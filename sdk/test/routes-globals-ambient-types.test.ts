@@ -124,6 +124,26 @@ describe("routes globals: ambient types resolve with zero import", () => {
     expect(diagnostics.some((d) => d.code === 2339)).toBe(true);
   });
 
+  // --- E2.5: the svm venue accessor tree is intersected onto Solana's ambient global only ---
+
+  it("Solana's ambient type ALSO carries the svm venue accessor tree, zero-import, alongside .route and Token", () => {
+    const diagnostics = typecheckProbe(`
+      const programId: unknown = Solana.RaydiumCpSwap.programId;
+      const swap: unknown = Solana.MeteoraDammV2.swap;
+      const stillHasRoute: unknown = Solana.route;
+      export {};
+    `);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("negative control: an EVM chain global has no svm venue namespace at the TYPE level (TS2339, not silently `any`)", () => {
+    const diagnostics = typecheckProbe(`
+      const x: unknown = Base.RaydiumCpSwap;
+      export {};
+    `);
+    expect(diagnostics.some((d) => d.code === 2339)).toBe(true); // TS2339: Property does not exist
+  });
+
   it("negative control: a method the vendored ABI does not have is a real error too (never invented, never `any`)", () => {
     const diagnostics = typecheckProbe(`
       const x: unknown = Base.UniswapV4.UniversalRouter.exactIn;

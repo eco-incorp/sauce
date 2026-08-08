@@ -16,3 +16,4 @@ export * from './cpi-probe.js';
 export * from './loader.js';
 export * from './venues/index.js';
 export * from './recipes/index.js';
+export * from './accessors.js';

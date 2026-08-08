@@ -63,8 +63,21 @@ describe("routes globals ambient .d.ts drift guard", () => {
   it("every chain declaration also carries the E2.3 `& ChainContracts` intersection (a generator that dropped it can't pass vacuously)", () => {
     for (const c of canonicalChains) {
       const name = pascalOfSlug(c.slug);
-      const matches = committed.match(new RegExp(`\\bconst ${name}: Accessors\\["${name}"\\] & ChainContracts;`, "g")) ?? [];
+      // svm-kind chains ALSO carry E2.5's `& SvmVenueAccessors` -- see the dedicated
+      // assertion below, which pins that suffix to exactly the svm chains and no others.
+      const svm = c.kind === "svm" ? " & SvmVenueAccessors" : "";
+      const matches = committed.match(new RegExp(`\\bconst ${name}: Accessors\\["${name}"\\] & ChainContracts${svm};`, "g")) ?? [];
       expect(matches).toHaveLength(1);
+    }
+  });
+
+  it("E2.5: the `& SvmVenueAccessors` intersection appears exactly once, and only on svm-kind chains", () => {
+    const svmChains = canonicalChains.filter((c) => c.kind === "svm");
+    const matches = committed.match(/&\s*SvmVenueAccessors;/g) ?? [];
+    expect(matches).toHaveLength(svmChains.length);
+    for (const c of svmChains) {
+      const name = pascalOfSlug(c.slug);
+      expect(committed).toContain(`const ${name}: Accessors["${name}"] & ChainContracts & SvmVenueAccessors;`);
     }
   });
 

@@ -13,6 +13,7 @@
 import type { ChainAccessors } from "./builder.js";
 import type { RewardInput, RouteInput } from "./types.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
+import type { SvmVenueAccessors } from "../svm/accessors.js";
 import type { TokenApi } from "../token/api.js";
 
 type Accessors = ChainAccessors<RouteInput, RewardInput>;
@@ -95,7 +96,7 @@ declare global {
   /** eco-routes origin accessor for Ink (chain id 57073). */
   const Ink: Accessors["Ink"] & ChainContracts;
   /** eco-routes origin accessor for Solana (chain id 1399811149). */
-  const Solana: Accessors["Solana"] & ChainContracts;
+  const Solana: Accessors["Solana"] & ChainContracts & SvmVenueAccessors;
   /** Runtime-resolved origin: `chain('eth')`, `chain(8453)`. */
   const chain: typeof import("./accessors.js").chain;
   /** Universal token interface — ERC20 on EVM targets, SPL Token on svm. */

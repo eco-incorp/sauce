@@ -94,8 +94,13 @@ function render(chains) {
       );
     }
     seen.set(name, c.slug);
+    // svm chains additionally carry the svm venue accessor tree
+    // (`Solana.RaydiumCpSwap`, ...) -- see routes/globals.ts's matching
+    // runtime `origin.chain.kind === "svm"` branch. Derived from `c.kind`,
+    // not a hardcoded slug, so a second svm chain gets this for free.
+    const svm = c.kind === 'svm' ? ' & SvmVenueAccessors' : '';
     lines.push(`  /** eco-routes origin accessor for ${c.name} (chain id ${c.id}). */`);
-    lines.push(`  const ${name}: Accessors["${name}"] & ChainContracts;`);
+    lines.push(`  const ${name}: Accessors["${name}"] & ChainContracts${svm};`);
   }
 
   return `// GENERATED FILE — do not edit by hand.
@@ -113,6 +118,7 @@ function render(chains) {
 import type { ChainAccessors } from "./builder.js";
 import type { RewardInput, RouteInput } from "./types.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
+import type { SvmVenueAccessors } from "../svm/accessors.js";
 import type { TokenApi } from "../token/api.js";
 
 type Accessors = ChainAccessors<RouteInput, RewardInput>;

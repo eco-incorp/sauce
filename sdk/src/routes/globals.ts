@@ -37,6 +37,10 @@ import "./globals.generated.js";
 // (`Base.Uniswap.UniversalRouter.method(...)`) alongside the existing
 // eco-routes DSL (`Base.route(...)`) -- see chainContractsFor below.
 import { chainContracts } from "../descriptors/accessors.js";
+// The SVM twin of the above: composes the svm venue accessor tree
+// (`Solana.RaydiumCpSwap.swap(...)`) onto an `svm`-kind chain global only --
+// see composeChainGlobal's `origin.chain.kind === "svm"` branch below.
+import { venues as svmVenueAccessors } from "../svm/accessors.js";
 // The universal token interface as a DEFAULT GLOBAL: `Token.transfer(...)` with no import. A
 // single, non-chain global -- see InstallRouteGlobalsOptions.includeToken below.
 import { Token } from "../token/api.js";
@@ -76,24 +80,38 @@ const owned = new Set<string>();
  */
 /**
  * Composes one chain global: the existing `ChainOrigin` (`chain`/`route`)
- * plus its lazy contract-namespace tree (`Uniswap`, `UniswapV4`, ...),
- * copied via `Object.getOwnPropertyDescriptors` (NOT spread) so the contract
- * namespaces' memoising GETTERS stay lazy — spread would invoke every one of
- * them eagerly at install time. `origin` itself is never mutated: this
- * returns a fresh object. Throws on a name collision (e.g. a future protocol
+ * plus its lazy contract-namespace tree (`Uniswap`, `UniswapV4`, ...) and,
+ * for an `svm`-kind chain only, the svm venue accessor tree
+ * (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
+ * `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's
+ * memoising GETTERS stay lazy — spread would invoke every one of them
+ * eagerly at install time. `origin` itself is never mutated: this returns a
+ * fresh object. Throws on a name collision (e.g. a future protocol or venue
  * slug literally named "route" or "chain"), mirroring
- * `createChainAccessors`'s own duplicate-key throw.
+ * `createChainAccessors`'s own duplicate-key throw. The `kind === "svm"`
+ * gate is registry-derived (from `../chains/canonical.js`'s own
+ * `CanonicalChain.kind`), not a hardcoded chain name -- a second SVM chain
+ * added to `CANONICAL_CHAINS` gets the venue namespaces automatically, and
+ * every EVM chain provably cannot.
  */
 function composeChainGlobal(name: string, origin: Record<string, unknown> & { chain: CanonicalChain }): object {
   const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;
-  const originDescriptors = Object.getOwnPropertyDescriptors(origin);
-  const contractDescriptors = Object.getOwnPropertyDescriptors(contracts);
-  for (const key of Object.keys(contractDescriptors)) {
-    if (key in originDescriptors) {
-      throw new Error(`routes/globals: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`);
-    }
+  const sources: PropertyDescriptorMap[] = [Object.getOwnPropertyDescriptors(contracts)];
+  if (origin.chain.kind === "svm") {
+    const svmVenues = svmVenueAccessors() as unknown as Record<string, unknown>;
+    sources.push(Object.getOwnPropertyDescriptors(svmVenues));
   }
-  return Object.defineProperties({}, { ...originDescriptors, ...contractDescriptors });
+  const originDescriptors = Object.getOwnPropertyDescriptors(origin);
+  const merged: PropertyDescriptorMap = { ...originDescriptors };
+  for (const source of sources) {
+    for (const key of Object.keys(source)) {
+      if (key in merged) {
+        throw new Error(`routes/globals: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`);
+      }
+    }
+    Object.assign(merged, source);
+  }
+  return Object.defineProperties({}, merged);
 }
 
 export function installRouteGlobals(opts: InstallRouteGlobalsOptions = {}): RouteGlobalsReport {
