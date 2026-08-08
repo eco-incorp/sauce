@@ -66,7 +66,7 @@ describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account �
       ]),
     );
     expect(harness.svm.getBalance(buffer) ?? 0n).toBe(0n); // reaped
-    expect(harness.svm.getBalance(harness.payer.address)).toBe(before + bufferLamports - 5000n); // minus the tx fee
+    expect(harness.svm.getBalance(harness.payer.address)).toBe(before! + bufferLamports! - 5000n); // minus the tx fee
   });
 
   it('rejects a wrong 32-byte hash pin (BufferHashMismatch) — the cross-lifecycle trust anchor', async () => {

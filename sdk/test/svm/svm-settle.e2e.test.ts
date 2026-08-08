@@ -14,7 +14,7 @@
  * logic, not this recipe's — this suite proves the recipe emits ix 12 correctly for both programs.
  */
 import { createHash } from 'node:crypto';
-import { getAddressCodec, type Address } from '@solana/kit';
+import { assertAccountExists, getAddressCodec, type Address } from '@solana/kit';
 import { compile } from '@eco-incorp/sauce-compiler';
 import { resolveAccounts } from '../../src/svm/index.js';
 import {
@@ -40,11 +40,12 @@ const sha256 = (bytes: Uint8Array): Uint8Array => new Uint8Array(createHash('sha
 
 /** The 32 pubkey bytes of `addr` as a big-endian scalar — the value form the program compares its
  *  CPI target against, derived from the address so the arg and the account ref cannot disagree. */
-const scalarOf = (addr: Address): bigint => toBigInt(getAddressCodec().encode(addr));
+const scalarOf = (addr: Address): bigint => toBigInt(new Uint8Array(getAddressCodec().encode(addr)));
 
 const DECIMALS = 6;
 const amountOf = (harness: EngineHarness, a: Address): bigint => {
   const acc = harness.svm.getAccount(a);
+  assertAccountExists(acc);
   return new DataView(acc.data.buffer, acc.data.byteOffset).getBigUint64(64, true);
 };
 

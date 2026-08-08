@@ -170,7 +170,7 @@ describe('parseExecutePayload', () => {
 describe('decodeSvmSettleExecution', () => {
   it('decodes args + resolves account identities from a real instruction (buffer-prefixed list)', () => {
     const fx = buildFixture(2, { minOut: 123n, splCount: 1n });
-    const decoded = decodeSvmSettleExecution({ instructionData: fx.ix.data as Uint8Array, accounts: fx.ix.accounts.map((a) => ({ address: a.address as string })) });
+    const decoded = decodeSvmSettleExecution({ instructionData: fx.ix.data as Uint8Array, accounts: fx.ix.accounts!.map((a) => ({ address: a.address as string })) });
 
     expect(decoded.instruction).toBe('execute_from_account');
     expect(decoded.hadBufferAccount).toBe(true);
@@ -220,7 +220,7 @@ describe('decodeSvmSettleExecution', () => {
   it('decodes an execute_and_close payload', () => {
     const fx = buildFixture(1);
     const ix = buildExecuteAndCloseInstruction({ programId: PROGRAM as never, buffer: BUFFER as never, accounts: fx.userMetas, expectedSha256: fx.pin, args: fx.args });
-    const decoded = decodeSvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts.map((a) => ({ address: a.address as string })) });
+    const decoded = decodeSvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts!.map((a) => ({ address: a.address as string })) });
     expect(decoded.instruction).toBe('execute_and_close');
     expect(decoded.escrowCount).toBe(1);
   });
@@ -234,7 +234,7 @@ describe('decodeSvmSettleExecution', () => {
 describe('verifySvmSettleExecution', () => {
   it('verifies a genuine execution end to end (bytecode byte-match + pin↔bytecode tie)', () => {
     const fx = buildFixture(2, { minOut: 999n });
-    const result = verifySvmSettleExecution({ instructionData: fx.ix.data as Uint8Array, accounts: fx.ix.accounts.map((a) => ({ address: a.address as string })), bytecode: fx.bytecode });
+    const result = verifySvmSettleExecution({ instructionData: fx.ix.data as Uint8Array, accounts: fx.ix.accounts!.map((a) => ({ address: a.address as string })), bytecode: fx.bytecode });
     expect(result.genuine).toBe(true);
     expect(result.pinMatchesBytecode).toBe(true);
     expect(result.tokenProgramsConsistent).toBe(true);
@@ -248,7 +248,7 @@ describe('verifySvmSettleExecution', () => {
     tampered[10] ^= 0xff;
     // Re-pin the calldata to the tampered bytecode so the failure is the byte-match, not the pin.
     const ix = buildExecuteFromAccountInstruction({ programId: PROGRAM as never, buffer: BUFFER as never, accounts: fx.userMetas, expectedSha256: sha256(tampered), args: fx.args });
-    const result = verifySvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts.map((a) => ({ address: a.address as string })), bytecode: tampered });
+    const result = verifySvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts!.map((a) => ({ address: a.address as string })), bytecode: tampered });
     expect(result.genuine).toBe(false);
     expect(result.mismatch).toMatch(/byte-match svmSettleSource\(2\)/);
   });
@@ -256,7 +256,7 @@ describe('verifySvmSettleExecution', () => {
   it('rejects a calldata pin that does not equal sha256(bytecode)', () => {
     const fx = buildFixture(1);
     const ix = buildExecuteFromAccountInstruction({ programId: PROGRAM as never, buffer: BUFFER as never, accounts: fx.userMetas, expectedSha256: new Uint8Array(32) /* wrong pin */, args: fx.args });
-    const result = verifySvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts.map((a) => ({ address: a.address as string })), bytecode: fx.bytecode });
+    const result = verifySvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts!.map((a) => ({ address: a.address as string })), bytecode: fx.bytecode });
     expect(result.genuine).toBe(false);
     expect(result.pinMatchesBytecode).toBe(false);
     expect(result.mismatch).toMatch(/pin does not equal sha256/);
@@ -266,7 +266,7 @@ describe('verifySvmSettleExecution', () => {
     // fx.ix was pinned to sha256(the real settle bytecode) == sha256(canonical) — the SDK recompiles the
     // canonical settle itself and matches the pin, so a partner needs no bytecode.
     const fx = buildFixture(2, { minOut: 321n });
-    const result = verifySvmSettleExecution({ instructionData: fx.ix.data as Uint8Array, accounts: fx.ix.accounts.map((a) => ({ address: a.address as string })) });
+    const result = verifySvmSettleExecution({ instructionData: fx.ix.data as Uint8Array, accounts: fx.ix.accounts!.map((a) => ({ address: a.address as string })) });
     expect(result.genuine).toBe(true);
     expect(result.verifiedBy).toBe('pin');
     expect(result.pinMatchesCanonical).toBe(true);
@@ -279,7 +279,7 @@ describe('verifySvmSettleExecution', () => {
     // settle hash — exactly the adversarial decoy the shape-only path would have misread.
     const fx = buildFixture(1);
     const ix = buildExecuteFromAccountInstruction({ programId: PROGRAM as never, buffer: BUFFER as never, accounts: fx.userMetas, expectedSha256: new Uint8Array(32).fill(0xab), args: fx.args });
-    const result = verifySvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts.map((a) => ({ address: a.address as string })) });
+    const result = verifySvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts!.map((a) => ({ address: a.address as string })) });
     expect(result.genuine).toBe(false);
     expect(result.verifiedBy).toBe('pin');
     expect(result.pinMatchesCanonical).toBe(false);
@@ -289,7 +289,7 @@ describe('verifySvmSettleExecution', () => {
   it('is NOT genuine when the calldata carries no pin and no bytecode is supplied', () => {
     const fx = buildFixture(1);
     const ix = buildExecuteFromAccountInstruction({ programId: PROGRAM as never, buffer: BUFFER as never, accounts: fx.userMetas, args: fx.args }); // no expectedSha256 → no pin
-    const result = verifySvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts.map((a) => ({ address: a.address as string })) });
+    const result = verifySvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: ix.accounts!.map((a) => ({ address: a.address as string })) });
     expect(result.genuine).toBe(false);
     expect(result.verifiedBy).toBe('none');
     expect(result.pin).toBeUndefined();
