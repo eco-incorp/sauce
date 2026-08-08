@@ -44,9 +44,14 @@ describe("routes globals ambient .d.ts drift guard", () => {
     }
   });
 
-  it("the declared-name count is exactly canonicalChains.length + 1 (the `+1` being `chain`)", () => {
+  it("the declared-name count is exactly canonicalChains.length + 2 (`chain` and the universal `Token` global)", () => {
     const constDecls = committed.match(/^\s*const \w+: /gm) ?? [];
-    expect(constDecls).toHaveLength(canonicalChains.length + 1);
+    expect(constDecls).toHaveLength(canonicalChains.length + 2);
+  });
+
+  it("the fixed `Token` global is declared exactly once, typed as the real TokenApi (not any)", () => {
+    const matches = committed.match(/\bconst Token: TokenApi;/g) ?? [];
+    expect(matches).toHaveLength(1);
   });
 
   it("`--check` exits 0 against the committed file (no drift)", () => {
@@ -61,5 +66,11 @@ describe("routes globals ambient .d.ts drift guard", () => {
       const matches = committed.match(new RegExp(`\\bconst ${name}: Accessors\\["${name}"\\] & ChainContracts;`, "g")) ?? [];
       expect(matches).toHaveLength(1);
     }
+  });
+
+  it("the generator source itself carries the Token name-collision guard (statically present, not just asserted by this suite)", () => {
+    const scriptSrc = readFileSync(SCRIPT_PATH, "utf8");
+    expect(scriptSrc).toContain("TOKEN_GLOBAL_NAME");
+    expect(scriptSrc).toMatch(/collides with the fixed .* global/);
   });
 });

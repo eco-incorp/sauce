@@ -37,6 +37,9 @@ import "./globals.generated.js";
 // (`Base.Uniswap.UniversalRouter.method(...)`) alongside the existing
 // eco-routes DSL (`Base.route(...)`) -- see chainContractsFor below.
 import { chainContracts } from "../descriptors/accessors.js";
+// The universal token interface as a DEFAULT GLOBAL: `Token.transfer(...)` with no import. A
+// single, non-chain global -- see InstallRouteGlobalsOptions.includeToken below.
+import { Token } from "../token/api.js";
 
 export interface RouteGlobalsReport {
   /** Names this call actually defined. */
@@ -50,6 +53,8 @@ export interface InstallRouteGlobalsOptions {
   readonly target?: object;
   /** Whether to also install the `chain(ref)` front door. Defaults to `true`. */
   readonly includeChain?: boolean;
+  /** Whether to also install the universal `Token` global. Defaults to `true`. */
+  readonly includeToken?: boolean;
 }
 
 /** Names this module itself has defined so far, across calls -- lets
@@ -98,6 +103,7 @@ export function installRouteGlobals(opts: InstallRouteGlobalsOptions = {}): Rout
     composeChainGlobal(name, origin as unknown as Record<string, unknown> & { chain: CanonicalChain }),
   ]);
   if (opts.includeChain !== false) entries.push(["chain", chain]);
+  if (opts.includeToken !== false) entries.push(["Token", Token]);
 
   const installed: string[] = [];
   const skipped: string[] = [];

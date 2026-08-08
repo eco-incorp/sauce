@@ -18,6 +18,7 @@ export {
 export * as routes from "./routes/index.js";
 export * as swap from "./swap/index.js";
 export * as deposit from "./deposit/index.js";
+export * as token from "./token/index.js";
 export * as contracts from "./descriptors/index.js";
 
 // eco-routes chain accessors as default globals: `Base.route(reward).Solana(route)`

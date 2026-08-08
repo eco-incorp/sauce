@@ -13,6 +13,7 @@
 import type { ChainAccessors } from "./builder.js";
 import type { RewardInput, RouteInput } from "./types.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
+import type { TokenApi } from "../token/api.js";
 
 type Accessors = ChainAccessors<RouteInput, RewardInput>;
 
@@ -97,6 +98,8 @@ declare global {
   const Solana: Accessors["Solana"] & ChainContracts;
   /** Runtime-resolved origin: `chain('eth')`, `chain(8453)`. */
   const chain: typeof import("./accessors.js").chain;
+  /** Universal token interface — ERC20 on EVM targets, SPL Token on svm. */
+  const Token: TokenApi;
 }
 
 export {};

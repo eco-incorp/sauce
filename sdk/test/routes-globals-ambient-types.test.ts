@@ -101,6 +101,29 @@ describe("routes globals: ambient types resolve with zero import", () => {
     expect(diagnostics.some((d) => d.code === 2339)).toBe(true); // TS2339: Property does not exist
   });
 
+  // --- E-token: the universal Token global, zero import ---
+
+  it("Token's ambient type resolves with zero import, and .transfer(...).source(...) is real, not `any`", () => {
+    const diagnostics = typecheckProbe(`
+      const call = Token.transfer({
+        token: "0x1111111111111111111111111111111111111111",
+        to: "0x2222222222222222222222222222222222222222",
+        amount: 1n,
+      });
+      const src: string = call.source("evm");
+      export {};
+    `);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("negative control: an unknown property on Token is a real error (TS2339, not silently `any`)", () => {
+    const diagnostics = typecheckProbe(`
+      const x: unknown = Token.transfer({ token: "0x1", to: "0x2", amount: 1n }).nope;
+      export {};
+    `);
+    expect(diagnostics.some((d) => d.code === 2339)).toBe(true);
+  });
+
   it("negative control: a method the vendored ABI does not have is a real error too (never invented, never `any`)", () => {
     const diagnostics = typecheckProbe(`
       const x: unknown = Base.UniswapV4.UniversalRouter.exactIn;

@@ -17,6 +17,12 @@ import {
 } from "../src/routes/globals.js";
 import type { RewardInput, RouteInput } from "../src/routes/index.js";
 
+/** Every chain global, plus the two non-chain globals this module installs by default: `chain`
+ *  and the universal `Token` interface (E-token). Kept derived, not a magic number, so a future
+ *  chain/global addition can't silently mask a real regression here. */
+const CHAIN_PLUS_CHAIN_PLUS_TOKEN = canonicalChains.length + 2;
+const CHAIN_PLUS_TOKEN = canonicalChains.length + 1;
+
 function reward(overrides: Partial<RewardInput> = {}): RewardInput {
   return {
     deadline: 1000n,
@@ -41,7 +47,8 @@ const g = globalThis as unknown as Record<string, unknown>;
 describe("routes globals: installed by default on import", () => {
   it("routeGlobals (the install-on-import result) installed every chain + chain, nothing skipped", () => {
     expect(routeGlobals.skipped).toEqual([]);
-    expect(routeGlobals.installed).toHaveLength(canonicalChains.length + 1);
+    expect(routeGlobals.installed).toHaveLength(CHAIN_PLUS_CHAIN_PLUS_TOKEN);
+    expect(routeGlobals.installed).toContain("Token");
   });
 
   it("every canonical chain's PascalCase name resolves on globalThis to a composed origin over the SAME CanonicalChain", () => {
@@ -105,6 +112,62 @@ describe("routes globals: installed by default on import", () => {
       expect(enumerableKeys).not.toContain(pascalOfSlug(c.slug));
     }
     expect(enumerableKeys).not.toContain("chain");
+    expect(enumerableKeys).not.toContain("Token");
+  });
+
+  // E-token: adding the Token global must not regress E3.5 (Base.route) or E2.3 (Base.Uniswap).
+  it("REGRESSION (E3.5/E2.3): Base.route(...) and Base.Uniswap.UniversalRouter still resolve via the bare global", () => {
+    const pending = (g.Base as { route: (r: RewardInput) => unknown }).route(reward());
+    expect(pending).toBeDefined();
+    const base = g.Base as { UniswapV4: { UniversalRouter: unknown }; Uniswap: { UniversalRouter: unknown } };
+    expect(base.UniswapV4.UniversalRouter).toBeDefined();
+    expect(base.Uniswap.UniversalRouter).toBe(base.UniswapV4.UniversalRouter);
+  });
+});
+
+describe("routes globals: the universal Token global", () => {
+  it("Token is installed on globalThis, non-enumerable, and is the SAME object as the named import", () => {
+    expect(typeof (g.Token as { transfer: unknown }).transfer).toBe("function");
+    expect(Object.keys(globalThis)).not.toContain("Token");
+    const desc = Object.getOwnPropertyDescriptor(globalThis, "Token");
+    expect(desc?.enumerable).toBe(false);
+  });
+
+  it("Token.transfer/.approve/.balanceOf each return a TokenCall builder", () => {
+    const token = g.Token as {
+      transfer: (s: unknown) => { source: (t: string) => string };
+      approve: (s: unknown) => { source: (t: string) => string };
+      balanceOf: (s: unknown) => { source: (t: string) => string };
+    };
+    const t = token.transfer({ token: "0x1111111111111111111111111111111111111111", to: "0x2222222222222222222222222222222222222222", amount: 1n });
+    expect(t.source("evm")).toContain("IERC20");
+  });
+
+  it("a pre-existing globalThis.Token is SKIPPED, not clobbered", () => {
+    uninstallRouteGlobals();
+    const SENTINEL = { marker: "pre-existing" };
+    g.Token = SENTINEL;
+    const report = installRouteGlobals();
+    expect(report.skipped).toContain("Token");
+    expect(g.Token).toBe(SENTINEL);
+    delete g.Token;
+    installRouteGlobals();
+  });
+
+  it("installRouteGlobals({ includeToken: false }) omits Token only", () => {
+    uninstallRouteGlobals();
+    const report = installRouteGlobals({ includeToken: false });
+    expect(report.installed).not.toContain("Token");
+    expect(g.Token).toBeUndefined();
+    installRouteGlobals();
+  });
+
+  it("uninstallRouteGlobals() removes Token; re-install is idempotent", () => {
+    uninstallRouteGlobals();
+    expect(g.Token).toBeUndefined();
+    const report = installRouteGlobals();
+    expect(report.installed).toContain("Token");
+    expect(typeof (g.Token as { transfer: unknown }).transfer).toBe("function");
   });
 });
 
@@ -144,23 +207,31 @@ describe("routes globals: installRouteGlobals / uninstallRouteGlobals", () => {
     uninstallRouteGlobals();
     const report = installRouteGlobals({ includeChain: false });
     expect(report.installed).not.toContain("chain");
-    expect(report.installed).toHaveLength(canonicalChains.length);
+    expect(report.installed).toHaveLength(CHAIN_PLUS_TOKEN);
+  });
+
+  it("includeToken: false omits the `Token` global only", () => {
+    uninstallRouteGlobals();
+    const report = installRouteGlobals({ includeToken: false });
+    expect(report.installed).not.toContain("Token");
+    expect(report.installed).toHaveLength(CHAIN_PLUS_TOKEN);
   });
 
   it("uninstallRouteGlobals removes exactly what this module installed, and re-install is idempotent (not self-skipping)", () => {
     uninstallRouteGlobals();
     const first = installRouteGlobals();
-    expect(first.installed.length).toBe(canonicalChains.length + 1);
+    expect(first.installed.length).toBe(CHAIN_PLUS_CHAIN_PLUS_TOKEN);
 
     uninstallRouteGlobals();
     for (const c of canonicalChains) {
       expect(g[pascalOfSlug(c.slug)]).toBeUndefined();
     }
     expect(g.chain).toBeUndefined();
+    expect(g.Token).toBeUndefined();
 
     const second = installRouteGlobals();
     expect(second.skipped).toEqual([]);
-    expect(second.installed.length).toBe(canonicalChains.length + 1);
+    expect(second.installed.length).toBe(CHAIN_PLUS_CHAIN_PLUS_TOKEN);
   });
 
   it("uninstall leaves an unrelated pre-existing global alone", () => {

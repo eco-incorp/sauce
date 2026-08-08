@@ -72,6 +72,11 @@ function loadCanonicalChains() {
   return chains;
 }
 
+/** The one fixed, non-chain global this generator also emits -- see gen-route-globals.mjs's
+ * caller in globals.ts for the matching runtime install (`Token`). Not derived from
+ * CANONICAL_CHAINS, but still collision-checked against it below. */
+const TOKEN_GLOBAL_NAME = 'Token';
+
 function render(chains) {
   const seen = new Map();
   const lines = [];
@@ -81,6 +86,11 @@ function render(chains) {
     if (prior !== undefined) {
       throw new Error(
         `duplicate chain global '${name}' (from slugs '${prior}' and '${c.slug}')`,
+      );
+    }
+    if (name === TOKEN_GLOBAL_NAME) {
+      throw new Error(
+        `chain global '${name}' (slug '${c.slug}') collides with the fixed '${TOKEN_GLOBAL_NAME}' global`,
       );
     }
     seen.set(name, c.slug);
@@ -103,6 +113,7 @@ function render(chains) {
 import type { ChainAccessors } from "./builder.js";
 import type { RewardInput, RouteInput } from "./types.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
+import type { TokenApi } from "../token/api.js";
 
 type Accessors = ChainAccessors<RouteInput, RewardInput>;
 
@@ -110,6 +121,8 @@ declare global {
 ${lines.join('\n')}
   /** Runtime-resolved origin: \`chain('eth')\`, \`chain(8453)\`. */
   const chain: typeof import("./accessors.js").chain;
+  /** Universal token interface — ERC20 on EVM targets, SPL Token on svm. */
+  const Token: TokenApi;
 }
 
 export {};
