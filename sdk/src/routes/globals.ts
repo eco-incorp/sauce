@@ -1,9 +1,9 @@
 /**
  * Installs the eco-routes chain accessors (and the `chain` front door) as
- * DEFAULT GLOBALS, so a consumer writes `Base.route(reward).Solana(route)`
+ * DEFAULT GLOBALS, so a consumer writes `Base(() => USDC.transfer(to, amt)).reward(reward)`
  * with zero import. Registry-derived by construction: it enumerates
  * `chainAccessors` (itself generated from `../chains/canonical.js` by
- * `createChainAccessors`), so adding a chain to `CANONICAL_CHAINS` adds a
+ * `createChainGlobals`), so adding a chain to `CANONICAL_CHAINS` adds a
  * global with no code change here.
  *
  * Imported for its side effect from `../index.js` -- see the comment there
