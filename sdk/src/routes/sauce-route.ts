@@ -22,7 +22,7 @@
 import { compile, type CompileResult, type CompileTarget } from "@eco-incorp/sauce-compiler";
 import { bytesToHex } from "viem";
 
-import type { ChainRef } from "./builder.js";
+import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import type { AddressInput, CallInput } from "./types.js";

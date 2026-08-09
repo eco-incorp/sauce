@@ -99,8 +99,8 @@ function render(chains) {
     // runtime `origin.chain.kind === "svm"` branch. Derived from `c.kind`,
     // not a hardcoded slug, so a second svm chain gets this for free.
     const svm = c.kind === 'svm' ? ' & SvmVenueAccessors' : '';
-    lines.push(`  /** eco-routes origin accessor for ${c.name} (chain id ${c.id}). */`);
-    lines.push(`  const ${name}: Accessors["${name}"] & ChainContracts${svm};`);
+    lines.push(`  /** eco-routes chain global for ${c.name} (chain id ${c.id}). */`);
+    lines.push(`  const ${name}: ChainGlobals["${name}"] & ChainContracts${svm};`);
   }
 
   return `// GENERATED FILE — do not edit by hand.
@@ -111,17 +111,16 @@ function render(chains) {
 //
 // Ambient only -- carries no runtime code (the runtime install lives in
 // ./globals.ts, generated separately by enumerating \`chainAccessors\`). Typing
-// each entry as \`Accessors["<Name>"]\` rather than spelling out
-// \`ChainOrigin<RouteInput, RewardInput>\` buys a free structural cross-check:
-// \`ChainAccessors\` is keyed by \`PascalOf<ChainSlug>\`, so a name that no longer
-// exists in the registry fails \`tsc\` here before the drift test even runs.
-import type { ChainAccessors } from "./builder.js";
-import type { RewardInput, RouteInput } from "./types.js";
+// each entry as \`ChainGlobals["<Name>"]\` rather than spelling out
+// \`ChainGlobal\` buys a free structural cross-check: \`ChainGlobals\` is keyed
+// by \`PascalOf<ChainSlug>\`, so a name that no longer exists in the registry
+// fails \`tsc\` here before the drift test even runs. A \`const\` typed with a
+// call-signature-bearing interface is callable in TS, so \`Base(sauce)\`
+// typechecks zero-import through this ambient chain.
+import type { ChainGlobals } from "./builder.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
 import type { SvmVenueAccessors } from "../svm/accessors.js";
 import type { TokenApi } from "../token/api.js";
-
-type Accessors = ChainAccessors<RouteInput, RewardInput>;
 
 declare global {
 ${lines.join('\n')}

@@ -1,162 +1,109 @@
 /**
- * Fluent builder stage machinery. Generic over `<TRoute, TReward>` and
- * parameterized by an `assemble` function, so a v3 reward-leg model can
- * instantiate a whole new builder without forking this file — only
- * `intent.ts` (and `types.ts`) need to change.
+ * Chain-global surface machinery: every canonical chain global is BOTH
+ * callable (`Base(sauce, opts)`) and a namespace carrying `.chain` and
+ * `.route` (the same callable, `Base.route === Base`'s own behavior).
  *
- * Every stage is an immutable value: a transition allocates a new stage
- * rather than mutating one in place, so a `PendingLeg`/`ChainStage` can be
- * branched and reused safely (see `sdk/test/routes.test.ts`'s "stage
- * immutability" cases).
+ * `ChainRoute`/`ChainGlobal` are ONE interface hierarchy — `ChainGlobal
+ * extends ChainRoute`, so the call signature and `.route` can never drift
+ * apart (see `sdk/test/routes-globals-ambient-types.test.ts`'s type-level pin).
+ *
+ * `ChainRef`/`CanonicalChain` now come straight from `../chains/canonical.js`
+ * (which additionally accepts `bigint`) rather than a narrower copy kept
+ * here — re-exported below so the public name survives at this import path.
  */
-import type { CanonicalChain, ChainSlug } from "../chains/canonical.js";
-import { canonicalChains, requireChain } from "../chains/canonical.js";
-import type { Intent, RouteInput, RewardInput } from "./types.js";
+import type { CanonicalChain, ChainRef, ChainSlug } from "../chains/canonical.js";
+import { canonicalChains } from "../chains/canonical.js";
+import type { IntentOptions, PendingSauceRoute, SauceBody } from "./intent-dsl.js";
+import { openRoute } from "./intent-dsl.js";
 
-export type ChainRef = number | string | CanonicalChain;
+export type { ChainRef };
 
 /**
  * `PascalOf<"bnb-chain">` = `"BnbChain"`. Matches the runtime `pascal()`
  * derivation in `accessors.ts` by construction (both reduce to
- * `Capitalize<S>` composed across `-`-separated segments) — re-exported from
+ * `Capitalize<S>` composed across `-`-separated segments) -- re-exported from
  * `accessors.ts` so callers only need one import site.
  */
 export type PascalOf<S extends string> = S extends `${infer H}-${infer T}`
   ? `${Capitalize<H>}${PascalOf<T>}`
   : Capitalize<S>;
 
-/** One generated method per canonical chain slug, PascalCase-keyed. */
-export type DestinationSelectors<R, W> = {
-  readonly [S in ChainSlug as PascalOf<S>]: DestinationMethod<R, W>;
+/** The call signature: `Chain(sauce, options)` -> a pending route awaiting `.reward(...)`. */
+export interface ChainRoute {
+  (sauce: SauceBody, options?: IntentOptions): PendingSauceRoute;
+}
+
+/** A chain global: callable (the SAME behavior as `.route`), plus `.chain`/`.route`. */
+export interface ChainGlobal extends ChainRoute {
+  /** The registry record this global was generated from (or resolved via `chain(ref)`). */
+  readonly chain: CanonicalChain;
+  /** The SAME interface as the call signature -- `Base.route === Base` in behavior, by construction. */
+  readonly route: ChainRoute;
+}
+
+/** One generated `ChainGlobal` per canonical chain slug, PascalCase-keyed. */
+export type ChainGlobals = {
+  readonly [S in ChainSlug as PascalOf<S>]: ChainGlobal;
 };
 
-export interface DestinationMethod<R = RouteInput, W = RewardInput> {
-  /** TERMINAL close: no destination route -> the chain is finished, intents are returned. */
-  (): Intent[];
-  /** CONTINUING close: attaches the destination route; this chain becomes the next leg's source. */
-  (route: R): ChainStage<R, W>;
-}
-
-export interface ChainOrigin<R = RouteInput, W = RewardInput> {
-  /** The registry record this accessor was generated from (or resolved via `chain(ref)`). */
-  readonly chain: CanonicalChain;
-  /** Opens a leg FROM this chain, escrowing `reward` here. */
-  route(reward: W): PendingLeg<R, W>;
-}
-
-export interface PendingLeg<R = RouteInput, W = RewardInput> extends DestinationSelectors<R, W> {
-  /** Dynamic destination (runtime-resolved chain). Mirrors the generated selectors' two arities. */
-  to(ref: ChainRef): Intent[];
-  to(ref: ChainRef, route: R): ChainStage<R, W>;
-}
-
-export interface ChainStage<R = RouteInput, W = RewardInput> extends Iterable<Intent> {
-  /** The chain the previous leg landed on -- the SOURCE of the next leg. */
-  readonly chain: CanonicalChain;
-  /** Opens the next leg from `chain`. */
-  route(reward: W): PendingLeg<R, W>;
-  /** Finishes without another leg. Returns a fresh array each call. */
-  build(): Intent[];
-}
-
-export type Assembler<R, W> = (
-  source: CanonicalChain,
-  destination: CanonicalChain,
-  route: R | undefined,
-  reward: W,
-) => Intent;
-
-/** Builds the immutable `ChainStage` standing on `chain`, having accumulated `legs` so far. */
-function makeChainStage<R, W>(
-  chain: CanonicalChain,
-  legs: readonly Intent[],
-  assemble: Assembler<R, W>,
-): ChainStage<R, W> {
-  return {
-    chain,
-    route(reward: W): PendingLeg<R, W> {
-      return makePendingLeg(chain, legs, reward, assemble);
-    },
-    build(): Intent[] {
-      return legs.slice();
-    },
-    [Symbol.iterator](): Iterator<Intent> {
-      return legs.slice()[Symbol.iterator]();
-    },
-  };
-}
-
-/** Builds the immutable `PendingLeg` open from `source`, awaiting a destination. */
-function makePendingLeg<R, W>(
-  source: CanonicalChain,
-  legs: readonly Intent[],
-  reward: W,
-  assemble: Assembler<R, W>,
-): PendingLeg<R, W> {
-  function closeTo(ref: ChainRef): Intent[];
-  function closeTo(ref: ChainRef, route: R): ChainStage<R, W>;
-  function closeTo(ref: ChainRef, route?: R): Intent[] | ChainStage<R, W> {
-    const destination = requireChain(ref);
-    const intent = assemble(source, destination, route, reward);
-    const nextLegs = [...legs, intent];
-    if (route === undefined) {
-      return nextLegs;
-    }
-    return makeChainStage(destination, nextLegs, assemble);
-  }
-
-  const pending: Record<string, unknown> = {
-    to: closeTo,
-  };
-  for (const c of canonicalChains) {
-    const key = pascalOfSlug(c.slug);
-    pending[key] = (route?: R) => (route === undefined ? closeTo(c) : closeTo(c, route));
-  }
-  return pending as unknown as PendingLeg<R, W>;
-}
+/** Function intrinsics a namespace/contract-accessor key must never collide with -- see
+ *  `globals.ts#composeChainGlobal`'s own, wider denylist for the composed (installed) global. */
+const FUNCTION_INTRINSICS: ReadonlySet<string> = new Set([
+  "length",
+  "name",
+  "prototype",
+  "arguments",
+  "caller",
+  "bind",
+  "call",
+  "apply",
+  "toString",
+  "constructor",
+  "chain",
+  "route",
+]);
 
 /**
- * Builds the top-level `ChainOrigin` for `chain` -- what a generated
- * accessor (`chainAccessors.Base`) or `chain(ref)` returns.
+ * Builds the callable `ChainGlobal` for `chain` -- what a generated global
+ * (`Base`) or `chain(ref)` returns. An ARROW function (no own `prototype` to
+ * collide with) forwarding to `openRoute`, with `chain`/`route` defined onto
+ * it as enumerable so `Object.keys(chainAccessors.Base)` stays exactly
+ * `["chain","route"]`.
  */
-export function makeChainOrigin<R, W>(
-  chain: CanonicalChain,
-  assemble: Assembler<R, W>,
-): ChainOrigin<R, W> {
-  return {
-    chain,
-    route(reward: W): PendingLeg<R, W> {
-      return makePendingLeg(chain, [], reward, assemble);
-    },
-  };
+export function makeChainGlobal(chain: CanonicalChain): ChainGlobal {
+  const route: ChainRoute = (sauce: SauceBody, options?: IntentOptions): PendingSauceRoute =>
+    openRoute(chain, sauce, options);
+
+  const fn = ((sauce: SauceBody, options?: IntentOptions): PendingSauceRoute => route(sauce, options)) as unknown as ChainGlobal;
+
+  Object.defineProperties(fn, {
+    chain: { value: chain, enumerable: true, configurable: false, writable: false },
+    route: { value: route, enumerable: true, configurable: false, writable: false },
+  });
+
+  return fn;
 }
 
-/** One generated `ChainOrigin` per canonical chain, PascalCase-keyed. */
-export type ChainAccessors<R = RouteInput, W = RewardInput> = {
-  readonly [S in ChainSlug as PascalOf<S>]: ChainOrigin<R, W>;
-};
-
 /**
- * Generates the top-level chain accessors from `../chains/canonical.js`,
- * parameterized by `assemble` -- the v3-swappable seam. Adding a chain to
- * `CANONICAL_CHAINS` adds an accessor here with zero code changes; a
- * duplicate PascalCase key (two slugs colliding after casing) throws at
- * module-eval time rather than silently overwriting one accessor with
+ * Generates the top-level chain globals from `../chains/canonical.js` --
+ * adding a chain to `CANONICAL_CHAINS` adds a global here with zero code
+ * changes; a duplicate PascalCase key (two slugs colliding after casing)
+ * throws at module-eval time rather than silently overwriting one with
  * another.
  */
-export function createChainAccessors<R, W>(assemble: Assembler<R, W>): ChainAccessors<R, W> {
-  const out: Record<string, ChainOrigin<R, W>> = {};
+export function createChainGlobals(): ChainGlobals {
+  const out: Record<string, ChainGlobal> = {};
   for (const c of canonicalChains) {
     const key = pascalOfSlug(c.slug);
     if (key in out) {
-      throw new Error(`duplicate chain accessor '${key}' (from slug '${c.slug}')`);
+      throw new Error(`duplicate chain global '${key}' (from slug '${c.slug}')`);
     }
-    out[key] = makeChainOrigin(c, assemble);
+    out[key] = makeChainGlobal(c);
   }
-  return out as ChainAccessors<R, W>;
+  return out as ChainGlobals;
 }
 
-// --- shared slug/pascal helpers (also used by accessors.ts) ---
+// --- shared slug/pascal helpers (also used by accessors.ts, descriptors/accessors.ts, svm/accessors.ts) ---
 
 /**
  * `PascalOf`'s runtime mirror: split on `-`, upper-case each segment's first
@@ -171,3 +118,7 @@ export function pascalOfSlug(slug: string): string {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join("");
 }
+
+// Re-exported so a caller checking for a hard denylist elsewhere (globals.ts)
+// can extend, rather than re-derive, this list.
+export { FUNCTION_INTRINSICS };

@@ -12,6 +12,7 @@
  * `src/routes/encode.ts`'s module doc comment for the full caveat.
  */
 import { chainAccessors } from "../src/routes/accessors.js";
+import { assembleIntent } from "../src/routes/intent.js";
 
 const BASE_CHAIN_ID = 8453;
 const SOLANA_CHAIN_ID = 1399811149;
@@ -348,8 +349,8 @@ describe("routes/encode: fork by chain kind", () => {
   });
 });
 
-describe("routes/encode: end-to-end over the E3.1 builder", () => {
-  it("hashes every leg of Base.route(r1).Solana(route2).route(r3).Ethereum() deterministically", () => {
+describe("routes/encode: end-to-end over multiple assembled intents", () => {
+  it("hashes every leg of Base -> Solana -> Ethereum deterministically", () => {
     const { Base: BaseAcc, Solana: SolanaAcc, Ethereum: EthereumAcc } = chainAccessors;
 
     const r1 = {
@@ -368,7 +369,9 @@ describe("routes/encode: end-to-end over the E3.1 builder", () => {
       prover: "0x6666666666666666666666666666666666666666" as const,
     };
 
-    const intents = BaseAcc.route(r1).Solana(route2).route(r3).Ethereum();
+    const leg1 = assembleIntent(BaseAcc.chain, SolanaAcc.chain, route2, r1);
+    const leg2 = assembleIntent(SolanaAcc.chain, EthereumAcc.chain, undefined, r3);
+    const intents = [leg1, leg2];
     expect(intents.length).toBeGreaterThanOrEqual(2);
 
     for (const intent of intents) {

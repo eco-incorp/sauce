@@ -1,29 +1,26 @@
 /**
- * eco-routes fluent builder — top-level chain accessors generated from
- * `../chains/canonical.js`.
+ * eco-routes cross-chain intent DSL — top-level chain globals generated from
+ * `../chains/canonical.js`, each BOTH callable and a namespace.
  *
  * ```ts
  * import { chainAccessors } from "@eco-incorp/sauce-sdk/routes"; // or routes namespace, see sdk/src/index.ts
- * const { Base, Solana, Ethereum } = chainAccessors;
- * const intents = Base.route(rewardA).Solana(routeA).route(rewardB).Ethereum();
+ * const { Base, Solana } = chainAccessors;
+ * const built = Base("return 1n;", { pot, deadline, portal }).reward({ source: Solana.chain, creator, prover, deadline });
+ * // identically: Base.route("return 1n;", {...}).reward({...})
  * ```
  */
 export { chain, chainAccessors, pascalOfSlug } from "./accessors.js";
 export type { PascalOf } from "./accessors.js";
 
 export {
-  createChainAccessors,
-  makeChainOrigin,
+  createChainGlobals,
+  makeChainGlobal,
 } from "./builder.js";
 export type {
-  Assembler,
-  ChainAccessors,
-  ChainOrigin,
+  ChainGlobal,
+  ChainGlobals,
   ChainRef,
-  ChainStage,
-  DestinationMethod,
-  DestinationSelectors,
-  PendingLeg,
+  ChainRoute,
 } from "./builder.js";
 
 export { assembleIntent } from "./intent.js";
@@ -110,5 +107,5 @@ export type {
 export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
 export type { VaultConfig } from "./vault.js";
 
-export { intentOn } from "./intent-dsl.js";
-export type { BuiltIntent, PendingSauceRoute, SauceIntentOrigin, SauceRewardSpec, SauceRouteSpec } from "./intent-dsl.js";
+export { openRoute } from "./intent-dsl.js";
+export type { BuiltIntent, IntentOptions, PendingSauceRoute, RewardArg, SauceBody, SauceRewardSpec } from "./intent-dsl.js";

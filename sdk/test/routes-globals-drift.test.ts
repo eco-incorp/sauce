@@ -39,7 +39,7 @@ describe("routes globals ambient .d.ts drift guard", () => {
   it("every canonical chain's PascalCase name has exactly one ambient declaration (generator-independent)", () => {
     for (const c of canonicalChains) {
       const name = pascalOfSlug(c.slug);
-      const matches = committed.match(new RegExp(`\\bconst ${name}: Accessors\\[`, "g")) ?? [];
+      const matches = committed.match(new RegExp(`\\bconst ${name}: ChainGlobals\\[`, "g")) ?? [];
       expect(matches).toHaveLength(1);
     }
   });
@@ -66,7 +66,7 @@ describe("routes globals ambient .d.ts drift guard", () => {
       // svm-kind chains ALSO carry E2.5's `& SvmVenueAccessors` -- see the dedicated
       // assertion below, which pins that suffix to exactly the svm chains and no others.
       const svm = c.kind === "svm" ? " & SvmVenueAccessors" : "";
-      const matches = committed.match(new RegExp(`\\bconst ${name}: Accessors\\["${name}"\\] & ChainContracts${svm};`, "g")) ?? [];
+      const matches = committed.match(new RegExp(`\\bconst ${name}: ChainGlobals\\["${name}"\\] & ChainContracts${svm};`, "g")) ?? [];
       expect(matches).toHaveLength(1);
     }
   });
@@ -77,7 +77,7 @@ describe("routes globals ambient .d.ts drift guard", () => {
     expect(matches).toHaveLength(svmChains.length);
     for (const c of svmChains) {
       const name = pascalOfSlug(c.slug);
-      expect(committed).toContain(`const ${name}: Accessors["${name}"] & ChainContracts & SvmVenueAccessors;`);
+      expect(committed).toContain(`const ${name}: ChainGlobals["${name}"] & ChainContracts & SvmVenueAccessors;`);
     }
   });
 
