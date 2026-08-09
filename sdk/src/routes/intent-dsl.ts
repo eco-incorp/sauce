@@ -16,6 +16,7 @@
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
+import { isSauceClosure, sauceBodyToSource, type SauceBody } from "./closure.js";
 import { encodeRewardEvm, encodeRewardSvm, encodeRouteEvm, encodeRouteSvm, hashIntent } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
 import { assembleIntent } from "./intent.js";
@@ -44,7 +45,7 @@ import type {
  * construction — a free identifier must come from `IntentOptions.defines` (or chain-scoped ambient
  * defines) or the compile fails closed with `undefined variable: X`.
  */
-export type SauceBody = string | (() => unknown);
+export type { SauceBody };
 
 /** Everything a route needs beyond the Sauce program body itself. */
 export interface IntentOptions {
@@ -219,13 +220,23 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
     missingField("execution", "as `IntentOptions.execution` or the EVM shorthand `IntentOptions.pot`");
   }
 
-  if (typeof sauce !== "string") {
-    throw new Error(
-      "openRoute: closure route bodies are not supported yet — pass a string (see sauce-route.ts#wrapSauceBody)",
-    );
-  }
+  const closure = isSauceClosure(sauce);
+  const sauceSource = closure ? sauceBodyToSource(sauce) : sauce;
 
-  const compiledRoute: CompiledSauceRoute = compileSauceRoute(destination, sauce, execution, options.compile);
+  let compiledRoute: CompiledSauceRoute;
+  try {
+    compiledRoute = compileSauceRoute(destination, sauceSource, execution, options.compile);
+  } catch (err) {
+    if (closure && err instanceof Error && /^undefined variable: /.test(err.message)) {
+      const name = err.message.slice("undefined variable: ".length);
+      throw new Error(
+        `openRoute: closure route body references '${name}', which is not defined — a closure ` +
+          `captures nothing by construction; supply '${name}' via IntentOptions.defines (or a chain-scoped ` +
+          `ambient define) instead.`,
+      );
+    }
+    throw err;
+  }
   const calls: CallInput[] = [...(options.precalls ?? []), ...compiledRoute.calls];
 
   return {
