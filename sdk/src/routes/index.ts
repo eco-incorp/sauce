@@ -108,5 +108,7 @@ export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
 export type { VaultConfig } from "./vault.js";
 
 export { isSauceClosure, sauceBodyToSource } from "./closure.js";
+export { chainDefines } from "./ambient.js";
+export type { AmbientDefinesOptions } from "./ambient.js";
 export { openRoute } from "./intent-dsl.js";
 export type { BuiltIntent, IntentOptions, PendingSauceRoute, RewardArg, SauceBody, SauceRewardSpec } from "./intent-dsl.js";

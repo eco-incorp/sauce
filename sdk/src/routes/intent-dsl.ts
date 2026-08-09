@@ -16,6 +16,7 @@
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
+import { chainDefines } from "./ambient.js";
 import { isSauceClosure, sauceBodyToSource, type SauceBody } from "./closure.js";
 import { encodeRewardEvm, encodeRewardSvm, encodeRouteEvm, encodeRouteSvm, hashIntent } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
@@ -70,6 +71,9 @@ export interface IntentOptions {
   creator?: AddressInput;
   prover?: AddressInput;
   rewardDeadline?: bigint | number | string;
+  /** Caller-supplied token symbol -> address map, folded into the chain-scoped ambient defines
+   *  (see `ambient.ts`) -- distinct from `.tokens` above (route/reward TOKEN AMOUNTS). */
+  tokenDefines?: Readonly<Record<string, AddressInput>>;
 }
 
 /** The object form of a reward argument — every field optional, since a missing one falls back to
@@ -223,9 +227,17 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
   const closure = isSauceClosure(sauce);
   const sauceSource = closure ? sauceBodyToSource(sauce) : sauce;
 
+  // Chain-scoped ambient defines (chainId, protocol/contract addresses, caller token symbols) sit
+  // UNDERNEATH the caller's own IntentOptions.defines, which sits underneath the most-specific
+  // IntentOptions.compile.defines -- caller always wins on a key collision; a user-declared local
+  // inside the body wins over all of this via the compiler's own getConstant/getVar precedence.
+  const ambientDefines = chainDefines(destination, { tokens: options.tokenDefines });
+  const mergedDefines = { ...ambientDefines, ...options.defines, ...options.compile?.defines };
+  const compileOptions: SauceCompileOptions = { ...options.compile, defines: mergedDefines };
+
   let compiledRoute: CompiledSauceRoute;
   try {
-    compiledRoute = compileSauceRoute(destination, sauceSource, execution, options.compile);
+    compiledRoute = compileSauceRoute(destination, sauceSource, execution, compileOptions);
   } catch (err) {
     if (closure && err instanceof Error && /^undefined variable: /.test(err.message)) {
       const name = err.message.slice("undefined variable: ".length);
