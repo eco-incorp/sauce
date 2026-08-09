@@ -233,7 +233,11 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
   // inside the body wins over all of this via the compiler's own getConstant/getVar precedence.
   const ambientDefines = chainDefines(destination, { tokens: options.tokenDefines });
   const mergedDefines = { ...ambientDefines, ...options.defines, ...options.compile?.defines };
-  const compileOptions: SauceCompileOptions = { ...options.compile, defines: mergedDefines };
+  const compileOptions: SauceCompileOptions = {
+    ...options.compile,
+    defines: mergedDefines,
+    tokens: options.compile?.tokens ?? options.tokenDefines,
+  };
 
   let compiledRoute: CompiledSauceRoute;
   try {

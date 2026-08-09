@@ -25,6 +25,9 @@ import { bytesToHex } from "viem";
 import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
+import { rewriteTokenMembers } from "./token-rewrite.js";
+import { TOKEN_BASE_DIRS } from "../token/source.js";
+import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import type { AddressInput, CallInput } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -34,6 +37,10 @@ export interface SauceCompileOptions {
   tsSource?: boolean;
   treeshake?: boolean;
   defines?: Record<string, bigint | boolean | number>;
+  /** Ambient token symbol -> address map -- rewrites `<Sym>.transfer/.approve/.balanceOf(...)`
+   *  into `IERC20.at(<Sym>).<method>(...)` (see `token-rewrite.ts`). EVM destinations only -- an
+   *  svm destination throws, pointing at the SPL account-plan `Token` emitter instead. */
+  tokens?: Readonly<Record<string, AddressInput>>;
 }
 
 export interface SauceEvmExecutionInput {
@@ -99,10 +106,28 @@ export function compileSauceRoute(
     );
   }
 
-  const source = wrapSauceBody(sauce);
+  const tokenSymbols = options.tokens ? Object.keys(options.tokens) : [];
+
+  let source = wrapSauceBody(sauce);
+  let baseDirs = options.baseDirs;
+  if (tokenSymbols.length > 0) {
+    const rewritten = rewriteTokenMembers(source, new Set(tokenSymbols));
+    if (rewritten.rewrote) {
+      if (chain.kind === "svm") {
+        throw new Error(
+          `compileSauceRoute: destination '${chain.slug}' is svm — the ERC20 member rewrite ` +
+            "(options.tokens) is EVM-only; an SVM route needs the SPL account-plan `Token` emitter " +
+            "(see token/api.ts) instead.",
+        );
+      }
+      source = `${ERC20_IMPORT_LINE}\n${rewritten.source}`;
+      baseDirs = [...(options.baseDirs ?? []), ...TOKEN_BASE_DIRS];
+    }
+  }
+
   const compiled = compile(source, {
     target,
-    baseDirs: options.baseDirs,
+    baseDirs,
     tsSource: options.tsSource,
     treeshake: options.treeshake,
     defines: options.defines,
