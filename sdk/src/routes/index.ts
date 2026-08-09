@@ -96,3 +96,19 @@ export type {
   StagedBufferRef,
   SvmAddressInput,
 } from "./sauce-calls.js";
+
+// --- cross-chain intent DSL (S1) ---
+
+export { compileSauceRoute, wrapSauceBody } from "./sauce-route.js";
+export type {
+  CompiledSauceRoute,
+  SauceCompileOptions,
+  SauceEvmExecutionInput,
+  SauceSvmExecutionInput,
+} from "./sauce-route.js";
+
+export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
+export type { VaultConfig } from "./vault.js";
+
+export { intentOn } from "./intent-dsl.js";
+export type { BuiltIntent, PendingSauceRoute, SauceIntentOrigin, SauceRewardSpec, SauceRouteSpec } from "./intent-dsl.js";
