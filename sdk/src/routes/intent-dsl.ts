@@ -21,6 +21,8 @@ import { isSauceClosure, sauceBodyToSource, type SauceBody } from "./closure.js"
 import { encodeRewardEvm, encodeRewardSvm, encodeRouteEvm, encodeRouteSvm, hashIntent } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
 import { assembleIntent } from "./intent.js";
+import { assertNestingInvariants, nestedChildCalls } from "./nest.js";
+import { normalizeRoute } from "./normalize.js";
 import {
   approvalTxs,
   fundTx,
@@ -117,9 +119,13 @@ export interface BuiltIntent {
   readonly source: CanonicalChain;
   /** The destination-chain `CompileResult` this intent's route call was compiled from. */
   readonly compiled: CompileResult;
-  /** The head intent. Until nesting lands, this only ever has one. */
+  /** Direct children attached via `.nest()`, in the order they were nested. Empty for a depth-1
+   *  intent (the default, unaffected by nesting at all). */
+  readonly children: readonly BuiltIntent[];
+  /** The head intent — this one. Forward-compatible name for `intent`. */
   root(): Intent;
-  /** Head-first. Length 1 in this stage — see the module doc. */
+  /** PRE-ORDER DFS over this intent and every descendant, head first. Length 1 until `.nest()` is
+   *  used; a depth-2 cascade (head -> child -> grandchild) has length 3. */
   intents(): readonly Intent[];
   hash(): IntentHashes;
   encodeEVM(): { readonly route: Hex; readonly reward: Hex };
@@ -145,8 +151,38 @@ export interface BuiltIntent {
   fundedCall(target?: Partial<PortalTarget>): PortalReadCall<boolean>;
 }
 
+/** `.nest(childOrThunk, opts?)`'s first argument: either an already-built child `BuiltIntent`
+ *  (checked against `child.source.id === parent.destination.id`, so a mismatched leg is rejected
+ *  rather than silently accepted), or — the documented PREFERRED form — a thunk receiving the
+ *  parent's own destination chain (which IS the child's source, by construction, so there is
+ *  nothing to get wrong). */
+export type NestChildOrThunk = BuiltIntent | ((parentChain: CanonicalChain) => BuiltIntent);
+
+export interface NestOptions {
+  /** Passed through to the spliced `publishAndFund` call. Defaults to `false` — a partially funded
+   *  child is a stalled cascade. */
+  allowPartial?: boolean;
+  /** Where the child's `approve`/`publishAndFund` calls sit relative to the compiled Sauce call.
+   *  Defaults to `"after"` — the parent's own program runs first. */
+  position?: "before" | "after";
+  /** Opts this child out of `assertNestingInvariants`'s funding-coverage check (invariant 5) — the
+   *  legitimate case where the parent's own Sauce program earns and forwards the child's reward. */
+  fundedByBody?: boolean;
+  /** Overrides the Portal the child's calls are issued against. Defaults to this route's own
+   *  `IntentOptions.portal` (the parent's own `route.portal`) — see `nest.ts`'s module doc for why
+   *  that default is the structurally correct one, not just a convenience. */
+  portal?: AddressInput;
+}
+
 export interface PendingSauceRoute {
   reward(rewardArg: RewardArg): BuiltIntent;
+  /**
+   * Attaches a STATIC child cascade leg: at `.reward()` time, the child's `approve`(s) +
+   * `publishAndFund` are spliced into THIS route's own `route.calls` (before or after the compiled
+   * Sauce call per `opts.position`), and `assertNestingInvariants` is run over every nested child.
+   * Chainable and order-preserving — call `.nest()` multiple times to attach multiple children.
+   */
+  nest(childOrThunk: NestChildOrThunk, opts?: NestOptions): PendingSauceRoute;
 }
 
 function missingField(field: string, where: string): never {
@@ -223,6 +259,7 @@ function makeBuiltIntent(
   source: CanonicalChain,
   compiled: CompileResult,
   sourcePortal: AddressInput | undefined,
+  children: readonly BuiltIntent[] = [],
 ): BuiltIntent {
   const target = (t: Partial<PortalTarget> | undefined) => resolveTarget(t, sourcePortal);
 
@@ -231,11 +268,12 @@ function makeBuiltIntent(
     destination,
     source,
     compiled,
+    children,
     root(): Intent {
       return intent;
     },
     intents(): readonly Intent[] {
-      return [intent];
+      return [intent, ...children.flatMap((c) => c.intents())];
     },
     hash(): IntentHashes {
       return hashIntent(intent);
@@ -327,11 +365,67 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
     }
     throw err;
   }
-  const calls: CallInput[] = [...(options.precalls ?? []), ...compiledRoute.calls];
 
-  return {
+  interface NestEntry {
+    readonly built: BuiltIntent;
+    readonly allowPartial: boolean;
+    readonly position: "before" | "after";
+    readonly fundedByBody: boolean;
+    readonly portal: AddressInput;
+  }
+  const nestedEntries: NestEntry[] = [];
+
+  const pending: PendingSauceRoute = {
+    nest(childOrThunk: NestChildOrThunk, opts?: NestOptions): PendingSauceRoute {
+      const isThunk = typeof childOrThunk === "function";
+      const built = isThunk ? childOrThunk(destination) : childOrThunk;
+      if (!isThunk && built.source.id !== destination.id) {
+        throw new Error(
+          `openRoute: .nest() child's source ('${built.source.slug}') does not match this route's ` +
+            `destination ('${destination.slug}') — a child's source chain is always its parent's ` +
+            `destination (execution) chain. Prefer the thunk form (\`.nest((on) => ...)\`), which cannot ` +
+            `get this wrong.`,
+        );
+      }
+      nestedEntries.push({
+        built,
+        allowPartial: opts?.allowPartial ?? false,
+        position: opts?.position ?? "after",
+        fundedByBody: opts?.fundedByBody ?? false,
+        portal: opts?.portal ?? options.portal,
+      });
+      return pending;
+    },
     reward(rewardArg: RewardArg): BuiltIntent {
       const { source, reward } = resolveReward(rewardArg, options);
+
+      if (nestedEntries.length > 0) {
+        const parentRouteForInvariants = normalizeRoute({
+          deadline: options.deadline,
+          portal: options.portal,
+          nativeAmount: options.nativeAmount,
+          tokens: options.tokens,
+          calls: [],
+        });
+        assertNestingInvariants({
+          parentChain: destination,
+          parentRoute: parentRouteForInvariants,
+          children: nestedEntries.map((e) => ({ intent: e.built.intent, fundedByBody: e.fundedByBody })),
+        });
+      }
+
+      const childCalls = (position: "before" | "after"): CallInput[] =>
+        nestedEntries
+          .filter((e) => e.position === position)
+          .flatMap((e) => nestedChildCalls(e.built.intent, { portal: e.portal, allowPartial: e.allowPartial }));
+
+      const calls: CallInput[] = [
+        ...(options.precalls ?? []),
+        ...childCalls("before"),
+        ...compiledRoute.calls,
+        ...childCalls("after"),
+      ];
+
       const intent = assembleIntent(
         source,
         destination,
@@ -345,7 +439,15 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
         },
         reward,
       );
-      return makeBuiltIntent(intent, destination, source, compiledRoute.compiled, options.sourcePortal);
+      return makeBuiltIntent(
+        intent,
+        destination,
+        source,
+        compiledRoute.compiled,
+        options.sourcePortal,
+        nestedEntries.map((e) => e.built),
+      );
     },
   };
+  return pending;
 }

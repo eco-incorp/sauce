@@ -113,7 +113,16 @@ export type { AmbientDefinesOptions } from "./ambient.js";
 export { rewriteTokenMembers } from "./token-rewrite.js";
 export type { TokenRewriteResult } from "./token-rewrite.js";
 export { openRoute } from "./intent-dsl.js";
-export type { BuiltIntent, IntentOptions, PendingSauceRoute, RewardArg, SauceBody, SauceRewardSpec } from "./intent-dsl.js";
+export type {
+  BuiltIntent,
+  IntentOptions,
+  NestChildOrThunk,
+  NestOptions,
+  PendingSauceRoute,
+  RewardArg,
+  SauceBody,
+  SauceRewardSpec,
+} from "./intent-dsl.js";
 
 export {
   approvalTxs,
