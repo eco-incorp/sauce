@@ -114,3 +114,15 @@ export { rewriteTokenMembers } from "./token-rewrite.js";
 export type { TokenRewriteResult } from "./token-rewrite.js";
 export { openRoute } from "./intent-dsl.js";
 export type { BuiltIntent, IntentOptions, PendingSauceRoute, RewardArg, SauceBody, SauceRewardSpec } from "./intent-dsl.js";
+
+export {
+  approvalTxs,
+  fundTx,
+  intentHashCall,
+  intentVaultAddressCall,
+  isIntentFundedCall,
+  publishAndFundTx,
+  publishTx,
+  PORTAL_ABI,
+} from "./portal.js";
+export type { PortalReadCall, PortalTarget, PortalTx } from "./portal.js";

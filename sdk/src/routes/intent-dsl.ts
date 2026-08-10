@@ -22,6 +22,18 @@ import { encodeRewardEvm, encodeRewardSvm, encodeRouteEvm, encodeRouteSvm, hashI
 import type { IntentHashes } from "./encode.js";
 import { assembleIntent } from "./intent.js";
 import {
+  approvalTxs,
+  fundTx,
+  intentHashCall,
+  intentVaultAddressCall,
+  isIntentFundedCall,
+  publishAndFundTx,
+  publishTx,
+  type PortalReadCall,
+  type PortalTarget,
+  type PortalTx,
+} from "./portal.js";
+import {
   compileSauceRoute,
   type CompiledSauceRoute,
   type SauceCompileOptions,
@@ -74,6 +86,10 @@ export interface IntentOptions {
   /** Caller-supplied token symbol -> address map, folded into the chain-scoped ambient defines
    *  (see `ambient.ts`) -- distinct from `.tokens` above (route/reward TOKEN AMOUNTS). */
   tokenDefines?: Readonly<Record<string, AddressInput>>;
+  /** The SOURCE-chain Portal — where this intent is PUBLISHED. Distinct from `portal` above, which
+   *  is the DESTINATION-chain Portal that lands in `route.portal`. Used as the default target for
+   *  every submission/read helper on `BuiltIntent` below. */
+  sourcePortal?: AddressInput;
 }
 
 /** The object form of a reward argument — every field optional, since a missing one falls back to
@@ -108,7 +124,25 @@ export interface BuiltIntent {
   hash(): IntentHashes;
   encodeEVM(): { readonly route: Hex; readonly reward: Hex };
   encodeSVM(): { readonly route: Hex; readonly reward: Hex };
+
+  publishCalldata(target?: Partial<PortalTarget>): PortalTx;
+  publishAndFundCalldata(allowPartial: boolean, target?: Partial<PortalTarget>): PortalTx;
+  fundCalldata(allowPartial: boolean, target?: Partial<PortalTarget>): PortalTx;
+  /** HEAD reward tokens only — a child is funded by its parent's execution, not the user; see
+   *  `nest.ts`/`intent-dsl.ts`'s `.nest()` once nesting lands. */
+  approvals(target?: Partial<PortalTarget>): readonly PortalTx[];
+
+  /** PRIMARY vault path: the on-chain `Portal.intentVaultAddress` read-call. The caller performs the
+   *  `eth_call`; this module never does RPC. */
+  vaultCall(target?: Partial<PortalTarget>): PortalReadCall<Hex>;
+  /** OPTION: the offline CREATE2 predictor — zero RPC, needs `config.vaultInitCodeHash`. */
+  predictVault(config: VaultConfig): Hex;
+  /** @deprecated alias of `predictVault`, kept so the already-landed, unit-tested surface keeps working. */
   vault(config: VaultConfig): Hex;
+
+  /** Cross-check helpers: our off-chain `hash()` vs the chain's own, and funded status. */
+  hashCall(target?: Partial<PortalTarget>): PortalReadCall<IntentHashes>;
+  fundedCall(target?: Partial<PortalTarget>): PortalReadCall<boolean>;
 }
 
 export interface PendingSauceRoute {
@@ -170,12 +204,28 @@ function resolveReward(
   };
 }
 
+function missingSourcePortal(): never {
+  throw new Error(
+    "BuiltIntent: no Portal target — supply it as the call's own `target.portal` or as " +
+      "`IntentOptions.sourcePortal` when building the intent",
+  );
+}
+
+function resolveTarget(target: Partial<PortalTarget> | undefined, sourcePortal: AddressInput | undefined): PortalTarget {
+  const portal = target?.portal ?? sourcePortal;
+  if (portal === undefined) missingSourcePortal();
+  return { portal };
+}
+
 function makeBuiltIntent(
   intent: Intent,
   destination: CanonicalChain,
   source: CanonicalChain,
   compiled: CompileResult,
+  sourcePortal: AddressInput | undefined,
 ): BuiltIntent {
+  const target = (t: Partial<PortalTarget> | undefined) => resolveTarget(t, sourcePortal);
+
   return {
     intent,
     destination,
@@ -196,8 +246,32 @@ function makeBuiltIntent(
     encodeSVM() {
       return { route: encodeRouteSvm(intent.route), reward: encodeRewardSvm(intent.reward) };
     },
+    publishCalldata(t) {
+      return publishTx(intent, target(t));
+    },
+    publishAndFundCalldata(allowPartial, t) {
+      return publishAndFundTx(intent, allowPartial, target(t));
+    },
+    fundCalldata(allowPartial, t) {
+      return fundTx(intent, allowPartial, target(t));
+    },
+    approvals(t) {
+      return approvalTxs(intent, target(t));
+    },
+    vaultCall(t) {
+      return intentVaultAddressCall(intent, target(t));
+    },
+    predictVault(config: VaultConfig): Hex {
+      return predictVaultAddress(hashIntent(intent).intentHash, config);
+    },
     vault(config: VaultConfig): Hex {
       return predictVaultAddress(hashIntent(intent).intentHash, config);
+    },
+    hashCall(t) {
+      return intentHashCall(intent, target(t));
+    },
+    fundedCall(t) {
+      return isIntentFundedCall(intent, target(t));
     },
   };
 }
@@ -271,7 +345,7 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
         },
         reward,
       );
-      return makeBuiltIntent(intent, destination, source, compiledRoute.compiled);
+      return makeBuiltIntent(intent, destination, source, compiledRoute.compiled, options.sourcePortal);
     },
   };
 }
