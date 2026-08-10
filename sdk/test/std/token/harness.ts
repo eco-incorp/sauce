@@ -12,7 +12,7 @@
  * and a MISS reported as a throw — the "arm absent" signal the compiler's per-target arm probe
  * (`token.js` → `token.evm.js` / `token.svm.js`) relies on.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,13 +41,20 @@ export interface WasmCompileOptions {
   resolvePackage?: (specifier: string, importer: string) => string | undefined;
 }
 
-// wasm-pack builds the package with `--target nodejs`, so it is CommonJS plus a sibling `.wasm` it
-// reads through `fs` at load time. This suite runs as ESM (jest's
-// NODE_OPTIONS=--experimental-vm-modules), and the package is deliberately NOT in the jest config's
-// transformIgnorePatterns allowlist — `createRequire` hands it to Node's own CJS loader instead,
-// which is the only loader that resolves the `.wasm` sibling. Same bridge the compiler's own Node
-// smoke test uses.
-const { compile } = createRequire(import.meta.url)('@eco-incorp/sauce-compiler-wasm') as {
+// The Rust SauceScript compiler is built FROM the `sauce-next` dep (github:eco-incorp/sauce#main)
+// into `sdk/.sauce-wasm/` by scripts/build-wasm.mjs — the sdk `pretest` runs it, so it is present
+// whenever the suite runs. It is REQUIRED (the Rust compiler is the SDK's compiler going forward),
+// so a missing build is a HARD ERROR, not a skip. wasm-pack's `--target nodejs` output is CommonJS
+// plus a sibling `.wasm` it reads through `fs` at load, so `createRequire` hands it to Node's own CJS
+// loader — the only one that resolves the `.wasm` sibling — rather than jest's ESM transform.
+const WASM_ENTRY = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '.sauce-wasm', 'sauce_wasm.js');
+if (!existsSync(WASM_ENTRY)) {
+  throw new Error(
+    `Rust SauceScript compiler not built at ${WASM_ENTRY}. Run \`pnpm --filter ./sdk build:wasm\` ` +
+      '(needs Rust + wasm-pack); the sdk `pretest` runs it automatically.',
+  );
+}
+const { compile } = createRequire(import.meta.url)(WASM_ENTRY) as {
   compile: (options: WasmCompileOptions) => Artifact;
 };
 

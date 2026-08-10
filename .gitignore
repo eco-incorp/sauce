@@ -32,3 +32,6 @@ npm-debug.log*
 # Coverage
 coverage/
 lcov.info
+
+# Rust compiler WASM built from the sauce-next dep (build-wasm.mjs); never committed
+sdk/.sauce-wasm/
