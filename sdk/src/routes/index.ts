@@ -126,3 +126,6 @@ export {
   PORTAL_ABI,
 } from "./portal.js";
 export type { PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
+
+export { assertNestingInvariants, assertStaticChild, nestedChildCalls } from "./nest.js";
+export type { AssertNestingInvariantsArgs, NestChild, NestedChildOptions } from "./nest.js";
