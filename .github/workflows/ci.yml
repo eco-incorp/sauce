@@ -56,17 +56,6 @@ jobs:
       - name: Verify hnc is the pinned version
         run: hnc --version | grep -q '1\.5\.13' || { echo "::error::hnc is not the pinned 1.5.13"; hnc --version; exit 1; }
 
-      # `@eco-incorp/sauce-compiler-wasm` (an sdk devDependency — the published Rust compiler the
-      # `sdk/test/std/token` suites compile against) lives on GitHub Packages. The committed root
-      # `.npmrc` maps the `@eco-incorp` scope to that registry but deliberately carries no token;
-      # the git `insteadOf` rewrite above does NOT cover npm registry auth, which is a separate
-      # protocol. So append the token line here. ECO_INCORP_TOKEN must therefore ALSO carry
-      # `read:packages` (classic PAT) / "Packages: read" (fine-grained), not just repo read.
-      - name: Configure GitHub Packages auth for @eco-incorp
-        env:
-          ECO_INCORP_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
-        run: echo "//npm.pkg.github.com/:_authToken=${ECO_INCORP_TOKEN}" >> .npmrc
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.2

@@ -10,16 +10,16 @@ importers:
     dependencies:
       '@solana-program/address-lookup-table':
         specifier: ^0.12.1
-        version: 0.12.1(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+        version: 0.12.1(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana-program/compute-budget':
         specifier: ^0.16.0
-        version: 0.16.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+        version: 0.16.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana-program/system':
         specifier: ^0.12.2
-        version: 0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+        version: 0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana-program/token':
         specifier: ^0.14.0
-        version: 0.14.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+        version: 0.14.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana/kit':
         specifier: ^6.10.0
         version: 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -47,7 +47,7 @@ importers:
         version: 1.0.1
       hardhat:
         specifier: ^2.22.0
-        version: 2.28.6(bufferutil@4.1.0)(typescript@5.9.3)
+        version: 2.28.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
 
   actions:
     dependencies:
@@ -134,7 +134,7 @@ importers:
         version: 22.19.19
       hardhat:
         specifier: ^2.22.0
-        version: 2.28.6(bufferutil@4.1.0)(typescript@5.9.3)
+        version: 2.28.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       tsx:
         specifier: ^4.7.0
         version: 4.22.3
@@ -149,16 +149,16 @@ importers:
         version: link:../compiler
       '@solana-program/address-lookup-table':
         specifier: ^0.12.1
-        version: 0.12.1(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+        version: 0.12.1(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana-program/compute-budget':
         specifier: ^0.16.0
-        version: 0.16.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+        version: 0.16.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana-program/system':
         specifier: ^0.12.2
-        version: 0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+        version: 0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana-program/token':
         specifier: ^0.14.0
-        version: 0.14.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+        version: 0.14.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana/kit':
         specifier: ^6.10.0
         version: 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -167,8 +167,8 @@ importers:
         version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
     devDependencies:
       '@eco-incorp/sauce-compiler-wasm':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: file:./vendor/sauce-compiler-wasm
+        version: file:sdk/vendor/sauce-compiler-wasm
       '@solana/web3.js':
         specifier: ^1.98.0
         version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -368,8 +368,8 @@ packages:
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
 
-  '@eco-incorp/sauce-compiler-wasm@0.1.0':
-    resolution: {integrity: sha512-+qLCoNLI3HyeIBfKbQ+hL8WJFVrC3jtt4hrQahkCrT8xwbiUe6Lr8U1Ap0CcbfMiGVHkBJzYozyrmcoKX0GkIw==, tarball: https://npm.pkg.github.com/download/@eco-incorp/sauce-compiler-wasm/0.1.0/6d4845cb0fba6ff07cbbfe535592e1edb0a97b4f}
+  '@eco-incorp/sauce-compiler-wasm@file:sdk/vendor/sauce-compiler-wasm':
+    resolution: {directory: sdk/vendor/sauce-compiler-wasm, type: directory}
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -3077,7 +3077,7 @@ packages:
     engines: {node: '>=0.10.0'}
 
   ox@https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a:
-    resolution: {integrity: sha512-OHHm9re1yVjiMN66GZ2JSGuqmvJPrk40zh3PIS/3I6prZLbt6U/zKlgW18eIIkO0Y/ZyySKr6D/4mUXjBmky1g==, tarball: https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a}
+    resolution: {tarball: https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a}
     version: 0.14.26-386a343.0
     peerDependencies:
       typescript: '>=5.4.0'
@@ -3877,7 +3877,7 @@ snapshots:
 
   '@bcoe/v8-coverage@0.2.3': {}
 
-  '@eco-incorp/sauce-compiler-wasm@0.1.0': {}
+  '@eco-incorp/sauce-compiler-wasm@file:sdk/vendor/sauce-compiler-wasm': {}
 
   '@emnapi/core@1.10.0':
     dependencies:
@@ -4738,21 +4738,21 @@ snapshots:
     dependencies:
       '@sinonjs/commons': 3.0.1
 
-  '@solana-program/address-lookup-table@0.12.1(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))':
+  '@solana-program/address-lookup-table@0.12.1(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))':
     dependencies:
       '@solana/kit': 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
 
-  '@solana-program/compute-budget@0.16.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))':
+  '@solana-program/compute-budget@0.16.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))':
     dependencies:
       '@solana/kit': 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
 
-  '@solana-program/system@0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))':
+  '@solana-program/system@0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))':
     dependencies:
       '@solana/kit': 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
 
-  '@solana-program/token@0.14.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))':
+  '@solana-program/token@0.14.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))':
     dependencies:
-      '@solana-program/system': 0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+      '@solana-program/system': 0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana/kit': 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
 
   '@solana/accounts@6.10.0(typescript@5.9.3)':
@@ -6229,7 +6229,7 @@ snapshots:
     optionalDependencies:
       uglify-js: 3.19.3
 
-  hardhat@2.28.6(bufferutil@4.1.0)(typescript@5.9.3):
+  hardhat@2.28.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6):
     dependencies:
       '@ethereumjs/util': 9.1.0
       '@ethersproject/abi': 5.8.0
@@ -6386,11 +6386,11 @@ snapshots:
 
   isexe@2.0.0: {}
 
-  isomorphic-ws@4.0.1(ws@7.5.11(bufferutil@4.1.0)):
+  isomorphic-ws@4.0.1(ws@7.5.11(bufferutil@4.1.0)(utf-8-validate@6.0.6)):
     dependencies:
       ws: 7.5.11(bufferutil@4.1.0)(utf-8-validate@6.0.6)
 
-  isows@1.0.7(ws@8.20.1(bufferutil@4.1.0)):
+  isows@1.0.7(ws@8.20.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)):
     dependencies:
       ws: 8.20.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)
 
@@ -6458,7 +6458,7 @@ snapshots:
       delay: 5.0.0
       es6-promisify: 5.0.0
       eyes: 0.1.8
-      isomorphic-ws: 4.0.1(ws@7.5.11(bufferutil@4.1.0))
+      isomorphic-ws: 4.0.1(ws@7.5.11(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       json-stringify-safe: 5.0.1
       stream-json: 1.9.1
       uuid: 8.3.2
@@ -7160,8 +7160,8 @@ snapshots:
 
   litesvm@1.2.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6):
     dependencies:
-      '@solana-program/system': 0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
-      '@solana-program/token': 0.14.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3))
+      '@solana-program/system': 0.12.2(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
+      '@solana-program/token': 0.14.0(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@solana/kit': 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
     optionalDependencies:
       litesvm-darwin-arm64: 1.2.1
@@ -7809,7 +7809,7 @@ snapshots:
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
       abitype: 1.2.3(typescript@5.9.3)
-      isows: 1.0.7(ws@8.20.1(bufferutil@4.1.0))
+      isows: 1.0.7(ws@8.20.1(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       ox: https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a(typescript@5.9.3)
       ws: 8.20.1(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
