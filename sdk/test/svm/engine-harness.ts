@@ -67,8 +67,13 @@ export const randomAddress = (): Address => getAddressCodec().decode(crypto.getR
  * block.timestamp, so engine-side quotes evaluate at exactly this instant.
  * No memory setup exists: interpreter memory is the per-transaction heap
  * frame, requested by the RequestHeapFrame prepend on every execute.
+ *
+ * `engineSo` defaults to the vendored binary; a suite whose bytecode targets a
+ * DIFFERENT engine lineage passes its own path rather than overriding
+ * SAUCE_ENGINE_SO, which would redirect every other suite too (they run
+ * TypeScript-compiler output and need the pinned engine).
  */
-export const startEngine = async (unixTimestamp: bigint): Promise<EngineHarness> => {
+export const startEngine = async (unixTimestamp: bigint, engineSo: string = ENGINE_SO): Promise<EngineHarness> => {
   // The default constructor's program runtime misses the
   // sol_remaining_compute_units syscall (the engine's GasLeft, 0x62 — the
   // SvmRoute CU-floor guard); rebuilding the runtime with every feature
@@ -80,7 +85,7 @@ export const startEngine = async (unixTimestamp: bigint): Promise<EngineHarness>
     .withSysvars()
     .withDefaultPrograms();
   const programId = (await generateKeyPairSigner()).address;
-  svm.addProgramFromFile(programId, ENGINE_SO);
+  svm.addProgramFromFile(programId, engineSo);
 
   svm.warpToSlot(HARNESS_SLOT);
   svm.setClock(new Clock(HARNESS_SLOT, 0n, 0n, 0n, unixTimestamp));

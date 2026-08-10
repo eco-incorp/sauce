@@ -10,7 +10,8 @@
   "homepage": "https://github.com/eco-incorp/sauce-sdk#readme",
   "bugs": "https://github.com/eco-incorp/sauce-sdk/issues",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "main": "sdk/dist/index.js",
   "types": "sdk/dist/index.d.ts",
