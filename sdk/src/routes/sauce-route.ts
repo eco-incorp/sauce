@@ -19,13 +19,14 @@
  * always compiled to exactly one bytecode blob (`compiled.bytecode[0]`) and slotted as exactly one
  * `Call` — a multi-statement body is one program with N statements, never N cooks.
  */
-import { compile, type CompileResult, type CompileTarget } from "@eco-incorp/sauce-compiler";
+import { compile, type CompileResult, type CompileTarget, type ContractsConfig } from "@eco-incorp/sauce-compiler";
 import { bytesToHex } from "viem";
 
 import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { rewriteTokenMembers } from "./token-rewrite.js";
+import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import type { AddressInput, CallInput } from "./types.js";
@@ -41,6 +42,17 @@ export interface SauceCompileOptions {
    *  into `IERC20.at(<Sym>).<method>(...)` (see `token-rewrite.ts`). EVM destinations only -- an
    *  svm destination throws, pointing at the SPL account-plan `Token` emitter instead. */
   tokens?: Readonly<Record<string, AddressInput>>;
+  /** Forwarded directly to `compile()` -- merged with the bindings the protocol-accessor rewrite
+   *  (below) synthesizes. A same-named entry with a DIFFERENT abi throws (see `protocol-rewrite.ts`). */
+  contracts?: ContractsConfig;
+  /** The full protocol-accessor rewrite (`protocol-rewrite.ts`) -- `Uniswap.UniversalRouter.execute(...)`
+   *  -> `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `address.self`.
+   *  Default ON (`true`); pass `false` to opt out entirely, or an options object to tune it. Default-ON
+   *  is isolation-safe by measurement: the shapes it claims (a 1-3 segment member-chain call rooted at
+   *  a registry namespace or canonical-chain key) do not compile at all today, so this can only turn a
+   *  hard compile error into a success or a clearer error -- never break an already-compiling program.
+   *  EVM destinations only -- an svm destination with at least one rewritten accessor site throws. */
+  accessors?: boolean | ProtocolRewriteOptions;
 }
 
 export interface SauceEvmExecutionInput {
@@ -110,6 +122,26 @@ export function compileSauceRoute(
 
   let source = wrapSauceBody(sauce);
   let baseDirs = options.baseDirs;
+  let contracts: ContractsConfig | undefined = options.contracts;
+
+  if (options.accessors !== false) {
+    const accessorOpts: ProtocolRewriteOptions = typeof options.accessors === "object" ? options.accessors : {};
+    const rewrittenAccessors = rewriteProtocolAccessors(source, chain, {
+      ...accessorOpts,
+      existingContracts: options.contracts,
+    });
+    if (rewrittenAccessors.rewrote) {
+      if (chain.kind === "svm") {
+        throw new Error(
+          `compileSauceRoute: destination '${chain.slug}' is svm — the protocol-accessor rewrite ` +
+            "(options.accessors) is EVM-only; contract bindings are not supported on target 'svm'.",
+        );
+      }
+      source = rewrittenAccessors.source;
+      contracts = { ...contracts, ...rewrittenAccessors.contracts };
+    }
+  }
+
   if (tokenSymbols.length > 0) {
     const rewritten = rewriteTokenMembers(source, new Set(tokenSymbols));
     if (rewritten.rewrote) {
@@ -131,6 +163,7 @@ export function compileSauceRoute(
     tsSource: options.tsSource,
     treeshake: options.treeshake,
     defines: options.defines,
+    contracts,
   });
 
   if (compiled.bytecode.length === 0) {
