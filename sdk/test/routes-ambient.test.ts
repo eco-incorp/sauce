@@ -46,15 +46,30 @@ describe("chainDefines", () => {
     expect("UniswapV4_UniversalRouter" in defines).toBe(false);
   });
 
-  it("negative control: no token symbol is defined unless the caller supplies one", () => {
-    const defines = chainDefines(requireChain("base"));
+  it("negative control: a chain the token registry does not cover defines no token symbol unless the caller supplies one", () => {
+    // Ronin has no token-registry rows (see token-registry.ts's coverage note).
+    const defines = chainDefines(requireChain("ronin"));
     expect(defines.USDC).toBeUndefined();
   });
 
+  it("base's registry USDC/WETH are DEFAULT ambient defines with no caller tokens at all", () => {
+    const defines = chainDefines(requireChain("base"));
+    expect(defines.USDC).toBe(BigInt("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"));
+    expect(defines.WETH).toBe(BigInt("0x4200000000000000000000000000000000000006"));
+  });
+
   it("a caller-supplied token symbol resolves to BigInt(address)", () => {
-    const USDC = "0x5555555555555555555555555555555555555555" as const;
-    const defines = chainDefines(requireChain("base"), { tokens: { USDC } });
-    expect(defines.USDC).toBe(BigInt(USDC));
+    const FOO = "0x5555555555555555555555555555555555555555" as const;
+    const defines = chainDefines(requireChain("base"), { tokens: { FOO } });
+    expect(defines.FOO).toBe(BigInt(FOO));
+  });
+
+  it("a caller-supplied token OVERRIDES the registry default for the same symbol, per-key", () => {
+    const OTHER_USDC = "0x5555555555555555555555555555555555555555" as const;
+    const defines = chainDefines(requireChain("base"), { tokens: { USDC: OTHER_USDC } });
+    expect(defines.USDC).toBe(BigInt(OTHER_USDC));
+    // WETH stays the registry default -- override is per-key, not wholesale.
+    expect(defines.WETH).toBe(BigInt("0x4200000000000000000000000000000000000006"));
   });
 });
 

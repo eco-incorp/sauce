@@ -26,6 +26,7 @@ import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { rewriteTokenMembers } from "./token-rewrite.js";
+import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
@@ -38,9 +39,12 @@ export interface SauceCompileOptions {
   tsSource?: boolean;
   treeshake?: boolean;
   defines?: Record<string, bigint | boolean | number>;
-  /** Ambient token symbol -> address map -- rewrites `<Sym>.transfer/.approve/.balanceOf(...)`
-   *  into `IERC20.at(<Sym>).<method>(...)` (see `token-rewrite.ts`). EVM destinations only -- an
-   *  svm destination throws, pointing at the SPL account-plan `Token` emitter instead. */
+  /** Caller token symbol -> address OVERRIDES, merged per-key on top of `token-registry.ts`'s
+   *  default per-chain registry (see `resolveTokenMap`) -- the merged map drives both `<Sym>.
+   *  transfer/.approve/.balanceOf(...)` (U4) and `<holder>.<Sym>` balance-sugar rewrites (see
+   *  `token-rewrite.ts`). A bare `USDC.transfer(...)` on a chain the registry covers now compiles
+   *  with NO entry here at all. EVM destinations only -- an svm destination throws if any site
+   *  actually rewrites, pointing at the SPL account-plan `Token` emitter instead. */
   tokens?: Readonly<Record<string, AddressInput>>;
   /** Forwarded directly to `compile()` -- merged with the bindings the protocol-accessor rewrite
    *  (below) synthesizes. A same-named entry with a DIFFERENT abi throws (see `protocol-rewrite.ts`). */
@@ -118,11 +122,48 @@ export function compileSauceRoute(
     );
   }
 
-  const tokenSymbols = options.tokens ? Object.keys(options.tokens) : [];
+  // The registry-resolved token map (registry defaults + options.tokens overrides, per-key -- see
+  // token-registry.ts#resolveTokenMap). Computed unconditionally: for an evm chain the registry may
+  // already supply symbols even with no caller options.tokens at all; for an svm chain/id the
+  // registry itself has no rows (no TOKEN_REGISTRY key is ever an svm chain id), so this reduces to
+  // "only options.tokens, if any" -- preserving the existing svm-throws-on-any-rewrite behavior.
+  const tokenMap = resolveTokenMap(chain, options.tokens);
 
   let source = wrapSauceBody(sauce);
   let baseDirs = options.baseDirs;
   let contracts: ContractsConfig | undefined = options.contracts;
+  // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
+  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted U4's bare
+  // `IERC20.at(USDC)` (the symbol, not a literal) with no `USDC` define at all. Idempotent with
+  // openRoute's own ambient-defines merge (ambient.ts#chainDefines resolves the SAME registry), so
+  // this is a no-op when reached via openRoute and a genuine fix for a direct caller.
+  let defines: Record<string, bigint | boolean | number> | undefined =
+    tokenMap.size > 0 ? { ...Object.fromEntries(tokenMap), ...options.defines } : options.defines;
+
+  // ORDER IS LOAD-BEARING: the token pass (U4 + balance sugar) runs BEFORE the protocol-accessor
+  // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `address.self`
+  // textually; if it ran first, `self.USDC` would become `address.self.USDC` and the balance
+  // sugar's holder would no longer be a bare Identifier, silently losing the site. Safe in the
+  // other direction: the accessor pass cannot claim IERC20.at(...)'s output (neither a namespace
+  // nor a chain key, and its call sits mid-chain, which `decomposeMemberChain` declines), and its
+  // synthesized-binding collision check cannot trip on `IERC20` (`pascalOfSlug("erc20")` yields
+  // `IErc20_*`, not `IERC20`); the sugar's own `address.self` output is immune to the accessor
+  // pass's self-sugar too (`self` there is a member PROPERTY, which its exclusion set already
+  // covers). See routes-token-rewrite.test.ts's composition test for the regression lock.
+  if (tokenMap.size > 0) {
+    const rewritten = rewriteTokenMembers(source, tokenMap);
+    if (rewritten.rewrote) {
+      if (chain.kind === "svm") {
+        throw new Error(
+          `compileSauceRoute: destination '${chain.slug}' is svm — the ERC20 member rewrite ` +
+            "(options.tokens) is EVM-only; an SVM route needs the SPL account-plan `Token` emitter " +
+            "(see token/api.ts) instead.",
+        );
+      }
+      source = `${ERC20_IMPORT_LINE}\n${rewritten.source}`;
+      baseDirs = [...(options.baseDirs ?? []), ...TOKEN_BASE_DIRS];
+    }
+  }
 
   if (options.accessors !== false) {
     const accessorOpts: ProtocolRewriteOptions = typeof options.accessors === "object" ? options.accessors : {};
@@ -142,27 +183,12 @@ export function compileSauceRoute(
     }
   }
 
-  if (tokenSymbols.length > 0) {
-    const rewritten = rewriteTokenMembers(source, new Set(tokenSymbols));
-    if (rewritten.rewrote) {
-      if (chain.kind === "svm") {
-        throw new Error(
-          `compileSauceRoute: destination '${chain.slug}' is svm — the ERC20 member rewrite ` +
-            "(options.tokens) is EVM-only; an SVM route needs the SPL account-plan `Token` emitter " +
-            "(see token/api.ts) instead.",
-        );
-      }
-      source = `${ERC20_IMPORT_LINE}\n${rewritten.source}`;
-      baseDirs = [...(options.baseDirs ?? []), ...TOKEN_BASE_DIRS];
-    }
-  }
-
   const compiled = compile(source, {
     target,
     baseDirs,
     tsSource: options.tsSource,
     treeshake: options.treeshake,
-    defines: options.defines,
+    defines,
     contracts,
   });
 
