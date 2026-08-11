@@ -21,7 +21,14 @@ import { isSauceClosure, sauceBodyToSource, type SauceBody } from "./closure.js"
 import { encodeRewardEvm, encodeRewardSvm, encodeRouteEvm, encodeRouteSvm, hashIntent } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
 import { assembleIntent } from "./intent.js";
-import { assertNestingInvariants, nestedChildCalls } from "./nest.js";
+import {
+  assertNestingInvariants,
+  nestedChildCalls,
+  nestedTransferProgram,
+  type ChildVaultResolution,
+  type NestVia,
+  type TransferNestEntry,
+} from "./nest.js";
 import { normalizeRoute } from "./normalize.js";
 import {
   approvalTxs,
@@ -50,8 +57,11 @@ import type {
   Hex,
   Intent,
   RewardInput,
+  Route,
   TokenAmountInput,
 } from "./types.js";
+
+export type { NestVia };
 
 /**
  * A route body: a complete `function main(){...}` program, a bare body (see
@@ -158,29 +168,86 @@ export interface BuiltIntent {
  *  nothing to get wrong). */
 export type NestChildOrThunk = BuiltIntent | ((parentChain: CanonicalChain) => BuiltIntent);
 
+/** `vaultConfig`'s shape — like `VaultConfig` but `portal` is optional (defaults to the resolved
+ *  nest `portal`, per `ChildVaultResolution`'s "predicted" rung). */
+export interface NestVaultConfigInput {
+  readonly vaultInitCodeHash: Hex;
+  readonly portal?: AddressInput;
+  readonly prefix?: Hex;
+}
+
 export interface NestOptions {
+  /**
+   * The nesting mechanism. **DSL default: `"transfer"`** (2026-08-11 directive) — deliberately the
+   * OPPOSITE of `nest.ts`'s own pure-module default (`"publishAndFund"`, kept so every already-landed
+   * caller of that module keeps its exact meaning). `"transfer"`: the parent's route transfers a
+   * balance-capped amount to the (fully static) child's vault, auto-scaling with static hashes and
+   * needing no on-chain publication. `"publishAndFund"`: the opt-in, kept reachable verbatim — choose
+   * it for public on-chain discovery (solvers already index `IntentPublished`) and exact-amount
+   * Portal-pulled funding.
+   */
+  via?: NestVia;
+  /** Where the child's calls (the transfer program's `cook()`, or the spliced `approve`s +
+   *  `publishAndFund`) sit relative to the compiled Sauce call. Defaults to `"after"` — the parent's
+   *  own program runs first (load-bearing for `via: "transfer"`: only an "after" transfer sees what
+   *  the body earned). */
+  position?: "before" | "after";
+  /** Overrides the Portal the child's calls/vault-read are issued against. Defaults to this route's
+   *  own `IntentOptions.portal` (the parent's own `route.portal`) — see `nest.ts`'s module doc for why
+   *  that default is the structurally correct one, not just a convenience. */
+  portal?: AddressInput;
+
+  // -- publishAndFund-only (throws under via: "transfer") -----------------------------------------
   /** Passed through to the spliced `publishAndFund` call. Defaults to `false` — a partially funded
    *  child is a stalled cascade. */
   allowPartial?: boolean;
-  /** Where the child's `approve`/`publishAndFund` calls sit relative to the compiled Sauce call.
-   *  Defaults to `"after"` — the parent's own program runs first. */
-  position?: "before" | "after";
   /** Opts this child out of `assertNestingInvariants`'s funding-coverage check (invariant 5) — the
-   *  legitimate case where the parent's own Sauce program earns and forwards the child's reward. */
+   *  legitimate case where the parent's own Sauce program earns and forwards the child's reward.
+   *  Meaningless under `via: "transfer"` (invariant 5 is unconditionally dropped there). */
   fundedByBody?: boolean;
-  /** Overrides the Portal the child's calls are issued against. Defaults to this route's own
-   *  `IntentOptions.portal` (the parent's own `route.portal`) — see `nest.ts`'s module doc for why
-   *  that default is the structurally correct one, not just a convenience. */
-  portal?: AddressInput;
+
+  // -- transfer-only (throws under via: "publishAndFund") ------------------------------------------
+  /** Rung C: a caller-verified vault address (typically from `child.vaultCall()`'s own `eth_call`).
+   *  Zero config, zero leak, the recommended production rung. Precedence over `vaultConfig`/the
+   *  runtime default. */
+  vault?: AddressInput;
+  /** Rung B: bakes `predictVaultAddress` as a constant (`portal` defaults to this nest's own
+   *  `portal`). Leanest and the only rung keeping the child off-chain — but a wrong
+   *  `vaultInitCodeHash` sends funds to a dead address irrecoverably; cross-check with
+   *  `child.vaultCall()` once before trusting it. */
+  vaultConfig?: NestVaultConfigInput;
+  /** Caps the transferred amount at the child's own declared reward amount. Default `true`. */
+  clamp?: boolean;
+  /** Reverts the parent's whole fulfillment when the Pot's balance is already short of the cap,
+   *  rather than quietly stalling the child. Default `false`. */
+  requireCap?: boolean;
+  /** `"skip"` omits the native leg even when the child declares `reward.nativeAmount > 0`. Default
+   *  `"balance"`. */
+  native?: "balance" | "skip";
+  /** Sets `value = child.reward.nativeAmount` on the transfer `cook()` call, so solver-delivered
+   *  native funding (via this route's own `route.nativeAmount`) reaches the Pot before the transfer
+   *  reads `address.balance`. Default `false`. Re-enables a NATIVE-only coverage check (T5): the sum
+   *  of every opted-in child's `nativeAmount` must not exceed this route's own `route.nativeAmount`. */
+  fundNativeFromRoute?: boolean;
+  /** Overrides the Pot the transfer `cook()` executes on. Defaults to this route's own EVM
+   *  `execution.pot` (T3: required for `via: "transfer"` — a Solana/SVM destination has no Pot). */
+  pot?: AddressInput;
+  /** Compile options for the generated transfer program (merged with `baseDirs`/`target: 'v12'`,
+   *  which this module always supplies). */
+  compile?: SauceCompileOptions;
 }
 
 export interface PendingSauceRoute {
   reward(rewardArg: RewardArg): BuiltIntent;
   /**
-   * Attaches a STATIC child cascade leg: at `.reward()` time, the child's `approve`(s) +
-   * `publishAndFund` are spliced into THIS route's own `route.calls` (before or after the compiled
-   * Sauce call per `opts.position`), and `assertNestingInvariants` is run over every nested child.
-   * Chainable and order-preserving — call `.nest()` multiple times to attach multiple children.
+   * Attaches a STATIC child cascade leg. At `.reward()` time: under the **default** `via:
+   * "transfer"`, a per-child `balanceOf`/clamp/transfer Sauce program (merged, in `.nest()` order,
+   * with every other same-position `"transfer"` child) is compiled and slotted as one extra `cook()`
+   * call; under the opt-in `via: "publishAndFund"`, the child's `approve`(s) + `publishAndFund` are
+   * spliced in verbatim, exactly as before this mechanism existed. Either way the calls sit before or
+   * after the compiled Sauce call per `opts.position`, and `assertNestingInvariants` runs over every
+   * nested child. Chainable and order-preserving — call `.nest()` multiple times to attach multiple
+   * children.
    */
   nest(childOrThunk: NestChildOrThunk, opts?: NestOptions): PendingSauceRoute;
 }
@@ -368,12 +435,53 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
 
   interface NestEntry {
     readonly built: BuiltIntent;
-    readonly allowPartial: boolean;
+    readonly via: NestVia;
     readonly position: "before" | "after";
-    readonly fundedByBody: boolean;
     readonly portal: AddressInput;
+    // publishAndFund-only:
+    readonly allowPartial: boolean;
+    readonly fundedByBody: boolean;
+    // transfer-only:
+    readonly vault?: AddressInput;
+    readonly vaultConfig?: NestVaultConfigInput;
+    readonly clamp: boolean;
+    readonly requireCap: boolean;
+    readonly native: "balance" | "skip";
+    readonly fundNativeFromRoute: boolean;
+    readonly pot?: AddressInput;
+    readonly compile?: SauceCompileOptions;
   }
   const nestedEntries: NestEntry[] = [];
+
+  const TRANSFER_ONLY_KEYS: readonly (keyof NestOptions)[] = [
+    "vault",
+    "vaultConfig",
+    "clamp",
+    "requireCap",
+    "native",
+    "fundNativeFromRoute",
+    "pot",
+    "compile",
+  ];
+  const PUBLISH_ONLY_KEYS: readonly (keyof NestOptions)[] = ["allowPartial", "fundedByBody"];
+
+  function assertNestOptionMode(via: NestVia, opts: NestOptions | undefined): void {
+    if (opts === undefined) return;
+    const otherVia: NestVia = via === "transfer" ? "publishAndFund" : "transfer";
+    const offendingKeys = via === "transfer" ? PUBLISH_ONLY_KEYS : TRANSFER_ONLY_KEYS;
+    for (const key of offendingKeys) {
+      if (opts[key] !== undefined) {
+        throw new Error(
+          `openRoute: .nest() option '${key}' is only valid with via: "${otherVia}" — it is meaningless ` +
+            `under via: "${via}" (mode-mismatched options throw rather than being silently ignored).`,
+        );
+      }
+    }
+  }
+
+  function evmPotOf(exec: SauceEvmExecutionInput | SauceSvmExecutionInput | undefined): AddressInput | undefined {
+    return exec !== undefined && "pot" in exec ? exec.pot : undefined;
+  }
 
   const pending: PendingSauceRoute = {
     nest(childOrThunk: NestChildOrThunk, opts?: NestOptions): PendingSauceRoute {
@@ -387,20 +495,42 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
             `get this wrong.`,
         );
       }
+
+      const via: NestVia = opts?.via ?? "transfer";
+      assertNestOptionMode(via, opts);
+
+      if (via === "transfer" && evmPotOf(execution) === undefined && opts?.pot === undefined) {
+        throw new Error(
+          `openRoute: .nest() via: "transfer" requires an EVM Pot execution (T3) — this route's own ` +
+            `IntentOptions.execution/pot must name a Pot (a Solana/SVM destination has none), or pass ` +
+            `NestOptions.pot explicitly.`,
+        );
+      }
+
       nestedEntries.push({
         built,
-        allowPartial: opts?.allowPartial ?? false,
+        via,
         position: opts?.position ?? "after",
-        fundedByBody: opts?.fundedByBody ?? false,
         portal: opts?.portal ?? options.portal,
+        allowPartial: opts?.allowPartial ?? false,
+        fundedByBody: opts?.fundedByBody ?? false,
+        vault: opts?.vault,
+        vaultConfig: opts?.vaultConfig,
+        clamp: opts?.clamp ?? true,
+        requireCap: opts?.requireCap ?? false,
+        native: opts?.native ?? "balance",
+        fundNativeFromRoute: opts?.fundNativeFromRoute ?? false,
+        pot: opts?.pot,
+        compile: opts?.compile,
       });
       return pending;
     },
     reward(rewardArg: RewardArg): BuiltIntent {
       const { source, reward } = resolveReward(rewardArg, options);
 
+      let parentRouteForInvariants: Route | undefined;
       if (nestedEntries.length > 0) {
-        const parentRouteForInvariants = normalizeRoute({
+        parentRouteForInvariants = normalizeRoute({
           deadline: options.deadline,
           portal: options.portal,
           nativeAmount: options.nativeAmount,
@@ -410,14 +540,102 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
         assertNestingInvariants({
           parentChain: destination,
           parentRoute: parentRouteForInvariants,
-          children: nestedEntries.map((e) => ({ intent: e.built.intent, fundedByBody: e.fundedByBody })),
+          children: nestedEntries.map((e) => ({ intent: e.built.intent, fundedByBody: e.fundedByBody, via: e.via })),
         });
+
+        // T5: a transfer child opting into `fundNativeFromRoute` re-enables a NATIVE-only coverage
+        // check, since that native genuinely comes from this route's own `route.nativeAmount`.
+        const fundNativeFromRouteTotal = nestedEntries
+          .filter((e) => e.via === "transfer" && e.fundNativeFromRoute)
+          .reduce((sum, e) => sum + e.built.intent.reward.nativeAmount, 0n);
+        if (fundNativeFromRouteTotal > parentRouteForInvariants.nativeAmount) {
+          throw new Error(
+            `openRoute: .nest() children opted into fundNativeFromRoute total nativeAmount ` +
+              `(${fundNativeFromRouteTotal}) exceeds this route's own route.nativeAmount ` +
+              `(${parentRouteForInvariants.nativeAmount}) (T5) — the transfer cook's value cannot ` +
+              `exceed what the solver delivered via route.nativeAmount.`,
+          );
+        }
       }
 
-      const childCalls = (position: "before" | "after"): CallInput[] =>
-        nestedEntries
-          .filter((e) => e.position === position)
+      /** Resolves a `NestEntry`'s vault-address rung, precedence explicit > predicted > runtime. */
+      function resolveVaultResolution(e: NestEntry): ChildVaultResolution {
+        if (e.vault !== undefined) return { mode: "explicit", vault: e.vault };
+        if (e.vaultConfig !== undefined) {
+          return {
+            mode: "predicted",
+            config: {
+              vaultInitCodeHash: e.vaultConfig.vaultInitCodeHash,
+              portal: e.vaultConfig.portal ?? e.portal,
+              prefix: e.vaultConfig.prefix,
+            },
+          };
+        }
+        return { mode: "runtime", portal: e.portal };
+      }
+
+      /** Compiles every `via: "transfer"` entry in one position group into ONE merged `cook()`
+       *  call (in `.nest()` order) — see `nest.ts#nestedTransferProgram`. */
+      function buildTransferCall(transferEntries: readonly NestEntry[]): CallInput {
+        const defaultPot = evmPotOf(execution);
+        const pot = transferEntries[0]!.pot ?? defaultPot;
+        if (pot === undefined) {
+          throw new Error(
+            `openRoute: .nest() via: "transfer" requires an EVM Pot execution (T3) — this route's own ` +
+              `IntentOptions.execution/pot must name a Pot, or pass NestOptions.pot explicitly.`,
+          );
+        }
+        for (const e of transferEntries) {
+          const entryPot = e.pot ?? defaultPot;
+          if (entryPot !== pot) {
+            throw new Error(
+              `openRoute: .nest() via: "transfer" children merged into the same position group must ` +
+                `target the same Pot — got conflicting NestOptions.pot values ('${pot}' vs '${entryPot}').`,
+            );
+          }
+        }
+
+        const entries: TransferNestEntry[] = transferEntries.map((e) => ({
+          child: e.built.intent,
+          opts: {
+            vaultResolution: resolveVaultResolution(e),
+            clamp: e.clamp,
+            requireCap: e.requireCap,
+            native: e.native,
+          },
+        }));
+
+        const { source: transferSource, baseDirs } = nestedTransferProgram(entries);
+
+        const nativeValue = transferEntries
+          .filter((e) => e.fundNativeFromRoute)
+          .reduce((sum, e) => sum + e.built.intent.reward.nativeAmount, 0n);
+
+        const perEntryCompile = transferEntries.map((e) => e.compile).find((c) => c !== undefined);
+        const transferCompileOptions: SauceCompileOptions = {
+          ...perEntryCompile,
+          target: perEntryCompile?.target ?? "v12",
+          baseDirs: [...(perEntryCompile?.baseDirs ?? []), ...baseDirs],
+        };
+
+        const compiledTransfer = compileSauceRoute(
+          destination,
+          transferSource,
+          { pot, value: nativeValue },
+          transferCompileOptions,
+        );
+        return compiledTransfer.calls[0]!;
+      }
+
+      const childCalls = (position: "before" | "after"): CallInput[] => {
+        const group = nestedEntries.filter((e) => e.position === position);
+        const publishCalls = group
+          .filter((e) => e.via === "publishAndFund")
           .flatMap((e) => nestedChildCalls(e.built.intent, { portal: e.portal, allowPartial: e.allowPartial }));
+        const transferEntries = group.filter((e) => e.via === "transfer");
+        const transferCalls = transferEntries.length > 0 ? [buildTransferCall(transferEntries)] : [];
+        return [...publishCalls, ...transferCalls];
+      };
 
       const calls: CallInput[] = [
         ...(options.precalls ?? []),
