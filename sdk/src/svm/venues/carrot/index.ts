@@ -247,6 +247,17 @@ function decodeOraclePriceOffset(data: Uint8Array, pool: Address, oracle: Addres
   throw new Error(`carrot vault ${pool}: oracle ${oracle} has an unrecognized verification-level tag ${tag}`);
 }
 
+// TODO(t22-fee-netting): the Token-2022 legs (CRT shares + pyUSD, see
+// CARROT_TOKEN_2022_MINTS) are NOT transfer-fee-netted in the NAV formula. This
+// is safe today: pyUSD's transfer fee is 0 bps (it carries only PermanentDelegate
+// / ConfidentialTransfer advisories, both routable), and the six real
+// simulateTransaction dry-runs matched the un-netted NAV formula to ~0.04% (see
+// the module header's VALIDATION note), i.e. no material CRT fee either. There is
+// also no referenceQuote in this fetch-only adapter to net a fee on — the NAV
+// fragment runs in the consuming app. If a basket/shares mint ever gains a
+// nonzero effective transfer fee, net it there (net(x, feeOfInputMint) into the
+// pool, net(grossOut, feeOfOutputMint) to the user) rather than here — a missed
+// netting is a safe self-limit; a wrong one would silently mis-quote.
 async function fetchCarrotPoolConfig(load: AccountLoader, pool: Address): Promise<CarrotPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`carrot vault ${pool} account not found`);

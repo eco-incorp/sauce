@@ -153,6 +153,8 @@ import type {
   SwapUser,
   VenueAccount,
 } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'whalestreet';
 export const WHALESTREET_PROGRAM_ID = address('FW6zUqn4iKRaeopwwhwsquTY6ABWLLgjxtrC3VPnaWBf');
@@ -205,12 +207,30 @@ export async function fetchWhalestreetPoolConfig(load: AccountLoader, pool: Addr
   if (data.length !== POOL_ACCOUNT_SIZE) {
     throw new Error(`${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
   }
+  const mintA = pubkeyAt(data, WHALESTREET_OFF_MINT_A);
+  const mintB = pubkeyAt(data, WHALESTREET_OFF_MINT_B);
+  // This venue's swap CPI is legacy-SPL (Tokenkeg) only. Detect a Token-2022
+  // (or otherwise un-routable) mint per side and GRACEFULLY SELF-DROP the pool
+  // (the SvmRoute orchestrator catches a fetchPoolConfig throw and drops the
+  // venue). The LEGACY path is byte-identical; an unreadable mint falls back to
+  // the legacy assumption.
+  for (const mint of [mintA, mintB]) {
+    const mintData = await load(mint);
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
+  }
   return {
     venue: SLUG,
     pool,
     direction: 0,
-    mintA: pubkeyAt(data, WHALESTREET_OFF_MINT_A),
-    mintB: pubkeyAt(data, WHALESTREET_OFF_MINT_B),
+    mintA,
+    mintB,
     vaultA: pubkeyAt(data, WHALESTREET_OFF_VAULT_A),
     vaultB: pubkeyAt(data, WHALESTREET_OFF_VAULT_B),
   };

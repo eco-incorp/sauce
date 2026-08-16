@@ -137,6 +137,8 @@ import type { Address } from '@solana/kit';
 import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from '../orca-whirlpool/tick-math.js';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'crema';
 export const CREMA_PROGRAM_ID = address('CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR');
@@ -395,12 +397,21 @@ export async function fetchCremaPoolConfig(load: AccountLoader, pool: Address): 
   const clmmConfig = codec.decode(data.subarray(OFF_CLMM_CONFIG, OFF_CLMM_CONFIG + 32)) as Address;
   const tokenMintA = codec.decode(data.subarray(OFF_MINT_A, OFF_MINT_A + 32)) as Address;
   const tokenMintB = codec.decode(data.subarray(OFF_MINT_B, OFF_MINT_B + 32)) as Address;
+  // The swap ix's token_program account is a single fixed program (Tokenkeg) —
+  // legacy-SPL only. A Token-2022 mint (or one carrying an un-routable extension)
+  // SELF-DROPS this pool: the thrown error is the graceful-drop signal the
+  // SvmRoute orchestrator catches. An unreadable mint falls back to the legacy
+  // assumption (a classic 82-byte mint classifies legacy → no throw → config
+  // built byte-identically to before).
   for (const mint of [tokenMintA, tokenMintB]) {
     const mintData = await load(mint);
-    if (mintData === null) throw new Error(`${SLUG}: mint ${mint} of pool ${pool} not found`);
-    // The swap ix's token_program account is a single fixed program (Tokenkeg) — classic SPL only.
-    if (mintData.length !== 82) {
-      throw new Error(`${SLUG}: pool ${pool} mint ${mint} is not a classic SPL mint (swap is Tokenkeg-only)`);
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
     }
   }
 

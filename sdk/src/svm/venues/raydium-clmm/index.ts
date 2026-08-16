@@ -73,6 +73,8 @@ import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit'
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 import { MAX_TICK, MIN_TICK, raydiumSqrtPriceAtTick } from './tick-math.js';
 
 const SLUG = 'raydium-clmm';
@@ -378,14 +380,22 @@ export async function fetchRaydiumClmmConfig(load: AccountLoader, pool: Address)
   const ammConfig = codec.decode(data.subarray(OFF_AMM_CONFIG, OFF_AMM_CONFIG + 32));
   const tokenMint0 = codec.decode(data.subarray(OFF_TOKEN_MINT_0, OFF_TOKEN_MINT_0 + 32));
   const tokenMint1 = codec.decode(data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32));
+  // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
+  // one carrying an un-routable extension) via the shared data-shape resolver
+  // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
+  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
+  // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
+  // Tokenkeg, parses no extensions, and the config is built unchanged. An
+  // unreadable mint falls back to the legacy assumption (keeps fixtures green).
   for (const mint of [tokenMint0, tokenMint1]) {
     const mintData = await load(mint);
-    if (mintData === null) throw new Error(`${SLUG}: mint ${mint} of pool ${pool} not found`);
-    // The quote reads tick liquidity (vault-independent), but a transfer-fee
-    // (Token-2022 TLV) mint would break the realized-delta bound; classic SPL
-    // mints are exactly 82 bytes.
-    if (mintData.length !== 82) {
-      throw new Error(`${SLUG}: pool ${pool} mint ${mint} is not a classic SPL mint (transfer-fee mints unsupported)`);
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
     }
   }
 

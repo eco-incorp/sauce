@@ -72,6 +72,8 @@ import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'metadao-futarchy';
 
@@ -162,12 +164,31 @@ export async function fetchMetaDaoFutarchySpotConfig(load: AccountLoader, pool: 
   if (quoteReserves === 0n || baseReserves === 0n) {
     throw new Error(`${SLUG} dao ${pool} has a zero-reserve side (quote=${quoteReserves}, base=${baseReserves}) — unquotable`);
   }
+  const baseMint = pubkeyAt(data, BASE_MINT_OFFSET);
+  const quoteMint = pubkeyAt(data, QUOTE_MINT_OFFSET);
+
+  // `spotSwap` is legacy-SPL only (classic `token::transfer`). SELF-DROP a
+  // Token-2022 mint (or one carrying an un-routable extension) by throwing — the
+  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue. An
+  // unreadable mint falls back to the legacy assumption (keeps existing tests green).
+  for (const mint of [baseMint, quoteMint]) {
+    const mintData = await load(mint);
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
+  }
+
   return {
     venue: SLUG,
     pool,
     direction: 'buy',
-    baseMint: pubkeyAt(data, BASE_MINT_OFFSET),
-    quoteMint: pubkeyAt(data, QUOTE_MINT_OFFSET),
+    baseMint,
+    quoteMint,
     ammBaseVault: pubkeyAt(data, AMM_BASE_VAULT_OFFSET),
     ammQuoteVault: pubkeyAt(data, AMM_QUOTE_VAULT_OFFSET),
     tokenProgram: TOKEN_PROGRAM,
