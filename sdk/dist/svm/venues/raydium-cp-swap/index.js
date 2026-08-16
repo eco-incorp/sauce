@@ -16,6 +16,7 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { ceilDiv, readUintLE } from '../math.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'raydium-cp-swap';
 const PROGRAM_ID = 'CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C';
 /** PDA ["vault_and_lp_mint_auth_seed"] — vault and lp-mint authority. */
@@ -205,7 +206,25 @@ export const raydiumCpSwap = {
             if (mintData === null) {
                 throw new Error(`raydium-cp-swap ${side} mint ${mint} is token-2022 but could not be loaded to check transfer-fee extensions`);
             }
+            // Un-routable (blocking) extensions self-drop: a NonTransferable or
+            // default-frozen mint cannot move through a plain transferChecked.
+            // Advisory extensions (PermanentDelegate / ConfidentialTransfer) are NOT
+            // blocking, so a zero-fee/advisory-only T22 mint still routes.
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`raydium-cp-swap ${side} mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
             if (hasTransferFeeExtension(mintData)) {
+                // TODO(t22-fee-netting): raydium-cp-swap's program deducts the input
+                // transfer fee before the trade fee/curve and nets the output transfer
+                // fee, so this is a determinable two-leg net (net(amountIn) into the
+                // curve, net(grossOut) to the user). It is left as a rejection because
+                // netting only referenceQuote would desync it from the un-netted
+                // on-chain election fragment (emitQuote), and netting emitQuote too
+                // needs the mint's fee TLV read on-chain plus the current Solana epoch
+                // to pick the active fee schedule — out of scope for this pass. Keep
+                // the safe self-limiting rejection rather than risk a favourable
+                // mis-quote.
                 throw new Error(`raydium-cp-swap ${side} mint ${mint} has a token-2022 transfer-fee extension (wire amounts diverge from the quote)`);
             }
         }

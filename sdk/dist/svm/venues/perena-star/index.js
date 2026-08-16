@@ -141,6 +141,8 @@
  */
 import { address, getAddressDecoder } from '@solana/kit';
 import { findAssociatedTokenPda } from '@solana-program/token';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 export const PERENA_STAR_PROGRAM_ID = address('save8RQVPMWNTzU18t3GBvBkN9hT7jsGjiCQ28FpD9H');
 const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const TRANCHE_STATE_DISCRIMINATOR = Uint8Array.from([212, 231, 254, 24, 238, 63, 92, 105]);
@@ -180,6 +182,25 @@ async function fetchPerenaStarPoolConfig(load, pool) {
     const bank = pubkey(trancheData, OFF_TRANCHE_BANK);
     const bankMint = pubkey(trancheData, OFF_MINT);
     const juniorMint = pubkey(trancheData, OFF_SHARE_MINT);
+    // Token-2022 safety: stake_junior/instant_unstake_junior move both mints via a
+    // legacy-SPL (Tokenkeg) token program, so a Token-2022 mint (or one carrying an
+    // un-routable extension) SELF-DROPS the pool via a thrown, clearly-described
+    // error — the SvmRoute orchestrator catches a fetchPoolConfig throw and drops
+    // the venue. The legacy path stays byte-identical: a classic 82-byte mint
+    // classifies as legacy → no throw, and an unreadable mint (not vendored by a
+    // fixture) falls back to legacy.
+    for (const mint of [bankMint, juniorMint]) {
+        const mintData = await load(mint);
+        if (mintData === null)
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`perena-star: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`perena-star: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
+    }
     const bankData = await load(bank);
     if (bankData === null)
         throw new Error(`perena-star bank ${bank} not found`);

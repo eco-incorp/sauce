@@ -147,6 +147,8 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'lemmingsfi';
 export const LEMMINGSFI_PROGRAM_ID = address('BQEJZUB4CzoT6UhRffoCkqCyqQNrCPCSGHcPEmsdbEsX');
 const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -208,8 +210,7 @@ function lemmingsfiConfig(cfg) {
     return cfg;
 }
 const ref = (slot, role) => `s${slot}:${role}`;
-async function fetchMintDecimals(load, mint) {
-    const data = await load(mint);
+function mintDecimalsFrom(mint, data) {
     if (data === null)
         throw new Error(`${SLUG} mint ${mint} account not found`);
     if (data.length < MINT_ACCOUNT_MIN_SIZE) {
@@ -226,7 +227,28 @@ export async function fetchLemmingsFiPoolConfig(load, pool) {
     }
     const mintA = pubkeyAt(data, OFF_MINT_A);
     const mintB = pubkeyAt(data, OFF_MINT_B);
-    const [decA, decB] = await Promise.all([fetchMintDecimals(load, mintA), fetchMintDecimals(load, mintB)]);
+    // Load each mint ONCE — the same bytes serve both T22 detection and the
+    // decimals read below. The `Swap` ix is legacy-SPL only (Tokenkeg account[7]),
+    // so SELF-DROP a Token-2022 mint (or one carrying an un-routable extension) by
+    // throwing — the SvmRoute orchestrator catches a fetchPoolConfig throw and
+    // drops the venue. An unreadable mint would fail the decimals read below anyway.
+    const [mintAData, mintBData] = await Promise.all([load(mintA), load(mintB)]);
+    for (const [mint, mintData] of [
+        [mintA, mintAData],
+        [mintB, mintBData],
+    ]) {
+        if (mintData === null)
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
+    }
+    const decA = mintDecimalsFrom(mintA, mintAData);
+    const decB = mintDecimalsFrom(mintB, mintBData);
     const { kNum, kDen } = priceScaleFactor(decA, decB);
     return {
         venue: SLUG,

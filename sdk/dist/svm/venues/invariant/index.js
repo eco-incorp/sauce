@@ -90,6 +90,8 @@
  */
 import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'invariant';
 export const INVARIANT_PROGRAM_ID = address('HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt');
 const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -333,6 +335,23 @@ export async function fetchInvariantPoolConfig(load, pool) {
     const tokenXReserve = codec.decode(data.subarray(OFF_TOKEN_X_RESERVE, OFF_TOKEN_X_RESERVE + 32));
     const tokenYReserve = codec.decode(data.subarray(OFF_TOKEN_Y_RESERVE, OFF_TOKEN_Y_RESERVE + 32));
     const tickmap = codec.decode(data.subarray(OFF_TICKMAP, OFF_TICKMAP + 32));
+    // The swap ix here is classic `token::transfer` (Tokenkeg-only, no mint
+    // accounts). SELF-DROP a Token-2022 mint (or one carrying an un-routable
+    // extension) by throwing — the SvmRoute orchestrator catches a fetchPoolConfig
+    // throw and drops the venue. An unreadable mint falls back to the legacy
+    // assumption, keeping every existing fixture-driven test green.
+    for (const mint of [tokenXMint, tokenYMint]) {
+        const mintData = await load(mint);
+        if (mintData === null)
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
+    }
     const tickSpacing = Number(readUintLE(data, OFF_TICK_SPACING, 2));
     const currentTick = (() => {
         const u = Number(readUintLE(data, OFF_CURRENT_TICK, 4));

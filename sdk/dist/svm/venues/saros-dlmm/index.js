@@ -123,6 +123,8 @@
  */
 import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'saros-dlmm';
 export const SAROS_DLMM_PROGRAM_ID = address('1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE');
 const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -298,12 +300,23 @@ export async function fetchSarosDlmmConfig(load, pair) {
     const codec = getAddressCodec();
     const tokenXMint = codec.decode(data.subarray(OFF_TOKEN_X_MINT, OFF_TOKEN_X_MINT + 32));
     const tokenYMint = codec.decode(data.subarray(OFF_TOKEN_Y_MINT, OFF_TOKEN_Y_MINT + 32));
+    // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
+    // one carrying an un-routable extension) via the shared data-shape resolver
+    // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
+    // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
+    // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
+    // Tokenkeg, parses no extensions, and the config is built unchanged. An
+    // unreadable mint falls back to the legacy assumption (keeps fixtures green).
     for (const mint of [tokenXMint, tokenYMint]) {
         const mintData = await load(mint);
         if (mintData === null)
-            throw new Error(`${SLUG}: mint ${mint} of pair ${pair} not found`);
-        if (mintData.length !== 82) {
-            throw new Error(`${SLUG}: pair ${pair} mint ${mint} is not a classic SPL mint`);
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pair} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pair} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
         }
     }
     const binStep = data[OFF_BIN_STEP];

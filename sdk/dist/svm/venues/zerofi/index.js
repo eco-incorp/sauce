@@ -110,6 +110,8 @@ import { address, getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import { INSTRUCTIONS_SYSVAR } from '../../cpi-probe.js';
 import { ieee754ScaleParams } from './ieee754.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'zerofi';
 export const ZEROFI_PROGRAM_ID = address('ZERor4xhbUycZ6gb9ntrhqscUcZmAbQDjEAtCf4hbZY');
 const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -234,6 +236,24 @@ export const zerofi = {
         }
         if (mintAData.length < MINT_DECIMALS_OFFSET + 1 || mintBData.length < MINT_DECIMALS_OFFSET + 1) {
             throw new Error(`${SLUG} pool ${pool} mint account(s) too short to be an SPL mint`);
+        }
+        // `swap_v4` is Tokenkeg-only (slots 9/11 are always the classic Token
+        // program). Detect a Token-2022 (or otherwise un-routable) mint per side
+        // and GRACEFULLY SELF-DROP the pool (the SvmRoute orchestrator catches a
+        // fetchPoolConfig throw and drops the venue). Reuses the mint bytes already
+        // loaded above; the LEGACY path is byte-identical (a classic 82-byte mint
+        // classifies Tokenkeg, parses no extensions).
+        for (const [m, mintData] of [
+            [mintA, mintAData],
+            [mintB, mintBData],
+        ]) {
+            if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join('; ')}`);
+            }
         }
         const decimalsA = mintAData[MINT_DECIMALS_OFFSET];
         const decimalsB = mintBData[MINT_DECIMALS_OFFSET];

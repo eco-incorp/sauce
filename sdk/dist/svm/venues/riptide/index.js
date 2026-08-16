@@ -12,8 +12,7 @@
  * USDT/USDC pool (`6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci`).
  *
  * This file is the off-chain decode + CPI-account layer (PoolConfig,
- * fetchPoolConfig, quoteAccounts). The on-chain quote fragment
- * (SvmVenueLadder) lives in ladder.ts.
+ * fetchPoolConfig, quoteAccounts).
  *
  * ── Account layout (pool account, 1024 bytes, gated at fetch) ──
  * Recovered the same way obric-v2/solfi-v2 do: decode candidate offsets,
@@ -50,6 +49,8 @@
  * whitelisted partner key. Landing a real cook needs no separate grant.
  */
 import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress, } from '@solana/kit';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'riptide';
 export const RIPTIDE_PROGRAM_ID = address('riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j');
 export const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -88,6 +89,23 @@ export async function fetchPoolConfig(load, pool, direction = 0) {
     }
     const mintA = pubkeyAt(data, OFF_MINT_A);
     const mintB = pubkeyAt(data, OFF_MINT_B);
+    // The on-chain swap ix is legacy-SPL (Tokenkeg) only for now, so SELF-DROP a
+    // pool holding a Token-2022 mint (or an un-routable extension mint) — the
+    // thrown error is the graceful-drop signal (SvmRoute catches a
+    // fetchPoolConfig throw and drops the venue). An unreadable mint falls back
+    // to the legacy assumption, keeping the byte-identical legacy path.
+    for (const mint of [mintA, mintB]) {
+        const mintData = await load(mint);
+        if (mintData === null)
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
+    }
     const [vaultA, vaultB] = await Promise.all([deriveAta(pool, mintA), deriveAta(pool, mintB)]);
     return {
         venue: SLUG,

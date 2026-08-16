@@ -148,6 +148,8 @@
  */
 import { address } from '@solana/kit';
 import { BINARYFI_ASSET_FLOOR_RATES } from './asset-configs.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'binaryfi';
 export const BINARYFI_PROGRAM_ID = address('B72M6nyCLFgWiJtAN4naUTminMiTmyGcEqQHXwVeRdht');
 /** Single global config account, shared by every market (see file header). */
@@ -236,6 +238,24 @@ export const binaryfi = {
         const quoteMint = b58Address(data, OFF_QUOTE_MINT);
         const assetVault = b58Address(data, OFF_ASSET_VAULT);
         const quoteVault = b58Address(data, OFF_QUOTE_VAULT);
+        // The on-chain swap ix (disc 0x08) is legacy-SPL only (one token_program
+        // slot, listed twice), so a Token-2022 mint (or one carrying an un-routable
+        // extension) SELF-DROPS this market: the thrown error is the graceful-drop
+        // signal the SvmRoute orchestrator catches. An unreadable mint falls back to
+        // the legacy assumption (a classic 82-byte mint classifies legacy → no throw
+        // → config built byte-identically to before).
+        for (const mint of [assetMint, quoteMint]) {
+            const mintData = await load(mint);
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`binaryfi: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`binaryfi: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
+        }
         const floorRate = BINARYFI_ASSET_FLOOR_RATES[assetMint];
         if (floorRate === undefined) {
             throw new Error(`binaryfi market ${pool}: no calibrated floor rate for asset mint ${assetMint} — refresh sdk/src/svm/venues/binaryfi/asset-configs.ts`);

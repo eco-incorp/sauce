@@ -1,0 +1,1 @@
+{"version":3,"file":"params.d.ts","sourceRoot":"","sources":["../../src/deposit/params.ts"],"names":[],"mappings":"AAMA,OAAO,KAAK,EAAkB,WAAW,EAAmB,iBAAiB,EAAE,MAAM,YAAY,CAAC;AAgBlG;;;;;;;;;;;;;;;GAeG;AACH,wBAAgB,SAAS,CACvB,IAAI,EAAE,WAAW,GAAG,CAAC,IAAI,CAAC,WAAW,EAAE,QAAQ,CAAC,GAAG;IAAE,MAAM,EAAE,SAAS,GAAG,OAAO,GAAG,KAAK,CAAA;CAAE,CAAC,GAC1F,iBAAiB,CAoEnB"}
