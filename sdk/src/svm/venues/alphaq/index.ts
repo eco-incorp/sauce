@@ -203,6 +203,33 @@ const OFF_STATS_PRICE = 56;
 const PRICE_SCALE = 10_000_000_000n; // 1e10
 
 /**
+ * The stats account also carries the LAST-CRANK unix timestamp (u64 LE) at
+ * offset 48 — when the keeper last refreshed the oracle price at
+ * {@link OFF_STATS_PRICE}. This is the "sane price" discriminator: a market
+ * whose keeper has stopped cranking holds a STALE @56 that no longer tracks the
+ * real rate (measured: JLP-USDC last cranked 2025-10-09 reads 5.834 vs a real
+ * ~3.62; PYTHIA/EITHER ~100 days stale read 6x/1000x off), and serving it would
+ * OVER-PROMISE the appreciated side — the exact favourable-error hazard this
+ * adapter exists to avoid. Across every AlphaQ market a freshness cut cleanly
+ * separates good from bad: EVERY market cranked within the hour has @56 matching
+ * the live routable rate to a few bps (zero false rejects), EVERY diverging
+ * market is stale. So a non-stable market is served only when its oracle price
+ * is fresh; otherwise it self-drops.
+ */
+const OFF_STATS_PRICE_TS = 48;
+/**
+ * Max age (seconds) of the stats oracle timestamp for a NON-stable market to be
+ * served. 1 hour — data-validated (every fresh market is minutes old; every
+ * stale one is 98+ DAYS, so any threshold in this vast gap separates them, and
+ * the tight end is the safe, over-promise-averse choice). Stablecoin pairs use
+ * the parity model and ignore this. NOTE: this is the PREPARE-time gate; the
+ * recipe ladder's on-chain fragment must additionally check @48 against
+ * block.timestamp LIVE at cook time, since a price fresh at prepare can go stale
+ * before the swap lands (see the module doc's CONSUMER NOTE).
+ */
+const MAX_PRICE_AGE_SECONDS = 3600n;
+
+/**
  * Curated set of mints this integration TRUSTS to be genuine ~$1 stablecoins
  * — see the module doc's "SCOPE GATE". High-confidence, well-known-brand
  * $1-pegged stablecoins only (USDC, USDT, and 6 others actually paired
@@ -387,6 +414,14 @@ export interface AlphaqPoolConfig extends PoolConfig {
    */
   priceRaw: bigint;
   /**
+   * The unix timestamp (seconds) the oracle price was last cranked, read from
+   * the stats account at {@link OFF_STATS_PRICE_TS}. The freshness anchor: a
+   * non-stable market is only served when this is recent (see
+   * {@link MAX_PRICE_AGE_SECONDS}); carried so the recipe fragment can re-check
+   * it LIVE at cook time. 0 for a never-cranked market.
+   */
+  priceTimestamp: bigint;
+  /**
    * True iff BOTH mints are in the curated {@link STABLE_MINTS} set. Stable
    * pools keep the original parity quote (byte/lamport-identical, regression-
    * guarded); non-stable pools use the oracle-priced quote. See
@@ -405,7 +440,11 @@ export interface AlphaqPoolConfig extends PoolConfig {
  * live prime for. A genuinely unknown/out-of-scope/future market is
  * dropped, never crashed on.
  */
-export async function fetchAlphaqPoolConfig(load: AccountLoader, pool: Address): Promise<AlphaqPoolConfig> {
+export async function fetchAlphaqPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+  now?: bigint,
+): Promise<AlphaqPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`alphaq market ${pool} not found`);
   if (data.length !== MARKET_SIZE) {
@@ -444,15 +483,37 @@ export async function fetchAlphaqPoolConfig(load: AccountLoader, pool: Address):
   // hard STABLE_MINTS-only gate: any equal-decimal market with a sane oracle
   // price now serves.
   const statsData = await load(statsAccount);
-  let priceRaw = PRICE_SCALE; // parity default (stable pairs ignore it)
-  if (statsData !== null && statsData.length >= OFF_STATS_PRICE + 8) {
-    priceRaw = readUint64LE(statsData, OFF_STATS_PRICE);
-  }
-  if (!isStablePair && (priceRaw <= 0n || statsData === null)) {
-    throw new Error(
-      `alphaq market ${pool} ("${symbol}") is a non-stable pair with no readable oracle price ` +
-        `(stats@${OFF_STATS_PRICE}) — self-dropping rather than assuming parity`,
-    );
+  const hasStats = statsData !== null && statsData.length >= OFF_STATS_PRICE + 8;
+  const priceRaw = hasStats ? readUint64LE(statsData, OFF_STATS_PRICE) : PRICE_SCALE; // parity default (stable pairs ignore it)
+  const priceTimestamp =
+    statsData !== null && statsData.length >= OFF_STATS_PRICE_TS + 8
+      ? readUint64LE(statsData, OFF_STATS_PRICE_TS)
+      : 0n;
+  // "Sane oracle price" gate for a NON-stable pair: it is only priceable via
+  // the oracle, so it self-drops (throws, caught by resolveSvmPoolSpec) rather
+  // than serve a garbage-but-parseable or STALE @56 — never falling back to the
+  // parity assumption that mispriced syrupUSDC. A stablecoin pair uses parity
+  // and ignores all of this. Three ways a non-stable oracle is not sane:
+  if (!isStablePair) {
+    if (!hasStats || priceRaw <= 0n) {
+      throw new Error(
+        `alphaq market ${pool} ("${symbol}") is a non-stable pair with no readable oracle price ` +
+          `(stats@${OFF_STATS_PRICE}) — self-dropping rather than assuming parity`,
+      );
+    }
+    if (priceTimestamp <= 0n) {
+      throw new Error(
+        `alphaq market ${pool} ("${symbol}") has a never-cranked oracle (stats@${OFF_STATS_PRICE_TS} == 0) — self-dropping`,
+      );
+    }
+    const nowSec = now ?? BigInt(Math.floor(Date.now() / 1000));
+    const age = nowSec - priceTimestamp;
+    if (age > MAX_PRICE_AGE_SECONDS) {
+      throw new Error(
+        `alphaq market ${pool} ("${symbol}") oracle price is STALE (last cranked ${age}s ago, ` +
+          `max ${MAX_PRICE_AGE_SECONDS}s) — self-dropping rather than serving a stale/over-promising price`,
+      );
+    }
   }
   return {
     venue: SLUG,
@@ -467,6 +528,7 @@ export async function fetchAlphaqPoolConfig(load: AccountLoader, pool: Address):
     decimalsB,
     statsAccount,
     priceRaw,
+    priceTimestamp,
     isStablePair,
   };
 }
