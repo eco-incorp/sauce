@@ -65,6 +65,8 @@ import { AMM_CONFIG_DISCRIMINATOR as RAYDIUM_CLMM_AMM_CONFIG_DISCRIMINATOR, POOL
 import { MAX_TICK as RAYDIUM_MAX_TICK, MIN_TICK as RAYDIUM_MIN_TICK } from '../raydium-clmm/tick-math.js';
 import { raydiumSqrtPriceAtTick } from '../raydium-clmm/tick-math.js';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'pancakeswap-clmm';
 /** PancakeSwap's Solana CLMM program (a Raydium-CLMM-shaped Anchor fork). */
 export const PANCAKESWAP_CLMM_PROGRAM_ID = address('HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq');
@@ -238,12 +240,23 @@ export async function fetchPancakeswapClmmConfig(load, pool) {
     const ammConfig = codec.decode(data.subarray(OFF_AMM_CONFIG, OFF_AMM_CONFIG + 32));
     const tokenMint0 = codec.decode(data.subarray(OFF_TOKEN_MINT_0, OFF_TOKEN_MINT_0 + 32));
     const tokenMint1 = codec.decode(data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32));
+    // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
+    // one carrying an un-routable extension) via the shared data-shape resolver
+    // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
+    // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
+    // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
+    // Tokenkeg, parses no extensions, and the config is built unchanged. An
+    // unreadable mint falls back to the legacy assumption (keeps fixtures green).
     for (const mint of [tokenMint0, tokenMint1]) {
         const mintData = await load(mint);
         if (mintData === null)
-            throw new Error(`${SLUG}: mint ${mint} of pool ${pool} not found`);
-        if (mintData.length !== 82) {
-            throw new Error(`${SLUG}: pool ${pool} mint ${mint} is not a classic SPL mint (transfer-fee mints unsupported)`);
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
         }
     }
     const cfgData = await load(ammConfig);

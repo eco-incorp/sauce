@@ -164,12 +164,12 @@ import { readUintLE } from '../math.js';
 import type {
   AccountBytesMap,
   AccountLoader,
-  LadderSwapTemplate,
   PoolConfig,
-  SvmVenueLadder,
   SwapUser,
   VenueAccount,
 } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'taurusfi';
 export const TAURUSFI_PROGRAM_ID: Address<'9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc'> = address(
@@ -319,6 +319,23 @@ export async function fetchTaurusFiConfig(load: AccountLoader, pool: Address): P
     }
     const vaultMint = pubkeyAt(vaultData, VAULT_MINT_OFFSET);
     if (vaultMint !== mint) throw new Error(`${SLUG}: vault ${vault} holds mint ${vaultMint}, expected ${mint}`);
+  }
+
+  // This venue's swap CPI is legacy-SPL (Tokenkeg) only. Detect a Token-2022
+  // (or otherwise un-routable) mint per side and GRACEFULLY SELF-DROP the pool
+  // (the SvmRoute orchestrator catches a fetchPoolConfig throw and drops the
+  // venue). The LEGACY path is byte-identical; an unreadable mint falls back to
+  // the legacy assumption.
+  for (const mint of [entry.mint0, entry.mint1]) {
+    const mintData = await load(mint);
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
   }
 
   return { venue: SLUG, pool, direction: '0to1', priceScaled, ...entry };

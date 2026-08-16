@@ -17,6 +17,8 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { ceilDiv, readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'raydium-amm-v4';
 const PROGRAM_ID = address('675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8');
 const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -105,6 +107,25 @@ export const raydiumAmmV4 = {
         const pcVault = pubkey(OFF_PC_VAULT);
         await loadVault(load, coinVault, 'coin', coinMint);
         await loadVault(load, pcVault, 'pc', pcMint);
+        // Token-2022 safety: swap_base_in_v2 carries a single legacy-SPL (Tokenkeg)
+        // token program, so a Token-2022 mint (or one carrying an un-routable
+        // extension) SELF-DROPS the pool via a thrown, clearly-described error — the
+        // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
+        // The legacy path stays byte-identical: a classic 82-byte mint classifies as
+        // legacy → no throw, and an unreadable mint (not vendored by a fixture) falls
+        // back to legacy (this keeps the existing vault-only fixtures green).
+        for (const mint of [coinMint, pcMint]) {
+            const mintData = await load(mint);
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
+        }
         return {
             venue: SLUG,
             pool,

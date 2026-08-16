@@ -9,8 +9,7 @@
  * state (see ladder.ts's module doc for the closed form and exactness notes).
  *
  * This file is the off-chain decode + CPI-account layer (PoolConfig,
- * fetchPoolConfig, quoteAccounts, the shared solfiSwapAccounts builder). The
- * on-chain quote fragment (SvmVenueLadder) lives in ladder.ts.
+ * fetchPoolConfig, quoteAccounts, the shared solfiSwapAccounts builder).
  *
  * ACCOUNT LIST is POSITIONAL BY MINT, not by direction (same trap as Quantum):
  * the swap ix always takes [userMintA, userMintB] in that fixed order,
@@ -29,6 +28,8 @@ import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'solfi-v2';
 
@@ -186,6 +187,23 @@ export const solfiV2 = {
     const vaultA = pubkeyAt(data, OFF_VAULT_A);
     const vaultB = pubkeyAt(data, OFF_VAULT_B);
     const registry = pubkeyAt(data, OFF_REGISTRY);
+
+    // The swap CPI is legacy-SPL (Tokenkeg) only for now, so SELF-DROP a pool
+    // holding a Token-2022 mint (or an un-routable extension mint) — the thrown
+    // error is the graceful-drop signal (SvmRoute drops the venue on a
+    // fetchPoolConfig throw). An unreadable mint falls back to the legacy
+    // assumption, keeping the byte-identical legacy path.
+    for (const mint of [mintA, mintB]) {
+      const mintData = await load(mint);
+      if (mintData === null) continue;
+      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+        throw new Error(`solfi-v2: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      }
+      const { blocking } = parseMintExtensions(mintData);
+      if (blocking.length > 0) {
+        throw new Error(`solfi-v2: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      }
+    }
 
     const additiveK = POOL_K[pool];
     if (additiveK === undefined) {

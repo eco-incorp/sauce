@@ -105,7 +105,8 @@
  * treasury-mint ATA — credited), owner(signer), circuit_breaker_program, token_program.
  * `expected_output_amount` is set to 0 here (this recipe's own `minOut`/`priceLimit` are
  * the floor, matching every other ladder's own venue-level `min_out = 1`-equivalent
- * convention — see `LadderSwapTemplate`'s own doc comment). Internally `redeem_v0`
+ * convention: the amount is runtime-patched at cook time, never bound by this CPI field).
+ * Internally `redeem_v0`
  * CPIs into `token_program::burn` then `circuit_breaker_program::transfer_v0` (which
  * itself CPIs into `token_program::transfer`) — both nested CPIs reuse accounts already
  * present in this top-level instruction's own account list, so nothing extra is needed
@@ -117,6 +118,8 @@
  */
 import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'helium-treasury';
 /** `TreasuryManagementV0`'s own program — recipe-side `SVM_VENUE_PROGRAM_IDS['helium-treasury']`. */
 export const HELIUM_TREASURY_PROGRAM_ID = address('treaf4wWBBty3fHdyBpo35Mz84M8k3heKXmjmi9vFt5');
@@ -198,11 +201,23 @@ export async function fetchHeliumTreasuryPoolConfig(load, pool) {
     if (treasuryMintField !== treasuryMint) {
         throw new Error(`${SLUG} treasury management ${pool}: treasury ${treasury} mint ${treasuryMintField} does not match treasuryMint ${treasuryMint}`);
     }
-    const supplyMintData = await load(supplyMint);
-    if (supplyMintData === null)
-        throw new Error(`${SLUG} treasury management ${pool}: supply mint ${supplyMint} does not exist`);
-    if (supplyMintData.length !== SPL_MINT_SIZE) {
-        throw new Error(`${SLUG} treasury management ${pool}: supply mint ${supplyMint} has unexpected size ${supplyMintData.length} (want ${SPL_MINT_SIZE} — token-2022 mints are not supported)`);
+    // The redeem_v0 burn/transfer path is Tokenkeg-only (token_program is
+    // hardcoded to spl_token::id()), so detect a Token-2022 or un-routable mint
+    // via the shared data-shape resolver and SELF-DROP this treasury (the thrown
+    // error is the graceful-drop signal the SvmRoute orchestrator catches). The
+    // LEGACY path is byte-identical: a classic 82-byte mint classifies Tokenkeg
+    // with no extensions.
+    for (const mint of [treasuryMint, supplyMint]) {
+        const mintData = await load(mint);
+        if (mintData === null)
+            continue; // an unreadable mint falls back to the legacy assumption
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping treasury ${pool} — mint ${mint} is Token-2022 (this venue's redeem is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping treasury ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
     }
     const cbData = await load(circuitBreaker);
     if (cbData === null)

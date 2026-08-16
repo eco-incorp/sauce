@@ -84,6 +84,8 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'saber-decimals-wrapper';
 export const SABER_DECIMALS_WRAPPER_PROGRAM_ID = address('DecZY86MU5Gj7kppfUCEmd4LbXXuyZH1yHaP2NTqdiZB');
 const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -126,6 +128,23 @@ async function fetchPoolConfig(load, pool) {
     const wrapperMint = pubkeyAt(data, OFF_WRAPPER_MINT);
     if (underlyingMint === wrapperMint) {
         throw new Error(`${SLUG} wrapper ${pool} has identical underlying/wrapper mints — corrupt account`);
+    }
+    // The deposit/withdraw CPI is legacy-SPL (Tokenkeg) only for now, so
+    // SELF-DROP a wrapper whose underlying or wrapper mint is Token-2022 (or
+    // carries an un-routable extension) — the thrown error is the graceful-drop
+    // signal (SvmRoute drops the venue on a fetchPoolConfig throw). An unreadable
+    // mint falls back to the legacy assumption, keeping the legacy path unchanged.
+    for (const mint of [underlyingMint, wrapperMint]) {
+        const mintData = await load(mint);
+        if (mintData === null)
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping wrapper ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping wrapper ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
     }
     return {
         venue: SLUG,

@@ -136,6 +136,8 @@ import { address } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountBytesMap, AccountLoader, PoolConfig, SvmVenueAdapter, SwapUser, VenueAccount, VenueSwap } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'hylo';
 export const HYLO_PROGRAM_ID = address('HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn');
@@ -261,6 +263,24 @@ function asHyloConfig(cfg: PoolConfig): HyloPoolConfig {
 async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<HyloPoolConfig> {
   if (pool !== USDC_PAIR_ACCOUNT) {
     throw new Error(`${SLUG} only serves the singleton pair ${USDC_PAIR_ACCOUNT}, got ${pool}`);
+  }
+  // This leg's two mints are compile-time PROTOCOL CONSTANTS (USDC / hyUSD), so
+  // they are "known" from the top — no pool decode is needed to name them. The
+  // mint_/redeem_stablecoin_usdc CPI is legacy-SPL only, so SELF-DROP a
+  // Token-2022 mint (or one carrying an un-routable extension) by throwing — the
+  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
+  // Legacy path stays byte-identical: a classic 82-byte mint classifies legacy,
+  // parses no blocking extension, and the Promise.all below runs exactly as before.
+  for (const mint of [USDC_MINT, HYUSD_MINT]) {
+    const mintData = await load(mint);
+    if (mintData === null) continue; // unreadable mint → legacy assumption (keeps existing tests green)
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
   }
   const [hyloData, pairData, pythData, vaultData] = await Promise.all([
     load(HYLO_ACCOUNT),
@@ -562,8 +582,3 @@ export const hylo: SvmVenueAdapter = {
   buildSwap,
   referenceQuote,
 };
-
-// ---- SvmVenueLadder (the SvmRoute production ladder) ----
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-

@@ -166,13 +166,13 @@ import type { Address } from '@solana/kit';
 import type {
   AccountBytesMap,
   AccountLoader,
-  LadderSwapTemplate,
   PoolConfig,
-  SvmVenueLadder,
   SwapUser,
   VenueAccount,
 } from '../types.js';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'kipseli';
 export const KIPSELI_PROGRAM_ID = address('3TK9D8aoBFYjYZtKCjciPrVrRStsnvo7KmpcJqDavpaU');
@@ -292,6 +292,24 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
   const baseMint = pubkeyAt(data, OFF_BASE_MINT);
   const quoteMint = pubkeyAt(data, OFF_QUOTE_MINT);
   const expiryMs = readUintLE(data, OFF_EXPIRY_MS, 8);
+
+  // This venue's on-chain swap_v2 ix is legacy-SPL (Tokenkeg) only, so a
+  // Token-2022 mint (or one carrying an un-routable extension) must SELF-DROP
+  // the pool rather than be silently assumed legacy. The thrown error IS the
+  // graceful-drop signal (the SvmRoute orchestrator catches a fetchPoolConfig
+  // throw and drops the venue). An unreadable mint falls back to the legacy
+  // assumption, keeping the classic 82-byte path byte-identical.
+  for (const mint of [baseMint, quoteMint]) {
+    const mintData = await load(mint);
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
+  }
 
   const [baseVault, quoteVault, baseDecimals, quoteDecimals] = await Promise.all([
     deriveAta(pool, baseMint, TOKEN_PROGRAM),

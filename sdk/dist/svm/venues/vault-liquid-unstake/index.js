@@ -89,6 +89,8 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { findAssociatedTokenPda } from '@solana-program/token';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'vault-liquid-unstake';
 const PROGRAM_ID = '2rU1oCHtQ7WJUvy15tKtFvxdYNNSc3id7AzUcjeFSddo';
 // Fixed, program-wide singletons (there is exactly one production Pool and
@@ -197,6 +199,24 @@ export const vaultLiquidUnstake = {
             spData.length !== STAKE_POOL_LEN ||
             spData[STAKE_POOL_OFF_ACCOUNT_TYPE] !== 1) {
             throw new Error(`${SLUG} stake pool ${stakePool} (lstInfo ${pool}) is missing or has an unexpected shape`);
+        }
+        // This venue's `sell_lst` CPI is legacy-SPL (Tokenkeg) only (outMint is
+        // always wrapped SOL, a classic mint). Detect a Token-2022 (or otherwise
+        // un-routable) LST mint and GRACEFULLY SELF-DROP the pool (the SvmRoute
+        // orchestrator catches a fetchPoolConfig throw and drops the venue). The
+        // LEGACY path is byte-identical; an unreadable mint falls back to the
+        // legacy assumption.
+        for (const m of [mint]) {
+            const mintData = await load(m);
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join('; ')}`);
+            }
         }
         const [poolLstAta] = await findAssociatedTokenPda({
             owner: address(POOL_ADDRESS),

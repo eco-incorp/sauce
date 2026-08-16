@@ -73,6 +73,8 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { findAssociatedTokenPda } from '@solana-program/token';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'hadron';
 export const HADRON_PROGRAM_ID = address('HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8');
 export const HADRON_TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -172,6 +174,23 @@ export async function fetchHadronConfig(load, pool) {
     if (entry.mintB !== mintB) {
         throw new Error(`${SLUG} pool ${pool}: mintA ${mintA}'s registered/validated quote mint is ${entry.mintB}, but this pool's mintB is ${mintB} — ` +
             'the live oracle price field is denominated against the REGISTERED quote only, so an unvalidated pairing self-drops');
+    }
+    // The swap CPI's token program is classic Tokenkeg, so detect a Token-2022
+    // or un-routable mint via the shared data-shape resolver and SELF-DROP the
+    // pool (the thrown error is the graceful-drop signal the SvmRoute orchestrator
+    // catches). The LEGACY path is byte-identical: a classic 82-byte mint
+    // classifies Tokenkeg with no extensions and this block is a no-op.
+    for (const mint of [mintA, mintB]) {
+        const mintData = await load(mint);
+        if (mintData === null)
+            continue; // an unreadable mint falls back to the legacy assumption
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
     }
     const [vaultA] = await findAssociatedTokenPda({ owner: pool, mint: mintA, tokenProgram: HADRON_TOKEN_PROGRAM });
     const [vaultB] = await findAssociatedTokenPda({ owner: pool, mint: mintB, tokenProgram: HADRON_TOKEN_PROGRAM });

@@ -57,6 +57,8 @@ import type {
   VenueAccount,
   VenueSwap,
 } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'stabble-stable-swap';
 
@@ -121,6 +123,25 @@ export const stabbleStableSwap: SvmVenueAdapter = {
 
     // Only the first two tokens are wired for quoting/swapping (see module doc).
     const [tokenA, tokenB] = common.tokens;
+    // The v1 `swap` ix is legacy-SPL (Tokenkeg) only — no Token-2022 /
+    // transfer-fee accounting — so SELF-DROP a pool holding a Token-2022 mint
+    // (or an un-routable extension mint). The thrown error is the graceful-drop
+    // signal (SvmRoute drops the venue on a fetchPoolConfig throw). An
+    // unreadable mint falls back to the legacy assumption, keeping the
+    // byte-identical legacy path. (The previous "guard" cited in the module doc
+    // was a dead no-op in stabble-common's decodeStabblePoolCommon; this is the
+    // real, data-shape-based detection.)
+    for (const mint of [tokenA.mint, tokenB.mint]) {
+      const mintData = await load(mint);
+      if (mintData === null) continue;
+      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      }
+      const { blocking } = parseMintExtensions(mintData);
+      if (blocking.length > 0) {
+        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      }
+    }
     const vaultTokenA = await findStabbleAta(vaultAuthority, tokenA.mint);
     const vaultTokenB = await findStabbleAta(vaultAuthority, tokenB.mint);
     const beneficiaryTokenOut = await findStabbleAta(vault.beneficiary, tokenB.mint);

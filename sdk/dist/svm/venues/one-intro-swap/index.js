@@ -85,6 +85,8 @@
  */
 import { getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'one-intro-swap';
 export const ONE_INTRO_SWAP_PROGRAM_ID = 'DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm';
 const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
@@ -158,6 +160,24 @@ export async function fetchOneIntroSwapPoolConfig(load, pool) {
     // surviving as a permanent zero-quote slot.
     if (virtualReserve0 === 0n || virtualReserve1 === 0n) {
         throw new Error(`one-intro-swap PoolState ${pool} has a zero virtual reserve (0=${virtualReserve0}, 1=${virtualReserve1})`);
+    }
+    // Token-2022 safety: this venue's SwapExactAmountIn ix is legacy-SPL (Tokenkeg)
+    // only, so a Token-2022 mint (or one carrying an un-routable extension)
+    // SELF-DROPS the pool via a thrown, clearly-described error — the SvmRoute
+    // orchestrator catches a fetchPoolConfig throw and drops the venue. The legacy
+    // path stays byte-identical: a classic 82-byte mint classifies as legacy → no
+    // throw, and an unreadable mint (not vendored by a fixture) falls back to legacy.
+    for (const mint of [mint0, mint1]) {
+        const mintData = await load(mint);
+        if (mintData === null)
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
     }
     const [feeA0, feeB0, feeA1, feeB1] = await Promise.all([
         deriveAta(ONE_INTRO_SWAP_FEE_OWNER_A, mint0),

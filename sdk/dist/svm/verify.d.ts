@@ -1,6 +1,6 @@
 import type { Address } from '@solana/kit';
 import type { ArgsLayout } from '@eco-incorp/sauce-compiler';
-export { decodePortalCalldataWithAccounts, extractSvmSettleFromCalls, extractSvmSettleFromIntent, type PortalAccountMeta, type PortalCalldataWithAccounts, type BytesInput, type SvmIntentCallLike, type SvmIntentLike, type ExtractSvmSettleOptions, type ExtractedSvmSettle, } from './intent.js';
+export { decodePortalCalldataWithAccounts, encodePortalCalldataWithAccounts, extractSvmSettleFromCalls, extractSvmSettleFromIntent, type PortalAccountMeta, type PortalCalldataWithAccounts, type PortalCalldataWithAccountsInput, type BytesInput, type SvmIntentCallLike, type SvmIntentLike, type ExtractSvmSettleOptions, type ExtractedSvmSettle, } from './intent.js';
 export interface DecodedSvmSettleArgs {
     /** The floor applied to escrow 0 (0 disables the floor). */
     minOut: bigint;
