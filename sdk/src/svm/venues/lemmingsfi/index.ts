@@ -147,7 +147,7 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SvmVenueLadder, SwapUser, VenueAccount } from '../types.js';
+import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
 import { readUintLE } from '../math.js';
 
 const SLUG = 'lemmingsfi';

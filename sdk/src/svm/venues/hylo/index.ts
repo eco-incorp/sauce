@@ -562,8 +562,3 @@ export const hylo: SvmVenueAdapter = {
   buildSwap,
   referenceQuote,
 };
-
-// ---- SvmVenueLadder (the SvmRoute production ladder) ----
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-

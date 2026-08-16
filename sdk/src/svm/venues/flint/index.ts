@@ -178,9 +178,7 @@ import type { Address } from '@solana/kit';
 import type {
   AccountBytesMap,
   AccountLoader,
-  LadderSwapTemplate,
   PoolConfig,
-  SvmVenueLadder,
   SwapUser,
   VenueAccount,
 } from '../types.js';

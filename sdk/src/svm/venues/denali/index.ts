@@ -139,7 +139,7 @@
 import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SvmVenueLadder, SwapUser, VenueAccount } from '../types.js';
+import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
 
 const SLUG = 'denali';
 export const DENALI_PROGRAM_ID = address('DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4');

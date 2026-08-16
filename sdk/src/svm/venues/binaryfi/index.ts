@@ -148,7 +148,7 @@
  */
 import { address } from '@solana/kit';
 import type { Address } from '@solana/kit';
-import type { AccountBytesMap, AccountLoader, LadderSwapTemplate, PoolConfig, SwapUser, VenueAccount } from '../types.js';
+import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
 import { BINARYFI_ASSET_FLOOR_RATES } from './asset-configs.js';
 
 const SLUG = 'binaryfi';

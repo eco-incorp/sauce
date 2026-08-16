@@ -149,7 +149,6 @@ import type {
   AccountBytesMap,
   AccountLoader,
   PoolConfig,
-  SvmVenueLadder,
   SwapUser,
   VenueAccount,
 } from '../types.js';

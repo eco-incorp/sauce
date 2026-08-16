@@ -194,7 +194,7 @@ export function scaleDepthReserves(state: ScaleCurveState, direction: ScaleDirec
   return direction === 'aToB' ? { reserveIn: vA, reserveOut: vB } : { reserveIn: vB, reserveOut: vA };
 }
 
-/** Continuous-oracle fee model (measurement only — see SvmVenueLadder.continuousFees doc). */
+/** Continuous-oracle fee model (measurement only). */
 export function scaleContinuousFees(state: ScaleCurveState, direction: ScaleDirection): { gammaPpm: bigint; muPpm: bigint } {
   const totalBps = state.platformFeeBps + state.shareBps.reduce((sum, bps) => sum + bps, 0n);
   const totalPpm = totalBps * 100n; // bps (1e4) -> ppm (1e6)
@@ -205,7 +205,7 @@ export function scaleContinuousFees(state: ScaleCurveState, direction: ScaleDire
 
 /**
  * The shared quote-curve helper, deduped BY NAME across both scale-amm and scale-vmm
- * (byte-identical source, per SvmVenueLadder.helpers()'s cross-family dedup rule — the
+ * (byte-identical source — the
  * two programs' math is identical, only account layouts differ). `dir` is 0 for
  * aToB (buy: fee on input) and nonzero for bToA (sell: fee on gross output).
  */

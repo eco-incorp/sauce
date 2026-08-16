@@ -117,9 +117,7 @@ import { readUintLE } from '../math.js';
 import type {
   AccountBytesMap,
   AccountLoader,
-  LadderSwapTemplate,
   PoolConfig,
-  SvmVenueLadder,
   SwapUser,
   VenueAccount,
 } from '../types.js';

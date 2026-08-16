@@ -12,8 +12,7 @@
  * USDT/USDC pool (`6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci`).
  *
  * This file is the off-chain decode + CPI-account layer (PoolConfig,
- * fetchPoolConfig, quoteAccounts). The on-chain quote fragment
- * (SvmVenueLadder) lives in ladder.ts.
+ * fetchPoolConfig, quoteAccounts).
  *
  * ── Account layout (pool account, 1024 bytes, gated at fetch) ──
  * Recovered the same way obric-v2/solfi-v2 do: decode candidate offsets,

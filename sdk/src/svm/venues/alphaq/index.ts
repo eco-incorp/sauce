@@ -39,8 +39,8 @@
  *   - dirByte = 1: mintA(vaultA) -> mintB(vaultB); dirByte = 0: reverse.
  *   - the trailing 8 bytes are always zero in every real sample gathered —
  *     no venue-level min_out; the recipe's own terminal outAta-delta check
- *     is the real floor, exactly the "venue min_out is always 1" doc on
- *     {@link LadderSwapTemplate} (here it's simply absent, not encoded as 1).
+ *     is the real floor, following the same "venue min_out is always 1"
+ *     convention every ladder uses (here it's simply absent, not encoded as 1).
  *   - amountIn genuinely needs the full 8 bytes: confirmed via a
  *     130,000,000,000-raw-unit (130k USDT) trade whose encoded value exceeds
  *     u32 range and round-trips exactly as a u64 LE.
