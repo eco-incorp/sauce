@@ -91,8 +91,26 @@ export interface MintExtensions {
   transferFee?: TransferFeeConfig;
   /** Present iff a TransferHook extension with a non-nil program is set. */
   transferHook?: TransferHookInfo;
-  /** Human-readable reasons the mint is un-routable through a plain transfer. */
+  /**
+   * HARD un-routable reasons: a plain `transferChecked` into a fresh recipient
+   * ATA genuinely fails or the received amount is unusable. Empty for a routable
+   * mint. Only NonTransferable and DefaultAccountState=frozen qualify — see the
+   * `advisories` note for why PermanentDelegate / ConfidentialTransfer do NOT.
+   */
   blocking: string[];
+  /**
+   * Present-but-routable trust flags. These extensions are carried by the
+   * flagship tradeable Token-2022 stablecoins (PYUSD, USDG both set
+   * PermanentDelegate AND ConfidentialTransferMint) yet transfer normally on
+   * every Solana DEX — so they must NOT self-drop the pool (doing so defeats the
+   * entire point of T22 support). They are surfaced here for a caller that wants
+   * to gate on trust policy, but routing treats them as safe. Verified against
+   * live mainnet mint bytes (see test/svm/fixtures/token-2022/real-mints.json):
+   * a ConfidentialTransferMint enables confidential transfers as an OPT-IN per
+   * account, leaving plain transfers intact; a PermanentDelegate is a
+   * clawback/compliance authority, not a transfer gate.
+   */
+  advisories: string[];
 }
 
 const addressDecoder = getAddressDecoder();
@@ -139,7 +157,7 @@ function parseTransferHook(data: Uint8Array, value: number, length: number): Tra
  * DefaultAccountState frozen), each pushed as a reason string into `blocking`.
  */
 export function parseMintExtensions(mintData: Uint8Array): MintExtensions {
-  const result: MintExtensions = { blocking: [] };
+  const result: MintExtensions = { blocking: [], advisories: [] };
   if (!isToken2022Mint(mintData)) return result;
 
   let offset = T22_TLV_START;
@@ -160,21 +178,29 @@ export function parseMintExtensions(mintData: Uint8Array): MintExtensions {
         break;
       }
       case EXT_NON_TRANSFERABLE:
-        result.blocking.push('NonTransferable (cannot be swapped)');
-        break;
-      case EXT_PERMANENT_DELEGATE:
-        result.blocking.push('PermanentDelegate (balances can be seized by the delegate)');
-        break;
-      case EXT_CONFIDENTIAL_TRANSFER_MINT:
-        result.blocking.push('ConfidentialTransferMint (amounts are hidden — no plain transfer)');
-        break;
-      case EXT_MEMO_TRANSFER:
-        result.blocking.push('MemoTransfer-required (transfers must carry a memo)');
+        result.blocking.push('NonTransferable (cannot be transferred at all)');
         break;
       case EXT_DEFAULT_ACCOUNT_STATE:
         if (length >= 1 && mintData[value] === ACCOUNT_STATE_FROZEN) {
+          // A freshly created recipient ATA starts frozen and cannot receive
+          // until the freeze authority thaws it — un-routable for a plain swap.
           result.blocking.push('DefaultAccountState=frozen (new accounts start frozen)');
         }
+        break;
+      case EXT_PERMANENT_DELEGATE:
+        // NOT blocking: a clawback/compliance authority, not a transfer gate.
+        // PYUSD/USDG both carry it and trade normally everywhere.
+        result.advisories.push('PermanentDelegate (a delegate authority can move/burn balances)');
+        break;
+      case EXT_CONFIDENTIAL_TRANSFER_MINT:
+        // NOT blocking: confidential transfers are OPT-IN per account; plain
+        // transferChecked still works. PYUSD/USDG both carry it.
+        result.advisories.push('ConfidentialTransferMint (confidential transfers are opt-in; plain transfers still work)');
+        break;
+      case EXT_MEMO_TRANSFER:
+        // Account-level extension — cannot appear on a mint; recognized only
+        // defensively. Surfaced as advisory, never a mint-level block.
+        result.advisories.push('MemoTransfer (account-level; not expected on a mint)');
         break;
       default:
         break; // any other extension is routing-neutral
