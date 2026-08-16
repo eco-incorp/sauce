@@ -147,7 +147,7 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SvmVenueLadder, SwapUser, VenueAccount } from '../types.js';
+import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
 import { readUintLE } from '../math.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';

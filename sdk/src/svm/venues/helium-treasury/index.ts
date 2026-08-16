@@ -105,7 +105,8 @@
  * treasury-mint ATA — credited), owner(signer), circuit_breaker_program, token_program.
  * `expected_output_amount` is set to 0 here (this recipe's own `minOut`/`priceLimit` are
  * the floor, matching every other ladder's own venue-level `min_out = 1`-equivalent
- * convention — see `LadderSwapTemplate`'s own doc comment). Internally `redeem_v0`
+ * convention: the amount is runtime-patched at cook time, never bound by this CPI field).
+ * Internally `redeem_v0`
  * CPIs into `token_program::burn` then `circuit_breaker_program::transfer_v0` (which
  * itself CPIs into `token_program::transfer`) — both nested CPIs reuse accounts already
  * present in this top-level instruction's own account list, so nothing extra is needed
@@ -118,7 +119,7 @@
 import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SvmVenueLadder, SwapUser, VenueAccount } from '../types.js';
+import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
 

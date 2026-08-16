@@ -25,7 +25,7 @@
  * from it because the SDK no longer exports one, and the consumer no longer
  * asks for one.
  *
- * 547 names total: 445 VALUES (below) + 102 TYPES
+ * 545 names total: 445 VALUES (below) + 100 TYPES
  * (consumer-union-types.fixture.ts).
  *
  * VALUES are probed as runtime values against the built module namespace --
@@ -39,10 +39,9 @@
  * only job is to import every listed type and reference each in one tuple
  * position, and asserts zero diagnostics.
  *
- * One consumer name is deliberately NOT in either list: `SvmVenueLadderV2`,
- * which the 0.5.0 branding change renamed to `SvmVenueLadder` (carried here
- * under the new name). That rename predates the ladder relocation and is
- * unrelated to it.
+ * The ladder type contract is no longer exported by the SDK at all -- the
+ * consuming recipes package now self-hosts it -- so no ladder type appears in
+ * either list.
  */
 import * as svm from '../../../src/svm/index.js';
 import ts from 'typescript';
@@ -533,7 +532,6 @@ const CONSUMER_UNION_TYPES: readonly string[] = [
   'InvariantWindow',
   'JupiterLendEarnPoolConfig',
   'JuplendAmmPoolConfig',
-  'LadderSwapTemplate',
   'LoadedAccount',
   'MSwapPoolConfig',
   'ManifestPoolConfig',
@@ -591,7 +589,6 @@ const CONSUMER_UNION_TYPES: readonly string[] = [
   'StabbleStableSwapPoolConfig',
   'StabbleWeightedSwapPoolConfig',
   'StagedBuffer',
-  'SvmVenueLadder',
   'SwapUser',
   'TesseraVPoolConfig',
   'TrendsPoolConfig',
@@ -605,9 +602,9 @@ const CONSUMER_UNION_TYPES: readonly string[] = [
 ];
 
 describe('consumer-union barrel surface (sauce-recipes)', () => {
-  it('pins the expected counts (445 values, 102 types) so a future edit is deliberate', () => {
+  it('pins the expected counts (445 values, 100 types) so a future edit is deliberate', () => {
     expect(CONSUMER_UNION_VALUES.length).toBe(445);
-    expect(CONSUMER_UNION_TYPES.length).toBe(102);
+    expect(CONSUMER_UNION_TYPES.length).toBe(100);
   });
 
   it('every consumer-union VALUE resolves through the built @eco-incorp/sauce-sdk/svm barrel', () => {

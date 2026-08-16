@@ -33,10 +33,10 @@
  * a silently-wrong byte-scan guess. Missing `fetchOracleQuote` throws, naming the gate — the same
  * "refuse, don't guess" posture zerofi's fee catalog and authority table already use.
  *
- * The baked (bid, ask) become part of `MetricPoolConfig` (`paramsFor`-visible, per the
- * `SvmVenueLadder` contract) and are what the emitted fragment's quote math uses. The emitted
+ * The baked (bid, ask) become part of `MetricPoolConfig` (`paramsFor`-visible) and are what the
+ * emitted fragment's quote math uses. The emitted
  * fragment issues NO on-chain oracle CPI — it multiplies by the baked scale and caps at a reserve
- * fraction (see ladder.ts). That is deliberate and load-bearing: the oracle program CAN revert
+ * fraction. That is deliberate and load-bearing: the oracle program CAN revert
  * post-invoke() (measured live, not hypothetical — program error Custom:20 when its price account
  * is stale), and SVM's CATCH is PRE-FLIGHT-ONLY, so an in-quote CPI revert would abort the WHOLE
  * cook — every co-merged venue's fill, not just this slot. A baked scale can never revert, so this

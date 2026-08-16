@@ -139,7 +139,7 @@
 import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SvmVenueLadder, SwapUser, VenueAccount } from '../types.js';
+import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
 

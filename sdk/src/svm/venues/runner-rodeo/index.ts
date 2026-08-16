@@ -118,9 +118,7 @@ import { parseMintExtensions } from '../../token-extensions.js';
 import type {
   AccountBytesMap,
   AccountLoader,
-  LadderSwapTemplate,
   PoolConfig,
-  SvmVenueLadder,
   SwapUser,
   VenueAccount,
 } from '../types.js';
