@@ -23,8 +23,10 @@
 // caller's choice, so each write `require`s that it is the SPL Token program — the same shape as the
 // mint check beside it, and the reason `Account` compares for identity.
 
+const SPL_TOKEN_PROGRAM = 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9;
+
 export function balanceOf(token: Address, account: Account): Uint256 {
-  require(account.owner == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9);
+  require(account.owner == SPL_TOKEN_PROGRAM);
   require(svm.sload(account, 0, 32).toBe() == token);
   return svm.sload(account, 64, 8).toLe();
 }
@@ -41,17 +43,17 @@ export function balanceOf(token: Address, account: Account): Uint256 {
 // further. `balanceOf`/`allowance` are not exposed this way — their `mint`@0 comparison pins the
 // account's own layout, which a mint would fail.
 export function totalSupply(token: Account): Uint256 {
-  require(token.owner == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9);
+  require(token.owner == SPL_TOKEN_PROGRAM);
   return svm.sload(token, 36, 8).toLe();
 }
 
 export function decimals(token: Account): Uint256 {
-  require(token.owner == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9);
+  require(token.owner == SPL_TOKEN_PROGRAM);
   return svm.sload(token, 44, 1).toLe();
 }
 
 export function allowance(token: Address, account: Account, spender: Address): Uint256 {
-  require(account.owner == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9);
+  require(account.owner == SPL_TOKEN_PROGRAM);
   require(svm.sload(account, 0, 32).toBe() == token);
   // The delegate is a `COption<Pubkey>`: read `delegated_amount` only when the tag is `Some` (1)
   // *and* the delegate matches `spender`. spl-token leaves the delegate bytes stale after `Revoke`,
@@ -70,8 +72,8 @@ export function allowance(token: Address, account: Account, spender: Address): U
 // (`uint256`); (2) the mint check reverts on a wrong `token`, where the EVM read arm returns 0 for a
 // codeless/wrong address — an error-path divergence, not a value one.
 export function transfer(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void {
-  require(tokenProgram == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9);
-  require(source.owner == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9);
+  require(tokenProgram == SPL_TOKEN_PROGRAM);
+  require(source.owner == SPL_TOKEN_PROGRAM);
   require(svm.sload(source, 0, 32).toBe() == token);
   require(amount <= 0xffffffffffffffff);
   let data = hex`03`;
@@ -91,8 +93,8 @@ export function transferFrom(token: Address, tokenProgram: Account, source: Acco
 // approve overwrites the first) — the EVM's `approve` writes a per-spender allowance map, so this
 // arm and `allowance` are single-delegate where the EVM is per-spender (a documented divergence).
 export function approve(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void {
-  require(tokenProgram == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9);
-  require(source.owner == 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9);
+  require(tokenProgram == SPL_TOKEN_PROGRAM);
+  require(source.owner == SPL_TOKEN_PROGRAM);
   require(svm.sload(source, 0, 32).toBe() == token);
   require(amount <= 0xffffffffffffffff);
   let data = hex`04`;
