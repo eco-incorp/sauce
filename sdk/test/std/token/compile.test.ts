@@ -2,11 +2,12 @@
  * `@sauce/token` compile conformance, from the CONSUMER side: the library at sdk/src/std/token built
  * through the published `@eco-incorp/sauce-compiler`, for both targets.
  *
- * Three things are asserted here and nowhere else in this repo:
+ * Four things are asserted here and nowhere else in this repo:
  *   1. every exported method compiles on both arms, at the signature each arm actually declares;
- *   2. the SVM account manifest — the SDK's attach contract — has the right shape, including the
- *      reachability rule that keeps a read-only import from demanding the SPL Token program;
- *   3. the packaging invariant that there is deliberately NO neutral `token.js`, so a package with no
+ *   2. the SPL Token program id the library pins its `require`s to, counted in the emitted bytecode;
+ *   3. what the library demands of its caller, which only a compile failure can show — the manifest
+ *      cannot, being exactly `main`'s own `Account` params;
+ *   4. the packaging invariant that there is deliberately NO neutral `token.js`, so a package with no
  *      arm for the target fails on the IMPORT rather than on a missing export.
  *
  * Execution — the compiled bytecode actually running on a real engine and returning the right value —
@@ -17,20 +18,36 @@
  * those files documents the divergence; this suite runs unconditionally because compiling needs no
  * engine at all.
  */
+import { address, getAddressCodec } from '@solana/kit';
 import { CASES, compileStdToken, compileWith } from './harness.js';
 import type { AccountEntry } from './harness.js';
 
 const slot = (index: number, name: string): AccountEntry => ({ kind: 'slot', index, name });
 
-const manifestOf = (method: string): AccountEntry[] => {
+const svmEntry = (method: string): string => {
   const testCase = CASES.find((entry) => entry.method === method);
   if (!testCase) throw new Error(`no case named ${method}`);
 
-  const { manifest } = compileStdToken(testCase.svm, 'svm');
+  return testCase.svm;
+};
+
+const manifestOf = (method: string): AccountEntry[] => {
+  const { manifest } = compileStdToken(svmEntry(method), 'svm');
   if (!manifest) throw new Error('the svm target must emit a manifest');
 
   return manifest.accounts;
 };
+
+/**
+ * The SPL Token program id as hex, derived from the canonical base58 address rather than copied from
+ * the library. A copy would agree with the library's constant however wrong that constant was, which
+ * is the one thing this must not do.
+ */
+const SPL_TOKEN_PROGRAM = Buffer.from(getAddressCodec().encode(address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'))).toString('hex');
+
+/** How many times the compiled program carries the id inline — one per `require` that pins it. */
+const pinnedProgramIds = (method: string): number =>
+  Buffer.from(compileStdToken(svmEntry(method), 'svm').bytecode).toString('hex').split(SPL_TOKEN_PROGRAM).length - 1;
 
 describe('@sauce/token: every exported method compiles on both targets', () => {
   it.each(CASES)('$method', ({ evm, svm }) => {
@@ -45,33 +62,65 @@ describe('@sauce/token: every exported method compiles on both targets', () => {
   });
 });
 
-describe('@sauce/token: the SVM account manifest', () => {
-  it('a read-only balanceOf manifests its account slot and NO program entry', () => {
-    // There is no dead-code elimination, so importing `balanceOf` also lowers the library's
-    // `transfer`/`transferFrom`/`approve`, each of which `svm.call`s the SPL Token program. Only the
-    // `svm.call`s REACHABLE from `main` are part of the attach contract — otherwise this program
-    // would demand an account a pure `svm.sload` read never touches, and which the e2e suite's own
-    // `balanceOf` transaction does not attach.
+describe('@sauce/token: the SPL Token program id', () => {
+  // Every `require(… == SPL_TOKEN_PROGRAM)` compiles the id inline, so counting occurrences counts the
+  // guards. Nothing else in CI can: the guards only *fire* on an engine, and both e2e suites that own
+  // one are env-gated. Without this, flipping a digit of the constant — or deleting the guards
+  // outright — is green here, which is exactly the failure the library's own comments warn about.
+  //
+  // A read pins the account's owner. A write pins the owner and, separately, the callee it CPIs into,
+  // so the count also catches losing one of the two.
+  it.each([
+    ['balanceOf', 1],
+    ['totalSupply', 1],
+    ['decimals', 1],
+    ['allowance', 1],
+    ['transfer', 2],
+    ['transferFrom', 2],
+    ['approve', 2],
+  ])('%s pins it %i time(s)', (method, expected) => {
+    expect(pinnedProgramIds(method)).toBe(expected);
+  });
+});
+
+describe('@sauce/token: what the library demands of its caller', () => {
+  // The manifest is exactly `main`'s declared `Account` params — an empty `main` with the same
+  // signature yields the identical one — so it cannot witness anything about the library. A compile
+  // failure can.
+  it('a write does not compile unless the caller declares an Account for the callee', () => {
+    const withoutTokenProgram =
+      'import { transfer } from "@sauce/token"; function main(token: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, source, dest, authority, amount); }';
+
+    expect(() => compileStdToken(withoutTokenProgram, 'svm')).toThrow('expected an account, found a number');
+  });
+
+  it('a write does not compile with a plain address in the callee position', () => {
+    // `svm.call`'s callee is an account the caller attaches, not a value — so an `Address` is refused
+    // rather than compiled into a call against a key nobody attached.
+    const addressAsCallee =
+      'import { transfer } from "@sauce/token"; function main(token: Address, tokenProgram: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, tokenProgram, source, dest, authority, amount); }';
+
+    expect(() => compileStdToken(addressAsCallee, 'svm')).toThrow('expected an account, found a number');
+  });
+
+  it('a read demands no program account', () => {
+    // The counterpart, and the real content of "a read-only import does not drag the callee in":
+    // importing the library also lowers `transfer`/`transferFrom`/`approve`, each of which CPIs into
+    // the SPL Token program, yet a read entry still compiles declaring only the account it reads.
     expect(manifestOf('balanceOf')).toEqual([slot(0, 'account')]);
   });
+});
 
-  it('a write manifests the CPI callee as a declared slot, like every other account', () => {
-    // The callee is not a category of its own: it is an account the caller attaches, so it appears at
-    // the position the entry declared it, carrying its name. It used to be a pubkey-only `program`
-    // entry harvested from the `svm.call`, which is why `tokenProgram` leads here rather than
-    // trailing — the entry declares it first.
-    expect(manifestOf('transfer')).toEqual([
-      slot(0, 'tokenProgram'),
-      slot(1, 'source'),
-      slot(2, 'dest'),
-      slot(3, 'authority'),
-    ]);
-  });
-
-  it('transferFrom manifests the same accounts through its delegation to transfer', () => {
-    // `transferFrom`'s SVM arm delegates to `transfer` rather than repeating the CPI, so this pins
-    // that threading the callee through a library call keeps it in exactly one slot.
-    expect(manifestOf('transferFrom')).toEqual(manifestOf('transfer'));
+describe('@sauce/token: the attach order the e2e suites resolve by name', () => {
+  // These pin the CASES entries above, not library behaviour: on 0.4.x the manifest is `main`'s
+  // `Account` params in declaration order, so what they protect is the agreement between those
+  // signatures and the accounts `svm.e2e.test.ts` attaches. Change a signature there, change this.
+  it.each([
+    ['transfer', ['tokenProgram', 'source', 'dest', 'authority']],
+    ['transferFrom', ['tokenProgram', 'source', 'dest', 'authority']],
+    ['approve', ['tokenProgram', 'source', 'delegate', 'authority']],
+  ])('%s', (method, names) => {
+    expect(manifestOf(method)).toEqual(names.map((name, index) => slot(index, name)));
   });
 });
 

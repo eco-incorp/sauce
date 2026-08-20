@@ -136,8 +136,8 @@ const deployToken = (): Promise<Address> =>
     .then(({ contractAddress }) => contractAddress ?? Promise.reject(new Error('the ERC20 deployment produced no address')));
 
 /**
- * Boot anvil, etch the runtime at [`ENGINE`] (hnc emits DEPLOYED bytecode, so there is no constructor
- * to run), and deploy the ERC20.
+ * Boot anvil, etch the runtime at [`ENGINE`] — `SAUCE_RUST_V12_RUNTIME` is already deployed bytecode
+ * (see the header for how it is produced), so there is no constructor to run — and deploy the ERC20.
  */
 const startEvm = (): Promise<{ anvil: ChildProcess; token: Address }> => {
   const anvil = spawn('anvil', ['--port', String(PORT), '--silent'], { stdio: 'ignore' });

@@ -33,3 +33,6 @@ npm-debug.log*
 coverage/
 lcov.info
 
+# Left by the removed sdk/scripts/build-wasm.mjs. The script is gone but a contributor who ran the
+# old pretest still has the output; keep this until those working copies have turned over.
+sdk/.sauce-wasm/

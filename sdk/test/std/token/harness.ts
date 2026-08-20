@@ -6,8 +6,11 @@
  * is the compiler that will actually consume it downstream.
  *
  * The library's four files are byte-identical copies of the sauce repo's conformance fixture
- * (`compiler/crates/sauce-cli/tests/fixtures/sauce-token/`), so a drift between the two repos shows
- * up as a diff rather than as silently divergent behavior. The resolver below reproduces what a Node
+ * (`compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token/`), which is the source of truth —
+ * port changes from there, never the other way. Nothing in this repo can enforce that: the fixture
+ * is not on disk here since the `sauce` git dep went away, so the check is `diff -r` against a
+ * local `sauce` checkout. What CI does pin is the SPL Token program id the library guards on —
+ * see `compile.test.ts`. The resolver below reproduces what a Node
  * host's `node_modules` walk hands the compiler: a bare `@sauce/token` mapped to the package entry
  * (`resolvePackage`), the package's own relative `./erc20.abi.json` served from the same directory,
  * and a MISS reported by returning `undefined` — the "arm absent" signal the compiler's per-target arm
