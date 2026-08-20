@@ -226,6 +226,52 @@ Small, but they are what "basic parity" means at the source level:
   the existing corpus and it is the only shape that makes one external call for a multi-output read.
 - **`emit()`** — executes 0.6. If library, mark `L14` deprecated in the inventory rather than porting.
 
+### 1.10 — Per-function build-artifact cache (follow-up; added 2026-08-19)
+
+**Goal (user).** Cache the per-function *build artifact* (the Saucer / `funcMeta` entry) in memory, keyed
+by the function, and clone+reuse it across compiles — so recompiling `main(x)=>a(x)+b(x)+c(x)` reuses
+the already-built `a` and `b` artifacts instead of re-walking their ASTs. **This caches the build
+output, not bytecode** — bytes are still (re)emitted per compile because args/offsets differ.
+
+**Why it's feasible (the seam already exists).** `compile()` is genuinely two-phase:
+- **Build** (per-function): `processFunction`/`processFunctionV12` walk each function's AST into its own
+  Saucer artifact; v12 collects them in `ctx.funcMeta` (`context.ts:128`). Cross-function calls are
+  emitted as sentinels `0xFF00|funcIndex` (`callPositions`); param reads as SDUP sentinels
+  (`refPositions`). This is the expensive part (AST walk + the fold/const-prop/return-kind pre-passes +
+  Saucer construction).
+- **Post-build** (`compile()`): `patchCalls` (`index.ts:403`), `patchSdup` (`:429`),
+  `assembleV12`/`buildMain` resolve sentinels → absolute byte offsets, concrete `SDUPn`, `ALLOCATE`
+  prefix, arg-prologue. Cheap; re-runs every compile.
+
+So the build artifact is a discrete object produced *before* the assembler, and offsets/args are
+late-bound — exactly what makes clone-and-reuse sound. (The whole-program `cache.ts` is a coarser,
+separate layer; its own header rejects caching *bytecode* bodies, which is a different claim.)
+
+**The one caveat.** `patchCalls` resolves the sentinel's *offset*, but the callee's **registry index**
+is still baked into the sentinel at build time (`0xFF00|funcIndex`, index from `ctx.addFunc` order,
+`processor/index.ts:468`). Two tiers follow:
+- **Tier 1 — leaf helpers** (no CALL_FUNCTION, no top-level-const/ABI reads): artifact is a pure
+  function of `(functionSource, target)`. Soundly cacheable with **zero architectural change**. Covers
+  the `tickArg`/`kyberOut`-shaped arithmetic helpers.
+- **Tier 2 — callers**: cacheable only if the key also fingerprints callee registry indices + any
+  consts/ABIs/callee-return-kinds the body reads. **Unlock:** make the call sentinel **name-based** and
+  resolve `name→offset` in `patchCalls` (instead of `index→offset`) — then no build artifact bakes a
+  program-specific index, and the key collapses to pure source. Small change *because* the post-build
+  patcher already exists.
+
+**Changes in `compiler/`.** A build-artifact store consulted before `processFunction*`, populated in
+the build phase; post-build assembly always runs fresh. Ship Tier 1 first; do the name-based-sentinel
+change, then Tier 2.
+
+**Gate on measurement first (do not skip):** (1) classify the real corpus
+(`sdk/src/protocols/*/functions`, `sdk/src/recipes`, `../sauce-recipes/ecoswap`) — leaf vs caller
+fraction is the cache's ceiling; (2) instrument `compile()` on eco-swap for the build-vs-post-build-vs
+whole-program-pre-pass time split. Only commit the tier the numbers justify.
+
+**Risk: LOW (Tier 1) → MEDIUM (Tier 2 / name-based sentinel).** Tier 1 touches no codegen. The
+name-based sentinel touches the post-build patcher — keep every offset test green while switching the
+resolution key.
+
 ---
 
 ## Part 2 — Port worklist: PRs into `../sauce` (`compiler-rs`)
@@ -252,6 +298,7 @@ inherit the inventory's `P0`–`P3` where they exist, adjusted for `compiler-rs`
 | **PR-4** | **`CompileOptions.defines`.** One additive field, threaded into `fold.rs`'s existing constant environment alongside its own `known` map. | `D4` | ABSENT | P1 | — |
 | **PR-5** | **`.catch(handler)` / try-catch surface.** `Feature::TryCatch` exists but `frontend.rs:956` rejects `try`/`catch` as out-of-subset and `ir.rs` has no `Stmt::Try`. Needs frontend acceptance + an IR node + codegen. | `C4` | ABSENT (matrix cell only) | P1 | — |
 | **PR-6** | **Compile cache.** Memoized `(source, options, resolved-import bytes)` → result, defensive clone in/out, bounded LRU. Note `compiler-rs`'s core is I/O-free, so the import-bytes term must key off the `Resolver`'s answers, not the filesystem. | `X1`–`X3` | ABSENT | P2 | — |
+| **PR-6b** | **Per-function build-artifact cache** (companion to TS §1.10; added 2026-08-19). Cache the per-function lowered **IR** (the pre-`codegen.rs` artifact), keyed by function, and reuse it across compiles so a new `main` reusing helpers `a`/`b` skips re-lowering them. **Structurally easier than in TS:** `main` already has an IR→`codegen.rs` split, and IR is program-relative — cross-function references and offsets are resolved entirely in codegen, so an IR artifact is index-relocatable **for free** (no name-based-sentinel change needed, unlike the TS Tier-2 caveat). Key on `(functionSource, target)` for leaf functions; add the read-consts/ABIs fingerprint for callers. Land after PR-6's cache infra + the Wave-2 IR-pass foundation exists. | `X1`–`X3` (finer grain) | ABSENT | P2 | PR-6, PR-8 |
 
 **Why these first:** each is bounded, needs no new pass, and PR-1/PR-2/PR-3 are also the items most
 likely to be load-bearing for real SDK SauceScript (protocol functions read `msg.value` and
