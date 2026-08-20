@@ -69,7 +69,9 @@ describe('@sauce/token: the SPL Token program id', () => {
   // outright — is green here, which is exactly the failure the library's own comments warn about.
   //
   // A read pins the account's owner. A write pins the owner and, separately, the callee it CPIs into,
-  // so the count also catches losing one of the two.
+  // so the count also catches losing one of the two. And because an unreachable function is never
+  // emitted, a read's count stays at one: were the library's three writes lowered in too, it would be
+  // five, so this is also where a regression in that pruning would surface.
   it.each([
     ['balanceOf', 1],
     ['totalSupply', 1],
@@ -104,9 +106,11 @@ describe('@sauce/token: what the library demands of its caller', () => {
   });
 
   it('a read demands no program account', () => {
-    // The counterpart, and the real content of "a read-only import does not drag the callee in":
-    // importing the library also lowers `transfer`/`transferFrom`/`approve`, each of which CPIs into
-    // the SPL Token program, yet a read entry still compiles declaring only the account it reads.
+    // The counterpart, and the real content of "a read-only import does not drag the callee in".
+    // Importing the library brings `transfer`/`transferFrom`/`approve` into scope and each CPIs into
+    // the SPL Token program, but an unreachable function is never emitted, so none of them reaches
+    // the bytecode. The counts above are the evidence rather than this comment: a read pins the
+    // program id ONCE, where lowering the three writes in would put it there five times.
     expect(manifestOf('balanceOf')).toEqual([slot(0, 'account')]);
   });
 });
