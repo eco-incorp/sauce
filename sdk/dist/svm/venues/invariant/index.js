@@ -88,8 +88,9 @@
  * bound the walk) self-drops via `SvmWindowDriftError`, matching
  * orca-whirlpool/raydium-clmm/meteora-dlmm's own "nothing to walk" gate.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'invariant';
@@ -288,11 +289,11 @@ async function deriveTickPda(pool, tickIndex) {
     const poolBytes = new Uint8Array(getAddressCodec().encode(pool));
     const indexBytes = new Uint8Array(4);
     new DataView(indexBytes.buffer).setInt32(0, tickIndex, true);
-    const [pda] = await getProgramDerivedAddress({
-        programAddress: INVARIANT_PROGRAM_ID,
-        seeds: [new TextEncoder().encode('tickv1'), poolBytes, indexBytes],
-    });
-    return pda;
+    return memoizedGetProgramDerivedAddress(INVARIANT_PROGRAM_ID, [
+        new TextEncoder().encode('tickv1'),
+        poolBytes,
+        indexBytes,
+    ]);
 }
 function hasDiscriminator(data, discriminator) {
     return discriminator.every((byte, i) => data[i] === byte);

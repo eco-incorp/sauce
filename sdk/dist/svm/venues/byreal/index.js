@@ -58,12 +58,13 @@
  * live 2026-07-31: 4 of the 129 pools carry a nonzero `dynamic_fee_info` and
  * are dropped by this gate; the rest are classic.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import { AMM_CONFIG_DISCRIMINATOR, RAYDIUM_CLMM_MAX_BOUNDARIES, POOL_DISCRIMINATOR, TICK_ARRAY_DISCRIMINATOR, windowStartTicks } from '../raydium-clmm/index.js';
 import { MAX_TICK, MIN_TICK } from '../raydium-clmm/tick-math.js';
 import { raydiumSqrtPriceAtTick } from '../raydium-clmm/tick-math.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 const SLUG = 'byreal';
 /** Byreal's deployed program — a different program id than raydium-clmm's CAMMC... deployment. */
 export const BYREAL_PROGRAM_ID = address('REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2');
@@ -119,11 +120,11 @@ function getAddressEncoded(value) {
 async function deriveTickArrayPda(pool, startTick) {
     const be = new Uint8Array(4);
     new DataView(be.buffer).setInt32(0, startTick, false);
-    const [pda] = await getProgramDerivedAddress({
-        programAddress: BYREAL_PROGRAM_ID,
-        seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), be],
-    });
-    return pda;
+    return memoizedGetProgramDerivedAddress(BYREAL_PROGRAM_ID, [
+        new TextEncoder().encode('tick_array'),
+        getAddressEncoded(pool),
+        be,
+    ]);
 }
 function tickInitialized(array, offset) {
     return readUintLE(array, OFF_TA_TICKS + offset * TICK_LEN + OFF_TICK_LIQ_GROSS, 16) !== 0n;
@@ -261,10 +262,10 @@ export async function fetchByrealPoolConfig(load, pool) {
     const [zeroForOne, oneForZero, bitmapExtension] = await Promise.all([
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-        getProgramDerivedAddress({
-            programAddress: BYREAL_PROGRAM_ID,
-            seeds: [new TextEncoder().encode('pool_tick_array_bitmap_extension'), getAddressEncoded(pool)],
-        }).then(([pda]) => pda),
+        memoizedGetProgramDerivedAddress(BYREAL_PROGRAM_ID, [
+            new TextEncoder().encode('pool_tick_array_bitmap_extension'),
+            getAddressEncoded(pool),
+        ]),
     ]);
     return {
         venue: SLUG,

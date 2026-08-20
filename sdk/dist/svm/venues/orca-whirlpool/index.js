@@ -64,10 +64,11 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
   */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from './tick-math.js';
 const SLUG = 'orca-whirlpool';
 export const ORCA_WHIRLPOOL_PROGRAM_ID = address('whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc');
@@ -117,11 +118,11 @@ function getAddressEncoded(value) {
     return new Uint8Array(getAddressCodec().encode(value));
 }
 async function deriveTickArrayPda(pool, startTick) {
-    const [pda] = await getProgramDerivedAddress({
-        programAddress: ORCA_WHIRLPOOL_PROGRAM_ID,
-        seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), new TextEncoder().encode(String(startTick))],
-    });
-    return pda;
+    return memoizedGetProgramDerivedAddress(ORCA_WHIRLPOOL_PROGRAM_ID, [
+        new TextEncoder().encode('tick_array'),
+        getAddressEncoded(pool),
+        new TextEncoder().encode(String(startTick)),
+    ]);
 }
 /** floor division toward negative infinity (the program's floor_division). */
 const floorDiv = (a, b) => Math.floor(a / b);
@@ -254,10 +255,7 @@ export async function fetchOrcaWhirlpoolConfig(load, pool) {
     const [aToB, bToA, oracle] = await Promise.all([
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-        getProgramDerivedAddress({
-            programAddress: ORCA_WHIRLPOOL_PROGRAM_ID,
-            seeds: [new TextEncoder().encode('oracle'), getAddressEncoded(pool)],
-        }).then(([pda]) => pda),
+        memoizedGetProgramDerivedAddress(ORCA_WHIRLPOOL_PROGRAM_ID, [new TextEncoder().encode('oracle'), getAddressEncoded(pool)]),
     ]);
     return {
         venue: SLUG,

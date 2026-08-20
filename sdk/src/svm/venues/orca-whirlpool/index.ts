@@ -64,12 +64,13 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
   */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from './tick-math.js';
 
 const SLUG = 'orca-whirlpool';
@@ -185,11 +186,11 @@ function getAddressEncoded(value: Address): Uint8Array {
 }
 
 async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: ORCA_WHIRLPOOL_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), new TextEncoder().encode(String(startTick))],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(ORCA_WHIRLPOOL_PROGRAM_ID, [
+    new TextEncoder().encode('tick_array'),
+    getAddressEncoded(pool),
+    new TextEncoder().encode(String(startTick)),
+  ]);
 }
 
 /** floor division toward negative infinity (the program's floor_division). */
@@ -338,10 +339,7 @@ export async function fetchOrcaWhirlpoolConfig(load: AccountLoader, pool: Addres
   const [aToB, bToA, oracle] = await Promise.all([
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-    getProgramDerivedAddress({
-      programAddress: ORCA_WHIRLPOOL_PROGRAM_ID,
-      seeds: [new TextEncoder().encode('oracle'), getAddressEncoded(pool)],
-    }).then(([pda]) => pda),
+    memoizedGetProgramDerivedAddress(ORCA_WHIRLPOOL_PROGRAM_ID, [new TextEncoder().encode('oracle'), getAddressEncoded(pool)]),
   ]);
 
   return {

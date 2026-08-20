@@ -72,11 +72,12 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
   */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from '../orca-whirlpool/tick-math.js';
 import { OFF_FEE_RATE, OFF_FEE_TIER_INDEX, OFF_LIQUIDITY, OFF_SQRT_PRICE, OFF_TA_START, OFF_TA_TICKS, OFF_TICK_CURRENT, OFF_TICK_SPACING, TICK_ARRAY_ACCOUNT_SIZE, TICK_ARRAY_DISCRIMINATOR, TICK_ARRAY_SIZE, TICK_LEN, WHIRLPOOL_ACCOUNT_SIZE, WHIRLPOOL_DISCRIMINATOR, windowStartTicks } from '../orca-whirlpool/index.js';
 import { readUintLE } from '../math.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
@@ -155,11 +156,11 @@ function getAddressEncoded(value: Address): Uint8Array {
 }
 
 async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: CROPPER_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), new TextEncoder().encode(String(startTick))],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(CROPPER_PROGRAM_ID, [
+    new TextEncoder().encode('tick_array'),
+    getAddressEncoded(pool),
+    new TextEncoder().encode(String(startTick)),
+  ]);
 }
 
 /**
@@ -291,10 +292,7 @@ export async function fetchCropperConfig(load: AccountLoader, pool: Address): Pr
   const [aToB, bToA, oracle] = await Promise.all([
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-    getProgramDerivedAddress({
-      programAddress: CROPPER_PROGRAM_ID,
-      seeds: [new TextEncoder().encode('oracle'), getAddressEncoded(pool)],
-    }).then(([pda]) => pda),
+    memoizedGetProgramDerivedAddress(CROPPER_PROGRAM_ID, [new TextEncoder().encode('oracle'), getAddressEncoded(pool)]),
   ]);
 
   return {

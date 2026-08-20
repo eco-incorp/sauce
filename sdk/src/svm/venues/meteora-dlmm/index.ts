@@ -56,12 +56,13 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
   */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import { MAX_BIN_ID, MIN_BIN_ID, binArrayIndex, priceFromId } from './bin-math.js';
 
 const SLUG = 'meteora-dlmm';
@@ -192,11 +193,11 @@ function getAddressEncoded(value: Address): Uint8Array {
 async function deriveBinArrayPda(pair: Address, index: number): Promise<Address> {
   const le = new Uint8Array(8);
   new DataView(le.buffer).setBigInt64(0, BigInt(index), true); // bin_array_index.to_le_bytes()
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: METEORA_DLMM_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('bin_array'), getAddressEncoded(pair), le],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
+    new TextEncoder().encode('bin_array'),
+    getAddressEncoded(pair),
+    le,
+  ]);
 }
 
 /** The three bin-array indexes the walk touches: the active array then two more in the walk direction. */
@@ -338,10 +339,7 @@ export async function fetchMeteoraDlmmConfig(load: AccountLoader, pair: Address)
   const [xToY, yToX, bitmapExtension] = await Promise.all([
     resolveWindow(load, pair, activeId, binStep, true),
     resolveWindow(load, pair, activeId, binStep, false),
-    getProgramDerivedAddress({
-      programAddress: METEORA_DLMM_PROGRAM_ID,
-      seeds: [new TextEncoder().encode('bitmap'), getAddressEncoded(pair)],
-    }).then(([pda]) => pda),
+    memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [new TextEncoder().encode('bitmap'), getAddressEncoded(pair)]),
   ]);
   // The bitmap extension exists only for pairs whose liquidity leaves the
   // default bitmap; probe it so the swap can pass the program-id None sentinel

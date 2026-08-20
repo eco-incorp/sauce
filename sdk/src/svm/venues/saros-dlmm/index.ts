@@ -121,12 +121,13 @@
  * test/svm/venues/saros-dlmm.test.ts's "exceeding the shipped window"
  * case.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 
 const SLUG = 'saros-dlmm';
 export const SAROS_DLMM_PROGRAM_ID = address('1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE');
@@ -223,20 +224,20 @@ function getAddressEncoded(value: Address): Uint8Array {
 async function deriveBinArrayPda(pair: Address, index: number): Promise<Address> {
   const le = new Uint8Array(4);
   new DataView(le.buffer).setUint32(0, index, true);
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: SAROS_DLMM_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('bin_array'), getAddressEncoded(pair), le],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(SAROS_DLMM_PROGRAM_ID, [
+    new TextEncoder().encode('bin_array'),
+    getAddressEncoded(pair),
+    le,
+  ]);
 }
 
 /** ['ownerAta', TOKEN_PROGRAM, mint] under the standard Associated Token Account program. */
 async function deriveAta(owner: Address, mint: Address): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: ASSOCIATED_TOKEN_PROGRAM_ID,
-    seeds: [getAddressEncoded(owner), getAddressEncoded(TOKEN_PROGRAM), getAddressEncoded(mint)],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(ASSOCIATED_TOKEN_PROGRAM_ID, [
+    getAddressEncoded(owner),
+    getAddressEncoded(TOKEN_PROGRAM),
+    getAddressEncoded(mint),
+  ]);
 }
 
 /**

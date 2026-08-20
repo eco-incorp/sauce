@@ -66,11 +66,12 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
   */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import { AMM_CONFIG_DISCRIMINATOR as RAYDIUM_CLMM_AMM_CONFIG_DISCRIMINATOR, POOL_DISCRIMINATOR as RAYDIUM_CLMM_POOL_DISCRIMINATOR, TICK_ARRAY_DISCRIMINATOR as RAYDIUM_CLMM_TICK_ARRAY_DISCRIMINATOR, windowStartTicks as raydiumClmmWindowStartTicks } from '../raydium-clmm/index.js';
 import { MAX_TICK as RAYDIUM_MAX_TICK, MIN_TICK as RAYDIUM_MIN_TICK } from '../raydium-clmm/tick-math.js';
 import { raydiumSqrtPriceAtTick } from '../raydium-clmm/tick-math.js';
 import { readUintLE } from '../math.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'stabble-clmm';
@@ -132,11 +133,11 @@ function getAddressEncoded(value) {
 async function deriveTickArrayPda(pool, startTick) {
     const be = new Uint8Array(4);
     new DataView(be.buffer).setInt32(0, startTick, false); // start_tick_index.to_be_bytes()
-    const [pda] = await getProgramDerivedAddress({
-        programAddress: STABBLE_CLMM_PROGRAM_ID,
-        seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), be],
-    });
-    return pda;
+    return memoizedGetProgramDerivedAddress(STABBLE_CLMM_PROGRAM_ID, [
+        new TextEncoder().encode('tick_array'),
+        getAddressEncoded(pool),
+        be,
+    ]);
 }
 /** Whether a tick cell is initialized (liquidity_gross != 0). */
 function tickInitialized(array, offset) {
@@ -276,10 +277,10 @@ export async function fetchStabbleClmmConfig(load, pool) {
     const [zeroForOne, oneForZero, bitmapExtension] = await Promise.all([
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-        getProgramDerivedAddress({
-            programAddress: STABBLE_CLMM_PROGRAM_ID,
-            seeds: [new TextEncoder().encode('pool_tick_array_bitmap_extension'), getAddressEncoded(pool)],
-        }).then(([pda]) => pda),
+        memoizedGetProgramDerivedAddress(STABBLE_CLMM_PROGRAM_ID, [
+            new TextEncoder().encode('pool_tick_array_bitmap_extension'),
+            getAddressEncoded(pool),
+        ]),
     ]);
     return {
         venue: SLUG,

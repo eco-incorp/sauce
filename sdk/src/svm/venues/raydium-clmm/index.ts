@@ -69,12 +69,13 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
   */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import { MAX_TICK, MIN_TICK, raydiumSqrtPriceAtTick } from './tick-math.js';
 
 const SLUG = 'raydium-clmm';
@@ -208,11 +209,11 @@ function getAddressEncoded(value: Address): Uint8Array {
 async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Address> {
   const be = new Uint8Array(4);
   new DataView(be.buffer).setInt32(0, startTick, false); // start_tick_index.to_be_bytes()
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: RAYDIUM_CLMM_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), be],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(RAYDIUM_CLMM_PROGRAM_ID, [
+    new TextEncoder().encode('tick_array'),
+    getAddressEncoded(pool),
+    be,
+  ]);
 }
 
 /** floor division toward negative infinity (TickArrayState::get_array_start_index). */
@@ -410,10 +411,10 @@ export async function fetchRaydiumClmmConfig(load: AccountLoader, pool: Address)
   const [zeroForOne, oneForZero, bitmapExtension] = await Promise.all([
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-    getProgramDerivedAddress({
-      programAddress: RAYDIUM_CLMM_PROGRAM_ID,
-      seeds: [new TextEncoder().encode('pool_tick_array_bitmap_extension'), getAddressEncoded(pool)],
-    }).then(([pda]) => pda),
+    memoizedGetProgramDerivedAddress(RAYDIUM_CLMM_PROGRAM_ID, [
+      new TextEncoder().encode('pool_tick_array_bitmap_extension'),
+      getAddressEncoded(pool),
+    ]),
   ]);
 
   return {

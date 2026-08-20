@@ -88,10 +88,11 @@
  *   quote — recoverable (an order fills/cancels), so it is the SAME
  *   SvmWindowDriftError self-drop class, wired via `window.hasActiveOrder`.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from '../orca-whirlpool/tick-math.js';
 import { readUintLE } from '../math.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import { windowStartTicks } from '../orca-whirlpool/index.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
@@ -177,11 +178,11 @@ function getAddressEncoded(value: Address): Uint8Array {
   return new Uint8Array(getAddressCodec().encode(value));
 }
 async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: DEFITUNA_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), new TextEncoder().encode(String(startTick))],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(DEFITUNA_PROGRAM_ID, [
+    new TextEncoder().encode('tick_array'),
+    getAddressEncoded(pool),
+    new TextEncoder().encode(String(startTick)),
+  ]);
 }
 
 interface DecodedTick {

@@ -132,9 +132,10 @@
  * - a direction with NO shipped boundaries and no edge (readable === 0) —
  *   wired via SvmWindowDriftError like orca-whirlpool/meteora-dlmm.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from '../orca-whirlpool/tick-math.js';
 import { readUintLE } from '../math.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'crema';
@@ -187,21 +188,20 @@ function getAddressEncoded(value) {
     return new Uint8Array(getAddressCodec().encode(value));
 }
 async function deriveTickArrayMapPda(pool) {
-    const [pda] = await getProgramDerivedAddress({
-        programAddress: CREMA_PROGRAM_ID,
-        seeds: [new TextEncoder().encode('tick_array_map'), getAddressEncoded(pool)],
-    });
-    return pda;
+    return memoizedGetProgramDerivedAddress(CREMA_PROGRAM_ID, [
+        new TextEncoder().encode('tick_array_map'),
+        getAddressEncoded(pool),
+    ]);
 }
 async function deriveTickArrayPda(pool, arrayIndex) {
     const idxBytes = new Uint8Array(2);
     idxBytes[0] = arrayIndex & 0xff;
     idxBytes[1] = (arrayIndex >> 8) & 0xff;
-    const [pda] = await getProgramDerivedAddress({
-        programAddress: CREMA_PROGRAM_ID,
-        seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), idxBytes],
-    });
-    return pda;
+    return memoizedGetProgramDerivedAddress(CREMA_PROGRAM_ID, [
+        new TextEncoder().encode('tick_array'),
+        getAddressEncoded(pool),
+        idxBytes,
+    ]);
 }
 /** floor division toward negative infinity (Crema's own TickUtil.getMinIndex/getArrayIndex). */
 const floorDiv = (a, b) => Math.floor(a / b);
