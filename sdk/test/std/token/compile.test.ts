@@ -1,6 +1,6 @@
 /**
  * `@sauce/token` compile conformance, from the CONSUMER side: the library at sdk/src/std/token built
- * through the published `@eco-incorp/sauce-compiler-wasm`, for both targets.
+ * through the published `@eco-incorp/sauce-compiler`, for both targets.
  *
  * Three things are asserted here and nowhere else in this repo:
  *   1. every exported method compiles on both arms, at the signature each arm actually declares;
@@ -17,7 +17,7 @@
  * those files documents the divergence; this suite runs unconditionally because compiling needs no
  * engine at all.
  */
-import { CASES, SPL_TOKEN_PROGRAM_PUBKEY, compileStdToken, compileWith } from './harness.js';
+import { CASES, compileStdToken, compileWith } from './harness.js';
 import type { AccountEntry } from './harness.js';
 
 const slot = (index: number, name: string): AccountEntry => ({ kind: 'slot', index, name });
@@ -55,19 +55,22 @@ describe('@sauce/token: the SVM account manifest', () => {
     expect(manifestOf('balanceOf')).toEqual([slot(0, 'account')]);
   });
 
-  it('a write manifests its slots plus the SPL Token program', () => {
-    // The other direction: reachability narrows the harvest, it does not disable it.
+  it('a write manifests the CPI callee as a declared slot, like every other account', () => {
+    // The callee is not a category of its own: it is an account the caller attaches, so it appears at
+    // the position the entry declared it, carrying its name. It used to be a pubkey-only `program`
+    // entry harvested from the `svm.call`, which is why `tokenProgram` leads here rather than
+    // trailing — the entry declares it first.
     expect(manifestOf('transfer')).toEqual([
-      slot(0, 'source'),
-      slot(1, 'dest'),
-      slot(2, 'authority'),
-      { kind: 'program', pubkey: SPL_TOKEN_PROGRAM_PUBKEY },
+      slot(0, 'tokenProgram'),
+      slot(1, 'source'),
+      slot(2, 'dest'),
+      slot(3, 'authority'),
     ]);
   });
 
-  it('transferFrom reaches the same program entry through its delegation to transfer', () => {
-    // `transferFrom`'s SVM arm delegates to `transfer` rather than repeating the CPI, so the program
-    // entry is only found if reachability is TRANSITIVE.
+  it('transferFrom manifests the same accounts through its delegation to transfer', () => {
+    // `transferFrom`'s SVM arm delegates to `transfer` rather than repeating the CPI, so this pins
+    // that threading the callee through a library call keeps it in exactly one slot.
     expect(manifestOf('transferFrom')).toEqual(manifestOf('transfer'));
   });
 });
@@ -83,13 +86,12 @@ describe('@sauce/token: packaging', () => {
     // real problem), and one that declared the surface would have to guess signatures the two arms
     // do not share. With no neutral file the arm probe's miss is what it is — the package could not
     // be imported for this target.
+    // Absence is a returned `undefined`, never a throw — a throw means "present but unreadable" and
+    // would make this a hard read failure rather than the missing arm it is meant to be.
     const compileArmless = () =>
       compileWith({
         target: 'evm',
-        resolve: (path) => {
-          if (path === 'main.js') return Buffer.from(entry);
-          throw new Error(`no such module: ${path}`);
-        },
+        resolve: (path) => (path === 'main.js' ? Buffer.from(entry) : undefined),
         resolvePackage: () => 'node_modules/@sauce/token/token.js',
       });
 

@@ -1,6 +1,6 @@
 /**
  * `@sauce/token` EXECUTION on the real SVM engine (LiteSVM), compiled by the published
- * `@eco-incorp/sauce-compiler-wasm`.
+ * `@eco-incorp/sauce-compiler`.
  *
  * A library that compiles proves nothing about what it reads: every case here plants a REAL SPL
  * image — a 165-byte `spl_token::state::Account` (mint@0, owner@32, amount@64 LE, delegate COption
@@ -10,8 +10,9 @@
  * account's `amount` actually moved.
  *
  * The accounts are attached from the compiler's own SVM MANIFEST rather than a hand-written list, so
- * the attach contract the SDK would follow in production is the one under test: slots by name in
- * manifest order, then the `svm.call` program entries by pubkey.
+ * the attach contract the SDK would follow in production is the one under test: every entry is a slot
+ * resolved by name, in manifest order. A CPI callee is no exception — it is an account the caller
+ * passes, so the SPL Token program arrives as a named slot like any other.
  *
  * GATED on SAUCE_RUST_ENGINE_SO, and that gate is a REAL FINDING, not a convenience:
  *
@@ -72,23 +73,25 @@ const codec = getAddressCodec();
 /** A pubkey as the SauceScript big-endian bigint literal the library compares `svm.sload(…).toBe()` against. */
 const literal = (address: Address): string => `0x${Buffer.from(codec.encode(address)).toString('hex')}n`;
 
-/** A manifest program entry's `0x…` hex pubkey, back as the base58 address to attach. */
-const programAddress = (pubkey: string): Address =>
-  codec.decode(Uint8Array.from(Buffer.from(pubkey.slice(2), 'hex')));
-
 const missing = (what: string): never => {
   throw new Error(`the SVM manifest ${what}`);
 };
 
 /**
- * The attach contract, applied: manifest slots resolve by NAME from `slots`, program entries resolve
- * by pubkey and ride along read-only. This is what an SDK consumer of the Rust compiler does with the
- * manifest, so a wrong order or a missing program entry fails the transaction rather than a matcher.
+ * The attach contract, applied: every manifest slot resolves by NAME from `slots`, in manifest order.
+ * This is what an SDK consumer of the Rust compiler does with the manifest, so a wrong order or an
+ * unresolved slot fails the transaction rather than a matcher.
+ *
+ * There is no separate program entry to special-case any more: a CPI callee is an account the caller
+ * attaches, so it reaches the manifest as an ordinary named slot and is resolved like the rest — which
+ * is why these tests now pass the SPL Token program in `slots` under the name the library declares it
+ * with. `remaining` marks where a caller's own variable-length accounts begin; no fixture here uses
+ * one, so it is an explicit failure rather than a silently dropped entry.
  */
 const attach = (manifest: Manifest | undefined, slots: Record<string, ResolvedAccountMeta>): ResolvedAccountMeta[] =>
   (manifest ?? missing('is absent — the svm target must emit one')).accounts.map((entry) =>
-    entry.kind === 'program'
-      ? { address: programAddress(entry.pubkey), role: AccountRole.READONLY }
+    entry.kind === 'remaining'
+      ? missing(`asks for a remaining-accounts tail at ${entry.from}, which this suite does not attach`)
       : (slots[entry.name] ?? missing(`names a slot the test did not resolve: ${entry.name}`)),
   );
 
@@ -249,10 +252,12 @@ describeStdToken('@sauce/token e2e: the SVM arm against real SPL accounts', () =
     const source = setTokenAccount(harness, randomAddress(), mint, harness.payer.address, TOKEN_BALANCE);
     const dest = setTokenAccount(harness, randomAddress(), mint, harness.payer.address, 0n);
 
-    // The authority is the payer, which already signs the transaction; the manifest's program entry
-    // is what puts the SPL Token program in the account list the CPI needs.
-    const entry = `import { transfer } from "@sauce/token"; function main(source: Account, dest: Account, authority: Account): void { transfer(${literal(mint)}, source, dest, authority, ${TRANSFERRED}n); }`;
+    // The authority is the payer, which already signs the transaction. `tokenProgram` is the CPI
+    // callee: a declared account now, so the entry takes it and this test attaches the real SPL Token
+    // program at that slot — the library `require`s it is exactly that program before it calls.
+    const entry = `import { transfer } from "@sauce/token"; function main(tokenProgram: Account, source: Account, dest: Account, authority: Account): void { transfer(${literal(mint)}, tokenProgram, source, dest, authority, ${TRANSFERRED}n); }`;
     await run(harness, entry, {
+      tokenProgram: { address: TOKEN_PROGRAM, role: AccountRole.READONLY },
       source: { address: source, role: AccountRole.WRITABLE },
       dest: { address: dest, role: AccountRole.WRITABLE },
       authority: { address: harness.payer.address, role: AccountRole.READONLY_SIGNER },
@@ -269,8 +274,9 @@ describeStdToken('@sauce/token e2e: the SVM arm against real SPL accounts', () =
     // The delegate account must exist for the SPL `Approve` processor to accept it as an account.
     setTokenAccount(harness, delegate, mint, harness.payer.address, 0n);
 
-    const approve = `import { approve } from "@sauce/token"; function main(source: Account, delegate: Account, authority: Account): void { approve(${literal(mint)}, source, delegate, authority, ${DELEGATED}n); }`;
+    const approve = `import { approve } from "@sauce/token"; function main(tokenProgram: Account, source: Account, delegate: Account, authority: Account): void { approve(${literal(mint)}, tokenProgram, source, delegate, authority, ${DELEGATED}n); }`;
     await run(harness, approve, {
+      tokenProgram: { address: TOKEN_PROGRAM, role: AccountRole.READONLY },
       source: { address: source, role: AccountRole.WRITABLE },
       delegate: { address: delegate, role: AccountRole.READONLY },
       authority: { address: harness.payer.address, role: AccountRole.READONLY_SIGNER },

@@ -1,6 +1,7 @@
 /**
  * `@sauce/token` (sdk/src/std/token) compiled through the PUBLISHED RUST compiler —
- * `@eco-incorp/sauce-compiler-wasm`, NOT the in-repo TypeScript one every other suite here uses.
+ * `@eco-incorp/sauce-compiler` from the public npm registry, NOT the in-repo TypeScript one every
+ * other suite here uses.
  * That is the whole point: the library ships as SauceScript source, so the only thing that proves it
  * is the compiler that will actually consume it downstream.
  *
@@ -9,8 +10,10 @@
  * up as a diff rather than as silently divergent behavior. The resolver below reproduces what a Node
  * host's `node_modules` walk hands the compiler: a bare `@sauce/token` mapped to the package entry
  * (`resolvePackage`), the package's own relative `./erc20.abi.json` served from the same directory,
- * and a MISS reported as a throw — the "arm absent" signal the compiler's per-target arm probe
- * (`token.js` → `token.evm.js` / `token.svm.js`) relies on.
+ * and a MISS reported by returning `undefined` — the "arm absent" signal the compiler's per-target arm
+ * probe (`token.js` → `token.evm.js` / `token.svm.js`) relies on. Absence is a returned `undefined`,
+ * not a throw: since compiler 0.2.0 a throw means "present but unreadable" and propagates instead of
+ * falling back, so a host that throws for absent turns a missing arm into a hard error.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -19,10 +22,17 @@ import { fileURLToPath } from 'node:url';
 
 export type Target = 'evm' | 'svm';
 
-/** One entry of the SVM attach contract — `{"kind":"slot",…}` / `{"kind":"program",…}` over the wire. */
+/**
+ * One entry of the SVM attach contract — `{"kind":"slot",…}` / `{"kind":"remaining",…}` over the wire.
+ *
+ * Declared here rather than imported from the compiler package, and only until it can be: 0.4.0 ships
+ * this union with a `program` variant the compiler no longer emits and without `remaining`, so
+ * importing it today would replace one stale copy with another. Delete this and import the package's
+ * own type once a release carrying the corrected declarations is out.
+ */
 export type AccountEntry =
   | { kind: 'slot'; index: number; name: string }
-  | { kind: 'program'; pubkey: `0x${string}` };
+  | { kind: 'remaining'; from: number };
 
 /** The SVM account manifest: what the SDK must attach, in order. `undefined` on the EVM. */
 export interface Manifest {
@@ -37,24 +47,19 @@ export interface Artifact {
 export interface WasmCompileOptions {
   target: Target;
   entry?: string;
-  resolve: (path: string) => Uint8Array;
+  resolve: (path: string) => Uint8Array | undefined;
   resolvePackage?: (specifier: string, importer: string) => string | undefined;
 }
 
-// The Rust SauceScript compiler is built FROM the `sauce-next` dep (github:eco-incorp/sauce#main)
-// into `sdk/.sauce-wasm/` by scripts/build-wasm.mjs — the sdk `pretest` runs it, so it is present
-// whenever the suite runs. It is REQUIRED (the Rust compiler is the SDK's compiler going forward),
-// so a missing build is a HARD ERROR, not a skip. wasm-pack's `--target nodejs` output is CommonJS
-// plus a sibling `.wasm` it reads through `fs` at load, so `createRequire` hands it to Node's own CJS
-// loader — the only one that resolves the `.wasm` sibling — rather than jest's ESM transform.
-const WASM_ENTRY = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '.sauce-wasm', 'sauce_wasm.js');
-if (!existsSync(WASM_ENTRY)) {
-  throw new Error(
-    `Rust SauceScript compiler not built at ${WASM_ENTRY}. Run \`pnpm --filter ./sdk build:wasm\` ` +
-      '(needs Rust + wasm-pack); the sdk `pretest` runs it automatically.',
-  );
-}
-const { compile } = createRequire(import.meta.url)(WASM_ENTRY) as {
+// The Rust SauceScript compiler arrives as the published npm package — nothing is built here, and no
+// Rust toolchain is needed to run this suite. It is aliased as `sauce-compiler-next` because its real
+// name, `@eco-incorp/sauce-compiler`, is still this workspace's TypeScript compiler; the alias goes
+// away when that swap completes.
+//
+// Required via `createRequire`, not `import`: the package's `node` condition is the CommonJS build,
+// which reads its sibling `.wasm` off disk at load. Node's own CJS loader is the one that resolves
+// that sibling — jest's ESM transform does not.
+const { compile } = createRequire(import.meta.url)('sauce-compiler-next') as {
   compile: (options: WasmCompileOptions) => Artifact;
 };
 
@@ -66,9 +71,6 @@ const PACKAGE_ROOT = 'node_modules/@sauce/token/';
 /** The entry module the compiler asks the resolver for first. */
 const ENTRY = 'main.js';
 
-/** The SPL Token program id as the manifest records it: `0x`-prefixed full-width big-endian hex. */
-export const SPL_TOKEN_PROGRAM_PUBKEY = '0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9';
-
 /**
  * Serve `entry` as `main.js` and the `@sauce/token` package from `sdk/src/std/token`. A package's own
  * relative import arrives `./`-prefixed (an fs resolver absorbs that in its path join), so the prefix
@@ -77,13 +79,17 @@ export const SPL_TOKEN_PROGRAM_PUBKEY = '0x06ddf6e1d765a193d9cbe146ceeb79ac1cb48
  */
 const resolveModule =
   (entry: string) =>
-  (path: string): Uint8Array => {
+  (path: string): Uint8Array | undefined => {
     const key = path.startsWith('./') ? path.slice(2) : path;
 
     if (key === ENTRY) return Buffer.from(entry);
-    if (!key.startsWith(PACKAGE_ROOT)) throw new Error(`no such module: ${path}`);
+    if (!key.startsWith(PACKAGE_ROOT)) return undefined;
 
-    return readFileSync(join(TOKEN_DIR, key.slice(PACKAGE_ROOT.length)));
+    const file = join(TOKEN_DIR, key.slice(PACKAGE_ROOT.length));
+
+    // `existsSync` rather than catching the read: a caught `ENOENT` would also swallow a permission
+    // error or a truncated read, which the contract wants propagated as "present but unreadable".
+    return existsSync(file) ? readFileSync(file) : undefined;
   };
 
 /** Map the one bare specifier this fixture package layer owns; anything else is "not mine". */
@@ -134,16 +140,16 @@ export const CASES: readonly MethodCase[] = [
   {
     method: 'transfer',
     evm: 'import { transfer } from "@sauce/token"; function main(token: Address, to: Address, amount: Uint256): void { transfer(token, to, amount); }',
-    svm: 'import { transfer } from "@sauce/token"; function main(token: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, source, dest, authority, amount); }',
+    svm: 'import { transfer } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, tokenProgram, source, dest, authority, amount); }',
   },
   {
     method: 'transferFrom',
     evm: 'import { transferFrom } from "@sauce/token"; function main(token: Address, from: Address, to: Address, amount: Uint256): void { transferFrom(token, from, to, amount); }',
-    svm: 'import { transferFrom } from "@sauce/token"; function main(token: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transferFrom(token, source, dest, authority, amount); }',
+    svm: 'import { transferFrom } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void { transferFrom(token, tokenProgram, source, dest, authority, amount); }',
   },
   {
     method: 'approve',
     evm: 'import { approve } from "@sauce/token"; function main(token: Address, spender: Address, amount: Uint256): void { approve(token, spender, amount); }',
-    svm: 'import { approve } from "@sauce/token"; function main(token: Address, source: Account, delegate: Account, authority: Account, amount: Uint256): void { approve(token, source, delegate, authority, amount); }',
+    svm: 'import { approve } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void { approve(token, tokenProgram, source, delegate, authority, amount); }',
   },
 ];
