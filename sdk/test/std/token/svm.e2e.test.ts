@@ -39,7 +39,7 @@ import type { Address, Instruction } from '@solana/kit';
 import { buildComputeBudgetPrepend, buildExecuteInstruction, buildHeapFramePrepend } from '../../../src/svm/index.js';
 import type { ResolvedAccountMeta } from '../../../src/svm/index.js';
 import { compileStdToken } from './harness.js';
-import type { Manifest } from './harness.js';
+import type { AccountManifest } from './harness.js';
 import {
   TOKEN_PROGRAM,
   expectOk,
@@ -88,7 +88,7 @@ const missing = (what: string): never => {
  * with. `remaining` marks where a caller's own variable-length accounts begin; no fixture here uses
  * one, so it is an explicit failure rather than a silently dropped entry.
  */
-const attach = (manifest: Manifest | undefined, slots: Record<string, ResolvedAccountMeta>): ResolvedAccountMeta[] =>
+const attach = (manifest: AccountManifest | undefined, slots: Record<string, ResolvedAccountMeta>): ResolvedAccountMeta[] =>
   (manifest ?? missing('is absent — the svm target must emit one')).accounts.map((entry) =>
     entry.kind === 'remaining'
       ? missing(`asks for a remaining-accounts tail at ${entry.from}, which this suite does not attach`)

@@ -81,7 +81,7 @@
     }
   },
   "devDependencies": {
-    "sauce-compiler-next": "npm:@eco-incorp/sauce-compiler@^0.4.0",
+    "sauce-compiler-next": "npm:@eco-incorp/sauce-compiler@^0.4.1",
     "typescript": "^5.4.0",
     "@types/node": "^20.0.0",
     "@solana/web3.js": "^1.98.0",

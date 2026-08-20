@@ -20,36 +20,12 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export type Target = 'evm' | 'svm';
+// The compiler's own types, not a local restatement of them. A hand-written mirror of a published
+// type is exactly the defect 0.4.1 fixed one repo up; re-declaring them here would reintroduce it
+// one repo down, with nothing to catch the drift.
+import type { CompileOptions, CompileResult, SauceTarget } from 'sauce-compiler-next';
 
-/**
- * One entry of the SVM attach contract — `{"kind":"slot",…}` / `{"kind":"remaining",…}` over the wire.
- *
- * Declared here rather than imported from the compiler package, and only until it can be: 0.4.0 ships
- * this union with a `program` variant the compiler no longer emits and without `remaining`, so
- * importing it today would replace one stale copy with another. Delete this and import the package's
- * own type once a release carrying the corrected declarations is out.
- */
-export type AccountEntry =
-  | { kind: 'slot'; index: number; name: string }
-  | { kind: 'remaining'; from: number };
-
-/** The SVM account manifest: what the SDK must attach, in order. `undefined` on the EVM. */
-export interface Manifest {
-  accounts: AccountEntry[];
-}
-
-export interface Artifact {
-  bytecode: Uint8Array;
-  manifest?: Manifest;
-}
-
-export interface WasmCompileOptions {
-  target: Target;
-  entry?: string;
-  resolve: (path: string) => Uint8Array | undefined;
-  resolvePackage?: (specifier: string, importer: string) => string | undefined;
-}
+export type { AccountEntry, AccountManifest, CompileOptions, CompileResult, SauceTarget } from 'sauce-compiler-next';
 
 // The Rust SauceScript compiler arrives as the published npm package — nothing is built here, and no
 // Rust toolchain is needed to run this suite. It is aliased as `sauce-compiler-next` because its real
@@ -60,7 +36,7 @@ export interface WasmCompileOptions {
 // which reads its sibling `.wasm` off disk at load. Node's own CJS loader is the one that resolves
 // that sibling — jest's ESM transform does not.
 const { compile } = createRequire(import.meta.url)('sauce-compiler-next') as {
-  compile: (options: WasmCompileOptions) => Artifact;
+  compile: (options: CompileOptions) => CompileResult;
 };
 
 const TOKEN_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'src', 'std', 'token');
@@ -75,7 +51,7 @@ const ENTRY = 'main.js';
  * Serve `entry` as `main.js` and the `@sauce/token` package from `sdk/src/std/token`. A package's own
  * relative import arrives `./`-prefixed (an fs resolver absorbs that in its path join), so the prefix
  * is stripped before matching. A miss — including the unselected sibling arm the probe asks for —
- * throws, which is exactly how a host says "absent".
+ * returns `undefined`, which is how a host says "absent"; throwing would say "present but unreadable".
  */
 const resolveModule =
   (entry: string) =>
@@ -97,11 +73,11 @@ const resolvePackage = (specifier: string): string | undefined =>
   specifier === '@sauce/token' ? `${PACKAGE_ROOT}token.js` : undefined;
 
 /** Compile a program that imports `@sauce/token` for `target`, against the real library source. */
-export const compileStdToken = (entry: string, target: Target): Artifact =>
+export const compileStdToken = (entry: string, target: SauceTarget): CompileResult =>
   compile({ target, entry: ENTRY, resolve: resolveModule(entry), resolvePackage });
 
 /** Compile against a caller-supplied resolver — for the packaging negative controls. */
-export const compileWith = (options: WasmCompileOptions): Artifact => compile({ entry: ENTRY, ...options });
+export const compileWith = (options: CompileOptions): CompileResult => compile({ entry: ENTRY, ...options });
 
 /**
  * Every exported method, with the entry that calls it on each target. The reads share a signature
