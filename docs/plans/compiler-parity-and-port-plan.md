@@ -20,6 +20,19 @@ inventoried at `docs/compiler-feature-inventory.md` (114 features, IDs `A1`…`X
 syntax decisions that matter, reaching basic parity. **Part 2** is a sequenced worklist of PRs into
 `../sauce` porting every TS-compiler feature missing or partial in `compiler-rs`.
 
+**Standing design constraint (user, 2026-08-19): preserve stdlib-injects-into-globals.** The standard
+library is a first-class contributor to the **global namespace** — stdlib symbols (the `@sauce/token`
+interface, `emit`, math/util helpers) are injected as globals so user code reaches them without an
+explicit import, and that injection model must survive every decision below. Consequences that bind
+the relevant items: the `GLOBALS` table is **not** native-opcodes-only — stdlib populates it too
+(affects 1.3's `evm.*`/`svm.*` split and 1.6's capability matrix, which must not assume a global is
+always an intrinsic); the reserved-name policy (0.4/1.8) must **not** block the stdlib from claiming a
+global name (reinforces the recommendation to narrow reservations to compiler-intercepted primitives
+only); and `emit()` as a **library** (0.6) is consistent with — indeed depends on — this model, since a
+library `emit` reaches users precisely by being injected into globals. On the RS side, the same
+constraint means stdlib symbols resolve through the global-name path, not only through `Resolver`
+imports.
+
 **No code changes are made by this doc.** It is the plan; execution is separate work.
 
 ---
