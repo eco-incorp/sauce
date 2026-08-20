@@ -598,3 +598,42 @@ SauceScript provides familiar JavaScript syntax while targeting the EVM. Key dif
 - **No closures** - Functions can't capture outer scope
 - **Strict equality only** - Must use `===` and `!==`
 - **EVM-native features** - Direct access to blockchain state, storage, and contract calls
+
+## Cross-target divergences
+
+The same SauceScript source compiles for multiple targets (`v1`, `v12`/EVM, and the `svm` v12
+dialect). Where those targets can produce *different* observable output for one program, one rule
+decides how the divergence is handled — adopted from the Rust `compiler-rs` policy so the two
+compilers converge:
+
+> **Divergence-resolution rule (normative).**
+> - **MUST reconcile in the compiler** when the *meaning* is shared and only the *encoding* differs.
+>   The construct keeps **one** name/spelling; codegen emits the per-target bytes. (e.g. `keccak256`,
+>   `Math.*`, `abi.encode` layout, array element boxing.)
+> - **MAY namespace as two gated features** only when the construct names a **target-specific
+>   concept with no counterpart** on the other target — same underlying opcode byte, genuinely
+>   divergent operand shape/semantics. Each is gated by its own capability. (e.g.
+>   `evm.sload`/`svm.sload`, `evm.call`/`svm.call`.)
+> - A divergence discharged by *reconciling* it is **removed** from the registry below; one kept as
+>   *two features* stays, recording **why** the two builtins exist. Never split a shared-meaning
+>   construct into two names — that is a rename, not a resolution.
+
+This is what decides *which* names move in the `evm.*`/`svm.*` split (Part 1 §1.3): `keccak256` and
+`Math.*` must **not** be namespaced (shared meaning); `sload`/`sstore`/`call` must be (same opcode,
+divergent semantics).
+
+### Registry — how EVM/SVM (and v1) output of one program can differ
+
+A living table, each row with a **disposition** (reconcile / two features / inherent). Seeded from
+the divergences the repo `CLAUDE.md` documents in prose; extend it as new ones are found. (Mirrors
+the Rust compiler's own `README.md` registry so the two can be diffed.)
+
+| Divergence | Detail | Disposition |
+|---|---|---|
+| **Nested static array literal** (`[[…],[…]]`) | Works on v1 (all forms); on v12/svm the static encoding is absent — `assertNoNestedArrayLiteral` (`K12`) rejects at compile time, pointing at the `new Array(n)` alternative. A flat literal and a `new Array`-nested structure work on all targets. | inherent (engine gap) — reconcile once v12/svm gains nested-array static encoding |
+| **Object-literal field reading an existing dynamic var** (`{a: dynLocal}`) | Silently returned a raw heap-descriptor artifact on BOTH v1 and v12; now `assertNoDynamicVariableObjectField` (`K13`) rejects. A *directly-constructed* dynamic value at the field is fine. | reconcile — compile-time rejection until a real re-embed lowering exists |
+| **Dynamic value stored via a scalar (VALUE) slot** | On v1 a descriptor stored in a value slot is destroyed (`WRITE_VALUE` drops `ctx.dynamicResult`); v12/svm carry the descriptor in-band in one 32-byte word, so it round-trips. Whole `K`-family (return-kind inference, `rejectV1ScalarToDynamicReassignment`, …) exists to protect the v1 invariant. | inherent (v1 memory model) — port the **invariant** (a dynamic value must never round-trip a scalar slot), not the machinery; MOOT for RS (no v1 target) |
+| **`.length` of a dynamic value through a parameter** | v1 silently reads the scalar word width (`32`) instead of the real length — no revert; v12/svm read the correct length via the ordinary stack parameter. | inherent (v1 `funcHeap`/`funcValues` split) — v1-only, MOOT for RS |
+| **ERC20 `bool` return of a non-reverting-`false` token** | The `bool` is discarded in the ABI-aware path (no returndatasize op to express SafeERC20), so a false-returning token "succeeds"; an `svm.call` CPI reverts on a failed transfer. | reconcile — revisit once a returndatasize op exists |
+| **Dynamic-data pointer ceiling** | v12 descriptor pointer was 16-bit (~45 KB) → truncation past it; widened to 32-bit upstream (sauce `#323`). EVM quadratic gas now bounds it in practice. | reconciled in kind (both abort loudly); degree asymmetry documented |
+| **`ctx.chainId()` / `ctx.blockNumber()` / balances / timestamp** | chain-specific value; SVM slot-height vs EVM block-height; wei vs lamports; SVM reverts off-chain. | inherent — won't-fix; one spelling, chain-defined value |
