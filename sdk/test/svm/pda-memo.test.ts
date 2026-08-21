@@ -28,7 +28,9 @@ import {
   __pdaMemoSize,
   __pdaMemoStats,
   __resetPdaMemoForTest,
-  __setMaxEntriesForTest,
+  configurePdaMemo,
+  DEFAULT_PDA_MEMO_MAX_ENTRIES,
+  getPdaMemoMaxEntries,
   memoizedGetProgramDerivedAddress,
 } from '../../src/svm/venues/pda-memo.js';
 import { raydiumClmm, RAYDIUM_CLMM_PROGRAM_ID, windowStartTicks as raydiumWindowStartTicks } from '../../src/svm/venues/raydium-clmm/index.js';
@@ -238,7 +240,7 @@ describe('PDA-derivation memo', () => {
     const seedFor = (i: number): readonly Uint8Array[] => [new Uint8Array([i])];
 
     it('never exceeds the cap and evicts the oldest entry on overflow', async () => {
-      __setMaxEntriesForTest(3);
+      configurePdaMemo({ maxEntries: 3 });
 
       await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(0)); // [0]
       await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(1)); // [0,1]
@@ -259,7 +261,7 @@ describe('PDA-derivation memo', () => {
     });
 
     it('a hit refreshes recency, so a since-touched entry survives the next eviction', async () => {
-      __setMaxEntriesForTest(2);
+      configurePdaMemo({ maxEntries: 2 });
 
       await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(10)); // [10]
       await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(11)); // [10,11]
@@ -273,6 +275,54 @@ describe('PDA-derivation memo', () => {
       const afterHit = __pdaMemoStats();
       await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(11)); // 11 was evicted -> MISS
       expect(__pdaMemoStats().misses).toBe(afterHit.misses + 1);
+    });
+  });
+
+  describe('configurePdaMemo: consumer-tunable cap', () => {
+    const PROGRAM = RAYDIUM_CLMM_PROGRAM_ID;
+    const seedFor = (i: number): readonly Uint8Array[] => [new Uint8Array([i])];
+
+    it('defaults to DEFAULT_PDA_MEMO_MAX_ENTRIES (100k) and reflects a raised cap', () => {
+      expect(DEFAULT_PDA_MEMO_MAX_ENTRIES).toBe(100_000);
+      expect(getPdaMemoMaxEntries()).toBe(DEFAULT_PDA_MEMO_MAX_ENTRIES);
+
+      configurePdaMemo({ maxEntries: 500_000 });
+      expect(getPdaMemoMaxEntries()).toBe(500_000);
+    });
+
+    it('a raised cap retains entries that the default-small cap would have evicted', async () => {
+      configurePdaMemo({ maxEntries: 5 }); // simulate a raised cap relative to the working set
+      for (let i = 0; i < 5; i++) await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(i));
+      expect(__pdaMemoSize()).toBe(5);
+
+      // Every one of the 5 is still warm — a repeat pass is all hits, none evicted.
+      const before = __pdaMemoStats();
+      for (let i = 0; i < 5; i++) await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(i));
+      expect(__pdaMemoStats().hits).toBe(before.hits + 5);
+      expect(__pdaMemoStats().misses).toBe(before.misses); // zero fresh derivations
+    });
+
+    it('lowering the cap below the current population evicts the oldest eagerly', async () => {
+      configurePdaMemo({ maxEntries: 10 });
+      for (let i = 0; i < 6; i++) await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(i)); // [0..5]
+      expect(__pdaMemoSize()).toBe(6);
+
+      configurePdaMemo({ maxEntries: 2 }); // eager shrink -> keeps the 2 most-recent (4,5)
+      expect(__pdaMemoSize()).toBe(2);
+
+      const before = __pdaMemoStats();
+      await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(5)); // most-recent survivor -> HIT
+      await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(0)); // evicted -> MISS
+      expect(__pdaMemoStats().hits).toBe(before.hits + 1);
+      expect(__pdaMemoStats().misses).toBe(before.misses + 1);
+    });
+
+    it('rejects a non-positive or non-integer cap', () => {
+      expect(() => configurePdaMemo({ maxEntries: 0 })).toThrow(/positive integer/);
+      expect(() => configurePdaMemo({ maxEntries: -1 })).toThrow(/positive integer/);
+      expect(() => configurePdaMemo({ maxEntries: 1.5 })).toThrow(/positive integer/);
+      expect(() => configurePdaMemo({ maxEntries: Number.NaN })).toThrow(/positive integer/);
+      expect(getPdaMemoMaxEntries()).toBe(DEFAULT_PDA_MEMO_MAX_ENTRIES); // unchanged after a rejected call
     });
   });
 });
