@@ -73,10 +73,15 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
   *(c90be5b — normative rule + seeded EVM/SVM/v1 registry, mirrors RS README)*
 - ⬜ **1.3** Adopt `evm.*`/`svm.*` namespace split in `globals.ts` (keep `storage.*`/`contract.*`
   as deprecated aliases). Land with/before 1.6. **TDD:** borrow RS namespace tests.
-- 🟡 **1.4** Unified `ctx.*` context namespace (additive; keep `msg`/`block`/`tx`/`address`).
-  Map: `ctx.msgSender`→msg.sender, `ctx.self`→address.self, `ctx.chainId`→block.chainId,
-  `ctx.blockNumber`→block.number, `ctx.timestamp`→block.timestamp, `ctx.selfBalance`→address.balance,
-  `ctx.balance(a)`→address.balanceOf. *(in progress fire#2, TDD)*
+- ✅ **1.4** Unified `ctx.*` context namespace (additive; keep `msg`/`block`/`tx`/`address`).
+  *(7bd13ff, fire#3)* — matched the RS oracle exactly: **7 CALL-form methods** (`ctx.msgSender()`,
+  `ctx.self()`, `ctx.chainId()`, `ctx.blockNumber()`, `ctx.timestamp()`, `ctx.selfBalance()`,
+  `ctx.balance(addr)`); `self` is a METHOD (not the `address.self` property), and `gasPrice`/`origin`
+  are excluded (RS raises CtxUnknownMethod). Each aliases the existing spelling → byte-identical on
+  v1/v12/svm. Nullary members carry the ignored args param so `compile.length!==1` (routes via the
+  call path; bare `ctx.foo` fails closed). Adds `ctx` to `RESERVED_NAMES` (executes part of 0.4).
+  15 tests; full suite green (1738). *NB: the earlier fire#2 "property spelling" map was superseded
+  by the RS audit — RS is call-form.*
 - ⬜ **1.5** Annotation-driven storage kind (highest leverage; cross-check vs heuristic, error on
   disagreement). **TDD:** the 9 K-bug shapes as real-exec regressions.
 - ⬜ **1.6** One `Feature`×availability matrix; fold scattered `assertNo*`/`ctx.isV12` guards in.
@@ -134,3 +139,11 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   re-architecture; fold structurally immune (PR-7 shrinks); much of Part 2 already CLOSED; V4/K12 =
   confirmed silent-miscompile RISK in RS; NEW decision 0.7 (block vs shared scope). RS baseline build
   GREEN (29s). Folded re-baseline into EPIC-2. Started §1.4 ctx.* (TDD) + launching parallel RS lane.
+- **2026-08-22 fire#3** — Loop restarted (cron `010d9719`, 30m). State assessment: TS branch is
+  5 parity commits + 12 inherited `routes:` commits ahead of main → **full rebase deferred** (12
+  unrelated xchain-DSL commits, high churn, zero value for parity coding which lives in `compiler/`
+  TS + `../sauce` RS). **#131 = SDK takes RS from npm; does NOT affect the RS-source port work.** RS
+  worktree fast-forwarded to `fd529240e` (current origin/main; 5 RS-native commits incl. `account.owner`
+  #342 — nothing to port). **Landed §1.4** (`7bd13ff`, RS-parity ctx.*, 15 tests, suite green 1738).
+  Dispatched parallel Workflow `w7sdrxsm7`: (a) RS V4 nested-array-literal risk verify+fix/lock,
+  (b) TS §1.8 reserved-name narrowing (executes 0.4), (c) RS Wave-2 PR-8/9 design (context-preserving).
