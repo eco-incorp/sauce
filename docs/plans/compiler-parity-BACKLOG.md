@@ -124,7 +124,12 @@ turns most of PR-20 MOOT/re-architected. **CLOSED (already on origin/main):** ev
 libraries+treeshake, narrow reserved-names, **V3 struct-arg order (DONE** `align_argument` — lock w/
 a test), **G21 break/continue (DONE** `codegen.rs:1258`).
 
-- **Wave 1** ⬜ PR-2 svm sugar (uint/accountData/writeAccountData/accountUint) · ⬜ PR-3 evm.tload/
+- **Wave 1** 🟡 **PR-2** svm sugar — ✅ freestanding **`uint()`** cast (RS `180604748`, fire#6; svm→CAST_LE,
+  evm→CAST_BE, reserved name, 1034 green). 🟡 **deferred:** `accountData`/`writeAccountData`/`accountUint`
+  freestanding — RS models svm accounts as `Ty::Account` main params (ECO-1860), TS uses string-ref
+  interning; a genuine **account-model cross-compiler divergence** (RS already covers the ops via
+  `svm.sload/sstore` + `uint(svm.sload(...))`). Route account-model reconciliation as its own item.
+  · ⬜ PR-3 evm.tload/
   tstore surface (matrix cell exists) · ✅ **PR-4 `defines`** *(RS 90cd112a1, fire#5)* — new
   `options.defines: Vec<(String,Word)>` injected as module-scope consts (caller wins over source const),
   PLUS a genuinely-new constant-`Stmt::If` fold in `fold.rs` (RS previously only folded ternaries, never
@@ -160,6 +165,25 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   `a_tuple_can_hold_a_nested_array_and_it_stays_dynamic` implies an array-in-TUPLE path may be a
   sibling sub-risk — needs a real-exec check on v12/svm (does it round-trip, or same silent drop?).
   · ⬜ V5 manifest vs accountPlan · ⬜ V6 TS11 (`assigned_once` present).
+
+## EPIC-N — 🌟 North-star: eco-swap compiles on BOTH compilers (from the fire#6 probe)
+
+**TS half DONE** — `ecoswap.unrolled.sauce.ts` compiles green on TS (v1 2229B / v12 2175B; svm is a
+deliberate EVM-binding rejection). **RS half = exactly 4 blockers**, ALL surface/type-vocabulary ports
+(RS codegen already handles every STRUCTURAL feature eco-swap emits: runtime for/while loops, `.at()`
+bindings, multi-output indexed call reads `slot0()[0]`, single-named JSON ABI imports, nested
+struct-literal ABI args ordered by component, `.length`, ternary, `Math.sqrt`/`mulDiv`, `abi.encode().slice()`).
+Ranked, source-grounded:
+- ⬜ **NS-1 [BLOCKER, deepest]** compile-time `args` + a `Tuple` param type in RS. `CompileOptions`
+  (options.rs) has no `args`; `Tuple` raises `UnknownType` (mod.rs:2048/3591). eco-swap's
+  pools/routes/brackets are `Tuple`. No as-written RS representation for dynamic tuple-of-tuples params
+  baked from compile-time args (the RS analog of TS `args`/`mainArgTypes`). **DESIGN-FIRST next fire.**
+- ⬜ **NS-2 [BLOCKER, small]** `address.*` namespace in RS (`address.self` ×15; RS only has `ctx.self()`).
+- ⬜ **NS-3 [BLOCKER, tiny]** `Math.neg` MathOp in RS (wrapping negation; RS MathOp lacks it).
+- ⬜ **NS-4 [verify after 1–3]** v12 deep-param REF/stack window (hit TS #374, fixed in-source by hoisting).
+
+NOT needed by eco-swap (deprioritize for the north-star): `new Array`, `for...of`, destructuring,
+try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
 
 ## EPIC-3 — Cross-cutting
 
@@ -198,6 +222,14 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   Both lanes independently gate-verified by the orchestrator (not just agent reports). **Next:** RS
   Wave-2 PR-11/13/14 (lookup tables / local new Array / same-file call fold) + Wave-1 stragglers
   (PR-2/3/4/5); TS §1.5 (annotation storage kind) or §1.9 (Math.* signed/modular); V4-tuple check.
+- **2026-08-22 fire#6** — Resolved decision **0.7** (autonomous fail-safe: keep base shared-scope +
+  cross-compiler divergence-registry entry, `1e4d5c4`) while a round ran. Then round `wedfaleea`
+  landed: **RS PR-2 `uint()`** (`180604748`, 1034; account-trio deferred = account-model divergence)
+  and the **eco-swap north-star probe** (read-only). Probe = strategic pivot: **TS compiles eco-swap
+  green**; RS needs exactly **4 surface/vocab blockers** (NS-1 args/Tuple, NS-2 address.*, NS-3
+  Math.neg, NS-4 v12 deep-param) — RS codegen already does every structural feature. Created EPIC-N
+  (north-star roadmap). **Next:** build NS-2 + NS-3 (small) in one RS lane; design NS-1 (args/Tuple);
+  TS §1.5 in parallel.
 - **2026-08-22 fire#5** (same session, budget healthy) — Two more parallel lanes, both landed+re-verified
   green by the orchestrator: **RS PR-4 defines** (`90cd112a1`, 1030 — +constant-if fold) and **TS §1.9
   Math.* signed/modular** (`e9d0405`, 1811 — +10 Math members, latent V12 methods wired to parity
