@@ -106,7 +106,12 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
   `assertNoDynamicVariableObjectField`, `rejectV1ScalarToDynamicReassignment`, …) deliberately left
   separate + documented — they are NOT target gates; moving them would risk the K-bug family.
   Behavior-preserving (suite byte-identical, 1819). ⬜ class-B unification remains out of scope by design.
-- ⬜ **1.7** State push/emission order once (lookup table; borrow RS `push_order.rs`).
+- ✅ **1.7** State push/emission order once. *(3e10367, fire#8)* — a clean emitter consolidation wasn't
+  possible without bytecode risk (v1 prefix vs v12 postfix, fused sentinel/stackEffect bookkeeping), so
+  per the conservative directive landed the blessed fallback: `test/push-order.parity.test.ts` — a single
+  18-row ORDER table + 56 tests that read operand order back out of finished bytecode (can't silently
+  drift) and pin it against RS `push_order.rs` rules. Confirms v12 agrees with RS except `setIndex`
+  (release/beta-vs-main engine wire divergence, documented). Suite 1875.
 - ✅ **1.8** Reserved-name policy (executes 0.4): narrow the BINDING rule. *(bb4fb0b, fire#3)* —
   split into `RESERVED_BINDING_NAMES` = {abi,crypto,ctx,Math,evm,svm} (the RS narrow set, used at
   `setVar`) vs the broad `RESERVED_NAMES` (kept for CALLABLE decls — TS's freestanding-builtin surface
@@ -197,7 +202,15 @@ Ranked, source-grounded:
 - ✅ **NS-3 [BLOCKER]** `Math.neg` in RS *(RS 627ee17c6, fire#7)* — `MathOp::Neg` (arity 1) reusing
   `Opcode::Neg` (0x29), byte-equivalent to `-x` by construction. Tests lock the byte-equivalence.
 - ⬜ **NS-4 [verify after NS-1]** v12 deep-param REF/stack window (hit TS #374, fixed in-source by hoisting).
-- ⬜ **NS-1 [BLOCKER, deepest]** — see above; **DESIGN-FIRST next.** Only blocker left after NS-2/NS-3.
+- 📐 **NS-1 [BLOCKER, deepest] — DESIGNED (fire#8), building next.** Full plan:
+  `docs/plans/rs-NS1-tuple-params-design.md`. **KEY FINDING (source-grounded): RS already decodes
+  `Array<Tuple<scalar>>` entry params at runtime** (green test `assembly.rs:2266-2275`) — it must NOT
+  copy TS arg-baking. Gap is narrow: bare `Tuple` isn't in the type vocabulary (`type_by_name`,
+  mod.rs:2056 → `UnknownType`), at 3 entry params + 4 local bindings in eco-swap. **Decision B1
+  (autonomous, reversible): caller-supplied `entry_arg_types` shape hint (types only, no baking)** —
+  NOT B2 (body-inference, unsound: an unread field under-sizes the tuple → wire-layout shift). Build:
+  PR-1 (`Tuple` infer-wildcard at local binding) → PR-2 (`entry_arg_types` option) → PR-3 (eco-swap RS
+  driver test). PR-4 (SDK/wasm arg-encoder for RUNTIME) is downstream, out of NS-1 core.
 
 NOT needed by eco-swap (deprioritize for the north-star): `new Array`, `for...of`, destructuring,
 try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
@@ -239,6 +252,12 @@ try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
   Both lanes independently gate-verified by the orchestrator (not just agent reports). **Next:** RS
   Wave-2 PR-11/13/14 (lookup tables / local new Array / same-file call fold) + Wave-1 stragglers
   (PR-2/3/4/5); TS §1.5 (annotation storage kind) or §1.9 (Math.* signed/modular); V4-tuple check.
+- **2026-08-22 fire#8** — **§1.6** (`05d2360`, pure target-gate consolidation) + **§1.7** (`3e10367`,
+  push-order parity table, 1875) landed+verified. NS-1 design (schema-cap failure first) succeeded on a
+  plain-text retry: **RS already decodes `Array<Tuple<scalar>>` at runtime — the gap is just the `Tuple`
+  type-vocabulary spelling.** Decided **B1** (entry_arg_types hint, not unsound body-inference); saved
+  `rs-NS1-tuple-params-design.md`. **TS Part-1 now essentially complete** (only §1.1 docs + §1.9 tail
+  left). **Next: BUILD NS-1 (PR-1→PR-2→PR-3) = eco-swap compiles on RS = north-star done.**
 - **2026-08-22 fire#7** — Round `wjqk95oz0`, both lanes landed+re-verified green: **RS NS-2 address.***
   (`0a958c5da`) + **NS-3 Math.neg** (`627ee17c6`), 1044 — **2 of 4 north-star blockers cleared**
   (eco-swap's `address.self`/`Math.neg` now compile on RS); **TS §1.5 annotation storage kind**
