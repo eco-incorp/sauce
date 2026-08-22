@@ -93,8 +93,13 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
   call path; bare `ctx.foo` fails closed). Adds `ctx` to `RESERVED_NAMES` (executes part of 0.4).
   15 tests; full suite green (1738). *NB: the earlier fire#2 "property spelling" map was superseded
   by the RS audit — RS is call-form.*
-- ⬜ **1.5** Annotation-driven storage kind (highest leverage; cross-check vs heuristic, error on
-  disagreement). **TDD:** the 9 K-bug shapes as real-exec regressions.
+- ✅ **1.5** Annotation-driven storage kind *(e955d79, fire#7)* — opt-in explicit scalar/dynamic
+  annotation on the `.ts`/`.sauce.ts` path, captured in the ts-frontend from the PRE-strip tree and
+  threaded out-of-band (same channel shape as `wideReturnArrays`), with a heuristic cross-check that
+  errors on disagreement. Vocabulary borrowed from RS `annotation_ty` (Uint256/Address/Account/bool/
+  number→scalar; bytes/string/T[]/`{...}`→dynamic). Byte-identical when no annotation present; ambiguous
+  same-name bindings dropped from cross-check. 8 tests; suite green (1819). *(CI format:check drift in 3
+  earlier-fire test files fixed in 96614bc.)*
 - ⬜ **1.6** One `Feature`×availability matrix; fold scattered `assertNo*`/`ctx.isV12` guards in.
 - ⬜ **1.7** State push/emission order once (lookup table; borrow RS `push_order.rs`).
 - ✅ **1.8** Reserved-name policy (executes 0.4): narrow the BINDING rule. *(bb4fb0b, fire#3)* —
@@ -178,9 +183,16 @@ Ranked, source-grounded:
   (options.rs) has no `args`; `Tuple` raises `UnknownType` (mod.rs:2048/3591). eco-swap's
   pools/routes/brackets are `Tuple`. No as-written RS representation for dynamic tuple-of-tuples params
   baked from compile-time args (the RS analog of TS `args`/`mainArgTypes`). **DESIGN-FIRST next fire.**
-- ⬜ **NS-2 [BLOCKER, small]** `address.*` namespace in RS (`address.self` ×15; RS only has `ctx.self()`).
-- ⬜ **NS-3 [BLOCKER, tiny]** `Math.neg` MathOp in RS (wrapping negation; RS MathOp lacks it).
-- ⬜ **NS-4 [verify after 1–3]** v12 deep-param REF/stack window (hit TS #374, fixed in-source by hoisting).
+- ✅ **NS-2 [BLOCKER]** `address.*` namespace in RS *(RS 0a958c5da, fire#7)* — added `address` as a 7th
+  namespace root (recognized + binding-reserved); `address.self`/`address.balance` PROPERTIES + `address.
+  balanceOf(a)` METHOD, aliasing the same ops as `ctx.self()`/`ctx.selfBalance()`/`ctx.balance(a)`. Full
+  spelling parity for the must-haves (eco-swap's `address.self`-as-arg compiles). 🟡 deferred: `codeSize/
+  codeHash/isContract/isEOA` — RS lacks those 4 opcodes (clean `AddressUnknownMember` error; not needed by
+  eco-swap). RS gate green (1044).
+- ✅ **NS-3 [BLOCKER]** `Math.neg` in RS *(RS 627ee17c6, fire#7)* — `MathOp::Neg` (arity 1) reusing
+  `Opcode::Neg` (0x29), byte-equivalent to `-x` by construction. Tests lock the byte-equivalence.
+- ⬜ **NS-4 [verify after NS-1]** v12 deep-param REF/stack window (hit TS #374, fixed in-source by hoisting).
+- ⬜ **NS-1 [BLOCKER, deepest]** — see above; **DESIGN-FIRST next.** Only blocker left after NS-2/NS-3.
 
 NOT needed by eco-swap (deprioritize for the north-star): `new Array`, `for...of`, destructuring,
 try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
@@ -222,6 +234,12 @@ try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
   Both lanes independently gate-verified by the orchestrator (not just agent reports). **Next:** RS
   Wave-2 PR-11/13/14 (lookup tables / local new Array / same-file call fold) + Wave-1 stragglers
   (PR-2/3/4/5); TS §1.5 (annotation storage kind) or §1.9 (Math.* signed/modular); V4-tuple check.
+- **2026-08-22 fire#7** — Round `wjqk95oz0`, both lanes landed+re-verified green: **RS NS-2 address.***
+  (`0a958c5da`) + **NS-3 Math.neg** (`627ee17c6`), 1044 — **2 of 4 north-star blockers cleared**
+  (eco-swap's `address.self`/`Math.neg` now compile on RS); **TS §1.5 annotation storage kind**
+  (`e955d79`), 1819. Also fixed CI `format:check` drift in 3 earlier-fire test files (`96614bc`).
+  **Only NS-1 (args + Tuple param model) + NS-4 (verify) remain for the eco-swap north-star.**
+  **Next: DESIGN NS-1** (the deepest blocker — RS `args` option + dynamic tuple param type), then build.
 - **2026-08-22 fire#6** — Resolved decision **0.7** (autonomous fail-safe: keep base shared-scope +
   cross-compiler divergence-registry entry, `1e4d5c4`) while a round ran. Then round `wedfaleea`
   landed: **RS PR-2 `uint()`** (`180604748`, 1034; account-trio deferred = account-model divergence)
