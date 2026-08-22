@@ -637,3 +637,12 @@ the Rust compiler's own `README.md` registry so the two can be diffed.)
 | **ERC20 `bool` return of a non-reverting-`false` token** | The `bool` is discarded in the ABI-aware path (no returndatasize op to express SafeERC20), so a false-returning token "succeeds"; an `svm.call` CPI reverts on a failed transfer. | reconcile — revisit once a returndatasize op exists |
 | **Dynamic-data pointer ceiling** | v12 descriptor pointer was 16-bit (~45 KB) → truncation past it; widened to 32-bit upstream (sauce `#323`). EVM quadratic gas now bounds it in practice. | reconciled in kind (both abort loudly); degree asymmetry documented |
 | **`ctx.chainId()` / `ctx.blockNumber()` / balances / timestamp** | chain-specific value; SVM slot-height vs EVM block-height; wei vs lamports; SVM reverts off-chain. | inherent — won't-fix; one spelling, chain-defined value |
+
+### Cross-compiler divergences (this TS compiler vs Rust `compiler-rs`)
+
+A separate axis from the target table above: the SAME SauceScript can differ between the two
+COMPILERS (independent of target). Recorded here so the parity program can diff them.
+
+| Divergence | Detail | Disposition |
+|---|---|---|
+| **`if`/`while` body scoping** | This (base/TS) compiler **shares** scope across `if`/`while` bodies — a `let` first declared inside a branch persists as the same variable after it (`processIfStatement`/`processWhileStatement` never `pushScope`). `compiler-rs` **block-scopes** them (the branch `let` is dropped at branch end). So `const FEE=100n; f(cond){ if(cond){ let FEE=5n; } return FEE }` keeps a runtime read on TS but folds to `100n` on RS. | **KNOWN, INTENTIONAL** (parity decision 0.7, provisional). Kept as-is — converging TS→block-scoping would change existing SauceScript semantics SDK-wide; reserved for explicit approval. Every TS pass guards shared-scope correctly today. |

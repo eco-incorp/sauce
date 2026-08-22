@@ -57,14 +57,19 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
   evm,svm}` (`lower/mod.rs:2106-2208`).
 - ✅ **0.5 destructuring** — DECIDED: adopt tuple projection (RS #292), KEEP TS `K10` spelling.
 - ✅ **0.6 emit()** — DECIDED: library, not builtin (consistent w/ stdlib-injects-into-globals).
-- 🆕 ⚠️ **0.7 NEW DECISION (surfaced by T0.1): block-scope vs shared-scope for `if`/`while` bodies.**
-  RS **block-scopes** them (a `let` inside a branch is dropped at branch end); base/TS **shares** scope
-  (the `let` persists as the same variable). So `const FEE=100n; f(cond){if(cond){let FEE=5n;} return
-  FEE}` → RS resolves `100n`; TS keeps a runtime read. This is a genuine **language-semantics
-  divergence**, not a bug. **Pending user call:** converge TS→RS block-scoping (cleaner, matches JS/TS
-  and RS) or keep the base shared-scope? Recommendation: **converge on block-scoping** (it's real
-  TS semantics, and the whole program is "SauceScript = TS subset"). Until decided, TS passes keep
-  their shared-scope guards (correct for today's base).
+- 🟡 ⚠️ **0.7: block-scope vs shared-scope for `if`/`while` bodies** — **PROVISIONALLY RESOLVED (fire#6,
+  autonomous, fail-safe, REVERSIBLE on user call).** RS **block-scopes** them (a `let` inside a branch
+  is dropped at branch end); base/TS **shares** scope (the `let` persists as the same variable). So
+  `const FEE=100n; f(cond){if(cond){let FEE=5n;} return FEE}` → RS resolves `100n`; TS keeps a runtime
+  read. A genuine **language-semantics divergence**, not a bug. **Autonomous ruling: KEEP base
+  shared-scope; record the divergence in the cross-target registry** (§1.2 mechanism) rather than
+  converge. Rationale: converging TS→block-scoping would change the semantics of EXISTING SauceScript
+  across the whole SDK protocol registry + recipes (a wide, risky base-language change), which is
+  exactly the kind of outward-facing/hard-to-reverse change to defer to explicit approval. Every TS
+  pass already guards for shared-scope correctly (this session's fixes), so the status quo is sound and
+  costs only the (documented) divergence. **User can still choose convergence** — my standing rec is
+  converge (real TS semantics) — but nothing in Parts 1/2 is blocked by keeping the status quo (§1.5
+  annotations are orthogonal to scope). Flagged in the divergence registry as a KNOWN, INTENTIONAL diff.
 
 ## EPIC-1 — TS backport (Part 1): make TS resemble RS
 
