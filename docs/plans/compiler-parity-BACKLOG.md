@@ -39,8 +39,16 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   Confirmed "Shape B" (temp-bind + index) round-trips on RS with no v1-style raw-temp workaround. Rejects
   non-call/object/nested/rest destructures + single-output + over-arity cleanly. 7 tests incl. end-to-end
   getReserves(); RS gate 1080. First full-recipe blocker CLEARED.
-- ⬜ **PR-5 `.catch()` EVM half** (111 sites) — the DEFERRED try/catch; EVM feasible (needs CATCH-opcode
-  inline-handler codegen), SVM a permanent divergence. Blocks the full recipe on EVM.
+- 📐 **PR-5 `.catch()` EVM half — DESIGNED (fire#22, `docs/plans/rs-catch-evm-design.md`): bounded M,
+  BUILDING.** The feared novel inline-sub-program primitive is UNNECESSARY — RS's forward-emit +
+  fixed-width-placeholder-patch (the `if`-arm mechanism) already emits an inline handler; `CATCH` (0xB7)
+  + a 1-byte length patched in place is the whole codegen. Handler surface is trivially narrow (all 111
+  sites = zero-param arrow, discarded statement; 99× `() => { local = 0; }`, 12× empty). Work = 1 opcode +
+  wire `Feature::TryCatch` (EVM-only) + `Stmt::TryCall` through ~11 exhaustive-match passes (shallow) +
+  frontend carve-out + narrow lowering. **The one real risk (CATCH stack contract) MUST be verified on the
+  real EVM engine** — build lands it behind a real-engine conformance gate; if unverifiable, ignored (not
+  trusted), like NS-5's acceptance test was. SVM = compile-time refusal (permanent divergence, more honest
+  than TS's laxer svm CATCH which only catches pre-flight CPI failures — recorded in the registry).
 - ⬜ **NS-1 extension: nested/named `ArgShape`** — the cfg entry param is a named nested struct; ArgShape
   expresses only flat empty-named ScalarTuple. Suspected next blocker after NS-7/.catch (unverified).
 
