@@ -73,10 +73,14 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   **ArgShape::Struct(Vec<(String,ArgShape)>)** variant + one `to_ty` arm [S]; (b) **nested-tuple entry
   decode** — `element_words`/`require_decodable_entry_param` must recurse [M]. Design gives cfg's exact
   15-field shape (14 scalars + `chain` nested 7). **sonnet build → opus review** next (after .catch harden frees the worktree).
-- 🆕 ⬜ **NS-8 [NEW blocker found by the ArgShape design, L] `rfqSigs: bytes[]` entry decode** — an array of
-  DYNAMICALLY-sized elements; RS entry decode explicitly unimplemented (`Error::EntryParamShape "not yet"`).
-  Independent of nesting; blocks the full recipe right AFTER cfg. Design-first later. This makes the full
-  recipe 3 items away (ArgShape Struct + nested decode + bytes[] decode), not 1.
+- 📐 **NS-8 `rfqSigs: bytes[]` entry decode — DESIGNED (fire#28 opus, `docs/plans/rs-NS8-bytes-array-design.md`):
+  revised M (not L), BUILD IT.** No `ArgShape` change (`ArrayOf(Bytes)` already lowers to `Ty::Array{Bytes}`);
+  the recipe only INDEXES a bytes element + forwards it verbatim (no `.length`/`abi.decode`/`ecrecover`), so
+  the element value is ONE `Expr::Slice` and the read side already works. Fix = 3 fns in `assembly.rs`:
+  admit `Array{Bytes}` in `require_decodable_entry_param`, + a `bytes[]` OFFSET-TABLE decode branch in
+  `entry_collection_decode` (reusing the array-of-tuple `ArrayOfLength`+`Loop`+`SetIndex` skeleton). Caveat:
+  dynamic-element decode → **real-engine verification required**. Built with ArgShape (same file) then
+  full-recipe acceptance probe.
 
 Long-tail detail (unrolled-north-star items):
 - ✅ V1 dynamic-kind adversarial audit *(RS 20957d1ab, fire#16)* — all 7 K-bug shapes verified
