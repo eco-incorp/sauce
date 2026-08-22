@@ -166,7 +166,8 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   (Opcode::Tload 0x80 / Tstore 0xC4). 9 tests; RS gate 1058. 🆕 **TS parity follow-up:** RS now accepts
   `evm.tload/tstore` but TS only has `storage.tRead/tWrite` — §1.3 deferred the evm.* spelling *because* RS
   lacked it; now add `evm.tload/tstore` to TS's evm namespace (alias storage.tRead/tWrite) so the same source
-  compiles on both.
+  compiles on both. ✅ **DONE** *(TS a96484b, fire#13)* — gatedAlias to storage.tRead/tWrite, EVM-gated,
+  byte-identical v1/v12, svm-rejected; 4 tests; suite 1883. **evm.*/svm.* namespace parity now complete.**
   · ✅ **PR-4 `defines`** *(RS 90cd112a1, fire#5)* — new
   `options.defines: Vec<(String,Word)>` injected as module-scope consts (caller wins over source const),
   PLUS a genuinely-new constant-`Stmt::If` fold in `fold.rs` (RS previously only folded ternaries, never
@@ -194,7 +195,11 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   (assigned-once + ternary-to-taken-arm present `fold.rs:205,424`; CFG interpreter absent — deliberately
   declines reassigned locals `fold.rs:1185,1255`) · ⬜ PR-11 lookup tables *(also needs non-scalar
   module const, `ModuleBindingNotLiteral` today)* · ⬜ PR-12 for…of (grammar-level) · ⬜ PR-13 local
-  `new Array` fold · ⬜ PR-14 same-file call fold.
+  `new Array` fold · ✅ **PR-14 same-file call fold** *(RS cdb734536, fire#13)* — IR-level fold mirroring TS
+  `tsEvalCall`: a `Call` to a same-file function whose body is exactly `return <expr>` with NO nested call
+  and ALL-Const args is substituted with its evaluated constant (params bound as LocalId→Word, re-folded via
+  the existing evaluator). No-nested-call rule guarantees termination; callee never removed; byte-identical
+  for non-foldable calls; composes with the `known`-map local const-prop. 4 tests; RS gate 1062.
 - **Wave 3 (inline)** ⬜ PR-15 validation+cycle · ⬜ PR-16 arrow-inline decl+splice (grammar-level).
 - **Wave 4** ⬜ PR-17 CREATE (absent) · ❎ PR-18 compile-time-eval — runtime `eval` LANDED (ECO-2090)
   but plan's L15 recursive-`compile()` intent still absent · ⬜ PR-19 quasiquote · ✅ PR-20 audited
