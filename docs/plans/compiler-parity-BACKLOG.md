@@ -215,8 +215,23 @@ Ranked, source-grounded:
   NOT B2 (body-inference, unsound: an unread field under-sizes the tuple → wire-layout shift). Build:
   PR-1 (`Tuple` infer-wildcard at local binding) → PR-2 (`entry_arg_types` option) → PR-3 (eco-swap RS
   driver test). PR-4 (SDK/wasm arg-encoder for RUNTIME) is downstream, out of NS-1 core.
-  **BUILD (fire#9): ✅ PR-1 (RS `9d9f98ef1`) + ✅ PR-2 (RS `52c6547d7`) landed on green; 🟡 PR-3
-  (eco-swap acceptance) in flight.** When PR-3 lands green → eco-swap compiles on RS → north-star done.
+  **✅ NS-1 DONE + PROVEN SUFFICIENT (fire#9-10):** PR-1 (`9d9f98ef1` Tuple infer-wildcard) + PR-2
+  (`52c6547d7` `ArgShape`/`entry_arg_types`, no Ty leak) + PR-3 harness (`a6a4e0a68`, `#[ignore]`d).
+  eco-swap now **lowers past EVERY type/shape stage** on RS — the 3 `Tuple` params take their shapes,
+  the 4 `Tuple` locals infer, tuple-index/`.length`/runtime-index all resolve. RS gate green (1048, 2
+  ignored). PR-4 (SDK/wasm encoder, RUNTIME) still deferred.
+- 🆕 ⛔ **NS-5 [BLOCKER — the actual last-mile] codegen liveness / `DivergentBranches`.** eco-swap fails
+  ONLY in codegen (`codegen.rs:1155`, `Error::DivergentBranches`): a local declared in an `if` arm whose
+  only reads are in a NESTED branch is force-COPIED by the linear-liveness approximation (`last_use_flags`,
+  codegen.rs:3028, documented TODO) → lingers live → diverges from the empty sibling arm. Hit via
+  `cl = zeroForOne === 1 ? sr4 : Q192 / sr4;`. Proper fix = per-branch backward liveness (scope.rs already
+  computes per-local `LiveRange`s; they're just not threaded into codegen's consume decision — Codegen holds
+  only `last_use: Vec<bool>`). **HIGH regression risk** (consume decisions → bytecode → 1000+ pinned tests).
+  Minimal repro + acceptance test both `#[ignore]`d, flip green together. **DESIGN-FIRST (fire#10).**
+- 🆕 ⬜ **NS-6 [possible, unverified] downstream gaps past NS-5** — eco-swap also uses `Math.mulDiv/sqrt/neg`
+  (now supported), `abi.encode().slice(0,0)`, nested `swap(SwapParams)` struct args, multi-output-call
+  tuple indexing. Whether any is an RS gap is UNKNOWN until NS-5 unblocks (or a probe reaches them). Probe
+  in fire#10.
 
 NOT needed by eco-swap (deprioritize for the north-star): `new Array`, `for...of`, destructuring,
 try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
