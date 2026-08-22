@@ -51,7 +51,12 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   preserve it) and single-DROP stack discipline for scalar/dynamic/multi-output calls + probe-then-branch +
   sequential catches + empty handler, all on the real engine. No defect. 🟡 Flagged a COVERAGE gap (not a
   bug): the committed conformance only executes the scalar handler — the 99× probe-then-branch idiom + 12×
-  empty handler aren't execution-tested → sonnet test-hardening lane. Deferred: handler param `(e)=>`, stack-changing handlers, `.catch`
+  empty handler aren't execution-tested → sonnet test-hardening lane. ✅ **HARDENED** *(RS 1142c7275, fire#27
+  sonnet)* — +8 real-engine conformance tests (probe-then-branch both paths, empty handler both paths,
+  dynamic-return + multi-output both paths, using the real forge-built MockTarget), 10/10 green on the real
+  Huff runtime. **Also fixed a genuine CI gap:** `catch_conformance.rs` was never in the Makefile's
+  `EVM_INTEGRATION_TESTS` (ran in NO CI job) — now wired. **`.catch()` EVM is DONE: built → opus-reviewed
+  CONFIRMED-SOUND → hardened → CI-locked.** Deferred: handler param `(e)=>`, stack-changing handlers, `.catch`
   on svm.call/raw calls (clean errors). *(was: DESIGNED fire#22 — bounded M, no novel primitive needed:)*
   RS's forward-emit +
   fixed-width-placeholder-patch (the `if`-arm mechanism) already emits an inline handler; `CATCH` (0xB7)
