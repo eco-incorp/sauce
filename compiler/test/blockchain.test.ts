@@ -1,4 +1,5 @@
 import { compile } from '../src/index.js';
+import { GLOBAL_FUNCTIONS, RESERVED_BINDING_NAMES, STDLIB_FUNCTIONS } from '../src/globals.js';
 import { OPS } from '../src/saucer/index.js';
 
 describe('blockchain context', () => {
@@ -565,5 +566,55 @@ describe('reserved-name narrowing (compiler-parity §1.8 / decision 0.4)', () =>
     expect(() => compile('function tx() { return 1; }\nfunction main() { return tx(); }')).toThrow(
       "'tx' is a reserved name",
     );
+  });
+});
+
+// Executes decision 0.6 (docs/plans/compiler-parity-BACKLOG.md §1.9): `emit` is a
+// LIBRARY function injected into globals — the "stdlib-injects-into-globals" model —
+// NOT a native intrinsic. These lock the injection seam and the byte-for-byte
+// transparency of the classification: `emit` reaches user code without an import,
+// composes existing primitives down to the one native LOG op, and its migration out
+// of the native table changed no emitted bytecode.
+describe('emit() as a library function (compiler-parity §1.9 / decision 0.6)', () => {
+  // The stdlib table's `emit` IS the one resolved by a bare call — proving the
+  // spread-merge injection, not two separate definitions.
+  it('injects the stdlib emit into GLOBAL_FUNCTIONS (same GlobalDef)', () => {
+    expect(STDLIB_FUNCTIONS.emit).toBeDefined();
+    expect(GLOBAL_FUNCTIONS.emit).toBe(STDLIB_FUNCTIONS.emit);
+  });
+
+  // Library symbol, reachable with no import statement in the source.
+  it('is reachable without an explicit import', () => {
+    const result = compile('function main() { emit("Ping()"); }');
+    expect(result.bytecode[0]).toContain(OPS.LOG);
+  });
+
+  // A library function composes primitives; it is NOT a reserved value-binding name
+  // (a plain value binding may shadow it — matching RS's treatment of the equivalent
+  // `log` library primitive), unlike the namespace-root intrinsics abi/crypto/etc.
+  it('is not a reserved value-binding name (shadowable as a value)', () => {
+    expect(RESERVED_BINDING_NAMES.has('emit')).toBe(false);
+    expect(() => compile('function main() { const emit = 5n; return emit; }')).not.toThrow();
+  });
+
+  // Golden byte-for-byte pins across the native→stdlib extraction: the LOG-op
+  // lowering (topic0 = keccak256(sig), ABI-encoded non-indexed data, indexed topics)
+  // is unchanged by the classification move. Any drift here is a real codegen change.
+  it('lowers byte-identically after the library extraction (golden)', () => {
+    const hex = (u: Uint8Array) => Buffer.from(u).toString('hex');
+
+    expect(hex(compile('function main() { emit("Ping()"); }').bytecode[0])).toBe(
+      'c601900020ca6e822df923f741dfe968d15d80a18abd25bd1e748bcb9ad81fea5bbb7386af',
+    );
+    expect(hex(compile('function main() { emit("Foo(uint256)", {value: 42}); }').bytecode[0])).toBe(
+      'c601a09401012a201176bd96090075e8a903f0c486668395688fc8c045fd7d1d173b9852e4613ca1',
+    );
+    expect(
+      hex(
+        compile(
+          'function main() { emit("Transfer(address,address,uint256)", {from: 1, to: 2, value: 42}, "from", "to"); }',
+        ).bytecode[0],
+      ),
+    ).toBe('c603a09401012a20ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef01010102');
   });
 });

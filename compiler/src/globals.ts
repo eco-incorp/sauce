@@ -858,7 +858,13 @@ export const GLOBALS: Record<string, Record<string, GlobalDef>> = {
 //   eval("let x = 10; return x * 2")
 //   Code is compiled at compile-time; argument must be a string literal.
 //   If code contains `function main`, it's compiled as-is; otherwise wrapped.
-export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
+//
+// This table holds the NATIVE freestanding intrinsics only — each lowers directly
+// to an engine op (gasLeft → GAS_LEFT, blockHash → BLOCK_HASH, uint → CAST_*,
+// accountData → svm account ops, eval → nested compile). The STDLIB-contributed
+// freestanding functions (currently `emit`) live in `STDLIB_FUNCTIONS` below and are
+// INJECTED into the exported `GLOBAL_FUNCTIONS` by a spread-merge — see decision 0.6.
+const NATIVE_GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
   gasLeft: {
     kind: 'scalar',
     compile: (s: SaucerLike, args: Expression[], _process: (e: Expression) => SaucerLike) => {
@@ -881,20 +887,6 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
       expectArity('blobHash()', 1, args);
 
       return s.blobHash(process(args[0]));
-    },
-  },
-  // emit(signature, data?, ...indexedFields) — emit a Solidity-style event
-  //   emit("Ping()")  — event with no fields
-  //   emit("Foo(uint256)", {value: 42})  — event with data
-  //   emit("Transfer(address,address,uint256)", {from, to, value}, "from", "to")  — with indexed
-  emit: {
-    kind: 'scalar',
-    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-      const { signature, fields, indexedNames } = parseEmitArgs(args);
-      const topics = buildTopics(s, signature, fields, indexedNames, process);
-      const data = buildData(s, fields, indexedNames, process);
-
-      return s.log(data, topics);
     },
   },
   eval: {
@@ -993,6 +985,53 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
     },
   },
 };
+
+/**
+ * STANDARD-LIBRARY freestanding functions (compiler-parity decision 0.6).
+ *
+ * The standard library is a first-class contributor to the global namespace: stdlib
+ * symbols reach user code WITHOUT an explicit import precisely by being INJECTED into
+ * globals (the standing "stdlib-injects-into-globals" design constraint,
+ * docs/plans/compiler-parity-and-port-plan.md). `emit` is that model made concrete —
+ * it is NOT a native intrinsic (contrast `NATIVE_GLOBAL_FUNCTIONS` above, each a direct
+ * op lowering) but a LIBRARY function that COMPOSES existing primitives: it derives
+ * topic0 = keccak256(signature), ABI-encodes the non-indexed fields, and lowers to the
+ * one native primitive `s.log(data, topics)` (the LOG op). RS spells the same event
+ * primitive `log()`; TS spells it `emit` (see the RS↔TS mapping note below).
+ *
+ * Keeping stdlib functions in a SEPARATE table, then spread-merging them into the
+ * exported `GLOBAL_FUNCTIONS`, is what makes the injection literal: `GLOBAL_FUNCTIONS`
+ * is deliberately NOT native-ops-only. Everything downstream (call dispatch in
+ * `processor/expression.ts`, kind inference, and the `RESERVED_NAMES` callable set —
+ * all keyed off the merged `GLOBAL_FUNCTIONS`) sees the injected `emit` identically, so
+ * the classification change is byte-for-byte transparent to codegen and reservation.
+ */
+export const STDLIB_FUNCTIONS: Record<string, GlobalDef> = {
+  // emit(signature, data?, ...indexedFields) — emit a Solidity-style event
+  //   emit("Ping()")  — event with no fields
+  //   emit("Foo(uint256)", {value: 42})  — event with data
+  //   emit("Transfer(address,address,uint256)", {from, to, value}, "from", "to")  — with indexed
+  emit: {
+    kind: 'scalar',
+    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+      const { signature, fields, indexedNames } = parseEmitArgs(args);
+      const topics = buildTopics(s, signature, fields, indexedNames, process);
+      const data = buildData(s, fields, indexedNames, process);
+
+      return s.log(data, topics);
+    },
+  },
+};
+
+/**
+ * Freestanding global functions, resolved by a bare call before any user function.
+ *
+ * The stdlib-contributed functions (`STDLIB_FUNCTIONS`) are INJECTED here via a
+ * spread-merge — the "stdlib-injects-into-globals" model (decision 0.6). No name
+ * collides between the two tables, so the merged shape is exactly the native
+ * intrinsics plus `emit`, keyed identically to before the extraction.
+ */
+export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = { ...NATIVE_GLOBAL_FUNCTIONS, ...STDLIB_FUNCTIONS };
 
 /**
  * evm.* / svm.* target-namespaced builtins (compiler-parity §1.3, adopted from compiler-rs).
