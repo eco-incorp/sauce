@@ -86,7 +86,13 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
   disagreement). **TDD:** the 9 K-bug shapes as real-exec regressions.
 - ⬜ **1.6** One `Feature`×availability matrix; fold scattered `assertNo*`/`ctx.isV12` guards in.
 - ⬜ **1.7** State push/emission order once (lookup table; borrow RS `push_order.rs`).
-- ⬜ **1.8** Reserved-name policy (executes 0.4): narrow `RESERVED_NAMES`.
+- ✅ **1.8** Reserved-name policy (executes 0.4): narrow the BINDING rule. *(bb4fb0b, fire#3)* —
+  split into `RESERVED_BINDING_NAMES` = {abi,crypto,ctx,Math,evm,svm} (the RS narrow set, used at
+  `setVar`) vs the broad `RESERVED_NAMES` (kept for CALLABLE decls — TS's freestanding-builtin surface
+  is wider than RS's, so `function gasLeft(){}` etc. must still be blocked to avoid silent shadowing).
+  Closes the RS→TS binding compat gap (`let block = 1n;` now compiles). +25 tests; suite green (1763).
+  🟡 **§1.8 follow-up:** narrowing the FUNCTION-name set to RS's {revert,require,log,eval} is deferred
+  (needs TS call-resolution analysis; low value — `function msg(){}` shadowing).
 - ⬜ **1.9** Syntax parity: `break`/`continue` v12/svm (G21); signed/modular `Math.*` (L2);
   destructuring doc; emit()→library.
 - ⬜ **1.10** Per-function build-artifact cache (Tier-1 leaf → Tier-2 name-based sentinel). Gate on
@@ -106,8 +112,12 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   tstore surface (matrix cell exists) · ⬜ PR-4 `defines` *(smallest clean win, no grammar/engine dep)*
   · ⬜ PR-5 try/catch (grammar-level) · ⬜ PR-6 compile cache · ⬜ PR-6b per-function IR cache.
   PR-1 (`ctx.*` complete) = PARTIAL but 14 missing entries are **engine-dependent**, not pure compiler.
-- **Wave 2 (partial-eval — THE real gap)** ⬜ PR-8 splice infra+cap → ⬜ PR-9 numeric/while unroll
-  *(representable today, no grammar change — highest leverage)* · 🟡 PR-10 local const-prop **PARTIAL**
+- **Wave 2 (partial-eval — THE real gap)** 📐 **PR-8/PR-9 DESIGNED** (fire#3, full file-cited plan in
+  `docs/plans/rs-partial-eval-PR8-PR9-design.md`): unroll at IR level in a NEW `unroll.rs` before
+  `fold` (reusing `fold::eval_binary`/`try_const`); for+while UNIFY into one recognizer; IR erases
+  step syntax; NO `collidesWithSurroundingDeclarations` needed (LocalId, no names). Key wiring subtlety:
+  fold the UNROLLED program at BOTH -O levels so validity stays -O-independent. ⬜ PR-8 splice infra+cap
+  (proven no-op) → ⬜ PR-9 numeric/while unroll *(highest leverage)* · 🟡 PR-10 local const-prop **PARTIAL**
   (assigned-once + ternary-to-taken-arm present `fold.rs:205,424`; CFG interpreter absent — deliberately
   declines reassigned locals `fold.rs:1185,1255`) · ⬜ PR-11 lookup tables *(also needs non-scalar
   module const, `ModuleBindingNotLiteral` today)* · ⬜ PR-12 for…of (grammar-level) · ⬜ PR-13 local
@@ -117,9 +127,14 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   but plan's L15 recursive-`compile()` intent still absent · ⬜ PR-19 quasiquote · ✅ PR-20 audited
   → mostly MOOT/re-architected (see T0.2 table in log).
 - **Verify** ⬜ V1 dynamic-kind adversarial audit (P0) · ⬜ V2 K15 positive test · ✅ V3 struct-arg
-  order (DONE — lock w/ test) · ⚠️ **V4 nested-array-literal — RS does NOT reject** (unlike TS v12/svm)
-  → **confirmed silent-miscompile RISK, needs real-exec check, blocks PR-20** · ⬜ V5 manifest vs
-  accountPlan · ⬜ V6 TS11 (`assigned_once` present).
+  order (DONE — lock w/ test) · ✅ **V4 nested-array-literal — FIXED** *(RS c861b09d, fire#3)*: the
+  P0 was CONFIRMED empirically (RS accept-and-miscompiled on BOTH targets — `NEW_ARRAY`+`INDEX`,
+  reverts on v12 EVM / rejected on svm; an existing RS test was *locking the bug in*). Fix mirrors TS
+  `assertNoNestedArrayLiteral` — new `Error::NestedArrayLiteral` in `array_literal` (lower/expression.rs),
+  syntactic, rejects on both targets (RS has no v1). RS gate green (1009). 🟡 **V4-followup:** RS test
+  `a_tuple_can_hold_a_nested_array_and_it_stays_dynamic` implies an array-in-TUPLE path may be a
+  sibling sub-risk — needs a real-exec check on v12/svm (does it round-trip, or same silent drop?).
+  · ⬜ V5 manifest vs accountPlan · ⬜ V6 TS11 (`assigned_once` present).
 
 ## EPIC-3 — Cross-cutting
 
@@ -147,3 +162,7 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   #342 — nothing to port). **Landed §1.4** (`7bd13ff`, RS-parity ctx.*, 15 tests, suite green 1738).
   Dispatched parallel Workflow `w7sdrxsm7`: (a) RS V4 nested-array-literal risk verify+fix/lock,
   (b) TS §1.8 reserved-name narrowing (executes 0.4), (c) RS Wave-2 PR-8/9 design (context-preserving).
+  **All 3 landed + independently re-verified green:** V4 = confirmed P0 + fixed (RS `c861b09d`, 1009);
+  §1.8 = narrowed (TS `bb4fb0b`, 1763); PR-8/9 = full design → `rs-partial-eval-PR8-PR9-design.md`.
+  Then launched the RS PR-8→PR-9 BUILD from that design (Workflow, background). **Next fire:** land
+  PR-8/9 if not done; V4-tuple sub-risk real-exec check; TS §1.3 (evm.*/svm.* namespace split).
