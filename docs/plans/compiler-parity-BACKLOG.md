@@ -11,7 +11,19 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
-## 🧭 PROGRAM STATUS (updated fire#15, 2026-08-22) — CORE MISSION ACHIEVED
+## 🧭 PROGRAM STATUS (updated fire#31, 2026-08-22) — COMPLETE (stretch explored to its boundary)
+
+**CONCLUSION (fire#31):** The parity **plan is complete** (Part 1 + Part 2, no open ⬜ plan items), the
+**designated unrolled north-star compiles + real-EVM-verifies on both compilers**, and the self-chosen
+**full production `ecoswap.sauce.ts` stretch is explored to its architectural boundary** — 4 of its 6
+blockers ported + opus-reviewed CONFIRMED-SOUND (NS-7 destructuring, `.catch`, ArgShape::Struct, NS-8
+bytes[]); the last 2 (NS-9 call-site param inference + NS-10 nested-array decode) are **interlocking
+architectural features beyond the plan**, DEFERRED with an opus-scoped build recipe (build only if full
+non-unrolled parity becomes a hard product requirement). Every landed unit is green + gate-verified; all
+divergences are in the compiler/README registry. **Absent new user direction, the substantive program is
+done** — further fires are hardening/maintenance only.
+
+
 
 **🎉 North-star CLOSED:** `ecoswap.unrolled.sauce.ts` (verbatim) compiles on BOTH compilers — TS
 (v1/v12) and compiler-rs (EVM) — from the same SauceScript. RS acceptance test green.
@@ -74,7 +86,7 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   decode** — `element_words`/`require_decodable_entry_param` must recurse [M]. Design gives cfg's exact
   15-field shape (14 scalars + `chain` nested 7). ✅ **DONE + verified** *(RS 35c20200e, fire#30 sonnet)* —
   `ArgShape::Struct` variant + recursive nested-tuple decode (element_words recurses; entry decode flattens
-  nested tuples with an offset-correctness test); nested Field-by-name resolution unit-verified. 🔎 opus review next.
+  nested tuples with an offset-correctness test); nested Field-by-name resolution unit-verified. ✅ opus review CONFIRMED-SOUND (fire#31, real-engine-probed the nested decode itself).
 - 📐 **NS-8 `rfqSigs: bytes[]` entry decode — DESIGNED (fire#28 opus, `docs/plans/rs-NS8-bytes-array-design.md`):
   revised M (not L), BUILD IT.** No `ArgShape` change (`ArrayOf(Bytes)` already lowers to `Ty::Array{Bytes}`);
   the recipe only INDEXES a bytes element + forwards it verbatim (no `.length`/`abi.decode`/`ecrecover`), so
@@ -84,19 +96,22 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   dynamic-element decode → **real-engine verification required**. ✅ **BUILT** *(RS fc4cde882, fire#29 sonnet
   — DONE + REAL-ENGINE VERIFIED)* — `Array{Bytes}` admission + offset-table decode branch. **Conformance 4/4
   on the real EVM engine** (unequal-length elements byte-exact by constant AND runtime index; cap revert;
-  table-present guard), CI-wired. 🔎 opus review next.
-- 🆕 ⬜ **NS-9 [full-recipe blocker #4] non-entry function `Tuple` param** — `eulerNeedsLive/eulerQuoteClosedForm(qd: Tuple, …)`
-  (ecoswap.sauce.ts:564,578) take the infer-wildcard `Tuple` as a HELPER param; RS rejects it by design
-  (only main's entry params + local bindings opt in; no per-call-site param-shape inference — the known
-  "no per-call-site parameter-kind inference" gap). Architectural (call-site shape propagation / polymorphic
-  params). **opus design/scope next — likely materially larger than the entry-param work.**
-- 🆕 ⬜ **NS-10 [suspected, behind NS-9] routing `Array<Array<Scalar>>` entry decode** — route rows are
-  runtime-indexed (`rt[1+5*L]`) + read `.length` (array ops, not tuple), so routing needs a nested-ARRAY
-  entry element, which NS-8 deliberately did NOT admit (only `Array{Bytes}`). Unverified (compile blocks on
-  NS-9 first). The full recipe is now ≥2 more (architectural) features away.
-- 📌 **Full-recipe acceptance test committed `#[ignore]`d** (RS `3d454f996`, flips green when NS-9 clears) —
-  honest capstone tracker: ArgShape + NS-8 CONFIRMED cleared by the real probe; the recipe is a stretch
-  beyond the designated (unrolled) north-star and is revealing an open-ended tail of architectural gaps.
+  table-present guard), CI-wired. ✅ opus review CONFIRMED-SOUND (fire#31; admission correctly narrow — Array{Bytes} does not leak to Array{Array}).
+- ⏸️ **NS-9 + NS-10 — DEFER-ARCHITECTURAL (opus scope, fire#31): the full-recipe stretch STOPS here.**
+  These two are INTERLOCKING architectural features, not port-bounded cleanups, and both are needed to move
+  the full recipe: **NS-10** (nested-array `Array<Array<Scalar>>` entry decode + runtime `.length`/index →
+  Tuple rows; routing/pools/segs/qlv are arrays, route rows runtime-indexed `rt[1+5*L]`) is a NEW entry-decode
+  + array-ops feature (M-L), and is a **hidden prerequisite of NS-9** (a helper's `qd: Tuple` only types if
+  `qlv[v]` yields a Tuple row); **NS-9** (call-site param-shape propagation for a non-entry `Tuple` param —
+  the known "no per-call-site parameter-kind inference" gap CLAUDE.md documents) is a **signature-resolution
+  phase inversion** (L). Recipe is monomorphic (skip true generics). **Recommendation ACCEPTED: do NOT chase
+  full-recipe green as part of this parity effort** — build only if full non-unrolled ecoswap parity becomes
+  a hard product requirement (then NS-10 first, NS-9 monomorphic on top). Captured; `#[ignore]`d acceptance
+  test (RS `3d454f996`) is the tracker.
+- 📌 **SDK-lane note (opus review F3):** if the full recipe is ever RUN (not just compiled) on RS, the SDK's
+  `buildSolverArgs` must OFFSET-INDIRECT the fully-static `cfg` tuple (RS entry decode gives every main param
+  one head word read as a collection offset; a plain `encodeAbiParameters` would inline a static tuple → the
+  first word would be a value, not an offset → garbage decode). Not a compiler bug; an SDK-encoder contract.
 
 Long-tail detail (unrolled-north-star items):
 - ✅ V1 dynamic-kind adversarial audit *(RS 20957d1ab, fire#16)* — all 7 K-bug shapes verified
