@@ -27,9 +27,23 @@ north-star series NS-1 (Tuple params) / NS-2 (address.*) / NS-3 (Math.neg) / NS-
 
 **✅ Decisions 0.3–0.7 all resolved.** (0.7 = keep base shared-scope, in the divergence registry.)
 
-**ALL GENUINE PARITY GAPS CLOSED (fire#18).** Both directions substantively complete; the last real port
-(PR-13 `new Array`) landed; PR-15/16, PR-12, PR-5-svm are documented architectural divergences, not gaps.
-Remaining below is OPTIONAL polish/downstream (none is a parity gap). Long-tail detail:
+**UNROLLED north-star: COMPLETE.** The designated parity target `ecoswap.unrolled.sauce.ts` compiles on
+both compilers; every gap IT needs is closed (through PR-13), decisions resolved, dynamic-kind locked.
+
+**⚠️ CORRECTION (fire#20 capstone): "all gaps closed" was premature for the FULL recipe.** Probing the
+full `ecoswap.sauce.ts` (non-unrolled) on RS/EVM found it aborts at frontend lowering with 147 unsupported
+constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled variant AVOIDED destructuring
+(used indexed `call()[0]` reads), so this GAP was invisible until the capstone. Remaining for the FULL recipe:
+- 🆕 ⬜ **NS-7 [GENUINE GAP, bounded PORT] multi-output-call destructuring** `const [a,b]=contract.method()`
+  (36 sites; first blocker main.js:1529). RS M1 rejects destructuring entirely; TS supports it. RS HAS
+  `Ty::Tuple`+constant `tuple_index`, so this is a frontend DESUGAR (`const t=call(); const a=t[0]; …`) onto
+  existing mechanisms — bounded, like PR-13. **BUILDING (fire#20).**
+- ⬜ **PR-5 `.catch()` EVM half** (111 sites) — the DEFERRED try/catch; EVM feasible (needs CATCH-opcode
+  inline-handler codegen), SVM a permanent divergence. Blocks the full recipe on EVM.
+- ⬜ **NS-1 extension: nested/named `ArgShape`** — the cfg entry param is a named nested struct; ArgShape
+  expresses only flat empty-named ScalarTuple. Suspected next blocker after NS-7/.catch (unverified).
+
+Long-tail detail (unrolled-north-star items):
 - ✅ V1 dynamic-kind adversarial audit *(RS 20957d1ab, fire#16)* — all 7 K-bug shapes verified
   STRUCTURALLY IMPOSSIBLE on RS (dynamism = a structural `Ty::is_dynamic` property + annotation-authoritative
   return types + `same_shape` reassignment rejection; no scalar/heap-slot decision exists). 11 lock-tests
