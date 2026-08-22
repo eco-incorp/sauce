@@ -130,8 +130,16 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
   (ECO-2011 safety) + binding-shadowable; the one real caller (erc20) verified (SDK gate 2536). Suite
   1879. ⬜ remaining §1.9 tail: `break`/`continue` v12/svm (likely already-supported — eco-swap compiles
   on TS v12), destructuring doc.
-- ⬜ **1.10** Per-function build-artifact cache (Tier-1 leaf → Tier-2 name-based sentinel). Gate on
-  measurements (T-CACHE).
+- ❎ **1.10** Per-function build-artifact cache — **INVESTIGATED (fire#10, T-CACHE done): NOT worth
+  building** for the actual workloads. Data: SDK 1400+ suite compiles in ~13ms total (0.046ms each, each
+  fn compiled ONCE, 99.7% single-main leaves sharing nothing); POST-BUILD (what the cache reuses) is
+  ≤2.3% everywhere; the only expensive+recurring case (eco-swap under many defines/args) is dominated by
+  `main()` — a CALLER Tier-1 can't cache, and once defines+args enter main's key Tier-2 collapses into the
+  whole-program `cache.ts` that already exists (~9× on re-runs). Tier-2 also carries MEDIUM risk (post-build
+  patcher + Saucer deep-clone correctness). **Recommendation: don't build; if latency ever matters, attack
+  PARSE (12–49%) + the whole-program PREPASS (15–46%), not per-fn reuse.** *(User asked for this early on —
+  the data answers "will it speed up?": no, for real workloads. Reversible if a future many-distinct-mains-
+  sharing-expensive-leaves workload appears.)* Same verdict applies to RS PR-6b.
 
 ## EPIC-2 — RS forward-port (Part 2): port TS-only features into RS
 
@@ -220,6 +228,15 @@ Ranked, source-grounded:
   eco-swap now **lowers past EVERY type/shape stage** on RS — the 3 `Tuple` params take their shapes,
   the 4 `Tuple` locals infer, tuple-index/`.length`/runtime-index all resolve. RS gate green (1048, 2
   ignored). PR-4 (SDK/wasm encoder, RUNTIME) still deferred.
+- 📐 **NS-5 DESIGNED (fire#10) — CONFIRMED LAST BLOCKER, building next.** Full design:
+  `docs/plans/rs-NS5-codegen-liveness-design.md`. Fix = a STRUCTURAL "symmetric-arm consume" in
+  codegen.rs (widen the occurrence tag to 3-state + a `container==IfArm` gate in `collect_statement_locals`;
+  `read_local` unchanged) — **NOT** a global precise-liveness rewrite. **ZERO blast radius / byte-identical
+  for all currently-compiling programs** (a lingering branch-local ALWAYS diverges today, so every matching
+  program currently ERRORS — no baseline bytes to preserve). NS-6 probe: **every other eco-swap feature
+  already compiles on RS/EVM** (abi.encode().slice, multi-output tuple index, Math.*, nested swap struct) —
+  NS-5 is the ONLY gate. One open unknown: full-file stack pressure (deep swap(SwapParams)), checkable in
+  the eco-swap test run right after the fix.
 - 🆕 ⛔ **NS-5 [BLOCKER — the actual last-mile] codegen liveness / `DivergentBranches`.** eco-swap fails
   ONLY in codegen (`codegen.rs:1155`, `Error::DivergentBranches`): a local declared in an `if` arm whose
   only reads are in a NESTED branch is force-COPIED by the linear-liveness approximation (`last_use_flags`,
