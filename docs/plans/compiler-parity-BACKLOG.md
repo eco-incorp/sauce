@@ -19,10 +19,22 @@ is green, but the BROADER real-engine suite **`make test-conformance-evm` has 11
 `division_by_zero_reverts`, `exponentiation_overflow_reverts`, `math_{addmod/mulmod,muldiv_by_zero,muldiv_overflow,
 signed_division_by_zero}_reverts`, `array_length_evaluates`, `set_index_stores_an_array_element`,
 `nested_set_index_mutates_the_inner_array`; + 1 bytecode mismatch `an_imported_module_const_compiles_to_the_same_bytes`).
-These SMELL branch-introduced (V4 nested-array rejection + more-aggressive constant-fold of overflow/÷0 now
-reject fixtures that used to compile). **opus diagnosis IN FLIGHT (fire#32):** attribute each vs origin/main →
-fixture-needs-update (correct new behavior) vs genuine-regression vs upstream-preexisting. NO "complete" claim
-until resolved. *(The individual feature conformance suites — catch/bytes_array/nested_tuple — are all green.)*
+**opus diagnosis DONE (fire#33):** all 11 are **branch-introduced** (verified: 11/11 PASS on origin/main via
+temp worktree; test bodies byte-identical). Verdict **MIXED — 7 fixture-updates + 4 GENUINE REGRESSIONS**:
+- **7 arithmetic/math = FIXTURE-NEEDS-UPDATE** (culprit PR-14 call-fold `cdb734536`): fixtures routed the
+  overflow/÷0 operand through a pure helper to keep it "runtime"; call-fold now correctly inlines it → the
+  fold guard correctly rejects the provably-constant ÷0/overflow. Compiler right; update fixtures to the
+  declare-then-reassign (NAC) idiom so the operand reaches the runtime guard.
+- **3 array = GENUINE REGRESSION** (culprit **V4 `c861b09d`, landed fire#3**): nested array literals
+  `[[..],[..]]` EXECUTE CORRECTLY on RS's real Huff v12 + SVM engines (empirically probed; both conformance
+  twins green on origin/main). V4 imported a TS-pin-specific limitation that does NOT apply to RS's newer
+  engine. **FIX: revert V4 on RS only** (remove the guard + enum variant + rejection test; restore the
+  fixture) — keep TS's V4 (correct for its release/beta pin) → an ENGINE-LINEAGE divergence, not a shared bug.
+- **1 imported-const byte mismatch = GENUINE REGRESSION** (culprit PR-14): call-fold folds a module-const
+  callee but not a function-local-const callee (2-stmt body), breaking the ECO-2076 byte-parity invariant.
+  **FIX: make call-fold symmetric** — fold bodies FIRST, then build the foldable-callee table from folded
+  bodies (a local `const x; return x/2` collapses to single-return and becomes foldable too).
+- **sonnet fix lane (fire#33) → opus review** next. NO "complete" until v12_conformance is 188/188 + svm twins green.
 
 
 
