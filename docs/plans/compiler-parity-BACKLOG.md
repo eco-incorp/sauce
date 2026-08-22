@@ -91,6 +91,10 @@ the real Huff runtime); 5 unit + 2 conformance tests; RS gate 1075. · ❎ **PR-
   the TS compiler evolves (user-authorized).
 - **Standing constraints.** [[no-ai-attribution]] · [[commit-incrementally-directive]] (commit each
   unit on green) · **stdlib-injects-into-globals** (plan intro) · engine pin stays `release/beta`.
+- **Model routing (USER, fire#23 + ultracode ON).** Workflow lanes: **opus = design + review/verify**,
+  **sonnet = implement** (pass `model:'opus'` / `model:'sonnet'` in `agent()` opts). Ultracode: Workflow
+  on every substantive task, exhaustive, **adversarially verify** — every sonnet implementation gets an
+  opus review lane before it's trusted (esp. anything with a real-engine/soundness risk).
 - **Status keys.** ⬜ TODO · 🟡 WIP · ✅ DONE · ⛔ BLOCKED · 🔍 AUDIT-NEEDED · ❎ WON'T (out of scope).
 
 ## ⚠️ Corrected baseline (2026-08-19)
