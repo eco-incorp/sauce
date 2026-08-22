@@ -5153,6 +5153,124 @@ function localConstPropagationTransformer(top: TopLevelContext) {
 export interface TsPartialEvalResult {
   readonly text: string;
   readonly wideReturnArrays: ReadonlySet<string>;
+  /**
+   * §1.5 — explicit storage-kind annotations, keyed by variable name, captured BEFORE the
+   * type strip (`ts.transpileModule` removes every type annotation, so it cannot survive in
+   * the emitted text — it rides alongside it out-of-band, the same channel shape
+   * `wideReturnArrays` uses). `compile()` (src/index.ts) hands this to `CompilerContext`, where
+   * `storeExpression` (processor/statement.ts) cross-checks each annotated variable against the
+   * heuristic `inferKindWithContext`. Only names with an UNAMBIGUOUS annotation are recorded —
+   * a name annotated with two different kinds, or also declared WITHOUT an annotation anywhere
+   * in the file, is omitted, so a same-name binding in another (function) scope can never be
+   * cross-checked against the wrong annotation. See `collectStorageKindAnnotations`.
+   */
+  readonly annotatedKinds: ReadonlyMap<string, StorageKind>;
+}
+
+/** Storage kind an annotation resolves to — the same 'scalar' | 'dynamic' split as `VariableKind`. */
+export type StorageKind = 'scalar' | 'dynamic';
+
+/**
+ * The storage kind a named type reference (`Uint256`, `bytes`, …) implies, or undefined for a
+ * name outside the recognized vocabulary (a user type/interface — left entirely to the
+ * heuristic). Mirrors the RS oracle's `target_free_type_by_name`
+ * (compiler-rs crates/sauce-core/src/lower/mod.rs): the elementary/word types (Uint256, Address,
+ * Account, bool) and their TS keyword aliases (number, bigint, boolean) are scalar; the
+ * variable-length types (bytes, string) are dynamic/heap.
+ */
+function namedTypeStorageKind(name: string): StorageKind | undefined {
+  switch (name) {
+    case 'Uint256':
+    case 'Address':
+    case 'Account':
+    case 'bool':
+    case 'number':
+    case 'bigint':
+    case 'boolean':
+      return 'scalar';
+    case 'bytes':
+    case 'string':
+      return 'dynamic';
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The storage kind a type annotation NODE implies, or undefined for a type outside the
+ * recognized vocabulary. An array type `T[]` and an inline object type `{ … }` (a tuple) are
+ * dynamic/heap; a parenthesized type is transparent; a keyword type routes through its canonical
+ * spelling; every other TS type construct (union, TS tuple `[A, B]`, `any`, …) is unrecognized —
+ * returns undefined so the heuristic decides, exactly as it did before annotations existed.
+ */
+function annotationStorageKind(type: ts.TypeNode): StorageKind | undefined {
+  switch (type.kind) {
+    case ts.SyntaxKind.ArrayType:
+    case ts.SyntaxKind.TypeLiteral:
+      return 'dynamic';
+    case ts.SyntaxKind.NumberKeyword:
+    case ts.SyntaxKind.BigIntKeyword:
+    case ts.SyntaxKind.BooleanKeyword:
+      return 'scalar';
+    case ts.SyntaxKind.StringKeyword:
+      return 'dynamic';
+    case ts.SyntaxKind.ParenthesizedType:
+      return annotationStorageKind((type as ts.ParenthesizedTypeNode).type);
+    case ts.SyntaxKind.TypeReference: {
+      const ref = type as ts.TypeReferenceNode;
+
+      return ts.isIdentifier(ref.typeName) ? namedTypeStorageKind(ref.typeName.text) : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Walk the ORIGINAL (pre-strip) TS tree and collect each variable's explicit storage-kind
+ * annotation, keyed by name. Only UNAMBIGUOUS names survive: a name is recorded iff it has
+ * exactly one recognized annotated kind across the whole file AND is never also declared
+ * without a recognized annotation. This is deliberately conservative — a name declared in two
+ * scopes (two functions each with their own `let x`) would otherwise risk cross-checking one
+ * scope's binding against the other's annotation; dropping such names means an annotation only
+ * ever "bites" when its name is used consistently, at the cost (a missed cross-check on an
+ * ambiguous name) of never a wrong one. (Known limitation: an annotated local inside an inline
+ * arrow-const function is alpha-renamed with a `#` suffix before this map is consulted, so its
+ * annotation is silently dropped — never mis-applied.)
+ */
+function collectStorageKindAnnotations(sourceFile: ts.SourceFile): Map<string, StorageKind> {
+  const annotated = new Map<string, Set<StorageKind>>();
+  const unrecognized = new Set<string>();
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      const name = node.name.text;
+      const kind = node.type ? annotationStorageKind(node.type) : undefined;
+
+      if (kind) {
+        const kinds = annotated.get(name) ?? new Set<StorageKind>();
+
+        kinds.add(kind);
+        annotated.set(name, kinds);
+      } else {
+        // No annotation, or one outside the recognized vocabulary — treat the name as
+        // ambiguous so a recognized annotation elsewhere on the same name never bites here.
+        unrecognized.add(name);
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+
+  const result = new Map<string, StorageKind>();
+
+  for (const [name, kinds] of annotated) {
+    if (kinds.size === 1 && !unrecognized.has(name)) result.set(name, [...kinds][0]);
+  }
+
+  return result;
 }
 
 export function tsPartialEvalWithMeta(code: string, filePath: string): TsPartialEvalResult {
@@ -5165,6 +5283,8 @@ export function tsPartialEvalWithMeta(code: string, filePath: string): TsPartial
   const tables = collectTopLevelTables(sourceFile, consts, functions);
   const topLevelContext: TopLevelContext = { consts, functions };
   const wideReturnArrays = new Set<string>();
+  // §1.5 — captured from the ORIGINAL tree before the strip below erases every annotation.
+  const annotatedKinds = collectStorageKindAnnotations(sourceFile);
 
   const result = ts.transpileModule(code, {
     fileName: filePath,
@@ -5193,7 +5313,7 @@ export function tsPartialEvalWithMeta(code: string, filePath: string): TsPartial
     },
   });
 
-  return { text: result.outputText, wideReturnArrays };
+  return { text: result.outputText, wideReturnArrays, annotatedKinds };
 }
 
 /**

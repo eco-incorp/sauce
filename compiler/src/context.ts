@@ -172,6 +172,17 @@ interface SharedModule {
    * and callers fall back to the pre-existing ctx-free inference.
    */
   returnKinds: Map<string, VariableKind>;
+  /**
+   * §1.5 — explicit storage-kind annotations from the ts-frontend, keyed by variable name
+   * (`let xs: uint256[] = …` → 'dynamic', `let x: Uint256 = …` → 'scalar'). Populated once by
+   * `compile()` from `tsPartialEvalWithMeta`'s out-of-band channel (annotations are stripped
+   * before acorn, so they cannot ride in the AST), and module-shared like `returnKinds` so a
+   * v12/svm helper's own child context (`forFunction()`) sees the SAME map. `storeExpression`
+   * cross-checks each annotated variable against the heuristic `inferKindWithContext`. Empty for
+   * a non-tsSource compile (annotations are a ts-frontend-only feature), so the whole mechanism
+   * is inert and byte-identical when unused.
+   */
+  annotatedKinds: Map<string, VariableKind>;
 }
 
 export class CompilerContext {
@@ -329,6 +340,7 @@ export class CompilerContext {
       accounts: new AccountRegistry(),
       staged: false,
       returnKinds: new Map(),
+      annotatedKinds: new Map(),
     };
 
     for (const [name, config] of Object.entries(contracts)) {
@@ -413,6 +425,20 @@ export class CompilerContext {
   /** A same-file function's analyzed return kind, or undefined if never recorded. */
   getFunctionReturnKind(name: string): VariableKind | undefined {
     return this.module.returnKinds.get(name);
+  }
+
+  /**
+   * §1.5 — record the ts-frontend's explicit storage-kind annotations (see
+   * `SharedModule.annotatedKinds`). Called once by `compile()` before processing; copied into a
+   * fresh Map so the caller's channel object can't be mutated through the context.
+   */
+  setAnnotatedKinds(annotatedKinds: ReadonlyMap<string, VariableKind>): void {
+    this.module.annotatedKinds = new Map(annotatedKinds);
+  }
+
+  /** A variable's explicit storage-kind annotation, or undefined if it was never annotated. */
+  getAnnotatedKind(name: string): VariableKind | undefined {
+    return this.module.annotatedKinds.get(name);
   }
 
   // ── v12 stack-variable tracking ──
