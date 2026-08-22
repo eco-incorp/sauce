@@ -11,6 +11,34 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## 🧭 PROGRAM STATUS (updated fire#15, 2026-08-22) — CORE MISSION ACHIEVED
+
+**🎉 North-star CLOSED:** `ecoswap.unrolled.sauce.ts` (verbatim) compiles on BOTH compilers — TS
+(v1/v12) and compiler-rs (EVM) — from the same SauceScript. RS acceptance test green.
+
+**✅ Part 1 (RS→TS backport) — COMPLETE.** §1.1–1.9 all landed (ctx.*, evm/svm namespaces incl.
+tload/tstore, annotation storage-kind, reserved-name narrowing, Math.* signed/modular, emit()→library,
+divergence registry, target-gate matrix, push-order parity table, TS-subset docs). §1.10 cache =
+❎ investigated, not worth building (T-CACHE data).
+
+**✅ Part 2 (TS→RS forward-port) — MAJOR FEATURES DONE.** V4 nested-array guard, PR-8/9 loop unrolling,
+PR-4 defines, PR-2 uint(), PR-3 evm.tload/tstore, PR-11 lookup tables, PR-14 same-file call fold; the
+north-star series NS-1 (Tuple params) / NS-2 (address.*) / NS-3 (Math.neg) / NS-5 (codegen liveness).
+
+**✅ Decisions 0.3–0.7 all resolved.** (0.7 = keep base shared-scope, in the divergence registry.)
+
+**Remaining = the LONG TAIL (none blocks the north-star; each is a heavy, eco-swap-irrelevant niche
+port needing its own design):**
+- 🟡 IN FLIGHT: V-series verification (V1 dynamic-kind adversarial audit).
+- ⬜ RS PR-13 local `new Array` fold (RS has NO `new Array` — big), PR-15/16 inline arrow-const
+  (frontend arrow carve-out + splice — design-first), PR-5 try/catch (frontend closure carve-out +
+  inline-handler codegen primitive — design-first), PR-12 for…of (grammar-level).
+- ⬜ V2/V5/V6 verification lock-tests.
+- ⬜ PR-4 SDK/wasm arg-encoder (to RUN, not just compile, eco-swap on RS) — optional, downstream.
+- ⬜ account-model reconciliation (svm accountData trio freestanding) — cross-compiler divergence.
+
+---
+
 ## Working agreements
 
 - **Branches.** TS work → `feat/compiler-parity` (in `sauce-sdk`, off `feat/xchain-intent-dsl`).
