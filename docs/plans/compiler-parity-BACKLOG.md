@@ -161,15 +161,26 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   freestanding — RS models svm accounts as `Ty::Account` main params (ECO-1860), TS uses string-ref
   interning; a genuine **account-model cross-compiler divergence** (RS already covers the ops via
   `svm.sload/sstore` + `uint(svm.sload(...))`). Route account-model reconciliation as its own item.
-  · ⬜ PR-3 evm.tload/
-  tstore surface (matrix cell exists) · ✅ **PR-4 `defines`** *(RS 90cd112a1, fire#5)* — new
+  · ✅ **PR-3 evm.tload/tstore** *(RS aa8e26d2c, fire#12)* — transient storage (EIP-1153), EVM-gated on
+  `Feature::TransientStorage` (was a matrix cell with no source surface), mirrors evm.sload/sstore byte-for-byte
+  (Opcode::Tload 0x80 / Tstore 0xC4). 9 tests; RS gate 1058. 🆕 **TS parity follow-up:** RS now accepts
+  `evm.tload/tstore` but TS only has `storage.tRead/tWrite` — §1.3 deferred the evm.* spelling *because* RS
+  lacked it; now add `evm.tload/tstore` to TS's evm namespace (alias storage.tRead/tWrite) so the same source
+  compiles on both.
+  · ✅ **PR-4 `defines`** *(RS 90cd112a1, fire#5)* — new
   `options.defines: Vec<(String,Word)>` injected as module-scope consts (caller wins over source const),
   PLUS a genuinely-new constant-`Stmt::If` fold in `fold.rs` (RS previously only folded ternaries, never
   pruned an `if` on a constant condition — the whole feature needed it). 2 tests; RS gate green (1030).
   🟡 **PR-4 deferred:** CLI/wasm `--define` flag (core-only landed); treeshake-of-folded-away-arm not
   narrowed (RS computes reachability PRE-fold by design — same known follow-up as TS); no dead-code-
-  after-return elim. · ⬜ PR-5 try/catch (grammar-level) · ⬜ PR-6 compile cache · ⬜ PR-6b per-function
-  IR cache. PR-1 (`ctx.*` complete) = PARTIAL but 14 missing entries are **engine-dependent**.
+  after-return elim. · ⛔ **PR-5 try/catch — BLOCKED, needs a dedicated design pass** *(fire#12 audit)*: no
+  bounded slice exists — even `x.method().catch(()=>{})` requires ALL of (a) a frontend arrow/closure carve-out
+  (against SauceScript's no-closures design, frontend.rs:593), (b) a NEW IR node for call-with-catch, (c) a NEW
+  inline-handler codegen primitive (RS has none — functions are separate table entries, EVAL takes a runtime
+  descriptor), (d) catch-param binding + per-target (SVM pre-flight-only) semantics + Feature::TryCatch gating.
+  Design-first later. · ❎ PR-6 compile cache / PR-6b per-function IR cache — SUPERSEDED by §1.10's "not worth
+  building" verdict (same T-CACHE data). PR-1 (`ctx.*` complete) = PARTIAL but 14 missing entries are
+  **engine-dependent**.
 - **Wave 2 (partial-eval — THE real gap)** 📐 **PR-8/PR-9 DESIGNED** (fire#3, full file-cited plan in
   `docs/plans/rs-partial-eval-PR8-PR9-design.md`): unroll at IR level in a NEW `unroll.rs` before
   `fold` (reusing `fold::eval_binary`/`try_const`); for+while UNIFY into one recognizer; IR erases
