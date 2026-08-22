@@ -207,10 +207,19 @@ async function resolveWindow(
 ): Promise<PancakeswapClmmWindow> {
   const startTicks = raydiumClmmWindowStartTicks(tickCurrentIndex, tickSpacing, zeroForOne) as [number, number, number];
   const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start)))) as [Address, Address, Address];
+  // Batch the whole window into ONE coalesced round instead of an outward
+  // serial walk (identical rationale to raydium-clmm's resolveWindow): the
+  // tick-array PDAs are all derived above, so nothing here depends on a prior
+  // array's bytes. allSettled preserves the break-on-first-invalid contract
+  // exactly — a rejection is re-thrown only if the readable prefix reaches it,
+  // and a miss/rejection past the break degrades to the same readable prefix.
+  const loaded = await Promise.allSettled(tickArrays.map((addr) => load(addr)));
   const arrays: Uint8Array[] = [];
   let readable = 0;
   for (let i = 0; i < 3; i++) {
-    const data = await load(tickArrays[i]);
+    const settled = loaded[i];
+    if (settled.status === 'rejected') throw settled.reason;
+    const data = settled.value;
     const valid =
       data !== null &&
       data.length >= TICK_ARRAY_ACCOUNT_SIZE &&

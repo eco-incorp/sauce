@@ -278,10 +278,23 @@ async function resolveWindow(
     Address,
   ];
 
+  // Read the whole window in ONE batched round instead of an outward serial
+  // walk: the tick-array PDAs are all derived above (from the live tick +
+  // spacing), so nothing here depends on a prior array's bytes. Registering
+  // every load() synchronously lets the coalescing loader fold them into a
+  // single getMultipleAccounts, collapsing ~3 dependency rounds to 1.
+  // allSettled (not all) keeps the break-on-first-invalid contract exact: a
+  // load that REJECTS is re-thrown only when the readable prefix actually
+  // reaches it (matching the old serial await), while a rejection/miss PAST
+  // the break — an array the serial walk never read — is never inspected, so
+  // a missing tail array degrades to the identical readable prefix.
+  const loaded = await Promise.allSettled(tickArrays.map((addr) => load(addr)));
   const arrays: (Uint8Array | null)[] = [];
   let readable = 0;
   for (let i = 0; i < 3; i++) {
-    const data = await load(tickArrays[i]);
+    const settled = loaded[i];
+    if (settled.status === 'rejected') throw settled.reason;
+    const data = settled.value;
     const valid =
       data !== null &&
       data.length >= TICK_ARRAY_ACCOUNT_SIZE &&
