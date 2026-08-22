@@ -95,6 +95,9 @@ export class Saucer implements SaucerLike {
     );
   }
 
+  // Operand EMISSION ORDER for every op below (v1 prefix `[OP][a][b]…`) is stated once, verified
+  // against real emission, and diffed against compiler-rs's `push_order.rs` in
+  // `test/push-order.parity.test.ts` (§1.7). Change an operand order here → update that table.
   private binary(op: number, left: Saucer, right: Saucer): Saucer {
     return this.with([op, ...left._bytes, ...right._bytes]);
   }

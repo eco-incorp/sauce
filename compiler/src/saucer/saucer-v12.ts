@@ -186,6 +186,10 @@ export class V12Saucer implements SaucerLike {
 
   // ── core operand shapes ──
 
+  // Operand EMISSION ORDER for every op below (v12 postfix `[a][b]…[OP]`, with SWAPPED_OPS/index/
+  // setIndex/nary reversals) is stated once, verified against real emission, and diffed against
+  // compiler-rs's `push_order.rs` in `test/push-order.parity.test.ts` (§1.7). Change an operand
+  // order here → update that table.
   private binary(op: number, aL: SaucerLike, bL: SaucerLike, isDynamic = false): V12Saucer {
     const a = aL as V12Saucer;
     const b = bL as V12Saucer;
