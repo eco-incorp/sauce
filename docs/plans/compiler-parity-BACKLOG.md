@@ -34,10 +34,11 @@ both compilers; every gap IT needs is closed (through PR-13), decisions resolved
 full `ecoswap.sauce.ts` (non-unrolled) on RS/EVM found it aborts at frontend lowering with 147 unsupported
 constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled variant AVOIDED destructuring
 (used indexed `call()[0]` reads), so this GAP was invisible until the capstone. Remaining for the FULL recipe:
-- 🆕 ⬜ **NS-7 [GENUINE GAP, bounded PORT] multi-output-call destructuring** `const [a,b]=contract.method()`
-  (36 sites; first blocker main.js:1529). RS M1 rejects destructuring entirely; TS supports it. RS HAS
-  `Ty::Tuple`+constant `tuple_index`, so this is a frontend DESUGAR (`const t=call(); const a=t[0]; …`) onto
-  existing mechanisms — bounded, like PR-13. **BUILDING (fire#20).**
+- ✅ **NS-7 multi-output-call destructuring** *(RS 8853a075b, fire#21)* — `const [a,b]=call()` frontend
+  carve-out + declarator desugar to a fresh Ty::Tuple temp + N constant `Expr::Field` projections (ONE call).
+  Confirmed "Shape B" (temp-bind + index) round-trips on RS with no v1-style raw-temp workaround. Rejects
+  non-call/object/nested/rest destructures + single-output + over-arity cleanly. 7 tests incl. end-to-end
+  getReserves(); RS gate 1080. First full-recipe blocker CLEARED.
 - ⬜ **PR-5 `.catch()` EVM half** (111 sites) — the DEFERRED try/catch; EVM feasible (needs CATCH-opcode
   inline-handler codegen), SVM a permanent divergence. Blocks the full recipe on EVM.
 - ⬜ **NS-1 extension: nested/named `ArgShape`** — the cfg entry param is a named nested struct; ArgShape
