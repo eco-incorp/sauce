@@ -73,7 +73,12 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
 
 ## EPIC-1 — TS backport (Part 1): make TS resemble RS
 
-- ⬜ **1.1** Declare SauceScript a TS subset; demote plain-acorn path (docs + per-call-site default).
+- 🟡 **1.1** Declare SauceScript a TS subset; demote plain-acorn path. *(250efd8, fire#12)* — landed the
+  normative "SauceScript is a strict subset of TypeScript" statement in compiler/README.md (ts-frontend =
+  primary path; plain-acorn = legacy core everything lowers to; `tsSource` = per-call-site opt-in, default
+  false — a bare `compile(src)` deliberately keeps byte-stable acorn behavior). The plain-acorn-default
+  FLIP was audited (verdict with the round result) — NOT flipped (bytecode-pinned callers). Docs-only, no
+  code/gate risk.
 - ✅ **1.2** Divergence-resolution rule + cross-target divergence registry in `compiler/README.md`.
   *(c90be5b — normative rule + seeded EVM/SVM/v1 registry, mirrors RS README)*
 - ✅ **1.3** `evm.*`/`svm.*` namespace split in `globals.ts`. *(8e1b7ad, fire#4)* — `gatedAlias(feature,
