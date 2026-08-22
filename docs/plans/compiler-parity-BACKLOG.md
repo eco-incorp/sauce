@@ -193,7 +193,15 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   sibling sub-risk — needs a real-exec check on v12/svm (does it round-trip, or same silent drop?).
   · ⬜ V5 manifest vs accountPlan · ⬜ V6 TS11 (`assigned_once` present).
 
-## EPIC-N — 🌟 North-star: eco-swap compiles on BOTH compilers (from the fire#6 probe)
+## EPIC-N — 🌟🎉 NORTH-STAR CLOSED (fire#11): eco-swap compiles on BOTH compilers
+
+**DONE 2026-08-22.** `ecoswap.unrolled.sauce.ts` (verbatim) compiles on **TS** (v1 2229B / v12 2175B)
+AND on **compiler-rs** (EVM) — same SauceScript, both compilers. RS acceptance test
+`tests/ecoswap.rs::ecoswap_unrolled_compiles_on_the_evm` PASSES; RS gate 1049, 0 ignored, byte-identical
+for all prior tests. Path taken: NS-2 address.* + NS-3 Math.neg + NS-1 Tuple param model (infer-wildcard
++ entry_arg_types) + NS-5 codegen liveness (balancing drops at inner-if merge, `20e1e140c`). svm eco-swap
+is out of scope (Contract.at is EVM-only by design). Remaining north-star follow-up: PR-4 (SDK/wasm
+arg-encoder to RUN, not just compile, eco-swap on RS) — downstream, optional.
 
 **TS half DONE** — `ecoswap.unrolled.sauce.ts` compiles green on TS (v1 2229B / v12 2175B; svm is a
 deliberate EVM-binding rejection). **RS half = exactly 4 blockers**, ALL surface/type-vocabulary ports
@@ -237,7 +245,15 @@ Ranked, source-grounded:
   already compiles on RS/EVM** (abi.encode().slice, multi-output tuple index, Math.*, nested swap struct) —
   NS-5 is the ONLY gate. One open unknown: full-file stack pressure (deep swap(SwapParams)), checkable in
   the eco-swap test run right after the fix.
-- 🆕 ⛔ **NS-5 [BLOCKER — the actual last-mile] codegen liveness / `DivergentBranches`.** eco-swap fails
+- ✅ **NS-5 DONE (fire#11, `20e1e140c`) — NORTH-STAR CLOSED.** Landed "balancing drops at inner-if
+  merge" (a generalization of the designed symmetric-arm consume — the real file needed it: r0/r1 at
+  ecoswap.unrolled:119-120 are read in DIFFERENT arms of SEPARATE inner ifs, so consuming alone can't
+  reconcile; a balancing DROP on the non-reading arm does). SAME zero-blast gate (block-scoped local,
+  declared in the current if-arm, read in an inner if, dead after, non-diverging arm — all currently-
+  erroring shapes). codegen.rs only; `last_use_flags`→`(flags, per-if drop sets)`, `drop_dead_locals`
+  at each non-diverging arm end. **1049 passed, 0 ignored, byte-identical**; the flagged stack-pressure
+  unknown never materialized (drops REDUCE pressure). eco-swap acceptance test un-ignored + PASSES.
+- ~~🆕 ⛔ NS-5 [BLOCKER] codegen liveness / `DivergentBranches`~~ — RESOLVED above. (history:) eco-swap failed
   ONLY in codegen (`codegen.rs:1155`, `Error::DivergentBranches`): a local declared in an `if` arm whose
   only reads are in a NESTED branch is force-COPIED by the linear-liveness approximation (`last_use_flags`,
   codegen.rs:3028, documented TODO) → lingers live → diverges from the empty sibling arm. Hit via
@@ -245,10 +261,10 @@ Ranked, source-grounded:
   computes per-local `LiveRange`s; they're just not threaded into codegen's consume decision — Codegen holds
   only `last_use: Vec<bool>`). **HIGH regression risk** (consume decisions → bytecode → 1000+ pinned tests).
   Minimal repro + acceptance test both `#[ignore]`d, flip green together. **DESIGN-FIRST (fire#10).**
-- 🆕 ⬜ **NS-6 [possible, unverified] downstream gaps past NS-5** — eco-swap also uses `Math.mulDiv/sqrt/neg`
-  (now supported), `abi.encode().slice(0,0)`, nested `swap(SwapParams)` struct args, multi-output-call
-  tuple indexing. Whether any is an RS gap is UNKNOWN until NS-5 unblocks (or a probe reaches them). Probe
-  in fire#10.
+- ✅ **NS-6 [CLEARED, fire#10 probe]** — every downstream eco-swap feature already compiles on RS/EVM:
+  `abi.encode().slice(0,0)`, multi-output-call tuple indexing (`getReserves()[0]`/`slot0()[0]`),
+  `Math.mulDiv/sqrt/neg`, nested `swap(SwapParams)` struct args. NS-5 was the only gate — confirmed by the
+  post-NS-5 full-file compile (no downstream error surfaced).
 
 NOT needed by eco-swap (deprioritize for the north-star): `new Array`, `for...of`, destructuring,
 try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
@@ -296,6 +312,14 @@ try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
   type-vocabulary spelling.** Decided **B1** (entry_arg_types hint, not unsound body-inference); saved
   `rs-NS1-tuple-params-design.md`. **TS Part-1 now essentially complete** (only §1.1 docs + §1.9 tail
   left). **Next: BUILD NS-1 (PR-1→PR-2→PR-3) = eco-swap compiles on RS = north-star done.**
+- **2026-08-22 fire#11 — 🎉 NORTH-STAR CLOSED.** **NS-5** landed (`20e1e140c`, balancing drops at
+  inner-if merge) → **eco-swap.unrolled compiles on compiler-rs (EVM)**, same source as TS. RS gate
+  1049, 0 ignored, byte-identical (only the 2 ignored acceptance/repro tests flipped to pass); stack
+  pressure never surfaced. Verified by the orchestrator. Also (fire#10): §1.10 cache declined-with-data,
+  NS-5/NS-6 designed. **Remaining for FULL parity (none block the north-star):** RS Wave tail — PR-3
+  evm.tload/tstore, PR-5 try/catch, PR-11 lookup tables, PR-13 local new Array, PR-14 same-file call
+  fold, PR-15/16 inline; V-series verification; TS §1.1 docs; PR-4 (SDK/wasm arg-encoder to RUN eco-swap
+  on RS). **Next fires: grind the Wave tail.**
 - **2026-08-22 fire#7** — Round `wjqk95oz0`, both lanes landed+re-verified green: **RS NS-2 address.***
   (`0a958c5da`) + **NS-3 Math.neg** (`627ee17c6`), 1044 — **2 of 4 north-star blockers cleared**
   (eco-swap's `address.self`/`Math.neg` now compile on RS); **TS §1.5 annotation storage kind**
