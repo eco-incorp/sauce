@@ -39,8 +39,16 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   Confirmed "Shape B" (temp-bind + index) round-trips on RS with no v1-style raw-temp workaround. Rejects
   non-call/object/nested/rest destructures + single-output + over-arity cleanly. 7 tests incl. end-to-end
   getReserves(); RS gate 1080. First full-recipe blocker CLEARED.
-- 📐 **PR-5 `.catch()` EVM half — DESIGNED (fire#22, `docs/plans/rs-catch-evm-design.md`): bounded M,
-  BUILDING.** The feared novel inline-sub-program primitive is UNNECESSARY — RS's forward-emit +
+- ✅ **PR-5 `.catch()` EVM half — LANDED + REAL-ENGINE VERIFIED** *(RS 16bac1983, fire#23; sonnet build)*.
+  `Opcode::Catch`=0xB7 + `Stmt::TryCall{call,handler}` through all ~11 exhaustive Stmt passes + frontend
+  carve-out (zero-param arrow, block body, discarded stmt) + lowering (handler in enclosing scope = closure
+  capture) + codegen (`<call> CATCH <len:1> <handler> DROP`, in-place length patch, stack-neutral assert).
+  **Real-EVM conformance ACTUALLY RAN (orchestrator re-verified): 2/2 green on the real Huff runtime** —
+  reverting call runs handler (ok=0), succeeding call skips it (ok=1), stack reconciled. Core gate 1090+
+  (4 catch integration + 2 conformance in sauce-cli). SVM = clean compile-time refusal (locked). 🔎 opus
+  adversarial review NEXT (per routing). Deferred: handler param `(e)=>`, stack-changing handlers, `.catch`
+  on svm.call/raw calls (clean errors). *(was: DESIGNED fire#22 — bounded M, no novel primitive needed:)*
+  RS's forward-emit +
   fixed-width-placeholder-patch (the `if`-arm mechanism) already emits an inline handler; `CATCH` (0xB7)
   + a 1-byte length patched in place is the whole codegen. Handler surface is trivially narrow (all 111
   sites = zero-param arrow, discarded statement; 99× `() => { local = 0; }`, 12× empty). Work = 1 opcode +
