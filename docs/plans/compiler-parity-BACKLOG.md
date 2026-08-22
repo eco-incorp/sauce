@@ -72,8 +72,9 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   `Expr::Field`) already works — the gap is ONLY the public `ArgShape` descriptor. TWO sub-fixes: (a)
   **ArgShape::Struct(Vec<(String,ArgShape)>)** variant + one `to_ty` arm [S]; (b) **nested-tuple entry
   decode** — `element_words`/`require_decodable_entry_param` must recurse [M]. Design gives cfg's exact
-  15-field shape (14 scalars + `chain` nested 7). ✅ **BUILT** *(RS 35c20200e, fire#29 sonnet — verifying on
-  acceptance-probe completion)* — `ArgShape::Struct` variant + recursive nested-tuple decode.
+  15-field shape (14 scalars + `chain` nested 7). ✅ **DONE + verified** *(RS 35c20200e, fire#30 sonnet)* —
+  `ArgShape::Struct` variant + recursive nested-tuple decode (element_words recurses; entry decode flattens
+  nested tuples with an offset-correctness test); nested Field-by-name resolution unit-verified. 🔎 opus review next.
 - 📐 **NS-8 `rfqSigs: bytes[]` entry decode — DESIGNED (fire#28 opus, `docs/plans/rs-NS8-bytes-array-design.md`):
   revised M (not L), BUILD IT.** No `ArgShape` change (`ArrayOf(Bytes)` already lowers to `Ty::Array{Bytes}`);
   the recipe only INDEXES a bytes element + forwards it verbatim (no `.length`/`abi.decode`/`ecrecover`), so
@@ -81,8 +82,21 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   admit `Array{Bytes}` in `require_decodable_entry_param`, + a `bytes[]` OFFSET-TABLE decode branch in
   `entry_collection_decode` (reusing the array-of-tuple `ArrayOfLength`+`Loop`+`SetIndex` skeleton). Caveat:
   dynamic-element decode → **real-engine verification required**. ✅ **BUILT** *(RS fc4cde882, fire#29 sonnet
-  — verifying + real-engine check on acceptance-probe completion)* — `Array{Bytes}` admission + offset-table
-  decode branch. Full-recipe acceptance probe (phase 3) IN FLIGHT.
+  — DONE + REAL-ENGINE VERIFIED)* — `Array{Bytes}` admission + offset-table decode branch. **Conformance 4/4
+  on the real EVM engine** (unequal-length elements byte-exact by constant AND runtime index; cap revert;
+  table-present guard), CI-wired. 🔎 opus review next.
+- 🆕 ⬜ **NS-9 [full-recipe blocker #4] non-entry function `Tuple` param** — `eulerNeedsLive/eulerQuoteClosedForm(qd: Tuple, …)`
+  (ecoswap.sauce.ts:564,578) take the infer-wildcard `Tuple` as a HELPER param; RS rejects it by design
+  (only main's entry params + local bindings opt in; no per-call-site param-shape inference — the known
+  "no per-call-site parameter-kind inference" gap). Architectural (call-site shape propagation / polymorphic
+  params). **opus design/scope next — likely materially larger than the entry-param work.**
+- 🆕 ⬜ **NS-10 [suspected, behind NS-9] routing `Array<Array<Scalar>>` entry decode** — route rows are
+  runtime-indexed (`rt[1+5*L]`) + read `.length` (array ops, not tuple), so routing needs a nested-ARRAY
+  entry element, which NS-8 deliberately did NOT admit (only `Array{Bytes}`). Unverified (compile blocks on
+  NS-9 first). The full recipe is now ≥2 more (architectural) features away.
+- 📌 **Full-recipe acceptance test committed `#[ignore]`d** (RS `3d454f996`, flips green when NS-9 clears) —
+  honest capstone tracker: ArgShape + NS-8 CONFIRMED cleared by the real probe; the recipe is a stretch
+  beyond the designated (unrolled) north-star and is revealing an open-ended tail of architectural gaps.
 
 Long-tail detail (unrolled-north-star items):
 - ✅ V1 dynamic-kind adversarial audit *(RS 20957d1ab, fire#16)* — all 7 K-bug shapes verified
