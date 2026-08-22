@@ -34,7 +34,15 @@ temp worktree; test bodies byte-identical). Verdict **MIXED — 7 fixture-update
   callee but not a function-local-const callee (2-stmt body), breaking the ECO-2076 byte-parity invariant.
   **FIX: make call-fold symmetric** — fold bodies FIRST, then build the foldable-callee table from folded
   bodies (a local `const x; return x/2` collapses to single-return and becomes foldable too).
-- **sonnet fix lane (fire#33) → opus review** next. NO "complete" until v12_conformance is 188/188 + svm twins green.
+- **sonnet fix lane (fire#33): v12_conformance now 188/0** (`2cec056e` fixtures + `33d67a571` V4-revert-RS +
+  `69211f071` call-fold symmetry); svm nested-array twins 3/3 on a fresh engine.so. **BUT a full workspace
+  `cargo test --no-fail-fast` (fire#34) found 8 MORE branch-introduced failures NOT in v12_conformance:**
+  (a) **7 svm_conformance arithmetic** = the SAME obsolete-fixture class (PR-14 call-fold) in the svm copy
+  CLASS A didn't touch → mechanical NAC-idiom fix; (b) **`swap_supply_compiles`** (example_programs.rs /
+  FAST_INTEGRATION) byte drift 1872→1624 — passes on origin/main, failed ~3 commits before the fix work, so
+  a branch commit made it compile SMALLER (more folding); execute-verify → update the byte-count fixture if
+  the smaller output is functionally correct, else it's a regression. Fixing both (sonnet) → full-workspace
+  gate. **Lesson: gate on the FULL suite (`cargo test --workspace --no-fail-fast`), not per-suite subsets.**
 
 
 
