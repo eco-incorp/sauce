@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Abi, AbiParameter, ContractInfo, ContractsConfig } from './contracts.js';
 import { parseAbiMethods } from './contracts.js';
-import { RESERVED_NAMES } from './globals.js';
+import { RESERVED_BINDING_NAMES, RESERVED_NAMES } from './globals.js';
 import { Saucer } from './saucer/saucer.js';
 import { V12Saucer } from './saucer/saucer-v12.js';
 import type { SaucerLike } from './saucer/saucer-like.js';
@@ -499,7 +499,7 @@ export class CompilerContext {
     structType?: StructType,
     isParam = false,
   ): Variable {
-    if (RESERVED_NAMES.has(name)) throw new Error(`'${name}' is a reserved name`);
+    if (RESERVED_BINDING_NAMES.has(name)) throw new Error(`'${name}' is a reserved name`);
 
     const scope = this.currentScope;
 

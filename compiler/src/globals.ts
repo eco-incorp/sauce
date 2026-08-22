@@ -904,4 +904,35 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
   },
 };
 
+/**
+ * Names refused where a CALLABLE is DECLARED — a `function` declaration
+ * (`CompilerContext.addFunc`) or an inline arrow-const function name
+ * (`processor/inline.ts`). Broad on purpose: it covers every builtin the call path
+ * resolves before a user function — the freestanding `GLOBAL_FUNCTIONS` (`gasLeft()`,
+ * `blockHash()`, `emit()`, `uint()`, …, intercepted in `processCallExpression`) and
+ * the namespace roots — so a same-named user callable can never be silently shadowed
+ * (the ECO-2011 hazard class). TS's freestanding-builtin surface is WIDER than
+ * compiler-rs's (RS spells the primitives `revert`/`log`, TS spells them `throw`/`emit`),
+ * so this callable reservation is deliberately wider than RS's function-name set
+ * ({revert,require,log,eval}); narrowing it to RS's would reopen that hazard for every
+ * `GLOBAL_FUNCTIONS` name. See docs/plans/compiler-parity-BACKLOG.md §1.8 / decision 0.4.
+ */
 export const RESERVED_NAMES: Set<string> = new Set([...Object.keys(GLOBALS), ...Object.keys(GLOBAL_FUNCTIONS)]);
+
+/**
+ * Names refused only as a VALUE BINDING — a `let`/`const`/parameter
+ * (`CompilerContext.setVar`). Exactly the builtin NAMESPACE ROOTS whose member calls
+ * resolve THROUGH the root identifier BEFORE any scope lookup (`abi.encode`,
+ * `crypto.keccak256`, `ctx.msgSender()`, `Math.sqrt`, and — landing with §1.3 — `evm.*`
+ * / `svm.*`): a binding there is reachable-looking yet unreachable, so it is refused
+ * rather than silently shadowed. Matches compiler-rs's binding-name rule exactly
+ * (`Namespace`, `lower/mod.rs`; decision 0.4).
+ *
+ * Deliberately NARROWER than `RESERVED_NAMES`: every OTHER TS global (`msg`, `block`,
+ * `tx`, `address`, `contract`, `storage`, `Uint8Array`) is a member-access-only or
+ * call-only surface a plain value binding cannot shadow (member reads check `GLOBALS`
+ * first; bare calls resolve `GLOBAL_FUNCTIONS` first) — so RS accepts `let msg = 1n;` /
+ * `let block = 1n;` and, with this set, so does TS. `evm`/`svm` are reserved ahead of
+ * the §1.3 namespace split (RS reserves them; nothing on TS binds them today).
+ */
+export const RESERVED_BINDING_NAMES: Set<string> = new Set(['abi', 'crypto', 'ctx', 'Math', 'evm', 'svm']);

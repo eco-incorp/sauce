@@ -175,15 +175,21 @@ describe('blockchain context', () => {
     );
   });
 
-  it('throws on variable named msg', () => {
-    expect(() => compile('function main() { const msg = 5; }')).toThrow("'msg' is a reserved name");
+  // §1.8 / decision 0.4: `msg`/`block` are member-access-only globals (`msg.sender`,
+  // `block.number`), not namespace roots, so a plain value binding cannot shadow them
+  // — RS accepts the binding and now so does TS. (Full matrix in the dedicated
+  // "reserved-name narrowing" describe block below.)
+  it('allows a variable named msg (member-access-only global)', () => {
+    expect(() => compile('function main() { const msg = 5n; return msg; }')).not.toThrow();
   });
 
-  it('throws on variable named block', () => {
-    expect(() => compile('function main() { const block = 5; }')).toThrow("'block' is a reserved name");
+  it('allows a variable named block (member-access-only global)', () => {
+    expect(() => compile('function main() { const block = 5n; return block; }')).not.toThrow();
   });
 
   it('throws on function named tx', () => {
+    // A function DECLARATION keeps the broader callable reservation (RESERVED_NAMES),
+    // so `tx` is still refused here even though `let tx` is now allowed.
     // Called from main — treeshake defaults to true, so an unreferenced function is
     // dropped (never compiled, never validated); this must stay reachable to fire.
     expect(() => compile('function tx() { return 1; }\nfunction main() { return tx(); }')).toThrow(
@@ -191,35 +197,36 @@ describe('blockchain context', () => {
     );
   });
 
-  it('throws on function parameter named address', () => {
-    // Called from main — see the 'tx' comment above.
-    expect(() => compile('function foo(address) { return address; }\nfunction main() { return foo(1); }')).toThrow(
-      "'address' is a reserved name",
-    );
+  it('allows a function parameter named address (former global)', () => {
+    // A parameter is a value binding — `address` is not a namespace root, so it is
+    // now accepted, matching RS.
+    expect(() =>
+      compile('function foo(address) { return address; }\nfunction main() { return foo(1n); }'),
+    ).not.toThrow();
   });
 
-  it('throws on variable named Math', () => {
+  it('throws on variable named Math (namespace root)', () => {
     expect(() => compile('function main() { const Math = 5; }')).toThrow("'Math' is a reserved name");
   });
 
-  it('throws on variable named gasLeft', () => {
-    expect(() => compile('function main() { const gasLeft = 5; }')).toThrow("'gasLeft' is a reserved name");
+  it('allows a variable named gasLeft (call-only builtin)', () => {
+    expect(() => compile('function main() { const gasLeft = 5n; return gasLeft; }')).not.toThrow();
   });
 
-  it('throws on variable named Uint8Array', () => {
-    expect(() => compile('function main() { const Uint8Array = 5; }')).toThrow("'Uint8Array' is a reserved name");
+  it('allows a variable named Uint8Array (constructor-only global)', () => {
+    expect(() => compile('function main() { const Uint8Array = 5n; return Uint8Array; }')).not.toThrow();
   });
 
-  it('throws on variable named abi', () => {
+  it('throws on variable named abi (namespace root)', () => {
     expect(() => compile('function main() { const abi = 5; }')).toThrow("'abi' is a reserved name");
   });
 
-  it('throws on variable named blockHash', () => {
-    expect(() => compile('function main() { const blockHash = 5; }')).toThrow("'blockHash' is a reserved name");
+  it('allows a variable named blockHash (call-only builtin)', () => {
+    expect(() => compile('function main() { const blockHash = 5n; return blockHash; }')).not.toThrow();
   });
 
-  it('throws on variable named blobHash', () => {
-    expect(() => compile('function main() { const blobHash = 5; }')).toThrow("'blobHash' is a reserved name");
+  it('allows a variable named blobHash (call-only builtin)', () => {
+    expect(() => compile('function main() { const blobHash = 5n; return blobHash; }')).not.toThrow();
   });
 
   it('throws on calling a property as a method', () => {
@@ -276,7 +283,7 @@ describe('blockchain context', () => {
     );
   });
 
-  it('throws on variable named crypto', () => {
+  it('throws on variable named crypto (namespace root)', () => {
     expect(() => compile('function main() { const crypto = 5; }')).toThrow("'crypto' is a reserved name");
   });
 
@@ -321,8 +328,8 @@ describe('blockchain context', () => {
     );
   });
 
-  it('throws on variable named storage', () => {
-    expect(() => compile('function main() { const storage = 5; }')).toThrow("'storage' is a reserved name");
+  it('allows a variable named storage (member-access-only global)', () => {
+    expect(() => compile('function main() { const storage = 5n; return storage; }')).not.toThrow();
   });
 
   // contract.* tests
@@ -422,8 +429,8 @@ describe('blockchain context', () => {
     );
   });
 
-  it('throws on variable named contract', () => {
-    expect(() => compile('function main() { const contract = 5; }')).toThrow("'contract' is a reserved name");
+  it('allows a variable named contract (member-access-only global)', () => {
+    expect(() => compile('function main() { const contract = 5n; return contract; }')).not.toThrow();
   });
 
   // emit tests
@@ -463,8 +470,8 @@ describe('blockchain context', () => {
     );
   });
 
-  it('throws on variable named emit', () => {
-    expect(() => compile('function main() { const emit = 5; }')).toThrow("'emit' is a reserved name");
+  it('allows a variable named emit (call-only builtin)', () => {
+    expect(() => compile('function main() { const emit = 5n; return emit; }')).not.toThrow();
   });
 
   it('throws on emit with no arguments', () => {
@@ -495,5 +502,52 @@ describe('blockchain context', () => {
 
   it('throws on variable named eval (strict mode)', () => {
     expect(() => compile('function main() { const eval = 5; }')).toThrow('Binding eval in strict mode');
+  });
+});
+
+// Executes decision 0.4 (docs/plans/compiler-parity-BACKLOG.md §1.8): the TS
+// binding-name reservation is narrowed to compiler-rs's rule — only the builtin
+// NAMESPACE ROOTS ({abi, crypto, ctx, Math, evm, svm}) are refused as a value
+// binding, because their member calls resolve THROUGH the root identifier before
+// any scope lookup. Every OTHER former TS global is a member-access-only / call-only
+// surface a plain value binding cannot shadow, so — matching RS — a local named for
+// one now compiles. Function declarations and inline function names keep the broader
+// callable reservation (see RESERVED_NAMES), so this only affects let/const/params.
+describe('reserved-name narrowing (compiler-parity §1.8 / decision 0.4)', () => {
+  // Names RS accepts as a binding that TS used to reject — now compile on TS too.
+  it.each(['msg', 'block', 'tx', 'address', 'contract', 'storage', 'Uint8Array', 'gasLeft', 'blockHash', 'blobHash', 'emit', 'uint', 'accountData', 'writeAccountData', 'accountUint'])(
+    'allows a local binding named %s (RS-accepted)',
+    (name) => {
+      expect(() => compile(`function main() { const ${name} = 1n; return ${name}; }`)).not.toThrow();
+    },
+  );
+
+  it('allows the task-motivating shapes let block / let tx', () => {
+    expect(() => compile('function main() { let block = 1n; let tx = 2n; return block + tx; }')).not.toThrow();
+  });
+
+  it('allows a function parameter named for a former global (address)', () => {
+    expect(() =>
+      compile('function foo(address) { return address; }\nfunction main() { return foo(1n); }'),
+    ).not.toThrow();
+  });
+
+  // A read-position member access on a namespace root still resolves to the global,
+  // so existing usage is unaffected by the binding narrowing.
+  it('keeps msg.sender / block.number resolving to the global', () => {
+    expect(() => compile('function main() { const a = msg.sender; const b = block.number; return a; }')).not.toThrow();
+  });
+
+  // The namespace roots stay refused as bindings — matching RS exactly.
+  it.each(['abi', 'crypto', 'ctx', 'Math', 'evm', 'svm'])('still refuses a binding named %s (namespace root)', (name) => {
+    expect(() => compile(`function main() { const ${name} = 5; }`)).toThrow("is a reserved name");
+  });
+
+  // Callable-name reservation is unchanged (broader than RS by design): a function
+  // declaration named for a builtin the call path resolves first is still refused.
+  it('still refuses a function declaration named tx', () => {
+    expect(() => compile('function tx() { return 1; }\nfunction main() { return tx(); }')).toThrow(
+      "'tx' is a reserved name",
+    );
   });
 });
