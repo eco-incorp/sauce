@@ -29,7 +29,10 @@ north-star series NS-1 (Tuple params) / NS-2 (address.*) / NS-3 (Math.neg) / NS-
 
 **Remaining = the LONG TAIL (none blocks the north-star; each is a heavy, eco-swap-irrelevant niche
 port needing its own design):**
-- 🟡 IN FLIGHT: V-series verification (V1 dynamic-kind adversarial audit).
+- ✅ V1 dynamic-kind adversarial audit *(RS 20957d1ab, fire#16)* — all 7 K-bug shapes verified
+  STRUCTURALLY IMPOSSIBLE on RS (dynamism = a structural `Ty::is_dynamic` property + annotation-authoritative
+  return types + `same_shape` reassignment rejection; no scalar/heap-slot decision exists). 11 lock-tests
+  (incl. shape 6, the v1-only call-arg revert — clean on RS's uniform one-word calling convention). No defect.
 - ⬜ RS PR-13 local `new Array` fold (RS has NO `new Array` — big), PR-15/16 inline arrow-const
   (frontend arrow carve-out + splice — design-first), PR-5 try/catch (frontend closure carve-out +
   inline-handler codegen primitive — design-first), PR-12 for…of (grammar-level).
