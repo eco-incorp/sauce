@@ -45,8 +45,13 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   capture) + codegen (`<call> CATCH <len:1> <handler> DROP`, in-place length patch, stack-neutral assert).
   **Real-EVM conformance ACTUALLY RAN (orchestrator re-verified): 2/2 green on the real Huff runtime** —
   reverting call runs handler (ok=0), succeeding call skips it (ok=1), stack reconciled. Core gate 1090+
-  (4 catch integration + 2 conformance in sauce-cli). SVM = clean compile-time refusal (locked). 🔎 opus
-  adversarial review NEXT (per routing). Deferred: handler param `(e)=>`, stack-changing handlers, `.catch`
+  (4 catch integration + 2 conformance in sauce-cli). SVM = clean compile-time refusal (locked). ✅ **opus
+  adversarial review (fire#24): CONFIRMED-SOUND** — attacked from the engine side (Calls.huff), verified the
+  load-bearing invariant (CATCH must directly follow the CALL op; `strip_to_evm_call`+`eval_order` both
+  preserve it) and single-DROP stack discipline for scalar/dynamic/multi-output calls + probe-then-branch +
+  sequential catches + empty handler, all on the real engine. No defect. 🟡 Flagged a COVERAGE gap (not a
+  bug): the committed conformance only executes the scalar handler — the 99× probe-then-branch idiom + 12×
+  empty handler aren't execution-tested → sonnet test-hardening lane. Deferred: handler param `(e)=>`, stack-changing handlers, `.catch`
   on svm.call/raw calls (clean errors). *(was: DESIGNED fire#22 — bounded M, no novel primitive needed:)*
   RS's forward-emit +
   fixed-width-placeholder-patch (the `if`-arm mechanism) already emits an inline handler; `CATCH` (0xB7)
