@@ -211,6 +211,8 @@ Ranked, source-grounded:
   NOT B2 (body-inference, unsound: an unread field under-sizes the tuple → wire-layout shift). Build:
   PR-1 (`Tuple` infer-wildcard at local binding) → PR-2 (`entry_arg_types` option) → PR-3 (eco-swap RS
   driver test). PR-4 (SDK/wasm arg-encoder for RUNTIME) is downstream, out of NS-1 core.
+  **BUILD (fire#9): ✅ PR-1 (RS `9d9f98ef1`) + ✅ PR-2 (RS `52c6547d7`) landed on green; 🟡 PR-3
+  (eco-swap acceptance) in flight.** When PR-3 lands green → eco-swap compiles on RS → north-star done.
 
 NOT needed by eco-swap (deprioritize for the north-star): `new Array`, `for...of`, destructuring,
 try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
