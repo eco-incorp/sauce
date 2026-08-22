@@ -515,12 +515,25 @@ describe('blockchain context', () => {
 // callable reservation (see RESERVED_NAMES), so this only affects let/const/params.
 describe('reserved-name narrowing (compiler-parity §1.8 / decision 0.4)', () => {
   // Names RS accepts as a binding that TS used to reject — now compile on TS too.
-  it.each(['msg', 'block', 'tx', 'address', 'contract', 'storage', 'Uint8Array', 'gasLeft', 'blockHash', 'blobHash', 'emit', 'uint', 'accountData', 'writeAccountData', 'accountUint'])(
-    'allows a local binding named %s (RS-accepted)',
-    (name) => {
-      expect(() => compile(`function main() { const ${name} = 1n; return ${name}; }`)).not.toThrow();
-    },
-  );
+  it.each([
+    'msg',
+    'block',
+    'tx',
+    'address',
+    'contract',
+    'storage',
+    'Uint8Array',
+    'gasLeft',
+    'blockHash',
+    'blobHash',
+    'emit',
+    'uint',
+    'accountData',
+    'writeAccountData',
+    'accountUint',
+  ])('allows a local binding named %s (RS-accepted)', (name) => {
+    expect(() => compile(`function main() { const ${name} = 1n; return ${name}; }`)).not.toThrow();
+  });
 
   it('allows the task-motivating shapes let block / let tx', () => {
     expect(() => compile('function main() { let block = 1n; let tx = 2n; return block + tx; }')).not.toThrow();
@@ -539,9 +552,12 @@ describe('reserved-name narrowing (compiler-parity §1.8 / decision 0.4)', () =>
   });
 
   // The namespace roots stay refused as bindings — matching RS exactly.
-  it.each(['abi', 'crypto', 'ctx', 'Math', 'evm', 'svm'])('still refuses a binding named %s (namespace root)', (name) => {
-    expect(() => compile(`function main() { const ${name} = 5; }`)).toThrow("is a reserved name");
-  });
+  it.each(['abi', 'crypto', 'ctx', 'Math', 'evm', 'svm'])(
+    'still refuses a binding named %s (namespace root)',
+    (name) => {
+      expect(() => compile(`function main() { const ${name} = 5; }`)).toThrow('is a reserved name');
+    },
+  );
 
   // Callable-name reservation is unchanged (broader than RS by design): a function
   // declaration named for a builtin the call path resolves first is still refused.

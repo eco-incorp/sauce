@@ -29,23 +29,16 @@ describe('evm.* namespace (§1.3 RS parity) — EVM-only, byte-identical to stor
 
   it('evm.sload(slot) === storage.read(slot)', () => evmEq('return evm.sload(3n)', 'return storage.read(3n)'));
 
-  it('evm.sstore(slot, v) === storage.write(slot, v)', () =>
-    evmEq('evm.sstore(7n, 9n)', 'storage.write(7n, 9n)'));
+  it('evm.sstore(slot, v) === storage.write(slot, v)', () => evmEq('evm.sstore(7n, 9n)', 'storage.write(7n, 9n)'));
 
   it('evm.call(addr, value, data) === contract.call(addr, value, data)', () =>
-    evmEq(
-      'return evm.call(7n, 0n, Uint8Array.from([0xaa]))',
-      'return contract.call(7n, 0n, Uint8Array.from([0xaa]))',
-    ));
+    evmEq('return evm.call(7n, 0n, Uint8Array.from([0xaa]))', 'return contract.call(7n, 0n, Uint8Array.from([0xaa]))'));
 
   it('evm.static(addr, data) === contract.static(addr, data)', () =>
     evmEq('return evm.static(7n, Uint8Array.from([0xaa]))', 'return contract.static(7n, Uint8Array.from([0xaa]))'));
 
   it('evm.delegate(addr, data) === contract.delegate(addr, data)', () =>
-    evmEq(
-      'return evm.delegate(7n, Uint8Array.from([0xaa]))',
-      'return contract.delegate(7n, Uint8Array.from([0xaa]))',
-    ));
+    evmEq('return evm.delegate(7n, Uint8Array.from([0xaa]))', 'return contract.delegate(7n, Uint8Array.from([0xaa]))'));
 
   describe('rejected on svm (RS evm_*_compiled_for_the_svm_is_unsupported)', () => {
     const svmRejected: Array<[string, string]> = [
@@ -60,7 +53,7 @@ describe('evm.* namespace (§1.3 RS parity) — EVM-only, byte-identical to stor
       expect(() => on(src, 'svm')).toThrow(UnsupportedTargetError);
     });
 
-    it("evm.sload names the target in its message", () => {
+    it('evm.sload names the target in its message', () => {
       expect(() => on('function main() { return evm.sload(3n) }', 'svm')).toThrow(
         "evm.sload is not supported on target 'svm'",
       );

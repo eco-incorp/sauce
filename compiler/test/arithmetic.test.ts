@@ -154,16 +154,12 @@ describe('arithmetic', () => {
 
     it('compiles Math.addMod', () => {
       const result = compile('function main() { const x = Math.addMod(10, 20, 5); }');
-      expect(result.bytecode[0]).toEqual(
-        prelude(OPS.ADD_MOD, [OPS.BYTE_1, 10, OPS.BYTE_1, 20, OPS.BYTE_1, 5]),
-      );
+      expect(result.bytecode[0]).toEqual(prelude(OPS.ADD_MOD, [OPS.BYTE_1, 10, OPS.BYTE_1, 20, OPS.BYTE_1, 5]));
     });
 
     it('compiles Math.mulMod', () => {
       const result = compile('function main() { const x = Math.mulMod(6, 7, 5); }');
-      expect(result.bytecode[0]).toEqual(
-        prelude(OPS.MUL_MOD, [OPS.BYTE_1, 6, OPS.BYTE_1, 7, OPS.BYTE_1, 5]),
-      );
+      expect(result.bytecode[0]).toEqual(prelude(OPS.MUL_MOD, [OPS.BYTE_1, 6, OPS.BYTE_1, 7, OPS.BYTE_1, 5]));
     });
 
     it('compiles Math.sDiv', () => {
@@ -185,9 +181,7 @@ describe('arithmetic', () => {
       // Math.signExtend(value, fromByte): the v1 engine reads k (fromByte) first, then the
       // value — so operands are emitted reversed relative to source-arg order.
       const result = compile('function main() { const x = Math.signExtend(200, 0); }');
-      expect(result.bytecode[0]).toEqual(
-        prelude(OPS.SIGN_EXTEND, [OPS.BYTE_1, 0, OPS.BYTE_1, 200]),
-      );
+      expect(result.bytecode[0]).toEqual(prelude(OPS.SIGN_EXTEND, [OPS.BYTE_1, 0, OPS.BYTE_1, 200]));
     });
 
     it('compiles Math.sLt', () => {
