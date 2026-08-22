@@ -182,6 +182,13 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   Design-first later. · ❎ PR-6 compile cache / PR-6b per-function IR cache — SUPERSEDED by §1.10's "not worth
   building" verdict (same T-CACHE data). PR-1 (`ctx.*` complete) = PARTIAL but 14 missing entries are
   **engine-dependent**.
+- ✅ **PR-11 module lookup-table folding** *(RS 4b6877e9d, fire#14)* — new `ModuleValue::Table` (const array/
+  object of literals, no runtime word); `TABLE[k]`/`TABLE.field` (constant index/field) fold to the element at
+  lower time; bare table ref / element write / whole-table reassign / alias all rejected (clean errors:
+  `ModuleTableNotIndexed`/`ModuleTableIndexNotConst`/`ArrayIndexOutOfRange`) — strict allowlist mirroring TS
+  `checkTableSafety` with better diagnostics. 8 tests; RS gate 1070. Deferred (fail-closed parity boundaries):
+  element referencing another const, `.length`, string-computed key, mutable `let` table, non-literal-but-
+  foldable index.
 - **Wave 2 (partial-eval — THE real gap)** 📐 **PR-8/PR-9 DESIGNED** (fire#3, full file-cited plan in
   `docs/plans/rs-partial-eval-PR8-PR9-design.md`): unroll at IR level in a NEW `unroll.rs` before
   `fold` (reusing `fold::eval_binary`/`try_const`); for+while UNIFY into one recognizer; IR erases
