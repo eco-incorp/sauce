@@ -1050,6 +1050,8 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = { ...NATIVE_GLOBAL_FU
  *   evm.delegate(addr,data)     -> contract.delegate
  *   evm.sload(slot)             -> storage.read
  *   evm.sstore(slot,value)      -> storage.write
+ *   evm.tload(key)              -> storage.tRead   (EIP-1153 transient storage)
+ *   evm.tstore(key,value)       -> storage.tWrite
  *   svm.sload(acct,off,len)     -> accountData
  *   svm.sstore(acct,off,value)  -> writeAccountData
  *   svm.call(program,accts,data)-> contract.call (svm arm) with args reordered to (target,data,accts)
@@ -1073,6 +1075,8 @@ GLOBALS.evm = {
   delegate: gatedAlias('evm.delegate', GLOBALS.contract.delegate),
   sload: gatedAlias('evm.sload', GLOBALS.storage.read),
   sstore: gatedAlias('evm.sstore', GLOBALS.storage.write),
+  tload: gatedAlias('evm.tload', GLOBALS.storage.tRead),
+  tstore: gatedAlias('evm.tstore', GLOBALS.storage.tWrite),
 };
 
 GLOBALS.svm = {

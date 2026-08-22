@@ -119,6 +119,12 @@ export const TARGET_CAPABILITIES: Record<string, CapabilityRow> = {
   'evm.delegate': { targets: EVM_TARGETS },
   'evm.sload': { targets: EVM_TARGETS },
   'evm.sstore': { targets: EVM_TARGETS },
+  // Transient storage (EIP-1153) mirror. RS gates these EVM-only via
+  // `Feature::TransientStorage` (targets.rs — Unavailable on svm); the underlying
+  // storage.tRead/tWrite spelling is deliberately UNGATED as a universal fork op, but the
+  // evm.* namespace already implies an EVM target, so these match RS and gate EVM-only.
+  'evm.tload': { targets: EVM_TARGETS },
+  'evm.tstore': { targets: EVM_TARGETS },
 
   // svm.* namespace (§1.3): the svm-only mirror of the accountData/CPI surface. RS gates each with
   // `require_available(..., Builtin::Svm*)` and rejects it on any EVM target (contract.rs

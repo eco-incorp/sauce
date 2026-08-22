@@ -31,6 +31,10 @@ describe('evm.* namespace (§1.3 RS parity) — EVM-only, byte-identical to stor
 
   it('evm.sstore(slot, v) === storage.write(slot, v)', () => evmEq('evm.sstore(7n, 9n)', 'storage.write(7n, 9n)'));
 
+  it('evm.tload(key) === storage.tRead(key)', () => evmEq('return evm.tload(3n)', 'return storage.tRead(3n)'));
+
+  it('evm.tstore(key, v) === storage.tWrite(key, v)', () => evmEq('evm.tstore(7n, 9n)', 'storage.tWrite(7n, 9n)'));
+
   it('evm.call(addr, value, data) === contract.call(addr, value, data)', () =>
     evmEq('return evm.call(7n, 0n, Uint8Array.from([0xaa]))', 'return contract.call(7n, 0n, Uint8Array.from([0xaa]))'));
 
@@ -44,6 +48,8 @@ describe('evm.* namespace (§1.3 RS parity) — EVM-only, byte-identical to stor
     const svmRejected: Array<[string, string]> = [
       ['evm.sload', 'function main() { return evm.sload(3n) }'],
       ['evm.sstore', 'function main() { evm.sstore(7n, 9n) }'],
+      ['evm.tload', 'function main() { return evm.tload(3n) }'],
+      ['evm.tstore', 'function main() { evm.tstore(7n, 9n) }'],
       ['evm.call', 'function main() { return evm.call(7n, 0n, Uint8Array.from([0xaa])) }'],
       ['evm.static', 'function main() { return evm.static(7n, Uint8Array.from([0xaa])) }'],
       ['evm.delegate', 'function main() { return evm.delegate(7n, Uint8Array.from([0xaa])) }'],
