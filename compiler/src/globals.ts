@@ -526,6 +526,72 @@ export const GLOBALS: Record<string, Record<string, GlobalDef>> = {
     gasPrice: { kind: 'scalar', compile: (s: SaucerLike) => s.txGasPrice() },
   },
 
+  // ctx.*  — unified context namespace (compiler-parity §1.4, adopted from compiler-rs).
+  // EXACTLY 7 members, ALL call-form (`ctx.foo()`); `self` is a METHOD (unlike the `address.self`
+  // PROPERTY), and `gasPrice`/`origin` are deliberately excluded (RS raises CtxUnknownMethod).
+  // Each aliases the pre-existing msg.*/block.*/address.* spelling, emitting byte-identical bytecode.
+  // A nullary here still takes the (ignored) args param so `compile.length !== 1` — that routes it
+  // through processStaticMethod (call form) and makes bare `ctx.foo` (no call) fail closed, matching
+  // RS's call-only rule. Oracle: sauce-core/src/lower/contract.rs:463-472.
+  ctx: {
+    msgSender: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.msgSender()', 0, args);
+
+        return s.msgSender();
+      },
+    },
+    self: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.self()', 0, args);
+
+        return s.addressSelf();
+      },
+    },
+    chainId: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.chainId()', 0, args);
+
+        return s.blockChainId();
+      },
+    },
+    blockNumber: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.blockNumber()', 0, args);
+
+        return s.blockNumber();
+      },
+    },
+    timestamp: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.timestamp()', 0, args);
+
+        return s.blockTimestamp();
+      },
+    },
+    selfBalance: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.selfBalance()', 0, args);
+
+        return s.addressBalance();
+      },
+    },
+    balance: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('ctx.balance()', 1, args);
+
+        return s.balanceOf(process(args[0]));
+      },
+    },
+  },
+
   // address.self               — this contract's address
   // address.balance            — this contract's ETH balance (wei)
   // address.balanceOf(addr)    — ETH balance of addr (wei)
