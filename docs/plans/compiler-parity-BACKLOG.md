@@ -11,7 +11,20 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
-## 🧭 PROGRAM STATUS (updated fire#31, 2026-08-22) — COMPLETE (stretch explored to its boundary)
+## 🧭 PROGRAM STATUS (updated fire#32, 2026-08-22) — ⚠️ CONFORMANCE-REGRESSION AUDIT IN FLIGHT
+
+**⚠️ CORRECTION (fire#32): "complete/all-green" was premature.** The agreed gate (`cargo test -p sauce-core`)
+is green, but the BROADER real-engine suite **`make test-conformance-evm` has 11 failures in `v12_conformance.rs`**
+(10 "source compiles: compilation failed" on tests that expect COMPILE+runtime-revert — `arithmetic_overflow_reverts`,
+`division_by_zero_reverts`, `exponentiation_overflow_reverts`, `math_{addmod/mulmod,muldiv_by_zero,muldiv_overflow,
+signed_division_by_zero}_reverts`, `array_length_evaluates`, `set_index_stores_an_array_element`,
+`nested_set_index_mutates_the_inner_array`; + 1 bytecode mismatch `an_imported_module_const_compiles_to_the_same_bytes`).
+These SMELL branch-introduced (V4 nested-array rejection + more-aggressive constant-fold of overflow/÷0 now
+reject fixtures that used to compile). **opus diagnosis IN FLIGHT (fire#32):** attribute each vs origin/main →
+fixture-needs-update (correct new behavior) vs genuine-regression vs upstream-preexisting. NO "complete" claim
+until resolved. *(The individual feature conformance suites — catch/bytes_array/nested_tuple — are all green.)*
+
+
 
 **CONCLUSION (fire#31):** The parity **plan is complete** (Part 1 + Part 2, no open ⬜ plan items), the
 **designated unrolled north-star compiles + real-EVM-verifies on both compilers**, and the self-chosen
