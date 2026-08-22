@@ -99,8 +99,13 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
   Closes the RS→TS binding compat gap (`let block = 1n;` now compiles). +25 tests; suite green (1763).
   🟡 **§1.8 follow-up:** narrowing the FUNCTION-name set to RS's {revert,require,log,eval} is deferred
   (needs TS call-resolution analysis; low value — `function msg(){}` shadowing).
-- ⬜ **1.9** Syntax parity: `break`/`continue` v12/svm (G21); signed/modular `Math.*` (L2);
-  destructuring doc; emit()→library.
+- 🟡 **1.9** Syntax parity. ✅ **Math.* signed/modular** *(e9d0405, fire#5)* — added 10 members to
+  `GLOBALS.Math` (addMod, mulMod, sDiv, sMod, sShr, signExtend, sLt, sGt, sLte, sGte) matching RS's
+  12-member `MathOp` set; implemented on v1 `Saucer` + wired the latent (unused, mis-named) V12Saucer
+  methods to the parity spelling (sAr→sShr, sgt→sGt…, signExtend param order fixed, SIGN_EXTEND out of
+  SWAPPED_OPS for source-order parity w/ RS `math_operand_order`). All Saucer ops pre-existed. +22 tests
+  (v1 byte-exact + v12 self-check + arity); suite green (1811). ⬜ remaining §1.9: `break`/`continue`
+  v12/svm (G21 — RS side done), destructuring doc, emit()→library.
 - ⬜ **1.10** Per-function build-artifact cache (Tier-1 leaf → Tier-2 name-based sentinel). Gate on
   measurements (T-CACHE).
 
@@ -115,9 +120,14 @@ libraries+treeshake, narrow reserved-names, **V3 struct-arg order (DONE** `align
 a test), **G21 break/continue (DONE** `codegen.rs:1258`).
 
 - **Wave 1** ⬜ PR-2 svm sugar (uint/accountData/writeAccountData/accountUint) · ⬜ PR-3 evm.tload/
-  tstore surface (matrix cell exists) · ⬜ PR-4 `defines` *(smallest clean win, no grammar/engine dep)*
-  · ⬜ PR-5 try/catch (grammar-level) · ⬜ PR-6 compile cache · ⬜ PR-6b per-function IR cache.
-  PR-1 (`ctx.*` complete) = PARTIAL but 14 missing entries are **engine-dependent**, not pure compiler.
+  tstore surface (matrix cell exists) · ✅ **PR-4 `defines`** *(RS 90cd112a1, fire#5)* — new
+  `options.defines: Vec<(String,Word)>` injected as module-scope consts (caller wins over source const),
+  PLUS a genuinely-new constant-`Stmt::If` fold in `fold.rs` (RS previously only folded ternaries, never
+  pruned an `if` on a constant condition — the whole feature needed it). 2 tests; RS gate green (1030).
+  🟡 **PR-4 deferred:** CLI/wasm `--define` flag (core-only landed); treeshake-of-folded-away-arm not
+  narrowed (RS computes reachability PRE-fold by design — same known follow-up as TS); no dead-code-
+  after-return elim. · ⬜ PR-5 try/catch (grammar-level) · ⬜ PR-6 compile cache · ⬜ PR-6b per-function
+  IR cache. PR-1 (`ctx.*` complete) = PARTIAL but 14 missing entries are **engine-dependent**.
 - **Wave 2 (partial-eval — THE real gap)** 📐 **PR-8/PR-9 DESIGNED** (fire#3, full file-cited plan in
   `docs/plans/rs-partial-eval-PR8-PR9-design.md`): unroll at IR level in a NEW `unroll.rs` before
   `fold` (reusing `fold::eval_binary`/`try_const`); for+while UNIFY into one recognizer; IR erases
@@ -183,3 +193,9 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   Both lanes independently gate-verified by the orchestrator (not just agent reports). **Next:** RS
   Wave-2 PR-11/13/14 (lookup tables / local new Array / same-file call fold) + Wave-1 stragglers
   (PR-2/3/4/5); TS §1.5 (annotation storage kind) or §1.9 (Math.* signed/modular); V4-tuple check.
+- **2026-08-22 fire#5** (same session, budget healthy) — Two more parallel lanes, both landed+re-verified
+  green by the orchestrator: **RS PR-4 defines** (`90cd112a1`, 1030 — +constant-if fold) and **TS §1.9
+  Math.* signed/modular** (`e9d0405`, 1811 — +10 Math members, latent V12 methods wired to parity
+  spelling). One stale LSP type-error on context.ts:371 was investigated and DISPROVEN (tsc exit 0 —
+  mid-edit snapshot). **Next:** RS PR-2 (svm sugar) + PR-5 (try/catch) or PR-14 (same-file call fold,
+  design-first); TS §1.5 (annotation storage kind) or §1.6 (Feature matrix); V4-tuple real-exec check.
