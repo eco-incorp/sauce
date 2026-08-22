@@ -27,8 +27,9 @@ north-star series NS-1 (Tuple params) / NS-2 (address.*) / NS-3 (Math.neg) / NS-
 
 **✅ Decisions 0.3–0.7 all resolved.** (0.7 = keep base shared-scope, in the divergence registry.)
 
-**Remaining = the LONG TAIL (none blocks the north-star; each is a heavy, eco-swap-irrelevant niche
-port needing its own design):**
+**ALL GENUINE PARITY GAPS CLOSED (fire#18).** Both directions substantively complete; the last real port
+(PR-13 `new Array`) landed; PR-15/16, PR-12, PR-5-svm are documented architectural divergences, not gaps.
+Remaining below is OPTIONAL polish/downstream (none is a parity gap). Long-tail detail:
 - ✅ V1 dynamic-kind adversarial audit *(RS 20957d1ab, fire#16)* — all 7 K-bug shapes verified
   STRUCTURALLY IMPOSSIBLE on RS (dynamism = a structural `Ty::is_dynamic` property + annotation-authoritative
   return types + `same_shape` reassignment rejection; no scalar/heap-slot decision exists). 11 lock-tests
@@ -36,15 +37,20 @@ port needing its own design):**
 - **TRIAGED (fire#17, `docs/plans/rs-longtail-triage.md`):** ➡️ **PR-13 `new Array(n)` = PORT (S)** — NOT
   big: it's frontend-only SUGAR onto RS's EXISTING `Expr::ArrayOfLength`+`SetIndex`+`Index` runtime primitive
   (already conformance-tested for entry params). The FULL eco-swap recipe (`ecoswap.sauce.ts`, not the unrolled
-  variant) uses it 96× → real parity value. **BUILDING (fire#17).** · ❎ **PR-15/16 inline = DIVERGENCE** (RS
+  variant) uses it 96× → real parity value. ✅ **DONE** *(RS 94e11b03a, fire#18)* — pure frontend sugar
+(new `check_new` + `new_array` lowering to `Expr::ArrayOfLength{Scalar, len}`), no new IR/opcode/gate;
+RS accepts a RUNTIME len (strict superset of TS's const-only fold). EVM golden executes (returns 2n on
+the real Huff runtime); 5 unit + 2 conformance tests; RS gate 1075. · ❎ **PR-15/16 inline = DIVERGENCE** (RS
   real functions + PR-14 call-fold cover the semantics + perf; splicer is TS-only ergonomics). · ⛔ **PR-5
   try/catch = DEFER** (L; needs frontend closure carve-out + new IR node + `CATCH`-opcode inline-handler
   primitive; **SVM half is a HARD divergence** — `Feature::TryCatch` is EVM-only by construction). · ❎
   **PR-12 for…of = DIVERGENCE** (indexed `for` + the PR-9 unroller cover it). All three registered in the
   compiler/README cross-compiler divergence table.
-- ⬜ V2/V5/V6 verification lock-tests.
+- ⬜ V2/V5/V6 verification lock-tests (extra hardening).
 - ⬜ PR-4 SDK/wasm arg-encoder (to RUN, not just compile, eco-swap on RS) — optional, downstream.
-- ⬜ account-model reconciliation (svm accountData trio freestanding) — cross-compiler divergence.
+- ⬜ account-model reconciliation (svm accountData trio freestanding) — a documented divergence.
+- 🟡 CAPSTONE (fire#18): probe whether the FULL `ecoswap.sauce.ts` (non-unrolled, 96 `new Array`)
+  compiles on RS now that PR-13 landed — a bonus beyond the stated north-star (the unrolled variant).
 
 ---
 
