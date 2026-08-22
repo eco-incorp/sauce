@@ -905,6 +905,68 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
 };
 
 /**
+ * evm.* / svm.* target-namespaced builtins (compiler-parity §1.3, adopted from compiler-rs).
+ *
+ * Thin, byte-identical ALIASES of the pre-existing storage/contract/accountData/writeAccountData
+ * surface, each asserting TARGET INTENT first: `evm.*` is EVM-only (v1/v12), `svm.*` is svm-only —
+ * exactly the split RS enforces via `require_available(target, Builtin::{Evm,Svm}*)`
+ * (sauce-core/src/lower/contract.rs `evm_call`/`svm_call`, statement.rs `evm_sstore`/`svm_sstore`).
+ * Because the capability assertion fires BEFORE delegation, the delegated compile always runs its
+ * same-target arm — so `evm.X` emits byte-for-byte what its EVM alias emits and `svm.X` what its
+ * svm alias emits (asserted in test/evm-svm-namespace.test.ts).
+ *
+ * Member map (RS oracle -> TS alias):
+ *   evm.call(addr,value,data)   -> contract.call   (EVM arm: externalCall)
+ *   evm.static(addr,data)       -> contract.static  (EVM arm: staticCall)
+ *   evm.delegate(addr,data)     -> contract.delegate
+ *   evm.sload(slot)             -> storage.read
+ *   evm.sstore(slot,value)      -> storage.write
+ *   svm.sload(acct,off,len)     -> accountData
+ *   svm.sstore(acct,off,value)  -> writeAccountData
+ *   svm.call(program,accts,data)-> contract.call (svm arm) with args reordered to (target,data,accts)
+ *
+ * DEFERRED (no clean TS twin — reported, not stubbed): svm.remainingAccounts / svm.remainingAccount.
+ */
+type NsMethod = (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => SaucerLike;
+
+const gatedAlias = (feature: string, target: GlobalDef): GlobalDef => ({
+  kind: target.kind,
+  compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+    assertCapability(s.ctx, feature, args[0]);
+
+    return (target.compile as NsMethod)(s, args, process);
+  },
+});
+
+GLOBALS.evm = {
+  call: gatedAlias('evm.call', GLOBALS.contract.call),
+  static: gatedAlias('evm.static', GLOBALS.contract.static),
+  delegate: gatedAlias('evm.delegate', GLOBALS.contract.delegate),
+  sload: gatedAlias('evm.sload', GLOBALS.storage.read),
+  sstore: gatedAlias('evm.sstore', GLOBALS.storage.write),
+};
+
+GLOBALS.svm = {
+  sload: gatedAlias('svm.sload', GLOBAL_FUNCTIONS.accountData),
+  sstore: gatedAlias('svm.sstore', GLOBAL_FUNCTIONS.writeAccountData),
+  call: {
+    kind: 'dynamic',
+    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+      assertCapability(s.ctx, 'svm.call', args[0]);
+
+      expectArity('svm.call', 3, args);
+
+      // RS spells the CPI `svm.call(program, accounts, calldata)`; TS's contract.call svm arm
+      // takes (target, calldata, accounts), so reorder before delegating for byte-parity with
+      // `contract.call(program, calldata, accounts)`.
+      const reordered = [args[0], args[2], args[1]];
+
+      return (GLOBALS.contract.call.compile as NsMethod)(s, reordered, process);
+    },
+  },
+};
+
+/**
  * Names refused where a CALLABLE is DECLARED — a `function` declaration
  * (`CompilerContext.addFunc`) or an inline arrow-const function name
  * (`processor/inline.ts`). Broad on purpose: it covers every builtin the call path

@@ -89,6 +89,22 @@ export const TARGET_CAPABILITIES: Record<string, CapabilityRow> = {
 
   // v12-dialect-only (v12 + svm): v1's Saucer builder has no cast surface at all.
   uint: { targets: V12_DIALECT_TARGETS },
+
+  // evm.* namespace (compiler-parity §1.3, adopted from compiler-rs): the EVM-only mirror of the
+  // storage.*/contract.* surface. RS gates each with `require_available(..., Builtin::Evm*)` and
+  // rejects it on the svm target (contract.rs `evm_call`, statement.rs `evm_sstore`).
+  'evm.call': { targets: EVM_TARGETS },
+  'evm.static': { targets: EVM_TARGETS },
+  'evm.delegate': { targets: EVM_TARGETS },
+  'evm.sload': { targets: EVM_TARGETS },
+  'evm.sstore': { targets: EVM_TARGETS },
+
+  // svm.* namespace (§1.3): the svm-only mirror of the accountData/CPI surface. RS gates each with
+  // `require_available(..., Builtin::Svm*)` and rejects it on any EVM target (contract.rs
+  // `svm_call`, statement.rs `svm_sstore`).
+  'svm.sload': { targets: SVM_ONLY },
+  'svm.sstore': { targets: SVM_ONLY },
+  'svm.call': { targets: SVM_ONLY },
 };
 
 /** Re-derived, not hand-listed — kept only for `saucer/svm-profile.ts`'s existing named
