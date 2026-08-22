@@ -124,8 +124,12 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
   12-member `MathOp` set; implemented on v1 `Saucer` + wired the latent (unused, mis-named) V12Saucer
   methods to the parity spelling (sAr→sShr, sgt→sGt…, signExtend param order fixed, SIGN_EXTEND out of
   SWAPPED_OPS for source-order parity w/ RS `math_operand_order`). All Saucer ops pre-existed. +22 tests
-  (v1 byte-exact + v12 self-check + arity); suite green (1811). ⬜ remaining §1.9: `break`/`continue`
-  v12/svm (G21 — RS side done), destructuring doc, emit()→library.
+  (v1 byte-exact + v12 self-check + arity); suite green (1811). ✅ **emit()→library** *(8bd6a8c, fire#9)*
+  — moved `emit` from the hardcoded builtin table into `STDLIB_FUNCTIONS` merged into `GLOBAL_FUNCTIONS`
+  (stdlib-injects-into-globals, decision 0.6); byte-identical LOG lowering; still callable-reserved
+  (ECO-2011 safety) + binding-shadowable; the one real caller (erc20) verified (SDK gate 2536). Suite
+  1879. ⬜ remaining §1.9 tail: `break`/`continue` v12/svm (likely already-supported — eco-swap compiles
+  on TS v12), destructuring doc.
 - ⬜ **1.10** Per-function build-artifact cache (Tier-1 leaf → Tier-2 name-based sentinel). Gate on
   measurements (T-CACHE).
 
