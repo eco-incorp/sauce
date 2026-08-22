@@ -100,7 +100,12 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
   number→scalar; bytes/string/T[]/`{...}`→dynamic). Byte-identical when no annotation present; ambiguous
   same-name bindings dropped from cross-check. 8 tests; suite green (1819). *(CI format:check drift in 3
   earlier-fire test files fixed in 96614bc.)*
-- ⬜ **1.6** One `Feature`×availability matrix; fold scattered `assertNo*`/`ctx.isV12` guards in.
+- 🟡 **1.6** One `Feature`×availability matrix. *(05d2360, fire#8)* — consolidated the PURE target-gates
+  (class A: unconditional "feature X unavailable on target Y") into `capabilities.ts` + one assertion
+  helper (touched capabilities.ts + collection.ts). Value-shape-conditional K-guards (class B:
+  `assertNoDynamicVariableObjectField`, `rejectV1ScalarToDynamicReassignment`, …) deliberately left
+  separate + documented — they are NOT target gates; moving them would risk the K-bug family.
+  Behavior-preserving (suite byte-identical, 1819). ⬜ class-B unification remains out of scope by design.
 - ⬜ **1.7** State push/emission order once (lookup table; borrow RS `push_order.rs`).
 - ✅ **1.8** Reserved-name policy (executes 0.4): narrow the BINDING rule. *(bb4fb0b, fire#3)* —
   split into `RESERVED_BINDING_NAMES` = {abi,crypto,ctx,Math,evm,svm} (the RS narrow set, used at
