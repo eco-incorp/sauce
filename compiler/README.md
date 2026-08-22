@@ -2,6 +2,33 @@
 
 Compiles SauceScript to Sauce bytecode for the EVM. SauceScript is a subset of JavaScript designed for writing smart contract logic.
 
+## SauceScript is a subset of TypeScript
+
+Normatively, **SauceScript is a strict subset of TypeScript** — every valid SauceScript program
+is valid TypeScript (and, because TypeScript is itself a superset of JavaScript, valid JavaScript).
+SauceScript adds no syntax of its own; it only *removes* language surface (see
+[Not Supported](#not-supported-javascript-features-not-in-saucescript) below) and fixes the type of
+every value to `uint256`. This means an author can write `.ts`/`.sauce.ts` sources with real
+TypeScript type annotations and tooling, and the compiler strips the types before lowering.
+
+Two authoring paths exist, and both lower to the **same** core pipeline:
+
+- **The `.ts`/`.sauce.ts` front-end is the primary path.** A `.ts`/`.sauce.ts` source (top-level via
+  `compile(src, { tsSource: true })`, or any resolved `.ts`/`.sauce.ts` *import*) runs through the
+  built-in TypeScript front-end (`src/ts-frontend.ts`) *before* the core parser: it parses with the
+  real `typescript` compiler, folds provably-constant branches/loops/consts, then strips types via
+  `ts.transpileModule`, handing the core plain JS text. For an import, this front-end is the
+  **default** `transformModule` — a caller-supplied `transformModule` overrides it, but absent one a
+  `.ts`/`.sauce.ts` import is TypeScript-aware automatically.
+- **The plain-acorn core is the legacy pipeline everything lowers to.** A bare `compile(src)` with no
+  `tsSource` (and a plain `.js`/`.sauce` source/import) parses the source string directly with
+  `acorn` — no fold/unroll/type-strip pass. This is the original, byte-stable path and remains the
+  default for a bare string so existing bytecode-pinned callers are unaffected.
+
+`tsSource` is therefore a **per-call-site opt-in** (default `false`), not a global mode. The
+subset-of-TypeScript statement above is a language-model claim; it does *not* mean a bare
+`compile(src)` silently changes parse behavior.
+
 ## Installation
 
 ```bash
