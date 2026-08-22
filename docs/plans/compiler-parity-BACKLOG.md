@@ -33,9 +33,15 @@ port needing its own design):**
   STRUCTURALLY IMPOSSIBLE on RS (dynamism = a structural `Ty::is_dynamic` property + annotation-authoritative
   return types + `same_shape` reassignment rejection; no scalar/heap-slot decision exists). 11 lock-tests
   (incl. shape 6, the v1-only call-arg revert — clean on RS's uniform one-word calling convention). No defect.
-- ⬜ RS PR-13 local `new Array` fold (RS has NO `new Array` — big), PR-15/16 inline arrow-const
-  (frontend arrow carve-out + splice — design-first), PR-5 try/catch (frontend closure carve-out +
-  inline-handler codegen primitive — design-first), PR-12 for…of (grammar-level).
+- **TRIAGED (fire#17, `docs/plans/rs-longtail-triage.md`):** ➡️ **PR-13 `new Array(n)` = PORT (S)** — NOT
+  big: it's frontend-only SUGAR onto RS's EXISTING `Expr::ArrayOfLength`+`SetIndex`+`Index` runtime primitive
+  (already conformance-tested for entry params). The FULL eco-swap recipe (`ecoswap.sauce.ts`, not the unrolled
+  variant) uses it 96× → real parity value. **BUILDING (fire#17).** · ❎ **PR-15/16 inline = DIVERGENCE** (RS
+  real functions + PR-14 call-fold cover the semantics + perf; splicer is TS-only ergonomics). · ⛔ **PR-5
+  try/catch = DEFER** (L; needs frontend closure carve-out + new IR node + `CATCH`-opcode inline-handler
+  primitive; **SVM half is a HARD divergence** — `Feature::TryCatch` is EVM-only by construction). · ❎
+  **PR-12 for…of = DIVERGENCE** (indexed `for` + the PR-9 unroller cover it). All three registered in the
+  compiler/README cross-compiler divergence table.
 - ⬜ V2/V5/V6 verification lock-tests.
 - ⬜ PR-4 SDK/wasm arg-encoder (to RUN, not just compile, eco-swap on RS) — optional, downstream.
 - ⬜ account-model reconciliation (svm accountData trio freestanding) — cross-compiler divergence.
