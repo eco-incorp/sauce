@@ -71,8 +71,14 @@ type (ECO-2109), libraries + external contracts, `@sauce/token` both arms, tuple
 - ⬜ **1.1** Declare SauceScript a TS subset; demote plain-acorn path (docs + per-call-site default).
 - ✅ **1.2** Divergence-resolution rule + cross-target divergence registry in `compiler/README.md`.
   *(c90be5b — normative rule + seeded EVM/SVM/v1 registry, mirrors RS README)*
-- ⬜ **1.3** Adopt `evm.*`/`svm.*` namespace split in `globals.ts` (keep `storage.*`/`contract.*`
-  as deprecated aliases). Land with/before 1.6. **TDD:** borrow RS namespace tests.
+- ✅ **1.3** `evm.*`/`svm.*` namespace split in `globals.ts`. *(8e1b7ad, fire#4)* — `gatedAlias(feature,
+  targetDef)` asserts capability FIRST then delegates to the existing `storage.*`/`contract.*`/`accountData`
+  lowering → byte-identical, target-gated. `evm.{call,static,delegate,sload,sstore}` (EVM-only),
+  `svm.{sload,sstore,call}` (svm-only; `svm.call` reorders RS's `(program,accts,data)` → TS's
+  `(target,data,accts)`). 8 new capability rows; storage.*/contract.* kept UNCHANGED as aliases. +26
+  tests (byte-equality + RS-borrowed target-mismatch rejections); suite green (1789). 🟡 **§1.3 deferred:**
+  `svm.remainingAccounts`/`remainingAccount` (need ECO-1860 typed-Account model TS lacks); `svm.call`
+  Account[]-shape parity; `evm.tload/tstore` (RS has none yet — TS keeps `storage.tRead/tWrite`).
 - ✅ **1.4** Unified `ctx.*` context namespace (additive; keep `msg`/`block`/`tx`/`address`).
   *(7bd13ff, fire#3)* — matched the RS oracle exactly: **7 CALL-form methods** (`ctx.msgSender()`,
   `ctx.self()`, `ctx.chainId()`, `ctx.blockNumber()`, `ctx.timestamp()`, `ctx.selfBalance()`,
@@ -116,8 +122,12 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   `docs/plans/rs-partial-eval-PR8-PR9-design.md`): unroll at IR level in a NEW `unroll.rs` before
   `fold` (reusing `fold::eval_binary`/`try_const`); for+while UNIFY into one recognizer; IR erases
   step syntax; NO `collidesWithSurroundingDeclarations` needed (LocalId, no names). Key wiring subtlety:
-  fold the UNROLLED program at BOTH -O levels so validity stays -O-independent. ⬜ PR-8 splice infra+cap
-  (proven no-op) → ⬜ PR-9 numeric/while unroll *(highest leverage)* · 🟡 PR-10 local const-prop **PARTIAL**
+  fold the UNROLLED program at BOTH -O levels so validity stays -O-independent. ✅ **PR-8** splice infra+cap
+  (proven no-op) *(RS 5b2eca0)* → ✅ **PR-9** numeric/while unroll *(RS 0512402, fire#4)* — new
+  `unroll.rs` (IR→IR, before `fold`); unified for+while recognizer, direction sanity, body-exit +
+  counter-reassign guards, cap+overflow-decline, terminal-assign, nested cascade. 15 unit + 4 e2e
+  bytecode-equality tests (incl. the -O gate + overflow-at-both-levels). RS gate green (**1028**).
+  · 🟡 PR-10 local const-prop **PARTIAL**
   (assigned-once + ternary-to-taken-arm present `fold.rs:205,424`; CFG interpreter absent — deliberately
   declines reassigned locals `fold.rs:1185,1255`) · ⬜ PR-11 lookup tables *(also needs non-scalar
   module const, `ModuleBindingNotLiteral` today)* · ⬜ PR-12 for…of (grammar-level) · ⬜ PR-13 local
@@ -166,3 +176,10 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   §1.8 = narrowed (TS `bb4fb0b`, 1763); PR-8/9 = full design → `rs-partial-eval-PR8-PR9-design.md`.
   Then launched the RS PR-8→PR-9 BUILD from that design (Workflow, background). **Next fire:** land
   PR-8/9 if not done; V4-tuple sub-risk real-exec check; TS §1.3 (evm.*/svm.* namespace split).
+- **2026-08-22 fire#4** (cron tick) — RS build (`w9bs3q7ni`) still running on PR-9 → stayed OUT of the
+  RS worktree, advanced an independent TS lane. **§1.3 landed+verified** (TS `8e1b7ad`, evm.*/svm.*
+  namespaces, +26 tests, suite 1789). Then the RS build completed: **PR-8 (`5b2eca0`) + PR-9
+  (`0512402`) both landed+re-verified green (1028)** — loop unrolling done, the biggest Wave-2 gap.
+  Both lanes independently gate-verified by the orchestrator (not just agent reports). **Next:** RS
+  Wave-2 PR-11/13/14 (lookup tables / local new Array / same-file call fold) + Wave-1 stragglers
+  (PR-2/3/4/5); TS §1.5 (annotation storage kind) or §1.9 (Math.* signed/modular); V4-tuple check.
