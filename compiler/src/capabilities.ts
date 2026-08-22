@@ -38,8 +38,11 @@ interface CapabilityRow {
   /** Suggested replacement, embedded in the derived message ("...; use <hint>"). */
   readonly hint?: string;
   /** Full message override, for a feature whose rejection needs bespoke phrasing
-   *  the generic formatter can't produce (e.g. destructuring's two-clause sentence). */
-  readonly message?: string;
+   *  the generic formatter can't produce (e.g. destructuring's two-clause sentence).
+   *  A function form receives the current target, for a message that must name the
+   *  specific rejecting target inline (e.g. the nested-array-literal row, which reads
+   *  differently on 'v12' vs 'svm'). */
+  readonly message?: string | ((target: CompileTarget) => string);
 }
 
 const EVM_TARGETS: readonly CompileTarget[] = ['v1', 'v12'];
@@ -85,6 +88,24 @@ export const TARGET_CAPABILITIES: Record<string, CapabilityRow> = {
     message:
       `an accounts list (string refs / {ref, writable?, signer?} objects) is not supported on an EVM target — ` +
       `that argument slot is raw calldata bytes there, not an svm account list`,
+  },
+
+  // v1-only: a NESTED array LITERAL (`[[1, 2], [3, 4]]`). This is a pure target-gate on a
+  // syntactic construct (detected at the emit site in collection.ts by an ArrayExpression
+  // element, exactly like the 'array destructuring'/'accounts list' rows detect their own
+  // shapes) — NOT a value/kind-shape guard: it never consults dynamic-vs-scalar kind
+  // inference, so it is safe to centralize here (unlike the K-family descriptor guards in
+  // processor/statement.ts + collection.ts, which stay put by design). v1 handles the
+  // nested-literal encoding; the engine-v12/svm runtimes have no nested-ARRAY encoding yet.
+  'nested array literal': {
+    targets: ['v1'],
+    // Names the specific rejecting target ('v12' or 'svm') inline, so the phrasing needs
+    // the current target — hence the function form rather than a static string.
+    message: (target) =>
+      `nested array literals (e.g. [[1, 2], [3, 4]]) are not supported on target '${target}' — the ` +
+      `engine-v12 runtime has no nested-ARRAY encoding yet (a v1-only capability today); build the nested ` +
+      `structure with new Array(n) instead (e.g. \`let outer = new Array(2); outer[0] = inner;\`), which is ` +
+      `supported on every target`,
   },
 
   // v12-dialect-only (v12 + svm): v1's Saucer builder has no cast surface at all.
@@ -133,7 +154,7 @@ function targetList(targets: readonly CompileTarget[]): string {
  *     targets 'a' and 'b'" (the v12-dialect-only row).
  */
 function deriveMessage(feature: string, row: CapabilityRow, target: CompileTarget): string {
-  if (row.message) return row.message;
+  if (row.message) return typeof row.message === 'function' ? row.message(target) : row.message;
 
   if (!row.targets.includes('svm')) {
     return `${feature} is not supported on target '${target}'${row.hint ? `; use ${row.hint}` : ''}`;
