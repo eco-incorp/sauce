@@ -62,8 +62,16 @@ constructs = 36 multi-output-call destructurings + 111 `.catch()`. The unrolled 
   real EVM engine** — build lands it behind a real-engine conformance gate; if unverifiable, ignored (not
   trusted), like NS-5's acceptance test was. SVM = compile-time refusal (permanent divergence, more honest
   than TS's laxer svm CATCH which only catches pre-flight CPI failures — recorded in the registry).
-- ⬜ **NS-1 extension: nested/named `ArgShape`** — the cfg entry param is a named nested struct; ArgShape
-  expresses only flat empty-named ScalarTuple. Suspected next blocker after NS-7/.catch (unverified).
+- 📐 **NS-1 extension: nested/named `ArgShape` — DESIGNED (fire#26 opus, `docs/plans/rs-argshape-nested-design.md`).**
+  Confirmed from source: `Ty::Tuple` already carries field names + the read side (named `.field`, nested
+  `Expr::Field`) already works — the gap is ONLY the public `ArgShape` descriptor. TWO sub-fixes: (a)
+  **ArgShape::Struct(Vec<(String,ArgShape)>)** variant + one `to_ty` arm [S]; (b) **nested-tuple entry
+  decode** — `element_words`/`require_decodable_entry_param` must recurse [M]. Design gives cfg's exact
+  15-field shape (14 scalars + `chain` nested 7). **sonnet build → opus review** next (after .catch harden frees the worktree).
+- 🆕 ⬜ **NS-8 [NEW blocker found by the ArgShape design, L] `rfqSigs: bytes[]` entry decode** — an array of
+  DYNAMICALLY-sized elements; RS entry decode explicitly unimplemented (`Error::EntryParamShape "not yet"`).
+  Independent of nesting; blocks the full recipe right AFTER cfg. Design-first later. This makes the full
+  recipe 3 items away (ArgShape Struct + nested decode + bytes[] decode), not 1.
 
 Long-tail detail (unrolled-north-star items):
 - ✅ V1 dynamic-kind adversarial audit *(RS 20957d1ab, fire#16)* — all 7 K-bug shapes verified
