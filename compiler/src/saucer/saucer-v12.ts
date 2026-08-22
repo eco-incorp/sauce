@@ -57,7 +57,6 @@ const SWAPPED_OPS = new Set<number>([
   OPS.EXP,
   OPS.S_DIV,
   OPS.S_MOD,
-  OPS.SIGN_EXTEND,
   OPS.BOOL_GT,
   OPS.BOOL_LT,
   OPS.BOOL_GTE,
@@ -651,22 +650,25 @@ export class V12Saucer implements SaucerLike {
   sMod(a: SaucerLike, b: SaucerLike): V12Saucer {
     return this.binary(OPS.S_MOD, a, b);
   }
-  sAr(value: SaucerLike, shift: SaucerLike): V12Saucer {
+  sShr(value: SaucerLike, shift: SaucerLike): V12Saucer {
     return this.binary(OPS.S_AR, value, shift);
   }
-  signExtend(k: SaucerLike, value: SaucerLike): V12Saucer {
-    return this.binary(OPS.SIGN_EXTEND, k, value);
+  // Math.signExtend(value, fromByte): SIGN_EXTEND wants the byte index (fromByte) on top
+  // (popped first), so operands push in source order — SIGN_EXTEND is intentionally NOT in
+  // SWAPPED_OPS, matching compiler-rs's `math_operand_order` (source order for signExtend).
+  signExtend(value: SaucerLike, fromByte: SaucerLike): V12Saucer {
+    return this.binary(OPS.SIGN_EXTEND, value, fromByte);
   }
-  sgt(l: SaucerLike, r: SaucerLike): V12Saucer {
+  sGt(l: SaucerLike, r: SaucerLike): V12Saucer {
     return this.binary(OPS.BOOL_SGT, l, r);
   }
-  slt(l: SaucerLike, r: SaucerLike): V12Saucer {
+  sLt(l: SaucerLike, r: SaucerLike): V12Saucer {
     return this.binary(OPS.BOOL_SLT, l, r);
   }
-  sgte(l: SaucerLike, r: SaucerLike): V12Saucer {
+  sGte(l: SaucerLike, r: SaucerLike): V12Saucer {
     return this.binary(OPS.BOOL_SGTE, l, r);
   }
-  slte(l: SaucerLike, r: SaucerLike): V12Saucer {
+  sLte(l: SaucerLike, r: SaucerLike): V12Saucer {
     return this.binary(OPS.BOOL_SLTE, l, r);
   }
 

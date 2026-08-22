@@ -78,6 +78,57 @@ const cases: Record<string, Case[]> = {
       ref: (c) => mk(c).mulDiv(mk(c).int(10n), mk(c).int(20n), mk(c).int(5n)),
     },
     { name: 'Math.neg', src: 'function main(){ return Math.neg(5) }', ref: (c) => mk(c).neg(mk(c).int(5n)) },
+    // §1.9 compiler-parity: signed / modular Math.* intrinsics on v12.
+    {
+      name: 'Math.addMod',
+      src: 'function main(){ return Math.addMod(10, 20, 5) }',
+      ref: (c) => mk(c).addMod(mk(c).int(10n), mk(c).int(20n), mk(c).int(5n)),
+    },
+    {
+      name: 'Math.mulMod',
+      src: 'function main(){ return Math.mulMod(6, 7, 5) }',
+      ref: (c) => mk(c).mulMod(mk(c).int(6n), mk(c).int(7n), mk(c).int(5n)),
+    },
+    {
+      name: 'Math.sDiv (swap)',
+      src: 'function main(){ return Math.sDiv(10, 3) }',
+      ref: (c) => mk(c).sDiv(mk(c).int(10n), mk(c).int(3n)),
+    },
+    {
+      name: 'Math.sMod (swap)',
+      src: 'function main(){ return Math.sMod(10, 3) }',
+      ref: (c) => mk(c).sMod(mk(c).int(10n), mk(c).int(3n)),
+    },
+    {
+      name: 'Math.sShr',
+      src: 'function main(){ return Math.sShr(64, 2) }',
+      ref: (c) => mk(c).sShr(mk(c).int(64n), mk(c).int(2n)),
+    },
+    {
+      name: 'Math.signExtend',
+      src: 'function main(){ return Math.signExtend(200, 0) }',
+      ref: (c) => mk(c).signExtend(mk(c).int(200n), mk(c).int(0n)),
+    },
+    {
+      name: 'Math.sLt (swap)',
+      src: 'function main(){ return Math.sLt(3, 5) }',
+      ref: (c) => mk(c).sLt(mk(c).int(3n), mk(c).int(5n)),
+    },
+    {
+      name: 'Math.sGt (swap)',
+      src: 'function main(){ return Math.sGt(3, 5) }',
+      ref: (c) => mk(c).sGt(mk(c).int(3n), mk(c).int(5n)),
+    },
+    {
+      name: 'Math.sLte (swap)',
+      src: 'function main(){ return Math.sLte(3, 5) }',
+      ref: (c) => mk(c).sLte(mk(c).int(3n), mk(c).int(5n)),
+    },
+    {
+      name: 'Math.sGte (swap)',
+      src: 'function main(){ return Math.sGte(3, 5) }',
+      ref: (c) => mk(c).sGte(mk(c).int(3n), mk(c).int(5n)),
+    },
     {
       name: 'nested (a+b)*(c-d)',
       src: 'function main(){ return (1 + 2) * (5 - 3) }',

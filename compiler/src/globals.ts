@@ -360,6 +360,96 @@ export const GLOBALS: Record<string, Record<string, GlobalDef>> = {
         return s.neg(process(args[0]));
       },
     },
+    // Math.addMod(a, b, n) — (a + b) % n
+    addMod: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.addMod', 3, args);
+
+        return s.addMod(process(args[0]), process(args[1]), process(args[2]));
+      },
+    },
+    // Math.mulMod(a, b, n) — (a * b) % n
+    mulMod: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.mulMod', 3, args);
+
+        return s.mulMod(process(args[0]), process(args[1]), process(args[2]));
+      },
+    },
+    // Math.sDiv(a, b) — signed integer division
+    sDiv: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sDiv', 2, args);
+
+        return s.sDiv(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sMod(a, b) — signed integer remainder
+    sMod: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sMod', 2, args);
+
+        return s.sMod(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sShr(value, shift) — signed (arithmetic) shift right (sign-filling)
+    sShr: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sShr', 2, args);
+
+        return s.sShr(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.signExtend(value, fromByte) — sign-extend value from the top bit of byte fromByte
+    signExtend: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.signExtend', 2, args);
+
+        return s.signExtend(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sLt(a, b) — signed a < b → 1/0
+    sLt: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sLt', 2, args);
+
+        return s.sLt(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sGt(a, b) — signed a > b → 1/0
+    sGt: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sGt', 2, args);
+
+        return s.sGt(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sLte(a, b) — signed a <= b → 1/0
+    sLte: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sLte', 2, args);
+
+        return s.sLte(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sGte(a, b) — signed a >= b → 1/0
+    sGte: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sGte', 2, args);
+
+        return s.sGte(process(args[0]), process(args[1]));
+      },
+    },
   },
 
   // crypto.keccak256(data) — compute keccak256 hash

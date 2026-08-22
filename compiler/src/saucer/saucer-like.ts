@@ -83,6 +83,18 @@ export interface SaucerLike {
   sqrt(operand: SaucerLike): SaucerLike;
   mulDiv(a: SaucerLike, b: SaucerLike, c: SaucerLike): SaucerLike;
 
+  // extended / signed arithmetic
+  addMod(a: SaucerLike, b: SaucerLike, n: SaucerLike): SaucerLike;
+  mulMod(a: SaucerLike, b: SaucerLike, n: SaucerLike): SaucerLike;
+  sDiv(a: SaucerLike, b: SaucerLike): SaucerLike;
+  sMod(a: SaucerLike, b: SaucerLike): SaucerLike;
+  sShr(value: SaucerLike, shift: SaucerLike): SaucerLike;
+  signExtend(value: SaucerLike, fromByte: SaucerLike): SaucerLike;
+  sLt(a: SaucerLike, b: SaucerLike): SaucerLike;
+  sGt(a: SaucerLike, b: SaucerLike): SaucerLike;
+  sLte(a: SaucerLike, b: SaucerLike): SaucerLike;
+  sGte(a: SaucerLike, b: SaucerLike): SaucerLike;
+
   // crypto
   keccak256(data: SaucerLike): SaucerLike;
   ecdsaVerify(signer: SaucerLike, hash: SaucerLike, signature: SaucerLike): SaucerLike;
