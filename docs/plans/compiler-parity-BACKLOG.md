@@ -122,6 +122,26 @@ BOTH compilers — RS P3 (`6f81b9039`) + TS P4 (`77109ad88`), same fixture, same
   fixture), add only a manifest + ambient proof; promote-to-package deferred to user confirmation. Build:
   manifest + TS token-ambient proof (P5a) + RS token-ambient proof (P5b) + a manifest↔compiler name-parity
   drift test. Dispatching P5a to the ready TS worktree.
+  **⚠️ MAJOR FINDING fire#52 (plugin-p5a caught it; my P5 design was flawed):** there are TWO compilers with
+  DIFFERENT target vocabularies, and the design conflated them. (1) The SDK token harness (`sdk/test/std/token`)
+  compiles through **`sauce-compiler-next` = the PUBLISHED Rust/WASM compiler** (npm `@eco-incorp/sauce-compiler`,
+  ≤0.4.1) — which has **NO `ambient`** (P3 is unreleased, only on the local `plugin-ambient` branch). (2) The
+  LOCAL TS compiler (`compiler/`) targets **`v1|v12|svm`** and probes `token.v1.js`/`token.v12.js`, but
+  `@sauce/token` ships only `token.evm.js`/`token.svm.js` (evm/svm = the RS/WASM vocab) — so the LOCAL TS
+  compiler **cannot resolve `@sauce/token` at all**, import OR ambient. So "prove real `@sauce/token` ambient on
+  BOTH compilers" is NOT achievable as designed. **CORRECTED split:**
+  - **P5a (TS, unblocked, proceeding):** manifest+loader; name-parity test vs the LOCAL compiler's REAL aliases
+    (`emit`→`s.log` globals.ts~734; `throw`→`OPS.REVERT`); + a bare/package-specifier ambient proof on the LOCAL
+    compiler via the EXISTING TOY `@sauce/token` fixture (`compiler/test/node-modules-fixture.ts`), byte-identical
+    import≡ambient — closes P4's "package-specifier ambient" gap (P4 tested only relative specifiers). NO real
+    `@sauce/token` (vocab mismatch); do NOT add v1/v12 arms (byte-identical constraint + user's call).
+  - **P5b (RS):** the REAL `@sauce/token`-as-ambient proof belongs here — the RS `plugin-ambient` branch has P3
+    ambient + evm/svm vocab + the byte-identical sauce-token fixture already at
+    `compiler/crates/sauce-cli/tests/fixtures/sauce-token/`. THIS is the genuine plugin demonstration.
+  - **SHIPPING DEPENDENCY (surface to user):** the SDK's real payoff (ambient `@sauce/token` through the SDK's
+    compile path = the published WASM compiler) requires **P3/ambient to be RELEASED to npm** — beyond building
+    the plugin PRs, it needs a compiler-rs release. The TS compiler's ambient (P4) is generic-parity/legacy;
+    `@sauce/token` is fundamentally an RS/WASM-target library. This reframes P6–P8 (SDK wiring) as RS/WASM-side.
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
 - ⬜ **P7 [SDK]** chain-bundle activation (chain-scoping, Option B; nested Base/Optimism = nest cascade).
