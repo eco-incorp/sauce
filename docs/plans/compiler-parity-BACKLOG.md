@@ -111,8 +111,17 @@ main (redundant with parity) — discarded fire#48; worktree re-anchored onto th
 **🎉 AMBIENT-IMPORT PARITY COMPLETE (fire#51):** the core plugin mechanism is now a real, SYMMETRIC feature on
 BOTH compilers — RS P3 (`6f81b9039`) + TS P4 (`77109ad88`), same fixture, same precedence, verified. P5–P8
 (shared plugin skeleton + SDK wiring + registries→Layer B) remain.
-- ⬜ **P5 [plugin]** shared skeleton — `@sauce/token` as first ambient module + Layer-C manifest (ambient list +
-  `emit`↔`log`/`throw`↔`revert` name-parity).
+- 🔄 **P5 [plugin]** shared skeleton — `@sauce/token` as first ambient module + Layer-C manifest. **DESIGN-READY
+  fire#52** → `docs/plans/P5-plugin-skeleton-design.md`. Proves the plugin mechanism end-to-end: BOTH compilers
+  compile a `@sauce/token`-using program with NO import line (via P3/P4 ambient), driven by a declarative
+  Layer-C manifest (`{ambient:["@sauce/token"], nameParity:{emit:"log",throw:"revert"}}`). **P3 bare-specifier
+  CHECK RESOLVED fire#52:** RS `Loader::visit` keys `index_by_path` by the raw specifier (assembly.rs:480), so
+  `ambient_module_indices.get("@sauce/token")` hits — a package ambient specifier works, the `.expect()` panic
+  worry was unfounded. **USER FORK (flagged, reversible default chosen):** where the plugin ultimately lives /
+  how it's packaged — P5 default = DON'T relocate `@sauce/token` (it's the byte-identical sauce conformance
+  fixture), add only a manifest + ambient proof; promote-to-package deferred to user confirmation. Build:
+  manifest + TS token-ambient proof (P5a) + RS token-ambient proof (P5b) + a manifest↔compiler name-parity
+  drift test. Dispatching P5a to the ready TS worktree.
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
 - ⬜ **P7 [SDK]** chain-bundle activation (chain-scoping, Option B; nested Base/Optimism = nest cascade).
