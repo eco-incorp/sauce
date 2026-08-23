@@ -11,7 +11,27 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
-## 🧭 PROGRAM STATUS (updated fire#40, 2026-08-22) — plan COMPLETE; full-recipe stretch at its SOUND BOUNDARY; branch make-ci-clean
+## 🧭 PROGRAM STATUS (updated fire#41, 2026-08-22) — COMPLETE, GREEN, CI-CLEAN, FULLY OPUS-REVIEWED
+
+**fire#41: verification discipline COMPLETE.** NS-10 opus-reviewed **CONFIRMED-SOUND** (8 real-engine hostile
+probes: two-level offset math correct, 5 guards correctly ordered, wrap→OOG/inverted-SLICE-revert never OOB,
+offset-aliasing bounded, Array<Array<ScalarTuple>> decodes, Array³/Array<Bytes> rejected). **Now EVERY
+compiler-code change this session is opus-reviewed CONFIRMED-SOUND** (V4 fix+revert, PR-8/9, PR-4, PR-2, PR-3,
+PR-11, PR-14, NS-1/2/3/5/7/8/10, .catch, ArgShape, + the regression fixes). Optional non-blocking hardening
+noted by the review (shared with NS-8/fixed-stride, not NS-10-specific): make the wrap-to-OOG defense an
+explicit pre-cap magnitude check; cap aggregate nested allocation. Not actioned (would touch all three decode
+arms; out of scope).
+
+**FINAL DELIVERABLE:** two clean feature branches, both `make ci`-clean (branch-introduced fmt+clippy drift
+fixed), UNMERGED:
+- `feat/compiler-parity` (TS) — Part 1 complete, suite green.
+- `feat/compiler-parity-port` (RS) — Part 2 complete, full workspace 0-failed (20 binaries) + every feature
+  opus-reviewed; unrolled eco-swap north-star compiles + real-EVM-verified.
+Full-recipe stretch at its sound boundary: NS-7/.catch/ArgShape/NS-8/NS-10 done+reviewed; NS-9 (last blocker)
+DEFER-ARCHITECTURAL with a ready 3a/3b build sketch. All divergences in the compiler/README registry.
+**The program is DONE. Open moves are the user's: open PRs / merge · mandate NS-9 · pivot.**
+
+## 🧭 (history) fire#40 — full-recipe stretch at its sound boundary; branch make-ci-clean
 
 **fire#40 CONCLUSION — full-recipe stretch taken as far as is sound; NS-9 is the principled STOP.**
 - ✅ **NS-10 landed** (nested-array entry decode, 8/8 real-engine) → routing decodes; full recipe now blocks ONLY on NS-9.
