@@ -99,6 +99,16 @@ gate-verified real-exit-codes, no AI attribution. All 4 user decisions (fire#58)
 outward/ops only:** push/PR the SDK wiring branch (P6–P8) when the user wants; land the RS/TS PRs; switch
 sauce-next→npm after a compiler-rs release. The DSL-parity-via-shared-plugin goal is achieved end-to-end.
 
+**PRs OPENED (fire#61, user "PRs for the rest of work?" + atomicity correction) — 10 total, 9 atomic:**
+- RS (eco-incorp/sauce): #353 P1 · #354 P2 · #355 P3 · #356 P5b — atomic. #352 parity foundation = 31 commits
+  (bulky; the pre-existing base — offered to slice into ~15 atomic PRs, awaiting user).
+- TS (eco-incorp/sauce-sdk): #135 P4 · #136 P5a — atomic.
+- SDK wiring (eco-incorp/sauce-sdk): **originally bundled as #137 (CLOSED — not atomic); re-opened as 3 atomic
+  stacked PRs #138 P6 → #139 P7 → #140 P8.** Base chain: main → #124 (xchain DSL draft) → `feat/compiler-parity`
+  (pushed as base; the routes-DSL + sauce-next/build-wasm infra P6–P8 need; itself 106 commits, not a clean PR)
+  → #138/#139/#140. OPEN structural decision for user: PR `feat/compiler-parity` itself / extract sauce-next
+  into a lean standalone PR; and whether to slice #352.
+
 ---
 
 ## 🚀 EPIC-P — PLUGIN SERIES (USER "make it all happen", fire#47) — EXECUTING as atomic stacked PRs
