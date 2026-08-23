@@ -192,6 +192,14 @@ BOTH compilers — RS P3 (`6f81b9039`) + TS P4 (`77109ad88`), same fixture, same
 **Autonomous build work is complete pending those decisions.** Absent user redirect, further fires = hold +
 light maintenance, NOT speculative gated building.
 
+**fire#54 — HARDENING (unblocked, non-speculative):** launched an opus ADVERSARIAL AUDIT of the RS ambient
+primitive (`ambient-audit-rs`) before it ships — the byte-identical `@sauce/token` proof is strong but that
+module is simple/self-contained; the audit probes UNCOVERED edge cases (transitive ambient imports,
+cross-ambient-module const refs, ambient⇄`defines` collision precedence, module-both-imported-and-ambient
+dedup, ambient-fn-vs-transitively-imported-fn collision, cyclic ambient, `main` reached transitively,
+unresolved-specifier `.expect()` panic-vs-clean-error, all-options-together). Throwaway probes, report
+CONFIRMED-SOUND vs CONFIRMED-BUG; real bugs → fix + regression-lock next.
+
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
