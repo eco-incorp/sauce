@@ -216,6 +216,16 @@ dead code (fail-open, harmless — left as-is). **FIX DISPATCHED to `plugin-p1`*
 into the resolved `ModuleScope`, so a DECLARED or IMPORTED name wins), + promote probes 4/5 + a
 different-module import-wins case as regression tests, remove the throwaway probe file. **This is exactly the
 payoff of the plateau-hardening audit.**
+  - ✅ **FIX DONE + verified fire#56**, commit `ac2ae519c` on `plugin-token-ambient-rs` (follow-up on P5b;
+    **squash into P3 at PR-prep**). Chose Option A: deleted the two pre-scope broadcasts, added
+    `inject_ambient_into_scopes` running AFTER `resolve_module_scopes` — merges insert-if-absent into each
+    module's ALREADY-RESOLVED `ModuleScope` (declarations + real imports), so an imported name is now "already
+    there" before ambient looks → a real import wins, same as a declaration. 3 new regression tests
+    (same-module, transitive different-module, entry-level different-module — each asserts the call resolves to
+    the USER's import id, not merely "compiles"). Throwaway probe file removed (worktree clean). Gate
+    RE-VERIFIED real exit codes: clippy 0, fmt no drift, **sauce-core 1122/1122**, `token_conformance` 10/10
+    unaffected. Sonnet-built (`plugin-p1`), opus-reviewed CONFIRMED-SOUND. NO AI attribution. **The RS ambient
+    primitive is now adversarially hardened (16-probe audit + this fix + regression-locked).**
 
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
