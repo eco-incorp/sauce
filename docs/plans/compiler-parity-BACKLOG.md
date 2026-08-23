@@ -11,7 +11,24 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
-## 🧭 PROGRAM STATUS (updated fire#35, 2026-08-22) — ✅ FULL WORKSPACE GREEN (regression audit resolved)
+## 🧭 PROGRAM STATUS (updated fire#36, 2026-08-22) — ✅ COMPLETE, GREEN, & OPUS-REVIEWED
+
+**Regression audit CLOSED (fire#36): the 3 compiler-code fixes are opus-reviewed CONFIRMED-SOUND** (no
+defects). V4-revert verified by real-engine execution of every nested-array shape (multi-element/deeply-nested/
+`.length`/nested-set-index/replace-whole-inner all correct; ragged + call-arg fail closed); call-fold two-phase
+is convergent/terminating/idempotent and perturbs no other bytecode; swap_supply 1624 is a bisect-confirmed
+sound NS-5 dead-local drop. Divergence registry updated (`eaf498f`, nested-array = engine-lineage). Optional
+non-blocking hardening noted: a swap_supply execution harness (currently canary-only) + tightening NS-5's CI
+scope so a canary-program byte change can't pass a suite excluding example_programs.rs.
+
+**FINAL STATE:** ✅ plan complete (Part 1 + Part 2) · ✅ unrolled north-star compiles + real-EVM-verified on
+BOTH compilers · ✅ full RS workspace `cargo test --workspace --no-fail-fast` 0-failed (20 binaries) +
+opus-reviewed · ✅ decisions 0.3–0.7 resolved · ✅ dynamic-kind correctness locked · full-recipe stretch
+explored to its architectural boundary (NS-7/`.catch`/ArgShape/NS-8 ported+reviewed; NS-9+NS-10 deferred
+with scope) · all divergences in the compiler/README registry. **Absent new user direction, the program is
+DONE — further fires = optional hardening/maintenance only.**
+
+## 🧭 (history) fire#35 — full workspace green (regression audit resolved)
 
 **✅ RESOLVED (fire#35): the full RS workspace suite is 0-failed across all 20 test binaries** (orchestrator
 re-verified `cargo test --workspace --no-fail-fast`: no result line has non-zero failures; tree clean at
