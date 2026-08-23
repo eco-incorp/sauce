@@ -72,6 +72,17 @@ main (redundant with parity) — discarded fire#48; worktree re-anchored onto th
   NOT the static `GLOBAL_FUNCTIONS`/`RESERVED_NAMES` merge (that's for built-in intrinsics like `emit`).
   Dispatch once P3's final contract (option name, fixture, precedence) lands, reusing P3's fixture as the
   parity test. *(core new TS feature)*
+  **DISPATCH-READY fire#50** (P3's contract now final). **Parity fixture (from P3's headline test):** ambient
+  module `./ambient.js` = `export function double(x) { return x * 2n; }`; entry `function main() { return
+  double(21n); }`; `ambient: ["./ambient.js"]` → `double` resolves with NO import line. P4 must compile this
+  on TS with the same shadowing precedence (user fn/const/param shadows ambient) + a byte/AST-identical
+  `ambient: []` negative control. **Base:** sauce-sdk `origin/main` @ `897d488` (P4 needs only globals.ts
+  seams that are on main — independently mergeable, NOT dependent on the TS parity branch). **Setup note:**
+  build in a DEDICATED sauce-sdk worktree off main (`pnpm install` needs the private `sauce` dep auth +
+  Foundry postinstall — a general-purpose agent must handle/ report that); gate = `pnpm --filter './compiler'
+  typecheck + test + lint`. TS `CompileOptions.ambient?: string[]` (index.ts:150); ambient fns via
+  `collectImportedFunctions` over the specifiers, consts via `ctx.addDefine` (insert-if-absent, already the
+  right precedence). Fresh TS-scoped sonnet agent (plugin-p1 is RS-scoped — released after P3).
 - ⬜ **P5 [plugin]** shared skeleton — `@sauce/token` as first ambient module + Layer-C manifest (ambient list +
   `emit`↔`log`/`throw`↔`revert` name-parity).
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
