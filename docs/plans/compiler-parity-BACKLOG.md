@@ -38,7 +38,15 @@ main (redundant with parity) — discarded fire#48; worktree re-anchored onto th
   self-check). Gate GREEN (clippy -D 0, nightly-fmt no drift, sauce-wasm 4/4, wasm32 target builds w/ RUSTC
   override = known env-only PATH issue); sonnet-built (`plugin-p1`), opus-reviewed CONFIRMED-SOUND + gate
   re-verified by orchestrator. NO AI attribution.
-- ⬜ **P2 [RS]** inline-ABI `contracts` variant on `CompileOptions` + wasm (the key DSL-forcing plumbing).
+- 🔄 **P2 [RS]** inline-ABI `contracts` variant — **IN PROGRESS fire#48** (`plugin-p1`, branch
+  `plugin-inline-contracts` stacked on P1). DESIGN (additive, does NOT change existing `contracts` path
+  semantics): new `CompileOptions.inline_contracts: Vec<(String,String)>` = `(name, abi_json)` — the ABI JSON
+  content, not a path. Threaded through `program()` (new param after `manifest_contracts`) →
+  `resolve_all_contracts`/`resolve_contracts` (module 0 only, like manifest); each inline entry resolved by
+  `abi::parse(name, "<inline:{name}>", abi_json.as_bytes())` DIRECTLY (no `resolver.resolve`), through the SAME
+  `seen`/`taken` collision checks. Wasm: `inlineContracts?: Array<[name,abi]>` + `optional_inline_contracts`
+  (clone of `optional_contracts`). Core test mirrors `an_inline_import_resolves_into_program_contracts` +
+  a collision test. Enables the SDK to compile a synthesized ABI map without temp files / resolver hacks.
 - ⬜ **P3 [RS]** ambient-import primitive — `CompileOptions.ambient: Vec<String>`: exported consts → `inject_defines`,
   functions → `assign_global_ids`; local/param shadows ambient. *(the core new RS feature)*
 - ⬜ **P4 [TS]** ambient-import parity — symmetric `ambient` option (`collectImportedFunctions` + `setDefines`,
