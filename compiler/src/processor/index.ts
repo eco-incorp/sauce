@@ -159,91 +159,230 @@ function collectImportedFunctions(
     if (stmt.type !== 'ImportDeclaration') continue;
 
     const source = (stmt.source as { value: string }).value;
-    const mod = ctx.resolveModuleSource(source, importerDir);
 
-    if (!mod) {
-      // No source file resolves → a `.json` contract ABI import.
-      processImportDeclaration(stmt as ImportDeclaration, ctx, importerDir);
-      continue;
-    }
-
-    // Dedup on the NEUTRAL identity (`mod.dedupKey`, when an arm won) rather than the file
-    // actually read, so cross-module dedup stays arm-agnostic — a shared module imported by
-    // two parents is pulled once regardless of which arm each import resolved to.
-    const dedupKey = mod.dedupKey ?? mod.filePath;
-
-    if (visited.has(dedupKey)) continue; // shared module already pulled
-
-    visited.add(dedupKey);
-
-    // A caller-supplied transformModule always wins; absent one, a `.ts`/`.sauce.ts`
-    // module gets the built-in fold+strip front-end automatically — `.js`/`.sauce`/`.mjs`
-    // are untouched (no ts-evaluator/typescript invocation at all).
-    const code = ctx.transformModule
-      ? ctx.transformModule(mod.code, mod.filePath)
-      : mod.filePath.endsWith('.ts')
-        ? tsPartialEval(mod.code, mod.filePath)
-        : mod.code;
-    let modAst: Program;
-
-    try {
-      modAst = acorn.parse(code, {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-        allowReturnOutsideFunction: true,
-      }) as unknown as Program;
-    } catch (e) {
-      const hint = mod.filePath.endsWith('.ts')
-        ? '' // .ts/.sauce.ts already ran through the built-in fold+strip front-end
-        : ' (if it is TypeScript, pass options.transformModule to strip types before parsing)';
-
-      throw new Error(`failed to parse imported module "${mod.filePath}": ${(e as Error).message}${hint}`);
-    }
-
-    // Recurse into the imported module's own imports FIRST so transitive functions
-    // (and contracts) are registered before this module's.
-    out.push(...collectImportedFunctions(modAst, ctx, seen, visited, inlineOut, path.dirname(mod.filePath)));
-
-    for (const fn of extractFunctionDeclarations(modAst)) {
-      const name = fn.id?.name;
-
-      if (!name) continue;
-
-      if (name === 'main') throw new Error(`imported module "${mod.filePath}" must not define main()`);
-
-      const prev = seen.get(name);
-
-      // Same name from a DIFFERENT module is an ambiguous collision; the same module
-      // seen twice (re-entrant graph) is already handled by `visited`, so a repeat
-      // here with the same path is just skipped.
-      if (prev && prev !== mod.filePath) {
-        throw new Error(`duplicate imported function "${name}" (from "${prev}" and "${mod.filePath}")`);
-      }
-
-      if (prev) continue;
-
-      seen.set(name, mod.filePath);
-      out.push(fn);
-    }
-
-    // Same collision-detection namespace (`seen`) covers inline (arrow-const) function
-    // declarations too, so a real function in one module colliding with an inline
-    // function of the same name in another (or the same) module is rejected identically.
-    for (const [name, decl] of extractInlineDeclarations(modAst)) {
-      const prev = seen.get(name);
-
-      if (prev && prev !== mod.filePath) {
-        throw new Error(`duplicate imported function "${name}" (from "${prev}" and "${mod.filePath}")`);
-      }
-
-      if (prev) continue;
-
-      seen.set(name, mod.filePath);
-      inlineOut.set(name, decl);
-    }
+    out.push(
+      ...collectFunctionsFromSpecifier(stmt as ImportDeclaration, source, ctx, seen, visited, inlineOut, importerDir),
+    );
   }
 
   return out;
+}
+
+// The per-specifier body `collectImportedFunctions` above runs once per `ImportDeclaration` it
+// finds: resolve, dedup against already-pulled modules, parse, recurse into the module's OWN
+// imports, then register its exported functions + inline (arrow-const) functions into the
+// shared `seen`/`inlineOut` namespaces. Factored out (rather than inlined in the loop above) so
+// the ambient-import mechanism (`collectAmbientExports` below) can drive this EXACT same
+// resolution+registration machinery from a bare specifier string with no `ImportDeclaration`
+// node at all — CompileOptions.ambient has no import line, just a list of module specifiers.
+// Two things differ per caller, both optional: `importStmt`, present only for a REAL import,
+// carries the specifiers a `.json` contract ABI import binds local names from (an ambient
+// specifier has none — see collectAmbientExports for what happens when one resolves to a
+// `.json` instead of a source module); and `onModule`, invoked once per newly-visited module
+// (never for one skipped by the `visited` dedup) with that module's own parsed AST — ambient
+// uses this to additionally pull the module's exported top-level consts, a real import never
+// needs it.
+function collectFunctionsFromSpecifier(
+  importStmt: ImportDeclaration | undefined,
+  source: string,
+  ctx: CompilerContext,
+  seen: Map<string, string>,
+  visited: Set<string>,
+  inlineOut: Map<string, InlineFnEntry>,
+  importerDir: string | undefined,
+  onModule?: (modAst: Program, filePath: string) => void,
+): FunctionDeclaration[] {
+  const out: FunctionDeclaration[] = [];
+  const mod = ctx.resolveModuleSource(source, importerDir);
+
+  if (!mod) {
+    // No source file resolves → a `.json` contract ABI import. Only a REAL import can mean
+    // this (it alone carries the specifiers a contract binds local names from); an ambient
+    // specifier calling this has no `importStmt` and no use for a contract ABI either, so
+    // that path rejects it outright instead (see collectAmbientExports).
+    if (importStmt) {
+      processImportDeclaration(importStmt, ctx, importerDir);
+    } else {
+      throw new Error(
+        `ambient module "${source}" does not resolve to a source module (a .json contract ABI cannot be ambient)`,
+      );
+    }
+
+    return out;
+  }
+
+  // Dedup on the NEUTRAL identity (`mod.dedupKey`, when an arm won) rather than the file
+  // actually read, so cross-module dedup stays arm-agnostic — a shared module imported by
+  // two parents is pulled once regardless of which arm each import resolved to.
+  const dedupKey = mod.dedupKey ?? mod.filePath;
+
+  if (visited.has(dedupKey)) return out; // shared module already pulled
+
+  visited.add(dedupKey);
+
+  // A caller-supplied transformModule always wins; absent one, a `.ts`/`.sauce.ts`
+  // module gets the built-in fold+strip front-end automatically — `.js`/`.sauce`/`.mjs`
+  // are untouched (no ts-evaluator/typescript invocation at all).
+  const code = ctx.transformModule
+    ? ctx.transformModule(mod.code, mod.filePath)
+    : mod.filePath.endsWith('.ts')
+      ? tsPartialEval(mod.code, mod.filePath)
+      : mod.code;
+  let modAst: Program;
+
+  try {
+    modAst = acorn.parse(code, {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      allowReturnOutsideFunction: true,
+    }) as unknown as Program;
+  } catch (e) {
+    const hint = mod.filePath.endsWith('.ts')
+      ? '' // .ts/.sauce.ts already ran through the built-in fold+strip front-end
+      : ' (if it is TypeScript, pass options.transformModule to strip types before parsing)';
+
+    throw new Error(`failed to parse imported module "${mod.filePath}": ${(e as Error).message}${hint}`);
+  }
+
+  // Recurse into the imported module's own imports FIRST so transitive functions
+  // (and contracts) are registered before this module's.
+  out.push(...collectImportedFunctions(modAst, ctx, seen, visited, inlineOut, path.dirname(mod.filePath)));
+
+  for (const fn of extractFunctionDeclarations(modAst)) {
+    const name = fn.id?.name;
+
+    if (!name) continue;
+
+    if (name === 'main') throw new Error(`imported module "${mod.filePath}" must not define main()`);
+
+    const prev = seen.get(name);
+
+    // Same name from a DIFFERENT module is an ambiguous collision; the same module
+    // seen twice (re-entrant graph) is already handled by `visited`, so a repeat
+    // here with the same path is just skipped.
+    if (prev && prev !== mod.filePath) {
+      throw new Error(`duplicate imported function "${name}" (from "${prev}" and "${mod.filePath}")`);
+    }
+
+    if (prev) continue;
+
+    seen.set(name, mod.filePath);
+    out.push(fn);
+  }
+
+  // Same collision-detection namespace (`seen`) covers inline (arrow-const) function
+  // declarations too, so a real function in one module colliding with an inline
+  // function of the same name in another (or the same) module is rejected identically.
+  for (const [name, decl] of extractInlineDeclarations(modAst)) {
+    const prev = seen.get(name);
+
+    if (prev && prev !== mod.filePath) {
+      throw new Error(`duplicate imported function "${name}" (from "${prev}" and "${mod.filePath}")`);
+    }
+
+    if (prev) continue;
+
+    seen.set(name, mod.filePath);
+    inlineOut.set(name, decl);
+  }
+
+  onModule?.(modAst, mod.filePath);
+
+  return out;
+}
+
+// Ambient const channel (CompileOptions.ambient): an ambient module's own top-level
+// `export const X = <literal>` declarations, evaluated + registered directly into ctx.defines
+// — mirroring `registerTopLevelConsts` below, but scoped to ONE already-parsed ambient
+// module's AST instead of the entry program's. Registration goes through
+// `ctx.registerConstant` (insert-if-absent), so a name the user (a real top-level const/
+// import, or CompileOptions.defines) already claims simply keeps that value — the "user
+// always wins" precedence — while still letting a LATER const in the SAME ambient module
+// reference an EARLIER one, since each is registered into ctx.defines (and so resolvable via
+// ctx.getConstant) as soon as it's evaluated, in file order, exactly like
+// registerTopLevelConsts already does for the entry program. `ambientSeen` is the caller's own
+// unified ambient-name namespace (SHARED with the function/inline channel collected alongside
+// it in collectAmbientExports below) — consulted here ONLY to detect a genuine ambient-vs-
+// ambient collision (two DIFFERENT ambient modules exporting the same name); it never gates
+// whether a value lands in ctx.defines, which is governed by `registerConstant`'s own
+// insert-if-absent rule regardless.
+//
+// Deliberately NOT transitive: only the DIRECTLY-specified ambient module's own top-level
+// consts are pulled — a nested module it itself imports is not walked for consts (unlike the
+// function channel, which gets that for free by reusing collectImportedFunctions's existing
+// recursion). A first-cut scope decision, not a soundness requirement.
+function registerAmbientConsts(
+  modAst: Program,
+  ctx: CompilerContext,
+  ambientSeen: Map<string, string>,
+  filePath: string,
+): void {
+  for (const stmt of modAst.body) {
+    if (stmt.type !== 'ExportNamedDeclaration') continue;
+
+    const decl = (stmt as { declaration?: Node }).declaration;
+
+    if (!decl || decl.type !== 'VariableDeclaration' || (decl as VariableDeclaration).kind !== 'const') continue;
+
+    for (const d of (decl as VariableDeclaration).declarations) {
+      if (d.id.type !== 'Identifier' || !d.init) continue;
+
+      const name = (d.id as { name: string }).name;
+      const value = evalConst(d.init, ctx);
+
+      if (value === undefined) continue; // non-literal-foldable export: out of scope, skip
+
+      const prev = ambientSeen.get(name);
+
+      if (prev && prev !== filePath) {
+        throw new Error(`duplicate ambient export "${name}" (from "${prev}" and "${filePath}")`);
+      }
+
+      if (!prev) ambientSeen.set(name, filePath);
+
+      ctx.registerConstant(name, value);
+    }
+  }
+}
+
+// Ambient imports (CompileOptions.ambient): resolve every listed specifier as a source module
+// (never a `.json` contract — a bare specifier has no local-name binding for one) and pull its
+// exported functions, inline (arrow-const) functions, and top-level exported consts, exactly
+// like a normal `import { x } from "./mod"` would, but with NO import line anywhere in the
+// program. `seen`/`visited` here are ambient-SCOPED — a fresh namespace never shared with the
+// entry program's own import-graph collection in processProgram — so an ambient name colliding
+// with something the USER already declared/imported never throws here (the caller filters
+// those out, silently, so user code always wins); only two DIFFERENT ambient modules (or an
+// ambient module and one of its own transitively-ambient-imported siblings) naming the SAME
+// function/inline/const is a genuine ambient-vs-ambient collision, and that still throws via
+// `seen`'s existing collision check (functions + inlines) and `registerAmbientConsts`'s own
+// (consts) — one unified namespace spanning all three, matching compiler-rs's P3 ambient
+// primitive.
+function collectAmbientExports(
+  specifiers: readonly string[],
+  ctx: CompilerContext,
+): { fns: FunctionDeclaration[]; inlines: Map<string, InlineFnEntry> } {
+  const seen = new Map<string, string>();
+  const visited = new Set<string>();
+  const inlineOut = new Map<string, InlineFnEntry>();
+  const fns: FunctionDeclaration[] = [];
+
+  for (const source of specifiers) {
+    fns.push(
+      ...collectFunctionsFromSpecifier(
+        undefined,
+        source,
+        ctx,
+        seen,
+        visited,
+        inlineOut,
+        undefined,
+        (modAst, filePath) => registerAmbientConsts(modAst, ctx, seen, filePath),
+      ),
+    );
+  }
+
+  return { fns, inlines: inlineOut };
 }
 
 // Reachability walk for tree-shaking: every function name transitively CALLED from
@@ -417,6 +556,34 @@ function processProgram(program: Program, ctx: CompilerContext): SaucerLike[] {
 
   const localFns = extractFunctionDeclarations(program);
   let declarations = [...importedFns, ...localFns];
+
+  // Ambient imports (CompileOptions.ambient, threaded onto ctx by compile()): broadcast each
+  // listed module's exported functions/inline-functions/consts into this compile's resolution
+  // set with NO import line — mirroring compiler-rs's P3 ambient primitive. Precedence: **user
+  // code always wins** — a name already claimed by the entry program's own local/imported
+  // functions or inline (arrow-const) functions above is filtered out here (silently) rather
+  // than added; the const channel gets the identical precedence "for free" via
+  // `registerConstant`'s own insert-if-absent rule inside `registerAmbientConsts` (and a
+  // function-local/parameter shadows an ambient const for free too, since `processExpression`'s
+  // Identifier case only consults `ctx.getConstant` when `ctx.getVar` is undefined — no change
+  // needed here for that).
+  if (ctx.ambient && ctx.ambient.length > 0) {
+    const { fns: ambientFns, inlines: ambientInlines } = collectAmbientExports(ctx.ambient, ctx);
+
+    const userNames = new Set<string>();
+
+    for (const d of declarations) if (d.id?.name) userNames.add(d.id.name);
+    for (const name of extractInlineDeclarations(program).keys()) userNames.add(name);
+    for (const name of importedInlines.keys()) userNames.add(name);
+
+    for (const fn of ambientFns) {
+      if (fn.id?.name && !userNames.has(fn.id.name)) declarations.push(fn);
+    }
+
+    for (const [name, decl] of ambientInlines) {
+      if (!userNames.has(name)) importedInlines.set(name, decl);
+    }
+  }
 
   const mainFunc = declarations.find((stmt) => stmt.id?.name === 'main');
 

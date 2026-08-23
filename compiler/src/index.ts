@@ -212,6 +212,21 @@ export interface CompileOptions {
    */
   defines?: Record<string, bigint | boolean | number>;
   /**
+   * Module specifiers whose EXPORTED functions and top-level consts are broadcast into this
+   * compile's global resolution set with NO import line — the same resolution + registration
+   * a normal `import { x } from "./mod"` performs, just seeded from this list instead of an
+   * `ImportDeclaration` in the source. Each specifier is resolved exactly like a source-file
+   * import (relative or bare/package, via the same `baseDirs`/node_modules lookup); an ambient
+   * module that itself defines `main()` is rejected, mirroring a regular import. Precedence:
+   * **user code always wins** — an ambient function/const is registered only when the entry
+   * program's own local/imported functions, consts, or (for the const channel) a runtime
+   * variable/parameter of the same name doesn't already claim it; two DIFFERENT ambient modules
+   * exporting the same name is a compile error (neither side is "the user's"). Mirrors
+   * compiler-rs's `CompileOptions.ambient` primitive — the stdlib/DSL plugin's injection
+   * mechanism (see `docs/plans/ambient-import-chain-scope-design.md` §1). Default: none.
+   */
+  ambient?: string[];
+  /**
    * Compile cache — ON BY DEFAULT. `compile()` returns a cached result for a
    * repeat (source + options) instead of recompiling, and stores each fresh
    * result. Values:
@@ -322,6 +337,8 @@ function compileFresh(source: string, options: CompileOptions = {}): CompileResu
   if (pre && pre.wideReturnArrays.size > 0) ctx.wideReturnArrays = pre.wideReturnArrays;
 
   if (options.defines) ctx.setDefines(options.defines);
+
+  if (options.ambient && options.ambient.length > 0) ctx.ambient = options.ambient;
 
   if (options.args && options.args.length > 0) {
     ctx.mainArgTypes = options.args.map(inferArgType);

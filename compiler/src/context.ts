@@ -270,6 +270,18 @@ export class CompilerContext {
   transformModule?: (code: string, filePath: string) => string;
 
   /**
+   * Ambient-import specifiers (CompileOptions.ambient): each listed module's exported
+   * functions/consts are broadcast into this compile's global resolution set with NO import
+   * line anywhere in the source. Set once by `compile()` (index.ts) before `processNode` ever
+   * runs — a plain instance field, never module-shared, since ambient resolution happens ONCE
+   * at the top of `processProgram`, against the top-level `ctx`, before any per-function child
+   * context (`forFunction()`) exists (exactly like `transformModule` immediately above, which
+   * is consulted at the same point for the same reason). See processor/index.ts's
+   * `collectAmbientExports`/`registerAmbientConsts` for the mechanism.
+   */
+  ambient?: string[];
+
+  /**
    * Drop functions unreachable from main() after constant folding (CompileOptions.treeshake,
    * default true — set false for the legacy "every declared/imported function is emitted"
    * shape).
@@ -578,7 +590,10 @@ export class CompilerContext {
   /**
    * Register a top-level `const X = <literal>` as a compile-time constant (so it can fold
    * branch conditions). A define of the same name already set via CompileOptions wins (an
-   * explicit override), so a const never clobbers a caller-provided flag.
+   * explicit override), so a const never clobbers a caller-provided flag. Also reused, as-is,
+   * by the ambient-import const channel (processor/index.ts's `registerAmbientConsts`) — the
+   * same insert-if-absent rule gives an ambient module's exported const the identical
+   * "user code wins" precedence for free.
    */
   registerConstant(name: string, value: bigint): void {
     if (!this.defines.has(name)) this.defines.set(name, value);
