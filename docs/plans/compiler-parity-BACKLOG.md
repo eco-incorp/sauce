@@ -142,6 +142,21 @@ BOTH compilers — RS P3 (`6f81b9039`) + TS P4 (`77109ad88`), same fixture, same
     compile path = the published WASM compiler) requires **P3/ambient to be RELEASED to npm** — beyond building
     the plugin PRs, it needs a compiler-rs release. The TS compiler's ambient (P4) is generic-parity/legacy;
     `@sauce/token` is fundamentally an RS/WASM-target library. This reframes P6–P8 (SDK wiring) as RS/WASM-side.
+  - ✅ **P5a DONE + verified fire#52**, commit `b2b3a7e16` on `plugin-token-ambient` (stacked on P4, NOT
+    pushed). Manifest `sdk/src/plugin/manifest.json` + `loadPlugin()` (skills-loader convention); name-parity
+    test (compiles `emit`/`throw` → asserts LOG/REVERT opcodes tied to the manifest, v1+v12); ambient
+    bare/scoped-PACKAGE-specifier proof in `compiler/test/node-modules-resolution.test.ts` (toy `@sauce/token`
+    fixture, `ambient:['@sauce/token']` byte-identical to import on v1+v12, per-target arm still wins, real
+    negative control) — closes P4's package-specifier gap (P4 tested only relative). Gate RE-VERIFIED real
+    exit codes (compiler 47/47, sdk 27/27, sdk typecheck 0). NO AI attribution. FOLLOW-UPS: (i) **P4 committed
+    `compiler/dist` is stale** (P4 didn't rebuild it; harmless now since the SDK uses the published WASM
+    compiler, not local dist — rebuild+commit when preparing the stack for PRs); (ii) real-`@sauce/token`-via-
+    LOCAL-TS-compiler proof is a documented vocab-mismatch gap, NOT faked.
+  - 🔄 **P5b [RS] IN PROGRESS fire#52** — the REAL `@sauce/token`-as-ambient proof. RS `plugin-ambient` branch
+    has P3 ambient + evm/svm vocab + the byte-identical fixture at
+    `compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token/`; `token_conformance.rs` = the
+    import-based template. P5b = ambient variant (`CompileOptions.ambient=["@sauce/token"]`) byte-identical to
+    import on evm+svm. Dispatched to `plugin-p1` (re-engaged, RS-scoped).
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
 - ⬜ **P7 [SDK]** chain-bundle activation (chain-scoping, Option B; nested Base/Optimism = nest cascade).
