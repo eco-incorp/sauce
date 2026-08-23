@@ -44,6 +44,18 @@ to eco-incorp/sauce confirmed.
   `github:eco-incorp/sauce#plugin-token-ambient-rs`, build the SDK wiring P6 (compiler-selector seam) → P7
   (chain-bundle activation, Option B) → P8 (registries→manifest data, minimal). Switch sauce-next back to npm
   only after everything is built + released.
+- **✅ P6–P8 UNBLOCKED fire#58/59.** BASE FINDING: the `sauce-next` GH-dep + `build-wasm.mjs` mechanism is on
+  `feat/compiler-parity`, NOT `origin/main` (which uses `sauce-compiler-next: npm:@eco-incorp/sauce-compiler@0.4.1`,
+  no ambient). So P6–P8 base on `feat/compiler-parity` (worktree `/Users/er/Documents/Projects/sauce-sdk-p6`,
+  branch `feat/plugin-sdk-wiring`, commit `b24bacc` repoints sauce-next → `#plugin-token-ambient-rs`).
+  **`pnpm --filter ./sdk build:wasm` BUILT the ambient-capable Rust→WASM compiler into `sdk/.sauce-wasm/`, and
+  its `sauce_wasm.d.ts` EXPOSES `ambient`/`inlineContracts`/`defines`/`entryArgTypes`** — the ambient primitive
+  is now LIVE in the SDK's compiler-going-forward. Compile seam = `sauce-route.ts:186` (TS `compile(source,{…})`).
+  **P6 DISPATCHED (`plugin-p6`, sonnet):** a `compiler?: 'ts'|'rs'` selector at that seam + an RS adapter
+  (source+baseDirs → resolve/resolvePackage; target v1/v12→evm, svm→svm; defines Record→Array; forward
+  ambient/inlineContracts/entryArgTypes), with an ambient-through-RS end-to-end SDK test as the payoff.
+  ⚠️ OPEN: is basing P6–P8 on `feat/compiler-parity` right, or should the sauce-next mechanism land on main
+  first? (surfaced to user; proceeding on feat/compiler-parity).
 
 ---
 
