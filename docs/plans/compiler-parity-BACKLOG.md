@@ -68,13 +68,17 @@ to eco-incorp/sauce confirmed.
   Documented scope cuts: ambient only on the RS path (the in-repo TS compiler has no `ambient` field);
   accountPlan/manifest not translated for RS+svm (nothing reads it). Sonnet-built (`plugin-p6`),
   opus-reviewed CONFIRMED-SOUND. NO AI attribution.
-- 🔄 **P7 [SDK] IN PROGRESS fire#60** — chain-bundle activation (Option B). Seam = `intent-dsl.ts:413-423`
-  (`chainDefines`→`mergedDefines`→`compileSauceRoute`). Add `chainAmbient(chain)` (the chain's ambient module
-  list) + thread `ambient` into the compile seam via `compiler:'rs'` when non-empty (TS default preserved when
-  no ambient). **Branch-divergence note:** P5a's manifest/`loadPlugin` is on `plugin-token-ambient`
-  (origin/main base), not this branch — P7 recreates a minimal `sdk/src/plugin` manifest+loader here (they
-  reconcile when everything lands on main). Test: a chain route compiling with its ambient bundle active via
-  RS. Dispatched to `plugin-p7`.
+- ✅ **P7 DONE + verified fire#60**, commit `90b243e` on `feat/plugin-sdk-wiring` (stacked on P6). `chainAmbient(chain)`
+  (ambient.ts, sibling to `chainDefines`) = the chain's ambient-MODULE list (returns `loadPlugin().ambient`,
+  empty by default — extensible per-chain without signature change); recreated a minimal `sdk/src/plugin`
+  manifest+loader on this branch (reconciles with P5a's at merge). `openRoute` merges `chainAmbient(destination)`
+  + caller `options.compile.ambient` (deduped) → `compileSauceRoute` `ambient`; **non-empty → `compiler:'rs'`
+  UNLESS the caller chose explicitly** (never overridden); empty default → both fall through unchanged →
+  existing routes byte-identical through the TS compiler. 5 tests (chainAmbient default `[]`; ambient route via
+  RS; byte-identity vs direct `compileSauceRoute`; explicit `'ts'` never overridden; empty-default byte-identical
+  to pre-P7). Gate RE-VERIFIED real exit codes: typecheck 0, chain-ambient 5/5 (the 3 pre-existing artifacts-gotcha
+  suite failures reproduce on unmodified HEAD via git stash — not a regression). Sonnet-built (`plugin-p7`),
+  opus-reviewed CONFIRMED-SOUND. NO AI attribution.
 
 ---
 
