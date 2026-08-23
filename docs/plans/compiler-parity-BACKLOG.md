@@ -41,6 +41,19 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
   types.** Design IN FLIGHT (fire#45, `w4aqx9s5v`) — resolving the fork: (A) compiler parses+scopes the chain
   block vs (B) SDK fluent-builder erases each chain region into that chain's defines+ambient-imports before
   compile(). Chain ≈ a named BUNDLE of (defines + ambient-imports) the manifest declares, activated by name.
+- ✅ **DESIGN DONE (fire#46, `docs/plans/ambient-import-chain-scope-design.md`): Option B, decisively.**
+  Decisive runtime fact: a Sauce program is atomic on ONE chain in ONE tx → a single `main()` CANNOT execute
+  cross-chain, so A's distinguishing case **has no runtime**; cross-chain = separate programs = the DSL's
+  existing nest cascade. **The real NEW compiler feature = ambient imports** (`CompileOptions.ambient:
+  Vec<String>` — exported consts ride the existing `inject_defines` channel, functions ride `assign_global_ids`;
+  local/param shadows ambient; NOT new syntax). Chain-scoping = SDK per-region bundle selection (B). **No
+  `Ty::Named`, no namespace registry, no grammar — entirely Rank-1.** FINALIZED 8-PR stacked plan:
+  1.[RS] wasm expose defines+entry_arg_types · 2.[RS] inline-ABI contracts variant · 3.[RS] ambient-import
+  primitive (NEW core) · 4.[TS] ambient-import parity (NEW core) · 5.[plugin] skeleton (@sauce/token as first
+  ambient module + name-parity manifest) · 6.[SDK] compiler-selector seam · 7.[SDK] chain-bundle activation
+  (chain-scoping, B) · 8.[SDK] registries→Layer B. Stops at PR8 with full DSL parity + ambient imports +
+  chain-scoping; Rank-2 (Ty::Named/namespace registry) stays deferred. Confirm crux: each chain region = a
+  SEPARATE atomic program (how the DSL already works) → validates B. **Awaiting go-ahead to start PR-1.**
 - **PR-slicing note (from the fire#42 inventory):** TS `feat/compiler-parity` (73 commits) is tangled — 12
   inherited `routes:` DSL commits (stay SDK-side per this redirect) + ~8 TS-code + ~49 docs; based on
   `feat/xchain-intent-dsl`, needs isolating onto main. RS `feat/compiler-parity-port` (31 commits) is clean
