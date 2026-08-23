@@ -84,7 +84,7 @@
     }
   },
   "devDependencies": {
-    "sauce-next": "github:eco-incorp/sauce#main",
+    "sauce-next": "github:eco-incorp/sauce#plugin-token-ambient-rs",
     "typescript": "^5.4.0",
     "@types/node": "^20.0.0",
     "@solana/web3.js": "^1.98.0",
