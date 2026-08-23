@@ -11,7 +11,19 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
-## 🧭 PROGRAM STATUS (updated fire#36, 2026-08-22) — ✅ COMPLETE, GREEN, & OPUS-REVIEWED
+## 🧭 PROGRAM STATUS (updated fire#37, 2026-08-22) — plan COMPLETE+green; now pursuing full-recipe stretch (ultracode)
+
+**fire#37: RESUMING the full-recipe stretch (NS-10 → NS-9) under ultracode + the standing eco-swap-north-star
+directive.** The plan is complete + green + opus-reviewed (below), but the FULL non-unrolled `ecoswap.sauce.ts`
+is the named top target and ultracode says pursue exhaustively. opus had scoped NS-9/NS-10 as DEFER (build
+only if a hard requirement); treating the repeated standing directive as that signal. Discipline preserved:
+**design-first** (opus) each — if a design shows genuinely untenable architectural risk (esp. NS-9's
+signature-resolution phase inversion), STOP with it documented rather than force it. Order (per opus scope):
+**NS-10 first** (nested-array `Array<Array<Scalar>>` entry decode — reuses NS-8's offset-table skeleton;
+prerequisite for NS-9's typed rows) → **NS-9 monomorphic** (call-site param-shape propagation; skip true
+generics — the recipe is monomorphic). NS-10 opus design IN FLIGHT.
+
+## 🧭 (history) fire#36 — ✅ COMPLETE, GREEN, & OPUS-REVIEWED
 
 **Regression audit CLOSED (fire#36): the 3 compiler-code fixes are opus-reviewed CONFIRMED-SOUND** (no
 defects). V4-revert verified by real-engine execution of every nested-array shape (multi-element/deeply-nested/
