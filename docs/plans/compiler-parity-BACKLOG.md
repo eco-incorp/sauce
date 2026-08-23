@@ -1034,3 +1034,15 @@ try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
   spelling). One stale LSP type-error on context.ts:371 was investigated and DISPROVEN (tsc exit 0 —
   mid-edit snapshot). **Next:** RS PR-2 (svm sugar) + PR-5 (try/catch) or PR-14 (same-file call fold,
   design-first); TS §1.5 (annotation storage kind) or §1.6 (Feature matrix); V4-tuple real-exec check.
+
+**#352 SLICING PLAN (fire#62, ready-to-run if user says go)** — 17 atomic stacked PRs off origin/main in
+dependency order (each = a branch at the feature's tip commit, stacked on the previous):
+1 loop-unroll (5b2eca06f+051240260) · 2 defines (90cd112a1) · 3 uint() (180604748) · 4 Math.neg (627ee17c6) ·
+5 address.* (0a958c5da) · 6 tuple-params (9d9f98ef1+52c6547d7+a6a4e0a68) · 7 inner-if reconcile (20e1e140c) ·
+8 tload/tstore (aa8e26d2c) · 9 call-folding (cdb734536+69211f071) · 10 lookup-tables (4b6877e9d) ·
+11 new Array (94e11b03a) · 12 dyn-value lock (20957d1ab) · 13 multi-output destructuring (8853a075b) ·
+14 .catch EVM (16bac1983+1142c7275) · 15 ArgShape::Struct (35c20200e) · 16 bytes[] decode (fc4cde882+634d3ab1c) ·
+17 nested-array decode (165c3661c). DROP the net-zero V4 pair (c861b09d3 + 33d67a571). Fold test/fixture
+(5b5497c54,e188d17e0,2cec056ec,3d454f996) + clippy/fmt (0ada5c9ca,235902bbf) into their feature/last PR.
+**AWAITING USER go/no-go** (they offered "one base" as legit; not auto-restructuring an open PR). Also awaiting:
+feat/compiler-parity base decision (PR as-is vs extract sauce-next infra into a lean PR for #138's base).
