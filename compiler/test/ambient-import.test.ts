@@ -192,6 +192,79 @@ describe('ambient imports (CompileOptions.ambient)', () => {
         expectSameBytecode(withAmbient, withoutAmbient);
       });
 
+      it('a user top-level FUNCTION of the same name WINS over an ambient CONST (mirror audit fix)', () => {
+        writeMod('amb_win_fn_vs_const.js', `export const RATE = 999n;`);
+
+        // RATE is a FUNCTION name here, never a readable value — a bare (non-call) reference
+        // must fail to resolve, with or without ambient. treeshake: false so this can't pass
+        // vacuously: RATE is only ever referenced as a bare identifier (never called), so with
+        // treeshake on it would already be dropped as unreachable regardless of whether the
+        // const-channel shadowing filter actually worked.
+        const source = 'function RATE() { return 1n; }\nfunction main() { let x = RATE; return x; }';
+
+        const withAmbient = () =>
+          compile(source, { baseDirs: [tmpDir], target, ambient: ['./amb_win_fn_vs_const'], treeshake: false });
+        const withoutAmbient = () => compile(source, { baseDirs: [tmpDir], target, treeshake: false });
+
+        // Both must fail identically — ambient's mere presence must never silently change
+        // behavior by binding RATE to the ambient const's literal value instead.
+        expect(withoutAmbient).toThrow(/undefined variable: RATE/);
+        expect(withAmbient).toThrow(/undefined variable: RATE/);
+      });
+
+      it('a user imported CONTRACT binding of the same name WINS over an ambient CONST (mirror audit fix)', () => {
+        writeMod(
+          'AuditTok2.json',
+          JSON.stringify([
+            {
+              type: 'function',
+              name: 'balanceOf',
+              stateMutability: 'view',
+              inputs: [{ name: 'a', type: 'address' }],
+              outputs: [{ name: '', type: 'uint256' }],
+            },
+          ]),
+        );
+        writeMod('amb_win_const_vs_contract.js', `export const AuditTok2 = 999n;`);
+
+        // AuditTok2 is a contract-binding name here, never a readable scalar value — a bare
+        // (non-`.at(...)`) reference must fail to resolve, with or without ambient.
+        const source =
+          'import { AuditTok2 } from "./AuditTok2.json";\nfunction main() { let x = AuditTok2; return x; }';
+
+        const withAmbient = () =>
+          compile(source, { baseDirs: [tmpDir], target, ambient: ['./amb_win_const_vs_contract'], treeshake: false });
+        const withoutAmbient = () => compile(source, { baseDirs: [tmpDir], target, treeshake: false });
+
+        expect(withoutAmbient).toThrow(/undefined variable: AuditTok2/);
+        expect(withAmbient).toThrow(/undefined variable: AuditTok2/);
+      });
+
+      it('a user IMPORTED inline (arrow-const) function of the same name WINS over an ambient CONST (mirror audit fix)', () => {
+        // A LOCAL top-level `const RATE = (x) => …` would already be caught by the pre-existing
+        // userConstNames set (any top-level `const` declaration's name is collected regardless
+        // of whether its initializer is an arrow function) — so this exercises the genuinely
+        // untested channel: an inline function pulled in via a REAL import, which is tracked in
+        // a separate `importedInlines` map that only ever fed the ambient FUNCTION filter before
+        // this fix, never the ambient CONST channel.
+        writeMod('real_inline_rate.js', `export const RATE = (x) => x + 1n;`);
+        writeMod('amb_win_importedinline_vs_const.js', `export const RATE = 999n;`);
+
+        const source = 'import { RATE } from "./real_inline_rate";\nfunction main() { let x = RATE; return x; }';
+
+        const withAmbient = () =>
+          compile(source, {
+            baseDirs: [tmpDir],
+            target,
+            ambient: ['./amb_win_importedinline_vs_const'],
+            treeshake: false,
+          });
+        const withoutAmbient = () => compile(source, { baseDirs: [tmpDir], target, treeshake: false });
+
+        expect(withoutAmbient).toThrow(/undefined variable: RATE/);
+        expect(withAmbient).toThrow(/undefined variable: RATE/);
+      });
+
       it('an ambient module defining main() is rejected', () => {
         writeMod('amb_bad_main.js', `export function main() { return 1n; }`);
 

@@ -295,17 +295,25 @@ function collectFunctionsFromSpecifier(
 // `export const X = <literal>` declarations, evaluated + registered directly into ctx.defines
 // — mirroring `registerTopLevelConsts` below, but scoped to ONE already-parsed ambient
 // module's AST instead of the entry program's. Registration goes through
-// `ctx.registerConstant` (insert-if-absent), so a name the user (a real top-level const/
-// import, or CompileOptions.defines) already claims simply keeps that value — the "user
-// always wins" precedence — while still letting a LATER const in the SAME ambient module
-// reference an EARLIER one, since each is registered into ctx.defines (and so resolvable via
-// ctx.getConstant) as soon as it's evaluated, in file order, exactly like
-// registerTopLevelConsts already does for the entry program. `ambientSeen` is the caller's own
-// unified ambient-name namespace (SHARED with the function/inline channel collected alongside
-// it in collectAmbientExports below) — consulted here ONLY to detect a genuine ambient-vs-
-// ambient collision (two DIFFERENT ambient modules exporting the same name); it never gates
-// whether a value lands in ctx.defines, which is governed by `registerConstant`'s own
-// insert-if-absent rule regardless.
+// `ctx.registerConstant` (insert-if-absent), so a name the user's own top-level CONST already
+// claims simply keeps that value — the "user always wins" precedence — while still letting a
+// LATER const in the SAME ambient module reference an EARLIER one, since each is registered
+// into ctx.defines (and so resolvable via ctx.getConstant) as soon as it's evaluated, in file
+// order, exactly like registerTopLevelConsts already does for the entry program. `ambientSeen`
+// is the caller's own unified ambient-name namespace (SHARED with the function/inline channel
+// collected alongside it in collectAmbientExports below) — consulted here ONLY to detect a
+// genuine ambient-vs-ambient collision (two DIFFERENT ambient modules exporting the same name),
+// unconditionally, exactly like the function channel's own `seen`-based collision check does
+// regardless of `userNames` — it never gates whether a value lands in ctx.defines.
+//
+// `userNames` is the SAME user-claimed name set (local/imported functions, inline arrow-const
+// functions, top-level consts, imported contract bindings) the function channel filters
+// `ambientFns`/`ambientInlines` against in processProgram — threaded in here too so a user
+// FUNCTION/inline/contract-binding name also shadows an ambient CONST, not just a user const
+// (which `registerConstant`'s own insert-if-absent already handled "for free"). Skipping the
+// registration entirely (rather than letting `registerConstant` no-op) is what closes that
+// gap: a function/inline/contract-binding name is never itself present in ctx.defines, so
+// `registerConstant`'s insert-if-absent check alone can't see it's already claimed.
 //
 // Deliberately NOT transitive: only the DIRECTLY-specified ambient module's own top-level
 // consts are pulled — a nested module it itself imports is not walked for consts (unlike the
@@ -316,6 +324,7 @@ function registerAmbientConsts(
   ctx: CompilerContext,
   ambientSeen: Map<string, string>,
   filePath: string,
+  userNames: ReadonlySet<string>,
 ): void {
   for (const stmt of modAst.body) {
     if (stmt.type !== 'ExportNamedDeclaration') continue;
@@ -340,6 +349,11 @@ function registerAmbientConsts(
 
       if (!prev) ambientSeen.set(name, filePath);
 
+      // A user function/inline/contract-binding of the same name wins — never register the
+      // ambient const at all (a same-named user CONST is already handled by registerConstant's
+      // own insert-if-absent below, so this check is additive, not a replacement for it).
+      if (userNames.has(name)) continue;
+
       ctx.registerConstant(name, value);
     }
   }
@@ -357,10 +371,15 @@ function registerAmbientConsts(
 // function/inline/const is a genuine ambient-vs-ambient collision, and that still throws via
 // `seen`'s existing collision check (functions + inlines) and `registerAmbientConsts`'s own
 // (consts) — one unified namespace spanning all three, matching compiler-rs's P3 ambient
-// primitive.
+// primitive. `userNames` (the caller's full user-claimed name set, computed BEFORE this
+// function runs — see the ordering note in processProgram) is threaded straight through to
+// `registerAmbientConsts` via the `onModule` hook, so the const channel gets the identical
+// "user code always wins" precedence the function/inline channel's own (separate, later)
+// filter in processProgram applies to `fns`/`inlineOut` below.
 function collectAmbientExports(
   specifiers: readonly string[],
   ctx: CompilerContext,
+  userNames: ReadonlySet<string>,
 ): { fns: FunctionDeclaration[]; inlines: Map<string, InlineFnEntry> } {
   const seen = new Map<string, string>();
   const visited = new Set<string>();
@@ -377,7 +396,7 @@ function collectAmbientExports(
         visited,
         inlineOut,
         undefined,
-        (modAst, filePath) => registerAmbientConsts(modAst, ctx, seen, filePath),
+        (modAst, filePath) => registerAmbientConsts(modAst, ctx, seen, filePath, userNames),
       ),
     );
   }
@@ -594,11 +613,11 @@ function processProgram(program: Program, ctx: CompilerContext): SaucerLike[] {
   // set with NO import line — mirroring compiler-rs's P3 ambient primitive. Precedence: **user
   // code always wins** — a name already claimed by the entry program's own local/imported
   // functions, inline (arrow-const) functions, top-level consts, or imported contract bindings
-  // is filtered out here (silently) rather than added; the const channel gets the identical
-  // precedence "for free" via `registerConstant`'s own insert-if-absent rule inside
-  // `registerAmbientConsts` (and a function-local/parameter shadows an ambient const for free
-  // too, since `processExpression`'s Identifier case only consults `ctx.getConstant` when
-  // `ctx.getVar` is undefined — no change needed here for that).
+  // is filtered out here (silently) rather than added, on EVERY channel (functions, inlines,
+  // AND consts — `registerAmbientConsts` takes the identical `userNames` set below); a
+  // function-local/parameter additionally shadows an ambient const for free, since
+  // `processExpression`'s Identifier case only consults `ctx.getConstant` when `ctx.getVar` is
+  // undefined — no change needed here for that.
   if (ctx.ambient && ctx.ambient.length > 0) {
     // Snapshot the user's own contract-binding names BEFORE collectAmbientExports runs — an
     // ambient module can itself transitively import a `.json` ABI (via its own nested imports,
@@ -608,8 +627,11 @@ function processProgram(program: Program, ctx: CompilerContext): SaucerLike[] {
     const userContractNames = new Set(ctx.contractNames);
     const userConstNames = collectTopLevelConstNames(program);
 
-    const { fns: ambientFns, inlines: ambientInlines } = collectAmbientExports(ctx.ambient, ctx);
-
+    // Build the full user-claimed name set BEFORE collectAmbientExports runs (unlike the
+    // function/inline filter below, which only needs it AFTER collection) — `registerAmbientConsts`
+    // is invoked DURING collectAmbientExports, via its `onModule` hook, so it needs `userNames`
+    // in hand already to keep an ambient const from shadowing a user function/inline/contract
+    // binding of the same name.
     const userNames = new Set<string>();
 
     for (const d of declarations) if (d.id?.name) userNames.add(d.id.name);
@@ -617,6 +639,8 @@ function processProgram(program: Program, ctx: CompilerContext): SaucerLike[] {
     for (const name of importedInlines.keys()) userNames.add(name);
     for (const name of userConstNames) userNames.add(name);
     for (const name of userContractNames) userNames.add(name);
+
+    const { fns: ambientFns, inlines: ambientInlines } = collectAmbientExports(ctx.ambient, ctx, userNames);
 
     for (const fn of ambientFns) {
       if (fn.id?.name && !userNames.has(fn.id.name)) declarations.push(fn);
