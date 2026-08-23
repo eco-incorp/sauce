@@ -143,6 +143,55 @@ describe('ambient imports (CompileOptions.ambient)', () => {
         expectSameBytecode(withAmbient, withoutAmbient);
       });
 
+      it('a user top-level CONST of the same name WINS over an ambient FUNCTION (audit fix)', () => {
+        writeMod('amb_win_const_vs_fn.js', `export function compute(x) { return x + 999n; }`);
+
+        const source = 'const compute = 10n;\nfunction main() { return compute; }';
+
+        // treeshake: false so this can't pass vacuously — with treeshake on, a leaked ambient
+        // fn would be dropped as unreachable regardless of whether the filter actually worked.
+        const withAmbient = compile(source, {
+          baseDirs: [tmpDir],
+          target,
+          ambient: ['./amb_win_const_vs_fn'],
+          treeshake: false,
+        });
+        const withoutAmbient = compile(source, { baseDirs: [tmpDir], target, treeshake: false });
+
+        // Byte-identical: the ambient compute() must never be added to the function table once
+        // the user's own top-level const compute already claims the name.
+        expectSameBytecode(withAmbient, withoutAmbient);
+      });
+
+      it('a user imported CONTRACT binding of the same name WINS over an ambient FUNCTION (audit fix)', () => {
+        writeMod(
+          'AuditTok.json',
+          JSON.stringify([
+            {
+              type: 'function',
+              name: 'balanceOf',
+              stateMutability: 'view',
+              inputs: [{ name: 'a', type: 'address' }],
+              outputs: [{ name: '', type: 'uint256' }],
+            },
+          ]),
+        );
+        writeMod('amb_win_contract_vs_fn.js', `export function AuditTok(x) { return x + 1n; }`);
+
+        const source =
+          'import { AuditTok } from "./AuditTok.json";\nfunction main() { return AuditTok.at(1n).balanceOf(2n); }';
+
+        const withAmbient = compile(source, {
+          baseDirs: [tmpDir],
+          target,
+          ambient: ['./amb_win_contract_vs_fn'],
+          treeshake: false,
+        });
+        const withoutAmbient = compile(source, { baseDirs: [tmpDir], target, treeshake: false });
+
+        expectSameBytecode(withAmbient, withoutAmbient);
+      });
+
       it('an ambient module defining main() is rejected', () => {
         writeMod('amb_bad_main.js', `export function main() { return 1n; }`);
 

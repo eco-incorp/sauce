@@ -373,6 +373,17 @@ export class CompilerContext {
     return this.module.functions;
   }
 
+  /**
+   * Names of every contract registered so far (shared across a v12 module's contexts) — a
+   * `.json` ABI import's local binding name, from `registerContract`. Used by the ambient-import
+   * mechanism (processor/index.ts's `processProgram`) to snapshot which names a user's own
+   * import graph already claims, so an ambient function of the same name is filtered out rather
+   * than added (see `lookupContract`, which checks one name at a time; this exposes the full set).
+   */
+  get contractNames(): string[] {
+    return [...this.module.contracts.keys()];
+  }
+
   /** v12: per-function build artifacts collected during processing. */
   get funcMeta(): FunctionMeta[] {
     return this.module.funcMeta;

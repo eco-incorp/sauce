@@ -498,17 +498,27 @@ export function eachChild(node: Node, visit: (child: Node) => void): void {
 // Register top-level `const X = <foldable init>` (and `export const`) in the MAIN
 // program as compile-time constants BEFORE treeshake/compile, so they fold branch
 // conditions. They emit no runtime code (top-level consts are compile-time only).
+// Shared by registerTopLevelConsts and collectTopLevelConstNames below: a top-level `const`
+// statement, plain or `export`-wrapped, or undefined for anything else (an ImportDeclaration, a
+// FunctionDeclaration, a top-level `let`/`var` — rejected by isAllowedTopLevel regardless, so
+// this never needs to recognize one).
+function topLevelConstDeclOf(stmt: Statement | ModuleDeclaration): VariableDeclaration | undefined {
+  const decl =
+    stmt.type === 'VariableDeclaration'
+      ? (stmt as VariableDeclaration)
+      : stmt.type === 'ExportNamedDeclaration' &&
+          (stmt as { declaration?: Node }).declaration?.type === 'VariableDeclaration'
+        ? ((stmt as { declaration?: Node }).declaration as VariableDeclaration)
+        : undefined;
+
+  return decl && decl.kind === 'const' ? decl : undefined;
+}
+
 function registerTopLevelConsts(program: Program, ctx: CompilerContext): void {
   for (const stmt of program.body) {
-    const decl =
-      stmt.type === 'VariableDeclaration'
-        ? (stmt as VariableDeclaration)
-        : stmt.type === 'ExportNamedDeclaration' &&
-            (stmt as { declaration?: Node }).declaration?.type === 'VariableDeclaration'
-          ? ((stmt as { declaration?: Node }).declaration as VariableDeclaration)
-          : undefined;
+    const decl = topLevelConstDeclOf(stmt);
 
-    if (!decl || decl.kind !== 'const') continue;
+    if (!decl) continue;
 
     for (const d of decl.declarations) {
       if (d.id.type !== 'Identifier' || !d.init) continue;
@@ -518,6 +528,28 @@ function registerTopLevelConsts(program: Program, ctx: CompilerContext): void {
       if (value !== undefined) ctx.registerConstant((d.id as { name: string }).name, value);
     }
   }
+}
+
+// Every top-level `const X = …` name in the entry program — regardless of whether its
+// initializer actually folds to a literal (registerTopLevelConsts only registers the ones that
+// do; this collects the NAME either way, since the identifier is claimed by the user's own
+// top-level declaration regardless). Used by the ambient-import mechanism (processProgram) to
+// keep an ambient function from leaking past a same-named user top-level const — see the
+// "userNames" audit note there.
+function collectTopLevelConstNames(program: Program): Set<string> {
+  const names = new Set<string>();
+
+  for (const stmt of program.body) {
+    const decl = topLevelConstDeclOf(stmt);
+
+    if (!decl) continue;
+
+    for (const d of decl.declarations) {
+      if (d.id.type === 'Identifier') names.add((d.id as { name: string }).name);
+    }
+  }
+
+  return names;
 }
 
 // Top-level node types allowed in the main program: imports, function declarations
@@ -561,13 +593,21 @@ function processProgram(program: Program, ctx: CompilerContext): SaucerLike[] {
   // listed module's exported functions/inline-functions/consts into this compile's resolution
   // set with NO import line — mirroring compiler-rs's P3 ambient primitive. Precedence: **user
   // code always wins** — a name already claimed by the entry program's own local/imported
-  // functions or inline (arrow-const) functions above is filtered out here (silently) rather
-  // than added; the const channel gets the identical precedence "for free" via
-  // `registerConstant`'s own insert-if-absent rule inside `registerAmbientConsts` (and a
-  // function-local/parameter shadows an ambient const for free too, since `processExpression`'s
-  // Identifier case only consults `ctx.getConstant` when `ctx.getVar` is undefined — no change
-  // needed here for that).
+  // functions, inline (arrow-const) functions, top-level consts, or imported contract bindings
+  // is filtered out here (silently) rather than added; the const channel gets the identical
+  // precedence "for free" via `registerConstant`'s own insert-if-absent rule inside
+  // `registerAmbientConsts` (and a function-local/parameter shadows an ambient const for free
+  // too, since `processExpression`'s Identifier case only consults `ctx.getConstant` when
+  // `ctx.getVar` is undefined — no change needed here for that).
   if (ctx.ambient && ctx.ambient.length > 0) {
+    // Snapshot the user's own contract-binding names BEFORE collectAmbientExports runs — an
+    // ambient module can itself transitively import a `.json` ABI (via its own nested imports,
+    // recursed through the ordinary collectImportedFunctions path), which would register a NEW
+    // contract into the same shared `ctx` this checks. That must never retroactively count as
+    // "the user's" for the filter below, so the snapshot has to be taken first.
+    const userContractNames = new Set(ctx.contractNames);
+    const userConstNames = collectTopLevelConstNames(program);
+
     const { fns: ambientFns, inlines: ambientInlines } = collectAmbientExports(ctx.ambient, ctx);
 
     const userNames = new Set<string>();
@@ -575,6 +615,8 @@ function processProgram(program: Program, ctx: CompilerContext): SaucerLike[] {
     for (const d of declarations) if (d.id?.name) userNames.add(d.id.name);
     for (const name of extractInlineDeclarations(program).keys()) userNames.add(name);
     for (const name of importedInlines.keys()) userNames.add(name);
+    for (const name of userConstNames) userNames.add(name);
+    for (const name of userContractNames) userNames.add(name);
 
     for (const fn of ambientFns) {
       if (fn.id?.name && !userNames.has(fn.id.name)) declarations.push(fn);
