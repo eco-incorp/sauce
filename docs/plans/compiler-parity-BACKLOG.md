@@ -244,6 +244,21 @@ than added"). LOW sev — treeshake-on (default) drops the dead fn → byte-iden
 false` observes it; never a wrong value. **FIX DISPATCHED to `plugin-p4`** (branch `plugin-token-ambient`,
 squash into P4 at PR-prep): extend `userNames` to include top-level const/let names + imported contract-binding
 names, promote the probe (`ambient-usernames-gap.probe.test.ts`) into a `treeshake:false` regression test.
+  - ✅ **TS FIX DONE + verified fire#57**, commit `67e7a1423` on `plugin-token-ambient` (follow-up on P5a;
+    **squash into P4 at PR-prep**). Added `CompilerContext.contractNames` getter (`[...contracts.keys()]`,
+    mirrors `functions`) + `collectTopLevelConstNames` (collects EVERY top-level const name regardless of
+    foldability — a name is user-claimed even if its value isn't literal) via a shared `topLevelConstDeclOf`
+    refactor; folded both into `userNames`. **Sharp ordering catch:** snapshot `contractNames` BEFORE
+    `collectAmbientExports` runs, since an ambient module can transitively register a new `.json` contract via
+    its own nested imports — which must not retroactively count as user-claimed. 2 new regression tests
+    (`treeshake:false` so non-vacuous, × v1/v12). Gate RE-VERIFIED real exit codes: typecheck/lint 0, ambient
+    **26/26**, full unit **1690 passed / 67 suites, 0 FAIL**. Sonnet-built (`plugin-p4`), opus-reviewed
+    CONFIRMED-SOUND. NO AI attribution.
+
+**🎉 BOTH compilers' ambient are now ADVERSARIALLY AUDITED + HARDENED** (RS: 16-probe audit + import-vs-ambient
+fix + 3 regression tests; TS: ~50-probe audit + userNames-gap fix + 2 regression tests). The core plugin
+mechanism is verified end-to-end on both sides. Epic remains at the decision-gated plateau (P6–P8 need the
+user: compiler-rs release + plugin packaging + land-on-main).
 
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
