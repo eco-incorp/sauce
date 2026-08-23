@@ -11,6 +11,29 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## 🚀 EPIC-P — PLUGIN SERIES (USER "make it all happen", fire#47) — EXECUTING as atomic stacked PRs
+
+Design: `docs/plans/ambient-import-chain-scope-design.md` + `shared-stdlib-dsl-plugin-architecture.md`. Option B
+confirmed (chain regions = separate atomic programs = the nest cascade). Flow per PR: opus design (where needed)
+→ sonnet build → opus review → gate green → stacked branch → PR. RS PRs (1–3) off `origin/main` in a dedicated
+worktree; TS/SDK PRs (4–8) in sauce-sdk. Base-language parity branches stay as a SEPARATE deliverable.
+
+- ⬜ **P1 [RS]** expose `defines` + `entry_arg_types` on the wasm surface (`sauce-wasm` marshalling + TYPES line).
+- ⬜ **P2 [RS]** inline-ABI `contracts` variant on `CompileOptions` + wasm (the key DSL-forcing plumbing).
+- ⬜ **P3 [RS]** ambient-import primitive — `CompileOptions.ambient: Vec<String>`: exported consts → `inject_defines`,
+  functions → `assign_global_ids`; local/param shadows ambient. *(the core new RS feature)*
+- ⬜ **P4 [TS]** ambient-import parity — symmetric `ambient` option (`collectImportedFunctions` + `setDefines`,
+  merged into `GLOBAL_FUNCTIONS`/`RESERVED_NAMES`). *(core new TS feature; parallel to P1–3)*
+- ⬜ **P5 [plugin]** shared skeleton — `@sauce/token` as first ambient module + Layer-C manifest (ambient list +
+  `emit`↔`log`/`throw`↔`revert` name-parity).
+- ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
+  defines + inline contracts + ambient.
+- ⬜ **P7 [SDK]** chain-bundle activation (chain-scoping, Option B; nested Base/Optimism = nest cascade).
+- ⬜ **P8 [SDK]** move address/token registries + ABIs → Layer-B data; both loaders derive defines/contracts.
+- Stops at P8 with full DSL parity + ambient imports + chain-scoping; Rank-2 (`Ty::Named`) deferred.
+
+---
+
 ## 🧭 NEW DIRECTION (USER, fire#42, 2026-08-22) — parity via a SHARED stdlib/DSL PLUGIN, not reimplementation
 
 **User redirect (supersedes "port the DSL into RS"):**
