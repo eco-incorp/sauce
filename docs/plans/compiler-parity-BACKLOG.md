@@ -38,23 +38,23 @@ main (redundant with parity) — discarded fire#48; worktree re-anchored onto th
   self-check). Gate GREEN (clippy -D 0, nightly-fmt no drift, sauce-wasm 4/4, wasm32 target builds w/ RUSTC
   override = known env-only PATH issue); sonnet-built (`plugin-p1`), opus-reviewed CONFIRMED-SOUND + gate
   re-verified by orchestrator. NO AI attribution.
-- 🔄 **P2 [RS]** inline-ABI `contracts` variant — **IN PROGRESS fire#48** (`plugin-p1`, branch
-  `plugin-inline-contracts` stacked on P1). DESIGN (additive, does NOT change existing `contracts` path
-  semantics): new `CompileOptions.inline_contracts: Vec<(String,String)>` = `(name, abi_json)` — the ABI JSON
-  content, not a path. Threaded through `program()` (new param after `manifest_contracts`) →
-  `resolve_all_contracts`/`resolve_contracts` (module 0 only, like manifest); each inline entry resolved by
-  `abi::parse(name, "<inline:{name}>", abi_json.as_bytes())` DIRECTLY (no `resolver.resolve`), through the SAME
-  `seen`/`taken` collision checks. Wasm: `inlineContracts?: Array<[name,abi]>` + `optional_inline_contracts`
-  (clone of `optional_contracts`). Core test mirrors `an_inline_import_resolves_into_program_contracts` +
-  a collision test. Enables the SDK to compile a synthesized ABI map without temp files / resolver hacks.
-- 📐 **P3 [RS]** ambient-import primitive — `CompileOptions.ambient: Vec<String>`. **DESIGN-READY fire#49**
-  → `docs/plans/rs-P3-ambient-import-design.md` (pinned against the actual RS code). Confirmed: RS already
-  surfaces imported consts cross-module (assembly.rs:1459), so channel-1 reuses the existing `ModuleValue`
-  repr — the only new bit is BROADCASTING ambient exports into every module (consts → `own` table,
-  functions → scope), **insert-if-absent so user code shadows ambient** (stdlib-injects-into-globals
-  precedence; differs from `inject_defines`'s override). Plus: ambient specifiers become extra `load_graph`
-  roots, reject `main` in an ambient module, ambient-vs-ambient dup = error. Dispatches to `plugin-ambient`
-  (stacked on P2) the moment P2 lands. *(the core new RS feature)*
+- ✅ **P2 [RS]** inline-ABI `contracts` variant — **DONE fire#49**, commit `52d1547bf` on
+  `plugin-inline-contracts` (stacked on P1, NOT pushed). New `CompileOptions.inline_contracts:
+  Vec<(String,String)>` = `(name, abi_json)`, applied to module 0 only; `resolve_contracts` calls
+  `abi::parse(name, "<inline:{name}>", …)` DIRECTLY (no resolver), through a refactored shared
+  `check_contract_name_available` collision helper (imports/manifest/inline all collide identically). Wasm:
+  `inlineContracts?: Array<[name,abi]>` + `optional_inline_contracts`. 6 new red-first tests incl. an
+  expectation-less-MockResolver proof that `resolver.resolve` is never called for inline. Sonnet-built
+  (`plugin-p1`), opus-reviewed CONFIRMED-SOUND, gate RE-VERIFIED by orchestrator with real exit codes
+  (clippy 0, **sauce-core 1110/1110**, wasm 4/4, nightly-fmt no drift). Caught+fixed 17 call sites (not 6 —
+  `lower_program_full` has 11 more in the NS-1/8/10 test module). NO AI attribution.
+- 🔄 **P3 [RS]** ambient-import primitive — **IN PROGRESS fire#49** (`plugin-p1`, branch `plugin-ambient`
+  stacked on P2). Design: `docs/plans/rs-P3-ambient-import-design.md` (build-ready, pinned to RS code).
+  `CompileOptions.ambient: Vec<String>` → ambient specifiers become extra `load_graph` roots; two
+  insert-if-absent broadcasts (consts → every module's `own` value table via a new `inject_ambient_consts`;
+  functions → every module's scope) so USER CODE SHADOWS ambient (differs from `inject_defines`' override);
+  reject `main` in an ambient module; ambient-vs-ambient dup = error. Wasm `ambient?: Array<string>`. Fixture
+  kept identical to P4's future TS parity test. *(the core new RS feature)*
 - ⬜ **P4 [TS]** ambient-import parity — symmetric `ambient` option (`collectImportedFunctions` + `setDefines`,
   merged into `GLOBAL_FUNCTIONS`/`RESERVED_NAMES`). *(core new TS feature; parallel to P1–3)*
 - ⬜ **P5 [plugin]** shared skeleton — `@sauce/token` as first ambient module + Layer-C manifest (ambient list +
