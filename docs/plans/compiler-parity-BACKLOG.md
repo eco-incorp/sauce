@@ -21,7 +21,13 @@ only if a hard requirement); treating the repeated standing directive as that si
 signature-resolution phase inversion), STOP with it documented rather than force it. Order (per opus scope):
 **NS-10 first** (nested-array `Array<Array<Scalar>>` entry decode — reuses NS-8's offset-table skeleton;
 prerequisite for NS-9's typed rows) → **NS-9 monomorphic** (call-site param-shape propagation; skip true
-generics — the recipe is monomorphic). NS-10 opus design IN FLIGHT.
+generics — the recipe is monomorphic). 📐 **NS-10 DESIGNED (fire#38 opus, `docs/plans/rs-NS10-nested-array-design.md`):
+BOUNDED — smaller than NS-8** (M). Reuses NS-8's offset-table skeleton + the existing fixed-stride array arm one
+level in — NO new IR node/codegen/ArgShape variant (recursive `ArrayOf`+`to_ty` already build `Ty::Array{Array{Scalar}}`);
+read side already lowers. Work = 1 `entry_collection_decode` branch + 3-line `require_decodable_entry_param` widening
+(narrow escape hatch; fails closed for Array³/Array<Bytes>) + flip the `an_array_of_arrays_is_still_not_yet_decodable`
+test to admission + a real-engine conformance vector. Scope: **only `routing` needs it** (runtime inner index
+`rt[1+5*L]` + variable inner length); pools/netCache/segs/qlv stay ScalarTuple. **sonnet build → opus review IN FLIGHT.**
 
 ## 🧭 (history) fire#36 — ✅ COMPLETE, GREEN, & OPUS-REVIEWED
 
