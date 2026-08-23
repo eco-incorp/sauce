@@ -1,0 +1,4 @@
+{
+  "ambient": ["@sauce/token"],
+  "nameParity": { "emit": "log", "throw": "revert" }
+}
