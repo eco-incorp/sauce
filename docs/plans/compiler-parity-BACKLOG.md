@@ -31,6 +31,16 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
   registries BAKED IN at plugin-build time) over executing plugin code inside wasm. Pure-SauceScript stdlib
   fns (the `@sauce/token` model) can ride alongside as source each frontend compiles. Likely a hybrid LEANING
   declarative. I finalize the format on this criterion when the design lands (not on the synthesis's default).
+- **REFINEMENT (USER, fire#45): "SDK-driven but integrated as an IMPORT feature."** The stdlib/DSL surface =
+  SauceScript deps whose exports **inject into the GLOBAL namespace** ("ambient imports"), + a genuinely new
+  capability: **CHAIN-SCOPED globals that ADD/REMOVE on entering/exiting a chain context** (`Base(() => {…})`
+  → Base's USDC/UniswapRouter/addresses ambient inside the block, removed outside). Lands as a MIDDLE PATH:
+  still SDK-driven for host logic + the fluent builder, but ambient-import + chain-scoping is a real COMPILER
+  feature on BOTH sides (TS already injects stdlib→globals; RS needs a small "ambient import" addition on its
+  Resolver). **Lighter than Rank-2: chain globals are consts + `Contract.at` wrappers, NOT `Ty::Named` nominal
+  types.** Design IN FLIGHT (fire#45, `w4aqx9s5v`) — resolving the fork: (A) compiler parses+scopes the chain
+  block vs (B) SDK fluent-builder erases each chain region into that chain's defines+ambient-imports before
+  compile(). Chain ≈ a named BUNDLE of (defines + ambient-imports) the manifest declares, activated by name.
 - **PR-slicing note (from the fire#42 inventory):** TS `feat/compiler-parity` (73 commits) is tangled — 12
   inherited `routes:` DSL commits (stay SDK-side per this redirect) + ~8 TS-code + ~49 docs; based on
   `feat/xchain-intent-dsl`, needs isolating onto main. RS `feat/compiler-parity-port` (31 commits) is clean
