@@ -18,10 +18,8 @@
  * `Base.USDC` (needs nesting).
  */
 import type { CanonicalChain } from "../chains/canonical.js";
-import { DESCRIPTORS } from "../descriptors/registry.js";
-import { loadPlugin } from "../plugin/index.js";
+import { loadPlugin, loadPluginData } from "../plugin/index.js";
 import { pascalOfSlug } from "./builder.js";
-import { resolveTokenMap } from "./token-registry.js";
 import type { AddressInput } from "./types.js";
 
 export interface AmbientDefinesOptions {
@@ -36,6 +34,12 @@ function toBigIntAddress(input: AddressInput): bigint {
 /**
  * The chain-scoped ambient defines map for `chain`: `chainId`/`CHAIN_ID`, every EVM protocol
  * contract address that has a real entry on `chain.id`, and any caller-supplied token symbols.
+ *
+ * P8: `protocolAddresses`/`tokens` are read through `loadPluginData()` (`plugin/index.ts`) rather
+ * than importing `descriptors/registry.ts`/`token-registry.ts` directly — the SAME underlying
+ * array/function, re-exposed through the plugin accessor as the single point the SDK reads
+ * Layer-B data through. Byte-identical output: `loadPluginData().protocolAddresses` IS
+ * `DESCRIPTORS` and `.tokens` IS `resolveTokenMap`, not a copy.
  */
 export function chainDefines(
   chain: CanonicalChain,
@@ -46,8 +50,10 @@ export function chainDefines(
     CHAIN_ID: BigInt(chain.id),
   };
 
+  const plugin = loadPluginData();
+
   if (chain.kind === "evm") {
-    for (const d of DESCRIPTORS) {
+    for (const d of plugin.protocolAddresses) {
       const address = d.perChainAddress[chain.id];
       if (address === undefined) continue;
       const key = `${pascalOfSlug(d.protocol)}_${d.contract}`;
@@ -55,7 +61,7 @@ export function chainDefines(
     }
   }
 
-  const tokenMap = resolveTokenMap(chain, opts.tokens);
+  const tokenMap = plugin.tokens(chain, opts.tokens);
   for (const [symbol, address] of tokenMap) {
     defines[symbol] = address;
   }

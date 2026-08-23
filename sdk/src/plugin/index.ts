@@ -2,6 +2,10 @@ import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
+import { DESCRIPTORS } from "../descriptors/registry.js";
+import type { ContractDescriptor } from "../descriptors/types.js";
+import { resolveTokenMap } from "../routes/token-registry.js";
+
 // At runtime this file is at dist/plugin/index.js, so package root is ../..
 // The manifest lives at src/plugin/manifest.json, read directly (not `import … from
 // "./manifest.json"`) to match `skills/loader.ts`'s own convention of reading a sibling
@@ -37,4 +41,45 @@ export interface SaucePlugin {
 /** Load the plugin manifest. Re-reads the file on every call — it is small and rarely read. */
 export function loadPlugin(): SaucePlugin {
   return JSON.parse(readFileSync(manifestPath, "utf-8")) as SaucePlugin;
+}
+
+/**
+ * P8 — the single declarative accessor over every Layer-B data source the SDK's loaders read.
+ * Carries the manifest's own `ambient`/`nameParity` (re-read via `loadPlugin()`, unchanged)
+ * alongside `protocolAddresses`/`tokens`, which are re-exposed FROM the two registries the SDK
+ * already trusted before there was a "plugin" concept at all — `descriptors/registry.ts`'s
+ * `DESCRIPTORS` (protocol contract addresses) and `routes/token-registry.ts`'s `resolveTokenMap`
+ * (per-chain token symbol -> address, including its existing caller-override merge). NEITHER is
+ * copied or relocated: this is the SAME array/function reference, so a caller reading through
+ * `loadPluginData()` sees byte-identical data to reading `DESCRIPTORS`/`resolveTokenMap` directly.
+ * The point is a single point of entry, not a new data source — see `routes/ambient.ts#chainDefines`
+ * for the first (and, per the "keep this minimal, in-place" directive, currently only) caller
+ * routed through this accessor instead of importing those two registries itself.
+ */
+export interface SaucePluginData extends SaucePlugin {
+  /** `descriptors/registry.ts`'s `DESCRIPTORS`, re-exposed verbatim (same array reference). */
+  readonly protocolAddresses: readonly ContractDescriptor[];
+  /** `token-registry.ts`'s `resolveTokenMap`, re-exposed verbatim (same function reference). */
+  readonly tokens: typeof resolveTokenMap;
+}
+
+export function loadPluginData(): SaucePluginData {
+  const plugin = loadPlugin();
+  return {
+    ambient: plugin.ambient,
+    nameParity: plugin.nameParity,
+    protocolAddresses: DESCRIPTORS,
+    tokens: resolveTokenMap,
+  };
+}
+
+/**
+ * Live accessor for the manifest's `nameParity` map (`manifest.json`'s `{ emit: "log", throw:
+ * "revert" }` — SauceScript surface name -> the underlying engine/opcode name each compiler
+ * actually implements). Declared in the manifest since P7 but never consulted anywhere in the SDK
+ * until this function — exported so it is a live, tested part of the plugin surface rather than
+ * inert config; see `plugin.test.ts`.
+ */
+export function pluginNameParity(): Record<string, string> {
+  return loadPluginData().nameParity;
 }
