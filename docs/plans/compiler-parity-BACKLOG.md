@@ -27,7 +27,15 @@ level in — NO new IR node/codegen/ArgShape variant (recursive `ArrayOf`+`to_ty
 read side already lowers. Work = 1 `entry_collection_decode` branch + 3-line `require_decodable_entry_param` widening
 (narrow escape hatch; fails closed for Array³/Array<Bytes>) + flip the `an_array_of_arrays_is_still_not_yet_decodable`
 test to admission + a real-engine conformance vector. Scope: **only `routing` needs it** (runtime inner index
-`rt[1+5*L]` + variable inner length); pools/netCache/segs/qlv stay ScalarTuple. **sonnet build → opus review IN FLIGHT.**
+`rt[1+5*L]` + variable inner length); pools/netCache/segs/qlv stay ScalarTuple. ✅ **BUILT** *(RS 165c3661c,
+fire#39 sonnet)* — 1 decode branch + admission hatch (fails closed for Array³/Array<Bytes>); **8/8 real-engine
+conformance** (runtime `x[i][k]`, per-row+outer `.length`, cap/missing-table/truncated-row/truncated-len reverts);
+full workspace 0-failed. **Full-recipe re-probe: routing now decodes** — the recipe progresses PAST NS-10 and
+fails ONLY on NS-9 (`eulerNeedsLive(qd: Tuple)`, the last blocker), as predicted. 🔎 opus review pending.
+- 🆕 ⚠️ **CI-lint gap (fire#39): `cargo clippy -D warnings` (part of `make ci`) has 6 errors** — `too_many_arguments`
+  on `program` (9/7) + `lower_function` (8/7) (pushed over by the parity `defines`+`entry_arg_types` threading =
+  branch-introduced) + a `collapsible_if`. Test-green ≠ CI-green. **sonnet clippy-fix lane → `make ci` lint clean.**
+  LESSON extended: the true RS gate is `make ci` (fmt + clippy + test + cargo-sort), not just `cargo test`.
 
 ## 🧭 (history) fire#36 — ✅ COMPLETE, GREEN, & OPUS-REVIEWED
 
