@@ -11,6 +11,30 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## ✅ USER DECISIONS (fire#58) — the gates are RESOLVED, executing
+
+1. **RS ship = "Open RS PRs, hold release."** Land the RS stack (parity foundation `feat/compiler-parity-port`
+   31 commits + plugin P1→P2→P3 + the ambient-audit fix squashed into P3 + P5b) on **eco-incorp/sauce `main`**
+   via PRs; do NOT cut a compiler-rs npm release yet.
+2. **TS ship = "Open the TS PR series now"** on sauce-sdk (P4 + P5a + the userNames fix squashed into P4;
+   independently mergeable — needs only main seams).
+3. **Plugin home = "Keep minimal, in-place."** Manifest at `sdk/src/plugin/`, `@sauce/token` stays byte-identical
+   (do NOT relocate / do NOT make a new package). P8 = minimal registries→manifest-data, no file moves.
+4. **P6–P8 = BUILD NOW, not blocked.** USER: "use `sauce-next` as GH dependency as we currently have in main.
+   We switch to the actual npm dependency only after everything is built and released." + (refinement) "as you
+   open stacked PRs for compiler-rs in sauce, you can use that commit of the top PR as sauce-next git dependency
+   … use your rc work here for integration." → so I point `sauce-next` at the **top RS PR's pushed commit** on
+   eco-incorp/sauce (`github:eco-incorp/sauce#<top-branch-or-sha>`), NOT waiting for any merge to main; that
+   gives the SDK an ambient-capable compiler immediately, and P6–P8 build/integrate against it. Switch to the
+   npm dep only after everything is built + released. **Not gated on merge OR release.**
+
+**Execution lanes (sequenced):** (R) land RS ambient on eco-incorp/sauce main → unblocks sauce-next#main;
+(T) open the TS PR series on sauce-sdk (independent); (P) build P6–P8 against sauce-next once ambient is on a
+reachable ref. Critical path for P6–P8 = R. `no-ai-attribution` + `commit-incrementally` apply; re1ro push auth
+to eco-incorp/sauce confirmed.
+
+---
+
 ## 🚀 EPIC-P — PLUGIN SERIES (USER "make it all happen", fire#47) — EXECUTING as atomic stacked PRs
 
 Design: `docs/plans/ambient-import-chain-scope-design.md` + `shared-stdlib-dsl-plugin-architecture.md`. Option B
