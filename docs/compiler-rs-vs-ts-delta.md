@@ -1,5 +1,14 @@
 # `compiler-rs` vs the SDK TypeScript compiler — what changed
 
+> **⚠️ Point-in-time snapshot (stale as of 2026-08-23).** This delta was taken against `sauce#main @
+> 431f9ce`. Since then the RS→TS parity port has LANDED on `feat/compiler-parity-port` (open PRs
+> eco-incorp/sauce #357–#374 + #375), closing most of the "feature-behind" gaps §7 describes — `defines`,
+> `uint()`, `Math.neg`, `address.*`, `new Array(n)`, `.catch()`, `evm.tload/tstore`, loop unrolling,
+> lookup-table folding, single-return call folding, and the full entry-parameter decode family
+> (`Tuple`/`entry_arg_types`/`ArgShape::Struct`/`bytes[]`/nested-array) — plus the ambient-import primitive
+> + inline-ABI contracts (#376–#379). The §7 parity table below is NOT refreshed; read it as a historical
+> snapshot, not current state. Current per-feature specs live in the RS code doc-comments + `compiler/README.md`.
+
 **What this doc is.** A grounded delta between the new Rust SauceScript compiler (`eco-incorp/sauce#main`
 @ `431f9ce`, crate `sauce-core`) and the existing SDK TypeScript compiler (`sauce-sdk/compiler`).
 
