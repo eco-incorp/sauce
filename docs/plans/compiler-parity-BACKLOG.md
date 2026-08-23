@@ -25,6 +25,12 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 - **Design investigation IN FLIGHT (fire#42, opus):** characterize both compilers' current stdlib/type/import
   extensibility + the exact DSL extension-type surface → synthesize the shared-plugin architecture + a phased
   ATOMIC STACKED-PR plan (team preference). `wgnt0u4fj`.
+- **PLUGIN-FORMAT CRITERION (USER, fire#43): "whatever is best for Rust/wasm."** compiler-rs ships as a
+  wasm npm module, so the format must be wasm-friendly: favor a **DECLARATIVE, serde-deserializable manifest**
+  (extension types + globals + signatures/lowerings, host-computed constants like keccak sigs / address
+  registries BAKED IN at plugin-build time) over executing plugin code inside wasm. Pure-SauceScript stdlib
+  fns (the `@sauce/token` model) can ride alongside as source each frontend compiles. Likely a hybrid LEANING
+  declarative. I finalize the format on this criterion when the design lands (not on the synthesis's default).
 - **PR-slicing note (from the fire#42 inventory):** TS `feat/compiler-parity` (73 commits) is tangled — 12
   inherited `routes:` DSL commits (stay SDK-side per this redirect) + ~8 TS-code + ~49 docs; based on
   `feat/xchain-intent-dsl`, needs isolating onto main. RS `feat/compiler-parity-port` (31 commits) is clean
