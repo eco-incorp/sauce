@@ -109,6 +109,30 @@ sauce-next→npm after a compiler-rs release. The DSL-parity-via-shared-plugin g
   → #138/#139/#140. OPEN structural decision for user: PR `feat/compiler-parity` itself / extract sauce-next
   into a lean standalone PR; and whether to slice #352.
 
+**✅ ATOMIC RE-SLICE + QUALITY PASS COMPLETE (fire#62–65, 2026-08-23).** User: "Sammy won't merge feature
+bundles" + "close #353–356, reopen incrementally so PR numbers are semantic."
+- **RS #352 sliced into 18 atomic parity PRs + foundation tail.** Closed #352–356; reopened as **#375** (foundation
+  tail: clippy/fmt + the `## Parity-added language features` README section, commit `717b97159`) → **#357–#374**
+  (one feature each: surface builtins, `uint()`, `Math.neg`, `address.*`, `new Array(n)`, `.catch()`,
+  `evm.tload/tstore`, multi-output destructuring, entry-param decode family, defines, loop unrolling, lookup-table
+  folding, single-return call folding) → **#376** P1 → **#377** P2 → **#378** P3 → **#379** P5b. Branch-pointer
+  slicing at existing SHAs → no rebase, no ripple. Base = `feat/compiler-parity-port` (worktree `sauce-compiler-rs`).
+- **Docs answer (option 2): specs are ALREADY in-codebase** — RS rustdoc doc-comments per feature + on each
+  `CompileOptions` field + `compiler/CLAUDE.md` + `docs/superpowers/specs/`; TS root `CLAUDE.md` +
+  `docs/compiler-feature-inventory.md`. Commit messages are the redundant copy. Nothing new created; the one stale
+  artifact (`docs/compiler-rs-vs-ts-delta.md`) date-stamped (commit `4ddba06`). Consolidated user-facing home =
+  the README section (#375).
+- **TS PR quality pass found + FIXED a real soundness bug.** The ambient CONST channel (`registerAmbientConsts`)
+  never checked `userNames`, so a user function/inline/contract did NOT shadow an ambient const of the same name
+  (silent behavior change). Fixed on `plugin-token-ambient` (#136), commit **`a4d28400`**: thread `userNames` into
+  `registerAmbientConsts` (skip a claimed name), `userNames` computed BEFORE `collectAmbientExports`. 6 new
+  `treeshake:false` regression cases (fn/imported-contract/imported-inline × 2 targets), RED-before/GREEN-after;
+  ambient-import 32/32, full compiler suite 1759 pass. **Both ambient channels now enforce "user code wins."**
+- **#136 retitled** ("Layer-C manifest skeleton + ambient bare-package-specifier proof" — was a misleading
+  @sauce/token framing) + body updated to describe the manifest + the 2 ambient audit fixes (squash-merge with P4).
+- **All 27 PR descriptions verified good; no AI attribution anywhere.** Minor open note for merge-time: some RS
+  commit messages cite design docs that live on `feat/compiler-parity` (would dangle if a PR merges before it).
+
 ---
 
 ## 🚀 EPIC-P — PLUGIN SERIES (USER "make it all happen", fire#47) — EXECUTING as atomic stacked PRs
