@@ -234,6 +234,17 @@ arrow-const functions, `userNames` completeness, const-registration ordering, ts
 Probes the same edge-case set adapted to TS + those TS-specifics; throwaway probes, CONFIRMED-SOUND vs
 CONFIRMED-BUG. Real bugs → fix + regression-lock (as done for RS).
 
+**TS AUDIT RESULT (fire#57):** ~50 probes, RS import-vs-ambient bug class **CONFIRMED ABSENT** on TS (separate
+`seen`/`visited` + `userNames` filter handle it), + ~everything CONFIRMED-SOUND (inline ambient fns, transitive
+ambient, precedence defines>const>ambient, cyclic, transitive-main-reject, unresolved-specifier clean error,
+.ts ambient module via fold+strip). **1 CONFIRMED-BUG (LOW):** the `userNames` filter (processor/index.ts
+~573-586) omits top-level `const`/`let` names AND imported `.json` contract-binding names, so an ambient
+FUNCTION sharing such a name leaks a dead body into the function table (violates "user wins — filtered rather
+than added"). LOW sev — treeshake-on (default) drops the dead fn → byte-identical/correct; only `treeshake:
+false` observes it; never a wrong value. **FIX DISPATCHED to `plugin-p4`** (branch `plugin-token-ambient`,
+squash into P4 at PR-prep): extend `userNames` to include top-level const/let names + imported contract-binding
+names, promote the probe (`ambient-usernames-gap.probe.test.ts`) into a `treeshake:false` regression test.
+
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
