@@ -29,11 +29,15 @@ green LOCALLY, stacked on parity, ready to push the moment parity lands. This do
 A prior background workflow (`w16mpr0xo`) died mid-run and had gone off-scope re-porting `defines` onto bare
 main (redundant with parity) — discarded fire#48; worktree re-anchored onto the parity tip.
 
-- 🔄 **P1 [RS]** expose `defines` + `entry_arg_types` on the wasm surface. Core ALREADY has both fields
-  (options.rs:57/69, parity branch); the wasm surface already exposes `contracts` but NOT these two → P1 is
-  wasm marshalling + TS decls ONLY. `defines?: Array<[string,string]>` (Word via FromStr); `entryArgTypes?:
-  Array<ArgShape|null>` (recursive discriminated-union `{kind:...}`, mirroring the `AccountEntry` output style).
-  **IN PROGRESS fire#48** (sonnet `plugin-p1`, on parity-based worktree; gate = build+clippy+nightly-fmt+test).
+- ✅ **P1 [RS]** expose `defines` + `entry_arg_types` on the wasm surface — **DONE fire#48**, commit
+  `68ecd5b6e` on branch `plugin-wasm-surface` (parity-based, NOT pushed). Wasm marshalling + TS decls ONLY,
+  no core changes (both `Word`/`ArgShape` already re-exported). `defines?: Array<[string,string]>` (value via
+  `Word::FromStr`, decimal/`0x`-hex); `entryArgTypes?: Array<ArgShape|null>` with a new exported recursive
+  `{kind}` TS union + a `arg_shape()` recursive marshaller; dedicated `DefineValue`/`UnknownArgShapeKind`
+  errors. Two new text-parity tests read the CORE `ArgShape` enum source (drift guard, stronger than a
+  self-check). Gate GREEN (clippy -D 0, nightly-fmt no drift, sauce-wasm 4/4, wasm32 target builds w/ RUSTC
+  override = known env-only PATH issue); sonnet-built (`plugin-p1`), opus-reviewed CONFIRMED-SOUND + gate
+  re-verified by orchestrator. NO AI attribution.
 - ⬜ **P2 [RS]** inline-ABI `contracts` variant on `CompileOptions` + wasm (the key DSL-forcing plumbing).
 - ⬜ **P3 [RS]** ambient-import primitive — `CompileOptions.ambient: Vec<String>`: exported consts → `inject_defines`,
   functions → `assign_global_ids`; local/param shadows ambient. *(the core new RS feature)*
