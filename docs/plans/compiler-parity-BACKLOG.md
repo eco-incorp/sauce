@@ -47,8 +47,14 @@ main (redundant with parity) — discarded fire#48; worktree re-anchored onto th
   `seen`/`taken` collision checks. Wasm: `inlineContracts?: Array<[name,abi]>` + `optional_inline_contracts`
   (clone of `optional_contracts`). Core test mirrors `an_inline_import_resolves_into_program_contracts` +
   a collision test. Enables the SDK to compile a synthesized ABI map without temp files / resolver hacks.
-- ⬜ **P3 [RS]** ambient-import primitive — `CompileOptions.ambient: Vec<String>`: exported consts → `inject_defines`,
-  functions → `assign_global_ids`; local/param shadows ambient. *(the core new RS feature)*
+- 📐 **P3 [RS]** ambient-import primitive — `CompileOptions.ambient: Vec<String>`. **DESIGN-READY fire#49**
+  → `docs/plans/rs-P3-ambient-import-design.md` (pinned against the actual RS code). Confirmed: RS already
+  surfaces imported consts cross-module (assembly.rs:1459), so channel-1 reuses the existing `ModuleValue`
+  repr — the only new bit is BROADCASTING ambient exports into every module (consts → `own` table,
+  functions → scope), **insert-if-absent so user code shadows ambient** (stdlib-injects-into-globals
+  precedence; differs from `inject_defines`'s override). Plus: ambient specifiers become extra `load_graph`
+  roots, reject `main` in an ambient module, ambient-vs-ambient dup = error. Dispatches to `plugin-ambient`
+  (stacked on P2) the moment P2 lands. *(the core new RS feature)*
 - ⬜ **P4 [TS]** ambient-import parity — symmetric `ambient` option (`collectImportedFunctions` + `setDefines`,
   merged into `GLOBAL_FUNCTIONS`/`RESERVED_NAMES`). *(core new TS feature; parallel to P1–3)*
 - ⬜ **P5 [plugin]** shared skeleton — `@sauce/token` as first ambient module + Layer-C manifest (ambient list +
