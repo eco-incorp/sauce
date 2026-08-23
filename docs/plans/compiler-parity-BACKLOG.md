@@ -81,8 +81,18 @@ main (redundant with parity) — discarded fire#48; worktree re-anchored onto th
   build in a DEDICATED sauce-sdk worktree off main (`pnpm install` needs the private `sauce` dep auth +
   Foundry postinstall — a general-purpose agent must handle/ report that); gate = `pnpm --filter './compiler'
   typecheck + test + lint`. TS `CompileOptions.ambient?: string[]` (index.ts:150); ambient fns via
-  `collectImportedFunctions` over the specifiers, consts via `ctx.addDefine` (insert-if-absent, already the
-  right precedence). Fresh TS-scoped sonnet agent (plugin-p1 is RS-scoped — released after P3).
+  `collectImportedFunctions` over the specifiers, consts via an insert-if-absent define registration.
+  **CORRECTION fire#51:** `ctx.addDefine` is NOT on origin/main (it's parity-branch-only) — on main there is
+  only `setDefines` (override) + `getConstant`; so P4 ADDS a small insert-if-absent `addDefine` itself
+  (`if (!this.defines.has(name)) this.defines.set(name, value)`). Fresh TS-scoped sonnet agent (plugin-p1 is
+  RS-scoped — released after P3).
+  **IN PROGRESS fire#51** (`plugin-p4`, worktree `/Users/er/Documents/Projects/sauce-sdk-ts-plugin` off
+  origin/main@897d488). ENV VERIFIED by orchestrator: pnpm install clean, compiler typecheck green, engine
+  libs fetched by hand (`node integration-test/fetch-engine-libs.js` — the pnpm-v10 `approve-builds` skip
+  meant the postinstall didn't auto-run), and `pnpm --filter './compiler' test` runs green with its
+  anvil+forge globalSetup. **TS JEST GOTCHA (durable, future TS lanes):** the pnpm store has BOTH jest 29 and
+  jest 30 — `pnpm exec jest` picks 29 → dies `clearMocksOnScope is not a function`. ALWAYS use the package
+  script `pnpm --filter './compiler' test -- <path>` (compiler's own jest-30 bin). Not a code bug.
 - ⬜ **P5 [plugin]** shared skeleton — `@sauce/token` as first ambient module + Layer-C manifest (ambient list +
   `emit`↔`log`/`throw`↔`revert` name-parity).
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
