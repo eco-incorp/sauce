@@ -227,6 +227,13 @@ payoff of the plateau-hardening audit.**
     unaffected. Sonnet-built (`plugin-p1`), opus-reviewed CONFIRMED-SOUND. NO AI attribution. **The RS ambient
     primitive is now adversarially hardened (16-probe audit + this fix + regression-locked).**
 
+**fire#57 — SYMMETRIC TS AUDIT launched** (`ambient-audit-ts`, opus, worktree `sauce-sdk-ts-plugin` @
+`plugin-token-ambient`). The TS ambient (P4) uses a DIFFERENT mechanism (a `userNames` filter, not
+pre-scope injection), so it may not share the RS import-vs-ambient bug — but has its own surface (inline
+arrow-const functions, `userNames` completeness, const-registration ordering, tsSource/transformModule).
+Probes the same edge-case set adapted to TS + those TS-specifics; throwaway probes, CONFIRMED-SOUND vs
+CONFIRMED-BUG. Real bugs → fix + regression-lock (as done for RS).
+
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
