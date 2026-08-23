@@ -48,13 +48,18 @@ main (redundant with parity) — discarded fire#48; worktree re-anchored onto th
   (`plugin-p1`), opus-reviewed CONFIRMED-SOUND, gate RE-VERIFIED by orchestrator with real exit codes
   (clippy 0, **sauce-core 1110/1110**, wasm 4/4, nightly-fmt no drift). Caught+fixed 17 call sites (not 6 —
   `lower_program_full` has 11 more in the NS-1/8/10 test module). NO AI attribution.
-- 🔄 **P3 [RS]** ambient-import primitive — **IN PROGRESS fire#49** (`plugin-p1`, branch `plugin-ambient`
-  stacked on P2). Design: `docs/plans/rs-P3-ambient-import-design.md` (build-ready, pinned to RS code).
-  `CompileOptions.ambient: Vec<String>` → ambient specifiers become extra `load_graph` roots; two
-  insert-if-absent broadcasts (consts → every module's `own` value table via a new `inject_ambient_consts`;
-  functions → every module's scope) so USER CODE SHADOWS ambient (differs from `inject_defines`' override);
-  reject `main` in an ambient module; ambient-vs-ambient dup = error. Wasm `ambient?: Array<string>`. Fixture
-  kept identical to P4's future TS parity test. *(the core new RS feature)*
+- ✅ **P3 [RS]** ambient-import primitive — **DONE fire#50**, commit `6f81b9039` on `plugin-ambient` (stacked
+  on P2, NOT pushed). `CompileOptions.ambient: Vec<String>`; ambient specifiers = extra `load_graph` roots
+  (same `Loader::visit`, diamond-deduped); two `.entry().or_insert()` broadcasts (`inject_ambient_consts` →
+  every module's `own` value table, `inject_ambient_functions` → every module's own fn table), run in the
+  `inject_defines` window before `resolve_module_scopes` freezes tables — **insert-if-absent so USER CODE
+  WINS** (reverse of `inject_defines`); `reject_ambient_main` (fast-fail) + `reject_duplicate_ambient_names`
+  (unified fn+const namespace, `other != module` diamond guard). Wasm `ambient?: Array<string>`. 9 red-first
+  tests incl. shadowing (fn/const/param), cross-channel dup, `main`-reject, and a byte-identical `ambient:[]`
+  negative control. Sonnet-built (`plugin-p1`), opus-reviewed CONFIRMED-SOUND, gate RE-VERIFIED real exit
+  codes (clippy 0, **sauce-core 1119/1119**, wasm 4/4, fmt no drift). NO AI attribution. **P5 CHECK:**
+  `ambient_module_indices` keys `index_by_path.get(raw_specifier)` + `.expect()` — verify a BARE package
+  specifier (`@sauce/token`) keys identically (else panic) when P5 makes it the first ambient module.
 - ⬜ **P4 [TS]** ambient-import parity — symmetric `ambient?: string[]` option. **SEAMS VERIFIED fire#50**
   (all exist as the design claims): `CompileOptions` (compiler/src/index.ts:150) already carries
   `defines?`/`contracts?`/`tsSource?` → `ambient?: string[]` slots in; `compile()` already calls
