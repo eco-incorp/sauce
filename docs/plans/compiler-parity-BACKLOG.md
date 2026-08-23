@@ -33,6 +33,18 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 reachable ref. Critical path for P6–P8 = R. `no-ai-attribution` + `commit-incrementally` apply; re1ro push auth
 to eco-incorp/sauce confirmed.
 
+**✅ PRs OPENED fire#58 (decisions 1+2 done):**
+- RS stack on **eco-incorp/sauce**: **#352** parity foundation (`feat/compiler-parity-port`→main) → **#353** P1
+  (`plugin-wasm-surface`) → **#354** P2 (`plugin-inline-contracts`) → **#355** P3 (`plugin-ambient`) → **#356**
+  P5b+audit-fix (`plugin-token-ambient-rs`, tip `ac2ae519c`). Held for release. **`ac2ae519c` / branch
+  `plugin-token-ambient-rs` = the `sauce-next` target for P6–P8 integration.**
+- TS stack on **eco-incorp/sauce-sdk**: **#135** P4 ambient parity + userNames fix (`plugin-ts-ambient`→main) →
+  **#136** P5a manifest skeleton (`plugin-token-ambient`).
+- **NEXT (decision 4, in progress):** point `sdk/package.json` `sauce-next` at
+  `github:eco-incorp/sauce#plugin-token-ambient-rs`, build the SDK wiring P6 (compiler-selector seam) → P7
+  (chain-bundle activation, Option B) → P8 (registries→manifest data, minimal). Switch sauce-next back to npm
+  only after everything is built + released.
+
 ---
 
 ## 🚀 EPIC-P — PLUGIN SERIES (USER "make it all happen", fire#47) — EXECUTING as atomic stacked PRs
