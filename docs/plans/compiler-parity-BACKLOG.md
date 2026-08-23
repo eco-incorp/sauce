@@ -11,7 +11,19 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
-## 🧭 PROGRAM STATUS (updated fire#32, 2026-08-22) — ⚠️ CONFORMANCE-REGRESSION AUDIT IN FLIGHT
+## 🧭 PROGRAM STATUS (updated fire#35, 2026-08-22) — ✅ FULL WORKSPACE GREEN (regression audit resolved)
+
+**✅ RESOLVED (fire#35): the full RS workspace suite is 0-failed across all 20 test binaries** (orchestrator
+re-verified `cargo test --workspace --no-fail-fast`: no result line has non-zero failures; tree clean at
+`5b5497c54`). All 19 branch-introduced failures the audit found are fixed: 14 obsolete fixtures updated to
+the NAC idiom (7 v12 `2cec056e` + 7 svm `e188d17e`; PR-14 call-fold correctly folds the old helper trick),
+V4 nested-array rejection reverted on RS (`33d67a571`; RS engine supports them), call-fold made symmetric
+(`69211f071`; ECO-2076 byte parity), swap_supply byte count 1872→1624 (`5b5497c5`; NS-5 balancing-drops
+legitimately shrink it — bisect-confirmed, not a miscompile). 🔎 **opus review of the 2 compiler-code fixes
+(V4 revert + call-fold symmetry) IN FLIGHT.** README divergence registry: V4 → engine-lineage (TS rejects
+nested arrays / RS accepts). *Below: the audit history that got here.*
+
+## 🧭 (history) fire#32 — ⚠️ CONFORMANCE-REGRESSION AUDIT
 
 **⚠️ CORRECTION (fire#32): "complete/all-green" was premature.** The agreed gate (`cargo test -p sauce-core`)
 is green, but the BROADER real-engine suite **`make test-conformance-evm` has 11 failures in `v12_conformance.rs`**
