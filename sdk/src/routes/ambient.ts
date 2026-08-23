@@ -19,6 +19,7 @@
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { DESCRIPTORS } from "../descriptors/registry.js";
+import { loadPlugin } from "../plugin/index.js";
 import { pascalOfSlug } from "./builder.js";
 import { resolveTokenMap } from "./token-registry.js";
 import type { AddressInput } from "./types.js";
@@ -60,4 +61,20 @@ export function chainDefines(
   }
 
   return defines;
+}
+
+/**
+ * P7 — the ambient-MODULE half of a chain bundle (`chainDefines` above is the scalar-defines
+ * half). Returns the ambient module specifier list active for `chain`: RS-compiler-only (see
+ * `sauce-route.ts#SauceCompileOptions.ambient`/`rs-compile.ts`) module exports broadcast into a
+ * chain's compiled program with no `import` line.
+ *
+ * Currently a SINGLE source of truth, not yet chain-specific: every chain gets the same list, the
+ * plugin manifest's own `ambient` array (`plugin/index.ts#loadPlugin`) — empty by default on this
+ * branch, see that file's own note. Extensible to a genuinely per-chain bundle later (e.g. an SVM
+ * destination activating an SVM-only ambient module an EVM one shouldn't see) without changing
+ * this function's signature — a caller already threads `chain` through.
+ */
+export function chainAmbient(_chain: CanonicalChain): string[] {
+  return loadPlugin().ambient;
 }
