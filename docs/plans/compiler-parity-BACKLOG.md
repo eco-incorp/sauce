@@ -11,7 +11,27 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
-## 🧭 PROGRAM STATUS (updated fire#37, 2026-08-22) — plan COMPLETE+green; now pursuing full-recipe stretch (ultracode)
+## 🧭 PROGRAM STATUS (updated fire#40, 2026-08-22) — plan COMPLETE; full-recipe stretch at its SOUND BOUNDARY; branch make-ci-clean
+
+**fire#40 CONCLUSION — full-recipe stretch taken as far as is sound; NS-9 is the principled STOP.**
+- ✅ **NS-10 landed** (nested-array entry decode, 8/8 real-engine) → routing decodes; full recipe now blocks ONLY on NS-9.
+- ⏸️ **NS-9 = DEFER-ARCHITECTURAL** *(opus design fire#40, `docs/plans/rs-NS9-helper-tuple-param-design.md`)*. NS-10
+  cleared the TYPE side (the arg is now a concrete monomorphic `Ty::Tuple(12)` from `qlv[v]`), but the residual
+  is a **signature-resolution phase inversion** (RS resolves all signatures before any body; the call-site arg Ty
+  only exists during body lowering). Every SOUND fix needs a two-pass-discovery or caller-first-reorder restructure
+  of the central all-target pipeline (L, regression-risky vs a fully-green workspace, for ONE fixture); the tempting
+  M shortcut (AST arg-tracer) is **silently unsound** (`qd` aliases `Tuple(12)` and `Tuple(24)` across scopes).
+  Per fire#37's stop-if-untenable rule, this crosses the line. Ready 3a/3b sonnet sketch documented for a future
+  hard product requirement. `full_ecoswap_sauce_ts_compiles_on_the_evm` stays `#[ignore]`d (the honest tracker).
+- ✅ **Branch make-ci-clean (all BRANCH-INTRODUCED CI issues fixed):** clippy 6→0 (`0ada5c9ca`, allow
+  too_many_arguments on pipeline fns + collapsible_if), nightly fmt 67→0 (`235902bbf`; origin/main was clean →
+  drift was branch-introduced by agent hand-edits). test 0-failed; cargo-sort clean-by-construction (Cargo.toml/lock
+  byte-identical to main); check-wasm fails LOCALLY only on third-party deps (identical deps to main = env, not
+  branch). Residual env caveats (not branch defects): nightly rustfmt here skips `imports_granularity`/`group_imports`
+  (verify import order in CI); sort-derives unverifiable locally. **LESSON (locked): the RS gate is `make ci`
+  (fmt+clippy+test+sort+wasm), NOT `cargo test` alone — this session found fmt+clippy branch drift the unit gate missed.**
+
+## 🧭 (history) fire#37 — pursuing full-recipe stretch (ultracode)
 
 **fire#37: RESUMING the full-recipe stretch (NS-10 → NS-9) under ultracode + the standing eco-swap-north-star
 directive.** The plan is complete + green + opus-reviewed (below), but the FULL non-unrolled `ecoswap.sauce.ts`
