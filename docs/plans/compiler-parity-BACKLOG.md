@@ -79,6 +79,25 @@ to eco-incorp/sauce confirmed.
   to pre-P7). Gate RE-VERIFIED real exit codes: typecheck 0, chain-ambient 5/5 (the 3 pre-existing artifacts-gotcha
   suite failures reproduce on unmodified HEAD via git stash — not a regression). Sonnet-built (`plugin-p7`),
   opus-reviewed CONFIRMED-SOUND. NO AI attribution.
+- ✅ **P8 DONE + verified fire#60**, commit `f3fec35` on `feat/plugin-sdk-wiring` (stacked on P7 — the FINAL
+  epic PR). `loadPluginData()` (`sdk/src/plugin/index.ts`) = the single declarative accessor: `{ ambient,
+  nameParity, protocolAddresses, tokens }` where `protocolAddresses`/`tokens` re-expose `DESCRIPTORS` /
+  `resolveTokenMap` **verbatim (same references, no copy, no relocation)**; `chainDefines` refactored to derive
+  through it → **byte-identical BY CONSTRUCTION** (+ an independent expected-map test + `toBe(DESCRIPTORS)`/
+  `toBe(resolveTokenMap)` reference-equality); `pluginNameParity()` activates the previously-inert `nameParity`.
+  Gate RE-VERIFIED real exit codes: typecheck 0, plugin.test 8/8, chainDefines suites (routes-ambient +
+  routes-chain-ambient) 16/16. Sonnet-built (`plugin-p8`), opus-reviewed CONFIRMED-SOUND. NO AI attribution.
+
+## 🎉 PLUGIN EPIC COMPLETE (fire#60) — all 8 PRs built + verified end-to-end
+
+**Compilers (both, ambient primitive audited + hardened):** RS #352 parity foundation → #353 P1 → #354 P2 →
+#355 P3 → #356 P5b+fix (eco-incorp/sauce, held for release). TS #135 P4 → #136 P5a (eco-incorp/sauce-sdk).
+**SDK integration (`feat/plugin-sdk-wiring`, stacked, unpushed):** `b24bacc`/`6f4e9f1` sauce-next→ambient branch
++ ambient wasm compiler live in the SDK → `60338f6` P6 compiler-selector (SDK→RS→ambient byte-identical) →
+`90b243e` P7 chain-scoped ambient bundles → `f3fec35` P8 plugin-data accessor. Every unit opus-reviewed,
+gate-verified real-exit-codes, no AI attribution. All 4 user decisions (fire#58) executed. **Remaining is
+outward/ops only:** push/PR the SDK wiring branch (P6–P8) when the user wants; land the RS/TS PRs; switch
+sauce-next→npm after a compiler-rs release. The DSL-parity-via-shared-plugin goal is achieved end-to-end.
 
 ---
 
