@@ -200,6 +200,23 @@ dedup, ambient-fn-vs-transitively-imported-fn collision, cyclic ambient, `main` 
 unresolved-specifier `.expect()` panic-vs-clean-error, all-options-together). Throwaway probes, report
 CONFIRMED-SOUND vs CONFIRMED-BUG; real bugs → fix + regression-lock next.
 
+**fire#56 — AUDIT FOUND A REAL BUG (fix dispatched).** `ambient-audit-rs` ran 16 probes (14 pass, 2 fail).
+**CONFIRMED-BUG (P3, fail-closed — never wrong bytecode, but rejects legal programs):** a user's explicit
+`import { X } from "./m"` where `X` is ALSO ambient-broadcast is spuriously `Error::DuplicateFunction`,
+violating "user code wins." Root cause: `inject_ambient_functions`/`inject_ambient_consts` populate
+`own_tables`/`values.own` BEFORE `resolve_module_scope` resolves imports, so the import collides with the
+ambient-injected name (assembly.rs ~1682-1694). Real impact: harness injects `@sauce/token` ambiently AND a
+user also `import`s `transfer` → confusing compile error. The byte-identical `@sauce/token` proof couldn't
+catch it (those tests never ALSO import the ambient name). **11 CONFIRMED-SOUND** (transitive-ambient-imports
+not broadcast=correct; cross-ambient const ref; ambient⇄defines precedence=defines wins; cyclic=clean
+ImportCycle; unresolved specifier=clean error, `.expect()` provably unreachable; dup specifier; reserved-name;
+re-export rejected; …). **1 intentional-limitation:** transitive `main` through an ambient module loads as
+dead code (fail-open, harmless — left as-is). **FIX DISPATCHED to `plugin-p1`** (branch
+`plugin-token-ambient-rs`, squash into P3 at PR-prep): make ambient a fallback AFTER import resolution (inject
+into the resolved `ModuleScope`, so a DECLARED or IMPORTED name wins), + promote probes 4/5 + a
+different-module import-wins case as regression tests, remove the throwaway probe file. **This is exactly the
+payoff of the plateau-hardening audit.**
+
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
