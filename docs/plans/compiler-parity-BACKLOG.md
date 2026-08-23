@@ -157,6 +157,43 @@ BOTH compilers — RS P3 (`6f81b9039`) + TS P4 (`77109ad88`), same fixture, same
     `compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token/`; `token_conformance.rs` = the
     import-based template. P5b = ambient variant (`CompileOptions.ambient=["@sauce/token"]`) byte-identical to
     import on evm+svm. Dispatched to `plugin-p1` (re-engaged, RS-scoped).
+    ✅ **P5b DONE + verified fire#53**, commit `d1680d51f` on `plugin-token-ambient-rs` (stacked on P3, NOT
+    pushed). `compile_token_ambient` + `strip_import` (derives the ambient entry from the import CASES entry —
+    no hand-duplication drift) + `every_method_compiles_ambient_byte_identical_to_the_import` (all 7 methods ×
+    evm+svm = 14 full-`Artifact` equalities: bytecode AND svm account manifest) + a real negative control.
+    Makefile: both tests added to `TOKEN_TESTS_EVM` (the `check-token-split` guard caught them). Directly
+    confirmed the bare/package ambient specifier works (no panic, no special-case). Sonnet-built (`plugin-p1`,
+    who also built the REAL engines + ran the full conformance suite: svm 168, v12 188, token 10/10, …).
+    Gate RE-VERIFIED real exit codes (clippy 0, fmt no drift, token_conformance 10/10). NO AI attribution.
+    **🎉 P5 COMPLETE — the plugin epic's core is proven end-to-end: a real stdlib library (`@sauce/token`) works
+    as an ambient plugin module on the RS compiler, byte-identical to explicit import.**
+
+---
+
+## 🧭 EPIC STATE (fire#53): provable work COMPLETE; remainder is DECISION-GATED
+
+**DONE + verified, all local/stacked/gated-green/UNPUSHED:**
+- RS: P1 `68ecd5b6e` (wasm defines+entry_arg_types) → P2 `52d1547bf` (inline contracts) → P3 `6f81b9039`
+  (ambient primitive) → P5b `d1680d51f` (real `@sauce/token` ambient, byte-identical).
+- TS: P4 `77109ad88` (ambient parity) → P5a `b2b3a7e16` (manifest + loader + name-parity + ambient-package proof).
+- Ambient-import parity exists SYMMETRICALLY on both compilers; the shared plugin skeleton (Layer-C manifest)
+  + the real-library ambient proof are in place.
+
+**REMAINDER = decision-gated, NOT effort-gated (needs the USER):**
+- **P6/P7 (SDK wiring)** feed `ambient`/`defines`/inline-contracts to the SDK's compile path = the PUBLISHED
+  WASM compiler, which LACKS ambient (P3 is unreleased). → **needs a compiler-rs RELEASE with the ambient
+  primitive** (my `plugin-ambient` branch is the source, unpushed). Building SDK wiring against a not-yet-
+  released API would be speculative/wrong.
+- **P8 (registries → Layer B)** + the plugin's ultimate home/packaging → the plugin-structure fork (user's call).
+- **Stack landing:** shipping ANY of this needs the user's go-ahead to land the parity foundations on `main`
+  first (still deferred).
+- **Deferred cleanup (pre-PR):** rebuild+commit P4's stale `compiler/dist`.
+
+**Autonomous build work is complete pending those decisions.** Absent user redirect, further fires = hold +
+light maintenance, NOT speculative gated building.
+
+- ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
+  defines + inline contracts + ambient.
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
   defines + inline contracts + ambient.
 - ⬜ **P7 [SDK]** chain-bundle activation (chain-scoping, Option B; nested Base/Optimism = nest cascade).
