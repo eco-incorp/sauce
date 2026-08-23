@@ -93,6 +93,24 @@ main (redundant with parity) — discarded fire#48; worktree re-anchored onto th
   anvil+forge globalSetup. **TS JEST GOTCHA (durable, future TS lanes):** the pnpm store has BOTH jest 29 and
   jest 30 — `pnpm exec jest` picks 29 → dies `clearMocksOnScope is not a function`. ALWAYS use the package
   script `pnpm --filter './compiler' test -- <path>` (compiler's own jest-30 bin). Not a code bug.
+  **✅ DONE + verified fire#51**, commit `77109ad88` on `plugin-ts-ambient` (base main@897d488, NOT pushed).
+  `CompileOptions.ambient?: string[]`; refactored `collectImportedFunctions`→ shared
+  `collectFunctionsFromSpecifier` (drives the same resolve+register from a bare specifier), + new
+  `collectAmbientExports` (fresh ambient-scoped `seen`/`visited` → ambient-vs-ambient dup throws,
+  ambient-vs-user filtered silently via a `userNames` set → USER WINS) + `registerAmbientConsts` (routes
+  through existing `registerConstant` = insert-if-absent; `addDefine` didn't exist on main, agent correctly
+  reused `registerConstant`). Added `ambient` to the compile cache key. **Precedence verified by orchestrator**
+  (`registerTopLevelConsts` at :549 runs BEFORE the ambient block at ~:557, so `defines > user const >
+  ambient const`; user-const-wins is genuine, not accidental). Headline fn is byte-identical to a real
+  import; headline const byte-identical to a `defines`. 11 cases × {v1,v12} = 22 tests. Gate RE-VERIFIED with
+  correct invocation (typecheck/lint/format 0, **ambient 22/22**, **full unit 1682 passed / 67 suites, 0
+  FAIL**, 2 env-gated skips = baseline). Sonnet-built (`plugin-p4`), opus-reviewed CONFIRMED-SOUND. NO AI
+  attribution. **Orchestrator verification lesson:** `pnpm -C <dir> --filter './compiler'` prints "No projects
+  matched" and exits 0 = a VACUOUS false-green; must `cd <worktree> && pnpm --filter './compiler' …`.
+
+**🎉 AMBIENT-IMPORT PARITY COMPLETE (fire#51):** the core plugin mechanism is now a real, SYMMETRIC feature on
+BOTH compilers — RS P3 (`6f81b9039`) + TS P4 (`77109ad88`), same fixture, same precedence, verified. P5–P8
+(shared plugin skeleton + SDK wiring + registries→Layer B) remain.
 - ⬜ **P5 [plugin]** shared skeleton — `@sauce/token` as first ambient module + Layer-C manifest (ambient list +
   `emit`↔`log`/`throw`↔`revert` name-parity).
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
