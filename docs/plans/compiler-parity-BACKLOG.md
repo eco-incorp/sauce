@@ -11,7 +11,26 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
-## 🧭 PROGRAM STATUS (updated fire#41, 2026-08-22) — COMPLETE, GREEN, CI-CLEAN, FULLY OPUS-REVIEWED
+## 🧭 NEW DIRECTION (USER, fire#42, 2026-08-22) — parity via a SHARED stdlib/DSL PLUGIN, not reimplementation
+
+**User redirect (supersedes "port the DSL into RS"):**
+- The cross-chain intent DSL **stays in the SDK repo** (TS source); it is NOT reimplemented in Rust.
+- The SDK now **imports compiler-rs as an npm package** (#131/#344, recently released).
+- Real parity lever = make **compiler-rs extensible with EXTENSION TYPES + a plugin stdlib**, then refactor
+  the **standard library + the DSL into ONE plugin that BOTH compilers consume** → parity by construction,
+  one source of truth, no duplicated Rust reimplementation. Builds on the standing `stdlib-injects-into-globals`
+  constraint + the already-shared `@sauce/token` fixture.
+- The base-language parity already landed (ctx/namespaces/Math/entry-decode/etc.) remains valid; this is the
+  DSL/stdlib layer on top.
+- **Design investigation IN FLIGHT (fire#42, opus):** characterize both compilers' current stdlib/type/import
+  extensibility + the exact DSL extension-type surface → synthesize the shared-plugin architecture + a phased
+  ATOMIC STACKED-PR plan (team preference). `wgnt0u4fj`.
+- **PR-slicing note (from the fire#42 inventory):** TS `feat/compiler-parity` (73 commits) is tangled — 12
+  inherited `routes:` DSL commits (stay SDK-side per this redirect) + ~8 TS-code + ~49 docs; based on
+  `feat/xchain-intent-dsl`, needs isolating onto main. RS `feat/compiler-parity-port` (31 commits) is clean
+  code-only (drop the V4 reject→revert pair; group fixtures with features) → ~15 atomic PRs.
+
+## 🧭 (history) fire#41 — base-language parity COMPLETE, GREEN, CI-CLEAN, FULLY OPUS-REVIEWED
 
 **fire#41: verification discipline COMPLETE.** NS-10 opus-reviewed **CONFIRMED-SOUND** (8 real-engine hostile
 probes: two-level offset math correct, 5 guards correctly ordered, wrap→OOG/inverted-SLICE-revert never OOB,
