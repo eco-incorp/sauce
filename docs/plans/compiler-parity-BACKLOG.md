@@ -56,6 +56,25 @@ to eco-incorp/sauce confirmed.
   ambient/inlineContracts/entryArgTypes), with an ambient-through-RS end-to-end SDK test as the payoff.
   ⚠️ OPEN: is basing P6–P8 on `feat/compiler-parity` right, or should the sauce-next mechanism land on main
   first? (surfaced to user; proceeding on feat/compiler-parity).
+- ✅ **P6 DONE + verified fire#60**, commit `60338f6` on `feat/plugin-sdk-wiring` (+ `6f4e9f1` repoint lock).
+  `compiler?: 'ts'|'rs'` on `SauceCompileOptions` (default `'ts'`, TS path byte-unchanged) + `ambient?`; the
+  `compile()` at `sauce-route.ts:196` is now a selector; new `rs-compile.ts` adapter lazy-loads
+  `.sauce-wasm` (createRequire), builds `resolve`/`resolvePackage` from source+baseDirs (empirically
+  probed — RS hands `resolve` already-joined specifiers), maps target **v1/v12→evm, svm→svm**, defines
+  Record→Array (1n/0n convention), and the SDK's parsed-ABI `ContractsConfig`→**`inlineContracts`** (P2 pays
+  off). **KEY RESULT (8/8 tests, gate re-verified typecheck 0 + 8/8):** `compiler:'rs'`+`ambient` compiles a
+  program with NO import line, **byte-identical to the explicit-import version** — SDK→RS/WASM→ambient proven
+  end-to-end; negative controls prove ambient (not RS leniency) does it, and the TS path ignores `ambient`.
+  Documented scope cuts: ambient only on the RS path (the in-repo TS compiler has no `ambient` field);
+  accountPlan/manifest not translated for RS+svm (nothing reads it). Sonnet-built (`plugin-p6`),
+  opus-reviewed CONFIRMED-SOUND. NO AI attribution.
+- 🔄 **P7 [SDK] IN PROGRESS fire#60** — chain-bundle activation (Option B). Seam = `intent-dsl.ts:413-423`
+  (`chainDefines`→`mergedDefines`→`compileSauceRoute`). Add `chainAmbient(chain)` (the chain's ambient module
+  list) + thread `ambient` into the compile seam via `compiler:'rs'` when non-empty (TS default preserved when
+  no ambient). **Branch-divergence note:** P5a's manifest/`loadPlugin` is on `plugin-token-ambient`
+  (origin/main base), not this branch — P7 recreates a minimal `sdk/src/plugin` manifest+loader here (they
+  reconcile when everything lands on main). Test: a chain route compiling with its ambient bundle active via
+  RS. Dispatched to `plugin-p7`.
 
 ---
 
