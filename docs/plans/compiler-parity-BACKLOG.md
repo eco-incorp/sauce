@@ -55,8 +55,18 @@ main (redundant with parity) — discarded fire#48; worktree re-anchored onto th
   functions → every module's scope) so USER CODE SHADOWS ambient (differs from `inject_defines`' override);
   reject `main` in an ambient module; ambient-vs-ambient dup = error. Wasm `ambient?: Array<string>`. Fixture
   kept identical to P4's future TS parity test. *(the core new RS feature)*
-- ⬜ **P4 [TS]** ambient-import parity — symmetric `ambient` option (`collectImportedFunctions` + `setDefines`,
-  merged into `GLOBAL_FUNCTIONS`/`RESERVED_NAMES`). *(core new TS feature; parallel to P1–3)*
+- ⬜ **P4 [TS]** ambient-import parity — symmetric `ambient?: string[]` option. **SEAMS VERIFIED fire#50**
+  (all exist as the design claims): `CompileOptions` (compiler/src/index.ts:150) already carries
+  `defines?`/`contracts?`/`tsSource?` → `ambient?: string[]` slots in; `compile()` already calls
+  `ctx.setDefines` (index.ts:328) + `collectImportedFunctions(program, ctx, …)` (:407). **Mechanism (mirrors
+  P3):** for each ambient specifier, resolve + run `collectImportedFunctions` (processor/index.ts:148 —
+  registers exported fns into the compile) and register exported consts via **`ctx.addDefine`
+  (context.ts:610), which is ALREADY insert-if-absent (`if (!this.defines.has(name))`)** = the exact
+  user-shadows-ambient precedence P3 decided (contrast `setDefines`, which overrides — used for
+  `CompileOptions.defines`). NB ambient FUNCTIONS ride `collectImportedFunctions` (dynamic, per-compile),
+  NOT the static `GLOBAL_FUNCTIONS`/`RESERVED_NAMES` merge (that's for built-in intrinsics like `emit`).
+  Dispatch once P3's final contract (option name, fixture, precedence) lands, reusing P3's fixture as the
+  parity test. *(core new TS feature)*
 - ⬜ **P5 [plugin]** shared skeleton — `@sauce/token` as first ambient module + Layer-C manifest (ambient list +
   `emit`↔`log`/`throw`↔`revert` name-parity).
 - ⬜ **P6 [SDK]** compiler-selector seam (TS compiler *or* the #131 compiler-rs npm dep) feeding erased source +
