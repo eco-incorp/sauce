@@ -15,10 +15,25 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 Design: `docs/plans/ambient-import-chain-scope-design.md` + `shared-stdlib-dsl-plugin-architecture.md`. Option B
 confirmed (chain regions = separate atomic programs = the nest cascade). Flow per PR: opus design (where needed)
-→ sonnet build → opus review → gate green → stacked branch → PR. RS PRs (1–3) off `origin/main` in a dedicated
-worktree; TS/SDK PRs (4–8) in sauce-sdk. Base-language parity branches stay as a SEPARATE deliverable.
+→ sonnet build → opus review → gate green → stacked branch → PR.
 
-- ⬜ **P1 [RS]** expose `defines` + `entry_arg_types` on the wasm surface (`sauce-wasm` marshalling + TYPES line).
+**⚠️ BASE CORRECTION (fire#48, 2026-08-22 — supersedes "RS PRs off origin/main").** The RS plugin PRs (P1–P3)
+CANNOT base on bare `origin/main`: they build on the parity foundation (`CompileOptions.defines`,
+`entry_arg_types`, `contracts` + `inject_defines`/`assign_global_ids`) which lives ONLY on the unmerged local
+branch `feat/compiler-parity-port` (235902bbf) — verified absent on `origin/main` this fire (options.rs on main
+has none of them). So the RS plugin stack is **based on the parity branch tip**, in worktree
+`/Users/er/Documents/Projects/sauce-plugin-stack`. Consequence — a real **SEQUENCING GATE**: to actually SHIP
+(push/merge) the plugin epic, the parity foundation must land on `main` FIRST (its own atomic PR series, still a
+SEPARATE deliverable awaiting the user's explicit merge go-ahead). Until then the plugin PRs are BUILT + gated
+green LOCALLY, stacked on parity, ready to push the moment parity lands. This does not merge anything outward.
+A prior background workflow (`w16mpr0xo`) died mid-run and had gone off-scope re-porting `defines` onto bare
+main (redundant with parity) — discarded fire#48; worktree re-anchored onto the parity tip.
+
+- 🔄 **P1 [RS]** expose `defines` + `entry_arg_types` on the wasm surface. Core ALREADY has both fields
+  (options.rs:57/69, parity branch); the wasm surface already exposes `contracts` but NOT these two → P1 is
+  wasm marshalling + TS decls ONLY. `defines?: Array<[string,string]>` (Word via FromStr); `entryArgTypes?:
+  Array<ArgShape|null>` (recursive discriminated-union `{kind:...}`, mirroring the `AccountEntry` output style).
+  **IN PROGRESS fire#48** (sonnet `plugin-p1`, on parity-based worktree; gate = build+clippy+nightly-fmt+test).
 - ⬜ **P2 [RS]** inline-ABI `contracts` variant on `CompileOptions` + wasm (the key DSL-forcing plumbing).
 - ⬜ **P3 [RS]** ambient-import primitive — `CompileOptions.ambient: Vec<String>`: exported consts → `inject_defines`,
   functions → `assign_global_ids`; local/param shadows ambient. *(the core new RS feature)*
