@@ -26,13 +26,22 @@ Reverses the earlier "EVM-only → evm.\*" call. Execution lanes:
 - **[TS #141] ✅ DONE (fire#89, `a9caae5`, pushed):** `evm.codeSize/codeHash/isContract/isEOA` → gated `ctx.*`
   (capability keys renamed evm.*→ctx.*); evm.*/svm. now carry ONLY storage-call duals; tests+README updated;
   byte-emission unchanged (same Saucer ops). 340 touched-suite tests green + typecheck clean.
-- **[TS #142] SEQUENCED behind the RS env-read decision.** #142 (`chore/ts-context-ops`, stacked) drops msg/block/tx,
-  moves portable reads→ctx.*, but parks **11 EVM-only ENV reads** (msgValue/origin/gasPrice/coinbase/prevrandao/
-  gasLimit/baseFee/blobBaseFee/gasLeft/blockHash/blobHash) under evm.* — all SPECULATIVE (no SDK consumer; the ~23-site
-  migration only touches msg.value→ctx.msgValue / msg.sender→ctx.msgSender / block.timestamp→ctx.timestamp). Its
-  convergence = rebase onto new #141 (isContract/isEOA now in ctx.*, evm block restructured → conflict) + SDK migration
-  (real payload, needed regardless) + the 11 env reads → whatever the RS side (`rs-ctx-converge` on #383) decides for
-  parity (keep-all-as-gated-ctx.* vs trim-to-consumed). HELD until that report lands, so both compilers agree.
+- **CONVERGENT TARGET (locked, fire#90):** `ctx.*` = **7 portable** (msgSender/self/chainId/blockNumber/timestamp/
+  selfBalance/balance) + **gated `ctx.msgValue`** (from RS main #348) + **4 gated code reads** (codeSize/codeHash/
+  isContract/isEOA, EVM-only). **The env reads (origin/gasPrice/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee/
+  gasLeft/blockHash/blobHash) are DROPPED from BOTH compilers** — `rs-ctx-converge`'s oracle analysis proved they're in
+  NEITHER compiler's canonical ctx.* (TS §1.4 excludes gasPrice/origin as CtxUnknownMethod; TS exposes no gasLeft/blockHash/
+  blobHash at all), speculative, zero enforced consumers. This SUPERSEDES the earlier "convert all env reads" steer — trimming
+  IS the convergence, not scope-creep. (Recipe's bare `gasLeft()` is served by a FREESTANDING intrinsic, not a namespace
+  member — untouched.)
+- **[RS #383] rework in flight (`rs-ctx-converge`):** drop msgValue + 9 env reads; keep ONLY the 4 code reads → gated ctx.*.
+  **⚠️ BASE DRIFT found:** the RS worktrees sat on a STALE local rebase of feat/compiler-parity-port (717b97159, pre-#362-
+  address-drop → still carries address.*) diverged from origin's canonical 8523acecb. Agent instructed to rebuild deltas on
+  ORIGIN (8523acecb, no address.*), NOT push the stale local base. #382 (ctx.msgData portable) verify+push, not redundant.
+- **[TS #142] mirrors: DROP its 11 env reads (not convert).** #142 (`chore/ts-context-ops`, stacked on new #141) →
+  rebase onto #141 `a9caae5` (conflict: isContract/isEOA now in ctx.*), REMOVE the evm.* env-read additions, keep the
+  msg/block/tx removal + ~23-site SDK migration (msg.value→ctx.msgValue / msg.sender→ctx.msgSender / block.timestamp→
+  ctx.timestamp). Execute once RS #383 lands its final 4-read shape, so both compilers are byte-parallel.
 - **[RS] (agent `rs-ctx-converge`, parallel):** rebase #382 (ctx.msgData) onto new main; rework #383 evm.* context surface
   → gated ctx.* reads (drop redundant `ctx.msgValue` — Sammy has it); keep evm.*/svm. storage-call. Worktrees
   `sauce-ctx-portable`/`sauce-ctx-evm` exist. Assess-redundancy-FIRST (Sammy may own env reads) then rework the remainder.
