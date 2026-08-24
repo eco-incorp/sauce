@@ -93,6 +93,21 @@ huma/raydium-cp-swap/hylo/meteora-damm-v2. COMPLEX (Token-2022/dynamic-fee/u128)
 perena(8). Shared: `venues/math.ts`. **PILOT = pumpswap** (2 clean `accountUint(ref,64,8)` reads = token.svm.js's balanceOf
 shape exactly); 2nd-lane shape-prover = raydium-amm-v4 (combined-expr). `accountData(` real calls exist ONLY in settle.
 
+**✅ FAN-OUT WAVE-2 DONE + PER-VENUE MIGRATION CLOSED (fire#105, `svm-wave2-definitive`, feat/svm-account-model @ `3a8665b`,
+local).** Definitive grep: EXACTLY 6 venues have a real own-emitQuote `accountUint(` call (rest are param-only/shared-ladder).
+**MIGRATED 3** (all needed `block.timestamp`→`ctx.timestamp()`): meteora-damm-v2, saber-stableswap, meteora-damm-v1-stable
+(saber/damm-v1-stable declare the ladder's stableD/stableY as TOP-LEVEL scalar stub doubles — RS forbids nesting a fn in
+main). **Gate: 22 suites / 292 tests GREEN + typecheck clean.** **TOTAL in-repo venues migrated = 10** (pumpswap + wave-1's 7
++ these 3). **BLOCKED 3 (reverted, RS compiler gaps):** meteora-dbc + perena = `codegen.rs:550 "the branches of this if leave
+different locals live"` (nested-if-with-const); stabble-stable-swap = nested-fn-in-main + `iter++`.
+**⚠️⚠️ RS M1-SUBSET GAPS FOUND (genuine TS→RS parity gaps, gate the STABLE-Newton family):** (1) **no `++`/`--` update
+expressions** (frontend.rs — Newton `for(;i++)` rejected; workaround `i=i+1`); (2) **no nested function declarations** (helper
+must be top-level); (3) **codegen "different locals live"** on nested-if-with-const (perena+dbc). **DECISION PENDING (fix RS vs
+rewrite ladder/defer):** the codegen "different locals live" is a genuine bug worth fixing (2 venues); `++`/nested-fn may be
+deliberate M1 omissions (workaround = ladder/SDK rewrite). Remaining accountUint surface: 3 blocked venues + settle
+(recipes/settle.sauce.ts 3, recipes/index.ts 3) — settle held (staged-mode Q). Shared ladder = sauce-recipes (out of repo).
+Branch NOT pushed yet.
+
 **✅ P0 DONE (fire#98, `svm-p0-foundation`):** worktree `sauce-svm-migration` / branch `feat/svm-account-model` (off
 feat/compiler-parity @188f7c8); `pnpm install` clean; WASM built from the CURRENT pin `431f9cef` (NO bump — it already has
 typed-Account) → `sdk/.sauce-wasm/`; **token compile suite 12/12 GREEN** (P0 gate); **pilot-shape PROVEN** — a 2-`Account`-param
