@@ -11,6 +11,25 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## 🔄 EPIC — NS-CONVERGE to Sammy's ctx.*+gating (fire#89, 2026-08-24, USER DECISION)
+
+**Sammy merged his own M8 features to RS `main` (#347–#351), some overlapping my open stack.** Two overlaps:
+- **#351 (ECO-2147 empty-array)** = duplicate of my #381 (ECO-2188). ✅ **#381 CLOSED**, ECO-2188 cancelled → points at #351.
+- **#348 (ECO-2146 `ctx.msgValue`)** = namespace DIVERGENCE vs my #383 `evm.msgValue`. Sammy's model: ALL context reads
+  under `ctx.*` (msgSender/self/chainId/blockNumber/timestamp/selfBalance/balance + gated `ctx.msgValue`), target-
+  availability via per-read `Feature` gate, **NO evm.\* namespace for context reads**. (evm.\*/svm.\* still exist, but
+  only for the STORAGE/CALL target-duals — sload/sstore/call — unchanged, legit.)
+
+**USER DECISION (fire#89): CONCEDE to Sammy's ctx.\*+gating.** Drop the `evm.*` CONTEXT/ADDRESS surface from BOTH
+compilers; relocate those reads to gated `ctx.*` (like `ctx.msgValue`). Keep the `evm.*`/`svm.*` STORAGE-CALL duals.
+Reverses the earlier "EVM-only → evm.\*" call. Execution lanes:
+- **[TS] (my lane, this session):** globals.ts — move `evm.codeSize/codeHash/isContract/isEOA` (#141) + `evm.msgValue`
+  + env reads (#142) → gated `ctx.*`; keep evm.*/svm. storage-call; re-migrate ~23 SDK sites (evm.msgValue→ctx.msgValue).
+  Branches `chore/ts-address-to-ctx` (#141) + stacked `chore/ts-context-ops` (#142). TDD: adapt evm-svm-namespace tests.
+- **[RS] (agent `rs-ctx-converge`, parallel):** rebase #382 (ctx.msgData) onto new main; rework #383 evm.* context surface
+  → gated ctx.* reads (drop redundant `ctx.msgValue` — Sammy has it); keep evm.*/svm. storage-call. Worktrees
+  `sauce-ctx-portable`/`sauce-ctx-evm` exist. Assess-redundancy-FIRST (Sammy may own env reads) then rework the remainder.
+
 ## ✅ CONTEXT-SURFACE CONVERGENCE + M8 REORG (fires#72–80, 2026-08-24)
 
 **Linear is now the live tracker** (project "Sauce Compiler Rust", team Eco). Backlog kept as durable summary.
