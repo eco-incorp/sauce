@@ -109,6 +109,21 @@ sauce-next→npm after a compiler-rs release. The DSL-parity-via-shared-plugin g
   → #138/#139/#140. OPEN structural decision for user: PR `feat/compiler-parity` itself / extract sauce-next
   into a lean standalone PR; and whether to slice #352.
 
+**🔨 IN FLIGHT (fire#67, 2026-08-24) — last parity gap: non-entry `Tuple` param.** Scout (`tuple-param-scout`)
+confirmed it's the SOLE remaining blocker for the full `ecoswap.sauce.ts` on RS: 2 non-entry `Tuple` params
+(`eulerNeedsLive`:564, `eulerQuoteClosedForm`:578); all 4 call sites pass an identical statically-known
+`ScalarTuple(12)` (`const qd: Tuple = qlv[v]`, `qlv` = main's `ArrayOf(ScalarTuple(12))` param). Fix is purely
+type-annotation resolution — `param_ty` (`lower/assembly.rs:985`) only honors the `Tuple` wildcard for main's
+Entry hint; non-entry → `NotEntry` → `UnknownType`. No IR/codegen/`check_assignable`/`tuple_index` change
+(all downstream already handles `Ty::Tuple`, proven by ECO-1966's `a_called_function_accepts_a_non_scalar_parameter`).
+**Approach (a)-MVP:** pre-signature pass infers each non-entry bare-`Tuple` param's `Ty` from its call sites
+(identifier→entry-param/binding/const; `arr[idx]`→element), uniform-shape single monomorphization, clear error on
+conflict/unresolvable. Impl delegated to `tuple-param-impl` (sonnet) in isolated worktree
+`/Users/er/Documents/Projects/sauce-tuple-params`, branch `parity-19-nonentry-tuple-params` (base
+`feat/compiler-parity-port`, sibling to the plugin chain). TDD: flip `full_ecoswap_sauce_ts_compiles_on_the_evm`
+err→ok + focused unit + conflict-negative. Will become a new PR + a new Epic-A (ECO-2157) child ticket on landing.
+Follow-up (not in scope): differing-shape N-way monomorphization.
+
 **✅ PORTED TO LINEAR (fire#66, 2026-08-24).** User: "port our epic to Linear, replicate Sammy's style, trees of epics+tickets, PR↔tickets linked." Sammy's structure = project **Sauce Compiler Rust** (Eco team, `ECO-` keys) → milestones M1–M8 → issues `M<n>.<x> · area: imperative` → sub-issues; rich evidence-based descriptions with `## Done when` AC. Built (user chose: **new milestone in his project** + **fresh ticket per PR** + link/update his tickets):
 - **Milestone M9** "Parity forward-port & ambient plugin (SDK compilation)" in Sauce Compiler Rust.
 - **Epic ECO-2157** (Parity forward-port) → 19 children **ECO-2159…2177** (one per `sauce#357–375`).
