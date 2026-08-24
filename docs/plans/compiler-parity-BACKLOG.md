@@ -11,6 +11,38 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## ✅ CONTEXT-SURFACE CONVERGENCE + M8 REORG (fires#72–80, 2026-08-24)
+
+**Linear is now the live tracker** (project "Sauce Compiler Rust", team Eco). Backlog kept as durable summary.
+
+**Namespace convergence — Rust namespacing is the STANDARD; TS+SDK conform (user directive).** `ctx.*` = PORTABLE
+(both engines), `evm.*` = EVM-only. Landed as 6 held-for-review PRs:
+- **address.\* dropped:** RS never gets it (#362 CLOSED); TS **sauce-sdk#141** (ECO-2163) drops `address.*`→`ctx.*`
+  (self/balance/balanceOf) + `evm.*` (codeSize/codeHash), byte-identical (golden vectors).
+- **context surface completed (RS):** **sauce#382** (ECO-2189) `ctx.msgData()` portable; **sauce#383** (ECO-2190) 13
+  EVM-only `evm.*` environment reads + `evm.isContract/isEOA`, one `Feature::EvmEnvironment` gate. Implements Sammy's
+  **ECO-2146** as `evm.msgValue` (EVM-only, not ctx.msgValue).
+- **msg/block/tx dropped (TS+SDK):** **sauce-sdk#142** (ECO-2191, stacked on #141) drops `msg`/`block`/`tx`, migrates
+  ~23 SDK sites (msg.sender→ctx.msgSender, msg.value→evm.msgValue, block.timestamp→ctx.timestamp).
+- **uint() KEPT** (#360/ECO-2161, user decision). **`../sauce-recipes` migration HELD** (user's call; 119 address.* uses).
+
+**⚠️ KEY LESSON — runtime execution beats source-level verification.** My opcode-verification workflow read the engine
+SOURCES (svm opcode.rs has the isContract/isEOA/balance arms) → mis-classified them "portable." An agent RAN them on real
+LiteSVM → they REVERT on svm (`InvalidInstructionData`): svm's account-index model can't resolve a raw EVM-ADDRESS operand
+(unlike SLOAD/SSTORE which reinterpret as account index). Fixed: isContract/isEOA gated `evm.*`. **Pre-existing
+`ctx.balance()` shares this bug → ECO-2192 (High, flagged for Sammy: compiler operand-reinterpretation vs engine fix).**
+The lean **main** engine ≠ the beta lineage the TS compiler used; every opcode wired is now engine-verified (all 23
+context reads confirmed present on main; 0 deferrals besides the operand-shape gap above).
+
+**LINEAR REORG (user directive):** Parity Epic **ECO-2157** + ~24 children moved M9→**M8** (they're M8's compiler-side
+precondition; overlaps Sammy's ECO-2146/2147 relatedTo-linked not duplicated). **M9 renamed → "Ambient imports &
+Layer-C plugin"** (ECO-2158 + children stay). Sammy heads-up posted on M8. Per-PR tickets = ECO-2159–2192.
+
+**REMAINING (all Sammy/user-gated, no blocked autonomous BUILD work):** module-const-expr / EKUBO_OR_PRINTR (ECO-2076,
+Sammy's design boundary — flagged); balance svm operand (ECO-2192, Sammy); parity-chain rebase-drop of #362's commit
+(chain-merge); `../sauce-recipes` migration (user). **Session pinned in worktree `sauce-address-ctx`; backlog edited
+via `sauce-sdk-cp` (feat/compiler-parity).**
+
 ## ✅ M8-compiler-gap progress (fire#71, 2026-08-24)
 
 - **ECO-2147 empty-array ABI typing — DONE + VERIFIED: PR #381** (commit c23d5dabc, 4 files/424 lines;
