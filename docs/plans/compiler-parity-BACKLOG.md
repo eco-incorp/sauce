@@ -11,6 +11,28 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## 🔄 SAMMY REVIEW — close 4 PRs + rebase-drop (fire#99, 2026-08-24, workflow `w6advoc96`)
+
+**Sammy (RS owner) reviewed and asked to CLOSE + rebase-drop four PRs** (sound, specific reasoning):
+- **#357** (parity-01 nested-array reject) — premise doesn't hold (nested literals return correctly on both engines at
+  #357's base); breaks 3 conformance tests (array_length_evaluates / nested_set_index_mutates_the_inner_array /
+  set_index_stores_an_array_element); #373 reverts it anyway. Real gap = entry params (main(a: Uint256[][])) = #374.
+- **#360** (parity-04 uint) — `uint()` is target-divergent (256 EVM / 1 SVM same source) → violates CLAUDE.md:1156 (a
+  target-specific-meaning primitive must be namespaced, not neutral). `.toBe()`/`.toLe()` are the consistent spelling.
+  ⚠️ REVERSES the earlier user "keep uint()" call — user is relaying Sammy's review; the .toLe/.toBe direction ALSO aligns
+  with the in-flight SVM migration.
+- **#361** (parity-05 Math.neg) — unary `-` already does it (`-x`=2^256−x both engines); duplicate name, drop→find/replace to `-`.
+- **#363** (parity-07 Tuple infer-wildcard) — net no-op (only new accept = `const t: Tuple={}` local, byte-identical to none);
+  entry params + `): Tuple` still fail so doesn't unblock the ~15 Tuple-failing SDK programs; drags in #357's rejection.
+
+**Full-stack rebase-drop in flight (workflow, isolated-clone + adversarial-verify-gated push).** Topology mapped:
+main→01(#357)→02→03→04(#360)→05(#361)→[06 closed]→07(#363)→08→…→18→feat/compiler-parity-port(#375)→19(#380)→384; #382/#383
+off the port. Drop the 4 commits (+ moot #373 revert-of-#357, keep #373's other fixups); re-base everything downstream incl.
+#382/#383 (preserving their converged ctx rework). Workflow: serial rebase in a fresh clone (NO push) → parallel range-diff
+each branch (confirm ONLY the 4 dropped) + build-test top (ecoswap must compile) → force-push-with-lease + close the 4 PRs,
+ONLY if every branch verifies clean. [[orphaned-workflow-worktree-collision]] respected (fresh clone, never the checked-out
+worktrees; lease-guarded push).
+
 ## 🔄 EPIC — SVM Account-model migration (fire#96, 2026-08-24, USER DECISION) — the SVM half of retiring TS
 
 **USER chose "Migrate SDK to Account model"** (over RS compat-shims / defer): migrate the SDK's SVM programs
