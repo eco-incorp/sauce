@@ -34,7 +34,26 @@ dropping → "unresolved import super::is_infer_tuple"). CLEANLY dropped + verif
 **USER DECISION (fire#102): DROP ALL 4 + replace blunt `Tuple` with FULLY-TYPED args (`interface {}`/`type {}`).** Two efforts:
 - **[3-DROP now]** #357 + #360 (clean) + #361 via Sammy's own `Math.neg(x)`→`-x` ecoswap-fixture find-and-replace (byte-equivalent).
   Keep #363 for now. Rebase-drop + close #357/#360/#361. (agent `rebase-drop-3`)
-- **[#363 REWORKED IN PLACE — kept OPEN (user refinement fire#103): replace blunt `Tuple` with `type {}`]** Do NOT close #363 —
+- **[#363 REWORK — DESIGN LOCKED (fire#104, `typed-args-scout`; user chose "inline now + type {} follow-up")].**
+  **KEY FINDING: fully-typed inline args ALREADY WORK on RS** — `sauce-cli/tests/fixtures/programs/swap-supply/source.ts`
+  declares `pools: { poolType: Uint256, poolAddress: Address, ... }[]` (no Tuple, no hints) and compiles. `annotation_ty`
+  (lower/mod.rs:1924) already lowers inline `{...}`→Ty::Tuple + `T[]`→Ty::Array; the ONLY gap is positional `[T,...]`
+  (TSTupleType, rejected at mod.rs:2042). **#363-REWORK PLAN (Phase 1, ~15 LOC + migration):** (1) add a TSTupleType arm to
+  `annotation_ty` (mod.rs:1934) + un-reject at mod.rs:2042 — no front-end change (annotations already flow through). (2)
+  Migrate ecoswap off Tuple → inline `{field:T}[]` object types (self-documenting; access via `dp[5]` still works —
+  resolve_position matches by index — or rewrite to `dp.field`; implementer's call for minimal-diff-vs-clean): ecoswap.unrolled
+  (3 params pools/routes/brackets), ecoswap-full (`cfg: Tuple`→named object type, already supported), + 3 conformance tests
+  (nested_tuple/nested_array/bytes_array — drop compile_with_hints); swap-supply unchanged; delete `.entry_arg_types(...)` from
+  tests/ecoswap.rs:109. (3) REMOVE the whole infer-wildcard machinery: `is_infer_tuple`+2 callers, `entry_arg_types`+`ArgShape`
+  +`to_ty`, `EntryParamHint`+threading, `Error::UntypedEntryTupleParam`. RETAIN the general decode layer (`EntryParamShape`,
+  `require_decodable_entry_param`, `entry_collection_decode`). NOT a breaking public API (entry_arg_types/ArgShape are
+  sauce-core-internal, not in wasm/cli bindings). **This IS #363's reworked content — kept OPEN as the typed-args PR.**
+  **⏳ SEQUENCING: hold until `rebase-drop-3` force-pushes the re-SHA'd stack (parity-07=#363 gets a new base first); then
+  implement the rework on the rebased parity-07.** **Phase 2 (follow-up PR): named `type {}` aliases** = a module-types pass
+  (analogous to module_bindings) + resolution threading through annotation_ty/named_type — moderately invasive, deferred.
+  **SDK-corpus flag:** ~20+ shipped protocol templates use flat `path: Tuple`/`amounts: Tuple` → trivially `Address[]`/`Uint256[]`
+  (already supported, zero compiler work) — but only when the SDK moves onto RS (tied to the SVM migration + eventual EVM-on-RS).
+- **[#363 was: REWORKED IN PLACE — kept OPEN (user refinement fire#103): replace blunt `Tuple` with `type {}`]** Do NOT close #363 —
   REWORK it: swap the untyped `Tuple` infer-wildcard SURFACE for fully-typed `type {}` aliases (`type PoolType = {...}`;
   `main(pools: PoolType[])`), resolving to the SAME lowered arg shape `entry_arg_types` already produces. KEEP #363's backing
   (`is_infer_tuple`/`entry_arg_types`/ecoswap NS-1 harness — ecoswap needs them); only the blunt-Tuple acceptance is removed.
