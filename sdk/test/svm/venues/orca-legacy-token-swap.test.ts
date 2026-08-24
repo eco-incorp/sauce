@@ -7,7 +7,7 @@
  */
 import { resolve } from 'path';
 import { address } from '@solana/kit';
-import { compile } from '@eco-incorp/sauce-compiler';
+import { compileSvm, wrapQuoteMain } from '../rs-compile.js';
 import { orcaLegacyTokenSwap } from '../../../src/svm/venues/orca-legacy-token-swap/index.js';
 import type { OrcaLegacyPoolConfig } from '../../../src/svm/venues/orca-legacy-token-swap/index.js';
 import { readUintLE } from '../../../src/svm/index.js';
@@ -197,27 +197,35 @@ describe('referenceQuote (docs/svm-venues.md formula, independent of emitQuote)'
 });
 
 describe('emitQuote', () => {
-  it('bakes netIn and reads only the two vault amounts via accountUint', () => {
+  it('bakes netIn and reads only the two vault amounts via svm.sload (Account model)', () => {
     // netIn = 1e9 - 2500000 - 500000 = 997000000; ceil((rIn*rOut)/(rIn+netIn))
-    // spelled as (rIn*rOut + rIn + netIn - 1) / (rIn + netIn).
+    // spelled as (rIn*rOut + rIn + netIn - 1) / (rIn + netIn). Reads go through
+    // main()'s positional `acc<k>` params (k = quoteAccounts() index): vault-in
+    // is slot 0, vault-out slot 1.
     expect(orcaLegacyTokenSwap.emitQuote(cfg, 3, 1_000_000_000n)).toBe(
       [
-        `const rIn3 = accountUint("${REF}:vault-in", 64, 8);`,
-        `const rOut3 = accountUint("${REF}:vault-out", 64, 8);`,
+        `const rIn3 = svm.sload(acc0, 64, 8).toLe();`,
+        `const rOut3 = svm.sload(acc1, 64, 8).toLe();`,
         `const q3 = rOut3 - (rIn3 * rOut3 + rIn3 + 996999999) / (rIn3 + 997000000);`,
       ].join('\n'),
     );
   });
 
-  it('compiles as SauceScript for target svm with the quoteAccounts refs in the plan', () => {
-    const source = `function main() {\n${orcaLegacyTokenSwap.emitQuote(cfg, 0, 1_000_000_000n)}\nreturn q0;\n}`;
-    const { accountPlan } = compile(source, { target: 'svm' });
-    expect(accountPlan).toEqual({
-      metas: [
-        { ref: `${REF}:vault-in`, writable: false, signer: false },
-        { ref: `${REF}:vault-out`, writable: false, signer: false },
-      ],
-    });
+  it('compiles as SauceScript for target svm with the quoteAccounts slots in the manifest', () => {
+    const fragment = orcaLegacyTokenSwap.emitQuote(cfg, 0, 1_000_000_000n);
+    const accounts = orcaLegacyTokenSwap.quoteAccounts(cfg); // ordered [vault-in, vault-out]
+    const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q0'));
+    expect(bytecode.length).toBeGreaterThan(0);
+    // Manifest slots come back in quoteAccounts() (== main param) order: slot k
+    // binds to quoteAccounts()[k].address (the RS analogue of accountPlan.metas).
+    expect(manifest?.accounts).toEqual([
+      { kind: 'slot', index: 0, name: 'acc0' },
+      { kind: 'slot', index: 1, name: 'acc1' },
+    ]);
+    const boundAddresses = manifest?.accounts.map((meta) =>
+      meta.kind === 'slot' ? accounts[meta.index]?.address : undefined,
+    );
+    expect(boundAddresses).toEqual([cfg.vaultIn, cfg.vaultOut]);
   });
 
   it('refuses to emit a quote whose fees consume the whole input', () => {
