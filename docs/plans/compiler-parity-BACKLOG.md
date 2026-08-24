@@ -39,7 +39,13 @@ dropping → "unresolved import super::is_infer_tuple"). CLEANLY dropped + verif
   `testdata/ecoswap-full/ecoswap.sauce.ts` (byte-verbatim copy of ../sauce-recipes, #[ignore]d) STILL has ~7 Math.neg — left
   untouched (preserves byte-verbatim invariant; `cargo test` never compiles it). FOLLOW-UP: update the sauce-recipes recipe
   Math.neg→- + re-copy (sauce-recipes user-held).**
-- **[#363 REWORK — DESIGN LOCKED (fire#104, `typed-args-scout`; user chose "inline now + type {} follow-up")].**
+- **[#363 — KILL IT (user redirect fire#108: "nobody asked u to do eco-swap! just kill the Tuple PR and do rebases").**
+  REWORK CANCELLED (workflow w8lahx1kr stopped). `kill-363` in flight: close #363 + rebase-drop parity-07's 3 commits (blunt
+  Tuple wildcard + entry_arg_types hint + ecoswap harness) + remove the ecoswap tests (ecoswap.rs/ecoswap_full.rs + fixtures,
+  the ONLY users of the Tuple machinery) + the ArgShape lib.rs export; re-base downstream. **Inline typed args
+  (`{field:T}[]`/`T[]`) SURVIVE — independent of #363 (base annotation_ty, swap-supply uses them), so no typed-args capability
+  lost.** The elaborate typed-args-scout design below is SHELVED (not needed).
+- ~~[#363 REWORK — DESIGN LOCKED (fire#104, `typed-args-scout`; user chose "inline now + type {} follow-up")]~~ SHELVED.
   **KEY FINDING: fully-typed inline args ALREADY WORK on RS** — `sauce-cli/tests/fixtures/programs/swap-supply/source.ts`
   declares `pools: { poolType: Uint256, poolAddress: Address, ... }[]` (no Tuple, no hints) and compiles. `annotation_ty`
   (lower/mod.rs:1924) already lowers inline `{...}`→Ty::Tuple + `T[]`→Ty::Array; the ONLY gap is positional `[T,...]`
