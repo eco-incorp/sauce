@@ -11,6 +11,23 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## 🔄 EPIC — SVM Account-model migration (fire#96, 2026-08-24, USER DECISION) — the SVM half of retiring TS
+
+**USER chose "Migrate SDK to Account model"** (over RS compat-shims / defer): migrate the SDK's SVM programs
+(16+ venue fragments + settle.sauce.ts + shared helpers, ~97 call-sites) from the TS **string-ref** account model
+(`accountUint("escrow0",64,8)` / `accountData("tokenProgram0",0,0)`) to RS's native **Account-slot** model
+(`Account` typed params + `svm.sload(a,64n,8n).toLe()` / `uint(svm.sload(...))`) — so RS can replace TS for SVM too.
+
+**⚠️ SEQUENCING SUBTLETY (scout to resolve before fan-out):** the target Account model needs typed-`Account` params
+(ECO-1860) which the **TS compiler LACKS** (EPIC-1 §1.3 deferred), and the SDK's current RS/WASM is **STALE**
+(`ac2ae519c`, Aug-23, pre-forward-ports). So migrated programs likely compile on NEITHER current path until the RS/WASM
+is refreshed to a commit with typed-Account + the latest ports (cf. [[sauce-next-wasm-dep]]). Probable order:
+**(1) refresh SDK RS/WASM → (2) switch SVM compile path to `compiler:'rs'` → (3) pilot ONE venue end-to-end (Account
+model + svm.e2e green via RS) → (4) fan out the remaining venues in parallel worktrees → (5) settle.sauce.ts + harness.**
+Scout `svm-migration-scout` mapping the terrain + confirming this sequence + picking the pilot. Keep the SVM e2e suites
+(`sdk/test/svm/**`) as the TDD gate. User's [[feedback-scope-other-projects]] note is about SIBLING repos — the SVM venues
+are in THIS repo (`sdk/src/svm/venues/`), in scope.
+
 ## 📊 M8 CORPUS-READINESS MEASUREMENT (fire#95, 2026-08-24, `rs-corpus-readiness` — FIRST full sweep)
 
 **How close is RS to REPLACING TS across the real SDK protocol corpus?** First-ever systematic measurement (North-Star only
