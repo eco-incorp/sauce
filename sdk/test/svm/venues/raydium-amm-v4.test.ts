@@ -11,7 +11,7 @@
 import { resolve } from 'path';
 import { address } from '@solana/kit';
 import type { Address } from '@solana/kit';
-import { compile } from '@eco-incorp/sauce-compiler';
+import { compileSvm, wrapQuoteMain } from '../rs-compile.js';
 import { raydiumAmmV4 } from '../../../src/svm/venues/raydium-amm-v4/index.js';
 import type { RaydiumAmmV4PoolConfig } from '../../../src/svm/venues/raydium-amm-v4/index.js';
 import { fixtureBytesMap, fixtureData, fixtureLoader, loadFixtures } from '../fixtures.js';
@@ -250,10 +250,12 @@ describe('raydium-amm-v4 quoteAccounts + emitQuote', () => {
     const fragment = raydiumAmmV4.emitQuote(cfg, 0, SOL_IN);
 
     // 1 SOL after the ceil-charged 25/10000 fee: 1_000_000_000 - 2_500_000.
+    // Account model: acc0 = pool (AmmInfo, need_take_pnl_* @192/@200), acc1 =
+    // coin vault, acc2 = pc vault (quoteAccounts() order).
     expect(fragment).toBe(
       [
-        `const rayV4In0 = accountUint("raydium-amm-v4:${POOL}:coin-vault", 64, 8) - accountUint("raydium-amm-v4:${POOL}", 192, 8);`,
-        `const rayV4Out0 = accountUint("raydium-amm-v4:${POOL}:pc-vault", 64, 8) - accountUint("raydium-amm-v4:${POOL}", 200, 8);`,
+        `const rayV4In0 = svm.sload(acc1, 64, 8).toLe() - svm.sload(acc0, 192, 8).toLe();`,
+        `const rayV4Out0 = svm.sload(acc2, 64, 8).toLe() - svm.sload(acc0, 200, 8).toLe();`,
         `const q0 = rayV4Out0 * 997500000 / (rayV4In0 + 997500000);`,
       ].join('\n'),
     );
@@ -265,24 +267,31 @@ describe('raydium-amm-v4 quoteAccounts + emitQuote', () => {
 
     expect(fragment).toBe(
       [
-        `const rayV4In3 = accountUint("raydium-amm-v4:${POOL}:pc-vault", 64, 8) - accountUint("raydium-amm-v4:${POOL}", 200, 8);`,
-        `const rayV4Out3 = accountUint("raydium-amm-v4:${POOL}:coin-vault", 64, 8) - accountUint("raydium-amm-v4:${POOL}", 192, 8);`,
+        `const rayV4In3 = svm.sload(acc2, 64, 8).toLe() - svm.sload(acc0, 200, 8).toLe();`,
+        `const rayV4Out3 = svm.sload(acc1, 64, 8).toLe() - svm.sload(acc0, 192, 8).toLe();`,
         `const q3 = rayV4Out3 * 997500 / (rayV4In3 + 997500);`,
       ].join('\n'),
     );
   });
 
-  it('emits syntactically valid target-svm SauceScript interning exactly the quote accounts', async () => {
+  it('emits syntactically valid target-svm SauceScript manifesting the quote accounts in param order', async () => {
     const cfg = await fetchConfig();
     const fragment = raydiumAmmV4.emitQuote(cfg, 0, SOL_IN);
-    const { accountPlan } = compile(`function main() {\n${fragment}\n  return q0;\n}`, { target: 'svm' });
+    const accounts = raydiumAmmV4.quoteAccounts(cfg); // ordered [pool, coinVault, pcVault]
+    const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q0'));
+    expect(bytecode.length).toBeGreaterThan(0);
 
-    // First-use intern order: coin vault, pool, pc vault — all readonly.
-    expect(accountPlan?.metas).toEqual([
-      { ref: `raydium-amm-v4:${POOL}:coin-vault`, writable: false, signer: false },
-      { ref: `raydium-amm-v4:${POOL}`, writable: false, signer: false },
-      { ref: `raydium-amm-v4:${POOL}:pc-vault`, writable: false, signer: false },
+    // Manifest slots come back in quoteAccounts() (== main param) order — the RS
+    // analogue of accountPlan.metas: slot k binds to quoteAccounts()[k].address.
+    expect(manifest?.accounts).toEqual([
+      { kind: 'slot', index: 0, name: 'acc0' },
+      { kind: 'slot', index: 1, name: 'acc1' },
+      { kind: 'slot', index: 2, name: 'acc2' },
     ]);
+    const boundAddresses = manifest?.accounts.map((meta) =>
+      meta.kind === 'slot' ? accounts[meta.index]?.address : undefined,
+    );
+    expect(boundAddresses).toEqual([POOL, COIN_VAULT, PC_VAULT]);
   });
 
   it('throws when the fee consumes the whole input', async () => {
