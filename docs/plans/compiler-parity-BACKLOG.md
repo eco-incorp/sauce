@@ -1037,9 +1037,24 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
   P0 was CONFIRMED empirically (RS accept-and-miscompiled on BOTH targets — `NEW_ARRAY`+`INDEX`,
   reverts on v12 EVM / rejected on svm; an existing RS test was *locking the bug in*). Fix mirrors TS
   `assertNoNestedArrayLiteral` — new `Error::NestedArrayLiteral` in `array_literal` (lower/expression.rs),
-  syntactic, rejects on both targets (RS has no v1). RS gate green (1009). 🟡 **V4-followup:** RS test
-  `a_tuple_can_hold_a_nested_array_and_it_stays_dynamic` implies an array-in-TUPLE path may be a
-  sibling sub-risk — needs a real-exec check on v12/svm (does it round-trip, or same silent drop?).
+  syntactic, rejects on both targets (RS has no v1). RS gate green (1009). **↳ SUPERSEDED:** that reject
+  was later REVERTED (#373 `parity-17-fixups`) + replaced with REAL nested-array support (#374, ECO-2174/2175)
+  — the reject imported a TS-PIN-ENGINE limitation that does NOT apply to RS's own v12/svm engines, which
+  round-trip nested arrays natively. ✅ **V4-followup — CLOSED SAFE-BY-CONSTRUCTION** *(fire#88, 2026-08-24,
+  `v4-tuple-array-verify`)*: the array-in-TUPLE sibling risk does NOT exist in compiler-rs. The whole TS
+  descriptor-drop family is STRUCTURALLY impossible here — RS is a main-engine dialect where a dynamic value
+  is an in-band 32-byte descriptor word on the ordinary one-word storage/calling convention; there is NO
+  VALUE-slot-vs-HEAP-slot store to drop it into (`assign` codegen.rs:1415, `write/read_spilled`
+  codegen.rs:2841/2828 round-trip the WHOLE word — locked by `tests/dynamic_value_roundtrip.rs`). Dynamism is
+  a STRUCTURAL `Ty::is_dynamic()` property (not an inferred `kind`) threaded via `Function::local_dynamic`
+  (lower/mod.rs:2742); a tuple is always dynamic (ir.rs:710), a tuple-field-array is dynamic
+  (`Expr::Field{is_dynamic}` ir.rs:714); construction embeds a dynamic element's descriptor as-is
+  (`push_collection_element` codegen.rs:1673 boxes only SCALAR elements); read-back is engine-native INDEX.
+  The one theoretical drop shape (scalar→dynamic reassignment) is a hard compile error
+  (`Ty::same_shape`→`InconsistentReassignment`, lower/statement.rs:915/978), fail-closed never silent. ALSO
+  exec-locked on BOTH real engines for the exact shape `let t={nums:[5n,6n,7n]}; return t.nums[2n]`→7:
+  `v12_conformance.rs:1423`, `svm_conformance.rs:1328` (+ nested-set-index twins :1405/:1065). No new test or
+  fix needed.
   · ⬜ V5 manifest vs accountPlan · ⬜ V6 TS11 (`assigned_once` present).
 
 ## EPIC-N — 🌟🎉 NORTH-STAR CLOSED (fire#11): eco-swap compiles on BOTH compilers
