@@ -271,7 +271,7 @@ export class V12Saucer implements SaucerLike {
     // single sanctioned one — per-execution values arrive as payload args.
     if (this.ctx.isSvm && this.ctx.staged) {
       throw new Error(
-        'msg.data is not supported in staged svm mode (CALLDATA copies the whole staged program to the heap); pass per-execution values as payload args instead',
+        'ctx.msgData() is not supported in staged svm mode (CALLDATA copies the whole staged program to the heap); pass per-execution values as payload args instead',
       );
     }
 

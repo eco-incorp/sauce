@@ -191,7 +191,7 @@ export interface SvmVenueLadder {
    * (and quoteSvmRoute) evaluates it lamport-identically to the engine.
    * `now` (unix seconds) feeds time-dependent families (locked-profit decay,
    * amp ramps) — it must equal the cluster clock the fragment's
-   * block.timestamp reads for the lamport-exact gate to hold.
+   * ctx.timestamp() reads for the lamport-exact gate to hold.
    */
   referenceQuote(cfg: PoolConfig, state: AccountBytesMap, params: readonly bigint[], now?: bigint): (x: bigint) => bigint;
   /**

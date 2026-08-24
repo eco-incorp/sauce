@@ -1,7 +1,7 @@
 /**
  * Shared LiteSVM engine harness for the solswap suites (gated on the vendored
  * engine .so existing — see ENGINE_SO below): boots the real SVM engine, pins
- * the cluster clock (the venue fragments read Clock via block.timestamp),
+ * the cluster clock (the venue fragments read Clock via ctx.timestamp()),
  * loads venue fixtures, fabricates SPL token accounts / address lookup
  * tables, and executes compiled programs through the sdk's own pure builders
  * (resolveAccounts + buildExecuteInstruction + buildExecuteTransaction).
@@ -64,7 +64,7 @@ export const randomAddress = (): Address => getAddressCodec().decode(crypto.getR
 /**
  * Boots LiteSVM with the engine program, a funded payer, and the cluster
  * clock pinned to `unixTimestamp` — the venue quote fragments read
- * block.timestamp, so engine-side quotes evaluate at exactly this instant.
+ * ctx.timestamp(), so engine-side quotes evaluate at exactly this instant.
  * No memory setup exists: interpreter memory is the per-transaction heap
  * frame, requested by the RequestHeapFrame prepend on every execute.
  *

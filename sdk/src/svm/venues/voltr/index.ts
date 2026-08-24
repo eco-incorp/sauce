@@ -92,7 +92,7 @@
  * SMALLER, never larger, than a version using `last_report` for the
  * subtraction would — i.e. it never over-promises a withdrawal).
  *
- * `block.timestamp` (the compiler's Clock-sysvar-backed global, the SAME
+ * `ctx.timestamp()` (the compiler's Clock-sysvar-backed global, the SAME
  * intrinsic `meteora-damm-v1-stable`'s own locked-profit-decay quote already
  * uses on-chain) drives the time-dependent terms; `Vault`'s own bytes drive
  * everything else — nothing here is baked at prepare time except

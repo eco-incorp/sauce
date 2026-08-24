@@ -17,7 +17,7 @@
  * - activation_point == 0 when activation_type == 0 (slot) — a slot-typed
  *   point cannot be evaluated against the unix clock off-chain nor in the
  *   fragment; timestamp-typed (activation_type == 1) points gate in-fragment
- *   on block.timestamp instead (quote 0 before activation).
+ *   on ctx.timestamp() instead (quote 0 before activation).
  *
  * Overflow bound for the in-VM fragment (engine arithmetic wraps at 2^256):
  * liquidity is u128 and every sqrt price is validated into
@@ -374,9 +374,9 @@ export const meteoraDammV2 = {
       );
     }
     // Timestamp-typed activation gates in-fragment (slot-typed nonzero points
-    // are rejected at fetch); block.timestamp is the Clock sysvar.
+    // are rejected at fetch); ctx.timestamp() is the Clock sysvar.
     if (c.activationType === 1 && c.activationPoint > 0n) {
-      lines.push(`if (block.timestamp < ${c.activationPoint}) { q${i} = 0 }`);
+      lines.push(`if (ctx.timestamp() < ${c.activationPoint}) { q${i} = 0 }`);
     }
     return lines.join('\n');
   },

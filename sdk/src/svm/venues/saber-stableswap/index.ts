@@ -241,13 +241,13 @@ export const saberStableswap: SvmVenueAdapter = {
 
     // Amp ramp: the interpolation direction depends only on compile-time
     // constants, so bake the up- or down-ramp branch; once the ramp window is
-    // past, block.timestamp < stopRampTs is false and amp stays the target.
+    // past, ctx.timestamp() < stopRampTs is false and amp stays the target.
     const range = c.stopRampTs - c.startRampTs;
     if (c.stopRampTs !== 0n && range > 0n && c.initialAmpFactor !== c.targetAmpFactor) {
       const interp = c.targetAmpFactor >= c.initialAmpFactor
-        ? `${c.initialAmpFactor} + Math.mulDiv(${c.targetAmpFactor - c.initialAmpFactor}, block.timestamp - ${c.startRampTs}, ${range})`
-        : `${c.initialAmpFactor} - Math.mulDiv(${c.initialAmpFactor - c.targetAmpFactor}, block.timestamp - ${c.startRampTs}, ${range})`;
-      lines.push(`  if (block.timestamp < ${c.stopRampTs}) { amp${i} = ${interp} }`);
+        ? `${c.initialAmpFactor} + Math.mulDiv(${c.targetAmpFactor - c.initialAmpFactor}, ctx.timestamp() - ${c.startRampTs}, ${range})`
+        : `${c.initialAmpFactor} - Math.mulDiv(${c.initialAmpFactor - c.targetAmpFactor}, ctx.timestamp() - ${c.startRampTs}, ${range})`;
+      lines.push(`  if (ctx.timestamp() < ${c.stopRampTs}) { amp${i} = ${interp} }`);
     }
 
     // dy = dstRes - y - 1 (the -1 rounding buffer), fee on the OUTPUT side.

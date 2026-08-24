@@ -100,14 +100,14 @@
  * `base_reserves` / `quote_reserves` are all FIXED-OFFSET fields on the ONE
  * pool account already being read — no tree walk. The one missing datum
  * (`Clock::get()?.slot`, the LIVE current slot) is read via SauceScript's
- * `block.number`, which the SVM engine profile documents as having a
+ * `ctx.blockNumber()`, which the SVM engine profile documents as having a
  * fork-parity analog for every EVM chain op (compiler/dist/saucer/
  * svm-profile.js) — EMPIRICALLY CONFIRMED here (not merely trusted from that
- * comment) by compiling `function main(){ return abi.encode(block.number,
- * block.timestamp) }` for target 'svm' and executing it on the real engine.so
+ * comment) by compiling `function main(){ return abi.encode(ctx.blockNumber(),
+ * ctx.timestamp()) }` for target 'svm' and executing it on the real engine.so
  * inside a LiteSVM harness pinned via `svm.warpToSlot(1000)` +
  * `svm.setClock(new Clock(1000, 0n, 0n, 0n, 12345n))`: it returned
- * `(1000, 12345)` — `block.number` is exactly the Solana slot, `block.timestamp`
+ * `(1000, 12345)` — `ctx.blockNumber()` is exactly the Solana slot, `ctx.timestamp()`
  * exactly the Clock's unix_timestamp, independently steerable (the SAME
  * mechanism `solfi-v2` already established for its own live-slot read — see
  * `the consuming app cu e2e test`'s `SOLFI_SLOT` comment). So `referenceQuote`'s
