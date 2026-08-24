@@ -25,6 +25,20 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 - **#363** (parity-07 Tuple infer-wildcard) — net no-op (only new accept = `const t: Tuple={}` local, byte-identical to none);
   entry params + `): Tuple` still fail so doesn't unblock the ~15 Tuple-failing SDK programs; drags in #357's rejection.
 
+**✅ WORKFLOW ABORTED SAFELY (fire#102, adversarial gate WORKED — no bad push).** The rebase agent found **2 of Sammy's 4
+"no-op" commits are LOAD-BEARING for ecoswap**, stopped per its "don't guess" directive: **#361 (Math.neg)** — the ecoswap
+fixture CALLS `Math.neg(amt)` @ lines 222/239 (dropping → "Math.neg is not a Math intrinsic"); **#363 (parity-07)** bundles
+`entry_arg_types` + the ecoswap NS-1 test harness + `is_infer_tuple()` (used by entry_arg_types + ecoswap's 3 tuple params;
+dropping → "unresolved import super::is_infer_tuple"). CLEANLY dropped + verified no-op: #357, #360, #373's revert-of-#357.
+
+**USER DECISION (fire#102): DROP ALL 4 + replace blunt `Tuple` with FULLY-TYPED args (`interface {}`/`type {}`).** Two efforts:
+- **[3-DROP now]** #357 + #360 (clean) + #361 via Sammy's own `Math.neg(x)`→`-x` ecoswap-fixture find-and-replace (byte-equivalent).
+  Keep #363 for now. Rebase-drop + close #357/#360/#361. (agent `rebase-drop-3`)
+- **[TYPED-ARGS feature → then #363]** NEW RS feature: `interface {}`/`type {}` typed struct definitions so args are always fully
+  typed (not blunt `Tuple`). Migrate ecoswap's 3 tuple entry params (pools/routes/brackets) off `Tuple` → typed defs; then
+  `is_infer_tuple`/entry_arg_types can be reworked and #363 dropped + closed. Design scout `typed-args-scout` scoping feasibility
+  + the ecoswap migration + implementation plan. This is TS→RS forward-port (TS has interface/type; RS should).
+
 **Full-stack rebase-drop in flight (workflow, isolated-clone + adversarial-verify-gated push).** Topology mapped:
 main→01(#357)→02→03→04(#360)→05(#361)→[06 closed]→07(#363)→08→…→18→feat/compiler-parity-port(#375)→19(#380)→384; #382/#383
 off the port. Drop the 4 commits (+ moot #373 revert-of-#357, keep #373's other fixups); re-base everything downstream incl.
