@@ -42,7 +42,11 @@ dropping → "unresolved import super::is_infer_tuple"). CLEANLY dropped + verif
 - **[#363 — KILL IT (user redirect fire#108: "nobody asked u to do eco-swap! just kill the Tuple PR and do rebases").**
   REWORK CANCELLED (workflow w8lahx1kr stopped). `kill-363` in flight: close #363 + rebase-drop parity-07's 3 commits (blunt
   Tuple wildcard + entry_arg_types hint + ecoswap harness) + remove the ecoswap tests (ecoswap.rs/ecoswap_full.rs + fixtures,
-  the ONLY users of the Tuple machinery) + the ArgShape lib.rs export; re-base downstream. **Inline typed args
+  the ONLY users of the Tuple machinery) + the ArgShape lib.rs export; re-base downstream. **⚠️ SCOPE EXPANDED (kill-363 recon):
+  parity-19 (#380 "non-entry Tuple param shape") is a PRODUCTION Tuple feature built ON is_infer_tuple/entry_arg_types (4
+  production sites) — can't survive #363's removal. DECISION (A): DROP #380 too (it IS the Tuple feature); rebase
+  parity-module-const-expr (#384, clean const-fold) directly onto the new port. So the kill closes BOTH #363 AND #380; #384
+  survives re-based. Rest of stack (parity-08..18 + port + ctx pair) test-confined Tuple usage, cleanly droppable.** Inline typed args
   (`{field:T}[]`/`T[]`) SURVIVE — independent of #363 (base annotation_ty, swap-supply uses them), so no typed-args capability
   lost.** The elaborate typed-args-scout design below is SHELVED (not needed).
 - ~~[#363 REWORK — DESIGN LOCKED (fire#104, `typed-args-scout`; user chose "inline now + type {} follow-up")]~~ SHELVED.
