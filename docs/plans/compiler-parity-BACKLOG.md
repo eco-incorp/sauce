@@ -34,10 +34,13 @@ dropping → "unresolved import super::is_infer_tuple"). CLEANLY dropped + verif
 **USER DECISION (fire#102): DROP ALL 4 + replace blunt `Tuple` with FULLY-TYPED args (`interface {}`/`type {}`).** Two efforts:
 - **[3-DROP now]** #357 + #360 (clean) + #361 via Sammy's own `Math.neg(x)`→`-x` ecoswap-fixture find-and-replace (byte-equivalent).
   Keep #363 for now. Rebase-drop + close #357/#360/#361. (agent `rebase-drop-3`)
-- **[TYPED-ARGS feature → then #363]** NEW RS feature: `interface {}`/`type {}` typed struct definitions so args are always fully
-  typed (not blunt `Tuple`). Migrate ecoswap's 3 tuple entry params (pools/routes/brackets) off `Tuple` → typed defs; then
-  `is_infer_tuple`/entry_arg_types can be reworked and #363 dropped + closed. Design scout `typed-args-scout` scoping feasibility
-  + the ecoswap migration + implementation plan. This is TS→RS forward-port (TS has interface/type; RS should).
+- **[#363 REWORKED IN PLACE — kept OPEN (user refinement fire#103): replace blunt `Tuple` with `type {}`]** Do NOT close #363 —
+  REWORK it: swap the untyped `Tuple` infer-wildcard SURFACE for fully-typed `type {}` aliases (`type PoolType = {...}`;
+  `main(pools: PoolType[])`), resolving to the SAME lowered arg shape `entry_arg_types` already produces. KEEP #363's backing
+  (`is_infer_tuple`/`entry_arg_types`/ecoswap NS-1 harness — ecoswap needs them); only the blunt-Tuple acceptance is removed.
+  Migrate ecoswap's 3 params (pools/routes/brackets) `: Tuple` → declared `type {}`. #363 stays a live PR = the typed-args PR.
+  Mechanism = `type {}` (user-named, not `interface {}`). `typed-args-scout` reframed to the rework plan. TS→RS forward-port;
+  ALSO unblocks the ~15 corpus programs failing on "Tuple is not a type" (which the infer-wildcard never fixed).
 
 **Full-stack rebase-drop in flight (workflow, isolated-clone + adversarial-verify-gated push).** Topology mapped:
 main→01(#357)→02→03→04(#360)→05(#361)→[06 closed]→07(#363)→08→…→18→feat/compiler-parity-port(#375)→19(#380)→384; #382/#383
