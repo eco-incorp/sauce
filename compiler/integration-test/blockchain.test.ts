@@ -82,20 +82,20 @@ describe('integration: blockchain context', () => {
     expect(BigInt(cook('function main() { return ctx.balance(ctx.self()); }'))).toBeGreaterThanOrEqual(0n);
   });
 
-  it('evm.codeSize(ctx.self()) returns non-zero (formerly address.codeSize(address.self))', () => {
-    expect(BigInt(cook('function main() { return evm.codeSize(ctx.self()); }'))).toBeGreaterThan(0n);
+  it('ctx.codeSize(ctx.self()) returns non-zero (formerly address.codeSize(address.self))', () => {
+    expect(BigInt(cook('function main() { return ctx.codeSize(ctx.self()); }'))).toBeGreaterThan(0n);
   });
 
-  it('evm.codeHash(ctx.self()) returns non-zero (formerly address.codeHash(address.self))', () => {
-    expect(BigInt(cook('function main() { return evm.codeHash(ctx.self()); }'))).toBeGreaterThan(0n);
+  it('ctx.codeHash(ctx.self()) returns non-zero (formerly address.codeHash(address.self))', () => {
+    expect(BigInt(cook('function main() { return ctx.codeHash(ctx.self()); }'))).toBeGreaterThan(0n);
   });
 
-  it('evm.isContract(ctx.self()) returns true (formerly address.isContract(address.self))', () => {
-    expect(BigInt(cook('function main() { return evm.isContract(ctx.self()); }'))).toBe(1n);
+  it('ctx.isContract(ctx.self()) returns true (formerly address.isContract(address.self))', () => {
+    expect(BigInt(cook('function main() { return ctx.isContract(ctx.self()); }'))).toBe(1n);
   });
 
-  it('evm.isEOA(ctx.self()) returns false (formerly address.isEOA — no prior integration coverage)', () => {
-    expect(BigInt(cook('function main() { return evm.isEOA(ctx.self()); }'))).toBe(0n);
+  it('ctx.isEOA(ctx.self()) returns false (formerly address.isEOA — no prior integration coverage)', () => {
+    expect(BigInt(cook('function main() { return ctx.isEOA(ctx.self()); }'))).toBe(0n);
   });
 
   // crypto tests

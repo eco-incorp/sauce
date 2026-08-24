@@ -130,13 +130,14 @@ export const TARGET_CAPABILITIES: Record<string, CapabilityRow> = {
   // evm.* namespace already implies an EVM target, so these match RS and gate EVM-only.
   'evm.tload': { targets: EVM_TARGETS },
   'evm.tstore': { targets: EVM_TARGETS },
-  // Code-inspection ops moved here from the retired `address.*` namespace (ECO-2163) — EXTCODESIZE/
-  // EXTCODEHASH-style ops with no svm analogue, so (unlike the rest of the former `address.*`
-  // surface, which stayed universal under `ctx.*`) these are gated EVM-only.
-  'evm.codeSize': { targets: EVM_TARGETS },
-  'evm.codeHash': { targets: EVM_TARGETS },
-  'evm.isContract': { targets: EVM_TARGETS },
-  'evm.isEOA': { targets: EVM_TARGETS },
+  // Code-inspection reads (EXTCODESIZE/EXTCODEHASH-style, no svm analogue) — gated EVM-only. Post
+  // NS-CONVERGE they live under `ctx.*` (not `evm.*`), matching RS main, which keeps every
+  // context/address read under `ctx.*` and expresses target availability with a per-read gate like
+  // its own `ctx.msgValue`; the gate here is identical, only the namespace changed.
+  'ctx.codeSize': { targets: EVM_TARGETS },
+  'ctx.codeHash': { targets: EVM_TARGETS },
+  'ctx.isContract': { targets: EVM_TARGETS },
+  'ctx.isEOA': { targets: EVM_TARGETS },
 
   // svm.* namespace (§1.3): the svm-only mirror of the accountData/CPI surface. RS gates each with
   // `require_available(..., Builtin::Svm*)` and rejects it on any EVM target (contract.rs

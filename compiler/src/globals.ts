@@ -684,15 +684,57 @@ export const GLOBALS: Record<string, Record<string, GlobalDef>> = {
         return s.balanceOf(process(args[0]));
       },
     },
+    // EVM-only code-inspection reads, gated exactly like RS's own gated `ctx.msgValue` (NS-CONVERGE,
+    // ECO-2163): the RS compiler keeps every context read under `ctx.*` and expresses target
+    // availability with a per-read capability gate, not a separate `evm.*` namespace. RS itself has
+    // none of these four (no clean oracle), so `ctx.*`-gated is the closest convergent home. Unlike
+    // the seven portable reads above, these `assertCapability` EVM-only first.
+    codeSize: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        assertCapability(s.ctx, 'ctx.codeSize', args[0]);
+        expectArity('ctx.codeSize()', 1, args);
+
+        return s.codeSize(process(args[0]));
+      },
+    },
+    codeHash: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        assertCapability(s.ctx, 'ctx.codeHash', args[0]);
+        expectArity('ctx.codeHash()', 1, args);
+
+        return s.codeHash(process(args[0]));
+      },
+    },
+    isContract: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        assertCapability(s.ctx, 'ctx.isContract', args[0]);
+        expectArity('ctx.isContract()', 1, args);
+
+        return s.isContract(process(args[0]));
+      },
+    },
+    isEOA: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        assertCapability(s.ctx, 'ctx.isEOA', args[0]);
+        expectArity('ctx.isEOA()', 1, args);
+
+        return s.isEOA(process(args[0]));
+      },
+    },
   },
 
   // The `address.*` namespace (self/balance/balanceOf/codeSize/codeHash/isContract/isEOA) was
   // REMOVED here (ECO-2163: Rust's namespacing is the standard, and RS never had this namespace).
   // self/balance/balanceOf moved to `ctx.self()`/`ctx.selfBalance()`/`ctx.balance(addr)` above;
-  // codeSize/codeHash/isContract/isEOA moved to `evm.codeSize`/`evm.codeHash`/`evm.isContract`/
-  // `evm.isEOA` below (EVM-only concepts with no svm analogue, so — unlike ctx.* — they're gated).
-  // `address` is no longer a recognized namespace root at all; see test/ctx-namespace.test.ts's
-  // rejection coverage.
+  // codeSize/codeHash/isContract/isEOA moved to `ctx.codeSize`/`ctx.codeHash`/`ctx.isContract`/
+  // `ctx.isEOA` above (NS-CONVERGE: RS keeps every context read under `ctx.*` and gates EVM-only
+  // ones per-read — like its own `ctx.msgValue` — rather than parking them in a separate `evm.*`
+  // namespace; these four gate EVM-only exactly the same way). `address` is no longer a recognized
+  // namespace root at all; see test/ctx-namespace.test.ts's rejection coverage.
 
   // contract.call(target, value, calldata)             — raw external call
   //   target 'svm': contract.call(target, calldata, accounts[]) — accounts is an
@@ -1003,10 +1045,10 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = { ...NATIVE_GLOBAL_FU
  * `evm_call`/`svm_call`, statement.rs `evm_sstore`/`svm_sstore`). Because the capability
  * assertion fires BEFORE delegation, the delegated compile always runs its same-target arm — so
  * `evm.X` emits byte-for-byte what its EVM alias emits and `svm.X` what its svm alias emits
- * (asserted in test/evm-svm-namespace.test.ts). The four `evm.code*`/`evm.is*` members below are
- * the exception: they have no other GLOBALS home to alias (their only prior definition was the
- * now-retired `address.*` namespace — ECO-2163), so they're defined directly rather than through
- * `gatedAlias`, but are gated identically.
+ * (asserted in test/evm-svm-namespace.test.ts). After NS-CONVERGE these namespaces carry ONLY the
+ * storage/call target-duals; the code-inspection reads (codeSize/codeHash/isContract/isEOA) that
+ * once lived here moved to gated `ctx.*` (see the ctx block) to match RS main, which keeps every
+ * context/address read under `ctx.*` and gates EVM-only ones per-read rather than by namespace.
  *
  * Member map (RS oracle -> TS alias):
  *   evm.call(addr,value,data)   -> contract.call   (EVM arm: externalCall)
@@ -1016,19 +1058,11 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = { ...NATIVE_GLOBAL_FU
  *   evm.sstore(slot,value)      -> storage.write
  *   evm.tload(key)              -> storage.tRead   (EIP-1153 transient storage)
  *   evm.tstore(key,value)       -> storage.tWrite
- *   evm.codeSize(addr)          -> (native; formerly address.codeSize)
- *   evm.codeHash(addr)          -> (native; formerly address.codeHash)
- *   evm.isContract(addr)        -> (native; formerly address.isContract)
- *   evm.isEOA(addr)             -> (native; formerly address.isEOA)
  *   svm.sload(acct,off,len)     -> accountData
  *   svm.sstore(acct,off,value)  -> writeAccountData
  *   svm.call(program,accts,data)-> contract.call (svm arm) with args reordered to (target,data,accts)
  *
  * DEFERRED (no clean TS twin — reported, not stubbed): svm.remainingAccounts / svm.remainingAccount.
- * RS itself has no `evm.codeSize`/`codeHash`/`isContract`/`isEOA` at all (no clean RS oracle to
- * mirror — RS raises a clean `AddressUnknownMember` for all four); this TS-only quartet exists
- * because the TS compiler already shipped them (under `address.*`) before this namespace split and
- * they were worth keeping, not because RS has an equivalent to alias.
  */
 type NsMethod = (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => SaucerLike;
 
@@ -1049,45 +1083,9 @@ GLOBALS.evm = {
   sstore: gatedAlias('evm.sstore', GLOBALS.storage.write),
   tload: gatedAlias('evm.tload', GLOBALS.storage.tRead),
   tstore: gatedAlias('evm.tstore', GLOBALS.storage.tWrite),
-  // Native EVM code-inspection ops, moved here from the retired `address.*` namespace (ECO-2163).
-  // No other GLOBALS entry defines these, so — unlike the aliases above — they're written
-  // directly rather than through `gatedAlias`, but gated EVM-only exactly the same way.
-  codeSize: {
-    kind: 'scalar',
-    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-      assertCapability(s.ctx, 'evm.codeSize', args[0]);
-      expectArity('evm.codeSize()', 1, args);
-
-      return s.codeSize(process(args[0]));
-    },
-  },
-  codeHash: {
-    kind: 'scalar',
-    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-      assertCapability(s.ctx, 'evm.codeHash', args[0]);
-      expectArity('evm.codeHash()', 1, args);
-
-      return s.codeHash(process(args[0]));
-    },
-  },
-  isContract: {
-    kind: 'scalar',
-    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-      assertCapability(s.ctx, 'evm.isContract', args[0]);
-      expectArity('evm.isContract()', 1, args);
-
-      return s.isContract(process(args[0]));
-    },
-  },
-  isEOA: {
-    kind: 'scalar',
-    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-      assertCapability(s.ctx, 'evm.isEOA', args[0]);
-      expectArity('evm.isEOA()', 1, args);
-
-      return s.isEOA(process(args[0]));
-    },
-  },
+  // NB: code-inspection reads (codeSize/codeHash/isContract/isEOA) are NOT here — NS-CONVERGE moved
+  // them to gated `ctx.*` (see the ctx block above). `evm.*` now carries ONLY the storage/call
+  // target-duals (the ones mirrored by `svm.*` below), matching RS main's namespace split.
 };
 
 GLOBALS.svm = {

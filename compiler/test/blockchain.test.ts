@@ -104,36 +104,36 @@ describe('blockchain context', () => {
     );
   });
 
-  it('compiles evm.codeSize(addr) (formerly address.codeSize(addr))', () => {
-    const result = compile('function main() { const s = evm.codeSize(42); }');
+  it('compiles ctx.codeSize(addr) (formerly address.codeSize(addr))', () => {
+    const result = compile('function main() { const s = ctx.codeSize(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.EXT_CODE_SIZE, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles evm.codeHash(addr) (formerly address.codeHash(addr))', () => {
-    const result = compile('function main() { const h = evm.codeHash(42); }');
+  it('compiles ctx.codeHash(addr) (formerly address.codeHash(addr))', () => {
+    const result = compile('function main() { const h = ctx.codeHash(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.EXT_CODE_HASH, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles evm.isContract(addr) (formerly address.isContract(addr))', () => {
-    const result = compile('function main() { const c = evm.isContract(42); }');
+  it('compiles ctx.isContract(addr) (formerly address.isContract(addr))', () => {
+    const result = compile('function main() { const c = ctx.isContract(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.IS_CONTRACT, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles evm.isEOA(addr) (formerly address.isEOA(addr))', () => {
-    const result = compile('function main() { const e = evm.isEOA(42); }');
+  it('compiles ctx.isEOA(addr) (formerly address.isEOA(addr))', () => {
+    const result = compile('function main() { const e = ctx.isEOA(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.IS_EOA, OPS.BYTE_1, 42]),
     );
   });
 
-  it('evm.codeSize/codeHash/isContract/isEOA reject the svm target (EVM-only, no svm analogue)', () => {
-    for (const call of ['evm.codeSize(42)', 'evm.codeHash(42)', 'evm.isContract(42)', 'evm.isEOA(42)']) {
+  it('ctx.codeSize/codeHash/isContract/isEOA reject the svm target (EVM-only, no svm analogue)', () => {
+    for (const call of ['ctx.codeSize(42)', 'ctx.codeHash(42)', 'ctx.isContract(42)', 'ctx.isEOA(42)']) {
       expect(() => compile(`function main() { const x = ${call}; }`, { target: 'svm' })).toThrow();
     }
   });

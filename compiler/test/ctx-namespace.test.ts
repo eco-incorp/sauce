@@ -79,8 +79,8 @@ describe('ctx.* context namespace (§1.4 RS parity)', () => {
 // ECO-2163: Rust's namespacing is the standard, and RS never had an `address.*` namespace of its
 // own — the TS-only `address.*` namespace (self/balance/balanceOf/codeSize/codeHash/isContract/
 // isEOA) has been dropped entirely. self/balance/balanceOf moved to ctx.* (covered above);
-// codeSize/codeHash/isContract/isEOA moved to evm.* (see test/blockchain.test.ts and
-// test/target-capabilities.test.ts). This locks the removal itself: `address` is no longer a
+// codeSize/codeHash/isContract/isEOA also moved to ctx.* but gated EVM-only (NS-CONVERGE — see
+// test/blockchain.test.ts and test/target-capabilities.test.ts). This locks the removal itself: `address` is no longer a
 // recognized namespace root at all, on any target, for any of its former members.
 describe('address.* namespace fully removed (ECO-2163)', () => {
   const rejected = [

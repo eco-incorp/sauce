@@ -413,13 +413,17 @@ ctx.selfBalance(); // this contract's ETH balance
 ctx.balance(addr); // ETH balance of addr
 ```
 
-### EVM Utilities (`evm.*` — EVM targets only, `v1`/`v12`; rejected on `svm`)
+### EVM-only code inspection (`ctx.*`, capability-gated — `v1`/`v12` only, rejected on `svm`)
+
+These are ordinary `ctx.*` reads that gate EVM-only per-read (there is no svm analogue), mirroring how
+the RS compiler keeps every context/address read under `ctx.*` and expresses target availability with a
+gate rather than a separate namespace.
 
 ```javascript
-evm.codeSize(addr); // code size in bytes
-evm.codeHash(addr); // keccak256 of code
-evm.isContract(addr); // 1 if has code, 0 otherwise
-evm.isEOA(addr); // 1 if no code, 0 otherwise
+ctx.codeSize(addr); // code size in bytes
+ctx.codeHash(addr); // keccak256 of code
+ctx.isContract(addr); // 1 if has code, 0 otherwise
+ctx.isEOA(addr); // 1 if no code, 0 otherwise
 ```
 
 ### Other Functions

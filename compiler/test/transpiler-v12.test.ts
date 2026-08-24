@@ -289,8 +289,8 @@ const paramCases: ParamCase[] = [
     ref: (c) => mk(c).add(mk(c).read('a'), mk(c).read('b')),
   },
   {
-    name: 'evm.isContract(param) (formerly address.isContract(param))',
-    src: 'function main(a){ return evm.isContract(a) }',
+    name: 'ctx.isContract(param) (formerly address.isContract(param))',
+    src: 'function main(a){ return ctx.isContract(a) }',
     params: ['a'],
     ref: (c) => mk(c).isContract(mk(c).read('a')),
   },
