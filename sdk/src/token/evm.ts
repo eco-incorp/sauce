@@ -11,12 +11,12 @@ export const ERC20_IMPORT_LINE = `import { IERC20 } from "./artifacts/IERC20.jso
 
 function formatOwner(owner: TokenBalanceSpec["owner"]): string {
   if (owner === undefined) throw new Error("Token.balanceOf: owner is required on an EVM target");
-  if (owner === "self") return "address.self";
+  if (owner === "self") return "ctx.self()";
   return formatAddressField(toAddressBigint(owner, "owner"));
 }
 
 function amountExpr(amount: bigint | number | "balance", tokenLiteral: string): string {
-  if (amount === "balance") return `IERC20.at(${tokenLiteral}).balanceOf(address.self)`;
+  if (amount === "balance") return `IERC20.at(${tokenLiteral}).balanceOf(ctx.self())`;
   return formatBigint(typeof amount === "bigint" ? amount : BigInt(amount));
 }
 

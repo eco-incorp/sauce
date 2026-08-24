@@ -405,16 +405,21 @@ block.baseFee; // EIP-1559 base fee
 block.blobBaseFee; // EIP-4844 blob base fee
 ```
 
-### Address Utilities
+### Context Utilities
 
 ```javascript
-address.self; // this contract's address
-address.balance; // this contract's ETH balance
-address.balanceOf(addr); // ETH balance of addr
-address.codeSize(addr); // code size in bytes
-address.codeHash(addr); // keccak256 of code
-address.isContract(addr); // 1 if has code, 0 otherwise
-address.isEOA(addr); // 1 if no code, 0 otherwise
+ctx.self(); // this contract's address
+ctx.selfBalance(); // this contract's ETH balance
+ctx.balance(addr); // ETH balance of addr
+```
+
+### EVM Utilities (`evm.*` — EVM targets only, `v1`/`v12`; rejected on `svm`)
+
+```javascript
+evm.codeSize(addr); // code size in bytes
+evm.codeHash(addr); // keccak256 of code
+evm.isContract(addr); // 1 if has code, 0 otherwise
+evm.isEOA(addr); // 1 if no code, 0 otherwise
 ```
 
 ### Other Functions

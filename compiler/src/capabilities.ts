@@ -26,9 +26,14 @@ import type { CompileTarget, CompilerContext } from './context.js';
  * NOT gated, deliberately (verified by compiling each on target 'svm' — see
  * test/target-capabilities.test.ts's over-gating guard): abi.encode/decode (the ABI CODEC
  * itself is universal — only the ABI-*typed-binding* surface below is EVM-only), emit/LOG,
- * crypto.*, msg.*, block.*, tx.*, address.*, gasLeft/blockHash/blobHash, storage.tRead/tWrite
- * (transient storage — a divergent-lowering, fork-parity op, not a gated one), eval, Math.*,
- * Uint8Array.from. A future edit MUST NOT "complete" this table with any of those.
+ * crypto.*, msg.*, block.*, tx.*, ctx.* (the unified context namespace — `ctx.self()`/
+ * `ctx.selfBalance()`/`ctx.balance()` included; the `address.*` namespace these used to alias was
+ * dropped entirely in favor of `ctx.*` — see compiler-parity ECO-2163), gasLeft/blockHash/blobHash,
+ * storage.tRead/tWrite (transient storage — a divergent-lowering, fork-parity op, not a gated one),
+ * eval, Math.*, Uint8Array.from. A future edit MUST NOT "complete" this table with any of those.
+ * (The former `address.codeSize`/`codeHash`/`isContract`/`isEOA` — EVM-only concepts with no svm
+ * analogue — moved to the `evm.*` namespace below and ARE gated, unlike the rest of the old
+ * `address.*` surface; they were never covered by the over-gating guard above.)
  */
 
 /** One gated feature: the targets it's allowed on, plus how to phrase the rejection. */
@@ -125,6 +130,13 @@ export const TARGET_CAPABILITIES: Record<string, CapabilityRow> = {
   // evm.* namespace already implies an EVM target, so these match RS and gate EVM-only.
   'evm.tload': { targets: EVM_TARGETS },
   'evm.tstore': { targets: EVM_TARGETS },
+  // Code-inspection ops moved here from the retired `address.*` namespace (ECO-2163) — EXTCODESIZE/
+  // EXTCODEHASH-style ops with no svm analogue, so (unlike the rest of the former `address.*`
+  // surface, which stayed universal under `ctx.*`) these are gated EVM-only.
+  'evm.codeSize': { targets: EVM_TARGETS },
+  'evm.codeHash': { targets: EVM_TARGETS },
+  'evm.isContract': { targets: EVM_TARGETS },
+  'evm.isEOA': { targets: EVM_TARGETS },
 
   // svm.* namespace (§1.3): the svm-only mirror of the accountData/CPI surface. RS gates each with
   // `require_available(..., Builtin::Svm*)` and rejects it on any EVM target (contract.rs

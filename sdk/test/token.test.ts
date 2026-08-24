@@ -42,14 +42,14 @@ describe("Token: EVM source emission", () => {
     expect(src).toContain(`IERC20.at(${BigInt(TOKEN).toString()}n).approve(${BigInt(SPENDER).toString()}n, 7n);`);
   });
 
-  it("balanceOf emits an expression, and Token.balanceOf('self') resolves to address.self", () => {
+  it("balanceOf emits an expression, and Token.balanceOf('self') resolves to ctx.self()", () => {
     const expr = Token.balanceOf({ token: TOKEN, owner: "self" }).expression("v1");
-    expect(expr).toBe(`IERC20.at(${BigInt(TOKEN).toString()}n).balanceOf(address.self)`);
+    expect(expr).toBe(`IERC20.at(${BigInt(TOKEN).toString()}n).balanceOf(ctx.self())`);
   });
 
   it("amount: 'balance' binds a runtime balanceOf read for transfer/approve", () => {
     const src = Token.transfer({ token: TOKEN, to: TO, amount: "balance" }).statement("evm");
-    expect(src).toContain(`IERC20.at(${BigInt(TOKEN).toString()}n).balanceOf(address.self)`);
+    expect(src).toContain(`IERC20.at(${BigInt(TOKEN).toString()}n).balanceOf(ctx.self())`);
   });
 
   it("statement() throws for balanceOf; expression() throws for transfer/approve", () => {

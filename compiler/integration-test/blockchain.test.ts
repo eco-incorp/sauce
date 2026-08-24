@@ -34,12 +34,12 @@ describe('integration: blockchain context', () => {
     expect(BigInt(cook('function main() { return tx.origin; }'))).toBeGreaterThanOrEqual(0n);
   });
 
-  it('address.self returns non-zero', () => {
-    expect(BigInt(cook('function main() { return address.self; }'))).toBeGreaterThan(0n);
+  it('ctx.self() returns non-zero (formerly address.self)', () => {
+    expect(BigInt(cook('function main() { return ctx.self(); }'))).toBeGreaterThan(0n);
   });
 
-  it('address.balance returns non-negative', () => {
-    expect(BigInt(cook('function main() { return address.balance; }'))).toBeGreaterThanOrEqual(0n);
+  it('ctx.selfBalance() returns non-negative (formerly address.balance)', () => {
+    expect(BigInt(cook('function main() { return ctx.selfBalance(); }'))).toBeGreaterThanOrEqual(0n);
   });
 
   it('context value in arithmetic', () => {
@@ -78,20 +78,24 @@ describe('integration: blockchain context', () => {
     expect(BigInt(cook('function main() { return blockHash(block.number - 1); }'))).toBeGreaterThan(0n);
   });
 
-  it('address.balanceOf(address.self) matches address.balance', () => {
-    expect(BigInt(cook('function main() { return address.balanceOf(address.self); }'))).toBeGreaterThanOrEqual(0n);
+  it('ctx.balance(ctx.self()) matches ctx.selfBalance() (formerly address.balanceOf(address.self)/address.balance)', () => {
+    expect(BigInt(cook('function main() { return ctx.balance(ctx.self()); }'))).toBeGreaterThanOrEqual(0n);
   });
 
-  it('address.codeSize(address.self) returns non-zero', () => {
-    expect(BigInt(cook('function main() { return address.codeSize(address.self); }'))).toBeGreaterThan(0n);
+  it('evm.codeSize(ctx.self()) returns non-zero (formerly address.codeSize(address.self))', () => {
+    expect(BigInt(cook('function main() { return evm.codeSize(ctx.self()); }'))).toBeGreaterThan(0n);
   });
 
-  it('address.codeHash(address.self) returns non-zero', () => {
-    expect(BigInt(cook('function main() { return address.codeHash(address.self); }'))).toBeGreaterThan(0n);
+  it('evm.codeHash(ctx.self()) returns non-zero (formerly address.codeHash(address.self))', () => {
+    expect(BigInt(cook('function main() { return evm.codeHash(ctx.self()); }'))).toBeGreaterThan(0n);
   });
 
-  it('address.isContract(address.self) returns true', () => {
-    expect(BigInt(cook('function main() { return address.isContract(address.self); }'))).toBe(1n);
+  it('evm.isContract(ctx.self()) returns true (formerly address.isContract(address.self))', () => {
+    expect(BigInt(cook('function main() { return evm.isContract(ctx.self()); }'))).toBe(1n);
+  });
+
+  it('evm.isEOA(ctx.self()) returns false (formerly address.isEOA — no prior integration coverage)', () => {
+    expect(BigInt(cook('function main() { return evm.isEOA(ctx.self()); }'))).toBe(0n);
   });
 
   // crypto tests
@@ -204,8 +208,8 @@ describe('integration: blockchain context', () => {
         const bytecode = Uint8Array.from([0x60, 0x00, 0x60, 0x00, 0xf3]);
 
         // Predict addresses using the known nonce
-        const predicted1 = contract.predictCreate(address.self, ${nonce}n);
-        const predicted2 = contract.predictCreate(address.self, ${nonce + 1n}n);
+        const predicted1 = contract.predictCreate(ctx.self(), ${nonce}n);
+        const predicted2 = contract.predictCreate(ctx.self(), ${nonce + 1n}n);
 
         // Deploy two contracts
         const deployed1 = contract.create(0, bytecode);
@@ -226,7 +230,7 @@ describe('integration: blockchain context', () => {
     const result = cook(`
       function main() {
         const bytecode = Uint8Array.from([0x60, 0x00, 0x60, 0x00, 0xf3]);
-        const predicted = contract.predictCreate2(address.self, ${salt}, ${codeHash});
+        const predicted = contract.predictCreate2(ctx.self(), ${salt}, ${codeHash});
         const deployed = contract.create2(0, ${salt}, bytecode);
         return predicted === deployed;
       }

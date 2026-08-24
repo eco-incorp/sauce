@@ -13,7 +13,7 @@
  * one symbol never drops an unrelated registry symbol for the same chain).
  *
  * Deliberately NOT here: `self` (a runtime intrinsic, not a `bigint|boolean|number` constant — the
- * working spelling stays the compiler's own `address.self`); SVM venue programIds; family-alias
+ * working spelling stays the compiler's own `ctx.self()`); SVM venue programIds; family-alias
  * spellings (`Uniswap_UniversalRouter` alongside `UniswapV4_UniversalRouter`); qualified cross-scope
  * `Base.USDC` (needs nesting).
  */

@@ -51,8 +51,8 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
 
   it("'delta' variant compiles and its source contains the pre/post/delta bracket", () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply({ amount: "delta" }));
-    expect(src).toMatch(/const deposit0Pre = IERC20\.at\(.*\)\.balanceOf\(address\.self\);/);
-    expect(src).toMatch(/const deposit0Post = IERC20\.at\(.*\)\.balanceOf\(address\.self\);/);
+    expect(src).toMatch(/const deposit0Pre = IERC20\.at\(.*\)\.balanceOf\(ctx\.self\(\)\);/);
+    expect(src).toMatch(/const deposit0Post = IERC20\.at\(.*\)\.balanceOf\(ctx\.self\(\)\);/);
     expect(src).toMatch(/const deposit0Amt = deposit0Post - deposit0Pre;/);
 
     const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target: "v12", treeshake: true });

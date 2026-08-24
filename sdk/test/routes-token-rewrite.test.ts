@@ -1,6 +1,6 @@
 /**
  * ERC20 token member rewrite — U4 `USDC.transfer(to, amount)` -> `IERC20.at(USDC).transfer(to,
- * amount)`, plus the balance sugar `self.USDC` -> `IERC20.at(<addr>n).balanceOf(address.self)`.
+ * amount)`, plus the balance sugar `self.USDC` -> `IERC20.at(<addr>n).balanceOf(ctx.self())`.
  */
 import { compile } from "@eco-incorp/sauce-compiler";
 import { requireChain } from "../src/chains/canonical.js";
@@ -160,12 +160,12 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
   const BASE = requireChain("base");
   const tokens = resolveTokenMap(BASE); // { USDC: <addr>n, WETH: <addr>n }
 
-  it("self.USDC rewrites to IERC20.at(<addr>n).balanceOf(address.self)", () => {
+  it("self.USDC rewrites to IERC20.at(<addr>n).balanceOf(ctx.self())", () => {
     const source = `function main() { return self.USDC; }`;
     const { source: out, rewrote, balanceSites } = rewriteTokenMembers(source, tokens);
     expect(rewrote).toBe(true);
     expect(balanceSites).toBe(1);
-    expect(out).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(address.self)`);
+    expect(out).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`);
   });
 
   it("a hex-address-literal holder emits the EXACT address (catches the float64 round-trip)", () => {
@@ -196,9 +196,9 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
   it("both spellings compile byte-identically: self.USDC vs USDC.balanceOf(self)", () => {
     const sugarSource = `function main() { return self.USDC; }`;
     // bare `self` alone isn't valid SauceScript (it needs the protocol-accessor pass's OWN self
-    // sugar -> `address.self`, a separate mechanism this test isn't exercising) -- spell it out
+    // sugar -> `ctx.self()`, a separate mechanism this test isn't exercising) -- spell it out
     // directly so this is an apples-to-apples comparison of the TOKEN rewrite alone.
-    const u4Source = `function main() { return USDC.balanceOf(address.self); }`;
+    const u4Source = `function main() { return USDC.balanceOf(ctx.self()); }`;
     const sugar = rewriteTokenMembers(sugarSource, tokens);
     const u4 = rewriteTokenMembers(u4Source, tokens);
     expect(sugar.rewrote).toBe(true);
@@ -216,9 +216,9 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     expect(Array.from(sugarCompiled.bytecode[0]!)).toEqual(Array.from(u4Compiled.bytecode[0]!));
   });
 
-  it("THE DECISIVE STEP (a): self.USDC for a real chain rewrites to IERC20.at(<real Base USDC>n).balanceOf(address.self) and compiles", () => {
+  it("THE DECISIVE STEP (a): self.USDC for a real chain rewrites to IERC20.at(<real Base USDC>n).balanceOf(ctx.self()) and compiles", () => {
     const compiled = compileSauceRoute("base", `return self.USDC;`, { pot: POT });
-    expect(compiled.source).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(address.self)`);
+    expect(compiled.source).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`);
     expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -321,7 +321,7 @@ describe("composition: token pass + protocol-accessor pass in ONE compile", () =
       { pot: POT },
     );
     expect(compiled.source).toContain("IUniswapV4_UniversalRouter.at(");
-    expect(compiled.source).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(address.self)`);
+    expect(compiled.source).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`);
     const count = (compiled.source.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []).length;
     expect(count).toBe(1);
     expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);

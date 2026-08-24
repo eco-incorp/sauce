@@ -226,7 +226,7 @@ export interface NestOptions {
   native?: "balance" | "skip";
   /** Sets `value = child.reward.nativeAmount` on the transfer `cook()` call, so solver-delivered
    *  native funding (via this route's own `route.nativeAmount`) reaches the Pot before the transfer
-   *  reads `address.balance`. Default `false`. Re-enables a NATIVE-only coverage check (T5): the sum
+   *  reads `ctx.selfBalance()`. Default `false`. Re-enables a NATIVE-only coverage check (T5): the sum
    *  of every opted-in child's `nativeAmount` must not exceed this route's own `route.nativeAmount`. */
   fundNativeFromRoute?: boolean;
   /** Overrides the Pot the transfer `cook()` executes on. Defaults to this route's own EVM

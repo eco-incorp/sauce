@@ -318,11 +318,11 @@ describe('integration: inline function returning a dynamic value (real execution
       };
       function main() {
         let arr = build();
-        arr[0] = address.balance;
+        arr[0] = ctx.selfBalance();
         return arr[0];
       }
     `;
 
-    expect(BigInt(cook(source))).toBe(BigInt(cook('function main() { return address.balance; }')));
+    expect(BigInt(cook(source))).toBe(BigInt(cook('function main() { return ctx.selfBalance(); }')));
   });
 });

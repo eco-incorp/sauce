@@ -617,12 +617,16 @@ export const GLOBALS: Record<string, Record<string, GlobalDef>> = {
   },
 
   // ctx.*  — unified context namespace (compiler-parity §1.4, adopted from compiler-rs).
-  // EXACTLY 7 members, ALL call-form (`ctx.foo()`); `self` is a METHOD (unlike the `address.self`
-  // PROPERTY), and `gasPrice`/`origin` are deliberately excluded (RS raises CtxUnknownMethod).
-  // Each aliases the pre-existing msg.*/block.*/address.* spelling, emitting byte-identical bytecode.
-  // A nullary here still takes the (ignored) args param so `compile.length !== 1` — that routes it
-  // through processStaticMethod (call form) and makes bare `ctx.foo` (no call) fail closed, matching
-  // RS's call-only rule. Oracle: sauce-core/src/lower/contract.rs:463-472.
+  // EXACTLY 7 members, ALL call-form (`ctx.foo()`); `self`/`selfBalance`/`balance` are METHODS —
+  // the standalone `address.self`/`address.balance`/`address.balanceOf` namespace they used to
+  // alias has been REMOVED entirely (ECO-2163: Rust's namespacing is the standard, and RS never had
+  // an `address.*` namespace of its own); `gasPrice`/`origin` are deliberately excluded (RS raises
+  // CtxUnknownMethod). Each aliases the pre-existing msg.*/block.* spelling (or, for
+  // self/selfBalance/balance, the same underlying op the old address.* namespace used), emitting
+  // byte-identical bytecode. A nullary here still takes the (ignored) args param so
+  // `compile.length !== 1` — that routes it through processStaticMethod (call form) and makes bare
+  // `ctx.foo` (no call) fail closed, matching RS's call-only rule.
+  // Oracle: sauce-core/src/lower/contract.rs:463-472.
   ctx: {
     msgSender: {
       kind: 'scalar',
@@ -682,57 +686,13 @@ export const GLOBALS: Record<string, Record<string, GlobalDef>> = {
     },
   },
 
-  // address.self               — this contract's address
-  // address.balance            — this contract's ETH balance (wei)
-  // address.balanceOf(addr)    — ETH balance of addr (wei)
-  // address.codeSize(addr)     — deployed code size of addr (bytes)
-  // address.codeHash(addr)     — keccak256 hash of addr's code
-  // address.isContract(addr)   — 1 if addr has code, 0 otherwise
-  // address.isEOA(addr)        — 1 if addr has no code, 0 otherwise
-  address: {
-    self: { kind: 'scalar', compile: (s: SaucerLike) => s.addressSelf() },
-    balance: { kind: 'scalar', compile: (s: SaucerLike) => s.addressBalance() },
-    balanceOf: {
-      kind: 'scalar',
-      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-        expectArity('address.balanceOf()', 1, args);
-
-        return s.balanceOf(process(args[0]));
-      },
-    },
-    codeSize: {
-      kind: 'scalar',
-      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-        expectArity('address.codeSize()', 1, args);
-
-        return s.codeSize(process(args[0]));
-      },
-    },
-    codeHash: {
-      kind: 'scalar',
-      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-        expectArity('address.codeHash()', 1, args);
-
-        return s.codeHash(process(args[0]));
-      },
-    },
-    isContract: {
-      kind: 'scalar',
-      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-        expectArity('address.isContract()', 1, args);
-
-        return s.isContract(process(args[0]));
-      },
-    },
-    isEOA: {
-      kind: 'scalar',
-      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-        expectArity('address.isEOA()', 1, args);
-
-        return s.isEOA(process(args[0]));
-      },
-    },
-  },
+  // The `address.*` namespace (self/balance/balanceOf/codeSize/codeHash/isContract/isEOA) was
+  // REMOVED here (ECO-2163: Rust's namespacing is the standard, and RS never had this namespace).
+  // self/balance/balanceOf moved to `ctx.self()`/`ctx.selfBalance()`/`ctx.balance(addr)` above;
+  // codeSize/codeHash/isContract/isEOA moved to `evm.codeSize`/`evm.codeHash`/`evm.isContract`/
+  // `evm.isEOA` below (EVM-only concepts with no svm analogue, so — unlike ctx.* — they're gated).
+  // `address` is no longer a recognized namespace root at all; see test/ctx-namespace.test.ts's
+  // rejection coverage.
 
   // contract.call(target, value, calldata)             — raw external call
   //   target 'svm': contract.call(target, calldata, accounts[]) — accounts is an
@@ -1036,13 +996,17 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = { ...NATIVE_GLOBAL_FU
 /**
  * evm.* / svm.* target-namespaced builtins (compiler-parity §1.3, adopted from compiler-rs).
  *
- * Thin, byte-identical ALIASES of the pre-existing storage/contract/accountData/writeAccountData
- * surface, each asserting TARGET INTENT first: `evm.*` is EVM-only (v1/v12), `svm.*` is svm-only —
- * exactly the split RS enforces via `require_available(target, Builtin::{Evm,Svm}*)`
- * (sauce-core/src/lower/contract.rs `evm_call`/`svm_call`, statement.rs `evm_sstore`/`svm_sstore`).
- * Because the capability assertion fires BEFORE delegation, the delegated compile always runs its
- * same-target arm — so `evm.X` emits byte-for-byte what its EVM alias emits and `svm.X` what its
- * svm alias emits (asserted in test/evm-svm-namespace.test.ts).
+ * Most members are thin, byte-identical ALIASES of the pre-existing storage/contract/
+ * accountData/writeAccountData surface, each asserting TARGET INTENT first: `evm.*` is EVM-only
+ * (v1/v12), `svm.*` is svm-only — exactly the split RS enforces via
+ * `require_available(target, Builtin::{Evm,Svm}*)` (sauce-core/src/lower/contract.rs
+ * `evm_call`/`svm_call`, statement.rs `evm_sstore`/`svm_sstore`). Because the capability
+ * assertion fires BEFORE delegation, the delegated compile always runs its same-target arm — so
+ * `evm.X` emits byte-for-byte what its EVM alias emits and `svm.X` what its svm alias emits
+ * (asserted in test/evm-svm-namespace.test.ts). The four `evm.code*`/`evm.is*` members below are
+ * the exception: they have no other GLOBALS home to alias (their only prior definition was the
+ * now-retired `address.*` namespace — ECO-2163), so they're defined directly rather than through
+ * `gatedAlias`, but are gated identically.
  *
  * Member map (RS oracle -> TS alias):
  *   evm.call(addr,value,data)   -> contract.call   (EVM arm: externalCall)
@@ -1052,11 +1016,19 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = { ...NATIVE_GLOBAL_FU
  *   evm.sstore(slot,value)      -> storage.write
  *   evm.tload(key)              -> storage.tRead   (EIP-1153 transient storage)
  *   evm.tstore(key,value)       -> storage.tWrite
+ *   evm.codeSize(addr)          -> (native; formerly address.codeSize)
+ *   evm.codeHash(addr)          -> (native; formerly address.codeHash)
+ *   evm.isContract(addr)        -> (native; formerly address.isContract)
+ *   evm.isEOA(addr)             -> (native; formerly address.isEOA)
  *   svm.sload(acct,off,len)     -> accountData
  *   svm.sstore(acct,off,value)  -> writeAccountData
  *   svm.call(program,accts,data)-> contract.call (svm arm) with args reordered to (target,data,accts)
  *
  * DEFERRED (no clean TS twin — reported, not stubbed): svm.remainingAccounts / svm.remainingAccount.
+ * RS itself has no `evm.codeSize`/`codeHash`/`isContract`/`isEOA` at all (no clean RS oracle to
+ * mirror — RS raises a clean `AddressUnknownMember` for all four); this TS-only quartet exists
+ * because the TS compiler already shipped them (under `address.*`) before this namespace split and
+ * they were worth keeping, not because RS has an equivalent to alias.
  */
 type NsMethod = (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => SaucerLike;
 
@@ -1077,6 +1049,45 @@ GLOBALS.evm = {
   sstore: gatedAlias('evm.sstore', GLOBALS.storage.write),
   tload: gatedAlias('evm.tload', GLOBALS.storage.tRead),
   tstore: gatedAlias('evm.tstore', GLOBALS.storage.tWrite),
+  // Native EVM code-inspection ops, moved here from the retired `address.*` namespace (ECO-2163).
+  // No other GLOBALS entry defines these, so — unlike the aliases above — they're written
+  // directly rather than through `gatedAlias`, but gated EVM-only exactly the same way.
+  codeSize: {
+    kind: 'scalar',
+    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+      assertCapability(s.ctx, 'evm.codeSize', args[0]);
+      expectArity('evm.codeSize()', 1, args);
+
+      return s.codeSize(process(args[0]));
+    },
+  },
+  codeHash: {
+    kind: 'scalar',
+    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+      assertCapability(s.ctx, 'evm.codeHash', args[0]);
+      expectArity('evm.codeHash()', 1, args);
+
+      return s.codeHash(process(args[0]));
+    },
+  },
+  isContract: {
+    kind: 'scalar',
+    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+      assertCapability(s.ctx, 'evm.isContract', args[0]);
+      expectArity('evm.isContract()', 1, args);
+
+      return s.isContract(process(args[0]));
+    },
+  },
+  isEOA: {
+    kind: 'scalar',
+    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+      assertCapability(s.ctx, 'evm.isEOA', args[0]);
+      expectArity('evm.isEOA()', 1, args);
+
+      return s.isEOA(process(args[0]));
+    },
+  },
 };
 
 GLOBALS.svm = {
@@ -1124,7 +1135,7 @@ export const RESERVED_NAMES: Set<string> = new Set([...Object.keys(GLOBALS), ...
  * (`Namespace`, `lower/mod.rs`; decision 0.4).
  *
  * Deliberately NARROWER than `RESERVED_NAMES`: every OTHER TS global (`msg`, `block`,
- * `tx`, `address`, `contract`, `storage`, `Uint8Array`) is a member-access-only or
+ * `tx`, `contract`, `storage`, `Uint8Array`) is a member-access-only or
  * call-only surface a plain value binding cannot shadow (member reads check `GLOBALS`
  * first; bare calls resolve `GLOBAL_FUNCTIONS` first) — so RS accepts `let msg = 1n;` /
  * `let block = 1n;` and, with this set, so does TS. `evm`/`svm` are reserved ahead of
