@@ -140,14 +140,16 @@ export const stabbleWeightedSwap: SvmVenueAdapter = {
   emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
     const c = asWeightedConfig(cfg);
     assertStabbleU64AmountIn(amountIn, `${SLUG} emitQuote`);
-    const pool = JSON.stringify(c.pool);
     const [tokenIn, tokenOut] = c.tokens;
     const wrappedIn = calcWrappedAmount(amountIn, tokenIn);
 
+    // Account model (RS compiler): quoteAccounts() attaches the pool alone, so the
+    // pool is slot 0 (acc0). accountUint lowered to CAST_LE and these are u64 LE
+    // fields, so `.toLe()` is the exact endianness match.
     const lines: string[] = [
-      `  const bal0_${i} = accountUint(${pool}, ${TOKENS_OFFSET + 4 + BAL_SUB_OFFSET}, 8);`,
-      `  const bal1_${i} = accountUint(${pool}, ${TOKENS_OFFSET + 4 + TOKEN_SIZE + BAL_SUB_OFFSET}, 8);`,
-      `  const fee${i} = accountUint(${pool}, ${SWAP_FEE_OFFSET}, 8);`,
+      `  const bal0_${i} = svm.sload(acc0, ${TOKENS_OFFSET + 4 + BAL_SUB_OFFSET}, 8).toLe();`,
+      `  const bal1_${i} = svm.sload(acc0, ${TOKENS_OFFSET + 4 + TOKEN_SIZE + BAL_SUB_OFFSET}, 8).toLe();`,
+      `  const fee${i} = svm.sload(acc0, ${SWAP_FEE_OFFSET}, 8).toLe();`,
     ];
     const xcapExpr = `Math.mulDiv(bal0_${i}, ${WEIGHTED_MAX_IN_RATIO}, 1000000000)`;
     lines.push(`  let wrapped${i} = ${wrappedIn};`);
