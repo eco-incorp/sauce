@@ -117,8 +117,12 @@ must be top-level); (3) **codegen "different locals live"** on nested-if-with-co
 (1) codegen "different locals live" — user asked "would TS error on shadow const?" — investigating (`rs-scope-investigate`);
 preliminary: NO, TS block-scopes if-branches so it's valid TS; RS rejects due to its deliberate SHARED-SCOPE + stack model (a
 branch-only const leaves the merge with different live locals). Fix = RS block-scope if bodies vs hoist consts in code — TBD.
-(2) `++`/`--` — **IMPLEMENT in RS** (user: "we should support ++/-- in rust compiler") — `rs-plusplus-impl` on
-`feat/compiler-update-expr` off main, PR to sauce, TDD. (3) nested functions — **DO NOT support** (user: "I don't like nested
+(2) `++`/`--` — ✅ **DONE (PR #385, `rs-plusplus-impl`, `feat/compiler-update-expr` off main).** `check_update`
+(frontend.rs:957, plain-identifier operand only); lowering `i++`≡`i=i+1n` reusing compound-assignment path (no new opcodes,
+statement.rs:862); STATEMENT context (for-update + bare `i++;`) fully covered (what Newton loops need), expression-context
+(`let x=i++`) deferred. Target-agnostic. Verified on REAL engines: cargo test 1060/0, v12 conformance 197 (4 new), svm
+conformance 174 (3 new, built engine.so), clippy/fmt clean. **SDK RS/WASM needs rebuild from a commit carrying #385 before
+Newton venues consume it.** (3) nested functions — **DO NOT support** (user: "I don't like nested
 functions declaration") — RS keeps rejecting; helpers hoisted to top-level (SDK/ladder rewrite, not a compiler change).
 Note: SDK RS/WASM needs a rebuild from a commit carrying ++/-- before the Newton venues can use it. Remaining accountUint surface: 3 blocked venues + settle
 (recipes/settle.sauce.ts 3, recipes/index.ts 3) — settle held (staged-mode Q). Shared ladder = sauce-recipes (out of repo).
