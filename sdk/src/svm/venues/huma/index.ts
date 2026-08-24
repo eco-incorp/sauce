@@ -400,9 +400,13 @@ export const huma: SvmVenueAdapter = {
     if (amountIn <= 0n) throw new Error(`${SLUG} amountIn must be positive, got ${amountIn}`);
     if (amountIn > U64_MAX) throw new Error(`${SLUG} amountIn must fit u64, got ${amountIn}`);
 
-    const poolState = JSON.stringify(`${poolRef(c)}:pool-state`);
-    const modeMint = JSON.stringify(`${poolRef(c)}:mode-mint`);
-    const poolUnderlying = JSON.stringify(`${poolRef(c)}:pool-underlying`);
+    // Account model (RS/svm target): reads go through main()'s ordered `acc<k>`
+    // params (k = the ref's index in quoteAccounts) — [pool-state=acc0,
+    // mode-mint=acc1, pool-underlying=acc2] — not `accountUint("<ref>", …)`.
+    // `accountUint` lowered to CAST_LE, so `.toLe()` is the exact endianness match.
+    const poolState = 'acc0';
+    const modeMint = 'acc1';
+    const poolUnderlying = 'acc2';
 
     // NO ternaries: the compiler requires a ternary to be the WHOLE (unnested)
     // right-hand side of an assignment, so every branch here is a plain
@@ -410,8 +414,8 @@ export const huma: SvmVenueAdapter = {
     // adapter in this repo uses (see e.g. goonfi-v2/ladder.ts's emitSetup).
     if (c.direction === 'deposit') {
       return [
-        `const humaAssets${i} = accountUint(${poolState}, ${c.modeAssetsOffset}, 16);`,
-        `const humaSupply${i} = accountUint(${modeMint}, 36, 8);`,
+        `const humaAssets${i} = svm.sload(${poolState}, ${c.modeAssetsOffset}, 16).toLe();`,
+        `const humaSupply${i} = svm.sload(${modeMint}, 36, 8).toLe();`,
         `let humaRoom${i} = 0;`,
         `if (${c.liquidityCap} > humaAssets${i}) { humaRoom${i} = ${c.liquidityCap} - humaAssets${i} }`,
         `let humaIn${i} = ${amountIn};`,
@@ -429,11 +433,11 @@ export const huma: SvmVenueAdapter = {
     }
 
     return [
-      `const humaAssets${i} = accountUint(${poolState}, ${c.modeAssetsOffset}, 16);`,
-      `const humaSupply${i} = accountUint(${modeMint}, 36, 8);`,
-      `const humaLiquid${i} = accountUint(${poolUnderlying}, 64, 8);`,
-      `const humaDeployed${i} = accountUint(${poolState}, ${c.liquidAssetsDeployedOffset}, 8);`,
-      `const humaDisbursed${i} = accountUint(${poolState}, ${c.disbursementReserveOffset}, 16);`,
+      `const humaAssets${i} = svm.sload(${poolState}, ${c.modeAssetsOffset}, 16).toLe();`,
+      `const humaSupply${i} = svm.sload(${modeMint}, 36, 8).toLe();`,
+      `const humaLiquid${i} = svm.sload(${poolUnderlying}, 64, 8).toLe();`,
+      `const humaDeployed${i} = svm.sload(${poolState}, ${c.liquidAssetsDeployedOffset}, 8).toLe();`,
+      `const humaDisbursed${i} = svm.sload(${poolState}, ${c.disbursementReserveOffset}, 16).toLe();`,
       `const humaAvailRaw${i} = humaLiquid${i} + humaDeployed${i};`,
       `let humaAvail${i} = 0;`,
       `if (humaAvailRaw${i} > humaDisbursed${i}) { humaAvail${i} = humaAvailRaw${i} - humaDisbursed${i} }`,

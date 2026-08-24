@@ -13,7 +13,7 @@
 import { resolve } from 'path';
 import { address } from '@solana/kit';
 import type { Address } from '@solana/kit';
-import { compile } from '@eco-incorp/sauce-compiler';
+import { compileSvm, wrapQuoteMain } from '../rs-compile.js';
 import { huma, humaFeeBpsFor } from '../../../src/svm/venues/huma/index.js';
 import type { HumaPoolConfig } from '../../../src/svm/venues/huma/index.js';
 import { fixtureBytesMap, fixtureData, fixtureLoader, loadFixtures } from '../fixtures.js';
@@ -208,25 +208,28 @@ describe('huma buildSwap', () => {
   });
 });
 
-describe('huma emitQuote compiles as target-svm SauceScript', () => {
-  it('deposit fragment compiles and interns exactly the quote accounts', async () => {
+describe('huma emitQuote compiles as target-svm SauceScript (Account model)', () => {
+  // Account model: reads go through main()'s ordered `acc<k>` params (k = the ref's
+  // index in quoteAccounts) — [pool-state=acc0, mode-mint=acc1, pool-underlying=acc2].
+  // wrapQuoteMain declares one param per quoteAccounts entry, so the manifest slots
+  // come back in that order (the deposit fragment leaves acc2 an unread param).
+  it('deposit fragment compiles and manifests the quote accounts in param order', async () => {
     const cfg = await fetchConfig('deposit');
     const fragment = huma.emitQuote(cfg, 0, 100_000_000n);
-    const { accountPlan } = compile(`function main() {\n${fragment}\n  return q0;\n}`, { target: 'svm' });
-    expect(accountPlan?.metas.map((m) => m.ref)).toEqual([
-      `huma:${CLASSIC_MODE_CONFIG}:pool-state`,
-      `huma:${CLASSIC_MODE_CONFIG}:mode-mint`,
-    ]);
+    expect(fragment).not.toContain('accountUint(');
+    const accounts = huma.quoteAccounts(cfg);
+    const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q0'));
+    expect(bytecode.length).toBeGreaterThan(0);
+    expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k })));
   });
 
-  it('withdraw fragment compiles and interns exactly the quote accounts', async () => {
+  it('withdraw fragment compiles and manifests the quote accounts in param order', async () => {
     const cfg = await fetchConfig('withdraw');
     const fragment = huma.emitQuote(cfg, 0, 100_000_000n);
-    const { accountPlan } = compile(`function main() {\n${fragment}\n  return q0;\n}`, { target: 'svm' });
-    expect(accountPlan?.metas.map((m) => m.ref)).toEqual([
-      `huma:${CLASSIC_MODE_CONFIG}:pool-state`,
-      `huma:${CLASSIC_MODE_CONFIG}:mode-mint`,
-      `huma:${CLASSIC_MODE_CONFIG}:pool-underlying`,
-    ]);
+    expect(fragment).not.toContain('accountUint(');
+    const accounts = huma.quoteAccounts(cfg);
+    const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q0'));
+    expect(bytecode.length).toBeGreaterThan(0);
+    expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k })));
   });
 });
