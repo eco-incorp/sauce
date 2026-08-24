@@ -18,15 +18,37 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 (`accountUint("escrow0",64,8)` / `accountData("tokenProgram0",0,0)`) to RS's native **Account-slot** model
 (`Account` typed params + `svm.sload(a,64n,8n).toLe()` / `uint(svm.sload(...))`) — so RS can replace TS for SVM too.
 
-**⚠️ SEQUENCING SUBTLETY (scout to resolve before fan-out):** the target Account model needs typed-`Account` params
-(ECO-1860) which the **TS compiler LACKS** (EPIC-1 §1.3 deferred), and the SDK's current RS/WASM is **STALE**
-(`ac2ae519c`, Aug-23, pre-forward-ports). So migrated programs likely compile on NEITHER current path until the RS/WASM
-is refreshed to a commit with typed-Account + the latest ports (cf. [[sauce-next-wasm-dep]]). Probable order:
-**(1) refresh SDK RS/WASM → (2) switch SVM compile path to `compiler:'rs'` → (3) pilot ONE venue end-to-end (Account
-model + svm.e2e green via RS) → (4) fan out the remaining venues in parallel worktrees → (5) settle.sauce.ts + harness.**
-Scout `svm-migration-scout` mapping the terrain + confirming this sequence + picking the pilot. Keep the SVM e2e suites
-(`sdk/test/svm/**`) as the TDD gate. User's [[feedback-scope-other-projects]] note is about SIBLING repos — the SVM venues
-are in THIS repo (`sdk/src/svm/venues/`), in scope.
+**SCOUT PLAN (fire#97, `svm-migration-scout`) — compile-path RESOLVED + phased.** Migrated venues compile on a **FRESH
+WASM from `sauce#main`** — NOT TS (`svmAccountRef` globals.ts:205-224 hard-requires a string/int literal; `Account` is
+type-strip-only), NOT the current stale WASM. The venue transform `accountUint("ref",off,w)` → `svm.sload(<AccountParam>,
+off n,w n).toLe()` needs ONLY features already proven on main (typed-Account + svm.sload + .toLe/.toBe + multi-account main
+params — all compile in `sdk/src/std/token/token.svm.js`), so it does **NOT** block on my unmerged ctx-converge/tuple-param
+PRs (helper-tuple-param NS9 also off-path — venue helpers are pure scalar, accounts live in main). Mechanism: devDep
+`sauce-next: github:eco-incorp/sauce#main` + `sdk/scripts/build-wasm.mjs` (`SAUCE_WASM_REBUILD=1 pnpm --filter ./sdk
+build:wasm` → gitignored `sdk/.sauce-wasm/`; needs Rust 1.97.1 + wasm32 + wasm-pack). Vendored `sauce-compiler-wasm/` is
+GONE (CLAUDE.md stale). Loader today = only `sdk/test/std/token/harness.ts` (`compile({target,entry,resolve,resolvePackage})
+→ {bytecode, manifest}`).
+
+**INVENTORY:** 16 venues use the string-ref model (of 87 dirs; ~21 emit quotes). SIMPLE (1-3 reads, CP reserve @ off 64):
+saber/stabble-stable/stabble-weighted/pumpswap/raydium-amm-v4/orca-legacy/spl-token-swap-forks/taurusfi/virtuals. MID (4-7):
+huma/raydium-cp-swap/hylo/meteora-damm-v2. COMPLEX (Token-2022/dynamic-fee/u128): meteora-dbc(18)/meteora-damm-v1-stable(16)/
+perena(8). Shared: `venues/math.ts`. **PILOT = pumpswap** (2 clean `accountUint(ref,64,8)` reads = token.svm.js's balanceOf
+shape exactly); 2nd-lane shape-prover = raydium-amm-v4 (combined-expr). `accountData(` real calls exist ONLY in settle.
+
+**PHASES:** **P0 (serial, GATE)** refresh sauce-next→main + rebuild WASM, token compile suite green on it. **P1 (serial)**
+generalize token/harness.ts WASM loader → shared svm rs-compile helper + migrate `venues/types.ts` adapter contract
+(`quoteRefs()`→ordered Account-param list; emitSetup/emitQuote use param names). **P2 PILOT (serial)** pumpswap end-to-end
+(source→Account, test→RS `manifest.accounts` assertion). **P3 FAN-OUT (parallel ~4-6 lanes)** 15 independent venues (own
+dir+test): SIMPLE batch(2 lanes)/MID batch(2)/COMPLEX 1-each. **P4 (parallel)** settle generator (recipes/index.ts
+svmSettleSource, 6 sites incl. the zero-length `accountData("tokenProgram*",0,0)` interning trick) + verify.ts. **P5 GATE**
+`sdk/test/svm/**` compile+manifest green offline via RS.
+
+**BLOCKERS:** (1) **[HARD PREREQ]** WASM refresh needs the toolchain present + sauce#main built. (2) **[VALIDATE ON PILOT]**
+RS staged-args/treeshake/`args` mode is UNVERIFIED — the shipped **settle API + ladder solver** use `compile(staged:true,…)`
+(TS-only today); venues use non-staged `function main(){…}` so they're fine, but settle/ladder full-replacement (P4) could
+de-scope if RS lacks staged mode. (3) **[GATE CAVEAT]** offline gate = COMPILE + manifest-shape only; e2e EXECUTION needs
+`SAUCE_ENGINE_SO` = a `cargo build-sbf` of sauce-next (vendored engine.so is release/beta, can't run RS bytecode) — same
+gating token e2e already carries. User's [[feedback-scope-other-projects]] note is SIBLING repos; SVM venues are THIS repo.
 
 ## 📊 M8 CORPUS-READINESS MEASUREMENT (fire#95, 2026-08-24, `rs-corpus-readiness` — FIRST full sweep)
 
