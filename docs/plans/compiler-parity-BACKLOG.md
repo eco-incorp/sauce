@@ -118,9 +118,15 @@ different locals live"` (nested-if-with-const); stabble-stable-swap = nested-fn-
 **⚠️⚠️ RS M1-SUBSET GAPS FOUND (genuine TS→RS parity gaps, gate the STABLE-Newton family):** (1) **no `++`/`--` update
 expressions** (frontend.rs — Newton `for(;i++)` rejected; workaround `i=i+1`); (2) **no nested function declarations** (helper
 must be top-level); (3) **codegen "different locals live"** on nested-if-with-const (perena+dbc). **USER DECISIONS (fire#106):**
-(1) codegen "different locals live" — user asked "would TS error on shadow const?" — investigating (`rs-scope-investigate`);
-preliminary: NO, TS block-scopes if-branches so it's valid TS; RS rejects due to its deliberate SHARED-SCOPE + stack model (a
-branch-only const leaves the merge with different live locals). Fix = RS block-scope if bodies vs hoist consts in code — TBD.
+(1) codegen "different locals live" — **ANSWER: NO, TS does NOT error** (not shadowing — different-name branch-local consts;
+valid TS/valid SauceScript). Genuine RS-only stack-discipline over-restriction (a branch-local const last-read in a NESTED if
+never gets consumed → lingers → then-arm taller than empty else → false DivergentBranches). ✅ **FIXED (PR #386,
+`rs-if-liveness-fix`, `fix/compiler-if-arm-liveness` off main).** NOT the naive `align_to(&entry)` (would break every ternary —
+codegen normalizes ternary/`&&`/`||` → Stmt::If with a shared result temp that MUST survive): instead `drop_arm_leftovers`
+drops trailing arm-locals STOPPING at the first `merge_survivors` slot (survivor-on-top → 0 drops → byte-identical for all
+ternaries; leftover → dropped; survivor-above-leftover → still DivergentBranches fail-closed). Flipped 1 test error→success +
+added the perena/dbc venue-shape regression. cargo test 1050/1050, v12_conformance 193/193, clippy/fmt clean. Unblocks the
+guarded-if venue family. **SDK RS/WASM needs rebuild from a commit carrying #386 too.**
 (2) `++`/`--` — ✅ **DONE (PR #385, `rs-plusplus-impl`, `feat/compiler-update-expr` off main).** `check_update`
 (frontend.rs:957, plain-identifier operand only); lowering `i++`≡`i=i+1n` reusing compound-assignment path (no new opcodes,
 statement.rs:862); STATEMENT context (for-update + bare `i++;`) fully covered (what Newton loops need), expression-context
