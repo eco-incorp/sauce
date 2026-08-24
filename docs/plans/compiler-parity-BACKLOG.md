@@ -1095,7 +1095,15 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
 - **Wave 4** ⬜ PR-17 CREATE (absent) · ❎ PR-18 compile-time-eval — runtime `eval` LANDED (ECO-2090)
   but plan's L15 recursive-`compile()` intent still absent · ⬜ PR-19 quasiquote · ✅ PR-20 audited
   → mostly MOOT/re-architected (see T0.2 table in log).
-- **Verify** ⬜ V1 dynamic-kind adversarial audit (P0) · ⬜ V2 K15 positive test · ✅ V3 struct-arg
+- **Verify** ✅ **V1 dynamic-kind adversarial audit — CLOSED** (fire#16 `20957d1ab` verified all 7 K-bug shapes;
+  fire#88 V4-followup closed array-in-tuple SAFE-BY-CONSTRUCTION; **fire#94 `v1-callarg-verify` closed the last residual
+  shape — dynamic local passed as a CALL ARGUMENT + indexed in the callee — SAFE-VERIFIED-BY-EXEC on BOTH engines**: RS has
+  NO arg-space kind-split (v1-TS's funcHeap/funcValues gap cannot exist), every arg rides one uniform stack word regardless
+  of dynamism [ir.rs:407-424/872-885, codegen.rs:2523-2540/2790-2818]; the exact fixture `head(a){return a[1]} main(){return
+  head([7n,8n,9n])}` returns 8 on v12-Huff (revm) AND real svm engine.so (LiteSVM), compiled UNOPTIMIZED. Already
+  regression-locked: `tests/dynamic_value_roundtrip.rs::dynamic_value_as_call_argument_indexed_in_callee` (Shape 6, compile-
+  lock; optional cheap enhancement = add a runtime-value assertion, not required for safety). The whole dynamic-kind family is
+  now confirmed structurally immune on RS.) · ⬜ V2 K15 positive test · ✅ V3 struct-arg
   order (DONE — lock w/ test) · ✅ **V4 nested-array-literal — FIXED** *(RS c861b09d, fire#3)*: the
   P0 was CONFIRMED empirically (RS accept-and-miscompiled on BOTH targets — `NEW_ARRAY`+`INDEX`,
   reverts on v12 EVM / rejected on svm; an existing RS test was *locking the bug in*). Fix mirrors TS
