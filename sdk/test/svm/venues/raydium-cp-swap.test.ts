@@ -8,7 +8,7 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { address, getAddressCodec } from '@solana/kit';
-import { compile } from '@eco-incorp/sauce-compiler';
+import { compileSvm, wrapQuoteMain } from '../rs-compile.js';
 import { raydiumCpSwap } from '../../../src/svm/venues/raydium-cp-swap/index.js';
 import { readUintLE } from '../../../src/svm/index.js';
 import { fixtureBytesMap, fixtureLoader, loadFixtures } from '../fixtures.js';
@@ -338,44 +338,52 @@ describe('raydium-cp-swap buildSwap', () => {
 });
 
 describe('raydium-cp-swap emitQuote', () => {
-  const wrap = (fragment: string, i = 0) => `function main() {\n${fragment}\n  return q${i};\n}`;
-
-  it('emits a q<i> fragment reading only quoteAccounts refs via accountUint', async () => {
+  // Account model: reads go through main()'s ordered `acc<k>` params (k = the ref's
+  // index in quoteAccounts), which for this venue is [pool=acc0, ammConfig=acc1,
+  // token0Vault=acc2, token1Vault=acc3]. `accountUint` → `svm.sload(...).toLe()`.
+  it('emits a q<i> fragment reading only quoteAccounts refs via svm.sload', async () => {
     const cfg = await fetchCfg();
     const fragment = raydiumCpSwap.emitQuote(cfg, 3, 1_000_000n);
     expect(fragment).toContain('const q3 =');
+    expect(fragment).not.toContain('accountUint(');
     expect(fragment).not.toContain('accountData(');
 
-    const refs = raydiumCpSwap.quoteAccounts(cfg).map((account) => account.ref);
-    const reads = [...fragment.matchAll(/accountUint\("([^"]+)"/g)].map((match) => match[1]);
+    const accountCount = raydiumCpSwap.quoteAccounts(cfg).length;
+    const reads = [...fragment.matchAll(/svm\.sload\((acc\d+)/g)].map((match) => match[1]);
     expect(reads.length).toBeGreaterThan(0);
-    for (const ref of reads) expect(refs).toContain(ref);
+    for (const acc of reads) {
+      const k = Number(acc.slice(3));
+      expect(k).toBeGreaterThanOrEqual(0);
+      expect(k).toBeLessThan(accountCount);
+    }
   });
 
   it('reads the input-side reserve from vault0 with the token_0 fee accumulators (ZeroForOne)', async () => {
     const fragment = raydiumCpSwap.emitQuote(await fetchCfg(), 0, 1_000_000n);
     const [rin, rout] = fragment.split('\n');
     // reserve = vault.amount(@64) - protocol(@341) - fund(@357) - creator(@397).
-    expect(rin).toContain(`accountUint("${VAULT0}", 64, 8)`);
-    expect(rin).toContain(`accountUint("${POOL}", 341, 8)`);
-    expect(rin).toContain(`accountUint("${POOL}", 357, 8)`);
-    expect(rin).toContain(`accountUint("${POOL}", 397, 8)`);
-    expect(rout).toContain(`accountUint("${VAULT1}", 64, 8)`);
-    expect(rout).toContain(`accountUint("${POOL}", 349, 8)`);
-    // Live trade fee rate from AmmConfig @12; creator rate @108 stays unread
+    // input vault = token0Vault = acc2; pool = acc0.
+    expect(rin).toContain('svm.sload(acc2, 64, 8).toLe()');
+    expect(rin).toContain('svm.sload(acc0, 341, 8).toLe()');
+    expect(rin).toContain('svm.sload(acc0, 357, 8).toLe()');
+    expect(rin).toContain('svm.sload(acc0, 397, 8).toLe()');
+    expect(rout).toContain('svm.sload(acc3, 64, 8).toLe()');
+    expect(rout).toContain('svm.sload(acc0, 349, 8).toLe()');
+    // Live trade fee rate from AmmConfig (acc1) @12; creator rate @108 stays unread
     // while enable_creator_fee is 0.
-    expect(fragment).toContain(`accountUint("${AMM_CONFIG}", 12, 8)`);
-    expect(fragment).not.toContain(`accountUint("${AMM_CONFIG}", 108, 8)`);
+    expect(fragment).toContain('svm.sload(acc1, 12, 8).toLe()');
+    expect(fragment).not.toContain('svm.sload(acc1, 108, 8)');
   });
 
   it('flips the reserve sides for OneForZero', async () => {
     const cfg = { ...(await fetchCfg()), inputIsToken0: false };
     const [rin, rout] = raydiumCpSwap.emitQuote(cfg, 0, 1_000_000n).split('\n');
-    expect(rin).toContain(`accountUint("${VAULT1}", 64, 8)`);
-    expect(rin).toContain(`accountUint("${POOL}", 349, 8)`);
-    expect(rin).toContain(`accountUint("${POOL}", 365, 8)`);
-    expect(rin).toContain(`accountUint("${POOL}", 405, 8)`);
-    expect(rout).toContain(`accountUint("${VAULT0}", 64, 8)`);
+    // input vault = token1Vault = acc3; output vault = token0Vault = acc2.
+    expect(rin).toContain('svm.sload(acc3, 64, 8).toLe()');
+    expect(rin).toContain('svm.sload(acc0, 349, 8).toLe()');
+    expect(rin).toContain('svm.sload(acc0, 365, 8).toLe()');
+    expect(rin).toContain('svm.sload(acc0, 405, 8).toLe()');
+    expect(rout).toContain('svm.sload(acc2, 64, 8).toLe()');
   });
 
   it('adds the live creator rate to the input fee when enabled on the input side', async () => {
@@ -383,7 +391,7 @@ describe('raydium-cp-swap emitQuote', () => {
       data[390] = 1;
     });
     const fragment = raydiumCpSwap.emitQuote(await fetchCfg(fx), 0, 1_000_000n);
-    expect(fragment).toContain(`(accountUint("${AMM_CONFIG}", 12, 8) + accountUint("${AMM_CONFIG}", 108, 8))`);
+    expect(fragment).toContain('(svm.sload(acc1, 12, 8).toLe() + svm.sload(acc1, 108, 8).toLe())');
     expect(fragment).not.toContain('os0'); // single-fee path, no output-side creator carve-out
   });
 
@@ -394,10 +402,10 @@ describe('raydium-cp-swap emitQuote', () => {
     });
     const fragment = raydiumCpSwap.emitQuote(await fetchCfg(fx), 0, 1_000_000n);
     expect(fragment).toContain('const os0 =');
-    expect(fragment).toContain(`const q0 = os0 - ((os0 * accountUint("${AMM_CONFIG}", 108, 8) + 999999) / 1000000);`);
+    expect(fragment).toContain('const q0 = os0 - ((os0 * svm.sload(acc1, 108, 8).toLe() + 999999) / 1000000);');
   });
 
-  it('compiles as SauceScript for the svm target, planning exactly the quote accounts read-only', async () => {
+  it('compiles for the svm target, manifesting exactly the quote accounts in param order', async () => {
     const cfg = await fetchCfg();
     for (const variant of [
       cfg,
@@ -405,21 +413,12 @@ describe('raydium-cp-swap emitQuote', () => {
       { ...cfg, enableCreatorFee: true },
       { ...cfg, enableCreatorFee: true, creatorFeeOn: 2 },
     ]) {
-      const { bytecode, accountPlan } = compile(wrap(raydiumCpSwap.emitQuote(variant, 0, 1_000_000n)), {
-        target: 'svm',
-      });
-      expect(bytecode[0].length).toBeGreaterThan(0);
-      if (!accountPlan) throw new Error('svm compile produced no account plan');
-      const planned = accountPlan.metas.map((meta) => meta.ref).sort();
-      const quoted = raydiumCpSwap
-        .quoteAccounts(variant)
-        .map((account) => account.ref)
-        .sort();
-      expect(planned).toEqual(quoted);
-      for (const meta of accountPlan.metas) {
-        expect(meta.writable).toBe(false);
-        expect(meta.signer).toBe(false);
-      }
+      const accounts = raydiumCpSwap.quoteAccounts(variant);
+      const { bytecode, manifest } = compileSvm(
+        wrapQuoteMain(accounts.length, raydiumCpSwap.emitQuote(variant, 0, 1_000_000n), 'q0'),
+      );
+      expect(bytecode.length).toBeGreaterThan(0);
+      expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k })));
     }
   });
 
