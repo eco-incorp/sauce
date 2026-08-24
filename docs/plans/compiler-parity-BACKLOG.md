@@ -39,7 +39,16 @@ dropping → "unresolved import super::is_infer_tuple"). CLEANLY dropped + verif
   `testdata/ecoswap-full/ecoswap.sauce.ts` (byte-verbatim copy of ../sauce-recipes, #[ignore]d) STILL has ~7 Math.neg — left
   untouched (preserves byte-verbatim invariant; `cargo test` never compiles it). FOLLOW-UP: update the sauce-recipes recipe
   Math.neg→- + re-copy (sauce-recipes user-held).**
-- **[#363 — KILL IT (user redirect fire#108: "nobody asked u to do eco-swap! just kill the Tuple PR and do rebases").**
+- **✅ TUPLE KILLED — DONE (fire#110, `kill-363`, Option A).** Dropped #363 (parity-07 ×3) + #380 (parity-19) + parity-16's
+  ecoswap-full/conformance commits. Tuple machinery GONE tree-wide (grep 0: is_infer_tuple/entry_arg_types/ArgShape/
+  EntryParamHint/UntypedEntryTupleParam/param_hint/lib.rs export; param_ty back to 2-arg; program()/lower_function lost the
+  entry_arg_types param). Removed ecoswap.rs/ecoswap_full.rs/testdata/ecoswap-full/* + sauce-cli conformance vectors + Makefile
+  wirings + README prose. **KEPT** the Ty-based decode layer (require_decodable_entry_param/entry_collection_decode/element_words
+  bytes[]/nested-tuple/nested-array branches via the INLINE annotation path) + EVERY other parity feature. **cargo test GREEN:
+  port 1088/0, module-const-expr 1093/0; clippy/fmt clean; range-diff clean per branch; 16 branches lease-pushed.** #363 CLOSED;
+  #380 shows MERGED-as-no-op (parity-19 reset to Tuple-free port head → head==base → GitHub auto-merge of an empty diff; feature
+  commit unreachable = gone; explanatory comment posted). Inline typed args (`{f:T}[]`/`T[]`) survive. **User directive complete.**
+- ~~[#363 — KILL IT (user redirect fire#108)]~~ DONE above.
   REWORK CANCELLED (workflow w8lahx1kr stopped). `kill-363` in flight: close #363 + rebase-drop parity-07's 3 commits (blunt
   Tuple wildcard + entry_arg_types hint + ecoswap harness) + remove the ecoswap tests (ecoswap.rs/ecoswap_full.rs + fixtures,
   the ONLY users of the Tuple machinery) + the ArgShape lib.rs export; re-base downstream. **⚠️ SCOPE EXPANDED (kill-363 recon):
