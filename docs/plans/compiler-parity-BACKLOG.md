@@ -38,10 +38,12 @@ Reverses the earlier "EVM-only → evm.\*" call. Execution lanes:
   **⚠️ BASE DRIFT found:** the RS worktrees sat on a STALE local rebase of feat/compiler-parity-port (717b97159, pre-#362-
   address-drop → still carries address.*) diverged from origin's canonical 8523acecb. Agent instructed to rebuild deltas on
   ORIGIN (8523acecb, no address.*), NOT push the stale local base. #382 (ctx.msgData portable) verify+push, not redundant.
-- **[TS #142] mirrors: DROP its 11 env reads (not convert).** #142 (`chore/ts-context-ops`, stacked on new #141) →
-  rebase onto #141 `a9caae5` (conflict: isContract/isEOA now in ctx.*), REMOVE the evm.* env-read additions, keep the
-  msg/block/tx removal + ~23-site SDK migration (msg.value→ctx.msgValue / msg.sender→ctx.msgSender / block.timestamp→
-  ctx.timestamp). Execute once RS #383 lands its final 4-read shape, so both compilers are byte-parallel.
+- **[TS #142] IN FLIGHT (`ts-142-converge`, parallel — decision is locked + RS-independent).** #142
+  (`chore/ts-context-ops`) → rebase onto #141 `a9caae5` (conflict: the 4 code reads now in ctx.*), **KEEP msgValue as
+  gated `ctx.msgValue`** (SDK consumers + on RS main #348), **DROP the other 10 env reads** (origin/gasPrice/coinbase/
+  prevrandao/gasLimit/baseFee/blobBaseFee/gasLeft/blockHash/blobHash — zero consumers), keep msg/block/tx removal +
+  ~23-site SDK migration (msg.value→ctx.msgValue / msg.sender→ctx.msgSender / block.timestamp→ctx.timestamp). Freestanding
+  gasLeft() intrinsic (if any) untouched. Final TS ctx.* == RS ctx.* target (7 portable + msgData + 4 code + msgValue).
 - **[RS] (agent `rs-ctx-converge`, parallel):** rebase #382 (ctx.msgData) onto new main; rework #383 evm.* context surface
   → gated ctx.* reads (drop redundant `ctx.msgValue` — Sammy has it); keep evm.*/svm. storage-call. Worktrees
   `sauce-ctx-portable`/`sauce-ctx-evm` exist. Assess-redundancy-FIRST (Sammy may own env reads) then rework the remainder.
