@@ -11,6 +11,25 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## ✅ M8-compiler-gap progress (fire#71, 2026-08-24)
+
+- **ECO-2147 empty-array ABI typing — DONE + VERIFIED: PR #381** (commit c23d5dabc, 4 files/424 lines;
+  `Lowerer::argument`+`typed_array_argument`/`typed_tuple_argument` in contract.rs; NO IR/codegen; 4 tests green
+  incl. nested-in-struct + 2 negative controls; build+suite green). Ticket **ECO-2188** (Epic A, linked #381 +
+  relatedTo Sammy's ECO-2147, commented). `empty-array-impl` finished but never self-reported; recovered from disk/PR.
+- **address.\* direction fix (ECO-2163):** in-repo TS drop delegated to `ts-address-drop` → branch
+  `chore/drop-ts-address-namespace` (off origin/main). Spot-checked: correctly updates doc-comment references +
+  real SauceScript (settle.sauce.ts `balanceOf(address.self)`→`ctx.self()`), NOT TS code logic. ⚠️ **WORKTREE
+  COLLISION:** the agent `git checkout -b`'d in the SHARED sauce-sdk checkout (my delegation error — should've been an
+  isolated worktree), displacing `feat/compiler-parity` HEAD. My commits safe; recovered `feat/compiler-parity` into
+  worktree `/Users/er/Documents/Projects/sauce-sdk-cp` (backlog work continues there). Lesson (again): isolated
+  worktree per agent, per [[orphaned-workflow-worktree-collision]].
+- **PENDING USER DECISIONS:** uint() keep/drop (#360 open — Rust IS currently getting it; my rec = keep, no ctx.*
+  equivalent, unused); `../sauce-recipes` ecoswap migration (119 uses, sibling repo, needs go-ahead).
+- **Rust address.\* rebase-drop** (0a958c5da from the parity chain): still queued — entangled with the parity chain
+  (drop ripples ~15 PRs, or a tip-revert conflicts with #380/#381); coordinate at chain-merge with Sammy.
+- **msg.value (ECO-2146)** still queued (compiler fix + SDK migration). **stack-window (ECO-2149)** = v12-parity, Sammy's call.
+
 ## ✅ USER DECISIONS (fire#58) — the gates are RESOLVED, executing
 
 1. **RS ship = "Open RS PRs, hold release."** Land the RS stack (parity foundation `feat/compiler-parity-port`
