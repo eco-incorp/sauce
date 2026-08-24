@@ -11,7 +11,7 @@
  */
 import { resolve } from 'path';
 import { address } from '@solana/kit';
-import { compile } from '@eco-incorp/sauce-compiler';
+import { compileSvm, wrapQuoteMain } from '../rs-compile.js';
 import { meteoraDammV2 } from '../../../src/svm/venues/meteora-damm-v2/index.js';
 import type { MeteoraDammV2PoolConfig } from '../../../src/svm/venues/meteora-damm-v2/index.js';
 import type { AccountLoader, PoolConfig } from '../../../src/svm/index.js';
@@ -358,31 +358,42 @@ describe('meteora-damm-v2 quoteAccounts', () => {
   });
 });
 
-describe('meteora-damm-v2 emitQuote', () => {
-  const compileFragment = (fragment: string, i: number) =>
-    compile(`function main() {\n${fragment}\nreturn q${i};\n}`, { target: 'svm' });
+describe('meteora-damm-v2 emitQuote — Account model (svm.sload) via RS', () => {
+  // Account model: quoteAccounts() attaches the pool alone (slot 0 -> acc0), so
+  // every read is `svm.sload(acc0, off, w).toLe()` over main()'s positional
+  // params, compiled through the RUST compiler (the TS `accountUint`/accountPlan
+  // form is gone). The emitted manifest binds slot k to quoteAccounts()[k].
+  const compileFragment = (cfg: MeteoraDammV2PoolConfig, i: number, amountIn: bigint) => {
+    const fragment = meteoraDammV2.emitQuote(cfg, i, amountIn);
+    const accounts = meteoraDammV2.quoteAccounts(cfg);
+    return { fragment, accounts, ...compileSvm(wrapQuoteMain(accounts.length, fragment, `q${i}`)) };
+  };
 
-  it('defines q<i> and reads pool state only via accountUint on the pool account', async () => {
+  it('defines q<i> and reads pool state only via svm.sload on acc0', async () => {
     const cfg = await fetchCfg();
     const fragment = meteoraDammV2.emitQuote(cfg, 7, ONE_SOL);
     expect(fragment).toContain('let q7 =');
-    expect(fragment).not.toContain('accountData(');
-    const reads = [...fragment.matchAll(/accountUint\(([^,]+),/g)].map((m) => m[1]);
+    expect(fragment).not.toContain('accountUint(');
+    const reads = [...fragment.matchAll(/svm\.sload\((acc\d+),/g)].map((m) => m[1]);
     expect(reads.length).toBeGreaterThan(0);
-    for (const read of reads) expect(read).toBe(JSON.stringify(POOL));
+    for (const read of reads) expect(read).toBe('acc0');
+    expect(fragment).toContain('.toLe();');
   });
 
-  it('compiles as SauceScript and interns exactly the read-only pool account (aToB)', async () => {
+  it('compiles for the svm target and manifests exactly the read-only pool (aToB)', async () => {
     const cfg = await fetchCfg();
-    const { accountPlan } = compileFragment(meteoraDammV2.emitQuote(cfg, 0, ONE_SOL), 0);
-    expect(accountPlan?.metas).toEqual([{ ref: POOL, writable: false, signer: false }]);
+    const { bytecode, manifest, accounts } = compileFragment(cfg, 0, ONE_SOL);
+    expect(bytecode.length).toBeGreaterThan(0);
+    expect(manifest?.accounts).toEqual([{ kind: 'slot', index: 0, name: 'acc0' }]);
+    const bound = manifest?.accounts.map((m) => (m.kind === 'slot' ? accounts[m.index]?.address : undefined));
+    expect(bound).toEqual([POOL]);
   });
 
   it('compiles for bToA with fee on output (collect_fee_mode 0)', async () => {
     const cfg: MeteoraDammV2PoolConfig = { ...(await fetchCfg()), direction: 'bToA' };
-    const fragment = meteoraDammV2.emitQuote(cfg, 1, HUNDRED_USDC);
+    const { fragment, bytecode } = compileFragment(cfg, 1, HUNDRED_USDC);
     expect(fragment).toContain('let q1 =');
-    expect(compileFragment(fragment, 1).bytecode[0].length).toBeGreaterThan(0);
+    expect(bytecode.length).toBeGreaterThan(0);
   });
 
   it('compiles for bToA with fee on input (collect_fee_mode 1)', async () => {
@@ -391,10 +402,10 @@ describe('meteora-damm-v2 emitQuote', () => {
       direction: 'bToA',
       collectFeeMode: 1,
     };
-    const fragment = meteoraDammV2.emitQuote(cfg, 2, HUNDRED_USDC);
+    const { fragment, bytecode } = compileFragment(cfg, 2, HUNDRED_USDC);
     // Fee comes off the input before the curve; the curve output IS the quote.
     expect(fragment).toContain('let q2 = g2;');
-    expect(compileFragment(fragment, 2).bytecode[0].length).toBeGreaterThan(0);
+    expect(bytecode.length).toBeGreaterThan(0);
   });
 
   it('clamps a band-crossing quote to 0 instead of throwing, in both directions', async () => {
@@ -408,16 +419,16 @@ describe('meteora-damm-v2 emitQuote', () => {
     expect(bToA).not.toContain('throw');
   });
 
-  it('emits the block.timestamp activation gate for a timestamp-typed nonzero activation point', async () => {
+  it('emits the ctx.timestamp() activation gate for a timestamp-typed nonzero activation point', async () => {
     const cfg = await fetchCfg(); // fixture: activation_type 1, activation_point 1754985927
-    const fragment = meteoraDammV2.emitQuote(cfg, 6, ONE_SOL);
-    expect(fragment).toContain('if (block.timestamp < 1754985927) { q6 = 0 }');
-    expect(compileFragment(fragment, 6).bytecode[0].length).toBeGreaterThan(0);
+    const { fragment, bytecode } = compileFragment(cfg, 6, ONE_SOL);
+    expect(fragment).toContain('if (ctx.timestamp() < 1754985927) { q6 = 0 }');
+    expect(bytecode.length).toBeGreaterThan(0);
   });
 
   it('omits the activation gate when activation_point is 0', async () => {
     const cfg: MeteoraDammV2PoolConfig = { ...(await fetchCfg()), activationPoint: 0n };
-    expect(meteoraDammV2.emitQuote(cfg, 8, ONE_SOL)).not.toContain('block.timestamp');
+    expect(meteoraDammV2.emitQuote(cfg, 8, ONE_SOL)).not.toContain('ctx.timestamp()');
   });
 
   it('compiles the dynamic-fee variant with the capped fee', async () => {
@@ -425,9 +436,9 @@ describe('meteora-damm-v2 emitQuote', () => {
       ...(await fetchCfg()),
       dynamicFee: { binStep: 80n, variableFeeControl: 5000n },
     };
-    const fragment = meteoraDammV2.emitQuote(cfg, 3, ONE_SOL);
+    const { fragment, bytecode } = compileFragment(cfg, 3, ONE_SOL);
     expect(fragment).toContain('if (f3 > 500000000) { f3 = 500000000 }');
-    expect(compileFragment(fragment, 3).bytecode[0].length).toBeGreaterThan(0);
+    expect(bytecode.length).toBeGreaterThan(0);
   });
 
   it('rejects bad indices, amounts and foreign configs', async () => {
