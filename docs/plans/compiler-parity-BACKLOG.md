@@ -109,6 +109,20 @@ sauce-next→npm after a compiler-rs release. The DSL-parity-via-shared-plugin g
   → #138/#139/#140. OPEN structural decision for user: PR `feat/compiler-parity` itself / extract sauce-next
   into a lean standalone PR; and whether to slice #352.
 
+**⚖️ FIFTH RECIPE GAP = a DESIGN DECISION, not a bug (fire#69, 2026-08-24).** #380 (non-entry Tuple param)
+VERIFIED (build + 4 new tests + ecoswap probe advancing past euler → stops at EKUBO_OR_PRINTR; ticket ECO-2187,
+Epic A). const-expr-scout FAILED (transient API error) so I investigated directly: the recipe has **exactly ONE**
+non-literal module const — `EKUBO_OR_PRINTR = HAS_EKUBO || HAS_PRINTR` (:1085). The literal-only rule
+(`ModuleBindingNotLiteral`, lower/mod.rs:509) is a **deliberate documented design** ("a design, not an omission" —
+module-level execution order across the import graph), = Sammy's **ECO-2076** boundary. Sound narrow carve-out exists
+(fold a compile-time-CONSTANT initializer — no runtime eval point, sidesteps the execution-order concern; it IS
+ECO-2076's own const-EXPRESSION AC), but it's HIS design call → **flagged on ECO-2076** (comment: land the
+const-expr carve-out, or pass EKUBO_OR_PRINTR as its own define upstream), did NOT autonomously override.
+**Honest split of the recipe's remaining compiler gaps:** clean fixes WE do (empty-array ECO-2147 in flight; msg.value
+ECO-2146 queued, +SDK migration) vs Sammy's DESIGN calls (stack-window ECO-2149 = already v12-parity; module-const-expr
+ECO-2076). So "full recipe compiles on RS" is partly gated on Sammy's 2 design decisions, not purely autonomous work.
+Sixth-gap unknown (can't probe past the fifth until it's resolved).
+
 **🔨 IN FLIGHT (fire#68, 2026-08-24) — clearing the compiler side of M8.** User: "can we fix [the Tuple param]
 to unblock all the milestones?" Honest answer: the Tuple fix unblocks the flagship recipe (M9 parity + M8's
 precondition), NOT literally all milestones — M8 has 3 more small compiler gaps + SDK-side migration. Scoped all 3
