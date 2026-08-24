@@ -35,6 +35,16 @@ huma/raydium-cp-swap/hylo/meteora-damm-v2. COMPLEX (Token-2022/dynamic-fee/u128)
 perena(8). Shared: `venues/math.ts`. **PILOT = pumpswap** (2 clean `accountUint(ref,64,8)` reads = token.svm.js's balanceOf
 shape exactly); 2nd-lane shape-prover = raydium-amm-v4 (combined-expr). `accountData(` real calls exist ONLY in settle.
 
+**✅ P0 DONE (fire#98, `svm-p0-foundation`):** worktree `sauce-svm-migration` / branch `feat/svm-account-model` (off
+feat/compiler-parity @188f7c8); `pnpm install` clean; WASM built from the CURRENT pin `431f9cef` (NO bump — it already has
+typed-Account) → `sdk/.sauce-wasm/`; **token compile suite 12/12 GREEN** (P0 gate); **pilot-shape PROVEN** — a 2-`Account`-param
+`svm.sload(a,64n,8n).toLe()` program compiles + emits `accounts:[{kind:slot,index:0,name:base},{index:1,name:quote}]` (param
+order). **Verbatim RS SVM syntax captured:** `main(base: Account, quote: Account): Uint256`; `svm.sload(acct, offN, lenN)` +
+`.toLe()`(LE u8/u32/u64) / `.toBe()`(BE 32-byte pubkey cmp); writes `x.toBytesLe(8n)`/`data.concat`/`hex\`03\``; CPI
+`svm.call(<programLiteralN>, [a,b,c], data)` — callee MUST be an inline bigint literal (a `let` drops the program entry under
+--no-optimize). Manifest `{accounts: ({kind:'slot',index,name}|{kind:'program',pubkey})[]}`, only main-REACHABLE svm.call
+programs harvested. Offline gate = compile+manifest (execution needs a main-lineage engine, expected). 🔄 **P1+P2 PILOT
+(pumpswap) IN FLIGHT** — establishing the replicable recipe + the incremental-vs-big-bang verdict on the types.ts contract.
 **PHASES:** **P0 (serial, GATE)** refresh sauce-next→main + rebuild WASM, token compile suite green on it. **P1 (serial)**
 generalize token/harness.ts WASM loader → shared svm rs-compile helper + migrate `venues/types.ts` adapter contract
 (`quoteRefs()`→ordered Account-param list; emitSetup/emitQuote use param names). **P2 PILOT (serial)** pumpswap end-to-end
