@@ -109,6 +109,19 @@ sauce-next→npm after a compiler-rs release. The DSL-parity-via-shared-plugin g
   → #138/#139/#140. OPEN structural decision for user: PR `feat/compiler-parity` itself / extract sauce-next
   into a lean standalone PR; and whether to slice #352.
 
+**🧭 DIRECTIONAL CORRECTION (user, 2026-08-24, fire#70): RUST namespacing is the STANDARD; TS+SDK conform
+(breaking TS changes OK).** NOT the other way — I wrongly ADDED `address.*` to Rust (#362) for TS-parity; Rust
+already has those reads under `ctx.*` (verified: `address.self`→SelfAddress=`ctx.self()`; `.balance`→SelfBalance=
+`ctx.selfBalance()`; `.balanceOf`→Balance=`ctx.balance()`). Actions taken: **CLOSED #362**; retargeted **ECO-2163**
+→ "Namespace convergence · standardize on ctx.* (drop address.*)". Audit of the other namespace/global adds:
+Math.neg (#361, recipe 27×) = under Rust's OWN Math namespace, KEEP; evm.tload/tstore (#365) = Rust's own evm
+namespace, KEEP; uint() (#360, not in recipe) = freestanding sugar over Rust's toLe/toBe, USER CALL. **Remaining
+work:** (a) rebase-drop `0a958c5da` from the parity chain — DEFERRED until empty-array (parity-20) lands, since the
+revert touches the same 3 files; (b) TS compiler drop `address.*` (globals.ts), keep ctx.*; (c) recipe + SDK
+migrate `address.*`→`ctx.*` (recipe uses it **119×**; recipe source is ../sauce-recipes = SIBLING REPO, needs user
+go-ahead per [[feedback-scope-other-projects]]). **⚠️ SELF-INFLICTED:** a careless `gh pr close 380` "guard" line
+briefly closed #380 — caught + reopened immediately (now OPEN); lesson: never run destructive cmds as guards.
+
 **⚖️ FIFTH RECIPE GAP = a DESIGN DECISION, not a bug (fire#69, 2026-08-24).** #380 (non-entry Tuple param)
 VERIFIED (build + 4 new tests + ecoswap probe advancing past euler → stops at EKUBO_OR_PRINTR; ticket ECO-2187,
 Epic A). const-expr-scout FAILED (transient API error) so I investigated directly: the recipe has **exactly ONE**
