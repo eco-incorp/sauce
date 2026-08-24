@@ -48,17 +48,28 @@ Reverses the earlier "EVM-only → evm.\*" call. Execution lanes:
   integration blockchain 40/40 (real anvil, ctx.msgValue()→0); SDK compile.test **1455/1455** (every protocol incl. the
   retargeted ones) + venue tests. **This 13-member surface == the RS #383 target EXACTLY** → true byte-parallel convergence
   once RS lands. (Adopted orphan worktree `sauce-ctx-ops` rather than removing a possibly-shared one.)
-- **[RS #383] REWORKING (`rs-ctx-converge`) — scope correction in flight.** First pass CONVERTED all 14 reads (executed my
-  superseded "convert all" before the D3 revision landed); being TRIMMED to the 4 gated ctx.* code reads
-  (codeSize/codeHash/isContract/isEOA), dropping the 10 env reads + msgValue (main #348 owns ctx.msgValue) → matches TS #142's
-  13-member surface. #382 (ctx.msgData) LEFT untouched on origin (already correct, green).
-- **⚠️ DEFERRED — RS parity-stack BASE DRIFT (not fixed here; belongs to the stack→new-main rebase).** origin/feat/compiler-
-  parity-port = 8523acecb (post-#362-address-drop) but its ecoswap fixture still uses `address.self` (12×, migration lives
-  deeper at parity-07, not the foundation) — so the foundation MAY not compile ecoswap standalone. A stale local rebase
-  717b97159 (parallel sibling, forked at 627ee17c) still has address.* handling. The agent's first push regressed #382/#383
-  to mergeable:CONFLICTING. **Resolution: do NOT force-update the shared parity-port base (would risk the whole 22-PR stack);
-  the entire stack must rebase onto NEW sauce main (post Sammy #347-#351) before any merge, and ALL base/address.* topology
-  resolves there.** mergeable:CONFLICTING accepted as a known artifact until that holistic rebase (Sammy coordination).
+- **[RS #382/#383] ✅ DONE + green + MERGEABLE on canonical origin base (`rs-ctx-converge`).**
+  - **#382** (`parity-ctx-portable` = `7bf72b264`): ctx.msgData portable, clean on 8523acecb, mergeable; erroneous first
+    force-push undone (restored). No code change.
+  - **#383** (`parity-evm-context` = `47fee0db8`, parent 8523acecb, single commit, tight +601/-19 / 12 files): the **4 gated
+    ctx.* code reads** codeSize(0x72)/codeHash(0x73)/isContract(0x75)/isEOA(0x76), gated `Feature::EvmCodeInspection`
+    (renamed from EvmEnvironment now only code reads remain). **DROPPED** msgValue (main #348 owns ctx.msgValue) + all 9 env
+    reads (origin/gasPrice/gasLeft/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee/blockHash/blobHash) — ContextOps/Expr
+    nodes/opcodes/builtins/codegen/tests all removed; an unknown env read is now clean `CtxUnknownMethod` (test pins
+    ctx.gasPrice→CtxUnknownMethod). No freestanding gasLeft() existed on this base to preserve. **GATES:** cargo test -p
+    sauce-core green (1111 lib + integration, 0 failed; only pre-existing unrelated ecoswap_full ignored); clippy -D + nightly
+    fmt clean; README + PR body updated.
+  - **Base-drift RESOLVED for these two:** 8523acecb DID compile ecoswap green (my Namespace::Address grep just missed the
+    spelling); the stale 717b97159 abandoned entirely; both PRs clean+mergeable on canonical origin. (The broader whole-stack→
+    new-main rebase remains a general future item, not specific to NS-CONVERGE — Sammy coordination.)
+
+## ✅ NS-CONVERGE COMPLETE (fire#94, 2026-08-24) — both compilers land the IDENTICAL 13-member ctx.*
+
+**PARITY ACHIEVED.** TS (#141+#142, pushed) and RS (#382+#383, mergeable on origin) both converge to the same
+`ctx.*` = **7 portable** (msgSender/self/chainId/blockNumber/timestamp/selfBalance/balance) + **msgData** + **msgValue**
+(gated EVM-only) + **4 code reads** (codeSize/codeHash/isContract/isEOA, gated EVM-only). `evm.*`/`svm.*` = storage-call
+duals only, both compilers. The 10 speculative env reads dropped from both. RS gets msgValue from main #348 once the stack
+rebases onto new main. **REMAINING = Sammy: review/merge #382/#383 + #141/#142; then the whole-stack→new-main rebase.**
 - **[RS] (agent `rs-ctx-converge`, parallel):** rebase #382 (ctx.msgData) onto new main; rework #383 evm.* context surface
   → gated ctx.* reads (drop redundant `ctx.msgValue` — Sammy has it); keep evm.*/svm. storage-call. Worktrees
   `sauce-ctx-portable`/`sauce-ctx-evm` exist. Assess-redundancy-FIRST (Sammy may own env reads) then rework the remainder.
