@@ -280,19 +280,26 @@ export const raydiumCpSwap = {
     requireU64Amount(amountIn);
 
     const { input, output } = sides(cfg);
-    const pool = JSON.stringify(cfg.pool);
-    const config = JSON.stringify(cfg.ammConfig);
+    // Account model (RS/svm target): reads go through main()'s ordered `Account`
+    // params `acc<k>` (k = the ref's index in quoteAccounts(cfg)), not
+    // `accountUint("<address>", …)`. quoteAccounts order is [pool, ammConfig,
+    // token0Vault, token1Vault]; `accountUint` lowered to CAST_LE, so `.toLe()`
+    // is the exact endianness match (all reads are u64/u128 LE).
+    const accs = [cfg.pool, cfg.ammConfig, cfg.token0Vault, cfg.token1Vault];
+    const slot = (addr: Address): string => `acc${accs.indexOf(addr)}`;
+    const pool = slot(cfg.pool);
+    const config = slot(cfg.ammConfig);
     const reserve = (side: typeof input, name: string) =>
-      `  const ${name}${i} = accountUint(${JSON.stringify(side.vault)}, ${VAULT_AMOUNT_OFFSET}, 8)` +
-      ` - accountUint(${pool}, ${side.protocolFees}, 8)` +
-      ` - accountUint(${pool}, ${side.fundFees}, 8)` +
-      ` - accountUint(${pool}, ${side.creatorFees}, 8);`;
+      `  const ${name}${i} = svm.sload(${slot(side.vault)}, ${VAULT_AMOUNT_OFFSET}, 8).toLe()` +
+      ` - svm.sload(${pool}, ${side.protocolFees}, 8).toLe()` +
+      ` - svm.sload(${pool}, ${side.fundFees}, 8).toLe()` +
+      ` - svm.sload(${pool}, ${side.creatorFees}, 8).toLe();`;
 
     // Fee rates are admin-mutable (update_amm_config), so they are read live
     // from AmmConfig; creator_fee_on/enable_creator_fee are pool-creation-time
     // constants, so the fee-side branch is resolved at generation time.
-    const tradeRate = `accountUint(${config}, ${CONFIG_OFFSETS.tradeFeeRate}, 8)`;
-    const creatorRate = `accountUint(${config}, ${CONFIG_OFFSETS.creatorFeeRate}, 8)`;
+    const tradeRate = `svm.sload(${config}, ${CONFIG_OFFSETS.tradeFeeRate}, 8).toLe()`;
+    const creatorRate = `svm.sload(${config}, ${CONFIG_OFFSETS.creatorFeeRate}, 8).toLe()`;
     const ceil = (product: string) => `(${product} + ${FEE_RATE_DENOMINATOR - 1n}) / ${FEE_RATE_DENOMINATOR}`;
 
     const lines = [reserve(input, 'rin'), reserve(output, 'rout')];
