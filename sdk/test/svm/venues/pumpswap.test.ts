@@ -12,8 +12,8 @@
  * recomputed from the documented formulas outside this package.
  */
 import { join } from 'path';
-import { compile } from '@eco-incorp/sauce-compiler';
 import type { Address } from '@solana/kit';
+import { compileSvm, wrapQuoteMain } from '../rs-compile.js';
 import { pumpswapAdapter, USER_VOLUME_ACCUMULATOR_REF } from '../../../src/svm/venues/pumpswap/index.js';
 import type { PumpswapPoolConfig } from '../../../src/svm/venues/pumpswap/index.js';
 import type { AccountBytesMap, VenueAccount } from '../../../src/svm/venues/types.js';
@@ -323,18 +323,29 @@ describe('emitQuote', () => {
   it('folds the buy fee arithmetic off-chain (effQ - 1 = 997008971 for 1e9 at 25/5/0)', async () => {
     const cfg = await fetchConfig(POOL);
     const fragment = pumpswapAdapter.emitQuote(cfg, 0, 1_000_000_000n);
-    expect(fragment).toContain(`const psBase0 = accountUint(${JSON.stringify(BASE_VAULT)}, 64, 8);`);
-    expect(fragment).toContain(`const psQuote0 = accountUint(${JSON.stringify(QUOTE_VAULT)}, 64, 8);`);
+    // Account model: reads go through main()'s positional `acc<k>` params (k = quoteAccounts()
+    // index), not `accountUint("<address>", …)` string refs; base vault is slot 0, quote vault slot 1.
+    expect(fragment).toContain('const psBase0 = svm.sload(acc0, 64, 8).toLe();');
+    expect(fragment).toContain('const psQuote0 = svm.sload(acc1, 64, 8).toLe();');
     expect(fragment).toContain('const q0 = Math.mulDiv(psBase0, 997008971, psQuote0 + 997008971);');
   });
 
-  it('buy fragment compiles for the svm target and plans exactly the two vault accounts', async () => {
+  it('buy fragment compiles for the svm target and manifests the two vaults in quoteAccounts order', async () => {
     const cfg = await fetchConfig(POOL);
     const fragment = pumpswapAdapter.emitQuote(cfg, 0, 1_000_000_000n);
-    const source = `function main() {\n${fragment}\n  return q0;\n}`;
-    const { bytecode, accountPlan } = compile(source, { target: 'svm' });
-    expect(bytecode[0].length).toBeGreaterThan(0);
-    expect(accountPlan?.metas.map((meta) => meta.ref)).toEqual([BASE_VAULT, QUOTE_VAULT]);
+    const accounts = pumpswapAdapter.quoteAccounts(cfg); // ordered [baseVault, quoteVault]
+    const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q0'));
+    expect(bytecode.length).toBeGreaterThan(0);
+    // The manifest slots come back in quoteAccounts() (== main param) order — the RS analogue of
+    // the old accountPlan.metas: slot k binds to quoteAccounts()[k].address.
+    expect(manifest?.accounts).toEqual([
+      { kind: 'slot', index: 0, name: 'acc0' },
+      { kind: 'slot', index: 1, name: 'acc1' },
+    ]);
+    const boundAddresses = manifest?.accounts.map((meta) =>
+      meta.kind === 'slot' ? accounts[meta.index]?.address : undefined,
+    );
+    expect(boundAddresses).toEqual([BASE_VAULT, QUOTE_VAULT]);
   });
 
   it('sell fragment ceil-rounds each non-zero fee component on the output', async () => {
@@ -345,8 +356,9 @@ describe('emitQuote', () => {
     expect(fragment).toContain('(psOut3 * 25 + 9999) / 10000');
     expect(fragment).toContain('(psOut3 * 5 + 9999) / 10000');
     expect(fragment).not.toContain('* 0 +'); // zero creator fee term omitted
-    const { bytecode } = compile(`function main() {\n${fragment}\n  return q3;\n}`, { target: 'svm' });
-    expect(bytecode[0].length).toBeGreaterThan(0);
+    const accounts = pumpswapAdapter.quoteAccounts(sellCfg);
+    const { bytecode } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q3'));
+    expect(bytecode.length).toBeGreaterThan(0);
   });
 
   it('rejects amounts that cannot be quoted', async () => {
