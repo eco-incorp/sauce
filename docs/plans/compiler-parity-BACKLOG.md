@@ -32,8 +32,13 @@ fixture CALLS `Math.neg(amt)` @ lines 222/239 (dropping → "Math.neg is not a M
 dropping → "unresolved import super::is_infer_tuple"). CLEANLY dropped + verified no-op: #357, #360, #373's revert-of-#357.
 
 **USER DECISION (fire#102): DROP ALL 4 + replace blunt `Tuple` with FULLY-TYPED args (`interface {}`/`type {}`).** Two efforts:
-- **[3-DROP now]** #357 + #360 (clean) + #361 via Sammy's own `Math.neg(x)`→`-x` ecoswap-fixture find-and-replace (byte-equivalent).
-  Keep #363 for now. Rebase-drop + close #357/#360/#361. (agent `rebase-drop-3`)
+- **[3-DROP ✅ DONE (fire#107, `rebase-drop-3`)]** #357/#360/#361 + #373's revert-of-#357 dropped; `Math.neg(amt)`→`-(amt)`
+  landed in ecoswap.unrolled's harness commit; all 18 branches range-diff-verified + lease-pushed; **PRs #357/#360/#361 CLOSED**;
+  ecoswap compiles, cargo test green (0 failed, ecoswap_full #[ignore]d). **parity-07 realigned** to the rebased tip `0cc1796e1`
+  (agent left the pointer stale per "don't touch #363"; I force-pushed it consistent — now ancestor of parity-08). **FLAG:
+  `testdata/ecoswap-full/ecoswap.sauce.ts` (byte-verbatim copy of ../sauce-recipes, #[ignore]d) STILL has ~7 Math.neg — left
+  untouched (preserves byte-verbatim invariant; `cargo test` never compiles it). FOLLOW-UP: update the sauce-recipes recipe
+  Math.neg→- + re-copy (sauce-recipes user-held).**
 - **[#363 REWORK — DESIGN LOCKED (fire#104, `typed-args-scout`; user chose "inline now + type {} follow-up")].**
   **KEY FINDING: fully-typed inline args ALREADY WORK on RS** — `sauce-cli/tests/fixtures/programs/swap-supply/source.ts`
   declares `pools: { poolType: Uint256, poolAddress: Address, ... }[]` (no Tuple, no hints) and compiles. `annotation_ty`
