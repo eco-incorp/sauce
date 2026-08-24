@@ -67,6 +67,22 @@ order). **Verbatim RS SVM syntax captured:** `main(base: Account, quote: Account
 --no-optimize). Manifest `{accounts: ({kind:'slot',index,name}|{kind:'program',pubkey})[]}`, only main-REACHABLE svm.call
 programs harvested. Offline gate = compile+manifest (execution needs a main-lineage engine, expected). 🔄 **P1+P2 PILOT
 (pumpswap) IN FLIGHT** — establishing the replicable recipe + the incremental-vs-big-bang verdict on the types.ts contract.
+**✅ P2 PILOT DONE (fire#100, `svm-p0-foundation`, commit 264a601):** pumpswap migrated end-to-end via RS (32/32
+green, typecheck clean, 3-file diff). **Shared helper `sdk/test/svm/rs-compile.ts`** — `compileSvm(source)` +
+`wrapQuoteMain(n, fragment, retExpr)` (generalizes the token WASM loader; RS returns a single Uint8Array, not TS's
+Uint8Array[]). **RECIPE (mechanical):** `accountUint("<ref>",off,w)` → `svm.sload(acc<k>,off,w).toLe()` (k = ref's index
+in `quoteAccounts(cfg)`; ALWAYS .toLe() — u64 LE amounts); `block.timestamp`→`ctx.timestamp()`/`block.number`→
+`ctx.blockNumber()`; leave ALL arithmetic (Math.mulDiv/sqrt/+−*/, bare+n literals compile byte-identical); flip test →
+`compileSvm(wrapQuoteMain(...))` asserting `manifest.accounts` = `[{kind:slot,index:i,name:'acc'+i}]`. **VERDICT:
+INCREMENTAL / parallel-independent** — no types.ts change (emitQuote is `=>string`, content isn't typed); blast radius =
+venue dir + its test; both dialects coexist during transition; the multi-venue orchestrator cutover is a separate DOWNSTREAM
+step (sauce-recipes, out of repo). RS/SVM REJECTS Math.floor/max/min/abi.encode — but those are OFF-CHAIN (fetchPoolConfig),
+not in emitQuote fragments (gavel's abi.encode = separate). Token-2022/u128 also off-chain. **🔄 P3 FAN-OUT WAVE-1 launched
+(workflow `wefd00eou`):** 4 parallel worktree lanes (each reuses the pilot's built WASM, no rebuild) over TRIVIAL+MULTI
+venues (orca-legacy/raydium-amm-v4/mswap/kipseli · helium-treasury/perena-star/phoenix/openbook-v2 · jupiter-lend-earn/
+spl-token-swap-forks/stabble-weighted/sanctum-stake-pool · raydium-cp-swap/hylo/huma/perena), gated per-venue, merged +
+full-svm-gated in the pilot worktree. Wave-2 (TIME-DEPENDENT/STABLE +ctx.* rule: meteora-damm-v2/v1-stable/dbc, saber,
+stabble-stable, voltr; + gavel abi.encode) held for after wave-1.
 **PHASES:** **P0 (serial, GATE)** refresh sauce-next→main + rebuild WASM, token compile suite green on it. **P1 (serial)**
 generalize token/harness.ts WASM loader → shared svm rs-compile helper + migrate `venues/types.ts` adapter contract
 (`quoteRefs()`→ordered Account-param list; emitSetup/emitQuote use param names). **P2 PILOT (serial)** pumpswap end-to-end
