@@ -23,9 +23,16 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 **USER DECISION (fire#89): CONCEDE to Sammy's ctx.\*+gating.** Drop the `evm.*` CONTEXT/ADDRESS surface from BOTH
 compilers; relocate those reads to gated `ctx.*` (like `ctx.msgValue`). Keep the `evm.*`/`svm.*` STORAGE-CALL duals.
 Reverses the earlier "EVM-only → evm.\*" call. Execution lanes:
-- **[TS] (my lane, this session):** globals.ts — move `evm.codeSize/codeHash/isContract/isEOA` (#141) + `evm.msgValue`
-  + env reads (#142) → gated `ctx.*`; keep evm.*/svm. storage-call; re-migrate ~23 SDK sites (evm.msgValue→ctx.msgValue).
-  Branches `chore/ts-address-to-ctx` (#141) + stacked `chore/ts-context-ops` (#142). TDD: adapt evm-svm-namespace tests.
+- **[TS #141] ✅ DONE (fire#89, `a9caae5`, pushed):** `evm.codeSize/codeHash/isContract/isEOA` → gated `ctx.*`
+  (capability keys renamed evm.*→ctx.*); evm.*/svm. now carry ONLY storage-call duals; tests+README updated;
+  byte-emission unchanged (same Saucer ops). 340 touched-suite tests green + typecheck clean.
+- **[TS #142] SEQUENCED behind the RS env-read decision.** #142 (`chore/ts-context-ops`, stacked) drops msg/block/tx,
+  moves portable reads→ctx.*, but parks **11 EVM-only ENV reads** (msgValue/origin/gasPrice/coinbase/prevrandao/
+  gasLimit/baseFee/blobBaseFee/gasLeft/blockHash/blobHash) under evm.* — all SPECULATIVE (no SDK consumer; the ~23-site
+  migration only touches msg.value→ctx.msgValue / msg.sender→ctx.msgSender / block.timestamp→ctx.timestamp). Its
+  convergence = rebase onto new #141 (isContract/isEOA now in ctx.*, evm block restructured → conflict) + SDK migration
+  (real payload, needed regardless) + the 11 env reads → whatever the RS side (`rs-ctx-converge` on #383) decides for
+  parity (keep-all-as-gated-ctx.* vs trim-to-consumed). HELD until that report lands, so both compilers agree.
 - **[RS] (agent `rs-ctx-converge`, parallel):** rebase #382 (ctx.msgData) onto new main; rework #383 evm.* context surface
   → gated ctx.* reads (drop redundant `ctx.msgValue` — Sammy has it); keep evm.*/svm. storage-call. Worktrees
   `sauce-ctx-portable`/`sauce-ctx-evm` exist. Assess-redundancy-FIRST (Sammy may own env reads) then rework the remainder.
