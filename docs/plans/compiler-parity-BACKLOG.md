@@ -109,6 +109,23 @@ sauce-next→npm after a compiler-rs release. The DSL-parity-via-shared-plugin g
   → #138/#139/#140. OPEN structural decision for user: PR `feat/compiler-parity` itself / extract sauce-next
   into a lean standalone PR; and whether to slice #352.
 
+**🔨 IN FLIGHT (fire#68, 2026-08-24) — clearing the compiler side of M8.** User: "can we fix [the Tuple param]
+to unblock all the milestones?" Honest answer: the Tuple fix unblocks the flagship recipe (M9 parity + M8's
+precondition), NOT literally all milestones — M8 has 3 more small compiler gaps + SDK-side migration. Scoped all 3
+(workflow `wf_97e94a3c-21a`, 4 agents):
+- **ECO-2146 `ctx.msgValue()`** (0.3pt, compiler) — genuine; wire `ContextOp::CallValue`/opcode 0x6b/EVM-only
+  `Feature::CallValue` capability gate. BUT corpus needs SDK-side follow-ups too (migrate `msg.value`→`ctx.msgValue()`
+  in zksync-bridge+stargate; add `ctx.msgValue` to TS globals.ts). Compiler-necessary, not corpus-sufficient. QUEUED.
+- **ECO-2147 empty-array-literal ABI typing** (3pt, compiler-only, NO IR/codegen) — genuine; ~13 corpus programs.
+  Type-directed call-arg lowering (`argument(arg, declared)` helper at contract.rs:851). **BUILDING**: `empty-array-impl`
+  (sonnet), worktree `/Users/er/Documents/Projects/sauce-empty-array`, branch `parity-20-empty-array-abi-type`.
+- **ECO-2149 seaport stack-window** (5pt) — **NOT a parity gap: RS-Evm == TS-v12** (both fail `param out of stack
+  range: 17`; only TS-*v1* compiles seaport). RS matching v12 IS parity. "Fixing" = making v12 do what only v1 did
+  (a capability decision for Sammy) + an abi-encode byte-identity risk. NOT building autonomously — flag to Sammy.
+- Non-entry `Tuple` param (below) still BUILDING as `tuple-param-impl` (parity-19).
+Build order (synth): msg-value → empty-array → stack-window; all stack on `feat/compiler-parity-port`, one atomic PR
+each, linked to Sammy's tickets. These 3 are Sammy's ECO-2146/2147/2149 — link/coordinate, don't surprise.
+
 **🔨 IN FLIGHT (fire#67, 2026-08-24) — last parity gap: non-entry `Tuple` param.** Scout (`tuple-param-scout`)
 confirmed it's the SOLE remaining blocker for the full `ecoswap.sauce.ts` on RS: 2 non-entry `Tuple` params
 (`eulerNeedsLive`:564, `eulerQuoteClosedForm`:578); all 4 call sites pass an identical statically-known
