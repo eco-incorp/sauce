@@ -38,9 +38,21 @@ context reads confirmed present on main; 0 deferrals besides the operand-shape g
 precondition; overlaps Sammy's ECO-2146/2147 relatedTo-linked not duplicated). **M9 renamed → "Ambient imports &
 Layer-C plugin"** (ECO-2158 + children stay). Sammy heads-up posted on M8. Per-PR tickets = ECO-2159–2192.
 
-**REMAINING (all Sammy/user-gated, no blocked autonomous BUILD work):** module-const-expr / EKUBO_OR_PRINTR (ECO-2076,
-Sammy's design boundary — flagged); balance svm operand (ECO-2192, Sammy); parity-chain rebase-drop of #362's commit
-(chain-merge); `../sauce-recipes` migration (user). **Session pinned in worktree `sauce-address-ctx`; backlog edited
+**✅ DONE since (fires#81–86, 2026-08-24):**
+- **module-const-expr fold** — PR #384 (ECO-2193, ECO-2076 const-expr AC), held for Sammy. Recipe probe advances past all
+  44 module consts → SIXTH gap = bare `gasLeft()` = recipe-spelling (`evm.gasLeft()` exists via #383), NOT a compiler gap.
+  **RS compiler is now FEATURE-COMPLETE for the flagship recipe** (all 6 layered gaps closed; last is recipe migration).
+- **#362 address.\* rebase-drop DONE + VERIFIED** — `0a958c5da` dropped from the whole chain via rebase across **22
+  branches** (force-pushed `--force-with-lease`, 0 aborts; parity-01..05 untouched). Prepare-verify checkpoint (isolated
+  scratch clone) caught the NS-1 fixture dependency BEFORE push → migrated `ecoswap.unrolled.sauce.ts` address.self→ctx.self()
+  to keep NS-1 green. range-diff clean on all 22 (only address.* removal + fixture migration); grep confirms no
+  Namespace::Address left. address.* no longer ships on merge. New tips: feat/compiler-parity-port `8523acec`, #380
+  `7fb65278`, #384 `d7a7b14f`, etc. ECO-2163 = every in-repo part done.
+- **Slack thread updated** with all new PRs (#380/381/382/383/384 + #141/142) — eco-pay #C0AFSM52JER compiler-parity thread.
+
+**REMAINING (all Sammy/user-gated, no blocked autonomous BUILD work):** balance svm operand (ECO-2192, Sammy);
+ECO-2076 (Sammy: fold #384 into #304 or keep); Sammy's PR reviews/merges + M8 SDK steps (ECO-2151-2156);
+`../sauce-recipes` migration (user-held). **Session pinned in worktree `sauce-address-ctx`; backlog edited
 via `sauce-sdk-cp` (feat/compiler-parity).**
 
 ## ✅ M8-compiler-gap progress (fire#71, 2026-08-24)
