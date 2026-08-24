@@ -83,6 +83,21 @@ venues (orca-legacy/raydium-amm-v4/mswap/kipseli · helium-treasury/perena-star/
 spl-token-swap-forks/stabble-weighted/sanctum-stake-pool · raydium-cp-swap/hylo/huma/perena), gated per-venue, merged +
 full-svm-gated in the pilot worktree. Wave-2 (TIME-DEPENDENT/STABLE +ctx.* rule: meteora-damm-v2/v1-stable/dbc, saber,
 stabble-stable, voltr; + gavel abi.encode) held for after wave-1.
+
+**✅ FAN-OUT WAVE-1 DONE (fire#101, workflow `wefd00eou`, feat/svm-account-model @ `1e1312c`):** **7 venues migrated + merged**
+(orca-legacy-token-swap, raydium-amm-v4, stabble-weighted-swap, spl-token-swap-forks, raydium-cp-swap, hylo, huma); zero merge
+conflicts (disjoint files); **FULL GATE 22 suites / 292 tests GREEN + typecheck clean**. NOT pushed (local). **KEY FINDING —
+most listed "venues" are PARAM-ONLY** (mswap/kipseli/helium-treasury/perena-star/phoenix/openbook-v2/jupiter-lend-earn/
+sanctum-stake-pool): no real `accountUint(` call in their own index.ts (grep matches are doc-comments); their quote fragments
+are emitted by a **SHARED LADDER MODULE relocated to `sauce-recipes`** (OUT of repo, user-held [[feedback-scope-other-projects]]).
+So the in-repo per-venue surface is small — the ladder-venue cutover is a separate downstream sauce-recipes step (needs user
+go-ahead). **⚠️ RS COMPILER GAP FOUND (perena) — a genuine TS→RS parity gap:** perena's ~7-level nested-if curve solver hits
+`crates/sauce-core/src/codegen.rs:550` "the branches of this if leave different locals live" whenever an inner `if` declares a
+`const` inside an outer `if` that also declared one (2-level minimal repro; 1 level fine). Independent of the migration
+(arithmetic is all RS-allowed). perena reverted to accountUint, BLOCKED pending an RS codegen fix (nested-if local-liveness)
+OR flattening its arithmeticLines. **Follow-up decision: fix RS (real gap, would help other programs) vs defer perena.** 🔄
+**WAVE-2 launched** — definitive grep of ALL venue dirs for real `accountUint(` calls → migrate every not-yet-done own-emitQuote
+venue (incl. TIME-DEPENDENT +ctx.* rule), skip param-only, flag RS-gap-blocked. settle.sauce.ts held separate (staged-mode Q).
 **PHASES:** **P0 (serial, GATE)** refresh sauce-next→main + rebuild WASM, token compile suite green on it. **P1 (serial)**
 generalize token/harness.ts WASM loader → shared svm rs-compile helper + migrate `venues/types.ts` adapter contract
 (`quoteRefs()`→ordered Account-param list; emitSetup/emitQuote use param names). **P2 PILOT (serial)** pumpswap end-to-end
