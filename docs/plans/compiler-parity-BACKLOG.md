@@ -102,9 +102,14 @@ main). **Gate: 22 suites / 292 tests GREEN + typecheck clean.** **TOTAL in-repo 
 different locals live"` (nested-if-with-const); stabble-stable-swap = nested-fn-in-main + `iter++`.
 **⚠️⚠️ RS M1-SUBSET GAPS FOUND (genuine TS→RS parity gaps, gate the STABLE-Newton family):** (1) **no `++`/`--` update
 expressions** (frontend.rs — Newton `for(;i++)` rejected; workaround `i=i+1`); (2) **no nested function declarations** (helper
-must be top-level); (3) **codegen "different locals live"** on nested-if-with-const (perena+dbc). **DECISION PENDING (fix RS vs
-rewrite ladder/defer):** the codegen "different locals live" is a genuine bug worth fixing (2 venues); `++`/nested-fn may be
-deliberate M1 omissions (workaround = ladder/SDK rewrite). Remaining accountUint surface: 3 blocked venues + settle
+must be top-level); (3) **codegen "different locals live"** on nested-if-with-const (perena+dbc). **USER DECISIONS (fire#106):**
+(1) codegen "different locals live" — user asked "would TS error on shadow const?" — investigating (`rs-scope-investigate`);
+preliminary: NO, TS block-scopes if-branches so it's valid TS; RS rejects due to its deliberate SHARED-SCOPE + stack model (a
+branch-only const leaves the merge with different live locals). Fix = RS block-scope if bodies vs hoist consts in code — TBD.
+(2) `++`/`--` — **IMPLEMENT in RS** (user: "we should support ++/-- in rust compiler") — `rs-plusplus-impl` on
+`feat/compiler-update-expr` off main, PR to sauce, TDD. (3) nested functions — **DO NOT support** (user: "I don't like nested
+functions declaration") — RS keeps rejecting; helpers hoisted to top-level (SDK/ladder rewrite, not a compiler change).
+Note: SDK RS/WASM needs a rebuild from a commit carrying ++/-- before the Newton venues can use it. Remaining accountUint surface: 3 blocked venues + settle
 (recipes/settle.sauce.ts 3, recipes/index.ts 3) — settle held (staged-mode Q). Shared ladder = sauce-recipes (out of repo).
 Branch NOT pushed yet.
 
