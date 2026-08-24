@@ -11,6 +11,36 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## 📊 M8 CORPUS-READINESS MEASUREMENT (fire#95, 2026-08-24, `rs-corpus-readiness` — FIRST full sweep)
+
+**How close is RS to REPLACING TS across the real SDK protocol corpus?** First-ever systematic measurement (North-Star only
+proved 1 recipe). Ran the built RS/WASM compiler (commit ac2ae519c, Aug-23 — PRE the latest forward-ports, so a hard FLOOR)
+over ALL 128 protocols / 286 functions via the P6 rs-compile path.
+
+- **EVM: 268/286 = 93.7% MEASURED floor; ~99.7% PROJECTED** on current RS main + in-flight #142. 114/128 protocols compile 100%.
+  AMM/DEX, lending, erc20, staking/LST ≈ 100%. The 18 failures:
+  - **12 = empty-array ABI typing** (balancer-v2, gmx-v2, oneinch, paraswap, pendle×4, zerox, …) — GENUINE gap but ALREADY
+    FIXED on RS main (#351/#381); absent only from the Aug-23 WASM. **Needs a WASM rebuild/repin to reach the SDK path.**
+  - **5 = msg.\* not yet migrated** (debridge/layerzero/stargate/zksync-bridge/erc20.storageTransfer) — DIALECT, resolved by
+    NS-CONVERGE #142 (msg.*→ctx.*); RS already supports the targets. SDK-side.
+  - **1 = seaport.fulfillBasicOrder** — v12 16-entry stack-window limit that **TS-v12 ALSO hits** (ECO-2149); not RS-specific,
+    Sammy's design call.
+- **SVM: ~0% as-written — UNIFORM account-model DIALECT divergence (bucket C, ECO-1860), NOT a capability gap.** The SVM venue
+  fragments + settle.sauce.ts use the TS STRING-REF model (`accountUint("escrow0",…)`, `accountData("tokenProgram0",…)`, 97
+  call-sites / 16 venues); RS uses the ACCOUNT-SLOT model (`Account` params + `svm.sload(a,…)`). Empirically: accountUint/
+  accountData → FAIL on RS; Account+svm.sload / uint(svm.sload) → PASS (the @sauce/token svm arm compiles by construction). RS
+  COVERS the same ops — it's a naming-model mismatch. Resolving needs EITHER an SDK migration of the SVM programs to the
+  Account model (large: 16+ venues + settle + harness) OR RS `accountUint`/`accountData` compat shims.
+- **Feature ports have ZERO corpus blast (data-validated):** for…of (PR-12), inline arrow-const (PR-15/16), local new-Array
+  FOLD (PR-13 — runtime `new Array` WORKS on RS, only compile-fold absent), try/catch, local const-prop — NONE appear in the
+  protocol templates (straight-line typed main() + .at() + struct-args, which RS fully handles). TS-parity-completeness items,
+  **not corpus blockers** — confirms deferring them is correct.
+
+**TOP GAPS RANKED BY CORPUS BLAST:** (1) **SVM account-model dialect** — blocks ~all SVM programs, BY FAR the biggest, needs a
+directional decision (SDK-migrate vs RS-shim). (2) empty-array — 12 EVM fns, fixed on RS main, needs WASM repin. (3) msg.*→ctx.*
+— 5 EVM fns, SDK-side #142. (4) seaport v12 stack — 1 fn, shared w/ TS-v12, Sammy. **EVM M8-readiness ≈ essentially there;
+SVM gated on the account-model call.**
+
 ## 🔄 EPIC — NS-CONVERGE to Sammy's ctx.*+gating (fire#89, 2026-08-24, USER DECISION)
 
 **Sammy merged his own M8 features to RS `main` (#347–#351), some overlapping my open stack.** Two overlaps:
