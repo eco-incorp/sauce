@@ -38,12 +38,19 @@ Reverses the earlier "EVM-only → evm.\*" call. Execution lanes:
   **⚠️ BASE DRIFT found:** the RS worktrees sat on a STALE local rebase of feat/compiler-parity-port (717b97159, pre-#362-
   address-drop → still carries address.*) diverged from origin's canonical 8523acecb. Agent instructed to rebuild deltas on
   ORIGIN (8523acecb, no address.*), NOT push the stale local base. #382 (ctx.msgData portable) verify+push, not redundant.
-- **[TS #142] IN FLIGHT (`ts-142-converge`, parallel — decision is locked + RS-independent).** #142
-  (`chore/ts-context-ops`) → rebase onto #141 `a9caae5` (conflict: the 4 code reads now in ctx.*), **KEEP msgValue as
-  gated `ctx.msgValue`** (SDK consumers + on RS main #348), **DROP the other 10 env reads** (origin/gasPrice/coinbase/
-  prevrandao/gasLimit/baseFee/blobBaseFee/gasLeft/blockHash/blobHash — zero consumers), keep msg/block/tx removal +
-  ~23-site SDK migration (msg.value→ctx.msgValue / msg.sender→ctx.msgSender / block.timestamp→ctx.timestamp). Freestanding
-  gasLeft() intrinsic (if any) untouched. Final TS ctx.* == RS ctx.* target (7 portable + msgData + 4 code + msgValue).
+- **[TS #142] ✅ DONE + VERIFIED (fire#92, `ts-142-converge`, pushed `08b9106`).** Rebased onto #141 `a9caae5`
+  (3-file conflict resolved by re-deriving from #141's clean version); **kept `ctx.msgValue`** (gated, capability key
+  `ctx.msgValue`, EVM_TARGETS — 2 SDK sites stargate/zksync-bridge + 5 test uses retargeted evm.msgValue→ctx.msgValue),
+  **dropped the other 10 env reads** everywhere (globals.ts/capabilities.ts/docs/tests); freestanding gasLeft()/blockHash()/
+  blobHash() intrinsics untouched. **Confirmed NO SDK site uses a dropped read.** Final TS `ctx.*` = 13 members:
+  msgSender/msgData/self/chainId/blockNumber/timestamp/selfBalance/balance (7 portable + msgData) + gated msgValue/codeSize/
+  codeHash/isContract/isEOA. `evm.*` = storage-call duals only. **GATES:** typecheck 0; full compiler test/ **1902/1902**;
+  integration blockchain 40/40 (real anvil, ctx.msgValue()→0); SDK compile.test **1455/1455** (every protocol incl. the
+  retargeted ones) + venue tests. **This 13-member surface == the RS #383 target EXACTLY** → true byte-parallel convergence
+  once RS lands. (Adopted orphan worktree `sauce-ctx-ops` rather than removing a possibly-shared one.)
+- **[RS #383] IN FLIGHT (`rs-ctx-converge`, Option A):** reset to clean origin base `origin/parity-evm-context` (8523acecb),
+  applying the 4-gated-ctx.*-code-read rework, --force-with-lease. #382 (ctx.msgData) LEFT untouched on origin (already
+  correct). Will land the same 13-member ctx.* target.
 - **[RS] (agent `rs-ctx-converge`, parallel):** rebase #382 (ctx.msgData) onto new main; rework #383 evm.* context surface
   → gated ctx.* reads (drop redundant `ctx.msgValue` — Sammy has it); keep evm.*/svm. storage-call. Worktrees
   `sauce-ctx-portable`/`sauce-ctx-evm` exist. Assess-redundancy-FIRST (Sammy may own env reads) then rework the remainder.
