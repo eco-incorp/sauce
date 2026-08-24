@@ -109,6 +109,15 @@ sauce-next→npm after a compiler-rs release. The DSL-parity-via-shared-plugin g
   → #138/#139/#140. OPEN structural decision for user: PR `feat/compiler-parity` itself / extract sauce-next
   into a lean standalone PR; and whether to slice #352.
 
+**✅ PORTED TO LINEAR (fire#66, 2026-08-24).** User: "port our epic to Linear, replicate Sammy's style, trees of epics+tickets, PR↔tickets linked." Sammy's structure = project **Sauce Compiler Rust** (Eco team, `ECO-` keys) → milestones M1–M8 → issues `M<n>.<x> · area: imperative` → sub-issues; rich evidence-based descriptions with `## Done when` AC. Built (user chose: **new milestone in his project** + **fresh ticket per PR** + link/update his tickets):
+- **Milestone M9** "Parity forward-port & ambient plugin (SDK compilation)" in Sauce Compiler Rust.
+- **Epic ECO-2157** (Parity forward-port) → 19 children **ECO-2159…2177** (one per `sauce#357–375`).
+- **Epic ECO-2158** (Ambient & Layer-C plugin) → 9 children **ECO-2178…2186** (`sauce#376–379` RS, `sauce-sdk#135/136` TS, `sauce-sdk#138/139/140` SDK).
+- All 30 issues: assignee Kiryl, In Review, milestone M9, **PR attached via `links`** (the PR↔ticket link).
+- **His tickets cross-linked**: `relatedTo` from our tickets → ECO-2076 (module-scope bindings, call-fold parity), ECO-2060 (const tuple index — soft related, NOT closed by us), ECO-2156 (M8.11 point-/compiler-at-Rust ← our P6 seam). Comments posted on **ECO-2156, ECO-1877 (M6 TS-oracle), ECO-2076** explaining the M9 linkage (Sammy notified as owner; statuses left to him).
+- Root project: https://linear.app/ecoprotocol/project/sauce-compiler-rust-8163c0e73034 · Epics ECO-2157 / ECO-2158.
+- Follow-up option (not done): edit each PR body to prepend its `ECO-<id>` so Linear's GitHub integration adds native two-way status sync (the `links` attachment already gives the visible link).
+
 **✅ ATOMIC RE-SLICE + QUALITY PASS COMPLETE (fire#62–65, 2026-08-23).** User: "Sammy won't merge feature
 bundles" + "close #353–356, reopen incrementally so PR numbers are semantic."
 - **RS #352 sliced into 18 atomic parity PRs + foundation tail.** Closed #352–356; reopened as **#375** (foundation
