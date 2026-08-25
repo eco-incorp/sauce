@@ -160,6 +160,14 @@ Completes the per-venue in-repo migration + VALIDATES #385/#386 on real venues. 
   needs genuine staged/parametric compilation in RS-core (+ wasm exposure) — a substantial NEW feature (Sammy's domain, needs
   design), NOT a small wasm addition. Flagged as the remaining SVM blocker; not an autonomous quick-fix.
 
+**🧾 HOUSEKEEPING (fire#115, user ask): PRs↔tickets↔Slack reconciled.** Slack thread (C0AFSM52JER) shows Sammy flagged
+#357/#360/#361/#363 to close + Kiryl agreed "explicit types only, no Tuple" (type {}/interface {} = future foundation) — my
+kill aligns exactly. Actions: **created + linked** ECO-2196 (#385 ++/--), ECO-2197 (#386 if-liveness), ECO-2198 (SVM migration
+→ new DRAFT PR sauce-sdk#143, base feat/compiler-parity, 13 venues); ECO-2196/2197 → In Review. **Cancelled** ECO-2161(uint#360)
+/ECO-2162(Math.neg#361)/ECO-2164(Tuple#363)/ECO-2187(non-entryTuple#380) — killed PRs. #385/#386 are OFF MAIN (independent
+fixes, NOT stacked on the parity chain). Slack DRAFT posted in-thread (Dr0BRZHR7QDD) = the "done, PRs are yours" handoff (closed
+list + rebase-green + remaining open PRs grouped + the 2 new fixes + SVM #143) — awaiting user review/send.
+
 **📍 STATE (fire#114): bounded autonomous work COMPLETE; remainder is big-feature or externally gated.** DONE this program:
 Tuple killed (#363/#380); ++/-- (#385) + if-arm-liveness (#386) fixed+validated on real venues; ctx.* convergence (RS
 #382/#383 + TS #141/#142); parity forward-port stack; SVM per-venue migration COMPLETE (13 venues, 300 green); corpus
