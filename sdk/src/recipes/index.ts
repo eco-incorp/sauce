@@ -76,3 +76,21 @@ export function settleSource(): string {
   if (cached === null) cached = readFileSync(SETTLE_SOURCE_PATH, "utf-8");
   return cached;
 }
+
+/**
+ * The CCTP split-intent recipe — a BUILDER (it constructs a V2 `Intent` via the cross-chain intent
+ * DSL and compiles the burn program through the RUST compiler), distinct in kind from the
+ * source-shipped `settle` recipe above. Splits one large USDC transfer into N sub-`burnLimit`
+ * `depositForBurn` chunks and stitches them into ONE atomic intent (one `V12Pot.cook`, all-or-revert
+ * on the source chain). See `cctp-split.ts` for the full design.
+ */
+export {
+  CCTP_CONTRACTS,
+  CCTP_DOMAIN,
+  MAX_CCTP_CHUNKS,
+  buildCctpSplitIntent,
+  buildNaiveCctpIntents,
+  cctpSplitProgram,
+  splitIntoChunks,
+  type CctpSplitParams,
+} from "./cctp-split.js";
