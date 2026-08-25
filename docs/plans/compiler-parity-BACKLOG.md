@@ -168,6 +168,11 @@ kill aligns exactly. Actions: **created + linked** ECO-2196 (#385 ++/--), ECO-21
 fixes, NOT stacked on the parity chain). Slack DRAFT posted in-thread (Dr0BRZHR7QDD) = the "done, PRs are yours" handoff (closed
 list + rebase-green + remaining open PRs grouped + the 2 new fixes + SVM #143) — awaiting user review/send.
 
+**✅ #385/#386 MERGED to sauce main (fire#125, 2026-08-25, re1ro admin-merge) — main HEAD 079442ad4 has check_update +
+drop_arm_leftovers.** ECO-2196/ECO-2197 → **Done**. Unblocks the SVM WASM: `svm-wasm-revert` in flight — repoint #143's
+sauce-next `svm-venue-unblock-base`→`#main`, rebuild WASM, verify the 24-suite/300-test venue gate off a main-based WASM
+(proves #385/#386 upstream cover the 3 Newton venues), commit → makes #143 clean (temp combined branch then deletable).
+
 **📍 STATE (fire#114): bounded autonomous work COMPLETE; remainder is big-feature or externally gated.** DONE this program:
 Tuple killed (#363/#380); ++/-- (#385) + if-arm-liveness (#386) fixed+validated on real venues; ctx.* convergence (RS
 #382/#383 + TS #141/#142); parity forward-port stack; SVM per-venue migration COMPLETE (13 venues, 300 green); corpus
