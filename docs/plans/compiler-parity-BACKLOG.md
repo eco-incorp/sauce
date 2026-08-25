@@ -155,6 +155,17 @@ Completes the per-venue in-repo migration + VALIDATES #385/#386 on real venues. 
   #385/#386):** current main's #350 (ECO-2150 entry-account role) adds a `requires` field to every manifest slot (bare Account →
   `"readonly"`); broke the 12 prior `manifest.accounts` assertions — FIXED (`21c87c6`: SvmAccountRole + requires on the shared
   SvmManifestAccount type + assertions; forward-compatible). Remaining SVM: settle (staged-mode gap) + sauce-recipes ladder (held).
+  **⛔ settle BLOCKED on a BIG RS FEATURE (fire#114): RS has NO `staged` mode AT ALL** (grep of sauce-core+sauce-wasm on main =
+  0 hits; CompileOptions has target/resolve/resolvePackage/entry/contracts/optimize only). settle's `compile(staged:true,args)`
+  needs genuine staged/parametric compilation in RS-core (+ wasm exposure) — a substantial NEW feature (Sammy's domain, needs
+  design), NOT a small wasm addition. Flagged as the remaining SVM blocker; not an autonomous quick-fix.
+
+**📍 STATE (fire#114): bounded autonomous work COMPLETE; remainder is big-feature or externally gated.** DONE this program:
+Tuple killed (#363/#380); ++/-- (#385) + if-arm-liveness (#386) fixed+validated on real venues; ctx.* convergence (RS
+#382/#383 + TS #141/#142); parity forward-port stack; SVM per-venue migration COMPLETE (13 venues, 300 green); corpus
+readiness ~99.7% EVM; dynamic-kind family verified immune. REMAINING = **Sammy's review/merge** (#385/#386 + parity/converged
+stack + combined `svm-venue-unblock-base`), **settle staged-mode** (big RS feature — design decision), **sauce-recipes ladder**
+(user-held). Nothing unblocked+non-gated in-lane; hold for a merge or new direction.
 Note: SDK RS/WASM needs a rebuild from a commit carrying ++/-- before the Newton venues can use it. Remaining accountUint surface: 3 blocked venues + settle
 (recipes/settle.sauce.ts 3, recipes/index.ts 3) — settle held (staged-mode Q). Shared ladder = sauce-recipes (out of repo).
 Branch NOT pushed yet.
