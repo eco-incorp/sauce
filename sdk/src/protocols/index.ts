@@ -31,6 +31,7 @@ import { protocolInfo as kim } from "./kim/info.js";
 // Lending protocols
 import { protocolInfo as aaveV2 } from "./aave-v2/info.js";
 import { protocolInfo as aaveV3 } from "./aave-v3/info.js";
+import { protocolInfo as cctp } from "./cctp/info.js";
 import { protocolInfo as compoundV2 } from "./compound-v2/info.js";
 import { protocolInfo as compoundV3 } from "./compound-v3/info.js";
 import { protocolInfo as sparkInfo } from "./spark/info.js";
@@ -183,6 +184,8 @@ export const protocols: Record<string, ProtocolInfo> = {
   // Lending
   "aave-v2": aaveV2,
   "aave-v3": aaveV3,
+  // Bridge
+  cctp,
   "compound-v2": compoundV2,
   "compound-v3": compoundV3,
   "spark": sparkInfo,
@@ -339,6 +342,7 @@ export * as curve from "./curve/index.js";
 export * as balancerV2 from "./balancer-v2/index.js";
 export * as aaveV2 from "./aave-v2/index.js";
 export * as aaveV3 from "./aave-v3/index.js";
+export * as cctp from "./cctp/index.js";
 export * as compoundV3 from "./compound-v3/index.js";
 export * as oneInch from "./oneinch/index.js";
 export * as chainlink from "./chainlink/index.js";

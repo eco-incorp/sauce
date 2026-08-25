@@ -15,6 +15,7 @@ import * as morphoBlue from "../protocols/morpho-blue/index.js";
 import * as compoundV3 from "../protocols/compound-v3/index.js";
 import * as erc20 from "../protocols/erc20/index.js";
 import * as erc4626 from "../protocols/erc4626/index.js";
+import * as cctp from "../protocols/cctp/index.js";
 import { CONTRACT_LINKS, type ContractLink } from "./links.js";
 import { buildDescriptor } from "./derive.js";
 import type { ContractDescriptor } from "./types.js";
@@ -52,6 +53,7 @@ const ABI_EXPORTS: Readonly<Record<string, Readonly<Record<string, Abi>>>> = {
   "compound-v3": { CometABI: compoundV3.CometABI as unknown as Abi },
   erc20: { ERC20ABI: erc20.ERC20ABI as unknown as Abi },
   erc4626: { VaultABI: erc4626.VaultABI as unknown as Abi },
+  cctp: { TokenMessengerABI: cctp.TokenMessengerABI as unknown as Abi },
 };
 
 /** Exposed for the linkage test's fail-closed invariants — not part of the public query API (see query.ts/index.ts). */

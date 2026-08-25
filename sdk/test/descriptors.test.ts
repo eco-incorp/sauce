@@ -182,9 +182,9 @@ describe("descriptors: registry totals + purity", () => {
   it("pins the current starter-set shape as a tripwire against silent link-table drift", () => {
     const protocolSlugs = new Set(DESCRIPTORS.map((d) => d.protocol));
     const abiExports = new Set(DESCRIPTORS.map((d) => d.abiExport).filter((x): x is string => x !== undefined));
-    expect(protocolSlugs.size).toBe(15);
-    expect(abiExports.size).toBe(24);
-    expect(DESCRIPTORS.length).toBe(29);
+    expect(protocolSlugs.size).toBe(16);
+    expect(abiExports.size).toBe(25);
+    expect(DESCRIPTORS.length).toBe(30);
   });
 
   it("listDescriptors() is stable/reference-equal across calls, and mutating a returned perChainAddress does not corrupt the registry", () => {

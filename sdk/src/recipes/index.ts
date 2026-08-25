@@ -78,19 +78,12 @@ export function settleSource(): string {
 }
 
 /**
- * The CCTP split-intent recipe — a BUILDER (it constructs a V2 `Intent` via the cross-chain intent
- * DSL and compiles the burn program through the RUST compiler), distinct in kind from the
- * source-shipped `settle` recipe above. Splits one large USDC transfer into N sub-`burnLimit`
- * `depositForBurn` chunks and stitches them into ONE atomic intent (one `V12Pot.cook`, all-or-revert
- * on the source chain). See `cctp-split.ts` for the full design.
+ * The CCTP transfer demo — a BUILDER (constructs V2 `Intent`s via the cross-chain intent DSL,
+ * compiling the route through the RUST compiler), distinct in kind from the source-shipped `settle`
+ * recipe above. A Base→Arbitrum USDC transfer "with interop/CCTP and without": `buildCctpSplitTransfer`
+ * splits the amount into N sub-`perMessageLimit` `depositForBurn` chunks burned in ONE atomic cook
+ * (all-or-revert on the source chain); `buildPlainTransfer` is the no-bridge baseline. Both read
+ * `USDC` and `Cctp.TokenMessenger` from the DSL registries — no hardcoded ABIs or addresses. See
+ * `cctp-transfer.ts`.
  */
-export {
-  CCTP_CONTRACTS,
-  CCTP_DOMAIN,
-  MAX_CCTP_CHUNKS,
-  buildCctpSplitIntent,
-  buildNaiveCctpIntents,
-  cctpSplitProgram,
-  splitIntoChunks,
-  type CctpSplitParams,
-} from "./cctp-split.js";
+export { buildCctpSplitTransfer, buildPlainTransfer, type CctpTransferParams } from "./cctp-transfer.js";
