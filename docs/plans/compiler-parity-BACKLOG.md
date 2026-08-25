@@ -147,6 +147,14 @@ functions declaration") — RS keeps rejecting; helpers hoisted to top-level (SD
 `svm-venue-unblock-base` (main + #385 + #386), repoint SDK sauce-next → it + rebuild WASM, migrate perena+meteora-dbc (via #386)
 + stabble-stable (via #385 + hoist its inline Newton helper top-level; flag if it needs the held sauce-recipes ladder).
 Completes the per-venue in-repo migration + VALIDATES #385/#386 on real venues. WASM reverts to main once #385/#386 merge.
+  ✅ **DONE (fire#113): ALL 3 MIGRATED + GREEN — #385/#386 validated on real venues.** Combined `svm-venue-unblock-base`
+  (main+#385+#386, `fa1fbe2dc`) built (1062/0) + pushed; WASM rebuilt. perena (`7316825`, #386 deep-nested-if solver),
+  meteora-dbc (`fe10e03`, #386 fee-scheduler), stabble-stable (`bc3414c`, #385 iter++ + top-level-helper hoist saber-style).
+  **PER-VENUE IN-REPO SVM MIGRATION COMPLETE = 13 venues** (pumpswap + 7 wave-1 + 3 wave-2 + 3 unblocked). Gate: 24 suites /
+  **300 tests green**, typecheck clean. feat/svm-account-model @ `bc3414c`. **⚠️ #350 SCHEMA DRIFT (from the WASM refresh, NOT
+  #385/#386):** current main's #350 (ECO-2150 entry-account role) adds a `requires` field to every manifest slot (bare Account →
+  `"readonly"`); broke the 12 prior `manifest.accounts` assertions — FIXED (`21c87c6`: SvmAccountRole + requires on the shared
+  SvmManifestAccount type + assertions; forward-compatible). Remaining SVM: settle (staged-mode gap) + sauce-recipes ladder (held).
 Note: SDK RS/WASM needs a rebuild from a commit carrying ++/-- before the Newton venues can use it. Remaining accountUint surface: 3 blocked venues + settle
 (recipes/settle.sauce.ts 3, recipes/index.ts 3) — settle held (staged-mode Q). Shared ladder = sauce-recipes (out of repo).
 Branch NOT pushed yet.
