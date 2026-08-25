@@ -19,7 +19,7 @@
  * always compiled to exactly one bytecode blob (`compiled.bytecode[0]`) and slotted as exactly one
  * `Call` — a multi-statement body is one program with N statements, never N cooks.
  */
-import { compile, type CompileResult, type CompileTarget, type ContractsConfig } from "@eco-incorp/sauce-compiler";
+import { compile, type ArgValue, type CompileResult, type CompileTarget, type ContractsConfig } from "@eco-incorp/sauce-compiler";
 import { bytesToHex } from "viem";
 
 import type { ChainRef } from "../chains/canonical.js";
@@ -48,6 +48,15 @@ export interface SauceCompileOptions {
   baseDirs?: string[];
   tsSource?: boolean;
   treeshake?: boolean;
+  /**
+   * Compile-time argument VALUES baked into a parameterized `main(...)` as a constant-folded
+   * arg-prologue: the compiler rewrites `main(a, b, ...)` into a no-arg `main` that opens with these
+   * literals, so a program shipped as a standalone `.sauce.ts` asset (e.g. `recipes/cctp-split.sauce.ts`,
+   * `settle.sauce.ts`) becomes fixed bytecode with no runtime inputs. TS compiler ONLY: the RS/WASM
+   * compiler has no args field, so `compiler: 'rs'` together with `args` throws (see `compileSauceRoute`)
+   * rather than silently emit a program whose params never get bound.
+   */
+  args?: ArgValue[];
   defines?: Record<string, bigint | boolean | number>;
   /** Caller token symbol -> address OVERRIDES, merged per-key on top of `token-registry.ts`'s
    *  default per-chain registry (see `resolveTokenMap`) -- the merged map drives both `<Sym>.
@@ -203,6 +212,14 @@ export function compileSauceRoute(
   // P6 compiler selector: 'rs' routes through the RS/WASM compiler (rs-compile.ts) -- the only
   // path that understands `options.ambient` -- everything else falls through to the existing TS
   // compile() call, unchanged.
+  if (options.compiler === "rs" && options.args !== undefined) {
+    throw new Error(
+      "compileSauceRoute: options.args (compile-time arg baking) is unsupported by the RS/WASM " +
+        "compiler -- it has no args field, so a parameterized `main(...)` would compile with its " +
+        "params unbound. Use the default TS compiler (omit `compiler`, or set `compiler: 'ts'`) for " +
+        "an args-baked program, or inline the values instead of parameterizing `main`.",
+    );
+  }
   const compiled =
     options.compiler === "rs"
       ? compileWithRs({ source, target, baseDirs, defines, contracts, ambient: options.ambient })
@@ -213,6 +230,7 @@ export function compileSauceRoute(
           treeshake: options.treeshake,
           defines,
           contracts,
+          args: options.args,
         });
 
   if (compiled.bytecode.length === 0) {

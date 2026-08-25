@@ -1,7 +1,10 @@
 /**
- * cctp-transfer demo — Base→Arbitrum USDC, with CCTP and without, compiled through the RUST compiler.
- * The point of these assertions: the route bodies are DSL-native (USDC + Cctp.TokenMessenger resolve
- * from the registries), and the CCTP variant is ONE atomic cook.
+ * cctp-transfer demo — Base→Arbitrum USDC, with CCTP and without. The route PROGRAMS are standalone
+ * `.sauce.ts` assets (`cctp-split.sauce.ts` / `plain-transfer.sauce.ts`) whose parameterized `main`
+ * is baked with this intent's values as compile-time `args` (the `settle.sauce.ts` mechanism — a TS
+ * compiler feature; RS binds entry params by runtime-decode instead). The point of these assertions:
+ * the programs are DSL-native (USDC + Cctp.TokenMessenger resolve from the registries), and the CCTP
+ * variant is ONE atomic cook.
  */
 import { bytesToHex, toFunctionSelector } from "viem";
 

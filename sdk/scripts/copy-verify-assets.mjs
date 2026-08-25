@@ -28,6 +28,8 @@ const SDK_DIR = resolve(SCRIPT_DIR, "..");
 
 const ASSETS = [
   { subdir: "recipes", file: "settle.sauce.ts" },
+  { subdir: "recipes", file: "cctp-split.sauce.ts" },
+  { subdir: "recipes", file: "plain-transfer.sauce.ts" },
   { subdir: join("svm", "recipes"), file: "settle.sauce.ts" },
 ];
 
