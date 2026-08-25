@@ -79,9 +79,11 @@ export function buildCctpSplitTransfer(params: CctpTransferParams): BuiltIntent 
   if (destDomain === undefined) throw new Error(`cctp-transfer: no CCTP domain registered for destination '${dest.slug}'`);
   const { count, chunk } = evenChunks(params.amount, params.perMessageLimit);
 
+  // One approval for the WHOLE batch, then N burns against that single allowance — not a
+  // wasteful approve per chunk.
   const body = `function main() {
+  USDC.approve(Cctp_TokenMessenger, TOTAL);
   for (let i = 0n; i < N; i = i + 1n) {
-    USDC.approve(Cctp_TokenMessenger, CHUNK);
     Cctp.TokenMessenger.depositForBurn(CHUNK, DEST_DOMAIN, RECIPIENT, USDC, 0n, MAX_FEE, 0n);
   }
   return 0n;
@@ -92,6 +94,7 @@ export function buildCctpSplitTransfer(params: CctpTransferParams): BuiltIntent 
     defines: {
       N: count,
       CHUNK: chunk,
+      TOTAL: params.amount,
       DEST_DOMAIN: destDomain,
       RECIPIENT: toBig(params.recipient),
       MAX_FEE: params.maxFeePerChunk ?? 0n,
