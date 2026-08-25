@@ -26,6 +26,7 @@
  */
 import { resolve } from 'path';
 import { address } from '@solana/kit';
+import { compileSvm, wrapQuoteMain } from '../rs-compile.js';
 import { meteoraDbc } from '../../../src/svm/venues/meteora-dbc/index.js';
 import type { MeteoraDbcPoolConfig } from '../../../src/svm/venues/meteora-dbc/index.js';
 import { fixtureBytesMap, fixtureLoader, loadFixtures } from '../fixtures.js';
@@ -97,6 +98,43 @@ describe('meteora-dbc: v1 adapter referenceQuote matches the official SDK on rea
     ];
     for (const [amountIn, out] of expected) {
       expect(bi(meteoraDbc.referenceQuote(cfg, state, amountIn, NOW))).toBe(bi(out));
+    }
+  });
+});
+
+describe('meteora-dbc emitQuote — Account model (svm.sload) via RS', () => {
+  // The Account-model migration: quoteAccounts() attaches [pool, config], so the
+  // pool binds to main()'s acc0 and the config to acc1; every read is
+  // svm.sload(acc<k>, off, w).toLe() (accountUint lowered to CAST_LE — .toLe() is
+  // the exact endianness match) and block.timestamp becomes ctx.timestamp().
+  it('reads pool (acc0) and config (acc1) via svm.sload().toLe(), never accountUint/block.timestamp', async () => {
+    const cfg = await fetch(SCHEDULED_POOL);
+    const fragment = meteoraDbc.emitQuote(cfg, 0, 1_000_000_000n);
+    expect(fragment).not.toContain('accountUint(');
+    expect(fragment).not.toContain('block.timestamp');
+    expect(fragment).toContain('svm.sload(acc0,');
+    expect(fragment).toContain('svm.sload(acc1,');
+    expect(fragment).toContain('ctx.timestamp()');
+  });
+
+  it('compiles both pools/directions for the svm target, manifesting [pool, config] in param order', async () => {
+    // SCHEDULED_POOL exercises the fee-scheduler + dynamic-fee nested-ifs — the
+    // real venue program whose if-arm local liveness (#386) this validates.
+    const staticCfg = await fetch(STATIC_POOL);
+    const cfgs: MeteoraDbcPoolConfig[] = [
+      staticCfg,
+      await fetch(SCHEDULED_POOL),
+      { ...staticCfg, direction: 'baseToQuote' },
+    ];
+    for (const cfg of cfgs) {
+      const accounts = meteoraDbc.quoteAccounts(cfg);
+      const { bytecode, manifest } = compileSvm(
+        wrapQuoteMain(accounts.length, meteoraDbc.emitQuote(cfg, 0, 1_000_000_000n), 'q0'),
+      );
+      expect(bytecode.length).toBeGreaterThan(0);
+      expect(manifest?.accounts).toEqual(
+        accounts.map((_, k) => ({ kind: 'slot', index: k, name: `acc${k}`, requires: 'readonly' })),
+      );
     }
   });
 });
