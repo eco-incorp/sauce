@@ -143,6 +143,10 @@ statement.rs:862); STATEMENT context (for-update + bare `i++;`) fully covered (w
 conformance 174 (3 new, built engine.so), clippy/fmt clean. **SDK RS/WASM needs rebuild from a commit carrying #385 before
 Newton venues consume it.** (3) nested functions — **DO NOT support** (user: "I don't like nested
 functions declaration") — RS keeps rejecting; helpers hoisted to top-level (SDK/ladder rewrite, not a compiler change).
+**🔄 UNBLOCK 3 VENUES (fire#112, `svm-unblock-venues`):** #385/#386 both OPEN (unmerged) — building TEMPORARY combined branch
+`svm-venue-unblock-base` (main + #385 + #386), repoint SDK sauce-next → it + rebuild WASM, migrate perena+meteora-dbc (via #386)
++ stabble-stable (via #385 + hoist its inline Newton helper top-level; flag if it needs the held sauce-recipes ladder).
+Completes the per-venue in-repo migration + VALIDATES #385/#386 on real venues. WASM reverts to main once #385/#386 merge.
 Note: SDK RS/WASM needs a rebuild from a commit carrying ++/-- before the Newton venues can use it. Remaining accountUint surface: 3 blocked venues + settle
 (recipes/settle.sauce.ts 3, recipes/index.ts 3) — settle held (staged-mode Q). Shared ladder = sauce-recipes (out of repo).
 Branch NOT pushed yet.
