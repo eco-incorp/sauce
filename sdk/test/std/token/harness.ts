@@ -19,9 +19,14 @@ import { fileURLToPath } from 'node:url';
 
 export type Target = 'evm' | 'svm';
 
+/** The role a slot account requires of the caller — the `requires` field the RS compiler emits on
+ *  every slot entry as of ECO-2150 (sauce#main's entry-account-role work, now on the converged
+ *  compiler). A bare `Account` param is `readonly`. */
+export type SvmAccountRole = 'readonly' | 'writable' | 'readonly_signer' | 'writable_signer';
+
 /** One entry of the SVM attach contract — `{"kind":"slot",…}` / `{"kind":"program",…}` over the wire. */
 export type AccountEntry =
-  | { kind: 'slot'; index: number; name: string }
+  | { kind: 'slot'; index: number; name: string; requires: SvmAccountRole }
   | { kind: 'program'; pubkey: `0x${string}` };
 
 /** The SVM account manifest: what the SDK must attach, in order. `undefined` on the EVM. */
@@ -134,16 +139,16 @@ export const CASES: readonly MethodCase[] = [
   {
     method: 'transfer',
     evm: 'import { transfer } from "@sauce/token"; function main(token: Address, to: Address, amount: Uint256): void { transfer(token, to, amount); }',
-    svm: 'import { transfer } from "@sauce/token"; function main(token: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, source, dest, authority, amount); }',
+    svm: 'import { transfer } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, tokenProgram, source, dest, authority, amount); }',
   },
   {
     method: 'transferFrom',
     evm: 'import { transferFrom } from "@sauce/token"; function main(token: Address, from: Address, to: Address, amount: Uint256): void { transferFrom(token, from, to, amount); }',
-    svm: 'import { transferFrom } from "@sauce/token"; function main(token: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transferFrom(token, source, dest, authority, amount); }',
+    svm: 'import { transferFrom } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void { transferFrom(token, tokenProgram, source, dest, authority, amount); }',
   },
   {
     method: 'approve',
     evm: 'import { approve } from "@sauce/token"; function main(token: Address, spender: Address, amount: Uint256): void { approve(token, spender, amount); }',
-    svm: 'import { approve } from "@sauce/token"; function main(token: Address, source: Account, delegate: Account, authority: Account, amount: Uint256): void { approve(token, source, delegate, authority, amount); }',
+    svm: 'import { approve } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void { approve(token, tokenProgram, source, delegate, authority, amount); }',
   },
 ];
