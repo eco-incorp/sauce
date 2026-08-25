@@ -84,7 +84,7 @@
     }
   },
   "devDependencies": {
-    "sauce-next": "github:eco-incorp/sauce#main",
+    "sauce-next": "github:eco-incorp/sauce#67a6f9f2d7a6020ef2101b1e25b7bb1f3b5f1cd9",
     "typescript": "^5.4.0",
     "@types/node": "^20.0.0",
     "@solana/web3.js": "^1.98.0",
