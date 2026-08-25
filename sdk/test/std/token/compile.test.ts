@@ -17,7 +17,7 @@
  * those files documents the divergence; this suite runs unconditionally because compiling needs no
  * engine at all.
  */
-import { CASES, SPL_TOKEN_PROGRAM_PUBKEY, compileStdToken, compileWith } from './harness.js';
+import { CASES, compileStdToken, compileWith } from './harness.js';
 import type { AccountEntry } from './harness.js';
 
 const slot = (index: number, name: string): AccountEntry => ({ kind: 'slot', index, name });
@@ -55,19 +55,21 @@ describe('@sauce/token: the SVM account manifest', () => {
     expect(manifestOf('balanceOf')).toEqual([slot(0, 'account')]);
   });
 
-  it('a write manifests its slots plus the SPL Token program', () => {
-    // The other direction: reachability narrows the harvest, it does not disable it.
+  it('a write manifests one slot per Account param — the token program rides in as a slot, not a harvested constant', () => {
+    // Post-#341 (RS account model) the compiler no longer harvests a constant `svm.call` callee into a
+    // `{program,pubkey}` entry; the SPL Token program is a declared `Account` param (`tokenProgram`),
+    // so it manifests as an ordinary slot alongside the SPL account slots, in `main`-arg order.
     expect(manifestOf('transfer')).toEqual([
-      slot(0, 'source'),
-      slot(1, 'dest'),
-      slot(2, 'authority'),
-      { kind: 'program', pubkey: SPL_TOKEN_PROGRAM_PUBKEY },
+      slot(0, 'tokenProgram'),
+      slot(1, 'source'),
+      slot(2, 'dest'),
+      slot(3, 'authority'),
     ]);
   });
 
-  it('transferFrom reaches the same program entry through its delegation to transfer', () => {
-    // `transferFrom`'s SVM arm delegates to `transfer` rather than repeating the CPI, so the program
-    // entry is only found if reachability is TRANSITIVE.
+  it('transferFrom manifests the same slots through its delegation to transfer', () => {
+    // `transferFrom`'s SVM arm delegates to `transfer` rather than repeating the CPI, so its slots are
+    // only found if reachability is TRANSITIVE.
     expect(manifestOf('transferFrom')).toEqual(manifestOf('transfer'));
   });
 });
@@ -93,7 +95,9 @@ describe('@sauce/token: packaging', () => {
         resolvePackage: () => 'node_modules/@sauce/token/token.js',
       });
 
-    expect(compileArmless).toThrow(/failed to import module "@sauce\/token"/);
+    // The RS compiler names the target-suffixed arm it tried to resolve (…/token.evm.js) rather than
+    // the bare package — still an IMPORT/resolve failure, not "balanceOf is not exported".
+    expect(compileArmless).toThrow(/failed to import module.*@sauce\/token/);
   });
 
   it('an uninstalled package reports PackageNotFound, keeping the host resolver’s own cause', () => {

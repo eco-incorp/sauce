@@ -134,16 +134,16 @@ export const CASES: readonly MethodCase[] = [
   {
     method: 'transfer',
     evm: 'import { transfer } from "@sauce/token"; function main(token: Address, to: Address, amount: Uint256): void { transfer(token, to, amount); }',
-    svm: 'import { transfer } from "@sauce/token"; function main(token: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, source, dest, authority, amount); }',
+    svm: 'import { transfer } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, tokenProgram, source, dest, authority, amount); }',
   },
   {
     method: 'transferFrom',
     evm: 'import { transferFrom } from "@sauce/token"; function main(token: Address, from: Address, to: Address, amount: Uint256): void { transferFrom(token, from, to, amount); }',
-    svm: 'import { transferFrom } from "@sauce/token"; function main(token: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transferFrom(token, source, dest, authority, amount); }',
+    svm: 'import { transferFrom } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void { transferFrom(token, tokenProgram, source, dest, authority, amount); }',
   },
   {
     method: 'approve',
     evm: 'import { approve } from "@sauce/token"; function main(token: Address, spender: Address, amount: Uint256): void { approve(token, spender, amount); }',
-    svm: 'import { approve } from "@sauce/token"; function main(token: Address, source: Account, delegate: Account, authority: Account, amount: Uint256): void { approve(token, source, delegate, authority, amount); }',
+    svm: 'import { approve } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void { approve(token, tokenProgram, source, delegate, authority, amount); }',
   },
 ];
