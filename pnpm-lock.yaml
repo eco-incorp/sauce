@@ -185,8 +185,8 @@ importers:
         specifier: ^1.2.1
         version: 1.2.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       sauce-next:
-        specifier: github:eco-incorp/sauce#04ba2a69f0c498b2cb57cae80d91a00df2f5a928
-        version: git+https://git@github.com:eco-incorp/sauce.git#04ba2a69f0c498b2cb57cae80d91a00df2f5a928
+        specifier: github:eco-incorp/sauce#67a6f9f2d7a6020ef2101b1e25b7bb1f3b5f1cd9
+        version: git+https://git@github.com:eco-incorp/sauce.git#67a6f9f2d7a6020ef2101b1e25b7bb1f3b5f1cd9
       ts-jest:
         specifier: ^29.1.0
         version: 29.4.11(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(jest-util@30.4.1)(jest@29.7.0(@types/node@20.19.41))(typescript@5.9.3)
@@ -3251,8 +3251,8 @@ packages:
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
-  sauce-next@git+https://git@github.com:eco-incorp/sauce.git#04ba2a69f0c498b2cb57cae80d91a00df2f5a928:
-    resolution: {commit: 04ba2a69f0c498b2cb57cae80d91a00df2f5a928, repo: git@github.com:eco-incorp/sauce.git, type: git}
+  sauce-next@git+https://git@github.com:eco-incorp/sauce.git#67a6f9f2d7a6020ef2101b1e25b7bb1f3b5f1cd9:
+    resolution: {commit: 67a6f9f2d7a6020ef2101b1e25b7bb1f3b5f1cd9, repo: git@github.com:eco-incorp/sauce.git, type: git}
     version: 0.0.0
 
   sauce@git+https://git@github.com:eco-incorp/sauce.git#3098366ba0fa87e04273199270c931d23a16993c:
@@ -7506,7 +7506,7 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  sauce-next@git+https://git@github.com:eco-incorp/sauce.git#04ba2a69f0c498b2cb57cae80d91a00df2f5a928: {}
+  sauce-next@git+https://git@github.com:eco-incorp/sauce.git#67a6f9f2d7a6020ef2101b1e25b7bb1f3b5f1cd9: {}
 
   sauce@git+https://git@github.com:eco-incorp/sauce.git#3098366ba0fa87e04273199270c931d23a16993c: {}
 

@@ -19,9 +19,14 @@ import { fileURLToPath } from 'node:url';
 
 export type Target = 'evm' | 'svm';
 
+/** The role a slot account requires of the caller — the `requires` field the RS compiler emits on
+ *  every slot entry as of ECO-2150 (sauce#main's entry-account-role work, now on the converged
+ *  compiler). A bare `Account` param is `readonly`. */
+export type SvmAccountRole = 'readonly' | 'writable' | 'readonly_signer' | 'writable_signer';
+
 /** One entry of the SVM attach contract — `{"kind":"slot",…}` / `{"kind":"program",…}` over the wire. */
 export type AccountEntry =
-  | { kind: 'slot'; index: number; name: string }
+  | { kind: 'slot'; index: number; name: string; requires: SvmAccountRole }
   | { kind: 'program'; pubkey: `0x${string}` };
 
 /** The SVM account manifest: what the SDK must attach, in order. `undefined` on the EVM. */

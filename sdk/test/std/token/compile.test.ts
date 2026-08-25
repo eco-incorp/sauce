@@ -18,9 +18,14 @@
  * engine at all.
  */
 import { CASES, compileStdToken, compileWith } from './harness.js';
-import type { AccountEntry } from './harness.js';
+import type { AccountEntry, SvmAccountRole } from './harness.js';
 
-const slot = (index: number, name: string): AccountEntry => ({ kind: 'slot', index, name });
+const slot = (index: number, name: string, requires: SvmAccountRole = 'readonly'): AccountEntry => ({
+  kind: 'slot',
+  index,
+  name,
+  requires,
+});
 
 const manifestOf = (method: string): AccountEntry[] => {
   const testCase = CASES.find((entry) => entry.method === method);
