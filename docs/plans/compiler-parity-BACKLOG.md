@@ -169,9 +169,11 @@ fixes, NOT stacked on the parity chain). Slack DRAFT posted in-thread (Dr0BRZHR7
 list + rebase-green + remaining open PRs grouped + the 2 new fixes + SVM #143) — awaiting user review/send.
 
 **✅ #385/#386 MERGED to sauce main (fire#125, 2026-08-25, re1ro admin-merge) — main HEAD 079442ad4 has check_update +
-drop_arm_leftovers.** ECO-2196/ECO-2197 → **Done**. Unblocks the SVM WASM: `svm-wasm-revert` in flight — repoint #143's
-sauce-next `svm-venue-unblock-base`→`#main`, rebuild WASM, verify the 24-suite/300-test venue gate off a main-based WASM
-(proves #385/#386 upstream cover the 3 Newton venues), commit → makes #143 clean (temp combined branch then deletable).
+drop_arm_leftovers.** ECO-2196/ECO-2197 → **Done**. **✅ SVM WASM REVERT DONE (`svm-wasm-revert`, commit 456ccbb pushed):**
+#143's sauce-next reverted `svm-venue-unblock-base`→`#main` (resolves 079442ad4), WASM rebuilt from main, **venue gate 24
+suites / 300 tests GREEN** off the main-based WASM (perena/meteora-dbc/stabble-stable all PASS — proves #385/#386 upstream
+cover them), typecheck clean, ZERO drift (#350 requires-field still holds). **PR #143 now CLEAN** (no temp-branch dep);
+temporary `svm-venue-unblock-base` branch DELETED. **SVM per-venue migration fully validated on main — #143 ready for review.**
 
 **📍 STATE (fire#114): bounded autonomous work COMPLETE; remainder is big-feature or externally gated.** DONE this program:
 Tuple killed (#363/#380); ++/-- (#385) + if-arm-liveness (#386) fixed+validated on real venues; ctx.* convergence (RS
