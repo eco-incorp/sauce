@@ -25,9 +25,16 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/**
+ * The role a slot account requires of the caller — the `requires` field the RS compiler emits on
+ * every slot entry as of sauce#main's entry-account-role work (ECO-2150). A bare `Account` param
+ * (every venue quote account: read via `svm.sload`, never written) is `readonly`.
+ */
+export type SvmAccountRole = 'readonly' | 'writable' | 'readonly_signer' | 'writable_signer';
+
 /** One entry of the SVM attach manifest — `{"kind":"slot",…}` / `{"kind":"program",…}` over the wire. */
 export type SvmManifestAccount =
-  | { kind: 'slot'; index: number; name: string }
+  | { kind: 'slot'; index: number; name: string; requires: SvmAccountRole }
   | { kind: 'program'; pubkey: `0x${string}` };
 
 /** The SVM account manifest: what the SDK must attach, in order. `undefined` on the EVM. */

@@ -239,7 +239,7 @@ describe('meteora-damm-v1-stable quoteAccounts + emitQuote', () => {
     const source = `${STUB_HELPERS}\n${wrapQuoteMain(accounts.length, fragment, 'q3')}`;
     const { bytecode, manifest } = compileSvm(source);
     expect(bytecode.length).toBeGreaterThan(0);
-    expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: `acc${k}` })));
+    expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: `acc${k}`, requires: 'readonly' })));
     const bound = manifest?.accounts.map((meta) =>
       meta.kind === 'slot' ? accounts[meta.index]?.address : undefined,
     );

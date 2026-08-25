@@ -418,7 +418,7 @@ describe('raydium-cp-swap emitQuote', () => {
         wrapQuoteMain(accounts.length, raydiumCpSwap.emitQuote(variant, 0, 1_000_000n), 'q0'),
       );
       expect(bytecode.length).toBeGreaterThan(0);
-      expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k })));
+      expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k, requires: 'readonly' })));
     }
   });
 

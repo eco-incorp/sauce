@@ -40,7 +40,7 @@ describe('stabble-weighted-swap emitQuote — Account model (svm.sload) via RS',
     const accounts = stabbleWeightedSwap.quoteAccounts(cfg); // ordered [pool]
     const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q0'));
     expect(bytecode.length).toBeGreaterThan(0);
-    expect(manifest?.accounts).toEqual(accounts.map((_, i) => ({ kind: 'slot', index: i, name: `acc${i}` })));
+    expect(manifest?.accounts).toEqual(accounts.map((_, i) => ({ kind: 'slot', index: i, name: `acc${i}`, requires: 'readonly' })));
     const boundAddresses = manifest?.accounts.map((meta) =>
       meta.kind === 'slot' ? accounts[meta.index]?.address : undefined,
     );

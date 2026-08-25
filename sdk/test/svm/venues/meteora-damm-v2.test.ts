@@ -384,7 +384,7 @@ describe('meteora-damm-v2 emitQuote — Account model (svm.sload) via RS', () =>
     const cfg = await fetchCfg();
     const { bytecode, manifest, accounts } = compileFragment(cfg, 0, ONE_SOL);
     expect(bytecode.length).toBeGreaterThan(0);
-    expect(manifest?.accounts).toEqual([{ kind: 'slot', index: 0, name: 'acc0' }]);
+    expect(manifest?.accounts).toEqual([{ kind: 'slot', index: 0, name: 'acc0', requires: 'readonly' }]);
     const bound = manifest?.accounts.map((m) => (m.kind === 'slot' ? accounts[m.index]?.address : undefined));
     expect(bound).toEqual([POOL]);
   });

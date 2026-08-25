@@ -71,7 +71,7 @@ describe('hylo emitQuote (Account model)', () => {
       const accounts = hylo.quoteAccounts(cfg);
       const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, hylo.emitQuote(cfg, 0, 1_000_000n), 'q0'));
       expect(bytecode.length).toBeGreaterThan(0);
-      expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k })));
+      expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k, requires: 'readonly' })));
     }
   });
 });

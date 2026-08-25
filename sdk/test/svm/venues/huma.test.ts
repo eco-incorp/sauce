@@ -220,7 +220,7 @@ describe('huma emitQuote compiles as target-svm SauceScript (Account model)', ()
     const accounts = huma.quoteAccounts(cfg);
     const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q0'));
     expect(bytecode.length).toBeGreaterThan(0);
-    expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k })));
+    expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k, requires: 'readonly' })));
   });
 
   it('withdraw fragment compiles and manifests the quote accounts in param order', async () => {
@@ -230,6 +230,6 @@ describe('huma emitQuote compiles as target-svm SauceScript (Account model)', ()
     const accounts = huma.quoteAccounts(cfg);
     const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q0'));
     expect(bytecode.length).toBeGreaterThan(0);
-    expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k })));
+    expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: 'acc' + k, requires: 'readonly' })));
   });
 });

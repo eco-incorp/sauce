@@ -219,8 +219,8 @@ describe('emitQuote', () => {
     // Manifest slots come back in quoteAccounts() (== main param) order: slot k
     // binds to quoteAccounts()[k].address (the RS analogue of accountPlan.metas).
     expect(manifest?.accounts).toEqual([
-      { kind: 'slot', index: 0, name: 'acc0' },
-      { kind: 'slot', index: 1, name: 'acc1' },
+      { kind: 'slot', index: 0, name: 'acc0', requires: 'readonly' },
+      { kind: 'slot', index: 1, name: 'acc1', requires: 'readonly' },
     ]);
     const boundAddresses = manifest?.accounts.map((meta) =>
       meta.kind === 'slot' ? accounts[meta.index]?.address : undefined,

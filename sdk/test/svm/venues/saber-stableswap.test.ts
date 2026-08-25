@@ -299,9 +299,9 @@ describe('saber-stableswap emitQuote — Account model (svm.sload) via RS', () =
     const { bytecode, manifest, accounts } = compileFragment(0, 1_000_000n);
     expect(bytecode.length).toBeGreaterThan(0);
     expect(manifest?.accounts).toEqual([
-      { kind: 'slot', index: 0, name: 'acc0' },
-      { kind: 'slot', index: 1, name: 'acc1' },
-      { kind: 'slot', index: 2, name: 'acc2' },
+      { kind: 'slot', index: 0, name: 'acc0', requires: 'readonly' },
+      { kind: 'slot', index: 1, name: 'acc1', requires: 'readonly' },
+      { kind: 'slot', index: 2, name: 'acc2', requires: 'readonly' },
     ]);
     const bound = manifest?.accounts.map((meta) =>
       meta.kind === 'slot' ? accounts[meta.index]?.address : undefined,

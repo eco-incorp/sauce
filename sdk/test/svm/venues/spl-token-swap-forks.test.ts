@@ -55,8 +55,8 @@ describe('spl-token-swap-forks emitQuote — Account model (svm.sload) via RS', 
     const { bytecode, manifest } = compileSvm(wrapQuoteMain(accounts.length, fragment, 'q0'));
     expect(bytecode.length).toBeGreaterThan(0);
     expect(manifest?.accounts).toEqual([
-      { kind: 'slot', index: 0, name: 'acc0' },
-      { kind: 'slot', index: 1, name: 'acc1' },
+      { kind: 'slot', index: 0, name: 'acc0', requires: 'readonly' },
+      { kind: 'slot', index: 1, name: 'acc1', requires: 'readonly' },
     ]);
     const boundAddresses = manifest?.accounts.map((meta) =>
       meta.kind === 'slot' ? accounts[meta.index]?.address : undefined,
