@@ -79,28 +79,23 @@ export function buildCctpSplitTransfer(params: CctpTransferParams): BuiltIntent 
   if (destDomain === undefined) throw new Error(`cctp-transfer: no CCTP domain registered for destination '${dest.slug}'`);
   const { count, chunk } = evenChunks(params.amount, params.perMessageLimit);
 
-  // One approval for the WHOLE batch, then N burns against that single allowance — not a
-  // wasteful approve per chunk.
-  const body = `function main() {
-  USDC.approve(Cctp_TokenMessenger, TOTAL);
-  for (let i = 0n; i < N; i = i + 1n) {
-    Cctp.TokenMessenger.depositForBurn(CHUNK, DEST_DOMAIN, RECIPIENT, USDC, 0n, MAX_FEE, 0n);
+  const recipient = toBig(params.recipient);
+  const maxFee = params.maxFeePerChunk ?? 0n;
+  // The burn LOGIC is a parameterized function; `main()` calls it with THIS intent's values, which
+  // the compiler bakes in at compile time (call args → constant-folded prologue). One approval for
+  // the whole batch, then N burns against it. USDC + Cctp.TokenMessenger resolve from the DSL.
+  const body = `function cctpSplit(recipient, chunk, n, destDomain, maxFee) {
+  USDC.approve(Cctp_TokenMessenger, chunk * n);
+  for (let i = 0n; i < n; i = i + 1n) {
+    Cctp.TokenMessenger.depositForBurn(chunk, destDomain, recipient, USDC, 0n, maxFee, 0n);
   }
   return 0n;
+}
+function main() {
+  return cctpSplit(${recipient}n, ${chunk}n, ${count}n, ${BigInt(destDomain)}n, ${maxFee}n);
 }`;
 
-  return openRoute(params.from, body, {
-    ...common(params),
-    defines: {
-      N: count,
-      CHUNK: chunk,
-      TOTAL: params.amount,
-      DEST_DOMAIN: destDomain,
-      RECIPIENT: toBig(params.recipient),
-      MAX_FEE: params.maxFeePerChunk ?? 0n,
-    },
-    compile: RS,
-  }).reward(params.reward);
+  return openRoute(params.from, body, { ...common(params), compile: RS }).reward(params.reward);
 }
 
 /**
@@ -108,14 +103,14 @@ export function buildCctpSplitTransfer(params: CctpTransferParams): BuiltIntent 
  * `amount` USDC to `recipient` on the destination chain via the normal Eco flow, no bridge stitch.
  */
 export function buildPlainTransfer(params: CctpTransferParams): BuiltIntent {
-  const body = `function main() {
-  USDC.transfer(RECIPIENT, AMOUNT);
+  const recipient = toBig(params.recipient);
+  const body = `function transfer(recipient, amount) {
+  USDC.transfer(recipient, amount);
   return 0n;
+}
+function main() {
+  return transfer(${recipient}n, ${params.amount}n);
 }`;
 
-  return openRoute(params.to, body, {
-    ...common(params),
-    defines: { RECIPIENT: toBig(params.recipient), AMOUNT: params.amount },
-    compile: RS,
-  }).reward(params.reward);
+  return openRoute(params.to, body, { ...common(params), compile: RS }).reward(params.reward);
 }
