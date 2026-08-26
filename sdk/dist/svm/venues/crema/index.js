@@ -265,10 +265,23 @@ async function resolveWindow(load, pool, tickArrayMapData, tickCurrentIndex, tic
         arrayIndices.push(arrayIndices[arrayIndices.length - 1] ?? startArrayIndex);
     const tickArrays = (await Promise.all(arrayIndices.map((idx) => deriveTickArrayPda(pool, idx))));
     const startTicks = arrayIndices.map((idx) => startTickOf(idx, tickSpacing));
+    // Batch the whole window into ONE coalesced round instead of an outward
+    // serial walk: `arrayIndices` (and thus every tick-array PDA above) is fully
+    // enumerated from the bitmap + monotonic pad before any load, so nothing
+    // here depends on a prior array's bytes. Registering every load()
+    // synchronously lets the coalescing loader fold them into a single
+    // getMultipleAccounts. allSettled preserves the break-on-first-invalid
+    // contract exactly — a rejection is re-thrown only if the readable prefix
+    // reaches it, and a miss/rejection past the break (incl. the padded
+    // duplicate-PDA slots) degrades to the same readable prefix as before.
+    const loaded = await Promise.allSettled(tickArrays.map((addr) => load(addr)));
     const arrays = [];
     let readable = 0;
     for (let i = 0; i < CREMA_MAX_ARRAYS; i++) {
-        const data = await load(tickArrays[i]);
+        const settled = loaded[i];
+        if (settled.status === 'rejected')
+            throw settled.reason;
+        const data = settled.value;
         const valid = data !== null &&
             data.length === TICK_ARRAY_ACCOUNT_SIZE &&
             hasDiscriminator(data, TICK_ARRAY_DISCRIMINATOR) &&

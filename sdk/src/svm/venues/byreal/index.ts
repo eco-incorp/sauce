@@ -162,11 +162,15 @@ async function resolveWindow(
     Address,
     Address,
   ];
-  const tickDatas = await Promise.all(tickArrays.map((a) => load(a)));
+  // allSettled (not all) keeps the break-on-first-invalid contract exact: a
+  // rejection is re-thrown only if the readable prefix actually reaches it.
+  const loaded = await Promise.allSettled(tickArrays.map((a) => load(a)));
   const arrays: Uint8Array[] = [];
   let readable = 0;
   for (let i = 0; i < 3; i++) {
-    const data = tickDatas[i];
+    const settled = loaded[i]!;
+    if (settled.status === 'rejected') throw settled.reason;
+    const data = settled.value;
     const valid =
       data !== null &&
       data.length >= TICK_ARRAY_ACCOUNT_SIZE &&

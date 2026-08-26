@@ -244,11 +244,21 @@ async function resolveWindow(
     Address,
   ];
 
-  const binArrayDatas = await Promise.all(binArrays.map((a) => load(a)));
+  // Batch the whole bin-array window into ONE coalesced round instead of an
+  // outward serial walk: the bin-array PDAs are all derived above (from the
+  // active id + step), so nothing here depends on a prior array's bytes.
+  // Registering every load() synchronously lets the coalescing loader fold
+  // them into a single getMultipleAccounts. allSettled preserves the
+  // break-on-first-invalid contract exactly — a rejection is re-thrown only if
+  // the readable prefix reaches it, and a miss/rejection past the break
+  // degrades to the same readable prefix a missing tail array always would.
+  const loaded = await Promise.allSettled(binArrays.map((addr) => load(addr)));
   const arrays: (Uint8Array | null)[] = [];
   let readable = 0;
   for (let i = 0; i < 3; i++) {
-    const data = binArrayDatas[i]!;
+    const settled = loaded[i];
+    if (settled.status === 'rejected') throw settled.reason;
+    const data = settled.value;
     const valid =
       data !== null &&
       data.length >= BIN_ARRAY_ACCOUNT_SIZE &&

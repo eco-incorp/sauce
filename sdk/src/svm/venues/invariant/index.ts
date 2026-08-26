@@ -355,16 +355,35 @@ async function resolveWindowFromBitmap(
   tickSpacing: number,
   xToY: boolean,
 ): Promise<InvariantWindow> {
-  const boundaries: InvariantBoundary[] = [];
+  // Enumerate the full candidate tick-index sequence from the ALREADY-FETCHED
+  // bitmap first (pure: the next initialized tick and the cursor advance depend
+  // only on the bitmap + tickSpacing, never on a loaded Tick account — the
+  // account bytes only gate the break and the boundary's sqrtPrice comes from
+  // the index), then derive + read every candidate Tick in ONE coalesced round
+  // instead of an outward per-tick serial walk that costs a round per boundary.
+  const foundTicks: number[] = [];
   let cursor = currentTick;
   for (let i = 0; i < INVARIANT_MAX_BOUNDARIES; i++) {
     const found = xToY ? prevInitialized(bitmap, cursor, tickSpacing) : nextInitialized(bitmap, cursor, tickSpacing);
     if (found === null) break;
-    const tickAddress = await deriveTickPda(pool, found);
-    const data = await load(tickAddress);
-    if (data === null || data.length !== TICK_ACCOUNT_SIZE || !hasDiscriminator(data, TICK_DISCRIMINATOR)) break;
-    boundaries.push({ tick: found, sqrtPrice: invariantSqrtPriceAtTick(found), address: tickAddress });
+    foundTicks.push(found);
     cursor = xToY ? found - tickSpacing : found + tickSpacing; // don't check the current tick again
+  }
+  const tickAddresses = await Promise.all(foundTicks.map((tick) => deriveTickPda(pool, tick)));
+
+  // allSettled keeps the break-on-first-missing/invalid contract exact: a load
+  // that REJECTS is re-thrown only when the readable prefix reaches it, while a
+  // rejection/miss past the break — a candidate the serial walk never read — is
+  // never inspected, so the resolved boundary window is byte-identical.
+  const boundaries: InvariantBoundary[] = [];
+  const loaded = await Promise.allSettled(tickAddresses.map((addr) => load(addr)));
+  for (let i = 0; i < foundTicks.length; i++) {
+    const settled = loaded[i]!;
+    if (settled.status === 'rejected') throw settled.reason;
+    const data = settled.value;
+    if (data === null || data.length !== TICK_ACCOUNT_SIZE || !hasDiscriminator(data, TICK_DISCRIMINATOR)) break;
+    const tick = foundTicks[i]!;
+    boundaries.push({ tick, sqrtPrice: invariantSqrtPriceAtTick(tick), address: tickAddresses[i]! });
   }
   return { boundaries };
 }

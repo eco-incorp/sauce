@@ -56,15 +56,6 @@ jobs:
       - name: Verify hnc is the pinned version
         run: hnc --version | grep -q '1\.5\.13' || { echo "::error::hnc is not the pinned 1.5.13"; hnc --version; exit 1; }
 
-      # The Rust SauceScript compiler: the sdk `@sauce/token` suites build it from the `sauce-next`
-      # git dep (github:eco-incorp/sauce#main) via scripts/build-wasm.mjs. Pinned toolchain 1.97.1
-      # (sauce#main rust-toolchain) + the wasm32 target + wasm-pack — same 'install a host toolchain'
-      # pattern as Foundry/hnc above. Required: build-wasm.mjs hard-errors if wasm-pack is absent.
-      - name: Install Rust + wasm-pack (SauceScript compiler)
-        run: |
-          rustup toolchain install 1.97.1 --profile minimal --target wasm32-unknown-unknown
-          curl -sSfL https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.2

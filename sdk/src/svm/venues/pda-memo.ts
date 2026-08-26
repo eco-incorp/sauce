@@ -46,14 +46,16 @@ export interface PdaMemoStats {
 }
 
 /**
- * Belt-and-suspenders cap on the memo's size — the real steady-state
+ * Default belt-and-suspenders cap on the memo's size — the real steady-state
  * population is a small, bounded set of distinct (program, pool, window)
  * tick-array/bin-array keys plus one oracle/bitmap/tick-array-map key per
  * pool (tens of entries per actively-traded pool, across all eleven
- * families), so this ceiling is never expected to bind in practice.
+ * families), so this ceiling is never expected to bind in practice. A
+ * consumer running an unusually large pool universe can raise it via
+ * {@link configurePdaMemo}.
  */
-const DEFAULT_MAX_ENTRIES = 100_000;
-let maxEntries = DEFAULT_MAX_ENTRIES;
+export const DEFAULT_PDA_MEMO_MAX_ENTRIES = 100_000;
+let maxEntries = DEFAULT_PDA_MEMO_MAX_ENTRIES;
 
 const memo = new Map<string, Address>();
 let hits = 0;
@@ -134,12 +136,48 @@ export function __pdaMemoSize(): number {
   return memo.size;
 }
 
+/** Options for {@link configurePdaMemo}. */
+export interface PdaMemoConfig {
+  /**
+   * Maximum number of `(programAddress, seeds) -> address` entries the memo
+   * retains before evicting the least-recently-used one. Must be a positive
+   * integer. Defaults to {@link DEFAULT_PDA_MEMO_MAX_ENTRIES} (100 000).
+   */
+  maxEntries: number;
+}
+
 /**
- * TEST SEAM: shrink the LRU cap so eviction is reachable in a unit test
- * without inserting 100k entries. `__resetPdaMemoForTest` restores the default.
+ * Tune the process-wide PDA-derivation memo. Call once at startup — the memo is
+ * a single process-lifetime cache shared across every CLMM/DLMM venue family,
+ * so this is global configuration, not per-call.
+ *
+ * A consumer whose pool universe is large enough to approach the default 100 000
+ * ceiling (each entry is one small `(program, pool, window)`-shaped key) can
+ * raise `maxEntries` to keep more derivations warm. Raising it is cheap — the
+ * memo only grows as far as real derivations demand. LOWERING it below the
+ * current population evicts the oldest entries eagerly to honor the new bound
+ * immediately (correct addresses always re-derive on the next miss).
+ *
+ * @throws if `maxEntries` is not a positive integer.
  */
-export function __setMaxEntriesForTest(n: number): void {
-  maxEntries = n;
+export function configurePdaMemo(config: PdaMemoConfig): void {
+  const next = config.maxEntries;
+  if (!Number.isInteger(next) || next < 1) {
+    throw new Error(`configurePdaMemo: maxEntries must be a positive integer, got ${String(next)}`);
+  }
+  maxEntries = next;
+  // Honor a lowered cap immediately rather than waiting for the next miss to
+  // drain one entry at a time. Map iteration is least-recently-used-first.
+  while (memo.size > maxEntries) {
+    const oldest = memo.keys().next().value;
+    if (oldest === undefined) break;
+    memo.delete(oldest);
+  }
+}
+
+/** The memo's current maximum-entry cap (default {@link DEFAULT_PDA_MEMO_MAX_ENTRIES}). */
+export function getPdaMemoMaxEntries(): number {
+  return maxEntries;
 }
 
 /** TEST SEAM: drop the memo, zero the counters, and restore the default cap. */
@@ -147,5 +185,5 @@ export function __resetPdaMemoForTest(): void {
   memo.clear();
   hits = 0;
   misses = 0;
-  maxEntries = DEFAULT_MAX_ENTRIES;
+  maxEntries = DEFAULT_PDA_MEMO_MAX_ENTRIES;
 }
