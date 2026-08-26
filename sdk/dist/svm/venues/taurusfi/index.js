@@ -250,11 +250,14 @@ export async function fetchTaurusFiConfig(load, pool) {
         throw new Error(`${SLUG}: price account ${entry.priceAccount} is ${priceData.length} bytes, expected >= 8`);
     }
     const priceScaled = decodeTaurusFiPriceScaled(readUintLE(priceData, 0, 8));
-    for (const [vault, mint] of [
+    const _vaultPairs = [
         [entry.vault0, entry.mint0],
         [entry.vault1, entry.mint1],
-    ]) {
-        const vaultData = await load(vault);
+    ];
+    const _vaultDatas = await Promise.all(_vaultPairs.map(([vault]) => load(vault)));
+    for (let _i = 0; _i < _vaultPairs.length; _i++) {
+        const [vault, mint] = _vaultPairs[_i];
+        const vaultData = _vaultDatas[_i];
         if (vaultData === null)
             throw new Error(`${SLUG}: vault ${vault} not found`);
         if (vaultData.length < VAULT_AMOUNT_OFFSET + 8) {
@@ -269,8 +272,11 @@ export async function fetchTaurusFiConfig(load, pool) {
     // (the SvmRoute orchestrator catches a fetchPoolConfig throw and drops the
     // venue). The LEGACY path is byte-identical; an unreadable mint falls back to
     // the legacy assumption.
-    for (const mint of [entry.mint0, entry.mint1]) {
-        const mintData = await load(mint);
+    const _mints = [entry.mint0, entry.mint1];
+    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    for (let _i = 0; _i < _mints.length; _i++) {
+        const mint = _mints[_i];
+        const mintData = _mintDatas[_i];
         if (mintData === null)
             continue;
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

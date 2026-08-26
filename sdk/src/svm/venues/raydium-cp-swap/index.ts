@@ -230,11 +230,14 @@ export const raydiumCpSwap = {
     };
 
     // Vault integrity: each pool vault must exist and hold the declared mint.
-    for (const [vault, mint] of [
+    const vaultPairs = [
       [cfg.token0Vault, cfg.token0Mint],
       [cfg.token1Vault, cfg.token1Mint],
-    ] as const) {
-      const vaultData = await load(vault);
+    ] as const;
+    const vaultDatas = await Promise.all(vaultPairs.map(([vault]) => load(vault)));
+    for (let vi = 0; vi < vaultPairs.length; vi++) {
+      const [vault, mint] = vaultPairs[vi]!;
+      const vaultData = vaultDatas[vi]!;
       if (vaultData === null) throw new Error(`raydium-cp-swap vault ${vault} not found`);
       if (vaultData.length < VAULT_AMOUNT_OFFSET + 8) {
         throw new Error(`raydium-cp-swap vault ${vault} data is ${vaultData.length} bytes, expected an SPL token account`);
@@ -247,12 +250,19 @@ export const raydiumCpSwap = {
 
     // Token-2022 transfer-fee gate: a transfer-fee extension on either mint
     // changes wire amounts on that leg, so the classic quote formula is wrong.
-    for (const [program, mint, side] of [
+    const t22Entries = [
       [cfg.token0Program, cfg.token0Mint, 'token_0'],
       [cfg.token1Program, cfg.token1Mint, 'token_1'],
-    ] as const) {
+    ] as const;
+    // Only Token-2022 mints are actually read; a legacy (Tokenkeg) leg issues no
+    // load, so pre-loading never adds an RPC — it only coalesces the two-T22 case.
+    const t22MintDatas = await Promise.all(
+      t22Entries.map(([program, mint]) => (program === TOKEN_2022_PROGRAM ? load(mint) : Promise.resolve(null))),
+    );
+    for (let ti = 0; ti < t22Entries.length; ti++) {
+      const [program, mint, side] = t22Entries[ti]!;
       if (program !== TOKEN_2022_PROGRAM) continue;
-      const mintData = await load(mint);
+      const mintData = t22MintDatas[ti]!;
       if (mintData === null) {
         throw new Error(`raydium-cp-swap ${side} mint ${mint} is token-2022 but could not be loaded to check transfer-fee extensions`);
       }

@@ -200,8 +200,11 @@ export async function fetchQuantumConfig(load, pool) {
     // byte-identical: a classic 82-byte mint classifies Tokenkeg, parses no
     // extensions, config built unchanged. An unreadable mint falls back to the
     // legacy assumption (keeps fixture-only tests green).
-    for (const mint of [mint0, mint1]) {
-        const mintData = await load(mint);
+    const mints = [mint0, mint1];
+    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    for (let mi = 0; mi < mints.length; mi++) {
+        const mint = mints[mi];
+        const mintData = mintDatas[mi];
         if (mintData === null)
             continue;
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

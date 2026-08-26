@@ -426,8 +426,11 @@ export const sanctumInfinity = {
     // thrown error is the graceful-drop signal (SvmRoute drops the venue on a
     // fetchPoolConfig throw). An unreadable mint falls back to the legacy
     // assumption, keeping the byte-identical legacy path.
-    for (const mint of [pair.inMint, pair.outMint]) {
-      const mintData = await load(mint);
+    const mints = [pair.inMint, pair.outMint];
+    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    for (let mi = 0; mi < mints.length; mi++) {
+      const mint = mints[mi]!;
+      const mintData = mintDatas[mi]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(`${SLUG}: dropping pair — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

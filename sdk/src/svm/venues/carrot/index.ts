@@ -303,8 +303,10 @@ async function fetchCarrotPoolConfig(load: AccountLoader, pool: Address): Promis
   // Every basket asset is read together (NAV is their joint sum) — one bad asset self-drops the
   // WHOLE vault (every direction), never just that asset (see module header's SELF-DROP SCOPE note).
   const assets: CarrotAssetSnapshot[] = [];
-  for (const a of rawAssets) {
-    const [ataData, oracleData] = await Promise.all([load(a.ata), load(a.oracle)]);
+  const assetAccountPairs = await Promise.all(rawAssets.map((a) => Promise.all([load(a.ata), load(a.oracle)])));
+  for (let ai = 0; ai < rawAssets.length; ai++) {
+    const a = rawAssets[ai]!;
+    const [ataData, oracleData] = assetAccountPairs[ai]!;
     if (ataData === null) throw new Error(`carrot vault ${pool}: asset ${a.assetId} vault ATA ${a.ata} not found`);
     if (ataData.length < ATA_AMOUNT_OFFSET + 8) throw new Error(`carrot vault ${pool}: asset ${a.assetId} vault ATA ${a.ata} is not a valid SPL token account`);
     if (oracleData === null) throw new Error(`carrot vault ${pool}: asset ${a.assetId} oracle ${a.oracle} not found`);

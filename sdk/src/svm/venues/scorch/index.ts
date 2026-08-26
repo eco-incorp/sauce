@@ -182,8 +182,11 @@ export const scorch = {
     // venue-robustness convention). LEGACY path unchanged: a classic 82-byte
     // mint classifies Tokenkeg, parses no extensions, config built as before. An
     // unreadable mint falls back to the legacy assumption.
-    for (const mint of [mintA, mintB]) {
-      const mintData = await load(mint);
+    const mints = [mintA, mintB];
+    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    for (let mi = 0; mi < mints.length; mi++) {
+      const mint = mints[mi]!;
+      const mintData = mintDatas[mi]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(`scorch: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
@@ -209,11 +212,14 @@ export const scorch = {
 
     // Vault structural existence check (the T22-vault size proxy that used to
     // live here is superseded by the per-mint Token-2022 detection above).
-    for (const [role, vault] of [
+    const vaultEntries = [
       ['A', vaultA],
       ['B', vaultB],
-    ] as const) {
-      const vaultBytes = await load(vault);
+    ] as const;
+    const vaultBytesList = await Promise.all(vaultEntries.map(([, vault]) => load(vault)));
+    for (let vi = 0; vi < vaultEntries.length; vi++) {
+      const [role, vault] = vaultEntries[vi]!;
+      const vaultBytes = vaultBytesList[vi]!;
       if (vaultBytes === null) throw new Error(`scorch pool ${pool}: vault${role} ${vault} does not exist`);
     }
 

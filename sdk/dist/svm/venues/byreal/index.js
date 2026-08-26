@@ -137,10 +137,16 @@ function tickHasLimitOrders(array, offset) {
 async function resolveWindow(load, pool, tickCurrentIndex, tickSpacing, zeroForOne) {
     const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, zeroForOne);
     const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start))));
+    // allSettled (not all) keeps the break-on-first-invalid contract exact: a
+    // rejection is re-thrown only if the readable prefix actually reaches it.
+    const loaded = await Promise.allSettled(tickArrays.map((a) => load(a)));
     const arrays = [];
     let readable = 0;
     for (let i = 0; i < 3; i++) {
-        const data = await load(tickArrays[i]);
+        const settled = loaded[i];
+        if (settled.status === 'rejected')
+            throw settled.reason;
+        const data = settled.value;
         const valid = data !== null &&
             data.length >= TICK_ARRAY_ACCOUNT_SIZE &&
             hasDiscriminator(data, TICK_ARRAY_DISCRIMINATOR) &&
@@ -239,8 +245,11 @@ export async function fetchByrealPoolConfig(load, pool) {
     // fetchPoolConfig throw and drops the venue. An unreadable mint falls back to
     // the legacy assumption (a classic 82-byte mint classifies legacy → no throw →
     // the config is built byte-identically to before).
-    for (const mint of [tokenMint0, tokenMint1]) {
-        const mintData = await load(mint);
+    const mintList = [tokenMint0, tokenMint1];
+    const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+    for (let mi = 0; mi < mintList.length; mi++) {
+        const mint = mintList[mi];
+        const mintData = mintDatas[mi];
         if (mintData === null)
             continue;
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

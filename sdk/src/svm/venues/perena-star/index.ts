@@ -210,8 +210,11 @@ async function fetchPerenaStarPoolConfig(load: AccountLoader, pool: Address): Pr
   // the venue. The legacy path stays byte-identical: a classic 82-byte mint
   // classifies as legacy → no throw, and an unreadable mint (not vendored by a
   // fixture) falls back to legacy.
-  for (const mint of [bankMint, juniorMint]) {
-    const mintData = await load(mint);
+  const mints = [bankMint, juniorMint];
+  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  for (let mi = 0; mi < mints.length; mi++) {
+    const mint = mints[mi]!;
+    const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`perena-star: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

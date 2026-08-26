@@ -360,11 +360,14 @@ export const huma: SvmVenueAdapter = {
     // and drops the venue). The mode-mint bytes are reused; the underlying mint
     // is loaded on demand and, if unreadable, falls back to the legacy
     // assumption, keeping the classic 82-byte path byte-identical.
-    for (const [mint, preloaded] of [
+    const _mintEntries = [
       [decodedConfig.underlyingMint, null],
       [modeMint, modeMintData],
-    ] as const) {
-      const mintData = preloaded ?? (await load(mint));
+    ] as const;
+    const _mintDatas = await Promise.all(_mintEntries.map(([mint, preloaded]) => preloaded ?? load(mint)));
+    for (let _i = 0; _i < _mintEntries.length; _i++) {
+      const mint = _mintEntries[_i]![0];
+      const mintData = _mintDatas[_i]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(`${SLUG}: dropping pool ${modeConfig} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

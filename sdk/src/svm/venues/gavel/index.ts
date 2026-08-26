@@ -227,8 +227,11 @@ export async function fetchGavelConfig(load: AccountLoader, pool: Address): Prom
   // thrown error is the graceful-drop signal the SvmRoute orchestrator catches).
   // The LEGACY path is byte-identical: a classic 82-byte mint classifies as
   // Tokenkeg, parses no extensions, and the config is built unchanged.
-  for (const mint of [baseMint, quoteMint]) {
-    const mintData = await load(mint);
+  const mintList = [baseMint, quoteMint];
+  const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+  for (let mi = 0; mi < mintList.length; mi++) {
+    const mint = mintList[mi]!;
+    const mintData = mintDatas[mi];
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

@@ -214,8 +214,11 @@ async function fetchJupiterLendEarnConfig(load: AccountLoader, pool: Address): P
   // and SELF-DROP the market (the thrown error is the graceful-drop signal the
   // SvmRoute orchestrator catches). The LEGACY path is byte-identical: a classic
   // 82-byte mint classifies Tokenkeg with no extensions.
-  for (const m of [mint, fTokenMint]) {
-    const mintData = await load(m);
+  const _mints = [mint, fTokenMint];
+  const _mintDatas = await Promise.all(_mints.map((m) => load(m)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const m = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping market ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
