@@ -42,8 +42,11 @@ export const stabbleWeightedSwap = {
         // 82-byte mint classifies as Tokenkeg, parses no extensions, and the config
         // is built exactly as before; an unreadable mint (a fixture that does not
         // vendor it) falls back to the legacy assumption.
-        for (const mint of [tokenA.mint, tokenB.mint]) {
-            const mintData = await load(mint);
+        const _mints = [tokenA.mint, tokenB.mint];
+        const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+        for (let _i = 0; _i < _mints.length; _i++) {
+            const mint = _mints[_i];
+            const mintData = _mintDatas[_i];
             if (mintData === null)
                 continue;
             if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

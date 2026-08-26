@@ -258,8 +258,11 @@ export async function fetchPancakeswapClmmConfig(load, pool) {
     // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
     // Tokenkeg, parses no extensions, and the config is built unchanged. An
     // unreadable mint falls back to the legacy assumption (keeps fixtures green).
-    for (const mint of [tokenMint0, tokenMint1]) {
-        const mintData = await load(mint);
+    const mints = [tokenMint0, tokenMint1];
+    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    for (let mi = 0; mi < mints.length; mi++) {
+        const mint = mints[mi];
+        const mintData = mintDatas[mi];
         if (mintData === null)
             continue;
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

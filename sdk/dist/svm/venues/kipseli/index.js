@@ -258,8 +258,11 @@ async function fetchPoolConfig(load, pool) {
     // graceful-drop signal (the SvmRoute orchestrator catches a fetchPoolConfig
     // throw and drops the venue). An unreadable mint falls back to the legacy
     // assumption, keeping the classic 82-byte path byte-identical.
-    for (const mint of [baseMint, quoteMint]) {
-        const mintData = await load(mint);
+    const _mints = [baseMint, quoteMint];
+    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    for (let _i = 0; _i < _mints.length; _i++) {
+        const mint = _mints[_i];
+        const mintData = _mintDatas[_i];
         if (mintData === null)
             continue;
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
@@ -276,11 +279,14 @@ async function fetchPoolConfig(load, pool) {
         fetchDecimals(load, baseMint),
         fetchDecimals(load, quoteMint),
     ]);
-    for (const [role, vault, mint] of [
+    const _vaults = [
         ['base', baseVault, baseMint],
         ['quote', quoteVault, quoteMint],
-    ]) {
-        const vaultData = await load(vault);
+    ];
+    const _vaultDatas = await Promise.all(_vaults.map(([, vault]) => load(vault)));
+    for (let _i = 0; _i < _vaults.length; _i++) {
+        const [role, vault, mint] = _vaults[_i];
+        const vaultData = _vaultDatas[_i];
         if (vaultData === null)
             throw new Error(`${SLUG} pool ${pool}: derived ${role} vault ${vault} does not exist`);
         if (vaultData.length < VAULT_MIN_SIZE) {

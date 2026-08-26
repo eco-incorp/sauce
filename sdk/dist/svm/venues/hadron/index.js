@@ -180,8 +180,11 @@ export async function fetchHadronConfig(load, pool) {
     // pool (the thrown error is the graceful-drop signal the SvmRoute orchestrator
     // catches). The LEGACY path is byte-identical: a classic 82-byte mint
     // classifies Tokenkeg with no extensions and this block is a no-op.
-    for (const mint of [mintA, mintB]) {
-        const mintData = await load(mint);
+    const _mints = [mintA, mintB];
+    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    for (let _i = 0; _i < _mints.length; _i++) {
+        const mint = _mints[_i];
+        const mintData = _mintDatas[_i];
         if (mintData === null)
             continue; // an unreadable mint falls back to the legacy assumption
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

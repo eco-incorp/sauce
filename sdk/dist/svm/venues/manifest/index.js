@@ -206,8 +206,11 @@ export async function fetchManifestConfig(load, pool) {
     // (the same graceful-degradation path an unsupported direction uses). The
     // LEGACY path is byte-identical to before: a classic mint classifies as
     // Tokenkeg, parses no extensions, and the config is built unchanged.
-    for (const mint of [baseMint, quoteMint]) {
-        const mintData = await load(mint);
+    const _mints = [baseMint, quoteMint];
+    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    for (let _i = 0; _i < _mints.length; _i++) {
+        const mint = _mints[_i];
+        const mintData = _mintDatas[_i];
         if (mintData === null)
             throw new Error(`${SLUG}: mint ${mint} of market ${pool} not found`);
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

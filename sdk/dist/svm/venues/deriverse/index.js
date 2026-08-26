@@ -249,8 +249,11 @@ export const deriverse = {
         // (the SvmRoute orchestrator catches it and drops the venue). An unreadable
         // mint falls back to the legacy assumption, keeping the classic path
         // byte-identical.
-        for (const mint of [assetMint, crncyMint]) {
-            const mintData = await load(mint);
+        const mintList = [assetMint, crncyMint];
+        const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+        for (let mi = 0; mi < mintList.length; mi++) {
+            const mint = mintList[mi];
+            const mintData = mintDatas[mi];
             if (mintData === null)
                 continue;
             if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

@@ -217,8 +217,11 @@ export const meteoraDammV1Stable = {
         // the SvmRoute orchestrator catches a fetchPoolConfig throw and drops the
         // venue. An unreadable mint (this venue's fixtures don't vendor the token
         // mints) falls back to the legacy assumption, keeping existing tests green.
-        for (const mint of [tokenAMint, tokenBMint]) {
-            const mintData = await load(mint);
+        const _mints = [tokenAMint, tokenBMint];
+        const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+        for (let _i = 0; _i < _mints.length; _i++) {
+            const mint = _mints[_i];
+            const mintData = _mintDatas[_i];
             if (mintData === null)
                 continue;
             if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
