@@ -271,8 +271,11 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Hylo
   // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
   // Legacy path stays byte-identical: a classic 82-byte mint classifies legacy,
   // parses no blocking extension, and the Promise.all below runs exactly as before.
-  for (const mint of [USDC_MINT, HYUSD_MINT]) {
-    const mintData = await load(mint);
+  const _mints = [USDC_MINT, HYUSD_MINT];
+  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const mint = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
     if (mintData === null) continue; // unreadable mint → legacy assumption (keeps existing tests green)
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

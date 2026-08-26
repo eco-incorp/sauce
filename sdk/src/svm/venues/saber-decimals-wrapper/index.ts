@@ -160,8 +160,11 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Sabe
   // carries an un-routable extension) — the thrown error is the graceful-drop
   // signal (SvmRoute drops the venue on a fetchPoolConfig throw). An unreadable
   // mint falls back to the legacy assumption, keeping the legacy path unchanged.
-  for (const mint of [underlyingMint, wrapperMint]) {
-    const mintData = await load(mint);
+  const mints = [underlyingMint, wrapperMint];
+  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  for (let mi = 0; mi < mints.length; mi++) {
+    const mint = mints[mi]!;
+    const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping wrapper ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

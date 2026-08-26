@@ -278,10 +278,11 @@ async function resolveWindow(
     Address,
   ];
 
+  const tickArrayDatas = await Promise.all(tickArrays.map((a) => load(a)));
   const arrays: (Uint8Array | null)[] = [];
   let readable = 0;
   for (let i = 0; i < 3; i++) {
-    const data = await load(tickArrays[i]);
+    const data = tickArrayDatas[i]!;
     const valid =
       data !== null &&
       data.length >= TICK_ARRAY_ACCOUNT_SIZE &&

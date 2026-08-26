@@ -207,10 +207,11 @@ async function resolveWindow(
 ): Promise<PancakeswapClmmWindow> {
   const startTicks = raydiumClmmWindowStartTicks(tickCurrentIndex, tickSpacing, zeroForOne) as [number, number, number];
   const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start)))) as [Address, Address, Address];
+  const tickArrayDatas = await Promise.all(tickArrays.map((a) => load(a)));
   const arrays: Uint8Array[] = [];
   let readable = 0;
   for (let i = 0; i < 3; i++) {
-    const data = await load(tickArrays[i]);
+    const data = tickArrayDatas[i]!;
     const valid =
       data !== null &&
       data.length >= TICK_ARRAY_ACCOUNT_SIZE &&
@@ -308,8 +309,11 @@ export async function fetchPancakeswapClmmConfig(load: AccountLoader, pool: Addr
   // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
   // Tokenkeg, parses no extensions, and the config is built unchanged. An
   // unreadable mint falls back to the legacy assumption (keeps fixtures green).
-  for (const mint of [tokenMint0, tokenMint1]) {
-    const mintData = await load(mint);
+  const mints = [tokenMint0, tokenMint1];
+  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  for (let mi = 0; mi < mints.length; mi++) {
+    const mint = mints[mi]!;
+    const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

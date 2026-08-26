@@ -244,10 +244,11 @@ async function resolveWindow(
     Address,
   ];
 
+  const binArrayDatas = await Promise.all(binArrays.map((a) => load(a)));
   const arrays: (Uint8Array | null)[] = [];
   let readable = 0;
   for (let i = 0; i < 3; i++) {
-    const data = await load(binArrays[i]);
+    const data = binArrayDatas[i]!;
     const valid =
       data !== null &&
       data.length >= BIN_ARRAY_ACCOUNT_SIZE &&
@@ -322,8 +323,11 @@ export async function fetchMeteoraDlmmConfig(load: AccountLoader, pair: Address)
   // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
   // Tokenkeg, parses no extensions, and the config is built unchanged. An
   // unreadable mint falls back to the legacy assumption (keeps fixtures green).
-  for (const mint of [tokenXMint, tokenYMint]) {
-    const mintData = await load(mint);
+  const mints = [tokenXMint, tokenYMint];
+  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  for (let mi = 0; mi < mints.length; mi++) {
+    const mint = mints[mi]!;
+    const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping pool ${pair} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
