@@ -6,14 +6,16 @@ import { DESCRIPTORS } from "../descriptors/registry.js";
 import type { ContractDescriptor } from "../descriptors/types.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
 
-// At runtime this file is at dist/plugin/index.js, so package root is ../..
-// The manifest lives at src/plugin/manifest.json, read directly (not `import … from
-// "./manifest.json"`) to match `skills/loader.ts`'s own convention of reading a sibling
-// data file relative to the package root rather than through a bundler-specific JSON
-// import — the same reason `src/skills/*.md` are read this way instead of imported.
+// Read the manifest from a sibling file (same dir as this compiled JS). This works in both
+// modes without any packaging quirks:
+//   - dev (ts-jest): thisDir resolves to `<sdk>/src/plugin/`, where manifest.json lives.
+//   - published: thisDir resolves to `<sdk>/dist/plugin/`, where `copy-verify-assets.mjs`
+//     copies manifest.json alongside index.js — and `sdk/dist` IS in the root `files` list
+//     (unlike `sdk/src/plugin/`), so consumers actually receive it.
+// Read directly (not `import ... from "./manifest.json"`) because `tsc` does not copy
+// imported JSON to outDir — same reason `src/skills/*.md` are read via `readFileSync`.
 const thisDir = dirname(fileURLToPath(import.meta.url));
-const packageRoot = join(thisDir, "..", "..");
-const manifestPath = join(packageRoot, "src", "plugin", "manifest.json");
+const manifestPath = join(thisDir, "manifest.json");
 
 /**
  * The shared stdlib/DSL plugin's manifest — the single declarative source of truth both
@@ -38,9 +40,17 @@ export interface SaucePlugin {
   nameParity: Record<string, string>;
 }
 
-/** Load the plugin manifest. Re-reads the file on every call — it is small and rarely read. */
+// Memoize: `chainAmbient()` (routes/ambient.ts) calls this on every `openRoute` compile, which
+// is a hot path. The manifest is a bundled asset that cannot change over the life of the
+// process — one parse per process is enough.
+let cached: SaucePlugin | undefined;
+
+/** Load the plugin manifest. Cached after the first call. */
 export function loadPlugin(): SaucePlugin {
-  return JSON.parse(readFileSync(manifestPath, "utf-8")) as SaucePlugin;
+  if (cached === undefined) {
+    cached = JSON.parse(readFileSync(manifestPath, "utf-8")) as SaucePlugin;
+  }
+  return cached;
 }
 
 /**
