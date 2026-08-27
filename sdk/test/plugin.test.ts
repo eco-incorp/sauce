@@ -27,6 +27,10 @@ describe("loadPluginData", () => {
     expect(loadPluginData().tokens).toBe(resolveTokenMap);
   });
 
+  it("is memoized: repeated calls return the SAME wrapper object (chainDefines hot-path invariant)", () => {
+    expect(loadPluginData()).toBe(loadPluginData());
+  });
+
   it("a spot-check: a known protocol/chain address from protocolAddresses matches DESCRIPTORS read independently", () => {
     const descriptor = getDescriptor("uniswap-v4", "UniversalRouter");
     expect(descriptor).toBeDefined();
@@ -58,29 +62,38 @@ describe("pluginNameParity", () => {
 });
 
 describe("chainDefines byte-identity after routing through loadPluginData()", () => {
-  it("produces the exact same map for base as reading DESCRIPTORS/resolveTokenMap directly (pre-refactor shape)", () => {
-    const base = requireChain("base");
-    const defines = chainDefines(base);
+  // Parametrized across EVM chains with real DESCRIPTORS entries (base, ethereum, arbitrum) AND
+  // the sole SVM chain (solana) — the SVM branch skips the EVM protocolAddresses loop, so it
+  // exercises a different code path in `chainDefines` and pins that the indirection is
+  // observationally identical on BOTH kinds.
+  it.each(["base", "ethereum", "arbitrum", "solana"] as const)(
+    "produces the exact same map for %s as reading DESCRIPTORS/resolveTokenMap directly (pre-refactor shape)",
+    (slug) => {
+      const chain = requireChain(slug);
+      const defines = chainDefines(chain);
 
-    // Pre-refactor equivalent: build the expected map by hand from the same two registries
-    // chainDefines used to import directly, proving the P8 indirection changed nothing observable.
-    const expected: Record<string, bigint | boolean | number> = {
-      chainId: BigInt(base.id),
-      CHAIN_ID: BigInt(base.id),
-    };
-    for (const d of DESCRIPTORS) {
-      const address = d.perChainAddress[base.id];
-      if (address === undefined) continue;
-      const key = `${pascalOfSlug(d.protocol)}_${d.contract}`;
-      expected[key] = BigInt(address);
-    }
-    for (const [symbol, address] of resolveTokenMap(base)) {
-      expected[symbol] = address;
-    }
+      // Pre-refactor equivalent: build the expected map by hand from the same two registries
+      // chainDefines used to import directly, proving the P8 indirection changed nothing observable.
+      const expected: Record<string, bigint | boolean | number> = {
+        chainId: BigInt(chain.id),
+        CHAIN_ID: BigInt(chain.id),
+      };
+      if (chain.kind === "evm") {
+        for (const d of DESCRIPTORS) {
+          const address = d.perChainAddress[chain.id];
+          if (address === undefined) continue;
+          const key = `${pascalOfSlug(d.protocol)}_${d.contract}`;
+          expected[key] = BigInt(address);
+        }
+      }
+      for (const [symbol, address] of resolveTokenMap(chain)) {
+        expected[symbol] = address;
+      }
 
-    expect(defines).toEqual(expected);
-    expect(Object.keys(defines).sort()).toEqual(Object.keys(expected).sort());
-  });
+      expect(defines).toEqual(expected);
+      expect(Object.keys(defines).sort()).toEqual(Object.keys(expected).sort());
+    },
+  );
 
   it("known spot-checks unaffected: chainId, a real protocol address, and registry token defaults", () => {
     const base = requireChain("base");

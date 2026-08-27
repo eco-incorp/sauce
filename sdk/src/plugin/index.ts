@@ -73,14 +73,23 @@ export interface SaucePluginData extends SaucePlugin {
   readonly tokens: typeof resolveTokenMap;
 }
 
+// Memoized for the same reason `loadPlugin()` is: `chainDefines` (routes/ambient.ts) calls
+// `loadPluginData()` on every `openRoute` compile. The wrapper is a fixed 4-property view of
+// process-lifetime constants (the manifest, DESCRIPTORS, resolveTokenMap) — one allocation is
+// enough. Skipping this leaves a fresh object literal per hot-path call for zero benefit.
+let cachedData: SaucePluginData | undefined;
+
 export function loadPluginData(): SaucePluginData {
-  const plugin = loadPlugin();
-  return {
-    ambient: plugin.ambient,
-    nameParity: plugin.nameParity,
-    protocolAddresses: DESCRIPTORS,
-    tokens: resolveTokenMap,
-  };
+  if (cachedData === undefined) {
+    const plugin = loadPlugin();
+    cachedData = {
+      ambient: plugin.ambient,
+      nameParity: plugin.nameParity,
+      protocolAddresses: DESCRIPTORS,
+      tokens: resolveTokenMap,
+    };
+  }
+  return cachedData;
 }
 
 /**
@@ -88,8 +97,9 @@ export function loadPluginData(): SaucePluginData {
  * "revert" }` — SauceScript surface name -> the underlying engine/opcode name each compiler
  * actually implements). Declared in the manifest since P7 but never consulted anywhere in the SDK
  * until this function — exported so it is a live, tested part of the plugin surface rather than
- * inert config; see `plugin.test.ts`.
+ * inert config; see `plugin.test.ts`. Returned `Readonly` because the underlying object IS the
+ * cached manifest's own map — a caller mutating this would corrupt every subsequent read.
  */
-export function pluginNameParity(): Record<string, string> {
+export function pluginNameParity(): Readonly<Record<string, string>> {
   return loadPluginData().nameParity;
 }
