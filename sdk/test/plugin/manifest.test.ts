@@ -24,15 +24,27 @@ describe('plugin manifest (Layer C)', () => {
   });
 
   describe('nameParity matches what the compiler actually implements', () => {
+    // Counting is control-vs-test rather than a bare `.toContain`: a single-byte opcode value
+    // can appear as an incidental operand byte (a literal chunk, a selector, another op's
+    // immediate) even in a program that doesn't use the surface at all. Compare the count in
+    // the test program against a control that shouldn't invoke the surface — the surface must
+    // introduce STRICTLY more of the opcode byte than the control does.
+    const countByte = (buf: Uint8Array, b: number): number => {
+      let n = 0;
+      for (const x of buf) if (x === b) n++;
+      return n;
+    };
+
     it.each(TARGETS)('emit(...) lowers to the LOG opcode on target %s', (target) => {
       const { nameParity } = loadPlugin();
 
       expect(nameParity.emit.toUpperCase()).toBe('LOG');
       expect(OPS.LOG).toBeDefined();
 
-      const { bytecode } = compile('function main() { emit("Ping()"); }', { target, cache: false });
+      const { bytecode: control } = compile('function main() { return 1n; }', { target, cache: false });
+      const { bytecode: test } = compile('function main() { emit("Ping()"); }', { target, cache: false });
 
-      expect(Array.from(bytecode[0])).toContain(OPS.LOG);
+      expect(countByte(test[0], OPS.LOG)).toBeGreaterThan(countByte(control[0], OPS.LOG));
     });
 
     it.each(TARGETS)('throw lowers to the REVERT opcode on target %s', (target) => {
@@ -41,9 +53,10 @@ describe('plugin manifest (Layer C)', () => {
       expect(nameParity.throw.toUpperCase()).toBe('REVERT');
       expect(OPS.REVERT).toBeDefined();
 
-      const { bytecode } = compile('function main() { throw 1n; }', { target, cache: false });
+      const { bytecode: control } = compile('function main() { return 1n; }', { target, cache: false });
+      const { bytecode: test } = compile('function main() { throw 1n; }', { target, cache: false });
 
-      expect(Array.from(bytecode[0])).toContain(OPS.REVERT);
+      expect(countByte(test[0], OPS.REVERT)).toBeGreaterThan(countByte(control[0], OPS.REVERT));
     });
   });
 });

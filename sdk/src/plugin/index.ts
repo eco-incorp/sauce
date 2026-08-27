@@ -2,14 +2,16 @@ import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
-// At runtime this file is at dist/plugin/index.js, so package root is ../..
-// The manifest lives at src/plugin/manifest.json, read directly (not `import … from
-// "./manifest.json"`) to match `skills/loader.ts`'s own convention of reading a sibling
-// data file relative to the package root rather than through a bundler-specific JSON
-// import — the same reason `src/skills/*.md` are read this way instead of imported.
+// Read the manifest from a sibling file (same dir as this compiled JS). This works in both
+// modes without any packaging quirks:
+//   - dev (ts-jest): thisDir resolves to `<sdk>/src/plugin/`, where manifest.json lives.
+//   - published: thisDir resolves to `<sdk>/dist/plugin/`, where `copy-verify-assets.mjs`
+//     copies manifest.json alongside index.js — and `sdk/dist` IS in the root `files` list
+//     (unlike `sdk/src/plugin/`), so consumers actually receive it.
+// Read directly (not `import ... from "./manifest.json"`) because `tsc` does not copy
+// imported JSON to outDir — same reason `src/skills/*.md` are read via `readFileSync`.
 const thisDir = dirname(fileURLToPath(import.meta.url));
-const packageRoot = join(thisDir, "..", "..");
-const manifestPath = join(packageRoot, "src", "plugin", "manifest.json");
+const manifestPath = join(thisDir, "manifest.json");
 
 /**
  * The shared stdlib/DSL plugin's Layer-C manifest — the single declarative source of truth
