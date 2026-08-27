@@ -129,7 +129,7 @@ function resolveHolder(object: AstNode | undefined, tokens: TokenSymbols, source
   if (object.type === "Identifier") {
     const name = (object as unknown as { name: string }).name;
     if (name === "self") return "ctx.self()";
-    if (name === "address") return undefined; // reserved defensively -- no longer a compiler namespace root (address.* was dropped for ctx.*/evm.*), but a bare `address` holder is still excluded rather than re-opened
+    if (name === "address") return undefined; // reserved defensively -- no longer a compiler namespace root (address.* was dropped for gated ctx.*), but a bare `address` holder is still excluded rather than re-opened
     if (tokens.has(name)) return undefined; // ambiguous: USDC.WETH belongs to neither feature
     if (isChainKey(name)) return undefined; // owned by a qualified-token spelling, not this sugar
     if (resolveNamespace(name) !== undefined) return undefined; // owned by the protocol-accessor pass
