@@ -34,7 +34,7 @@ import { SVM_MAX_ESCROWS, svmSettleRefs, svmSettleSource } from './recipes/index
 // The intent-level surface (unwrap the Portal envelope + extract from an intent) is re-exported here so
 // the whole partner-facing decode/verify story lives under `@eco-incorp/sauce-sdk/svm/verify`, symmetric
 // with the EVM `/verify` barrel re-exporting its own `intent.ts`.
-export { decodePortalCalldataWithAccounts, extractSvmSettleFromCalls, extractSvmSettleFromIntent, } from './intent.js';
+export { decodePortalCalldataWithAccounts, encodePortalCalldataWithAccounts, extractSvmSettleFromCalls, extractSvmSettleFromIntent, } from './intent.js';
 /** Byte length of the settle args tail: 4 scalar slots × 32 bytes. */
 export const SVM_SETTLE_ARGS_BYTES = 4 * 32;
 const addressDecoder = getAddressDecoder();

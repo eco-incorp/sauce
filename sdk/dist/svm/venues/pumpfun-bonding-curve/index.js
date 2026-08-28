@@ -124,6 +124,7 @@
  */
 import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'pumpfun-bonding-curve';
 export const PUMPFUN_BONDING_CURVE_PROGRAM_ID = address_('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
 const FEE_PROGRAM = address_('pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ');
@@ -180,6 +181,14 @@ function detectTokenProgram(mint, data) {
     if (data[165] !== 1) {
         throw new Error(`pumpfun-bonding-curve mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
     }
+    // Un-routable (blocking) extensions self-drop: a NonTransferable or
+    // default-frozen mint cannot move through a plain transferChecked. Advisory
+    // extensions (PermanentDelegate / ConfidentialTransfer) are NOT blocking, so
+    // a zero-fee/advisory-only T22 mint still routes.
+    const { blocking } = parseMintExtensions(data);
+    if (blocking.length > 0) {
+        throw new Error(`pumpfun-bonding-curve gate: mint ${mint} is un-routable — ${blocking.join('; ')}`);
+    }
     let offset = 166;
     while (offset + 4 <= data.length) {
         const extensionType = data[offset] | (data[offset + 1] << 8);
@@ -187,6 +196,12 @@ function detectTokenProgram(mint, data) {
         if (extensionType === 0)
             break;
         if (extensionType === 1) {
+            // TODO(t22-fee-netting): a TransferFeeConfig makes the vault/ATA delta
+            // diverge from the user amount on both legs. Correct handling nets the fee
+            // (netTransferAmount) consistently in the on-chain quote fragment AND the
+            // TS reference quote, and needs the mint's fee TLV read on-chain — out of
+            // scope for this pass. Keep the safe self-limiting rejection so a
+            // fee-bearing pool drops out rather than risk a favourable mis-quote.
             throw new Error(`pumpfun-bonding-curve gate: mint ${mint} carries a token-2022 TransferFeeConfig extension (vault/ATA deltas would not match user amounts)`);
         }
         offset += 4 + extensionLength;

@@ -93,6 +93,8 @@ import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'quantum';
 
@@ -231,11 +233,25 @@ export async function fetchQuantumConfig(load: AccountLoader, pool: Address): Pr
   const codec = getAddressCodec();
   const mint0 = codec.decode(data.subarray(OFF_MINT0, OFF_MINT0 + 32));
   const mint1 = codec.decode(data.subarray(OFF_MINT1, OFF_MINT1 + 32));
-  for (const mint of [mint0, mint1]) {
-    const mintData = await load(mint);
-    if (mintData === null) throw new Error(`${SLUG}: mint ${mint} of pool ${pool} not found`);
-    if (mintData.length !== 82) {
-      throw new Error(`${SLUG}: pool ${pool} mint ${mint} is not a classic SPL mint (swap is Tokenkeg-only)`);
+  // The swap ix is Tokenkeg-only here. Detect the real token program per mint
+  // via the shared data-shape resolver and SELF-DROP a Token-2022 mint or one
+  // carrying an un-routable extension (the thrown error IS the graceful drop —
+  // SvmRoute catches a fetchPoolConfig throw and drops the venue). LEGACY path
+  // byte-identical: a classic 82-byte mint classifies Tokenkeg, parses no
+  // extensions, config built unchanged. An unreadable mint falls back to the
+  // legacy assumption (keeps fixture-only tests green).
+  const mints = [mint0, mint1];
+  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  for (let mi = 0; mi < mints.length; mi++) {
+    const mint = mints[mi]!;
+    const mintData = mintDatas[mi]!;
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
     }
   }
   const levelCount = data[OFF_LEVEL_COUNT];

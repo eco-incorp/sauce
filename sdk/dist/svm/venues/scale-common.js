@@ -47,6 +47,7 @@
  * formula is unverified, so a pool carrying it is rejected rather than guessed at.
  */
 import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
+import { parseMintExtensions } from '../token-extensions.js';
 export const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 export const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 export const ASSOCIATED_TOKEN_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
@@ -121,6 +122,14 @@ export function detectTokenProgram(mint, data) {
     if (data[165] !== 1) {
         throw new Error(`scale venue: mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
     }
+    // A NonTransferable / DefaultAccountState=frozen mint genuinely cannot route
+    // through a plain transferChecked — self-drop it (safe; a dropped pool just
+    // self-limits). PermanentDelegate/Confidential are advisories, not blocking,
+    // so a routable T22 stablecoin (PYUSD/USDG) still passes.
+    const { blocking } = parseMintExtensions(data);
+    if (blocking.length > 0) {
+        throw new Error(`scale venue: mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
     let offset = 166;
     while (offset + 4 <= data.length) {
         const extensionType = data[offset] | (data[offset + 1] << 8);
@@ -128,6 +137,14 @@ export function detectTokenProgram(mint, data) {
         if (extensionType === 0)
             break; // uninitialized tail
         if (extensionType === 1) {
+            // TODO(t22-fee-netting): a fee-bearing mint is REJECTED here rather than
+            // fee-netted. Netting would need net(amount, feeConfig, epoch) on both
+            // legs, but (a) scale-vmm exposes no referenceQuote at all and scale-amm's
+            // receives only a unix `now`, not the Solana `epoch` getEpochFee requires,
+            // and (b) how a mint-level transfer fee composes with this virtual-CP
+            // curve's own fee-on-input / fee-on-gross-output split is not confidently
+            // determined. Rejecting self-limits (safe); a wrong net silently
+            // mis-quotes — so keep the no-op (reject) path.
             throw new Error(`scale venue: mint ${mint} carries a token-2022 TransferFeeConfig extension (wire amounts would not match the quote)`);
         }
         offset += 4 + extensionLength;
@@ -163,7 +180,7 @@ export function scaleDepthReserves(state, direction) {
     const vB = state.reservesB;
     return direction === 'aToB' ? { reserveIn: vA, reserveOut: vB } : { reserveIn: vB, reserveOut: vA };
 }
-/** Continuous-oracle fee model (measurement only — see SvmVenueLadder.continuousFees doc). */
+/** Continuous-oracle fee model (measurement only). */
 export function scaleContinuousFees(state, direction) {
     const totalBps = state.platformFeeBps + state.shareBps.reduce((sum, bps) => sum + bps, 0n);
     const totalPpm = totalBps * 100n; // bps (1e4) -> ppm (1e6)
@@ -173,7 +190,7 @@ export function scaleContinuousFees(state, direction) {
 }
 /**
  * The shared quote-curve helper, deduped BY NAME across both scale-amm and scale-vmm
- * (byte-identical source, per SvmVenueLadder.helpers()'s cross-family dedup rule — the
+ * (byte-identical source — the
  * two programs' math is identical, only account layouts differ). `dir` is 0 for
  * aToB (buy: fee on input) and nonzero for bToA (sell: fee on gross output).
  */

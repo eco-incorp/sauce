@@ -88,10 +88,13 @@
  * bound the walk) self-drops via `SvmWindowDriftError`, matching
  * orca-whirlpool/raydium-clmm/meteora-dlmm's own "nothing to walk" gate.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'invariant';
 export const INVARIANT_PROGRAM_ID = address('HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt');
@@ -305,11 +308,11 @@ async function deriveTickPda(pool: Address, tickIndex: number): Promise<Address>
   const poolBytes = new Uint8Array(getAddressCodec().encode(pool));
   const indexBytes = new Uint8Array(4);
   new DataView(indexBytes.buffer).setInt32(0, tickIndex, true);
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: INVARIANT_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('tickv1'), poolBytes, indexBytes],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(INVARIANT_PROGRAM_ID, [
+    new TextEncoder().encode('tickv1'),
+    poolBytes,
+    indexBytes,
+  ]);
 }
 
 function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): boolean {
@@ -352,16 +355,35 @@ async function resolveWindowFromBitmap(
   tickSpacing: number,
   xToY: boolean,
 ): Promise<InvariantWindow> {
-  const boundaries: InvariantBoundary[] = [];
+  // Enumerate the full candidate tick-index sequence from the ALREADY-FETCHED
+  // bitmap first (pure: the next initialized tick and the cursor advance depend
+  // only on the bitmap + tickSpacing, never on a loaded Tick account — the
+  // account bytes only gate the break and the boundary's sqrtPrice comes from
+  // the index), then derive + read every candidate Tick in ONE coalesced round
+  // instead of an outward per-tick serial walk that costs a round per boundary.
+  const foundTicks: number[] = [];
   let cursor = currentTick;
   for (let i = 0; i < INVARIANT_MAX_BOUNDARIES; i++) {
     const found = xToY ? prevInitialized(bitmap, cursor, tickSpacing) : nextInitialized(bitmap, cursor, tickSpacing);
     if (found === null) break;
-    const tickAddress = await deriveTickPda(pool, found);
-    const data = await load(tickAddress);
-    if (data === null || data.length !== TICK_ACCOUNT_SIZE || !hasDiscriminator(data, TICK_DISCRIMINATOR)) break;
-    boundaries.push({ tick: found, sqrtPrice: invariantSqrtPriceAtTick(found), address: tickAddress });
+    foundTicks.push(found);
     cursor = xToY ? found - tickSpacing : found + tickSpacing; // don't check the current tick again
+  }
+  const tickAddresses = await Promise.all(foundTicks.map((tick) => deriveTickPda(pool, tick)));
+
+  // allSettled keeps the break-on-first-missing/invalid contract exact: a load
+  // that REJECTS is re-thrown only when the readable prefix reaches it, while a
+  // rejection/miss past the break — a candidate the serial walk never read — is
+  // never inspected, so the resolved boundary window is byte-identical.
+  const boundaries: InvariantBoundary[] = [];
+  const loaded = await Promise.allSettled(tickAddresses.map((addr) => load(addr)));
+  for (let i = 0; i < foundTicks.length; i++) {
+    const settled = loaded[i]!;
+    if (settled.status === 'rejected') throw settled.reason;
+    const data = settled.value;
+    if (data === null || data.length !== TICK_ACCOUNT_SIZE || !hasDiscriminator(data, TICK_DISCRIMINATOR)) break;
+    const tick = foundTicks[i]!;
+    boundaries.push({ tick, sqrtPrice: invariantSqrtPriceAtTick(tick), address: tickAddresses[i]! });
   }
   return { boundaries };
 }
@@ -379,6 +401,27 @@ export async function fetchInvariantPoolConfig(load: AccountLoader, pool: Addres
   const tokenXReserve = codec.decode(data.subarray(OFF_TOKEN_X_RESERVE, OFF_TOKEN_X_RESERVE + 32)) as Address;
   const tokenYReserve = codec.decode(data.subarray(OFF_TOKEN_Y_RESERVE, OFF_TOKEN_Y_RESERVE + 32)) as Address;
   const tickmap = codec.decode(data.subarray(OFF_TICKMAP, OFF_TICKMAP + 32)) as Address;
+
+  // The swap ix here is classic `token::transfer` (Tokenkeg-only, no mint
+  // accounts). SELF-DROP a Token-2022 mint (or one carrying an un-routable
+  // extension) by throwing — the SvmRoute orchestrator catches a fetchPoolConfig
+  // throw and drops the venue. An unreadable mint falls back to the legacy
+  // assumption, keeping every existing fixture-driven test green.
+  const _mints = [tokenXMint, tokenYMint];
+  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const mint = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
+  }
+
   const tickSpacing = Number(readUintLE(data, OFF_TICK_SPACING, 2));
   const currentTick = ((): number => {
     const u = Number(readUintLE(data, OFF_CURRENT_TICK, 4));

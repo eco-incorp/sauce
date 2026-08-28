@@ -20,6 +20,8 @@
 import { createHash } from 'node:crypto';
 import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'saber-stableswap';
 export const SABER_STABLESWAP_PROGRAM_ID = address('SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ');
 // Classic SPL Token — Saber predates Token-2022; vaults are Tokenkeg-owned.
@@ -139,6 +141,29 @@ export const saberStableswap = {
         }
         const nonce = data[2];
         const pubkey = getAddressDecoder();
+        const mintA = pubkey.decode(data, 203);
+        const mintB = pubkey.decode(data, 235);
+        // Saber predates Token-2022 and its vaults are Tokenkeg-owned, but detect
+        // and SELF-DROP a pool holding a Token-2022 mint (or an un-routable
+        // extension mint) defensively — the thrown error is the graceful-drop
+        // signal (SvmRoute drops the venue on a fetchPoolConfig throw). An
+        // unreadable mint falls back to the legacy assumption, leaving the
+        // byte-identical legacy path intact.
+        const mints = [mintA, mintB];
+        const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+        for (let mi = 0; mi < mints.length; mi++) {
+            const mint = mints[mi];
+            const mintData = mintDatas[mi];
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
+        }
         return {
             venue: SLUG,
             pool,
@@ -150,8 +175,8 @@ export const saberStableswap = {
             stopRampTs: readUintLE(data, 27, 8),
             vaultA: pubkey.decode(data, 107),
             vaultB: pubkey.decode(data, 139),
-            mintA: pubkey.decode(data, 203),
-            mintB: pubkey.decode(data, 235),
+            mintA,
+            mintB,
             adminFeeA: pubkey.decode(data, 267),
             adminFeeB: pubkey.decode(data, 299),
             adminTradeFeeNumerator: readUintLE(data, 331, 8),
