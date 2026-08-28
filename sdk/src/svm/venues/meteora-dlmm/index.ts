@@ -56,10 +56,13 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
   */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 import { MAX_BIN_ID, MIN_BIN_ID, binArrayIndex, priceFromId } from './bin-math.js';
 
 const SLUG = 'meteora-dlmm';
@@ -111,8 +114,6 @@ const OFF_RESERVE_X = 152;
 const OFF_RESERVE_Y = 184;
 const OFF_ORACLE = 552;
 export const OFF_ACTIVATION_POINT = 816;
-const OFF_TOKEN_X_PROGRAM_FLAG = 880;
-const OFF_TOKEN_Y_PROGRAM_FLAG = 881;
 
 // BinArray offsets: index i64 @8, bins[70] @56 (144 bytes each).
 export const OFF_BA_INDEX = 8;
@@ -192,11 +193,11 @@ function getAddressEncoded(value: Address): Uint8Array {
 async function deriveBinArrayPda(pair: Address, index: number): Promise<Address> {
   const le = new Uint8Array(8);
   new DataView(le.buffer).setBigInt64(0, BigInt(index), true); // bin_array_index.to_le_bytes()
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: METEORA_DLMM_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('bin_array'), getAddressEncoded(pair), le],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
+    new TextEncoder().encode('bin_array'),
+    getAddressEncoded(pair),
+    le,
+  ]);
 }
 
 /** The three bin-array indexes the walk touches: the active array then two more in the walk direction. */
@@ -243,10 +244,21 @@ async function resolveWindow(
     Address,
   ];
 
+  // Batch the whole bin-array window into ONE coalesced round instead of an
+  // outward serial walk: the bin-array PDAs are all derived above (from the
+  // active id + step), so nothing here depends on a prior array's bytes.
+  // Registering every load() synchronously lets the coalescing loader fold
+  // them into a single getMultipleAccounts. allSettled preserves the
+  // break-on-first-invalid contract exactly — a rejection is re-thrown only if
+  // the readable prefix reaches it, and a miss/rejection past the break
+  // degrades to the same readable prefix a missing tail array always would.
+  const loaded = await Promise.allSettled(binArrays.map((addr) => load(addr)));
   const arrays: (Uint8Array | null)[] = [];
   let readable = 0;
   for (let i = 0; i < 3; i++) {
-    const data = await load(binArrays[i]);
+    const settled = loaded[i];
+    if (settled.status === 'rejected') throw settled.reason;
+    const data = settled.value;
     const valid =
       data !== null &&
       data.length >= BIN_ARRAY_ACCOUNT_SIZE &&
@@ -314,14 +326,25 @@ export async function fetchMeteoraDlmmConfig(load: AccountLoader, pair: Address)
   const codec = getAddressCodec();
   const tokenXMint = codec.decode(data.subarray(OFF_TOKEN_X_MINT, OFF_TOKEN_X_MINT + 32));
   const tokenYMint = codec.decode(data.subarray(OFF_TOKEN_Y_MINT, OFF_TOKEN_Y_MINT + 32));
-  if (data[OFF_TOKEN_X_PROGRAM_FLAG] !== 0 || data[OFF_TOKEN_Y_PROGRAM_FLAG] !== 0) {
-    throw new Error(`${SLUG}: pair ${pair} uses Token-2022 mints (program flags ${data[OFF_TOKEN_X_PROGRAM_FLAG]}/${data[OFF_TOKEN_Y_PROGRAM_FLAG]}) — classic SPL only`);
-  }
-  for (const mint of [tokenXMint, tokenYMint]) {
-    const mintData = await load(mint);
-    if (mintData === null) throw new Error(`${SLUG}: mint ${mint} of pair ${pair} not found`);
-    if (mintData.length !== 82) {
-      throw new Error(`${SLUG}: pair ${pair} mint ${mint} is not a classic SPL mint`);
+  // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
+  // one carrying an un-routable extension) via the shared data-shape resolver
+  // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
+  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
+  // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
+  // Tokenkeg, parses no extensions, and the config is built unchanged. An
+  // unreadable mint falls back to the legacy assumption (keeps fixtures green).
+  const mints = [tokenXMint, tokenYMint];
+  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  for (let mi = 0; mi < mints.length; mi++) {
+    const mint = mints[mi]!;
+    const mintData = mintDatas[mi]!;
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pair} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pair} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
     }
   }
 
@@ -330,10 +353,7 @@ export async function fetchMeteoraDlmmConfig(load: AccountLoader, pair: Address)
   const [xToY, yToX, bitmapExtension] = await Promise.all([
     resolveWindow(load, pair, activeId, binStep, true),
     resolveWindow(load, pair, activeId, binStep, false),
-    getProgramDerivedAddress({
-      programAddress: METEORA_DLMM_PROGRAM_ID,
-      seeds: [new TextEncoder().encode('bitmap'), getAddressEncoded(pair)],
-    }).then(([pda]) => pda),
+    memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [new TextEncoder().encode('bitmap'), getAddressEncoded(pair)]),
   ]);
   // The bitmap extension exists only for pairs whose liquidity leaves the
   // default bitmap; probe it so the swap can pass the program-id None sentinel

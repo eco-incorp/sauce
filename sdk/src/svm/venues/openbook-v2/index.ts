@@ -130,7 +130,7 @@
  * `max_base_lots` (baseIn) or `max_quote_lots_including_fees` (quoteIn).
  *
  * THE ATOMS-VS-LOTS PATCH GAP (why `fill[slot]` gets reassigned in
- * emitFinalQuote): `LadderSwapTemplate.patch: 'in'` always writes the merge's
+ * emitFinalQuote): the `patch: 'in'` amount convention always writes the merge's
  * raw ATOM-denominated fill share verbatim (`le8(fill[slot])`, see
  * codegen.ts) — every existing venue's CPI amount field IS atom-denominated,
  * so this has never needed a conversion hook. OpenBook's `max_base_lots`/

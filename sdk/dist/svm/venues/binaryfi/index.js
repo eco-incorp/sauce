@@ -148,6 +148,8 @@
  */
 import { address } from '@solana/kit';
 import { BINARYFI_ASSET_FLOOR_RATES } from './asset-configs.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'binaryfi';
 export const BINARYFI_PROGRAM_ID = address('B72M6nyCLFgWiJtAN4naUTminMiTmyGcEqQHXwVeRdht');
 /** Single global config account, shared by every market (see file header). */
@@ -236,15 +238,39 @@ export const binaryfi = {
         const quoteMint = b58Address(data, OFF_QUOTE_MINT);
         const assetVault = b58Address(data, OFF_ASSET_VAULT);
         const quoteVault = b58Address(data, OFF_QUOTE_VAULT);
+        // The on-chain swap ix (disc 0x08) is legacy-SPL only (one token_program
+        // slot, listed twice), so a Token-2022 mint (or one carrying an un-routable
+        // extension) SELF-DROPS this market: the thrown error is the graceful-drop
+        // signal the SvmRoute orchestrator catches. An unreadable mint falls back to
+        // the legacy assumption (a classic 82-byte mint classifies legacy → no throw
+        // → config built byte-identically to before).
+        const mintList = [assetMint, quoteMint];
+        const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+        for (let mi = 0; mi < mintList.length; mi++) {
+            const mint = mintList[mi];
+            const mintData = mintDatas[mi];
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`binaryfi: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`binaryfi: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
+        }
         const floorRate = BINARYFI_ASSET_FLOOR_RATES[assetMint];
         if (floorRate === undefined) {
             throw new Error(`binaryfi market ${pool}: no calibrated floor rate for asset mint ${assetMint} — refresh sdk/src/svm/venues/binaryfi/asset-configs.ts`);
         }
-        for (const [role, vault] of [
+        const vaultEntries = [
             ['asset', assetVault],
             ['quote', quoteVault],
-        ]) {
-            const vaultBytes = await load(vault);
+        ];
+        const vaultDatas = await Promise.all(vaultEntries.map(([, vault]) => load(vault)));
+        for (let vi = 0; vi < vaultEntries.length; vi++) {
+            const [role, vault] = vaultEntries[vi];
+            const vaultBytes = vaultDatas[vi];
             if (vaultBytes === null)
                 throw new Error(`binaryfi market ${pool}: ${role}Vault ${vault} does not exist`);
             if (vaultBytes.length !== SPL_TOKEN_ACCOUNT_SIZE) {

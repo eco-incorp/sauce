@@ -24,6 +24,24 @@ export type BytesInput = Uint8Array | string;
  * `Hex` a call carries), or base64. Throws on a truncated / malformed envelope.
  */
 export declare function decodePortalCalldataWithAccounts(data: BytesInput): PortalCalldataWithAccounts;
+/** Input to {@link encodePortalCalldataWithAccounts} — the mirror of {@link PortalCalldataWithAccounts}. */
+export interface PortalCalldataWithAccountsInput {
+    /** The wrapped instruction data — for a Sauce call, the `execute_from_account` payload. */
+    instructionData: Uint8Array;
+    /** The attached account metas, in order. */
+    accounts: readonly PortalAccountMeta[];
+    /** The envelope's own `account_count` field. Defaults to `accounts.length` — see the decoder's own
+     *  comment on why this is not asserted equal to `accounts.length` here either; a caller with a
+     *  different convention (e.g. excluding a leading buffer account) can override it explicitly. */
+    accountCount?: number;
+}
+/**
+ * Encodes a Portal `CalldataWithAccounts` envelope — the exact inverse of
+ * {@link decodePortalCalldataWithAccounts}, sharing its codec byte-for-byte (both are built from the
+ * same field list above), so encoder and decoder cannot drift apart. This is what a route `Call.data`
+ * for a staged SVM Sauce execution looks like on the wire.
+ */
+export declare function encodePortalCalldataWithAccounts(input: PortalCalldataWithAccountsInput): `0x${string}`;
 /** An intent call, duck-typed to the one field this reads. Matches eco-solver's `Call` / persisted
  *  `IntentCall` (both carry `data` as viem `Hex`). */
 export interface SvmIntentCallLike {

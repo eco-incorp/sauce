@@ -132,11 +132,14 @@
  * - a direction with NO shipped boundaries and no edge (readable === 0) —
  *   wired via SvmWindowDriftError like orca-whirlpool/meteora-dlmm.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from '../orca-whirlpool/tick-math.js';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'crema';
 export const CREMA_PROGRAM_ID = address('CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR');
@@ -230,21 +233,20 @@ function getAddressEncoded(value: Address): Uint8Array {
   return new Uint8Array(getAddressCodec().encode(value));
 }
 async function deriveTickArrayMapPda(pool: Address): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: CREMA_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('tick_array_map'), getAddressEncoded(pool)],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(CREMA_PROGRAM_ID, [
+    new TextEncoder().encode('tick_array_map'),
+    getAddressEncoded(pool),
+  ]);
 }
 async function deriveTickArrayPda(pool: Address, arrayIndex: number): Promise<Address> {
   const idxBytes = new Uint8Array(2);
   idxBytes[0] = arrayIndex & 0xff;
   idxBytes[1] = (arrayIndex >> 8) & 0xff;
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: CREMA_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), idxBytes],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(CREMA_PROGRAM_ID, [
+    new TextEncoder().encode('tick_array'),
+    getAddressEncoded(pool),
+    idxBytes,
+  ]);
 }
 
 /** floor division toward negative infinity (Crema's own TickUtil.getMinIndex/getArrayIndex). */
@@ -319,10 +321,22 @@ async function resolveWindow(
   const tickArrays = (await Promise.all(arrayIndices.map((idx) => deriveTickArrayPda(pool, idx)))) as [Address, Address, Address];
   const startTicks = arrayIndices.map((idx) => startTickOf(idx, tickSpacing)) as [number, number, number];
 
+  // Batch the whole window into ONE coalesced round instead of an outward
+  // serial walk: `arrayIndices` (and thus every tick-array PDA above) is fully
+  // enumerated from the bitmap + monotonic pad before any load, so nothing
+  // here depends on a prior array's bytes. Registering every load()
+  // synchronously lets the coalescing loader fold them into a single
+  // getMultipleAccounts. allSettled preserves the break-on-first-invalid
+  // contract exactly — a rejection is re-thrown only if the readable prefix
+  // reaches it, and a miss/rejection past the break (incl. the padded
+  // duplicate-PDA slots) degrades to the same readable prefix as before.
+  const loaded = await Promise.allSettled(tickArrays.map((addr) => load(addr)));
   const arrays: Uint8Array[] = [];
   let readable = 0;
   for (let i = 0; i < CREMA_MAX_ARRAYS; i++) {
-    const data = await load(tickArrays[i]!);
+    const settled = loaded[i]!;
+    if (settled.status === 'rejected') throw settled.reason;
+    const data = settled.value;
     const valid =
       data !== null &&
       data.length === TICK_ARRAY_ACCOUNT_SIZE &&
@@ -395,12 +409,24 @@ export async function fetchCremaPoolConfig(load: AccountLoader, pool: Address): 
   const clmmConfig = codec.decode(data.subarray(OFF_CLMM_CONFIG, OFF_CLMM_CONFIG + 32)) as Address;
   const tokenMintA = codec.decode(data.subarray(OFF_MINT_A, OFF_MINT_A + 32)) as Address;
   const tokenMintB = codec.decode(data.subarray(OFF_MINT_B, OFF_MINT_B + 32)) as Address;
-  for (const mint of [tokenMintA, tokenMintB]) {
-    const mintData = await load(mint);
-    if (mintData === null) throw new Error(`${SLUG}: mint ${mint} of pool ${pool} not found`);
-    // The swap ix's token_program account is a single fixed program (Tokenkeg) — classic SPL only.
-    if (mintData.length !== 82) {
-      throw new Error(`${SLUG}: pool ${pool} mint ${mint} is not a classic SPL mint (swap is Tokenkeg-only)`);
+  // The swap ix's token_program account is a single fixed program (Tokenkeg) —
+  // legacy-SPL only. A Token-2022 mint (or one carrying an un-routable extension)
+  // SELF-DROPS this pool: the thrown error is the graceful-drop signal the
+  // SvmRoute orchestrator catches. An unreadable mint falls back to the legacy
+  // assumption (a classic 82-byte mint classifies legacy → no throw → config
+  // built byte-identically to before).
+  const mintList = [tokenMintA, tokenMintB];
+  const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+  for (let mi = 0; mi < mintList.length; mi++) {
+    const mint = mintList[mi]!;
+    const mintData = mintDatas[mi];
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
     }
   }
 
