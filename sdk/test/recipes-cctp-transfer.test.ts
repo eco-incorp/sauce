@@ -60,30 +60,27 @@ describe("cctp-transfer — Base→Arbitrum, DSL-native (no hardcoded ABIs/addre
     expect(built.source.slug).toBe("base");
   });
 
-  it("handles a non-even split: full chunks PLUS a remainder burn — the whole amount moves, no truncation", () => {
-    // $2.50 at a $1 cap -> 2×$1 full burns + one $0.50 remainder burn. Previously this threw
-    // ("must be a multiple of perMessageLimit"); it must now build atomically instead of dropping $0.50.
+  it("a non-even amount builds atomically — the SCRIPT drains the remainder, no divisibility assumption", () => {
+    // $2.50 at a $1 cap -> $1 + $1 + $0.50, split on-chain. The builder used to REJECT this ("must be
+    // a multiple of perMessageLimit"); it now just hands the script `amount` + `chunkSize`.
     const built = buildCctpSplitTransfer(params({ amount: 2_500_000n }));
     expect(built.intents()).toHaveLength(1);
-    expect(built.intent.route.calls).toHaveLength(1); // still ONE atomic V12Pot.cook
+    expect(built.intent.route.calls).toHaveLength(1); // one atomic V12Pot.cook
+    expect(bytesToHex(built.compiled.bytecode[0]!).slice(2).includes(DEPOSIT_FOR_BURN)).toBe(true);
+  });
+
+  it("splits at RUNTIME: ONE depositForBurn call site drives the drain loop (not one baked per chunk)", () => {
+    // 10 chunks' worth, yet the program carries a single depositForBurn — the burn count is decided
+    // on-chain from amount/chunkSize, so the interface is `pass the total, the script splits`.
+    const built = buildCctpSplitTransfer(params({ amount: 10_000_000n }));
     const hex = bytesToHex(built.compiled.bytecode[0]!).slice(2);
-    // Two depositForBurn call sites compile in: the loop body + the guarded remainder burn — so the
-    // remainder is accounted for in the program, not silently truncated.
-    expect(hex.split(DEPOSIT_FOR_BURN).length - 1).toBe(2);
+    expect(hex.split(DEPOSIT_FOR_BURN).length - 1).toBe(1);
   });
 
-  it("an exact multiple still builds (remainder guard is skipped at runtime)", () => {
-    const built = buildCctpSplitTransfer(params({ amount: 2_000_000n })); // $2 at $1 cap -> 2×$1, no remainder
+  it("a sub-cap amount builds too (the loop's single, final burn)", () => {
+    const built = buildCctpSplitTransfer(params({ amount: 500_000n })); // $0.50 < $1 cap
     expect(built.intent.route.calls).toHaveLength(1);
-    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
-  });
-
-  it("bakes the actual remainder VALUE into the program (not always zero)", () => {
-    // Both amounts give count = 2 full $1 chunks; they differ ONLY in the remainder ($0 vs $0.50).
-    // So a byte difference proves the remainder is a real baked input, not silently dropped/zeroed.
-    const even = bytesToHex(buildCctpSplitTransfer(params({ amount: 2_000_000n })).compiled.bytecode[0]!);
-    const odd = bytesToHex(buildCctpSplitTransfer(params({ amount: 2_500_000n })).compiled.bytecode[0]!);
-    expect(odd).not.toBe(even);
+    expect(bytesToHex(built.compiled.bytecode[0]!).slice(2).includes(DEPOSIT_FOR_BURN)).toBe(true);
   });
 
   it("rejects a non-positive amount or per-message limit", () => {

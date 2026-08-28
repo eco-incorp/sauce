@@ -72,17 +72,6 @@ export interface CctpTransferParams {
   readonly reward: RewardArg;
 }
 
-/**
- * Splits `amount` into as many full `limit`-sized chunks as fit, plus whatever is left over
- * (`0 <= remainder < limit`). The recipe burns the `count` full chunks in its loop and, when
- * `remainder > 0`, one final sub-limit burn — so the ENTIRE amount moves regardless of whether it
- * divides evenly by the per-message cap (`$2.50` at a `$1` cap → 2×`$1` + `$0.50`).
- */
-function splitChunks(amount: bigint, limit: bigint): { count: bigint; chunk: bigint; remainder: bigint } {
-  if (limit <= 0n || amount <= 0n) throw new Error("cctp-transfer: amount and perMessageLimit must be > 0");
-  return { count: amount / limit, chunk: limit, remainder: amount % limit };
-}
-
 function common(params: CctpTransferParams) {
   return {
     pot: params.pot,
@@ -97,23 +86,25 @@ function common(params: CctpTransferParams) {
 }
 
 /**
- * WITH CCTP — one intent whose route burns `amount` via a for-loop of `count` full sub-limit
- * `depositForBurn`s plus one final `remainder` burn when the amount doesn't divide evenly by the
- * cap, atomic in one cook. Fulfilled locally on the source chain, so the intent's destination IS
- * its source. `main(recipient, chunk, count, remainder, destinationDomain, maxFee)` is baked with
- * this intent's values as compile-time `args`.
+ * WITH CCTP — one intent whose route drains `amount` in `depositForBurn`s capped at
+ * `perMessageLimit` (the script splits: full-cap burns until the last, which takes the remainder),
+ * atomic in one cook. Fulfilled locally on the source chain, so the intent's destination IS its
+ * source. The builder hands the program only its two numbers; `main(recipient, amount, chunkSize,
+ * destinationDomain, maxFee)` is baked with this intent's values as compile-time `args`.
  */
 export function buildCctpSplitTransfer(params: CctpTransferParams): BuiltIntent {
   const dest = requireChain(params.to);
   const destDomain = CCTP_DOMAIN[dest.slug];
   if (destDomain === undefined) throw new Error(`cctp-transfer: no CCTP domain registered for destination '${dest.slug}'`);
-  const { count, chunk, remainder } = splitChunks(params.amount, params.perMessageLimit);
+  if (params.amount <= 0n || params.perMessageLimit <= 0n) {
+    throw new Error("cctp-transfer: amount and perMessageLimit must be > 0");
+  }
   const recipient = toBig(params.recipient);
   const maxFee = params.maxFeePerChunk ?? 0n;
 
   return openRoute(params.from, cctpSplitSource(), {
     ...common(params),
-    compile: { args: [recipient, chunk, count, remainder, BigInt(destDomain), maxFee] },
+    compile: { args: [recipient, params.amount, params.perMessageLimit, BigInt(destDomain), maxFee] },
   }).reward(params.reward);
 }
 

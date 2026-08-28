@@ -1,12 +1,17 @@
 /**
- * cctp-split — split a USDC transfer into full sub-limit CCTP burns plus a final remainder burn,
- * ATOMIC in one Sauce cook.
+ * cctp-split — move a USDC `amount` in CCTP burns capped at `chunkSize`, ATOMIC in one Sauce cook.
  *
- * `main` is parameterized; the recipe builder (`recipes/cctp-transfer.ts`) bakes THIS intent's
- * concrete values in as compile-time `args` — the compiler rewrites `main(recipient, chunk, ...)`
- * into a no-arg `main` that opens with those literals — so the shipped bytecode carries no runtime
- * inputs, and the program stays a readable, standalone asset instead of a string assembled in
- * TypeScript. Same shape as `settle.sauce.ts`.
+ * The INTERFACE is the whole point: you pass the TOTAL `amount` and the per-message `chunkSize`, and
+ * THE SCRIPT does the splitting — it burns `chunkSize` at a time until the amount is drained, the
+ * last burn taking whatever is left (`< chunkSize`). No divisibility assumption, no remainder dropped:
+ * `$2.50` at a `$1` cap becomes `$1 + $1 + $0.50`. The TypeScript builder computes nothing; it only
+ * hands the script its two numbers.
+ *
+ * `main` is parameterized; the builder (`recipes/cctp-transfer.ts`) bakes THIS intent's concrete
+ * values in as compile-time `args`. The compiler pushes them via a call prologue and `main` receives
+ * them as ordinary runtime params, so the drain `while` loop is real runtime control flow — the burn
+ * count is decided on-chain from `amount`/`chunkSize`, not precomputed off-chain. Standalone asset,
+ * not a string assembled in TypeScript. Same shape as `settle.sauce.ts`.
  *
  * DSL-NATIVE, ZERO HARDCODING — no ABI, no address:
  *   • `USDC` resolves to the source chain's USDC address from the token registry.
@@ -14,26 +19,22 @@
  *     descriptor.
  *   • `Cctp_TokenMessenger` (the approve spender) is that same address, auto-injected as an ambient
  *     define.
- * One approval for the whole batch, then the burns against it — if any burn reverts (e.g. it
+ * One approval for the whole amount, then the burns against it — if any burn reverts (e.g. it
  * exceeds Circle's per-message cap) the entire source-chain tx reverts (all-or-nothing).
- *
- * The split is `count` full `chunk`-sized burns plus, when `amount` is NOT an exact multiple of the
- * per-message cap, ONE final `remainder` burn (`0 < remainder < chunk`) so the whole `amount` moves
- * — never a truncated total. `count`/`chunk`/`remainder` arrive as runtime params (the compiler
- * pushes the baked `args` via a call prologue; `main` is a normal function receiving them), so the
- * loop and the remainder guard are ordinary runtime control flow — a zero remainder simply skips
- * the extra burn.
  *
  * Params are intentionally UNANNOTATED: the DSL accessor rewrite that resolves `USDC`/`Cctp` is
  * acorn-based (plain JS), so a `.sauce.ts` routed through it must carry no TypeScript type syntax.
  */
-function main(recipient, chunk, count, remainder, destinationDomain, maxFee) {
-  USDC.approve(Cctp_TokenMessenger, chunk * count + remainder);
-  for (let i = 0n; i < count; i = i + 1n) {
-    Cctp.TokenMessenger.depositForBurn(chunk, destinationDomain, recipient, USDC, 0n, maxFee, 0n);
-  }
-  if (remainder > 0n) {
-    Cctp.TokenMessenger.depositForBurn(remainder, destinationDomain, recipient, USDC, 0n, maxFee, 0n);
+function main(recipient, amount, chunkSize, destinationDomain, maxFee) {
+  USDC.approve(Cctp_TokenMessenger, amount);
+  let remaining = amount;
+  while (remaining > 0n) {
+    let burnAmount = chunkSize;
+    if (remaining < chunkSize) {
+      burnAmount = remaining;
+    }
+    Cctp.TokenMessenger.depositForBurn(burnAmount, destinationDomain, recipient, USDC, 0n, maxFee, 0n);
+    remaining = remaining - burnAmount;
   }
   return 0n;
 }
