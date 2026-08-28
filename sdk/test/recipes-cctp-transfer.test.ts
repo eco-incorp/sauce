@@ -60,7 +60,7 @@ describe("cctp-transfer — Base→Arbitrum, DSL-native (no hardcoded ABIs/addre
     expect(built.source.slug).toBe("base");
   });
 
-  it("a non-even amount builds atomically — the SCRIPT drains the remainder, no divisibility assumption", () => {
+  it("a non-even amount builds atomically — the SCRIPT handles the remainder, no divisibility assumption", () => {
     // $2.50 at a $1 cap -> $1 + $1 + $0.50, split on-chain. The builder used to REJECT this ("must be
     // a multiple of perMessageLimit"); it now just hands the script `amount` + `chunkSize`.
     const built = buildCctpSplitTransfer(params({ amount: 2_500_000n }));
@@ -69,15 +69,15 @@ describe("cctp-transfer — Base→Arbitrum, DSL-native (no hardcoded ABIs/addre
     expect(bytesToHex(built.compiled.bytecode[0]!).slice(2).includes(DEPOSIT_FOR_BURN)).toBe(true);
   });
 
-  it("splits at RUNTIME: ONE depositForBurn call site drives the drain loop (not one baked per chunk)", () => {
-    // 10 chunks' worth, yet the program carries a single depositForBurn — the burn count is decided
-    // on-chain from amount/chunkSize, so the interface is `pass the total, the script splits`.
+  it("splits at RUNTIME: exactly TWO depositForBurn sites (full-chunk loop + remainder), not one per chunk", () => {
+    // 10 chunks' worth, yet the program carries exactly two depositForBurn call sites — the loop body
+    // and the remainder burn — so count = amount / chunkSize is computed ON-CHAIN, not unrolled.
     const built = buildCctpSplitTransfer(params({ amount: 10_000_000n }));
     const hex = bytesToHex(built.compiled.bytecode[0]!).slice(2);
-    expect(hex.split(DEPOSIT_FOR_BURN).length - 1).toBe(1);
+    expect(hex.split(DEPOSIT_FOR_BURN).length - 1).toBe(2);
   });
 
-  it("a sub-cap amount builds too (the loop's single, final burn)", () => {
+  it("a sub-cap amount builds too (count = 0, just the remainder burn)", () => {
     const built = buildCctpSplitTransfer(params({ amount: 500_000n })); // $0.50 < $1 cap
     expect(built.intent.route.calls).toHaveLength(1);
     expect(bytesToHex(built.compiled.bytecode[0]!).slice(2).includes(DEPOSIT_FOR_BURN)).toBe(true);
