@@ -131,8 +131,11 @@ export const stabbleStableSwap: SvmVenueAdapter = {
     // byte-identical legacy path. (The previous "guard" cited in the module doc
     // was a dead no-op in stabble-common's decodeStabblePoolCommon; this is the
     // real, data-shape-based detection.)
-    for (const mint of [tokenA.mint, tokenB.mint]) {
-      const mintData = await load(mint);
+    const _mints = [tokenA.mint, tokenB.mint];
+    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    for (let _i = 0; _i < _mints.length; _i++) {
+      const mint = _mints[_i]!;
+      const mintData = _mintDatas[_i]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

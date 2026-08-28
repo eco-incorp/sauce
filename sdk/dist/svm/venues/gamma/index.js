@@ -183,11 +183,14 @@ export async function fetchGammaPoolConfig(load, pool) {
         inputIsToken0: true,
     };
     // Vault integrity: each pool vault must exist and hold the declared mint.
-    for (const [vault, mint] of [
+    const vaultEntries = [
         [cfg.token0Vault, cfg.token0Mint],
         [cfg.token1Vault, cfg.token1Mint],
-    ]) {
-        const vaultData = await load(vault);
+    ];
+    const vaultDatas = await Promise.all(vaultEntries.map(([vault]) => load(vault)));
+    for (let vi = 0; vi < vaultEntries.length; vi++) {
+        const [vault, mint] = vaultEntries[vi];
+        const vaultData = vaultDatas[vi];
         if (vaultData === null)
             throw new Error(`${SLUG} vault ${vault} not found`);
         if (vaultData.length < VAULT_AMOUNT_OFFSET + 8) {

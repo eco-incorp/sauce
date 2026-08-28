@@ -114,8 +114,11 @@ export const raydiumAmmV4 = {
         // The legacy path stays byte-identical: a classic 82-byte mint classifies as
         // legacy → no throw, and an unreadable mint (not vendored by a fixture) falls
         // back to legacy (this keeps the existing vault-only fixtures green).
-        for (const mint of [coinMint, pcMint]) {
-            const mintData = await load(mint);
+        const mints = [coinMint, pcMint];
+        const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+        for (let mi = 0; mi < mints.length; mi++) {
+            const mint = mints[mi];
+            const mintData = mintDatas[mi];
             if (mintData === null)
                 continue;
             if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

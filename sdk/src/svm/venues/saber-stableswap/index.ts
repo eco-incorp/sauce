@@ -191,8 +191,11 @@ export const saberStableswap: SvmVenueAdapter = {
     // signal (SvmRoute drops the venue on a fetchPoolConfig throw). An
     // unreadable mint falls back to the legacy assumption, leaving the
     // byte-identical legacy path intact.
-    for (const mint of [mintA, mintB]) {
-      const mintData = await load(mint);
+    const mints = [mintA, mintB];
+    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    for (let mi = 0; mi < mints.length; mi++) {
+      const mint = mints[mi]!;
+      const mintData = mintDatas[mi]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
         throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

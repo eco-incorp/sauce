@@ -299,8 +299,11 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
   // graceful-drop signal (the SvmRoute orchestrator catches a fetchPoolConfig
   // throw and drops the venue). An unreadable mint falls back to the legacy
   // assumption, keeping the classic 82-byte path byte-identical.
-  for (const mint of [baseMint, quoteMint]) {
-    const mintData = await load(mint);
+  const _mints = [baseMint, quoteMint];
+  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const mint = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
@@ -318,11 +321,14 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
     fetchDecimals(load, quoteMint),
   ]);
 
-  for (const [role, vault, mint] of [
+  const _vaults = [
     ['base', baseVault, baseMint],
     ['quote', quoteVault, quoteMint],
-  ] as const) {
-    const vaultData = await load(vault);
+  ] as const;
+  const _vaultDatas = await Promise.all(_vaults.map(([, vault]) => load(vault)));
+  for (let _i = 0; _i < _vaults.length; _i++) {
+    const [role, vault, mint] = _vaults[_i]!;
+    const vaultData = _vaultDatas[_i]!;
     if (vaultData === null) throw new Error(`${SLUG} pool ${pool}: derived ${role} vault ${vault} does not exist`);
     if (vaultData.length < VAULT_MIN_SIZE) {
       throw new Error(`${SLUG} pool ${pool}: ${role} vault ${vault} is ${vaultData.length} bytes, not an SPL token account`);

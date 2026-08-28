@@ -171,8 +171,11 @@ export async function fetchMetaDaoFutarchySpotConfig(load: AccountLoader, pool: 
   // Token-2022 mint (or one carrying an un-routable extension) by throwing — the
   // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue. An
   // unreadable mint falls back to the legacy assumption (keeps existing tests green).
-  for (const mint of [baseMint, quoteMint]) {
-    const mintData = await load(mint);
+  const _mints = [baseMint, quoteMint];
+  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const mint = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

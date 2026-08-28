@@ -184,8 +184,11 @@ export async function fetchOmnipairPoolConfig(load: AccountLoader, pool: Address
   // data-shape resolver and SELF-DROP the pool (the thrown error is the
   // graceful-drop signal the SvmRoute orchestrator catches). The LEGACY path is
   // byte-identical: a classic 82-byte mint classifies Tokenkeg with no extensions.
-  for (const mint of [token0Mint, token1Mint]) {
-    const mintData = await load(mint);
+  const mints = [token0Mint, token1Mint];
+  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  for (let mi = 0; mi < mints.length; mi++) {
+    const mint = mints[mi]!;
+    const mintData = mintDatas[mi]!;
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

@@ -208,8 +208,11 @@ export async function fetchDenaliPoolConfig(load: AccountLoader, pool: Address):
   // graceful-drop signal (the SvmRoute orchestrator catches it and drops the
   // venue). An unreadable mint falls back to the legacy assumption, keeping the
   // classic 82-byte path byte-identical.
-  for (const mint of [mintA, mintB]) {
-    const mintData = await load(mint);
+  const mintList = [mintA, mintB];
+  const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+  for (let mi = 0; mi < mintList.length; mi++) {
+    const mint = mintList[mi]!;
+    const mintData = mintDatas[mi];
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

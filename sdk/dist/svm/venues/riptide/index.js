@@ -94,8 +94,11 @@ export async function fetchPoolConfig(load, pool, direction = 0) {
     // thrown error is the graceful-drop signal (SvmRoute catches a
     // fetchPoolConfig throw and drops the venue). An unreadable mint falls back
     // to the legacy assumption, keeping the byte-identical legacy path.
-    for (const mint of [mintA, mintB]) {
-        const mintData = await load(mint);
+    const mints = [mintA, mintB];
+    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    for (let mi = 0; mi < mints.length; mi++) {
+        const mint = mints[mi];
+        const mintData = mintDatas[mi];
         if (mintData === null)
             continue;
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

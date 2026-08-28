@@ -244,8 +244,11 @@ export const binaryfi = {
         // signal the SvmRoute orchestrator catches. An unreadable mint falls back to
         // the legacy assumption (a classic 82-byte mint classifies legacy → no throw
         // → config built byte-identically to before).
-        for (const mint of [assetMint, quoteMint]) {
-            const mintData = await load(mint);
+        const mintList = [assetMint, quoteMint];
+        const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+        for (let mi = 0; mi < mintList.length; mi++) {
+            const mint = mintList[mi];
+            const mintData = mintDatas[mi];
             if (mintData === null)
                 continue;
             if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
@@ -260,11 +263,14 @@ export const binaryfi = {
         if (floorRate === undefined) {
             throw new Error(`binaryfi market ${pool}: no calibrated floor rate for asset mint ${assetMint} — refresh sdk/src/svm/venues/binaryfi/asset-configs.ts`);
         }
-        for (const [role, vault] of [
+        const vaultEntries = [
             ['asset', assetVault],
             ['quote', quoteVault],
-        ]) {
-            const vaultBytes = await load(vault);
+        ];
+        const vaultDatas = await Promise.all(vaultEntries.map(([, vault]) => load(vault)));
+        for (let vi = 0; vi < vaultEntries.length; vi++) {
+            const [role, vault] = vaultEntries[vi];
+            const vaultBytes = vaultDatas[vi];
             if (vaultBytes === null)
                 throw new Error(`binaryfi market ${pool}: ${role}Vault ${vault} does not exist`);
             if (vaultBytes.length !== SPL_TOKEN_ACCOUNT_SIZE) {

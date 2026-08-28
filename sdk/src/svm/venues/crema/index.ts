@@ -415,8 +415,11 @@ export async function fetchCremaPoolConfig(load: AccountLoader, pool: Address): 
   // SvmRoute orchestrator catches. An unreadable mint falls back to the legacy
   // assumption (a classic 82-byte mint classifies legacy → no throw → config
   // built byte-identically to before).
-  for (const mint of [tokenMintA, tokenMintB]) {
-    const mintData = await load(mint);
+  const mintList = [tokenMintA, tokenMintB];
+  const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+  for (let mi = 0; mi < mintList.length; mi++) {
+    const mint = mintList[mi]!;
+    const mintData = mintDatas[mi];
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);

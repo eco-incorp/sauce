@@ -149,8 +149,11 @@ export async function fetchTesseraVConfig(load, pool, direction) {
     // mint per side and GRACEFULLY SELF-DROP the pool (the SvmRoute orchestrator
     // catches a fetchPoolConfig throw and drops the venue). The LEGACY path is
     // byte-identical; an unreadable mint falls back to the legacy assumption.
-    for (const mint of [mintA, mintB]) {
-        const mintData = await load(mint);
+    const _mints = [mintA, mintB];
+    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    for (let _i = 0; _i < _mints.length; _i++) {
+        const mint = _mints[_i];
+        const mintData = _mintDatas[_i];
         if (mintData === null)
             continue;
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

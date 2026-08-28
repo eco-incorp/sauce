@@ -150,10 +150,16 @@ export function windowStartTicks(tickCurrentIndex, tickSpacing, aToB) {
 async function resolveWindow(load, pool, tickCurrentIndex, tickSpacing, aToB) {
     const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, aToB);
     const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start))));
+    // allSettled (not all) keeps the break-on-first-invalid contract exact: a
+    // rejection is re-thrown only if the readable prefix actually reaches it.
+    const loaded = await Promise.allSettled(tickArrays.map((a) => load(a)));
     const arrays = [];
     let readable = 0;
     for (let i = 0; i < 3; i++) {
-        const data = await load(tickArrays[i]);
+        const settled = loaded[i];
+        if (settled.status === 'rejected')
+            throw settled.reason;
+        const data = settled.value;
         const valid = data !== null &&
             data.length >= TICK_ARRAY_ACCOUNT_SIZE &&
             hasDiscriminator(data, TICK_ARRAY_DISCRIMINATOR) &&
@@ -239,8 +245,11 @@ export async function fetchOrcaWhirlpoolConfig(load, pool) {
     // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
     // Tokenkeg, parses no extensions, and the config is built unchanged. An
     // unreadable mint falls back to the legacy assumption (keeps fixtures green).
-    for (const mint of [tokenMintA, tokenMintB]) {
-        const mintData = await load(mint);
+    const mints = [tokenMintA, tokenMintB];
+    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    for (let mi = 0; mi < mints.length; mi++) {
+        const mint = mints[mi];
+        const mintData = mintDatas[mi];
         if (mintData === null)
             continue;
         if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {

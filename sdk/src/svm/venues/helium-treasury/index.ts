@@ -233,8 +233,11 @@ export async function fetchHeliumTreasuryPoolConfig(load: AccountLoader, pool: A
   // error is the graceful-drop signal the SvmRoute orchestrator catches). The
   // LEGACY path is byte-identical: a classic 82-byte mint classifies Tokenkeg
   // with no extensions.
-  for (const mint of [treasuryMint, supplyMint]) {
-    const mintData = await load(mint);
+  const _mints = [treasuryMint, supplyMint];
+  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const mint = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
       throw new Error(`${SLUG}: dropping treasury ${pool} — mint ${mint} is Token-2022 (this venue's redeem is legacy-SPL only)`);
