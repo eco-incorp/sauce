@@ -88,6 +88,7 @@
  */
 import { address, getAddressDecoder } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 export const HEAVEN_PROGRAM_ID = address('HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o');
 const CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
 const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
@@ -284,8 +285,33 @@ async function fetchHeavenPoolConfig(load, pool) {
     if (anySlotWindowActive(data, OFF_SLOT_FEES_BASE, slotsSinceCreation) || anySlotWindowActive(protocolConfigData, PROTOCOL_CONFIG_SLOT_FEES_BASE, slotsSinceCreation)) {
         throw new Error(`heaven pool ${pool} is within its anti-snipe slot-offset window (created_at_slot ${createdAtSlot}, current ${currentSlot}) — fee schedule is not modeled during this window`);
     }
+    // Un-routable extension self-drop: a NonTransferable or DefaultAccountState=
+    // frozen mint genuinely cannot be swapped through a plain transferChecked, so
+    // drop the whole pool. PermanentDelegate / ConfidentialTransfer are advisories
+    // (routable), never blocking — parseMintExtensions already scopes this
+    // correctly. Legacy (82-byte) mints and token_b (gated to wrapped SOL) parse
+    // to blocking:[], so this is a no-op on the legacy path.
+    for (const [mintData, mint, side] of [
+        [tokenAMintData, tokenAMint, 'token_a'],
+        [tokenBMintData, tokenBMint, 'token_b'],
+    ]) {
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`heaven pool ${pool}: ${side} mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
+    }
     const tokenAFeeBps = tokenAProgram === TOKEN_2022_PROGRAM ? activeTransferFeeBps(tokenAMintData, tokenAMint, currentEpoch) : 0n;
     const tokenBFeeBps = tokenBProgram === TOKEN_2022_PROGRAM ? activeTransferFeeBps(tokenBMintData, tokenBMint, currentEpoch) : 0n;
+    // A ZERO effective-bps Token-2022 mint (e.g. LIGHT's scheduled fee REMOVAL —
+    // see activeTransferFeeBps's doc) ROUTES with a quote byte-identical to legacy.
+    // Only an ACTIVE (nonzero) fee self-drops.
+    // TODO(t22-fee-netting): net the fee on both legs in the consuming app's Heaven
+    // quote fragment (POOL receives net(amountIn, feeOfInputMint); USER receives
+    // net(grossOut, feeOfOutputMint)) instead of self-dropping. This fetch-only
+    // adapter has no referenceQuote here (Heaven's 5-fee-type virtual-reserve quote
+    // lives in the consuming app), so netting it in-repo is not possible with
+    // confidence — kept as a self-drop (safe self-limit; a wrong netting would
+    // silently mis-quote).
     if (tokenAFeeBps > 0n || tokenBFeeBps > 0n) {
         throw new Error(`heaven pool ${pool}: an ACTIVE Token-2022 transfer fee is configured (token_a ${tokenAFeeBps} bps, token_b ${tokenBFeeBps} bps) — vault deltas would not match user amounts`);
     }

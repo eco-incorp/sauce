@@ -176,6 +176,12 @@ export function makeSplTokenSwapForkAdapter(slug, programId, unresolvedGate) {
                 venue: slug,
                 pool,
                 swapAuthority: deriveSwapAuthority(programId, pool, bumpSeed),
+                // token_program_id @3 — the classic spl-token-swap `Swap` ix takes ONE
+                // token program used for BOTH vaults and the pool mint, so a per-side
+                // program does not exist for this family: a pool mixing legacy + T22
+                // mints cannot function under this program. This reads the pool's own
+                // stored program (legacy OR Token-2022), so a T22 pool threads T22 here
+                // with no hardcoded-legacy assumption — buildSwap forwards it verbatim.
                 tokenProgram: pubkey(3),
                 vaultIn: pubkey(35),
                 vaultOut: pubkey(67),

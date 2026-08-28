@@ -33,5 +33,6 @@ npm-debug.log*
 coverage/
 lcov.info
 
-# Rust compiler WASM built from the sauce-next dep (build-wasm.mjs); never committed
+# The Rust SauceScript compiler, built from the SHA-pinned sauce-next dep by
+# sdk/scripts/build-wasm.mjs. Generated, never committed.
 sdk/.sauce-wasm/

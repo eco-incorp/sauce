@@ -1,0 +1,238 @@
+import { formatAddressField, formatBigint } from "./format.js";
+function uintExtra(bits, defaultValue = 0n) {
+    const max = 2n ** BigInt(bits);
+    return {
+        defaultValue,
+        normalize(value, fieldName) {
+            const v = typeof value === "bigint" ? value : BigInt(value);
+            if (v < 0n || v >= max) {
+                throw new Error(`${fieldName}: expected a uint${bits} (0 <= x < ${max}), got ${v}`);
+            }
+            return v;
+        },
+    };
+}
+function addressExtra(defaultValue = 0n) {
+    return {
+        defaultValue,
+        normalize(value, fieldName) {
+            if (typeof value === "bigint")
+                return value;
+            if (typeof value === "number")
+                throw new Error(`${fieldName}: expected an address, got a number`);
+            return BigInt(value);
+        },
+    };
+}
+function tokenLiteral(d) {
+    if (d.token === null)
+        throw new Error("deposit template: token is required but was not resolved");
+    return formatBigint(d.token);
+}
+function beneficiaryLiteral(d) {
+    if (d.beneficiary === null) {
+        throw new Error("deposit template: beneficiary is required but was not resolved");
+    }
+    return formatAddressField(d.beneficiary);
+}
+/** WETH9's two well-known selectors — there is no vendored SDK ABI for WETH; see the module doc's
+ *  `skippedProtocols` note for the full audit establishing that and why these constants are used
+ *  instead of inventing a tracked artifact. Pinned against `toFunctionSelector` in `deposit.test.ts`. */
+const WETH_DEPOSIT_SELECTOR = [0xd0, 0xe3, 0x0d, 0xb0]; // deposit()
+const WETH_WITHDRAW_SELECTOR = [0x2e, 0x1a, 0x7d, 0x4d]; // withdraw(uint256)
+const LIDO_SUBMIT_SELECTOR = [0xa1, 0x90, 0x3e, 0xab]; // submit(address)
+function bytesLiteral(bytes) {
+    return `Uint8Array.from([${bytes.join(", ")}])`;
+}
+/** A raw calldata expression: selector bytes, plus (if `wordExpr` is given) one abi-encoded word
+ *  concatenated on — either a literal 32-byte word (compile-time amount/address) or a runtime
+ *  `abi.encode(<expr>)` call. */
+function rawCalldata(selector, wordExpr) {
+    if (wordExpr === undefined)
+        return bytesLiteral(selector);
+    return `${bytesLiteral(selector)}.concat(abi.encode(${wordExpr}))`;
+}
+function aavePoolSupplyTemplate(protocol, exportName) {
+    const binding = protocol === "aave-v3" ? "IAavePool" : "ISparkPool";
+    return {
+        protocol,
+        action: "supply",
+        source: { module: `protocols/${protocol}/abis.ts`, exportName },
+        signature: "supply(address,uint256,address,uint16)",
+        selector: "0x617ba037",
+        funding: "erc20-approve",
+        beneficiary: "supported",
+        allowsMaxAmount: false,
+        imports: [`import { ${binding} } from "./protocols/${protocol}/${exportName}.json";`],
+        binding,
+        extras: { referralCode: uintExtra(16, 0n) },
+        emit(d, amountExpr) {
+            const referral = formatBigint(d.extra.referralCode ?? 0n);
+            return [
+                `${binding}.at(${formatBigint(d.target)}).supply(${tokenLiteral(d)}, ${amountExpr}, ${beneficiaryLiteral(d)}, ${referral});`,
+            ];
+        },
+    };
+}
+function aavePoolWithdrawTemplate(protocol, exportName) {
+    const binding = protocol === "aave-v3" ? "IAavePool" : "ISparkPool";
+    return {
+        protocol,
+        action: "withdraw",
+        source: { module: `protocols/${protocol}/abis.ts`, exportName },
+        signature: "withdraw(address,uint256,address)",
+        selector: "0x69328dec",
+        funding: "none",
+        beneficiary: "supported",
+        allowsMaxAmount: true,
+        imports: [`import { ${binding} } from "./protocols/${protocol}/${exportName}.json";`],
+        binding,
+        extras: {},
+        emit(d, amountExpr) {
+            return [
+                `${binding}.at(${formatBigint(d.target)}).withdraw(${tokenLiteral(d)}, ${amountExpr}, ${beneficiaryLiteral(d)});`,
+            ];
+        },
+    };
+}
+export const DEPOSIT_TEMPLATES = {
+    "aave-v3:supply": aavePoolSupplyTemplate("aave-v3", "PoolABI"),
+    "aave-v3:withdraw": aavePoolWithdrawTemplate("aave-v3", "PoolABI"),
+    "spark:supply": aavePoolSupplyTemplate("spark", "SparkPoolABI"),
+    "spark:withdraw": aavePoolWithdrawTemplate("spark", "SparkPoolABI"),
+    "compound-v3:supply": {
+        protocol: "compound-v3",
+        action: "supply",
+        source: { module: "protocols/compound-v3/abis.ts", exportName: "CometABI" },
+        signature: "supplyTo(address,address,uint256)",
+        selector: "0x4232cd63",
+        funding: "erc20-approve",
+        beneficiary: "supported",
+        allowsMaxAmount: false,
+        imports: [`import { IComet } from "./protocols/compound-v3/CometABI.json";`],
+        binding: "IComet",
+        extras: {},
+        emit(d, amountExpr) {
+            return [
+                `IComet.at(${formatBigint(d.target)}).supplyTo(${beneficiaryLiteral(d)}, ${tokenLiteral(d)}, ${amountExpr});`,
+            ];
+        },
+    },
+    "euler-v2:deposit": {
+        protocol: "euler-v2",
+        action: "deposit",
+        source: { module: "protocols/euler-v2/abis.ts", exportName: "EVaultABI" },
+        signature: "deposit(uint256,address)",
+        selector: "0x6e553f65",
+        funding: "erc20-approve",
+        beneficiary: "supported",
+        allowsMaxAmount: false,
+        imports: [`import { IEVault } from "./protocols/euler-v2/EVaultABI.json";`],
+        binding: "IEVault",
+        extras: {},
+        emit(d, amountExpr) {
+            return [`IEVault.at(${formatBigint(d.target)}).deposit(${amountExpr}, ${beneficiaryLiteral(d)});`];
+        },
+    },
+    "erc4626:deposit": {
+        protocol: "erc4626",
+        action: "deposit",
+        source: { module: "protocols/erc4626/abis.ts", exportName: "VaultABI" },
+        signature: "deposit(uint256,address)",
+        selector: "0x6e553f65",
+        funding: "erc20-approve",
+        beneficiary: "supported",
+        allowsMaxAmount: false,
+        imports: [`import { IERC4626Vault } from "./protocols/erc4626/VaultABI.json";`],
+        binding: "IERC4626Vault",
+        extras: {},
+        emit(d, amountExpr) {
+            return [
+                `IERC4626Vault.at(${formatBigint(d.target)}).deposit(${amountExpr}, ${beneficiaryLiteral(d)});`,
+            ];
+        },
+    },
+    "lido:wrap": {
+        protocol: "lido",
+        action: "wrap",
+        source: { module: "protocols/lido/abis.ts", exportName: "WstETHABI" },
+        signature: "wrap(uint256)",
+        selector: "0xea598cb0",
+        funding: "erc20-approve",
+        beneficiary: "unsupported",
+        allowsMaxAmount: false,
+        imports: [`import { IWstETH } from "./protocols/lido/WstETHABI.json";`],
+        binding: "IWstETH",
+        extras: {},
+        emit(d, amountExpr) {
+            return [`IWstETH.at(${formatBigint(d.target)}).wrap(${amountExpr});`];
+        },
+    },
+    "lido:stake": {
+        protocol: "lido",
+        action: "stake",
+        source: { module: "protocols/lido/abis.ts", exportName: "LidoABI" },
+        signature: "submit(address)",
+        selector: "0xa1903eab",
+        funding: "native-value",
+        beneficiary: "unsupported",
+        allowsMaxAmount: false,
+        imports: [],
+        binding: null,
+        extras: { referral: addressExtra(0n) },
+        emit(d, amountExpr) {
+            const referral = d.extra.referral ?? 0n;
+            const calldata = rawCalldata(LIDO_SUBMIT_SELECTOR, formatBigint(referral));
+            return [`contract.call(${formatBigint(d.target)}, ${amountExpr}, ${calldata});`];
+        },
+    },
+    "weth:wrap": {
+        protocol: "weth",
+        action: "wrap",
+        source: null,
+        signature: "deposit()",
+        selector: "0xd0e30db0",
+        funding: "native-value",
+        beneficiary: "unsupported",
+        allowsMaxAmount: false,
+        imports: [],
+        binding: null,
+        extras: {},
+        emit(d, amountExpr) {
+            return [`contract.call(${formatBigint(d.target)}, ${amountExpr}, ${bytesLiteral(WETH_DEPOSIT_SELECTOR)});`];
+        },
+    },
+    "weth:unwrap": {
+        protocol: "weth",
+        action: "unwrap",
+        source: null,
+        signature: "withdraw(uint256)",
+        selector: "0x2e1a7d4d",
+        funding: "none",
+        beneficiary: "unsupported",
+        allowsMaxAmount: false,
+        imports: [],
+        binding: null,
+        extras: {},
+        emit(d, amountExpr) {
+            const calldata = rawCalldata(WETH_WITHDRAW_SELECTOR, amountExpr);
+            return [`contract.call(${formatBigint(d.target)}, 0n, ${calldata});`];
+        },
+    },
+};
+/** Looks up a template by `protocol:action`, throwing (and listing every registered key) rather
+ *  than letting a caller emit a program that would misbehave on-chain — same posture as
+ *  `toSwapParams`'s guard on `UndispatchablePoolType`. */
+export function depositTemplateFor(protocol, action) {
+    const key = `${protocol}:${action}`;
+    const template = DEPOSIT_TEMPLATES[key];
+    if (!template) {
+        const known = Object.keys(DEPOSIT_TEMPLATES).sort().join(", ");
+        throw new Error(`depositTemplateFor: no deposit template registered for "${key}". Known: ${known}`);
+    }
+    return template;
+}
+export function listDepositTemplates() {
+    return Object.values(DEPOSIT_TEMPLATES);
+}
+//# sourceMappingURL=templates.js.map

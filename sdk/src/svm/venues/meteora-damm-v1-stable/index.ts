@@ -35,6 +35,8 @@ import type {
   VenueAccount,
   VenueSwap,
 } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'meteora-damm-v1-stable';
 const PROGRAM_ID = address('Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB');
@@ -264,6 +266,28 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
     const pk = (offset: number) => codec.decode(data.subarray(offset, offset + 32));
     const aVault = pk(POOL_OFFSETS.aVault);
     const bVault = pk(POOL_OFFSETS.bVault);
+    const tokenAMint = pk(POOL_OFFSETS.tokenAMint);
+    const tokenBMint = pk(POOL_OFFSETS.tokenBMint);
+
+    // The `swap` ix uses classic `token::transfer` (no mint accounts). SELF-DROP
+    // a Token-2022 mint (or one carrying an un-routable extension) by throwing —
+    // the SvmRoute orchestrator catches a fetchPoolConfig throw and drops the
+    // venue. An unreadable mint (this venue's fixtures don't vendor the token
+    // mints) falls back to the legacy assumption, keeping existing tests green.
+    const _mints = [tokenAMint, tokenBMint];
+    const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+    for (let _i = 0; _i < _mints.length; _i++) {
+      const mint = _mints[_i]!;
+      const mintData = _mintDatas[_i]!;
+      if (mintData === null) continue;
+      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      }
+      const { blocking } = parseMintExtensions(mintData);
+      if (blocking.length > 0) {
+        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      }
+    }
 
     // Second hop: the swap/quote satellite addresses live in the two vaults.
     const vaultA = await loadVault(load, aVault, 'a');
@@ -272,8 +296,8 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
     return {
       venue: SLUG,
       pool,
-      tokenAMint: pk(POOL_OFFSETS.tokenAMint),
-      tokenBMint: pk(POOL_OFFSETS.tokenBMint),
+      tokenAMint,
+      tokenBMint,
       aVault,
       bVault,
       aVaultLp: pk(POOL_OFFSETS.aVaultLp),

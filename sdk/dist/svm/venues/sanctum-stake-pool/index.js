@@ -143,11 +143,12 @@
  */
 import { address, getAddressDecoder, getAddressEncoder } from '@solana/kit';
 import { createHash } from 'node:crypto';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 export const SANCTUM_STAKE_POOL_PROGRAM_ID = address('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
 export const SANCTUM_STAKE_POOL_2_PROGRAM_ID = address('SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY');
 export const SANCTUM_STAKE_POOL_3_PROGRAM_ID = address('SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn');
 export const SANCTUM_STAKE_POOL_4_PROGRAM_ID = address('stkitrT1Uoy18Dk1fTrgPw8W6MVzoCfYoAFT4MLsmhq');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
 /** The recipe-wide vocabulary for "the user is trading SOL" — see module header's ACCOUNTS caveat. */
 export const WSOL_MINT = address('So11111111111111111111111111111111111111112');
@@ -246,7 +247,25 @@ async function fetchSanctumStakePoolConfig(load, pool, programId, slug) {
     const reserveStake = c.pubkey();
     const poolMint = c.pubkey();
     const managerFeeAccount = c.pubkey();
-    const tokenProgramId = c.pubkey();
+    c.pubkey(); // token_program_id — no longer gated here; the mint T22 detection below supersedes it
+    // DepositSol mints the LST to the user via the classic Tokenkeg program, so a
+    // Token-2022 pool mint (or one carrying an un-routable extension) must
+    // SELF-DROP. Detect the real token program from the mint's own account via the
+    // shared data-shape resolver, replacing the old stored-token_program_id guard;
+    // the thrown error IS the graceful drop (SvmRoute catches a fetchPoolConfig
+    // throw and drops the venue). LEGACY path unchanged: a classic 82-byte mint
+    // classifies Tokenkeg, parses no extensions, config built as before. An
+    // unreadable mint falls back to the legacy assumption (keeps existing tests green).
+    const poolMintData = await load(poolMint);
+    if (poolMintData !== null) {
+        if (classifyMintProgram(poolMint, poolMintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${slug}: dropping pool ${pool} — mint ${poolMint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(poolMintData);
+        if (blocking.length > 0) {
+            throw new Error(`${slug}: dropping pool ${pool} — mint ${poolMint} is un-routable: ${blocking.join('; ')}`);
+        }
+    }
     if (c.offset() !== OFF_TOTAL_LAMPORTS) {
         // total_lamports/pool_token_supply are meant to sit at fixed offsets —
         // this only fails if a future stake-pool version reorders the struct
@@ -270,9 +289,6 @@ async function fetchSanctumStakePoolConfig(load, pool, programId, slug) {
     c.u8(); // stake_referral_fee
     const solDepositAuthority = c.optionPubkey();
     const solDepositFee = c.fee();
-    if (tokenProgramId !== TOKEN_PROGRAM) {
-        throw new Error(`${slug} pool ${pool} token_program_id must be the classic Tokenkeg program — Token-2022 pools are not implemented by this adapter`);
-    }
     if (solDepositAuthority !== undefined) {
         throw new Error(`${slug} pool ${pool} requires a sol_deposit_authority signature — permissioned pools are not implemented by this adapter`);
     }

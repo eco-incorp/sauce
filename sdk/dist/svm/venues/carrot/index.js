@@ -203,6 +203,17 @@ function decodeOraclePriceOffset(data, pool, oracle) {
         return ORACLE_VERIFICATION_TAG_OFFSET + 2 + ORACLE_FEED_ID_SIZE;
     throw new Error(`carrot vault ${pool}: oracle ${oracle} has an unrecognized verification-level tag ${tag}`);
 }
+// TODO(t22-fee-netting): the Token-2022 legs (CRT shares + pyUSD, see
+// CARROT_TOKEN_2022_MINTS) are NOT transfer-fee-netted in the NAV formula. This
+// is safe today: pyUSD's transfer fee is 0 bps (it carries only PermanentDelegate
+// / ConfidentialTransfer advisories, both routable), and the six real
+// simulateTransaction dry-runs matched the un-netted NAV formula to ~0.04% (see
+// the module header's VALIDATION note), i.e. no material CRT fee either. There is
+// also no referenceQuote in this fetch-only adapter to net a fee on — the NAV
+// fragment runs in the consuming app. If a basket/shares mint ever gains a
+// nonzero effective transfer fee, net it there (net(x, feeOfInputMint) into the
+// pool, net(grossOut, feeOfOutputMint) to the user) rather than here — a missed
+// netting is a safe self-limit; a wrong one would silently mis-quote.
 async function fetchCarrotPoolConfig(load, pool) {
     const data = await load(pool);
     if (data === null)
@@ -241,8 +252,10 @@ async function fetchCarrotPoolConfig(load, pool) {
     // Every basket asset is read together (NAV is their joint sum) — one bad asset self-drops the
     // WHOLE vault (every direction), never just that asset (see module header's SELF-DROP SCOPE note).
     const assets = [];
-    for (const a of rawAssets) {
-        const [ataData, oracleData] = await Promise.all([load(a.ata), load(a.oracle)]);
+    const assetAccountPairs = await Promise.all(rawAssets.map((a) => Promise.all([load(a.ata), load(a.oracle)])));
+    for (let ai = 0; ai < rawAssets.length; ai++) {
+        const a = rawAssets[ai];
+        const [ataData, oracleData] = assetAccountPairs[ai];
         if (ataData === null)
             throw new Error(`carrot vault ${pool}: asset ${a.assetId} vault ATA ${a.ata} not found`);
         if (ataData.length < ATA_AMOUNT_OFFSET + 8)

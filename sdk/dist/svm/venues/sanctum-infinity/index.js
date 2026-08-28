@@ -112,6 +112,8 @@
 import { createHash } from 'node:crypto';
 import { address, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 import { SANCTUM_INFINITY_REGISTRY, WSOL_MINT, } from './registry.js';
 const SLUG = 'sanctum-infinity';
 /** The S-controller ("INF") program — `SVM_VENUE_PROGRAM_IDS['sanctum-infinity']`. */
@@ -364,6 +366,26 @@ export const sanctumInfinity = {
             throw new Error(`${SLUG}: unknown discovery key ${pool} (not minted this process)`);
         if (pair.inMint === pair.outMint)
             throw new Error(`${SLUG}: in/out mint are identical`);
+        // The swap CPI is legacy-SPL (Tokenkeg) only for now, so SELF-DROP the pair
+        // if either mint is Token-2022 (or carries an un-routable extension) — the
+        // thrown error is the graceful-drop signal (SvmRoute drops the venue on a
+        // fetchPoolConfig throw). An unreadable mint falls back to the legacy
+        // assumption, keeping the byte-identical legacy path.
+        const mints = [pair.inMint, pair.outMint];
+        const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+        for (let mi = 0; mi < mints.length; mi++) {
+            const mint = mints[mi];
+            const mintData = mintDatas[mi];
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`${SLUG}: dropping pair — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`${SLUG}: dropping pair — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
+        }
         const [poolStateData, lstStateList, slab] = await Promise.all([
             load(POOL_STATE_ID),
             load(LST_STATE_LIST_ID),

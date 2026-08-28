@@ -72,10 +72,13 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
   */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from '../orca-whirlpool/tick-math.js';
 import { OFF_FEE_RATE, OFF_FEE_TIER_INDEX, OFF_LIQUIDITY, OFF_SQRT_PRICE, OFF_TA_START, OFF_TA_TICKS, OFF_TICK_CURRENT, OFF_TICK_SPACING, TICK_ARRAY_ACCOUNT_SIZE, TICK_ARRAY_DISCRIMINATOR, TICK_ARRAY_SIZE, TICK_LEN, WHIRLPOOL_ACCOUNT_SIZE, WHIRLPOOL_DISCRIMINATOR, windowStartTicks } from '../orca-whirlpool/index.js';
 import { readUintLE } from '../math.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'cropper';
 /** Cropper's AMM (Whirlpool-lineage CLMM) program. */
 export const CROPPER_PROGRAM_ID = address('H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt');
@@ -109,11 +112,11 @@ function getAddressEncoded(value) {
     return new Uint8Array(getAddressCodec().encode(value));
 }
 async function deriveTickArrayPda(pool, startTick) {
-    const [pda] = await getProgramDerivedAddress({
-        programAddress: CROPPER_PROGRAM_ID,
-        seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), new TextEncoder().encode(String(startTick))],
-    });
-    return pda;
+    return memoizedGetProgramDerivedAddress(CROPPER_PROGRAM_ID, [
+        new TextEncoder().encode('tick_array'),
+        getAddressEncoded(pool),
+        new TextEncoder().encode(String(startTick)),
+    ]);
 }
 /**
  * Scan the readable window for initialized-tick boundaries in walk order —
@@ -126,10 +129,16 @@ async function deriveTickArrayPda(pool, startTick) {
 async function resolveWindow(load, pool, tickCurrentIndex, tickSpacing, aToB) {
     const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, aToB);
     const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start))));
+    // allSettled (not all) keeps the break-on-first-invalid contract exact: a
+    // rejection is re-thrown only if the readable prefix actually reaches it.
+    const loaded = await Promise.allSettled(tickArrays.map((a) => load(a)));
     const arrays = [];
     let readable = 0;
     for (let i = 0; i < 3; i++) {
-        const data = await load(tickArrays[i]);
+        const settled = loaded[i];
+        if (settled.status === 'rejected')
+            throw settled.reason;
+        const data = settled.value;
         const valid = data !== null &&
             data.length >= TICK_ARRAY_ACCOUNT_SIZE &&
             hasDiscriminator(data, TICK_ARRAY_DISCRIMINATOR) &&
@@ -209,22 +218,31 @@ export async function fetchCropperConfig(load, pool) {
     const OFF_VAULT_B = 213;
     const tokenMintA = codec.decode(data.subarray(OFF_MINT_A, OFF_MINT_A + 32));
     const tokenMintB = codec.decode(data.subarray(OFF_MINT_B, OFF_MINT_B + 32));
-    for (const mint of [tokenMintA, tokenMintB]) {
-        const mintData = await load(mint);
+    // The swap ix is Tokenkeg-only, so a Token-2022 mint (or one carrying an
+    // un-routable extension) SELF-DROPS this pool: the thrown error is the
+    // graceful-drop signal the SvmRoute orchestrator catches. An unreadable mint
+    // falls back to the legacy assumption (a classic 82-byte mint classifies
+    // legacy → no throw → config built byte-identically to before).
+    const mintList = [tokenMintA, tokenMintB];
+    const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+    for (let mi = 0; mi < mintList.length; mi++) {
+        const mint = mintList[mi];
+        const mintData = mintDatas[mi];
         if (mintData === null)
-            throw new Error(`${SLUG}: mint ${mint} of pool ${pool} not found`);
-        if (mintData.length !== 82) {
-            throw new Error(`${SLUG}: pool ${pool} mint ${mint} is not a classic SPL mint (the swap ix is Tokenkeg-only)`);
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
         }
     }
     const tickCurrentIndex = readI32(data, OFF_TICK_CURRENT);
     const [aToB, bToA, oracle] = await Promise.all([
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-        getProgramDerivedAddress({
-            programAddress: CROPPER_PROGRAM_ID,
-            seeds: [new TextEncoder().encode('oracle'), getAddressEncoded(pool)],
-        }).then(([pda]) => pda),
+        memoizedGetProgramDerivedAddress(CROPPER_PROGRAM_ID, [new TextEncoder().encode('oracle'), getAddressEncoded(pool)]),
     ]);
     return {
         venue: SLUG,

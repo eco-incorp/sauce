@@ -33,10 +33,10 @@
  * a silently-wrong byte-scan guess. Missing `fetchOracleQuote` throws, naming the gate — the same
  * "refuse, don't guess" posture zerofi's fee catalog and authority table already use.
  *
- * The baked (bid, ask) become part of `MetricPoolConfig` (`paramsFor`-visible, per the
- * `SvmVenueLadder` contract) and are what the emitted fragment's quote math uses. The emitted
+ * The baked (bid, ask) become part of `MetricPoolConfig` (`paramsFor`-visible) and are what the
+ * emitted fragment's quote math uses. The emitted
  * fragment issues NO on-chain oracle CPI — it multiplies by the baked scale and caps at a reserve
- * fraction (see ladder.ts). That is deliberate and load-bearing: the oracle program CAN revert
+ * fraction. That is deliberate and load-bearing: the oracle program CAN revert
  * post-invoke() (measured live, not hypothetical — program error Custom:20 when its price account
  * is stale), and SVM's CATCH is PRE-FLIGHT-ONLY, so an in-quote CPI revert would abort the WHOLE
  * cook — every co-merged venue's fill, not just this slot. A baked scale can never revert, so this
@@ -80,6 +80,8 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'metric';
 export const METRIC_PROGRAM_ID = address('Bvs46DPFxiFE6YHxLDLD6QAUcmy51FyRVPZJusPxLk3j');
 export const METRIC_ORACLE_PROGRAM_ID = address('CvGnk4HouriGypBTZhYc76esyN5kWBepWueYVeSpR1L1');
@@ -227,6 +229,26 @@ export const metric = {
         }
         const decimalsA = mintAData[MINT_DECIMALS_OFFSET];
         const decimalsB = mintBData[MINT_DECIMALS_OFFSET];
+        // Token-2022 safety: this venue's swap ix is legacy-SPL (Tokenkeg) only, so
+        // a Token-2022 mint (or one carrying an un-routable extension) SELF-DROPS the
+        // pool via a thrown, clearly-described error — the SvmRoute orchestrator
+        // catches a fetchPoolConfig throw and drops the venue. The legacy path stays
+        // byte-identical: a classic 82-byte mint classifies as legacy → no throw. We
+        // reuse the mint bytes already loaded above for the decimals decode.
+        for (const [mint, mintData] of [
+            [mintA, mintAData],
+            [mintB, mintBData],
+        ]) {
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
+        }
         if (fetchOracleQuote === undefined) {
             throw new Error(`${SLUG} pool ${pool} has no fetchOracleQuote supplied — this venue's price cannot be derived from account ` +
                 `bytes alone (the oracle's transform is closed/unrecovered, see module doc); the caller must run the ` +

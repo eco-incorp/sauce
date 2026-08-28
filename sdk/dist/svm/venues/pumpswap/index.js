@@ -25,6 +25,7 @@
  */
 import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import { ceilDiv, readUintLE } from '../math.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 export const PUMPSWAP_PROGRAM_ID = address('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
 const FEE_PROGRAM = address('pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ');
 const GLOBAL_CONFIG = address('ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw');
@@ -89,6 +90,15 @@ function detectTokenProgram(mint, data) {
     if (data[165] !== 1) {
         throw new Error(`pumpswap mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
     }
+    // Un-routable (blocking) extensions self-drop the pool: a NonTransferable or
+    // default-frozen mint genuinely cannot move through a plain transferChecked,
+    // so it can never route. PermanentDelegate / ConfidentialTransfer are NOT
+    // blocking (PYUSD/USDG carry them and trade fine) — parseMintExtensions keeps
+    // those out of `blocking`, so a zero-fee/advisory-only T22 mint still routes.
+    const { blocking } = parseMintExtensions(data);
+    if (blocking.length > 0) {
+        throw new Error(`pumpswap gate: mint ${mint} is un-routable — ${blocking.join('; ')}`);
+    }
     let offset = 166;
     while (offset + 4 <= data.length) {
         const extensionType = data[offset] | (data[offset + 1] << 8);
@@ -96,6 +106,14 @@ function detectTokenProgram(mint, data) {
         if (extensionType === 0)
             break; // uninitialized tail
         if (extensionType === 1) {
+            // TODO(t22-fee-netting): a TransferFeeConfig makes the vault delta diverge
+            // from the user amount on both legs. Correct handling nets the fee via
+            // netTransferAmount on BOTH the on-chain election fragment (emitQuote) AND
+            // referenceQuote so the two stay consistent (netting only referenceQuote
+            // would desync it from the elected quote), and needs the mint's fee TLV
+            // read on-chain in SauceScript. That coordinated change is out of scope
+            // for this pass; keep the safe self-limiting rejection so a fee-bearing
+            // pool simply drops out rather than risk a favourable mis-quote.
             throw new Error(`pumpswap gate: mint ${mint} carries a token-2022 TransferFeeConfig extension (vault deltas would not match user amounts)`);
         }
         offset += 4 + extensionLength;

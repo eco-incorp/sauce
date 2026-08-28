@@ -98,6 +98,8 @@ import type {
   VenueAccount,
   VenueSwap,
 } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'huma';
 
@@ -349,6 +351,32 @@ export const huma: SvmVenueAdapter = {
     ]);
     const modeMintData = await load(modeMint);
     if (modeMintData === null) throw new Error(`${SLUG} mode_mint account ${modeMint} not found`);
+
+    // The deposit/instant_withdraw ix moves both the underlying mint and the
+    // mode share mint through legacy-SPL (Tokenkeg) transfers only, so a
+    // Token-2022 mint (or one carrying an un-routable extension) on either side
+    // must SELF-DROP the pool rather than be silently assumed legacy. The thrown
+    // error IS the graceful-drop signal (the SvmRoute orchestrator catches it
+    // and drops the venue). The mode-mint bytes are reused; the underlying mint
+    // is loaded on demand and, if unreadable, falls back to the legacy
+    // assumption, keeping the classic 82-byte path byte-identical.
+    const _mintEntries = [
+      [decodedConfig.underlyingMint, null],
+      [modeMint, modeMintData],
+    ] as const;
+    const _mintDatas = await Promise.all(_mintEntries.map(([mint, preloaded]) => preloaded ?? load(mint)));
+    for (let _i = 0; _i < _mintEntries.length; _i++) {
+      const mint = _mintEntries[_i]![0];
+      const mintData = _mintDatas[_i]!;
+      if (mintData === null) continue;
+      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+        throw new Error(`${SLUG}: dropping pool ${modeConfig} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      }
+      const { blocking } = parseMintExtensions(mintData);
+      if (blocking.length > 0) {
+        throw new Error(`${SLUG}: dropping pool ${modeConfig} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      }
+    }
 
     const poolUnderlyingToken = await findAta(poolAuthority, decodedConfig.underlyingMint);
     const poolUnderlyingTokenData = await load(poolUnderlyingToken);
