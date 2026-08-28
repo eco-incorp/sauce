@@ -17,7 +17,7 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 ```typescript
 // Get price by feed ID
 import { PythOracleABI as IPythOracle } from "./abis";
-function main(oracleAddress: Address, priceId: Bytes32): Uint256 {
+function main(oracleAddress: Address, priceId: Uint256): { price: Uint256, conf: Uint256, expo: Uint256, publishTime: Uint256 } {
   const oracle = IPythOracle.at(oracleAddress);
   return oracle.getPrice(priceId);
 }
