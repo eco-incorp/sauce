@@ -166,13 +166,13 @@ import type { Address } from '@solana/kit';
 import type {
   AccountBytesMap,
   AccountLoader,
-  LadderSwapTemplate,
   PoolConfig,
-  SvmVenueLadder,
   SwapUser,
   VenueAccount,
 } from '../types.js';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'kipseli';
 export const KIPSELI_PROGRAM_ID = address('3TK9D8aoBFYjYZtKCjciPrVrRStsnvo7KmpcJqDavpaU');
@@ -293,6 +293,27 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
   const quoteMint = pubkeyAt(data, OFF_QUOTE_MINT);
   const expiryMs = readUintLE(data, OFF_EXPIRY_MS, 8);
 
+  // This venue's on-chain swap_v2 ix is legacy-SPL (Tokenkeg) only, so a
+  // Token-2022 mint (or one carrying an un-routable extension) must SELF-DROP
+  // the pool rather than be silently assumed legacy. The thrown error IS the
+  // graceful-drop signal (the SvmRoute orchestrator catches a fetchPoolConfig
+  // throw and drops the venue). An unreadable mint falls back to the legacy
+  // assumption, keeping the classic 82-byte path byte-identical.
+  const _mints = [baseMint, quoteMint];
+  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const mint = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
+  }
+
   const [baseVault, quoteVault, baseDecimals, quoteDecimals] = await Promise.all([
     deriveAta(pool, baseMint, TOKEN_PROGRAM),
     deriveAta(pool, quoteMint, TOKEN_PROGRAM),
@@ -300,11 +321,14 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
     fetchDecimals(load, quoteMint),
   ]);
 
-  for (const [role, vault, mint] of [
+  const _vaults = [
     ['base', baseVault, baseMint],
     ['quote', quoteVault, quoteMint],
-  ] as const) {
-    const vaultData = await load(vault);
+  ] as const;
+  const _vaultDatas = await Promise.all(_vaults.map(([, vault]) => load(vault)));
+  for (let _i = 0; _i < _vaults.length; _i++) {
+    const [role, vault, mint] = _vaults[_i]!;
+    const vaultData = _vaultDatas[_i]!;
     if (vaultData === null) throw new Error(`${SLUG} pool ${pool}: derived ${role} vault ${vault} does not exist`);
     if (vaultData.length < VAULT_MIN_SIZE) {
       throw new Error(`${SLUG} pool ${pool}: ${role} vault ${vault} is ${vaultData.length} bytes, not an SPL token account`);

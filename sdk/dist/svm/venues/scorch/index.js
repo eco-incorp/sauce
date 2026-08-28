@@ -76,6 +76,8 @@
  */
 import { address } from '@solana/kit';
 import { SCORCH_ASSET_CONFIGS } from './asset-configs.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'scorch';
 /** CORE — pool state owner + pricing engine. This is `SVM_VENUE_PROGRAM_IDS.scorch`. */
 export const SCORCH_CORE_PROGRAM_ID = address('ojh19ojaKduoJZuaJADhcVGp4xt1TcdAvZmpVsCorch');
@@ -91,7 +93,6 @@ const OFF_MINT_A = 16;
 const OFF_VAULT_A = 48;
 const OFF_MINT_B = 82;
 const OFF_VAULT_B = 114;
-const SPL_TOKEN_ACCOUNT_SIZE = 165;
 /**
  * Conservative haircut on the raw vault-reserve-ratio price (parts per
  * million of the naive constant-product output) — see this file's top
@@ -155,6 +156,29 @@ export const scorch = {
         const vaultA = b58Address(data, OFF_VAULT_A);
         const mintB = b58Address(data, OFF_MINT_B);
         const vaultB = b58Address(data, OFF_VAULT_B);
+        // The ROUTER's swap CPI moves both sides through the classic Tokenkeg
+        // program, so a Token-2022 mint (or one carrying an un-routable extension)
+        // must SELF-DROP. Detect the real token program per mint via the shared
+        // data-shape resolver (replacing the old vault-size T22 proxy); the thrown
+        // error IS the graceful drop (this ONE pool leaves discovery, per the
+        // venue-robustness convention). LEGACY path unchanged: a classic 82-byte
+        // mint classifies Tokenkeg, parses no extensions, config built as before. An
+        // unreadable mint falls back to the legacy assumption.
+        const mints = [mintA, mintB];
+        const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+        for (let mi = 0; mi < mints.length; mi++) {
+            const mint = mints[mi];
+            const mintData = mintDatas[mi];
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`scorch: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`scorch: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
+        }
         const assetConfigAStr = SCORCH_ASSET_CONFIGS[mintA];
         const assetConfigBStr = SCORCH_ASSET_CONFIGS[mintB];
         if (assetConfigAStr === undefined) {
@@ -163,16 +187,18 @@ export const scorch = {
         if (assetConfigBStr === undefined) {
             throw new Error(`scorch pool ${pool}: no known AssetConfig for mint ${mintB} — refresh the consuming app scorch-asset-configs venue module`);
         }
-        for (const [role, vault] of [
+        // Vault structural existence check (the T22-vault size proxy that used to
+        // live here is superseded by the per-mint Token-2022 detection above).
+        const vaultEntries = [
             ['A', vaultA],
             ['B', vaultB],
-        ]) {
-            const vaultBytes = await load(vault);
+        ];
+        const vaultBytesList = await Promise.all(vaultEntries.map(([, vault]) => load(vault)));
+        for (let vi = 0; vi < vaultEntries.length; vi++) {
+            const [role, vault] = vaultEntries[vi];
+            const vaultBytes = vaultBytesList[vi];
             if (vaultBytes === null)
                 throw new Error(`scorch pool ${pool}: vault${role} ${vault} does not exist`);
-            if (vaultBytes.length !== SPL_TOKEN_ACCOUNT_SIZE) {
-                throw new Error(`scorch pool ${pool}: vault${role} ${vault} has unexpected size ${vaultBytes.length} (want ${SPL_TOKEN_ACCOUNT_SIZE} — token-2022 vaults are not supported)`);
-            }
         }
         return {
             venue: SLUG,

@@ -74,6 +74,8 @@ import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'manifest';
 
@@ -230,14 +232,30 @@ export async function fetchManifestConfig(load: AccountLoader, pool: Address): P
   const codec = getAddressCodec();
   const baseMint = codec.decode(data.subarray(OFF_BASE_MINT, OFF_BASE_MINT + 32));
   const quoteMint = codec.decode(data.subarray(OFF_QUOTE_MINT, OFF_QUOTE_MINT + 32));
-  // The Swap ix here is classic-SPL only: a Token-2022 mint is 82 bytes + TLV
-  // extensions and needs the optional mint accounts on the swap. Mirrors the
-  // whirlpool Tokenkeg gate (best-effort by mint size).
-  for (const mint of [baseMint, quoteMint]) {
-    const mintData = await load(mint);
+  // The on-chain Swap ix here is genuinely Tokenkeg-only (a Token-2022 market
+  // needs the optional mint accounts + swap_v2-style plumbing — a per-venue
+  // follow-up). So detect the real token program per mint via the shared
+  // resolver (data-shape based) instead of the old fragile size check, and
+  // SELF-DROP a Token-2022 mint or one carrying an un-routable extension. The
+  // drop is expressed as a thrown, clearly-described error — the SvmRoute
+  // orchestrator catches a fetchPoolConfig throw and silently drops the venue
+  // (the same graceful-degradation path an unsupported direction uses). The
+  // LEGACY path is byte-identical to before: a classic mint classifies as
+  // Tokenkeg, parses no extensions, and the config is built unchanged.
+  const _mints = [baseMint, quoteMint];
+  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const mint = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
     if (mintData === null) throw new Error(`${SLUG}: mint ${mint} of market ${pool} not found`);
-    if (mintData.length !== 82) {
-      throw new Error(`${SLUG}: market ${pool} mint ${mint} is not a classic SPL mint (Swap is Tokenkeg-only)`);
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(
+        `${SLUG}: dropping market ${pool} — mint ${mint} is a Token-2022 mint (the Swap ix is Tokenkeg-only for now)`,
+      );
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping market ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
     }
   }
 

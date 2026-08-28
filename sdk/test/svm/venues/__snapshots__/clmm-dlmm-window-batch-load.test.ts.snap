@@ -1,0 +1,217 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`meteora-dlmm window batch-load resolves a byte-identical bin window in both directions 1`] = `
+{
+  "xToY": {
+    "arrayIndexes": [
+      -90,
+      -91,
+      -92,
+    ],
+    "binArrays": [
+      "EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC",
+      "BQfCpu2aNw3CXe4SQbDHY6goR6kZgSGakDs9yMqh6Bhv",
+      "CqpVWqcMyDGaoH8HWXhEfVo9Xd2i6Ljspvja3Fy6Ye7j",
+    ],
+    "bins": [
+      {
+        "arrayIndex": 0,
+        "binId": -6260,
+        "offset": 40,
+        "price": 1508911527888532005n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6261,
+        "offset": 39,
+        "price": 1508308204606689329n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6262,
+        "offset": 38,
+        "price": 1507705122557666263n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6263,
+        "offset": 37,
+        "price": 1507102281645008259n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6264,
+        "offset": 36,
+        "price": 1506499681772299340n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6265,
+        "offset": 35,
+        "price": 1505897322843162075n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6266,
+        "offset": 34,
+        "price": 1505295204761257572n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6267,
+        "offset": 33,
+        "price": 1504693327430285457n,
+      },
+    ],
+    "readable": 3,
+  },
+  "yToX": {
+    "arrayIndexes": [
+      -90,
+      -89,
+      -88,
+    ],
+    "binArrays": [
+      "EsMdTh8Ce3fdpQoLGhbuqrXKQnZTUQfVpKAbokm6QjYC",
+      "8CRkBdY5RkDRDBAZFKwRBpfe2JSWoPqM8jfr14KUXMpF",
+      "88CrJuawxX8QQETR5U8gMrjP6fftzUYwSYJyeXBXmU2g",
+    ],
+    "bins": [
+      {
+        "arrayIndex": 0,
+        "binId": -6260,
+        "offset": 40,
+        "price": 1508911527888532005n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6259,
+        "offset": 41,
+        "price": 1509515092499687418n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6258,
+        "offset": 42,
+        "price": 1510118898536687293n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6257,
+        "offset": 43,
+        "price": 1510722946096101968n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6256,
+        "offset": 44,
+        "price": 1511327235274540409n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6255,
+        "offset": 45,
+        "price": 1511931766168650225n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6254,
+        "offset": 46,
+        "price": 1512536538875117685n,
+      },
+      {
+        "arrayIndex": 0,
+        "binId": -6253,
+        "offset": 47,
+        "price": 1513141553490667732n,
+      },
+    ],
+    "readable": 3,
+  },
+}
+`;
+
+exports[`raydium-clmm window batch-load resolves a byte-identical boundary window in both directions 1`] = `
+{
+  "0to1": {
+    "boundaries": [
+      {
+        "arrayIndex": 0,
+        "offset": 41,
+        "sqrtPrice": 5275114974673453536n,
+        "tick": -25039,
+      },
+      {
+        "arrayIndex": 0,
+        "offset": 40,
+        "sqrtPrice": 5274851238704751751n,
+        "tick": -25040,
+      },
+      {
+        "arrayIndex": 0,
+        "offset": 39,
+        "sqrtPrice": 5274587515921861200n,
+        "tick": -25041,
+      },
+      {
+        "arrayIndex": 0,
+        "offset": 38,
+        "sqrtPrice": 5274323806324119251n,
+        "tick": -25042,
+      },
+    ],
+    "edge": null,
+    "readable": 3,
+    "startTicks": [
+      -25080,
+      -25140,
+      -25200,
+    ],
+    "tickArrays": [
+      "JCQwkxWu53UDXBVnfKk99D7GZPM6PoEhNgMPNb4HgWdi",
+      "5UGyour8ZxNgNA2JCGcH7L8hbhASnqqSDZ1oWQy6LncA",
+      "GsMHDaqRmofaSy41RJ8yhW2QUdFc4LJA2DYNBASfkjJd",
+    ],
+  },
+  "1to0": {
+    "boundaries": [
+      {
+        "arrayIndex": 0,
+        "offset": 46,
+        "sqrtPrice": 5276433852327174840n,
+        "tick": -25034,
+      },
+      {
+        "arrayIndex": 0,
+        "offset": 47,
+        "sqrtPrice": 5276697667424579517n,
+        "tick": -25033,
+      },
+      {
+        "arrayIndex": 0,
+        "offset": 48,
+        "sqrtPrice": 5276961495712407645n,
+        "tick": -25032,
+      },
+      {
+        "arrayIndex": 0,
+        "offset": 50,
+        "sqrtPrice": 5277489191861978483n,
+        "tick": -25030,
+      },
+    ],
+    "edge": null,
+    "readable": 3,
+    "startTicks": [
+      -25080,
+      -25020,
+      -24960,
+    ],
+    "tickArrays": [
+      "JCQwkxWu53UDXBVnfKk99D7GZPM6PoEhNgMPNb4HgWdi",
+      "Ciz1cQqTuUgrNAKkFiSR8QbUtsugzYWBrKqXdwvmfRpJ",
+      "BVxCioxJSVqGYssU7azfLVtFgw4nbvpMq5mwd1YNntPS",
+    ],
+  },
+}
+`;

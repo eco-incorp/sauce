@@ -53,6 +53,29 @@ export interface AlphaqPoolConfig extends PoolConfig {
     decimalsB: number;
     /** The market's 336-byte hot-state companion account — WRITABLE in the swap CPI. */
     statsAccount: Address;
+    /**
+     * AlphaQ's live oracle price of mintA in mintB, scaled by {@link PRICE_SCALE}
+     * (1e10), read from the stats account at {@link OFF_STATS_PRICE}. `1e10`
+     * (parity) for a genuine stablecoin pair; the real spot (e.g. ~1.178e10 for
+     * syrupUSDC) for a non-stable one. A non-stable pool is priced at this spot;
+     * a stablecoin pool keeps the byte-identical parity model and ignores it.
+     */
+    priceRaw: bigint;
+    /**
+     * The unix timestamp (seconds) the oracle price was last cranked, read from
+     * the stats account at {@link OFF_STATS_PRICE_TS}. The freshness anchor: a
+     * non-stable market is only served when this is recent (see
+     * {@link MAX_PRICE_AGE_SECONDS}); carried so the recipe fragment can re-check
+     * it LIVE at cook time. 0 for a never-cranked market.
+     */
+    priceTimestamp: bigint;
+    /**
+     * True iff BOTH mints are in the curated {@link STABLE_MINTS} set. Stable
+     * pools keep the original parity quote (byte/lamport-identical, regression-
+     * guarded); non-stable pools use the oracle-priced quote. See
+     * `fetchAlphaqPoolConfig`.
+     */
+    isStablePair: boolean;
 }
 /**
  * Decode a market (672-byte) account. Throws (caller self-drops, per
@@ -64,7 +87,7 @@ export interface AlphaqPoolConfig extends PoolConfig {
  * live prime for. A genuinely unknown/out-of-scope/future market is
  * dropped, never crashed on.
  */
-export declare function fetchAlphaqPoolConfig(load: AccountLoader, pool: Address): Promise<AlphaqPoolConfig>;
+export declare function fetchAlphaqPoolConfig(load: AccountLoader, pool: Address, now?: bigint): Promise<AlphaqPoolConfig>;
 /**
  * The symmetric constant-product model — see the module doc's "THE ACTUAL
  * MODEL". `D = min(rawA, rawB)` (raw units; safe because
@@ -75,5 +98,24 @@ export declare function fetchAlphaqPoolConfig(load: AccountLoader, pool: Address
  * doc's "REJECTED FIRST ATTEMPT").
  */
 declare function cpQuote(x: bigint, rawA: bigint, rawB: bigint): bigint;
-export { cpQuote as __alphaqCpQuoteForTest, decodeSymbol as __alphaqDecodeSymbolForTest };
+/**
+ * The venue quote. For a STABLE pair this is the ORIGINAL parity model,
+ * byte/lamport-identical to before (spot pinned at 1:1). For a NON-stable pair
+ * it pins the spot at AlphaQ's live oracle price (`priceRaw`/{@link PRICE_SCALE},
+ * mintA->mintB) instead: the symmetric constant-product base
+ * (`net*D/(D+net)`, D = min raw vault — the same conservative, depth-
+ * understating shape) is scaled by the spot, `AtoB` multiplying by the price
+ * and `BtoA` dividing by it. Because the base is direction-symmetric and the
+ * spot scaling is applied last, the curve passes through the real spot at
+ * x->0 (fixing the parity mispricing that made syrupUSDC quote ~1.0 instead of
+ * ~0.849 per USDC) while still understating AlphaQ's true (deeper) depth — the
+ * safe direction, since the on-chain CPI executes AlphaQ's own pricing and the
+ * recipe's post-swap outAta-delta check bounds the fill.
+ *
+ * `rawA`/`rawB` are the live raw vault balances (mintA/mintB); `direction`
+ * is which way the trade goes ('AtoB' spends mintA). `x` is the gross input in
+ * the input side's raw units.
+ */
+declare function alphaqQuote(x: bigint, rawA: bigint, rawB: bigint, priceRaw: bigint, isStablePair: boolean, direction: 'AtoB' | 'BtoA'): bigint;
+export { cpQuote as __alphaqCpQuoteForTest, alphaqQuote as __alphaqQuoteForTest, decodeSymbol as __alphaqDecodeSymbolForTest, };
 //# sourceMappingURL=index.d.ts.map

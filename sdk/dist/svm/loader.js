@@ -8,41 +8,50 @@ export function coalescingAccountLoader(loadMany, options = {}) {
         throw new Error(`coalescingAccountLoader chunkSize must be a positive integer, got ${chunkSize}`);
     }
     let pending = null;
+    // One chunk's sweep: load it, then resolve/reject every waiter for its
+    // addresses. Never rejects — failures are delivered to that chunk's own
+    // waiters, so one bad chunk can't sink the others under Promise.all below.
+    const sweepChunk = async (batch, chunk) => {
+        let results;
+        try {
+            results = await loadMany(chunk);
+            if (results.length !== chunk.length) {
+                throw new Error(`batch loader returned ${results.length} accounts for ${chunk.length} addresses`);
+            }
+        }
+        catch (error) {
+            for (const address of chunk)
+                for (const waiter of batch.get(address))
+                    waiter.reject(error);
+            return;
+        }
+        chunk.forEach((address, i) => {
+            const result = results[i];
+            for (const waiter of batch.get(address)) {
+                if (result === null) {
+                    waiter.resolve(null);
+                    continue;
+                }
+                try {
+                    options.expectOwner?.(address, result.owner);
+                    // Fresh copy per waiter — callers may mutate their view.
+                    waiter.resolve(new Uint8Array(result.data));
+                }
+                catch (error) {
+                    waiter.reject(error);
+                }
+            }
+        });
+    };
     const flush = async (batch) => {
         const addresses = [...batch.keys()];
+        // Chunks are independent getMultipleAccounts round-trips (chunkSize is the
+        // RPC's per-call pubkey cap) — fire them in parallel, not one after another.
+        const chunks = [];
         for (let at = 0; at < addresses.length; at += chunkSize) {
-            const chunk = addresses.slice(at, at + chunkSize);
-            let results;
-            try {
-                results = await loadMany(chunk);
-                if (results.length !== chunk.length) {
-                    throw new Error(`batch loader returned ${results.length} accounts for ${chunk.length} addresses`);
-                }
-            }
-            catch (error) {
-                for (const address of chunk)
-                    for (const waiter of batch.get(address))
-                        waiter.reject(error);
-                continue;
-            }
-            chunk.forEach((address, i) => {
-                const result = results[i];
-                for (const waiter of batch.get(address)) {
-                    if (result === null) {
-                        waiter.resolve(null);
-                        continue;
-                    }
-                    try {
-                        options.expectOwner?.(address, result.owner);
-                        // Fresh copy per waiter — callers may mutate their view.
-                        waiter.resolve(new Uint8Array(result.data));
-                    }
-                    catch (error) {
-                        waiter.reject(error);
-                    }
-                }
-            });
+            chunks.push(addresses.slice(at, at + chunkSize));
         }
+        await Promise.all(chunks.map((chunk) => sweepChunk(batch, chunk)));
     };
     return (address) => new Promise((resolve, reject) => {
         if (pending === null) {

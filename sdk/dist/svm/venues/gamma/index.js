@@ -101,9 +101,11 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { getEpochFee, parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'gamma';
 export const GAMMA_PROGRAM_ID = address('GAMMA7meSFWaBXF25oSUgmGRwaW6sCMFLmBNiMSdbHVT');
 const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+const CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
 // sha256("account:PoolState")[0..8] / sha256("account:AmmConfig")[0..8] — byte-identical to
 // raydium-cp-swap's (same Anchor account type names on the shared struct prefix).
 const POOL_STATE_DISCRIMINATOR = [0xf7, 0xed, 0xe3, 0xf5, 0xd7, 0xc3, 0xde, 0x46];
@@ -129,26 +131,6 @@ const POOL_OFFSETS = {
 /** SPL token account (Tokenkeg and Token-2022): mint @0, amount u64 LE @64. */
 const VAULT_MINT_OFFSET = 0;
 const VAULT_AMOUNT_OFFSET = 64;
-/**
- * Token-2022 mint TLV scan for the TransferFeeConfig extension (type 1): a
- * transfer-fee mint changes wire amounts on both swap legs, so such pools are
- * out of scope (mirrors raydium-cp-swap's own gate — same account layout).
- */
-function hasTransferFeeExtension(mint) {
-    if (mint.length <= 165)
-        return false;
-    let offset = 166;
-    while (offset + 4 <= mint.length) {
-        const type = mint[offset] | (mint[offset + 1] << 8);
-        if (type === 0)
-            break; // Uninitialized — trailing padding
-        if (type === 1)
-            return true; // TransferFeeConfig
-        const length = mint[offset + 2] | (mint[offset + 3] << 8);
-        offset += 4 + length;
-    }
-    return false;
-}
 /** Fetch + decode one GAMMA pool (mirrors raydium-cp-swap's fetchPoolConfig gates). Read-only against the loader. */
 export async function fetchGammaPoolConfig(load, pool) {
     const codec = getAddressCodec();
@@ -201,11 +183,14 @@ export async function fetchGammaPoolConfig(load, pool) {
         inputIsToken0: true,
     };
     // Vault integrity: each pool vault must exist and hold the declared mint.
-    for (const [vault, mint] of [
+    const vaultEntries = [
         [cfg.token0Vault, cfg.token0Mint],
         [cfg.token1Vault, cfg.token1Mint],
-    ]) {
-        const vaultData = await load(vault);
+    ];
+    const vaultDatas = await Promise.all(vaultEntries.map(([vault]) => load(vault)));
+    for (let vi = 0; vi < vaultEntries.length; vi++) {
+        const [vault, mint] = vaultEntries[vi];
+        const vaultData = vaultDatas[vi];
         if (vaultData === null)
             throw new Error(`${SLUG} vault ${vault} not found`);
         if (vaultData.length < VAULT_AMOUNT_OFFSET + 8) {
@@ -216,8 +201,27 @@ export async function fetchGammaPoolConfig(load, pool) {
             throw new Error(`${SLUG} vault ${vault} holds mint ${vaultMint}, expected ${mint}`);
         }
     }
-    // Token-2022 transfer-fee gate: a transfer-fee extension on either mint
-    // changes wire amounts on that leg, so the classic quote formula is wrong.
+    // Token-2022 per-mint extension gate. The pool stores each leg's owning
+    // program (token_0/1_program), which the swap ix threads per side, so a
+    // Token-2022 mint is routable on this venue as long as its extensions don't
+    // change the wire amount or make it un-transferable:
+    //   - A genuinely un-routable extension (NonTransferable / DefaultAccountState=
+    //     frozen — parseMintExtensions().blocking) self-drops the pool.
+    //   - A TransferFeeConfig whose EFFECTIVE (epoch-selected) fee is nonzero
+    //     also self-drops: this fetch-only adapter has no referenceQuote here to
+    //     net the fee on both legs (the GAMMA quote fragment lives in the
+    //     consuming app), and a raw constant-product quote over vault amounts
+    //     would over-quote by the wire fee the vault never receives.
+    //     TODO(t22-fee-netting): net the fee on both legs in the consuming app's
+    //     GAMMA quote (POOL receives net(amountIn, feeOfInputMint); USER receives
+    //     net(grossOut, feeOfOutputMint)) instead of self-dropping. Kept as a
+    //     self-drop until that quote can be netted with confidence — a missed
+    //     netting only forgoes a rare fee-bearing pool (safe self-limit), while a
+    //     wrong netting would silently mis-quote.
+    // A ZERO-fee (or zero-bps scheduled-removal) Token-2022 mint ROUTES with a
+    // constant-product quote byte-identical to the legacy path — narrowing the
+    // old presence-based reject to an effective-bps>0 reject is what lets it.
+    let epoch = null;
     for (const [program, mint, side] of [
         [cfg.token0Program, cfg.token0Mint, 'token_0'],
         [cfg.token1Program, cfg.token1Mint, 'token_1'],
@@ -226,10 +230,24 @@ export async function fetchGammaPoolConfig(load, pool) {
             continue;
         const mintData = await load(mint);
         if (mintData === null) {
-            throw new Error(`${SLUG} ${side} mint ${mint} is token-2022 but could not be loaded to check transfer-fee extensions`);
+            throw new Error(`${SLUG} ${side} mint ${mint} is token-2022 but could not be loaded to check extensions`);
         }
-        if (hasTransferFeeExtension(mintData)) {
-            throw new Error(`${SLUG} ${side} mint ${mint} has a token-2022 transfer-fee extension (wire amounts diverge from the quote)`);
+        const { blocking, transferFee } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG} ${side} mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
+        if (transferFee !== undefined) {
+            if (epoch === null) {
+                const clockData = await load(CLOCK_SYSVAR);
+                if (clockData === null) {
+                    throw new Error(`${SLUG} could not read the Clock sysvar to resolve ${side} mint ${mint}'s active transfer-fee tier`);
+                }
+                epoch = readUintLE(clockData, 16, 8);
+            }
+            const bps = getEpochFee(transferFee, epoch).transferFeeBasisPoints;
+            if (bps > 0) {
+                throw new Error(`${SLUG} ${side} mint ${mint} has an ACTIVE ${bps}bps token-2022 transfer fee (wire amounts diverge from the quote)`);
+            }
         }
     }
     return cfg;

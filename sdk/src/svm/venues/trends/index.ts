@@ -157,6 +157,7 @@
 import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'trends';
 export const TRENDS_PROGRAM_ID = address('CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz');
@@ -197,12 +198,27 @@ function detectBaseTokenProgram(mint: Address, data: Uint8Array): Address {
   if (data[165] !== 1) {
     throw new Error(`${SLUG}: base mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
   }
+  // A NonTransferable / DefaultAccountState=frozen base mint genuinely cannot
+  // route — self-drop it. PermanentDelegate/Confidential are advisories (a
+  // routable T22 mint keeps routing), never blocking.
+  const { blocking } = parseMintExtensions(data);
+  if (blocking.length > 0) {
+    throw new Error(`${SLUG}: gate: base mint ${mint} is un-routable: ${blocking.join('; ')}`);
+  }
   let offset = 166;
   while (offset + 4 <= data.length) {
     const extensionType = data[offset]! | (data[offset + 1]! << 8);
     const extensionLength = data[offset + 2]! | (data[offset + 3]! << 8);
     if (extensionType === 0) break; // uninitialized tail
     if (extensionType === 1) {
+      // TODO(t22-fee-netting): the base mint's transfer fee is REJECTED rather
+      // than fee-netted. This is a WSOL-quoted bonding curve whose reserves are
+      // read live and whose real-reserve capacity clamp assumes the full
+      // requested amount lands in the vault; a mint-level transfer fee breaks
+      // that assumption in a way simple leg-netting (net(amount, cfg, epoch) per
+      // leg) does not cleanly model, and this facade exposes no referenceQuote /
+      // epoch to net against anyway. Rejecting self-limits (safe); a wrong net
+      // silently mis-quotes — so keep the no-op (reject) path.
       throw new Error(
         `${SLUG}: gate: base mint ${mint} carries a token-2022 TransferFeeConfig extension (vault deltas would not match the quoted amount)`,
       );

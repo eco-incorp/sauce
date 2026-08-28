@@ -79,8 +79,7 @@
  * a pool, with zero code changes — sequencing, not a gate on the feature.
  *
  * This file is the off-chain decode + CPI-account layer (PoolConfig,
- * fetchPoolConfig, quoteAccounts). The on-chain quote fragment
- * (SvmVenueLadder) lives in ladder.ts.
+ * fetchPoolConfig, quoteAccounts).
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';

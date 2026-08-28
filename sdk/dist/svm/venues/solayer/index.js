@@ -136,6 +136,8 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'solayer';
 export const SOLAYER_PROGRAM_ID = address('endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT');
 export const SOLAYER_SSOL_MINT = address('sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh');
@@ -153,7 +155,6 @@ const OFF_LST_MINT = 73;
 const OFF_VAULT = 105;
 const OFF_NAME_LEN = 137;
 const OFF_NAME = 141;
-const SPL_MINT_SIZE = 82;
 const SPL_TOKEN_ACCOUNT_SIZE = 165;
 function hasDiscriminator(data, discriminator) {
     return discriminator.every((byte, i) => data[i] === byte);
@@ -179,18 +180,27 @@ export async function fetchSolayerPoolConfig(load, pool) {
         throw new Error(`${SLUG} pool ${pool} has a corrupt name length (${nameLen})`);
     }
     const name = new TextDecoder().decode(data.subarray(OFF_NAME, OFF_NAME + nameLen));
-    // Both mints must be classic Tokenkeg (82-byte program-pack Mint accounts) — no
-    // Token-2022 transfer-fee extension observed on any live pool (see module header).
+    // Both directions transfer/mint/burn via the classic Tokenkeg program, so a
+    // Token-2022 mint (or one carrying an un-routable extension) must SELF-DROP.
+    // Detect the real token program per mint via the shared data-shape resolver;
+    // the thrown error IS the graceful drop (SvmRoute catches a fetchPoolConfig
+    // throw and drops the venue). LEGACY path byte-identical: a classic 82-byte
+    // mint classifies Tokenkeg, parses no extensions, config built unchanged. An
+    // unreadable mint falls back to the legacy assumption (keeps existing tests green).
     const [receiptMintData, lstMintData] = await Promise.all([load(receiptMint), load(lstMint)]);
-    if (receiptMintData === null)
-        throw new Error(`${SLUG} pool ${pool} receipt mint ${receiptMint} not found`);
-    if (lstMintData === null)
-        throw new Error(`${SLUG} pool ${pool} lst mint ${lstMint} not found`);
-    if (receiptMintData.length !== SPL_MINT_SIZE) {
-        throw new Error(`${SLUG} pool ${pool} receipt mint ${receiptMint} is not a classic ${SPL_MINT_SIZE}-byte SPL mint`);
-    }
-    if (lstMintData.length !== SPL_MINT_SIZE) {
-        throw new Error(`${SLUG} pool ${pool} lst mint ${lstMint} is not a classic ${SPL_MINT_SIZE}-byte SPL mint`);
+    for (const [mint, mintData] of [
+        [receiptMint, receiptMintData],
+        [lstMint, lstMintData],
+    ]) {
+        if (mintData === null)
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        }
     }
     const vaultData = await load(vault);
     if (vaultData === null)
