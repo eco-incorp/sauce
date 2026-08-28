@@ -76,6 +76,8 @@ export interface ProtocolRewriteResult {
   readonly accessorSites: number;
   /** Count of bare `self` sites rewritten. */
   readonly selfSites: number;
+  /** Count of bare `<Protocol>.<Contract>` VALUE-position sites resolved to an address literal. */
+  readonly valueAccessSites: number;
 }
 
 interface Splice {
@@ -132,6 +134,62 @@ function collectAccessorCandidates(program: AstNode, shadowed: ReadonlySet<strin
     out.push({ calleeStart: callee.start, calleeEnd: callee.end, head, path });
   });
   return out;
+}
+
+/**
+ * Collects bare `<Protocol|Family>.<Contract>` accessors used in VALUE position -- e.g. the spender
+ * of `USDC.approve(Cctp.TokenMessenger, amount)`, where `Cctp.TokenMessenger` is an ADDRESS, not a
+ * `.method(...)` call. The CALL pass above only ever owns a member chain that is a call's callee, so
+ * without this a bare accessor value reached the compiler as an unresolved property access and
+ * failed (`property 'TokenMessenger' access not supported`). Each resolved site becomes the SAME
+ * on-chain address literal the call path binds `.at(...)` to, so the dot spelling is now usable as a
+ * value everywhere the underscore ambient define (`Cctp_TokenMessenger`, ambient.ts#chainDefines)
+ * already was -- the two are equivalent, dot is just the accessor-consistent spelling.
+ *
+ * A "value" site is a terminal 2-segment member access: NOT the object of a longer chain and NOT a
+ * call's callee (both of which the CALL pass -- or a genuine `.method` chain -- already own). Only a
+ * recognized namespace head is ever touched (isolation); an unresolvable-but-recognized head still
+ * fails closed with the same named errors as the call path (unknown/undeployed/interface contract).
+ */
+function collectValueAccessSites(
+  program: AstNode,
+  shadowed: ReadonlySet<string>,
+  enclosingChain: CanonicalChain,
+  chainScope: ReadonlySet<number> | undefined,
+  allowWidenedSelectors: boolean,
+): Splice[] {
+  // A node that is the `.object` of a member access, or a call's `.callee`, is part of a longer
+  // chain the CALL pass (or an ordinary `.method` access) already owns -- never a terminal value.
+  const nonTerminal = new Set<AstNode>();
+  walk(program, (n) => {
+    if (n.type === "MemberExpression" && !(n as { computed?: boolean }).computed) {
+      const object = (n as { object?: AstNode }).object;
+      if (object) nonTerminal.add(object);
+    }
+    if (n.type === "CallExpression") {
+      const callee = (n as { callee?: AstNode }).callee;
+      if (callee) nonTerminal.add(callee);
+    }
+  });
+
+  const sites: Splice[] = [];
+  walk(program, (n) => {
+    if (n.type !== "MemberExpression" || (n as { computed?: boolean }).computed) return;
+    if (nonTerminal.has(n)) return; // object of a longer chain / a call callee -> not a terminal value
+    const decomposed = decomposeMemberChain(n);
+    if (decomposed === undefined) return;
+    const { head, path } = decomposed;
+    if (shadowed.has(head)) return;
+    // Isolation: only a recognized head (chain key or protocol/family namespace) is ever claimed.
+    const chainKey = isChainKey(head);
+    if (!chainKey && resolveNamespace(head) === undefined) return;
+    // Shape gate mirroring the call collector, minus the method: a protocol head is exactly
+    // `<Protocol>.<Contract>` (path 1); a chain head is `<Chain>.<Protocol>[.<Contract>]` (path 1-2).
+    if (chainKey ? path.length < 1 || path.length > 2 : path.length !== 1) return;
+    const { address } = resolveAccessorTarget(head, path, false, enclosingChain, chainScope, allowWidenedSelectors);
+    sites.push({ start: n.start, end: n.end, replacement: formatBigint(BigInt(address)) });
+  });
+  return sites;
 }
 
 /** Resolves a (protocol slug, contract name) pair against `resolveNamespace`'s namespace -- for a
@@ -202,37 +260,55 @@ interface ResolvedSite extends Splice {
   readonly descriptor: ContractDescriptor;
 }
 
-function resolveCandidate(
-  candidate: AccessorCandidate,
+interface AccessorTarget {
+  readonly chain: CanonicalChain;
+  readonly protocol: string;
+  readonly contract: string;
+  readonly descriptor: ContractDescriptor;
+  readonly address: Address;
+}
+
+/** Resolves the (chain, protocol, contract, descriptor, deployed address) a namespace member chain
+ *  points at -- shared by the CALL path (`path` ends with the method, `hasMethod`) and the bare
+ *  VALUE path (`path` IS the whole `<Protocol>[.<Contract>]` / `<Chain>.<Protocol>[.<Contract>]`
+ *  contract reference). Both apply the IDENTICAL shape rules, guards and named errors, so
+ *  `Base.UniswapV3.UniversalRouter` resolves to the same address whether it is called or used as a
+ *  value. `hasMethod` only changes whether a trailing segment is stripped and the wording of the
+ *  shape/interface errors (which still say "call" for a call). */
+function resolveAccessorTarget(
+  head: string,
+  path: readonly string[],
+  hasMethod: boolean,
   enclosingChain: CanonicalChain,
   chainScope: ReadonlySet<number> | undefined,
   allowWidenedSelectors: boolean,
-): ResolvedSite {
-  const { head, path } = candidate;
-  const method = path[path.length - 1]!;
+): AccessorTarget {
+  const contractSegs = hasMethod ? path.slice(0, path.length - 1) : path; // strip a trailing method
+  const shown = hasMethod ? `${head}.${path.join(".")}(...)` : `${head}.${path.join(".")}`;
+  const suffix = hasMethod ? ".<method>(...)" : "";
 
   let chain: CanonicalChain;
   let nsSegments: readonly string[];
   let namespaceHead: string;
 
   if (isChainKey(head)) {
-    // shapes C/D: <Chain>.<Protocol>[.<Contract>].<method>(...)
+    // shapes C/D: <Chain>.<Protocol>[.<Contract>]
     const slug = chainSlugForKey(head);
     if (slug === undefined) fail(`internal: chain key '${head}' has no chain slug`);
     chain = requireChain(slug);
     if (chainScope !== undefined && !chainScope.has(chain.id)) {
       fail(`chain '${chain.slug}' (referenced as '${head}....') is outside the allowed chainScope`);
     }
-    if (path.length < 2 || path.length > 3) {
-      fail(`'${head}.${path.join(".")}(...)' -- expected '${head}.<Protocol>[.<Contract>].<method>(...)'`);
+    if (contractSegs.length < 1 || contractSegs.length > 2) {
+      fail(`'${shown}' -- expected '${head}.<Protocol>[.<Contract>]${suffix}'`);
     }
-    namespaceHead = path[0]!;
-    nsSegments = path.slice(1, path.length - 1); // [] (shape D) or [Contract] (shape C)
+    namespaceHead = contractSegs[0]!;
+    nsSegments = contractSegs.slice(1); // [] (default contract) or [Contract]
   } else {
-    // shapes A/B: <Protocol|Family>[.<Contract>].<method>(...)
+    // shapes A/B: <Protocol|Family>[.<Contract>]
     chain = enclosingChain;
     namespaceHead = head;
-    nsSegments = path.slice(0, path.length - 1); // [] (shape B) or [Contract] (shape A)
+    nsSegments = contractSegs; // [] (default contract) or [Contract]
   }
 
   const ns = resolveNamespace(namespaceHead);
@@ -253,7 +329,7 @@ function resolveCandidate(
     fail(
       `${protocol}.${contract} is an interface descriptor (no fixed address) — this is what the ERC20 ` +
         "token-member rewrite (options.tokens / token-rewrite.ts) already covers; a protocol-accessor " +
-        "call needs a concrete deployed instance, not a bare interface",
+        `${hasMethod ? "call" : "reference"} needs a concrete deployed instance, not a bare interface`,
     );
   }
   if (descriptor.coverage.typeFidelity === "widened" && !allowWidenedSelectors) {
@@ -269,6 +345,27 @@ function resolveCandidate(
     const known = descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)";
     fail(`Contract '${contract}' (${protocol}) is not deployed on '${chain.slug}' (available: ${known})`);
   }
+
+  return { chain, protocol, contract, descriptor, address };
+}
+
+function resolveCandidate(
+  candidate: AccessorCandidate,
+  enclosingChain: CanonicalChain,
+  chainScope: ReadonlySet<number> | undefined,
+  allowWidenedSelectors: boolean,
+): ResolvedSite {
+  const { head, path } = candidate;
+  const method = path[path.length - 1]!;
+
+  const { protocol, contract, descriptor, address } = resolveAccessorTarget(
+    head,
+    path,
+    true,
+    enclosingChain,
+    chainScope,
+    allowWidenedSelectors,
+  );
 
   const methodDescriptor = methodByName(descriptor, method);
   if (methodDescriptor === undefined) {
@@ -392,9 +489,14 @@ export function rewriteProtocolAccessors(
   const excluded = selfSugar ? collectSelfExclusions(program) : new Set<AstNode>();
   const selfSites = selfSugar ? collectSelfSites(program, excluded, shadowed) : [];
 
-  const allSites = [...resolved, ...selfSites];
+  // Bare `<Protocol>.<Contract>` / `<Chain>.<Protocol>[.<Contract>]` in value position -> its
+  // on-chain address literal. Terminal by construction (never a call callee), so it can't overlap a
+  // `resolved` call-site splice.
+  const valueSites = collectValueAccessSites(program, shadowed, chain, chainScope, allowWidenedSelectors);
+
+  const allSites = [...resolved, ...selfSites, ...valueSites];
   if (allSites.length === 0) {
-    return { source, rewrote: false, contracts: {}, accessorSites: 0, selfSites: 0 };
+    return { source, rewrote: false, contracts: {}, accessorSites: 0, selfSites: 0, valueAccessSites: 0 };
   }
 
   const ordered = [...allSites].sort((a, b) => b.start - a.start);
@@ -409,5 +511,6 @@ export function rewriteProtocolAccessors(
     contracts,
     accessorSites: resolved.length,
     selfSites: selfSites.length,
+    valueAccessSites: valueSites.length,
   };
 }

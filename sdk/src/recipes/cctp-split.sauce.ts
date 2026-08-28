@@ -17,8 +17,9 @@
  *   • `USDC` resolves to the source chain's USDC address from the token registry.
  *   • `Cctp.TokenMessenger.depositForBurn(...)` resolves interface + address from the CCTP protocol
  *     descriptor.
- *   • `Cctp_TokenMessenger` (the approve spender) is that same address, auto-injected as an ambient
- *     define.
+ *   • `Cctp.TokenMessenger` (the approve spender) resolves to that same address as a VALUE — the
+ *     accessor works in value position, not just as a call target (equivalent to the underscore
+ *     ambient define `Cctp_TokenMessenger`, just the accessor-consistent spelling).
  * One approval for the whole amount, then the burns against it — if any burn reverts (e.g. it
  * exceeds Circle's per-message cap) the entire source-chain tx reverts (all-or-nothing).
  *
@@ -26,7 +27,7 @@
  * acorn-based (plain JS), so a `.sauce.ts` routed through it must carry no TypeScript type syntax.
  */
 function main(recipient, amount, chunkSize, destinationDomain, maxFee) {
-  USDC.approve(Cctp_TokenMessenger, amount);
+  USDC.approve(Cctp.TokenMessenger, amount);
   let count = amount / chunkSize;
   for (let i = 0n; i < count; i++) {
     Cctp.TokenMessenger.depositForBurn(chunkSize, destinationDomain, recipient, USDC, 0n, maxFee, 0n);

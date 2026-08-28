@@ -299,3 +299,53 @@ describe("rewriteProtocolAccessors: negative controls -- isolation", () => {
     ).toThrow();
   });
 });
+
+const BASE_CCTP_TOKEN_MESSENGER = 232410083228790048339504449763962118892241342301n; // Cctp.TokenMessenger on base
+
+describe("rewriteProtocolAccessors: VALUE position -- an accessor used as an address, not a call", () => {
+  it("Cctp.TokenMessenger (Protocol.Contract) resolves to the SAME address literal the underscore define uses", () => {
+    const source = `function main() { return Cctp.TokenMessenger; }`;
+    const { source: out, rewrote, valueAccessSites } = rewriteProtocolAccessors(source, BASE);
+    expect(rewrote).toBe(true);
+    expect(valueAccessSites).toBe(1);
+    expect(out).toContain(`${BASE_CCTP_TOKEN_MESSENGER}n`);
+    expect(out).not.toContain("Cctp.TokenMessenger");
+  });
+
+  it("Base.Uniswap.UniversalRouter (Chain.Protocol.Contract) resolves to that chain's address as a value", () => {
+    const source = `function main() { return Base.Uniswap.UniversalRouter; }`;
+    const { source: out, valueAccessSites } = rewriteProtocolAccessors(source, ETHEREUM); // enclosing chain ignored -- Base wins
+    expect(valueAccessSites).toBe(1);
+    expect(out).toContain(`${BigInt(BASE_UNIVERSAL_ROUTER)}n`);
+  });
+
+  it("chain-qualified value resolves per the NAMED chain (Base vs Ethereum AaveV3 differ)", () => {
+    const onBase = rewriteProtocolAccessors(`function main() { return Base.AaveV3; }`, OPTIMISM);
+    const onEth = rewriteProtocolAccessors(`function main() { return Ethereum.AaveV3; }`, OPTIMISM);
+    expect(onBase.source).toContain(`${BigInt(BASE_AAVE_POOL)}n`);
+    expect(onEth.source).toContain(`${BigInt(ETHEREUM_AAVE_POOL)}n`);
+  });
+
+  it("a call AND a value of the same accessor coexist -- call -> binding, value -> address, no double-rewrite", () => {
+    const source = `function main() { AaveV3.getUserAccountData(address.self); return AaveV3.Pool; }`;
+    const { source: out, accessorSites, valueAccessSites } = rewriteProtocolAccessors(source, BASE);
+    expect(accessorSites).toBe(1); // the call
+    expect(valueAccessSites).toBe(1); // the value
+    expect(out).toContain(`IAaveV3_Pool.view(${BigInt(BASE_AAVE_POOL)}n).getUserAccountData`);
+    expect(out).toContain(`return ${BigInt(BASE_AAVE_POOL)}n;`);
+  });
+
+  it("ISOLATION: a non-namespace member value (foo.bar) is left completely untouched", () => {
+    const source = `function main() { let foo = 0n; return foo.bar; }`;
+    const { rewrote, valueAccessSites, source: out } = rewriteProtocolAccessors(source, BASE);
+    expect(valueAccessSites).toBe(0);
+    expect(rewrote).toBe(false);
+    expect(out).toBe(source);
+  });
+
+  it("END TO END: USDC.approve(Cctp.TokenMessenger, x) compiles through openRoute (dot form as a spender)", () => {
+    const built = openRoute("base", `function main() { USDC.approve(Cctp.TokenMessenger, 1000000n); }`, evmOptions()).reward(0n);
+    expect(built.intent.route.calls).toHaveLength(1);
+    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+});
