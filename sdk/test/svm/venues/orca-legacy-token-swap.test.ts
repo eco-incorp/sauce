@@ -6,7 +6,7 @@
  * the fee constants baked.
  */
 import { resolve } from 'path';
-import { address } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import { compile } from '@eco-incorp/sauce-compiler';
 import { orcaLegacyTokenSwap } from '../../../src/svm/venues/orca-legacy-token-swap/index.js';
 import type { OrcaLegacyPoolConfig } from '../../../src/svm/venues/orca-legacy-token-swap/index.js';
@@ -224,6 +224,38 @@ describe('emitQuote', () => {
     expect(() => orcaLegacyTokenSwap.emitQuote(cfg, 0, 2n)).toThrow(
       'orca-legacy-token-swap amountIn 2 is consumed entirely by fees',
     );
+  });
+});
+
+describe('Token-2022 stored token_program', () => {
+  const TOKEN_2022 = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+
+  it('threads a Token-2022 program stored on the pool and quotes byte-identically', async () => {
+    // The legacy spl-token-swap program stores ONE token_program_id (@3); this
+    // adapter reads it rather than hardcoding legacy, so a pool created against
+    // Token-2022 is threaded correctly. Set @3 to the Token-2022 program.
+    const t22Bytes = new Uint8Array(getAddressCodec().encode(TOKEN_2022));
+    const load2 = doctoredLoader((data) => {
+      data.set(t22Bytes, 3);
+      return data;
+    });
+    const t22cfg = await orcaLegacyTokenSwap.fetchPoolConfig(load2, POOL);
+    expect(t22cfg.tokenProgram).toBe(TOKEN_2022);
+    // The constant-product quote reads only raw vault balances (SPL amount @64,
+    // identical on both token programs) → byte-identical to the legacy vector.
+    expect(orcaLegacyTokenSwap.referenceQuote(t22cfg, state, 1_000_000_000n, 0n)).toBe(81330481n);
+    // buildSwap threads the pool's stored program at account index 9.
+    const { accounts } = orcaLegacyTokenSwap.buildSwap(
+      t22cfg,
+      { inAta: 'user-wsol', outAta: 'user-usdc', owner: 'payer' },
+      1_000_000_000n,
+    );
+    expect(accounts[9]).toEqual({ ref: `${REF}:token-program`, address: TOKEN_2022 });
+  });
+
+  it('legacy control: the fixture pool still threads the legacy program', () => {
+    expect(cfg.tokenProgram).toBe(TOKEN_PROGRAM);
+    expect(orcaLegacyTokenSwap.referenceQuote(cfg, state, 1_000_000_000n, 0n)).toBe(81330481n);
   });
 });
 

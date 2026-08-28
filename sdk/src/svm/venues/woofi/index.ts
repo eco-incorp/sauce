@@ -118,6 +118,8 @@ import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'woofi';
 
@@ -199,7 +201,6 @@ export const PYTH_VERIFICATION_FULL = 1;
 // SPL token account amount + mint decimals offsets (standard).
 const TOKEN_ACCOUNT_AMOUNT_OFF = 64;
 const MINT_DECIMALS_OFF = 44;
-const MINT_ACCOUNT_SIZE = 82;
 
 export const ONE_E18 = 1_000_000_000_000_000_000n;
 export const ONE_E5 = 100_000n;
@@ -253,11 +254,22 @@ function woofiConfig(cfg: PoolConfig): WoofiPoolConfig {
   return cfg as WoofiPoolConfig;
 }
 
-async function loadMintDecimals(load: AccountLoader, mint: Address, pool: Address): Promise<void> {
+// The swap CPI moves tokens through the classic Tokenkeg program, so a
+// Token-2022 mint (or one carrying an un-routable extension) must SELF-DROP.
+// Detect the real token program per mint via the shared data-shape resolver;
+// the thrown error IS the graceful drop (SvmRoute catches a fetchPoolConfig
+// throw and drops the venue). LEGACY path byte-identical: a classic 82-byte
+// mint classifies Tokenkeg, parses no extensions, config built unchanged. An
+// unreadable mint falls back to the legacy assumption (keeps existing tests green).
+async function gateMint(load: AccountLoader, mint: Address, pool: Address): Promise<void> {
   const data = await load(mint);
-  if (data === null) throw new Error(`woofi pool ${pool} mint ${mint} not found`);
-  if (data.length !== MINT_ACCOUNT_SIZE) {
-    throw new Error(`woofi pool ${pool} mint ${mint} is ${data.length} bytes, not a classic SPL mint (Tokenkeg-only)`);
+  if (data === null) return;
+  if (classifyMintProgram(mint, data) === TOKEN_2022_PROGRAM_ID) {
+    throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+  }
+  const { blocking } = parseMintExtensions(data);
+  if (blocking.length > 0) {
+    throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
   }
 }
 
@@ -312,8 +324,8 @@ export async function fetchWoofiConfig(load: AccountLoader, pool: Address): Prom
     : { wooracle: bundle.wooracleB, woopool: bundle.woopoolB, tokenVault: bundle.tokenVaultB };
 
   await Promise.all([
-    loadMintDecimals(load, base.tokenMint, pool),
-    loadMintDecimals(load, bundle.quoteTokenMint, pool),
+    gateMint(load, base.tokenMint, pool),
+    gateMint(load, bundle.quoteTokenMint, pool),
   ]);
 
   const [oracleData, poolData] = await Promise.all([load(base.wooracle), load(base.woopool)]);

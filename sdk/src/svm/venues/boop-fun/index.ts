@@ -120,7 +120,9 @@
 import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
-import type { AccountBytesMap, AccountLoader, LadderSwapTemplate, PoolConfig, SvmVenueLadder, SwapUser, VenueAccount } from '../types.js';
+import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'boop-fun' as const;
 
@@ -166,19 +168,6 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
   const data = await load(addr);
   if (data === null) throw new Error(`boop-fun ${what} ${addr} not found`);
   return data;
-}
-
-/**
- * Classic-Tokenkeg-only gate (see module header "SCOPE"): a classic mint's own account is exactly
- * 82 bytes; anything else is token-2022 (or malformed), rejected — this module has no second
- * token-program slot to route a token-2022 base-mint transfer through.
- */
-function assertClassicMint(mint: Address, data: Uint8Array): void {
-  if (data.length !== 82) {
-    throw new Error(
-      `boop-fun mint ${mint} is not a classic Tokenkeg mint (${data.length} bytes, expected 82) — token-2022 base mints are unsupported (no base-token-program CPI slot)`,
-    );
-  }
 }
 
 export interface BoopFunPoolConfig extends PoolConfig {
@@ -240,7 +229,19 @@ export const boopFun = {
       pda([SEED('bonding_curve_sol_vault'), mint], BOOP_FUN_PROGRAM_ID),
       pda([SEED('trading_fees_vault'), mint], BOOP_FUN_PROGRAM_ID),
     ]);
-    assertClassicMint(mint, mintData);
+    // The CPI supplies exactly ONE token_program account (no separate base/quote
+    // token-program slot), so the base mint's swap is legacy-SPL only: a
+    // Token-2022 base mint (or one carrying an un-routable extension) SELF-DROPS
+    // this pool. The thrown error is the graceful-drop signal the SvmRoute
+    // orchestrator catches. A classic 82-byte mint classifies legacy → no throw →
+    // config built byte-identically to before.
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`boop-fun: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`boop-fun: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
     if (!hasDiscriminator(configData, CONFIG_DISCRIMINATOR)) {
       throw new Error(`boop-fun config ${CONFIG} discriminator mismatch`);
     }

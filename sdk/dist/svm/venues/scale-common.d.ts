@@ -52,14 +52,14 @@ export declare function scaleDepthReserves(state: ScaleCurveState, direction: Sc
     reserveIn: bigint;
     reserveOut: bigint;
 };
-/** Continuous-oracle fee model (measurement only — see SvmVenueLadder.continuousFees doc). */
+/** Continuous-oracle fee model (measurement only). */
 export declare function scaleContinuousFees(state: ScaleCurveState, direction: ScaleDirection): {
     gammaPpm: bigint;
     muPpm: bigint;
 };
 /**
  * The shared quote-curve helper, deduped BY NAME across both scale-amm and scale-vmm
- * (byte-identical source, per SvmVenueLadder.helpers()'s cross-family dedup rule — the
+ * (byte-identical source — the
  * two programs' math is identical, only account layouts differ). `dir` is 0 for
  * aToB (buy: fee on input) and nonzero for bToA (sell: fee on gross output).
  */

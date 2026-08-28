@@ -280,6 +280,19 @@ function haircutFor(cfg) {
     return cfg.entry.haircutAtoBPpm;
 }
 async function fetchPoolConfig(load, pool) {
+    // Per-side token programs are threaded from the curated registry (tokenProgramA/
+    // tokenProgramB), each real-evidence-confirmed per pair — the Token-2022 side
+    // (pumpCmXq) carries TOKEN_2022_PROGRAM and its own `checkedMint` for the swap
+    // ix's transferChecked. Opposite sides differ (pumpCmXq is Token-2022, its USDT
+    // counterparty is legacy), which the registry captures explicitly.
+    // TODO(t22-fee-netting): the curated pumpCmXq (Token-2022) mint is NOT
+    // transfer-fee-netted here. Flint's quote is a per-direction constant-product
+    // haircut over live vault balances (see the "Quote curve" header) sized to the
+    // WORST observed real-fill ratio plus a large margin, so any small wire fee is
+    // already absorbed conservatively; and there is no referenceQuote in this
+    // fetch-only adapter to net a fee on. If a curated pair's Token-2022 side is
+    // ever found to carry a material effective fee, net it in the consuming app's
+    // Flint quote fragment rather than here — a missed netting is a safe self-limit.
     const entry = FLINT_PAIR_REGISTRY[pool];
     if (entry === undefined) {
         throw new Error(`${SLUG}: ${pool} is not a curated pair (see FLINT_PAIR_REGISTRY)`);

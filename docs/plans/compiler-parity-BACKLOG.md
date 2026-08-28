@@ -11,6 +11,392 @@ Every fire: read this file → pick the next unblocked item(s) → advance → u
 
 ---
 
+## 🔄 SAMMY REVIEW — close 4 PRs + rebase-drop (fire#99, 2026-08-24, workflow `w6advoc96`)
+
+**Sammy (RS owner) reviewed and asked to CLOSE + rebase-drop four PRs** (sound, specific reasoning):
+- **#357** (parity-01 nested-array reject) — premise doesn't hold (nested literals return correctly on both engines at
+  #357's base); breaks 3 conformance tests (array_length_evaluates / nested_set_index_mutates_the_inner_array /
+  set_index_stores_an_array_element); #373 reverts it anyway. Real gap = entry params (main(a: Uint256[][])) = #374.
+- **#360** (parity-04 uint) — `uint()` is target-divergent (256 EVM / 1 SVM same source) → violates CLAUDE.md:1156 (a
+  target-specific-meaning primitive must be namespaced, not neutral). `.toBe()`/`.toLe()` are the consistent spelling.
+  ⚠️ REVERSES the earlier user "keep uint()" call — user is relaying Sammy's review; the .toLe/.toBe direction ALSO aligns
+  with the in-flight SVM migration.
+- **#361** (parity-05 Math.neg) — unary `-` already does it (`-x`=2^256−x both engines); duplicate name, drop→find/replace to `-`.
+- **#363** (parity-07 Tuple infer-wildcard) — net no-op (only new accept = `const t: Tuple={}` local, byte-identical to none);
+  entry params + `): Tuple` still fail so doesn't unblock the ~15 Tuple-failing SDK programs; drags in #357's rejection.
+
+**✅ WORKFLOW ABORTED SAFELY (fire#102, adversarial gate WORKED — no bad push).** The rebase agent found **2 of Sammy's 4
+"no-op" commits are LOAD-BEARING for ecoswap**, stopped per its "don't guess" directive: **#361 (Math.neg)** — the ecoswap
+fixture CALLS `Math.neg(amt)` @ lines 222/239 (dropping → "Math.neg is not a Math intrinsic"); **#363 (parity-07)** bundles
+`entry_arg_types` + the ecoswap NS-1 test harness + `is_infer_tuple()` (used by entry_arg_types + ecoswap's 3 tuple params;
+dropping → "unresolved import super::is_infer_tuple"). CLEANLY dropped + verified no-op: #357, #360, #373's revert-of-#357.
+
+**USER DECISION (fire#102): DROP ALL 4 + replace blunt `Tuple` with FULLY-TYPED args (`interface {}`/`type {}`).** Two efforts:
+- **[3-DROP ✅ DONE (fire#107, `rebase-drop-3`)]** #357/#360/#361 + #373's revert-of-#357 dropped; `Math.neg(amt)`→`-(amt)`
+  landed in ecoswap.unrolled's harness commit; all 18 branches range-diff-verified + lease-pushed; **PRs #357/#360/#361 CLOSED**;
+  ecoswap compiles, cargo test green (0 failed, ecoswap_full #[ignore]d). **parity-07 realigned** to the rebased tip `0cc1796e1`
+  (agent left the pointer stale per "don't touch #363"; I force-pushed it consistent — now ancestor of parity-08). **FLAG:
+  `testdata/ecoswap-full/ecoswap.sauce.ts` (byte-verbatim copy of ../sauce-recipes, #[ignore]d) STILL has ~7 Math.neg — left
+  untouched (preserves byte-verbatim invariant; `cargo test` never compiles it). FOLLOW-UP: update the sauce-recipes recipe
+  Math.neg→- + re-copy (sauce-recipes user-held).**
+- **✅ TUPLE KILLED — DONE (fire#110, `kill-363`, Option A).** Dropped #363 (parity-07 ×3) + #380 (parity-19) + parity-16's
+  ecoswap-full/conformance commits. Tuple machinery GONE tree-wide (grep 0: is_infer_tuple/entry_arg_types/ArgShape/
+  EntryParamHint/UntypedEntryTupleParam/param_hint/lib.rs export; param_ty back to 2-arg; program()/lower_function lost the
+  entry_arg_types param). Removed ecoswap.rs/ecoswap_full.rs/testdata/ecoswap-full/* + sauce-cli conformance vectors + Makefile
+  wirings + README prose. **KEPT** the Ty-based decode layer (require_decodable_entry_param/entry_collection_decode/element_words
+  bytes[]/nested-tuple/nested-array branches via the INLINE annotation path) + EVERY other parity feature. **cargo test GREEN:
+  port 1088/0, module-const-expr 1093/0; clippy/fmt clean; range-diff clean per branch; 16 branches lease-pushed.** #363 CLOSED;
+  #380 shows MERGED-as-no-op (parity-19 reset to Tuple-free port head → head==base → GitHub auto-merge of an empty diff; feature
+  commit unreachable = gone; explanatory comment posted). Inline typed args (`{f:T}[]`/`T[]`) survive. **User directive complete.**
+- ~~[#363 — KILL IT (user redirect fire#108)]~~ DONE above.
+  REWORK CANCELLED (workflow w8lahx1kr stopped). `kill-363` in flight: close #363 + rebase-drop parity-07's 3 commits (blunt
+  Tuple wildcard + entry_arg_types hint + ecoswap harness) + remove the ecoswap tests (ecoswap.rs/ecoswap_full.rs + fixtures,
+  the ONLY users of the Tuple machinery) + the ArgShape lib.rs export; re-base downstream. **⚠️ SCOPE EXPANDED (kill-363 recon):
+  parity-19 (#380 "non-entry Tuple param shape") is a PRODUCTION Tuple feature built ON is_infer_tuple/entry_arg_types (4
+  production sites) — can't survive #363's removal. DECISION (A): DROP #380 too (it IS the Tuple feature); rebase
+  parity-module-const-expr (#384, clean const-fold) directly onto the new port. So the kill closes BOTH #363 AND #380; #384
+  survives re-based. Rest of stack (parity-08..18 + port + ctx pair) test-confined Tuple usage, cleanly droppable.** Inline typed args
+  (`{field:T}[]`/`T[]`) SURVIVE — independent of #363 (base annotation_ty, swap-supply uses them), so no typed-args capability
+  lost.** The elaborate typed-args-scout design below is SHELVED (not needed).
+- ~~[#363 REWORK — DESIGN LOCKED (fire#104, `typed-args-scout`; user chose "inline now + type {} follow-up")]~~ SHELVED.
+  **KEY FINDING: fully-typed inline args ALREADY WORK on RS** — `sauce-cli/tests/fixtures/programs/swap-supply/source.ts`
+  declares `pools: { poolType: Uint256, poolAddress: Address, ... }[]` (no Tuple, no hints) and compiles. `annotation_ty`
+  (lower/mod.rs:1924) already lowers inline `{...}`→Ty::Tuple + `T[]`→Ty::Array; the ONLY gap is positional `[T,...]`
+  (TSTupleType, rejected at mod.rs:2042). **#363-REWORK PLAN (Phase 1, ~15 LOC + migration):** (1) add a TSTupleType arm to
+  `annotation_ty` (mod.rs:1934) + un-reject at mod.rs:2042 — no front-end change (annotations already flow through). (2)
+  Migrate ecoswap off Tuple → inline `{field:T}[]` object types (self-documenting; access via `dp[5]` still works —
+  resolve_position matches by index — or rewrite to `dp.field`; implementer's call for minimal-diff-vs-clean): ecoswap.unrolled
+  (3 params pools/routes/brackets), ecoswap-full (`cfg: Tuple`→named object type, already supported), + 3 conformance tests
+  (nested_tuple/nested_array/bytes_array — drop compile_with_hints); swap-supply unchanged; delete `.entry_arg_types(...)` from
+  tests/ecoswap.rs:109. (3) REMOVE the whole infer-wildcard machinery: `is_infer_tuple`+2 callers, `entry_arg_types`+`ArgShape`
+  +`to_ty`, `EntryParamHint`+threading, `Error::UntypedEntryTupleParam`. RETAIN the general decode layer (`EntryParamShape`,
+  `require_decodable_entry_param`, `entry_collection_decode`). NOT a breaking public API (entry_arg_types/ArgShape are
+  sauce-core-internal, not in wasm/cli bindings). **This IS #363's reworked content — kept OPEN as the typed-args PR.**
+  **⏳ SEQUENCING: hold until `rebase-drop-3` force-pushes the re-SHA'd stack (parity-07=#363 gets a new base first); then
+  implement the rework on the rebased parity-07.** **Phase 2 (follow-up PR): named `type {}` aliases** = a module-types pass
+  (analogous to module_bindings) + resolution threading through annotation_ty/named_type — moderately invasive, deferred.
+  **SDK-corpus flag:** ~20+ shipped protocol templates use flat `path: Tuple`/`amounts: Tuple` → trivially `Address[]`/`Uint256[]`
+  (already supported, zero compiler work) — but only when the SDK moves onto RS (tied to the SVM migration + eventual EVM-on-RS).
+- **[#363 was: REWORKED IN PLACE — kept OPEN (user refinement fire#103): replace blunt `Tuple` with `type {}`]** Do NOT close #363 —
+  REWORK it: swap the untyped `Tuple` infer-wildcard SURFACE for fully-typed `type {}` aliases (`type PoolType = {...}`;
+  `main(pools: PoolType[])`), resolving to the SAME lowered arg shape `entry_arg_types` already produces. KEEP #363's backing
+  (`is_infer_tuple`/`entry_arg_types`/ecoswap NS-1 harness — ecoswap needs them); only the blunt-Tuple acceptance is removed.
+  Migrate ecoswap's 3 params (pools/routes/brackets) `: Tuple` → declared `type {}`. #363 stays a live PR = the typed-args PR.
+  Mechanism = `type {}` (user-named, not `interface {}`). `typed-args-scout` reframed to the rework plan. TS→RS forward-port;
+  ALSO unblocks the ~15 corpus programs failing on "Tuple is not a type" (which the infer-wildcard never fixed).
+
+**Full-stack rebase-drop in flight (workflow, isolated-clone + adversarial-verify-gated push).** Topology mapped:
+main→01(#357)→02→03→04(#360)→05(#361)→[06 closed]→07(#363)→08→…→18→feat/compiler-parity-port(#375)→19(#380)→384; #382/#383
+off the port. Drop the 4 commits (+ moot #373 revert-of-#357, keep #373's other fixups); re-base everything downstream incl.
+#382/#383 (preserving their converged ctx rework). Workflow: serial rebase in a fresh clone (NO push) → parallel range-diff
+each branch (confirm ONLY the 4 dropped) + build-test top (ecoswap must compile) → force-push-with-lease + close the 4 PRs,
+ONLY if every branch verifies clean. [[orphaned-workflow-worktree-collision]] respected (fresh clone, never the checked-out
+worktrees; lease-guarded push).
+
+## 🔄 EPIC — SVM Account-model migration (fire#96, 2026-08-24, USER DECISION) — the SVM half of retiring TS
+
+**USER chose "Migrate SDK to Account model"** (over RS compat-shims / defer): migrate the SDK's SVM programs
+(16+ venue fragments + settle.sauce.ts + shared helpers, ~97 call-sites) from the TS **string-ref** account model
+(`accountUint("escrow0",64,8)` / `accountData("tokenProgram0",0,0)`) to RS's native **Account-slot** model
+(`Account` typed params + `svm.sload(a,64n,8n).toLe()` / `uint(svm.sload(...))`) — so RS can replace TS for SVM too.
+
+**SCOUT PLAN (fire#97, `svm-migration-scout`) — compile-path RESOLVED + phased.** Migrated venues compile on a **FRESH
+WASM from `sauce#main`** — NOT TS (`svmAccountRef` globals.ts:205-224 hard-requires a string/int literal; `Account` is
+type-strip-only), NOT the current stale WASM. The venue transform `accountUint("ref",off,w)` → `svm.sload(<AccountParam>,
+off n,w n).toLe()` needs ONLY features already proven on main (typed-Account + svm.sload + .toLe/.toBe + multi-account main
+params — all compile in `sdk/src/std/token/token.svm.js`), so it does **NOT** block on my unmerged ctx-converge/tuple-param
+PRs (helper-tuple-param NS9 also off-path — venue helpers are pure scalar, accounts live in main). Mechanism: devDep
+`sauce-next: github:eco-incorp/sauce#main` + `sdk/scripts/build-wasm.mjs` (`SAUCE_WASM_REBUILD=1 pnpm --filter ./sdk
+build:wasm` → gitignored `sdk/.sauce-wasm/`; needs Rust 1.97.1 + wasm32 + wasm-pack). Vendored `sauce-compiler-wasm/` is
+GONE (CLAUDE.md stale). Loader today = only `sdk/test/std/token/harness.ts` (`compile({target,entry,resolve,resolvePackage})
+→ {bytecode, manifest}`).
+
+**INVENTORY:** 16 venues use the string-ref model (of 87 dirs; ~21 emit quotes). SIMPLE (1-3 reads, CP reserve @ off 64):
+saber/stabble-stable/stabble-weighted/pumpswap/raydium-amm-v4/orca-legacy/spl-token-swap-forks/taurusfi/virtuals. MID (4-7):
+huma/raydium-cp-swap/hylo/meteora-damm-v2. COMPLEX (Token-2022/dynamic-fee/u128): meteora-dbc(18)/meteora-damm-v1-stable(16)/
+perena(8). Shared: `venues/math.ts`. **PILOT = pumpswap** (2 clean `accountUint(ref,64,8)` reads = token.svm.js's balanceOf
+shape exactly); 2nd-lane shape-prover = raydium-amm-v4 (combined-expr). `accountData(` real calls exist ONLY in settle.
+
+**✅ FAN-OUT WAVE-2 DONE + PER-VENUE MIGRATION CLOSED (fire#105, `svm-wave2-definitive`, feat/svm-account-model @ `3a8665b`,
+local).** Definitive grep: EXACTLY 6 venues have a real own-emitQuote `accountUint(` call (rest are param-only/shared-ladder).
+**MIGRATED 3** (all needed `block.timestamp`→`ctx.timestamp()`): meteora-damm-v2, saber-stableswap, meteora-damm-v1-stable
+(saber/damm-v1-stable declare the ladder's stableD/stableY as TOP-LEVEL scalar stub doubles — RS forbids nesting a fn in
+main). **Gate: 22 suites / 292 tests GREEN + typecheck clean.** **TOTAL in-repo venues migrated = 10** (pumpswap + wave-1's 7
++ these 3). **BLOCKED 3 (reverted, RS compiler gaps):** meteora-dbc + perena = `codegen.rs:550 "the branches of this if leave
+different locals live"` (nested-if-with-const); stabble-stable-swap = nested-fn-in-main + `iter++`.
+**⚠️⚠️ RS M1-SUBSET GAPS FOUND (genuine TS→RS parity gaps, gate the STABLE-Newton family):** (1) **no `++`/`--` update
+expressions** (frontend.rs — Newton `for(;i++)` rejected; workaround `i=i+1`); (2) **no nested function declarations** (helper
+must be top-level); (3) **codegen "different locals live"** on nested-if-with-const (perena+dbc). **USER DECISIONS (fire#106):**
+(1) codegen "different locals live" — **ANSWER: NO, TS does NOT error** (not shadowing — different-name branch-local consts;
+valid TS/valid SauceScript). Genuine RS-only stack-discipline over-restriction (a branch-local const last-read in a NESTED if
+never gets consumed → lingers → then-arm taller than empty else → false DivergentBranches). ✅ **FIXED (PR #386,
+`rs-if-liveness-fix`, `fix/compiler-if-arm-liveness` off main).** NOT the naive `align_to(&entry)` (would break every ternary —
+codegen normalizes ternary/`&&`/`||` → Stmt::If with a shared result temp that MUST survive): instead `drop_arm_leftovers`
+drops trailing arm-locals STOPPING at the first `merge_survivors` slot (survivor-on-top → 0 drops → byte-identical for all
+ternaries; leftover → dropped; survivor-above-leftover → still DivergentBranches fail-closed). Flipped 1 test error→success +
+added the perena/dbc venue-shape regression. cargo test 1050/1050, v12_conformance 193/193, clippy/fmt clean. Unblocks the
+guarded-if venue family. **SDK RS/WASM needs rebuild from a commit carrying #386 too.**
+(2) `++`/`--` — ✅ **DONE (PR #385, `rs-plusplus-impl`, `feat/compiler-update-expr` off main).** `check_update`
+(frontend.rs:957, plain-identifier operand only); lowering `i++`≡`i=i+1n` reusing compound-assignment path (no new opcodes,
+statement.rs:862); STATEMENT context (for-update + bare `i++;`) fully covered (what Newton loops need), expression-context
+(`let x=i++`) deferred. Target-agnostic. Verified on REAL engines: cargo test 1060/0, v12 conformance 197 (4 new), svm
+conformance 174 (3 new, built engine.so), clippy/fmt clean. **SDK RS/WASM needs rebuild from a commit carrying #385 before
+Newton venues consume it.** (3) nested functions — **DO NOT support** (user: "I don't like nested
+functions declaration") — RS keeps rejecting; helpers hoisted to top-level (SDK/ladder rewrite, not a compiler change).
+**🔄 UNBLOCK 3 VENUES (fire#112, `svm-unblock-venues`):** #385/#386 both OPEN (unmerged) — building TEMPORARY combined branch
+`svm-venue-unblock-base` (main + #385 + #386), repoint SDK sauce-next → it + rebuild WASM, migrate perena+meteora-dbc (via #386)
++ stabble-stable (via #385 + hoist its inline Newton helper top-level; flag if it needs the held sauce-recipes ladder).
+Completes the per-venue in-repo migration + VALIDATES #385/#386 on real venues. WASM reverts to main once #385/#386 merge.
+  ✅ **DONE (fire#113): ALL 3 MIGRATED + GREEN — #385/#386 validated on real venues.** Combined `svm-venue-unblock-base`
+  (main+#385+#386, `fa1fbe2dc`) built (1062/0) + pushed; WASM rebuilt. perena (`7316825`, #386 deep-nested-if solver),
+  meteora-dbc (`fe10e03`, #386 fee-scheduler), stabble-stable (`bc3414c`, #385 iter++ + top-level-helper hoist saber-style).
+  **PER-VENUE IN-REPO SVM MIGRATION COMPLETE = 13 venues** (pumpswap + 7 wave-1 + 3 wave-2 + 3 unblocked). Gate: 24 suites /
+  **300 tests green**, typecheck clean. feat/svm-account-model @ `bc3414c`. **⚠️ #350 SCHEMA DRIFT (from the WASM refresh, NOT
+  #385/#386):** current main's #350 (ECO-2150 entry-account role) adds a `requires` field to every manifest slot (bare Account →
+  `"readonly"`); broke the 12 prior `manifest.accounts` assertions — FIXED (`21c87c6`: SvmAccountRole + requires on the shared
+  SvmManifestAccount type + assertions; forward-compatible). Remaining SVM: settle (staged-mode gap) + sauce-recipes ladder (held).
+  **⛔ settle BLOCKED on a BIG RS FEATURE (fire#114): RS has NO `staged` mode AT ALL** (grep of sauce-core+sauce-wasm on main =
+  0 hits; CompileOptions has target/resolve/resolvePackage/entry/contracts/optimize only). settle's `compile(staged:true,args)`
+  needs genuine staged/parametric compilation in RS-core (+ wasm exposure) — a substantial NEW feature (Sammy's domain, needs
+  design), NOT a small wasm addition. Flagged as the remaining SVM blocker; not an autonomous quick-fix.
+
+**🧾 HOUSEKEEPING (fire#115, user ask): PRs↔tickets↔Slack reconciled.** Slack thread (C0AFSM52JER) shows Sammy flagged
+#357/#360/#361/#363 to close + Kiryl agreed "explicit types only, no Tuple" (type {}/interface {} = future foundation) — my
+kill aligns exactly. Actions: **created + linked** ECO-2196 (#385 ++/--), ECO-2197 (#386 if-liveness), ECO-2198 (SVM migration
+→ new DRAFT PR sauce-sdk#143, base feat/compiler-parity, 13 venues); ECO-2196/2197 → In Review. **Cancelled** ECO-2161(uint#360)
+/ECO-2162(Math.neg#361)/ECO-2164(Tuple#363)/ECO-2187(non-entryTuple#380) — killed PRs. #385/#386 are OFF MAIN (independent
+fixes, NOT stacked on the parity chain). Slack DRAFT posted in-thread (Dr0BRZHR7QDD) = the "done, PRs are yours" handoff (closed
+list + rebase-green + remaining open PRs grouped + the 2 new fixes + SVM #143) — awaiting user review/send.
+
+**✅ #385/#386 MERGED to sauce main (fire#125, 2026-08-25, re1ro admin-merge) — main HEAD 079442ad4 has check_update +
+drop_arm_leftovers.** ECO-2196/ECO-2197 → **Done**. **✅ SVM WASM REVERT DONE (`svm-wasm-revert`, commit 456ccbb pushed):**
+#143's sauce-next reverted `svm-venue-unblock-base`→`#main` (resolves 079442ad4), WASM rebuilt from main, **venue gate 24
+suites / 300 tests GREEN** off the main-based WASM (perena/meteora-dbc/stabble-stable all PASS — proves #385/#386 upstream
+cover them), typecheck clean, ZERO drift (#350 requires-field still holds). **PR #143 now CLEAN** (no temp-branch dep);
+temporary `svm-venue-unblock-base` branch DELETED. **SVM per-venue migration fully validated on main — #143 ready for review.**
+
+**📍 STATE (fire#114): bounded autonomous work COMPLETE; remainder is big-feature or externally gated.** DONE this program:
+Tuple killed (#363/#380); ++/-- (#385) + if-arm-liveness (#386) fixed+validated on real venues; ctx.* convergence (RS
+#382/#383 + TS #141/#142); parity forward-port stack; SVM per-venue migration COMPLETE (13 venues, 300 green); corpus
+readiness ~99.7% EVM; dynamic-kind family verified immune. REMAINING = **Sammy's review/merge** (#385/#386 + parity/converged
+stack + combined `svm-venue-unblock-base`), **settle staged-mode** (big RS feature — design decision), **sauce-recipes ladder**
+(user-held). Nothing unblocked+non-gated in-lane; hold for a merge or new direction.
+Note: SDK RS/WASM needs a rebuild from a commit carrying ++/-- before the Newton venues can use it. Remaining accountUint surface: 3 blocked venues + settle
+(recipes/settle.sauce.ts 3, recipes/index.ts 3) — settle held (staged-mode Q). Shared ladder = sauce-recipes (out of repo).
+Branch NOT pushed yet.
+
+**✅ P0 DONE (fire#98, `svm-p0-foundation`):** worktree `sauce-svm-migration` / branch `feat/svm-account-model` (off
+feat/compiler-parity @188f7c8); `pnpm install` clean; WASM built from the CURRENT pin `431f9cef` (NO bump — it already has
+typed-Account) → `sdk/.sauce-wasm/`; **token compile suite 12/12 GREEN** (P0 gate); **pilot-shape PROVEN** — a 2-`Account`-param
+`svm.sload(a,64n,8n).toLe()` program compiles + emits `accounts:[{kind:slot,index:0,name:base},{index:1,name:quote}]` (param
+order). **Verbatim RS SVM syntax captured:** `main(base: Account, quote: Account): Uint256`; `svm.sload(acct, offN, lenN)` +
+`.toLe()`(LE u8/u32/u64) / `.toBe()`(BE 32-byte pubkey cmp); writes `x.toBytesLe(8n)`/`data.concat`/`hex\`03\``; CPI
+`svm.call(<programLiteralN>, [a,b,c], data)` — callee MUST be an inline bigint literal (a `let` drops the program entry under
+--no-optimize). Manifest `{accounts: ({kind:'slot',index,name}|{kind:'program',pubkey})[]}`, only main-REACHABLE svm.call
+programs harvested. Offline gate = compile+manifest (execution needs a main-lineage engine, expected). 🔄 **P1+P2 PILOT
+(pumpswap) IN FLIGHT** — establishing the replicable recipe + the incremental-vs-big-bang verdict on the types.ts contract.
+**✅ P2 PILOT DONE (fire#100, `svm-p0-foundation`, commit 264a601):** pumpswap migrated end-to-end via RS (32/32
+green, typecheck clean, 3-file diff). **Shared helper `sdk/test/svm/rs-compile.ts`** — `compileSvm(source)` +
+`wrapQuoteMain(n, fragment, retExpr)` (generalizes the token WASM loader; RS returns a single Uint8Array, not TS's
+Uint8Array[]). **RECIPE (mechanical):** `accountUint("<ref>",off,w)` → `svm.sload(acc<k>,off,w).toLe()` (k = ref's index
+in `quoteAccounts(cfg)`; ALWAYS .toLe() — u64 LE amounts); `block.timestamp`→`ctx.timestamp()`/`block.number`→
+`ctx.blockNumber()`; leave ALL arithmetic (Math.mulDiv/sqrt/+−*/, bare+n literals compile byte-identical); flip test →
+`compileSvm(wrapQuoteMain(...))` asserting `manifest.accounts` = `[{kind:slot,index:i,name:'acc'+i}]`. **VERDICT:
+INCREMENTAL / parallel-independent** — no types.ts change (emitQuote is `=>string`, content isn't typed); blast radius =
+venue dir + its test; both dialects coexist during transition; the multi-venue orchestrator cutover is a separate DOWNSTREAM
+step (sauce-recipes, out of repo). RS/SVM REJECTS Math.floor/max/min/abi.encode — but those are OFF-CHAIN (fetchPoolConfig),
+not in emitQuote fragments (gavel's abi.encode = separate). Token-2022/u128 also off-chain. **🔄 P3 FAN-OUT WAVE-1 launched
+(workflow `wefd00eou`):** 4 parallel worktree lanes (each reuses the pilot's built WASM, no rebuild) over TRIVIAL+MULTI
+venues (orca-legacy/raydium-amm-v4/mswap/kipseli · helium-treasury/perena-star/phoenix/openbook-v2 · jupiter-lend-earn/
+spl-token-swap-forks/stabble-weighted/sanctum-stake-pool · raydium-cp-swap/hylo/huma/perena), gated per-venue, merged +
+full-svm-gated in the pilot worktree. Wave-2 (TIME-DEPENDENT/STABLE +ctx.* rule: meteora-damm-v2/v1-stable/dbc, saber,
+stabble-stable, voltr; + gavel abi.encode) held for after wave-1.
+
+**✅ FAN-OUT WAVE-1 DONE (fire#101, workflow `wefd00eou`, feat/svm-account-model @ `1e1312c`):** **7 venues migrated + merged**
+(orca-legacy-token-swap, raydium-amm-v4, stabble-weighted-swap, spl-token-swap-forks, raydium-cp-swap, hylo, huma); zero merge
+conflicts (disjoint files); **FULL GATE 22 suites / 292 tests GREEN + typecheck clean**. NOT pushed (local). **KEY FINDING —
+most listed "venues" are PARAM-ONLY** (mswap/kipseli/helium-treasury/perena-star/phoenix/openbook-v2/jupiter-lend-earn/
+sanctum-stake-pool): no real `accountUint(` call in their own index.ts (grep matches are doc-comments); their quote fragments
+are emitted by a **SHARED LADDER MODULE relocated to `sauce-recipes`** (OUT of repo, user-held [[feedback-scope-other-projects]]).
+So the in-repo per-venue surface is small — the ladder-venue cutover is a separate downstream sauce-recipes step (needs user
+go-ahead). **⚠️ RS COMPILER GAP FOUND (perena) — a genuine TS→RS parity gap:** perena's ~7-level nested-if curve solver hits
+`crates/sauce-core/src/codegen.rs:550` "the branches of this if leave different locals live" whenever an inner `if` declares a
+`const` inside an outer `if` that also declared one (2-level minimal repro; 1 level fine). Independent of the migration
+(arithmetic is all RS-allowed). perena reverted to accountUint, BLOCKED pending an RS codegen fix (nested-if local-liveness)
+OR flattening its arithmeticLines. **Follow-up decision: fix RS (real gap, would help other programs) vs defer perena.** 🔄
+**WAVE-2 launched** — definitive grep of ALL venue dirs for real `accountUint(` calls → migrate every not-yet-done own-emitQuote
+venue (incl. TIME-DEPENDENT +ctx.* rule), skip param-only, flag RS-gap-blocked. settle.sauce.ts held separate (staged-mode Q).
+**PHASES:** **P0 (serial, GATE)** refresh sauce-next→main + rebuild WASM, token compile suite green on it. **P1 (serial)**
+generalize token/harness.ts WASM loader → shared svm rs-compile helper + migrate `venues/types.ts` adapter contract
+(`quoteRefs()`→ordered Account-param list; emitSetup/emitQuote use param names). **P2 PILOT (serial)** pumpswap end-to-end
+(source→Account, test→RS `manifest.accounts` assertion). **P3 FAN-OUT (parallel ~4-6 lanes)** 15 independent venues (own
+dir+test): SIMPLE batch(2 lanes)/MID batch(2)/COMPLEX 1-each. **P4 (parallel)** settle generator (recipes/index.ts
+svmSettleSource, 6 sites incl. the zero-length `accountData("tokenProgram*",0,0)` interning trick) + verify.ts. **P5 GATE**
+`sdk/test/svm/**` compile+manifest green offline via RS.
+
+**BLOCKERS:** (1) **[HARD PREREQ]** WASM refresh needs the toolchain present + sauce#main built. (2) **[VALIDATE ON PILOT]**
+RS staged-args/treeshake/`args` mode is UNVERIFIED — the shipped **settle API + ladder solver** use `compile(staged:true,…)`
+(TS-only today); venues use non-staged `function main(){…}` so they're fine, but settle/ladder full-replacement (P4) could
+de-scope if RS lacks staged mode. (3) **[GATE CAVEAT]** offline gate = COMPILE + manifest-shape only; e2e EXECUTION needs
+`SAUCE_ENGINE_SO` = a `cargo build-sbf` of sauce-next (vendored engine.so is release/beta, can't run RS bytecode) — same
+gating token e2e already carries. User's [[feedback-scope-other-projects]] note is SIBLING repos; SVM venues are THIS repo.
+
+## 📊 M8 CORPUS-READINESS MEASUREMENT (fire#95, 2026-08-24, `rs-corpus-readiness` — FIRST full sweep)
+
+**How close is RS to REPLACING TS across the real SDK protocol corpus?** First-ever systematic measurement (North-Star only
+proved 1 recipe). Ran the built RS/WASM compiler (commit ac2ae519c, Aug-23 — PRE the latest forward-ports, so a hard FLOOR)
+over ALL 128 protocols / 286 functions via the P6 rs-compile path.
+
+- **EVM: 268/286 = 93.7% MEASURED floor; ~99.7% PROJECTED** on current RS main + in-flight #142. 114/128 protocols compile 100%.
+  AMM/DEX, lending, erc20, staking/LST ≈ 100%. The 18 failures:
+  - **12 = empty-array ABI typing** (balancer-v2, gmx-v2, oneinch, paraswap, pendle×4, zerox, …) — GENUINE gap but ALREADY
+    FIXED on RS main (#351/#381); absent only from the Aug-23 WASM. **Needs a WASM rebuild/repin to reach the SDK path.**
+  - **5 = msg.\* not yet migrated** (debridge/layerzero/stargate/zksync-bridge/erc20.storageTransfer) — DIALECT, resolved by
+    NS-CONVERGE #142 (msg.*→ctx.*); RS already supports the targets. SDK-side.
+  - **1 = seaport.fulfillBasicOrder** — v12 16-entry stack-window limit that **TS-v12 ALSO hits** (ECO-2149); not RS-specific,
+    Sammy's design call.
+- **SVM: ~0% as-written — UNIFORM account-model DIALECT divergence (bucket C, ECO-1860), NOT a capability gap.** The SVM venue
+  fragments + settle.sauce.ts use the TS STRING-REF model (`accountUint("escrow0",…)`, `accountData("tokenProgram0",…)`, 97
+  call-sites / 16 venues); RS uses the ACCOUNT-SLOT model (`Account` params + `svm.sload(a,…)`). Empirically: accountUint/
+  accountData → FAIL on RS; Account+svm.sload / uint(svm.sload) → PASS (the @sauce/token svm arm compiles by construction). RS
+  COVERS the same ops — it's a naming-model mismatch. Resolving needs EITHER an SDK migration of the SVM programs to the
+  Account model (large: 16+ venues + settle + harness) OR RS `accountUint`/`accountData` compat shims.
+- **Feature ports have ZERO corpus blast (data-validated):** for…of (PR-12), inline arrow-const (PR-15/16), local new-Array
+  FOLD (PR-13 — runtime `new Array` WORKS on RS, only compile-fold absent), try/catch, local const-prop — NONE appear in the
+  protocol templates (straight-line typed main() + .at() + struct-args, which RS fully handles). TS-parity-completeness items,
+  **not corpus blockers** — confirms deferring them is correct.
+
+**TOP GAPS RANKED BY CORPUS BLAST:** (1) **SVM account-model dialect** — blocks ~all SVM programs, BY FAR the biggest, needs a
+directional decision (SDK-migrate vs RS-shim). (2) empty-array — 12 EVM fns, fixed on RS main, needs WASM repin. (3) msg.*→ctx.*
+— 5 EVM fns, SDK-side #142. (4) seaport v12 stack — 1 fn, shared w/ TS-v12, Sammy. **EVM M8-readiness ≈ essentially there;
+SVM gated on the account-model call.**
+
+## 🔄 EPIC — NS-CONVERGE to Sammy's ctx.*+gating (fire#89, 2026-08-24, USER DECISION)
+
+**Sammy merged his own M8 features to RS `main` (#347–#351), some overlapping my open stack.** Two overlaps:
+- **#351 (ECO-2147 empty-array)** = duplicate of my #381 (ECO-2188). ✅ **#381 CLOSED**, ECO-2188 cancelled → points at #351.
+- **#348 (ECO-2146 `ctx.msgValue`)** = namespace DIVERGENCE vs my #383 `evm.msgValue`. Sammy's model: ALL context reads
+  under `ctx.*` (msgSender/self/chainId/blockNumber/timestamp/selfBalance/balance + gated `ctx.msgValue`), target-
+  availability via per-read `Feature` gate, **NO evm.\* namespace for context reads**. (evm.\*/svm.\* still exist, but
+  only for the STORAGE/CALL target-duals — sload/sstore/call — unchanged, legit.)
+
+**USER DECISION (fire#89): CONCEDE to Sammy's ctx.\*+gating.** Drop the `evm.*` CONTEXT/ADDRESS surface from BOTH
+compilers; relocate those reads to gated `ctx.*` (like `ctx.msgValue`). Keep the `evm.*`/`svm.*` STORAGE-CALL duals.
+Reverses the earlier "EVM-only → evm.\*" call. Execution lanes:
+- **[TS #141] ✅ DONE (fire#89, `a9caae5`, pushed):** `evm.codeSize/codeHash/isContract/isEOA` → gated `ctx.*`
+  (capability keys renamed evm.*→ctx.*); evm.*/svm. now carry ONLY storage-call duals; tests+README updated;
+  byte-emission unchanged (same Saucer ops). 340 touched-suite tests green + typecheck clean.
+- **CONVERGENT TARGET (locked, fire#90):** `ctx.*` = **7 portable** (msgSender/self/chainId/blockNumber/timestamp/
+  selfBalance/balance) + **gated `ctx.msgValue`** (from RS main #348) + **4 gated code reads** (codeSize/codeHash/
+  isContract/isEOA, EVM-only). **The env reads (origin/gasPrice/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee/
+  gasLeft/blockHash/blobHash) are DROPPED from BOTH compilers** — `rs-ctx-converge`'s oracle analysis proved they're in
+  NEITHER compiler's canonical ctx.* (TS §1.4 excludes gasPrice/origin as CtxUnknownMethod; TS exposes no gasLeft/blockHash/
+  blobHash at all), speculative, zero enforced consumers. This SUPERSEDES the earlier "convert all env reads" steer — trimming
+  IS the convergence, not scope-creep. (Recipe's bare `gasLeft()` is served by a FREESTANDING intrinsic, not a namespace
+  member — untouched.)
+- **[RS #383] rework in flight (`rs-ctx-converge`):** drop msgValue + 9 env reads; keep ONLY the 4 code reads → gated ctx.*.
+  **⚠️ BASE DRIFT found:** the RS worktrees sat on a STALE local rebase of feat/compiler-parity-port (717b97159, pre-#362-
+  address-drop → still carries address.*) diverged from origin's canonical 8523acecb. Agent instructed to rebuild deltas on
+  ORIGIN (8523acecb, no address.*), NOT push the stale local base. #382 (ctx.msgData portable) verify+push, not redundant.
+- **[TS #142] ✅ DONE + VERIFIED (fire#92, `ts-142-converge`, pushed `08b9106`).** Rebased onto #141 `a9caae5`
+  (3-file conflict resolved by re-deriving from #141's clean version); **kept `ctx.msgValue`** (gated, capability key
+  `ctx.msgValue`, EVM_TARGETS — 2 SDK sites stargate/zksync-bridge + 5 test uses retargeted evm.msgValue→ctx.msgValue),
+  **dropped the other 10 env reads** everywhere (globals.ts/capabilities.ts/docs/tests); freestanding gasLeft()/blockHash()/
+  blobHash() intrinsics untouched. **Confirmed NO SDK site uses a dropped read.** Final TS `ctx.*` = 13 members:
+  msgSender/msgData/self/chainId/blockNumber/timestamp/selfBalance/balance (7 portable + msgData) + gated msgValue/codeSize/
+  codeHash/isContract/isEOA. `evm.*` = storage-call duals only. **GATES:** typecheck 0; full compiler test/ **1902/1902**;
+  integration blockchain 40/40 (real anvil, ctx.msgValue()→0); SDK compile.test **1455/1455** (every protocol incl. the
+  retargeted ones) + venue tests. **This 13-member surface == the RS #383 target EXACTLY** → true byte-parallel convergence
+  once RS lands. (Adopted orphan worktree `sauce-ctx-ops` rather than removing a possibly-shared one.)
+- **[RS #382/#383] ✅ DONE + green + MERGEABLE on canonical origin base (`rs-ctx-converge`).**
+  - **#382** (`parity-ctx-portable` = `7bf72b264`): ctx.msgData portable, clean on 8523acecb, mergeable; erroneous first
+    force-push undone (restored). No code change.
+  - **#383** (`parity-evm-context` = `47fee0db8`, parent 8523acecb, single commit, tight +601/-19 / 12 files): the **4 gated
+    ctx.* code reads** codeSize(0x72)/codeHash(0x73)/isContract(0x75)/isEOA(0x76), gated `Feature::EvmCodeInspection`
+    (renamed from EvmEnvironment now only code reads remain). **DROPPED** msgValue (main #348 owns ctx.msgValue) + all 9 env
+    reads (origin/gasPrice/gasLeft/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee/blockHash/blobHash) — ContextOps/Expr
+    nodes/opcodes/builtins/codegen/tests all removed; an unknown env read is now clean `CtxUnknownMethod` (test pins
+    ctx.gasPrice→CtxUnknownMethod). No freestanding gasLeft() existed on this base to preserve. **GATES:** cargo test -p
+    sauce-core green (1111 lib + integration, 0 failed; only pre-existing unrelated ecoswap_full ignored); clippy -D + nightly
+    fmt clean; README + PR body updated.
+  - **Base-drift RESOLVED for these two:** 8523acecb DID compile ecoswap green (my Namespace::Address grep just missed the
+    spelling); the stale 717b97159 abandoned entirely; both PRs clean+mergeable on canonical origin. (The broader whole-stack→
+    new-main rebase remains a general future item, not specific to NS-CONVERGE — Sammy coordination.)
+
+## ✅ NS-CONVERGE COMPLETE (fire#94, 2026-08-24) — both compilers land the IDENTICAL 13-member ctx.*
+
+**PARITY ACHIEVED.** TS (#141+#142, pushed) and RS (#382+#383, mergeable on origin) both converge to the same
+`ctx.*` = **7 portable** (msgSender/self/chainId/blockNumber/timestamp/selfBalance/balance) + **msgData** + **msgValue**
+(gated EVM-only) + **4 code reads** (codeSize/codeHash/isContract/isEOA, gated EVM-only). `evm.*`/`svm.*` = storage-call
+duals only, both compilers. The 10 speculative env reads dropped from both. RS gets msgValue from main #348 once the stack
+rebases onto new main. **REMAINING = Sammy: review/merge #382/#383 + #141/#142; then the whole-stack→new-main rebase.**
+- **[RS] (agent `rs-ctx-converge`, parallel):** rebase #382 (ctx.msgData) onto new main; rework #383 evm.* context surface
+  → gated ctx.* reads (drop redundant `ctx.msgValue` — Sammy has it); keep evm.*/svm. storage-call. Worktrees
+  `sauce-ctx-portable`/`sauce-ctx-evm` exist. Assess-redundancy-FIRST (Sammy may own env reads) then rework the remainder.
+
+## ✅ CONTEXT-SURFACE CONVERGENCE + M8 REORG (fires#72–80, 2026-08-24)
+
+**Linear is now the live tracker** (project "Sauce Compiler Rust", team Eco). Backlog kept as durable summary.
+
+**Namespace convergence — Rust namespacing is the STANDARD; TS+SDK conform (user directive).** `ctx.*` = PORTABLE
+(both engines), `evm.*` = EVM-only. Landed as 6 held-for-review PRs:
+- **address.\* dropped:** RS never gets it (#362 CLOSED); TS **sauce-sdk#141** (ECO-2163) drops `address.*`→`ctx.*`
+  (self/balance/balanceOf) + `evm.*` (codeSize/codeHash), byte-identical (golden vectors).
+- **context surface completed (RS):** **sauce#382** (ECO-2189) `ctx.msgData()` portable; **sauce#383** (ECO-2190) 13
+  EVM-only `evm.*` environment reads + `evm.isContract/isEOA`, one `Feature::EvmEnvironment` gate. Implements Sammy's
+  **ECO-2146** as `evm.msgValue` (EVM-only, not ctx.msgValue).
+- **msg/block/tx dropped (TS+SDK):** **sauce-sdk#142** (ECO-2191, stacked on #141) drops `msg`/`block`/`tx`, migrates
+  ~23 SDK sites (msg.sender→ctx.msgSender, msg.value→evm.msgValue, block.timestamp→ctx.timestamp).
+- **uint() KEPT** (#360/ECO-2161, user decision). **`../sauce-recipes` migration HELD** (user's call; 119 address.* uses).
+
+**⚠️ KEY LESSON — runtime execution beats source-level verification.** My opcode-verification workflow read the engine
+SOURCES (svm opcode.rs has the isContract/isEOA/balance arms) → mis-classified them "portable." An agent RAN them on real
+LiteSVM → they REVERT on svm (`InvalidInstructionData`): svm's account-index model can't resolve a raw EVM-ADDRESS operand
+(unlike SLOAD/SSTORE which reinterpret as account index). Fixed: isContract/isEOA gated `evm.*`. **Pre-existing
+`ctx.balance()` shares this bug → ECO-2192 (High, flagged for Sammy: compiler operand-reinterpretation vs engine fix).**
+The lean **main** engine ≠ the beta lineage the TS compiler used; every opcode wired is now engine-verified (all 23
+context reads confirmed present on main; 0 deferrals besides the operand-shape gap above).
+
+**LINEAR REORG (user directive):** Parity Epic **ECO-2157** + ~24 children moved M9→**M8** (they're M8's compiler-side
+precondition; overlaps Sammy's ECO-2146/2147 relatedTo-linked not duplicated). **M9 renamed → "Ambient imports &
+Layer-C plugin"** (ECO-2158 + children stay). Sammy heads-up posted on M8. Per-PR tickets = ECO-2159–2192.
+
+**✅ DONE since (fires#81–86, 2026-08-24):**
+- **module-const-expr fold** — PR #384 (ECO-2193, ECO-2076 const-expr AC), held for Sammy. Recipe probe advances past all
+  44 module consts → SIXTH gap = bare `gasLeft()` = recipe-spelling (`evm.gasLeft()` exists via #383), NOT a compiler gap.
+  **RS compiler is now FEATURE-COMPLETE for the flagship recipe** (all 6 layered gaps closed; last is recipe migration).
+- **#362 address.\* rebase-drop DONE + VERIFIED** — `0a958c5da` dropped from the whole chain via rebase across **22
+  branches** (force-pushed `--force-with-lease`, 0 aborts; parity-01..05 untouched). Prepare-verify checkpoint (isolated
+  scratch clone) caught the NS-1 fixture dependency BEFORE push → migrated `ecoswap.unrolled.sauce.ts` address.self→ctx.self()
+  to keep NS-1 green. range-diff clean on all 22 (only address.* removal + fixture migration); grep confirms no
+  Namespace::Address left. address.* no longer ships on merge. New tips: feat/compiler-parity-port `8523acec`, #380
+  `7fb65278`, #384 `d7a7b14f`, etc. ECO-2163 = every in-repo part done.
+- **Slack thread updated** with all new PRs (#380/381/382/383/384 + #141/142) — eco-pay #C0AFSM52JER compiler-parity thread.
+
+**REMAINING (all Sammy/user-gated, no blocked autonomous BUILD work):** balance svm operand (ECO-2192, Sammy);
+ECO-2076 (Sammy: fold #384 into #304 or keep); Sammy's PR reviews/merges + M8 SDK steps (ECO-2151-2156);
+`../sauce-recipes` migration (user-held). **Session pinned in worktree `sauce-address-ctx`; backlog edited
+via `sauce-sdk-cp` (feat/compiler-parity).**
+
+## ✅ M8-compiler-gap progress (fire#71, 2026-08-24)
+
+- **ECO-2147 empty-array ABI typing — DONE + VERIFIED: PR #381** (commit c23d5dabc, 4 files/424 lines;
+  `Lowerer::argument`+`typed_array_argument`/`typed_tuple_argument` in contract.rs; NO IR/codegen; 4 tests green
+  incl. nested-in-struct + 2 negative controls; build+suite green). Ticket **ECO-2188** (Epic A, linked #381 +
+  relatedTo Sammy's ECO-2147, commented). `empty-array-impl` finished but never self-reported; recovered from disk/PR.
+- **address.\* direction fix (ECO-2163):** in-repo TS drop delegated to `ts-address-drop` → branch
+  `chore/drop-ts-address-namespace` (off origin/main). Spot-checked: correctly updates doc-comment references +
+  real SauceScript (settle.sauce.ts `balanceOf(address.self)`→`ctx.self()`), NOT TS code logic. ⚠️ **WORKTREE
+  COLLISION:** the agent `git checkout -b`'d in the SHARED sauce-sdk checkout (my delegation error — should've been an
+  isolated worktree), displacing `feat/compiler-parity` HEAD. My commits safe; recovered `feat/compiler-parity` into
+  worktree `/Users/er/Documents/Projects/sauce-sdk-cp` (backlog work continues there). Lesson (again): isolated
+  worktree per agent, per [[orphaned-workflow-worktree-collision]].
+- **PENDING USER DECISIONS:** uint() keep/drop (#360 open — Rust IS currently getting it; my rec = keep, no ctx.*
+  equivalent, unused); `../sauce-recipes` ecoswap migration (119 uses, sibling repo, needs go-ahead).
+- **Rust address.\* rebase-drop** (0a958c5da from the parity chain): still queued — entangled with the parity chain
+  (drop ripples ~15 PRs, or a tip-revert conflicts with #380/#381); coordinate at chain-merge with Sammy.
+- **msg.value (ECO-2146)** still queued (compiler fix + SDK migration). **stack-window (ECO-2149)** = v12-parity, Sammy's call.
+
 ## ✅ USER DECISIONS (fire#58) — the gates are RESOLVED, executing
 
 1. **RS ship = "Open RS PRs, hold release."** Land the RS stack (parity foundation `feat/compiler-parity-port`
@@ -44,6 +430,162 @@ to eco-incorp/sauce confirmed.
   `github:eco-incorp/sauce#plugin-token-ambient-rs`, build the SDK wiring P6 (compiler-selector seam) → P7
   (chain-bundle activation, Option B) → P8 (registries→manifest data, minimal). Switch sauce-next back to npm
   only after everything is built + released.
+- **✅ P6–P8 UNBLOCKED fire#58/59.** BASE FINDING: the `sauce-next` GH-dep + `build-wasm.mjs` mechanism is on
+  `feat/compiler-parity`, NOT `origin/main` (which uses `sauce-compiler-next: npm:@eco-incorp/sauce-compiler@0.4.1`,
+  no ambient). So P6–P8 base on `feat/compiler-parity` (worktree `/Users/er/Documents/Projects/sauce-sdk-p6`,
+  branch `feat/plugin-sdk-wiring`, commit `b24bacc` repoints sauce-next → `#plugin-token-ambient-rs`).
+  **`pnpm --filter ./sdk build:wasm` BUILT the ambient-capable Rust→WASM compiler into `sdk/.sauce-wasm/`, and
+  its `sauce_wasm.d.ts` EXPOSES `ambient`/`inlineContracts`/`defines`/`entryArgTypes`** — the ambient primitive
+  is now LIVE in the SDK's compiler-going-forward. Compile seam = `sauce-route.ts:186` (TS `compile(source,{…})`).
+  **P6 DISPATCHED (`plugin-p6`, sonnet):** a `compiler?: 'ts'|'rs'` selector at that seam + an RS adapter
+  (source+baseDirs → resolve/resolvePackage; target v1/v12→evm, svm→svm; defines Record→Array; forward
+  ambient/inlineContracts/entryArgTypes), with an ambient-through-RS end-to-end SDK test as the payoff.
+  ⚠️ OPEN: is basing P6–P8 on `feat/compiler-parity` right, or should the sauce-next mechanism land on main
+  first? (surfaced to user; proceeding on feat/compiler-parity).
+- ✅ **P6 DONE + verified fire#60**, commit `60338f6` on `feat/plugin-sdk-wiring` (+ `6f4e9f1` repoint lock).
+  `compiler?: 'ts'|'rs'` on `SauceCompileOptions` (default `'ts'`, TS path byte-unchanged) + `ambient?`; the
+  `compile()` at `sauce-route.ts:196` is now a selector; new `rs-compile.ts` adapter lazy-loads
+  `.sauce-wasm` (createRequire), builds `resolve`/`resolvePackage` from source+baseDirs (empirically
+  probed — RS hands `resolve` already-joined specifiers), maps target **v1/v12→evm, svm→svm**, defines
+  Record→Array (1n/0n convention), and the SDK's parsed-ABI `ContractsConfig`→**`inlineContracts`** (P2 pays
+  off). **KEY RESULT (8/8 tests, gate re-verified typecheck 0 + 8/8):** `compiler:'rs'`+`ambient` compiles a
+  program with NO import line, **byte-identical to the explicit-import version** — SDK→RS/WASM→ambient proven
+  end-to-end; negative controls prove ambient (not RS leniency) does it, and the TS path ignores `ambient`.
+  Documented scope cuts: ambient only on the RS path (the in-repo TS compiler has no `ambient` field);
+  accountPlan/manifest not translated for RS+svm (nothing reads it). Sonnet-built (`plugin-p6`),
+  opus-reviewed CONFIRMED-SOUND. NO AI attribution.
+- ✅ **P7 DONE + verified fire#60**, commit `90b243e` on `feat/plugin-sdk-wiring` (stacked on P6). `chainAmbient(chain)`
+  (ambient.ts, sibling to `chainDefines`) = the chain's ambient-MODULE list (returns `loadPlugin().ambient`,
+  empty by default — extensible per-chain without signature change); recreated a minimal `sdk/src/plugin`
+  manifest+loader on this branch (reconciles with P5a's at merge). `openRoute` merges `chainAmbient(destination)`
+  + caller `options.compile.ambient` (deduped) → `compileSauceRoute` `ambient`; **non-empty → `compiler:'rs'`
+  UNLESS the caller chose explicitly** (never overridden); empty default → both fall through unchanged →
+  existing routes byte-identical through the TS compiler. 5 tests (chainAmbient default `[]`; ambient route via
+  RS; byte-identity vs direct `compileSauceRoute`; explicit `'ts'` never overridden; empty-default byte-identical
+  to pre-P7). Gate RE-VERIFIED real exit codes: typecheck 0, chain-ambient 5/5 (the 3 pre-existing artifacts-gotcha
+  suite failures reproduce on unmodified HEAD via git stash — not a regression). Sonnet-built (`plugin-p7`),
+  opus-reviewed CONFIRMED-SOUND. NO AI attribution.
+- ✅ **P8 DONE + verified fire#60**, commit `f3fec35` on `feat/plugin-sdk-wiring` (stacked on P7 — the FINAL
+  epic PR). `loadPluginData()` (`sdk/src/plugin/index.ts`) = the single declarative accessor: `{ ambient,
+  nameParity, protocolAddresses, tokens }` where `protocolAddresses`/`tokens` re-expose `DESCRIPTORS` /
+  `resolveTokenMap` **verbatim (same references, no copy, no relocation)**; `chainDefines` refactored to derive
+  through it → **byte-identical BY CONSTRUCTION** (+ an independent expected-map test + `toBe(DESCRIPTORS)`/
+  `toBe(resolveTokenMap)` reference-equality); `pluginNameParity()` activates the previously-inert `nameParity`.
+  Gate RE-VERIFIED real exit codes: typecheck 0, plugin.test 8/8, chainDefines suites (routes-ambient +
+  routes-chain-ambient) 16/16. Sonnet-built (`plugin-p8`), opus-reviewed CONFIRMED-SOUND. NO AI attribution.
+
+## 🎉 PLUGIN EPIC COMPLETE (fire#60) — all 8 PRs built + verified end-to-end
+
+**Compilers (both, ambient primitive audited + hardened):** RS #352 parity foundation → #353 P1 → #354 P2 →
+#355 P3 → #356 P5b+fix (eco-incorp/sauce, held for release). TS #135 P4 → #136 P5a (eco-incorp/sauce-sdk).
+**SDK integration (`feat/plugin-sdk-wiring`, stacked, unpushed):** `b24bacc`/`6f4e9f1` sauce-next→ambient branch
++ ambient wasm compiler live in the SDK → `60338f6` P6 compiler-selector (SDK→RS→ambient byte-identical) →
+`90b243e` P7 chain-scoped ambient bundles → `f3fec35` P8 plugin-data accessor. Every unit opus-reviewed,
+gate-verified real-exit-codes, no AI attribution. All 4 user decisions (fire#58) executed. **Remaining is
+outward/ops only:** push/PR the SDK wiring branch (P6–P8) when the user wants; land the RS/TS PRs; switch
+sauce-next→npm after a compiler-rs release. The DSL-parity-via-shared-plugin goal is achieved end-to-end.
+
+**PRs OPENED (fire#61, user "PRs for the rest of work?" + atomicity correction) — 10 total, 9 atomic:**
+- RS (eco-incorp/sauce): #353 P1 · #354 P2 · #355 P3 · #356 P5b — atomic. #352 parity foundation = 31 commits
+  (bulky; the pre-existing base — offered to slice into ~15 atomic PRs, awaiting user).
+- TS (eco-incorp/sauce-sdk): #135 P4 · #136 P5a — atomic.
+- SDK wiring (eco-incorp/sauce-sdk): **originally bundled as #137 (CLOSED — not atomic); re-opened as 3 atomic
+  stacked PRs #138 P6 → #139 P7 → #140 P8.** Base chain: main → #124 (xchain DSL draft) → `feat/compiler-parity`
+  (pushed as base; the routes-DSL + sauce-next/build-wasm infra P6–P8 need; itself 106 commits, not a clean PR)
+  → #138/#139/#140. OPEN structural decision for user: PR `feat/compiler-parity` itself / extract sauce-next
+  into a lean standalone PR; and whether to slice #352.
+
+**🧭 DIRECTIONAL CORRECTION (user, 2026-08-24, fire#70): RUST namespacing is the STANDARD; TS+SDK conform
+(breaking TS changes OK).** NOT the other way — I wrongly ADDED `address.*` to Rust (#362) for TS-parity; Rust
+already has those reads under `ctx.*` (verified: `address.self`→SelfAddress=`ctx.self()`; `.balance`→SelfBalance=
+`ctx.selfBalance()`; `.balanceOf`→Balance=`ctx.balance()`). Actions taken: **CLOSED #362**; retargeted **ECO-2163**
+→ "Namespace convergence · standardize on ctx.* (drop address.*)". Audit of the other namespace/global adds:
+Math.neg (#361, recipe 27×) = under Rust's OWN Math namespace, KEEP; evm.tload/tstore (#365) = Rust's own evm
+namespace, KEEP; uint() (#360, not in recipe) = freestanding sugar over Rust's toLe/toBe, USER CALL. **Remaining
+work:** (a) rebase-drop `0a958c5da` from the parity chain — DEFERRED until empty-array (parity-20) lands, since the
+revert touches the same 3 files; (b) TS compiler drop `address.*` (globals.ts), keep ctx.*; (c) recipe + SDK
+migrate `address.*`→`ctx.*` (recipe uses it **119×**; recipe source is ../sauce-recipes = SIBLING REPO, needs user
+go-ahead per [[feedback-scope-other-projects]]). **⚠️ SELF-INFLICTED:** a careless `gh pr close 380` "guard" line
+briefly closed #380 — caught + reopened immediately (now OPEN); lesson: never run destructive cmds as guards.
+
+**⚖️ FIFTH RECIPE GAP = a DESIGN DECISION, not a bug (fire#69, 2026-08-24).** #380 (non-entry Tuple param)
+VERIFIED (build + 4 new tests + ecoswap probe advancing past euler → stops at EKUBO_OR_PRINTR; ticket ECO-2187,
+Epic A). const-expr-scout FAILED (transient API error) so I investigated directly: the recipe has **exactly ONE**
+non-literal module const — `EKUBO_OR_PRINTR = HAS_EKUBO || HAS_PRINTR` (:1085). The literal-only rule
+(`ModuleBindingNotLiteral`, lower/mod.rs:509) is a **deliberate documented design** ("a design, not an omission" —
+module-level execution order across the import graph), = Sammy's **ECO-2076** boundary. Sound narrow carve-out exists
+(fold a compile-time-CONSTANT initializer — no runtime eval point, sidesteps the execution-order concern; it IS
+ECO-2076's own const-EXPRESSION AC), but it's HIS design call → **flagged on ECO-2076** (comment: land the
+const-expr carve-out, or pass EKUBO_OR_PRINTR as its own define upstream), did NOT autonomously override.
+**Honest split of the recipe's remaining compiler gaps:** clean fixes WE do (empty-array ECO-2147 in flight; msg.value
+ECO-2146 queued, +SDK migration) vs Sammy's DESIGN calls (stack-window ECO-2149 = already v12-parity; module-const-expr
+ECO-2076). So "full recipe compiles on RS" is partly gated on Sammy's 2 design decisions, not purely autonomous work.
+Sixth-gap unknown (can't probe past the fifth until it's resolved).
+
+**🔨 IN FLIGHT (fire#68, 2026-08-24) — clearing the compiler side of M8.** User: "can we fix [the Tuple param]
+to unblock all the milestones?" Honest answer: the Tuple fix unblocks the flagship recipe (M9 parity + M8's
+precondition), NOT literally all milestones — M8 has 3 more small compiler gaps + SDK-side migration. Scoped all 3
+(workflow `wf_97e94a3c-21a`, 4 agents):
+- **ECO-2146 `ctx.msgValue()`** (0.3pt, compiler) — genuine; wire `ContextOp::CallValue`/opcode 0x6b/EVM-only
+  `Feature::CallValue` capability gate. BUT corpus needs SDK-side follow-ups too (migrate `msg.value`→`ctx.msgValue()`
+  in zksync-bridge+stargate; add `ctx.msgValue` to TS globals.ts). Compiler-necessary, not corpus-sufficient. QUEUED.
+- **ECO-2147 empty-array-literal ABI typing** (3pt, compiler-only, NO IR/codegen) — genuine; ~13 corpus programs.
+  Type-directed call-arg lowering (`argument(arg, declared)` helper at contract.rs:851). **BUILDING**: `empty-array-impl`
+  (sonnet), worktree `/Users/er/Documents/Projects/sauce-empty-array`, branch `parity-20-empty-array-abi-type`.
+- **ECO-2149 seaport stack-window** (5pt) — **NOT a parity gap: RS-Evm == TS-v12** (both fail `param out of stack
+  range: 17`; only TS-*v1* compiles seaport). RS matching v12 IS parity. "Fixing" = making v12 do what only v1 did
+  (a capability decision for Sammy) + an abi-encode byte-identity risk. NOT building autonomously — flag to Sammy.
+- Non-entry `Tuple` param (below) still BUILDING as `tuple-param-impl` (parity-19).
+Build order (synth): msg-value → empty-array → stack-window; all stack on `feat/compiler-parity-port`, one atomic PR
+each, linked to Sammy's tickets. These 3 are Sammy's ECO-2146/2147/2149 — link/coordinate, don't surprise.
+
+**🔨 IN FLIGHT (fire#67, 2026-08-24) — last parity gap: non-entry `Tuple` param.** Scout (`tuple-param-scout`)
+confirmed it's the SOLE remaining blocker for the full `ecoswap.sauce.ts` on RS: 2 non-entry `Tuple` params
+(`eulerNeedsLive`:564, `eulerQuoteClosedForm`:578); all 4 call sites pass an identical statically-known
+`ScalarTuple(12)` (`const qd: Tuple = qlv[v]`, `qlv` = main's `ArrayOf(ScalarTuple(12))` param). Fix is purely
+type-annotation resolution — `param_ty` (`lower/assembly.rs:985`) only honors the `Tuple` wildcard for main's
+Entry hint; non-entry → `NotEntry` → `UnknownType`. No IR/codegen/`check_assignable`/`tuple_index` change
+(all downstream already handles `Ty::Tuple`, proven by ECO-1966's `a_called_function_accepts_a_non_scalar_parameter`).
+**Approach (a)-MVP:** pre-signature pass infers each non-entry bare-`Tuple` param's `Ty` from its call sites
+(identifier→entry-param/binding/const; `arr[idx]`→element), uniform-shape single monomorphization, clear error on
+conflict/unresolvable. Impl delegated to `tuple-param-impl` (sonnet) in isolated worktree
+`/Users/er/Documents/Projects/sauce-tuple-params`, branch `parity-19-nonentry-tuple-params` (base
+`feat/compiler-parity-port`, sibling to the plugin chain). TDD: flip `full_ecoswap_sauce_ts_compiles_on_the_evm`
+err→ok + focused unit + conflict-negative. Will become a new PR + a new Epic-A (ECO-2157) child ticket on landing.
+Follow-up (not in scope): differing-shape N-way monomorphization.
+
+**✅ PORTED TO LINEAR (fire#66, 2026-08-24).** User: "port our epic to Linear, replicate Sammy's style, trees of epics+tickets, PR↔tickets linked." Sammy's structure = project **Sauce Compiler Rust** (Eco team, `ECO-` keys) → milestones M1–M8 → issues `M<n>.<x> · area: imperative` → sub-issues; rich evidence-based descriptions with `## Done when` AC. Built (user chose: **new milestone in his project** + **fresh ticket per PR** + link/update his tickets):
+- **Milestone M9** "Parity forward-port & ambient plugin (SDK compilation)" in Sauce Compiler Rust.
+- **Epic ECO-2157** (Parity forward-port) → 19 children **ECO-2159…2177** (one per `sauce#357–375`).
+- **Epic ECO-2158** (Ambient & Layer-C plugin) → 9 children **ECO-2178…2186** (`sauce#376–379` RS, `sauce-sdk#135/136` TS, `sauce-sdk#138/139/140` SDK).
+- All 30 issues: assignee Kiryl, In Review, milestone M9, **PR attached via `links`** (the PR↔ticket link).
+- **His tickets cross-linked**: `relatedTo` from our tickets → ECO-2076 (module-scope bindings, call-fold parity), ECO-2060 (const tuple index — soft related, NOT closed by us), ECO-2156 (M8.11 point-/compiler-at-Rust ← our P6 seam). Comments posted on **ECO-2156, ECO-1877 (M6 TS-oracle), ECO-2076** explaining the M9 linkage (Sammy notified as owner; statuses left to him).
+- Root project: https://linear.app/ecoprotocol/project/sauce-compiler-rust-8163c0e73034 · Epics ECO-2157 / ECO-2158.
+- Follow-up option (not done): edit each PR body to prepend its `ECO-<id>` so Linear's GitHub integration adds native two-way status sync (the `links` attachment already gives the visible link).
+
+**✅ ATOMIC RE-SLICE + QUALITY PASS COMPLETE (fire#62–65, 2026-08-23).** User: "Sammy won't merge feature
+bundles" + "close #353–356, reopen incrementally so PR numbers are semantic."
+- **RS #352 sliced into 18 atomic parity PRs + foundation tail.** Closed #352–356; reopened as **#375** (foundation
+  tail: clippy/fmt + the `## Parity-added language features` README section, commit `717b97159`) → **#357–#374**
+  (one feature each: surface builtins, `uint()`, `Math.neg`, `address.*`, `new Array(n)`, `.catch()`,
+  `evm.tload/tstore`, multi-output destructuring, entry-param decode family, defines, loop unrolling, lookup-table
+  folding, single-return call folding) → **#376** P1 → **#377** P2 → **#378** P3 → **#379** P5b. Branch-pointer
+  slicing at existing SHAs → no rebase, no ripple. Base = `feat/compiler-parity-port` (worktree `sauce-compiler-rs`).
+- **Docs answer (option 2): specs are ALREADY in-codebase** — RS rustdoc doc-comments per feature + on each
+  `CompileOptions` field + `compiler/CLAUDE.md` + `docs/superpowers/specs/`; TS root `CLAUDE.md` +
+  `docs/compiler-feature-inventory.md`. Commit messages are the redundant copy. Nothing new created; the one stale
+  artifact (`docs/compiler-rs-vs-ts-delta.md`) date-stamped (commit `4ddba06`). Consolidated user-facing home =
+  the README section (#375).
+- **TS PR quality pass found + FIXED a real soundness bug.** The ambient CONST channel (`registerAmbientConsts`)
+  never checked `userNames`, so a user function/inline/contract did NOT shadow an ambient const of the same name
+  (silent behavior change). Fixed on `plugin-token-ambient` (#136), commit **`a4d28400`**: thread `userNames` into
+  `registerAmbientConsts` (skip a claimed name), `userNames` computed BEFORE `collectAmbientExports`. 6 new
+  `treeshake:false` regression cases (fn/imported-contract/imported-inline × 2 targets), RED-before/GREEN-after;
+  ambient-import 32/32, full compiler suite 1759 pass. **Both ambient channels now enforce "user code wins."**
+- **#136 retitled** ("Layer-C manifest skeleton + ambient bare-package-specifier proof" — was a misleading
+  @sauce/token framing) + body updated to describe the manifest + the 2 ambient audit fixes (squash-merge with P4).
+- **All 27 PR descriptions verified good; no AI attribution anywhere.** Minor open note for merge-time: some RS
+  commit messages cite design docs that live on `feat/compiler-parity` (would dangle if a PR merges before it).
 
 ---
 
@@ -813,14 +1355,37 @@ a test), **G21 break/continue (DONE** `codegen.rs:1258`).
 - **Wave 4** ⬜ PR-17 CREATE (absent) · ❎ PR-18 compile-time-eval — runtime `eval` LANDED (ECO-2090)
   but plan's L15 recursive-`compile()` intent still absent · ⬜ PR-19 quasiquote · ✅ PR-20 audited
   → mostly MOOT/re-architected (see T0.2 table in log).
-- **Verify** ⬜ V1 dynamic-kind adversarial audit (P0) · ⬜ V2 K15 positive test · ✅ V3 struct-arg
+- **Verify** ✅ **V1 dynamic-kind adversarial audit — CLOSED** (fire#16 `20957d1ab` verified all 7 K-bug shapes;
+  fire#88 V4-followup closed array-in-tuple SAFE-BY-CONSTRUCTION; **fire#94 `v1-callarg-verify` closed the last residual
+  shape — dynamic local passed as a CALL ARGUMENT + indexed in the callee — SAFE-VERIFIED-BY-EXEC on BOTH engines**: RS has
+  NO arg-space kind-split (v1-TS's funcHeap/funcValues gap cannot exist), every arg rides one uniform stack word regardless
+  of dynamism [ir.rs:407-424/872-885, codegen.rs:2523-2540/2790-2818]; the exact fixture `head(a){return a[1]} main(){return
+  head([7n,8n,9n])}` returns 8 on v12-Huff (revm) AND real svm engine.so (LiteSVM), compiled UNOPTIMIZED. Already
+  regression-locked: `tests/dynamic_value_roundtrip.rs::dynamic_value_as_call_argument_indexed_in_callee` (Shape 6, compile-
+  lock; optional cheap enhancement = add a runtime-value assertion, not required for safety). The whole dynamic-kind family is
+  now confirmed structurally immune on RS.) · ⬜ V2 K15 positive test · ✅ V3 struct-arg
   order (DONE — lock w/ test) · ✅ **V4 nested-array-literal — FIXED** *(RS c861b09d, fire#3)*: the
   P0 was CONFIRMED empirically (RS accept-and-miscompiled on BOTH targets — `NEW_ARRAY`+`INDEX`,
   reverts on v12 EVM / rejected on svm; an existing RS test was *locking the bug in*). Fix mirrors TS
   `assertNoNestedArrayLiteral` — new `Error::NestedArrayLiteral` in `array_literal` (lower/expression.rs),
-  syntactic, rejects on both targets (RS has no v1). RS gate green (1009). 🟡 **V4-followup:** RS test
-  `a_tuple_can_hold_a_nested_array_and_it_stays_dynamic` implies an array-in-TUPLE path may be a
-  sibling sub-risk — needs a real-exec check on v12/svm (does it round-trip, or same silent drop?).
+  syntactic, rejects on both targets (RS has no v1). RS gate green (1009). **↳ SUPERSEDED:** that reject
+  was later REVERTED (#373 `parity-17-fixups`) + replaced with REAL nested-array support (#374, ECO-2174/2175)
+  — the reject imported a TS-PIN-ENGINE limitation that does NOT apply to RS's own v12/svm engines, which
+  round-trip nested arrays natively. ✅ **V4-followup — CLOSED SAFE-BY-CONSTRUCTION** *(fire#88, 2026-08-24,
+  `v4-tuple-array-verify`)*: the array-in-TUPLE sibling risk does NOT exist in compiler-rs. The whole TS
+  descriptor-drop family is STRUCTURALLY impossible here — RS is a main-engine dialect where a dynamic value
+  is an in-band 32-byte descriptor word on the ordinary one-word storage/calling convention; there is NO
+  VALUE-slot-vs-HEAP-slot store to drop it into (`assign` codegen.rs:1415, `write/read_spilled`
+  codegen.rs:2841/2828 round-trip the WHOLE word — locked by `tests/dynamic_value_roundtrip.rs`). Dynamism is
+  a STRUCTURAL `Ty::is_dynamic()` property (not an inferred `kind`) threaded via `Function::local_dynamic`
+  (lower/mod.rs:2742); a tuple is always dynamic (ir.rs:710), a tuple-field-array is dynamic
+  (`Expr::Field{is_dynamic}` ir.rs:714); construction embeds a dynamic element's descriptor as-is
+  (`push_collection_element` codegen.rs:1673 boxes only SCALAR elements); read-back is engine-native INDEX.
+  The one theoretical drop shape (scalar→dynamic reassignment) is a hard compile error
+  (`Ty::same_shape`→`InconsistentReassignment`, lower/statement.rs:915/978), fail-closed never silent. ALSO
+  exec-locked on BOTH real engines for the exact shape `let t={nums:[5n,6n,7n]}; return t.nums[2n]`→7:
+  `v12_conformance.rs:1423`, `svm_conformance.rs:1328` (+ nested-set-index twins :1405/:1065). No new test or
+  fix needed.
   · ⬜ V5 manifest vs accountPlan · ⬜ V6 TS11 (`assigned_once` present).
 
 ## EPIC-N — 🌟🎉 NORTH-STAR CLOSED (fire#11): eco-swap compiles on BOTH compilers
@@ -970,3 +1535,15 @@ try/catch, defines, lookup tables, inline arrow-const, same-file call fold.
   spelling). One stale LSP type-error on context.ts:371 was investigated and DISPROVEN (tsc exit 0 —
   mid-edit snapshot). **Next:** RS PR-2 (svm sugar) + PR-5 (try/catch) or PR-14 (same-file call fold,
   design-first); TS §1.5 (annotation storage kind) or §1.6 (Feature matrix); V4-tuple real-exec check.
+
+**#352 SLICING PLAN (fire#62, ready-to-run if user says go)** — 17 atomic stacked PRs off origin/main in
+dependency order (each = a branch at the feature's tip commit, stacked on the previous):
+1 loop-unroll (5b2eca06f+051240260) · 2 defines (90cd112a1) · 3 uint() (180604748) · 4 Math.neg (627ee17c6) ·
+5 address.* (0a958c5da) · 6 tuple-params (9d9f98ef1+52c6547d7+a6a4e0a68) · 7 inner-if reconcile (20e1e140c) ·
+8 tload/tstore (aa8e26d2c) · 9 call-folding (cdb734536+69211f071) · 10 lookup-tables (4b6877e9d) ·
+11 new Array (94e11b03a) · 12 dyn-value lock (20957d1ab) · 13 multi-output destructuring (8853a075b) ·
+14 .catch EVM (16bac1983+1142c7275) · 15 ArgShape::Struct (35c20200e) · 16 bytes[] decode (fc4cde882+634d3ab1c) ·
+17 nested-array decode (165c3661c). DROP the net-zero V4 pair (c861b09d3 + 33d67a571). Fold test/fixture
+(5b5497c54,e188d17e0,2cec056ec,3d454f996) + clippy/fmt (0ada5c9ca,235902bbf) into their feature/last PR.
+**AWAITING USER go/no-go** (they offered "one base" as legit; not auto-restructuring an open PR). Also awaiting:
+feat/compiler-parity base decision (PR as-is vs extract sauce-next infra into a lean PR for #138's base).

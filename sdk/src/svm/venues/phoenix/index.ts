@@ -206,6 +206,8 @@
 import { address } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import type { AccountBytesMap, AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'phoenix';
 
@@ -407,13 +409,27 @@ export async function fetchPhoenixConfig(load: AccountLoader, pool: Address): Pr
 
   const baseMint = decodeAddress(data, OFF_BASE_MINT);
   const quoteMint = decodeAddress(data, OFF_QUOTE_MINT);
-  // The Swap ix carries no mint account (no transfer_checked plumbing) — it
-  // is Tokenkeg-only. Mirrors manifest's classic-SPL-mint-size gate.
-  for (const mint of [baseMint, quoteMint]) {
-    const mintData = await load(mint);
-    if (mintData === null) throw new Error(`${SLUG}: mint ${mint} of market ${pool} not found`);
-    if (mintData.length !== 82) {
-      throw new Error(`${SLUG}: market ${pool} mint ${mint} is not a classic SPL mint (Swap is Tokenkeg-only)`);
+  // The Swap ix carries no mint account (no transfer_checked plumbing) — it is
+  // Tokenkeg-only. Detect the real token program per mint via the shared
+  // data-shape resolver instead of a fragile size check, and SELF-DROP a
+  // Token-2022 mint or one carrying an un-routable extension. The thrown,
+  // clearly-described error IS the graceful drop (SvmRoute catches a
+  // fetchPoolConfig throw and drops the venue). The LEGACY path is
+  // byte-identical to before: a classic 82-byte mint classifies as Tokenkeg,
+  // parses no extensions, and the config is built unchanged. An unreadable mint
+  // falls back to the legacy assumption (keeps fixture-only tests green).
+  const mints = [baseMint, quoteMint];
+  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  for (let mi = 0; mi < mints.length; mi++) {
+    const mint = mints[mi]!;
+    const mintData = mintDatas[mi]!;
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
     }
   }
 
