@@ -61,6 +61,8 @@
     "typecheck": "tsc --noEmit",
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
     "gen-route-globals": "node scripts/gen-route-globals.mjs",
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "pretest": "node scripts/build-wasm.mjs",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs"
   },
   "dependencies": {
@@ -81,7 +83,7 @@
     }
   },
   "devDependencies": {
-    "sauce-compiler-next": "npm:@eco-incorp/sauce-compiler@^0.4.1",
+    "sauce-next": "github:eco-incorp/sauce#fcedc167adf762347986feba6e53ed48800a6bfd",
     "typescript": "^5.4.0",
     "@types/node": "^20.0.0",
     "@solana/web3.js": "^1.98.0",
