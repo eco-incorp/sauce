@@ -60,11 +60,14 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
   */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import { AMM_CONFIG_DISCRIMINATOR as RAYDIUM_CLMM_AMM_CONFIG_DISCRIMINATOR, POOL_DISCRIMINATOR as RAYDIUM_CLMM_POOL_DISCRIMINATOR, TICK_ARRAY_DISCRIMINATOR as RAYDIUM_CLMM_TICK_ARRAY_DISCRIMINATOR, windowStartTicks as raydiumClmmWindowStartTicks } from '../raydium-clmm/index.js';
 import { MAX_TICK as RAYDIUM_MAX_TICK, MIN_TICK as RAYDIUM_MIN_TICK } from '../raydium-clmm/tick-math.js';
 import { raydiumSqrtPriceAtTick } from '../raydium-clmm/tick-math.js';
 import { readUintLE } from '../math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 const SLUG = 'pancakeswap-clmm';
 /** PancakeSwap's Solana CLMM program (a Raydium-CLMM-shaped Anchor fork). */
 export const PANCAKESWAP_CLMM_PROGRAM_ID = address('HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq');
@@ -124,11 +127,11 @@ function getAddressEncoded(value) {
 async function deriveTickArrayPda(pool, startTick) {
     const be = new Uint8Array(4);
     new DataView(be.buffer).setInt32(0, startTick, false); // start_tick_index.to_be_bytes()
-    const [pda] = await getProgramDerivedAddress({
-        programAddress: PANCAKESWAP_CLMM_PROGRAM_ID,
-        seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), be],
-    });
-    return pda;
+    return memoizedGetProgramDerivedAddress(PANCAKESWAP_CLMM_PROGRAM_ID, [
+        new TextEncoder().encode('tick_array'),
+        getAddressEncoded(pool),
+        be,
+    ]);
 }
 /** Whether a tick cell is initialized (liquidity_gross != 0). */
 function tickInitialized(array, offset) {
@@ -146,10 +149,20 @@ function tickHasLimitOrders(array, offset) {
 async function resolveWindow(load, pool, tickCurrentIndex, tickSpacing, zeroForOne) {
     const startTicks = raydiumClmmWindowStartTicks(tickCurrentIndex, tickSpacing, zeroForOne);
     const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start))));
+    // Batch the whole window into ONE coalesced round instead of an outward
+    // serial walk (identical rationale to raydium-clmm's resolveWindow): the
+    // tick-array PDAs are all derived above, so nothing here depends on a prior
+    // array's bytes. allSettled preserves the break-on-first-invalid contract
+    // exactly — a rejection is re-thrown only if the readable prefix reaches it,
+    // and a miss/rejection past the break degrades to the same readable prefix.
+    const loaded = await Promise.allSettled(tickArrays.map((addr) => load(addr)));
     const arrays = [];
     let readable = 0;
     for (let i = 0; i < 3; i++) {
-        const data = await load(tickArrays[i]);
+        const settled = loaded[i];
+        if (settled.status === 'rejected')
+            throw settled.reason;
+        const data = settled.value;
         const valid = data !== null &&
             data.length >= TICK_ARRAY_ACCOUNT_SIZE &&
             hasDiscriminator(data, RAYDIUM_CLMM_TICK_ARRAY_DISCRIMINATOR) &&
@@ -238,12 +251,26 @@ export async function fetchPancakeswapClmmConfig(load, pool) {
     const ammConfig = codec.decode(data.subarray(OFF_AMM_CONFIG, OFF_AMM_CONFIG + 32));
     const tokenMint0 = codec.decode(data.subarray(OFF_TOKEN_MINT_0, OFF_TOKEN_MINT_0 + 32));
     const tokenMint1 = codec.decode(data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32));
-    for (const mint of [tokenMint0, tokenMint1]) {
-        const mintData = await load(mint);
+    // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
+    // one carrying an un-routable extension) via the shared data-shape resolver
+    // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
+    // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue.
+    // The LEGACY path stays byte-identical: a classic 82-byte mint classifies as
+    // Tokenkeg, parses no extensions, and the config is built unchanged. An
+    // unreadable mint falls back to the legacy assumption (keeps fixtures green).
+    const mints = [tokenMint0, tokenMint1];
+    const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+    for (let mi = 0; mi < mints.length; mi++) {
+        const mint = mints[mi];
+        const mintData = mintDatas[mi];
         if (mintData === null)
-            throw new Error(`${SLUG}: mint ${mint} of pool ${pool} not found`);
-        if (mintData.length !== 82) {
-            throw new Error(`${SLUG}: pool ${pool} mint ${mint} is not a classic SPL mint (transfer-fee mints unsupported)`);
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
         }
     }
     const cfgData = await load(ammConfig);
@@ -257,10 +284,10 @@ export async function fetchPancakeswapClmmConfig(load, pool) {
     const [zeroForOne, oneForZero, bitmapExtension] = await Promise.all([
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-        getProgramDerivedAddress({
-            programAddress: PANCAKESWAP_CLMM_PROGRAM_ID,
-            seeds: [new TextEncoder().encode('pool_tick_array_bitmap_extension'), getAddressEncoded(pool)],
-        }).then(([pda]) => pda),
+        memoizedGetProgramDerivedAddress(PANCAKESWAP_CLMM_PROGRAM_ID, [
+            new TextEncoder().encode('pool_tick_array_bitmap_extension'),
+            getAddressEncoded(pool),
+        ]),
     ]);
     return {
         venue: SLUG,

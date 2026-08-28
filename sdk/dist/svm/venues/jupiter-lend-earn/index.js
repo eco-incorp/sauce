@@ -66,10 +66,11 @@
  *   time).
  * - `token_program` — this adapter GATES to classic Tokenkeg only (Token-2022
  *   extensions — transfer fees, gating hooks — are not modeled, matching
- *   `sanctum-stake-pool`'s identical scope decision). `AccountLoader` returns
- *   only bytes, never the owning program, so the gate is by SIZE instead: a
- *   classic `Mint` account is exactly 82 bytes (see `assertClassicMint`
- *   below for the residual edge case this doesn't catch).
+ *   `sanctum-stake-pool`'s identical scope decision). Both mints (`mint` and
+ *   `f_token_mint`) are classified via the shared data-shape resolver
+ *   (`classifyMintProgram` / `parseMintExtensions`); a Token-2022 or
+ *   un-routable mint SELF-DROPS this market with a thrown error (the
+ *   graceful-drop signal the SvmRoute orchestrator catches).
  *
  * DISCOVERY — `Lending` stores BOTH mints at fixed offsets (mint@8,
  * f_token_mint@40) with a fixed 196-byte size, so it discovers exactly like
@@ -152,6 +153,8 @@
  * ~56.3-57.5k, redeem ~66.3-67.7k raw CPI cost).
  */
 import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'jupiter-lend-earn';
 export const JUPITER_LEND_EARN_PROGRAM_ID = address('jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9');
 /** The Liquidity layer every deposit/redeem CPI delegates real token accounting to. */
@@ -179,11 +182,28 @@ async function fetchJupiterLendEarnConfig(load, pool) {
     const rewardsRateModel = decoder.decode(data.subarray(OFF_REWARDS_RATE_MODEL, OFF_REWARDS_RATE_MODEL + 32));
     const liquidityReserve = decoder.decode(data.subarray(OFF_TOKEN_RESERVES_LIQUIDITY, OFF_TOKEN_RESERVES_LIQUIDITY + 32));
     const supplyPositionOnLiquidity = decoder.decode(data.subarray(OFF_SUPPLY_POSITION_ON_LIQUIDITY, OFF_SUPPLY_POSITION_ON_LIQUIDITY + 32));
-    const [reserveData, , rateModel] = await Promise.all([
-        load(liquidityReserve),
-        assertClassicMint(load, mint),
-        deriveRateModel(mint),
-    ]);
+    // Tokenkeg-only (Token-2022 extensions — transfer fees, gating hooks — are
+    // not modeled, matching sanctum-stake-pool's identical scope decision), so
+    // detect a Token-2022 or un-routable mint via the shared data-shape resolver
+    // and SELF-DROP the market (the thrown error is the graceful-drop signal the
+    // SvmRoute orchestrator catches). The LEGACY path is byte-identical: a classic
+    // 82-byte mint classifies Tokenkeg with no extensions.
+    const _mints = [mint, fTokenMint];
+    const _mintDatas = await Promise.all(_mints.map((m) => load(m)));
+    for (let _i = 0; _i < _mints.length; _i++) {
+        const m = _mints[_i];
+        const mintData = _mintDatas[_i];
+        if (mintData === null)
+            continue; // an unreadable mint falls back to the legacy assumption
+        if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping market ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping market ${pool} — mint ${m} is un-routable: ${blocking.join('; ')}`);
+        }
+    }
+    const [reserveData, rateModel] = await Promise.all([load(liquidityReserve), deriveRateModel(mint)]);
     if (reserveData === null)
         throw new Error(`jupiter-lend-earn TokenReserve ${liquidityReserve} account not found`);
     const vault = decoder.decode(reserveData.subarray(OFF_RESERVE_VAULT, OFF_RESERVE_VAULT + 32));
@@ -200,26 +220,6 @@ async function fetchJupiterLendEarnConfig(load, pool) {
         tokenProgram: TOKEN_PROGRAM,
         direction: 'deposit',
     };
-}
-/**
- * `AccountLoader` only returns raw bytes, never the account's owning program —
- * so this adapter gates Token-2022 out by SIZE instead: a classic Tokenkeg
- * `Mint` account is EXACTLY 82 bytes; a Token-2022 mint (same program-owned
- * struct prefix) carries a trailing extension TLV the moment any extension
- * is configured, which is the overwhelming majority of real Token-2022
- * mints. A Token-2022 mint with literally zero extensions would slip past
- * this check with the (wrong) classic token program attached — the CPI's own
- * `token::token_program` constraint would then reject it on-chain, a loud
- * revert rather than a silent bad fill. Every market this adapter has
- * verified live (USDC/USDT/wSOL) is classic and exactly 82 bytes.
- */
-async function assertClassicMint(load, mint) {
-    const data = await load(mint);
-    if (data === null)
-        throw new Error(`jupiter-lend-earn mint ${mint} account not found`);
-    if (data.length !== 82) {
-        throw new Error(`jupiter-lend-earn mint ${mint} has non-classic size ${data.length} (expected 82) — Token-2022/extension mints are not implemented by this adapter`);
-    }
 }
 /** PDA(["rate_model", mint], LIQUIDITY_PROGRAM) — verified live for all three test markets. */
 async function deriveRateModel(mint) {

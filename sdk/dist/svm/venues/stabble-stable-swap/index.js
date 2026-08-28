@@ -26,6 +26,8 @@
 import { getAddressCodec } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import { assertStabbleU64AmountIn, calcRoundedAmount, calcUnwrappedAmount, calcWrappedAmount, complement, decodeStabblePoolCommon, decodeStabbleVault, deriveStabbleVaultAuthority, findStabbleAta, mulDown, STABBLE_SWAP_DISCRIMINATOR, STABBLE_TOKEN_PROGRAM_ID, STABBLE_VAULT_PROGRAM_ID, STABLE_MAX_TOKENS, STABLE_SWAP_PROGRAM_ID, stableCalcInvariantN, stableCalcOutGivenIn, stableGetAmplification, stableQuoteHelperSource, } from '../stabble-common.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'stabble-stable-swap';
 // Stable variant field offsets (see ../stabble-common.ts module doc).
 const AMP_INITIAL_OFFSET = 106;
@@ -61,6 +63,29 @@ export const stabbleStableSwap = {
         const vaultAuthority = deriveStabbleVaultAuthority(common.vault, vault.authorityBump);
         // Only the first two tokens are wired for quoting/swapping (see module doc).
         const [tokenA, tokenB] = common.tokens;
+        // The v1 `swap` ix is legacy-SPL (Tokenkeg) only — no Token-2022 /
+        // transfer-fee accounting — so SELF-DROP a pool holding a Token-2022 mint
+        // (or an un-routable extension mint). The thrown error is the graceful-drop
+        // signal (SvmRoute drops the venue on a fetchPoolConfig throw). An
+        // unreadable mint falls back to the legacy assumption, keeping the
+        // byte-identical legacy path. (The previous "guard" cited in the module doc
+        // was a dead no-op in stabble-common's decodeStabblePoolCommon; this is the
+        // real, data-shape-based detection.)
+        const _mints = [tokenA.mint, tokenB.mint];
+        const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+        for (let _i = 0; _i < _mints.length; _i++) {
+            const mint = _mints[_i];
+            const mintData = _mintDatas[_i];
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
+        }
         const vaultTokenA = await findStabbleAta(vaultAuthority, tokenA.mint);
         const vaultTokenB = await findStabbleAta(vaultAuthority, tokenB.mint);
         const beneficiaryTokenOut = await findStabbleAta(vault.beneficiary, tokenB.mint);

@@ -133,4 +133,8 @@ export { WHALESTREET_PROGRAM_ID, WHALESTREET_OFF_MINT_A, WHALESTREET_OFF_VAULT_A
 // metric: explicit re-export — some names collide with an existing venue's
 // generic constants/helpers; aliased with a `METRIC_` prefix.
 export { METRIC_PROGRAM_ID, METRIC_ORACLE_PROGRAM_ID, OFF_MINT_A as METRIC_OFF_MINT_A, OFF_VAULT_A as METRIC_OFF_VAULT_A, OFF_MINT_B as METRIC_OFF_MINT_B, OFF_VAULT_B as METRIC_OFF_VAULT_B, OFF_ORACLE_CONFIG as METRIC_OFF_ORACLE_CONFIG, PRICE_ACCOUNT_OFFSET_IN_ORACLE_CONFIG as METRIC_PRICE_ACCOUNT_OFFSET_IN_ORACLE_CONFIG, METRIC_SWAP_DISCRIMINATOR, CAP_DIVISOR as METRIC_CAP_DIVISOR, metricScaleParams, metric, metricSwapAccounts, } from './metric/index.js';
+// PDA-derivation memo — public tuning knob only. The memoizing primitive and
+// its test seams stay internal (used by the venue derivers via a relative
+// import); consumers get exactly the config surface.
+export { configurePdaMemo, getPdaMemoMaxEntries, DEFAULT_PDA_MEMO_MAX_ENTRIES } from './pda-memo.js';
 //# sourceMappingURL=index.js.map

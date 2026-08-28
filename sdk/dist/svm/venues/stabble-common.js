@@ -539,13 +539,35 @@ const POW_FOUR = 4n * STABBLE_ONE;
 const ISCALE = 10n ** 18n;
 const ISCALE_PER_ONE = ISCALE / STABBLE_ONE;
 const POW_FRAC_BITS = 64;
-function isqrtFloor(n) {
+/**
+ * Integer floor(sqrt(n)), Newton's method. Exported (like every other helper
+ * in this module) so its byte-identity and iteration count are directly
+ * testable — see stabble-isqrt.test.ts.
+ *
+ * The seed `1n << ceil(bits/2)` (bits = n's bit length) is picked so the
+ * FIRST iterate already sits >= floor(sqrt(n)) for every n >= 2: n < 2^bits
+ * implies sqrt(n) < 2^(bits/2) <= 2^ceil(bits/2), so the seed's square,
+ * 2^(2*ceil(bits/2)), is >= 2^bits > n. Newton's iteration for floor-sqrt is
+ * monotonically non-increasing once started at or above the true root and
+ * converges to exactly floor(sqrt(n)) regardless of the starting point (the
+ * classical property this loop has always relied on — only the seed changed
+ * here) — so the RESULT for every n is unchanged; only the number of
+ * iterations needed drops, from ~bits/2 with the old `x = n` seed (each
+ * early iteration barely halves x) to ~5-8 total once seeded this close to
+ * the root. This matters here specifically because `weightedPowUp`'s
+ * fractional-exponent path feeds `sqrtInternalCeil` an ISCALE(1e18)-inflated
+ * operand — routinely ~110-130 bits — so the old seed cost ~55-70 slow
+ * halving iterations per sqrt call, repeated up to POW_FRAC_BITS(64) times
+ * per `weightedPowUp` invocation.
+ */
+export function isqrtFloor(n) {
     if (n < 0n)
         throw new Error(`isqrtFloor needs a non-negative value, got ${n}`);
     if (n < 2n)
         return n;
-    let x = n;
-    let y = (x + 1n) / 2n;
+    const bits = n.toString(2).length;
+    let x = 1n << BigInt((bits + 1) >> 1);
+    let y = (x + n / x) / 2n;
     while (y < x) {
         x = y;
         y = (x + n / x) / 2n;

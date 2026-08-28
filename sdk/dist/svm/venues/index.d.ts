@@ -159,4 +159,6 @@ export { WHALESTREET_PROGRAM_ID, WHALESTREET_OFF_MINT_A, WHALESTREET_OFF_VAULT_A
 export type { WhalestreetPoolConfig } from './whalestreet/index.js';
 export { METRIC_PROGRAM_ID, METRIC_ORACLE_PROGRAM_ID, OFF_MINT_A as METRIC_OFF_MINT_A, OFF_VAULT_A as METRIC_OFF_VAULT_A, OFF_MINT_B as METRIC_OFF_MINT_B, OFF_VAULT_B as METRIC_OFF_VAULT_B, OFF_ORACLE_CONFIG as METRIC_OFF_ORACLE_CONFIG, PRICE_ACCOUNT_OFFSET_IN_ORACLE_CONFIG as METRIC_PRICE_ACCOUNT_OFFSET_IN_ORACLE_CONFIG, METRIC_SWAP_DISCRIMINATOR, CAP_DIVISOR as METRIC_CAP_DIVISOR, metricScaleParams, metric, metricSwapAccounts, } from './metric/index.js';
 export type { MetricPoolConfig } from './metric/index.js';
+export { configurePdaMemo, getPdaMemoMaxEntries, DEFAULT_PDA_MEMO_MAX_ENTRIES } from './pda-memo.js';
+export type { PdaMemoConfig } from './pda-memo.js';
 //# sourceMappingURL=index.d.ts.map

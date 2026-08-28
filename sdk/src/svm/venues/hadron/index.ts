@@ -75,6 +75,8 @@ import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { findAssociatedTokenPda } from '@solana-program/token';
 import type { AccountLoader, PoolConfig, VenueAccount } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'hadron';
 
@@ -223,6 +225,26 @@ export async function fetchHadronConfig(load: AccountLoader, pool: Address): Pro
       `${SLUG} pool ${pool}: mintA ${mintA}'s registered/validated quote mint is ${entry.mintB}, but this pool's mintB is ${mintB} — ` +
         'the live oracle price field is denominated against the REGISTERED quote only, so an unvalidated pairing self-drops',
     );
+  }
+
+  // The swap CPI's token program is classic Tokenkeg, so detect a Token-2022
+  // or un-routable mint via the shared data-shape resolver and SELF-DROP the
+  // pool (the thrown error is the graceful-drop signal the SvmRoute orchestrator
+  // catches). The LEGACY path is byte-identical: a classic 82-byte mint
+  // classifies Tokenkeg with no extensions and this block is a no-op.
+  const _mints = [mintA, mintB];
+  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const mint = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
+    if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
   }
 
   const [vaultA] = await findAssociatedTokenPda({ owner: pool, mint: mintA, tokenProgram: HADRON_TOKEN_PROGRAM });

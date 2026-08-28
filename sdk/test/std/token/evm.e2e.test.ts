@@ -1,6 +1,6 @@
 /**
  * `@sauce/token` EXECUTION on the real V12 EVM engine, compiled by the published
- * `@eco-incorp/sauce-compiler-wasm`. The counterpart of the sibling `svm.e2e.test.ts`: the same
+ * `@eco-incorp/sauce-compiler`. The counterpart of the sibling `svm.e2e.test.ts`: the same
  * library, the same known balance, read back through a genuine ERC20 instead of a genuine SPL
  * account — which is what makes the pair a cross-target differential rather than two unrelated tests.
  *
@@ -22,8 +22,14 @@
  *   published compiler therefore does not run on the pinned runtime: it either returns EMPTY or dies
  *   with MemoryOOG. Repinning `sauce` is the real fix and is out of this suite's scope.
  *
- * So: point SAUCE_RUST_V12_RUNTIME at a file of `main`-lineage DEPLOYED runtime hex to run these —
- *   cd <sauce>/v12-evm && hnc -s . -r v12/Runtime.huff > /tmp/v12-runtime.hex
+ * So: point SAUCE_RUST_V12_RUNTIME at a file of `main`-lineage DEPLOYED runtime hex to run these.
+ * `hnc -r` cannot produce it — Runtime.huff's CONSTRUCTOR returns its own bytecode, so the deployed
+ * runtime is only known at deployment time — so deploy the creation bytecode and read the code back:
+ *   cd <sauce>/v12-evm && anvil --port 8799 --silent &
+ *   KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80  # anvil's first account
+ *   ADDR=$(cast send --rpc-url http://127.0.0.1:8799 --private-key $KEY --create \
+ *     "0x$(hnc -s . -b v12/Runtime.huff | tr -d '[:space:]')" --json | jq -r .contractAddress)
+ *   cast code "$ADDR" --rpc-url http://127.0.0.1:8799 > /tmp/v12-runtime.hex
  *   SAUCE_RUST_V12_RUNTIME=/tmp/v12-runtime.hex pnpm --filter './sdk' test
  * Also needs `anvil` on PATH (Foundry, which CI already installs).
  */
@@ -130,8 +136,8 @@ const deployToken = (): Promise<Address> =>
     .then(({ contractAddress }) => contractAddress ?? Promise.reject(new Error('the ERC20 deployment produced no address')));
 
 /**
- * Boot anvil, etch the runtime at [`ENGINE`] (hnc emits DEPLOYED bytecode, so there is no constructor
- * to run), and deploy the ERC20.
+ * Boot anvil, etch the runtime at [`ENGINE`] — `SAUCE_RUST_V12_RUNTIME` is already deployed bytecode
+ * (see the header for how it is produced), so there is no constructor to run — and deploy the ERC20.
  */
 const startEvm = (): Promise<{ anvil: ChildProcess; token: Address }> => {
   const anvil = spawn('anvil', ['--port', String(PORT), '--silent'], { stdio: 'ignore' });

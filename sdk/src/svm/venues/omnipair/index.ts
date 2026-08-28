@@ -108,6 +108,8 @@ import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit'
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'omnipair';
 export const OMNIPAIR_PROGRAM_ID = address('omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE');
@@ -177,11 +179,23 @@ export async function fetchOmnipairPoolConfig(load: AccountLoader, pool: Address
   const reserve1 = readUintLE(data, reserveBase + 8, 8);
   if (reserve0 === 0n || reserve1 === 0n) throw new Error(`${SLUG}: pair ${pool} is not initialized (zero reserve)`);
 
-  for (const mint of [token0Mint, token1Mint]) {
-    const mintData = await load(mint);
-    if (mintData === null) throw new Error(`${SLUG}: mint ${mint} of pair ${pool} not found`);
-    if (mintData.length !== 82) {
-      throw new Error(`${SLUG}: pair ${pool} mint ${mint} is not a classic SPL mint (swap is Tokenkeg-only)`);
+  // The swap path is Tokenkeg-only (Token-2022 transfer-fee/extension mints are
+  // out of scope), so detect a Token-2022 or un-routable mint via the shared
+  // data-shape resolver and SELF-DROP the pool (the thrown error is the
+  // graceful-drop signal the SvmRoute orchestrator catches). The LEGACY path is
+  // byte-identical: a classic 82-byte mint classifies Tokenkeg with no extensions.
+  const mints = [token0Mint, token1Mint];
+  const mintDatas = await Promise.all(mints.map((mint) => load(mint)));
+  for (let mi = 0; mi < mints.length; mi++) {
+    const mint = mints[mi]!;
+    const mintData = mintDatas[mi]!;
+    if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
     }
   }
 

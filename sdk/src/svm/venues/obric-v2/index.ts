@@ -37,6 +37,8 @@ import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 import { INSTRUCTIONS_SYSVAR } from '../../cpi-probe.js';
 import type { CpiTier } from '../../cpi-probe.js';
 
@@ -259,6 +261,26 @@ export const obricV2 = {
     };
     const xDecimals = dec(d.mintX, mintXData);
     const yDecimals = dec(d.mintY, mintYData);
+
+    // Token-2022 safety: the swap carries one token program (Tokenkeg), so a
+    // Token-2022 mint (or one carrying an un-routable extension) SELF-DROPS the
+    // pool via a thrown, clearly-described error — the SvmRoute orchestrator
+    // catches a fetchPoolConfig throw and drops the venue. The legacy path stays
+    // byte-identical: a classic 82-byte mint classifies as legacy → no throw. We
+    // reuse the mint bytes already loaded above for the decimals decode.
+    for (const [mint, mintData] of [
+      [d.mintX, mintXData],
+      [d.mintY, mintYData],
+    ] as const) {
+      if (mintData === null) continue;
+      if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      }
+      const { blocking } = parseMintExtensions(mintData);
+      if (blocking.length > 0) {
+        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      }
+    }
 
     // Classify each feed by its documented Pyth-v2 layout (magic + expo).
     const feedX = decodeFeed(feedXData);

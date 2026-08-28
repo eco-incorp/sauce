@@ -1,16 +1,17 @@
-// Builds the Rust SauceScript compiler to WASM FROM the `sauce-next` git dep
-// (github:eco-incorp/sauce#main) into a gitignored `sdk/.sauce-wasm/`, the same
-// way `sync-engine-artifacts.mjs` derives the engine artifacts from the pinned
-// `sauce` (release/beta) dep. Nothing is committed: the `@sauce/token` suites
-// (sdk/test/std/token) load the freshly-built module from `.sauce-wasm/`.
+// Builds the Rust SauceScript compiler to WASM from the `sauce-next` dep — the sauce repo pinned by
+// SHA in sdk/package.json — into a gitignored `sdk/.sauce-wasm/`, the same way
+// `sync-engine-artifacts.mjs` derives the engine artifacts from the pinned `sauce` dep.
 //
-// `sauce#main` ships source only (no prebuilt wasm, no lifecycle build), so this
-// runs `wasm-pack build crates/sauce-wasm --target nodejs` (the crate's own
-// Makefile `pkg:` target). Needs Rust (the repo pins 1.97.1 via rust-toolchain)
-// + the wasm32-unknown-unknown target + wasm-pack. CI installs them next to
-// Foundry/hnc; a contributor without the toolchain gets a clean SKIP and the
-// token suites self-skip (see harness.ts `wasmAvailable`), so `pnpm test` stays
-// green offline. Refresh on a `sauce-next` repin with SAUCE_WASM_REBUILD=1.
+// `sauce-next` is a SOURCE checkout, not a package: the repo has no root package.json and ships no
+// prebuilt wasm, so pnpm hands it over verbatim and the build happens here, via
+// `wasm-pack build crates/sauce-wasm --target nodejs`. Needs Rust (the repo pins 1.97.1 via
+// rust-toolchain.toml), the wasm32-unknown-unknown target, and wasm-pack — CI installs all three
+// next to Foundry/hnc.
+//
+// The Rust compiler IS the SDK's compiler, so a missing toolchain is a HARD ERROR rather than a
+// skip: a skip reads exactly like a pass, and the suites that consume `.sauce-wasm/` would go green
+// having compiled nothing. Idempotent — re-runs exit early once the output exists, so it is safe as
+// a pre-hook on test/build/typecheck. Force a rebuild after a repin with SAUCE_WASM_REBUILD=1.
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,8 +28,8 @@ if (existsSync(resolve(OUT, 'sauce_wasm.js')) && !process.env.SAUCE_WASM_REBUILD
   process.exit(0);
 }
 
-// Locate the sauce-next checkout — a devDep of sdk; pnpm exposes a package.json-less
-// git dep under its dep-key name, same shape sync-engine-artifacts resolves `sauce`.
+// pnpm exposes a package.json-less git dep under its dep-key name — the same shape
+// sync-engine-artifacts resolves `sauce` with, and the reason both candidates are probed.
 const CANDIDATES = [
   resolve(SDK_DIR, 'node_modules', 'sauce-next'),
   resolve(REPO_ROOT, 'node_modules', 'sauce-next'),
@@ -39,8 +40,6 @@ if (!sauceNext) {
   process.exit(1);
 }
 
-// The Rust WASM compiler is REQUIRED — it is the SDK's SauceScript compiler going forward — so a
-// missing toolchain is a HARD ERROR, not a skip (same posture as Foundry for the compiler suites).
 if (spawnSync('wasm-pack', ['--version'], { stdio: 'ignore' }).status !== 0) {
   console.error(
     '[build-wasm] wasm-pack not found. The Rust SauceScript compiler is required. Install:\n' +
@@ -62,13 +61,13 @@ if (existsSync(resolve(cargoBin, 'rustup'))) {
 }
 
 console.log(`[build-wasm] wasm-pack build crates/sauce-wasm --target nodejs -> ${OUT}`);
-const r = spawnSync('wasm-pack', ['build', 'crates/sauce-wasm', '--target', 'nodejs', '--out-dir', OUT], {
+const built = spawnSync('wasm-pack', ['build', 'crates/sauce-wasm', '--target', 'nodejs', '--out-dir', OUT], {
   cwd: compilerDir,
   env,
   stdio: 'inherit',
 });
-if (r.status !== 0) {
+if (built.status !== 0) {
   console.error('[build-wasm] wasm-pack build failed.');
-  process.exit(r.status ?? 1);
+  process.exit(built.status ?? 1);
 }
 console.log('[build-wasm] done.');
