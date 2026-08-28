@@ -19,8 +19,14 @@ import { loadPlugin } from '../../src/plugin/index.js';
 const TARGETS: readonly CompileTarget[] = ['v1', 'v12'];
 
 describe('plugin manifest (Layer C)', () => {
-  it('declares @sauce/token as the ambient module list', () => {
-    expect(loadPlugin().ambient).toEqual(['@sauce/token']);
+  // Empty, and an entry is not free to add: the SDK's route path (`routes/ambient.ts#chainAmbient`)
+  // hands this list to EVERY `openRoute` compile, and the RS compiler resolves a bare specifier by
+  // walking up from the caller's `baseDirs` — which `openRoute` does not supply. `@sauce/token`
+  // lives at `sdk/src/std/token/` and is installed into no node_modules tree, so declaring it here
+  // makes every route throw `failed to import module "@sauce/token"`. It belongs here once the SDK
+  // resolves its own stdlib on the route path.
+  it('declares no ambient module — none resolves on the route path yet', () => {
+    expect(loadPlugin().ambient).toEqual([]);
   });
 
   describe('nameParity matches what the compiler actually implements', () => {
