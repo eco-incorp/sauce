@@ -78,9 +78,11 @@ export interface SauceCompileOptions {
   accessors?: boolean | ProtocolRewriteOptions;
   /**
    * Module specifiers whose exports are broadcast into every module with no `import` line --
-   * RS-COMPILER-ONLY (see `compiler` above). Forwarded when `compiler: 'rs'`; silently unused
-   * (never forwarded to `compile()`, never a compile error) when `compiler` is omitted/`'ts'`,
-   * since the TS compiler this repo vendors has no `ambient` concept to forward it to.
+   * RS-COMPILER-ONLY (see `compiler` above). Forwarded when `compiler: 'rs'`; a NON-EMPTY value
+   * with `compiler` omitted/`'ts'` is rejected up front (parallel to the `args + rs` guard) rather
+   * than silently dropped, since the TS compiler has no `ambient` concept and a program relying on
+   * it would otherwise fail later with an opaque unresolved-identifier error. An empty array is a
+   * no-op on either path and is accepted, so a caller passing `ambient: []` unconditionally is safe.
    */
   ambient?: string[];
 }
@@ -218,6 +220,14 @@ export function compileSauceRoute(
         "compiler -- it has no args field, so a parameterized `main(...)` would compile with its " +
         "params unbound. Use the default TS compiler (omit `compiler`, or set `compiler: 'ts'`) for " +
         "an args-baked program, or inline the values instead of parameterizing `main`.",
+    );
+  }
+  if (options.compiler !== "rs" && options.ambient !== undefined && options.ambient.length > 0) {
+    throw new Error(
+      "compileSauceRoute: options.ambient (module exports broadcast into every module with no " +
+        "`import` line) is RS-COMPILER-ONLY -- the TS compiler this repo vendors has no `ambient` " +
+        "concept to forward it to, so a program relying on it would fail later with an opaque " +
+        "unresolved-identifier error. Set `compiler: 'rs'` to use ambient, or drop the option.",
     );
   }
   const compiled =

@@ -70,17 +70,31 @@ describe("compileSauceRoute: ambient (RS-compiler-only) end to end", () => {
     ).toThrow();
   });
 
-  it("negative control: compiler:'ts' (default) never sees `options.ambient` -- the identical call fails", () => {
-    // The TS compiler this repo vendors has no `ambient` concept at all (see rs-compile.ts's and
-    // sauce-route.ts's own doc notes) -- `options.ambient` is silently unused on this path, so the
-    // exact same source/options pair that compiles above still fails to compile here.
+  it("negative control: compiler:'ts' (default) with a non-empty `options.ambient` is REJECTED early", () => {
+    // The TS compiler this repo vendors has no `ambient` concept at all -- so rather than silently
+    // drop the option and let a program using it fail later with an opaque unresolved-identifier
+    // error, compileSauceRoute rejects the combination up front, parallel to the `args + rs` guard.
     expect(() =>
       compileSauceRoute(base, bareBody, execution, {
         compiler: "ts",
         baseDirs: [AMBIENT_FIXTURE_DIR],
         ambient: AMBIENT,
       }),
-    ).toThrow();
+    ).toThrow(/RS-COMPILER-ONLY|`compiler: 'rs'`/);
+    // Omitted `compiler` defaults to 'ts', same rejection.
+    expect(() =>
+      compileSauceRoute(base, bareBody, execution, {
+        baseDirs: [AMBIENT_FIXTURE_DIR],
+        ambient: AMBIENT,
+      }),
+    ).toThrow(/RS-COMPILER-ONLY|`compiler: 'rs'`/);
+  });
+
+  it("compiler:'ts' with an EMPTY `options.ambient: []` is accepted (nothing to broadcast)", () => {
+    // The guard only rejects a NON-EMPTY ambient list -- an empty one is a no-op on either compiler
+    // path and must not throw, so a caller passing `ambient: []` unconditionally isn't punished.
+    const built = compileSauceRoute(base, "return 1n;", execution, { compiler: "ts", ambient: [] });
+    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
   it("ambient produces BYTE-IDENTICAL bytecode to the same call made through an explicit import", () => {
