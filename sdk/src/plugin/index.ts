@@ -17,17 +17,17 @@ const manifestPath = join(thisDir, "manifest.json");
  * The shared stdlib/DSL plugin's manifest — the single declarative source of truth both
  * compilers' loaders are meant to read.
  *
- * MINIMAL, THIS BRANCH (`feat/plugin-sdk-wiring`, P7): `ambient` ships EMPTY here — no real
- * ambient stdlib module (e.g. `@sauce/token`) is wired in on this branch yet, deliberately, per
- * the "keep the plugin minimal, in-place" directive. A separate branch (`plugin-token-ambient`,
- * off `origin/main`) landed a fuller P5a version of this exact file/loader with
- * `ambient: ["@sauce/token"]` (commit b2b3a7e). The two are NOT yet reconciled — when both land on
- * `main`, this manifest should absorb that branch's real ambient entry (and its
- * `manifest.test.ts` nameParity-vs-real-opcode pin) rather than the two drifting independently.
- * Until then, an empty default here means `chainAmbient()` (routes/ambient.ts) — and therefore
- * every route compiled through `openRoute` — activates NO ambient module unless a caller opts in
- * via `IntentOptions.compile.ambient`/`options.ambient`, so nothing on this branch changes
- * existing compiled output.
+ * `ambient` ships EMPTY, and an entry is not free to add: `chainAmbient()` (routes/ambient.ts)
+ * hands this list to EVERY `openRoute` compile, which both activates the RS compiler and makes the
+ * compile fail unless each specifier resolves. `rs-compile.ts` resolves a bare specifier by walking
+ * up from the caller's `baseDirs` looking for `node_modules/<pkg>`, and `openRoute` supplies no
+ * `baseDirs` — so a specifier that is not installed in a real `node_modules` tree makes every route
+ * throw `failed to import module "<name>"`.
+ *
+ * `@sauce/token` is exactly that case today: it lives at `sdk/src/std/token/` and is never
+ * installed anywhere the walk can find it (the token suites reach it through a synthetic resolver
+ * in their own harness). It belongs here once the SDK can resolve its own stdlib on the route path,
+ * not before.
  */
 export interface SaucePlugin {
   /** Module specifiers broadcast into every compile's global resolution set with no import line. */

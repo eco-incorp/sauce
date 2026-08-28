@@ -29,7 +29,11 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
 }
 
 describe("chainAmbient", () => {
-  it("is empty by default for every chain (this branch ships no real ambient module yet)", () => {
+  // Empty is the only satisfiable value today: a manifest entry is activated for every openRoute
+  // compile, and nothing openRoute passes lets `rs-compile.ts` resolve a bare specifier — see
+  // `plugin/index.ts`. The default-path test at the bottom of this file is what fails if that
+  // changes without the resolver changing with it.
+  it("is empty for every chain — no ambient module resolves on openRoute's default path yet", () => {
     expect(chainAmbient(requireChain("base"))).toEqual([]);
     expect(chainAmbient(requireChain("solana"))).toEqual([]);
   });
