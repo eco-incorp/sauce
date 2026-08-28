@@ -501,6 +501,5 @@ export const perena = {
     buildSwap,
     referenceQuote,
 };
-// ---- SvmVenueLadder (the SvmRoute production ladder) ----
 const ref = (slot, role) => `s${slot}:${role}`;
 //# sourceMappingURL=index.js.map

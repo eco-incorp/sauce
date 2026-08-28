@@ -159,6 +159,7 @@
  */
 import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import type { Address } from '@solana/kit';
+import { parseMintExtensions } from '../../token-extensions.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
 
 const SLUG = 'raydium-launchlab' as const;
@@ -208,12 +209,26 @@ async function resolveBaseTokenProgram(load: AccountLoader, mint: Address, flag:
   if (data[165] !== 1) {
     throw new Error(`${SLUG} base mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
   }
+  // Un-routable (blocking) extensions self-drop: a NonTransferable or
+  // default-frozen base mint cannot move through a plain transferChecked.
+  // Advisory extensions (PermanentDelegate / ConfidentialTransfer) are NOT
+  // blocking, so a zero-fee/advisory-only T22 base mint still routes.
+  const { blocking } = parseMintExtensions(data);
+  if (blocking.length > 0) {
+    throw new Error(`${SLUG} gate: base mint ${mint} is un-routable — ${blocking.join('; ')}`);
+  }
   let offset = 166;
   while (offset + 4 <= data.length) {
     const extensionType = data[offset]! | (data[offset + 1]! << 8);
     const extensionLength = data[offset + 2]! | (data[offset + 3]! << 8);
     if (extensionType === 0) break;
     if (extensionType === 1) {
+      // TODO(t22-fee-netting): a TransferFeeConfig makes the vault/ATA delta
+      // diverge from the user amount on both legs. Correct handling nets the fee
+      // (netTransferAmount) consistently in the on-chain quote fragment AND the
+      // TS reference quote, and needs the mint's fee TLV read on-chain — out of
+      // scope for this pass. Keep the safe self-limiting rejection so a
+      // fee-bearing pool drops out rather than risk a favourable mis-quote.
       throw new Error(
         `${SLUG} gate: base mint ${mint} carries a token-2022 TransferFeeConfig extension (vault/ATA deltas would not match this ladder's constant-product math)`,
       );

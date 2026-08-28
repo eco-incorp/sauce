@@ -118,6 +118,8 @@ import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'mercurial';
 
@@ -200,6 +202,26 @@ export async function fetchMercurialPoolConfig(load: AccountLoader, pool: Addres
   }
   const mintA = pubkey.decode(vaultAData, 0);
   const mintB = pubkey.decode(vaultBData, 0);
+
+  // Mercurial's `Exchange` ix is legacy-SPL only (Tokenkeg vaults). SELF-DROP a
+  // Token-2022 mint (or one carrying an un-routable extension) by throwing — the
+  // SvmRoute orchestrator catches a fetchPoolConfig throw and drops the venue. An
+  // unreadable mint falls back to the legacy assumption (keeps existing tests green).
+  const _mints = [mintA, mintB];
+  const _mintDatas = await Promise.all(_mints.map((mint) => load(mint)));
+  for (let _i = 0; _i < _mints.length; _i++) {
+    const mint = _mints[_i]!;
+    const mintData = _mintDatas[_i]!;
+    if (mintData === null) continue;
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
+  }
+
   const vaultAOwner = pubkey.decode(vaultAData, 32);
   const vaultBOwner = pubkey.decode(vaultBData, 32);
   if (vaultAOwner !== authority) {

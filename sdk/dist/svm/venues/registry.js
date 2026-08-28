@@ -9,20 +9,31 @@ import { saberStableswap } from './saber-stableswap/index.js';
 import { stabbleStableSwap } from './stabble-stable-swap/index.js';
 import { stabbleWeightedSwap } from './stabble-weighted-swap/index.js';
 // Adapter table. Keys MUST equal adapter.slug — venueAdapter reports them as
-// the known-venue list. Constant-product venues first, then the sqrt-price
-// and stable ones (the venue-matrix order in the solswap README).
-const adapters = {
-    [raydiumCpSwap.slug]: raydiumCpSwap,
-    [raydiumAmmV4.slug]: raydiumAmmV4,
-    [pumpswapAdapter.slug]: pumpswapAdapter,
-    [orcaLegacyTokenSwap.slug]: orcaLegacyTokenSwap,
-    [meteoraDammV2.slug]: meteoraDammV2,
-    [saberStableswap.slug]: saberStableswap,
-    [meteoraDammV1Stable.slug]: meteoraDammV1Stable,
-    [meteoraDbc.slug]: meteoraDbc,
-    [stabbleStableSwap.slug]: stabbleStableSwap,
-    [stabbleWeightedSwap.slug]: stabbleWeightedSwap,
+// the known-venue list, and the accessor tree below (svm/accessors.ts) walks
+// this exact table at the TYPE level via RegisteredVenueSlug. Constant-product
+// venues first, then the sqrt-price and stable ones (the venue-matrix order in
+// the solswap README). Literal keys (not computed `[x.slug]:`) so
+// `keyof typeof adaptersTyped` is the real, checkable slug union — the loop
+// right below promotes the "keys MUST equal slug" invariant from a comment
+// into a module-eval assertion.
+const adaptersTyped = {
+    'raydium-cp-swap': raydiumCpSwap,
+    'raydium-amm-v4': raydiumAmmV4,
+    pumpswap: pumpswapAdapter,
+    'orca-legacy-token-swap': orcaLegacyTokenSwap,
+    'meteora-damm-v2': meteoraDammV2,
+    'saber-stableswap': saberStableswap,
+    'meteora-damm-v1-stable': meteoraDammV1Stable,
+    'meteora-dbc': meteoraDbc,
+    'stabble-stable-swap': stabbleStableSwap,
+    'stabble-weighted-swap': stabbleWeightedSwap,
 };
+for (const [key, adapter] of Object.entries(adaptersTyped)) {
+    if (key !== adapter.slug) {
+        throw new Error(`svm/venues/registry: table key '${key}' does not match adapter.slug '${adapter.slug}'`);
+    }
+}
+const adapters = adaptersTyped;
 /** Known venue slugs, in table order. */
 export function listVenues() {
     return Object.keys(adapters);
@@ -33,33 +44,6 @@ export function venueAdapter(slug) {
     if (adapter === undefined) {
         const known = listVenues();
         throw new Error(`unknown venue '${slug}' (known venues: ${known.length > 0 ? known.join(', ') : 'none'})`);
-    }
-    return adapter;
-}
-/**
- * The adapter-contract v2 (SvmRoute ladder) registry, keyed by slug.
- *
- * EMPTY BY DESIGN. The eco-swap merge-decomposition ladders this table used to
- * register were relocated to the consuming recipes package, which defines and
- * registers them itself; the SDK keeps only the generic venue integration
- * (pool-account adapters, program ids, pool-config types, AMM/tick math). The
- * few `<venue>/ladder.ts` files still present here were never registered in
- * this table either, so nothing that used to resolve through it does today.
- *
- * The accessors below are retained so the barrel surface does not change shape
- * for downstream consumers; `ladderVenueAdapter` throws for every slug.
- */
-const ladderAdapters = {};
-/** Known ladder-family slugs, in table order. */
-export function listLadderVenues() {
-    return Object.keys(ladderAdapters);
-}
-/** Looks up a ladder-adapter (v2) by slug; throws listing the known slugs. */
-export function ladderVenueAdapter(slug) {
-    const adapter = ladderAdapters[slug];
-    if (adapter === undefined) {
-        const known = listLadderVenues();
-        throw new Error(`unknown ladder venue '${slug}' (known venues: ${known.length > 0 ? known.join(', ') : 'none'})`);
     }
     return adapter;
 }

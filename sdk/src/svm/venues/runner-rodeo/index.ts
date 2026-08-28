@@ -114,12 +114,11 @@
 import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 import type {
   AccountBytesMap,
   AccountLoader,
-  LadderSwapTemplate,
   PoolConfig,
-  SvmVenueLadder,
   SwapUser,
   VenueAccount,
 } from '../types.js';
@@ -292,11 +291,25 @@ export const runnerRodeo = {
     const protocolFeeBpsB = readUintLE(cfgData, 77, 2);
 
     const baseTokenProgram = detectTokenProgram(baseMint, mintData);
+    // A NonTransferable / DefaultAccountState=frozen base mint genuinely cannot route through the
+    // program's transferChecked — self-drop it (safe; a dropped pool just self-limits).
+    // PermanentDelegate/Confidential are advisories, not blocking, so a routable T22 mint passes.
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`runner-rodeo pool ${pool} gate: base mint ${baseMint} is un-routable: ${blocking.join('; ')}`);
+    }
     const feeConfig = mintTransferFeeConfig(mintData);
     // A nonzero mint-level fee is SAFE iff this program's own authority can harvest it back
     // (see mintTransferFeeConfig's doc — the Swap CPI always self-harvests, netting it to zero
     // real effect); if some OTHER authority controls withdrawal, a nonzero fee would silently
     // corrupt the constant-product math above, so THAT combination is the actual gate.
+    // TODO(t22-fee-netting): the non-self-harvestable case below is REJECTED, not fee-netted.
+    // Unlike a plain pool-transfer venue, this program self-harvests the withheld fee back into
+    // the vault after each transferChecked, so when it CAN harvest (authority == AUTHORITY) the
+    // fee nets to zero and the full amount lands — netting the quote would be WRONG. When it
+    // CANNOT harvest, the withheld-but-unreturned fee corrupts the virtual-reserve curve in a way
+    // simple per-leg net(amount, cfg, epoch) does not model (and this facade has no epoch to net
+    // against). Rejecting self-limits (safe); keep the no-op (reject) path.
     if (feeConfig !== null && feeConfig.bpsActive && feeConfig.withdrawWithheldAuthority !== AUTHORITY) {
       throw new Error(
         `runner-rodeo pool ${pool} gate: base mint ${baseMint} carries an ACTIVE Token-2022 transfer fee ` +

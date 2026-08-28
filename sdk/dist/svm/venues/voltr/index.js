@@ -181,6 +181,8 @@
  */
 import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import { findAssociatedTokenPda } from '@solana-program/token';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'voltr';
 export const VOLTR_PROGRAM_ID = address('vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8');
 export const SPL_TOKEN_PROGRAM_ID = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -261,6 +263,26 @@ export async function fetchVoltrConfig(load, pool) {
         throw new Error(`${SLUG}: lp mint ${lpMint} not found`);
     const assetDecimals = assetMintRaw[MINT_DECIMALS_OFFSET];
     const lpDecimals = lpMintRaw[MINT_DECIMALS_OFFSET];
+    // `deposit_vault`/`instant_withdraw_vault` pass the classic Token program for
+    // the asset side; a Token-2022 asset changes wire semantics this adapter has
+    // not verified against. Detect a Token-2022 (or otherwise un-routable) mint
+    // and GRACEFULLY SELF-DROP the pool (the SvmRoute orchestrator catches a
+    // fetchPoolConfig throw and drops the venue) instead of relying on the CPI to
+    // fail on-chain. Reuses the mint bytes already loaded above; the LEGACY path
+    // is byte-identical (a classic 82-byte mint classifies Tokenkeg, parses no
+    // extensions). LP shares are always classic per the IDL, checked defensively.
+    for (const [m, mintData] of [
+        [assetMint, assetMintRaw],
+        [lpMint, lpMintRaw],
+    ]) {
+        if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join('; ')}`);
+        }
+    }
     return {
         venue: SLUG,
         pool,

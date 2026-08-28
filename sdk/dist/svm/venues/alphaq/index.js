@@ -39,8 +39,8 @@
  *   - dirByte = 1: mintA(vaultA) -> mintB(vaultB); dirByte = 0: reverse.
  *   - the trailing 8 bytes are always zero in every real sample gathered —
  *     no venue-level min_out; the recipe's own terminal outAta-delta check
- *     is the real floor, exactly the "venue min_out is always 1" doc on
- *     {@link LadderSwapTemplate} (here it's simply absent, not encoded as 1).
+ *     is the real floor, following the same "venue min_out is always 1"
+ *     convention every ladder uses (here it's simply absent, not encoded as 1).
  *   - amountIn genuinely needs the full 8 bytes: confirmed via a
  *     130,000,000,000-raw-unit (130k USDT) trade whose encoded value exceeds
  *     u32 range and round-trips exactly as a u64 LE.
@@ -138,6 +138,20 @@
  * not a refusal: extending to LST/BTC/RWA pairs needs an actual price
  * reference this integration does not have, not more reserve-reading.
  *
+ * UPDATE — the price reference WAS found: AlphaQ's live oracle spot is in the
+ * 336-byte STATS account at {@link OFF_STATS_PRICE} (u64 LE, price*1e10,
+ * mintA->mintB), recovered by cross-market correlation against live rates. The
+ * former hard "both mints must be a curated stablecoin" gate is LIFTED: any
+ * equal-decimal market with a sane stats price now serves, priced at that real
+ * spot (see `alphaqQuote`). A genuine stablecoin pair (both in `STABLE_MINTS`)
+ * still keeps the exact parity model, byte/lamport-identical (`isStablePair`).
+ * A non-stable market with no readable stats price self-drops rather than
+ * assuming parity (which mispriced syrupUSDC ~1.178 as 1.0 and forced the
+ * catastrophic route). The decimalsA === decimalsB precondition stays.
+ * CONSUMER NOTE: the recipe ladder's on-chain fragment should read stats@56
+ * LIVE at cook time (the price drifts); this SDK config carries `priceRaw` for
+ * the off-chain reference/sizing.
+ *
  * KNOWN OPEN ISSUE: the real-CPI LiteSVM cell for this family
  * (the consuming app realcpi e2e test's `alphaq quadrilateral`)
  * currently fails `InvalidAccountOwner` at ~5,010 CU inside AlphaQ's own
@@ -166,6 +180,49 @@ const OFF_MINT_B = 272;
  */
 const HAIRCUT_BPS = 10n;
 const HAIRCUT_DENOM = 10000n;
+/**
+ * The market's 336-byte STATS account carries AlphaQ's LIVE oracle price of
+ * mintA in mintB at offset 56 (u64 LE), scaled by 1e10 — the "deeper backing"
+ * the module doc's QUOTE MODEL section notes the vaults do not reflect. This is
+ * what lets a NON-stable pair (an LST/SOL, a yield-bearing stable like
+ * syrupUSDC at ~1.178) be priced at its real spot instead of an assumed
+ * parity. Reverse-engineered by correlating stats@56/1e10 against live rates
+ * across 21 markets (SYRUPU-USDC 1.1783 vs Jupiter 1.1784, MSOL-SOL 1.398,
+ * JITOSO-SOL 1.295, every stable ~1.0 — all within a few bps); confirmed
+ * stable across re-reads (an oracle field the keeper cranks, not a swap-mutated
+ * counter). Sibling fields at +8/+48 read within a bp (bid/ask around the mid).
+ * The price is a WHOLE-coin rate (mintA->mintB); it is directly usable as a raw
+ * rate only because this adapter gates decimalsA === decimalsB.
+ */
+const OFF_STATS_PRICE = 56;
+/** Fixed-point scale of the stats-account price field (see OFF_STATS_PRICE). */
+const PRICE_SCALE = 10000000000n; // 1e10
+/**
+ * The stats account also carries the LAST-CRANK unix timestamp (u64 LE) at
+ * offset 48 — when the keeper last refreshed the oracle price at
+ * {@link OFF_STATS_PRICE}. This is the "sane price" discriminator: a market
+ * whose keeper has stopped cranking holds a STALE @56 that no longer tracks the
+ * real rate (measured: JLP-USDC last cranked 2025-10-09 reads 5.834 vs a real
+ * ~3.62; PYTHIA/EITHER ~100 days stale read 6x/1000x off), and serving it would
+ * OVER-PROMISE the appreciated side — the exact favourable-error hazard this
+ * adapter exists to avoid. Across every AlphaQ market a freshness cut cleanly
+ * separates good from bad: EVERY market cranked within the hour has @56 matching
+ * the live routable rate to a few bps (zero false rejects), EVERY diverging
+ * market is stale. So a non-stable market is served only when its oracle price
+ * is fresh; otherwise it self-drops.
+ */
+const OFF_STATS_PRICE_TS = 48;
+/**
+ * Max age (seconds) of the stats oracle timestamp for a NON-stable market to be
+ * served. 1 hour — data-validated (every fresh market is minutes old; every
+ * stale one is 98+ DAYS, so any threshold in this vast gap separates them, and
+ * the tight end is the safe, over-promise-averse choice). Stablecoin pairs use
+ * the parity model and ignore this. NOTE: this is the PREPARE-time gate; the
+ * recipe ladder's on-chain fragment must additionally check @48 against
+ * block.timestamp LIVE at cook time, since a price fresh at prepare can go stale
+ * before the swap lands (see the module doc's CONSUMER NOTE).
+ */
+const MAX_PRICE_AGE_SECONDS = 3600n;
 /**
  * Curated set of mints this integration TRUSTS to be genuine ~$1 stablecoins
  * — see the module doc's "SCOPE GATE". High-confidence, well-known-brand
@@ -325,7 +382,7 @@ function bs58EncodeUnchecked(bytes) {
  * live prime for. A genuinely unknown/out-of-scope/future market is
  * dropped, never crashed on.
  */
-export async function fetchAlphaqPoolConfig(load, pool) {
+export async function fetchAlphaqPoolConfig(load, pool, now) {
     const data = await load(pool);
     if (data === null)
         throw new Error(`alphaq market ${pool} not found`);
@@ -337,24 +394,56 @@ export async function fetchAlphaqPoolConfig(load, pool) {
         throw new Error(`alphaq market ${pool} has a blank symbol`);
     const mintA = readPubkey(data, OFF_MINT_A);
     const mintB = readPubkey(data, OFF_MINT_B);
-    // SCOPE GATE — see the module doc's "SCOPE GATE": this quote model assumes
-    // near-1:1 fair value, which is only safe for a genuine stablecoin pair.
-    if (!STABLE_MINTS.has(mintA) || !STABLE_MINTS.has(mintB)) {
-        throw new Error(`alphaq market ${pool} ("${symbol}") is not a curated stablecoin pair — this integration's ` +
-            'reserve-based quote model assumes ~1:1 fair value and has no price oracle for a non-stable side');
-    }
+    const isStablePair = STABLE_MINTS.has(mintA) && STABLE_MINTS.has(mintB);
     const decimalsA = data[OFF_DECIMALS_A];
     const decimalsB = data[OFF_DECIMALS_B];
     if (decimalsA !== decimalsB) {
         // Raw-unit reserve comparison (this model's `D = min(vaultA, vaultB)`) is
-        // only meaningful when one raw unit of each side is the same fraction of
-        // a whole coin — see the module doc's "THE ACTUAL MODEL".
+        // only meaningful when one raw unit of each side is the same fraction of a
+        // whole coin — see the module doc's "THE ACTUAL MODEL". This precondition
+        // holds for BOTH the stable parity model and the oracle-priced non-stable
+        // model (the stats price is a WHOLE-coin rate, usable raw only at equal
+        // decimals), so it stays a hard gate for every market.
         throw new Error(`alphaq market ${pool} ("${symbol}") has mismatched decimals (${decimalsA} vs ${decimalsB}) — not priceable by this model`);
     }
     const statsAccount = resolveAlphaqStatsAccount(symbol);
     if (statsAccount === undefined) {
         throw new Error(`alphaq market ${pool} ("${symbol}") has no known stats account — not in the captured table and ` +
             'not primed via primeAlphaqStatsAccounts()');
+    }
+    // Read the live oracle spot from the stats account (see OFF_STATS_PRICE). A
+    // STABLE pair keeps the parity model and does not need it, but a NON-stable
+    // pair is only priceable WITH it — so a non-stable market self-drops (throws,
+    // caught by resolveSvmPoolSpec) when the stats price is missing or non-sane,
+    // instead of falling back to the parity assumption that mis-priced syrupUSDC
+    // (~1.178) as 1.0 and forced a catastrophic route. This LIFTS the former
+    // hard STABLE_MINTS-only gate: any equal-decimal market with a sane oracle
+    // price now serves.
+    const statsData = await load(statsAccount);
+    const hasStats = statsData !== null && statsData.length >= OFF_STATS_PRICE + 8;
+    const priceRaw = hasStats ? readUint64LE(statsData, OFF_STATS_PRICE) : PRICE_SCALE; // parity default (stable pairs ignore it)
+    const priceTimestamp = statsData !== null && statsData.length >= OFF_STATS_PRICE_TS + 8
+        ? readUint64LE(statsData, OFF_STATS_PRICE_TS)
+        : 0n;
+    // "Sane oracle price" gate for a NON-stable pair: it is only priceable via
+    // the oracle, so it self-drops (throws, caught by resolveSvmPoolSpec) rather
+    // than serve a garbage-but-parseable or STALE @56 — never falling back to the
+    // parity assumption that mispriced syrupUSDC. A stablecoin pair uses parity
+    // and ignores all of this. Three ways a non-stable oracle is not sane:
+    if (!isStablePair) {
+        if (!hasStats || priceRaw <= 0n) {
+            throw new Error(`alphaq market ${pool} ("${symbol}") is a non-stable pair with no readable oracle price ` +
+                `(stats@${OFF_STATS_PRICE}) — self-dropping rather than assuming parity`);
+        }
+        if (priceTimestamp <= 0n) {
+            throw new Error(`alphaq market ${pool} ("${symbol}") has a never-cranked oracle (stats@${OFF_STATS_PRICE_TS} == 0) — self-dropping`);
+        }
+        const nowSec = now ?? BigInt(Math.floor(Date.now() / 1000));
+        const age = nowSec - priceTimestamp;
+        if (age > MAX_PRICE_AGE_SECONDS) {
+            throw new Error(`alphaq market ${pool} ("${symbol}") oracle price is STALE (last cranked ${age}s ago, ` +
+                `max ${MAX_PRICE_AGE_SECONDS}s) — self-dropping rather than serving a stale/over-promising price`);
+        }
     }
     return {
         venue: SLUG,
@@ -368,7 +457,17 @@ export async function fetchAlphaqPoolConfig(load, pool) {
         decimalsA,
         decimalsB,
         statsAccount,
+        priceRaw,
+        priceTimestamp,
+        isStablePair,
     };
+}
+/** Little-endian u64 read (no external dep; mirrors the venue math helper). */
+function readUint64LE(data, offset) {
+    let v = 0n;
+    for (let i = 7; i >= 0; i--)
+        v = (v << 8n) | BigInt(data[offset + i]);
+    return v;
 }
 /**
  * The symmetric constant-product model — see the module doc's "THE ACTUAL
@@ -389,5 +488,31 @@ function cpQuote(x, rawA, rawB) {
         return 0n;
     return (net * depth) / (depth + net); // floor
 }
-export { cpQuote as __alphaqCpQuoteForTest, decodeSymbol as __alphaqDecodeSymbolForTest };
+/**
+ * The venue quote. For a STABLE pair this is the ORIGINAL parity model,
+ * byte/lamport-identical to before (spot pinned at 1:1). For a NON-stable pair
+ * it pins the spot at AlphaQ's live oracle price (`priceRaw`/{@link PRICE_SCALE},
+ * mintA->mintB) instead: the symmetric constant-product base
+ * (`net*D/(D+net)`, D = min raw vault — the same conservative, depth-
+ * understating shape) is scaled by the spot, `AtoB` multiplying by the price
+ * and `BtoA` dividing by it. Because the base is direction-symmetric and the
+ * spot scaling is applied last, the curve passes through the real spot at
+ * x->0 (fixing the parity mispricing that made syrupUSDC quote ~1.0 instead of
+ * ~0.849 per USDC) while still understating AlphaQ's true (deeper) depth — the
+ * safe direction, since the on-chain CPI executes AlphaQ's own pricing and the
+ * recipe's post-swap outAta-delta check bounds the fill.
+ *
+ * `rawA`/`rawB` are the live raw vault balances (mintA/mintB); `direction`
+ * is which way the trade goes ('AtoB' spends mintA). `x` is the gross input in
+ * the input side's raw units.
+ */
+function alphaqQuote(x, rawA, rawB, priceRaw, isStablePair, direction) {
+    const base = cpQuote(x, rawA, rawB);
+    if (isStablePair)
+        return base; // unchanged parity path — regression-guarded
+    if (priceRaw <= 0n)
+        return 0n;
+    return direction === 'AtoB' ? (base * priceRaw) / PRICE_SCALE : (base * PRICE_SCALE) / priceRaw;
+}
+export { cpQuote as __alphaqCpQuoteForTest, alphaqQuote as __alphaqQuoteForTest, decodeSymbol as __alphaqDecodeSymbolForTest, };
 //# sourceMappingURL=index.js.map
