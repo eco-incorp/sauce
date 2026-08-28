@@ -58,10 +58,13 @@
  * live 2026-07-31: 4 of the 129 pools carry a nonzero `dynamic_fee_info` and
  * are dropped by this gate; the rest are classic.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
+import { address, getAddressCodec } from '@solana/kit';
 import { AMM_CONFIG_DISCRIMINATOR, RAYDIUM_CLMM_MAX_BOUNDARIES, POOL_DISCRIMINATOR, TICK_ARRAY_DISCRIMINATOR, windowStartTicks } from '../raydium-clmm/index.js';
 import { MAX_TICK, MIN_TICK } from '../raydium-clmm/tick-math.js';
 import { raydiumSqrtPriceAtTick } from '../raydium-clmm/tick-math.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
+import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
 const SLUG = 'byreal';
 /** Byreal's deployed program — a different program id than raydium-clmm's CAMMC... deployment. */
 export const BYREAL_PROGRAM_ID = address('REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2');
@@ -117,11 +120,11 @@ function getAddressEncoded(value) {
 async function deriveTickArrayPda(pool, startTick) {
     const be = new Uint8Array(4);
     new DataView(be.buffer).setInt32(0, startTick, false);
-    const [pda] = await getProgramDerivedAddress({
-        programAddress: BYREAL_PROGRAM_ID,
-        seeds: [new TextEncoder().encode('tick_array'), getAddressEncoded(pool), be],
-    });
-    return pda;
+    return memoizedGetProgramDerivedAddress(BYREAL_PROGRAM_ID, [
+        new TextEncoder().encode('tick_array'),
+        getAddressEncoded(pool),
+        be,
+    ]);
 }
 function tickInitialized(array, offset) {
     return readUintLE(array, OFF_TA_TICKS + offset * TICK_LEN + OFF_TICK_LIQ_GROSS, 16) !== 0n;
@@ -134,10 +137,16 @@ function tickHasLimitOrders(array, offset) {
 async function resolveWindow(load, pool, tickCurrentIndex, tickSpacing, zeroForOne) {
     const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, zeroForOne);
     const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start))));
+    // allSettled (not all) keeps the break-on-first-invalid contract exact: a
+    // rejection is re-thrown only if the readable prefix actually reaches it.
+    const loaded = await Promise.allSettled(tickArrays.map((a) => load(a)));
     const arrays = [];
     let readable = 0;
     for (let i = 0; i < 3; i++) {
-        const data = await load(tickArrays[i]);
+        const settled = loaded[i];
+        if (settled.status === 'rejected')
+            throw settled.reason;
+        const data = settled.value;
         const valid = data !== null &&
             data.length >= TICK_ARRAY_ACCOUNT_SIZE &&
             hasDiscriminator(data, TICK_ARRAY_DISCRIMINATOR) &&
@@ -230,12 +239,25 @@ export async function fetchByrealPoolConfig(load, pool) {
     const ammConfig = codec.decode(data.subarray(OFF_AMM_CONFIG, OFF_AMM_CONFIG + 32));
     const tokenMint0 = codec.decode(data.subarray(OFF_TOKEN_MINT_0, OFF_TOKEN_MINT_0 + 32));
     const tokenMint1 = codec.decode(data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32));
-    for (const mint of [tokenMint0, tokenMint1]) {
-        const mintData = await load(mint);
+    // The on-chain swap ix here is legacy-SPL only, so a Token-2022 mint (or one
+    // carrying an un-routable extension) SELF-DROPS this pool. The thrown error is
+    // the graceful-drop signal — the SvmRoute orchestrator catches a
+    // fetchPoolConfig throw and drops the venue. An unreadable mint falls back to
+    // the legacy assumption (a classic 82-byte mint classifies legacy → no throw →
+    // the config is built byte-identically to before).
+    const mintList = [tokenMint0, tokenMint1];
+    const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+    for (let mi = 0; mi < mintList.length; mi++) {
+        const mint = mintList[mi];
+        const mintData = mintDatas[mi];
         if (mintData === null)
-            throw new Error(`${SLUG}: mint ${mint} of pool ${pool} not found`);
-        if (mintData.length !== 82) {
-            throw new Error(`${SLUG}: pool ${pool} mint ${mint} is not a classic SPL mint (transfer-fee mints unsupported)`);
+            continue;
+        if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        }
+        const { blocking } = parseMintExtensions(mintData);
+        if (blocking.length > 0) {
+            throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
         }
     }
     const cfgData = await load(ammConfig);
@@ -249,10 +271,10 @@ export async function fetchByrealPoolConfig(load, pool) {
     const [zeroForOne, oneForZero, bitmapExtension] = await Promise.all([
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
         resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-        getProgramDerivedAddress({
-            programAddress: BYREAL_PROGRAM_ID,
-            seeds: [new TextEncoder().encode('pool_tick_array_bitmap_extension'), getAddressEncoded(pool)],
-        }).then(([pda]) => pda),
+        memoizedGetProgramDerivedAddress(BYREAL_PROGRAM_ID, [
+            new TextEncoder().encode('pool_tick_array_bitmap_extension'),
+            getAddressEncoded(pool),
+        ]),
     ]);
     return {
         venue: SLUG,

@@ -16,6 +16,12 @@ import { meteoraDammV2 } from '../../../src/svm/venues/meteora-damm-v2/index.js'
 import type { MeteoraDammV2PoolConfig } from '../../../src/svm/venues/meteora-damm-v2/index.js';
 import type { AccountLoader, PoolConfig } from '../../../src/svm/index.js';
 import { fixtureBytesMap, fixtureData, fixtureLoader, loadFixtures } from '../fixtures.js';
+import {
+  makeT22Mint,
+  NON_TRANSFERABLE_TLV,
+  PERMANENT_DELEGATE_TLV,
+  transferFeeConfigTlv,
+} from '../fixtures/token-2022/synth.js';
 
 const POOL = address('8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie');
 const COMPOUNDING_POOL = address('HybT1fLHfZDjQVnfBdFh9qT8kjPfb6wJCkKkoLZKqunm');
@@ -252,6 +258,53 @@ describe('meteora-damm-v2 fetchPoolConfig', () => {
     const cfg = await meteoraDammV2.fetchPoolConfig(load, POOL);
     expect(cfg.tokenAProgram).toBe(TOKEN_2022);
     expect(cfg.tokenBProgram).toBe(TOKENKEG);
+  });
+});
+
+describe('meteora-damm-v2 Token-2022 routability', () => {
+  it('routes a zero-fee Token-2022 mint (advisory-only) and leaves the quote token-program-agnostic', async () => {
+    const load = doctoredLoader(
+      (data) => {
+        data[482] = 1; // token_a -> Token-2022
+      },
+      { [WSOL]: makeT22Mint(PERMANENT_DELEGATE_TLV) }, // PermanentDelegate is an advisory, not blocking
+    );
+    const cfg = await meteoraDammV2.fetchPoolConfig(load, POOL);
+    expect(cfg.tokenAProgram).toBe(TOKEN_2022);
+    expect(cfg.tokenBProgram).toBe(TOKENKEG);
+    // referenceQuote reads pool bytes only — identical to the legacy worked example.
+    expect(meteoraDammV2.referenceQuote(cfg, state, ONE_SOL, NOW)).toBe(81_533_661n);
+  });
+
+  it('self-drops a NonTransferable (blocking) Token-2022 mint', async () => {
+    const load = doctoredLoader(
+      (data) => {
+        data[482] = 1;
+      },
+      { [WSOL]: makeT22Mint(NON_TRANSFERABLE_TLV) },
+    );
+    await expect(meteoraDammV2.fetchPoolConfig(load, POOL)).rejects.toThrow(
+      `token_a mint ${WSOL} is un-routable: NonTransferable`,
+    );
+  });
+
+  it('still self-drops a fee-bearing (bps>0) Token-2022 mint (netting deferred)', async () => {
+    const load = doctoredLoader(
+      (data) => {
+        data[482] = 1;
+      },
+      { [WSOL]: makeT22Mint(transferFeeConfigTlv(50)) },
+    );
+    await expect(meteoraDammV2.fetchPoolConfig(load, POOL)).rejects.toThrow(
+      `token_a mint ${WSOL} has a token-2022 transfer-fee extension`,
+    );
+  });
+
+  it('legacy control: both sides legacy, quote unchanged', async () => {
+    const cfg = await fetchCfg();
+    expect(cfg.tokenAProgram).toBe(TOKENKEG);
+    expect(cfg.tokenBProgram).toBe(TOKENKEG);
+    expect(meteoraDammV2.referenceQuote(cfg, state, ONE_SOL, NOW)).toBe(81_533_661n);
   });
 });
 

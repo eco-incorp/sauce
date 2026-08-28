@@ -43,4 +43,5 @@ export function getChain(chainId) {
 export function getAllChainIds() {
     return Object.keys(chains).map(Number);
 }
+export * from "./canonical.js";
 //# sourceMappingURL=index.js.map

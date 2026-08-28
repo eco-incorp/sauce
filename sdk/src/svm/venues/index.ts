@@ -626,3 +626,9 @@ export {
   metricSwapAccounts,
 } from './metric/index.js';
 export type { MetricPoolConfig } from './metric/index.js';
+
+// PDA-derivation memo — public tuning knob only. The memoizing primitive and
+// its test seams stay internal (used by the venue derivers via a relative
+// import); consumers get exactly the config surface.
+export { configurePdaMemo, getPdaMemoMaxEntries, DEFAULT_PDA_MEMO_MAX_ENTRIES } from './pda-memo.js';
+export type { PdaMemoConfig } from './pda-memo.js';

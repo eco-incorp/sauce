@@ -22,7 +22,7 @@
 // canonical `svmSettleSource(N)` ITSELF and requires the calldata pin to equal `sha256(canonical settle)`
 // (or, if the caller passes the staged `bytecode` from `fulfillmentMetadata.svm.sauceStage`, a full
 // byte-match). A partner needs no bytecode to get a genuine verdict; a decoy is REJECTED, not returned.
-import { addDecoderSizePrefix, getArrayDecoder, getAddressDecoder, getBooleanDecoder, getBytesDecoder, getStructDecoder, getU8Decoder, getU32Decoder, } from '@solana/kit';
+import { addDecoderSizePrefix, addEncoderSizePrefix, getArrayDecoder, getArrayEncoder, getAddressDecoder, getAddressEncoder, getBooleanDecoder, getBooleanEncoder, getBytesDecoder, getBytesEncoder, getStructDecoder, getStructEncoder, getU8Decoder, getU8Encoder, getU32Decoder, getU32Encoder, } from '@solana/kit';
 import { verifySvmSettleExecution } from './verify.js';
 // Borsh (Anchor): `bytes` = u32 LE length prefix + bytes; `Vec<T>` = u32 LE length + elements;
 // `bool` = 1 byte; `pubkey` = 32 bytes; `u8` = 1 byte. Field order is the IDL struct order.
@@ -76,6 +76,36 @@ export function decodePortalCalldataWithAccounts(data) {
         accountCount: decoded.calldata.accountCount,
         accounts: decoded.accounts.map((a) => ({ pubkey: a.pubkey, isSigner: a.isSigner, isWritable: a.isWritable })),
     };
+}
+// Encoder side of the exact same envelope — kept beside the decoder above so the Portal
+// `CalldataWithAccounts` Borsh layout has exactly one source of truth (field order, u32-length
+// prefixes, u8 account_count, u32-length-prefixed accounts vec).
+const calldataEncoder = getStructEncoder([
+    ['data', addEncoderSizePrefix(getBytesEncoder(), getU32Encoder())],
+    ['accountCount', getU8Encoder()],
+]);
+const accountMetaEncoder = getStructEncoder([
+    ['pubkey', getAddressEncoder()],
+    ['isSigner', getBooleanEncoder()],
+    ['isWritable', getBooleanEncoder()],
+]);
+const calldataWithAccountsEncoder = getStructEncoder([
+    ['calldata', calldataEncoder],
+    ['accounts', getArrayEncoder(accountMetaEncoder, { size: getU32Encoder() })],
+]);
+/**
+ * Encodes a Portal `CalldataWithAccounts` envelope — the exact inverse of
+ * {@link decodePortalCalldataWithAccounts}, sharing its codec byte-for-byte (both are built from the
+ * same field list above), so encoder and decoder cannot drift apart. This is what a route `Call.data`
+ * for a staged SVM Sauce execution looks like on the wire.
+ */
+export function encodePortalCalldataWithAccounts(input) {
+    const accountCount = input.accountCount ?? input.accounts.length;
+    const encoded = calldataWithAccountsEncoder.encode({
+        calldata: { data: input.instructionData, accountCount },
+        accounts: input.accounts.map((a) => ({ pubkey: a.pubkey, isSigner: a.isSigner, isWritable: a.isWritable })),
+    });
+    return `0x${Buffer.from(Uint8Array.from(encoded)).toString('hex')}`;
 }
 /**
  * Scans SVM intent calls and returns the first call that is a GENUINE settle execution — the SVM twin of

@@ -29,7 +29,17 @@ import { address } from '@solana/kit';
 import { compileSvm, wrapQuoteMain } from '../rs-compile.js';
 import { meteoraDbc } from '../../../src/svm/venues/meteora-dbc/index.js';
 import type { MeteoraDbcPoolConfig } from '../../../src/svm/venues/meteora-dbc/index.js';
+import type { AccountLoader } from '../../../src/svm/index.js';
 import { fixtureBytesMap, fixtureLoader, loadFixtures } from '../fixtures.js';
+import {
+  makeT22Mint,
+  NON_TRANSFERABLE_TLV,
+  PERMANENT_DELEGATE_TLV,
+  transferFeeConfigTlv,
+} from '../fixtures/token-2022/synth.js';
+
+const TOKENKEG = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const TOKEN_2022 = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 
 const FIXTURES = resolve(process.cwd(), 'test/svm/fixtures/meteora-dbc');
 const STATIC_POOL = address('5HXw3UDdd9n6aNsiPCNkB23JJBAZv3qSMf11oiJxL5z8');
@@ -136,5 +146,58 @@ describe('meteora-dbc emitQuote — Account model (svm.sload) via RS', () => {
         accounts.map((_, k) => ({ kind: 'slot', index: k, name: `acc${k}`, requires: 'readonly' })),
       );
     }
+  });
+});
+
+describe('meteora-dbc: Token-2022 routability', () => {
+  const OFF_TOKEN_TYPE = 237; // base-mint token program flag in PoolConfig
+
+  // Loader that flips the STATIC pool's config base token flag to Token-2022 and
+  // serves synthetic mint bytes for the base mint address; every other account
+  // (the pool, the vaults) is served unchanged from the fixture.
+  async function t22BaseLoader(mintBytes: Uint8Array): Promise<{ load: AccountLoader; baseMint: string }> {
+    const cfg = await fetch(STATIC_POOL);
+    const configAddr = cfg.config as string;
+    const baseMint = cfg.baseMint as string;
+    const load2: AccountLoader = async (addr) => {
+      if (addr === configAddr) {
+        const d = new Uint8Array(state[configAddr]);
+        d[OFF_TOKEN_TYPE] = 1; // base -> Token-2022
+        return d;
+      }
+      if (addr === baseMint) return new Uint8Array(mintBytes);
+      return load(addr);
+    };
+    return { load: load2, baseMint };
+  }
+
+  it('routes a zero-fee Token-2022 base mint (advisory-only) and threads the program per side', async () => {
+    const { load: load2 } = await t22BaseLoader(makeT22Mint(PERMANENT_DELEGATE_TLV));
+    const cfg = await meteoraDbc.fetchPoolConfig(load2, STATIC_POOL);
+    expect(cfg.tokenBaseProgram).toBe(TOKEN_2022);
+    expect(cfg.tokenQuoteProgram).toBe(TOKENKEG); // opposite side stays legacy
+    // quote is token-program-agnostic: identical to the pinned legacy vector.
+    expect(bi(meteoraDbc.referenceQuote(cfg, state, 1_000_000_000n, NOW))).toBe(bi(18_643_953_491_788_332n));
+  });
+
+  it('self-drops a NonTransferable (blocking) Token-2022 base mint', async () => {
+    const { load: load2, baseMint } = await t22BaseLoader(makeT22Mint(NON_TRANSFERABLE_TLV));
+    await expect(meteoraDbc.fetchPoolConfig(load2, STATIC_POOL)).rejects.toThrow(
+      `meteora-dbc pool ${STATIC_POOL} base mint ${baseMint} is un-routable: NonTransferable`,
+    );
+  });
+
+  it('still self-drops a fee-bearing (bps>0) Token-2022 base mint (netting deferred)', async () => {
+    const { load: load2, baseMint } = await t22BaseLoader(makeT22Mint(transferFeeConfigTlv(75)));
+    await expect(meteoraDbc.fetchPoolConfig(load2, STATIC_POOL)).rejects.toThrow(
+      `meteora-dbc pool ${STATIC_POOL} base mint ${baseMint} has a token-2022 transfer-fee extension`,
+    );
+  });
+
+  it('legacy control: both sides legacy, quote unchanged', async () => {
+    const cfg = await fetch(STATIC_POOL);
+    expect(cfg.tokenBaseProgram).toBe(TOKENKEG);
+    expect(cfg.tokenQuoteProgram).toBe(TOKENKEG);
+    expect(bi(meteoraDbc.referenceQuote(cfg, state, 1_000_000_000n, NOW))).toBe(bi(18_643_953_491_788_332n));
   });
 });

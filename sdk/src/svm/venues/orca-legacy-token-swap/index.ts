@@ -141,6 +141,20 @@ export const orcaLegacyTokenSwap = {
       }
     }
 
+    // Per-side token program: the legacy spl-token-swap program stores ONE
+    // token_program_id (@3) for the whole pool and CPIs both legs through it —
+    // there is no per-mint program to thread, and this reads the pool's own
+    // stored program (not a hardcoded legacy id), so a pool created against
+    // Token-2022 is threaded correctly. The constant-product referenceQuote/
+    // emitQuote read only the raw vault balances (SPL token account amount @64,
+    // identical on both token programs), so a zero-fee Token-2022 pool quotes
+    // byte-identically to a legacy one.
+    // TODO(t22-fee-netting): this adapter never fetches the mint accounts, so a
+    // Token-2022 TransferFeeConfig on a leg is neither detected nor netted. Such
+    // a pool would over-quote (the wire haircut is unmodeled). Adding netting
+    // needs a mint fetch (to read the fee config + current epoch) plus matching
+    // netting in BOTH referenceQuote and emitQuote — deferred; these legacy
+    // pools are legacy-token in practice, so the exposure is negligible today.
     const bumpSeed = data[2];
     return {
       venue: SLUG,

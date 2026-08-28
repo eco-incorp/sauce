@@ -30,6 +30,7 @@
  */
 import { address, getAddressCodec } from '@solana/kit';
 import { ceilDiv, readUintLE } from '../math.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'meteora-damm-v2';
 const PROGRAM_ID = address('cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG');
 /** Constant PDA ['pool_authority'] of the program — owner of both vaults. */
@@ -141,27 +142,29 @@ function tokenProgramFor(pool, side, flag) {
     throw new Error(`meteora-damm-v2 pool ${pool} token_${side}_flag=${flag} is not a known token program flag`);
 }
 /**
- * Token-2022 transfer-fee gate: a TransferFeeConfig extension makes wire
- * amounts diverge from the pool math, so such pools are rejected. Mint TLV:
- * 82-byte base, zero padding to 165, account type byte at 165, then
- * [type u16 LE][len u16 LE][data] entries; TransferFeeConfig is type 1.
+ * Token-2022 mint routability gate. A plain / advisory-only mint
+ * (PermanentDelegate, ConfidentialTransfer — PYUSD/USDG carry these and trade
+ * fine) routes exactly like a legacy mint. A NonTransferable /
+ * DefaultAccountState=frozen mint genuinely cannot move through a plain
+ * transferChecked, so it self-drops. A TransferFeeConfig mint is dropped (see
+ * the TODO) rather than netted.
  */
-async function assertNoTransferFee(load, pool, side, mint) {
+async function assertRoutableMint(load, pool, side, mint) {
     const data = await load(mint);
     if (data === null) {
         throw new Error(`meteora-damm-v2 pool ${pool} token_${side} mint ${mint} not found (required to inspect token-2022 extensions)`);
     }
-    if (data.length <= 166)
-        return; // base mint, no extensions
-    let offset = 166;
-    while (offset + 4 <= data.length) {
-        const type = readUintLE(data, offset, 2);
-        if (type === 0n)
-            break; // uninitialized padding
-        if (type === 1n) {
-            throw new Error(`meteora-damm-v2 pool ${pool} token_${side} mint ${mint} has a token-2022 transfer-fee extension`);
-        }
-        offset += 4 + Number(readUintLE(data, offset + 2, 2));
+    const ext = parseMintExtensions(data);
+    if (ext.blocking.length > 0) {
+        throw new Error(`meteora-damm-v2 pool ${pool} token_${side} mint ${mint} is un-routable: ${ext.blocking.join('; ')}`);
+    }
+    // TODO(t22-fee-netting): a fee-bearing mint is REJECTED, not netted. Netting
+    // would have to be applied IDENTICALLY in referenceQuote AND the in-VM
+    // emitQuote fragment (the triangle invariant this venue enforces), across the
+    // epoch-scheduled, max_fee-capped spl-token-2022 fee curve — a materially
+    // larger change deferred here. Dropping self-limits (safe), never over-quotes.
+    if (ext.transferFee) {
+        throw new Error(`meteora-damm-v2 pool ${pool} token_${side} mint ${mint} has a token-2022 transfer-fee extension`);
     }
 }
 /**
@@ -195,9 +198,9 @@ export const meteoraDammV2 = {
         const tokenAProgram = tokenProgramFor(pool, 'a', d.tokenAFlag);
         const tokenBProgram = tokenProgramFor(pool, 'b', d.tokenBFlag);
         if (d.tokenAFlag === 1)
-            await assertNoTransferFee(load, pool, 'a', d.tokenAMint);
+            await assertRoutableMint(load, pool, 'a', d.tokenAMint);
         if (d.tokenBFlag === 1)
-            await assertNoTransferFee(load, pool, 'b', d.tokenBMint);
+            await assertRoutableMint(load, pool, 'b', d.tokenBMint);
         return {
             venue: SLUG,
             pool,

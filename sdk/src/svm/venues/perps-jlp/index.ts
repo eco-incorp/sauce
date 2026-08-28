@@ -102,6 +102,8 @@ import { address, getAddressCodec, getProgramDerivedAddress, getUtf8Encoder, get
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 
 const SLUG = 'perps-jlp';
 
@@ -413,13 +415,25 @@ export async function fetchPerpsJlpConfig(
   if (!dIn.allowSwap) throw new Error(`${SLUG}: custody ${custodyIn} has swap disabled (Permissions.allowSwap == false)`);
   if (!dOut.allowSwap) throw new Error(`${SLUG}: custody ${custodyOut} has swap disabled (Permissions.allowSwap == false)`);
 
-  // Tokenkeg-only (a token-2022 transfer-fee mint would desync wire amounts —
-  // same restriction obric-v2/quantum apply to their own venues).
+  // Tokenkeg-only (a Token-2022 transfer-fee/extension mint would desync wire
+  // amounts — same restriction obric-v2/quantum apply to their own venues), so
+  // detect a Token-2022 or un-routable mint via the shared data-shape resolver
+  // and SELF-DROP the pair (the thrown error is the graceful-drop signal the
+  // SvmRoute orchestrator catches). The LEGACY path is byte-identical: a classic
+  // 82-byte mint classifies Tokenkeg with no extensions.
   const [mintInData, mintOutData] = await Promise.all([load(dIn.mint), load(mintOut)]);
-  if (mintInData === null || mintOutData === null) throw new Error(`${SLUG}: mint account(s) not found`);
-  // classic SPL mint accounts are exactly 82 bytes.
-  if (mintInData.length !== 82 || mintOutData.length !== 82) {
-    throw new Error(`${SLUG}: pair ${dIn.mint}/${mintOut} is not classic-Tokenkeg (swap2 is Tokenkeg-only here)`);
+  for (const [mint, mintData] of [
+    [dIn.mint, mintInData],
+    [mintOut, mintOutData],
+  ] as const) {
+    if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
+    if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`${SLUG}: dropping pair ${dIn.mint}/${mintOut} — mint ${mint} is Token-2022 (swap2 is legacy-SPL only here)`);
+    }
+    const { blocking } = parseMintExtensions(mintData);
+    if (blocking.length > 0) {
+      throw new Error(`${SLUG}: dropping pair ${dIn.mint}/${mintOut} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    }
   }
 
   const [dovesInData, dovesOutData] = await Promise.all([load(dIn.dovesOracle), load(dOut.dovesOracle)]);

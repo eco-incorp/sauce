@@ -115,6 +115,7 @@
 import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import { readUintLE } from '../math.js';
 import { JUPITER_LEND_LIQUIDITY_PROGRAM_ID } from '../jupiter-lend-earn/index.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'juplend-amm';
 export const JUPLEND_AMM_PROGRAM_ID = address('jupZ4m2GqUCJ5iueMfzQf8khFfH31d4XAQt3RzCT9Vd');
 // Same on-chain program as jupiter-lend-earn's `JUPITER_LEND_LIQUIDITY_PROGRAM_ID`
@@ -164,9 +165,12 @@ async function pda(seeds, programAddress) {
 /**
  * Which token program owns a mint, from the mint account bytes alone (no
  * `owner` field on AccountLoader reads): a classic SPL mint is exactly 82
- * bytes; anything else must be token-2022 TLV. Ported verbatim from this
- * SDK's pumpswap adapter (same gate: reject a TransferFeeConfig extension,
- * whose transfer-time haircut would desync the vault delta from amount).
+ * bytes; anything else must be token-2022 TLV. A plain / advisory-only
+ * Token-2022 mint (PermanentDelegate, ConfidentialTransfer — PYUSD/USDG carry
+ * these and trade fine) routes exactly like a legacy mint; a genuinely
+ * un-routable extension set (NonTransferable / DefaultAccountState=frozen)
+ * self-drops, and a TransferFeeConfig-bearing mint is dropped (see the
+ * TODO below).
  */
 function detectTokenProgram(mint, data) {
     if (data.length === 82)
@@ -177,16 +181,17 @@ function detectTokenProgram(mint, data) {
     if (data[165] !== 1) {
         throw new Error(`juplend-amm mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
     }
-    let offset = 166;
-    while (offset + 4 <= data.length) {
-        const extensionType = data[offset] | (data[offset + 1] << 8);
-        const extensionLength = data[offset + 2] | (data[offset + 3] << 8);
-        if (extensionType === 0)
-            break; // uninitialized tail
-        if (extensionType === 1) {
-            throw new Error(`juplend-amm gate: mint ${mint} carries a token-2022 TransferFeeConfig extension (vault deltas would not match user amounts)`);
-        }
-        offset += 4 + extensionLength;
+    const ext = parseMintExtensions(data);
+    if (ext.blocking.length > 0) {
+        throw new Error(`juplend-amm gate: mint ${mint} is un-routable (${ext.blocking.join('; ')})`);
+    }
+    // TODO(t22-fee-netting): a TransferFeeConfig mint is DROPPED, not netted.
+    // This adapter's quote/ladder was relocated to the recipes package (see the
+    // module doc), so there is no referenceQuote here to net the fee on both
+    // legs; dropping self-limits (never over-quotes). Add the netting in the
+    // recipes ladder to serve fee-bearing pools.
+    if (ext.transferFee) {
+        throw new Error(`juplend-amm gate: mint ${mint} carries a token-2022 TransferFeeConfig extension (vault deltas would not match user amounts)`);
     }
     return TOKEN_2022_PROGRAM;
 }

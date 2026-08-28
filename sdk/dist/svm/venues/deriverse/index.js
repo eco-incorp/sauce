@@ -68,6 +68,8 @@
  * directory.
   */
 import { getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
+import { parseMintExtensions } from '../../token-extensions.js';
 const SLUG = 'deriverse';
 export const DERIVERSE_PROGRAM_ID = 'DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD';
 const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
@@ -240,6 +242,28 @@ export const deriverse = {
         const assetMint = pubkeyAt(OFF_ASSET_MINT);
         const crncyMint = pubkeyAt(OFF_CRNCY_MINT);
         const mapsAddress = pubkeyAt(OFF_MAPS_ADDRESS);
+        // Both legs are assumed classic Tokenkeg (see the SCOPE GATE note above):
+        // this venue's Swap ix is legacy-SPL only, so a Token-2022 mint (or one
+        // carrying an un-routable extension) must SELF-DROP the pool rather than be
+        // silently assumed legacy. The thrown error IS the graceful-drop signal
+        // (the SvmRoute orchestrator catches it and drops the venue). An unreadable
+        // mint falls back to the legacy assumption, keeping the classic path
+        // byte-identical.
+        const mintList = [assetMint, crncyMint];
+        const mintDatas = await Promise.all(mintList.map((mint) => load(mint)));
+        for (let mi = 0; mi < mintList.length; mi++) {
+            const mint = mintList[mi];
+            const mintData = mintDatas[mi];
+            if (mintData === null)
+                continue;
+            if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+            }
+            const { blocking } = parseMintExtensions(mintData);
+            if (blocking.length > 0) {
+                throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+            }
+        }
         // asset/crncy VAULTS are NOT the TokenState PDA itself — TokenState is a
         // small Deriverse bookkeeping record (id/decimals/mask) whose OWN
         // `program_address` field (offset 40, 32 bytes) names the real SPL
