@@ -10,23 +10,20 @@
 import { venueAdapter } from "../src/svm/venues/registry.js";
 import { chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 import { installRouteGlobals, uninstallRouteGlobals } from "../src/routes/globals.js";
-import type { RewardInput, RouteInput } from "../src/routes/index.js";
+import type { IntentOptions } from "../src/routes/index.js";
 
-function reward(overrides: Partial<RewardInput> = {}): RewardInput {
-  return {
-    deadline: 1000n,
-    creator: "0x1111111111111111111111111111111111111111",
-    prover: "0x2222222222222222222222222222222222222222",
-    ...overrides,
-  };
-}
+const POT = "0x1111111111111111111111111111111111111111" as const;
+const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 
-function route(overrides: Partial<RouteInput> = {}): RouteInput {
+function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
+    pot: POT,
     deadline: 2000n,
-    portal: "0x3333333333333333333333333333333333333333",
-    calls: [{ target: "0x4444444444444444444444444444444444444444", data: "0xabcdef", value: 5n }],
-    tokens: [{ token: "0x5555555555555555555555555555555555555555", amount: 10n }],
+    portal: PORTAL,
+    source: "base",
+    creator: "0x3333333333333333333333333333333333333333",
+    prover: "0x4444444444444444444444444444444444444444",
+    rewardDeadline: 1000n,
     ...overrides,
   };
 }
@@ -57,14 +54,25 @@ describe("svm venue globals: ambient + runtime, no import of the tree", () => {
 describe("svm venue globals: coexistence with .route", () => {
   it("the SAME Solana object answers .route(...) AND carries .RaydiumCpSwap", () => {
     const solana = g.Solana as {
-      route: (r: RewardInput) => { Base: (rt: RouteInput) => unknown };
+      route: (s: string, o: IntentOptions) => { reward: (r: bigint) => unknown };
       RaydiumCpSwap: unknown;
       chain: { slug: string };
     };
     expect(solana.chain.slug).toBe("solana");
     expect(solana.RaydiumCpSwap).toBeDefined();
-    const intents = solana.route(reward()).Base(route());
-    expect(intents).toBeDefined();
+    const built = solana.route("function main() { return 1n; }", {
+      execution: {
+        buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        accounts: [],
+      },
+      deadline: 2000n,
+      portal: PORTAL,
+      source: "base",
+      creator: "0x3333333333333333333333333333333333333333",
+      prover: "0x4444444444444444444444444444444444444444",
+      rewardDeadline: 1000n,
+    }).reward(0n);
+    expect(built).toBeDefined();
   });
 
   it("composition never mutates the imported chainAccessors.Solana object", () => {

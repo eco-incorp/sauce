@@ -108,14 +108,16 @@ const scenarios: Record<string, (c: CompilerContext) => Uint8Array> = {
 
   sDiv: (c) => S(c).sDiv(U(c, 12), U(c, 4))._bytes,
   sMod: (c) => S(c).sMod(U(c, 12), U(c, 5))._bytes,
-  sAr: (c) => S(c).sAr(U(c, 256), U(c, 2))._bytes,
-  signExtend: (c) => S(c).signExtend(U(c, 0), U(c, 255))._bytes,
+  sAr: (c) => S(c).sShr(U(c, 256), U(c, 2))._bytes,
+  // signExtend(value, fromByte); emits [value][fromByte][SIGN_EXTEND] — same bytes the
+  // Solidity reference vector encodes (byte index on top / popped first).
+  signExtend: (c) => S(c).signExtend(U(c, 255), U(c, 0))._bytes,
   signedComparisons: (c) =>
     cat(
-      S(c).sgt(U(c, 5), U(c, 3))._bytes,
-      S(c).slt(U(c, 5), U(c, 3))._bytes,
-      S(c).sgte(U(c, 5), U(c, 3))._bytes,
-      S(c).slte(U(c, 5), U(c, 3))._bytes,
+      S(c).sGt(U(c, 5), U(c, 3))._bytes,
+      S(c).sLt(U(c, 5), U(c, 3))._bytes,
+      S(c).sGte(U(c, 5), U(c, 3))._bytes,
+      S(c).sLte(U(c, 5), U(c, 3))._bytes,
     ),
 
   boolComparisons: (c) =>

@@ -65,20 +65,39 @@ describe("routes globals: ambient types resolve with zero import", () => {
     expect(diagnostics.some((d) => d.code === 2304)).toBe(true); // TS2304: Cannot find name
   });
 
-  it("Base's ambient type is the real ChainOrigin shape -- .route(...) is callable and typed, not `any`", () => {
+  it("Base(sauce, opts) and Base.route(sauce, opts) both typecheck zero-import, and .reward(...) is typed, not `any`", () => {
+    const diagnostics = typecheckProbe(`
+      const opts = {
+        pot: "0x1111111111111111111111111111111111111111" as const,
+        deadline: 2000n,
+        portal: "0x2222222222222222222222222222222222222222" as const,
+        source: "base" as const,
+        creator: "0x3333333333333333333333333333333333333333" as const,
+        prover: "0x4444444444444444444444444444444444444444" as const,
+      };
+      const viaCall = Base("return 1n;", opts);
+      const built = viaCall.reward(0n);
+      const intent: unknown = built.intent;
+      const viaRoute = Base.route("return 1n;", opts);
+      const built2 = viaRoute.reward(0n);
+      // type-level pin: .route carries EXACTLY the call signature's own interface.
+      const _pin: (typeof Base)["route"] = Base;
+      export {};
+    `);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("negative control: the old reward-first Base.route({deadline,creator,prover}) no longer typechecks", () => {
     const diagnostics = typecheckProbe(`
       const reward = {
         deadline: 1000n,
         creator: "0x1111111111111111111111111111111111111111" as const,
         prover: "0x2222222222222222222222222222222222222222" as const,
       };
-      const pending = Base.route(reward);
-      // .route() on a ChainOrigin returns a PendingLeg with generated
-      // per-chain destination methods -- confirm one resolves and is callable.
-      const intents: unknown = pending.Solana();
+      const x: unknown = Base.route(reward);
       export {};
     `);
-    expect(diagnostics).toHaveLength(0);
+    expect(diagnostics.length).toBeGreaterThan(0);
   });
 
   // --- E2.3: the native contract-accessor tree is intersected onto the SAME ambient global ---

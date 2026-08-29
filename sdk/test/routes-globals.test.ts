@@ -15,7 +15,7 @@ import {
   uninstallRouteGlobals,
   routeGlobals,
 } from "../src/routes/globals.js";
-import type { RewardInput, RouteInput } from "../src/routes/index.js";
+import type { IntentOptions } from "../src/routes/index.js";
 
 /** Every chain global, plus the two non-chain globals this module installs by default: `chain`
  *  and the universal `Token` interface (E-token). Kept derived, not a magic number, so a future
@@ -23,21 +23,20 @@ import type { RewardInput, RouteInput } from "../src/routes/index.js";
 const CHAIN_PLUS_CHAIN_PLUS_TOKEN = canonicalChains.length + 2;
 const CHAIN_PLUS_TOKEN = canonicalChains.length + 1;
 
-function reward(overrides: Partial<RewardInput> = {}): RewardInput {
-  return {
-    deadline: 1000n,
-    creator: "0x1111111111111111111111111111111111111111",
-    prover: "0x2222222222222222222222222222222222222222",
-    ...overrides,
-  };
-}
+const POT = "0x1111111111111111111111111111111111111111" as const;
+const PORTAL = "0x3333333333333333333333333333333333333333" as const;
+const CREATOR = "0x5555555555555555555555555555555555555555" as const;
+const PROVER = "0x6666666666666666666666666666666666666666" as const;
 
-function route(overrides: Partial<RouteInput> = {}): RouteInput {
+function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
+    pot: POT,
     deadline: 2000n,
-    portal: "0x3333333333333333333333333333333333333333",
-    calls: [{ target: "0x4444444444444444444444444444444444444444", data: "0xabcdef", value: 5n }],
-    tokens: [{ token: "0x5555555555555555555555555555555555555555", amount: 10n }],
+    portal: PORTAL,
+    source: "base",
+    creator: CREATOR,
+    prover: PROVER,
+    rewardDeadline: 1000n,
     ...overrides,
   };
 }
@@ -89,21 +88,18 @@ describe("routes globals: installed by default on import", () => {
     expect(viaGlobal.chain).toEqual(requireChain("base"));
   });
 
-  it("end-to-end: Base.route(...).Solana(...).route(...).Ethereum() through the bare globals matches the named-import build", () => {
-    const rewardA = reward({ deadline: 111n });
-    const rewardB = reward({ deadline: 222n });
-    const routeA = route({ deadline: 1n });
+  it("end-to-end: Base(sauce, opts).reward(...) through the bare global matches the named-import build, and === Base.route(...)", () => {
+    const opts = evmOptions();
 
-    type OriginLike = { route: (r: RewardInput) => any };
-    const viaGlobals = (g.Base as OriginLike)
-      .route(rewardA)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .Solana(routeA as any)
-      .route(rewardB)
-      .Ethereum();
-
-    const viaNamedImport = chainAccessors.Base.route(rewardA).Solana(routeA).route(rewardB).Ethereum();
-    expect(viaGlobals).toEqual(viaNamedImport);
+    type OriginLike = {
+      (sauce: string, o: IntentOptions): { reward: (r: number | bigint) => unknown };
+      route: (sauce: string, o: IntentOptions) => { reward: (r: number | bigint) => unknown };
+    };
+    const viaCall = (g.Base as OriginLike)("return 1n;", opts).reward(0n) as { intent: unknown };
+    const viaRoute = (g.Base as OriginLike).route("return 1n;", opts).reward(0n) as { intent: unknown };
+    const viaNamedImport = chainAccessors.Base("return 1n;", opts).reward(0n);
+    expect(viaCall.intent).toEqual(viaNamedImport.intent);
+    expect(viaRoute.intent).toEqual(viaNamedImport.intent);
   });
 
   it("installed properties are non-enumerable (don't pollute Object.keys(globalThis))", () => {
@@ -117,7 +113,7 @@ describe("routes globals: installed by default on import", () => {
 
   // E-token: adding the Token global must not regress E3.5 (Base.route) or E2.3 (Base.Uniswap).
   it("REGRESSION (E3.5/E2.3): Base.route(...) and Base.Uniswap.UniversalRouter still resolve via the bare global", () => {
-    const pending = (g.Base as { route: (r: RewardInput) => unknown }).route(reward());
+    const pending = (g.Base as { route: (s: string, o: IntentOptions) => unknown }).route("return 1n;", evmOptions());
     expect(pending).toBeDefined();
     const base = g.Base as { UniswapV4: { UniversalRouter: unknown }; Uniswap: { UniversalRouter: unknown } };
     expect(base.UniswapV4.UniversalRouter).toBeDefined();

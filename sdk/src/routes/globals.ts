@@ -1,9 +1,9 @@
 /**
  * Installs the eco-routes chain accessors (and the `chain` front door) as
- * DEFAULT GLOBALS, so a consumer writes `Base.route(reward).Solana(route)`
+ * DEFAULT GLOBALS, so a consumer writes `Base(() => USDC.transfer(to, amt)).reward(reward)`
  * with zero import. Registry-derived by construction: it enumerates
  * `chainAccessors` (itself generated from `../chains/canonical.js` by
- * `createChainAccessors`), so adding a chain to `CANONICAL_CHAINS` adds a
+ * `createChainGlobals`), so adding a chain to `CANONICAL_CHAINS` adds a
  * global with no code change here.
  *
  * Imported for its side effect from `../index.js` -- see the comment there
@@ -78,47 +78,69 @@ const owned = new Set<string>();
  * `Object.keys(globalThis)`/`for...in`) and `configurable: true` (so
  * `uninstallRouteGlobals` can genuinely remove it).
  */
+/** Function intrinsics a contract/venue namespace key must never collide with once composed onto a
+ *  CALLABLE global -- unlike the plain-object global this replaced, landing on one of these would
+ *  corrupt the callable itself, not merely shadow an inert property. */
+const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
+  "length",
+  "name",
+  "prototype",
+  "arguments",
+  "caller",
+  "bind",
+  "call",
+  "apply",
+  "toString",
+  "constructor",
+]);
+
 /**
- * Composes one chain global: the existing `ChainOrigin` (`chain`/`route`)
- * plus its lazy contract-namespace tree (`Uniswap`, `UniswapV4`, ...) and,
- * for an `svm`-kind chain only, the svm venue accessor tree
- * (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
+ * Composes one chain global: a FRESH callable forwarding to `origin.route`
+ * (so it stays CALLABLE — a plain object would silently drop that), plus
+ * `chain`/`route` and the lazy contract-namespace tree (`Uniswap`,
+ * `UniswapV4`, ...) and, for an `svm`-kind chain only, the svm venue
+ * accessor tree (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
  * `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's
  * memoising GETTERS stay lazy — spread would invoke every one of them
  * eagerly at install time. `origin` itself is never mutated: this returns a
- * fresh object. Throws on a name collision (e.g. a future protocol or venue
- * slug literally named "route" or "chain"), mirroring
- * `createChainAccessors`'s own duplicate-key throw. The `kind === "svm"`
- * gate is registry-derived (from `../chains/canonical.js`'s own
- * `CanonicalChain.kind`), not a hardcoded chain name -- a second SVM chain
- * added to `CANONICAL_CHAINS` gets the venue namespaces automatically, and
- * every EVM chain provably cannot.
+ * fresh function object. Throws on a name collision (e.g. a future protocol
+ * or venue slug literally named "route", "chain", or a function intrinsic
+ * like "call"/"bind"), mirroring `createChainGlobals`'s own duplicate-key
+ * throw. The `kind === "svm"` gate is registry-derived (from
+ * `../chains/canonical.js`'s own `CanonicalChain.kind`), not a hardcoded
+ * chain name -- a second SVM chain added to `CANONICAL_CHAINS` gets the
+ * venue namespaces automatically, and every EVM chain provably cannot.
  */
-function composeChainGlobal(name: string, origin: Record<string, unknown> & { chain: CanonicalChain }): object {
+function composeChainGlobal(name: string, origin: Record<string, unknown> & { chain: CanonicalChain; route: unknown }): object {
   const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;
   const sources: PropertyDescriptorMap[] = [Object.getOwnPropertyDescriptors(contracts)];
   if (origin.chain.kind === "svm") {
     const svmVenues = svmVenueAccessors() as unknown as Record<string, unknown>;
     sources.push(Object.getOwnPropertyDescriptors(svmVenues));
   }
-  const originDescriptors = Object.getOwnPropertyDescriptors(origin);
-  const merged: PropertyDescriptorMap = { ...originDescriptors };
+
+  const fn = ((...args: unknown[]) => (origin.route as (...a: unknown[]) => unknown)(...args)) as unknown as Record<string, unknown>;
+  const merged: PropertyDescriptorMap = {
+    chain: { value: origin.chain, enumerable: true, configurable: false, writable: false },
+    route: { value: origin.route, enumerable: true, configurable: false, writable: false },
+  };
   for (const source of sources) {
     for (const key of Object.keys(source)) {
-      if (key in merged) {
+      if (key in merged || FUNCTION_INTRINSIC_DENYLIST.has(key)) {
         throw new Error(`routes/globals: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`);
       }
     }
     Object.assign(merged, source);
   }
-  return Object.defineProperties({}, merged);
+  Object.defineProperties(fn, merged);
+  return fn;
 }
 
 export function installRouteGlobals(opts: InstallRouteGlobalsOptions = {}): RouteGlobalsReport {
   const target = (opts.target ?? globalThis) as Record<string, unknown>;
   const entries: [string, unknown][] = Object.entries(chainAccessors).map(([name, origin]) => [
     name,
-    composeChainGlobal(name, origin as unknown as Record<string, unknown> & { chain: CanonicalChain }),
+    composeChainGlobal(name, origin as unknown as Record<string, unknown> & { chain: CanonicalChain; route: unknown }),
   ]);
   if (opts.includeChain !== false) entries.push(["chain", chain]);
   if (opts.includeToken !== false) entries.push(["Token", Token]);

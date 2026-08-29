@@ -1,177 +1,52 @@
 /**
- * eco-routes fluent builder — CONTRACT tests. Pure data assertions, no
- * compiler/forge/network involved.
+ * eco-routes chain-global surface — CONTRACT tests. Pure data assertions, no
+ * compiler/forge/network involved beyond the trivial one-op SauceScript
+ * programs compiled below.
  */
 import { canonicalChains, requireChain } from "../src/chains/canonical.js";
-import {
-  chain,
-  chainAccessors,
-  pascalOfSlug,
-  toUniversalAddress,
-  toBigInt,
-} from "../src/routes/index.js";
-import type { Intent, RewardInput, RouteInput } from "../src/routes/index.js";
+import { chain, chainAccessors, pascalOfSlug } from "../src/routes/index.js";
+import type { PendingSauceRoute } from "../src/routes/index.js";
 
-function reward(overrides: Partial<RewardInput> = {}): RewardInput {
-  return {
-    deadline: 1000n,
-    creator: "0x1111111111111111111111111111111111111111",
-    prover: "0x2222222222222222222222222222222222222222",
-    ...overrides,
-  };
-}
+const POT = "0x1111111111111111111111111111111111111111" as const;
+const PORTAL = "0x2222222222222222222222222222222222222222" as const;
+const CREATOR = "0x3333333333333333333333333333333333333333" as const;
+const PROVER = "0x4444444444444444444444444444444444444444" as const;
 
-function route(overrides: Partial<RouteInput> = {}): RouteInput {
+function baseOptions(overrides: Record<string, unknown> = {}) {
   return {
+    pot: POT,
     deadline: 2000n,
-    portal: "0x3333333333333333333333333333333333333333",
-    calls: [{ target: "0x4444444444444444444444444444444444444444", data: "0xabcdef", value: 5n }],
-    tokens: [{ token: "0x5555555555555555555555555555555555555555", amount: 10n }],
+    portal: PORTAL,
+    source: "base",
+    creator: CREATOR,
+    prover: PROVER,
+    rewardDeadline: 1000n,
     ...overrides,
   };
 }
 
-describe("routes: single leg", () => {
-  it("assembles exactly one intent with the right ids and round-tripped data", () => {
-    const r = reward();
-    const rt = route();
-    const intents = chain("base").route(r).Solana(rt).build();
-
-    expect(intents).toHaveLength(1);
-    const [intent] = intents;
-    expect(intent.sourceChainId).toBe(8453n);
-    expect(intent.destination).toBe(1399811149n);
-    expect(intent.route.calls[0]!.data).toBe("0xabcdef");
-    expect(intent.route.tokens[0]!.amount).toBe(10n);
+describe("routes: callable alias === .route", () => {
+  it("Base(sauce, opts) and Base.route(sauce, opts) produce deep-equal Intents", () => {
+    const { Base } = chainAccessors;
+    const viaCall = Base("return 1n;", baseOptions()).reward(0n);
+    const viaRoute = Base.route("return 1n;", baseOptions()).reward(0n);
+    expect(viaCall.intent).toEqual(viaRoute.intent);
   });
 
-  it("copies caller arrays -- mutating the input afterward does not change the intent", () => {
-    const calls: Array<NonNullable<RouteInput["calls"]>[number]> = [
-      { target: "0x4444444444444444444444444444444444444444", data: "0xaa", value: 1n },
-    ];
-    const rt = route({ calls });
-    const intents = chain("base").route(reward()).Solana(rt).build();
-    calls.push({ target: "0x6666666666666666666666666666666666666666", data: "0xbb", value: 2n });
-    expect(intents[0]!.route.calls).toHaveLength(1);
-  });
-});
-
-describe("routes: the literal example, verbatim", () => {
-  it("Base.route(rewardA).Solana(routeA).route(rewardB).Ethereum() yields 2 intents", () => {
-    const { Base, Solana, Ethereum } = chainAccessors;
-    const rewardA = reward({ deadline: 111n });
-    const routeA = route({ deadline: 222n });
-    const rewardB = reward({ deadline: 333n });
-
-    const intents: Intent[] = Base.route(rewardA).Solana(routeA).route(rewardB).Ethereum();
-
-    expect(intents).toHaveLength(2);
-    const [leg1, leg2] = intents;
-
-    expect(leg1!.sourceChainId).toBe(8453n);
-    expect(leg1!.destination).toBe(1399811149n);
-    expect(leg1!.reward.deadline).toBe(111n);
-    expect(leg1!.route.deadline).toBe(222n);
-
-    expect(leg2!.sourceChainId).toBe(1399811149n);
-    expect(leg2!.destination).toBe(1n);
-    expect(leg2!.reward.deadline).toBe(333n);
-    // terminal close: leg2 gets a synthesized empty route
-    expect(leg2!.route.calls).toHaveLength(0);
-    expect(leg2!.route.tokens).toHaveLength(0);
-  });
-});
-
-describe("routes: dest becomes next source", () => {
-  it("holds across a 4-accessor pipeline", () => {
-    const { Base, Solana, Ethereum, Arbitrum } = chainAccessors;
-    const intents = Base.route(reward())
-      .Solana(route())
-      .route(reward())
-      .Ethereum(route())
-      .route(reward())
-      .Arbitrum(route())
-      .route(reward())
-      .Base();
-
-    expect(intents).toHaveLength(4);
-    for (let i = 0; i < intents.length - 1; i++) {
-      expect(intents[i + 1]!.sourceChainId).toBe(intents[i]!.destination);
-    }
-    expect(intents[0]!.sourceChainId).toBe(BigInt(requireChain("base").id));
-  });
-});
-
-describe("routes: terminal close", () => {
-  it("zero-arg dest returns Intent[] with an empty route inheriting the reward deadline", () => {
-    const r = reward({ deadline: 999n });
-    const result = chain("base").route(r).Solana();
-    expect(Array.isArray(result)).toBe(true);
-    const [intent] = result as Intent[];
-    expect(intent!.route.deadline).toBe(999n);
-    expect(intent!.route.calls).toHaveLength(0);
-    expect(intent!.route.tokens).toHaveLength(0);
-    expect(intent!.route.nativeAmount).toBe(0n);
-    expect(intent!.route.portal).toBe("0x" + "00".repeat(32));
-    expect(intent!.route.salt).toBe("0x" + "00".repeat(32));
+  it("typeof chainAccessors.Base === 'function' and its own keys are exactly ['chain','route']", () => {
+    expect(typeof chainAccessors.Base).toBe("function");
+    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "route"]);
   });
 
-  it("with-route form returns a continuable stage, not an array", () => {
-    const stage = chain("base").route(reward()).Solana(route());
-    expect(Array.isArray(stage)).toBe(false);
-    expect(typeof (stage as { route?: unknown }).route).toBe("function");
-    expect(typeof (stage as { build?: unknown }).build).toBe("function");
-  });
-});
-
-describe("routes: unknown chain", () => {
-  it("chain(ref) throws for an unknown ref", () => {
-    expect(() => chain("bogus")).toThrow(/Unknown chain 'bogus'/);
-  });
-
-  it("pendingLeg.to(ref) throws for an unknown ref", () => {
-    const pending = chain("base").route(reward());
-    expect(() => pending.to("bogus")).toThrow(/Unknown chain 'bogus'/);
-  });
-
-  it("has no accessor for an unknown chain", () => {
-    expect("Bogus" in chainAccessors).toBe(false);
-  });
-
-  it("resolves known aliases (positive control)", () => {
+  it("chain('eth')/chain(8453)/chain('BNB Chain') resolve and are callable", () => {
+    expect(typeof chain("eth")).toBe("function");
     expect(chain("eth").chain.slug).toBe("ethereum");
     expect(chain(8453).chain.slug).toBe("base");
     expect(chain("BNB Chain").chain.slug).toBe("bsc");
   });
-});
 
-describe("routes: EVM + SVM legs", () => {
-  it("EVM -> SVM -> EVM pipeline", () => {
-    const { Base, Solana, Ethereum } = chainAccessors;
-    const intents = Base.route(reward()).Solana(route()).route(reward()).Ethereum(route());
-    expect(intents.chain.kind).toBe("evm");
-    expect(intents.build()[0]!.destination).toBe(1399811149n);
-  });
-
-  it("SVM-origin pipeline", () => {
-    const { Solana, Base } = chainAccessors;
-    const intents = Solana.route(reward()).Base();
-    expect(intents[0]!.sourceChainId).toBe(1399811149n);
-    expect(intents[0]!.destination).toBe(8453n);
-  });
-
-  it("chain('solana').chain.kind is svm; EVM ends are evm", () => {
-    expect(chain("solana").chain.kind).toBe("svm");
-    expect(chain("base").chain.kind).toBe("evm");
-    expect(chain("ethereum").chain.kind).toBe("evm");
-  });
-
-  it("Call.value survives on an SVM leg (the value-drop is an encode-time concern, not this layer's)", () => {
-    const rt = route({
-      calls: [{ target: "0x7777777777777777777777777777777777777777", data: "0x01", value: 42n }],
-    });
-    const intents = chain("base").route(reward()).Solana(rt).build();
-    expect(intents[0]!.route.calls[0]!.value).toBe(42n);
+  it("chain('bogus') throws Unknown chain", () => {
+    expect(() => chain("bogus")).toThrow(/Unknown chain 'bogus'/);
   });
 });
 
@@ -184,7 +59,7 @@ describe("routes: accessor generation is registry-derived", () => {
     expect(Object.keys(chainAccessors)).toHaveLength(canonicalChains.length);
   });
 
-  it("each accessor's .chain is the matching registry record", () => {
+  it("each global's .chain is the matching registry record", () => {
     for (const c of canonicalChains) {
       const key = pascalOfSlug(c.slug);
       expect((chainAccessors as Record<string, { chain: unknown }>)[key]!.chain).toEqual(c);
@@ -192,53 +67,55 @@ describe("routes: accessor generation is registry-derived", () => {
   });
 });
 
-describe("routes: stage immutability / branching", () => {
-  it("one PendingLeg reused for two different destinations yields independent results", () => {
-    const pending = chain("base").route(reward());
-    const toSolana = pending.Solana();
-    const toEthereum = pending.Ethereum();
-    expect(toSolana[0]!.destination).toBe(1399811149n);
-    expect(toEthereum[0]!.destination).toBe(1n);
-  });
+describe("routes: EVM happy path", () => {
+  it("compiles the route body and slots exactly one cook() call into a well-formed Intent", () => {
+    const { Ethereum } = chainAccessors;
+    const built = Ethereum("function main() { return 1n; }", {
+      pot: POT,
+      deadline: 2000n,
+      portal: PORTAL,
+    }).reward({ source: "base", deadline: 1000n, creator: CREATOR, prover: PROVER });
 
-  it("two build() calls return distinct arrays with equal contents", () => {
-    const stage = chain("base").route(reward()).Solana(route());
-    const a = stage.build();
-    const b = stage.build();
-    expect(a).not.toBe(b);
-    expect(a).toEqual(b);
-  });
-
-  it("mutating a returned array leaves a later build() unaffected", () => {
-    const stage = chain("base").route(reward()).Solana(route());
-    const a = stage.build();
-    a.pop();
-    expect(stage.build()).toHaveLength(1);
+    expect(built.intent.route.calls).toHaveLength(1);
+    expect(built.intent.destination).toBe(BigInt(requireChain("ethereum").id));
+    expect(built.intent.sourceChainId).toBe(BigInt(requireChain("base").id));
+    expect(built.compiled.bytecode.length).toBe(1);
   });
 });
 
-describe("routes: normalization", () => {
-  it("left-pads a 20-byte EVM address into a 32-byte UniversalAddress", () => {
-    const got = toUniversalAddress("0x1111111111111111111111111111111111111111");
-    expect(got).toBe("0x" + "00".repeat(12) + "11".repeat(20));
+describe("routes: stage immutability / branching", () => {
+  it("one PendingSauceRoute reused for two .reward() calls yields independent Intents", () => {
+    const { Ethereum } = chainAccessors;
+    const pending: PendingSauceRoute = Ethereum("return 1n;", baseOptions());
+    const a = pending.reward(0n);
+    const b = pending.reward(5n);
+    expect(a.intent.reward.nativeAmount).toBe(0n);
+    expect(b.intent.reward.nativeAmount).toBe(5n);
   });
 
-  it("passes an already-32-byte value through unchanged", () => {
-    const value = `0x${"ab".repeat(32)}` as const;
-    expect(toUniversalAddress(value)).toBe(value);
+  it("intents() returns a fresh array each call", () => {
+    const { Ethereum } = chainAccessors;
+    const built = Ethereum("return 1n;", baseOptions()).reward(0n);
+    const a = built.intents();
+    const b = built.intents();
+    expect(a).not.toBe(b);
+    expect(a).toEqual(b);
   });
+});
 
-  it("throws on a malformed/oversized address", () => {
-    expect(() => toUniversalAddress("0x1234" as never)).toThrow();
-    expect(() => toUniversalAddress(("0x" + "11".repeat(21)) as never)).toThrow();
-  });
+describe("routes: string-body form (stage-1 compatibility) on an SVM destination", () => {
+  it("Solana.route(sauceString, {execution:{buffer,...}}) still works", () => {
+    const { Solana } = chainAccessors;
+    const built = Solana.route("function main() { return 1n; }", {
+      execution: {
+        buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        accounts: [{ pubkey: "So11111111111111111111111111111111111111112", isSigner: false, isWritable: false }],
+      },
+      deadline: 2000n,
+      portal: PORTAL,
+    }).reward({ source: "base", deadline: 1000n, creator: CREATOR, prover: PROVER });
 
-  it("toBigInt accepts number/string/bigint and rejects negatives", () => {
-    expect(toBigInt(5)).toBe(5n);
-    expect(toBigInt("5")).toBe(5n);
-    expect(toBigInt(5n)).toBe(5n);
-    expect(() => toBigInt(-1)).toThrow();
-    expect(() => toBigInt("-1")).toThrow();
-    expect(() => toBigInt(-1n)).toThrow();
+    expect(built.intent.route.calls).toHaveLength(1);
+    expect(built.intent.destination).toBe(BigInt(requireChain("solana").id));
   });
 });

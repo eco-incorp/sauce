@@ -4,6 +4,7 @@ import { OPS } from '../saucer/index.js';
 import type { CompilerContext } from '../context.js';
 import { processExpression } from './index.js';
 import { extractSortedProperties, extractStructType } from './inference.js';
+import { assertCapability } from '../capabilities.js';
 
 const assertValidArrayElement = (el: ArrayExpression['elements'][number]): Expression => {
   if (!el) throw new Error('sparse arrays are not supported');
@@ -35,15 +36,12 @@ const assertConsistentStructFields = (elements: Expression[]): void => {
 // built with `new Array(n)`, both work fine on v12/svm). Reject it at compile
 // time on those targets instead of letting it fail opaquely at runtime.
 const assertNoNestedArrayLiteral = (elements: Expression[], ctx: CompilerContext): void => {
-  if (!ctx.isV12) return;
-
+  // Detect the syntactic shape here, then let the centralized capability matrix
+  // (capabilities.ts's 'nested array literal' row, v1-only) own the target check and
+  // the rejection message — same split as the 'accounts list'/'array destructuring'
+  // gates. A no-op on v1 (where the row allows it).
   if (elements.some((el) => el.type === 'ArrayExpression')) {
-    throw new Error(
-      `nested array literals (e.g. [[1, 2], [3, 4]]) are not supported on target '${ctx.target}' — the ` +
-        `engine-v12 runtime has no nested-ARRAY encoding yet (a v1-only capability today); build the nested ` +
-        `structure with new Array(n) instead (e.g. \`let outer = new Array(2); outer[0] = inner;\`), which is ` +
-        `supported on every target`,
-    );
+    assertCapability(ctx, 'nested array literal');
   }
 };
 

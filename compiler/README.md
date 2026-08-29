@@ -2,6 +2,33 @@
 
 Compiles SauceScript to Sauce bytecode for the EVM. SauceScript is a subset of JavaScript designed for writing smart contract logic.
 
+## SauceScript is a subset of TypeScript
+
+Normatively, **SauceScript is a strict subset of TypeScript** — every valid SauceScript program
+is valid TypeScript (and, because TypeScript is itself a superset of JavaScript, valid JavaScript).
+SauceScript adds no syntax of its own; it only *removes* language surface (see
+[Not Supported](#not-supported-javascript-features-not-in-saucescript) below) and fixes the type of
+every value to `uint256`. This means an author can write `.ts`/`.sauce.ts` sources with real
+TypeScript type annotations and tooling, and the compiler strips the types before lowering.
+
+Two authoring paths exist, and both lower to the **same** core pipeline:
+
+- **The `.ts`/`.sauce.ts` front-end is the primary path.** A `.ts`/`.sauce.ts` source (top-level via
+  `compile(src, { tsSource: true })`, or any resolved `.ts`/`.sauce.ts` *import*) runs through the
+  built-in TypeScript front-end (`src/ts-frontend.ts`) *before* the core parser: it parses with the
+  real `typescript` compiler, folds provably-constant branches/loops/consts, then strips types via
+  `ts.transpileModule`, handing the core plain JS text. For an import, this front-end is the
+  **default** `transformModule` — a caller-supplied `transformModule` overrides it, but absent one a
+  `.ts`/`.sauce.ts` import is TypeScript-aware automatically.
+- **The plain-acorn core is the legacy pipeline everything lowers to.** A bare `compile(src)` with no
+  `tsSource` (and a plain `.js`/`.sauce` source/import) parses the source string directly with
+  `acorn` — no fold/unroll/type-strip pass. This is the original, byte-stable path and remains the
+  default for a bare string so existing bytecode-pinned callers are unaffected.
+
+`tsSource` is therefore a **per-call-site opt-in** (default `false`), not a global mode. The
+subset-of-TypeScript statement above is a language-model claim; it does *not* mean a bare
+`compile(src)` silently changes parse behavior.
+
 ## Installation
 
 ```bash
@@ -598,3 +625,56 @@ SauceScript provides familiar JavaScript syntax while targeting the EVM. Key dif
 - **No closures** - Functions can't capture outer scope
 - **Strict equality only** - Must use `===` and `!==`
 - **EVM-native features** - Direct access to blockchain state, storage, and contract calls
+
+## Cross-target divergences
+
+The same SauceScript source compiles for multiple targets (`v1`, `v12`/EVM, and the `svm` v12
+dialect). Where those targets can produce *different* observable output for one program, one rule
+decides how the divergence is handled — adopted from the Rust `compiler-rs` policy so the two
+compilers converge:
+
+> **Divergence-resolution rule (normative).**
+> - **MUST reconcile in the compiler** when the *meaning* is shared and only the *encoding* differs.
+>   The construct keeps **one** name/spelling; codegen emits the per-target bytes. (e.g. `keccak256`,
+>   `Math.*`, `abi.encode` layout, array element boxing.)
+> - **MAY namespace as two gated features** only when the construct names a **target-specific
+>   concept with no counterpart** on the other target — same underlying opcode byte, genuinely
+>   divergent operand shape/semantics. Each is gated by its own capability. (e.g.
+>   `evm.sload`/`svm.sload`, `evm.call`/`svm.call`.)
+> - A divergence discharged by *reconciling* it is **removed** from the registry below; one kept as
+>   *two features* stays, recording **why** the two builtins exist. Never split a shared-meaning
+>   construct into two names — that is a rename, not a resolution.
+
+This is what decides *which* names move in the `evm.*`/`svm.*` split (Part 1 §1.3): `keccak256` and
+`Math.*` must **not** be namespaced (shared meaning); `sload`/`sstore`/`call` must be (same opcode,
+divergent semantics).
+
+### Registry — how EVM/SVM (and v1) output of one program can differ
+
+A living table, each row with a **disposition** (reconcile / two features / inherent). Seeded from
+the divergences the repo `CLAUDE.md` documents in prose; extend it as new ones are found. (Mirrors
+the Rust compiler's own `README.md` registry so the two can be diffed.)
+
+| Divergence | Detail | Disposition |
+|---|---|---|
+| **Nested static array literal** (`[[…],[…]]`) | Works on v1 (all forms); on v12/svm the static encoding is absent — `assertNoNestedArrayLiteral` (`K12`) rejects at compile time, pointing at the `new Array(n)` alternative. A flat literal and a `new Array`-nested structure work on all targets. | inherent (engine gap) — reconcile once v12/svm gains nested-array static encoding |
+| **Object-literal field reading an existing dynamic var** (`{a: dynLocal}`) | Silently returned a raw heap-descriptor artifact on BOTH v1 and v12; now `assertNoDynamicVariableObjectField` (`K13`) rejects. A *directly-constructed* dynamic value at the field is fine. | reconcile — compile-time rejection until a real re-embed lowering exists |
+| **Dynamic value stored via a scalar (VALUE) slot** | On v1 a descriptor stored in a value slot is destroyed (`WRITE_VALUE` drops `ctx.dynamicResult`); v12/svm carry the descriptor in-band in one 32-byte word, so it round-trips. Whole `K`-family (return-kind inference, `rejectV1ScalarToDynamicReassignment`, …) exists to protect the v1 invariant. | inherent (v1 memory model) — port the **invariant** (a dynamic value must never round-trip a scalar slot), not the machinery; MOOT for RS (no v1 target) |
+| **`.length` of a dynamic value through a parameter** | v1 silently reads the scalar word width (`32`) instead of the real length — no revert; v12/svm read the correct length via the ordinary stack parameter. | inherent (v1 `funcHeap`/`funcValues` split) — v1-only, MOOT for RS |
+| **ERC20 `bool` return of a non-reverting-`false` token** | The `bool` is discarded in the ABI-aware path (no returndatasize op to express SafeERC20), so a false-returning token "succeeds"; an `svm.call` CPI reverts on a failed transfer. | reconcile — revisit once a returndatasize op exists |
+| **Dynamic-data pointer ceiling** | v12 descriptor pointer was 16-bit (~45 KB) → truncation past it; widened to 32-bit upstream (sauce `#323`). EVM quadratic gas now bounds it in practice. | reconciled in kind (both abort loudly); degree asymmetry documented |
+| **`ctx.chainId()` / `ctx.blockNumber()` / balances / timestamp** | chain-specific value; SVM slot-height vs EVM block-height; wei vs lamports; SVM reverts off-chain. | inherent — won't-fix; one spelling, chain-defined value |
+
+### Cross-compiler divergences (this TS compiler vs Rust `compiler-rs`)
+
+A separate axis from the target table above: the SAME SauceScript can differ between the two
+COMPILERS (independent of target). Recorded here so the parity program can diff them.
+
+| Divergence | Detail | Disposition |
+|---|---|---|
+| **`if`/`while` body scoping** | This (base/TS) compiler **shares** scope across `if`/`while` bodies — a `let` first declared inside a branch persists as the same variable after it (`processIfStatement`/`processWhileStatement` never `pushScope`). `compiler-rs` **block-scopes** them (the branch `let` is dropped at branch end). So `const FEE=100n; f(cond){ if(cond){ let FEE=5n; } return FEE }` keeps a runtime read on TS but folds to `100n` on RS. | **KNOWN, INTENTIONAL** (parity decision 0.7, provisional). Kept as-is — converging TS→block-scoping would change existing SauceScript semantics SDK-wide; reserved for explicit approval. Every TS pass guards shared-scope correctly today. |
+| **svm account-reference model** | TS's `accountData`/`writeAccountData`/`accountUint` (and `contract.call` accounts) take a **string-literal ref** interned into a symbolic account-plan (`ctx.internAccount`) or a raw int index. `compiler-rs` models svm accounts as **`Ty::Account` main params** (ECO-1860 — "the compiler invents no entries of its own") and rejects a scalar/int as an account. Both express the same CPI, differently. | **inherent (account model)** — the underlying ops match (`svm.sload/sstore` == accountData/writeAccountData; `uint(svm.sload(..))` == accountUint). Freestanding account-data-trio parity on RS needs the account-model reconciled first; a dedicated item, not a sugar port. |
+| **inline arrow-const functions** (`const f = (x) => …`) | TS inlines them (alpha-rename + splice, ergonomic guard-clause helpers). `compiler-rs` rejects arrow/function EXPRESSIONS wholesale; the same semantics are written as a real `function` (no "only main may call" restriction on RS) and the same perf comes from RS's PR-14 const-arg call-fold. | **architectural divergence** — RS uses real functions + call-fold instead of a splicer; not ported. A program spelled with `const f = x => …` must use `function f(x){…}` on RS. (Parity triage fire#17.) |
+| **nested array literals** (`[[…],[…]]`) | This (TS) compiler REJECTS them on its v12/svm targets (`assertNoNestedArrayLiteral`/`K12`) because its pinned `release/beta` engine has no nested-array static encoding (see the cross-target table above). `compiler-rs` targets the newer `main`-lineage engine, which **does** support them — real-engine-verified (reads/`.length`/nested set-index all execute correctly on its v12 Huff runtime + SVM engine), so RS accepts them. | **engine-lineage divergence** — same SauceScript, different engine capability. RS's earlier V4 rejection (a copy of TS's) was reverted (fire#35, `33d67a571`) as wrong for RS's engine; TS keeps its rejection (correct for its pin). Reconciles on TS if/when its engine pin gains the encoding. |
+| **`for…of`** | TS accepts `for (const x of arr)` (and unrolls it over a lookup table). `compiler-rs` rejects `for…of`/`for…in`; the same iteration is written as an indexed numeric `for` (which RS both supports and unrolls, PR-9). | **architectural divergence** — indexed `for` covers it; not ported. (Parity triage fire#17.) |
+| **`try/catch` on SVM** | TS's `.catch()` catches a failed external call and continues. On RS this is `Feature::TryCatch`, **EVM-only** by construction (the SVM engine has no `CATCH` opcode). | **inherent (engine)** — any SauceScript using catch-and-continue is non-portable to SVM by construction. The EVM half is DEFERRED (needs a new IR node + `CATCH` inline-handler codegen primitive); the SVM half is a permanent divergence. (Parity triage fire#17.) |

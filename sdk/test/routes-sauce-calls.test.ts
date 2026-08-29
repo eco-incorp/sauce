@@ -13,7 +13,8 @@ import { v12PotAbi, v12KitchenAbi } from "../src/evm/engine.js";
 import { V12_EVM_CONTRACTS, v12SvmProgramId } from "../src/deployments/index.js";
 import { decodePortalCalldataWithAccounts, encodePortalCalldataWithAccounts } from "../src/svm/intent.js";
 import { EXECUTE_FROM_ACCOUNT_DISCRIMINATOR } from "../src/svm/engine.js";
-import { chain, hashIntent } from "../src/routes/index.js";
+import { assembleIntent, hashIntent } from "../src/routes/index.js";
+import { requireChain } from "../src/chains/canonical.js";
 import {
   assertSauceEvmLive,
   buildSauceEvmCall,
@@ -97,10 +98,13 @@ describe("EVM composition with the fluent builder + E3.2 encode/decode round-tri
       portal: "0x5555555555555555555555555555555555555555",
       calls,
     };
-    const intents = chain("base").route({ deadline: 1000n, creator: OWNER, prover: OWNER }).Optimism(route).build();
-    expect(intents).toHaveLength(1);
-    const [intent] = intents;
-    expect(intent!.route.calls).toHaveLength(2);
+    const intent = assembleIntent(
+      requireChain("base"),
+      requireChain("optimism"),
+      route,
+      { deadline: 1000n, creator: OWNER, prover: OWNER },
+    );
+    expect(intent.route.calls).toHaveLength(2);
     expect(intent!.route.calls[0]!.data).toBe(calls[0]!.data);
     expect(intent!.route.calls[1]!.data).toBe(calls[1]!.data);
 

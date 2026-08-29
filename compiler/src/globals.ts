@@ -360,6 +360,96 @@ export const GLOBALS: Record<string, Record<string, GlobalDef>> = {
         return s.neg(process(args[0]));
       },
     },
+    // Math.addMod(a, b, n) — (a + b) % n
+    addMod: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.addMod', 3, args);
+
+        return s.addMod(process(args[0]), process(args[1]), process(args[2]));
+      },
+    },
+    // Math.mulMod(a, b, n) — (a * b) % n
+    mulMod: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.mulMod', 3, args);
+
+        return s.mulMod(process(args[0]), process(args[1]), process(args[2]));
+      },
+    },
+    // Math.sDiv(a, b) — signed integer division
+    sDiv: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sDiv', 2, args);
+
+        return s.sDiv(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sMod(a, b) — signed integer remainder
+    sMod: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sMod', 2, args);
+
+        return s.sMod(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sShr(value, shift) — signed (arithmetic) shift right (sign-filling)
+    sShr: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sShr', 2, args);
+
+        return s.sShr(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.signExtend(value, fromByte) — sign-extend value from the top bit of byte fromByte
+    signExtend: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.signExtend', 2, args);
+
+        return s.signExtend(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sLt(a, b) — signed a < b → 1/0
+    sLt: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sLt', 2, args);
+
+        return s.sLt(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sGt(a, b) — signed a > b → 1/0
+    sGt: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sGt', 2, args);
+
+        return s.sGt(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sLte(a, b) — signed a <= b → 1/0
+    sLte: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sLte', 2, args);
+
+        return s.sLte(process(args[0]), process(args[1]));
+      },
+    },
+    // Math.sGte(a, b) — signed a >= b → 1/0
+    sGte: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('Math.sGte', 2, args);
+
+        return s.sGte(process(args[0]), process(args[1]));
+      },
+    },
   },
 
   // crypto.keccak256(data) — compute keccak256 hash
@@ -524,6 +614,72 @@ export const GLOBALS: Record<string, Record<string, GlobalDef>> = {
   tx: {
     origin: { kind: 'scalar', compile: (s: SaucerLike) => s.txOrigin() },
     gasPrice: { kind: 'scalar', compile: (s: SaucerLike) => s.txGasPrice() },
+  },
+
+  // ctx.*  — unified context namespace (compiler-parity §1.4, adopted from compiler-rs).
+  // EXACTLY 7 members, ALL call-form (`ctx.foo()`); `self` is a METHOD (unlike the `address.self`
+  // PROPERTY), and `gasPrice`/`origin` are deliberately excluded (RS raises CtxUnknownMethod).
+  // Each aliases the pre-existing msg.*/block.*/address.* spelling, emitting byte-identical bytecode.
+  // A nullary here still takes the (ignored) args param so `compile.length !== 1` — that routes it
+  // through processStaticMethod (call form) and makes bare `ctx.foo` (no call) fail closed, matching
+  // RS's call-only rule. Oracle: sauce-core/src/lower/contract.rs:463-472.
+  ctx: {
+    msgSender: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.msgSender()', 0, args);
+
+        return s.msgSender();
+      },
+    },
+    self: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.self()', 0, args);
+
+        return s.addressSelf();
+      },
+    },
+    chainId: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.chainId()', 0, args);
+
+        return s.blockChainId();
+      },
+    },
+    blockNumber: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.blockNumber()', 0, args);
+
+        return s.blockNumber();
+      },
+    },
+    timestamp: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.timestamp()', 0, args);
+
+        return s.blockTimestamp();
+      },
+    },
+    selfBalance: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[]) => {
+        expectArity('ctx.selfBalance()', 0, args);
+
+        return s.addressBalance();
+      },
+    },
+    balance: {
+      kind: 'scalar',
+      compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+        expectArity('ctx.balance()', 1, args);
+
+        return s.balanceOf(process(args[0]));
+      },
+    },
   },
 
   // address.self               — this contract's address
@@ -702,7 +858,13 @@ export const GLOBALS: Record<string, Record<string, GlobalDef>> = {
 //   eval("let x = 10; return x * 2")
 //   Code is compiled at compile-time; argument must be a string literal.
 //   If code contains `function main`, it's compiled as-is; otherwise wrapped.
-export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
+//
+// This table holds the NATIVE freestanding intrinsics only — each lowers directly
+// to an engine op (gasLeft → GAS_LEFT, blockHash → BLOCK_HASH, uint → CAST_*,
+// accountData → svm account ops, eval → nested compile). The STDLIB-contributed
+// freestanding functions (currently `emit`) live in `STDLIB_FUNCTIONS` below and are
+// INJECTED into the exported `GLOBAL_FUNCTIONS` by a spread-merge — see decision 0.6.
+const NATIVE_GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
   gasLeft: {
     kind: 'scalar',
     compile: (s: SaucerLike, args: Expression[], _process: (e: Expression) => SaucerLike) => {
@@ -725,20 +887,6 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
       expectArity('blobHash()', 1, args);
 
       return s.blobHash(process(args[0]));
-    },
-  },
-  // emit(signature, data?, ...indexedFields) — emit a Solidity-style event
-  //   emit("Ping()")  — event with no fields
-  //   emit("Foo(uint256)", {value: 42})  — event with data
-  //   emit("Transfer(address,address,uint256)", {from, to, value}, "from", "to")  — with indexed
-  emit: {
-    kind: 'scalar',
-    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
-      const { signature, fields, indexedNames } = parseEmitArgs(args);
-      const topics = buildTopics(s, signature, fields, indexedNames, process);
-      const data = buildData(s, fields, indexedNames, process);
-
-      return s.log(data, topics);
     },
   },
   eval: {
@@ -838,4 +986,148 @@ export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = {
   },
 };
 
+/**
+ * STANDARD-LIBRARY freestanding functions (compiler-parity decision 0.6).
+ *
+ * The standard library is a first-class contributor to the global namespace: stdlib
+ * symbols reach user code WITHOUT an explicit import precisely by being INJECTED into
+ * globals (the standing "stdlib-injects-into-globals" design constraint,
+ * docs/plans/compiler-parity-and-port-plan.md). `emit` is that model made concrete —
+ * it is NOT a native intrinsic (contrast `NATIVE_GLOBAL_FUNCTIONS` above, each a direct
+ * op lowering) but a LIBRARY function that COMPOSES existing primitives: it derives
+ * topic0 = keccak256(signature), ABI-encodes the non-indexed fields, and lowers to the
+ * one native primitive `s.log(data, topics)` (the LOG op). RS spells the same event
+ * primitive `log()`; TS spells it `emit` (see the RS↔TS mapping note below).
+ *
+ * Keeping stdlib functions in a SEPARATE table, then spread-merging them into the
+ * exported `GLOBAL_FUNCTIONS`, is what makes the injection literal: `GLOBAL_FUNCTIONS`
+ * is deliberately NOT native-ops-only. Everything downstream (call dispatch in
+ * `processor/expression.ts`, kind inference, and the `RESERVED_NAMES` callable set —
+ * all keyed off the merged `GLOBAL_FUNCTIONS`) sees the injected `emit` identically, so
+ * the classification change is byte-for-byte transparent to codegen and reservation.
+ */
+export const STDLIB_FUNCTIONS: Record<string, GlobalDef> = {
+  // emit(signature, data?, ...indexedFields) — emit a Solidity-style event
+  //   emit("Ping()")  — event with no fields
+  //   emit("Foo(uint256)", {value: 42})  — event with data
+  //   emit("Transfer(address,address,uint256)", {from, to, value}, "from", "to")  — with indexed
+  emit: {
+    kind: 'scalar',
+    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+      const { signature, fields, indexedNames } = parseEmitArgs(args);
+      const topics = buildTopics(s, signature, fields, indexedNames, process);
+      const data = buildData(s, fields, indexedNames, process);
+
+      return s.log(data, topics);
+    },
+  },
+};
+
+/**
+ * Freestanding global functions, resolved by a bare call before any user function.
+ *
+ * The stdlib-contributed functions (`STDLIB_FUNCTIONS`) are INJECTED here via a
+ * spread-merge — the "stdlib-injects-into-globals" model (decision 0.6). No name
+ * collides between the two tables, so the merged shape is exactly the native
+ * intrinsics plus `emit`, keyed identically to before the extraction.
+ */
+export const GLOBAL_FUNCTIONS: Record<string, GlobalDef> = { ...NATIVE_GLOBAL_FUNCTIONS, ...STDLIB_FUNCTIONS };
+
+/**
+ * evm.* / svm.* target-namespaced builtins (compiler-parity §1.3, adopted from compiler-rs).
+ *
+ * Thin, byte-identical ALIASES of the pre-existing storage/contract/accountData/writeAccountData
+ * surface, each asserting TARGET INTENT first: `evm.*` is EVM-only (v1/v12), `svm.*` is svm-only —
+ * exactly the split RS enforces via `require_available(target, Builtin::{Evm,Svm}*)`
+ * (sauce-core/src/lower/contract.rs `evm_call`/`svm_call`, statement.rs `evm_sstore`/`svm_sstore`).
+ * Because the capability assertion fires BEFORE delegation, the delegated compile always runs its
+ * same-target arm — so `evm.X` emits byte-for-byte what its EVM alias emits and `svm.X` what its
+ * svm alias emits (asserted in test/evm-svm-namespace.test.ts).
+ *
+ * Member map (RS oracle -> TS alias):
+ *   evm.call(addr,value,data)   -> contract.call   (EVM arm: externalCall)
+ *   evm.static(addr,data)       -> contract.static  (EVM arm: staticCall)
+ *   evm.delegate(addr,data)     -> contract.delegate
+ *   evm.sload(slot)             -> storage.read
+ *   evm.sstore(slot,value)      -> storage.write
+ *   evm.tload(key)              -> storage.tRead   (EIP-1153 transient storage)
+ *   evm.tstore(key,value)       -> storage.tWrite
+ *   svm.sload(acct,off,len)     -> accountData
+ *   svm.sstore(acct,off,value)  -> writeAccountData
+ *   svm.call(program,accts,data)-> contract.call (svm arm) with args reordered to (target,data,accts)
+ *
+ * DEFERRED (no clean TS twin — reported, not stubbed): svm.remainingAccounts / svm.remainingAccount.
+ */
+type NsMethod = (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => SaucerLike;
+
+const gatedAlias = (feature: string, target: GlobalDef): GlobalDef => ({
+  kind: target.kind,
+  compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+    assertCapability(s.ctx, feature, args[0]);
+
+    return (target.compile as NsMethod)(s, args, process);
+  },
+});
+
+GLOBALS.evm = {
+  call: gatedAlias('evm.call', GLOBALS.contract.call),
+  static: gatedAlias('evm.static', GLOBALS.contract.static),
+  delegate: gatedAlias('evm.delegate', GLOBALS.contract.delegate),
+  sload: gatedAlias('evm.sload', GLOBALS.storage.read),
+  sstore: gatedAlias('evm.sstore', GLOBALS.storage.write),
+  tload: gatedAlias('evm.tload', GLOBALS.storage.tRead),
+  tstore: gatedAlias('evm.tstore', GLOBALS.storage.tWrite),
+};
+
+GLOBALS.svm = {
+  sload: gatedAlias('svm.sload', GLOBAL_FUNCTIONS.accountData),
+  sstore: gatedAlias('svm.sstore', GLOBAL_FUNCTIONS.writeAccountData),
+  call: {
+    kind: 'dynamic',
+    compile: (s: SaucerLike, args: Expression[], process: (e: Expression) => SaucerLike) => {
+      assertCapability(s.ctx, 'svm.call', args[0]);
+
+      expectArity('svm.call', 3, args);
+
+      // RS spells the CPI `svm.call(program, accounts, calldata)`; TS's contract.call svm arm
+      // takes (target, calldata, accounts), so reorder before delegating for byte-parity with
+      // `contract.call(program, calldata, accounts)`.
+      const reordered = [args[0], args[2], args[1]];
+
+      return (GLOBALS.contract.call.compile as NsMethod)(s, reordered, process);
+    },
+  },
+};
+
+/**
+ * Names refused where a CALLABLE is DECLARED — a `function` declaration
+ * (`CompilerContext.addFunc`) or an inline arrow-const function name
+ * (`processor/inline.ts`). Broad on purpose: it covers every builtin the call path
+ * resolves before a user function — the freestanding `GLOBAL_FUNCTIONS` (`gasLeft()`,
+ * `blockHash()`, `emit()`, `uint()`, …, intercepted in `processCallExpression`) and
+ * the namespace roots — so a same-named user callable can never be silently shadowed
+ * (the ECO-2011 hazard class). TS's freestanding-builtin surface is WIDER than
+ * compiler-rs's (RS spells the primitives `revert`/`log`, TS spells them `throw`/`emit`),
+ * so this callable reservation is deliberately wider than RS's function-name set
+ * ({revert,require,log,eval}); narrowing it to RS's would reopen that hazard for every
+ * `GLOBAL_FUNCTIONS` name. See docs/plans/compiler-parity-BACKLOG.md §1.8 / decision 0.4.
+ */
 export const RESERVED_NAMES: Set<string> = new Set([...Object.keys(GLOBALS), ...Object.keys(GLOBAL_FUNCTIONS)]);
+
+/**
+ * Names refused only as a VALUE BINDING — a `let`/`const`/parameter
+ * (`CompilerContext.setVar`). Exactly the builtin NAMESPACE ROOTS whose member calls
+ * resolve THROUGH the root identifier BEFORE any scope lookup (`abi.encode`,
+ * `crypto.keccak256`, `ctx.msgSender()`, `Math.sqrt`, and — landing with §1.3 — `evm.*`
+ * / `svm.*`): a binding there is reachable-looking yet unreachable, so it is refused
+ * rather than silently shadowed. Matches compiler-rs's binding-name rule exactly
+ * (`Namespace`, `lower/mod.rs`; decision 0.4).
+ *
+ * Deliberately NARROWER than `RESERVED_NAMES`: every OTHER TS global (`msg`, `block`,
+ * `tx`, `address`, `contract`, `storage`, `Uint8Array`) is a member-access-only or
+ * call-only surface a plain value binding cannot shadow (member reads check `GLOBALS`
+ * first; bare calls resolve `GLOBAL_FUNCTIONS` first) — so RS accepts `let msg = 1n;` /
+ * `let block = 1n;` and, with this set, so does TS. `evm`/`svm` are reserved ahead of
+ * the §1.3 namespace split (RS reserves them; nothing on TS binds them today).
+ */
+export const RESERVED_BINDING_NAMES: Set<string> = new Set(['abi', 'crypto', 'ctx', 'Math', 'evm', 'svm']);

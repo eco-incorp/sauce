@@ -6,7 +6,8 @@ import { compile } from "../../compiler/dist/index.js";
 import { bytesToHex } from "viem";
 
 import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
-import { chain } from "../src/routes/accessors.js";
+import { requireChain } from "../src/chains/canonical.js";
+import { assembleIntent } from "../src/routes/intent.js";
 import { normalizeRoute } from "../src/routes/normalize.js";
 import { v12PotAbi } from "../src/evm/engine.js";
 import { decodeFunctionData } from "viem";
@@ -142,17 +143,19 @@ describe("the E3 seam, end to end", () => {
     expect(decoded.functionName).toBe("cook");
     expect((decoded.args[0] as readonly string[])[0]).toBe(ingredient);
 
-    const intents = chain("base")
-      .route({ deadline: 1n, creator: POT, prover: POT })
-      .Solana({
+    const intent = assembleIntent(
+      requireChain("base"),
+      requireChain("solana"),
+      {
         deadline: 2n,
         portal: POT,
         calls: [call],
         tokens: [{ token: TOKEN_IN, amount: 1n }],
-      })
-      .build();
+      },
+      { deadline: 1n, creator: POT, prover: POT },
+    );
 
-    const normalized = normalizeRoute(intents[0]!.route);
+    const normalized = normalizeRoute(intent.route);
     expect(normalized.calls[0]!.data).toBe(call.data);
     expect(normalized.calls[0]!.value).toBe(0n);
   });

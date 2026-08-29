@@ -336,11 +336,13 @@ describe('V12Saucer — control flow shapes', () => {
 });
 
 describe('V12Saucer — signed/extended ops (v12-only)', () => {
-  it('S_AR is not swapped; SIGN_EXTEND is swapped', () => {
+  it('sShr and signExtend push operands in source order (neither swapped)', () => {
     const s = S();
-    expect(Array.from(s.sAr(s.int(256n), s.int(2n))._bytes)).toEqual([OPS.BYTE_2, 1, 0, OPS.BYTE_1, 2, OPS.S_AR]);
-    // sign_extend swapped → [255][0][SIGN_EXTEND]
-    const se = s.signExtend(s.int(0n), s.int(255n));
+    // sShr(value, shift) → [value][shift][S_AR]
+    expect(Array.from(s.sShr(s.int(256n), s.int(2n))._bytes)).toEqual([OPS.BYTE_2, 1, 0, OPS.BYTE_1, 2, OPS.S_AR]);
+    // signExtend(value, fromByte) → [value][fromByte][SIGN_EXTEND] — fromByte (the byte index)
+    // ends on top so it is popped first, matching compiler-rs's math_operand_order.
+    const se = s.signExtend(s.int(255n), s.int(0n));
     expect(Array.from(se._bytes)).toEqual([OPS.BYTE_1, 255, OPS.BYTE_1, 0, OPS.SIGN_EXTEND]);
   });
   it('cast/addMod/mulMod emit their opcodes', () => {

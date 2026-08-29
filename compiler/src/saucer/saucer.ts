@@ -95,6 +95,9 @@ export class Saucer implements SaucerLike {
     );
   }
 
+  // Operand EMISSION ORDER for every op below (v1 prefix `[OP][a][b]…`) is stated once, verified
+  // against real emission, and diffed against compiler-rs's `push_order.rs` in
+  // `test/push-order.parity.test.ts` (§1.7). Change an operand order here → update that table.
   private binary(op: number, left: Saucer, right: Saucer): Saucer {
     return this.with([op, ...left._bytes, ...right._bytes]);
   }
@@ -323,6 +326,51 @@ export class Saucer implements SaucerLike {
 
   mulDiv(a: Saucer, b: Saucer, c: Saucer): Saucer {
     return this.ternary(OPS.MUL_DIV, a, b, c);
+  }
+
+  // extended / signed arithmetic — the v1 engine (runtime/Math.sol, runtime/Boolean.sol)
+  // evaluates operands positionally in the order they are emitted after the op.
+  addMod(a: Saucer, b: Saucer, n: Saucer): Saucer {
+    return this.ternary(OPS.ADD_MOD, a, b, n);
+  }
+
+  mulMod(a: Saucer, b: Saucer, n: Saucer): Saucer {
+    return this.ternary(OPS.MUL_MOD, a, b, n);
+  }
+
+  sDiv(a: Saucer, b: Saucer): Saucer {
+    return this.binary(OPS.S_DIV, a, b);
+  }
+
+  sMod(a: Saucer, b: Saucer): Saucer {
+    return this.binary(OPS.S_MOD, a, b);
+  }
+
+  sShr(value: Saucer, shift: Saucer): Saucer {
+    return this.binary(OPS.S_AR, value, shift);
+  }
+
+  // SIGN_EXTEND reads the byte index (k) first, then the value (runtime/Math.sol:
+  // `k = executeOP(...); x = executeOP(...); signextend(k, x)`), so the source-order
+  // args (value, fromByte) are emitted reversed.
+  signExtend(value: Saucer, fromByte: Saucer): Saucer {
+    return this.binary(OPS.SIGN_EXTEND, fromByte, value);
+  }
+
+  sLt(a: Saucer, b: Saucer): Saucer {
+    return this.binary(OPS.BOOL_SLT, a, b);
+  }
+
+  sGt(a: Saucer, b: Saucer): Saucer {
+    return this.binary(OPS.BOOL_SGT, a, b);
+  }
+
+  sLte(a: Saucer, b: Saucer): Saucer {
+    return this.binary(OPS.BOOL_SLTE, a, b);
+  }
+
+  sGte(a: Saucer, b: Saucer): Saucer {
+    return this.binary(OPS.BOOL_SGTE, a, b);
   }
 
   keccak256(data: Saucer): Saucer {
