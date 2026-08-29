@@ -92,8 +92,12 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   either returns empty or dies with `MemoryOOG` on the `V12RuntimeBytecode` this repo generates.
   Pointing `SAUCE_ENGINE_SO` itself at a `main` engine is therefore **not** a workaround — it breaks
   `sdk/test/svm/staged.e2e` and `svm-settle.e2e`, which need the pinned one. Both suites skip when
-  their variable is unset (so the default `pnpm test` is green and engine-free); supply them to run
-  the real executions. The `.so` is `cd <sauce>/v12-svm && make build`. The runtime is *not*
+  their variable is unset LOCALLY, so the default `pnpm test` is green and engine-free — but in CI
+  an unset variable is a hard failure, and CI supplies both from the `v12-svm-v0.4.0` and
+  `v12-evm-v0.3.0` release artifacts, which are built from the same sauce commit `sauce-next` pins
+  the compiler to. (They cannot come from the `sauce` git dep: `release/beta` is the wrong lineage,
+  and sauce `main` deleted the `engine/` tree `sync-engine-artifacts.mjs` reads.)
+  Locally, the `.so` is `cd <sauce>/v12-svm && make build`. The runtime is *not*
   `hnc -r` — that refuses on `Runtime.huff`, whose CONSTRUCTOR returns its own bytecode, so the
   deployed code is only known once deployed. Deploy the creation bytecode and read it back:
 
