@@ -25,6 +25,7 @@ import { bytesToHex } from "viem";
 import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
+import { compileWithRs } from "./rs-compile.js";
 import { rewriteTokenMembers } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
@@ -35,6 +36,15 @@ import type { AddressInput, CallInput } from "./types.js";
 export interface SauceCompileOptions {
   /** Defaults by destination `ChainKind`: `'v12'` for evm, `'svm'` for svm. */
   target?: CompileTarget;
+  /**
+   * P6: which compiler `compile()` runs through. `'ts'` (default, omitted) is today's
+   * `@eco-incorp/sauce-compiler` TypeScript compiler -- completely unchanged. `'rs'` routes
+   * through the RS/WASM compiler instead (`rs-compile.ts`) -- the only path that understands
+   * `ambient` below. Every other option on this interface is best-effort translated for the RS
+   * path; see `rs-compile.ts`'s own per-field notes for exactly how (e.g. `target: 'v1'|'v12'`
+   * both map to the RS compiler's single `'evm'` backend).
+   */
+  compiler?: "ts" | "rs";
   baseDirs?: string[];
   tsSource?: boolean;
   treeshake?: boolean;
@@ -57,6 +67,13 @@ export interface SauceCompileOptions {
    *  hard compile error into a success or a clearer error -- never break an already-compiling program.
    *  EVM destinations only -- an svm destination with at least one rewritten accessor site throws. */
   accessors?: boolean | ProtocolRewriteOptions;
+  /**
+   * Module specifiers whose exports are broadcast into every module with no `import` line --
+   * RS-COMPILER-ONLY (see `compiler` above). Forwarded when `compiler: 'rs'`; silently unused
+   * (never forwarded to `compile()`, never a compile error) when `compiler` is omitted/`'ts'`,
+   * since the TS compiler this repo vendors has no `ambient` concept to forward it to.
+   */
+  ambient?: string[];
 }
 
 export interface SauceEvmExecutionInput {
@@ -183,14 +200,20 @@ export function compileSauceRoute(
     }
   }
 
-  const compiled = compile(source, {
-    target,
-    baseDirs,
-    tsSource: options.tsSource,
-    treeshake: options.treeshake,
-    defines,
-    contracts,
-  });
+  // P6 compiler selector: 'rs' routes through the RS/WASM compiler (rs-compile.ts) -- the only
+  // path that understands `options.ambient` -- everything else falls through to the existing TS
+  // compile() call, unchanged.
+  const compiled =
+    options.compiler === "rs"
+      ? compileWithRs({ source, target, baseDirs, defines, contracts, ambient: options.ambient })
+      : compile(source, {
+          target,
+          baseDirs,
+          tsSource: options.tsSource,
+          treeshake: options.treeshake,
+          defines,
+          contracts,
+        });
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
