@@ -22,7 +22,9 @@ import { address, getAddressCodec } from '@solana/kit';
 import { CASES, compileStdToken, compileWith } from './harness.js';
 import type { AccountEntry } from './harness.js';
 
-const slot = (index: number, name: string): AccountEntry => ({ kind: 'slot', index, name });
+// `requires` is the role the slot demands of whatever account is attached there. Every account in
+// this library is a bare `Account` parameter, which is `readonly`; nothing is inferred from the CPI.
+const slot = (index: number, name: string): AccountEntry => ({ kind: 'slot', index, name, requires: 'readonly' });
 
 const svmEntry = (method: string): string => {
   const testCase = CASES.find((entry) => entry.method === method);
