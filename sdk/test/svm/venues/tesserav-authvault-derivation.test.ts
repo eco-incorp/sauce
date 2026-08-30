@@ -97,6 +97,47 @@ describe('tesserav general auth/vault derivation', () => {
     expect(usdcVault).toBe(VAULT_USDC);
   });
 
+  // pickTesseraVVault's >1-non-ATA branch is the subtlest funds-routing logic: after excluding the
+  // canonical ATA, MORE than one auth-owned account remains for the mint. These pin both sub-cases.
+  test('pickTesseraVVault with >1 non-ATA account, balances known, picks the LARGEST (real vault over a dust decoy)', async () => {
+    const auth = TESSERAV_GLOBAL_AUTH;
+    const mint = address(USDC);
+    const [ata] = await findAssociatedTokenPda({ owner: auth, mint, tokenProgram: TOKEN_PROGRAM });
+    const realVault = fabricatedAddress(0xa1);
+    const dustDecoy = fabricatedAddress(0xb2);
+    // owned = ATA (excluded) + two non-ATA accounts, out of balance order to prove it ranks, not takes[0].
+    const picked = await pickTesseraVVault(auth, mint, [
+      { address: dustDecoy, amount: 50_000n },
+      { address: ata, amount: 1n },
+      { address: realVault, amount: 4_060_000_000_000n },
+    ]);
+    expect(picked).toBe(realVault); // largest non-ATA balance wins
+    expect(picked).not.toBe(dustDecoy);
+    expect(String(picked)).not.toBe(String(ata));
+  });
+
+  test('pickTesseraVVault with >1 non-ATA account and an UNKNOWN balance self-drops (null) — never guesses', async () => {
+    const auth = TESSERAV_GLOBAL_AUTH;
+    const mint = address(USDC);
+    const [ata] = await findAssociatedTokenPda({ owner: auth, mint, tokenProgram: TOKEN_PROGRAM });
+    // Two non-ATA candidates but one balance is unknown -> unrankable -> self-drop rather than route
+    // funds to a possibly-wrong account.
+    const picked = await pickTesseraVVault(auth, mint, [
+      { address: fabricatedAddress(0xc3), amount: 4_060_000_000_000n },
+      { address: fabricatedAddress(0xd4) }, // balance unknown
+      { address: ata, amount: 1n },
+    ]);
+    expect(picked).toBeNull();
+  });
+
+  test('pickTesseraVVault with ZERO non-ATA accounts self-drops (null) — the global vault does not exist yet', async () => {
+    const auth = TESSERAV_GLOBAL_AUTH;
+    const mint = address(USDC);
+    const [ata] = await findAssociatedTokenPda({ owner: auth, mint, tokenProgram: TOKEN_PROGRAM });
+    expect(await pickTesseraVVault(auth, mint, [{ address: ata, amount: 1n }])).toBeNull(); // only the ATA
+    expect(await pickTesseraVVault(auth, mint, [])).toBeNull(); // nothing owned
+  });
+
   test('the committed cache reproduces the SOL/USDC + cbBTC vaults EXACTLY (RPC-free fast path)', () => {
     expect(String(TESSERAV_KNOWN_VAULTS[WSOL])).toBe(VAULT_WSOL);
     expect(String(TESSERAV_KNOWN_VAULTS[USDC])).toBe(VAULT_USDC);
