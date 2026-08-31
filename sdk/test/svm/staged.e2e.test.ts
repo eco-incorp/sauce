@@ -30,6 +30,7 @@ import {
   stageBytecode,
   startEngine,
   toBigInt,
+  planToManifest,
 } from './engine-harness.js';
 import type { EngineHarness } from './engine-harness.js';
 
@@ -51,7 +52,7 @@ describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account �
 
     const buffer = await stageBytecode(harness, seed32(0), bytecode);
     // no plan refs, no signer needed: pure compute never reads MSG_SENDER
-    const accounts = resolveAccounts({ metas: [] }, {}, harness.payer.address);
+    const accounts = resolveAccounts({ accounts: [] }, {}, harness.payer.address);
 
     const result = expectOk(await executeStaged(harness, buffer, accounts, { pin: sha256(bytecode) }));
     expect(toBigInt(result.returnData)).toBe(0xbeefn);
@@ -72,7 +73,7 @@ describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account �
   it('rejects a wrong 32-byte hash pin (BufferHashMismatch) — the cross-lifecycle trust anchor', async () => {
     const bytecode = new Uint8Array([0x01, 0x2a, 0x00]); // BYTE_1 42, STOP
     const buffer = await stageBytecode(harness, seed32(1), bytecode);
-    const accounts = resolveAccounts({ metas: [] }, {}, harness.payer.address);
+    const accounts = resolveAccounts({ accounts: [] }, {}, harness.payer.address);
 
     const wrongPin = sha256(bytecode);
     wrongPin[0] ^= 0xff;
@@ -86,7 +87,7 @@ describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account �
   it('an execute transaction without RequestHeapFrame aborts before any opcode', async () => {
     const bytecode = new Uint8Array([0x01, 0x2a, 0x00]); // BYTE_1 42, STOP
     const buffer = await stageBytecode(harness, seed32(5), bytecode);
-    const accounts = resolveAccounts({ metas: [] }, {}, harness.payer.address);
+    const accounts = resolveAccounts({ accounts: [] }, {}, harness.payer.address);
 
     // Same instruction, no heap-frame request: the claim probe hits unmapped
     // memory (SBF AccessViolation) — deterministic, zero state at risk.
@@ -118,7 +119,7 @@ describeSvm('staged e2e: payload args (stage once, execute many, ONE instruction
     expect(argsLayout!.programLength).toBe(bytecode[0].length);
 
     const buffer = await stageBytecode(harness, seed32(2), bytecode[0]);
-    const accounts = resolveAccounts(accountPlan!, {}, harness.payer.address);
+    const accounts = resolveAccounts(planToManifest(accountPlan!), {}, harness.payer.address);
     const pin = sha256(bytecode[0]);
 
     const first = expectOk(
@@ -140,7 +141,7 @@ describeSvm('staged e2e: payload args (stage once, execute many, ONE instruction
       args: [0n, '0x00'],
     });
     const buffer = await stageBytecode(harness, seed32(3), bytecode[0]);
-    const accounts = resolveAccounts(accountPlan!, {}, harness.payer.address);
+    const accounts = resolveAccounts(planToManifest(accountPlan!), {}, harness.payer.address);
 
     const result = expectOk(
       await executeStaged(harness, buffer, accounts, {
@@ -161,7 +162,7 @@ describeSvm('lazy NoSigner: signerless executes are valid unless MSG_SENDER is r
 
   it('a pure-compute program executes with an EMPTY instruction account list', async () => {
     const { bytecode, accountPlan } = compile('function main() { return 41 + 1 }', { target: 'svm' });
-    const accounts = resolveAccounts(accountPlan!, {}, harness.payer.address);
+    const accounts = resolveAccounts(planToManifest(accountPlan!), {}, harness.payer.address);
     expect(accounts).toHaveLength(0); // signerless — and valid
 
     const execute = buildExecuteInstruction({ programId: harness.programId, bytecode: bytecode[0], accounts });
@@ -175,14 +176,14 @@ describeSvm('lazy NoSigner: signerless executes are valid unless MSG_SENDER is r
     const signerless = buildExecuteInstruction({
       programId: harness.programId,
       bytecode: bytecode[0],
-      accounts: resolveAccounts(accountPlan!, {}, harness.payer.address),
+      accounts: resolveAccounts(planToManifest(accountPlan!), {}, harness.payer.address),
     });
     expectFail(await sendInstructions(harness, [buildHeapFramePrepend(), signerless]));
 
     const signed = buildExecuteInstruction({
       programId: harness.programId,
       bytecode: bytecode[0],
-      accounts: resolveAccounts(accountPlan!, {}, harness.payer.address, { appendPayerSigner: true }),
+      accounts: resolveAccounts(planToManifest(accountPlan!), {}, harness.payer.address, { appendPayerSigner: true }),
     });
     const result = expectOk(await sendInstructions(harness, [buildHeapFramePrepend(), signed]));
     expect(result.returnData).toHaveLength(32);
@@ -226,7 +227,7 @@ describeSvm('staged e2e: a program too large for the packet runs staged — the 
     expect(staged.warnings).toEqual([]);
 
     const buffer = await stageBytecode(harness, seed32(4), staged.bytecode[0]);
-    const accounts = resolveAccounts(staged.accountPlan!, {}, harness.payer.address);
+    const accounts = resolveAccounts(planToManifest(staged.accountPlan!), {}, harness.payer.address);
 
     const result = expectOk(
       await executeStaged(harness, buffer, accounts, { pin: sha256(staged.bytecode[0]) }),

@@ -18,7 +18,7 @@ import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve as resolvePath } from "node:path";
 
-import type { CompileResult, CompileTarget, ContractsConfig } from "@eco-incorp/sauce-compiler";
+import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 // The RS compiler's own option/result types, from the package this file loads at runtime -- a
 // hand-written mirror of them would drift with nothing to catch it.
 import type {

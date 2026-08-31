@@ -1,6 +1,7 @@
 import { createSolanaRpc, createSolanaRpcSubscriptions, sendAndConfirmTransactionFactory } from '@solana/kit';
 import type { Address, AddressesByLookupTableAddress, Commitment, Instruction, Signature, TransactionSigner } from '@solana/kit';
-import type { AccountPlan, ArgsLayout, ArgValue } from '@eco-incorp/sauce-compiler';
+import type { AccountManifest } from 'sauce-next';
+import type { ArgsLayout, ArgValue } from './layout.js';
 import { createAltWithAddresses, extendAlt, fetchAlt, waitForAltActive } from './alt.js';
 import { encodePayloadArgs } from './args.js';
 import {
@@ -33,7 +34,7 @@ export interface SimulateOpts {
   prepends?: readonly Instruction[];
   lookupTables?: AddressesByLookupTableAddress;
   /**
-   * Append the fee payer as an in-list readonly signer when the plan yields no
+   * Append the fee payer as an in-list readonly signer when the manifest yields no
    * signer meta. Needed ONLY for programs that read MSG_SENDER/TX_ORIGIN —
    * NoSigner is lazy, so everything else runs (and simulates) signerless.
    */
@@ -104,8 +105,8 @@ export interface SauceSvmClient {
    * existing path: an already-covering table sends no transactions.
    */
   ensureLookupTable(addresses: readonly Address[], opts?: EnsureLookupTableOpts): Promise<EnsuredLookupTable>;
-  simulate(bytecode: Uint8Array, plan: AccountPlan, resolution: AccountResolution, opts?: SimulateOpts): Promise<SimulateExecuteResult>;
-  execute(bytecode: Uint8Array, plan: AccountPlan, resolution: AccountResolution, opts?: ExecuteOpts): Promise<SendExecuteResult>;
+  simulate(bytecode: Uint8Array, manifest: AccountManifest, resolution: AccountResolution, opts?: SimulateOpts): Promise<SimulateExecuteResult>;
+  execute(bytecode: Uint8Array, manifest: AccountManifest, resolution: AccountResolution, opts?: ExecuteOpts): Promise<SendExecuteResult>;
   /**
    * Stages bytecode into the buffer at 32-byte `seed` (init → chunked writes → a
    * dedicated finalize sent only after every write confirmed, each tx on a fresh
@@ -116,7 +117,7 @@ export interface SauceSvmClient {
   stageBuffer(seed: Uint8Array, bytecode: Uint8Array): Promise<StagedBuffer>;
   /** Closes the buffer at 32-byte `seed`, refunding its rent to the payer (the recompile path). */
   closeBuffer(seed: Uint8Array): Promise<SendExecuteResult>;
-  simulateStaged(buffer: Address | StagedBuffer, plan: AccountPlan, resolution: AccountResolution, opts?: SimulateStagedOpts): Promise<SimulateExecuteResult>;
+  simulateStaged(buffer: Address | StagedBuffer, manifest: AccountManifest, resolution: AccountResolution, opts?: SimulateStagedOpts): Promise<SimulateExecuteResult>;
   /**
    * Executes a finalized buffer, hash-pinned, in ONE instruction. With `args`,
    * the per-execution values are encoded into the instruction payload
@@ -124,7 +125,7 @@ export interface SauceSvmClient {
    * reads them through its CALLDATA prologue, so one staged buffer serves
    * every argument set without restaging.
    */
-  executeStaged(buffer: Address | StagedBuffer, plan: AccountPlan, resolution: AccountResolution, opts?: ExecuteStagedOpts): Promise<SendExecuteResult>;
+  executeStaged(buffer: Address | StagedBuffer, manifest: AccountManifest, resolution: AccountResolution, opts?: ExecuteStagedOpts): Promise<SendExecuteResult>;
 }
 
 export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: SauceSvmClientConfig): Promise<SauceSvmClient> {
@@ -169,12 +170,12 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
 
   async function buildTransaction(
     bytecode: Uint8Array,
-    plan: AccountPlan,
+    manifest: AccountManifest,
     resolution: AccountResolution,
     prepends: readonly Instruction[],
     opts: SimulateOpts,
   ): Promise<SignedExecuteTransaction> {
-    const accounts = resolveAccounts(plan, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
+    const accounts = resolveAccounts(manifest, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
     const executeInstruction = buildExecuteInstruction({ programId, bytecode, accounts });
 
     return signExecuteTransaction(executeInstruction, prepends, opts.lookupTables);
@@ -182,11 +183,11 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
 
   async function simulate(
     bytecode: Uint8Array,
-    plan: AccountPlan,
+    manifest: AccountManifest,
     resolution: AccountResolution,
     opts: SimulateOpts = {},
   ): Promise<SimulateExecuteResult> {
-    const transaction = await buildTransaction(bytecode, plan, resolution, opts.prepends ?? [], opts);
+    const transaction = await buildTransaction(bytecode, manifest, resolution, opts.prepends ?? [], opts);
 
     return simulateExecute(rpc, transaction);
   }
@@ -205,14 +206,14 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
 
   async function buildStagedTransaction(
     buffer: Address | StagedBuffer,
-    plan: AccountPlan,
+    manifest: AccountManifest,
     resolution: AccountResolution,
     prepends: readonly Instruction[],
     opts: SimulateStagedOpts,
   ): Promise<SignedExecuteTransaction> {
     const address = typeof buffer === 'string' ? buffer : buffer.address;
     const expectedSha256 = stagedPin(address, opts.expectedSha256 ?? (typeof buffer === 'string' ? undefined : buffer.sha256));
-    const accounts = resolveAccounts(plan, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
+    const accounts = resolveAccounts(manifest, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
     const args = opts.args && opts.args.layout.slots.length > 0 ? encodePayloadArgs(opts.args.layout, opts.args.values) : undefined;
     const executeInstruction = buildExecuteFromAccountInstruction({ programId, buffer: address, accounts, expectedSha256, args });
 
@@ -221,11 +222,11 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
 
   async function simulateStaged(
     buffer: Address | StagedBuffer,
-    plan: AccountPlan,
+    manifest: AccountManifest,
     resolution: AccountResolution,
     opts: SimulateStagedOpts = {},
   ): Promise<SimulateExecuteResult> {
-    const transaction = await buildStagedTransaction(buffer, plan, resolution, opts.prepends ?? [], opts);
+    const transaction = await buildStagedTransaction(buffer, manifest, resolution, opts.prepends ?? [], opts);
 
     return simulateExecute(rpc, transaction);
   }
@@ -301,20 +302,20 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
 
     async execute(
       bytecode: Uint8Array,
-      plan: AccountPlan,
+      manifest: AccountManifest,
       resolution: AccountResolution,
       opts: ExecuteOpts = {},
     ): Promise<SendExecuteResult> {
       const prepends = await autoComputeUnitPrepends(
         () =>
-          simulate(bytecode, plan, resolution, {
+          simulate(bytecode, manifest, resolution, {
             prepends: opts.prepends,
             lookupTables: opts.lookupTables,
             appendPayerSigner: opts.appendPayerSigner,
           }),
         opts,
       );
-      const transaction = await buildTransaction(bytecode, plan, resolution, prepends, opts);
+      const transaction = await buildTransaction(bytecode, manifest, resolution, prepends, opts);
 
       return sendExecute({ rpc, rpcSubscriptions, transaction });
     },
@@ -381,13 +382,13 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
 
     async executeStaged(
       buffer: Address | StagedBuffer,
-      plan: AccountPlan,
+      manifest: AccountManifest,
       resolution: AccountResolution,
       opts: ExecuteStagedOpts = {},
     ): Promise<SendExecuteResult> {
       const prepends = await autoComputeUnitPrepends(
         () =>
-          simulateStaged(buffer, plan, resolution, {
+          simulateStaged(buffer, manifest, resolution, {
             prepends: opts.prepends,
             lookupTables: opts.lookupTables,
             appendPayerSigner: opts.appendPayerSigner,
@@ -396,7 +397,7 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
           }),
         opts,
       );
-      const transaction = await buildStagedTransaction(buffer, plan, resolution, prepends, opts);
+      const transaction = await buildStagedTransaction(buffer, manifest, resolution, prepends, opts);
 
       return sendExecute({ rpc, rpcSubscriptions, transaction });
     },

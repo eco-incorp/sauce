@@ -40,7 +40,7 @@
  */
 import * as acorn from "acorn";
 import type { Address } from "viem";
-import type { ContractsConfig } from "@eco-incorp/sauce-compiler";
+import type { ContractsConfig } from "./compile-types.js";
 
 import { requireChain, type CanonicalChain, type ChainRef } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";

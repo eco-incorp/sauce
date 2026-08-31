@@ -32,6 +32,7 @@ import {
   TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
   transferCheckedData,
+  planToManifest,
 } from './engine-harness.js';
 import type { EngineHarness } from './engine-harness.js';
 import { svmSettleSource } from '../../src/svm/index.js';
@@ -78,7 +79,7 @@ describeSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022, one s
   }) => {
     const s = staged[1]!;
     const accounts = resolveAccounts(
-      s.plan!,
+      planToManifest(s.plan!),
       {
         tokenProgram0: p.tp,
         tokenProgram1: TOKEN_PROGRAM, // unused when splCount=1; still attached (dedups if == tp)
@@ -153,7 +154,7 @@ describeSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022, one s
     const dest1 = setTokenAccount(harness, randomAddress(), mint1, recipient, 0n, TOKEN_2022_PROGRAM);
 
     const accounts = resolveAccounts(
-      s.plan!,
+      planToManifest(s.plan!),
       {
         tokenProgram0: TOKEN_PROGRAM,
         tokenProgram1: TOKEN_2022_PROGRAM,

@@ -16,6 +16,7 @@ import { getAddressCodec, generateKeyPairSigner, lamports } from '@solana/kit';
 import type { Address, AddressesByLookupTableAddress, Instruction, KeyPairSigner } from '@solana/kit';
 import { Clock, FailedTransactionMetadata, FeatureSet, LiteSVM } from 'litesvm';
 import type { AccountPlan } from '@eco-incorp/sauce-compiler';
+import type { AccountManifest, AccountRole as SlotRole } from 'sauce-next';
 import {
   buildComputeBudgetPrepend,
   buildExecuteFromAccountInstruction,
@@ -215,6 +216,33 @@ export const fabricateAlt = (harness: EngineHarness, addresses: readonly Address
   return { [table]: [...addresses] };
 };
 
+/**
+ * TS `AccountPlan` -> RS `AccountManifest`, for the SVM suites whose programs only the TypeScript
+ * compiler can build: `svmSettleSource` uses the `accountUint`/`accountData` string-ref sugar and
+ * `staged: true`, neither of which the Rust compiler has. `sdk/src` speaks `AccountManifest`, so
+ * these suites need the bridge until those programs move to the RS Account model.
+ *
+ * The four roles ARE the writable/signer product, so the mapping is total and lossless. A plan
+ * `pubkey` has no manifest counterpart, so it throws rather than silently dropping the address.
+ */
+export const planToManifest = (plan: AccountPlan): AccountManifest => {
+  if (plan.usesRawIndices) throw new Error('planToManifest: a raw-index plan has no manifest form');
+
+  return {
+    accounts: plan.metas.map((meta, index) => {
+      if (meta.pubkey !== undefined) {
+        throw new Error(`planToManifest: meta '${meta.ref}' carries a pubkey, which a manifest slot cannot express`);
+      }
+
+      const requires: SlotRole = meta.writable
+        ? (meta.signer ? 'writable_signer' : 'writable')
+        : (meta.signer ? 'readonly_signer' : 'readonly');
+
+      return { kind: 'slot' as const, index, name: meta.ref, requires };
+    }),
+  };
+};
+
 export type RunResult =
   | { ok: true; returnData: Uint8Array; logs: string[] }
   | { ok: false; revertData: Uint8Array; err: string; logs: string[] };
@@ -241,7 +269,7 @@ export const signExecuteTransaction = async (
   resolution: AccountResolution,
   { lookupTables, computeUnits = 1_400_000 }: ExecuteOptions = {},
 ): Promise<SignedExecuteTransaction> => {
-  const accounts = resolveAccounts(output.accountPlan, resolution, harness.payer.address);
+  const accounts = resolveAccounts(planToManifest(output.accountPlan), resolution, harness.payer.address);
   const instructions: Instruction[] = [
     ...buildComputeBudgetPrepend({ unitLimit: computeUnits }),
     buildHeapFramePrepend(),

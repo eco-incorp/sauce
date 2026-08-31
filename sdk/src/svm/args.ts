@@ -16,7 +16,7 @@
  * accounts (stagedArgsBudget) — bigger args belong in a second buffer used as
  * a data account, read on-chain via accountData.
  */
-import type { ArgsLayout, ArgsLayoutSlot, ArgValue } from '@eco-incorp/sauce-compiler';
+import type { ArgsLayout, ArgsLayoutSlot, ArgValue } from './layout.js';
 
 function hexToBytes(hex: string): Uint8Array {
   const h = hex.startsWith('0x') ? hex.slice(2) : hex;

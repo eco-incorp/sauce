@@ -1,3 +1,4 @@
+import type { AccountManifest } from 'sauce-next';
 import { address, generateKeyPairSigner, getCompiledTransactionMessageDecoder } from '@solana/kit';
 import type { Blockhash, KeyPairSigner } from '@solana/kit';
 import {
@@ -51,10 +52,12 @@ describe('buildExecuteTransaction', () => {
     expect(size).toBeLessThanOrEqual(1232);
   });
 
-  it('signs for a non-payer plan signer attached to the execute metas via resolveAccounts', async () => {
+  it('signs for a non-payer manifest signer attached to the execute metas via resolveAccounts', async () => {
     const delegate = await generateKeyPairSigner();
-    const plan = { metas: [{ ref: 'delegate', writable: false, signer: true }] };
-    const accounts = resolveAccounts(plan, { delegate: { address: delegate.address, signer: delegate } }, payer.address);
+    const manifest: AccountManifest = {
+      accounts: [{ kind: 'slot', index: 0, name: 'delegate', requires: 'readonly_signer' }],
+    };
+    const accounts = resolveAccounts(manifest, { delegate: { address: delegate.address, signer: delegate } }, payer.address);
     const instructions = [
       buildHeapFramePrepend(),
       buildExecuteInstruction({ programId: PROGRAM_ID, bytecode: new Uint8Array([0x00]), accounts }),

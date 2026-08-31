@@ -49,7 +49,7 @@ import {
   type SauceEvmExecutionInput,
   type SauceSvmExecutionInput,
 } from "./sauce-route.js";
-import type { CompileResult } from "@eco-incorp/sauce-compiler";
+import type { CompileResult } from "./compile-types.js";
 import { predictVaultAddress, type VaultConfig } from "./vault.js";
 import type {
   AddressInput,

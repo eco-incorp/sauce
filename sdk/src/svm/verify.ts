@@ -30,7 +30,7 @@ import { createHash } from 'node:crypto';
 import { getAddressDecoder } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { compile } from '@eco-incorp/sauce-compiler';
-import type { ArgsLayout } from '@eco-incorp/sauce-compiler';
+import type { ArgsLayout } from './layout.js';
 import {
   EXECUTE_AND_CLOSE_DISCRIMINATOR,
   EXECUTE_DISCRIMINATOR,

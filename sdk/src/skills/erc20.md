@@ -51,18 +51,18 @@ function main(token: Address, account: Address): Uint256 {
 }
 
 // Storage-based transfer (demonstrates storage, crypto, abi encode, events)
-function balanceSlot(account: any) {
+function balanceSlot(account: Address): Uint256 {
   return crypto.keccak256(abi.encode(account, 1));
 }
-function main(to: any, amount: any) {
+function main(to: Address, amount: Uint256): Uint256 {
   const from = ctx.msgSender();
   const fromSlot = balanceSlot(from);
-  const fromBalance = storage.read(fromSlot);
+  const fromBalance = evm.sload(fromSlot);
   if (fromBalance < amount) throw "insufficient balance";
-  storage.write(fromSlot, fromBalance - amount);
+  evm.sstore(fromSlot, fromBalance - amount);
   const toSlot = balanceSlot(to);
-  storage.write(toSlot, storage.read(toSlot) + amount);
-  emit("Transfer(address,address,uint256)", { from, to, amount }, "from", "to");
+  evm.sstore(toSlot, evm.sload(toSlot) + amount);
+  log(abi.encode(from, to, amount), crypto.keccak256("Transfer(address,address,uint256)"));
   return 1;
 }
 ```

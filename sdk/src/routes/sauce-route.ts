@@ -19,7 +19,9 @@
  * always compiled to exactly one bytecode blob (`compiled.bytecode[0]`) and slotted as exactly one
  * `Call` — a multi-statement body is one program with N statements, never N cooks.
  */
-import { compile, type ArgValue, type CompileResult, type CompileTarget, type ContractsConfig } from "@eco-incorp/sauce-compiler";
+import { compile } from "@eco-incorp/sauce-compiler";
+import type { ArgValue } from "../svm/layout.js";
+import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import { bytesToHex } from "viem";
 
 import type { ChainRef } from "../chains/canonical.js";
