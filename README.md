@@ -38,8 +38,10 @@ built.publishCalldata()      // calldata for sourcePortal — omit sourcePortal 
 
 `routes.openRoute(destination, …)` is what the chain globals forward to, so
 `Base(sauce, options).reward(…)` is the same call. Those globals are installed on `globalThis` as a
-side effect of importing the package — they are **not** exports, so `import { Base }` fails. Opt out
-with `__ECO_ROUTES_NO_GLOBALS__`, or just use `routes.openRoute`.
+side effect of importing the package — they are **not** exports, so `import { Base }` fails. Opt out by setting `globalThis.__ECO_ROUTES_NO_GLOBALS__ = true` **before the first import** — it is
+read at module evaluation, so setting it afterwards is too late and silently does nothing. After the
+fact, `uninstallRouteGlobals()` is the one that works. Or just use `routes.openRoute` and ignore
+them.
 
 `.reward()` takes a token-amount array as above. A **bare bigint** is a NATIVE reward —
 `.reward(1_000_000n)` posts 1e6 wei of the source chain's gas token, not 1 USDC.
@@ -110,14 +112,19 @@ const { bytecode } = compile({
 })
 ```
 
-On **EVM**, `main` may take parameters and they arrive at run time as 32-byte words appended to the
-program, so one program serves many argument sets. Compile-time substitution is `defines` instead.
-On **SVM** a `main` parameter is an `Account` slot rather than a decoded word — the parameter list is
-the account manifest, returned as `CompileResult.manifest`.
+`main` may take parameters. They arrive at run time as 32-byte big-endian words appended after the
+program, on **both** targets, so one program serves many argument sets — compile-time substitution is
+`defines` instead.
+
+The SDK ships an encoder for that payload only on the **SVM** side: `ArgsLayout` / `encodePayloadArgs`
+(`@eco-incorp/sauce-sdk/svm`), which `SvmClient` passes through to `execute_from_account`. On EVM you
+concatenate the words yourself. Separately on SVM, an **`Account`**-typed parameter is not a decoded
+word at all — those become the account manifest, returned as `CompileResult.manifest`.
 
 A `main` that falls off the end has no return type of its own, and a raw `compile` rejects it
-(`` `main` does not return on every path ``). Generated programs — the `token`/`swap`/`deposit`
-builders — hit this. Either annotate it yourself (`function main(): void { … }`) or go through
+(`` `main` does not return on every path ``). Generated programs hit this whenever they fall through
+— which most do, though not all: a trailing `Token.balanceOf` emits a `return`, and annotating that
+one `: void` would break it. Either annotate it yourself (`function main(): void { … }`) or go through
 `routes.compileSauceRoute`, which annotates it for you. Note that one takes
 `(destination, sauce, execution, options)`: the execution seam is required, and an SVM destination
 needs an already-staged buffer, so it is the route path rather than a bare compile helper.
