@@ -21,7 +21,7 @@
  * prologue-shaped program may do anything in its body.
  *
  * "This is the program I audited" is answerable by recompiling the shipped source and byte-comparing,
- * but against ONE compiler: `@eco-incorp/sauce-sdk/compiler`, the TypeScript compiler this package
+ * but against the retired in-repo TypeScript compiler, which this package
  * ships. It bakes the params into this prologue and leaves a body that is byte-identical for every
  * token count, minOut and recipient — so one `bodyHash` covers every argument set, which is what
  * makes the comparison meaningful. Neither half holds for the published RUST compiler: it folds each

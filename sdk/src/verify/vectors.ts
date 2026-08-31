@@ -6,8 +6,8 @@ export interface ConformanceVector {
   minOut: bigint;
   recipient: Hex;
   /** The exact program these args produce — measured by compiling `recipes/settle.sauce.ts` with
-   *  `@eco-incorp/sauce-sdk/compiler`, not hand-assembled. `test/verify.compile.test.ts` recompiles
-   *  it and byte-compares, so this is a live regression pin, not a transcription. */
+   *  the in-repo TypeScript compiler, which no longer exists in this repo. FROZEN: nothing
+   *  recompiles these, and nothing can (see the note above `SETTLE_VECTORS`). */
   program: Hex;
 }
 
@@ -23,7 +23,7 @@ const Z = "0x0000000000000000000000000000000000ff00aa" as Hex; // leading-zero-b
  * They serve two purposes at once. They are the definition of the v1 grammar for anyone
  * reimplementing the decoder, which is what a conformance corpus is for; and they are a LIVE
  * regression pin on the compiler that produces the grammar — `test/verify.compile.test.ts` compiles
- * `recipes/settle.sauce.ts` with `@eco-incorp/sauce-sdk/compiler` (the TypeScript compiler this
+ * `recipes/settle.sauce.ts` with the in-repo TypeScript compiler (which this
  * package ships) and byte-compares against these vectors, so a program edit or a compiler change
  * shows up as a real diff.
  *

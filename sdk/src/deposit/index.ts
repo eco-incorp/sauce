@@ -23,15 +23,16 @@
  * `ingredients[0]`, exactly like `swap`'s own multi-leg story.
  *
  * ```ts
- * import { compile } from "@eco-incorp/sauce-sdk/compiler";
- * import { deposit } from "@eco-incorp/sauce-sdk";
- * import { bytesToHex } from "viem";
+ * import { compileSauceRoute, deposit } from "@eco-incorp/sauce-sdk";
  *
- * const { bytecode } = compile(
- *   deposit.swapThenDepositSource(swapLeg, { protocol: "aave-v3", action: "supply", target: aavePool,
- *     token: tokenOut, amount: "delta", extra: { referralCode: 0n } }),
- *   { baseDirs: deposit.COMPOSED_BASE_DIRS, target: "v12", treeshake: true, tsSource: true },
- * );
+ * // compileSauceRoute, not the compiler directly: it applies the source post-processing a
+ * // generated program needs (a `main` that falls off the end has no return type of its own,
+ * // and a raw compile rejects it with "`main` does not return on every path").
+ * const { compiled } = compileSauceRoute({
+ *   source: deposit.swapThenDepositSource(swapLeg, { protocol: "aave-v3", action: "supply",
+ *     target: aavePool, token: tokenOut, amount: "delta", extra: { referralCode: 0n } }),
+ *   baseDirs: deposit.COMPOSED_BASE_DIRS,
+ * });
  * ```
  *
  * ## Starter templates (eleven; see `templates.ts` for the full registry)

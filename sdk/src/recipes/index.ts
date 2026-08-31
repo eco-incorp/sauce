@@ -5,21 +5,20 @@
  * "what is the program text?" and "where is this package installed?" — and then getting out of the
  * way. It ships no compile helper, so whatever options a caller passes are the ones they can audit.
  *
- * BYTE-FOR-BYTE REPRODUCIBILITY IS AGAINST ONE NAMED COMPILER — `@eco-incorp/sauce-sdk/compiler`,
+ * BYTE-FOR-BYTE REPRODUCIBILITY IS NO LONGER OFFERED — it was against the in-repo TypeScript compiler,
  * the TypeScript compiler this package ships. It is the only one with compile-time `args`, which is
  * what bakes `(tokens, minOut, recipient)` into the fixed PROLOGUE that IS the v1 wire grammar
  * `@eco-incorp/sauce-sdk/verify` decodes:
  *
  * ```ts
- * import { compile } from "@eco-incorp/sauce-sdk/compiler";
+ * import { compileSauceRoute } from "@eco-incorp/sauce-sdk";
  * import { settleSource, SAUCE_BASE_DIRS } from "@eco-incorp/sauce-sdk/recipes";
  *
- * const { bytecode } = compile(settleSource(), {
- *   baseDirs: SAUCE_BASE_DIRS,   // resolves the program's `./artifacts/IERC20.json` import
- *   target: "v12",               // the program is v12-only
- *   treeshake: true,
- *   tsSource: true,              // the source is TypeScript-annotated SauceScript
- *   args: [tokens.map(BigInt), minOut, BigInt(recipient)],
+ * // The settle program takes its `(tokens, minOut, recipient)` as RUNTIME entry arguments, which
+ * // ride the instruction payload after the program bytes -- they are not baked at compile time.
+ * const { compiled } = compileSauceRoute({
+ *   source: settleSource(),
+ *   baseDirs: SAUCE_BASE_DIRS,       // resolves the program's `./artifacts/IERC20.json` import
  * });
  * // bytecode[0] is byte-identical to the program we hand you, and to `SETTLE_VECTORS`.
  * ```

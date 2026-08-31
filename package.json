@@ -21,8 +21,8 @@
       "default": "./sdk/dist/index.js"
     },
     "./compiler": {
-      "types": "./compiler/dist/index.d.ts",
-      "default": "./compiler/dist/index.js"
+      "types": "./sdk/dist/compiler.d.ts",
+      "default": "./sdk/dist/compiler.js"
     },
     "./actions": {
       "types": "./actions/dist/index.d.ts",
@@ -79,7 +79,6 @@
     "sauce-dev-tools": "./dev-tools/scripts/init.js"
   },
   "files": [
-    "compiler/dist",
     "sdk/dist",
     "actions/dist",
     "sdk/src/skills",

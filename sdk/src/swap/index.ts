@@ -16,15 +16,14 @@
  * ## Composing with E3 (route.calls)
  *
  * ```ts
- * import { compile } from "@eco-incorp/sauce-sdk/compiler";
- * import { swap, routes } from "@eco-incorp/sauce-sdk";
- * import { bytesToHex } from "viem";
+ * import { compileSauceRoute, swap } from "@eco-incorp/sauce-sdk";
  *
- * const { bytecode } = compile(swap.swapSource(spec), {
+ * // compileSauceRoute, not the compiler directly: it applies the source post-processing a
+ * // generated program needs. A raw compile rejects a `main` that falls off the end with
+ * // "`main` does not return on every path".
+ * const { compiled } = compileSauceRoute({
+ *   source: swap.swapSource(spec),
  *   baseDirs: swap.SWAP_BASE_DIRS,   // resolves ./artifacts/ISauceRouter.json (+ IERC20 if needed)
- *   target: "v12",
- *   treeshake: true,
- *   tsSource: true,
  * });
  *
  * const call = routes.buildSauceEvmCall({ pot, ingredients: [bytesToHex(bytecode[0])] });

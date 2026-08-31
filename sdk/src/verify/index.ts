@@ -8,7 +8,7 @@
 // dependency graph to answer a question `viem` alone answers today.
 //
 // ⚠ WHICH PROGRAMS. The v1 grammar is an ARTIFACT of compile-time `args`, so it is the grammar of
-// exactly one compiler: `@eco-incorp/sauce-sdk/compiler`, the TypeScript compiler this package
+// the retired in-repo TypeScript compiler, which this package
 // ships, which bakes the params into a fixed prologue ahead of the body. The published RUST compiler
 // has no `args` option, and the `defines` standing in for it are constant-folded at each USE SITE —
 // on `recipes/settle.sauce.ts`, `minOut` lands at byte 48 and `recipient` at byte 104, with `0x92`
