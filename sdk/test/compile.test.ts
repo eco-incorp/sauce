@@ -1,10 +1,9 @@
 /**
  * Comprehensive compilation and structure tests for all SDK protocol SauceScript functions.
  *
- * The corpus is written for the RUST compiler, so that is what compiles it here — the published
- * `@eco-incorp/sauce-compiler` from npm, aliased `sauce-next`. Tier 1 selector
- * verification still runs through the in-repo TypeScript compiler, which is what can read a
- * segment's bytes.
+ * The corpus is compiled by the published compiler (`@eco-incorp/sauce-compiler` from npm, aliased
+ * `sauce-next`) — including Tier 1 selector verification, which scans the emitted program for the
+ * selector bytes it must contain.
  */
 
 import { join, dirname } from 'path';

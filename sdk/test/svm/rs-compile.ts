@@ -5,10 +5,9 @@
  * compiler (the `sauce-next` dep, i.e. the npm `@eco-incorp/sauce-compiler`
  * wasm package) and read back the SVM account manifest.
  *
- * This is the compiler the migrated venues target: the Account model — typed
- * `Account` params on `main(...)` plus `svm.sload(acct, off, w).toLe()` reads —
- * exists only in the RS compiler, not the in-repo TypeScript one (which uses the
- * older `accountUint("<ref>", off, w)` string-ref sugar + `accountPlan.metas`).
+ * The venues target the Account model: typed `Account` params on `main(...)`
+ * plus `svm.sload(acct, off, w).toLe()` reads, with the manifest reporting the
+ * attach order.
  *
  * The migration transform (see sdk/src/svm/venues/pumpswap/index.ts for the pilot):
  *   - a venue's ordered `quoteAccounts(cfg)` become the ordered `Account` params
@@ -50,8 +49,8 @@ interface WasmCompileOptions {
   resolve: (path: string) => Uint8Array;
 }
 
-// The Rust compiler, aliased `sauce-next` because its real name (`@eco-incorp/sauce-compiler`) is
-// still this workspace's TypeScript one. Required via `createRequire` for the same reason
+// The SauceScript compiler, under the `sauce-next` alias: a workspace package shadowed its real
+// name (`@eco-incorp/sauce-compiler`) when the alias was introduced. Required via `createRequire` for the same reason
 // `test/std/token/harness.ts` and `test/helpers.ts` do: the package's `node` condition is a
 // CommonJS build that reads its sibling `.wasm` off disk at load, and jest's ESM transform does not
 // resolve that sibling.

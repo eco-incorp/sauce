@@ -1,6 +1,6 @@
 /**
  * E4.2 universal deposit adapter — real-compile tests. Uses the ordinary
- * `@eco-incorp/sauce-compiler`, no forge/fork/anvil. Same import + baseDirs pattern as
+ * compiler, no forge/fork/anvil. Same import + baseDirs pattern as
  * `swap.compile.test.ts`.
  */
 import { compileProgram as compile } from "./helpers";

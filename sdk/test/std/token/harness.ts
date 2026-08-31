@@ -1,8 +1,7 @@
 /**
- * `@sauce/token` (sdk/src/std/token) compiled through the RUST compiler — the published
- * `@eco-incorp/sauce-compiler` (`sauce-next`), NOT the in-repo TypeScript one every other suite here
- * uses. That is the whole point: the library ships as SauceScript source, so the only thing that
- * proves it is the compiler that will actually consume it downstream.
+ * `@sauce/token` (sdk/src/std/token) compiled through the published compiler
+ * (`@eco-incorp/sauce-compiler`, aliased `sauce-next`). The library ships as SauceScript source, so
+ * the only thing that proves it is the compiler that will actually consume it downstream.
  *
  * The library's four files are byte-identical copies of the sauce repo's conformance fixture
  * (`compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token/`), which is the source of truth —
@@ -30,8 +29,8 @@ import type { CompileOptions, CompileResult, SauceTarget } from 'sauce-next';
 
 export type { AccountEntry, AccountManifest, CompileOptions, CompileResult, SauceTarget } from 'sauce-next';
 
-// The Rust SauceScript compiler, aliased `sauce-next` because its real name
-// (`@eco-incorp/sauce-compiler`) is still this workspace's TypeScript one.
+// The SauceScript compiler, under the `sauce-next` alias: a workspace package shadowed its real
+// name (`@eco-incorp/sauce-compiler`) when the alias was introduced.
 //
 // Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build
 // that reads its sibling `.wasm` off disk at load. Node's own CJS loader is the one that resolves

@@ -1,5 +1,5 @@
 /**
- * E4.1 universal swap adapter — real-compile tests. Uses the ordinary `@eco-incorp/sauce-compiler`,
+ * E4.1 universal swap adapter — real-compile tests. Uses the ordinary compiler,
  * no forge/fork/anvil. Same import + baseDirs pattern as `svm-settle.compile.test.ts`.
  */
 import { compileProgram as compile } from "./helpers";
