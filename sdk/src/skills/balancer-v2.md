@@ -21,7 +21,7 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 ```typescript
 import { BalancerV2VaultABI as IVault } from "./abis";
 
-function main(vaultAddress: Address, poolId: Bytes32, assetIn: Address, assetOut: Address, amount: Uint256, limit: Uint256, sender: Address, recipient: Address): Uint256 {
+function main(vaultAddress: Address, poolId: Uint256, assetIn: Address, assetOut: Address, amount: Uint256, limit: Uint256, sender: Address, recipient: Address): Uint256 {
   const vault = IVault.at(vaultAddress);
   return vault.swap({poolId: poolId, kind: 0, assetIn: assetIn, assetOut: assetOut, amount: amount, userData: 0x00}, {sender: sender, fromInternalBalance: false, recipient: recipient, toInternalBalance: false}, limit, 99999999999);
 }
@@ -40,9 +40,10 @@ function main(vaultAddress: Address, poolId: Bytes32, assetIn: Address, assetOut
 ```typescript
 import { BalancerV2VaultABI as IVault } from "./abis";
 
-function main(vaultAddress: Address, poolId: Bytes32, sender: Address, recipient: Address, userData: Bytes): Uint256 {
+function main(vaultAddress: Address, poolId: Uint256, sender: Address, recipient: Address, userData: bytes): Uint256 {
   const vault = IVault.at(vaultAddress);
-  return vault.joinPool(poolId, sender, recipient, {assets: [], maxAmountsIn: [], userData: userData, fromInternalBalance: false});
+  vault.joinPool(poolId, sender, recipient, {assets: [], maxAmountsIn: [], userData: userData, fromInternalBalance: false});
+  return 1;
 }
 ```
 - `userData`: ABI-encoded join type and amounts. Join types vary by pool kind (e.g., EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT)
@@ -53,9 +54,10 @@ function main(vaultAddress: Address, poolId: Bytes32, sender: Address, recipient
 ```typescript
 import { BalancerV2VaultABI as IVault } from "./abis";
 
-function main(vaultAddress: Address, poolId: Bytes32, sender: Address, recipient: Address, userData: Bytes): Uint256 {
+function main(vaultAddress: Address, poolId: Uint256, sender: Address, recipient: Address, userData: bytes): Uint256 {
   const vault = IVault.at(vaultAddress);
-  return vault.exitPool(poolId, sender, recipient, {assets: [], minAmountsOut: [], userData: userData, toInternalBalance: false});
+  vault.exitPool(poolId, sender, recipient, {assets: [], minAmountsOut: [], userData: userData, toInternalBalance: false});
+  return 1;
 }
 ```
 - `userData`: ABI-encoded exit type and amounts. Exit types: EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT

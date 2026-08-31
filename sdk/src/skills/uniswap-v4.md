@@ -21,9 +21,10 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 ```typescript
 import { UniswapV4UniversalRouterABI as IUniversalRouter } from "./abis";
 
-function main(routerAddress: Address, commands: Bytes, inputs: Bytes): Uint256 {
+function main(routerAddress: Address, commands: bytes, inputs: bytes[]): Uint256 {
   const router = IUniversalRouter.at(routerAddress);
-  return router.execute(commands, inputs, 99999999999);
+  router.execute(commands, inputs, 99999999999);
+  return 1;
 }
 ```
 - `routerAddress`: UniversalRouter address for the target chain
@@ -35,9 +36,10 @@ function main(routerAddress: Address, commands: Bytes, inputs: Bytes): Uint256 {
 ```typescript
 import { UniswapV4PositionManagerABI as IPositionManager } from "./abis";
 
-function main(positionManagerAddress: Address, unlockData: Bytes): Uint256 {
+function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
   const pm = IPositionManager.at(positionManagerAddress);
-  return pm.modifyLiquidities(unlockData, 99999999999);
+  pm.modifyLiquidities(unlockData, 99999999999);
+  return 1;
 }
 ```
 - `positionManagerAddress`: PositionManager address for the target chain
@@ -48,9 +50,10 @@ function main(positionManagerAddress: Address, unlockData: Bytes): Uint256 {
 ```typescript
 import { UniswapV4PositionManagerABI as IPositionManager } from "./abis";
 
-function main(positionManagerAddress: Address, unlockData: Bytes): Uint256 {
+function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
   const pm = IPositionManager.at(positionManagerAddress);
-  return pm.modifyLiquidities(unlockData, 99999999999);
+  pm.modifyLiquidities(unlockData, 99999999999);
+  return 1;
 }
 ```
 - Same interface as addLiquidity but with negative liquidityDelta in the encoded data
