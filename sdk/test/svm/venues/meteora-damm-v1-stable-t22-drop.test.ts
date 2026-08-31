@@ -7,6 +7,7 @@
 import { fileURLToPath } from 'url';
 import { address } from '@solana/kit';
 import { meteoraDammV1Stable } from '../../../src/svm/venues/meteora-damm-v1-stable/index.js';
+import type { MeteoraDammV1StablePoolConfig } from '../../../src/svm/venues/meteora-damm-v1-stable/index.js';
 import { TOKEN_2022_PROGRAM_ID } from '../../../src/svm/token-program.js';
 import { fixtureLoader, loadFixtures } from '../fixtures.js';
 import type { AccountFixture } from '../fixtures.js';
@@ -38,7 +39,7 @@ describe('meteora-damm-v1-stable Token-2022 self-drop', () => {
   });
 
   it('decodes the plain fixture unchanged (legacy fallback, mints not vendored)', async () => {
-    const cfg = await meteoraDammV1Stable.fetchPoolConfig(fixtureLoader(fixtures), POOL);
+    const cfg = (await meteoraDammV1Stable.fetchPoolConfig(fixtureLoader(fixtures), POOL)) as MeteoraDammV1StablePoolConfig;
     expect(cfg.venue).toBe('meteora-damm-v1-stable');
     expect(cfg.tokenAMint).toBe(TOKEN_A_MINT);
   });

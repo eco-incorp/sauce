@@ -1,5 +1,0 @@
-export declare const supply = "\nimport { VTokenABI as IVToken } from \"./abis\";\n\nfunction main(vTokenAddress: Address, amount: Uint256): Uint256 {\n  const vToken = IVToken.at(vTokenAddress);\n  return vToken.mint(amount);\n}\n";
-export declare const withdraw = "\nimport { VTokenABI as IVToken } from \"./abis\";\n\nfunction main(vTokenAddress: Address, amount: Uint256): Uint256 {\n  const vToken = IVToken.at(vTokenAddress);\n  return vToken.redeemUnderlying(amount);\n}\n";
-export declare const borrow = "\nimport { VTokenABI as IVToken } from \"./abis\";\n\nfunction main(vTokenAddress: Address, amount: Uint256): Uint256 {\n  const vToken = IVToken.at(vTokenAddress);\n  return vToken.borrow(amount);\n}\n";
-export declare const repay = "\nimport { VTokenABI as IVToken } from \"./abis\";\n\nfunction main(vTokenAddress: Address, amount: Uint256): Uint256 {\n  const vToken = IVToken.at(vTokenAddress);\n  return vToken.repayBorrow(amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

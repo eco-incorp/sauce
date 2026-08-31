@@ -1,3 +1,0 @@
-export declare const burnSqueeth = "\nimport { ControllerABI as IController } from \"./abis\";\n\nfunction main(controllerAddress: Address, vaultId: Uint256, amount: Uint256, withdrawAmount: Uint256): Uint256 {\n  const controller = IController.at(controllerAddress);\n  controller.burnPowerPerpAmount(vaultId, amount, withdrawAmount);\n  return 1;\n}\n";
-export declare const withdrawCollateral = "\nimport { ControllerABI as IController } from \"./abis\";\n\nfunction main(controllerAddress: Address, vaultId: Uint256, amount: Uint256): Uint256 {\n  const controller = IController.at(controllerAddress);\n  controller.withdraw(vaultId, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

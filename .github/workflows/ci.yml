@@ -43,6 +43,19 @@ jobs:
         with:
           version: v1.5.1
 
+      # The huff-neo compiler (hnc). The v12 runtime no longer comes from it -- that is a pinned
+      # release asset now -- but compiler/integration-test/{v12-execution,v12-solidity-parity}.test.ts
+      # compile Runtime.huff themselves and `describe.skip` without it. 63 tests, and a skipped suite
+      # reads the same as a passing one in jest's summary, so the version stays pinned and verified.
+      - name: Install huff-neo compiler (hnc)
+        run: |
+          export HUFF_NEO_DIR="$HOME/.huff-neo"   # pin the install dir (the runner sets XDG_CONFIG_HOME, which the installer would otherwise use)
+          curl -L https://raw.githubusercontent.com/cakevm/huff-neo/main/hnc-up/install | bash
+          "$HUFF_NEO_DIR/bin/hnc-up" --install 1.5.13
+          echo "$HUFF_NEO_DIR/bin" >> "$GITHUB_PATH"
+      - name: Verify hnc is the pinned version
+        run: hnc --version | grep -q '1\.5\.13' || { echo "::error::hnc is not the pinned 1.5.13"; hnc --version; exit 1; }
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.2
@@ -155,6 +168,11 @@ jobs:
 
       - name: SDK — typecheck
         run: pnpm --filter './sdk' typecheck
+
+      # sdk/tsconfig.json's `include` is src-only, so `typecheck` never sees test/. That is how a
+      # test file that does not parse shipped through three green runs. This is the gate for it.
+      - name: SDK — typecheck tests
+        run: pnpm --filter './sdk' typecheck:test
 
       - name: SDK — build
         run: pnpm --filter './sdk' build

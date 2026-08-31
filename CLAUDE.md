@@ -65,8 +65,8 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   `cargo build-sbf` in the sauce repo's `svm/`). The SVM integration suites
   (`compiler/integration-test/svm-*.test.ts`, `sdk/test/svm/*.test.ts`) run compiled
   `target: 'svm'` bytecode on it via LiteSVM. The binary is **vendored** at
-  `artifacts/svm/engine.so` (committed, force-added — `.so` is gitignored — same
-  convention as the committed `compiler/dist`/`sdk/dist`) and that's the default both
+  `artifacts/svm/engine.so` (committed, force-added — `artifacts/` is gitignored; it is the
+  only force-added path left, since no `dist/` is tracked) and that's the default both
   locally and in CI, so these suites run **offline by default**, same as the EVM ones; the
   suites **skip cleanly** only if that binary is somehow missing. Set `SAUCE_ENGINE_SO` to
   override — e.g. to test a freshly built engine before repinning the `sauce` dep. **Refresh
@@ -111,34 +111,33 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   `Runtime.huff`'s CONSTRUCTOR returns its own bytecode, so the deployed code is only known once
   deployed; deploy the creation code to an anvil and read it back with `cast code`. (The EVM suite
   needs `anvil` on `PATH` either way.)
-- **Committed EVM engine artifacts** (`sdk/dist/artifacts/` — `Router`, `SauceRouter`,
+- **EVM engine artifacts** (`sdk/{src,dist}/artifacts/` — `Router`, `SauceRouter`,
   `ISauceRouter`, `V12Pot`, `V12Kitchen`, `V12RuntimeBytecode`, `IERC20`, `IUniswapV3Pool`,
   `IStateView`) ship to downstream SDK consumers, which read them for local tests/deploys, so
-  they must track the pinned `sauce` engine. Unlike `compiler/dist`, they are **not** build
-  output — `tsc` never emits them — so a `sauce` repin would silently leave them stale. **After
-  any repin run `pnpm --filter './sdk' sync-engine-artifacts`** (copies the 8 forge artifacts
-  from the pinned dep's `engine/out/`) **and commit the result**. CI enforces this: it re-syncs
-  from the freshly-installed engine (foundry v1.5.1 + solc 0.8.27 → byte-reproducible) and fails
-  on any drift, so a forgotten re-sync can't merge.
-- **`V12RuntimeBytecode.json` is the one artifact the sync script does NOT re-derive** (it is
-  listed in `OPTIONAL_SOURCES`, not `SOURCES`). It used to be a snapshot committed inside the
-  dep at `engine-v12/snapshots/`, so syncing was a plain copy. The engine **deleted that
-  committed copy** (`chore(v12): compile the runtime at deploy time`) because it was a second
-  source of truth that rotted — a change to six `.huff` handlers shipped with a snapshot built
-  from the pre-change source, through green CI, and the deploy script would have pushed those
-  stale bytes to eleven live chains. The engine now compiles `v12/Runtime.huff` with `hnc` at
-  deploy time, where `hnc` is a first-class dep. **It is not one here** — this repo's CI installs
-  Foundry only, and that same CI re-runs the sync and fails on drift, so requiring the snapshot
-  would make the drift check unsatisfiable. The engine keeps its generator
-  (`engine-v12/script/V12RuntimeBytecode.s.sol`) precisely for this consumer; its doc comment
-  names "the sauce-sdk viem test harness" as the reason. **When the v12 runtime changes, refresh
-  it by hand** from a checkout of the pinned commit, with `hnc` on `PATH`:
-  `cd engine-v12 && git submodule update --init --recursive --depth 1 && forge script
-  script/V12RuntimeBytecode.s.sol --sig "run()" --ffi`, then copy
-  `snapshots/V12RuntimeBytecode.json` over `sdk/src/artifacts/` + `sdk/dist/artifacts/` and
-  commit. The generator sanity-deploys the creation code before writing, so a broken snapshot
-  fails there rather than in a downstream consumer. Nothing in this repo re-derives or verifies
-  it, so a v12 runtime change without this step silently ships stale creation code to consumers.
+  they must track the pinned `sauce` engine. **Nothing is tracked** — `artifacts/` is gitignored,
+  as is every `dist/` — so they exist only where a build has run, and `tsc` does not emit them:
+  **after any repin run `pnpm --filter './sdk' sync-engine-artifacts`** (copies the 8 forge
+  artifacts from the pinned dep's `engine/out/`). CI runs that same sync from the
+  freshly-installed engine (foundry v1.5.1 + solc 0.8.27 → byte-reproducible) and asserts all 9
+  JSONs landed, so a broken generation fails there rather than shipping an empty dir. The one
+  thing it drift-checks against the index is `sdk/src/deployments`, which *is* committed.
+- **`V12RuntimeBytecode.json` comes from a pinned release asset, not from the `sauce` git dep.**
+  The engine deleted its committed `engine-v12/snapshots/` copy (`chore(v12): compile the runtime
+  at deploy time`) because a second source of truth rotted — six changed `.huff` handlers once
+  shipped with a snapshot built from pre-change source, through green CI.
+  `sync-engine-artifacts.mjs:279` now wraps `v12-evm-v0.3.0`'s `runtime.creation.hex` in the JSON
+  shape consumers already read. No Huff toolchain is involved in producing it.
+- **A tag is not a pin.** A GitHub tag is movable, so each asset is checked against a digest
+  committed in the script itself (`keccak256` of the *decoded* creation code; `sha256` of the
+  `.so`), cross-checked against the release manifest's `creationCodeKeccak`/`soSha256`, **and**
+  against `manifest.commit`. A moved tag throws rather than silently supplying a different engine.
+  Assets cache under `node_modules/.cache/sauce-engine-releases/<tag>/`, so a warm tree needs no
+  network, and a corrupt cache is caught by re-hashing and refetched.
+- **`hnc` is still a CI dependency, for a different reason.** It no longer produces the runtime,
+  but `compiler/integration-test/{v12-execution,v12-solidity-parity}.test.ts` compile
+  `v12/Runtime.huff` themselves and `describe.skip` without it — 63 tests. The version stays
+  pinned and verified because a skipped suite and a passing suite are the same line in jest's
+  summary.
 
 ## Architecture
 

@@ -1,2 +1,0 @@
-export declare const getRoutes = "\nimport { FlashAggregatorABI as IFlashAggregator } from \"./abis\";\n\nfunction main(aggregatorAddress: Address): Uint256 {\n  const aggregator = IFlashAggregator.at(aggregatorAddress);\n  aggregator.getRoutes();\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

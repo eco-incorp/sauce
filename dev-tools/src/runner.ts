@@ -25,6 +25,12 @@ const { compile } = createRequire(import.meta.url)('sauce-compiler') as {
 
 const ENTRY = 'main.js'
 
+const MAX_DEFINE_VALUE = (1n << 256n) - 1n
+
+// A define REPLACES a module `const` of that name, so the name has to be one the source could have
+// declared. Same shape `scripts/run.ts` uses to tell a define operand from a runtime arg.
+const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+
 const sauceAbi = parseAbi([
   'function cook(bytes[] memory calls) public payable returns (bytes memory)'
 ])
@@ -47,8 +53,12 @@ export function parseArg(arg: string): bigint | string {
 export function parseDefine(pair: string): [string, string] {
   const eq = pair.indexOf('=')
   if (eq < 1) throw new Error(`expected NAME=VALUE, got '${pair}'`)
-  const name = pair.slice(0, eq)
+  const name = pair.slice(0, eq).trim()
   const value = pair.slice(eq + 1).trim()
+  // `eq < 1` only rejects a missing or leading `=`, so ' A=5', '1BAD=5' and ' =5' all reach here: a
+  // name that is not an identifier overrides no `const` and would reach the compiler as a define
+  // nothing can bind to.
+  if (!IDENTIFIER.test(name)) throw new Error(`define name '${name}' is not an identifier: got '${pair}'`)
   // `BigInt('')` is 0n, not a throw, so the emptiness check has to be its own — otherwise
   // `NAME=` reaches the compiler as an empty literal it will refuse mid-compile. Trimmed first, so an
   // all-whitespace value is empty rather than 0.
@@ -60,9 +70,11 @@ export function parseDefine(pair: string): [string, string] {
   // instead: it is in grammar as written, and the radix a caller chose is the one they want echoed
   // back at them.
   const parsed = BigInt(value)
-  // A define is one UNSIGNED 256-bit word, and a minus sign survives normalization, so a negative
-  // needs its own rejection rather than reaching the compiler as `-5`.
+  // A define is one UNSIGNED 256-bit word, but `BigInt` is unbounded at both ends and both a minus
+  // sign and a 100-digit decimal survive normalization, so each bound needs its own rejection rather
+  // than reaching the compiler as `-5` or as a value no word can hold.
   if (parsed < 0n) throw new Error(`define '${name}' is negative ('${value}'): a define is one unsigned 256-bit word`)
+  if (parsed > MAX_DEFINE_VALUE) throw new Error(`define '${name}' exceeds 2^256-1 ('${value}'): a define is one unsigned 256-bit word`)
 
   return [name, /^0x/i.test(value) ? value : parsed.toString()]
 }

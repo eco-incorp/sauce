@@ -41,7 +41,7 @@ function aaveSupply(overrides: Partial<DepositSpec & { amount: "balance" | "delt
 }
 
 describe("swapThenDepositSource — swap output feeds a deposit, one program", () => {
-  it(`compiles on (amount: 'balance')`, () => {
+  it(`compiles (amount: 'balance')`, () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply());
     const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
@@ -94,9 +94,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
 
 describe("negative control — swapSource alone is unaffected by the swapImportLines extraction", () => {
   it("still compiles fine (regression pin for the swapImportLines extraction)", () => {
-    const { bytecode } = compile(swapSource(univ3Leg), {
-      baseDirs: [...SWAP_BASE_DIRS],
-      });
+    const { bytecode } = compile(swapSource(univ3Leg), { baseDirs: [...SWAP_BASE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

@@ -127,6 +127,58 @@ test("rejects a negative value", () => {
   ok(threw, "a define is one unsigned 256-bit word");
 });
 
+test("accepts the largest 256-bit word", () => {
+  const max = (1n << 256n) - 1n;
+  eq(parseDefine(`AMOUNT=${max}`)[1], max.toString());
+});
+
+test("rejects a value above the largest 256-bit word", () => {
+  // BigInt is unbounded, so 2^256 — the first value no word holds — and a 100-digit decimal both
+  // read fine and stay in the compiler's grammar; only the ceiling guard stops them.
+  for (const spelling of [`AMOUNT=${1n << 256n}`, `AMOUNT=${"9".repeat(100)}`]) {
+    let threw = false;
+    try {
+      parseDefine(spelling);
+    } catch {
+      threw = true;
+    }
+    ok(threw, `should reject ${JSON.stringify(spelling)}`);
+  }
+});
+
+test("trims the name", () => {
+  const [name, value] = parseDefine(" A=5");
+  eq(name, "A");
+  eq(value, "5");
+});
+
+test("rejects a name that is not an identifier", () => {
+  // A define replaces a module const of that name, so a name no source could have declared binds to
+  // nothing. The '=' guard passes all of these: it only catches a missing or leading '='.
+  for (const spelling of ["1BAD=5", "a-b=5", "A B=5"]) {
+    let threw = false;
+    try {
+      parseDefine(spelling);
+    } catch {
+      threw = true;
+    }
+    ok(threw, `should reject ${JSON.stringify(spelling)}`);
+  }
+});
+
+test("rejects an all-whitespace name", () => {
+  // ' =5' has its '=' at index 1, so it clears the '=' guard and is empty only after trimming.
+  for (const spelling of [" =5", "\t=5"]) {
+    let threw = false;
+    try {
+      parseDefine(spelling);
+    } catch {
+      threw = true;
+    }
+    ok(threw, `should reject ${JSON.stringify(spelling)}`);
+  }
+});
+
 // BigInt accepts more spellings than the compiler's `decimal or 0x-hex` define grammar, so every one
 // of these used to pass parseDefine and then fail mid-compile. They are normalized instead.
 test("normalizes the spellings the compiler's define grammar does not accept", () => {

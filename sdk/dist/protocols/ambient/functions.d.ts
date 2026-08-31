@@ -1,2 +1,0 @@
-export declare const swap = "\nimport { CrocSwapDexABI as ICrocSwapDex } from \"./abis\";\n\nfunction main(dexAddress: Address, base: Address, quote: Address, poolIdx: Uint256, isBuy: bool, inBaseQty: bool, qty: Uint256, minOut: Uint256): { baseFlow: Uint256, quoteFlow: Uint256 } {\n  const dex = ICrocSwapDex.at(dexAddress);\n  return dex.swap(base, quote, poolIdx, isBuy, inBaseQty, qty, 0, 0, minOut, 0);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

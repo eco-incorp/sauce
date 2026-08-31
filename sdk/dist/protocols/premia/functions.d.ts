@@ -1,3 +1,0 @@
-export declare const exercise = "\nimport { DiamondABI as IDiamond } from \"./abis\";\n\nfunction main(diamondAddress: Address, holder: Address, longTokenId: Uint256): Uint256 {\n  const diamond = IDiamond.at(diamondAddress);\n  return diamond.exercise(holder, longTokenId);\n}\n";
-export declare const settle = "\nimport { DiamondABI as IDiamond } from \"./abis\";\n\nfunction main(diamondAddress: Address, holder: Address, shortTokenId: Uint256): Uint256 {\n  const diamond = IDiamond.at(diamondAddress);\n  return diamond.settle(holder, shortTokenId);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

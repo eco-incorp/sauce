@@ -1,3 +1,0 @@
-export declare const createTask = "\nimport { GelatoAutomateABI as IAutomate } from \"./abis\";\n\nfunction main(automateAddress: Address, execAddress: Address, execData: bytes, moduleData: { modules: Uint256[], args: bytes[] }, feeToken: Address): Uint256 {\n  const automate = IAutomate.at(automateAddress);\n  return automate.createTask(execAddress, execData, moduleData, feeToken);\n}\n";
-export declare const cancelTask = "\nimport { GelatoAutomateABI as IAutomate } from \"./abis\";\n\nfunction main(automateAddress: Address, taskId: Uint256): Uint256 {\n  const automate = IAutomate.at(automateAddress);\n  automate.cancelTask(taskId);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

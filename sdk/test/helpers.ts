@@ -8,7 +8,6 @@
 import { existsSync, readFileSync } from 'fs';
 import { createRequire } from 'node:module';
 import { join } from 'path';
-import ts from 'typescript';
 import { ensureVoidMain } from '../src/routes/rs-compile.js';
 import { keccak256, toBytes, toHex } from 'viem';
 import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-compiler';
@@ -144,8 +143,6 @@ function parseImports(source: string): ParsedImport[] {
     }
   }
   return imports;
-}
-
 }
 
 /**

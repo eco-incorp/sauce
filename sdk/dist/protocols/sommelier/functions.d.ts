@@ -1,4 +1,0 @@
-export declare const deposit = "\nimport { CellarABI as ICellar } from \"./abis\";\n\nfunction main(cellarAddress: Address, assets: Uint256, receiver: Address): Uint256 {\n  const cellar = ICellar.at(cellarAddress);\n  return cellar.deposit(assets, receiver);\n}\n";
-export declare const withdraw = "\nimport { CellarABI as ICellar } from \"./abis\";\n\nfunction main(cellarAddress: Address, assets: Uint256, receiver: Address, owner: Address): Uint256 {\n  const cellar = ICellar.at(cellarAddress);\n  return cellar.withdraw(assets, receiver, owner);\n}\n";
-export declare const redeem = "\nimport { CellarABI as ICellar } from \"./abis\";\n\nfunction main(cellarAddress: Address, shares: Uint256, receiver: Address, owner: Address): Uint256 {\n  const cellar = ICellar.at(cellarAddress);\n  return cellar.redeem(shares, receiver, owner);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

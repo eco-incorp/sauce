@@ -1,3 +1,0 @@
-export declare const transfer = "\nimport { BoldTokenABI as IBoldToken } from \"./abis\";\n\nfunction main(boldAddress: Address, to: Address, amount: Uint256): Uint256 {\n  const bold = IBoldToken.at(boldAddress);\n  bold.transfer(to, amount);\n  return 1;\n}\n";
-export declare const approve = "\nimport { BoldTokenABI as IBoldToken } from \"./abis\";\n\nfunction main(boldAddress: Address, spender: Address, amount: Uint256): Uint256 {\n  const bold = IBoldToken.at(boldAddress);\n  bold.approve(spender, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

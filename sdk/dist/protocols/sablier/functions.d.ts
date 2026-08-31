@@ -1,3 +1,0 @@
-export declare const withdrawFromStream = "\nimport { LockupLinearABI as ILockupLinear } from \"./abis\";\n\nfunction main(lockupLinearAddress: Address, streamId: Uint256, to: Address, amount: Uint256): Uint256 {\n  const lockup = ILockupLinear.at(lockupLinearAddress);\n  lockup.withdraw(streamId, to, amount);\n  return 1;\n}\n";
-export declare const cancelStream = "\nimport { LockupLinearABI as ILockupLinear } from \"./abis\";\n\nfunction main(lockupLinearAddress: Address, streamId: Uint256): Uint256 {\n  const lockup = ILockupLinear.at(lockupLinearAddress);\n  lockup.cancel(streamId);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

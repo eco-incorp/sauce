@@ -1,2 +1,0 @@
-export declare const stake = "\nimport { METHABI as IMETH } from \"./abis\";\n\nfunction main(methAddress: Address, minMETHAmount: Uint256): Uint256 {\n  const meth = IMETH.at(methAddress);\n  meth.stake(minMETHAmount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

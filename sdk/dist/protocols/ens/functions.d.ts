@@ -1,3 +1,0 @@
-export declare const setResolver = "\nimport { ENSRegistryABI as IENSRegistry } from \"./abis\";\n\nfunction main(registryAddress: Address, node: Uint256, resolver: Address): Uint256 {\n  const registry = IENSRegistry.at(registryAddress);\n  registry.setResolver(node, resolver);\n  return 1;\n}\n";
-export declare const setOwner = "\nimport { ENSRegistryABI as IENSRegistry } from \"./abis\";\n\nfunction main(registryAddress: Address, node: Uint256, owner: Address): Uint256 {\n  const registry = IENSRegistry.at(registryAddress);\n  registry.setOwner(node, owner);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

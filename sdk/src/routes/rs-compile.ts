@@ -198,17 +198,11 @@ function blankLiterals(source: string): string {
 }
 
 /**
- * `main`'s OWN body — its opening brace to the matching close — with every string, template and
- * comment blanked out. Both halves are load-bearing for the `return` scan below: stopping at the
- * closing brace keeps a helper declared AFTER `main` out of it, and blanking literals keeps a
- * thrown `"…return…"` message from reading as code.
- *
- * The blanking runs BEFORE the opening brace is located, not alongside the walk. A block comment
- * between the parameter list and the body can contain a brace, and searching the raw source finds
- * THAT one — the walk then starts a level in, never balances, and runs to EOF.
+ * `main`'s OWN body — its opening brace to the matching close — taken from an ALREADY-blanked
+ * `code`. Stopping at the closing brace keeps a helper declared AFTER `main` out of the `return`
+ * scan below, and the blanking keeps a thrown `"…return…"` message from reading as code.
  */
-function mainBody(source: string, from: number): string {
-  const code = blankLiterals(source);
+function mainBody(code: string, from: number): string {
   const open = code.indexOf("{", from);
   if (open === -1) return "";
 
@@ -231,25 +225,29 @@ function mainBody(source: string, from: number): string {
  * compile seam, after every rewrite pass has run.
  */
 export function ensureVoidMain(source: string): string {
-  const signature = /function(\s+)main(\s*)\(/.exec(source);
+  // EVERY search below runs on the blanked copy, never the raw source: an earlier string or comment
+  // containing `function main()` would otherwise be the match, and a paren inside a parameter's
+  // default-value string would close the param list early — either one lands `: void` mid-source.
+  // Blanking is length-preserving, so every index still names the same character in `source`.
+  const code = blankLiterals(source);
+  const signature = /function(\s+)main(\s*)\(/.exec(code);
   if (signature === null) return source;
 
   // Walk to the signature's closing paren — a param list can nest (`Account<Writable>`), but never
   // parens, so counting them is enough.
   let depth = 0;
   let i = signature.index + signature[0].length - 1;
-  for (; i < source.length; i++) {
-    if (source[i] === "(") depth++;
-    else if (source[i] === ")" && --depth === 0) break;
+  for (; i < code.length; i++) {
+    if (code[i] === "(") depth++;
+    else if (code[i] === ")" && --depth === 0) break;
   }
-  const afterParams = source.slice(i + 1);
   // Already annotated: leave it alone.
-  if (/^\s*:/.test(afterParams)) return source;
+  if (/^\s*:/.test(code.slice(i + 1))) return source;
   // It returns a value: leave it alone. Scanned over `mainBody` rather than the rest of the FILE,
-  // which would also see a helper declared after `main` and the word inside a thrown message.
-  if (/(^|[^.\w])return(\s|;)/.test(mainBody(source, i + 1))) return source;
+  // which would also see a helper declared after `main`.
+  if (/(^|[^.\w])return(\s|;)/.test(mainBody(code, i + 1))) return source;
 
-  return `${source.slice(0, i + 1)}: void${afterParams}`;
+  return `${source.slice(0, i + 1)}: void${source.slice(i + 1)}`;
 }
 
 export interface RsCompileInput {

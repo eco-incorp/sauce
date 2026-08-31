@@ -10,6 +10,7 @@ import { resolve } from 'path';
 import { address } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { huma } from '../../../src/svm/venues/huma/index.js';
+import type { HumaPoolConfig } from '../../../src/svm/venues/huma/index.js';
 import type { AccountLoader } from '../../../src/svm/index.js';
 import { fixtureLoader, loadFixtures } from '../fixtures.js';
 import { makeT22Mint } from '../fixtures/token-2022/synth.js';
@@ -35,7 +36,7 @@ describe('huma Token-2022 self-drop', () => {
   });
 
   it('legacy control: the unmodified real fixture builds a config (no drop)', async () => {
-    const cfg = await huma.fetchPoolConfig(fixtureLoader(loadFixtures(FIXTURE_DIR)), CLASSIC_MODE_CONFIG);
+    const cfg = (await huma.fetchPoolConfig(fixtureLoader(loadFixtures(FIXTURE_DIR)), CLASSIC_MODE_CONFIG)) as HumaPoolConfig;
     expect(cfg.venue).toBe('huma');
     expect(cfg.modeMint).toBe(CLASSIC_MODE_MINT);
     expect(cfg.underlyingMint).toBe(UNDERLYING_MINT);

@@ -1,2 +1,0 @@
-export declare const unoswap = "\nimport { AggregationRouterV6ABI as IAggregationRouterV6 } from \"./abis\";\n\nfunction main(routerAddress: Address, srcToken: Address, amount: Uint256, minReturn: Uint256): Uint256 {\n  const router = IAggregationRouterV6.at(routerAddress);\n  return router.unoswap(srcToken, amount, minReturn, []);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

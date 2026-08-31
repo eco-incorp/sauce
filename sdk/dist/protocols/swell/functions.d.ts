@@ -1,3 +1,0 @@
-export declare const stakeSwETH = "\nimport { SwETHABI as ISwETH } from \"./abis\";\n\nfunction main(swethAddress: Address): Uint256 {\n  const sweth = ISwETH.at(swethAddress);\n  return sweth.deposit();\n}\n";
-export declare const stakeRswETH = "\nimport { RswETHABI as IRswETH } from \"./abis\";\n\nfunction main(rswethAddress: Address): Uint256 {\n  const rsweth = IRswETH.at(rswethAddress);\n  return rsweth.deposit();\n}\n";
-//# sourceMappingURL=functions.d.ts.map

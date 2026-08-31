@@ -84,6 +84,43 @@ describe('ensureVoidMain annotates a main that falls off the end', () => {
     expect(ensureVoidMain(source)).toContain('function main(): void');
   });
 
+  it('a comment naming `function main(` before the real one does not steal the match', () => {
+    // The signature regex ran on the RAW source, so the comment's spelling matched first. The paren
+    // walk then ran on from there and closed on `helper`'s list, whose `: void` read as
+    // already-annotated — so the real `main` was left bare, which does not compile.
+    const source = [
+      '// mirrors function main(',
+      'function helper(): void { evm.sstore(3n, 4n); }',
+      'function main() { helper(); }',
+    ].join('\n');
+
+    expect(ensureVoidMain(source)).toBe(
+      [
+        '// mirrors function main(',
+        'function helper(): void { evm.sstore(3n, 4n); }',
+        'function main(): void { helper(); }',
+      ].join('\n'),
+    );
+    expect(compiles(source)).toBeGreaterThan(0);
+  });
+
+  it('a paren inside a comment in the param list does not mis-locate the closing paren', () => {
+    // The paren walk ran on the RAW source too, so the comment's `)` closed the list early and `: void`
+    // landed mid-comment.
+    const source = 'function main(/* takes ) nothing */) { evm.sstore(1n, 2n); }';
+
+    expect(ensureVoidMain(source)).toBe('function main(/* takes ) nothing */): void { evm.sstore(1n, 2n); }');
+    expect(compiles(source)).toBeGreaterThan(0);
+  });
+
+  it('a paren inside a default-value string does not mis-locate the closing paren', () => {
+    // NOT compiled: a string-valued param default is outside the M1 subset, so the annotation is the
+    // whole assertion. The generators emit plain JS and nothing stops one carrying a paren in a string.
+    const source = 'function main(label = "a)b") { evm.sstore(1n, 2n); }';
+
+    expect(ensureVoidMain(source)).toBe('function main(label = "a)b"): void { evm.sstore(1n, 2n); }');
+  });
+
   it("a string containing an unbalanced brace does not truncate the body's walk", () => {
     const source = 'function main() { if (evm.sload(1n) > 0n) { throw "}"; } evm.sstore(1n, 2n); }';
 

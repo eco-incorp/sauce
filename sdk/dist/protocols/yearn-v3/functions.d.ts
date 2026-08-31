@@ -1,4 +1,0 @@
-export declare const deposit = "\nimport { YearnV3VaultABI as IYearnV3Vault } from \"./abis\";\n\nfunction main(vaultAddress: Address, assets: Uint256, receiver: Address): Uint256 {\n  const vault = IYearnV3Vault.at(vaultAddress);\n  return vault.deposit(assets, receiver);\n}\n";
-export declare const withdraw = "\nimport { YearnV3VaultABI as IYearnV3Vault } from \"./abis\";\n\nfunction main(vaultAddress: Address, assets: Uint256, receiver: Address, owner: Address): Uint256 {\n  const vault = IYearnV3Vault.at(vaultAddress);\n  return vault.withdraw(assets, receiver, owner);\n}\n";
-export declare const redeem = "\nimport { YearnV3VaultABI as IYearnV3Vault } from \"./abis\";\n\nfunction main(vaultAddress: Address, shares: Uint256, receiver: Address, owner: Address): Uint256 {\n  const vault = IYearnV3Vault.at(vaultAddress);\n  return vault.redeem(shares, receiver, owner);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

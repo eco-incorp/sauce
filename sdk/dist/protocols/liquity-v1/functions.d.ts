@@ -1,3 +1,0 @@
-export declare const closeTrove = "\nimport { BorrowerOperationsABI as IBorrowerOperations } from \"./abis\";\n\nfunction main(borrowerOpsAddress: Address): Uint256 {\n  const borrowerOps = IBorrowerOperations.at(borrowerOpsAddress);\n  borrowerOps.closeTrove();\n  return 1;\n}\n";
-export declare const repayLUSD = "\nimport { BorrowerOperationsABI as IBorrowerOperations } from \"./abis\";\n\nfunction main(borrowerOpsAddress: Address, amount: Uint256): Uint256 {\n  const borrowerOps = IBorrowerOperations.at(borrowerOpsAddress);\n  borrowerOps.repayLUSD(amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

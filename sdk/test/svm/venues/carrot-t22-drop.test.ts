@@ -44,6 +44,7 @@ describe('carrot Token-2022 threading', () => {
     // issue: asset in, T22 shares out.
     expect(carrotMints(base)).toEqual({ inMint: USDC, outMint: CRT_MINT });
     // redeem: T22 shares in, asset out.
-    expect(carrotMints({ ...base, direction: 'redeem:0' })).toEqual({ inMint: CRT_MINT, outMint: USDC });
+    const redeem: CarrotPoolConfig = { ...base, direction: 'redeem:0' };
+    expect(carrotMints(redeem)).toEqual({ inMint: CRT_MINT, outMint: USDC });
   });
 });

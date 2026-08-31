@@ -1,3 +1,0 @@
-export declare const addLiquidity = "\nimport { LiquidityPoolABI as ILiquidityPool } from \"./abis\";\n\nfunction main(poolAddress: Address, tokenId: Uint256, tokenAmount: Uint256): Uint256 {\n  const pool = ILiquidityPool.at(poolAddress);\n  pool.addLiquidity(tokenId, tokenAmount);\n  return 1;\n}\n";
-export declare const removeLiquidity = "\nimport { LiquidityPoolABI as ILiquidityPool } from \"./abis\";\n\nfunction main(poolAddress: Address, tokenId: Uint256, mlpAmount: Uint256): Uint256 {\n  const pool = ILiquidityPool.at(poolAddress);\n  pool.removeLiquidity(tokenId, mlpAmount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

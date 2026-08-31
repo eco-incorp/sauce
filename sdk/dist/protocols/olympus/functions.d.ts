@@ -1,3 +1,0 @@
-export declare const stake = "\nimport { StakingABI as IStaking } from \"./abis\";\n\nfunction main(stakingAddress: Address, to: Address, amount: Uint256): Uint256 {\n  const staking = IStaking.at(stakingAddress);\n  return staking.stake(to, amount, 1, 1);\n}\n";
-export declare const unstake = "\nimport { StakingABI as IStaking } from \"./abis\";\n\nfunction main(stakingAddress: Address, to: Address, amount: Uint256): Uint256 {\n  const staking = IStaking.at(stakingAddress);\n  return staking.unstake(to, amount, 1, 1);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

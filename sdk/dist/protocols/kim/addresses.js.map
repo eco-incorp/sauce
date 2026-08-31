@@ -1,1 +1,0 @@
-{"version":3,"file":"addresses.js","sourceRoot":"","sources":["../../../src/protocols/kim/addresses.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,WAAW,GAAsB;IAC5C;QACE,OAAO,EAAE,KAAK;QACd,SAAS,EAAE,MAAM;QACjB,SAAS,EAAE;YACT,QAAQ,EAAE,4CAA4C;SACvD;KACF;CACF,CAAC"}

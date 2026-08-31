@@ -1,3 +1,0 @@
-export declare const depositETH = "\nimport { RestakeManagerABI as IRestakeManager } from \"./abis\";\n\nfunction main(restakeManagerAddress: Address): Uint256 {\n  const manager = IRestakeManager.at(restakeManagerAddress);\n  manager.depositETH();\n  return 1;\n}\n";
-export declare const deposit = "\nimport { RestakeManagerABI as IRestakeManager } from \"./abis\";\n\nfunction main(restakeManagerAddress: Address, collateralToken: Address, amount: Uint256): Uint256 {\n  const manager = IRestakeManager.at(restakeManagerAddress);\n  manager.deposit(collateralToken, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

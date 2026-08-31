@@ -1,1 +1,0 @@
-{"version":3,"file":"info.js","sourceRoot":"","sources":["../../../src/protocols/erc20/info.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,YAAY,GAAiB;IACxC,IAAI,EAAE,OAAO;IACb,IAAI,EAAE,OAAO;IACb,WAAW,EAAE,4LAA4L;IACzM,OAAO,EAAE,uCAAuC;IAChD,MAAM,EAAE,wDAAwD;IAChE,GAAG,EAAE,yBAAyB;IAC9B,QAAQ,EAAE,gBAAgB;IAC1B,MAAM,EAAE,EAAE;IACV,OAAO,EAAE,IAAI;CACd,CAAC"}

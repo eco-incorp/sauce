@@ -1,4 +1,0 @@
-export declare const submit = "\nimport { LidoABI as ILido } from \"./abis\";\n\nfunction main(lidoAddress: Address): Uint256 {\n  const lido = ILido.at(lidoAddress);\n  return lido.submit(0x0000000000000000000000000000000000000000);\n}\n";
-export declare const wrap = "\nimport { WstETHABI as IWstETH } from \"./abis\";\n\nfunction main(wstethAddress: Address, amount: Uint256): Uint256 {\n  const wsteth = IWstETH.at(wstethAddress);\n  return wsteth.wrap(amount);\n}\n";
-export declare const unwrap = "\nimport { WstETHABI as IWstETH } from \"./abis\";\n\nfunction main(wstethAddress: Address, amount: Uint256): Uint256 {\n  const wsteth = IWstETH.at(wstethAddress);\n  return wsteth.unwrap(amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

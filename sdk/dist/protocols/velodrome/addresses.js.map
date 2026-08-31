@@ -1,1 +1,0 @@
-{"version":3,"file":"addresses.js","sourceRoot":"","sources":["../../../src/protocols/velodrome/addresses.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,WAAW,GAAsB;IAC5C;QACE,OAAO,EAAE,EAAE;QACX,SAAS,EAAE,UAAU;QACrB,SAAS,EAAE;YACT,QAAQ,EAAE,4CAA4C;YACtD,WAAW,EAAE,4CAA4C;SAC1D;KACF;CACF,CAAC"}

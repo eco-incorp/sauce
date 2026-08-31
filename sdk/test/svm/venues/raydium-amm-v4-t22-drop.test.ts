@@ -10,6 +10,7 @@
 import { resolve } from 'path';
 import { address } from '@solana/kit';
 import { raydiumAmmV4 } from '../../../src/svm/venues/raydium-amm-v4/index.js';
+import type { RaydiumAmmV4PoolConfig } from '../../../src/svm/venues/raydium-amm-v4/index.js';
 import { loadFixtures, fixtureLoader } from '../fixtures.js';
 import type { AccountFixture } from '../fixtures.js';
 import { makeT22Mint } from '../fixtures/token-2022/synth.js';
@@ -40,7 +41,7 @@ describe('raydium-amm-v4 Token-2022 self-drop', () => {
 
   it('still resolves for the unmodified fixtures (mints unvendored → legacy fallback)', async () => {
     const load = fixtureLoader(loadFixtures(FIXTURES));
-    const cfg = await raydiumAmmV4.fetchPoolConfig(load, POOL);
+    const cfg = (await raydiumAmmV4.fetchPoolConfig(load, POOL)) as RaydiumAmmV4PoolConfig;
     expect(cfg.venue).toBe('raydium-amm-v4');
     expect(cfg.coinMint).toBe(COIN_MINT);
     expect(cfg.pcMint).toBe(USDC_MINT);

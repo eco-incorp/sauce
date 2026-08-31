@@ -1,2 +1,0 @@
-export declare const bridge = "\nimport { EverclearSpokeABI as IEverclearSpoke } from \"./abis\";\n\nfunction main(spokeAddress: Address, destinations: Uint256[], recipient: Address, inputAsset: Address, outputAsset: Address, amount: Uint256): Uint256 {\n  const spoke = IEverclearSpoke.at(spokeAddress);\n  return spoke.newIntent(destinations, recipient, inputAsset, outputAsset, amount, 300, 86400, 0x00);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

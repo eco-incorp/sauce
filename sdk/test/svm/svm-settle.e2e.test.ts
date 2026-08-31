@@ -1,11 +1,12 @@
 /**
  * Engine-gated end-to-end for the SVM `settle` recipe (`svm/recipes/settle.sauce.ts`).
  *
- * Proves the real on-chain behaviour against the vendored engine .so via LiteSVM (which loads the
- * real SPL Token and Token-2022 programs): TransferChecked (ix 12) sweeps work for classic SPL AND
- * Token-2022 mints, the floor gates atomically, and `SETTLE_SPL_COUNT` routes a mixed
- * classic/Token-2022 multi-escrow settle to one recipient's per-mint destinations. Skips cleanly if
- * the engine binary is missing (same gate as its siblings).
+ * Proves the real on-chain behaviour against the `main`-lineage engine from `SAUCE_RUST_ENGINE_SO`
+ * via LiteSVM (which loads the real SPL Token and Token-2022 programs): TransferChecked (ix 12)
+ * sweeps work for classic SPL AND Token-2022 mints, the floor gates atomically, and
+ * `SETTLE_SPL_COUNT` routes a mixed classic/Token-2022 multi-escrow settle to one recipient's
+ * per-mint destinations. `describeRustSvm` skips locally when that variable is unset, and CI
+ * HARD-FAILS instead — a skipped suite and a passing one are the same line in jest's summary.
  *
  * `minOut`/`splCount` are compile-time defines, so a blob is specific to its
  * `(escrowCount, minOut, splCount)` triple. The account identities stay late-bound, which is why one

@@ -1,2 +1,0 @@
-export declare const bridgeTokens = "\nimport { WormholeTokenBridgeABI as ITokenBridge } from \"./abis\";\n\nfunction main(tokenBridgeAddress: Address, token: Address, amount: Uint256, recipientChain: Uint256, recipient: Uint256): Uint256 {\n  const bridge = ITokenBridge.at(tokenBridgeAddress);\n  return bridge.transferTokens(token, amount, recipientChain, recipient, 0, 0);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

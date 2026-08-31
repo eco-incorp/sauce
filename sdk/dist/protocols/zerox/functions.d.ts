@@ -1,2 +1,0 @@
-export declare const transformERC20 = "\nimport { ExchangeProxyABI as IExchangeProxy } from \"./abis\";\n\nfunction main(exchangeProxyAddress: Address, inputToken: Address, outputToken: Address, inputTokenAmount: Uint256, minOutputTokenAmount: Uint256): Uint256 {\n  const proxy = IExchangeProxy.at(exchangeProxyAddress);\n  return proxy.transformERC20(inputToken, outputToken, inputTokenAmount, minOutputTokenAmount, []);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

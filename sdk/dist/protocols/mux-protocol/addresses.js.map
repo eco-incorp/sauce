@@ -1,1 +1,0 @@
-{"version":3,"file":"addresses.js","sourceRoot":"","sources":["../../../src/protocols/mux-protocol/addresses.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,WAAW,GAAsB;IAC5C;QACE,OAAO,EAAE,KAAK;QACd,SAAS,EAAE,UAAU;QACrB,SAAS,EAAE;YACT,SAAS,EAAE,4CAA4C;YACvD,aAAa,EAAE,4CAA4C;SAC5D;KACF;CACF,CAAC"}

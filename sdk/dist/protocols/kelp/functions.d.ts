@@ -1,2 +1,0 @@
-export declare const depositAsset = "\nimport { LRTDepositPoolABI as ILRTDepositPool } from \"./abis\";\n\nfunction main(depositPoolAddress: Address, asset: Address, depositAmount: Uint256, minRSETHAmountExpected: Uint256): Uint256 {\n  const pool = ILRTDepositPool.at(depositPoolAddress);\n  pool.depositAsset(asset, depositAmount, minRSETHAmountExpected, \"\");\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

@@ -1,3 +1,0 @@
-export declare const depositETH = "\nimport { ScrollL1GatewayRouterABI as IL1GatewayRouter } from \"./abis\";\n\nfunction main(gatewayRouterAddress: Address, amount: Uint256, gasLimit: Uint256): Uint256 {\n  const router = IL1GatewayRouter.at(gatewayRouterAddress);\n  router.depositETH(amount, gasLimit);\n  return 1;\n}\n";
-export declare const depositERC20 = "\nimport { ScrollL1GatewayRouterABI as IL1GatewayRouter } from \"./abis\";\n\nfunction main(gatewayRouterAddress: Address, token: Address, amount: Uint256, gasLimit: Uint256): Uint256 {\n  const router = IL1GatewayRouter.at(gatewayRouterAddress);\n  router.depositERC20(token, amount, gasLimit);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

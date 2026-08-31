@@ -1,3 +1,0 @@
-export declare const approve = "\nimport { Permit2ABI as IPermit2 } from \"./abis\";\n\nfunction main(permit2Address: Address, token: Address, spender: Address, amount: Uint256, expiration: Uint256): Uint256 {\n  const permit2 = IPermit2.at(permit2Address);\n  permit2.approve(token, spender, amount, expiration);\n  return 1;\n}\n";
-export declare const transferFrom = "\nimport { Permit2ABI as IPermit2 } from \"./abis\";\n\nfunction main(permit2Address: Address, from: Address, to: Address, amount: Uint256, token: Address): Uint256 {\n  const permit2 = IPermit2.at(permit2Address);\n  permit2.transferFrom(from, to, amount, token);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map
