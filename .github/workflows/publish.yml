@@ -67,21 +67,12 @@ jobs:
           git config --global --add url."https://x-access-token:${ECO_INCORP_TOKEN}@github.com/".insteadOf "git@github.com:"
           git config --global --add url."https://x-access-token:${ECO_INCORP_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
 
-      # Foundry builds the sauce engine (compiler postinstall `forge build`) so the
-      # `prepack` step can copy engine artifacts into dev-tools/artifacts/ for the tarball.
+      # Foundry builds the pinned sauce engine (sync-engine-artifacts runs the `forge build`) so the
+      # sdk build produces sdk/dist/artifacts and `prepack` can copy from it into dev-tools/artifacts/.
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: v1.5.1
-
-      # hnc (huff-neo) — the sdk build compiles engine-v12/v12/Runtime.huff with it to GENERATE
-      # dist/artifacts/V12RuntimeBytecode.json (nothing committed). Pinned for reproducible bytes.
-      - name: Install huff-neo compiler (hnc)
-        run: |
-          export HUFF_NEO_DIR="$HOME/.huff-neo"   # pin the install dir (runner sets XDG_CONFIG_HOME, which the installer would otherwise use)
-          curl -L https://raw.githubusercontent.com/cakevm/huff-neo/main/hnc-up/install | bash
-          "$HUFF_NEO_DIR/bin/hnc-up" --install 1.5.13
-          echo "$HUFF_NEO_DIR/bin" >> "$GITHUB_PATH"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -97,7 +88,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # GH_TOKEN: the sdk build's sync step downloads V12RuntimeBytecode from the eco-incorp/sauce
+      # v12-evm release, and that repo is private. Without it the artifact is skipped with a warning
+      # and the verify step below refuses to publish.
       - name: Build all areas (compiler first, then sdk/actions in parallel)
+        env:
+          GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
         run: pnpm build
 
       # The sdk build runs sync with SYNC_OPTIONAL_FORGE=1 (tolerant, for local dev), so a broken

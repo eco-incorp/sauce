@@ -48,6 +48,9 @@ importers:
       hardhat:
         specifier: ^2.22.0
         version: 2.28.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      sauce:
+        specifier: github:eco-incorp/sauce#d1c900d03d8d5befd8f049c7890e11a16fd24d91
+        version: git+https://git@github.com:eco-incorp/sauce.git#d1c900d03d8d5befd8f049c7890e11a16fd24d91
 
   compiler:
     dependencies:
@@ -91,9 +94,6 @@ importers:
       prettier:
         specifier: ^3.8.1
         version: 3.8.3
-      sauce:
-        specifier: github:eco-incorp/sauce#release/beta
-        version: git+https://git@github.com:eco-incorp/sauce.git#d1c900d03d8d5befd8f049c7890e11a16fd24d91
       ts-jest:
         specifier: ^29.4.6
         version: 29.4.11(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(jest-util@30.4.1)(jest@30.4.2(@types/node@25.9.1))(typescript@5.9.3)
