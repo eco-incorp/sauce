@@ -40,8 +40,8 @@ describe("rewriteTokenMembers", () => {
       `function main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`;
     const withDefine = `import { IERC20 } from "./artifacts/IERC20.json";\n${rewritten}`;
 
-    const a = compile(withDefine, { target: "v12", baseDirs: [...TOKEN_BASE_DIRS], defines: { USDC: BigInt(USDC) } });
-    const b = compile(handWritten, { target: "v12", baseDirs: [...TOKEN_BASE_DIRS] });
+    const a = compile(withDefine, { baseDirs: [...TOKEN_BASE_DIRS], defines: { USDC: BigInt(USDC) } });
+    const b = compile(handWritten, { baseDirs: [...TOKEN_BASE_DIRS] });
     expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
   });
 
@@ -127,7 +127,7 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     const handWritten =
       `import { IERC20 } from "./artifacts/IERC20.json";\n` +
       `function main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`;
-    const hand = compile(handWritten, { target: "v12", baseDirs: [...TOKEN_BASE_DIRS] });
+    const hand = compile(handWritten, { baseDirs: [...TOKEN_BASE_DIRS] });
     expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(Array.from(hand.bytecode[0]!));
   });
 
@@ -136,13 +136,13 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     const compiled = compileSauceRoute("base", `USDC.transfer(${TO}, 5n);`, { pot: POT }, { tokens: { USDC: OTHER } });
     const overridden = compile(
       `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main() { IERC20.at(${OTHER}n).transfer(${TO}, 5n); }`,
-      { target: "v12", baseDirs: [...TOKEN_BASE_DIRS] },
+      { baseDirs: [...TOKEN_BASE_DIRS] },
     );
     expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(Array.from(overridden.bytecode[0]!));
 
     const registryDefault = compile(
       `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`,
-      { target: "v12", baseDirs: [...TOKEN_BASE_DIRS] },
+      { baseDirs: [...TOKEN_BASE_DIRS] },
     );
     expect(Array.from(compiled.compiled.bytecode[0]!)).not.toEqual(Array.from(registryDefault.bytecode[0]!));
   });
@@ -208,11 +208,9 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     expect(u4.rewrote).toBe(true);
 
     const sugarCompiled = compile(`import { IERC20 } from "./artifacts/IERC20.json";\n${sugar.source}`, {
-      target: "v12",
       baseDirs: [...TOKEN_BASE_DIRS],
     });
     const u4Compiled = compile(`import { IERC20 } from "./artifacts/IERC20.json";\n${u4.source}`, {
-      target: "v12",
       baseDirs: [...TOKEN_BASE_DIRS],
       defines: { USDC: BigInt(USDC) },
     });

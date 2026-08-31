@@ -30,8 +30,8 @@ const { compile: compileRust } = createRequire(import.meta.url)('sauce-compiler'
 
 /** The option surface the real-compile suites already call with. */
 export interface CompileProgramOptions extends CompileSourceOptions {
-  /** `'v1'`/`'v12'` are the same EVM backend; `'svm'` maps through. Defaults to `'evm'`. */
-  target?: 'v1' | 'v12' | 'evm' | 'svm';
+  /** The compiler's two backends. Defaults to `'evm'`. */
+  target?: 'evm' | 'svm';
   /** Contract bindings holding a PARSED ABI, as `protocol-rewrite.ts` synthesizes them. */
   contracts?: Readonly<Record<string, { abi: unknown }>>;
   /** Accepted and ignored: the compiler always constant-folds, and has no compile cache to bypass. */

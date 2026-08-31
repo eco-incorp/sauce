@@ -89,12 +89,10 @@ describe("the sign is actually in the bytes", () => {
   it("the UniV4 leg's blob contains the 32-byte two's-complement word; the UniV3 leg's contains the minimal positive push", () => {
     const univ3 = compile(swapSource(specFor(SwapPoolType.UniV3)), {
       baseDirs: [...SWAP_BASE_DIRS],
-      target: "v1",
-    }).bytecode[0]!;
+      }).bytecode[0]!;
     const univ4 = compile(swapSource(specFor(SwapPoolType.UniV4)), {
       baseDirs: [...SWAP_BASE_DIRS],
-      target: "v1",
-    }).bytecode[0]!;
+      }).bytecode[0]!;
 
     // 1000n minimal-width push: 0x03e8 (2 bytes) should be present in the UniV3 blob.
     expect(indexOfBytes(univ3, new Uint8Array([0x03, 0xe8]))).toBeGreaterThanOrEqual(0);
@@ -122,8 +120,7 @@ describe("the E3 seam, end to end", () => {
   it("compile -> bytesToHex -> buildSauceEvmCall -> survives RouteInput.calls through normalizeRoute unchanged", () => {
     const { bytecode } = compile(swapSource(specFor(SwapPoolType.UniV3)), {
       baseDirs: [...SWAP_BASE_DIRS],
-      target: "v12",
-    });
+      });
     const ingredient = bytesToHex(bytecode[0]!);
     const call = buildSauceEvmCall({ pot: POT, ingredients: [ingredient] });
 

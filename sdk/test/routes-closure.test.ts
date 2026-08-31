@@ -24,7 +24,7 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
 }
 
 function bytecodeOf(source: string): Uint8Array {
-  const { bytecode } = compile(source, { target: "v12" });
+  const { bytecode } = compile(source);
   return bytecode[0]!;
 }
 

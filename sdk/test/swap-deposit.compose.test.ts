@@ -53,7 +53,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
     expect(src).toMatch(/const deposit0Post = IERC20\.at\(.*\)\.balanceOf\(ctx\.self\(\)\);/);
     expect(src).toMatch(/const deposit0Amt = deposit0Post - deposit0Pre;/);
 
-    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target: "v12" });
+    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -66,7 +66,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
 
   it("the E3 seam, end to end: compile -> bytesToHex -> buildSauceEvmCall -> normalizeRoute", () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply());
-    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target: "v12" });
+    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
     const ingredient = bytesToHex(bytecode[0]!);
     const call = buildSauceEvmCall({ pot: POT, ingredients: [ingredient] });
 
@@ -96,8 +96,7 @@ describe("negative control — swapSource alone is unaffected by the swapImportL
   it("still compiles fine (regression pin for the swapImportLines extraction)", () => {
     const { bytecode } = compile(swapSource(univ3Leg), {
       baseDirs: [...SWAP_BASE_DIRS],
-      target: "v12",
-    });
+      });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

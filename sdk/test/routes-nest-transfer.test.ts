@@ -4,7 +4,7 @@
  * `"publishAndFund"`, see `nest.ts`'s `NestVia` doc).
  *
  * Pure: hand-built `Intent`s + text assertions, plus a real `compile()` proof that the emitted
- * program actually compiles at `target: 'v12'` (no network, no anvil).
+ * program actually compiles (no network, no anvil).
  */
 import { compileProgram as compile } from "./helpers";
 import { hexToBytes, type Hex } from "viem";
@@ -205,7 +205,7 @@ describe("nest.ts: vault-address resolution rungs", () => {
 });
 
 describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
-  it("a 1-token, 1-child program compiles at target 'v12'", () => {
+  it("a 1-token, 1-child program compiles", () => {
     const child = childIntent({
       reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 500n }] }),
     });
@@ -213,7 +213,7 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
     expect(imports).toEqual([expect.stringContaining("IERC20")]);
     expect(baseDirs.length).toBeGreaterThan(0);
 
-    const result = compile(source, { target: "v12", baseDirs: [...baseDirs] });
+    const result = compile(source, { baseDirs: [...baseDirs] });
     expect(result.bytecode.length).toBeGreaterThan(0);
     expect(result.bytecode[0]!.length).toBeGreaterThan(0);
   });
@@ -255,7 +255,7 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
     ];
     const { source, baseDirs } = nestedTransferProgram(entries);
 
-    const result = compile(source, { target: "v12", baseDirs: [...baseDirs, ...TOKEN_BASE_DIRS] });
+    const result = compile(source, { baseDirs: [...baseDirs, ...TOKEN_BASE_DIRS] });
     expect(result.bytecode.length).toBeGreaterThan(0);
     // sanity: every per-child local is namespaced by index, so no `already declared` collision.
     expect(source).toContain("n0_vault");
@@ -271,7 +271,7 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
     const { source, imports, baseDirs } = nestedTransferProgram([{ child, opts: explicitOpts }]);
     expect(imports).toEqual([]);
     expect(baseDirs).toEqual([]);
-    const result = compile(source, { target: "v12" });
+    const result = compile(source);
     expect(result.bytecode.length).toBeGreaterThan(0);
   });
 });
