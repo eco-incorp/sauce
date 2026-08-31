@@ -7,7 +7,10 @@ Portal. One package, TypeScript, EVM and SVM.
 npm install @eco-incorp/sauce-sdk
 ```
 
-The SauceScript compiler comes with it as a dependency; there is nothing else to install.
+The SauceScript compiler comes with it as a dependency. The only optional extra is
+`@solana/web3.js`, needed just for the `/svm/engine/web3js` interop subpath.
+
+A `sauce-dev-tools` binary ships with the package for the local fork environment and script runner.
 
 ## Quickstart
 
@@ -17,11 +20,11 @@ Open a route on a destination chain, and the SDK compiles the program and assemb
 import { routes } from '@eco-incorp/sauce-sdk'
 
 const built = routes.openRoute('base', 'function main() { return 1n; }', {
-  source: 'ethereum',      // where the reward is posted
+  source: 'ethereum',            // where the reward is posted
   pot, portal, creator, prover,
-  deadline: 2000n,
-  rewardDeadline: 1000n,
-}).reward(0n)
+  deadline: routeDeadline,       // how long a solver has to fulfil
+  rewardDeadline,                // must be >= routeDeadline, or the reward can expire
+}).reward(rewardAmount)          // mid-fulfilment and no solver will take it
 
 built.compiled.bytecode[0]   // the program
 built.intent                 // the assembled Intent, ready to publish
@@ -39,12 +42,21 @@ built.intent                 // the assembled Intent, ready to publish
 The `token`, `swap` and `deposit` namespaces emit SauceScript for you:
 
 ```ts
-import { token } from '@eco-incorp/sauce-sdk'
+import { routes, token } from '@eco-incorp/sauce-sdk'
 
-const source = token.Token.transfer({ token: usdc, to: recipient, amount: 1_000_000n }).source('evm')
+// toSauceScript returns the baseDirs the program's own imports need, alongside the source
+const { source, baseDirs } = token.Token
+  .transfer({ token: usdc, to: recipient, amount: 1_000_000n })
+  .toSauceScript('evm')
+
+const built = routes.openRoute('base', source, { ...options, compile: { baseDirs } }).reward(reward)
 ```
 
-Feed that to `routes.openRoute`, or compile it yourself with `routes.compileSauceRoute`.
+The `baseDirs` matter: the emitted program does `import { IERC20 } from "./artifacts/IERC20.json"`,
+and a route only supplies token base dirs automatically when its own `USDC.transfer(…)` rewrite
+fires — which it does not for source a builder already emitted. Without them the compile fails with
+`failed to import \`IERC20\``. `.source(target)` gives you the source alone if you are supplying
+`baseDirs` yourself.
 
 ## The compiler
 
@@ -68,14 +80,14 @@ Use `routes.compileSauceRoute` rather than a raw `compile` for **generated** pro
 
 ## Registries
 
-129 protocols and 33 chains ship with the package:
+129 protocols and 39 canonical chains ship with the package — EVM plus Solana:
 
 ```ts
 import { listProtocols, getProtocol, requireChain } from '@eco-incorp/sauce-sdk'
 
 listProtocols().length          // 129
 getProtocol('uniswap-v3')       // ABIs, addresses, per-chain deployments
-requireChain('base').id         // 8453
+requireChain('base').id         // 8453 — reads CANONICAL_CHAINS (39; `chains` is the 33 EVM ones)
 ```
 
 ## Subpaths
@@ -89,13 +101,18 @@ requireChain('base').id         // 8453
 | `/chains`, `/deployments` | canonical chain list; deployed contract addresses |
 | `/recipes` | shipped programs (settle, CCTP split-transfer) and their sources |
 | `/svm`, `/svm/engine`, `/svm/verify` | SVM client, account resolution, engine harness, settle verification |
+| `/svm/engine/web3js` | the same engine against `@solana/web3.js` (optional peer) |
+| `/recipes/settle.sauce.ts`, `/svm/recipes/settle.sauce.ts` | the settle program sources themselves, for partners reproducing bytes |
 | `/evm/engine` | EVM engine helpers |
 | `/verify` | decodes **legacy v1-grammar** settle programs. `viem`-only, browser-safe |
 | `/skills` | AI skill files per protocol |
 
 `/verify` is for programs already on chain: it reads the v1 prologue that the retired TypeScript
-compiler emitted. Programs built by this SDK today are not v1-grammar — use
-`svm/verify`'s recompile-and-compare shape for those.
+compiler emitted. Programs built by this SDK today are not v1-grammar, so it will refuse them.
+
+Verifying a program you built means recompiling it from the same source and comparing bytes.
+`/svm/verify` does exactly that for SVM settle programs; there is no EVM counterpart in the package
+today, so an EVM caller applies the technique themselves.
 
 ## Development
 
