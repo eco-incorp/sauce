@@ -103,6 +103,20 @@ test("rejects an empty value", () => {
   ok(threw, "should reject NAME= with no value");
 });
 
+test("rejects a reserved word as a name", () => {
+  // Identifier SHAPE is not enough: `const=5` passes the regex, then the compiler refuses it with a
+  // bare "compiling the program failed" that names nothing. Measured against the pinned compiler.
+  for (const word of ["const", "class", "function", "return", "let", "void", "if"]) {
+    let threw = false;
+    try {
+      parseDefine(`${word}=5`);
+    } catch {
+      threw = true;
+    }
+    ok(threw, `should reject reserved word ${JSON.stringify(word)}`);
+  }
+});
+
 test("rejects an all-whitespace value", () => {
   // Same 0n trap as the empty case: BigInt(" ") and BigInt("\n") are both 0n.
   for (const spelling of ["AMOUNT= ", "AMOUNT=   ", "AMOUNT=\n", "AMOUNT=\t"]) {

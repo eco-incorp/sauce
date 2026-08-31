@@ -8,7 +8,10 @@
 // `execute_from_account` instruction data (`[disc][flags][pin?][slice?][args]`) and `accounts` is that
 // instruction's account list. This module decodes that envelope and hands the two halves to
 // `decodeSvmSettleExecution` / `verifySvmSettleExecution`, so an external partner goes from a published
-// intent to `(minOut, splCount, tokenProgram0/1)` + resolved account identities with ONLY this package.
+// intent to the staged-execute header + resolved account identities with ONLY this package. `minOut`
+// and `splCount` are NOT decodable -- they are defines folded into the bytecode -- so a partner who
+// needs them states them as an expectation and `verifySvmSettleExecution` establishes them by
+// recompiling and byte-comparing. See `verify.ts`'s note on `DecodedSvmSettleExecution`.
 //
 // WHY THIS LIVES IN THE SDK (not in a solver adapter): this surface is for partners CONSUMING Eco
 // intents, who have neither the solver's internals nor its `decodeRouteCall`. So the Portal envelope

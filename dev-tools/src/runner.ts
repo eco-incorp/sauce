@@ -30,6 +30,12 @@ const MAX_DEFINE_VALUE = (1n << 256n) - 1n
 // A define REPLACES a module `const` of that name, so the name has to be one the source could have
 // declared. Same shape `scripts/run.ts` uses to tell a define operand from a runtime arg.
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+const RESERVED = new Set([
+  'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'delete', 'do', 'else', 'enum',
+  'export', 'extends', 'false', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+  'let', 'new', 'null', 'return', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var',
+  'void', 'while', 'with', 'yield',
+])
 
 const sauceAbi = parseAbi([
   'function cook(bytes[] memory calls) public payable returns (bytes memory)'
@@ -59,6 +65,10 @@ export function parseDefine(pair: string): [string, string] {
   // name that is not an identifier overrides no `const` and would reach the compiler as a define
   // nothing can bind to.
   if (!IDENTIFIER.test(name)) throw new Error(`define name '${name}' is not an identifier: got '${pair}'`)
+  // Identifier SHAPE is not enough: a reserved word passes the regex and reaches the compiler, which
+  // rejects it with a bare "compiling the program failed" naming nothing. Measured against the pinned
+  // compiler -- `const`, `class`, `function`, `return`, `let`, `void` and `if` all fail there.
+  if (RESERVED.has(name)) throw new Error(`define name '${name}' is a reserved word: it cannot name a const`)
   // `BigInt('')` is 0n, not a throw, so the emptiness check has to be its own — otherwise
   // `NAME=` reaches the compiler as an empty literal it will refuse mid-compile. Trimmed first, so an
   // all-whitespace value is empty rather than 0.
