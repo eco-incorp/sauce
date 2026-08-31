@@ -1,12 +1,10 @@
-// Calculate fibonacci number. N is a compile-time define: `sauce fibonacci.js N=10`.
-const N = 0n;
-
-function main() {
-  if (N <= 1) return N;
+// Calculate fibonacci number
+function main(n) {
+  if (n <= 1) return n;
 
   let a = 0;
   let b = 1;
-  for (let i = 2; i <= N; i++) {
+  for (let i = 2; i <= n; i++) {
     const temp = a + b;
     a = b;
     b = temp;

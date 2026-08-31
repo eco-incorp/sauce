@@ -78,7 +78,7 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
 - **`SAUCE_RUST_ENGINE_SO` / `SAUCE_RUST_V12_RUNTIME`** — the two engines every suite that EXECUTES
   compiled bytecode needs, and **deliberately separate variables** from `SAUCE_ENGINE_SO` above.
   The SDK compiles through the published compiler (`@eco-incorp/sauce-compiler` from the public npm
-  registry, an `sdk/` dependency aliased `sauce-next` because a workspace package shadowed the real
+  registry, imported under the short name `sauce-compiler` because the workspace package holds the real
   name; nothing is built locally and no Rust toolchain is needed), which emits for the sauce `main`
   engine lineage. `SAUCE_ENGINE_SO`'s vendored `artifacts/svm/engine.so` is built from the pinned
   `release/beta` lineage, so it can only serve suites that do NOT run freshly compiled bytecode
@@ -1704,4 +1704,4 @@ Tag-driven (`.github/workflows/publish.yml`): `git tag v1.2.3 && git push origin
 (`NPM_TOKEN`) and GitHub Packages (`GITHUB_TOKEN`). Only the root version is published; workspace
 packages stay `private`.
 
-**The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce-sdk` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, aliased `sauce-next`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.
+**The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce-sdk` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, imported as `sauce-compiler`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.

@@ -2,7 +2,7 @@
  * Shared RS/WASM SauceScript compile helper for SVM venue tests — the venue-side
  * analogue of `sdk/test/std/token/harness.ts`'s loader, generalized so any venue
  * test can compile an Account-model quote program through the PUBLISHED RUST
- * compiler (the `sauce-next` dep, i.e. the npm `@eco-incorp/sauce-compiler`
+ * compiler (the `sauce-compiler` dep, i.e. the npm `@eco-incorp/sauce-compiler`
  * wasm package) and read back the SVM account manifest.
  *
  * The venues target the Account model: typed `Account` params on `main(...)`
@@ -49,12 +49,13 @@ interface WasmCompileOptions {
   resolve: (path: string) => Uint8Array;
 }
 
-// The SauceScript compiler, under the `sauce-next` alias: a workspace package shadowed its real
+// The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, imported under the short
+// name `sauce-compiler` because the in-repo workspace package still holds the scoped
 // name (`@eco-incorp/sauce-compiler`) when the alias was introduced. Required via `createRequire` for the same reason
 // `test/std/token/harness.ts` and `test/helpers.ts` do: the package's `node` condition is a
 // CommonJS build that reads its sibling `.wasm` off disk at load, and jest's ESM transform does not
 // resolve that sibling.
-const { compile } = createRequire(import.meta.url)('sauce-next') as {
+const { compile } = createRequire(import.meta.url)('sauce-compiler') as {
   compile: (options: WasmCompileOptions) => SvmArtifact;
 };
 

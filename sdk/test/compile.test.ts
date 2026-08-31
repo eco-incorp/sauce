@@ -2,7 +2,7 @@
  * Comprehensive compilation and structure tests for all SDK protocol SauceScript functions.
  *
  * The corpus is compiled by the published compiler (`@eco-incorp/sauce-compiler` from npm, aliased
- * `sauce-next`) — including Tier 1 selector verification, which scans the emitted program for the
+ * `sauce-compiler`) — including Tier 1 selector verification, which scans the emitted program for the
  * selector bytes it must contain.
  */
 

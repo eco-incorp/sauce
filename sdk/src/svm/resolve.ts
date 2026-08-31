@@ -1,6 +1,6 @@
 import { AccountRole, isSignerRole } from '@solana/kit';
 import type { Address, TransactionSigner } from '@solana/kit';
-import type { AccountManifest, AccountRole as SlotRole } from 'sauce-next';
+import type { AccountManifest, AccountRole as SlotRole } from 'sauce-compiler';
 
 /**
  * Maps each declared slot of the compiler's AccountManifest to a concrete

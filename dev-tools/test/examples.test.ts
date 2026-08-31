@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 
 // wasm-pack `--target nodejs` output: a CommonJS build reading its sibling `.wasm` at load, so
 // Node's own CJS loader must resolve it.
-const { compile: compileWasm } = createRequire(import.meta.url)("sauce-next") as {
+const { compile: compileWasm } = createRequire(import.meta.url)("sauce-compiler") as {
   compile: (options: {
     target: "evm" | "svm";
     entry: string;

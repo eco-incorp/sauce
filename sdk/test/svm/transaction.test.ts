@@ -1,4 +1,4 @@
-import type { AccountManifest } from 'sauce-next';
+import type { AccountManifest } from 'sauce-compiler';
 import { address, generateKeyPairSigner, getCompiledTransactionMessageDecoder } from '@solana/kit';
 import type { Blockhash, KeyPairSigner } from '@solana/kit';
 import {

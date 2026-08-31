@@ -1,7 +1,7 @@
 /**
  * The SDK's one compiler seam.
  *
- * Loads the SauceScript compiler (`sauce-next`, the published `@eco-incorp/sauce-compiler` wasm
+ * Loads the SauceScript compiler (`sauce-compiler`, the published `@eco-incorp/sauce-compiler` wasm
  * package) and adapts its `compile({ resolve, resolvePackage, ... })` signature to the source-plus-
  * options shape `sauce-route.ts` calls with: a `source` string plus `baseDirs`/`defines`/`contracts`,
  * returning a `CompileResult` (`compile-types.ts`) so `CompiledSauceRoute` never names a compiler
@@ -19,7 +19,7 @@ import type {
   CompileOptions as RsCompileOptions,
   CompileResult as RsCompileResult,
   SauceTarget as RsTarget,
-} from "sauce-next";
+} from "sauce-compiler";
 
 const ENTRY = "main.js";
 
@@ -33,10 +33,10 @@ function loadRsCompile(): (options: RsCompileOptions) => RsCompileResult {
   // resolves that sibling -- an ESM/bundler loader does not. Mirrors `test/std/token/harness.ts`.
   let mod: { compile: (options: RsCompileOptions) => RsCompileResult };
   try {
-    mod = createRequire(import.meta.url)("sauce-next") as typeof mod;
+    mod = createRequire(import.meta.url)("sauce-compiler") as typeof mod;
   } catch (cause) {
     throw new Error(
-      "the SauceScript compiler (`sauce-next` -> the published @eco-incorp/sauce-compiler) failed to load.",
+      "the SauceScript compiler (`sauce-compiler` -> the published @eco-incorp/sauce-compiler) failed to load.",
       { cause },
     );
   }

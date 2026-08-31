@@ -1,6 +1,6 @@
 import { createSolanaRpc, createSolanaRpcSubscriptions, sendAndConfirmTransactionFactory } from '@solana/kit';
 import type { Address, AddressesByLookupTableAddress, Commitment, Instruction, Signature, TransactionSigner } from '@solana/kit';
-import type { AccountManifest } from 'sauce-next';
+import type { AccountManifest } from 'sauce-compiler';
 import type { ArgsLayout, ArgValue } from './layout.js';
 import { createAltWithAddresses, extendAlt, fetchAlt, waitForAltActive } from './alt.js';
 import { encodePayloadArgs } from './args.js';

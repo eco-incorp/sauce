@@ -24,6 +24,10 @@
       "types": "./compiler/dist/index.d.ts",
       "default": "./compiler/dist/index.js"
     },
+    "./actions": {
+      "types": "./actions/dist/index.d.ts",
+      "default": "./actions/dist/index.js"
+    },
     "./protocols/*": {
       "types": "./sdk/dist/protocols/*/index.d.ts",
       "default": "./sdk/dist/protocols/*/index.js"
@@ -77,6 +81,7 @@
   "files": [
     "compiler/dist",
     "sdk/dist",
+    "actions/dist",
     "sdk/src/skills",
     "sdk/src/protocols",
     "dev-tools/scripts",
@@ -88,7 +93,7 @@
     "artifacts/svm/engine.so"
   ],
   "scripts": {
-    "build": "pnpm --filter './compiler' build && pnpm --filter './sdk' build",
+    "build": "pnpm --filter './compiler' build && pnpm -r --filter './sdk' --filter './actions' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "format": "pnpm -r --if-present format",
@@ -102,6 +107,7 @@
     "@solana/kit": "^6.10.0",
     "acorn": "^8.15.0",
     "dotenv": "^17.3.1",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0",
     "ts-evaluator": "^2.0.0",
     "typescript": "^5.7.0",
     "viem": "^2.45.3"

@@ -13,7 +13,7 @@ import { dirname, join } from 'path'
 
 // The compiler is wasm-pack `--target nodejs` output: a CommonJS build that reads its sibling
 // `.wasm` off disk at load, so Node's own CJS loader has to resolve it — an `import` does not.
-const { compile } = createRequire(import.meta.url)('sauce-next') as {
+const { compile } = createRequire(import.meta.url)('sauce-compiler') as {
   compile: (options: {
     target: 'evm' | 'svm'
     entry: string

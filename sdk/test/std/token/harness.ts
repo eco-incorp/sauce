@@ -1,6 +1,6 @@
 /**
  * `@sauce/token` (sdk/src/std/token) compiled through the published compiler
- * (`@eco-incorp/sauce-compiler`, aliased `sauce-next`). The library ships as SauceScript source, so
+ * (the published `@eco-incorp/sauce-compiler`, imported as `sauce-compiler`). The library ships as SauceScript source, so
  * the only thing that proves it is the compiler that will actually consume it downstream.
  *
  * The library's four files are byte-identical copies of the sauce repo's conformance fixture
@@ -25,17 +25,18 @@ import { fileURLToPath } from 'node:url';
 // type is exactly the defect 0.4.1 fixed one repo up; re-declaring them here would reintroduce it
 // one repo down, with nothing to catch the drift. The package ships them, so they track the
 // resolved version for free.
-import type { CompileOptions, CompileResult, SauceTarget } from 'sauce-next';
+import type { CompileOptions, CompileResult, SauceTarget } from 'sauce-compiler';
 
-export type { AccountEntry, AccountManifest, CompileOptions, CompileResult, SauceTarget } from 'sauce-next';
+export type { AccountEntry, AccountManifest, CompileOptions, CompileResult, SauceTarget } from 'sauce-compiler';
 
-// The SauceScript compiler, under the `sauce-next` alias: a workspace package shadowed its real
+// The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, imported under the short
+// name `sauce-compiler` because the in-repo workspace package still holds the scoped
 // name (`@eco-incorp/sauce-compiler`) when the alias was introduced.
 //
 // Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build
 // that reads its sibling `.wasm` off disk at load. Node's own CJS loader is the one that resolves
 // that sibling — jest's ESM transform does not.
-const { compile } = createRequire(import.meta.url)('sauce-next') as {
+const { compile } = createRequire(import.meta.url)('sauce-compiler') as {
   compile: (options: CompileOptions) => CompileResult;
 };
 

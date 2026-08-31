@@ -32,6 +32,9 @@ importers:
       dotenv:
         specifier: ^17.3.1
         version: 17.4.2
+      sauce-compiler:
+        specifier: npm:@eco-incorp/sauce-compiler@^0.5.0
+        version: '@eco-incorp/sauce-compiler@0.5.0'
       ts-evaluator:
         specifier: ^2.0.0
         version: 2.0.0(typescript@5.9.3)
@@ -125,7 +128,7 @@ importers:
       dotenv:
         specifier: ^17.3.1
         version: 17.4.2
-      sauce-next:
+      sauce-compiler:
         specifier: npm:@eco-incorp/sauce-compiler@^0.5.0
         version: '@eco-incorp/sauce-compiler@0.5.0'
       viem:
@@ -162,7 +165,7 @@ importers:
       '@solana/kit':
         specifier: ^6.10.0
         version: 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
-      sauce-next:
+      sauce-compiler:
         specifier: npm:@eco-incorp/sauce-compiler@^0.5.0
         version: '@eco-incorp/sauce-compiler@0.5.0'
       viem:

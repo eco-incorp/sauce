@@ -27,7 +27,7 @@ import { execSync, spawn } from "child_process";
 import { createRequire } from "node:module";
 
 // wasm-pack `--target nodejs` output: a CommonJS build reading its sibling `.wasm` at load.
-const { compile } = createRequire(import.meta.url)("sauce-next") as {
+const { compile } = createRequire(import.meta.url)("sauce-compiler") as {
   compile: (options: {
     target: "evm" | "svm";
     entry: string;

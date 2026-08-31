@@ -44,7 +44,7 @@ import {
 import type { EngineHarness } from './engine-harness.js';
 import { svmSettleSource } from '../../src/svm/index.js';
 import { compileSource } from '../helpers';
-import type { AccountManifest } from 'sauce-next';
+import type { AccountManifest } from 'sauce-compiler';
 
 const DECIMALS = 6;
 const amountOf = (harness: EngineHarness, a: Address): bigint => {

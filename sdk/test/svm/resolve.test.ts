@@ -1,5 +1,5 @@
 import { AccountRole, address, createNoopSigner } from '@solana/kit';
-import type { AccountEntry, AccountManifest, AccountRole as SlotRole } from 'sauce-next';
+import type { AccountEntry, AccountManifest, AccountRole as SlotRole } from 'sauce-compiler';
 import { PAYER_REF, resolveAccounts } from '../../src/svm/index.js';
 
 const PAYER = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
