@@ -83,6 +83,7 @@ export function compileCacheKey(source: string, options: CompileOptions = {}): s
     treeshake: options.treeshake ?? true,
     fold: options.fold ?? true,
     defines: options.defines ?? null,
+    ambient: options.ambient ?? null,
     args: options.args ?? null,
     contracts: options.contracts ?? null,
     // Absolute-resolved so a relative baseDir keys by the file it actually reads
