@@ -7,9 +7,22 @@
 
 import { createPublicClient, createWalletClient, http, parseAbi, Hex, defineChain } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { readFileSync } from 'fs'
+import { createRequire } from 'node:module'
+import { existsSync, readFileSync } from 'fs'
+import { dirname, join } from 'path'
 
-import { compile } from '../../compiler/dist/index.js'
+// The compiler is wasm-pack `--target nodejs` output: a CommonJS build that reads its sibling
+// `.wasm` off disk at load, so Node's own CJS loader has to resolve it — an `import` does not.
+const { compile } = createRequire(import.meta.url)('sauce-next') as {
+  compile: (options: {
+    target: 'evm' | 'svm'
+    entry: string
+    resolve: (path: string) => Uint8Array | undefined
+    defines?: Array<[name: string, value: string]>
+  }) => { bytecode: Uint8Array }
+}
+
+const ENTRY = 'main.js'
 
 const sauceAbi = parseAbi([
   'function cook(bytes[] memory calls) public payable returns (bytes memory)'
@@ -21,6 +34,21 @@ export function parseArg(arg: string): bigint | string {
     return arg
   }
   return BigInt(arg)
+}
+
+/**
+ * Parse one `NAME=VALUE` CLI define. A value is one 256-bit word, so it is an integer literal —
+ * decimal or `0x`-hex — never an array.
+ */
+export function parseDefine(pair: string): [string, string] {
+  const eq = pair.indexOf('=')
+  if (eq < 1) throw new Error(`expected NAME=VALUE, got '${pair}'`)
+  const name = pair.slice(0, eq)
+  const value = pair.slice(eq + 1)
+  // Reject early rather than handing the compiler something it will refuse mid-compile.
+  BigInt(value)
+
+  return [name, value]
 }
 
 function toHex(bytes: Uint8Array): Hex {
@@ -36,24 +64,49 @@ export interface CompileScriptResult {
 
 /**
  * Compile a SauceScript file to bytecode segments.
+ *
+ * `defines` are compile-time consts: each REPLACES the module's own `const` of that name and is
+ * constant-folded, so a given set of values yields fixed bytecode. (The compiler has no
+ * positional compile-time `args`; a script that wants build-time values declares consts and the
+ * caller overrides them by name.)
  */
-export function compileScript(scriptPath: string, baseDir: string, args?: (bigint | string)[]): CompileScriptResult {
+export function compileScript(
+  scriptPath: string,
+  baseDir: string,
+  defines?: Record<string, bigint | string>,
+): CompileScriptResult {
   const sauceScript = readFileSync(scriptPath, 'utf-8')
+  const scriptDir = dirname(scriptPath)
 
-  const result = compile(sauceScript, {
-    baseDirs: [baseDir],
-    args: args && args.length > 0 ? args : undefined,
+  const resolve = (path: string): Uint8Array | undefined => {
+    const key = path.replace(/^\.\//, '')
+    if (key === ENTRY) return Buffer.from(sauceScript)
+    // A miss is `undefined` — "nothing at this path" — never a throw, which would mean
+    // "present but unreadable" and stop the compiler falling back.
+    for (const dir of [scriptDir, baseDir, join(baseDir, 'node_modules')]) {
+      const candidate = join(dir, key)
+      if (existsSync(candidate)) return readFileSync(candidate)
+    }
+
+    return undefined
+  }
+
+  const entries = Object.entries(defines ?? {})
+  const result = compile({
+    target: 'evm',
+    entry: ENTRY,
+    resolve,
+    ...(entries.length > 0 ? { defines: entries.map(([k, v]) => [k, v.toString()] as [string, string]) } : {}),
   })
 
-  return {
-    bytecodes: result.bytecode.map(toHex),
-    warnings: result.warnings,
-  }
+  // The compiler emits ONE program; `cook()` takes a list, and executes `calls[0]`.
+  return { bytecodes: [toHex(result.bytecode)], warnings: [] }
 }
 
 export interface RunOptions {
   scriptPath: string
-  scriptArgs?: (bigint | string)[]
+  /** Compile-time consts, by name — see {@link compileScript}. */
+  defines?: Record<string, bigint | string>
   sauceAddress: string
   rpcUrl: string
   forkUrl?: string
@@ -65,7 +118,7 @@ export interface RunOptions {
  * Compile and execute a SauceScript on a Sauce contract.
  */
 export async function executeScript(options: RunOptions): Promise<void> {
-  const { scriptPath, scriptArgs = [], sauceAddress, rpcUrl, forkUrl, baseDir } = options
+  const { scriptPath, defines = {}, sauceAddress, rpcUrl, forkUrl, baseDir } = options
 
   console.log('=== SauceScript Runner ===\n')
   console.log('File:', scriptPath)
@@ -74,8 +127,9 @@ export async function executeScript(options: RunOptions): Promise<void> {
   if (forkUrl) {
     console.log('Fork URL:', forkUrl)
   }
-  if (scriptArgs.length > 0) {
-    console.log('Arguments:', scriptArgs.map(a => a.toString()).join(', '))
+  const defineEntries = Object.entries(defines)
+  if (defineEntries.length > 0) {
+    console.log('Defines:', defineEntries.map(([k, v]) => `${k}=${v}`).join(', '))
   }
   console.log('')
 
@@ -85,7 +139,7 @@ export async function executeScript(options: RunOptions): Promise<void> {
   console.log(sauceScript)
 
   console.log('Compiling...')
-  const compiled = compileScript(scriptPath, baseDir, scriptArgs.length > 0 ? scriptArgs : undefined)
+  const compiled = compileScript(scriptPath, baseDir, defineEntries.length > 0 ? defines : undefined)
 
   console.log('Segments:', compiled.bytecodes.length)
   for (let i = 0; i < compiled.bytecodes.length; i++) {

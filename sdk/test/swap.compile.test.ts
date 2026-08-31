@@ -2,7 +2,7 @@
  * E4.1 universal swap adapter — real-compile tests. Uses the ordinary `@eco-incorp/sauce-compiler`,
  * no forge/fork/anvil. Same import + baseDirs pattern as `svm-settle.compile.test.ts`.
  */
-import { compile } from "../../compiler/dist/index.js";
+import { compileProgram as compile } from "./helpers";
 import { bytesToHex } from "viem";
 
 import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";

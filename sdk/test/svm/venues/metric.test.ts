@@ -8,7 +8,6 @@
  * 'svm' target (the CPI-in-emitSetup shape is novel in this tree — see ladder.ts's module doc).
  */
 import { resolve } from 'path';
-import { compile } from '@eco-incorp/sauce-compiler';
 import { metric, METRIC_QUOTE_HAIRCUT_PPM } from '../../../src/svm/venues/metric/index.js';
 import type { MetricPoolConfig } from '../../../src/svm/venues/metric/index.js';
 

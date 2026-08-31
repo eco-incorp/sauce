@@ -94,7 +94,7 @@ export function loadPluginData(): SaucePluginData {
 }
 
 /**
- * Live accessor for the manifest's `nameParity` map (`manifest.json`'s `{ emit: "log", throw:
+ * Live accessor for the manifest's `nameParity` map (`manifest.json`'s `{ throw:
  * "revert" }` — SauceScript surface name -> the underlying engine/opcode name each compiler
  * actually implements). Declared in the manifest since P7 but never consulted anywhere in the SDK
  * until this function — exported so it is a live, tested part of the plugin surface rather than

@@ -1,13 +1,10 @@
 /**
  * The compiler seam's data contract, owned by the SDK.
  *
- * `compileSauceRoute` forks between two compilers (the in-repo TypeScript one and the RS/WASM one
- * behind `rs-compile.ts`), and the shapes below are what BOTH produce and consume — so they belong
- * to the seam, not to either compiler package. Owning them here is what lets `sdk/src` name a
- * route's compile inputs and outputs without importing a compiler's type surface.
- *
- * Structurally identical to the TypeScript compiler's own definitions, so a value from either path
- * still satisfies them.
+ * `compileSauceRoute` reaches the compiler through one seam (`rs-compile.ts`), and the shapes below
+ * are what that seam produces and consumes. Owning them here is what lets `sdk/src` name a route's
+ * compile inputs and outputs without importing the compiler's own type surface — which is a wasm
+ * package loaded at runtime, not something the SDK's public types should be pinned to.
  */
 
 export interface AbiParameter {

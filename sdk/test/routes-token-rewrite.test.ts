@@ -2,7 +2,7 @@
  * ERC20 token member rewrite — U4 `USDC.transfer(to, amount)` -> `IERC20.at(USDC).transfer(to,
  * amount)`, plus the balance sugar `self.USDC` -> `IERC20.at(<addr>n).balanceOf(ctx.self())`.
  */
-import { compile } from "@eco-incorp/sauce-compiler";
+import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";
 import { resolveTokenMap } from "../src/routes/token-registry.js";
@@ -148,8 +148,11 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
   });
 
   it("an unregistered chain (no registry rows, no tokenDefines) leaves a bare USDC untouched -- the base compiler's own error", () => {
+    // The point is that the rewrite declines and the compile FAILS CLOSED rather than emitting a
+    // program with an unbound symbol. The compiler reports a member call on an undeclared name as an
+    // un-lowerable call expression rather than naming the identifier, so match either shape.
     expect(() => compileSauceRoute("ronin", `USDC.transfer(${TO}, 5n);`, { pot: POT })).toThrow(
-      /undefined variable: USDC/,
+      /`USDC` is not a declared variable|cannot be lowered to IR yet/,
     );
   });
 });
@@ -341,7 +344,7 @@ describe("svm: the token/balance-sugar pass never rewrites for an svm destinatio
         { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         { accessors: false },
       ),
-    ).toThrow(/undefined variable: self|property 'USDC' access not supported/);
+    ).toThrow(/`self` is not a declared variable|property 'USDC' access not supported/);
   });
 
   it("with accessors default ON, the pre-existing self-sugar rewrite fires and the existing svm guard throws -- a safe, named failure, never a silent drop", () => {

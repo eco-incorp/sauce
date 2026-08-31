@@ -56,15 +56,22 @@ const WETH_WITHDRAW_SELECTOR: readonly number[] = [0x2e, 0x1a, 0x7d, 0x4d]; // w
 const LIDO_SUBMIT_SELECTOR: readonly number[] = [0xa1, 0x90, 0x3e, 0xab]; // submit(address)
 
 function bytesLiteral(bytes: readonly number[]): string {
-  return `Uint8Array.from([${bytes.join(", ")}])`;
+  return `hex\`${bytes.map((b) => b.toString(16).padStart(2, "0")).join("")}\``;
 }
 
-/** A raw calldata expression: selector bytes, plus (if `wordExpr` is given) one abi-encoded word
- *  concatenated on — either a literal 32-byte word (compile-time amount/address) or a runtime
- *  `abi.encode(<expr>)` call. */
-function rawCalldata(selector: readonly number[], wordExpr?: string): string {
-  if (wordExpr === undefined) return bytesLiteral(selector);
-  return `${bytesLiteral(selector)}.concat(abi.encode(${wordExpr}))`;
+/**
+ * A selector const plus the calldata expression that reads it. The selector is BOUND rather than
+ * used inline because a method call directly on a `hex` literal (`hex\`…\`.concat(…)`) is outside
+ * the compiler's supported subset; the name is per-call so several deposits can share one program.
+ */
+function calldataLines(
+  name: string,
+  selector: readonly number[],
+  wordExpr: string | undefined,
+): { decl: string; expr: string } {
+  const decl = `const ${name} = ${bytesLiteral(selector)};`;
+
+  return { decl, expr: wordExpr === undefined ? name : `${name}.concat(abi.encode(${wordExpr}))` };
 }
 
 export type DepositKey =
@@ -217,8 +224,8 @@ export const DEPOSIT_TEMPLATES: Readonly<Record<DepositKey, DepositTemplate>> = 
     extras: { referral: addressExtra(0n) },
     emit(d, amountExpr) {
       const referral = d.extra.referral ?? 0n;
-      const calldata = rawCalldata(LIDO_SUBMIT_SELECTOR, formatBigint(referral));
-      return [`contract.call(${formatBigint(d.target)}, ${amountExpr}, ${calldata});`];
+      const { decl, expr } = calldataLines("dSubmit", LIDO_SUBMIT_SELECTOR, formatBigint(referral));
+      return [decl, `evm.call(${formatBigint(d.target)}, ${amountExpr}, ${expr});`];
     },
   },
 
@@ -235,7 +242,8 @@ export const DEPOSIT_TEMPLATES: Readonly<Record<DepositKey, DepositTemplate>> = 
     binding: null,
     extras: {},
     emit(d, amountExpr) {
-      return [`contract.call(${formatBigint(d.target)}, ${amountExpr}, ${bytesLiteral(WETH_DEPOSIT_SELECTOR)});`];
+      const { decl, expr } = calldataLines("dWrap", WETH_DEPOSIT_SELECTOR, undefined);
+      return [decl, `evm.call(${formatBigint(d.target)}, ${amountExpr}, ${expr});`];
     },
   },
 
@@ -252,8 +260,8 @@ export const DEPOSIT_TEMPLATES: Readonly<Record<DepositKey, DepositTemplate>> = 
     binding: null,
     extras: {},
     emit(d, amountExpr) {
-      const calldata = rawCalldata(WETH_WITHDRAW_SELECTOR, amountExpr);
-      return [`contract.call(${formatBigint(d.target)}, 0n, ${calldata});`];
+      const { decl, expr } = calldataLines("dUnwrap", WETH_WITHDRAW_SELECTOR, amountExpr);
+      return [decl, `evm.call(${formatBigint(d.target)}, 0n, ${expr});`];
     },
   },
 };

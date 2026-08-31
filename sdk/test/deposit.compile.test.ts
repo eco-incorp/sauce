@@ -3,7 +3,7 @@
  * `@eco-incorp/sauce-compiler`, no forge/fork/anvil. Same import + baseDirs pattern as
  * `swap.compile.test.ts`.
  */
-import { compile } from "../../compiler/dist/index.js";
+import { compileProgram as compile } from "./helpers";
 
 import { DEPOSIT_BASE_DIRS, depositSource } from "../src/deposit/source.js";
 import type { DepositKey } from "../src/deposit/templates.js";

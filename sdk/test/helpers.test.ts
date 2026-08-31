@@ -1,20 +1,19 @@
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { compileSauceFunction, computeSelector, extractSelectors } from './helpers';
+import { compileSauceFunctionRust, computeSelector, extractSelectors } from './helpers';
 
 const PROTOCOLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'protocols');
 
 describe('test helpers', () => {
-  describe('compileSauceFunction', () => {
+  describe('compileSauceFunctionRust', () => {
     it('compiles a simple SauceScript without imports', () => {
       const source = `
 function main(): Uint256 {
   return 1;
 }
 `;
-      const result = compileSauceFunction(source, PROTOCOLS_DIR);
-      expect(result.bytecode.length).toBeGreaterThanOrEqual(1);
-      expect(result.bytecode[0].length).toBeGreaterThan(0);
+      const result = compileSauceFunctionRust(source, PROTOCOLS_DIR);
+      expect(result.bytecode.length).toBeGreaterThan(0);
     });
 
     it('compiles aave-v3 supply function with ABI import', () => {
@@ -28,9 +27,8 @@ function main(poolAddress: Address, asset: Address, amount: Uint256, onBehalfOf:
 }
 `;
       const protocolDir = join(PROTOCOLS_DIR, 'aave-v3');
-      const result = compileSauceFunction(source, protocolDir);
-      expect(result.bytecode.length).toBeGreaterThanOrEqual(1);
-      expect(result.bytecode[0].length).toBeGreaterThan(0);
+      const result = compileSauceFunctionRust(source, protocolDir);
+      expect(result.bytecode.length).toBeGreaterThan(0);
     });
   });
 

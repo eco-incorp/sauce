@@ -1,4 +1,6 @@
 {
   "ambient": [],
-  "nameParity": { "emit": "log", "throw": "revert" }
+  "nameParity": {
+    "throw": "revert"
+  }
 }

@@ -55,8 +55,9 @@ describe("loadPluginData", () => {
 
 describe("pluginNameParity", () => {
   it("is live and matches the manifest's declared parity map", () => {
-    expect(pluginNameParity()).toEqual({ emit: "log", throw: "revert" });
-    expect(pluginNameParity().emit).toBe("log");
+    expect(pluginNameParity()).toEqual({ throw: "revert" });
+    // `log` is the surface name AND the opcode name, so it is no longer a divergence to record.
+    expect(pluginNameParity().emit).toBeUndefined();
     expect(pluginNameParity().throw).toBe("revert");
   });
 });

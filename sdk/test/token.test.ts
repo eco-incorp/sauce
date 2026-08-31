@@ -116,7 +116,7 @@ describe("Token: SVM source emission", () => {
   it("transfer emits svm.sload/svm.call with TransferChecked (0x0c) over annotated Account params", () => {
     const src = Token.transfer(svmTransfer).source("svm");
     expect(src).toContain(
-      "function main(tokenProgram: Account, mint0: Account, src0: Account<Writable>, dst0: Account<Writable>, owner: Account<Signer>): void {",
+      "function main(tokenProgram: Account, mint0: Account, src0: Account<Writable>, dst0: Account<Writable>, owner: Account<Signer>) {",
     );
     expect(src).toContain("svm.sload(mint0, 44, 1).toLe()");
     expect(src).toContain("const disc0 = hex`0c`;");

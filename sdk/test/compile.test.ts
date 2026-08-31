@@ -10,7 +10,7 @@
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readdirSync, existsSync, readFileSync } from 'fs';
-import { compileSauceFunction, compileSauceFunctionRust, computeSelector, extractSelectors } from './helpers';
+import { compileSauceFunctionRust, computeSelector, extractSelectors } from './helpers';
 
 const SDK_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PROTOCOLS_DIR = join(SDK_ROOT, 'src', 'protocols');
@@ -121,7 +121,7 @@ describe('Tier 1 selector verification', () => {
     it('swap contains exactInputSingle selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'uniswap-v3');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.swap, protocolDir);
+      const result = compileSauceFunctionRust(functions.swap, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       // ABI uses uint32 (widened from Solidity's uint24 for compiler compatibility)
@@ -136,7 +136,7 @@ describe('Tier 1 selector verification', () => {
     it('supply contains supply selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'aave-v3');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.supply, protocolDir);
+      const result = compileSauceFunctionRust(functions.supply, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       const expectedSelector = computeSelector('supply(address,uint256,address,uint16)');
@@ -146,7 +146,7 @@ describe('Tier 1 selector verification', () => {
     it('borrow contains borrow selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'aave-v3');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.borrow, protocolDir);
+      const result = compileSauceFunctionRust(functions.borrow, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       const expectedSelector = computeSelector('borrow(address,uint256,uint256,uint16,address)');
@@ -158,7 +158,7 @@ describe('Tier 1 selector verification', () => {
     it('submit contains submit selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'lido');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.submit, protocolDir);
+      const result = compileSauceFunctionRust(functions.submit, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       const expectedSelector = computeSelector('submit(address)');
@@ -170,7 +170,7 @@ describe('Tier 1 selector verification', () => {
     it('swap contains swapExactTokensForTokens selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'uniswap-v2');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.swap, protocolDir);
+      const result = compileSauceFunctionRust(functions.swap, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       const expectedSelector = computeSelector(

@@ -68,7 +68,7 @@ export type { NestVia };
  * `sauce-route.ts#wrapSauceBody`), or a closure (see `closure.ts#sauceBodyToSource`) whose
  * `Function.prototype.toString()` is extracted as SauceScript source. Closures capture nothing by
  * construction — a free identifier must come from `IntentOptions.defines` (or chain-scoped ambient
- * defines) or the compile fails closed with `undefined variable: X`.
+ * defines) or the compile fails closed with "`X` is not a declared variable".
  */
 export type { SauceBody };
 
@@ -417,27 +417,24 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
   // `chainAmbient(destination)` is the plugin's chain-scoped ambient module list (empty by default
   // on this branch, see `ambient.ts#chainAmbient`/`plugin/index.ts`'s own notes); merged with any
   // caller-supplied `options.compile.ambient` (deduped -- either side may legitimately name the
-  // same module). `ambient` only works through the RS/WASM compiler (`rs-compile.ts`), so a
-  // non-empty merged list defaults `compiler` to `'rs'` UNLESS the caller already picked one
-  // explicitly -- never overriding an explicit choice. When the merged list is empty (today's
-  // default), both `ambient` and `compiler` fall through to `options.compile`'s own values
-  // unchanged, so an existing route compiles byte-identically through the TS compiler exactly as
-  // it did before this feature existed.
+  // same module).
   const mergedAmbient = Array.from(new Set([...chainAmbient(destination), ...(options.compile?.ambient ?? [])]));
   const compileOptions: SauceCompileOptions = {
     ...options.compile,
     defines: mergedDefines,
     tokens: options.compile?.tokens ?? options.tokenDefines,
     ambient: mergedAmbient.length > 0 ? mergedAmbient : options.compile?.ambient,
-    compiler: options.compile?.compiler ?? (mergedAmbient.length > 0 ? "rs" : undefined),
   };
 
   let compiledRoute: CompiledSauceRoute;
   try {
     compiledRoute = compileSauceRoute(destination, sauceSource, execution, compileOptions);
   } catch (err) {
-    if (closure && err instanceof Error && /^undefined variable: /.test(err.message)) {
-      const name = err.message.slice("undefined variable: ".length);
+    // The compiler reports a free identifier as "`X` is not a declared variable", inside a larger
+    // rustc-style diagnostic — so match the sentence rather than a message prefix.
+    const undeclared = err instanceof Error ? /`([^`]+)` is not a declared variable/.exec(err.message) : null;
+    if (closure && undeclared !== null) {
+      const name = undeclared[1]!;
       throw new Error(
         `openRoute: closure route body references '${name}', which is not defined — a closure ` +
           `captures nothing by construction; supply '${name}' via IntentOptions.defines (or a chain-scoped ` +

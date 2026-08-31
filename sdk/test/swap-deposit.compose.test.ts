@@ -2,7 +2,7 @@
  * E4.1/E4.2 composition seam — real-compile tests, mirroring `swap.compile.test.ts`'s "the E3
  * seam, end to end" case, extended one leg further (swap -> deposit).
  */
-import { compile } from "../../compiler/dist/index.js";
+import { compileProgram as compile } from "./helpers";
 import { bytesToHex, decodeFunctionData } from "viem";
 
 import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";

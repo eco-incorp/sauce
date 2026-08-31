@@ -18,7 +18,6 @@ consumers import everything from one name.
 | --- | --- | --- | --- |
 | `compiler/` | `@eco-incorp/sauce-compiler` | `/compiler` | SauceScript (JS subset) → Sauce bytecode |
 | `sdk/` | `@eco-incorp/sauce-sdk-source` | `.`, `/protocols/*`, `/chains`, `/skills`, `/recipes` | 127+ protocol registry, chains, recipes, AI skill files |
-| `actions/` | `@eco-incorp/sauce-actions` | `/actions` | High-level routing actions (swaps/bridges) → bytecode |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools` | Local/forked hardhat env + recipe runner |
 
 This repo was **extracted from `../sauce`** (the source of truth, which still has its own copies of
@@ -76,14 +75,15 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   force-commit — nothing re-derives this automatically, so a repin without a refresh silently
   tests against a stale engine again. The `'svm'` compile target, its account-plan output,
   and the `/svm` SDK subpath are documented in `docs/plans/2026-07-03-solana-svm-support.md`.
-- **`SAUCE_RUST_ENGINE_SO` / `SAUCE_RUST_V12_RUNTIME`** — the two engines the `sdk/test/std/token`
-  execution suites need, and **deliberately separate variables** from `SAUCE_ENGINE_SO` above.
-  Those suites are the only ones here that compile through the published **Rust** compiler
-  (`@eco-incorp/sauce-compiler` from the public npm registry, a `sdk/` devDependency aliased as
-  `sauce-next` because its real name is still this workspace's TypeScript compiler at `compiler/`;
-  nothing is built locally and no Rust toolchain is needed), which emits for the sauce `main` engine
-  lineage — while everything else in this repo compiles through the TypeScript compiler and runs on
-  the pinned `release/beta` lineage.
+- **`SAUCE_RUST_ENGINE_SO` / `SAUCE_RUST_V12_RUNTIME`** — the two engines every suite that EXECUTES
+  compiled bytecode needs, and **deliberately separate variables** from `SAUCE_ENGINE_SO` above.
+  The SDK compiles through the published compiler (`@eco-incorp/sauce-compiler` from the public npm
+  registry, an `sdk/` dependency aliased `sauce-next` because a workspace package shadowed the real
+  name; nothing is built locally and no Rust toolchain is needed), which emits for the sauce `main`
+  engine lineage. `SAUCE_ENGINE_SO`'s vendored `artifacts/svm/engine.so` is built from the pinned
+  `release/beta` lineage, so it can only serve suites that do NOT run freshly compiled bytecode
+  (instruction builders, PDA derivation, decoders). Anything that does run it gates on
+  `describeRustSvm`/`SAUCE_RUST_ENGINE_SO` instead, which hard-fails in CI rather than skipping.
   **The two wire formats have diverged, measured in both directions**: on the SVM, `JUMP`/`JUMP_I`
   (0xB0/0xB1) exist only on `main` and `NEW_ARRAY` (0x92) encodes its scalar elements differently, so
   Rust-compiled bytecode carrying any `require`/`if` is rejected by the vendored `engine.so` with
@@ -92,8 +92,12 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   value-returning program's epilogue) are `do_unknown` on the pin, so a Rust-compiled `balanceOf`
   either returns empty or dies with `MemoryOOG` on the `V12RuntimeBytecode` this repo generates.
   Pointing `SAUCE_ENGINE_SO` itself at a `main` engine is therefore **not** a workaround — it breaks
-  `sdk/test/svm/staged.e2e` and `svm-settle.e2e`, which need the pinned one. Both suites skip when
-  their variable is unset LOCALLY, so the default `pnpm test` is green and engine-free — but in CI
+  the suites that exercise the SDK's staged-execution instruction builders, which encode the pinned
+  engine's layout. **Staged execution is a known gap**: those builders and `main`-lineage bytecode
+  cannot both be satisfied today, so `svm-settle.e2e` runs its programs INLINE and the staged-path
+  e2e is gone. Restoring it needs the v12-svm v0.4.0 instruction layout; it is unrelated to which
+  compiler the SDK uses. Engine-gated suites skip when their variable is unset LOCALLY, so the
+  default `pnpm test` is green and engine-free — but in CI
   an unset variable is a hard failure, and CI supplies both from the `v12-svm-v0.4.0` and
   `v12-evm-v0.3.0` release artifacts, which are built from the same sauce commit the published
   compiler's `compiler-v0.5.0` tag is cut from. (They cannot come from the `sauce` git dep:

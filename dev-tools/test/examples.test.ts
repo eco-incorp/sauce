@@ -4,21 +4,38 @@
  */
 
 import { join, dirname } from "path";
-import { readdirSync, readFileSync } from "fs";
+import { createRequire } from "node:module";
+import { existsSync, readdirSync, readFileSync } from "fs";
 import { fileURLToPath } from "url";
-import ts from "typescript";
 
-import { compile } from "../../compiler/dist/index.js";
+// wasm-pack `--target nodejs` output: a CommonJS build reading its sibling `.wasm` at load, so
+// Node's own CJS loader must resolve it.
+const { compile: compileWasm } = createRequire(import.meta.url)("sauce-next") as {
+  compile: (options: {
+    target: "evm" | "svm";
+    entry: string;
+    resolve: (path: string) => Uint8Array | undefined;
+  }) => { bytecode: Uint8Array };
+};
 
-/** Strip TypeScript type annotations, returning plain JS */
-function stripTypes(source: string): string {
-  const result = ts.transpileModule(source, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ESNext,
-      module: ts.ModuleKind.ESNext,
+const ENTRY = "main.js";
+
+/** Compile one program, resolving any non-entry import off disk against `baseDirs`. */
+function compile(source: string, baseDirs: readonly string[]): { bytecode: Uint8Array } {
+  return compileWasm({
+    target: "evm",
+    entry: ENTRY,
+    resolve: (path) => {
+      const key = path.replace(/^\.\//, "");
+      if (key === ENTRY) return Buffer.from(source);
+      for (const dir of baseDirs) {
+        const candidate = join(dir, key);
+        if (existsSync(candidate)) return readFileSync(candidate);
+      }
+
+      return undefined;
     },
   });
-  return result.outputText;
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -58,16 +75,11 @@ const jsScripts = readdirSync(JS_DIR).filter((f) => f.endsWith(".js"));
 for (const file of jsScripts) {
   test(`sauce/js/${file}`, () => {
     const source = readFileSync(join(JS_DIR, file), "utf-8");
-    const result = compile(source, { baseDirs: BASE_DIRS });
-    ok(result.bytecode.length >= 1, "should produce at least one segment");
-    for (const seg of result.bytecode) {
+    const result = compile(source, BASE_DIRS);
+    ok(result.bytecode.length >= 1, "should produce a non-empty program");
+    for (const seg of [result.bytecode]) {
       ok(seg.length > 0, "segment should not be empty");
     }
-    eq(
-      result.warnings.length,
-      0,
-      `unexpected warnings: ${result.warnings.join(", ")}`,
-    );
   });
 }
 
@@ -78,18 +90,12 @@ const tsScripts = readdirSync(TS_DIR).filter(
 
 for (const file of tsScripts) {
   test(`sauce/ts/${file}`, () => {
-    const raw = readFileSync(join(TS_DIR, file), "utf-8");
-    const source = stripTypes(raw);
-    const result = compile(source, { baseDirs: BASE_DIRS });
-    ok(result.bytecode.length >= 1, "should produce at least one segment");
-    for (const seg of result.bytecode) {
+    const source = readFileSync(join(TS_DIR, file), "utf-8");
+    const result = compile(source, BASE_DIRS);
+    ok(result.bytecode.length >= 1, "should produce a non-empty program");
+    for (const seg of [result.bytecode]) {
       ok(seg.length > 0, "segment should not be empty");
     }
-    eq(
-      result.warnings.length,
-      0,
-      `unexpected warnings: ${result.warnings.join(", ")}`,
-    );
   });
 }
 
@@ -99,20 +105,13 @@ for (const tsFile of tsScripts) {
   const jsFile = tsFile.replace(/\.ts$/, ".js");
   if (!jsScripts.includes(jsFile)) continue;
   test(`sauce/ts/${tsFile} matches sauce/js/${jsFile}`, () => {
+    // The compiler reads the annotated source directly, so the .ts twin needs no strip step —
+    // the annotations are erased by the frontend, which is exactly the parity being asserted.
     const jsSource = readFileSync(join(JS_DIR, jsFile), "utf-8");
-    const tsSource = stripTypes(readFileSync(join(TS_DIR, tsFile), "utf-8"));
-    const jsResult = compile(jsSource, { baseDirs: BASE_DIRS });
-    const tsResult = compile(tsSource, { baseDirs: BASE_DIRS });
-    eq(
-      jsResult.bytecode.length,
-      tsResult.bytecode.length,
-      "segment count mismatch",
-    );
-    for (let i = 0; i < jsResult.bytecode.length; i++) {
-      const jsHex = Buffer.from(jsResult.bytecode[i]).toString("hex");
-      const tsHex = Buffer.from(tsResult.bytecode[i]).toString("hex");
-      eq(jsHex, tsHex, `segment ${i} bytecode mismatch`);
-    }
+    const tsSource = readFileSync(join(TS_DIR, tsFile), "utf-8");
+    const jsHex = Buffer.from(compile(jsSource, BASE_DIRS).bytecode).toString("hex");
+    const tsHex = Buffer.from(compile(tsSource, BASE_DIRS).bytecode).toString("hex");
+    eq(jsHex, tsHex, "bytecode mismatch");
   });
 }
 

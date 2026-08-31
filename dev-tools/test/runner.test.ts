@@ -1,11 +1,11 @@
 /**
- * Tests for the SauceScript runner (compilation + arg injection).
+ * Tests for the SauceScript runner (compilation + define injection).
  * Run with: npm run test:runner
  */
 
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { compileScript, parseArg } from "../src/runner";
+import { compileScript, parseDefine } from "../src/runner";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -35,27 +35,38 @@ function eq(actual: any, expected: any, msg?: string) {
   }
 }
 
-// --- parseArg ---
+// --- parseDefine ---
 
-console.log("\nparseArg");
+console.log("\nparseDefine");
 
-test("parses integer as bigint", () => {
-  eq(parseArg("42"), 42n);
+test("splits NAME=VALUE", () => {
+  const [name, value] = parseDefine("AMOUNT=42");
+  eq(name, "AMOUNT");
+  eq(value, "42");
 });
 
-test("parses negative integer as bigint", () => {
-  eq(parseArg("-1"), -1n);
+test("keeps a 0x-hex value verbatim", () => {
+  eq(parseDefine("ADDR=0xff")[1], "0xff");
 });
 
-test("parses short hex as bigint", () => {
-  // 0x followed by up to 64 hex chars (32 bytes) → bigint
-  eq(parseArg("0xff"), 255n);
+test("rejects a pair with no '='", () => {
+  let threw = false;
+  try {
+    parseDefine("AMOUNT");
+  } catch {
+    threw = true;
+  }
+  ok(threw, "should reject a bare name");
 });
 
-test("parses long hex as string", () => {
-  // > 66 chars (0x + 64) → kept as string (bytes)
-  const longHex = "0x" + "ab".repeat(33); // 68 chars
-  eq(parseArg(longHex), longHex);
+test("rejects a non-integer value early", () => {
+  let threw = false;
+  try {
+    parseDefine("AMOUNT=notanumber");
+  } catch {
+    threw = true;
+  }
+  ok(threw, "should reject a value the compiler could not read");
 });
 
 // --- compileScript (no args) ---
@@ -81,39 +92,28 @@ test("compiles erc20.js", () => {
   eq(result.warnings.length, 0, "should have no warnings");
 });
 
-// --- compileScript (with args) ---
+// --- compileScript (with defines) ---
 
-console.log("\ncompileScript with args");
+console.log("\ncompileScript with defines");
 
-test("add.js with args produces different bytecode than without", () => {
-  const without = compileScript(join(ROOT, "sauce/js/add.js"), ROOT);
-  const withArgs = compileScript(join(ROOT, "sauce/js/add.js"), ROOT, [1n, 2n]);
-  ok(
-    withArgs.bytecodes[0] === without.bytecodes[0] && without.bytecodes.length + 1 === withArgs.bytecodes.length,
-    "bytecodes should differ when args are injected",
-  );
+const FIXTURE = join(__dirname, "fixtures/defined.js");
+
+test("a define overrides the script's own const and changes the bytecode", () => {
+  const plain = compileScript(FIXTURE, ROOT);
+  const defined = compileScript(FIXTURE, ROOT, { AMOUNT: 4242n });
+  ok(plain.bytecodes[0] !== defined.bytecodes[0], "a define should change the emitted bytes");
 });
 
-test("add.js with args includes arg values in bytecode", () => {
-  const result = compileScript(join(ROOT, "sauce/js/add.js"), ROOT, [5n, 10n]);
-  eq(result.bytecodes.length, 2, "should produce 1 segment");
-  // The bytecode should contain the encoded values 5 and 10
-  const hex = result.bytecodes[1];
-  ok(hex.includes("05"), "bytecode should contain value 5");
-  ok(hex.includes("0a"), "bytecode should contain value 10");
+test("the same define reproduces the same bytecode", () => {
+  const a = compileScript(FIXTURE, ROOT, { AMOUNT: 7n });
+  const b = compileScript(FIXTURE, ROOT, { AMOUNT: 7n });
+  eq(a.bytecodes[0], b.bytecodes[0], "compilation should be deterministic");
 });
 
-test("add.js with single arg only injects one param", () => {
-  // add.js has main(a, b) — passing only one arg should set a, leave b as default
-  const result = compileScript(join(ROOT, "sauce/js/add.js"), ROOT, [7n]);
-  eq(result.bytecodes.length, 2, "should produce 1 segment");
-  eq(result.warnings.length, 0, "should have no warnings");
-});
-
-test("example.js with args compiles successfully", () => {
-  const result = compileScript(join(ROOT, "sauce/js/example.js"), ROOT, [5n, 10n]);
-  ok(result.bytecodes.length >= 1, "should produce at least 1 segment");
-  eq(result.warnings.length, 0, "should have no warnings");
+test("a 0x-hex define value is accepted", () => {
+  const result = compileScript(FIXTURE, ROOT, { AMOUNT: "0xff" });
+  eq(result.bytecodes.length, 1, "should produce 1 segment");
+  ok(result.bytecodes[0].startsWith("0x"), "bytecode should be hex");
 });
 
 // --- summary ---

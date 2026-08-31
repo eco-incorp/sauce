@@ -118,9 +118,6 @@ export function tokenSource(spec: TokenSpec | readonly TokenSpec[], target: Toke
 
   // Every SVM account is a main() param, in attach order — that declaration IS the manifest.
   const params = isEvmTarget(target) ? "" : svmAccountParamList(specs);
-  // A trailing `balanceOf` is the only op with a value; anything else falls off the end, and the
-  // compiler requires that to be declared rather than inferred.
-  const returns = specs[specs.length - 1]!.op === "balanceOf" ? "" : ": void";
-  const parts = [...importLines, "", `function ${fnName}(${params})${returns} {`, body, "}", ""];
+  const parts = [...importLines, "", `function ${fnName}(${params}) {`, body, "}", ""];
   return parts.join("\n");
 }

@@ -24,10 +24,6 @@
       "types": "./compiler/dist/index.d.ts",
       "default": "./compiler/dist/index.js"
     },
-    "./actions": {
-      "types": "./actions/dist/index.d.ts",
-      "default": "./actions/dist/index.js"
-    },
     "./protocols/*": {
       "types": "./sdk/dist/protocols/*/index.d.ts",
       "default": "./sdk/dist/protocols/*/index.js"
@@ -83,7 +79,6 @@
     "sdk/dist",
     "sdk/src/skills",
     "sdk/src/protocols",
-    "actions/dist",
     "dev-tools/scripts",
     "dev-tools/src",
     "dev-tools/sauce",
@@ -93,7 +88,7 @@
     "artifacts/svm/engine.so"
   ],
   "scripts": {
-    "build": "pnpm --filter './compiler' build && pnpm -r --filter './sdk' --filter './actions' build",
+    "build": "pnpm --filter './compiler' build && pnpm --filter './sdk' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "format": "pnpm -r --if-present format",

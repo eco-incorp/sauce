@@ -14,7 +14,7 @@ import type { AddressInput, AmountInput } from "../swap/types.js";
  * - `"erc20-approve"` — an ERC20 asset; `depositCallStatement` emits `IERC20.approve(target,
  *   amount)` immediately before the protocol call (see {@link ApprovalPolicy}).
  * - `"native-value"` — no ERC20 leg at all; the amount rides as `msg.value` on a raw
- *   `contract.call(target, value, calldata)` (a typed ABI binding can never attach value — see
+ *   `evm.call(target, value, calldata)` (a typed ABI binding can never attach value — see
  *   `sdk/src/deposit/index.ts`'s "native vs ERC20" note). No approve is ever emitted.
  * - `"none"` — a redeem/withdraw leg that burns a balance this contract already holds (e.g. Aave's
  *   `withdraw`, which burns aTokens). No approve, no value.

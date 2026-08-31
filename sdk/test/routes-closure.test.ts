@@ -1,7 +1,7 @@
 /**
  * Closure route bodies — `sauceBodyToSource` extraction + end-to-end via `openRoute`.
  */
-import { compile } from "@eco-incorp/sauce-compiler";
+import { compileProgram as compile } from "./helpers";
 import * as acorn from "acorn";
 import { isSauceClosure, sauceBodyToSource } from "../src/routes/closure.js";
 import { openRoute } from "../src/routes/intent-dsl.js";

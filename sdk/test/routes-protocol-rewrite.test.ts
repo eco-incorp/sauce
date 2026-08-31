@@ -3,7 +3,7 @@
  * `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `ctx.self()`.
  * See `src/routes/protocol-rewrite.ts`'s module doc for the design.
  */
-import { compile } from "@eco-incorp/sauce-compiler";
+import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
 import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";

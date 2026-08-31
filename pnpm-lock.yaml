@@ -49,22 +49,6 @@ importers:
         specifier: ^2.22.0
         version: 2.28.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
 
-  actions:
-    dependencies:
-      viem:
-        specifier: ^2.0.0
-        version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.19
-      tsx:
-        specifier: ^4.7.0
-        version: 4.22.3
-      typescript:
-        specifier: ^5.8.0
-        version: 5.9.3
-
   compiler:
     dependencies:
       acorn:
@@ -116,15 +100,15 @@ importers:
 
   dev-tools:
     dependencies:
-      '@eco-incorp/sauce-compiler':
-        specifier: workspace:*
-        version: link:../compiler
       '@uniswap/v3-core':
         specifier: ^1.0.1
         version: 1.0.1
       dotenv:
         specifier: ^17.3.1
         version: 17.4.2
+      sauce-next:
+        specifier: npm:@eco-incorp/sauce-compiler@^0.5.0
+        version: '@eco-incorp/sauce-compiler@0.5.0'
       viem:
         specifier: ^2.45.1
         version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -144,9 +128,6 @@ importers:
 
   sdk:
     dependencies:
-      '@eco-incorp/sauce-compiler':
-        specifier: workspace:*
-        version: link:../compiler
       '@solana-program/address-lookup-table':
         specifier: ^0.12.1
         version: 0.12.1(@solana/kit@6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))

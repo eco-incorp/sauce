@@ -6,7 +6,7 @@
  * Pure: hand-built `Intent`s + text assertions, plus a real `compile()` proof that the emitted
  * program actually compiles at `target: 'v12'` (no network, no anvil).
  */
-import { compile } from "@eco-incorp/sauce-compiler";
+import { compileProgram as compile } from "./helpers";
 import { hexToBytes, type Hex } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
@@ -114,7 +114,8 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
       `const n0_vault = ${BigInt(VAULT)}n;`,
       `const n0_nbal = ctx.selfBalance();`,
       `const n0_namt = n0_nbal > 77n ? 77n : n0_nbal;`,
-      `if (n0_namt > 0n) { contract.call(n0_vault, n0_namt, Uint8Array.from([])); }`,
+      "const n0_ndata = hex``;",
+      `if (n0_namt > 0n) { evm.call(n0_vault, n0_namt, n0_ndata); }`,
     ]);
 
     const tokenOnlyChild = childIntent({
