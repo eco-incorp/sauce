@@ -115,7 +115,7 @@ describe("canonical chain registry: protocol chainName reconciliation", () => {
       }
     }
     expect(visited).toBeGreaterThan(0); // guards a vacuously-true loop
-    expect(pairs.size).toBe(20);
+    expect(pairs.size).toBe(21);
   });
 });
 

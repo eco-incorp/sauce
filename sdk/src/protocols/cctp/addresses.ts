@@ -11,6 +11,7 @@ export const deployments: ChainDeployment[] = [
   { chainId: 10, chainName: "Optimism", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 130, chainName: "Unichain", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 137, chainName: "Polygon", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
+  { chainId: 143, chainName: "Monad", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 146, chainName: "Sonic", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 8453, chainName: "Base", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 42161, chainName: "Arbitrum", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
@@ -33,4 +34,5 @@ export const CCTP_DOMAIN: Readonly<Record<string, number>> = {
   unichain: 10,
   linea: 11,
   sonic: 13,
+  monad: 15,
 };
