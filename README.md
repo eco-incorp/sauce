@@ -6,6 +6,11 @@ Build, compile and verify Sauce programs — cross-chain intents whose programs 
 npm install @eco-incorp/sauce-sdk
 ```
 
+**Node only.** The compiler is loaded through `createRequire` (its `node` build is CommonJS reading a
+sibling `.wasm` off disk), and the route path imports `node:fs`/`node:path`, so the Quickstart, the
+builders and `/compiler` all require a Node runtime. `/verify` is the exception — see below. The
+compiler package does ship a browser build, but this package does not expose it.
+
 The SauceScript compiler comes with it as a dependency. The only optional extra is
 `@solana/web3.js`, needed just for the `/svm/engine/web3js` interop subpath.
 
@@ -19,6 +24,8 @@ import { routes } from '@eco-incorp/sauce-sdk'
 // Both deadlines are ABSOLUTE unix timestamps, not durations: the chain compares
 // `block.timestamp > route.deadline`. And rewardDeadline must be >= deadline — a solver may fulfil
 // right up to the route deadline, so an earlier reward deadline is already refundable by then.
+// pot, portal, sourcePortal, creator, prover and usdc are addresses for YOUR deployment — the
+// package ships no defaults for them (`/deployments` carries the engine's own contracts, not these).
 const now = BigInt(Math.floor(Date.now() / 1000))
 
 const built = routes.openRoute('base', 'function main() { return 1n; }', {
@@ -116,10 +123,12 @@ const { bytecode } = compile({
 program, on **both** targets, so one program serves many argument sets — compile-time substitution is
 `defines` instead.
 
-The SDK ships an encoder for that payload only on the **SVM** side: `ArgsLayout` / `encodePayloadArgs`
-(`@eco-incorp/sauce-sdk/svm`), which `SvmClient` passes through to `execute_from_account`. On EVM you
-concatenate the words yourself. Separately on SVM, an **`Account`**-typed parameter is not a decoded
-word at all — those become the account manifest, returned as `CompileResult.manifest`.
+A `bytes` parameter is not padded — it occupies its fixed compile-time length, so the tail is not
+uniformly 32-byte words once one is present.
+
+The compiler returns `{ bytecode, manifest? }` and no argument layout, so callers build the tail
+themselves. On **SVM** an `Account`-typed parameter is not a payload argument at all: those become
+the account manifest in `CompileResult.manifest`.
 
 A `main` that falls off the end has no return type of its own, and a raw `compile` rejects it
 (`` `main` does not return on every path ``). Generated programs hit this whenever they fall through
