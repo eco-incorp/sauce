@@ -1,59 +1,119 @@
-# sauce-sdk
+# @eco-incorp/sauce-sdk
 
-Tooling for the Sauce protocol, published as a single npm package: `@eco-incorp/sauce-sdk`.
-
-Includes:
-
-- A JS-like recipe **compiler** that emits Sauce bytecode.
-- A TypeScript **SDK** for building against on-chain protocols (Uniswap, Curve, Balancer, …).
-- High-level **action primitives** (AMM swaps, multi-hop, split routing).
-- A local **dev environment** (hardhat fork, script runner, examples).
-
-## Install
+Build, compile and verify Sauce programs — cross-chain intents that execute as bytecode on the Eco
+Portal. One package, TypeScript, EVM and SVM.
 
 ```sh
-pnpm add @eco-incorp/sauce-sdk
-# or
 npm install @eco-incorp/sauce-sdk
 ```
 
-## Import paths
+The SauceScript compiler comes with it as a dependency; there is nothing else to install.
 
-Everything ships under the single `@eco-incorp/sauce-sdk` package with subpath exports:
+## Quickstart
+
+Open a route on a destination chain, and the SDK compiles the program and assembles the intent:
+
+```ts
+import { routes } from '@eco-incorp/sauce-sdk'
+
+const built = routes.openRoute('base', 'function main() { return 1n; }', {
+  source: 'ethereum',      // where the reward is posted
+  pot, portal, creator, prover,
+  deadline: 2000n,
+  rewardDeadline: 1000n,
+}).reward(0n)
+
+built.compiled.bytecode[0]   // the program
+built.intent                 // the assembled Intent, ready to publish
+```
+
+`routes.openRoute(destination, …)` is what the chain globals forward to, so
+`Base(sauce, options).reward(…)` is the same call.
+
+> **Route bodies are unannotated SauceScript.** The SDK runs source rewrites over the body before
+> compiling, and those parse plain JS — `function main(): Uint256 { … }` is rejected. Annotated
+> SauceScript is fine when you call the compiler directly (below), just not through a route.
+
+## Building programs without writing SauceScript
+
+The `token`, `swap` and `deposit` namespaces emit SauceScript for you:
+
+```ts
+import { token } from '@eco-incorp/sauce-sdk'
+
+const source = token.Token.transfer({ token: usdc, to: recipient, amount: 1_000_000n }).source('evm')
+```
+
+Feed that to `routes.openRoute`, or compile it yourself with `routes.compileSauceRoute`.
+
+## The compiler
+
+`/compiler` re-exports the published Rust/wasm SauceScript compiler:
 
 ```ts
 import { compile } from '@eco-incorp/sauce-sdk/compiler'
-import { protocolInfo } from '@eco-incorp/sauce-sdk/protocols/uniswap-v3'
-import { Saucer } from '@eco-incorp/sauce-sdk/actions'
-// the bare specifier is the SDK entry
-import { /* ... */ } from '@eco-incorp/sauce-sdk'
+
+const { bytecode } = compile({
+  target: 'evm',                                  // or 'svm'
+  entry: 'main.js',
+  resolve: (path) => sourceFor(path),             // your loader; return undefined if unknown
+})
 ```
 
-## Repo layout
+`main` may take parameters — they arrive at run time as 32-byte words appended to the program, so one
+program serves many argument sets. Compile-time substitution is `defines` instead.
 
-Sources are organised as a pnpm workspace for development; everything ships under the single `@eco-incorp/sauce-sdk` name at publish time.
+Use `routes.compileSauceRoute` rather than a raw `compile` for **generated** programs: a generated
+`main` falls off the end and has no return type of its own, which a raw compile rejects.
 
-| Path | What's in it | Subpath |
-| --- | --- | --- |
-| [`sdk/`](sdk/) | Protocols, chains, skills | `/`, `/protocols/*`, `/chains`, `/skills` |
-| [`actions/`](actions/) | High-level action primitives | `/actions` |
-| [`dev-tools/`](dev-tools/) | Local fork environment, script runner, examples | bin: `sauce-dev-tools` |
+## Registries
+
+129 protocols and 33 chains ship with the package:
+
+```ts
+import { listProtocols, getProtocol, requireChain } from '@eco-incorp/sauce-sdk'
+
+listProtocols().length          // 129
+getProtocol('uniswap-v3')       // ABIs, addresses, per-chain deployments
+requireChain('base').id         // 8453
+```
+
+## Subpaths
+
+| Subpath | What's there |
+| --- | --- |
+| `.` | routes DSL, `token`/`swap`/`deposit` builders, chain + protocol registries |
+| `/compiler` | the SauceScript compiler |
+| `/actions` | routing-intent lowering (`actionsToSauce`), AMM/bridge action primitives |
+| `/protocols/*` | one protocol's ABIs and metadata, e.g. `/protocols/uniswap-v3` |
+| `/chains`, `/deployments` | canonical chain list; deployed contract addresses |
+| `/recipes` | shipped programs (settle, CCTP split-transfer) and their sources |
+| `/svm`, `/svm/engine`, `/svm/verify` | SVM client, account resolution, engine harness, settle verification |
+| `/evm/engine` | EVM engine helpers |
+| `/verify` | decodes **legacy v1-grammar** settle programs. `viem`-only, browser-safe |
+| `/skills` | AI skill files per protocol |
+
+`/verify` is for programs already on chain: it reads the v1 prologue that the retired TypeScript
+compiler emitted. Programs built by this SDK today are not v1-grammar — use
+`svm/verify`'s recompile-and-compare shape for those.
 
 ## Development
 
 ```sh
 pnpm install
 pnpm build       # sdk + actions
-pnpm typecheck   # typecheck all areas
-pnpm test        # run all tests
+pnpm typecheck
+pnpm test
 ```
 
 ## Publishing
 
-Tag-driven via [`.github/workflows/publish.yml`](.github/workflows/publish.yml):
+Tag-driven, via [`.github/workflows/publish.yml`](.github/workflows/publish.yml):
 
 ```sh
 git tag v1.2.3 && git push origin v1.2.3
 ```
 
-The workflow stamps the root package with the tag's version and publishes `@eco-incorp/sauce-sdk` to both npmjs.com and GitHub Packages.
+The workflow stamps the version from the tag inside the runner (`npm version --no-git-tag-version`)
+and publishes to **npmjs.com only**. The `version` in `package.json` is therefore not the source of
+truth and will read older than the latest release — that is expected.
