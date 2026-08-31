@@ -19,12 +19,17 @@ Open a route on a destination chain, and the SDK compiles the program and assemb
 ```ts
 import { routes } from '@eco-incorp/sauce-sdk'
 
+// Both deadlines are ABSOLUTE unix timestamps, not durations: the chain compares
+// `block.timestamp > route.deadline`. And rewardDeadline must be >= deadline — a solver may fulfil
+// right up to the route deadline, so an earlier reward deadline is already refundable by then.
+const now = BigInt(Math.floor(Date.now() / 1000))
+
 const built = routes.openRoute('base', 'function main() { return 1n; }', {
-  source: 'ethereum',            // where the reward is posted
+  source: 'ethereum',                  // where the reward is posted
   pot, portal, creator, prover,
-  deadline: routeDeadline,       // how long a solver has to fulfil
-  rewardDeadline,                // must be >= routeDeadline, or the reward can expire
-}).reward(rewardAmount)          // mid-fulfilment and no solver will take it
+  deadline: now + 3600n,
+  rewardDeadline: now + 7200n,
+}).reward([{ token: usdc, amount: 1_000_000n }])
 
 built.compiled.bytecode[0]   // the program
 built.intent                 // the assembled Intent, ready to publish
@@ -32,6 +37,9 @@ built.intent                 // the assembled Intent, ready to publish
 
 `routes.openRoute(destination, …)` is what the chain globals forward to, so
 `Base(sauce, options).reward(…)` is the same call.
+
+`.reward()` takes a token-amount array as above. A **bare bigint** is a NATIVE reward —
+`.reward(1_000_000n)` posts 1e6 wei of the source chain's gas token, not 1 USDC.
 
 > **Route bodies are unannotated SauceScript.** The SDK runs source rewrites over the body before
 > compiling, and those parse plain JS — `function main(): Uint256 { … }` is rejected. Annotated
@@ -49,14 +57,22 @@ const { source, baseDirs } = token.Token
   .transfer({ token: usdc, to: recipient, amount: 1_000_000n })
   .toSauceScript('evm')
 
-const built = routes.openRoute('base', source, { ...options, compile: { baseDirs } }).reward(reward)
+const built = routes
+  .openRoute('base', source, { ...options, compile: { baseDirs: [...baseDirs] } })
+  .reward(reward)
 ```
 
 The `baseDirs` matter: the emitted program does `import { IERC20 } from "./artifacts/IERC20.json"`,
-and a route only supplies token base dirs automatically when its own `USDC.transfer(…)` rewrite
-fires — which it does not for source a builder already emitted. Without them the compile fails with
-`failed to import \`IERC20\``. `.source(target)` gives you the source alone if you are supplying
-`baseDirs` yourself.
+and a route supplies token base dirs automatically only when its own `USDC.transfer(…)` rewrite
+fires — which it does not for source a builder already emitted. Without them the compile fails on
+that import. Spread them: `toSauceScript`'s array is `readonly`, the option is not.
+
+`.source(target)` gives you the source alone if you are supplying `baseDirs` yourself.
+
+**On the SVM target this route path does not work.** `toSauceScript('svm')` emits `main` with typed
+account parameters — that parameter list *is* the account manifest, so it cannot be dropped — and a
+route runs an acorn-based accessor rewrite that rejects annotations. Pass
+`compile: { accessors: false }`, or compile the source directly.
 
 ## The compiler
 
@@ -68,26 +84,38 @@ import { compile } from '@eco-incorp/sauce-sdk/compiler'
 const { bytecode } = compile({
   target: 'evm',                                  // or 'svm'
   entry: 'main.js',
-  resolve: (path) => sourceFor(path),             // your loader; return undefined if unknown
+  resolve: (path) => bytesFor(path),              // module BYTES (Uint8Array), or undefined
 })
 ```
 
 `main` may take parameters — they arrive at run time as 32-byte words appended to the program, so one
 program serves many argument sets. Compile-time substitution is `defines` instead.
 
-Use `routes.compileSauceRoute` rather than a raw `compile` for **generated** programs: a generated
-`main` falls off the end and has no return type of its own, which a raw compile rejects.
+A `main` that falls off the end has no return type of its own, and a raw `compile` rejects it
+(`` `main` does not return on every path ``). Generated programs — the `token`/`swap`/`deposit`
+builders — hit this. Either annotate it yourself (`function main(): void { … }`) or go through
+`routes.compileSauceRoute`, which annotates it for you. Note that one takes
+`(destination, sauce, execution, options)`: the execution seam is required, and an SVM destination
+needs an already-staged buffer, so it is the route path rather than a bare compile helper.
 
 ## Registries
 
-129 protocols and 39 canonical chains ship with the package — EVM plus Solana:
+129 protocols and 39 canonical chains ship with the package — 38 EVM plus Solana:
 
 ```ts
 import { listProtocols, getProtocol, requireChain } from '@eco-incorp/sauce-sdk'
 
 listProtocols().length          // 129
 getProtocol('uniswap-v3')       // ABIs, addresses, per-chain deployments
-requireChain('base').id         // 8453 — reads CANONICAL_CHAINS (39; `chains` is the 33 EVM ones)
+```
+
+`requireChain` and `getChain` read different registries: `CANONICAL_CHAINS` has all 39, while the
+`chains` export has 33 of the 38 EVM ones — `unichain`, `sonic`, `ronin`, `plasma` and `ink` are
+canonical but absent from it, so `getChain(130)` is `undefined` where `requireChain('unichain')`
+resolves.
+
+```ts
+requireChain('base').id         // 8453 — reads CANONICAL_CHAINS (all 39)
 ```
 
 ## Subpaths
