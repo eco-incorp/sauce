@@ -19,7 +19,8 @@ const manifestPath = join(thisDir, "manifest.json");
 
 /**
  * The shared stdlib/DSL plugin's manifest — the single declarative source of truth both
- * compilers' loaders are meant to read.
+ * compilers' loaders are meant to read (see
+ * `docs/plans/P5-plugin-skeleton-design.md`).
  *
  * `ambient` ships EMPTY, and an entry is not free to add: `chainAmbient()` (routes/ambient.ts)
  * hands this list to EVERY `openRoute` compile, which both activates the RS compiler and makes the

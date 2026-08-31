@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { compile } from '../src/index.js';
+import { compile, type CompileTarget } from '../src/index.js';
 import { CompilerContext } from '../src/context.js';
 import { OPS } from '../src/saucer/ops.js';
 import { makeNodeModulesFixture, type NodeModulesFixture } from './node-modules-fixture.js';
@@ -242,5 +242,67 @@ describe('bare-specifier / node_modules resolution', () => {
     const withPackages = compile(source, { baseDirs: [fx.projDir], target: 'v1', cache: false }).bytecode;
 
     expect(withPackages[0]).toEqual(returnLiteral(12));
+  });
+});
+
+// Ambient bare-specifier package resolution (P5's "resolved unknown": ambient's specifier
+// resolution is the SAME collectFunctionsFromSpecifier machinery a real import already uses —
+// context.ts's resolveModuleSource -> resolvePackage fallback for a specifier that isn't
+// "./"/"../" — so `CompileOptions.ambient` resolves a bare/scoped package specifier through
+// node_modules exactly like `import ... from "@sauce/token"` above, with NO import line at all.
+// See docs/plans/P5-plugin-skeleton-design.md and compiler/test/ambient-import.test.ts (which
+// covers the RELATIVE-specifier ambient shape; this is its bare-package-specifier counterpart).
+//
+// Reuses the SAME toy `@sauce/token` fixture as the rest of this file (a fake `tok()` export
+// with a real per-target `.svm.js` arm) — NOT the actual `sdk/src/std/token` library, whose
+// arms are named `.evm.js`/`.svm.js` (the PUBLISHED Rust/WASM compiler's target vocabulary),
+// not this compiler's own `CompileTarget` ('v1'/'v12'/'svm') — so it cannot be resolved by this
+// compiler's arm probe at all yet, ambient or import, independent of this feature.
+describe('ambient bare-specifier package resolution (CompileOptions.ambient)', () => {
+  const targets: CompileTarget[] = ['v1', 'v12'];
+
+  for (const target of targets) {
+    it(`ambient: ['@sauce/token'] resolves via node_modules, byte-identical to the import, on target ${target}`, () => {
+      const viaAmbient = compile('function main() { return tok(); }', {
+        baseDirs: [fx.projDir],
+        target,
+        ambient: ['@sauce/token'],
+        cache: false,
+      });
+
+      const viaImport = compile('import { tok } from "@sauce/token";\nfunction main() { return tok(); }', {
+        baseDirs: [fx.projDir],
+        target,
+        cache: false,
+      });
+
+      expect(viaAmbient.bytecode.length).toBe(viaImport.bytecode.length);
+      viaAmbient.bytecode.forEach((buf, i) => expect(Array.from(buf)).toEqual(Array.from(viaImport.bytecode[i])));
+    });
+  }
+
+  it('composes with per-target arm selection: the svm arm wins ambiently too, diverging from the v1/v12 neutral body', () => {
+    const svmResult = compile('function main() { return tok(); }', {
+      baseDirs: [fx.projDir],
+      target: 'svm',
+      ambient: ['@sauce/token'],
+      cache: false,
+    });
+
+    const v1Result = compile('function main() { return tok(); }', {
+      baseDirs: [fx.projDir],
+      target: 'v1',
+      ambient: ['@sauce/token'],
+      cache: false,
+    });
+
+    expect(v1Result.bytecode[0]).toEqual(returnLiteral(1));
+    expect(svmResult.bytecode[0]).not.toEqual(v1Result.bytecode[0]);
+  });
+
+  it('without ambient (and no import line), the same program genuinely fails to resolve — not a vacuous pass', () => {
+    expect(() =>
+      compile('function main() { return tok(); }', { baseDirs: [fx.projDir], target: 'v1', cache: false }),
+    ).toThrow();
   });
 });
