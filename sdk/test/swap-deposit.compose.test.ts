@@ -41,13 +41,11 @@ function aaveSupply(overrides: Partial<DepositSpec & { amount: "balance" | "delt
 }
 
 describe("swapThenDepositSource — swap output feeds a deposit, one program", () => {
-  for (const target of ["v1", "v12"] as const) {
-    it(`compiles on ${target} (amount: 'balance')`, () => {
-      const src = swapThenDepositSource(univ3Leg, aaveSupply());
-      const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target });
-      expect(bytecode[0]!.length).toBeGreaterThan(0);
-    });
-  }
+  it(`compiles on (amount: 'balance')`, () => {
+    const src = swapThenDepositSource(univ3Leg, aaveSupply());
+    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
+    expect(bytecode[0]!.length).toBeGreaterThan(0);
+  });
 
   it("'delta' variant compiles and its source contains the pre/post/delta bracket", () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply({ amount: "delta" }));

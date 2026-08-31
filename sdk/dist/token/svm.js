@@ -46,9 +46,7 @@ export function tokenProgramValueExpr(input) {
         return formatBigint(TOKEN_PROGRAM_BIGINT);
     if (input === "token-2022")
         return formatBigint(TOKEN_2022_PROGRAM_BIGINT);
-    if (typeof input === "bigint")
-        return formatBigint(input);
-    return input.arg;
+    return formatBigint(input);
 }
 export function assertRefIsIdentifier(ref, label) {
     if (!IDENTIFIER_RE.test(ref)) {
@@ -56,7 +54,7 @@ export function assertRefIsIdentifier(ref, label) {
     }
 }
 export function newSvmEmitState() {
-    return { pinnedTokenPrograms: new Set() };
+    return { pinnedTokenPrograms: new Map() };
 }
 /** `Account`, `Account<Writable>`, `Account<Signer>` or `Account<Writable, Signer>`. */
 export function accountParamType({ writable, signer }) {
@@ -113,12 +111,22 @@ function amountExpr(amount, sourceRef) {
         return `svm.sload(${sourceRef}, ${SPL_AMOUNT_OFFSET}, 8).toLe()`;
     return formatBigint(typeof amount === "bigint" ? amount : BigInt(amount));
 }
-/** `require(<ref> == <pubkey>)`, emitted at most once per token-program ref per program. */
+/**
+ * `require(<ref> == <pubkey>)`, emitted once per (ref, program) pair. A ref names ONE attached
+ * account, so two ops pinning the same ref to different programs cannot both be satisfied -- the
+ * second would silently execute against the first's program. Distinct programs need distinct refs.
+ */
 function tokenProgramPin(ref, tokenProgram, state) {
-    if (state.pinnedTokenPrograms.has(ref))
+    const value = tokenProgramValueExpr(tokenProgram);
+    const pinned = state.pinnedTokenPrograms.get(ref);
+    if (pinned === value)
         return undefined;
-    state.pinnedTokenPrograms.add(ref);
-    return `require(${ref} == ${tokenProgramValueExpr(tokenProgram)});`;
+    if (pinned !== undefined) {
+        throw new Error(`svm token: ref '${ref}' is pinned to ${pinned} and cannot also be ${value} -- one ref is one ` +
+            `attached account. Give the ops distinct svm.tokenProgram refs.`);
+    }
+    state.pinnedTokenPrograms.set(ref, value);
+    return `require(${ref} == ${value});`;
 }
 /**
  * `svm.call(...)` block for a `TransferChecked`/`ApproveChecked` CPI. `index` disambiguates the

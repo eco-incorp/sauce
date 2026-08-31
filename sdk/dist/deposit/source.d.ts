@@ -22,8 +22,9 @@ export declare const COMPOSED_BASE_DIRS: readonly string[];
 /**
  * One deposit's full statement block (any `"balance"` binding line, the approve line if
  * applicable, then the protocol call) for `spec` — for splicing into a larger, hand-written
- * program. `varSuffix` disambiguates the bound `depositAmtN` local when multiple `"balance"`
- * deposits share one program (`depositSource` passes the spec's own index).
+ * program. `varSuffix` disambiguates EVERY local this block binds — the `depositAmtN` balance read
+ * and a template's own selector const — when several deposits share one program (`depositSource`
+ * passes the spec's own index).
  */
 export declare function depositCallStatement(spec: DepositSourceSpec, varSuffix?: string): string;
 /** The import lines a `depositSource(specs)` program needs: each resolved template's own

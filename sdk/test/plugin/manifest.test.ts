@@ -15,7 +15,9 @@
 import { loadPlugin } from '../../src/plugin/index.js';
 import { compileProgram as compile } from '../helpers';
 
-const TARGETS = ['v1', 'v12'] as const;
+// The compiler's two REAL backends. `'v1'`/`'v12'` were the retired TS compiler's EVM targets and
+// both map to `'evm'` now, so iterating them ran every case twice against one backend.
+const TARGETS = ['evm', 'svm'] as const;
 
 /** The engine's REVERT opcode — measured against the published compiler's emission for `throw`,
  *  the same way `SETTLE_WIRE`'s constants are. Identical on both EVM and SVM. */

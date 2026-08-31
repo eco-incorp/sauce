@@ -1,6 +1,6 @@
 import { AccountRole } from '@solana/kit';
 import type { Address, TransactionSigner } from '@solana/kit';
-import type { AccountManifest } from 'sauce-next';
+import type { AccountManifest } from 'sauce-compiler';
 /**
  * Maps each declared slot of the compiler's AccountManifest to a concrete
  * address. `signer: true` upgrades the role only; pass the TransactionSigner
@@ -54,7 +54,9 @@ export interface ResolvedAccountMeta {
  *
  * A `remaining` entry is a POSITION, not an account: it marks where the
  * caller's own variable-length tail begins, so resolution stops there and the
- * caller appends its tail itself.
+ * caller appends its tail itself. It must be the LAST entry, and one that is not
+ * throws — stopping early would drop the slots after it from `metas` and shift
+ * the index of every account the caller then appends.
  *
  * MSG_SENDER/TX_ORIGIN is the first in-list signer, resolved LAZILY by the
  * engine (NoSigner only when the program actually reads the sender) — so no

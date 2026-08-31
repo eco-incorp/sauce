@@ -42,10 +42,12 @@ export interface SvmTokenRefs {
      *  `"tokenProgram"`. */
     tokenProgram?: string;
 }
-/** The SVM CPI target VALUE — a literal well-known program id, or a `main()` argument name. */
-export type SvmTokenProgramInput = "spl" | "token-2022" | bigint | {
-    readonly arg: string;
-};
+/**
+ * The SVM CPI target VALUE — a well-known program id by name, or a raw pubkey as a bigint. Always a
+ * LITERAL: every account identity a program touches is an attach slot, so a caller-supplied identity
+ * belongs in `SvmTokenRefs.tokenProgram` (the ref this value is pinned against), never in the value.
+ */
+export type SvmTokenProgramInput = "spl" | "token-2022" | bigint;
 export interface TokenTransferSpec {
     /** EVM: the ERC20 contract. Required on an EVM target. */
     token?: AddressInput;

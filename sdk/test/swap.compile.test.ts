@@ -52,15 +52,12 @@ function specFor(poolType: SwapPoolType): SwapSpec {
 
 describe("swap adapter compiles for every dispatchable poolType, both targets", () => {
   for (const poolType of Object.values(SwapPoolType) as SwapPoolType[]) {
-    for (const target of ["v1", "v12"] as const) {
-      it(`poolType ${poolType} / ${target}`, () => {
-        const { bytecode } = compile(swapSource(specFor(poolType)), {
-          baseDirs: [...SWAP_BASE_DIRS],
-          target,
-        });
-        expect(bytecode[0]!.length).toBeGreaterThan(0);
+    it(`poolType ${poolType}`, () => {
+      const { bytecode } = compile(swapSource(specFor(poolType)), {
+        baseDirs: [...SWAP_BASE_DIRS]
       });
-    }
+      expect(bytecode[0]!.length).toBeGreaterThan(0);
+    });
   }
 });
 
@@ -82,12 +79,10 @@ describe("a realistic 2-leg balance-chained program (UniV3 positive -> UniV4 neg
     }),
   ]);
 
-  for (const target of ["v1", "v12"] as const) {
-    it(`compiles on ${target}`, () => {
-      const { bytecode } = compile(src, { baseDirs: [...SWAP_BASE_DIRS], target });
-      expect(bytecode[0]!.length).toBeGreaterThan(0);
-    });
-  }
+  it("compiles", () => {
+    const { bytecode } = compile(src, { baseDirs: [...SWAP_BASE_DIRS] });
+    expect(bytecode[0]!.length).toBeGreaterThan(0);
+  });
 });
 
 describe("the sign is actually in the bytes", () => {

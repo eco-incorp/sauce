@@ -39,17 +39,14 @@ const ALL_KEYS: DepositKey[] = [
   "lido:wrap",
 ];
 
-describe("deposit adapter compiles for every registered template, both targets", () => {
+describe("deposit adapter compiles for every registered template", () => {
   for (const key of ALL_KEYS) {
-    for (const target of ["v1", "v12"] as const) {
-      it(`${key} / ${target}`, () => {
-        const { bytecode } = compile(depositSource(specFor(key)), {
-          baseDirs: [...DEPOSIT_BASE_DIRS],
-          target,
-        });
-        expect(bytecode[0]!.length).toBeGreaterThan(0);
+    it(key, () => {
+      const { bytecode } = compile(depositSource(specFor(key)), {
+        baseDirs: [...DEPOSIT_BASE_DIRS],
       });
-    }
+      expect(bytecode[0]!.length).toBeGreaterThan(0);
+    });
   }
 });
 
@@ -72,16 +69,14 @@ describe("amount 'balance' variants compile", () => {
 });
 
 describe("a multi-deposit program (erc4626 + aave-v3, one main())", () => {
-  for (const target of ["v1", "v12"] as const) {
-    it(`compiles on ${target}`, () => {
-      const src = depositSource([
-        { protocol: "erc4626", action: "deposit", target: TARGET, token: TOKEN, amount: 500n },
-        { protocol: "aave-v3", action: "supply", target: TARGET, token: TOKEN, amount: 500n },
-      ]);
-      const { bytecode } = compile(src, { baseDirs: [...DEPOSIT_BASE_DIRS], target });
-      expect(bytecode[0]!.length).toBeGreaterThan(0);
-    });
-  }
+  it("compiles", () => {
+    const src = depositSource([
+      { protocol: "erc4626", action: "deposit", target: TARGET, token: TOKEN, amount: 500n },
+      { protocol: "aave-v3", action: "supply", target: TARGET, token: TOKEN, amount: 500n },
+    ]);
+    const { bytecode } = compile(src, { baseDirs: [...DEPOSIT_BASE_DIRS] });
+    expect(bytecode[0]!.length).toBeGreaterThan(0);
+  });
 });
 
 /**

@@ -47,9 +47,11 @@ function bytesLiteral(bytes) {
 /**
  * A selector const plus the calldata expression that reads it. The selector is BOUND rather than
  * used inline because a method call directly on a `hex` literal (`hex\`…\`.concat(…)`) is outside
- * the compiler's supported subset; the name is per-call so several deposits can share one program.
+ * the compiler's supported subset. `varSuffix` is the emitting spec's own index, so two deposits of
+ * the SAME kind in one program declare two distinct consts instead of colliding on one name.
  */
-function calldataLines(name, selector, wordExpr) {
+function calldataLines(base, varSuffix, selector, wordExpr) {
+    const name = `${base}${varSuffix}`;
     const decl = `const ${name} = ${bytesLiteral(selector)};`;
     return { decl, expr: wordExpr === undefined ? name : `${name}.concat(abi.encode(${wordExpr}))` };
 }
@@ -181,9 +183,9 @@ export const DEPOSIT_TEMPLATES = {
         imports: [],
         binding: null,
         extras: { referral: addressExtra(0n) },
-        emit(d, amountExpr) {
+        emit(d, amountExpr, varSuffix) {
             const referral = d.extra.referral ?? 0n;
-            const { decl, expr } = calldataLines("dSubmit", LIDO_SUBMIT_SELECTOR, formatBigint(referral));
+            const { decl, expr } = calldataLines("dSubmit", varSuffix, LIDO_SUBMIT_SELECTOR, formatBigint(referral));
             return [decl, `evm.call(${formatBigint(d.target)}, ${amountExpr}, ${expr});`];
         },
     },
@@ -199,8 +201,8 @@ export const DEPOSIT_TEMPLATES = {
         imports: [],
         binding: null,
         extras: {},
-        emit(d, amountExpr) {
-            const { decl, expr } = calldataLines("dWrap", WETH_DEPOSIT_SELECTOR, undefined);
+        emit(d, amountExpr, varSuffix) {
+            const { decl, expr } = calldataLines("dWrap", varSuffix, WETH_DEPOSIT_SELECTOR, undefined);
             return [decl, `evm.call(${formatBigint(d.target)}, ${amountExpr}, ${expr});`];
         },
     },
@@ -216,8 +218,8 @@ export const DEPOSIT_TEMPLATES = {
         imports: [],
         binding: null,
         extras: {},
-        emit(d, amountExpr) {
-            const { decl, expr } = calldataLines("dUnwrap", WETH_WITHDRAW_SELECTOR, amountExpr);
+        emit(d, amountExpr, varSuffix) {
+            const { decl, expr } = calldataLines("dUnwrap", varSuffix, WETH_WITHDRAW_SELECTOR, amountExpr);
             return [decl, `evm.call(${formatBigint(d.target)}, 0n, ${expr});`];
         },
     },

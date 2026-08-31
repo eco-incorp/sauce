@@ -7,7 +7,8 @@ export declare function tokenProgramValueExpr(input: SvmTokenProgramInput | unde
 export declare function assertRefIsIdentifier(ref: string, label: string): void;
 /** Per-program emission state: a token program is pinned at most once per ref per program. */
 export interface SvmEmitState {
-    pinnedTokenPrograms: Set<string>;
+    /** token-program ref -> the program value it was pinned to, so a second op cannot repoint it. */
+    pinnedTokenPrograms: Map<string, string>;
 }
 export declare function newSvmEmitState(): SvmEmitState;
 interface Role {

@@ -1,5 +1,5 @@
 import type { Address, AddressesByLookupTableAddress, Commitment, Instruction, Signature, TransactionSigner } from '@solana/kit';
-import type { AccountManifest } from 'sauce-next';
+import type { AccountManifest } from 'sauce-compiler';
 import type { ArgsLayout, ArgValue } from './layout.js';
 import type { AccountResolution } from './resolve.js';
 import type { SendExecuteResult, SimulateExecuteResult } from './send.js';

@@ -4,8 +4,9 @@ export interface ConformanceVector {
     tokens: Hex[];
     minOut: bigint;
     recipient: Hex;
-    /** The exact program these args produced under the retired compiler — measured by compiling
-     *  `recipes/settle.sauce.ts`, not hand-assembled. Frozen: nothing recompiles it any more. */
+    /** The exact program these args produce — measured by compiling `recipes/settle.sauce.ts` with
+     *  the in-repo TypeScript compiler, not hand-assembled. `test/verify.compile.test.ts` recompiles
+     *  it and byte-compares, so this is a live regression pin, not a transcription. */
     program: Hex;
 }
 /**
@@ -13,10 +14,15 @@ export interface ConformanceVector {
  * obtained by actually compiling `recipes/settle.sauce.ts` with the given args (not hand-encoded).
  * See decode.ts's module docstring for the grammar these bytes instantiate.
  *
- * They are now a FROZEN corpus rather than a regression pin on a live compiler: the compiler that
- * produced them is retired, and its replacement folds the params into the body instead of a prologue
- * (decode.ts explains). Nothing recompiles these — they are the definition of the v1 grammar for
- * anyone reimplementing the decoder, which is what a conformance corpus is for.
+ * They serve two purposes at once. They are the definition of the v1 grammar for anyone
+ * reimplementing the decoder, which is what a conformance corpus is for; and they are a LIVE
+ * regression pin on the compiler that produces the grammar — `test/verify.compile.test.ts` compiles
+ * `recipes/settle.sauce.ts` with the in-repo TypeScript compiler and byte-compares against these
+ * vectors, so a program edit or a compiler change shows up as a real diff.
+ *
+ * The published Rust compiler does NOT reproduce them, and is not meant to: it folds the params
+ * into the body instead of emitting them as a decodable prologue (decode.ts explains), so these
+ * bytes pin the v1 grammar only.
  *
  * `v3` is the trap vector: `Z = 0x0000000000000000000000000000000000ff00aa` has two leading zero
  * bytes, so its minimal-length PUSH is only 3 bytes wide (`03 ff00aa`), not the naive 20 — a fixed
