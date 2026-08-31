@@ -322,7 +322,7 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
   quoteAccounts(cfg: PoolConfig): VenueAccount[] {
     const c = cfg as MeteoraDammV1StablePoolConfig;
     const refs = poolRefs(c.pool);
-    // 8 read-only accounts; t comes from block.timestamp (Clock sysvar), and
+    // 8 read-only accounts; t comes from ctx.timestamp() (Clock sysvar), and
     // only the OUT-side token vault is read (idle-float liquidity bound).
     return [
       { ref: refs.pool, address: c.pool },

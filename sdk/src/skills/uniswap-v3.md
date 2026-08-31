@@ -38,7 +38,7 @@ function main(routerAddress: Address, tokenIn: Address, tokenOut: Address, fee: 
 ```typescript
 import { UniswapV3NonfungiblePositionManagerABI as INonfungiblePositionManager } from "./abis";
 
-function main(nfpmAddress: Address, token0: Address, token1: Address, fee: Uint256, tickLower: Uint256, tickUpper: Uint256, amount0Desired: Uint256, amount1Desired: Uint256, amount0Min: Uint256, amount1Min: Uint256, recipient: Address): Uint256 {
+function main(nfpmAddress: Address, token0: Address, token1: Address, fee: Uint256, tickLower: Uint256, tickUpper: Uint256, amount0Desired: Uint256, amount1Desired: Uint256, amount0Min: Uint256, amount1Min: Uint256, recipient: Address): { tokenId: Uint256, liquidity: Uint256, amount0: Uint256, amount1: Uint256 } {
   const nfpm = INonfungiblePositionManager.at(nfpmAddress);
   return nfpm.mint({token0: token0, token1: token1, fee: fee, tickLower: tickLower, tickUpper: tickUpper, amount0Desired: amount0Desired, amount1Desired: amount1Desired, amount0Min: amount0Min, amount1Min: amount1Min, recipient: recipient, deadline: 99999999999});
 }
@@ -55,7 +55,7 @@ function main(nfpmAddress: Address, token0: Address, token1: Address, fee: Uint2
 ```typescript
 import { UniswapV3NonfungiblePositionManagerABI as INonfungiblePositionManager } from "./abis";
 
-function main(nfpmAddress: Address, tokenId: Uint256, liquidity: Uint256, amount0Min: Uint256, amount1Min: Uint256): Uint256 {
+function main(nfpmAddress: Address, tokenId: Uint256, liquidity: Uint256, amount0Min: Uint256, amount1Min: Uint256): { amount0: Uint256, amount1: Uint256 } {
   const nfpm = INonfungiblePositionManager.at(nfpmAddress);
   return nfpm.decreaseLiquidity({tokenId: tokenId, liquidity: liquidity, amount0Min: amount0Min, amount1Min: amount1Min, deadline: 99999999999});
 }

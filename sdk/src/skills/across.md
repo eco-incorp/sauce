@@ -14,7 +14,8 @@ import { AcrossSpokePoolABI as ISpokePool } from "./abis";
 
 function main(spokePoolAddress: Address, token: Address, amount: Uint256, destinationChainId: Uint256, recipient: Address): Uint256 {
   const spokePool = ISpokePool.at(spokePoolAddress);
-  return spokePool.deposit(recipient, token, amount, destinationChainId, 0, 0, msg.sender, 0);
+  spokePool.deposit(recipient, token, amount, destinationChainId, 0, 0, ctx.msgSender(), 0);
+  return 1;
 }
 ```
 - `token`: ERC-20 token to bridge (must be supported by Across)

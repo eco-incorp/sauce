@@ -115,10 +115,10 @@ describe("toSwapParams — guards", () => {
   it("a non-empty callback with an overridden payer or recipient throws", () => {
     expect(() =>
       toSwapParams(spec({ poolType: SwapPoolType.UniV3, callback: "0xaa", payer: OTHER })),
-    ).toThrow(/address\.self/);
+    ).toThrow(/ctx\.self\(\)/);
     expect(() =>
       toSwapParams(spec({ poolType: SwapPoolType.UniV3, callback: "0xaa", recipient: OTHER })),
-    ).toThrow(/address\.self/);
+    ).toThrow(/ctx\.self\(\)/);
   });
 
   it("a non-empty callback on a callback venue with default payer/recipient is accepted", () => {
@@ -201,14 +201,14 @@ describe("predicates", () => {
 });
 
 describe("source shape", () => {
-  it("swapCallStatement's output contains every field in ABI order, with address.self as the default payer/recipient", () => {
+  it("swapCallStatement's output contains every field in ABI order, with ctx.self() as the default payer/recipient", () => {
     const out = swapCallStatement(spec());
     const order = SWAP_PARAMS_FIELDS.map((f) => out.indexOf(`${f}:`));
     for (let i = 1; i < order.length; i++) {
       expect(order[i]).toBeGreaterThan(order[i - 1]!);
     }
-    expect(out).toContain("payer: address.self");
-    expect(out).toContain("recipient: address.self");
+    expect(out).toContain("payer: ctx.self()");
+    expect(out).toContain("recipient: ctx.self()");
     expect(out).not.toMatch(/payer: 0x/);
   });
 
@@ -228,14 +228,14 @@ describe("source shape", () => {
   it("a 'balance' amountIn emits a runtime IERC20.balanceOf read and imports IERC20", () => {
     const src = swapSource(spec({ amountIn: "balance" as const }));
     expect(src).toContain('import { IERC20 } from "./artifacts/IERC20.json"');
-    expect(src).toContain(`IERC20.at(${BigInt(TOKEN_IN)}n).balanceOf(address.self)`);
+    expect(src).toContain(`IERC20.at(${BigInt(TOKEN_IN)}n).balanceOf(ctx.self())`);
   });
 
   it("a 'balance' amountIn on UniV4 wraps the balance read in the two's-complement negation", () => {
     const src = swapSource(
       spec({ poolType: SwapPoolType.UniV4, poolKey: { fee: 3000n }, amountIn: "balance" as const }),
     );
-    expect(src).toContain(`(0n - (IERC20.at(${BigInt(TOKEN_IN)}n).balanceOf(address.self)))`);
+    expect(src).toContain(`(0n - (IERC20.at(${BigInt(TOKEN_IN)}n).balanceOf(ctx.self())))`);
   });
 
   it("no 'balance' leg does NOT import IERC20", () => {

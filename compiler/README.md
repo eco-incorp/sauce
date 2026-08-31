@@ -405,16 +405,25 @@ block.baseFee; // EIP-1559 base fee
 block.blobBaseFee; // EIP-4844 blob base fee
 ```
 
-### Address Utilities
+### Context Utilities
 
 ```javascript
-address.self; // this contract's address
-address.balance; // this contract's ETH balance
-address.balanceOf(addr); // ETH balance of addr
-address.codeSize(addr); // code size in bytes
-address.codeHash(addr); // keccak256 of code
-address.isContract(addr); // 1 if has code, 0 otherwise
-address.isEOA(addr); // 1 if no code, 0 otherwise
+ctx.self(); // this contract's address
+ctx.selfBalance(); // this contract's ETH balance
+ctx.balance(addr); // ETH balance of addr
+```
+
+### EVM-only code inspection (`ctx.*`, capability-gated — `v1`/`v12` only, rejected on `svm`)
+
+These are ordinary `ctx.*` reads that gate EVM-only per-read (there is no svm analogue), mirroring how
+the RS compiler keeps every context/address read under `ctx.*` and expresses target availability with a
+gate rather than a separate namespace.
+
+```javascript
+ctx.codeSize(addr); // code size in bytes
+ctx.codeHash(addr); // keccak256 of code
+ctx.isContract(addr); // 1 if has code, 0 otherwise
+ctx.isEOA(addr); // 1 if no code, 0 otherwise
 ```
 
 ### Other Functions

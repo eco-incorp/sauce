@@ -17,7 +17,7 @@
  * - activation_point == 0 when activation_type == 0 (slot) — a slot-typed
  *   point cannot be evaluated against the unix clock off-chain nor in the
  *   fragment; timestamp-typed (activation_type == 1) points gate in-fragment
- *   on block.timestamp instead (quote 0 before activation).
+ *   on ctx.timestamp() instead (quote 0 before activation).
  *
  * Overflow bound for the in-VM fragment (engine arithmetic wraps at 2^256):
  * liquidity is u128 and every sqrt price is validated into

@@ -25,6 +25,7 @@ import { bytesToHex } from "viem";
 import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
+import { compileWithRs } from "./rs-compile.js";
 import { rewriteTokenMembers } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
@@ -35,6 +36,15 @@ import type { AddressInput, CallInput } from "./types.js";
 export interface SauceCompileOptions {
   /** Defaults by destination `ChainKind`: `'v12'` for evm, `'svm'` for svm. */
   target?: CompileTarget;
+  /**
+   * P6: which compiler `compile()` runs through. `'ts'` (default, omitted) is today's
+   * `@eco-incorp/sauce-compiler` TypeScript compiler -- completely unchanged. `'rs'` routes
+   * through the RS/WASM compiler instead (`rs-compile.ts`) -- the only path that understands
+   * `ambient` below. Every other option on this interface is best-effort translated for the RS
+   * path; see `rs-compile.ts`'s own per-field notes for exactly how (e.g. `target: 'v1'|'v12'`
+   * both map to the RS compiler's single `'evm'` backend).
+   */
+  compiler?: "ts" | "rs";
   baseDirs?: string[];
   tsSource?: boolean;
   treeshake?: boolean;
@@ -50,13 +60,20 @@ export interface SauceCompileOptions {
    *  (below) synthesizes. A same-named entry with a DIFFERENT abi throws (see `protocol-rewrite.ts`). */
   contracts?: ContractsConfig;
   /** The full protocol-accessor rewrite (`protocol-rewrite.ts`) -- `Uniswap.UniversalRouter.execute(...)`
-   *  -> `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `address.self`.
+   *  -> `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `ctx.self()`.
    *  Default ON (`true`); pass `false` to opt out entirely, or an options object to tune it. Default-ON
    *  is isolation-safe by measurement: the shapes it claims (a 1-3 segment member-chain call rooted at
    *  a registry namespace or canonical-chain key) do not compile at all today, so this can only turn a
    *  hard compile error into a success or a clearer error -- never break an already-compiling program.
    *  EVM destinations only -- an svm destination with at least one rewritten accessor site throws. */
   accessors?: boolean | ProtocolRewriteOptions;
+  /**
+   * Module specifiers whose exports are broadcast into every module with no `import` line --
+   * RS-COMPILER-ONLY (see `compiler` above). Forwarded when `compiler: 'rs'`; silently unused
+   * (never forwarded to `compile()`, never a compile error) when `compiler` is omitted/`'ts'`,
+   * since the TS compiler this repo vendors has no `ambient` concept to forward it to.
+   */
+  ambient?: string[];
 }
 
 export interface SauceEvmExecutionInput {
@@ -141,13 +158,13 @@ export function compileSauceRoute(
     tokenMap.size > 0 ? { ...Object.fromEntries(tokenMap), ...options.defines } : options.defines;
 
   // ORDER IS LOAD-BEARING: the token pass (U4 + balance sugar) runs BEFORE the protocol-accessor
-  // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `address.self`
-  // textually; if it ran first, `self.USDC` would become `address.self.USDC` and the balance
+  // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
+  // textually; if it ran first, `self.USDC` would become `ctx.self().USDC` and the balance
   // sugar's holder would no longer be a bare Identifier, silently losing the site. Safe in the
   // other direction: the accessor pass cannot claim IERC20.at(...)'s output (neither a namespace
   // nor a chain key, and its call sits mid-chain, which `decomposeMemberChain` declines), and its
   // synthesized-binding collision check cannot trip on `IERC20` (`pascalOfSlug("erc20")` yields
-  // `IErc20_*`, not `IERC20`); the sugar's own `address.self` output is immune to the accessor
+  // `IErc20_*`, not `IERC20`); the sugar's own `ctx.self()` output is immune to the accessor
   // pass's self-sugar too (`self` there is a member PROPERTY, which its exclusion set already
   // covers). See routes-token-rewrite.test.ts's composition test for the regression lock.
   if (tokenMap.size > 0) {
@@ -183,14 +200,20 @@ export function compileSauceRoute(
     }
   }
 
-  const compiled = compile(source, {
-    target,
-    baseDirs,
-    tsSource: options.tsSource,
-    treeshake: options.treeshake,
-    defines,
-    contracts,
-  });
+  // P6 compiler selector: 'rs' routes through the RS/WASM compiler (rs-compile.ts) -- the only
+  // path that understands `options.ambient` -- everything else falls through to the existing TS
+  // compile() call, unchanged.
+  const compiled =
+    options.compiler === "rs"
+      ? compileWithRs({ source, target, baseDirs, defines, contracts, ambient: options.ambient })
+      : compile(source, {
+          target,
+          baseDirs,
+          tsSource: options.tsSource,
+          treeshake: options.treeshake,
+          defines,
+          contracts,
+        });
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");

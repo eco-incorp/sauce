@@ -12,9 +12,10 @@ Bridge tokens via Socket Gateway using a pre-computed route.
 ```typescript
 import { SocketGatewayABI as ISocketGateway } from "./abis";
 
-function main(gatewayAddress: Address, routeId: Uint256, bridgeData: Bytes): Uint256 {
+function main(gatewayAddress: Address, routeId: Uint256, bridgeData: bytes): Uint256 {
   const gateway = ISocketGateway.at(gatewayAddress);
-  return gateway.bridge(routeId, bridgeData);
+  gateway.bridge(routeId, bridgeData);
+  return 1;
 }
 ```
 - `routeId`: Route identifier obtained from the Socket API. Each route corresponds to a specific bridge integration (uint32)

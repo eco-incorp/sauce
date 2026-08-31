@@ -23,7 +23,7 @@ function main(
   exchangeRouterAddress: Address, receiver: Address, cancellationReceiver: Address,
   market: Address, initialCollateralToken: Address, sizeDeltaUsd: Uint256,
   initialCollateralDeltaAmount: Uint256, triggerPrice: Uint256, acceptablePrice: Uint256,
-  executionFee: Uint256, minOutputAmount: Uint256, orderType: Uint256, isLong: Bool
+  executionFee: Uint256, minOutputAmount: Uint256, orderType: Uint256, isLong: bool
 ): Uint256 {
   const router = IExchangeRouter.at(exchangeRouterAddress);
   const result = router.createOrder({
@@ -55,7 +55,7 @@ function main(exchangeRouterAddress: Address, token: Address, receiver: Address,
 
 // Cancel pending order
 import { ExchangeRouterABI as IExchangeRouter } from "./abis";
-function main(exchangeRouterAddress: Address, orderKey: Bytes32): Uint256 {
+function main(exchangeRouterAddress: Address, orderKey: Uint256): Uint256 {
   const router = IExchangeRouter.at(exchangeRouterAddress);
   router.cancelOrder(orderKey);
   return 1;

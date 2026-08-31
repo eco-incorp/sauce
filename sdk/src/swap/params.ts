@@ -107,7 +107,7 @@ function normalizeCallback(
   }
   if (payerOverridden || recipientOverridden) {
     throw new Error(
-      "toSwapParams: a non-empty callback requires payer and recipient to both stay address.self — Router.sol's callback-driven handlers require payer == recipient == address(this)",
+      "toSwapParams: a non-empty callback requires payer and recipient to both stay ctx.self() — Router.sol's callback-driven handlers require payer == recipient == address(this)",
     );
   }
   return value;

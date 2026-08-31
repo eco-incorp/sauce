@@ -18,16 +18,17 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 ```typescript
 // Create automated task
 import { GelatoAutomateABI as IAutomate } from "./abis";
-function main(automateAddress: Address, execAddress: Address, execData: Bytes, moduleData: Bytes, feeToken: Address): Uint256 {
+function main(automateAddress: Address, execAddress: Address, execData: bytes, moduleData: { modules: Uint256[], args: bytes[] }, feeToken: Address): Uint256 {
   const automate = IAutomate.at(automateAddress);
   return automate.createTask(execAddress, execData, moduleData, feeToken);
 }
 
 // Cancel task
 import { GelatoAutomateABI as IAutomate } from "./abis";
-function main(automateAddress: Address, taskId: Bytes32): Uint256 {
+function main(automateAddress: Address, taskId: Uint256): Uint256 {
   const automate = IAutomate.at(automateAddress);
-  return automate.cancelTask(taskId);
+  automate.cancelTask(taskId);
+  return 1;
 }
 ```
 

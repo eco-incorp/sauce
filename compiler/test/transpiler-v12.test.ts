@@ -8,7 +8,7 @@
  * insertion, scalar-vs-dynamic tracking, slot-vs-stack variable access) rather
  * than hard-coding hex.
  *
- * SauceScript here is the LOCAL surface (namespaced `storage.write`, `msg.sender`,
+ * SauceScript here is the LOCAL surface (namespaced `storage.write`, `ctx.msgSender()`,
  * `crypto.keccak256`, `contract.call`, `Math.*`), not the prototype's uppercase
  * builtins — so signed ops (no local surface) are covered by the builder unit
  * suite (saucer-v12.test.ts) instead (CAST_BE's surface, uint(), is pinned per
@@ -40,14 +40,30 @@ const cases: Record<string, Case[]> = {
   ],
 
   Context: [
-    { name: 'msg.sender', src: 'function main(){ return msg.sender }', ref: (c) => mk(c).msgSender() },
-    { name: 'block.timestamp', src: 'function main(){ return block.timestamp }', ref: (c) => mk(c).blockTimestamp() },
-    { name: 'block.chainId', src: 'function main(){ return block.chainId }', ref: (c) => mk(c).blockChainId() },
-    { name: 'address.self', src: 'function main(){ return address.self }', ref: (c) => mk(c).addressSelf() },
+    {
+      name: 'ctx.msgSender() (formerly msg.sender)',
+      src: 'function main(){ return ctx.msgSender() }',
+      ref: (c) => mk(c).msgSender(),
+    },
+    {
+      name: 'ctx.timestamp() (formerly block.timestamp)',
+      src: 'function main(){ return ctx.timestamp() }',
+      ref: (c) => mk(c).blockTimestamp(),
+    },
+    {
+      name: 'ctx.chainId() (formerly block.chainId)',
+      src: 'function main(){ return ctx.chainId() }',
+      ref: (c) => mk(c).blockChainId(),
+    },
+    {
+      name: 'ctx.self() (formerly address.self)',
+      src: 'function main(){ return ctx.self() }',
+      ref: (c) => mk(c).addressSelf(),
+    },
     { name: 'gasLeft()', src: 'function main(){ return gasLeft() }', ref: (c) => mk(c).gasLeft() },
     {
-      name: 'address.balanceOf(self)',
-      src: 'function main(){ return address.balanceOf(address.self) }',
+      name: 'ctx.balance(ctx.self()) (formerly address.balanceOf(address.self))',
+      src: 'function main(){ return ctx.balance(ctx.self()) }',
       ref: (c) => mk(c).balanceOf(mk(c).addressSelf()),
     },
   ],
@@ -244,10 +260,10 @@ const cases: Record<string, Case[]> = {
 
   ControlFlow: [
     {
-      // block.chainId > 0 (not a literal) so the condition isn't const-foldable — this
+      // ctx.chainId() > 0 (not a literal) so the condition isn't const-foldable — this
       // case pins generic if/else codegen shape, not folding.
       name: 'if/else statement',
-      src: 'function main(){ if (block.chainId > 0) { storage.write(0, 1) } else { storage.write(0, 2) } }',
+      src: 'function main(){ if (ctx.chainId() > 0) { storage.write(0, 1) } else { storage.write(0, 2) } }',
       ref: (c) =>
         mk(c)
           .if(mk(c).gt(mk(c).blockChainId(), mk(c).int(0n)))
@@ -285,8 +301,8 @@ const paramCases: ParamCase[] = [
     ref: (c) => mk(c).add(mk(c).read('a'), mk(c).read('b')),
   },
   {
-    name: 'address.isContract(param)',
-    src: 'function main(a){ return address.isContract(a) }',
+    name: 'ctx.isContract(param) (formerly address.isContract(param))',
+    src: 'function main(a){ return ctx.isContract(a) }',
     params: ['a'],
     ref: (c) => mk(c).isContract(mk(c).read('a')),
   },

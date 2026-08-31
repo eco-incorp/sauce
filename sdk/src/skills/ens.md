@@ -18,7 +18,7 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 ```typescript
 // Set resolver for ENS name
 import { ENSRegistryABI as IENSRegistry } from "./abis";
-function main(registryAddress: Address, node: Bytes32, resolver: Address): Uint256 {
+function main(registryAddress: Address, node: Uint256, resolver: Address): Uint256 {
   const registry = IENSRegistry.at(registryAddress);
   registry.setResolver(node, resolver);
   return 1;
@@ -26,7 +26,7 @@ function main(registryAddress: Address, node: Bytes32, resolver: Address): Uint2
 
 // Transfer ENS name ownership
 import { ENSRegistryABI as IENSRegistry } from "./abis";
-function main(registryAddress: Address, node: Bytes32, owner: Address): Uint256 {
+function main(registryAddress: Address, node: Uint256, owner: Address): Uint256 {
   const registry = IENSRegistry.at(registryAddress);
   registry.setOwner(node, owner);
   return 1;

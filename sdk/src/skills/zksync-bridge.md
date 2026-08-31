@@ -14,7 +14,7 @@ import { ZkSyncDiamondProxyABI as IDiamondProxy } from "./abis";
 
 function main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint256): Uint256 {
   const proxy = IDiamondProxy.at(diamondProxyAddress);
-  return proxy.requestL2Transaction(recipient, msg.value, 0x00, l2GasLimit, 800, [], msg.sender);
+  return proxy.requestL2Transaction(recipient, ctx.msgValue(), 0x00, l2GasLimit, 800, [], ctx.msgSender());
 }
 ```
 - `recipient`: Address to receive ETH on zkSync L2 (also the contract to call if `_calldata` is provided)

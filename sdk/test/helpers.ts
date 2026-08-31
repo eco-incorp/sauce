@@ -7,10 +7,24 @@
  */
 
 import { readFileSync } from 'fs';
+import { createRequire } from 'node:module';
 import { join } from 'path';
 import ts from 'typescript';
 import { keccak256, toBytes, toHex } from 'viem';
+import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-next';
 import { compile, type ContractsConfig, type Abi } from '../../compiler/dist/index.js';
+
+// The Rust SauceScript compiler, aliased because its real name (`@eco-incorp/sauce-compiler`) is
+// still this workspace's TypeScript one. Required via `createRequire` for the same reason
+// `test/std/token/harness.ts` does: the package's `node` condition is a CommonJS build that reads
+// its sibling `.wasm` off disk at load, and jest's ESM transform does not resolve that sibling.
+const { compile: compileRust } = createRequire(import.meta.url)('sauce-next') as {
+  compile: (options: {
+    target: SauceTarget;
+    entry?: string;
+    resolve: (path: string) => Uint8Array | undefined;
+  }) => RustCompileResult;
+};
 
 /**
  * Strip TypeScript type annotations from SauceScript, returning plain JS.
@@ -197,6 +211,44 @@ export function compileSauceFunction(sauceScript: string, protocolDir: string): 
 
   const result = compile(strippedSource, { contracts });
   return { bytecode: result.bytecode, warnings: result.warnings };
+}
+
+/**
+ * Compile a SauceScript program with the RUST compiler — the one the corpus is written for, and
+ * the one that will consume it downstream.
+ *
+ * A template's `import { SomeABI as IFoo } from "./abis"` is a CONTRACT import there: the
+ * specifier resolves to ABI JSON rather than to a module, so the resolver serves the named export
+ * of the protocol's `abis.ts` at that path. Compilation failure throws.
+ */
+export function compileSauceFunctionRust(
+  sauceScript: string,
+  protocolDir: string,
+  target: SauceTarget = 'evm',
+): RustCompileResult {
+  const [contractImport] = parseImports(sauceScript);
+  const abi = contractImport
+    ? (loadProtocolAbis(protocolDir)[contractImport.exportName] as Abi | undefined)
+    : undefined;
+
+  if (contractImport && !abi) {
+    throw new Error(`ABI export "${contractImport.exportName}" not found in ${protocolDir}/abis.ts`);
+  }
+
+  const entry = 'main.js';
+  // A miss is `undefined` — the "nothing at this path" signal — never a throw, which would mean
+  // "present but unreadable" and would stop the compiler falling back.
+  const resolve = (path: string): Uint8Array | undefined => {
+    const key = path.startsWith('./') ? path.slice(2) : path;
+    if (key === entry) return Buffer.from(sauceScript);
+    if (contractImport && key === contractImport.source.replace(/^\.\//, '')) {
+      return Buffer.from(JSON.stringify(abi));
+    }
+
+    return undefined;
+  };
+
+  return compileRust({ target, entry, resolve });
 }
 
 /**

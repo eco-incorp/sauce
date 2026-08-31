@@ -194,7 +194,7 @@ describe("emission shape — approvals", () => {
 
   it("amount 'balance' binds exactly one balanceOf read, reused by both approve and the call", () => {
     const stmt = depositCallStatement(aaveSpec({ amount: "balance" }));
-    const balanceOfCount = (stmt.match(/balanceOf\(address\.self\)/g) ?? []).length;
+    const balanceOfCount = (stmt.match(/balanceOf\(ctx\.self\(\)\)/g) ?? []).length;
     expect(balanceOfCount).toBe(1);
     expect(stmt).toMatch(/const depositAmt = IERC20\.at/);
     expect(stmt.match(/depositAmt/g)?.length).toBeGreaterThanOrEqual(3); // decl + approve + call

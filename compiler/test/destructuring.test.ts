@@ -410,14 +410,14 @@ describe('array destructuring — rejected shapes', () => {
     // variable, whose slot would strip the bytes component's heap descriptor
     expect(() =>
       compileMain(
-        'let data = 0; if (msg.value > 0) { const [n, data] = Pool.at(1).meta(); return n + data.length; } return data;',
+        'let data = 0; if (ctx.msgValue() > 0) { const [n, data] = Pool.at(1).meta(); return n + data.length; } return data;',
       ),
     ).toThrow(/cannot destructure output 1 \('data'\).*existing scalar variable 'data'/);
   });
 
   it('allows rebinding an existing variable of the matching kind (plain-const semantics)', () => {
     expect(() =>
-      compileMain('let f = 0; if (msg.value > 0) { const [f] = Pool.at(1).fee(); return f; } return f;'),
+      compileMain('let f = 0; if (ctx.msgValue() > 0) { const [f] = Pool.at(1).fee(); return f; } return f;'),
     ).not.toThrow();
   });
 });
@@ -590,9 +590,9 @@ describe('shape B — multi-output call result stored in a variable (v1 guard)',
   // then rejects the reassignment of an already-scalar `s` — a compile-time catch of
   // what was previously a silent runtime INDEX fault, not a "keeps compiling" case.
   it('rejects a ternary reassignment whose branches are dynamic into an already-scalar variable', () => {
-    expect(() => compileMain('let s = Pool.at(1).slot0(); s = msg.value > 0 ? [1, 2] : [3, 4]; return s[0];')).toThrow(
-      /cannot assign a dynamic value to 's'/,
-    );
+    expect(() =>
+      compileMain('let s = Pool.at(1).slot0(); s = ctx.msgValue() > 0 ? [1, 2] : [3, 4]; return s[0];'),
+    ).toThrow(/cannot assign a dynamic value to 's'/);
   });
 
   it('update-expression reassignment clears a stale tag', () => {
@@ -601,12 +601,12 @@ describe('shape B — multi-output call result stored in a variable (v1 guard)',
 
   it('tags a ternary whose BOTH branches are multi-output calls (guaranteed fault)', () => {
     expect(() =>
-      compileMain('const s = msg.value > 0 ? Pool.at(1).slot0() : Pool.at(2).slot0(); return s[0];'),
+      compileMain('const s = ctx.msgValue() > 0 ? Pool.at(1).slot0() : Pool.at(2).slot0(); return s[0];'),
     ).toThrow(/cannot index 's'/);
   });
 
   it('leaves a single-multi-output-branch ternary untagged (documented hole — other path may be valid)', () => {
-    expect(() => compileMain('const s = msg.value > 0 ? Pool.at(1).slot0() : [1, 2]; return s[0];')).not.toThrow();
+    expect(() => compileMain('const s = ctx.msgValue() > 0 ? Pool.at(1).slot0() : [1, 2]; return s[0];')).not.toThrow();
   });
 
   it('propagates the tag through aliasing (const t = s)', () => {
