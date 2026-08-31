@@ -388,11 +388,14 @@ export const pumpswapAdapter = {
   emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
     const c = asPumpswapConfig(cfg);
     checkAmountIn(amountIn);
-    const baseRef = JSON.stringify(c.baseVault);
-    const quoteRef = JSON.stringify(c.quoteVault);
+    // Account model (RS/svm target): the fragment reads through main()'s ordered
+    // `Account` params, not `accountUint("<address>", …)` string refs. Param `acc<k>`
+    // is `quoteAccounts()[k]` — base vault is slot 0, quote vault slot 1 — so the
+    // emitted manifest slots come back in that order. `accountUint` lowered to CAST_LE,
+    // so `svm.sload(…).toLe()` is the exact endianness match (SPL amount@64 is u64 LE).
     const lines = [
-      `  const psBase${i} = accountUint(${baseRef}, 64, 8);`,
-      `  const psQuote${i} = accountUint(${quoteRef}, 64, 8);`,
+      `  const psBase${i} = svm.sload(acc0, 64, 8).toLe();`,
+      `  const psQuote${i} = svm.sload(acc1, 64, 8).toLe();`,
     ];
     if (c.direction === 'quoteToBase') {
       // The fee arithmetic only involves compile-time constants, so it folds

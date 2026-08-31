@@ -393,28 +393,32 @@ export const meteoraDbc = {
     const c = dbcConfig(cfg);
     if (!Number.isInteger(i) || i < 0) throw new Error(`meteora-dbc emitQuote index must be a non-negative integer, got ${i}`);
     checkAmountIn('meteora-dbc emitQuote', amountIn);
-    const poolRef = JSON.stringify(c.pool);
-    const cfgRef = JSON.stringify(c.config);
+    // Account model (RS/svm target): quoteAccounts() attaches [pool, config], so
+    // the pool binds to main()'s acc0 and the config to acc1; every read is
+    // svm.sload(acc<k>, off, w).toLe() (accountUint lowered to CAST_LE — .toLe()
+    // is the exact endianness match), and block.timestamp becomes ctx.timestamp().
+    const poolU = (off: number, w: number): string => `svm.sload(acc0, ${off}, ${w}).toLe()`;
+    const cfgU = (off: number, w: number): string => `svm.sload(acc1, ${off}, ${w}).toLe()`;
     const upperOff = OFF_CURVE + CURVE_POINT_SIZE * c.segIdx;
     const lowerOff = c.segIdx === 0 ? OFF_SQRT_START_PRICE : OFF_CURVE + CURVE_POINT_SIZE * (c.segIdx - 1);
     const lines: string[] = [
-      `const s${i}sp = accountUint(${poolRef}, ${OFF_SQRT_PRICE}, 16);`,
-      `const s${i}cliff = accountUint(${cfgRef}, ${OFF_CLIFF_FEE_NUMERATOR}, 8);`,
-      `const s${i}freq = accountUint(${cfgRef}, ${OFF_PERIOD_FREQUENCY}, 8);`,
+      `const s${i}sp = ${poolU(OFF_SQRT_PRICE, 16)};`,
+      `const s${i}cliff = ${cfgU(OFF_CLIFF_FEE_NUMERATOR, 8)};`,
+      `const s${i}freq = ${cfgU(OFF_PERIOD_FREQUENCY, 8)};`,
       `let s${i}f = s${i}cliff;`,
       `if (s${i}freq !== 0) {`,
-      `  const s${i}act = accountUint(${poolRef}, ${OFF_ACTIVATION_POINT}, 8);`,
+      `  const s${i}act = ${poolU(OFF_ACTIVATION_POINT, 8)};`,
       `  let s${i}per = 0;`,
       `  if (ctx.timestamp() >= s${i}act) { s${i}per = (ctx.timestamp() - s${i}act) / s${i}freq }`,
-      `  const s${i}np = accountUint(${cfgRef}, ${OFF_NUMBER_OF_PERIOD}, 2);`,
+      `  const s${i}np = ${cfgU(OFF_NUMBER_OF_PERIOD, 2)};`,
       `  if (s${i}per > s${i}np) { s${i}per = s${i}np }`,
-      `  const s${i}red = accountUint(${cfgRef}, ${OFF_REDUCTION_FACTOR}, 8);`,
+      `  const s${i}red = ${cfgU(OFF_REDUCTION_FACTOR, 8)};`,
       `  s${i}f = s${i}cliff - s${i}red * s${i}per;`,
       '}',
-      `if (accountUint(${cfgRef}, ${OFF_DYN_INITIALIZED}, 1) === 1) {`,
-      `  const s${i}va = accountUint(${poolRef}, ${OFF_VOL_ACCUMULATOR}, 16);`,
-      `  const s${i}bs = accountUint(${cfgRef}, ${OFF_DYN_BIN_STEP}, 2);`,
-      `  const s${i}vfc = accountUint(${cfgRef}, ${OFF_DYN_VARIABLE_FEE_CONTROL}, 4);`,
+      `if (${cfgU(OFF_DYN_INITIALIZED, 1)} === 1) {`,
+      `  const s${i}va = ${poolU(OFF_VOL_ACCUMULATOR, 16)};`,
+      `  const s${i}bs = ${cfgU(OFF_DYN_BIN_STEP, 2)};`,
+      `  const s${i}vfc = ${cfgU(OFF_DYN_VARIABLE_FEE_CONTROL, 4)};`,
       `  const s${i}vv = s${i}va * s${i}bs;`,
       `  s${i}f = s${i}f + (s${i}vv * s${i}vv * s${i}vfc + 99999999999) / 100000000000;`,
       '}',
@@ -422,17 +426,17 @@ export const meteoraDbc = {
     ];
     if (c.direction === 'quoteToBase') {
       lines.push(
-        `const s${i}up0 = accountUint(${cfgRef}, ${upperOff}, 16);`,
-        `const s${i}mig = accountUint(${cfgRef}, ${OFF_MIGRATION_SQRT_PRICE}, 16);`,
+        `const s${i}up0 = ${cfgU(upperOff, 16)};`,
+        `const s${i}mig = ${cfgU(OFF_MIGRATION_SQRT_PRICE, 16)};`,
         `let s${i}up = s${i}up0;`,
         `if (s${i}mig < s${i}up) { s${i}up = s${i}mig }`,
-        `const s${i}liq = accountUint(${cfgRef}, ${upperOff + 16}, 16);`,
+        `const s${i}liq = ${cfgU(upperOff + 16, 16)};`,
         `let s${i}cap = 0;`,
         `if (s${i}up > s${i}sp) { s${i}cap = (s${i}liq * (s${i}up - s${i}sp) + ${Q128 - 1n}) / ${Q128} }`,
-        `if (s${i}freq !== 0) { if (ctx.timestamp() < accountUint(${poolRef}, ${OFF_ACTIVATION_POINT}, 8)) { s${i}cap = 0 } }`,
+        `if (s${i}freq !== 0) { if (ctx.timestamp() < ${poolU(OFF_ACTIVATION_POINT, 8)}) { s${i}cap = 0 } }`,
         `let s${i}x = ${amountIn};`,
         `if (s${i}x > s${i}cap) { s${i}x = s${i}cap }`,
-        `const s${i}cfm = accountUint(${cfgRef}, ${OFF_COLLECT_FEE_MODE}, 1);`,
+        `const s${i}cfm = ${cfgU(OFF_COLLECT_FEE_MODE, 1)};`,
         `let s${i}din = s${i}x;`,
         `if (s${i}cfm === 0) { s${i}din = s${i}x - (s${i}x * s${i}f + 999999999) / 1000000000 }`,
         `const s${i}nx = s${i}sp + (s${i}din * ${Q128}) / s${i}liq;`,
@@ -442,11 +446,11 @@ export const meteoraDbc = {
       );
     } else {
       lines.push(
-        `const s${i}lo = accountUint(${cfgRef}, ${lowerOff}, 16);`,
-        `const s${i}liq = accountUint(${cfgRef}, ${upperOff + 16}, 16);`,
+        `const s${i}lo = ${cfgU(lowerOff, 16)};`,
+        `const s${i}liq = ${cfgU(upperOff + 16, 16)};`,
         `let s${i}cap = 0;`,
         `if (s${i}sp > s${i}lo) { s${i}cap = (s${i}liq * (s${i}sp - s${i}lo) + s${i}lo * s${i}sp - 1) / (s${i}lo * s${i}sp) }`,
-        `if (s${i}freq !== 0) { if (ctx.timestamp() < accountUint(${poolRef}, ${OFF_ACTIVATION_POINT}, 8)) { s${i}cap = 0 } }`,
+        `if (s${i}freq !== 0) { if (ctx.timestamp() < ${poolU(OFF_ACTIVATION_POINT, 8)}) { s${i}cap = 0 } }`,
         `let s${i}x = ${amountIn};`,
         `if (s${i}x > s${i}cap) { s${i}x = s${i}cap }`,
         `const s${i}den = s${i}liq + s${i}x * s${i}sp;`,

@@ -6,7 +6,7 @@
  */
 import { fileURLToPath } from 'url';
 import { address } from '@solana/kit';
-import { compile } from '@eco-incorp/sauce-compiler';
+import { compileSvm, wrapQuoteMain } from '../rs-compile.js';
 import { meteoraDammV1Stable } from '../../../src/svm/venues/meteora-damm-v1-stable/index.js';
 import type { MeteoraDammV1StablePoolConfig } from '../../../src/svm/venues/meteora-damm-v1-stable/index.js';
 import { fixtureBytesMap, fixtureData, fixtureLoader, loadFixtures } from '../fixtures.js';
@@ -210,30 +210,40 @@ describe('meteora-damm-v1-stable quoteAccounts + emitQuote', () => {
     ]);
   });
 
-  it('emits a q<i> fragment with the amountIn literal baked that compiles as SauceScript', async () => {
+  it('emits a q<i> fragment reading the 8 quote accounts via svm.sload, compiling for svm via RS', async () => {
     const cfg = await fetchConfig();
     const fragment = meteoraDammV1Stable.emitQuote(cfg, 3, AMOUNT_IN);
     expect(fragment).toContain('const q3 = ');
     expect(fragment).toContain(`${AMOUNT_IN} * fNum3`);
     expect(fragment).toContain('stableD(');
     expect(fragment).toContain('stableY(');
+    // Account model: reads go through main()'s positional acc<k> params (k =
+    // quoteAccounts() index), not accountUint string refs, and the Clock is
+    // read via ctx.timestamp().
+    expect(fragment).not.toContain('accountUint(');
+    expect(fragment).not.toContain('block.timestamp');
+    expect(fragment).toContain('const t3 = ctx.timestamp();');
+    expect(fragment).toContain('svm.sload(acc0, '); // pool
+    expect(fragment).toContain('svm.sload(acc7, '); // bTokenVault (last slot)
 
-    // Compile with stub Newton helpers standing in for the generator-declared
-    // shared functions — validates the fragment is real SauceScript and that
-    // it reads exactly the quoteAccounts refs.
-    const source = [
-      'function stableD(amp, xa, xb) { return xa + xb; }',
-      'function stableY(amp, x, d) { return d - x; }',
-      'function main() {',
-      fragment,
-      '  return q3;',
-      '}',
+    // Compile through the RUST compiler with top-level scalar stub doubles for
+    // the ladder-generator's out-of-repo stableD/stableY Newton helpers (RS
+    // forbids nesting a function in main()); this validates the migrated
+    // fragment is real RS SauceScript and manifests exactly the 8 quote
+    // accounts in quoteAccounts() order.
+    const STUB_HELPERS = [
+      'function stableD(amp: Uint256, xa: Uint256, xb: Uint256): Uint256 { return xa + xb; }',
+      'function stableY(amp: Uint256, x: Uint256, d: Uint256): Uint256 { return d - x; }',
     ].join('\n');
-    const { bytecode, accountPlan } = compile(source, { target: 'svm' });
-    expect(bytecode[0].length).toBeGreaterThan(0);
-    const planned = accountPlan!.metas.map((meta) => meta.ref).sort();
-    const quoted = meteoraDammV1Stable.quoteAccounts(cfg).map((account) => account.ref).sort();
-    expect(planned).toEqual(quoted);
+    const accounts = meteoraDammV1Stable.quoteAccounts(cfg);
+    const source = `${STUB_HELPERS}\n${wrapQuoteMain(accounts.length, fragment, 'q3')}`;
+    const { bytecode, manifest } = compileSvm(source);
+    expect(bytecode.length).toBeGreaterThan(0);
+    expect(manifest?.accounts).toEqual(accounts.map((_, k) => ({ kind: 'slot', index: k, name: `acc${k}`, requires: 'readonly' })));
+    const bound = manifest?.accounts.map((meta) =>
+      meta.kind === 'slot' ? accounts[meta.index]?.address : undefined,
+    );
+    expect(bound).toEqual(accounts.map((account) => account.address));
   });
 
   it('rejects a non-u64 amountIn', async () => {

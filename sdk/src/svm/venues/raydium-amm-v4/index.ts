@@ -227,9 +227,17 @@ export const raydiumAmmV4: SvmVenueAdapter = {
     // the no-orderbook path (math.rs:322). All operands are u64, so the product
     // rOut * inAfterFee stays under 2^128 — far from the engine's 256-bit wrap —
     // and matches the program's U128 floor division (math.rs:373) exactly.
-    const pool = JSON.stringify(poolRef(c));
-    const rIn = `accountUint(${JSON.stringify(c.inputIsCoin ? coinVaultRef(c) : pcVaultRef(c))}, ${OFF_SPL_AMOUNT}, 8) - accountUint(${pool}, ${c.inputIsCoin ? OFF_NEED_TAKE_PNL_COIN : OFF_NEED_TAKE_PNL_PC}, 8)`;
-    const rOut = `accountUint(${JSON.stringify(c.inputIsCoin ? pcVaultRef(c) : coinVaultRef(c))}, ${OFF_SPL_AMOUNT}, 8) - accountUint(${pool}, ${c.inputIsCoin ? OFF_NEED_TAKE_PNL_PC : OFF_NEED_TAKE_PNL_COIN}, 8)`;
+    // Account model (RS/svm target): reads go through main()'s ordered `Account`
+    // params, not `accountUint("<address>", …)` string refs. Param `acc<k>` is
+    // `quoteAccounts()[k]`: acc0 = pool (AmmInfo, holds need_take_pnl_*), acc1 =
+    // coinVault, acc2 = pcVault. `accountUint` lowered to CAST_LE, so
+    // `svm.sload(…).toLe()` is the exact endianness match (u64 LE fields).
+    const inVaultAcc = c.inputIsCoin ? 'acc1' : 'acc2';
+    const outVaultAcc = c.inputIsCoin ? 'acc2' : 'acc1';
+    const inPnlOff = c.inputIsCoin ? OFF_NEED_TAKE_PNL_COIN : OFF_NEED_TAKE_PNL_PC;
+    const outPnlOff = c.inputIsCoin ? OFF_NEED_TAKE_PNL_PC : OFF_NEED_TAKE_PNL_COIN;
+    const rIn = `svm.sload(${inVaultAcc}, ${OFF_SPL_AMOUNT}, 8).toLe() - svm.sload(acc0, ${inPnlOff}, 8).toLe()`;
+    const rOut = `svm.sload(${outVaultAcc}, ${OFF_SPL_AMOUNT}, 8).toLe() - svm.sload(acc0, ${outPnlOff}, 8).toLe()`;
     return [
       `const rayV4In${i} = ${rIn};`,
       `const rayV4Out${i} = ${rOut};`,

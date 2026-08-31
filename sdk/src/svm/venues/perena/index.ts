@@ -407,7 +407,11 @@ function liveStateFrom(c: PerenaPoolConfig, pool: Uint8Array): PerenaLiveState {
 function emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
   const c = asPerenaConfig(cfg);
   const readPrefix = `s${i}`;
-  return [...readLines(c, JSON.stringify(poolRef(c, 'pool')), readPrefix), ...arithmeticLines(c, readPrefix, readPrefix, String(amountIn), `q${i}`)].join('\n');
+  // Account model (RS/svm target): the fragment reads through main()'s ordered
+  // `Account` params, not `accountUint("<ref>", …)` string refs. `quoteAccounts()`
+  // attaches only the pool, so every read is `svm.sload(acc0, …).toLe()` and the
+  // manifest comes back with the single slot 0 == quoteAccounts()[0] (the pool).
+  return [...readLines(c, 'acc0', readPrefix), ...arithmeticLines(c, readPrefix, readPrefix, String(amountIn), `q${i}`)].join('\n');
 }
 
 /**
@@ -415,25 +419,25 @@ function emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
  * locals) — read ONCE and reused by every rung's arithmetic (see
  * `arithmeticLines`), matching every other family's emitSetup/
  * emitLadderQuote split (re-reading the SAME 8 fields on every rung would
- * multiply this venue's dominant CU cost for no reason — `accountUint` reads
- * are not free, see budget.ts's per-family CU pins). `poolRefJson` is the
- * JSON-stringified account ref for the pool account — MUST match whatever
- * `quoteAccounts`/`quoteRefs` registered for the same cfg/slot.
+ * multiply this venue's dominant CU cost for no reason — `svm.sload` reads
+ * are not free, see budget.ts's per-family CU pins). `acc` is the `main(...)`
+ * Account param the pool binds to — `acc0` here, since `quoteAccounts()`
+ * attaches the pool at index 0 (`accountUint` lowered to CAST_LE, so `.toLe()`
+ * is the exact endianness match for these u64/u32 LE fields).
  */
-function readLines(c: PerenaPoolConfig, poolRefJson: string, readPrefix: string): string[] {
+function readLines(c: PerenaPoolConfig, acc: string, readPrefix: string): string[] {
   const inIdx: 0 | 1 = c.direction === 'aToB' ? 0 : 1;
   const outIdx: 0 | 1 = c.direction === 'aToB' ? 1 : 0;
   const p = readPrefix;
-  const pool = poolRefJson;
   return [
-    `  const ${p}xin = accountUint(${pool}, ${pairOff(inIdx, P_X_RESERVE)}, 8);`,
-    `  const ${p}yin = accountUint(${pool}, ${pairOff(inIdx, P_Y_RESERVE)}, 8);`,
-    `  const ${p}lin = accountUint(${pool}, ${pairOff(inIdx, P_INV_L)}, 8);`,
-    `  const ${p}xout = accountUint(${pool}, ${pairOff(outIdx, P_X_RESERVE)}, 8);`,
-    `  const ${p}yout = accountUint(${pool}, ${pairOff(outIdx, P_Y_RESERVE)}, 8);`,
-    `  const ${p}lout = accountUint(${pool}, ${pairOff(outIdx, P_INV_L)}, 8);`,
-    `  const ${p}fn = accountUint(${pool}, ${OFF_FEE_NUM}, 4);`,
-    `  const ${p}fd = accountUint(${pool}, ${OFF_FEE_DENOM}, 4);`,
+    `  const ${p}xin = svm.sload(${acc}, ${pairOff(inIdx, P_X_RESERVE)}, 8).toLe();`,
+    `  const ${p}yin = svm.sload(${acc}, ${pairOff(inIdx, P_Y_RESERVE)}, 8).toLe();`,
+    `  const ${p}lin = svm.sload(${acc}, ${pairOff(inIdx, P_INV_L)}, 8).toLe();`,
+    `  const ${p}xout = svm.sload(${acc}, ${pairOff(outIdx, P_X_RESERVE)}, 8).toLe();`,
+    `  const ${p}yout = svm.sload(${acc}, ${pairOff(outIdx, P_Y_RESERVE)}, 8).toLe();`,
+    `  const ${p}lout = svm.sload(${acc}, ${pairOff(outIdx, P_INV_L)}, 8).toLe();`,
+    `  const ${p}fn = svm.sload(${acc}, ${OFF_FEE_NUM}, 4).toLe();`,
+    `  const ${p}fd = svm.sload(${acc}, ${OFF_FEE_DENOM}, 4).toLe();`,
   ];
 }
 

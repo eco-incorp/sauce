@@ -191,11 +191,13 @@ export const orcaLegacyTokenSwap = {
     // (num + den - 1) / den. Reserves are u64, so rsIn * rsOut <= 2^128 and
     // nothing here approaches the engine's 256-bit wrap ("All arithmetic in
     // u128" — docs/svm-venues.md); no Math.mulDiv needed.
-    const vaultIn = JSON.stringify(poolRef(cfg, 'vault-in'));
-    const vaultOut = JSON.stringify(poolRef(cfg, 'vault-out'));
+    // Account model (RS/svm target): reads go through main()'s ordered `Account`
+    // params, not `accountUint("<address>", …)` string refs. Param `acc<k>` is
+    // `quoteAccounts()[k]` — vault-in is slot 0, vault-out slot 1 — and `accountUint`
+    // lowered to CAST_LE, so `svm.sload(…).toLe()` is the exact endianness match.
     return [
-      `const rIn${i} = accountUint(${vaultIn}, 64, 8);`,
-      `const rOut${i} = accountUint(${vaultOut}, 64, 8);`,
+      `const rIn${i} = svm.sload(acc0, 64, 8).toLe();`,
+      `const rOut${i} = svm.sload(acc1, 64, 8).toLe();`,
       `const q${i} = rOut${i} - (rIn${i} * rOut${i} + rIn${i} + ${netIn - 1n}) / (rIn${i} + ${netIn});`,
     ].join('\n');
   },

@@ -248,11 +248,12 @@ export function makeSplTokenSwapForkAdapter(slug: string, programId: Address, un
     },
     emitQuote(cfg, i, amountIn) {
       const netIn = netAmountIn(slug, cfg, amountIn);
-      const vaultIn = JSON.stringify(poolRef(slug, cfg, 'vault-in'));
-      const vaultOut = JSON.stringify(poolRef(slug, cfg, 'vault-out'));
+      // Account model (RS compiler): quoteAccounts() order is [vault-in, vault-out],
+      // so vault-in is slot 0 (acc0) and vault-out slot 1 (acc1). accountUint lowered
+      // to CAST_LE and the SPL amount@64 is u64 LE, so `.toLe()` is the exact match.
       return [
-        `const rIn${i} = accountUint(${vaultIn}, 64, 8);`,
-        `const rOut${i} = accountUint(${vaultOut}, 64, 8);`,
+        `const rIn${i} = svm.sload(acc0, 64, 8).toLe();`,
+        `const rOut${i} = svm.sload(acc1, 64, 8).toLe();`,
         `const q${i} = rOut${i} - (rIn${i} * rOut${i} + rIn${i} + ${netIn - 1n}) / (rIn${i} + ${netIn});`,
       ].join('\n');
     },

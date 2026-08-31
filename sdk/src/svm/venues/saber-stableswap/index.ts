@@ -246,10 +246,9 @@ export const saberStableswap: SvmVenueAdapter = {
     }
     assertU64AmountIn(amountIn);
 
-    const pool = JSON.stringify(c.pool);
-    const vaultA = JSON.stringify(c.vaultA);
-    const vaultB = JSON.stringify(c.vaultB);
-
+    // Account model (RS): quoteAccounts() attaches [pool, vaultA, vaultB], so
+    // the pool is slot 0 (acc0), vaultA slot 1 (acc1) and vaultB slot 2 (acc2);
+    // every read is `svm.sload(acc<k>, off, w).toLe()` (all u64/u8 LE fields).
     // stableD(amp, xa, xb) -> invariant D and stableY(amp, x, d) -> new
     // destination-side balance are the shared stable-curve helpers the
     // generator declares once (Newton per computeD/computeY above: cap 256,
@@ -257,9 +256,9 @@ export const saberStableswap: SvmVenueAdapter = {
     // u64, so srcRes + amountIn < 2^65 and every fragment-level op stays far
     // below the 256-bit wrap; Math.mulDiv is 512-bit-safe by construction.
     const lines = [
-      `  const paused${i} = accountUint(${pool}, 1, 1);`,
-      `  const srcRes${i} = accountUint(${vaultA}, 64, 8);`,
-      `  const dstRes${i} = accountUint(${vaultB}, 64, 8);`,
+      `  const paused${i} = svm.sload(acc0, 1, 1).toLe();`,
+      `  const srcRes${i} = svm.sload(acc1, 64, 8).toLe();`,
+      `  const dstRes${i} = svm.sload(acc2, 64, 8).toLe();`,
       `  let amp${i} = ${c.targetAmpFactor};`,
     ];
 
