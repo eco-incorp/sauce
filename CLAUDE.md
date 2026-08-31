@@ -11,28 +11,30 @@ it.
 
 A **pnpm monorepo** of four workspace packages, all `private: true`, bundled and published as a
 **single npm package `@eco-incorp/sauce-sdk`** via subpath exports — only the root `package.json`
-publishes. This bundling is the key mental model: code lives in four packages for development,
+publishes. This bundling is the key mental model: code lives in two packages for development,
 consumers import everything from one name.
 
 | Workspace | Internal name | Published as | Role |
 | --- | --- | --- | --- |
-| `compiler/` | `@eco-incorp/sauce-compiler` | `/compiler` | SauceScript (JS subset) → Sauce bytecode |
 | `sdk/` | `@eco-incorp/sauce-sdk-source` | `.`, `/protocols/*`, `/chains`, `/skills`, `/recipes` | 127+ protocol registry, chains, recipes, AI skill files |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools` | Local/forked hardhat env + recipe runner |
 
-This repo was **extracted from `../sauce`** (the source of truth, which still has its own copies of
-these four packages, generally more built-out). The packages here are **siblings, not generations**:
-`dev-tools` is a dev harness, not a legacy `sdk`. The genuinely deprecated compiler is
-`../sauce/compiler-poc/`, nothing here.
+This repo was **extracted from `../sauce`** (the source of truth, which still has its own copies,
+generally more built-out). The packages here are **siblings, not generations**: `dev-tools` is a dev
+harness, not a legacy `sdk`.
+
+SauceScript is compiled by the **Rust compiler**, consumed from npm as `@eco-incorp/sauce-compiler`
+and aliased `sauce-next` because the name was previously taken by this repo's own TypeScript
+compiler. That TypeScript compiler is gone; there is no in-repo compiler to build.
 
 ## Build, test, lint
 
-Run from the repo root. **Build order matters** — sdk and actions consume the compiler's `dist/`, so
-the compiler builds first (the `build` script enforces this).
+Run from the repo root. There is no in-repo compiler to build first — the Rust compiler arrives
+prebuilt from npm.
 
 ```sh
 pnpm install
-pnpm build          # compiler, THEN sdk + actions
+pnpm build          # sdk
 pnpm typecheck      # all workspaces
 pnpm test           # all workspaces
 ```
@@ -43,11 +45,10 @@ Per-workspace (`--filter`):
 pnpm --filter './compiler' test          # jest: unit test/ + integration-test/ (needs Foundry)
 pnpm --filter './compiler' lint          # eslint; also: format:check (CI enforces)
 pnpm --filter './sdk' test               # compiles every protocol's SauceScript fn (1400+ tests)
-pnpm --filter './actions' test:unit      # fork-free subset CI runs
 ```
 
 Single test file: jest (compiler/sdk) → `pnpm --filter './compiler' test -- arithmetic.test.ts`.
-Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter './actions' exec tsx
+dev-tools uses the **node test runner**, not jest → `pnpm --filter './dev-tools' exec tsx
 --test tests/megas-swap.unit.test.ts`.
 
 ## Toolchain gotchas (why a fresh clone may fail)
@@ -59,14 +60,14 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   `globalSetup` spawns anvil, `forge create`s the engine, runs compiled bytecode) and to build the
   engine artifacts. The compiler `postinstall` (`integration-test/fetch-engine-libs.js`) clones the
   OpenZeppelin submodule into the `sauce` dep and `forge build`s it (pnpm doesn't recurse submodules).
-- **`FORK_URL`** — actions `test`/`test:megas-swap` and dev-tools fork flows hit a hardhat mainnet
+- **`FORK_URL`** — dev-tools fork flows hit a hardhat mainnet
   fork (loaded from `.env`). `test:unit` is the fork-free subset.
 - **`SAUCE_ENGINE_SO`** — path to the Solana engine binary (`engine.so`, built with
   `cargo build-sbf` in the sauce repo's `svm/`). The SVM integration suites
   (`compiler/integration-test/svm-*.test.ts`, `sdk/test/svm/*.test.ts`) run compiled
   `target: 'svm'` bytecode on it via LiteSVM. The binary is **vendored** at
   `artifacts/svm/engine.so` (committed, force-added — `.so` is gitignored — same
-  convention as the committed `compiler/dist`/`sdk/dist`) and that's the default both
+  convention as the committed `sdk/dist`) and that's the default both
   locally and in CI, so these suites run **offline by default**, same as the EVM ones; the
   suites **skip cleanly** only if that binary is somehow missing. Set `SAUCE_ENGINE_SO` to
   override — e.g. to test a freshly built engine before repinning the `sauce` dep. **Refresh
@@ -103,48 +104,41 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   compiler's `compiler-v0.5.0` tag is cut from. (They cannot come from the `sauce` git dep:
   `release/beta` is the wrong lineage, and sauce `main` deleted the `engine/` tree
   `sync-engine-artifacts.mjs` reads.)
-  Locally, the `.so` is `cd <sauce>/v12-svm && make build`. The runtime is *not*
-  `hnc -r` — that refuses on `Runtime.huff`, whose CONSTRUCTOR returns its own bytecode, so the
-  deployed code is only known once deployed. Deploy the creation bytecode and read it back:
-
-  ```sh
-  cd <sauce>/v12-evm && anvil --port 8799 --silent &
-  KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80  # anvil's first account
-  ADDR=$(cast send --rpc-url http://127.0.0.1:8799 --private-key $KEY --create \
-    "0x$(hnc -s . -b v12/Runtime.huff | tr -d '[:space:]')" --json | jq -r .contractAddress)
-  cast code "$ADDR" --rpc-url http://127.0.0.1:8799 > /tmp/v12-runtime.hex
-  ```
-
-  (the EVM suite also needs `anvil` on `PATH`). **Repinning `sauce` to a lineage that matches the
-  published Rust compiler is the real fix; until then these two suites cannot run in CI.**
+  `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines` fetches both from those releases
+  and writes them where the env vars point, so neither a Huff toolchain nor a local sauce checkout is
+  needed. Building by hand is only necessary when testing against an **unreleased** engine: the `.so`
+  is `cd <sauce>/v12-svm && make build`, and the EVM runtime cannot be produced by `hnc -r` at all —
+  `Runtime.huff`'s CONSTRUCTOR returns its own bytecode, so the deployed code is only known once
+  deployed, and you must deploy the creation code to an anvil and read it back with `cast code`.
+  (The EVM suite needs `anvil` on `PATH` either way.)
 - **Committed EVM engine artifacts** (`sdk/dist/artifacts/` — `Router`, `SauceRouter`,
   `ISauceRouter`, `V12Pot`, `V12Kitchen`, `V12RuntimeBytecode`, `IERC20`, `IUniswapV3Pool`,
   `IStateView`) ship to downstream SDK consumers, which read them for local tests/deploys, so
-  they must track the pinned `sauce` engine. Unlike `compiler/dist`, they are **not** build
+  they must track the pinned `sauce` engine. Unlike `sdk/dist`, they are **not** build
   output — `tsc` never emits them — so a `sauce` repin would silently leave them stale. **After
   any repin run `pnpm --filter './sdk' sync-engine-artifacts`** (copies the 8 forge artifacts
   from the pinned dep's `engine/out/`) **and commit the result**. CI enforces this: it re-syncs
   from the freshly-installed engine (foundry v1.5.1 + solc 0.8.27 → byte-reproducible) and fails
   on any drift, so a forgotten re-sync can't merge.
-- **`V12RuntimeBytecode.json` is the one artifact the sync script does NOT re-derive** (it is
-  listed in `OPTIONAL_SOURCES`, not `SOURCES`). It used to be a snapshot committed inside the
-  dep at `engine-v12/snapshots/`, so syncing was a plain copy. The engine **deleted that
-  committed copy** (`chore(v12): compile the runtime at deploy time`) because it was a second
-  source of truth that rotted — a change to six `.huff` handlers shipped with a snapshot built
-  from the pre-change source, through green CI, and the deploy script would have pushed those
-  stale bytes to eleven live chains. The engine now compiles `v12/Runtime.huff` with `hnc` at
-  deploy time, where `hnc` is a first-class dep. **It is not one here** — this repo's CI installs
-  Foundry only, and that same CI re-runs the sync and fails on drift, so requiring the snapshot
-  would make the drift check unsatisfiable. The engine keeps its generator
-  (`engine-v12/script/V12RuntimeBytecode.s.sol`) precisely for this consumer; its doc comment
-  names "the sauce-sdk viem test harness" as the reason. **When the v12 runtime changes, refresh
-  it by hand** from a checkout of the pinned commit, with `hnc` on `PATH`:
-  `cd engine-v12 && git submodule update --init --recursive --depth 1 && forge script
-  script/V12RuntimeBytecode.s.sol --sig "run()" --ffi`, then copy
-  `snapshots/V12RuntimeBytecode.json` over `sdk/src/artifacts/` + `sdk/dist/artifacts/` and
-  commit. The generator sanity-deploys the creation code before writing, so a broken snapshot
-  fails there rather than in a downstream consumer. Nothing in this repo re-derives or verifies
-  it, so a v12 runtime change without this step silently ships stale creation code to consumers.
+- **`V12RuntimeBytecode.json` comes from a pinned GitHub RELEASE, not from the `sauce` git dep.**
+  The engine deleted its committed `engine-v12/snapshots/` copy (`chore(v12): compile the runtime at
+  deploy time`) because a second source of truth rotted — six changed `.huff` handlers once shipped
+  with a snapshot built from pre-change source, through green CI. `sync-engine-artifacts.mjs` now
+  downloads `runtime.creation.hex` from `v12-evm-v0.3.0` and `engine.so` from `v12-svm-v0.4.0`, both
+  built from `fcedc167a` — the commit the published `compiler-v0.5.0` is cut from. No Huff toolchain
+  is involved anywhere in this repo.
+- **A tag is not a pin.** A GitHub tag is movable, so each asset is checked against a digest
+  committed in the script itself (`keccak256` of the *decoded* creation code; `sha256` of the `.so`),
+  cross-checked against the release manifest's `creationCodeKeccak`/`soSha256`, **and** against
+  `manifest.commit == fcedc167a`. A moved tag throws rather than silently supplying a different
+  engine. Assets cache under `node_modules/.cache/sauce-engine-releases/<tag>/`, so a warm tree needs
+  no network; a corrupt cache is caught by re-hashing and refetched.
+- **The 8 forge artifacts still come from the pinned `sauce` git dep**, declared at the repo root
+  (not inside a workspace) against an immutable commit. They are **not** build output — `tsc` never
+  emits them — so after any repin run `pnpm --filter './sdk' sync-engine-artifacts` and commit the
+  result. CI re-syncs and fails on drift, so a forgotten re-sync cannot merge. They could not move to
+  releases: `IERC20`/`IUniswapV3Pool`/`IStateView`/`SauceRouter` are in no release asset, and release
+  `Pot.cook(bytes)` disagrees with the SDK's `cook(bytes[])`.
 
 ## Architecture
 
@@ -1656,9 +1650,6 @@ accounts and a real deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_RUST_V1
 those two are gated. `src/std/` is **not** in the package `files` list yet, so it does not ship to
 consumers — this is validation-only for now.
 
-**`actions/`** — `actionsToSauce(actions)` lowers routing intents (`uniswapV3ExactInput`, bridges,
-wraps, stakes) to bytecode. Actions **chain**: output feeds the next implicitly (no `amountIn`) or via
-`saveOutputAs`/`amountRef`. See `actions/AMM_SWAP_INTERFACES.md`.
 
 **`dev-tools/`** — harness: `start:local`/`start:fork` boot a hardhat net + deploy the engine;
 `npm run sauce <file.js> [args]` compiles+runs a SauceScript; `npm run recipe …` runs recipes.
