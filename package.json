@@ -121,7 +121,7 @@
   "devDependencies": {
     "@uniswap/v3-core": "^1.0.1",
     "hardhat": "^2.22.0",
-    "sauce": "github:eco-incorp/sauce#d1c900d03d8d5befd8f049c7890e11a16fd24d91"
+    "sauce": "github:eco-incorp/sauce#cae256b38dccd7d7751cd66a4f509bab9a7a7fb5"
   },
   "packageManager": "pnpm@10.28.2",
   "engines": {
