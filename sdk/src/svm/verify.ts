@@ -1,36 +1,29 @@
 // @eco-incorp/sauce-sdk/svm/verify — the SVM counterpart of `@eco-incorp/sauce-sdk/verify`, for a
 // compiled `settle` program.
 //
-// WHY IT LOOKS DIFFERENT FROM THE EVM ONE. The EVM settle program bakes its params
-// (tokens, minOut, recipient) into a PROLOGUE, so `decodeSettleProgram` reads them straight out of
-// the bytecode. The SVM settle program is compiled STAGED (`staged: true`): the compiler puts args in
-// the per-execution CALLDATA, not the blob — the buffer bytecode is byte-identical for ANY arg values
-// at a given escrow count (verified: `svmSettleSource(1)` compiles to the same 293 bytes for
-// minOut=1 and minOut=999). So there is nothing to decode OUT of the program itself. Two facts split
-// the EVM decoder's single job into two halves here:
+// VERIFICATION IS BY RECOMPILE, on both VMs. A settle program's per-execution values
+// (`minOut`, `splCount`) are compile-time `defines`, constant-folded into the bytecode, and every
+// account identity is an attach slot that never appears in it. So there is nothing to decode OUT of
+// a program — and nothing that needs to be: a caller checking an execution already knows the values
+// it expects. What it needs is proof that the program it was handed IS the one those values produce.
 //
-//   1. THE PROGRAM is a pure function of the escrow count. You verify it the way the recipe's own
-//      "PARTNER VERIFY" note says — recompile `svmSettleSource(N)` and byte-compare — not by parsing a
-//      prologue. `verifySvmSettleProgram` packages that: it infers N from the account plan, recompiles,
-//      and byte-compares the blob + the ref order. That is the SVM analogue of the EVM `bodyHash`
-//      check (prove the logic is the genuine settle logic, not a lookalike).
+// `verifySvmSettleProgram` is that proof: recompile `svmSettleSource(N)` with the expected defines
+// and byte-compare. A match establishes THREE things at once — the logic is the genuine settle
+// logic, `minOut` is the expected floor, and `splCount` is the expected token-program split —
+// because all three are folded into the same bytes. Under the older staged form the blob was a pure
+// function of N and the scalars rode the instruction payload, so they had to be decoded and checked
+// separately; binding them into the program is strictly stronger.
 //
-//   2. THE ARGS (minOut, splCount, tokenProgram0/1) ride the CALLDATA, so they ARE recoverable — from
-//      the execute payload's args tail, not the blob. `decodeSvmSettleArgs` is the exact inverse of the
-//      SDK's `encodePayloadArgs` for the settle layout (four 32-byte big-endian scalar slots).
+// The account identities are never in the bytecode on SVM in either form — Solana requires them
+// attached — so they come from the executed instruction's account list, matched positionally against
+// `svmSettleRefs(N)`. `decodeSvmSettleExecution` does that half; `verifySvmSettleExecution` adds the
+// recompile check and the pin↔bytecode tie.
 //
-// The account identities (escrows, mints, dests, owner, token programs) are never in the bytecode on
-// SVM in either mode — Solana requires them attached — so they come from the executed instruction's
-// account list, matched against the plan's refs (`svmSettleRefs(N)`). This module does not read them;
-// a caller pairs the verified plan with the on-chain instruction to resolve them.
-//
-// Unlike `@eco-incorp/sauce-sdk/verify` (viem-only, browser-safe), `verifySvmSettleProgram` pulls the
-// compiler in to recompile — a node-side check. `decodeSvmSettleArgs` is light (only @solana/kit).
+// Unlike `@eco-incorp/sauce-sdk/verify`, this pulls the compiler in to recompile — a node-side check.
 import { createHash } from 'node:crypto';
 import { getAddressDecoder } from '@solana/kit';
 import type { Address } from '@solana/kit';
-import { compile } from '@eco-incorp/sauce-compiler';
-import type { ArgsLayout } from './layout.js';
+import { compileWithRs } from '../routes/rs-compile.js';
 import {
   EXECUTE_AND_CLOSE_DISCRIMINATOR,
   EXECUTE_DISCRIMINATOR,
@@ -58,68 +51,25 @@ export {
   type ExtractedSvmSettle,
 } from './intent.js';
 
-// ── args (from the execute payload's calldata tail) ──
+// ── what a caller expects a settle program to enforce ──
 
-export interface DecodedSvmSettleArgs {
+/**
+ * The values a settle program was compiled with. Both are folded into the bytecode, so they are what
+ * a recompile pins: naming them is how a caller says "prove the program enforces THIS floor and THIS
+ * split", rather than reading them back out of an execution and trusting them.
+ */
+export interface SvmSettleExpectation {
   /** The floor applied to escrow 0 (0 disables the floor). */
   minOut: bigint;
   /** Escrows i < splCount sweep via tokenProgram0, the rest via tokenProgram1. */
   splCount: bigint;
-  tokenProgram0: Address;
-  tokenProgram1: Address;
-}
-
-/** Byte length of the settle args tail: 4 scalar slots × 32 bytes. */
-export const SVM_SETTLE_ARGS_BYTES = 4 * 32;
-
-const addressDecoder = getAddressDecoder();
-
-/** Big-endian u256 -> bigint, for a 32-byte scalar slot. */
-function beScalar(bytes: Uint8Array, offset: number): bigint {
-  let v = 0n;
-  for (let i = 0; i < 32; i++) v = (v << 8n) | BigInt(bytes[offset + i]);
-  return v;
-}
-
-/**
- * Decodes the settle program's per-execution args from the CALLDATA tail — the exact inverse of the
- * SDK's `encodePayloadArgs` for `main(minOut, splCount, tokenProgram0, tokenProgram1)` (four 32-byte
- * big-endian scalar slots). Pass the ARGS bytes only (strip the execute payload's flags byte + any
- * hash pin / slice first). `argsLayout` is optional: when supplied it is checked to be the settle
- * shape; the decode itself uses the fixed 0/32/64/96 offsets either way.
- *
- * A token-program slot is a 32-byte pubkey; minOut/splCount are big-endian scalars. Nothing about
- * these values is trusted — a caller compares them against what it expects, exactly as with the EVM
- * decoder.
- */
-export function decodeSvmSettleArgs(payloadArgs: Uint8Array, argsLayout?: ArgsLayout): DecodedSvmSettleArgs {
-  if (!(payloadArgs instanceof Uint8Array) || payloadArgs.length !== SVM_SETTLE_ARGS_BYTES) {
-    const got = payloadArgs instanceof Uint8Array ? `${payloadArgs.length} bytes` : 'a non-Uint8Array';
-    throw new Error(`svm settle args must be exactly ${SVM_SETTLE_ARGS_BYTES} bytes (4 × 32), got ${got}`);
-  }
-
-  if (argsLayout !== undefined) {
-    const shapeOk =
-      argsLayout.mode === 'calldata' &&
-      argsLayout.slots.length === 4 &&
-      argsLayout.slots.every((s, i) => s.kind === 'scalar' && s.length === 32 && s.offset === i * 32);
-    if (!shapeOk) {
-      throw new Error('argsLayout is not the settle shape (4 scalar 32-byte slots at 0/32/64/96)');
-    }
-  }
-
-  return {
-    minOut: beScalar(payloadArgs, 0),
-    splCount: beScalar(payloadArgs, 32),
-    tokenProgram0: addressDecoder.decode(payloadArgs.subarray(64, 96)),
-    tokenProgram1: addressDecoder.decode(payloadArgs.subarray(96, 128)),
-  };
 }
 
 // ── program (recompile + byte-compare) ──
 
-export interface AccountPlanLike {
-  metas: readonly { ref: string }[];
+/** Just enough of an account manifest to count and name its slots. */
+export interface SettleManifestLike {
+  accounts: readonly { kind: string; name?: string }[];
 }
 
 export interface SvmSettleVerification {
@@ -133,7 +83,7 @@ export interface SvmSettleVerification {
   mismatch?: string;
 }
 
-/** N escrows intern `3N + 3` accounts (2 token programs + 3 per escrow + the shared owner). */
+/** N escrows declare `3N + 3` accounts (2 token programs + 3 per escrow + the shared owner). */
 function escrowCountFromPlan(metaCount: number): number | null {
   if ((metaCount - 3) % 3 !== 0) return null;
   const n = (metaCount - 3) / 3;
@@ -150,55 +100,59 @@ function sha256(bytes: Uint8Array): Uint8Array {
   return new Uint8Array(createHash('sha256').update(bytes).digest());
 }
 
-/** The canonical settle bytecode for `escrowCount`, recompiled from the shipped source with the shipped
- *  options. A pure function of the escrow count (staged args never affect the blob), and cached by the
- *  compiler — so it is the SDK's own ground truth for "what the genuine settle program's bytes are",
- *  derivable WITHOUT any partner-supplied bytecode. */
-function compileCanonicalSettle(escrowCount: number): Uint8Array {
-  return compile(svmSettleSource(escrowCount), { target: 'svm', staged: true, treeshake: true, args: [0n, 0n, 0n, 0n] }).bytecode[0]!;
+/** The canonical settle bytecode for `escrowCount` under `expected`, recompiled from the shipped
+ *  source with the shipped defines — a deterministic function of exactly those three values, and the
+ *  SDK's own ground truth for "what the genuine settle program's bytes are", derivable WITHOUT any
+ *  partner-supplied bytecode. */
+function compileCanonicalSettle(escrowCount: number, expected: SvmSettleExpectation): Uint8Array {
+  return compileWithRs({
+    source: svmSettleSource(escrowCount),
+    target: 'svm',
+    defines: { SETTLE_MIN_OUT: expected.minOut, SETTLE_SPL_COUNT: expected.splCount },
+  }).bytecode[0]!;
 }
 
 /**
- * Verifies a compiled SVM settle program is genuine — the SVM analogue of the EVM decoder's body-hash
- * check, done by recompile rather than prologue-decode (the staged blob has no prologue). It:
- *   1. infers the escrow count N from the account plan's ref count (3N + 3),
- *   2. recompiles `svmSettleSource(N)` with the exact shipped options (`target: svm, staged, treeshake`;
- *      placeholder args, whose VALUES cannot affect a staged blob), and
- *   3. byte-compares the blob AND asserts the plan's refs equal `svmSettleRefs(N)`.
+ * Verifies a compiled SVM settle program is genuine AND enforces `expected` — the SVM analogue of the
+ * EVM check, done by recompile. It:
+ *   1. takes the escrow count N (or infers it from the manifest's `3N + 3` slots),
+ *   2. recompiles `svmSettleSource(N)` with `expected` as defines, and
+ *   3. byte-compares the result, and asserts the manifest's slot names equal `svmSettleRefs(N)`.
  *
- * A genuine result means the bytecode IS the reusable settle logic for N escrows and the account slots
- * are the ones that logic addresses — the params (from `decodeSvmSettleArgs`) and the resolved account
- * identities (from the executed instruction) are then checkable against expectation. Never throws for a
- * non-genuine program; returns `{ genuine: false, mismatch }`.
+ * A genuine result means the bytecode IS the reusable settle logic for N escrows, compiled for
+ * exactly this floor and this split — all three are the same bytes, so one comparison pins them all.
+ * The resolved account identities (from the executed instruction) remain the caller's own check.
+ * Never throws for a non-genuine program; returns `{ genuine: false, mismatch }`.
  */
-export function verifySvmSettleProgram(bytecode: Uint8Array, accountPlan: AccountPlanLike): SvmSettleVerification {
-  const escrowCount = escrowCountFromPlan(accountPlan.metas.length);
+export function verifySvmSettleProgram(
+  bytecode: Uint8Array,
+  manifest: SettleManifestLike,
+  expected: SvmSettleExpectation,
+): SvmSettleVerification {
+  const slots = manifest.accounts.filter((entry) => entry.kind === 'slot');
+  const escrowCount = escrowCountFromPlan(slots.length);
   if (escrowCount === null) {
     return {
       genuine: false,
       escrowCount: null,
       refs: [],
-      mismatch: `account plan has ${accountPlan.metas.length} accounts, which is not 3N + 3 for any settle escrow count 1..${SVM_MAX_ESCROWS}`,
+      mismatch: `account manifest has ${slots.length} slots, which is not 3N + 3 for any settle escrow count 1..${SVM_MAX_ESCROWS}`,
     };
   }
 
   const refs = svmSettleRefs(escrowCount);
-  const planRefs = accountPlan.metas.map((m) => m.ref);
-  if (planRefs.length !== refs.length || planRefs.some((r, i) => r !== refs[i])) {
-    return { genuine: false, escrowCount, refs, mismatch: `account plan refs do not match svmSettleRefs(${escrowCount})` };
+  const slotNames = slots.map((slot) => slot.name);
+  if (slotNames.length !== refs.length || slotNames.some((name, i) => name !== refs[i])) {
+    return { genuine: false, escrowCount, refs, mismatch: `account manifest slots do not match svmSettleRefs(${escrowCount})` };
   }
 
-  // Placeholder args: 4 scalars. Values are irrelevant to a staged blob (verified) — only the shape
-  // (four scalar slots) must match what the source declares.
-  const expected = compile(svmSettleSource(escrowCount), {
-    target: 'svm',
-    staged: true,
-    treeshake: true,
-    args: [0n, 0n, 0n, 0n],
-  });
-
-  if (!bytesEqual(bytecode, expected.bytecode[0]!)) {
-    return { genuine: false, escrowCount, refs, mismatch: `bytecode does not byte-match svmSettleSource(${escrowCount})` };
+  if (!bytesEqual(bytecode, compileCanonicalSettle(escrowCount, expected))) {
+    return {
+      genuine: false,
+      escrowCount,
+      refs,
+      mismatch: `bytecode does not byte-match svmSettleSource(${escrowCount}) at minOut=${expected.minOut}, splCount=${expected.splCount}`,
+    };
   }
 
   return { genuine: true, escrowCount, refs };
@@ -206,9 +160,8 @@ export function verifySvmSettleProgram(bytecode: Uint8Array, accountPlan: Accoun
 
 // ── execution (calldata + accounts together) ──
 //
-// The two halves above each decode ONE side of a settle execution: `decodeSvmSettleArgs` the calldata
-// args tail, `verifySvmSettleProgram` the bytecode + ref order. But the two shapes a caller actually
-// holds carry BOTH sides at once:
+// `verifySvmSettleProgram` above checks the PROGRAM. The other half of an execution is WHICH accounts
+// it ran against, and the two shapes a caller actually holds carry both at once:
 //   - the sauce-recipes `split=1` response's settle sauce — `execution.instructionData` (calldata) +
 //     `execution.accounts[]` (the user account tail, no buffer prefix), and
 //   - an executed engine instruction (e.g. eco-solver's Portal `CalldataWithAccounts` after its own
@@ -323,8 +276,6 @@ export interface DecodedSvmSettleExecution {
   pin?: Uint8Array;
   /** The explicit bytecode slice the calldata carried, if any (foreign path only). */
   slice?: { offset: number; len: number };
-  /** The decoded per-execution args `(minOut, splCount, tokenProgram0, tokenProgram1)`. */
-  args: DecodedSvmSettleArgs;
   /** The escrow count inferred from the account-list length. */
   escrowCount: number;
   /** The canonical ref order for `escrowCount` — `svmSettleRefs(escrowCount)`. */
@@ -333,9 +284,6 @@ export interface DecodedSvmSettleExecution {
   accounts: Record<string, Address>;
   /** True iff a leading bytecode-buffer account was detected in `accounts` and skipped. */
   hadBufferAccount: boolean;
-  /** True iff `args.tokenProgram0/1` (calldata) equal the `tokenProgram0/1` accounts (account list) —
-   *  the settle recipe binds each from ONE value, so a mismatch is a malformed/adversarial program. */
-  tokenProgramsConsistent: boolean;
   /** Whether the provided account labels matched the canonical refs, or null if entries carried no
    *  `ref` (a bare address list). Identities are resolved positionally regardless — this only reports
    *  whether a caller-supplied label agreed with the slot it landed in. */
@@ -359,12 +307,12 @@ export interface DecodedSvmSettleExecution {
  * (whose prologue grammar is a settle-specific signature), a STAGED settle's args carry no structural
  * signature: any staged Sauce execute with a 128-byte args tail and a `3N+3`/`3N+4` account count has
  * this exact shape. So a non-settle execution (or an adversarial decoy) decodes here without error into
- * arbitrary `(minOut, splCount, …)`. To prove the execution actually runs the genuine settle program,
- * use `verifySvmSettleExecution` (or `extractSvmSettleFromIntent`), which ties the calldata to the SDK's
+ * any staged program at all. To prove the execution actually runs the genuine settle program, use
+ * `verifySvmSettleExecution` (or `extractSvmSettleFromIntent`), which ties the calldata to the SDK's
  * own recompiled canonical settle bytecode.
  */
 export function decodeSvmSettleExecution(input: SvmSettleExecutionInput): DecodedSvmSettleExecution {
-  const { instruction, pin, slice, args } = parseExecutePayload(input.instructionData);
+  const { instruction, pin, slice } = parseExecutePayload(input.instructionData);
 
   const shape = classifyAccountList(input.accounts.length);
   if (shape === null) {
@@ -374,7 +322,6 @@ export function decodeSvmSettleExecution(input: SvmSettleExecutionInput): Decode
   }
   const { escrowCount, hasBuffer } = shape;
 
-  const decodedArgs = decodeSvmSettleArgs(args);
   const refs = svmSettleRefs(escrowCount);
 
   const userAccounts = hasBuffer ? input.accounts.slice(1) : input.accounts;
@@ -390,24 +337,19 @@ export function decodeSvmSettleExecution(input: SvmSettleExecutionInput): Decode
     }
   });
 
-  const tokenProgramsConsistent =
-    decodedArgs.tokenProgram0 === accounts.tokenProgram0 && decodedArgs.tokenProgram1 === accounts.tokenProgram1;
-
   return {
     instruction,
     pin,
     slice,
-    args: decodedArgs,
     escrowCount,
     refs,
     accounts,
     hadBufferAccount: hasBuffer,
-    tokenProgramsConsistent,
     labeledRefsConsistent,
   };
 }
 
-export interface SvmSettleExecutionVerifyInput extends SvmSettleExecutionInput {
+export interface SvmSettleExecutionVerifyInput extends SvmSettleExecutionInput, SvmSettleExpectation {
   /**
    * OPTIONAL. The compiled settle bytecode this execution runs (from the recipes split response this is
    * base64-decode(`sauces[settleIdx].program.bytecode`); from an eco-solver intent it is
@@ -444,9 +386,9 @@ export interface SvmSettleExecutionVerification extends DecodedSvmSettleExecutio
 
 /**
  * The genuineness check for a settle execution — the crucial companion to `decodeSvmSettleExecution`,
- * whose structural decode alone CANNOT tell a settle from any other staged Sauce execute (staged args
- * carry no signature). This ties the calldata to the SDK's own recompiled canonical settle bytecode, in
- * one of two ways, no partner bytecode required for either verdict:
+ * whose structural decode alone CANNOT tell a settle from any other staged Sauce execute (an account
+ * count is not a signature). This ties the calldata to the SDK's own recompiled canonical settle
+ * bytecode, in one of two ways, no partner bytecode required for either verdict:
  *
  *   - `bytecode` supplied → byte-compare it to `compileCanonicalSettle(escrowCount)` AND check the pin
  *     ties to it (`sha256(bytecode) === pin`). Proves the exact staged bytes ARE the settle and WILL run.
@@ -455,13 +397,13 @@ export interface SvmSettleExecutionVerification extends DecodedSvmSettleExecutio
  *     the genuine settle (or the execution reverts on the pin gate) — a decoy's pin cannot match.
  *   - neither → `genuine: false`, `verifiedBy: 'none'` (structure alone is not proof).
  *
- * A `genuine` result leaves only `(minOut, splCount, tokenPrograms)` + the resolved account identities to
- * check against expectation. Never throws beyond the shared structural decode; reports failures in
- * `mismatch`.
+ * Because `minOut`/`splCount` are folded into the bytecode, a `genuine` result also proves the program
+ * enforces the `minOut`/`splCount` passed in — leaving only the resolved account identities for the
+ * caller to check. Never throws beyond the shared structural decode; reports failures in `mismatch`.
  */
 export function verifySvmSettleExecution(input: SvmSettleExecutionVerifyInput): SvmSettleExecutionVerification {
   const decoded = decodeSvmSettleExecution(input);
-  const canonical = compileCanonicalSettle(decoded.escrowCount);
+  const canonical = compileCanonicalSettle(decoded.escrowCount, input);
   const pin = decoded.pin;
 
   const pinMatchesCanonical = pin === undefined ? null : bytesEqual(sha256(canonical), pin);

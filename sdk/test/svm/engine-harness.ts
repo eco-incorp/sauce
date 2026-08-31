@@ -47,6 +47,24 @@ export const ENGINE_SO = process.env.SAUCE_ENGINE_SO ?? resolve(process.cwd(), '
 /** describe when the engine binary exists, describe.skip otherwise (CI). */
 export const describeSvm = existsSync(ENGINE_SO) ? describe : describe.skip;
 
+// The vendored engine above is the wrong LINEAGE for compiler-emitted bytecode: it is built from the
+// pinned `sauce` dep, while the compiler this repo consumes is cut from `main`. Anything that
+// EXECUTES a freshly compiled program needs the matching engine, which CI downloads from the v12
+// releases (see the "Fetch the v12 engines" step) and exposes here.
+export const RUST_ENGINE_SO = process.env.SAUCE_RUST_ENGINE_SO;
+
+/** describe for suites that execute compiler-emitted bytecode — they need the `main`-lineage engine. */
+export const describeRustSvm = RUST_ENGINE_SO ? describe : describe.skip;
+
+// The gate above is a local-developer convenience, never a CI outcome: a skipped suite and a passing
+// one are the same line in jest's summary. CI supplies the engine, so an absent one is a failure.
+if (!RUST_ENGINE_SO && process.env.CI) {
+  throw new Error(
+    'SAUCE_RUST_ENGINE_SO is unset in CI. Suites executing compiler-emitted bytecode must never skip ' +
+      'here — see the "Fetch the v12 engines" step in .github/workflows/ci.yml.',
+  );
+}
+
 export const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
 export const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb' as Address;
 const ALT_PROGRAM = 'AddressLookupTab1e1111111111111111111111111' as Address;
@@ -249,7 +267,7 @@ export type RunResult =
 
 export interface ExecutableOutput {
   bytecode: Uint8Array;
-  accountPlan: AccountPlan;
+  manifest: AccountManifest;
 }
 
 export interface ExecuteOptions {
@@ -269,7 +287,7 @@ export const signExecuteTransaction = async (
   resolution: AccountResolution,
   { lookupTables, computeUnits = 1_400_000 }: ExecuteOptions = {},
 ): Promise<SignedExecuteTransaction> => {
-  const accounts = resolveAccounts(planToManifest(output.accountPlan), resolution, harness.payer.address);
+  const accounts = resolveAccounts(output.manifest, resolution, harness.payer.address);
   const instructions: Instruction[] = [
     ...buildComputeBudgetPrepend({ unitLimit: computeUnits }),
     buildHeapFramePrepend(),

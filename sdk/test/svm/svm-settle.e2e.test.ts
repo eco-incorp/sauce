@@ -3,9 +3,21 @@
  *
  * Proves the real on-chain behaviour against the vendored engine .so via LiteSVM (which loads the
  * real SPL Token and Token-2022 programs): TransferChecked (ix 12) sweeps work for classic SPL AND
- * Token-2022 mints, the floor gates atomically, one staged blob serves every combination, and the
- * `splCount` runtime arg routes a mixed classic/Token-2022 multi-escrow settle to one recipient's
- * per-mint destinations. Skips cleanly if the engine binary is missing (same gate as its siblings).
+ * Token-2022 mints, the floor gates atomically, and `SETTLE_SPL_COUNT` routes a mixed
+ * classic/Token-2022 multi-escrow settle to one recipient's per-mint destinations. Skips cleanly if
+ * the engine binary is missing (same gate as its siblings).
+ *
+ * `minOut`/`splCount` are compile-time defines, so a blob is specific to its
+ * `(escrowCount, minOut, splCount)` triple. The account identities stay late-bound, which is why one
+ * blob still serves every mint/recipient/owner.
+ *
+ * RUNS INLINE, not staged. The SDK's staged-execution instruction encoding
+ * (`buffer_init`/`write`/`finalize` + `execute_from_account`) targets the vendored beta-lineage
+ * engine, while compiler-emitted bytecode needs the matching `main`-lineage engine — the two cannot
+ * be satisfied at once today (`test/svm/staged.e2e.test.ts` passes on the beta engine and fails at
+ * its first staging instruction on the other one, with identical bytecode, which isolates the gap to
+ * the staging protocol rather than the program). Inline `execute` is lineage-correct and carries the
+ * whole behaviour under test here; N=1/N=2 (176/299 bytes) fit an instruction comfortably.
  *
  * WHY TransferChecked, not the legacy Transfer (ix 3): ix 3 reverts on a Token-2022 fee mint, so it
  * cannot honour "works for SPL or Token-2022". TransferChecked is the uniform instruction; the token
@@ -13,35 +25,26 @@
  * of the attached mint, so they always agree). The fee-mint case itself is the token program's own
  * logic, not this recipe's — this suite proves the recipe emits ix 12 correctly for both programs.
  */
-import { createHash } from 'node:crypto';
 import { assertAccountExists, getAddressCodec, type Address } from '@solana/kit';
-import { compile } from '@eco-incorp/sauce-compiler';
-import { resolveAccounts } from '../../src/svm/index.js';
 import {
-  describeSvm,
-  executeStaged,
+  describeRustSvm,
+  execute,
   expectFail,
   expectOk,
   randomAddress,
   setMint,
   setTokenAccount,
-  seed32,
-  stageBytecode,
   startEngine,
+  RUST_ENGINE_SO,
   toBigInt,
   TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
   transferCheckedData,
-  planToManifest,
 } from './engine-harness.js';
 import type { EngineHarness } from './engine-harness.js';
 import { svmSettleSource } from '../../src/svm/index.js';
-
-const sha256 = (bytes: Uint8Array): Uint8Array => new Uint8Array(createHash('sha256').update(bytes).digest());
-
-/** The 32 pubkey bytes of `addr` as a big-endian scalar — the value form the program compares its
- *  CPI target against, derived from the address so the arg and the account ref cannot disagree. */
-const scalarOf = (addr: Address): bigint => toBigInt(new Uint8Array(getAddressCodec().encode(addr)));
+import { compileSource } from '../helpers';
+import type { AccountManifest } from 'sauce-next';
 
 const DECIMALS = 6;
 const amountOf = (harness: EngineHarness, a: Address): bigint => {
@@ -50,49 +53,45 @@ const amountOf = (harness: EngineHarness, a: Address): bigint => {
   return new DataView(acc.data.buffer, acc.data.byteOffset).getBigUint64(64, true);
 };
 
-interface Staged {
-  buffer: Address;
-  pin: Uint8Array;
-  plan: ReturnType<typeof compile>['accountPlan'];
-  args: ReturnType<typeof compile>['argsLayout'];
+interface Compiled {
+  bytecode: Uint8Array;
+  manifest: AccountManifest;
 }
 
-describeSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022, one staged blob', () => {
+describeRustSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022', () => {
   let harness: EngineHarness;
-  const staged: Record<number, Staged> = {};
+  const cache = new Map<string, Compiled>();
 
-  const stage = async (index: number, escrowCount: number): Promise<Staged> => {
-    const c = compile(svmSettleSource(escrowCount), { target: 'svm', staged: true, treeshake: true, args: [0n, 0n, 0n, 0n] });
-    const buffer = await stageBytecode(harness, seed32(index), c.bytecode[0]!);
-    return { buffer, pin: sha256(c.bytecode[0]!), plan: c.accountPlan, args: c.argsLayout };
+  /** The blob for one (escrowCount, minOut, splCount) triple — memoized, since it is a pure function. */
+  const build = (escrowCount: number, minOut: bigint, splCount: bigint): Compiled => {
+    const key = `${escrowCount}:${minOut}:${splCount}`;
+    const hit = cache.get(key);
+    if (hit) return hit;
+
+    const { bytecode, manifest } = compileSource(svmSettleSource(escrowCount), 'svm', {
+      defines: { SETTLE_MIN_OUT: minOut, SETTLE_SPL_COUNT: splCount },
+    });
+    const entry: Compiled = { bytecode, manifest: manifest! };
+    cache.set(key, entry);
+
+    return entry;
   };
 
   beforeAll(async () => {
-    harness = await startEngine(1_700_000_000n);
-    staged[1] = await stage(0, 1);
-    staged[2] = await stage(1, 2);
+    harness = await startEngine(1_700_000_000n, RUST_ENGINE_SO!);
   });
 
-  /** Run the N=1 blob against one escrow on program `tp` (attached as tokenProgram0, splCount=1). */
+  /** Run an N=1 blob for `minOut` against one escrow on program `tp` (tokenProgram0, splCount=1). */
   const runOne = async (p: {
     escrow: Address; mint: Address; dest: Address; owner: Address; minOut: bigint; tp: Address;
   }) => {
-    const s = staged[1]!;
-    const accounts = resolveAccounts(
-      planToManifest(s.plan!),
-      {
-        tokenProgram0: p.tp,
-        tokenProgram1: TOKEN_PROGRAM, // unused when splCount=1; still attached (dedups if == tp)
-        escrow0: p.escrow,
-        mint0: p.mint,
-        dest0: p.dest,
-        owner: { address: p.owner, signer: harness.payer },
-      },
-      harness.payer.address,
-    );
-    return executeStaged(harness, s.buffer, accounts, {
-      pin: s.pin,
-      args: { layout: s.args!, values: [p.minOut, 1n, scalarOf(p.tp), scalarOf(TOKEN_PROGRAM)] },
+    return execute(harness, build(1, p.minOut, 1n), {
+      tokenProgram0: p.tp,
+      tokenProgram1: TOKEN_PROGRAM, // unused when splCount=1; still attached (dedups if == tp)
+      escrow0: p.escrow,
+      mint0: p.mint,
+      dest0: p.dest,
+      owner: { address: p.owner, signer: harness.payer },
     });
   };
 
@@ -142,7 +141,6 @@ describeSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022, one s
   });
 
   it('★ mixed N=2: splCount=1 routes escrow0 (classic) via tokenProgram0 and escrow1 (Token-2022) via tokenProgram1, one recipient', async () => {
-    const s = staged[2]!;
     const owner = harness.payer.address;
     const recipient = randomAddress();
 
@@ -153,22 +151,14 @@ describeSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022, one s
     const escrow1 = setTokenAccount(harness, randomAddress(), mint1, owner, 200n, TOKEN_2022_PROGRAM);
     const dest1 = setTokenAccount(harness, randomAddress(), mint1, recipient, 0n, TOKEN_2022_PROGRAM);
 
-    const accounts = resolveAccounts(
-      planToManifest(s.plan!),
-      {
+    // splCount=1 → escrow0 via tokenProgram0 (classic), escrow1 via tokenProgram1 (2022).
+    const r = expectOk(
+      await execute(harness, build(2, 50n, 1n), {
         tokenProgram0: TOKEN_PROGRAM,
         tokenProgram1: TOKEN_2022_PROGRAM,
         escrow0, mint0, dest0,
         escrow1, mint1, dest1,
         owner: { address: owner, signer: harness.payer },
-      },
-      harness.payer.address,
-    );
-    // splCount=1 → escrow0 via tokenProgram0 (classic), escrow1 via tokenProgram1 (2022).
-    const r = expectOk(
-      await executeStaged(harness, s.buffer, accounts, {
-        pin: s.pin,
-        args: { layout: s.args!, values: [50n, 1n, scalarOf(TOKEN_PROGRAM), scalarOf(TOKEN_2022_PROGRAM)] },
       }),
     );
 

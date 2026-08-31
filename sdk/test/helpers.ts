@@ -6,7 +6,7 @@
  * source files since the published compiler only resolves JSON imports.
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { createRequire } from 'node:module';
 import { join } from 'path';
 import ts from 'typescript';
@@ -23,8 +23,46 @@ const { compile: compileRust } = createRequire(import.meta.url)('sauce-next') as
     target: SauceTarget;
     entry?: string;
     resolve: (path: string) => Uint8Array | undefined;
+    defines?: Array<[name: string, value: string]>;
   }) => RustCompileResult;
 };
+
+export interface CompileSourceOptions {
+  /** Roots a non-entry import (e.g. `./artifacts/IERC20.json`) is resolved against, in order. */
+  baseDirs?: readonly string[];
+  /** Compile-time consts, as the builders pass them. */
+  defines?: Readonly<Record<string, bigint | number | string>>;
+}
+
+/**
+ * Compile a complete SauceScript program through the Rust compiler, resolving any non-entry import
+ * off disk against `baseDirs` — the shared seam the real-compile suites use, so the whole corpus
+ * loads the wasm module once and states its resolve rules in one place.
+ */
+export function compileSource(
+  source: string,
+  target: SauceTarget,
+  { baseDirs = [], defines }: CompileSourceOptions = {},
+): RustCompileResult {
+  const entry = 'main.js';
+  const resolve = (path: string): Uint8Array | undefined => {
+    const key = path.replace(/^\.\//, '');
+    if (key === entry) return Buffer.from(source);
+    for (const dir of baseDirs) {
+      const full = join(dir, key);
+      if (existsSync(full)) return readFileSync(full);
+    }
+
+    return undefined;
+  };
+
+  return compileRust({
+    target,
+    entry,
+    resolve,
+    ...(defines ? { defines: Object.entries(defines).map(([k, v]) => [k, v.toString()] as [string, string]) } : {}),
+  });
+}
 
 /**
  * Strip TypeScript type annotations from SauceScript, returning plain JS.
