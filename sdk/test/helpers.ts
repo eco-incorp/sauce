@@ -11,14 +11,14 @@ import { createRequire } from 'node:module';
 import { join } from 'path';
 import ts from 'typescript';
 import { keccak256, toBytes, toHex } from 'viem';
-import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-compiler-next';
+import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-next';
 import { compile, type ContractsConfig, type Abi } from '../../compiler/dist/index.js';
 
 // The Rust SauceScript compiler, aliased because its real name (`@eco-incorp/sauce-compiler`) is
 // still this workspace's TypeScript one. Required via `createRequire` for the same reason
 // `test/std/token/harness.ts` does: the package's `node` condition is a CommonJS build that reads
 // its sibling `.wasm` off disk at load, and jest's ESM transform does not resolve that sibling.
-const { compile: compileRust } = createRequire(import.meta.url)('sauce-compiler-next') as {
+const { compile: compileRust } = createRequire(import.meta.url)('sauce-next') as {
   compile: (options: {
     target: SauceTarget;
     entry?: string;
