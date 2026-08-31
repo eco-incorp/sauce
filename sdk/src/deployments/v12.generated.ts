@@ -28,6 +28,7 @@ export const V12_EVM_CHAINS = {
   56: { name: 'bsc', live: true, status: 'live' },
   130: { name: 'unichain', live: true, status: 'live' },
   137: { name: 'polygon', live: true, status: 'live' },
+  143: { name: 'monad', live: true, status: 'live' },
   146: { name: 'sonic', live: true, status: 'live' },
   2020: { name: 'ronin', live: false, status: 'failed', error: 'Contracts deployed with a Solidity version equal or higher than 0.8.20 might not work properly. For more information, please see https://eips.ethereum.org/EIPS/eip-3855 Error: Failed to send transacti' },
   8453: { name: 'base', live: true, status: 'live' },

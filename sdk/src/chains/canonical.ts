@@ -86,8 +86,9 @@ export const CANONICAL_CHAINS = [
   { id: 7777777, slug: "zora", name: "Zora", kind: "evm", aliases: [] },
   { id: 1313161554, slug: "aurora", name: "Aurora", kind: "evm", aliases: [] },
 
-  // --- EVM, present only in V12_EVM_CHAINS (5) — NOT in `chains`; slug copied from the deploy record ---
+  // --- EVM, present only in V12_EVM_CHAINS (6) — NOT in `chains`; slug copied from the deploy record ---
   { id: 130, slug: "unichain", name: "Unichain", kind: "evm", aliases: [] },
+  { id: 143, slug: "monad", name: "Monad", kind: "evm", aliases: [] },
   { id: 146, slug: "sonic", name: "Sonic", kind: "evm", aliases: [] },
   { id: 2020, slug: "ronin", name: "Ronin", kind: "evm", aliases: [] },
   { id: 9745, slug: "plasma", name: "Plasma", kind: "evm", aliases: [] },

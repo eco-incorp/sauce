@@ -86,6 +86,8 @@ declare global {
   const Aurora: ChainGlobals["Aurora"] & ChainContracts;
   /** eco-routes chain global for Unichain (chain id 130). */
   const Unichain: ChainGlobals["Unichain"] & ChainContracts;
+  /** eco-routes chain global for Monad (chain id 143). */
+  const Monad: ChainGlobals["Monad"] & ChainContracts;
   /** eco-routes chain global for Sonic (chain id 146). */
   const Sonic: ChainGlobals["Sonic"] & ChainContracts;
   /** eco-routes chain global for Ronin (chain id 2020). */

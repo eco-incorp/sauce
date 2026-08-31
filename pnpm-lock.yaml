@@ -49,8 +49,8 @@ importers:
         specifier: ^2.22.0
         version: 2.28.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       sauce:
-        specifier: github:eco-incorp/sauce#d1c900d03d8d5befd8f049c7890e11a16fd24d91
-        version: git+https://git@github.com:eco-incorp/sauce.git#d1c900d03d8d5befd8f049c7890e11a16fd24d91
+        specifier: github:eco-incorp/sauce#cae256b38dccd7d7751cd66a4f509bab9a7a7fb5
+        version: git+https://git@github.com:eco-incorp/sauce.git#cae256b38dccd7d7751cd66a4f509bab9a7a7fb5
 
   actions:
     dependencies:
@@ -2522,8 +2522,8 @@ packages:
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
-  sauce@git+https://git@github.com:eco-incorp/sauce.git#d1c900d03d8d5befd8f049c7890e11a16fd24d91:
-    resolution: {commit: d1c900d03d8d5befd8f049c7890e11a16fd24d91, repo: git@github.com:eco-incorp/sauce.git, type: git}
+  sauce@git+https://git@github.com:eco-incorp/sauce.git#cae256b38dccd7d7751cd66a4f509bab9a7a7fb5:
+    resolution: {commit: cae256b38dccd7d7751cd66a4f509bab9a7a7fb5, repo: git@github.com:eco-incorp/sauce.git, type: git}
     version: 0.0.0
 
   semver@5.7.2:
@@ -5835,7 +5835,7 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  sauce@git+https://git@github.com:eco-incorp/sauce.git#d1c900d03d8d5befd8f049c7890e11a16fd24d91: {}
+  sauce@git+https://git@github.com:eco-incorp/sauce.git#cae256b38dccd7d7751cd66a4f509bab9a7a7fb5: {}
 
   semver@5.7.2: {}
 

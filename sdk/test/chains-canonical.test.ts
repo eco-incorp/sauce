@@ -24,8 +24,8 @@ import { V12_EVM_CHAINS, v12LiveChainIds, v12ChainSlug } from "../src/deployment
 import { listProtocols } from "../src/protocols/index.js";
 
 describe("canonical chain registry: structural invariants", () => {
-  it("has exactly 39 entries", () => {
-    expect(canonicalChains.length).toBe(39);
+  it("has exactly 40 entries", () => {
+    expect(canonicalChains.length).toBe(40);
   });
 
   it("has unique ids and unique slugs", () => {
@@ -77,10 +77,10 @@ describe("canonical chain registry: superset of `chains` (additivity)", () => {
 });
 
 describe("canonical chain registry: v12 deploy-record consistency", () => {
-  it("matches V12_EVM_CHAINS slugs for all 12 chains, ronin included", () => {
+  it("matches V12_EVM_CHAINS slugs for all 13 chains, ronin included", () => {
     const raw = V12_EVM_CHAINS as Record<number, { name: string }>;
     const ids = Object.keys(raw).map(Number);
-    expect(ids.length).toBe(12);
+    expect(ids.length).toBe(13);
     for (const id of ids) {
       expect(chainById(id)!.slug).toBe(raw[id].name);
     }
@@ -139,7 +139,7 @@ describe("canonical chain registry: Solana / SVM", () => {
 
   it("evmChains/svmChains partition correctly", () => {
     expect(svmChains().length).toBe(1);
-    expect(evmChains().length).toBe(38);
+    expect(evmChains().length).toBe(39);
   });
 
   it("is absent from the EVM-only `chains` export (additivity, reverse direction)", () => {
