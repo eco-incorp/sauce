@@ -1,5 +1,44 @@
-import { Saucer, CompilerContext, OPS, type OutputSpec } from '../../compiler/dist/index.js';
-import { keccak256, toBytes, encodeAbiParameters } from 'viem';
+/**
+ * Routing actions -> a SauceScript program, compiled by the published Rust/wasm compiler.
+ *
+ * This used to compose builder nodes (`s.int`, `s.externalCall`, `chain.join`) against the in-repo
+ * TypeScript compiler's `Saucer`. That compiler is retired and the Rust one's only surface is
+ * `compile()` over source text, so every action now emits SauceScript STATEMENTS instead — the
+ * idiom `sdk/src/deposit/templates.ts` and `sdk/src/token/svm.ts` already use.
+ *
+ * WHAT DID NOT CHANGE: the calldata. Every action still targets the same address with the same
+ * selector and the same ABI-encoded arguments; `emit.ts`'s `encodeArgs` reproduces the retired
+ * builder's `abiEncode(tuple(args))` for every arity. What changed is the shape of the intermediate
+ * representation, and two things that were latent bugs in it:
+ *
+ *   - the per-build scratch-slot counters (`curveScratchCounter`, `v2ScratchCounter`) were
+ *     module-level and leaked across builds; they are the [`Emitter`]'s now, so a program's names
+ *     depend only on that program;
+ *   - a call whose `uint256` return value is consumed binds it to a local. The builder returned an
+ *     expression that re-issued the call on each use, which is one on-chain call per use.
+ */
+import {
+  arrayLiteral,
+  bindBytes,
+  bindConst,
+  calldata,
+  concatCalldata,
+  decodeUint256,
+  encodeArgs,
+  formatBigint,
+  fn,
+  hexToBytes,
+  newEmitter,
+  selector,
+  slotVar,
+  tupleLiteral as tuple,
+  type Emitter,
+  type Expr,
+  type Fragment,
+  type Stmt,
+} from './emit.js';
+import { compileEvm } from './compile.js';
+import { encodeAbiParameters } from 'viem';
 
 import type {
   RoutingAction,
@@ -47,39 +86,27 @@ import type {
   ApproveAction,
 } from './types.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** OutputSpec for a single uint256 return value. */
-const UINT256_OUTPUT: OutputSpec = { count: 1, typeSpecs: [OPS.BYTE_32] };
-
 /** V4 ActionConstants.CONTRACT_BALANCE — signals the router to use its own token balance. */
 const V4_CONTRACT_BALANCE = BigInt('0x8000000000000000000000000000000000000000000000000000000000000000');
 
 /** V4 ActionConstants.OPEN_DELTA — signals "take all owed" in a TAKE action. */
 const V4_OPEN_DELTA = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 
-function hexToBytes(hex: string): Uint8Array {
-  const h = hex.startsWith('0x') ? hex.slice(2) : hex;
-  const bytes = new Uint8Array(h.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(h.substring(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
+const ZERO = '0n';
+const SELF = 'ctx.self()';
+const MSG_SENDER = 'ctx.msgSender()';
+
+/** An address, pool id or any other 256-bit field, as the literal the emitted source carries. */
+function word(value: string | number | bigint): Expr {
+  return formatBigint(BigInt(value));
 }
 
-/** Compute 4-byte selector from a Solidity function signature. */
-function selector(sig: string): Uint8Array {
-  const hash = keccak256(toBytes(sig));
-  return hexToBytes(hash.slice(0, 10)); // "0x" + 8 hex chars = 4 bytes
+function flag(value: boolean): Expr {
+  return value ? '1n' : '0n';
 }
 
-/** Build calldata: 4-byte selector + abiEncode(tuple(args)). */
-function calldata(s: Saucer, sig: string, args: Saucer[]): Saucer {
-  const sel = s.bytes(selector(sig));
-  if (args.length === 0) return sel;
-  return s.concat([sel, s.abiEncode(s.tuple(args))]);
+function evmCall(target: Expr, value: Expr, data: Expr): Expr {
+  return `evm.call(${target}, ${value}, ${data})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,18 +116,17 @@ function calldata(s: Saucer, sig: string, args: Saucer[]): Saucer {
 /**
  * Resolve the amount for an action:
  * 1. Explicit amount string (highest priority)
- * 2. amountRef — read from a named slot
- * 3. lastOutputSlot — implicit chain from previous action
+ * 2. amountRef — the local a previous action saved its output to
+ * 3. lastOutputSlot — implicit chain from the previous action
  */
 function resolveAmountIn(
-  s: Saucer,
   explicitAmount: string | undefined,
   amountRef: string | undefined,
   lastOutputSlot: string | undefined,
-): Saucer {
-  if (explicitAmount !== undefined) return s.int(BigInt(explicitAmount));
-  if (amountRef !== undefined) return s.read(amountRef);
-  if (lastOutputSlot !== undefined) return s.read(lastOutputSlot);
+): Expr {
+  if (explicitAmount !== undefined) return word(explicitAmount);
+  if (amountRef !== undefined) return slotVar(amountRef);
+  if (lastOutputSlot !== undefined) return lastOutputSlot;
   throw new Error(
     'No amount specified: provide an explicit amount, amountRef, or chain from a previous action',
   );
@@ -116,123 +142,126 @@ function getExplicitAmount(action: RoutingAction): string | undefined {
 // Action result type
 // ---------------------------------------------------------------------------
 
-interface ActionResult {
-  /** Bytecode for the call (may include ABI_DECODE for return-value capture). */
-  call: Saucer;
+export interface ActionResult {
+  /** Statements that execute the action, in order. */
+  readonly stmts: readonly Stmt[];
   /**
-   * The output value expression for chaining.
-   * - For swaps: the decoded return value (same Saucer as `call`).
-   * - For void actions: the input amountIn (pass-through).
+   * The action's output amount, as an expression valid once `stmts` have run.
+   *
+   * Meaningful only when `buildAction` was asked for the output (`needsOutput`). An action whose
+   * return value was not requested leaves the pass-through input amount here — the same looseness
+   * the retired builder had, and for the same reason: nothing reads it in that case.
    */
-  output: Saucer;
+  readonly output: Expr;
 }
 
 // ---------------------------------------------------------------------------
 // Dispatcher
 // ---------------------------------------------------------------------------
 
-export function actionsToSauce(actions: RoutingAction[]): Uint8Array {
-  if (actions.length === 0) return new Uint8Array();
+/** The SauceScript source for `actions`. Empty for an empty list. */
+export function actionsToSauceSource(actions: readonly RoutingAction[]): string {
+  if (actions.length === 0) return '';
 
-  const ctx = new CompilerContext();
-  const s = new Saucer(ctx);
-
-  let chain = s; // accumulator — starts empty
+  const emit = newEmitter();
+  const body: Stmt[] = [];
+  const declared = new Set<string>();
   let lastOutputSlot: string | undefined;
 
   for (let i = 0; i < actions.length; i++) {
     const action = actions[i];
-    const amountIn = resolveAmountIn(
-      s,
-      getExplicitAmount(action),
-      action.amountRef,
-      lastOutputSlot,
-    );
+    const amountIn = resolveAmountIn(getExplicitAmount(action), action.amountRef, lastOutputSlot);
 
     // Determine if we need to store the output
     const needsStore =
       action.saveOutputAs !== undefined ||
       actions.slice(i + 1).some(
-        (a) =>
-          getExplicitAmount(a) === undefined && a.amountRef === undefined,
+        (a) => getExplicitAmount(a) === undefined && a.amountRef === undefined,
       ) ||
-      actions.slice(i + 1).some(
-        (a) => a.amountRef === action.saveOutputAs,
-      );
+      actions.slice(i + 1).some((a) => a.amountRef === action.saveOutputAs);
 
-    const result = buildAction(s, action, amountIn, needsStore);
+    const result = buildAction(emit, action, amountIn, needsStore);
+    body.push(...result.stmts);
 
     if (needsStore) {
-      const outputSlot = action.saveOutputAs ?? `__out_${i}`;
-
-      if (result.output === result.call) {
-        // Output IS the call result — storing it implicitly executes the call
-        chain = chain.join(s.store(outputSlot, result.output));
-      } else {
-        // Void call — execute it, then store the pass-through output
-        chain = chain.join(result.call).join(s.store(outputSlot, result.output));
-      }
-
-      lastOutputSlot = outputSlot;
-    } else {
-      // No chaining needed — just execute the call
-      chain = chain.join(result.call);
+      const slot = action.saveOutputAs === undefined ? `t_out${i}` : slotVar(action.saveOutputAs);
+      body.push(declared.has(slot) ? `${slot} = ${result.output};` : `let ${slot} = ${result.output};`);
+      declared.add(slot);
+      lastOutputSlot = slot;
     }
   }
 
-  return chain.build();
+  return `${fn('main', [], 'void', body)}\n`;
+}
+
+export function actionsToSauce(actions: readonly RoutingAction[]): Uint8Array {
+  const source = actionsToSauceSource(actions);
+
+  return source === '' ? new Uint8Array() : compileEvm(source);
 }
 
 export function actionToSauce(action: RoutingAction): Uint8Array {
   return actionsToSauce([action]);
 }
 
-export type { ActionResult };
-
-export function buildAction(s: Saucer, action: RoutingAction, amountIn: Saucer, outputChained: boolean): ActionResult {
+/**
+ * Emit the statements for one action.
+ *
+ * BREAKING: this took a `Saucer` and a `Saucer` amount and returned builder nodes. It now takes an
+ * [`Emitter`] (from `newEmitter()`) and a SauceScript amount EXPRESSION, and returns source
+ * fragments. `needsOutput` is the old `outputChained` under its real name: it both selects the
+ * recipient (`ctx.self()` when the output is consumed here, the action's own `recipient` otherwise)
+ * and decides whether a call's `uint256` return value is captured.
+ */
+export function buildAction(
+  emit: Emitter,
+  action: RoutingAction,
+  amountIn: Expr,
+  needsOutput: boolean,
+): ActionResult {
   switch (action.type) {
-    case 'uniswapV3ExactInput':        return uniswapV3ExactInput(s, action, amountIn, outputChained);
-    case 'uniswapV3ExactInputMultiHop': return uniswapV3ExactInputMultiHop(s, action, amountIn, outputChained);
-    case 'uniswapV4ExactInput':        return uniswapV4ExactInput(s, action, amountIn);
-    case 'uniswapV4ExactInputMultiHop': return uniswapV4ExactInputMultiHop(s, action, amountIn);
-    case 'curveSwap':                  return curveSwap(s, action, amountIn, outputChained);
-    case 'balancerV2Swap':             return balancerV2Swap(s, action, amountIn, outputChained);
-    case 'balancerV2BatchSwap':        return balancerV2BatchSwap(s, action, amountIn, outputChained);
-    case 'balancerV3Swap':             return balancerV3Swap(s, action, amountIn, outputChained);
-    case 'uniswapV2Swap':              return uniswapV2Swap(s, action, amountIn, outputChained);
-    case 'curveRouterNGSwap':          return curveRouterNGSwap(s, action, amountIn, outputChained);
-    case 'ambientSwap':                return ambientSwap(s, action, amountIn);
-    case 'dodoSwap':                   return dodoSwap(s, action, amountIn, outputChained);
-    case 'maverickSwap':               return maverickSwap(s, action, amountIn, outputChained);
-    case 'maverickMultiHopSwap':       return maverickMultiHopSwap(s, action, amountIn, outputChained);
-    case 'carbonSwap':                 return carbonSwap(s, action, amountIn, outputChained);
-    case 'fraxswapSwap':               return fraxswapSwap(s, action, amountIn, outputChained);
-    case 'clipperSwap':                return clipperSwap(s, action, amountIn, outputChained);
-    case 'integralSwap':               return integralSwap(s, action, amountIn, outputChained);
-    case 'fluidDexT1Swap':             return fluidDexT1Swap(s, action, amountIn, outputChained);
-    case 'fluidDexLiteSwap':           return fluidDexLiteSwap(s, action, amountIn);
-    case 'transfer':                   return transfer(s, action, amountIn);
-    case 'approve':                    return approve(s, action, amountIn);
-    case 'wrapETH':                    return wrapETH(s, action, amountIn);
-    case 'unwrapETH':                  return unwrapETH(s, action, amountIn);
-    case 'wrapStETH':                  return wrapStETH(s, action, amountIn);
-    case 'unwrapStETH':                return unwrapStETH(s, action, amountIn);
-    case 'lidoStake':                  return lidoStake(s, action, amountIn);
-    case 'lidoUnstake':                return lidoUnstake(s, action, amountIn);
-    case 'rocketPoolStake':            return rocketPoolStake(s, action, amountIn);
-    case 'rocketPoolUnstake':          return rocketPoolUnstake(s, action, amountIn);
-    case 'coinbaseStake':              return coinbaseStake(s, action, amountIn);
-    case 'etherFiStake':               return etherFiStake(s, action, amountIn);
-    case 'aaveV3Supply':               return aaveV3Supply(s, action, amountIn);
-    case 'aaveV3Withdraw':             return aaveV3Withdraw(s, action, amountIn);
-    case 'aaveV3Borrow':               return aaveV3Borrow(s, action, amountIn);
-    case 'aaveV3Repay':                return aaveV3Repay(s, action, amountIn);
-    case 'compoundV3Supply':           return compoundV3Supply(s, action, amountIn);
-    case 'compoundV3Withdraw':         return compoundV3Withdraw(s, action, amountIn);
-    case 'acrossBridge':               return acrossBridge(s, action, amountIn);
-    case 'stargateBridge':             return stargateBridge(s, action, amountIn);
-    case 'cctpBridge':                 return cctpBridge(s, action, amountIn);
-    case 'hyperlaneBridge':            return hyperlaneBridge(s, action, amountIn);
+    case 'uniswapV3ExactInput':        return uniswapV3ExactInput(emit, action, amountIn, needsOutput);
+    case 'uniswapV3ExactInputMultiHop': return uniswapV3ExactInputMultiHop(emit, action, amountIn, needsOutput);
+    case 'uniswapV4ExactInput':        return uniswapV4ExactInput(emit, action, amountIn);
+    case 'uniswapV4ExactInputMultiHop': return uniswapV4ExactInputMultiHop(emit, action, amountIn);
+    case 'curveSwap':                  return curveSwap(emit, action, amountIn, needsOutput);
+    case 'balancerV2Swap':             return balancerV2Swap(emit, action, amountIn, needsOutput);
+    case 'balancerV2BatchSwap':        return balancerV2BatchSwap(emit, action, amountIn, needsOutput);
+    case 'balancerV3Swap':             return balancerV3Swap(emit, action, amountIn, needsOutput);
+    case 'uniswapV2Swap':              return uniswapV2Swap(emit, action, amountIn, needsOutput);
+    case 'curveRouterNGSwap':          return curveRouterNGSwap(emit, action, amountIn, needsOutput);
+    case 'ambientSwap':                return ambientSwap(emit, action, amountIn);
+    case 'dodoSwap':                   return dodoSwap(emit, action, amountIn, needsOutput);
+    case 'maverickSwap':               return maverickSwap(emit, action, amountIn, needsOutput);
+    case 'maverickMultiHopSwap':       return maverickMultiHopSwap(emit, action, amountIn, needsOutput);
+    case 'carbonSwap':                 return carbonSwap(emit, action, amountIn, needsOutput);
+    case 'fraxswapSwap':               return fraxswapSwap(emit, action, amountIn, needsOutput);
+    case 'clipperSwap':                return clipperSwap(emit, action, amountIn, needsOutput);
+    case 'integralSwap':               return integralSwap(emit, action, amountIn, needsOutput);
+    case 'fluidDexT1Swap':             return fluidDexT1Swap(emit, action, amountIn, needsOutput);
+    case 'fluidDexLiteSwap':           return fluidDexLiteSwap(emit, action, amountIn);
+    case 'transfer':                   return transfer(emit, action, amountIn);
+    case 'approve':                    return approve(emit, action, amountIn);
+    case 'wrapETH':                    return wrapETH(emit, action, amountIn);
+    case 'unwrapETH':                  return unwrapETH(emit, action, amountIn);
+    case 'wrapStETH':                  return wrapStETH(emit, action, amountIn);
+    case 'unwrapStETH':                return unwrapStETH(emit, action, amountIn);
+    case 'lidoStake':                  return lidoStake(emit, action, amountIn);
+    case 'lidoUnstake':                return lidoUnstake(emit, action, amountIn);
+    case 'rocketPoolStake':            return rocketPoolStake(emit, action, amountIn);
+    case 'rocketPoolUnstake':          return rocketPoolUnstake(emit, action, amountIn);
+    case 'coinbaseStake':              return coinbaseStake(emit, action, amountIn);
+    case 'etherFiStake':               return etherFiStake(emit, action, amountIn);
+    case 'aaveV3Supply':               return aaveV3Supply(emit, action, amountIn);
+    case 'aaveV3Withdraw':             return aaveV3Withdraw(emit, action, amountIn, needsOutput);
+    case 'aaveV3Borrow':               return aaveV3Borrow(emit, action, amountIn);
+    case 'aaveV3Repay':                return aaveV3Repay(emit, action, amountIn);
+    case 'compoundV3Supply':           return compoundV3Supply(emit, action, amountIn);
+    case 'compoundV3Withdraw':         return compoundV3Withdraw(emit, action, amountIn);
+    case 'acrossBridge':               return acrossBridge(emit, action, amountIn);
+    case 'stargateBridge':             return stargateBridge(emit, action, amountIn);
+    case 'cctpBridge':                 return cctpBridge(emit, action, amountIn);
+    case 'hyperlaneBridge':            return hyperlaneBridge(emit, action, amountIn);
     default: {
       const _: never = action;
       throw new Error(`Unknown action type: ${(_ as any).type}`);
@@ -241,56 +270,90 @@ export function buildAction(s: Saucer, action: RoutingAction, amountIn: Saucer, 
 }
 
 // ---------------------------------------------------------------------------
+// Call shapes
+// ---------------------------------------------------------------------------
+
+/** A call whose `uint256` return value is the action's output when `needsOutput`. */
+function capturedCall(
+  emit: Emitter,
+  needsOutput: boolean,
+  target: Expr,
+  value: Expr,
+  cd: Fragment,
+  passThrough: Expr,
+): ActionResult {
+  const call = evmCall(target, value, cd.expr);
+  if (!needsOutput) return { stmts: [...cd.stmts, `${call};`], output: passThrough };
+
+  const decoded = decodeUint256(emit, call);
+  const bound = bindConst(emit, 'amt', decoded.expr);
+
+  return { stmts: [...cd.stmts, ...decoded.stmts, ...bound.stmts], output: bound.expr };
+}
+
+/** A call with no usable return value — the input amount passes through. */
+function voidCall(target: Expr, value: Expr, cd: Fragment, passThrough: Expr): ActionResult {
+  return { stmts: [...cd.stmts, `${evmCall(target, value, cd.expr)};`], output: passThrough };
+}
+
+/** `balanceOf(ctx.self())` on `token`, as a bound `uint256` local. */
+function selfBalance(emit: Emitter, token: Expr): Fragment {
+  const cd = calldata(emit, 'balanceOf(address)', [SELF]);
+  const decoded = decodeUint256(emit, evmCall(token, ZERO, cd.expr));
+  const bound = bindConst(emit, 'bal', decoded.expr);
+
+  return { stmts: [...cd.stmts, ...decoded.stmts, ...bound.stmts], expr: bound.expr };
+}
+
+// ---------------------------------------------------------------------------
 // Swap actions — capture uint256 output
 // ---------------------------------------------------------------------------
 
-function uniswapV3ExactInput(s: Saucer, action: UniswapV3ExactInputAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const params = s.tuple([
-    s.int(BigInt(action.tokenIn)),
-    s.int(BigInt(action.tokenOut)),
-    s.int(BigInt(action.fee)),
+function uniswapV3ExactInput(emit: Emitter, action: UniswapV3ExactInputAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const params = [
+    word(action.tokenIn),
+    word(action.tokenOut),
+    word(action.fee),
     recipient,
     amountIn,
-    s.int(BigInt(action.amountOutMin ?? '0')),
-    s.int(BigInt(action.sqrtPriceLimitX96 ?? '0')),
-  ]);
+    word(action.amountOutMin ?? '0'),
+    word(action.sqrtPriceLimitX96 ?? '0'),
+  ];
   const cd = calldata(
-    s,
+    emit,
     'exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))',
-    [params],
+    [tuple(params)],
   );
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
+
+  return capturedCall(emit, needsOutput, word(action.router), ZERO, cd, amountIn);
 }
 
-function uniswapV3ExactInputMultiHop(s: Saucer, action: UniswapV3ExactInputMultiHopAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const params = s.tuple([
-    s.bytes(hexToBytes(action.path)),
-    recipient,
-    amountIn,
-    s.int(BigInt(action.amountOutMin)),
-  ]);
+function uniswapV3ExactInputMultiHop(emit: Emitter, action: UniswapV3ExactInputMultiHopAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const path = bindBytes(emit, 'path', hexToBytes(action.path));
   const cd = calldata(
-    s,
+    emit,
     'exactInput((bytes,address,uint256,uint256))',
-    [params],
+    [tuple([path.expr, recipient, amountIn, word(action.amountOutMin)])],
   );
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
+
+  return capturedCall(
+    emit,
+    needsOutput,
+    word(action.router),
+    ZERO,
+    { stmts: [...path.stmts, ...cd.stmts], expr: cd.expr },
+    amountIn,
+  );
 }
 
-function uniswapV4ExactInput(s: Saucer, action: UniswapV4ExactInputAction, amountIn: Saucer): ActionResult {
+function uniswapV4ExactInput(emit: Emitter, action: UniswapV4ExactInputAction, amountIn: Expr): ActionResult {
   const currencyIn = action.zeroForOne ? action.poolKey.currency0 : action.poolKey.currency1;
   const currencyOut = action.zeroForOne ? action.poolKey.currency1 : action.poolKey.currency0;
 
   // Transfer input token to the router so it can settle without Permit2
-  const transferCd = calldata(s, 'transfer(address,uint256)', [
-    s.int(BigInt(action.router)),
-    amountIn,
-  ]);
-  const transferCall = s.externalCall(s.int(BigInt(currencyIn)), s.int(0n), transferCd);
+  const transferCd = calldata(emit, 'transfer(address,uint256)', [word(action.router), amountIn]);
 
   // ExactInputSingleParams: { PoolKey poolKey, bool zeroForOne, uint128 amountIn, uint128 amountOutMinimum, bytes hookData }
   const poolKeyAbi = { type: 'tuple', components: [
@@ -323,36 +386,27 @@ function uniswapV4ExactInput(s: Saucer, action: UniswapV4ExactInputAction, amoun
     [currencyOut, action.recipient, V4_OPEN_DELTA],
   );
 
-  // Actions: SWAP_EXACT_IN_SINGLE (0x06), SETTLE (0x0b), TAKE (0x0e)
-  const v4Input = encodeAbiParameters(
-    [{ type: 'bytes' }, { type: 'bytes[]' }],
-    ['0x060b0e', [swapParams, settleParams, takeParams]],
-  );
+  const executeCalldata = v4ExecuteCalldata('0x060b0e', [swapParams, settleParams, takeParams]);
 
-  const executeCalldata = encodeAbiParameters(
-    [{ type: 'bytes' }, { type: 'bytes[]' }],
-    ['0x10', [v4Input]],
-  );
+  const sel = bindBytes(emit, 'sel', selector('execute(bytes,bytes[])'));
+  const blob = bindBytes(emit, 'v4', hexToBytes(executeCalldata));
 
-  const cd = s.concat([
-    s.bytes(selector('execute(bytes,bytes[])')),
-    s.bytes(hexToBytes(executeCalldata)),
-  ]);
-
-  const executeCall = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd);
-  const call = transferCall.join(executeCall);
-  return { call, output: amountIn };
+  return {
+    stmts: [
+      ...transferCd.stmts,
+      `${evmCall(word(currencyIn), ZERO, transferCd.expr)};`,
+      ...sel.stmts,
+      ...blob.stmts,
+      `${evmCall(word(action.router), ZERO, concatCalldata(sel.expr, [blob.expr]))};`,
+    ],
+    output: amountIn,
+  };
 }
 
-function uniswapV4ExactInputMultiHop(s: Saucer, action: UniswapV4ExactInputMultiHopAction, amountIn: Saucer): ActionResult {
+function uniswapV4ExactInputMultiHop(emit: Emitter, action: UniswapV4ExactInputMultiHopAction, amountIn: Expr): ActionResult {
   const currencyOut = action.path[action.path.length - 1].intermediateCurrency;
 
-  // Transfer input token to the router so it can settle without Permit2
-  const transferCd = calldata(s, 'transfer(address,uint256)', [
-    s.int(BigInt(action.router)),
-    amountIn,
-  ]);
-  const transferCall = s.externalCall(s.int(BigInt(action.currencyIn)), s.int(0n), transferCd);
+  const transferCd = calldata(emit, 'transfer(address,uint256)', [word(action.router), amountIn]);
 
   // ExactInputParams: { Currency currencyIn, PathKey[] path, uint256[] maxHopSlippage, uint128 amountIn, uint128 amountOutMinimum }
   const pathKeyAbi = { type: 'tuple[]', components: [
@@ -373,133 +427,116 @@ function uniswapV4ExactInputMultiHop(s: Saucer, action: UniswapV4ExactInputMulti
     ],
   );
 
-  // SETTLE (0x0b) with payerIsUser=false + CONTRACT_BALANCE (0) — router uses its own balance
   const settleParams = encodeAbiParameters(
     [{ type: 'address' }, { type: 'uint256' }, { type: 'bool' }],
     [action.currencyIn, V4_CONTRACT_BALANCE, false],
   );
 
-  // TAKE (0x0e) — sends output to specified recipient, OPEN_DELTA = take all owed
   const takeParams = encodeAbiParameters(
     [{ type: 'address' }, { type: 'address' }, { type: 'uint256' }],
     [currencyOut, action.recipient, V4_OPEN_DELTA],
   );
 
-  // Actions: SWAP_EXACT_IN (0x07), SETTLE (0x0b), TAKE (0x0e)
-  const v4Input = encodeAbiParameters(
-    [{ type: 'bytes' }, { type: 'bytes[]' }],
-    ['0x070b0e', [swapParams, settleParams, takeParams]],
-  );
+  const executeCalldata = v4ExecuteCalldata('0x070b0e', [swapParams, settleParams, takeParams]);
 
-  const executeCalldata = encodeAbiParameters(
-    [{ type: 'bytes' }, { type: 'bytes[]' }],
-    ['0x10', [v4Input]],
-  );
+  const sel = bindBytes(emit, 'sel', selector('execute(bytes,bytes[])'));
+  const blob = bindBytes(emit, 'v4', hexToBytes(executeCalldata));
 
-  const cd = s.concat([
-    s.bytes(selector('execute(bytes,bytes[])')),
-    s.bytes(hexToBytes(executeCalldata)),
-  ]);
-
-  const executeCall = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd);
-  const call = transferCall.join(executeCall);
-  return { call, output: amountIn };
-}
-
-/**
- * Per-build counter for `curveSwap` scratch slots so multiple curve actions in
- * the same chain (or the same dispatcher) don't share a slot name and clobber
- * each other's pre/post snapshots.
- */
-let curveScratchCounter = 0;
-
-function curveSwap(s: Saucer, action: CurveSwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  // Older Curve pools (e.g. 3pool at 0xbEbc44...) expose only the 4-arg
-  // `exchange` which returns VOID and sends the output to msg.sender. We:
-  //   1. snapshot Sauce's pre-swap `tokenOut` balance,
-  //   2. call the 4-arg exchange (Sauce is msg.sender — output lands here),
-  //   3. compute `post - pre` to recover this swap's output without sweeping
-  //      any pre-existing dust / residual from earlier actions.
-  //
-  // Newer pools that support the 5-arg overload with receiver still work
-  // here — they just end up sending to msg.sender too, so step 3 still runs.
-  const id = curveScratchCounter++;
-  const preBalSlot = `__curve_pre_${id}`;
-  const balSlot = `__curve_bal_${id}`;
-
-  const tokenOut = s.int(BigInt(action.tokenOut));
-  const balOf = () =>
-    s.externalCall(
-      tokenOut,
-      s.int(0n),
-      calldata(s, 'balanceOf(address)', [s.addressSelf()]),
-      UINT256_OUTPUT,
-    );
-
-  const exchangeCd = calldata(
-    s,
-    'exchange(int128,int128,uint256,uint256)',
-    [
-      s.int(BigInt(action.i)),
-      s.int(BigInt(action.j)),
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
+  return {
+    stmts: [
+      ...transferCd.stmts,
+      `${evmCall(word(action.currencyIn), ZERO, transferCd.expr)};`,
+      ...sel.stmts,
+      ...blob.stmts,
+      `${evmCall(word(action.router), ZERO, concatCalldata(sel.expr, [blob.expr]))};`,
     ],
-  );
-
-  const captureAndSwap = s
-    .store(preBalSlot, balOf())
-    .join(s.externalCall(s.int(BigInt(action.pool)), s.int(0n), exchangeCd));
-  const swapOutput = s.sub(balOf(), s.read(preBalSlot));
-
-  if (outputChained) {
-    return { call: captureAndSwap, output: swapOutput };
-  }
-  // Non-chained: stash the delta and transfer it to the recipient.
-  const forward = captureAndSwap
-    .join(s.store(balSlot, swapOutput))
-    .join(
-      s.externalCall(
-        tokenOut,
-        s.int(0n),
-        calldata(s, 'transfer(address,uint256)', [
-          s.int(BigInt(action.recipient)),
-          s.read(balSlot),
-        ]),
-      ),
-    );
-  return { call: forward, output: s.read(balSlot) };
+    output: amountIn,
+  };
 }
 
-function balancerV2Swap(s: Saucer, action: BalancerV2SwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const singleSwap = s.tuple([
-    s.int(BigInt(action.poolId)), // bytes32 — must be static, not dynamic bytes
-    s.int(0n), // kind = GIVEN_IN
-    s.int(BigInt(action.tokenIn)),
-    s.int(BigInt(action.tokenOut)),
+/** `abi.encode(bytes("0x10"), [abi.encode(actions, params)])` — the V4 router's two-level input. */
+function v4ExecuteCalldata(actions: `0x${string}`, params: readonly `0x${string}`[]): `0x${string}` {
+  const v4Input = encodeAbiParameters([{ type: 'bytes' }, { type: 'bytes[]' }], [actions, params as never]);
+
+  return encodeAbiParameters([{ type: 'bytes' }, { type: 'bytes[]' }], ['0x10', [v4Input]]);
+}
+
+function curveSwap(emit: Emitter, action: CurveSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  // Older Curve pools (e.g. 3pool at 0xbEbc44...) expose only the 4-arg `exchange` which returns
+  // VOID and sends the output to msg.sender. We snapshot the pre-swap `tokenOut` balance, call the
+  // 4-arg exchange (Sauce is msg.sender — output lands here), then compute `post - pre` to recover
+  // this swap's output without sweeping any pre-existing dust from earlier actions.
+  const tokenOut = word(action.tokenOut);
+  const pre = selfBalance(emit, tokenOut);
+  const exchangeCd = calldata(emit, 'exchange(int128,int128,uint256,uint256)', [
+    word(action.i),
+    word(action.j),
     amountIn,
-    s.bytes(new Uint8Array(0)), // empty userData
+    word(action.amountOutMin),
   ]);
-  const funds = s.tuple([
-    s.addressSelf(),  // sender — must equal msg.sender (Sauce) for vault auth
-    s.int(0n),
-    recipient,        // recipient — Sauce when chaining, caller otherwise
-    s.int(0n),
+  const post = selfBalance(emit, tokenOut);
+  const delta = bindConst(emit, 'delta', `${post.expr} - ${pre.expr}`);
+
+  const captureAndSwap: Stmt[] = [
+    ...pre.stmts,
+    ...exchangeCd.stmts,
+    `${evmCall(word(action.pool), ZERO, exchangeCd.expr)};`,
+    ...post.stmts,
+    ...delta.stmts,
+  ];
+
+  if (needsOutput) return { stmts: captureAndSwap, output: delta.expr };
+
+  // Non-chained: forward the delta to the recipient.
+  const transferCd = calldata(emit, 'transfer(address,uint256)', [word(action.recipient), delta.expr]);
+
+  return {
+    stmts: [
+      ...captureAndSwap,
+      ...transferCd.stmts,
+      `${evmCall(tokenOut, ZERO, transferCd.expr)};`,
+    ],
+    output: delta.expr,
+  };
+}
+
+function balancerV2Swap(emit: Emitter, action: BalancerV2SwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const userData = bindBytes(emit, 'ud', new Uint8Array(0));
+  const singleSwap = tuple([
+    word(action.poolId), // bytes32 — must be static, not dynamic bytes
+    ZERO,                // kind = GIVEN_IN
+    word(action.tokenIn),
+    word(action.tokenOut),
+    amountIn,
+    userData.expr,
+  ]);
+  const funds = tuple([
+    SELF,      // sender — must equal msg.sender (Sauce) for vault auth
+    ZERO,
+    recipient, // recipient — Sauce when chaining, caller otherwise
+    ZERO,
   ]);
   const cd = calldata(
-    s,
+    emit,
     'swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)',
-    [singleSwap, funds, s.int(BigInt(action.amountOutMin)), s.int(BigInt(action.deadline))],
+    [singleSwap, funds, word(action.amountOutMin), word(action.deadline)],
   );
-  const call = s.externalCall(s.int(BigInt(action.vault)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
+
+  return capturedCall(
+    emit,
+    needsOutput,
+    word(action.vault),
+    ZERO,
+    { stmts: [...userData.stmts, ...cd.stmts], expr: cd.expr },
+    amountIn,
+  );
 }
 
-function balancerV2BatchSwap(s: Saucer, action: BalancerV2BatchSwapAction, _amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipientExpr = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  // Pre-encode the complex calldata using viem, then splice in runtime values
-  // for funds.sender (addressSelf) and funds.recipient (msgSender)
+function balancerV2BatchSwap(emit: Emitter, action: BalancerV2BatchSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipientExpr = needsOutput ? SELF : word(action.recipient);
+  // Pre-encode the complex calldata with viem, then splice in the runtime values for funds.sender
+  // (ctx.self()) and funds.recipient.
   const MAX_INT256 = BigInt('57896044618658097711785492504343953926634992332820282019728792003956564819967');
 
   const stepsData = action.steps.map((step) => ({
@@ -510,16 +547,13 @@ function balancerV2BatchSwap(s: Saucer, action: BalancerV2BatchSwapAction, _amou
     userData: '0x' as `0x${string}`,
   }));
 
-  const assetsData = action.assets.map(a => a as `0x${string}`);
+  const assetsData = action.assets.map((a) => a as `0x${string}`);
 
   const limitsData = action.assets.map((_, i) =>
-    i === action.assets.length - 1
-      ? -BigInt(action.amountOutMin)
-      : MAX_INT256,
+    i === action.assets.length - 1 ? -BigInt(action.amountOutMin) : MAX_INT256,
   );
 
-  // Encode the full calldata with placeholder addresses for sender/recipient
-  // Sender placeholder: 0xaaaa...aaaa, recipient placeholder: 0xbbbb...bbbb
+  // Placeholder addresses stand in for the two runtime values.
   const SENDER_PLACEHOLDER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const;
   const RECIPIENT_PLACEHOLDER = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as const;
 
@@ -553,15 +587,10 @@ function balancerV2BatchSwap(s: Saucer, action: BalancerV2BatchSwapAction, _amou
     ],
   );
 
-  // Find sender/recipient placeholder positions in the encoded data and replace with runtime values
   const encodedBytes = hexToBytes(encoded);
   const senderPad = hexToBytes('0x000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
   const recipientPad = hexToBytes('0x000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
 
-  // Build calldata by replacing placeholders
-  const sel = selector('batchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool),int256[],uint256)');
-
-  // Find placeholder offsets in encoded data
   let senderOffset = -1;
   let recipientOffset = -1;
   for (let i = 0; i <= encodedBytes.length - 32; i++) {
@@ -573,69 +602,71 @@ function balancerV2BatchSwap(s: Saucer, action: BalancerV2BatchSwapAction, _amou
     }
   }
 
-  // Build: selector + pre_sender + addressSelf + between + recipient + post_recipient
-  const parts: Saucer[] = [s.bytes(sel)];
+  const sel = bindBytes(emit, 'sel', selector(
+    'batchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool),int256[],uint256)',
+  ));
+
+  // Build: selector + pre_sender + ctx.self() + between + recipient + post_recipient. Each pre-
+  // encoded run is a bound `hex` const, because a method call's receiver must be an identifier.
+  const stmts: Stmt[] = [...sel.stmts];
+  const parts: Expr[] = [];
+  const chunk = (from: number, to: number): void => {
+    const bound = bindBytes(emit, 'bs', encodedBytes.slice(from, to));
+    stmts.push(...bound.stmts);
+    parts.push(bound.expr);
+  };
 
   if (senderOffset < recipientOffset) {
-    parts.push(s.bytes(encodedBytes.slice(0, senderOffset)));
-    parts.push(s.abiEncode(s.tuple([s.addressSelf()])));
-    parts.push(s.bytes(encodedBytes.slice(senderOffset + 32, recipientOffset)));
-    parts.push(s.abiEncode(s.tuple([recipientExpr])));
-    parts.push(s.bytes(encodedBytes.slice(recipientOffset + 32)));
+    chunk(0, senderOffset);
+    parts.push(encodeArgs([SELF]));
+    chunk(senderOffset + 32, recipientOffset);
+    parts.push(encodeArgs([recipientExpr]));
+    chunk(recipientOffset + 32, encodedBytes.length);
   } else {
-    parts.push(s.bytes(encodedBytes.slice(0, recipientOffset)));
-    parts.push(s.abiEncode(s.tuple([recipientExpr])));
-    parts.push(s.bytes(encodedBytes.slice(recipientOffset + 32, senderOffset)));
-    parts.push(s.abiEncode(s.tuple([s.addressSelf()])));
-    parts.push(s.bytes(encodedBytes.slice(senderOffset + 32)));
+    chunk(0, recipientOffset);
+    parts.push(encodeArgs([recipientExpr]));
+    chunk(recipientOffset + 32, senderOffset);
+    parts.push(encodeArgs([SELF]));
+    chunk(senderOffset + 32, encodedBytes.length);
   }
 
-  const cd = s.concat(parts);
-  const call = s.externalCall(s.int(BigInt(action.vault)), s.int(0n), cd);
-  return { call, output: _amountIn };
+  stmts.push(`${evmCall(word(action.vault), ZERO, concatCalldata(sel.expr, parts))};`);
+
+  return { stmts, output: amountIn };
 }
 
 // ---------------------------------------------------------------------------
 // New AMM swap actions
 // ---------------------------------------------------------------------------
 
-let v2ScratchCounter = 0;
+function uniswapV2Swap(emit: Emitter, action: UniswapV2SwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const cd = calldata(emit, 'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)', [
+    amountIn,
+    word(action.amountOutMin),
+    arrayLiteral(action.path.map(word)),
+    recipient,
+    word(action.deadline),
+  ]);
+  const swap: Stmt[] = [...cd.stmts, `${evmCall(word(action.router), ZERO, cd.expr)};`];
+  if (!needsOutput) return { stmts: swap, output: amountIn };
 
-function uniswapV2Swap(s: Saucer, action: UniswapV2SwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const cd = calldata(
-    s,
-    'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)',
-    [
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
-      s.array(action.path.map((addr) => s.int(BigInt(addr)))),
-      recipient,
-      s.int(BigInt(action.deadline)),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd);
-  if (!outputChained) return { call, output: call };
+  // swapExactTokensForTokens returns `uint256[] memory amounts` — decoding the first 32 bytes as a
+  // uint256 yields the ABI offset (0x20), not the output amount. Snapshot the tokenOut balance
+  // pre/post instead.
+  const tokenOut = word(action.path[action.path.length - 1]);
+  const pre = selfBalance(emit, tokenOut);
+  const post = selfBalance(emit, tokenOut);
+  const delta = bindConst(emit, 'delta', `${post.expr} - ${pre.expr}`);
 
-  // swapExactTokensForTokens returns `uint256[] memory amounts` — decoding the
-  // first 32 bytes (UINT256_OUTPUT) yields the ABI offset (0x20), not the
-  // output amount. Snapshot Sauce's tokenOut balance pre/post instead.
-  const tokenOut = s.int(BigInt(action.path[action.path.length - 1]));
-  const id = v2ScratchCounter++;
-  const preSlot = `__v2_pre_${id}`;
-  const balOf = () =>
-    s.externalCall(
-      tokenOut,
-      s.int(0n),
-      calldata(s, 'balanceOf(address)', [s.addressSelf()]),
-      UINT256_OUTPUT,
-    );
-  const captureAndSwap = s.store(preSlot, balOf()).join(call);
-  return { call: captureAndSwap, output: s.sub(balOf(), s.read(preSlot)) };
+  return {
+    stmts: [...pre.stmts, ...swap, ...post.stmts, ...delta.stmts],
+    output: delta.expr,
+  };
 }
 
-function curveRouterNGSwap(s: Saucer, action: CurveRouterNGSwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
+function curveRouterNGSwap(emit: Emitter, action: CurveRouterNGSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
   // Pad route to 11 entries
   const route = [...action.route];
   while (route.length < 11) route.push('0x0000000000000000000000000000000000000000');
@@ -646,462 +677,409 @@ function curveRouterNGSwap(s: Saucer, action: CurveRouterNGSwapAction, amountIn:
   const pools = [...action.pools];
   while (pools.length < 5) pools.push('0x0000000000000000000000000000000000000000');
 
-  const routeArgs = route.map((addr) => s.int(BigInt(addr)));
-  const swapParamArgs = swapParams.map((row) =>
-    s.tuple(row.map((v) => s.int(BigInt(v)))),
-  );
-  const poolArgs = pools.map((addr) => s.int(BigInt(addr)));
-
-  const cd = calldata(
-    s,
-    'exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)',
-    [
-      s.tuple(routeArgs),
-      s.tuple(swapParamArgs),
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
-      s.tuple(poolArgs),
-      recipient,
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
-}
-
-function balancerV3Swap(s: Saucer, action: BalancerV3SwapAction, amountIn: Saucer, _outputChained: boolean): ActionResult {
-  // BalancerV3 Router sends output to msg.sender; no recipient parameter in the function
-  const cd = calldata(
-    s,
-    'swapSingleTokenExactIn(address,address,address,uint256,uint256,uint256,bool,bytes)',
-    [
-      s.int(BigInt(action.pool)),
-      s.int(BigInt(action.tokenIn)),
-      s.int(BigInt(action.tokenOut)),
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
-      s.int(BigInt(action.deadline)),
-      s.int(action.wethIsEth ? 1n : 0n),
-      s.bytes(new Uint8Array(0)),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
-}
-
-function ambientSwap(s: Saucer, action: AmbientSwapAction, amountIn: Saucer): ActionResult {
-  // Encode the swap command as: abi.encode(base, quote, poolIdx, isBuy, inBaseQty, qty, tip, limitPrice, minOut, settleFlags)
-  const cmd = s.abiEncode(s.tuple([
-    s.int(BigInt(action.base)),
-    s.int(BigInt(action.quote)),
-    s.int(BigInt(action.poolIdx)),
-    s.int(action.isBuy ? 1n : 0n),
-    s.int(action.inBaseQty ? 1n : 0n),
+  const cd = calldata(emit, 'exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)', [
+    tuple(route.map(word)),
+    tuple(swapParams.map((row) => tuple(row.map(word)))),
     amountIn,
-    s.int(BigInt(action.tip)),
-    s.int(BigInt(action.limitPrice)),
-    s.int(BigInt(action.minOut)),
-    s.int(BigInt(action.reserveFlags)),
-  ]));
-  const cd = calldata(s, 'userCmd(uint16,bytes)', [s.int(1n), cmd]);
-  const call = s.externalCall(s.int(BigInt(action.dex)), s.int(0n), cd);
-  return { call, output: amountIn };
+    word(action.amountOutMin),
+    tuple(pools.map(word)),
+    recipient,
+  ]);
+
+  return capturedCall(emit, needsOutput, word(action.router), ZERO, cd, amountIn);
 }
 
-function dodoSwap(s: Saucer, action: DODOSwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  void outputChained; // DODO proxy sends output to msg.sender; we return the proxy's return value
-  const fn = action.version === 'v1'
+function balancerV3Swap(emit: Emitter, action: BalancerV3SwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  // BalancerV3 Router sends output to msg.sender; no recipient parameter in the function
+  const userData = bindBytes(emit, 'ud', new Uint8Array(0));
+  const cd = calldata(emit, 'swapSingleTokenExactIn(address,address,address,uint256,uint256,uint256,bool,bytes)', [
+    word(action.pool),
+    word(action.tokenIn),
+    word(action.tokenOut),
+    amountIn,
+    word(action.amountOutMin),
+    word(action.deadline),
+    flag(action.wethIsEth),
+    userData.expr,
+  ]);
+
+  return capturedCall(
+    emit,
+    needsOutput,
+    word(action.router),
+    ZERO,
+    { stmts: [...userData.stmts, ...cd.stmts], expr: cd.expr },
+    amountIn,
+  );
+}
+
+function ambientSwap(emit: Emitter, action: AmbientSwapAction, amountIn: Expr): ActionResult {
+  // abi.encode(base, quote, poolIdx, isBuy, inBaseQty, qty, tip, limitPrice, minOut, settleFlags)
+  const cmd = bindConst(emit, 'cmd', encodeArgs([
+    word(action.base),
+    word(action.quote),
+    word(action.poolIdx),
+    flag(action.isBuy),
+    flag(action.inBaseQty),
+    amountIn,
+    word(action.tip),
+    word(action.limitPrice),
+    word(action.minOut),
+    word(action.reserveFlags),
+  ]));
+  const cd = calldata(emit, 'userCmd(uint16,bytes)', ['1n', cmd.expr]);
+
+  return voidCall(word(action.dex), ZERO, { stmts: [...cmd.stmts, ...cd.stmts], expr: cd.expr }, amountIn);
+}
+
+function dodoSwap(emit: Emitter, action: DODOSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  // The DODO proxy sends output to msg.sender; we return the proxy's own return value.
+  const sig = action.version === 'v1'
     ? 'dodoSwapV1(address,address,uint256,uint256,address[],uint256,bool,uint256)'
     : 'dodoSwapV2TokenToToken(address,address,uint256,uint256,address[],uint256,bool,uint256)';
-  const cd = calldata(
-    s,
-    fn,
-    [
-      s.int(BigInt(action.fromToken)),
-      s.int(BigInt(action.toToken)),
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
-      s.array(action.dodoPairs.map((addr) => s.int(BigInt(addr)))),
-      s.int(BigInt(action.directions)),
-      s.int(0n), // isIncentive = false
-      s.int(BigInt(action.deadline)),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.proxy)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
-}
-
-function maverickSwap(s: Saucer, action: MaverickSwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const cd = calldata(
-    s,
-    'exactInputSingle(address,address,bool,uint256,uint256)',
-    [
-      recipient,
-      s.int(BigInt(action.pool)),
-      s.int(action.tokenAIn ? 1n : 0n),
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
-}
-
-function maverickMultiHopSwap(s: Saucer, action: MaverickMultiHopSwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const cd = calldata(
-    s,
-    'exactInputMultiHop(address,bytes,uint256,uint256)',
-    [
-      recipient,
-      s.bytes(hexToBytes(action.path)),
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
-}
-
-function carbonSwap(s: Saucer, action: CarbonSwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  void outputChained; // Carbon doesn't support recipient override
-  const tradeActionTuples = action.tradeActions.map((ta) =>
-    s.tuple([s.int(BigInt(ta.strategyId)), s.int(BigInt(ta.amount))]),
-  );
-  const cd = calldata(
-    s,
-    'tradeBySourceAmount(address,address,(uint256,uint128)[],uint256,uint128)',
-    [
-      s.int(BigInt(action.sourceToken)),
-      s.int(BigInt(action.targetToken)),
-      s.array(tradeActionTuples),
-      s.int(BigInt(action.deadline)),
-      s.int(BigInt(action.amountOutMin)),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.controller)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
-}
-
-function fraxswapSwap(s: Saucer, action: FraxswapSwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const cd = calldata(
-    s,
-    'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)',
-    [
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
-      s.array(action.path.map((addr) => s.int(BigInt(addr)))),
-      recipient,
-      s.int(BigInt(action.deadline)),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
-}
-
-function clipperSwap(s: Saucer, action: ClipperSwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  void amountIn; // Clipper uses pre-transferred tokens, amount is implicit
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const cd = calldata(
-    s,
-    'sellTokenForToken(address,address,address,uint256,bytes)',
-    [
-      s.int(BigInt(action.inputToken)),
-      s.int(BigInt(action.outputToken)),
-      recipient,
-      s.int(BigInt(action.amountOutMin)),
-      s.bytes(hexToBytes(action.auxiliaryData)),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.exchange)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
-}
-
-function integralSwap(s: Saucer, action: IntegralSwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const params = s.tuple([
-    s.int(BigInt(action.tokenIn)),
-    s.int(BigInt(action.tokenOut)),
+  const cd = calldata(emit, sig, [
+    word(action.fromToken),
+    word(action.toToken),
     amountIn,
-    s.int(BigInt(action.amountOutMin)),
-    s.int(action.wrapUnwrap ? 1n : 0n),
+    word(action.amountOutMin),
+    arrayLiteral(action.dodoPairs.map(word)),
+    word(action.directions),
+    ZERO, // isIncentive = false
+    word(action.deadline),
+  ]);
+
+  return capturedCall(emit, needsOutput, word(action.proxy), ZERO, cd, amountIn);
+}
+
+function maverickSwap(emit: Emitter, action: MaverickSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const cd = calldata(emit, 'exactInputSingle(address,address,bool,uint256,uint256)', [
     recipient,
-    s.int(BigInt(action.gasLimit)),
-    s.int(BigInt(action.submitDeadline)),
+    word(action.pool),
+    flag(action.tokenAIn),
+    amountIn,
+    word(action.amountOutMin),
   ]);
-  const cd = calldata(
-    s,
-    'sell((address,address,uint256,uint256,bool,address,uint256,uint32))',
-    [params],
-  );
-  const call = s.externalCall(s.int(BigInt(action.delay)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
+
+  return capturedCall(emit, needsOutput, word(action.router), ZERO, cd, amountIn);
 }
 
-function fluidDexT1Swap(s: Saucer, action: FluidDexT1SwapAction, amountIn: Saucer, outputChained: boolean): ActionResult {
-  const recipient = outputChained ? s.addressSelf() : s.int(BigInt(action.recipient));
-  const cd = calldata(
-    s,
-    'swapIn(bool,uint256,uint256,address)',
-    [
-      s.int(action.swap0to1 ? 1n : 0n),
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
-      recipient,
-    ],
+function maverickMultiHopSwap(emit: Emitter, action: MaverickMultiHopSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const path = bindBytes(emit, 'path', hexToBytes(action.path));
+  const cd = calldata(emit, 'exactInputMultiHop(address,bytes,uint256,uint256)', [
+    recipient,
+    path.expr,
+    amountIn,
+    word(action.amountOutMin),
+  ]);
+
+  return capturedCall(
+    emit,
+    needsOutput,
+    word(action.router),
+    ZERO,
+    { stmts: [...path.stmts, ...cd.stmts], expr: cd.expr },
+    amountIn,
   );
-  const call = s.externalCall(s.int(BigInt(action.pool)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
 }
 
-function fluidDexLiteSwap(s: Saucer, action: FluidDexLiteSwapAction, amountIn: Saucer): ActionResult {
+function carbonSwap(emit: Emitter, action: CarbonSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  // Carbon doesn't support a recipient override.
+  const tradeActions = action.tradeActions.map((ta) => tuple([word(ta.strategyId), word(ta.amount)]));
+  const cd = calldata(emit, 'tradeBySourceAmount(address,address,(uint256,uint128)[],uint256,uint128)', [
+    word(action.sourceToken),
+    word(action.targetToken),
+    arrayLiteral(tradeActions),
+    word(action.deadline),
+    word(action.amountOutMin),
+  ]);
+
+  return capturedCall(emit, needsOutput, word(action.controller), ZERO, cd, amountIn);
+}
+
+function fraxswapSwap(emit: Emitter, action: FraxswapSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const cd = calldata(emit, 'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)', [
+    amountIn,
+    word(action.amountOutMin),
+    arrayLiteral(action.path.map(word)),
+    recipient,
+    word(action.deadline),
+  ]);
+
+  return capturedCall(emit, needsOutput, word(action.router), ZERO, cd, amountIn);
+}
+
+function clipperSwap(emit: Emitter, action: ClipperSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  // Clipper uses pre-transferred tokens, so the amount is implicit.
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const aux = bindBytes(emit, 'aux', hexToBytes(action.auxiliaryData));
+  const cd = calldata(emit, 'sellTokenForToken(address,address,address,uint256,bytes)', [
+    word(action.inputToken),
+    word(action.outputToken),
+    recipient,
+    word(action.amountOutMin),
+    aux.expr,
+  ]);
+
+  return capturedCall(
+    emit,
+    needsOutput,
+    word(action.exchange),
+    ZERO,
+    { stmts: [...aux.stmts, ...cd.stmts], expr: cd.expr },
+    amountIn,
+  );
+}
+
+function integralSwap(emit: Emitter, action: IntegralSwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const params = tuple([
+    word(action.tokenIn),
+    word(action.tokenOut),
+    amountIn,
+    word(action.amountOutMin),
+    flag(action.wrapUnwrap),
+    recipient,
+    word(action.gasLimit),
+    word(action.submitDeadline),
+  ]);
+  const cd = calldata(emit, 'sell((address,address,uint256,uint256,bool,address,uint256,uint32))', [params]);
+
+  return capturedCall(emit, needsOutput, word(action.delay), ZERO, cd, amountIn);
+}
+
+function fluidDexT1Swap(emit: Emitter, action: FluidDexT1SwapAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const recipient = needsOutput ? SELF : word(action.recipient);
+  const cd = calldata(emit, 'swapIn(bool,uint256,uint256,address)', [
+    flag(action.swap0to1),
+    amountIn,
+    word(action.amountOutMin),
+    recipient,
+  ]);
+
+  return capturedCall(emit, needsOutput, word(action.pool), ZERO, cd, amountIn);
+}
+
+function fluidDexLiteSwap(emit: Emitter, action: FluidDexLiteSwapAction, amountIn: Expr): ActionResult {
   // DexKey is a tuple: (token0, token1, salt)
-  const dexKey = s.tuple([
-    s.int(BigInt(action.token0)),
-    s.int(BigInt(action.token1)),
-    s.int(BigInt(action.salt)),
+  const dexKey = tuple([word(action.token0), word(action.token1), word(action.salt)]);
+  const cd = calldata(emit, 'swapSingle((address,address,bytes32),bool,int256,uint256,address)', [
+    dexKey,
+    flag(action.swap0To1),
+    amountIn, // positive = exact input
+    word(action.amountOutMin),
+    word(action.recipient),
   ]);
-  const cd = calldata(
-    s,
-    'swapSingle((address,address,bytes32),bool,int256,uint256,address)',
-    [
-      dexKey,
-      s.int(action.swap0To1 ? 1n : 0n),
-      amountIn, // positive = exact input
-      s.int(BigInt(action.amountOutMin)),
-      s.int(BigInt(action.recipient)),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.dex)), s.int(0n), cd);
-  return { call, output: amountIn };
+
+  return voidCall(word(action.dex), ZERO, cd, amountIn);
 }
 
 // ---------------------------------------------------------------------------
 // Transfer & approve — void output (pass-through amount)
 // ---------------------------------------------------------------------------
 
-function transfer(s: Saucer, action: TransferAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'transfer(address,uint256)', [
-    s.int(BigInt(action.to)),
-    amountIn,
-  ]);
-  const call = s.externalCall(s.int(BigInt(action.token)), s.int(0n), cd);
-  return { call, output: amountIn };
+function transfer(emit: Emitter, action: TransferAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'transfer(address,uint256)', [word(action.to), amountIn]);
+
+  return voidCall(word(action.token), ZERO, cd, amountIn);
 }
 
-function approve(s: Saucer, action: ApproveAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'approve(address,uint256)', [
-    s.int(BigInt(action.spender)),
-    amountIn,
-  ]);
-  const call = s.externalCall(s.int(BigInt(action.token)), s.int(0n), cd);
-  return { call, output: amountIn };
+function approve(emit: Emitter, action: ApproveAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'approve(address,uint256)', [word(action.spender), amountIn]);
+
+  return voidCall(word(action.token), ZERO, cd, amountIn);
 }
 
 // ---------------------------------------------------------------------------
 // Wrap / Unwrap — void output (pass-through amount)
 // ---------------------------------------------------------------------------
 
-function wrapETH(s: Saucer, action: WrapETHAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'deposit()', []);
-  const call = s.externalCall(s.int(BigInt(action.weth)), amountIn, cd);
-  return { call, output: amountIn };
+function wrapETH(emit: Emitter, action: WrapETHAction, amountIn: Expr): ActionResult {
+  return voidCall(word(action.weth), amountIn, calldata(emit, 'deposit()', []), amountIn);
 }
 
-function unwrapETH(s: Saucer, action: UnwrapETHAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'withdraw(uint256)', [amountIn]);
-  const call = s.externalCall(s.int(BigInt(action.weth)), s.int(0n), cd);
-  return { call, output: amountIn };
+function unwrapETH(emit: Emitter, action: UnwrapETHAction, amountIn: Expr): ActionResult {
+  return voidCall(word(action.weth), ZERO, calldata(emit, 'withdraw(uint256)', [amountIn]), amountIn);
 }
 
-function wrapStETH(s: Saucer, action: WrapStETHAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'wrap(uint256)', [amountIn]);
-  const call = s.externalCall(s.int(BigInt(action.wstETH)), s.int(0n), cd);
-  return { call, output: amountIn };
+function wrapStETH(emit: Emitter, action: WrapStETHAction, amountIn: Expr): ActionResult {
+  return voidCall(word(action.wstETH), ZERO, calldata(emit, 'wrap(uint256)', [amountIn]), amountIn);
 }
 
-function unwrapStETH(s: Saucer, action: UnwrapStETHAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'unwrap(uint256)', [amountIn]);
-  const call = s.externalCall(s.int(BigInt(action.wstETH)), s.int(0n), cd);
-  return { call, output: amountIn };
+function unwrapStETH(emit: Emitter, action: UnwrapStETHAction, amountIn: Expr): ActionResult {
+  return voidCall(word(action.wstETH), ZERO, calldata(emit, 'unwrap(uint256)', [amountIn]), amountIn);
 }
 
 // ---------------------------------------------------------------------------
 // Liquid staking — void output (pass-through amount)
 // ---------------------------------------------------------------------------
 
-function lidoStake(s: Saucer, action: LidoStakeAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'submit(address)', [s.int(BigInt(action.referral))]);
-  const call = s.externalCall(s.int(BigInt(action.stETH)), amountIn, cd);
-  return { call, output: amountIn };
+function lidoStake(emit: Emitter, action: LidoStakeAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'submit(address)', [word(action.referral)]);
+
+  return voidCall(word(action.stETH), amountIn, cd, amountIn);
 }
 
-function lidoUnstake(s: Saucer, action: LidoUnstakeAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'requestWithdrawals(uint256[],address)', [
-    s.array([amountIn]),
-    s.msgSender(),
-  ]);
-  const call = s.externalCall(s.int(BigInt(action.withdrawalQueue)), s.int(0n), cd);
-  return { call, output: amountIn };
+function lidoUnstake(emit: Emitter, action: LidoUnstakeAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'requestWithdrawals(uint256[],address)', [arrayLiteral([amountIn]), MSG_SENDER]);
+
+  return voidCall(word(action.withdrawalQueue), ZERO, cd, amountIn);
 }
 
-function rocketPoolStake(s: Saucer, action: RocketPoolStakeAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'deposit()', []);
-  const call = s.externalCall(s.int(BigInt(action.depositPool)), amountIn, cd);
-  return { call, output: amountIn };
+function rocketPoolStake(emit: Emitter, action: RocketPoolStakeAction, amountIn: Expr): ActionResult {
+  return voidCall(word(action.depositPool), amountIn, calldata(emit, 'deposit()', []), amountIn);
 }
 
-function rocketPoolUnstake(s: Saucer, action: RocketPoolUnstakeAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'burn(uint256)', [amountIn]);
-  const call = s.externalCall(s.int(BigInt(action.rETH)), s.int(0n), cd);
-  return { call, output: amountIn };
+function rocketPoolUnstake(emit: Emitter, action: RocketPoolUnstakeAction, amountIn: Expr): ActionResult {
+  return voidCall(word(action.rETH), ZERO, calldata(emit, 'burn(uint256)', [amountIn]), amountIn);
 }
 
-function coinbaseStake(s: Saucer, action: CoinbaseStakeAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'deposit()', []);
-  const call = s.externalCall(s.int(BigInt(action.cbETH)), amountIn, cd);
-  return { call, output: amountIn };
+function coinbaseStake(emit: Emitter, action: CoinbaseStakeAction, amountIn: Expr): ActionResult {
+  return voidCall(word(action.cbETH), amountIn, calldata(emit, 'deposit()', []), amountIn);
 }
 
-function etherFiStake(s: Saucer, action: EtherFiStakeAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'deposit()', []);
-  const call = s.externalCall(s.int(BigInt(action.liquidityPool)), amountIn, cd);
-  return { call, output: amountIn };
+function etherFiStake(emit: Emitter, action: EtherFiStakeAction, amountIn: Expr): ActionResult {
+  return voidCall(word(action.liquidityPool), amountIn, calldata(emit, 'deposit()', []), amountIn);
 }
 
 // ---------------------------------------------------------------------------
 // Lending / Borrowing — void output (pass-through amount)
 // ---------------------------------------------------------------------------
 
-function aaveV3Supply(s: Saucer, action: AaveV3SupplyAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'supply(address,uint256,address,uint16)', [
-    s.int(BigInt(action.token)),
+function aaveV3Supply(emit: Emitter, action: AaveV3SupplyAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'supply(address,uint256,address,uint16)', [
+    word(action.token),
     amountIn,
-    s.int(BigInt(action.onBehalfOf)),
-    s.int(BigInt(action.referralCode)),
+    word(action.onBehalfOf),
+    word(action.referralCode),
   ]);
-  const call = s.externalCall(s.int(BigInt(action.pool)), s.int(0n), cd);
-  return { call, output: amountIn };
+
+  return voidCall(word(action.pool), ZERO, cd, amountIn);
 }
 
-function aaveV3Withdraw(s: Saucer, action: AaveV3WithdrawAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'withdraw(address,uint256,address)', [
-    s.int(BigInt(action.token)),
+function aaveV3Withdraw(emit: Emitter, action: AaveV3WithdrawAction, amountIn: Expr, needsOutput: boolean): ActionResult {
+  const cd = calldata(emit, 'withdraw(address,uint256,address)', [
+    word(action.token),
     amountIn,
-    s.int(BigInt(action.to)),
+    word(action.to),
   ]);
-  const call = s.externalCall(s.int(BigInt(action.pool)), s.int(0n), cd, UINT256_OUTPUT);
-  return { call, output: call };
+
+  return capturedCall(emit, needsOutput, word(action.pool), ZERO, cd, amountIn);
 }
 
-function aaveV3Borrow(s: Saucer, action: AaveV3BorrowAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'borrow(address,uint256,uint256,uint16,address)', [
-    s.int(BigInt(action.token)),
+function aaveV3Borrow(emit: Emitter, action: AaveV3BorrowAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'borrow(address,uint256,uint256,uint16,address)', [
+    word(action.token),
     amountIn,
-    s.int(BigInt(action.interestRateMode)),
-    s.int(BigInt(action.referralCode)),
-    s.int(BigInt(action.onBehalfOf)),
+    word(action.interestRateMode),
+    word(action.referralCode),
+    word(action.onBehalfOf),
   ]);
-  const call = s.externalCall(s.int(BigInt(action.pool)), s.int(0n), cd);
-  return { call, output: amountIn };
+
+  return voidCall(word(action.pool), ZERO, cd, amountIn);
 }
 
-function aaveV3Repay(s: Saucer, action: AaveV3RepayAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'repay(address,uint256,uint256,address)', [
-    s.int(BigInt(action.token)),
+function aaveV3Repay(emit: Emitter, action: AaveV3RepayAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'repay(address,uint256,uint256,address)', [
+    word(action.token),
     amountIn,
-    s.int(BigInt(action.interestRateMode)),
-    s.int(BigInt(action.onBehalfOf)),
+    word(action.interestRateMode),
+    word(action.onBehalfOf),
   ]);
-  const call = s.externalCall(s.int(BigInt(action.pool)), s.int(0n), cd);
-  return { call, output: amountIn };
+
+  return voidCall(word(action.pool), ZERO, cd, amountIn);
 }
 
-function compoundV3Supply(s: Saucer, action: CompoundV3SupplyAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'supply(address,uint256)', [
-    s.int(BigInt(action.token)),
-    amountIn,
-  ]);
-  const call = s.externalCall(s.int(BigInt(action.comet)), s.int(0n), cd);
-  return { call, output: amountIn };
+function compoundV3Supply(emit: Emitter, action: CompoundV3SupplyAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'supply(address,uint256)', [word(action.token), amountIn]);
+
+  return voidCall(word(action.comet), ZERO, cd, amountIn);
 }
 
-function compoundV3Withdraw(s: Saucer, action: CompoundV3WithdrawAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'withdraw(address,uint256)', [
-    s.int(BigInt(action.token)),
-    amountIn,
-  ]);
-  const call = s.externalCall(s.int(BigInt(action.comet)), s.int(0n), cd);
-  return { call, output: amountIn };
+function compoundV3Withdraw(emit: Emitter, action: CompoundV3WithdrawAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'withdraw(address,uint256)', [word(action.token), amountIn]);
+
+  return voidCall(word(action.comet), ZERO, cd, amountIn);
 }
 
 // ---------------------------------------------------------------------------
 // Bridge actions — void output (pass-through amount)
 // ---------------------------------------------------------------------------
 
-function acrossBridge(s: Saucer, action: AcrossBridgeAction, amountIn: Saucer): ActionResult {
+function acrossBridge(emit: Emitter, action: AcrossBridgeAction, amountIn: Expr): ActionResult {
+  const message = bindBytes(emit, 'msg', hexToBytes(action.message));
   const cd = calldata(
-    s,
+    emit,
     'depositV3(address,address,address,address,uint256,uint256,uint256,address,uint32,uint32,uint32,bytes)',
     [
-      s.msgSender(),                           // depositor
-      s.msgSender(),                           // recipient
-      s.int(BigInt(action.token)),             // inputToken
-      s.int(BigInt(action.token)),             // outputToken (same for simple bridge)
-      amountIn,                                // inputAmount
-      amountIn,                                // outputAmount
-      s.int(BigInt(action.destChainId)),       // destinationChainId
-      s.int(0n),                               // exclusiveRelayer (none)
-      s.int(BigInt(action.quoteTimestamp)),     // quoteTimestamp
-      s.int(BigInt(action.fillDeadline)),       // fillDeadline
-      s.int(BigInt(action.exclusivityDeadline)), // exclusivityDeadline
-      s.bytes(hexToBytes(action.message)),     // message
+      MSG_SENDER,                        // depositor
+      MSG_SENDER,                        // recipient
+      word(action.token),                // inputToken
+      word(action.token),                // outputToken (same for simple bridge)
+      amountIn,                          // inputAmount
+      amountIn,                          // outputAmount
+      word(action.destChainId),          // destinationChainId
+      ZERO,                              // exclusiveRelayer (none)
+      word(action.quoteTimestamp),
+      word(action.fillDeadline),
+      word(action.exclusivityDeadline),
+      message.expr,
     ],
   );
-  const call = s.externalCall(s.int(BigInt(action.spokePool)), s.int(0n), cd);
-  return { call, output: amountIn };
-}
 
-function stargateBridge(s: Saucer, action: StargateBridgeAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(
-    s,
-    'swap(uint16,uint256,uint256,address,uint256,uint256,(address,address,bytes))',
-    [
-      s.int(BigInt(action.destChainId)),
-      s.int(BigInt(action.srcPoolId)),
-      s.int(BigInt(action.dstPoolId)),
-      s.msgSender(),
-      amountIn,
-      s.int(BigInt(action.amountOutMin)),
-      s.tuple([
-        s.msgSender(),
-        s.msgSender(),
-        s.bytes(new Uint8Array(0)),
-      ]),
-    ],
-  );
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(BigInt(action.lzFee)), cd);
-  return { call, output: amountIn };
-}
-
-function cctpBridge(s: Saucer, action: CCTPBridgeAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'depositForBurn(uint256,uint32,bytes32,address)', [
+  return voidCall(
+    word(action.spokePool),
+    ZERO,
+    { stmts: [...message.stmts, ...cd.stmts], expr: cd.expr },
     amountIn,
-    s.int(BigInt(action.destDomain)),
-    s.int(BigInt(action.mintRecipient)),
-    s.int(BigInt(action.token)),
-  ]);
-  const call = s.externalCall(s.int(BigInt(action.tokenMessenger)), s.int(0n), cd);
-  return { call, output: amountIn };
+  );
 }
 
-function hyperlaneBridge(s: Saucer, action: HyperlaneBridgeAction, amountIn: Saucer): ActionResult {
-  const cd = calldata(s, 'dispatch(uint32,bytes32,bytes)', [
-    s.int(BigInt(action.destinationDomain)),
-    s.int(BigInt(action.token)),
-    s.bytes(new Uint8Array(0)),
+function stargateBridge(emit: Emitter, action: StargateBridgeAction, amountIn: Expr): ActionResult {
+  const payload = bindBytes(emit, 'pl', new Uint8Array(0));
+  const cd = calldata(emit, 'swap(uint16,uint256,uint256,address,uint256,uint256,(address,address,bytes))', [
+    word(action.destChainId),
+    word(action.srcPoolId),
+    word(action.dstPoolId),
+    MSG_SENDER,
+    amountIn,
+    word(action.amountOutMin),
+    tuple([MSG_SENDER, MSG_SENDER, payload.expr]),
   ]);
-  const call = s.externalCall(s.int(BigInt(action.router)), s.int(BigInt(action.gasPayment)), cd);
-  return { call, output: amountIn };
+
+  return voidCall(
+    word(action.router),
+    word(action.lzFee),
+    { stmts: [...payload.stmts, ...cd.stmts], expr: cd.expr },
+    amountIn,
+  );
+}
+
+function cctpBridge(emit: Emitter, action: CCTPBridgeAction, amountIn: Expr): ActionResult {
+  const cd = calldata(emit, 'depositForBurn(uint256,uint32,bytes32,address)', [
+    amountIn,
+    word(action.destDomain),
+    word(action.mintRecipient),
+    word(action.token),
+  ]);
+
+  return voidCall(word(action.tokenMessenger), ZERO, cd, amountIn);
+}
+
+function hyperlaneBridge(emit: Emitter, action: HyperlaneBridgeAction, amountIn: Expr): ActionResult {
+  const body = bindBytes(emit, 'body', new Uint8Array(0));
+  const cd = calldata(emit, 'dispatch(uint32,bytes32,bytes)', [
+    word(action.destinationDomain),
+    word(action.token),
+    body.expr,
+  ]);
+
+  return voidCall(
+    word(action.router),
+    word(action.gasPayment),
+    { stmts: [...body.stmts, ...cd.stmts], expr: cd.expr },
+    amountIn,
+  );
 }

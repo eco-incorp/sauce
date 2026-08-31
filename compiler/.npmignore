@@ -1,9 +1,0 @@
-# Intentionally does NOT ignore dist/.
-#
-# compiler/.gitignore lists `dist/`, so the built output is never tracked. But
-# npm-packlist honors a nested .gitignore even when the root package `files`
-# whitelist lists `compiler/dist`, which would silently drop compiler/dist from
-# the published tarball. A present .npmignore overrides the sibling .gitignore
-# for npm only, so `compiler/dist` is packed while git keeps ignoring it. This
-# file is load-bearing regardless of tracking: removing it drops compiler/dist
-# from `npm pack` entirely.

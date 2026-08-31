@@ -43,19 +43,6 @@ jobs:
         with:
           version: v1.5.1
 
-      # The huff-neo compiler (hnc). The v12 runtime no longer comes from it -- that is a pinned
-      # release asset now -- but compiler/integration-test/{v12-execution,v12-solidity-parity}.test.ts
-      # compile Runtime.huff themselves and `describe.skip` without it. 63 tests, and a skipped suite
-      # reads the same as a passing one in jest's summary, so the version stays pinned and verified.
-      - name: Install huff-neo compiler (hnc)
-        run: |
-          export HUFF_NEO_DIR="$HOME/.huff-neo"   # pin the install dir (the runner sets XDG_CONFIG_HOME, which the installer would otherwise use)
-          curl -L https://raw.githubusercontent.com/cakevm/huff-neo/main/hnc-up/install | bash
-          "$HUFF_NEO_DIR/bin/hnc-up" --install 1.5.13
-          echo "$HUFF_NEO_DIR/bin" >> "$GITHUB_PATH"
-      - name: Verify hnc is the pinned version
-        run: hnc --version | grep -q '1\.5\.13' || { echo "::error::hnc is not the pinned 1.5.13"; hnc --version; exit 1; }
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.2
@@ -93,7 +80,7 @@ jobs:
           GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
         run: |
           set -euo pipefail
-          pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines --fetch-v12-harness | tee "$RUNNER_TEMP/sync.log"
+          pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines | tee "$RUNNER_TEMP/sync.log"
           grep -E '^(SAUCE_RUST_ENGINE_SO|SAUCE_V12_RUNTIME_CREATION_HEX)=' "$RUNNER_TEMP/sync.log" >> "$GITHUB_ENV"
           # sdk/src/deployments/v12.generated.ts is COMMITTED (src, generated from the pin's deploy
           # record) — it must match a fresh sync, else a repin that moved the record wasn't committed.
@@ -138,8 +125,8 @@ jobs:
       # -----------------------------------------------------------------------
 
       # ---- SVM engine binary ------------------------------------------------
-      # The SVM integration suites (compiler/integration-test/svm-*.test.ts,
-      # sdk/test/svm/*) execute compiled `target: 'svm'` bytecode on the real
+      # The SVM integration suites (sdk/test/svm/*) execute compiled
+      # `target: 'svm'` bytecode on the real
       # engine via LiteSVM. The engine binary is vendored at
       # artifacts/svm/engine.so (committed, force-added — built from the exact
       # commit the `sauce` git dep is pinned to) and that's the harnesses'
@@ -150,32 +137,6 @@ jobs:
       - name: Verify vendored SVM engine binary
         run: test -s artifacts/svm/engine.so || { echo "::error::artifacts/svm/engine.so missing or empty"; exit 1; }
       # -----------------------------------------------------------------------
-
-      # The 63 v12 exec-parity tests `describe.skip` without hnc + the three engine-v12 harness libs,
-      # and a skipped suite is the same line as a passing one. Assert they are present, so the next
-      # person to remove a fetch gets a red run instead of a quiet 1875.
-      - name: Verify the v12 exec-parity harness is present
-        run: |
-          ENGINE_V12=node_modules/sauce/engine-v12
-          test -f "$ENGINE_V12/test/V12-execparity/V12ExecParity.t.sol" || { echo "::error::exec-parity harness missing"; exit 1; }
-          for l in forge-std foundry-huff-neo openzeppelin-contracts; do
-            test -d "$ENGINE_V12/lib/$l" || { echo "::error::engine-v12/lib/$l missing — the 63 exec-parity tests would skip"; exit 1; }
-          done
-
-      - name: Build compiler
-        run: pnpm --filter './compiler' build
-
-      - name: Compiler — typecheck
-        run: pnpm --filter './compiler' typecheck
-
-      - name: Compiler — lint
-        run: pnpm --filter './compiler' lint
-
-      - name: Compiler — format check
-        run: pnpm --filter './compiler' format:check
-
-      - name: Compiler — test
-        run: pnpm --filter './compiler' test
 
       - name: SDK — typecheck
         run: pnpm --filter './sdk' typecheck

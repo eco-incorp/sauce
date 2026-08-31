@@ -1,5 +1,28 @@
+/**
+ * Swap actions -> quote calls, both off-chain (`eth_call`) and on-chain.
+ *
+ * The off-chain half (`to`, `data`, `decode`) never touched a compiler and is unchanged. The
+ * on-chain half emitted `Saucer` builder nodes against the retired TypeScript compiler; it now
+ * emits SauceScript statements plus the `uint256` expression they leave available (a
+ * [`Fragment`]), because the Rust compiler's only surface is `compile()` over source text.
+ *
+ * The four return SHAPES the retired `OutputSpec` described map onto `abi.decode` shape strings —
+ * see [`Shape`]. Everything else about a quote (target, selector, arguments, amount offsets) is
+ * byte-for-byte what it was.
+ */
 import { keccak256, toBytes, encodeAbiParameters, decodeAbiParameters, getAddress } from 'viem';
-import { Saucer, OPS, type OutputSpec } from '../../compiler/dist/index.js';
+
+import {
+  bindBytes,
+  bindConst,
+  encodeArgs,
+  formatBigint,
+  hexToBytes,
+  type Emitter,
+  type Expr,
+  type Fragment,
+  type Stmt,
+} from './emit.js';
 
 import type {
   SwapAction,
@@ -39,11 +62,13 @@ export interface QuoteCall {
   /** Decode the raw eth_call result into the output amount */
   decode: (result: Hex) => bigint;
   /**
-   * Emit Saucer bytecode that performs the on-chain staticCall and extracts
-   * the output amount as a uint256 expression. Every quote extracts to a
-   * single uint256 regardless of the underlying return shape.
+   * Emit the SauceScript that performs the on-chain quote call, plus the expression yielding the
+   * output amount. Every quote extracts to a single uint256 regardless of the underlying return
+   * shape.
+   *
+   * BREAKING: took and returned a `Saucer`; takes an `Emitter` and returns a source [`Fragment`].
    */
-  toSauce: (s: Saucer) => Saucer;
+  toSauce: (emit: Emitter) => Fragment;
   /**
    * Runtime-amount variant: splices `amountExpr` into the calldata at the
    * protocol's fixed amount offset and returns the uint256 output expression.
@@ -53,8 +78,11 @@ export interface QuoteCall {
    * Integral, FluidT1, UniV2/Fraxswap routers). Callers that need
    * runtime-parameterised quoting (e.g. split routing) must check for this
    * field and error out if absent.
+   *
+   * BREAKING: took and returned `Saucer`s; takes an `Emitter` plus a SauceScript amount
+   * EXPRESSION, and returns a source [`Fragment`].
    */
-  toSauceDynamic?: (s: Saucer, amountExpr: Saucer) => Saucer;
+  toSauceDynamic?: (emit: Emitter, amountExpr: Expr) => Fragment;
 }
 
 /**
@@ -96,25 +124,36 @@ const decodeUint256 = (data: Hex): bigint =>
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000' as Address;
 
 // ---------------------------------------------------------------------------
-// On-chain extraction helpers — every helper returns a Saucer yielding uint256
+// On-chain extraction — every helper yields a Fragment whose expr is a uint256
 // ---------------------------------------------------------------------------
 
-function hexToByteArray(hex: Hex): Uint8Array {
-  const h = hex.slice(2);
-  const out = new Uint8Array(h.length / 2);
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(h.substring(i * 2, i * 2 + 2), 16);
-  return out;
+/**
+ * An `abi.decode` shape: one shape string per decoded field, parsed at compile time. This is what
+ * the retired compiler's `OutputSpec` (`{count, typeSpecs}`) becomes — `[OPS.BYTE_32]` is
+ * `["Uint256"]`, `[OPS.ARRAY, OPS.BYTE_32]` is `["Uint256[]"]`.
+ */
+type Shape = readonly string[];
+
+/** Return data is a single uint256. */
+const OUT_UINT256: Shape = ['Uint256'];
+/** Return data is a single dynamic uint256[] (or int256[] read as its two's-complement words). */
+const OUT_UINT256_ARRAY: Shape = ['Uint256[]'];
+/** Ambient's `(int128 baseFlow, int128 quoteFlow, uint128 finalPrice)` — three static words. */
+const AMBIENT_OUTPUT: Shape = ['Uint256', 'Uint256', 'Uint256'];
+
+/** `count` static 32-byte fields. */
+function words(count: number): Shape {
+  return Array<string>(count).fill('Uint256');
 }
 
-/** OutputSpec: decode return data as a single uint256 at offset 0. */
-const OUT_UINT256: OutputSpec = { count: 1, typeSpecs: [OPS.BYTE_32] };
-/** OutputSpec: decode return data as a single dynamic uint256[] (or int256[]). */
-const OUT_UINT256_ARRAY: OutputSpec = { count: 1, typeSpecs: [OPS.ARRAY, OPS.BYTE_32] };
+function shapeLiteral(shape: Shape): string {
+  return `[${shape.map((s) => `"${s}"`).join(', ')}]`;
+}
 
 /**
  * Two ways to invoke a quoter on-chain:
  *
- * - `'static'` — STATICCALL. Use for pure-view quoters that make no state
+ * - `'static'` — STATICCALL (`evm.static`). Use for pure-view quoters that make no state
  *   changes (Curve `get_dy`, Balancer `queryBatchSwap` / `querySwap…`,
  *   Carbon, Clipper, DODO, Integral, UniV2/Fraxswap router `getAmountsOut`,
  *   Ambient `calcImpact`). Blocking state writes is exactly the safety
@@ -123,7 +162,7 @@ const OUT_UINT256_ARRAY: OutputSpec = { count: 1, typeSpecs: [OPS.ARRAY, OPS.BYT
  *   STATICCALL keeps a malicious or buggy target from re-entering or
  *   mutating state.
  *
- * - `'call'` — regular CALL with `value=0`. Use for revert-simulation
+ * - `'call'` — regular CALL with `value=0` (`evm.call`). Use for revert-simulation
  *   quoters (UniV3 QuoterV2, UniV4 V4Quoter, MaverickV2Quoter, Fluid
  *   resolvers). They trigger `pool.swap(...)` internally — a state-writing
  *   function that reverts after the callback. STATICCALL would block those
@@ -132,62 +171,115 @@ const OUT_UINT256_ARRAY: OutputSpec = { count: 1, typeSpecs: [OPS.ARRAY, OPS.BYT
  */
 type QuoterMode = 'static' | 'call';
 
-function quoterInvoke(
-  mode: QuoterMode,
-  to: Address,
-  dataBytes: Uint8Array,
-  output: OutputSpec,
-): (s: Saucer) => Saucer {
-  return (s) => {
-    const target = s.int(BigInt(to));
-    const cd = s.bytes(dataBytes);
-    return mode === 'static'
-      ? s.staticCall(target, cd, output)
-      : s.externalCall(target, s.int(0n), cd, output);
-  };
+function invoke(mode: QuoterMode, to: Address, cd: Expr): Expr {
+  const target = formatBigint(BigInt(to));
+
+  return mode === 'static' ? `evm.static(${target}, ${cd})` : `evm.call(${target}, 0n, ${cd})`;
 }
 
-/** Most quotes: first 32-byte word of return is the uint256 amount. */
-function asUint256(mode: QuoterMode, to: Address, data: Hex): (s: Saucer) => Saucer {
-  return quoterInvoke(mode, to, hexToByteArray(data), OUT_UINT256);
+/**
+ * Call the quoter and bind the decoded tuple.
+ *
+ * Both the return data and the decoded tuple are bound. That is not tidiness: a projection
+ * re-evaluates the object it embeds, so an extractor reading two fields off an unbound
+ * `abi.decode(evm.call(…), …)` would issue the quoter call twice.
+ */
+function decodeCall(emit: Emitter, mode: QuoterMode, to: Address, cd: Fragment, shape: Shape): Fragment {
+  const ret = bindConst(emit, 'qret', invoke(mode, to, cd.expr));
+  const dec = bindConst(emit, 'qdec', `abi.decode(${ret.expr}, ${shapeLiteral(shape)})`);
+
+  return { stmts: [...cd.stmts, ...ret.stmts, ...dec.stmts], expr: dec.expr };
+}
+
+/** Pulls the output amount out of a bound decoded tuple. */
+type Extract = (emit: Emitter, decoded: Fragment) => Fragment;
+
+/** Most quotes: the first field is the uint256 amount. */
+const firstWord: Extract = (_emit, decoded) => ({ stmts: decoded.stmts, expr: `${decoded.expr}[0]` });
+
+/** Field `index` of a tuple of static words. */
+function nthWord(index: number): Extract {
+  return (_emit, decoded) => ({ stmts: decoded.stmts, expr: `${decoded.expr}[${index}]` });
 }
 
 /** Return is uint256[] (e.g. V2 getAmountsOut) — take the last element. */
-function asUint256ArrayLast(mode: QuoterMode, to: Address, data: Hex): (s: Saucer) => Saucer {
-  const callFn = quoterInvoke(mode, to, hexToByteArray(data), OUT_UINT256_ARRAY);
-  return (s) => {
-    const arr = callFn(s);
-    return s.index(arr, s.sub(s.length(arr), s.int(1n)));
+const arrayLast: Extract = (emit, decoded) => {
+  const arr = bindConst(emit, 'qarr', `${decoded.expr}[0]`);
+
+  return { stmts: [...decoded.stmts, ...arr.stmts], expr: `${arr.expr}[${arr.expr}.length - 1n]` };
+};
+
+/**
+ * Return is int256[] (e.g. BalancerV2 queryBatchSwap deltas). The entry at
+ * `index` is known to be negative (tokens owed to the caller) — negate it to
+ * recover the magnitude. Unary `-` is two's-complement negation, so it wraps
+ * rather than tripping an overflow check the way a checked `0 - x` would.
+ */
+function int256ArrayAbs(index: number): Extract {
+  return (emit, decoded) => {
+    const arr = bindConst(emit, 'qarr', `${decoded.expr}[0]`);
+
+    return { stmts: [...decoded.stmts, ...arr.stmts], expr: `-${arr.expr}[${index}n]` };
   };
 }
 
 /**
- * Return is int256[] (e.g. BalancerV2 queryBatchSwap deltas). The entry at
- * `index` is known to be negative (tokens owed to the caller) — negate it
- * via unsigned `0 - x` to recover the magnitude.
+ * Pick the negative flow from Ambient's `(int128 baseFlow, int128 quoteFlow,
+ * uint128 finalPrice)` return tuple and negate it. Branchless:
+ *   sign(x) = x >> 255  (0 for non-negative, 1 for negative after sign-ext)
+ *   result  = -(sign(base)*base + sign(quote)*quote)
  */
-function asInt256ArrayAbs(mode: QuoterMode, to: Address, data: Hex, index: number): (s: Saucer) => Saucer {
-  const callFn = quoterInvoke(mode, to, hexToByteArray(data), OUT_UINT256_ARRAY);
-  const idx = BigInt(index);
-  return (s) => {
-    const arr = callFn(s);
-    return s.neg(s.index(arr, s.int(idx)));
+const ambientFlow: Extract = (emit, decoded) => {
+  const base = bindConst(emit, 'qbase', `${decoded.expr}[0]`);
+  const quote = bindConst(emit, 'qquote', `${decoded.expr}[1]`);
+  const sum = bindConst(
+    emit,
+    'qsum',
+    `(${base.expr} >> 255n) * ${base.expr} + (${quote.expr} >> 255n) * ${quote.expr}`,
+  );
+
+  return {
+    stmts: [...decoded.stmts, ...base.stmts, ...quote.stmts, ...sum.stmts],
+    expr: `-${sum.expr}`,
   };
+};
+
+/** A whole pre-computed quote call, as an on-chain fragment. */
+function staticQuote(mode: QuoterMode, to: Address, data: Hex, shape: Shape, extract: Extract): (emit: Emitter) => Fragment {
+  return (emit) => {
+    const cd = bindBytes(emit, 'qcd', hexToBytes(data));
+
+    return extract(emit, decodeCall(emit, mode, to, cd, shape));
+  };
+}
+
+/** Most quotes: first 32-byte word of return is the uint256 amount. */
+function asUint256(mode: QuoterMode, to: Address, data: Hex): (emit: Emitter) => Fragment {
+  return staticQuote(mode, to, data, OUT_UINT256, firstWord);
+}
+
+/** Return is uint256[] (e.g. V2 getAmountsOut) — take the last element. */
+function asUint256ArrayLast(mode: QuoterMode, to: Address, data: Hex): (emit: Emitter) => Fragment {
+  return staticQuote(mode, to, data, OUT_UINT256_ARRAY, arrayLast);
+}
+
+/** Return is int256[]; the entry at `index` is negative — recover its magnitude. */
+function asInt256ArrayAbs(mode: QuoterMode, to: Address, data: Hex, index: number): (emit: Emitter) => Fragment {
+  return staticQuote(mode, to, data, OUT_UINT256_ARRAY, int256ArrayAbs(index));
 }
 
 /**
  * Return is a tuple of `count` static 32-byte fields (all uint256 or sign-
  * extended int/uint with width ≤ 256). Pick the field at `index`.
  */
-function asTupleFieldUint256(mode: QuoterMode, to: Address, data: Hex, count: number, index: number): (s: Saucer) => Saucer {
+function asTupleFieldUint256(mode: QuoterMode, to: Address, data: Hex, count: number, index: number): (emit: Emitter) => Fragment {
   if (index === 0) return asUint256(mode, to, data);
-  const typeSpecs = Array<number>(count).fill(OPS.BYTE_32);
-  const callFn = quoterInvoke(mode, to, hexToByteArray(data), { count, typeSpecs });
-  const idx = BigInt(index);
-  return (s) => {
-    const decoded = callFn(s);
-    return s.index(decoded, s.int(idx));
-  };
+
+  return staticQuote(mode, to, data, words(count), nthWord(index));
+}
+
+function asAmbientFlow(mode: QuoterMode, to: Address, data: Hex): (emit: Emitter) => Fragment {
+  return staticQuote(mode, to, data, AMBIENT_OUTPUT, ambientFlow);
 }
 
 /**
@@ -196,65 +288,37 @@ function asTupleFieldUint256(mode: QuoterMode, to: Address, data: Hex, count: nu
  * `amountOffset` is the byte offset where the 32-byte uint256 amount word
  * lives in the pre-computed calldata. At runtime the program concats
  *   prefix = data[0:amountOffset]   (selector + preceding ABI head slots)
- *   amount = abiEncode(tuple(amountExpr))   (32 bytes)
+ *   amount = abi.encode({amountExpr})       (32 bytes)
  *   suffix = data[amountOffset+32:] (trailing head slots + dynamic tail)
- * and invokes the quoter.
+ * and invokes the quoter. Each pre-encoded run is a bound `hex` const, because a method call's
+ * receiver has to be an identifier.
  */
 function makeDynamic(
   mode: QuoterMode,
   to: Address,
   data: Hex,
   amountOffset: number,
-  output: OutputSpec,
-  postExtract?: (s: Saucer, raw: Saucer) => Saucer,
-): (s: Saucer, amountExpr: Saucer) => Saucer {
-  const bytes = hexToByteArray(data);
-  const prefix = bytes.slice(0, amountOffset);
-  const suffix = bytes.slice(amountOffset + 32);
-  return (s, amountExpr) => {
-    const parts: Saucer[] = [s.bytes(prefix), s.abiEncode(s.tuple([amountExpr]))];
-    if (suffix.length > 0) parts.push(s.bytes(suffix));
-    const cd = s.concat(parts);
-    const target = s.int(BigInt(to));
-    const raw = mode === 'static'
-      ? s.staticCall(target, cd, output)
-      : s.externalCall(target, s.int(0n), cd, output);
-    return postExtract ? postExtract(s, raw) : raw;
+  shape: Shape,
+  extract: Extract,
+): (emit: Emitter, amountExpr: Expr) => Fragment {
+  const bytes = hexToBytes(data);
+  const prefixBytes = bytes.slice(0, amountOffset);
+  const suffixBytes = bytes.slice(amountOffset + 32);
+
+  return (emit, amountExpr) => {
+    const prefix = bindBytes(emit, 'qpre', prefixBytes);
+    const stmts: Stmt[] = [...prefix.stmts];
+    const parts: Expr[] = [encodeArgs([amountExpr])];
+    if (suffixBytes.length > 0) {
+      const suffix = bindBytes(emit, 'qsuf', suffixBytes);
+      stmts.push(...suffix.stmts);
+      parts.push(suffix.expr);
+    }
+    const cd: Fragment = { stmts, expr: `${prefix.expr}.concat(${parts.join(', ')})` };
+
+    return extract(emit, decodeCall(emit, mode, to, cd, shape));
   };
 }
-
-/**
- * Ambient CrocImpact — returns (int128 baseFlow, int128 quoteFlow, uint128
- * finalPrice). Exactly one of baseFlow / quoteFlow is negative (tokens out).
- * Pick it and negate without branching:
- *   sign(x) = x >> 255  (0 or 1 after sign extension to int256)
- *   result  = 0 - (sign(base) * base + sign(quote) * quote)
- */
-/**
- * Pick the negative flow from Ambient's `(int128 baseFlow, int128 quoteFlow,
- * uint128 finalPrice)` return tuple and negate it. Branchless:
- *   sign(x) = x >> 255  (0 for non-negative, 1 for negative after sign-ext)
- *   result  = -(sign(base)*base + sign(quote)*quote)
- */
-function extractAmbientFlow(s: Saucer, decoded: Saucer): Saucer {
-  const baseFlow = s.index(decoded, s.int(0n));
-  const quoteFlow = s.index(decoded, s.int(1n));
-  const bSign = s.shr(baseFlow, s.int(255n));
-  const qSign = s.shr(quoteFlow, s.int(255n));
-  const sum = s.add(s.mul(bSign, baseFlow), s.mul(qSign, quoteFlow));
-  return s.neg(sum);
-}
-
-const AMBIENT_OUTPUT: OutputSpec = {
-  count: 3,
-  typeSpecs: [OPS.BYTE_32, OPS.BYTE_32, OPS.BYTE_32],
-};
-
-function asAmbientFlow(mode: QuoterMode, to: Address, data: Hex): (s: Saucer) => Saucer {
-  const callFn = quoterInvoke(mode, to, hexToByteArray(data), AMBIENT_OUTPUT);
-  return (s) => extractAmbientFlow(s, callFn(s));
-}
-
 
 function requireOpt(value: Address | undefined, name: string): Address {
   if (!value) throw new Error(`opts.${name} is required for this action type`);
@@ -328,7 +392,7 @@ function quoteCurve(action: CurveSwapAction, amountIn: bigint): QuoteCall {
   return {
     to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
     // selector(4) + int128 i(32) + int128 j(32) = 68
-    toSauceDynamic: makeDynamic('static', to, data, 68, OUT_UINT256),
+    toSauceDynamic: makeDynamic('static', to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -362,7 +426,7 @@ function quoteCurveRouterNG(action: CurveRouterNGSwapAction, amountIn: bigint): 
   return {
     to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
     // selector(4) + address[11] (11*32) + uint256[5][5] (25*32) = 1156
-    toSauceDynamic: makeDynamic('static', to, data, 1156, OUT_UINT256),
+    toSauceDynamic: makeDynamic('static', to, data, 1156, OUT_UINT256, firstWord),
   };
 }
 
@@ -376,7 +440,6 @@ function quoteV2Router(router: Address, path: Address[], amountIn: bigint): Quot
       [amountIn, path],
     ),
   );
-  const lastOf = (s: Saucer, arr: Saucer) => s.index(arr, s.sub(s.length(arr), s.int(1n)));
   return {
     to,
     data,
@@ -386,7 +449,7 @@ function quoteV2Router(router: Address, path: Address[], amountIn: bigint): Quot
     },
     toSauce: asUint256ArrayLast('static', to, data),
     // selector(4), then amountIn is the first head slot.
-    toSauceDynamic: makeDynamic('static', to, data, 4, OUT_UINT256_ARRAY, lastOf),
+    toSauceDynamic: makeDynamic('static', to, data, 4, OUT_UINT256_ARRAY, arrayLast),
   };
 }
 
@@ -475,10 +538,9 @@ function quoteBalV2Single(action: BalancerV2SwapAction, amountIn: bigint): Quote
   // Output token delta is at index 1 (asset index for tokenOut). It's negative
   // (vault sends tokens out), so negate via the unchecked NEG opcode to get
   // the magnitude — plain `0 - x` would trip Solidity's checked-sub panic.
-  const extract = (s: Saucer, arr: Saucer) => s.neg(s.index(arr, s.int(1n)));
   return {
     ...base,
-    toSauceDynamic: makeDynamic('static', base.to, base.data, AMOUNT_OFFSET, OUT_UINT256_ARRAY, extract),
+    toSauceDynamic: makeDynamic('static', base.to, base.data, AMOUNT_OFFSET, OUT_UINT256_ARRAY, int256ArrayAbs(1)),
   };
 }
 
@@ -517,7 +579,7 @@ function quoteBalV3(action: BalancerV3SwapAction, amountIn: bigint): QuoteCall {
   return {
     to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
     // selector(4) + pool(32) + tokenIn(32) + tokenOut(32) = 100
-    toSauceDynamic: makeDynamic('static', to, data, 100, OUT_UINT256),
+    toSauceDynamic: makeDynamic('static', to, data, 100, OUT_UINT256, firstWord),
   };
 }
 
@@ -567,7 +629,7 @@ function quoteClipper(action: ClipperSwapAction, amountIn: bigint): QuoteCall {
   return {
     to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
     // selector(4) + tokenIn(32) + tokenOut(32) = 68
-    toSauceDynamic: makeDynamic('static', to, data, 68, OUT_UINT256),
+    toSauceDynamic: makeDynamic('static', to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -606,7 +668,7 @@ function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
     },
     toSauce: asUint256('static', to, data),
     // selector(4) + sender/zero(32) = 36
-    toSauceDynamic: makeDynamic('static', to, data, 36, OUT_UINT256),
+    toSauceDynamic: makeDynamic('static', to, data, 36, OUT_UINT256, firstWord),
   };
 }
 
@@ -652,7 +714,7 @@ function quoteUniV3Single(action: UniswapV3ExactInputAction, amountIn: bigint, q
     },
     toSauce: asUint256('call', to, data),
     // Struct args: selector(4) + tokenIn(32) + tokenOut(32) = 68
-    toSauceDynamic: makeDynamic('call', to, data, 68, OUT_UINT256),
+    toSauceDynamic: makeDynamic('call', to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -679,7 +741,7 @@ function quoteUniV3Multi(action: UniswapV3ExactInputMultiHopAction, amountIn: bi
     },
     toSauce: asUint256('call', to, data),
     // selector(4) + path_offset_pointer(32) = 36 (amount is the 2nd head slot; path tail follows)
-    toSauceDynamic: makeDynamic('call', to, data, 36, OUT_UINT256),
+    toSauceDynamic: makeDynamic('call', to, data, 36, OUT_UINT256, firstWord),
   };
 }
 
@@ -842,8 +904,8 @@ function quoteMaverick(action: MaverickSwapAction, amountIn: bigint, quoter: Add
     toSauceDynamic: makeDynamic(
       'call',
       to, data, 36,
-      { count: 3, typeSpecs: [OPS.BYTE_32, OPS.BYTE_32, OPS.BYTE_32] },
-      (s, tup) => s.index(tup, s.int(1n)),
+      words(3),
+      nthWord(1),
     ),
   };
 }
@@ -871,7 +933,7 @@ function quoteMaverickMulti(action: MaverickMultiHopSwapAction, amountIn: bigint
     },
     toSauce: asUint256('call', to, data),
     // selector(4) + path_offset_pointer(32) = 36 (2nd head slot is amount)
-    toSauceDynamic: makeDynamic('call', to, data, 36, OUT_UINT256),
+    toSauceDynamic: makeDynamic('call', to, data, 36, OUT_UINT256, firstWord),
   };
 }
 
@@ -925,7 +987,7 @@ function quoteAmbient(action: AmbientSwapAction, amountIn: bigint, impact: Addre
     },
     toSauce: asAmbientFlow('static', to, data),
     // selector(4) + base(32) + quote(32) + poolIdx(32) + isBuy(32) + inBaseQty(32) = 164
-    toSauceDynamic: makeDynamic('static', to, data, 164, AMBIENT_OUTPUT, extractAmbientFlow),
+    toSauceDynamic: makeDynamic('static', to, data, 164, AMBIENT_OUTPUT, ambientFlow),
   };
 }
 
@@ -942,7 +1004,7 @@ function quoteIntegral(action: IntegralSwapAction, amountIn: bigint, relayer: Ad
   return {
     to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
     // selector(4) + tokenIn(32) + tokenOut(32) = 68
-    toSauceDynamic: makeDynamic('static', to, data, 68, OUT_UINT256),
+    toSauceDynamic: makeDynamic('static', to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -964,7 +1026,7 @@ function quoteFluidT1(action: FluidDexT1SwapAction, amountIn: bigint, resolver: 
   return {
     to, data, decode: decodeUint256, toSauce: asUint256('call', to, data),
     // selector(4) + dex(32) + swap0to1(32) = 68
-    toSauceDynamic: makeDynamic('call', to, data, 68, OUT_UINT256),
+    toSauceDynamic: makeDynamic('call', to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -1003,6 +1065,6 @@ function quoteFluidLite(action: FluidDexLiteSwapAction, amountIn: bigint, resolv
   return {
     to, data, decode: decodeUint256, toSauce: asUint256('call', to, data),
     // selector(4) + DexKey(3*32) + bool(32) = 132
-    toSauceDynamic: makeDynamic('call', to, data, 132, OUT_UINT256),
+    toSauceDynamic: makeDynamic('call', to, data, 132, OUT_UINT256, firstWord),
   };
 }

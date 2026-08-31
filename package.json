@@ -92,7 +92,7 @@
     "artifacts/svm/engine.so"
   ],
   "scripts": {
-    "build": "pnpm --filter './compiler' build && pnpm -r --filter './sdk' --filter './actions' build",
+    "build": "pnpm -r --filter './sdk' --filter './actions' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "format": "pnpm -r --if-present format",

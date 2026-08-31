@@ -2,7 +2,7 @@ import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { actionsToSauce } from '../src/to-sauce.js';
 import { execSync, spawn, type ChildProcess } from 'child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   createPublicClient,
@@ -221,14 +221,47 @@ async function startHardhat(): Promise<ChildProcess> {
   return proc;
 }
 
+/**
+ * The Sauce ENGINE the programs run on.
+ *
+ * Was the v1 `Sauce.sol` from the `sauce` git dep, entered through `cook(bytes[])`. That artifact
+ * lived under `compiler/node_modules/`, which goes away with the TypeScript compiler — and it is the
+ * wrong engine now regardless: the published Rust compiler emits V12 bytecode. So this deploys the
+ * V12 runtime instead. Its creation code returns its own bytecode, so the deployed contract IS the
+ * engine, and a program is sent to it as RAW CALLDATA (the payload is `[program | args]`; there is
+ * no `cook` selector to prefix).
+ *
+ * `runtimeCreationCode` comes from `sdk/dist/artifacts/V12RuntimeBytecode.json`, which
+ * `pnpm --filter ./sdk sync-engine-artifacts --fetch-v12-engines` writes from the `v12-evm` release
+ * built at the commit the published compiler's `compiler-v0.5.0` tag is cut from — compiler and
+ * engine are one lineage by construction. `sdk/src/artifacts/` is the fallback for a local run, and
+ * `SAUCE_V12_RUNTIME_CREATION_HEX` overrides both (a file of creation hex).
+ */
+function v12RuntimeCreationCode(): Hex {
+  const override = process.env.SAUCE_V12_RUNTIME_CREATION_HEX;
+  if (override) {
+    const hex = readFileSync(override, 'utf-8').trim().replace(/^0x/, '');
+    return `0x${hex}` as Hex;
+  }
+  const candidates = [
+    resolve(REPO_ROOT, 'sdk/dist/artifacts/V12RuntimeBytecode.json'),
+    resolve(REPO_ROOT, 'sdk/src/artifacts/V12RuntimeBytecode.json'),
+  ];
+  const found = candidates.find((p) => existsSync(p));
+  if (!found) {
+    throw new Error(
+      `V12RuntimeBytecode.json not found (looked in ${candidates.join(', ')}). ` +
+        "Run `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines`, or point " +
+        'SAUCE_V12_RUNTIME_CREATION_HEX at a file of runtime creation hex.',
+    );
+  }
+  const { runtimeCreationCode } = JSON.parse(readFileSync(found, 'utf-8')) as { runtimeCreationCode: Hex };
+  if (!runtimeCreationCode) throw new Error(`${found} has no runtimeCreationCode`);
+  return runtimeCreationCode;
+}
+
 async function deploySauce(): Promise<Address> {
-  const artifactPath = resolve(REPO_ROOT, 'compiler/node_modules/sauce/engine/out/Sauce.sol/Sauce.json');
-  const artifact = JSON.parse(readFileSync(artifactPath, 'utf-8'));
-  const bytecode = artifact.bytecode.object as Hex;
-  const abi = artifact.abi;
-
   const account = privateKeyToAccount(PK);
-
   const tempClient = createPublicClient({ transport: http(RPC) });
   const actualChainId = await tempClient.getChainId();
 
@@ -242,10 +275,17 @@ async function deploySauce(): Promise<Address> {
   const publicClient = createPublicClient({ chain: localChain, transport: http(RPC) });
   const walletClient = createWalletClient({ account, chain: localChain, transport: http(RPC) });
 
-  const hash = await walletClient.deployContract({ abi, bytecode, account, chain: localChain });
+  const hash = await walletClient.sendTransaction({
+    account,
+    chain: localChain,
+    data: v12RuntimeCreationCode(),
+    gas: 30_000_000n,
+  });
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-  if (!receipt.contractAddress) throw new Error('Sauce deployment failed');
+  if (!receipt.contractAddress) throw new Error('V12 runtime deployment failed');
+  const code = await publicClient.getCode({ address: receipt.contractAddress });
+  // A failed deploy leaves an address with no code rather than an error, so size is the check.
+  if (!code || code.length < 1000) throw new Error(`V12 runtime deployed only ${code?.length ?? 0} hex chars`);
   return receipt.contractAddress;
 }
 
@@ -278,11 +318,16 @@ function toHex(bytes: Uint8Array): string {
   return '0x' + Buffer.from(bytes).toString('hex');
 }
 
+/**
+ * Run a Sauce program on the V12 engine — the compiled bytecode IS the calldata (the payload is
+ * `[program | args]`). The retired TypeScript compiler's programs entered the v1 engine through
+ * `cook(bytes[])`; the V12 runtime has no such wrapper.
+ */
 function cookSend(bytecode: Uint8Array, value?: string): Hex {
   const hex = toHex(bytecode);
   const valueFlag = value ? `--value ${value}` : '';
   const result = execSync(
-    `cast send ${SAUCE} "cook(bytes[])" "[${hex}]" --rpc-url ${RPC} --private-key ${PK} ${valueFlag} --gas-limit 5000000 --json 2>&1`,
+    `cast send ${SAUCE} ${hex} --rpc-url ${RPC} --private-key ${PK} ${valueFlag} --gas-limit 5000000 --json 2>&1`,
     { encoding: 'utf8' },
   ).trim();
   const tx = JSON.parse(result);
