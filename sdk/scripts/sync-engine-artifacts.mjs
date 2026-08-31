@@ -409,3 +409,29 @@ if (process.argv.includes('--fetch-v12-engines')) {
   console.log(`SAUCE_RUST_ENGINE_SO=${enginePath}`);
   console.log(`SAUCE_V12_RUNTIME_CREATION_HEX=${runtimeCreationPath}`);
 }
+
+// `--fetch-v12-harness`: clone the two harness libs `engine-v12`'s exec-parity suite imports. The
+// v12 runtime comes from a release asset now, so nothing else fetches them -- and
+// compiler/integration-test/{v12-execution,v12-solidity-parity}.test.ts `describe.skip` when they
+// are absent, which is 63 tests reading as green. Their versions do not affect any bytecode: they
+// are the forge Script harness, not the compiler.
+if (process.argv.includes('--fetch-v12-harness')) {
+  const engineV12 = resolve(SAUCE, 'engine-v12');
+  if (!existsSync(engineV12)) {
+    throw new Error(`--fetch-v12-harness: ${engineV12} is absent from this pin`);
+  }
+  // Three, and the third is easy to miss: `engine-v12/lib/openzeppelin-contracts` is a DIFFERENT
+  // path from the `engine/lib/openzeppelin-contracts` the artifact sync already fetches, and the
+  // exec-parity harness imports IERC20/SafeERC20/SafeCast/Create2 from it.
+  const HARNESS_LIBS = {
+    'forge-std': 'https://github.com/foundry-rs/forge-std',
+    'foundry-huff-neo': 'https://github.com/cakevm/foundry-huff-neo',
+    'openzeppelin-contracts': 'https://github.com/OpenZeppelin/openzeppelin-contracts',
+  };
+  for (const [name, url] of Object.entries(HARNESS_LIBS)) {
+    const dir = resolve(engineV12, 'lib', name);
+    if (existsSync(dir)) continue;
+    console.log(`[sync-engine-artifacts] fetching engine-v12 harness lib: ${name}`);
+    execSync(`git clone --depth 1 -q ${url} ${JSON.stringify(dir)}`, { stdio: 'inherit' });
+  }
+}
