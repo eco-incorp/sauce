@@ -2,7 +2,7 @@
  * Comprehensive compilation and structure tests for all SDK protocol SauceScript functions.
  *
  * The corpus is written for the RUST compiler, so that is what compiles it here — the published
- * `@eco-incorp/sauce-compiler` from npm, aliased `sauce-compiler-next`. Tier 1 selector
+ * `@eco-incorp/sauce-compiler` from npm, aliased `sauce-next`. Tier 1 selector
  * verification still runs through the in-repo TypeScript compiler, which is what can read a
  * segment's bytes.
  */
@@ -92,26 +92,12 @@ function discoverAllProtocolFunctions(): ProtocolFunction[] {
  * `[]` its element type from the position it sits in, and landed after the 0.4.1 this workspace
  * depends on. Delete those entries when the dependency is bumped past it.
  */
+// Templates the Rust compiler cannot compile. An entry here is asserted to THROW, so a gap that
+// closes fails this suite rather than passing quietly — which is how the 18 `empty-array-literal`
+// entries measured against published 0.4.1 were caught: the pinned compiler takes an empty array
+// literal's element type from the position it sits in, so they all compile now.
 const RUST_COMPILER_GAPS: Record<string, string> = {
   'erc20/storageTransfer': 'needs storage.read/write and emit(), which the Rust compiler does not provide',
-  'balancer-v2/addLiquidity': 'empty-array-literal',
-  'balancer-v2/removeLiquidity': 'empty-array-literal',
-  'chainlink-ccip/sendMessage': 'empty-array-literal',
-  'gelato/createTask': 'empty-array-literal',
-  'gmx-v2/createOrder': 'empty-array-literal',
-  'kyberswap-aggregator/swap': 'empty-array-literal',
-  'oneinch/unoswap': 'empty-array-literal',
-  'paraswap/simpleSwap': 'empty-array-literal',
-  'pendle/addLiquiditySingleToken': 'empty-array-literal',
-  'pendle/removeLiquiditySingleToken': 'empty-array-literal',
-  'pendle/swapExactTokenForPt': 'empty-array-literal',
-  'pendle/swapExactTokenForYt': 'empty-array-literal',
-  'seaport/fulfillBasicOrder': 'empty-array-literal',
-  'stargate/bridge': 'empty-array-literal',
-  'trader-joe/swap': 'empty-array-literal',
-  'uniswap-v4/swap': 'empty-array-literal',
-  'zerox/transformERC20': 'empty-array-literal',
-  'zksync-bridge/depositETH': 'empty-array-literal',
 };
 
 describe('SauceScript compilation', () => {
