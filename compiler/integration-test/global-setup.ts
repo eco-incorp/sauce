@@ -1,13 +1,8 @@
 import { execSync, spawn } from 'child_process';
 import { resolve } from 'path';
-import { existsSync, writeFileSync } from 'fs';
+import { writeFileSync } from 'fs';
 
-// The `sauce` engine dep is declared at the repo root, not in this workspace, so pnpm links it one
-// level up. The local candidate stays first for a tree that still has its own copy.
-const ENGINE_DIR =
-  [resolve(process.cwd(), 'node_modules/sauce/engine'), resolve(process.cwd(), '..', 'node_modules/sauce/engine')].find(
-    existsSync,
-  ) ?? resolve(process.cwd(), 'node_modules/sauce/engine');
+const ENGINE_DIR = resolve(process.cwd(), 'node_modules/sauce/engine');
 const PORT = 8546;
 const RPC = `http://127.0.0.1:${PORT}`;
 const PK = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';

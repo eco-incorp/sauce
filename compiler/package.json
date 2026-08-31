@@ -44,6 +44,7 @@
     "jest": "^30.2.0",
     "litesvm": "^1.2.1",
     "prettier": "^3.8.1",
+    "sauce": "github:eco-incorp/sauce#d1c900d03d8d5befd8f049c7890e11a16fd24d91",
     "ts-jest": "^29.4.6"
   },
   "dependencies": {
