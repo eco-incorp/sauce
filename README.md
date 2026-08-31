@@ -22,18 +22,24 @@ import { routes } from '@eco-incorp/sauce-sdk'
 const now = BigInt(Math.floor(Date.now() / 1000))
 
 const built = routes.openRoute('base', 'function main() { return 1n; }', {
-  source: 'ethereum',                  // where the reward is posted
-  pot, portal, creator, prover,
+  source: 'ethereum',                  // the SOURCE chain — where the reward is posted
+  pot,                                 // the Pot on the destination chain, which runs the program
+  portal,                              // the DESTINATION Portal — lands in route.portal
+  sourcePortal,                        // the SOURCE Portal — where the intent is published
+  creator, prover,
   deadline: now + 3600n,
   rewardDeadline: now + 7200n,
 }).reward([{ token: usdc, amount: 1_000_000n }])
 
 built.compiled.bytecode[0]   // the program
-built.intent                 // the assembled Intent, ready to publish
+built.intent                 // the assembled Intent
+built.publishCalldata()      // calldata for sourcePortal — omit sourcePortal above and this throws
 ```
 
 `routes.openRoute(destination, …)` is what the chain globals forward to, so
-`Base(sauce, options).reward(…)` is the same call.
+`Base(sauce, options).reward(…)` is the same call. Those globals are installed on `globalThis` as a
+side effect of importing the package — they are **not** exports, so `import { Base }` fails. Opt out
+with `__ECO_ROUTES_NO_GLOBALS__`, or just use `routes.openRoute`.
 
 `.reward()` takes a token-amount array as above. A **bare bigint** is a NATIVE reward —
 `.reward(1_000_000n)` posts 1e6 wei of the source chain's gas token, not 1 USDC.
