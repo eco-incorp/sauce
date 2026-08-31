@@ -1,8 +1,8 @@
 import { AccountRole } from '@solana/kit';
 import type { Address, TransactionSigner } from '@solana/kit';
-import type { AccountPlan } from '@eco-incorp/sauce-compiler';
+import type { AccountManifest } from 'sauce-next';
 /**
- * Maps each symbolic account ref from the compiler's AccountPlan to a concrete
+ * Maps each declared slot of the compiler's AccountManifest to a concrete
  * address. `signer: true` upgrades the role only; pass the TransactionSigner
  * itself to also sign the transaction with it (required for any signer ref
  * other than the reserved fee-payer ref — the send layer has no other way to
@@ -44,18 +44,22 @@ export interface ResolvedAccountMeta {
     signer?: TransactionSigner;
 }
 /**
- * Resolves an AccountPlan into ordered account metas: metas[i] is user-account
- * index i of the execute instruction (inline: instruction account i; staged:
- * i + 1, after the buffer). writable comes from the plan; signer is upgraded
- * by the plan flag, the resolution entry's signer flag or TransactionSigner,
- * or the reserved PAYER_REF. An attached TransactionSigner rides on the meta
- * so the transaction builder signs with it. Duplicate addresses across refs
- * are fine — Solana dedupes at message compile.
+ * Resolves an AccountManifest into ordered account metas: metas[i] is
+ * user-account index i of the execute instruction (inline: instruction account
+ * i; staged: i + 1, after the buffer). The base role comes from the slot's
+ * `requires`; signer is upgraded by that role, the resolution entry's signer
+ * flag or TransactionSigner, or the reserved PAYER_REF. An attached
+ * TransactionSigner rides on the meta so the transaction builder signs with it.
+ * Duplicate addresses across refs are fine — Solana dedupes at message compile.
+ *
+ * A `remaining` entry is a POSITION, not an account: it marks where the
+ * caller's own variable-length tail begins, so resolution stops there and the
+ * caller appends its tail itself.
  *
  * MSG_SENDER/TX_ORIGIN is the first in-list signer, resolved LAZILY by the
  * engine (NoSigner only when the program actually reads the sender) — so no
- * signer is auto-appended; a MSG_SENDER-reading program whose plan carries no
- * signer meta passes `appendPayerSigner: true`.
+ * signer is auto-appended; a MSG_SENDER-reading program whose manifest
+ * declares no signer slot passes `appendPayerSigner: true`.
  */
-export declare function resolveAccounts(plan: AccountPlan, resolution: AccountResolution, payer: Address, { appendPayerSigner }?: ResolveAccountsOptions): ResolvedAccountMeta[];
+export declare function resolveAccounts(manifest: AccountManifest, resolution: AccountResolution, payer: Address, { appendPayerSigner }?: ResolveAccountsOptions): ResolvedAccountMeta[];
 //# sourceMappingURL=resolve.d.ts.map

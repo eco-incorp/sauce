@@ -202,9 +202,9 @@ export const saberStableswap = {
             throw new Error(`saber-stableswap emitQuote pool index must be a non-negative integer, got ${i}`);
         }
         assertU64AmountIn(amountIn);
-        const pool = JSON.stringify(c.pool);
-        const vaultA = JSON.stringify(c.vaultA);
-        const vaultB = JSON.stringify(c.vaultB);
+        // Account model (RS): quoteAccounts() attaches [pool, vaultA, vaultB], so
+        // the pool is slot 0 (acc0), vaultA slot 1 (acc1) and vaultB slot 2 (acc2);
+        // every read is `svm.sload(acc<k>, off, w).toLe()` (all u64/u8 LE fields).
         // stableD(amp, xa, xb) -> invariant D and stableY(amp, x, d) -> new
         // destination-side balance are the shared stable-curve helpers the
         // generator declares once (Newton per computeD/computeY above: cap 256,
@@ -212,20 +212,20 @@ export const saberStableswap = {
         // u64, so srcRes + amountIn < 2^65 and every fragment-level op stays far
         // below the 256-bit wrap; Math.mulDiv is 512-bit-safe by construction.
         const lines = [
-            `  const paused${i} = accountUint(${pool}, 1, 1);`,
-            `  const srcRes${i} = accountUint(${vaultA}, 64, 8);`,
-            `  const dstRes${i} = accountUint(${vaultB}, 64, 8);`,
+            `  const paused${i} = svm.sload(acc0, 1, 1).toLe();`,
+            `  const srcRes${i} = svm.sload(acc1, 64, 8).toLe();`,
+            `  const dstRes${i} = svm.sload(acc2, 64, 8).toLe();`,
             `  let amp${i} = ${c.targetAmpFactor};`,
         ];
         // Amp ramp: the interpolation direction depends only on compile-time
         // constants, so bake the up- or down-ramp branch; once the ramp window is
-        // past, block.timestamp < stopRampTs is false and amp stays the target.
+        // past, ctx.timestamp() < stopRampTs is false and amp stays the target.
         const range = c.stopRampTs - c.startRampTs;
         if (c.stopRampTs !== 0n && range > 0n && c.initialAmpFactor !== c.targetAmpFactor) {
             const interp = c.targetAmpFactor >= c.initialAmpFactor
-                ? `${c.initialAmpFactor} + Math.mulDiv(${c.targetAmpFactor - c.initialAmpFactor}, block.timestamp - ${c.startRampTs}, ${range})`
-                : `${c.initialAmpFactor} - Math.mulDiv(${c.initialAmpFactor - c.targetAmpFactor}, block.timestamp - ${c.startRampTs}, ${range})`;
-            lines.push(`  if (block.timestamp < ${c.stopRampTs}) { amp${i} = ${interp} }`);
+                ? `${c.initialAmpFactor} + Math.mulDiv(${c.targetAmpFactor - c.initialAmpFactor}, ctx.timestamp() - ${c.startRampTs}, ${range})`
+                : `${c.initialAmpFactor} - Math.mulDiv(${c.initialAmpFactor - c.targetAmpFactor}, ctx.timestamp() - ${c.startRampTs}, ${range})`;
+            lines.push(`  if (ctx.timestamp() < ${c.stopRampTs}) { amp${i} = ${interp} }`);
         }
         // dy = dstRes - y - 1 (the -1 rounding buffer), fee on the OUTPUT side.
         // The dstRes > y guard mirrors the on-chain checked_subs: without it a

@@ -3,6 +3,7 @@ export * from './clusters.js';
 export * from './pda.js';
 export * from './resolve.js';
 export * from './instructions.js';
+export * from './layout.js';
 export * from './args.js';
 export * from './prepends.js';
 export * from './alt.js';

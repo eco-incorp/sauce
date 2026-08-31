@@ -9,17 +9,17 @@
  * with an SPL `TransferChecked` CPI (no ERC20 `transfer`).
  *
  * ```ts
- * import { compile } from "@eco-incorp/sauce-sdk/compiler";
+ * import { compile } from "sauce-next";
  * import { svmSettleSource } from "@eco-incorp/sauce-sdk/svm";
  *
- * const { bytecode, accountPlan, argsLayout } = compile(svmSettleSource(3), {
+ * const { bytecode, manifest } = compile({
  *   target: "svm",
- *   staged: true,
- *   treeshake: true,
- *   // staged mode never bakes args into the blob; only their SHAPE matters at compile time.
- *   args: [minOut, splCount, tokenProgram0, tokenProgram1],
+ *   entry: "main.js",
+ *   resolve: (path) => (path === "main.js" ? Buffer.from(svmSettleSource(3)) : undefined),
+ *   defines: [["SETTLE_MIN_OUT", String(minOut)], ["SETTLE_SPL_COUNT", String(splCount)]],
  * });
- * // bytecode[0] is byte-identical for ANY arg values at a given escrow count.
+ * // `bytecode` is a deterministic function of (escrowCount, minOut, splCount) — and ONLY those.
+ * // Every account identity is an attach slot, so one blob still serves every mint/recipient.
  * ```
  *
  * The shape, and why each piece differs from EVM's single loop:
@@ -31,24 +31,23 @@
  *     that wallet's ATA per mint and fills the `dest_i` slots — an SPL token account holds one mint,
  *     so N mints need N destination accounts even for one recipient. (A derivable address still has
  *     to be attached: Solana requires every touched account in the instruction's account list.)
- *   - `splCount` (a RUNTIME arg) groups escrows by token program: the first `splCount` sweep via
- *     `tokenProgram0`, the rest via `tokenProgram1` — classic SPL and Token-2022 in one settle. One
- *     staged blob per total-N serves every split. All-classic? pass `tokenProgram1 == tokenProgram0`
- *     and Solana dedups the slot.
+ *   - `SETTLE_SPL_COUNT` (a compile-time define) groups escrows by token program: the first
+ *     `splCount` sweep via `tokenProgram0`, the rest via `tokenProgram1` — classic SPL and
+ *     Token-2022 in one settle. All-classic? attach the same program at both slots and Solana dedups
+ *     it.
  *   - `TransferChecked` (ix 12), so it is correct for Token-2022 fee mints (PYUSD et al.), not only
  *     classic SPL. That is why each escrow also attaches its `mint_i` — TransferChecked reads
  *     decimals from it (the program reads them on-chain, so decimals are never an argument).
  *     Transfer-HOOK mints are out of scope; a resolver should reject one with a clear error.
  *
- * `svmSettleRefs(n)` gives the AccountPlan order to resolve against. There is no
- * `decodeSvmSettleProgram` and there cannot be one: staged args are never baked into the blob, so
- * there is no prologue to parse back — `minOut`/`splCount` ride in the per-execution payload and the
- * account identities ride in the instruction's account list. The verification the EVM decoder does in
- * one step is therefore split, in `@eco-incorp/sauce-sdk/svm/verify`: `verifySvmSettleProgram`
- * recompiles this source and byte-compares the blob (proving the logic is genuine, the SVM analogue of
- * the EVM body-hash check), and `decodeSvmSettleArgs` recovers `minOut`/`splCount`/`tokenProgram*` from
- * the execute payload's calldata tail. The resolved account identities come from the executed
- * instruction's account list, matched against these refs.
+ * `svmSettleRefs(n)` gives the manifest order to resolve against. There is no
+ * `decodeSvmSettleProgram` and there cannot be one: the account identities are never in the
+ * bytecode on SVM (Solana requires them attached), so there is no prologue carrying them to parse
+ * back. Verification is by RECOMPILE, in `@eco-incorp/sauce-sdk/svm/verify`:
+ * `verifySvmSettleProgram` recompiles this source with the caller's expected
+ * `(escrowCount, minOut, splCount)` and byte-compares — proving the logic is genuine AND pinning
+ * those two scalars, since both are folded in. The resolved account identities come from the
+ * executed instruction's account list, matched against these refs.
  */
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,16 +84,18 @@ const SVM_HEADER = `// settle.sauce.ts — a STANDALONE, reusable SVM Sauce prog
 // the escrows' balances — a swap, a bridge, an airdrop, or nothing at all. Keep it that way: no
 // caller-specific names, in the code OR in the revert string (identical to the EVM twin's).
 //
-// THE SHAPE: \`main(minOut, splCount, tokenProgram0, tokenProgram1)\`.
-//   - \`minOut\` is an ordinary scalar arg — the direct mirror of the EVM twin's \`minOut\` — and applies
+// THE SHAPE: \`main(<accounts…>)\` with \`SETTLE_MIN_OUT\` / \`SETTLE_SPL_COUNT\` supplied as compile-time
+// \`defines\`. Every ACCOUNT is a \`main\` parameter, declared in the order a caller attaches them —
+// that declaration is the account manifest.
+//   - \`SETTLE_MIN_OUT\` is the direct mirror of the EVM twin's \`minOut\` — and applies
 //     to \`escrow0\` ONLY, exactly as the EVM floor applies to \`tokens[0]\`. Every other escrow is swept
 //     unconditionally (a dust sweep).
 //   - \`splCount\` groups escrows by token program: escrow i sweeps via \`tokenProgram0\` when
 //     \`i < splCount\`, else \`tokenProgram1\`. Classic SPL and Token-2022 in one settle; order escrows
 //     classic-first. When every mint shares one program, pass \`tokenProgram1 == tokenProgram0\`.
 //   - Every identity — which escrows, which recipient ATAs, which owner authorizes, which token
-//     programs — binds at EXECUTION time via the AccountPlan's refs, so one blob per escrow count
-//     serves every mint/recipient/split.
+//     programs — binds at EXECUTION time via the manifest's slots, so one blob serves every
+//     mint/recipient. The bytecode varies ONLY with (escrowCount, minOut, splCount).
 //
 // ONE RECIPIENT, N DESTINATIONS: the \`dest_i\` refs are the ONE recipient wallet's associated token
 // account per mint. An SPL token account holds a single mint, so N mints need N destination accounts
@@ -109,16 +110,10 @@ const SVM_HEADER = `// settle.sauce.ts — a STANDALONE, reusable SVM Sauce prog
 // they need per-mint hook accounts a generic program cannot enumerate, and a transfer targeting one
 // reverts atomically. A resolver should reject a hook-configured mint up front with a clear error.
 //
-// ⚠ CONSTRUCTION GOTCHA, LOAD-BEARING: the two \`accountData("tokenProgram*", 0, 0)\` reads are
-// zero-length reads that look like dead code, but the engine resolves a \`contract.call\` CPI target
-// by scanning the instruction's ATTACHED accounts for the target's pubkey — so each token program
-// must occupy an AccountPlan slot. Omit them and the compile still succeeds, but the CPI fails
-// pre-flight the moment it runs.
-//
-// ⚠ EACH \`tokenProgram_p\` IS TWO INDEPENDENT BINDINGS a caller makes at execution time — the scalar
-// argument (the CPI target value) and the account ref (so the engine finds it attached). Nothing
-// here enforces they name the same program; a mismatch is a loud, atomic pre-flight CPI failure that
-// moves nothing. Bind both from the same source value.
+// EACH \`tokenProgram_p\` IS ONE BINDING: it is an \`Account\` parameter, and \`svm.call\` takes that
+// same account as its CPI target — so there is nothing for a caller to keep in sync. Nothing here
+// pins WHICH program arrives at that slot, though: whoever attaches the accounts chooses, so a
+// caller that cares must compare the attached account itself.
 //
 // KNOWN PROPERTY, DOCUMENTED AND ACCEPTED — NOT DEFENDED AGAINST: the floor and the sweeps read
 // CURRENT balances, not a delta against a baseline, so a donated balance counts toward \`minOut\` and
@@ -149,40 +144,36 @@ function assertEscrowCount(fn, escrowCount) {
 export function svmSettleSource(escrowCount = 1) {
     assertEscrowCount("svmSettleSource", escrowCount);
     const sweep = (i) => `
-  // escrow ${i}: read balance then decimals (fixed order → deterministic AccountPlan slots), then
-  // TransferChecked the whole balance to this recipient's ATA, via this escrow's token program
-  // (tokenProgram0 for the first \`splCount\` escrows, tokenProgram1 for the rest).
-  const bal${i} = accountUint("escrow${i}", ${SPL_AMOUNT_OFFSET}, 8);
-  const dec${i} = accountUint("mint${i}", ${MINT_DECIMALS_OFFSET}, 1);
+  // escrow ${i}: read balance then decimals, then TransferChecked the whole balance to this
+  // recipient's ATA, via this escrow's token program (tokenProgram0 for the first
+  // \`SETTLE_SPL_COUNT\` escrows, tokenProgram1 for the rest).
+  const bal${i} = svm.sload(escrow${i}, ${SPL_AMOUNT_OFFSET}, 8).toLe();
+  const dec${i} = svm.sload(mint${i}, ${MINT_DECIMALS_OFFSET}, 1).toLe();
   if (bal${i} > 0) {
-    const tp${i} = ${i} < splCount ? tokenProgram0 : tokenProgram1;
-    const tag${i} = Uint8Array.from([12]);                     // TransferChecked
-    const amt${i} = abi.encode(le8(bal${i})).slice(24, 32);     // 8-byte LE amount
-    const dcb${i} = abi.encode(dec${i}).slice(31, 32);          // 1-byte decimals
-    const data${i} = tag${i}.concat(amt${i}).concat(dcb${i});
-    contract.call(tp${i}, data${i}, [
-      { ref: "escrow${i}", writable: true },
-      { ref: "mint${i}" },
-      { ref: "dest${i}", writable: true },
-      { ref: "owner", signer: true }
-    ]);
+    const tp${i} = ${i} < SETTLE_SPL_COUNT ? tokenProgram0 : tokenProgram1;
+    const tag${i} = hex\`0c\`;                                   // TransferChecked
+    const data${i} = tag${i}.concat(bal${i}.toBytesLe(8)).concat(dec${i}.toBytesLe(1));
+    svm.call(tp${i}, [escrow${i}, mint${i}, dest${i}, owner], data${i});
   }`;
+    // Accounts are main() PARAMS, declared in exactly `svmSettleRefs` order — that declaration IS
+    // the manifest the caller attaches against.
+    const params = ["tokenProgram0: Account", "tokenProgram1: Account"];
+    for (let i = 0; i < escrowCount; i++) {
+        params.push(`escrow${i}: Account<Writable>`, `mint${i}: Account`, `dest${i}: Account<Writable>`);
+        if (i === 0)
+            params.push("owner: Account<Signer>");
+    }
     return `${SVM_HEADER}
-/** 64-bit byte swap: the LE image of a u64 amount, MSTORE'd big-endian by abi.encode. */
-function le8(x) {
-  return ((x & 255) << 56) | ((x & 65280) << 40) | ((x & 16711680) << 24) | ((x & 4278190080) << 8)
-    | ((x >> 8) & 4278190080) | ((x >> 24) & 16711680) | ((x >> 40) & 65280) | (x >> 56);
-}
+// Per-execution values arrive as \`defines\`, which replace these declarations and constant-fold, so
+// a given (minOut, splCount) pair yields fixed bytecode. The defaults keep this file compilable and
+// readable on its own.
+const SETTLE_MIN_OUT = 0n;
+const SETTLE_SPL_COUNT = 0n;
 
-function main(minOut, splCount, tokenProgram0, tokenProgram1) {
-  // Load-bearing: interns both token-program accounts so the TransferChecked CPIs can resolve their
-  // target from the instruction's attached accounts. See the header note above.
-  accountData("tokenProgram0", 0, 0);
-  accountData("tokenProgram1", 0, 0);
-
-  const floorBal = accountUint("escrow0", ${SPL_AMOUNT_OFFSET}, 8);
-  if (minOut > 0) {
-    if (floorBal < minOut) {
+function main(${params.join(", ")}): Uint256 {
+  const floorBal = svm.sload(escrow0, ${SPL_AMOUNT_OFFSET}, 8).toLe();
+  if (SETTLE_MIN_OUT > 0) {
+    if (floorBal < SETTLE_MIN_OUT) {
       throw "settle: balance below minOut";
     }
   }
@@ -193,11 +184,11 @@ ${Array.from({ length: escrowCount }, (_, i) => sweep(i)).join("\n")}
 `;
 }
 /**
- * The account refs a generated program interns, in AccountPlan order, for `escrowCount` escrows:
+ * The account refs a generated program declares, in manifest order, for `escrowCount` escrows:
  * `tokenProgram0`, `tokenProgram1`, then per escrow `escrow_i` (source, writable), `mint_i`
  * (read for decimals), `dest_i` (recipient ATA, writable) — with the shared `owner` (signer) landing
- * right after escrow 0's group, because ORDER IS INTERN ORDER (first mention), not a tidy grouping,
- * and `owner`'s first mention is escrow 0's Transfer CPI. A caller's `AccountResolution` must cover
+ * right after escrow 0's group, which is simply the order `main` declares its params in. A caller's
+ * `AccountResolution` must cover
  * exactly these; `sdk/test/svm-settle.compile.test.ts` pins this against a real compile for several
  * escrow counts so it can never drift from what the compiler actually emits.
  */

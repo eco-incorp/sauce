@@ -2,8 +2,8 @@
 export function formatBigint(value) {
     return `${value.toString()}n`;
 }
-/** A resolved address field: `bigint` -> its numeric literal, `"self"` -> `address.self`. */
+/** A resolved address field: `bigint` -> its numeric literal, `"self"` -> `ctx.self()`. */
 export function formatAddressField(value) {
-    return value === "self" ? "address.self" : formatBigint(value);
+    return value === "self" ? "ctx.self()" : formatBigint(value);
 }
 //# sourceMappingURL=format.js.map

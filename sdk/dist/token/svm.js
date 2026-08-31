@@ -1,8 +1,26 @@
 /**
  * The SPL Token arm — statement/expression builders for the universal token interface's SVM
- * lowering. Reuses the shipped SPL knowledge in `sdk/src/svm/venues/scale-common.ts` and the
- * `svmSettleSource`/`settle.sauce.ts` idiom (`contract.call(program, data, accounts)`,
- * `accountData`/`accountUint`, the `le8` u64 byteswap helper) rather than reinventing it.
+ * lowering. Reuses the shipped SPL knowledge in `sdk/src/svm/venues/scale-common.ts`.
+ *
+ * ACCOUNT MODEL. Every account a program touches is a `main` PARAMETER, declared in the order the
+ * caller must attach them; the compiler reports that order back as the account manifest, and a slot
+ * carries the role its annotation asserts (`Account<Writable>`, `Account<Signer>`). So a ref name
+ * here becomes an identifier in the emitted source rather than a string, an account read is
+ * `svm.sload(ref, off, len).toLe()`, and a CPI is `svm.call(program, [accounts], data)` where the
+ * program is itself one of those params.
+ *
+ * That collapses three things the string-ref form needed:
+ *   - the `accountData(ref, 0, 0)` zero-length read whose only job was to force the CPI target into
+ *     an account slot — a param already is one;
+ *   - the split between the CPI target as a baked VALUE and as a separate account ref, and with it
+ *     the "two independent bindings a caller must keep in sync" hazard: there is now one binding;
+ *   - the `le8` byteswap helper and the `abi.encode(...).slice(...)` dance, replaced by
+ *     `.toBytesLe(width)` (and `abi.encode` is not available on the svm target anyway).
+ *
+ * Because `svm.call` invokes whatever account occupies the program slot, each concrete token program
+ * is pinned with `require(<ref> == <pubkey>)`. The baked-value form got that check for free (the
+ * engine resolved the CPI by scanning the attached accounts for the baked pubkey); this restores it
+ * explicitly.
  */
 import { getAddressEncoder } from "@solana/kit";
 import { TOKEN_2022_PROGRAM, TOKEN_PROGRAM } from "../svm/venues/scale-common.js";
@@ -10,6 +28,8 @@ import { formatBigint } from "../deposit/format.js";
 import { MINT_DECIMALS_OFFSET, SPL_AMOUNT_OFFSET, SPL_APPROVE_CHECKED, SPL_TRANSFER_CHECKED, } from "./types.js";
 import { ownerRef, tokenProgramRef } from "./params.js";
 const ADDRESS_ENCODER = getAddressEncoder();
+/** A ref becomes a `main` parameter name, so it has to be spellable as one. */
+const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 function addressToBigint(addr) {
     const bytes = new Uint8Array(ADDRESS_ENCODER.encode(addr));
     let v = 0n;
@@ -17,7 +37,7 @@ function addressToBigint(addr) {
         v = (v << 8n) | BigInt(b);
     return v;
 }
-/** Well-known SPL program ids, converted once to the bigint literal `contract.call`'s target wants. */
+/** Well-known SPL program ids, converted once to the bigint literal the identity check wants. */
 export const TOKEN_PROGRAM_BIGINT = addressToBigint(TOKEN_PROGRAM);
 export const TOKEN_2022_PROGRAM_BIGINT = addressToBigint(TOKEN_2022_PROGRAM);
 /** The SauceScript expression for a `SvmTokenProgramInput` CPI-target VALUE. Defaults to `"spl"`. */
@@ -30,43 +50,92 @@ export function tokenProgramValueExpr(input) {
         return formatBigint(input);
     return input.arg;
 }
+export function assertRefIsIdentifier(ref, label) {
+    if (!IDENTIFIER_RE.test(ref)) {
+        throw new Error(`${label}: svm ref '${ref}' must be a valid identifier — it becomes a main() account parameter`);
+    }
+}
 export function newSvmEmitState() {
-    return { internedTokenPrograms: new Set() };
+    return { pinnedTokenPrograms: new Set() };
 }
-export const LE8_HELPER_SOURCE = [
-    "/** 64-bit byte swap: the LE image of a u64 amount, MSTORE'd big-endian by abi.encode. */",
-    "function le8(x) {",
-    "  return ((x & 255) << 56) | ((x & 65280) << 40) | ((x & 16711680) << 24) | ((x & 4278190080) << 8)",
-    "    | ((x >> 8) & 4278190080) | ((x >> 24) & 16711680) | ((x >> 40) & 65280) | (x >> 56);",
-    "}",
-].join("\n");
-function amountLe8Expr(amount, sourceRef) {
-    const inner = amount === "balance" ? `accountUint("${sourceRef}", ${SPL_AMOUNT_OFFSET}, 8)` : formatBigint(typeof amount === "bigint" ? amount : BigInt(amount));
-    return `le8(${inner})`;
+/** `Account`, `Account<Writable>`, `Account<Signer>` or `Account<Writable, Signer>`. */
+export function accountParamType({ writable, signer }) {
+    const args = [...(writable ? ["Writable"] : []), ...(signer ? ["Signer"] : [])];
+    return args.length > 0 ? `Account<${args.join(", ")}>` : "Account";
 }
-/** `accountData("<ref>", 0, 0)` — interned at most once per ref per program (load-bearing CPI-target
- *  attach; see `settle.sauce.ts`'s header comment for why this can't be dropped). */
-function tokenProgramIntern(ref, state) {
-    if (state.internedTokenPrograms.has(ref))
-        return undefined;
-    state.internedTokenPrograms.add(ref);
-    return `accountData("${ref}", 0, 0);`;
+/** The refs one spec needs, in attach order, each with the role that spec demands of it. */
+function specParams(spec) {
+    if (spec.op === "balanceOf") {
+        return [{ ref: spec.svm.source, writable: false, signer: false }];
+    }
+    const refs = spec.svm;
+    const counterparty = spec.op === "transfer"
+        ? { ref: refs.dest, writable: true, signer: false }
+        : { ref: refs.delegate, writable: false, signer: false };
+    return [
+        { ref: tokenProgramRef(refs), writable: false, signer: false },
+        { ref: refs.mint, writable: false, signer: false },
+        { ref: refs.source, writable: true, signer: false },
+        counterparty,
+        { ref: ownerRef(refs), writable: false, signer: true },
+    ];
 }
 /**
- * `contract.call(...)` block for a `TransferChecked`/`ApproveChecked` CPI — `index` disambiguates
- * the bound-local names (`dec0`, `amt0`, ...) across a multi-op program.
+ * Every account the program's specs touch, in FIRST-USE order — the order a caller attaches them
+ * and the order the manifest reports. A ref shared across ops (`owner`/`tokenProgram` by design)
+ * appears once, holding the strongest role any op demanded of it.
+ */
+export function svmAccountParams(specs) {
+    const byRef = new Map();
+    for (const spec of specs) {
+        for (const param of specParams(spec)) {
+            assertRefIsIdentifier(param.ref, "tokenSource");
+            const seen = byRef.get(param.ref);
+            if (seen === undefined) {
+                byRef.set(param.ref, { ...param });
+                continue;
+            }
+            seen.writable = seen.writable || param.writable;
+            seen.signer = seen.signer || param.signer;
+        }
+    }
+    return [...byRef.values()];
+}
+/** The `main(...)` parameter list for `specs`, annotated with each slot's required role. */
+export function svmAccountParamList(specs) {
+    return svmAccountParams(specs)
+        .map((param) => `${param.ref}: ${accountParamType(param)}`)
+        .join(", ");
+}
+// ── statements ──
+function amountExpr(amount, sourceRef) {
+    if (amount === "balance")
+        return `svm.sload(${sourceRef}, ${SPL_AMOUNT_OFFSET}, 8).toLe()`;
+    return formatBigint(typeof amount === "bigint" ? amount : BigInt(amount));
+}
+/** `require(<ref> == <pubkey>)`, emitted at most once per token-program ref per program. */
+function tokenProgramPin(ref, tokenProgram, state) {
+    if (state.pinnedTokenPrograms.has(ref))
+        return undefined;
+    state.pinnedTokenPrograms.add(ref);
+    return `require(${ref} == ${tokenProgramValueExpr(tokenProgram)});`;
+}
+/**
+ * `svm.call(...)` block for a `TransferChecked`/`ApproveChecked` CPI. `index` disambiguates the
+ * bound-local names (`dec0`, `amtv0`, ...) across a multi-op program; a method call on a literal is
+ * outside the compiler's supported subset, so each operand is bound to a const first.
  */
 function checkedCallLines(opts) {
-    const { index, discriminant, refs, amount, tokenProgram, destOrDelegateRef, destOrDelegateWritable, state } = opts;
+    const { index, discriminant, refs, amount, tokenProgram, counterpartyRef, state } = opts;
     const mintRef = refs.mint;
     const sourceRef = refs.source;
     const ownerName = ownerRef(refs);
     const tpRef = tokenProgramRef(refs);
     const lines = [];
-    const intern = tokenProgramIntern(tpRef, state);
-    if (intern !== undefined)
-        lines.push(intern);
-    lines.push(`const dec${index} = accountUint("${mintRef}", ${MINT_DECIMALS_OFFSET}, 1);`, `const amt${index} = abi.encode(${amountLe8Expr(amount, sourceRef)}).slice(24, 32);`, `const dcb${index} = abi.encode(dec${index}).slice(31, 32);`, `const data${index} = Uint8Array.from([${discriminant}]).concat(amt${index}).concat(dcb${index});`, `contract.call(${tokenProgramValueExpr(tokenProgram)}, data${index}, [`, `  { ref: "${sourceRef}", writable: true },`, `  { ref: "${mintRef}" },`, `  { ref: "${destOrDelegateRef}"${destOrDelegateWritable ? ", writable: true" : ""} },`, `  { ref: "${ownerName}", signer: true }`, `]);`);
+    const pin = tokenProgramPin(tpRef, tokenProgram, state);
+    if (pin !== undefined)
+        lines.push(pin);
+    lines.push(`const disc${index} = hex\`${discriminant.toString(16).padStart(2, "0")}\`;`, `const amtv${index} = ${amountExpr(amount, sourceRef)};`, `const dec${index} = svm.sload(${mintRef}, ${MINT_DECIMALS_OFFSET}, 1).toLe();`, `const data${index} = disc${index}.concat(amtv${index}.toBytesLe(8)).concat(dec${index}.toBytesLe(1));`, `svm.call(${tpRef}, [${sourceRef}, ${mintRef}, ${counterpartyRef}, ${ownerName}], data${index});`);
     return lines;
 }
 export function svmTransferLines(spec, index, state) {
@@ -77,8 +146,7 @@ export function svmTransferLines(spec, index, state) {
         refs,
         amount: spec.amount,
         tokenProgram: spec.tokenProgram,
-        destOrDelegateRef: refs.dest,
-        destOrDelegateWritable: true,
+        counterpartyRef: refs.dest,
         state,
     });
 }
@@ -90,16 +158,15 @@ export function svmApproveLines(spec, index, state) {
         refs,
         amount: spec.amount,
         tokenProgram: spec.tokenProgram,
-        destOrDelegateRef: refs.delegate,
-        destOrDelegateWritable: false,
+        counterpartyRef: refs.delegate,
         state,
     });
 }
 export function svmBalanceExpression(spec) {
     const refs = spec.svm;
-    return `accountUint("${refs.source}", ${SPL_AMOUNT_OFFSET}, 8)`;
+    return `svm.sload(${refs.source}, ${SPL_AMOUNT_OFFSET}, 8).toLe()`;
 }
-/** The AccountPlan refs, in intern order, for `transfer`/`approve` with the given (defaulted) refs. */
+/** The account manifest refs, in attach order, for `transfer`/`approve` with the given refs. */
 export function accountRefsForTransfer(refs) {
     return [tokenProgramRef(refs), refs.mint, refs.source, refs.dest, ownerRef(refs)];
 }

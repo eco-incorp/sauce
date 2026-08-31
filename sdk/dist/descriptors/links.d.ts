@@ -152,6 +152,12 @@ export declare const CONTRACT_LINKS: readonly [{
     readonly contract: "PoolFactory";
     readonly kind: "singleton";
 }, {
+    readonly protocol: "cctp";
+    readonly roleKey: "tokenMessenger";
+    readonly abiExport: "TokenMessengerABI";
+    readonly contract: "TokenMessenger";
+    readonly kind: "singleton";
+}, {
     readonly protocol: "aave-v3";
     readonly roleKey: "pool";
     readonly abiExport: "PoolABI";

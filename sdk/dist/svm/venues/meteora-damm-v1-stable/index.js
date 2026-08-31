@@ -263,7 +263,7 @@ export const meteoraDammV1Stable = {
     quoteAccounts(cfg) {
         const c = cfg;
         const refs = poolRefs(c.pool);
-        // 8 read-only accounts; t comes from block.timestamp (Clock sysvar), and
+        // 8 read-only accounts; t comes from ctx.timestamp() (Clock sysvar), and
         // only the OUT-side token vault is read (idle-float liquidity bound).
         return [
             { ref: refs.pool, address: c.pool },
@@ -279,41 +279,43 @@ export const meteoraDammV1Stable = {
     emitQuote(cfg, i, amountIn) {
         const c = cfg;
         assertU64Amount(amountIn, 'emitQuote');
-        const refs = poolRefs(c.pool);
-        const pool = JSON.stringify(refs.pool);
-        const aVault = JSON.stringify(refs.aVault);
-        const bVault = JSON.stringify(refs.bVault);
         const DEG = DEGRADATION_DENOMINATOR;
+        // Account model (RS): quoteAccounts() attaches, in order,
+        //   [pool, aVault, bVault, aVaultLp, bVaultLp, aLpMint, bLpMint, bTokenVault]
+        // so each field is read as `svm.sload(acc<k>, off, w).toLe()` (all u64 LE):
+        //   acc0=pool  acc1=aVault  acc2=bVault  acc3=aVaultLp  acc4=bVaultLp
+        //   acc5=aLpMint  acc6=bLpMint  acc7=bTokenVault
+        // and the Clock is read via ctx.timestamp() (RS spelling).
         const lines = [
             // Vault unlocked amounts at the cluster clock (locked-profit decay,
             // denominator 1e12). t < last_report cannot happen on-chain (the vault
             // crank stamps last_report from the same clock); if it ever wrapped, the
             // ratio would exceed 1e12 and the fragment falls back to total_amount.
-            `const t${i} = block.timestamp;`,
-            `const aTot${i} = accountUint(${aVault}, ${VAULT_OFFSETS.totalAmount}, 8);`,
-            `const aLok${i} = accountUint(${aVault}, ${VAULT_OFFSETS.lastUpdatedLockedProfit}, 8);`,
-            `const aRatio${i} = (t${i} - accountUint(${aVault}, ${VAULT_OFFSETS.lastReport}, 8)) * accountUint(${aVault}, ${VAULT_OFFSETS.lockedProfitDegradation}, 8);`,
+            `const t${i} = ctx.timestamp();`,
+            `const aTot${i} = svm.sload(acc1, ${VAULT_OFFSETS.totalAmount}, 8).toLe();`,
+            `const aLok${i} = svm.sload(acc1, ${VAULT_OFFSETS.lastUpdatedLockedProfit}, 8).toLe();`,
+            `const aRatio${i} = (t${i} - svm.sload(acc1, ${VAULT_OFFSETS.lastReport}, 8).toLe()) * svm.sload(acc1, ${VAULT_OFFSETS.lockedProfitDegradation}, 8).toLe();`,
             `let aUnl${i} = aTot${i};`,
             `if (aRatio${i} <= ${DEG}) { aUnl${i} = aTot${i} - aLok${i} * (${DEG} - aRatio${i}) / ${DEG} }`,
-            `const bTot${i} = accountUint(${bVault}, ${VAULT_OFFSETS.totalAmount}, 8);`,
-            `const bLok${i} = accountUint(${bVault}, ${VAULT_OFFSETS.lastUpdatedLockedProfit}, 8);`,
-            `const bRatio${i} = (t${i} - accountUint(${bVault}, ${VAULT_OFFSETS.lastReport}, 8)) * accountUint(${bVault}, ${VAULT_OFFSETS.lockedProfitDegradation}, 8);`,
+            `const bTot${i} = svm.sload(acc2, ${VAULT_OFFSETS.totalAmount}, 8).toLe();`,
+            `const bLok${i} = svm.sload(acc2, ${VAULT_OFFSETS.lastUpdatedLockedProfit}, 8).toLe();`,
+            `const bRatio${i} = (t${i} - svm.sload(acc2, ${VAULT_OFFSETS.lastReport}, 8).toLe()) * svm.sload(acc2, ${VAULT_OFFSETS.lockedProfitDegradation}, 8).toLe();`,
             `let bUnl${i} = bTot${i};`,
             `if (bRatio${i} <= ${DEG}) { bUnl${i} = bTot${i} - bLok${i} * (${DEG} - bRatio${i}) / ${DEG} }`,
             // Reserves via vault share math (never raw balances).
-            `const aLpAmt${i} = accountUint(${JSON.stringify(refs.aVaultLp)}, ${TOKEN_AMOUNT_OFFSET}, 8);`,
-            `const bLpAmt${i} = accountUint(${JSON.stringify(refs.bVaultLp)}, ${TOKEN_AMOUNT_OFFSET}, 8);`,
-            `const aSup${i} = accountUint(${JSON.stringify(refs.aLpMint)}, ${MINT_SUPPLY_OFFSET}, 8);`,
-            `const bSup${i} = accountUint(${JSON.stringify(refs.bLpMint)}, ${MINT_SUPPLY_OFFSET}, 8);`,
+            `const aLpAmt${i} = svm.sload(acc3, ${TOKEN_AMOUNT_OFFSET}, 8).toLe();`,
+            `const bLpAmt${i} = svm.sload(acc4, ${TOKEN_AMOUNT_OFFSET}, 8).toLe();`,
+            `const aSup${i} = svm.sload(acc5, ${MINT_SUPPLY_OFFSET}, 8).toLe();`,
+            `const bSup${i} = svm.sload(acc6, ${MINT_SUPPLY_OFFSET}, 8).toLe();`,
             `const rIn${i} = aLpAmt${i} * aUnl${i} / aSup${i};`,
             `const rOut${i} = bLpAmt${i} * bUnl${i} / bSup${i};`,
             // Input-token fees, re-read at quote time (admin-mutable): trade fee with
             // minimum 1 when the numerator is non-zero, protocol fee as a cut of it.
-            `const fNum${i} = accountUint(${pool}, ${POOL_OFFSETS.tradeFeeNumerator}, 8);`,
-            `let tFee${i} = ${amountIn} * fNum${i} / accountUint(${pool}, ${POOL_OFFSETS.tradeFeeDenominator}, 8);`,
+            `const fNum${i} = svm.sload(acc0, ${POOL_OFFSETS.tradeFeeNumerator}, 8).toLe();`,
+            `let tFee${i} = ${amountIn} * fNum${i} / svm.sload(acc0, ${POOL_OFFSETS.tradeFeeDenominator}, 8).toLe();`,
             `if (fNum${i} > 0) { if (tFee${i} === 0) { tFee${i} = 1 } }`,
-            `const pNum${i} = accountUint(${pool}, ${POOL_OFFSETS.protocolTradeFeeNumerator}, 8);`,
-            `let pFee${i} = tFee${i} * pNum${i} / accountUint(${pool}, ${POOL_OFFSETS.protocolTradeFeeDenominator}, 8);`,
+            `const pNum${i} = svm.sload(acc0, ${POOL_OFFSETS.protocolTradeFeeNumerator}, 8).toLe();`,
+            `let pFee${i} = tFee${i} * pNum${i} / svm.sload(acc0, ${POOL_OFFSETS.protocolTradeFeeDenominator}, 8).toLe();`,
             `if (pNum${i} > 0) { if (tFee${i} > 0) { if (pFee${i} === 0) { pFee${i} = 1 } } }`,
             `tFee${i} = tFee${i} - pFee${i};`,
             `const inNet${i} = ${amountIn} - pFee${i};`,
@@ -324,7 +326,7 @@ export const meteoraDammV1Stable = {
             `const srcNet${i} = aft${i} - rIn${i} - tFee${i};`,
             // Stable curve on multiplier-upscaled reserves (multipliers immutable,
             // baked; amp re-read — it is admin-adjustable). dy carries the -1 guard.
-            `const amp${i} = accountUint(${pool}, ${POOL_OFFSETS.amp}, 8);`,
+            `const amp${i} = svm.sload(acc0, ${POOL_OFFSETS.amp}, 8).toLe();`,
             `const dInv${i} = stableD(amp${i}, rIn${i} * ${c.tokenAMultiplier}, rOut${i} * ${c.tokenBMultiplier});`,
             `const y${i} = stableY(amp${i}, (rIn${i} + srcNet${i}) * ${c.tokenAMultiplier}, dInv${i});`,
             `const dest${i} = (rOut${i} * ${c.tokenBMultiplier} - y${i} - 1) / ${c.tokenBMultiplier};`,
@@ -333,7 +335,7 @@ export const meteoraDammV1Stable = {
             `let out${i} = outLp${i} * bUnl${i} / bSup${i};`,
             // Idle-float liquidity bound (strict <): clamp to 0 instead of throwing
             // so the other venues in a multi-pool program stay quotable.
-            `if (out${i} >= accountUint(${JSON.stringify(refs.bTokenVault)}, ${TOKEN_AMOUNT_OFFSET}, 8)) { out${i} = 0 }`,
+            `if (out${i} >= svm.sload(acc7, ${TOKEN_AMOUNT_OFFSET}, 8).toLe()) { out${i} = 0 }`,
         ];
         if (c.activationType === 1 && c.activationPoint > 0n) {
             lines.push(`if (t${i} < ${c.activationPoint}) { out${i} = 0 }`);

@@ -16,7 +16,7 @@
  * accounts (stagedArgsBudget) — bigger args belong in a second buffer used as
  * a data account, read on-chain via accountData.
  */
-import type { ArgsLayout, ArgsLayoutSlot, ArgValue } from '@eco-incorp/sauce-compiler';
+import type { ArgsLayout, ArgsLayoutSlot, ArgValue } from './layout.js';
 /** Encodes one runtime value against its layout slot (scalar → 32B BE word, bytes → raw). */
 export declare function encodeArgSlot(slot: ArgsLayoutSlot, value: ArgValue): Uint8Array;
 /**

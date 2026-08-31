@@ -56,7 +56,7 @@ export interface SwapThenDepositOptions {
  * beneficiary, 0);`.
  *
  * A deposit spec with `amount: "delta"` is bracketed around the WHOLE swap block: a balance
- * snapshot (`IERC20.balanceOf`/`address.balance`, per the template's funding kind) is taken before
+ * snapshot (`IERC20.balanceOf`/`ctx.selfBalance()`, per the template's funding kind) is taken before
  * the swap statements and again after, and the deposit uses `post - pre` — the exact
  * `swapAndSupply` idiom ("never sweep pre-existing tokenOut dust", since a cook may run in a shared
  * runtime context). `amount: "balance"`/a concrete literal are unaffected and just run after the

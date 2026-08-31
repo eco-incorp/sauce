@@ -19,6 +19,7 @@ export * as curve from "./curve/index.js";
 export * as balancerV2 from "./balancer-v2/index.js";
 export * as aaveV2 from "./aave-v2/index.js";
 export * as aaveV3 from "./aave-v3/index.js";
+export * as cctp from "./cctp/index.js";
 export * as compoundV3 from "./compound-v3/index.js";
 export * as oneInch from "./oneinch/index.js";
 export * as chainlink from "./chainlink/index.js";

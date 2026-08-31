@@ -17,7 +17,7 @@
  * - activation_point == 0 when activation_type == 0 (slot) — a slot-typed
  *   point cannot be evaluated against the unix clock off-chain nor in the
  *   fragment; timestamp-typed (activation_type == 1) points gate in-fragment
- *   on block.timestamp instead (quote 0 before activation).
+ *   on ctx.timestamp() instead (quote 0 before activation).
  *
  * Overflow bound for the in-VM fragment (engine arithmetic wraps at 2^256):
  * liquidity is u128 and every sqrt price is validated into
@@ -233,18 +233,19 @@ export const meteoraDammV2 = {
             throw new Error(`meteora-damm-v2 emitQuote index must be a non-negative integer, got ${i}`);
         }
         checkAmountIn('meteora-damm-v2 emitQuote', amountIn);
-        const ref = JSON.stringify(c.pool);
         const lines = [];
-        // Live reads: base fee numerator (u64 @8), liquidity (u128 @360) and
-        // sqrt_price (u128 @456) change under trading; band bounds and dynamic-fee
-        // config are immutable pool parameters and are baked as literals.
+        // Account model (RS compiler): quoteAccounts() attaches the pool alone, so
+        // the pool is slot 0 (acc0) and every on-chain read is `svm.sload(acc0, off,
+        // w).toLe()`. Live reads: base fee numerator (u64 @8), liquidity (u128 @360)
+        // and sqrt_price (u128 @456) change under trading; band bounds and dynamic-
+        // fee config are immutable pool parameters and are baked as literals.
         if (c.dynamicFee === null) {
-            lines.push(`const f${i} = accountUint(${ref}, 8, 8);`);
+            lines.push(`const f${i} = svm.sload(acc0, 8, 8).toLe();`);
         }
         else {
-            lines.push(`let f${i} = accountUint(${ref}, 8, 8);`, `const v${i} = accountUint(${ref}, 120, 16) * ${c.dynamicFee.binStep};`, `f${i} = f${i} + (v${i} * v${i} * ${c.dynamicFee.variableFeeControl} + 99999999999) / 100000000000;`, `if (f${i} > ${c.maxFeeNumerator}) { f${i} = ${c.maxFeeNumerator} }`);
+            lines.push(`let f${i} = svm.sload(acc0, 8, 8).toLe();`, `const v${i} = svm.sload(acc0, 120, 16).toLe() * ${c.dynamicFee.binStep};`, `f${i} = f${i} + (v${i} * v${i} * ${c.dynamicFee.variableFeeControl} + 99999999999) / 100000000000;`, `if (f${i} > ${c.maxFeeNumerator}) { f${i} = ${c.maxFeeNumerator} }`);
         }
-        lines.push(`const l${i} = accountUint(${ref}, 360, 16);`, `const s${i} = accountUint(${ref}, 456, 16);`);
+        lines.push(`const l${i} = svm.sload(acc0, 360, 16).toLe();`, `const s${i} = svm.sload(acc0, 456, 16).toLe();`);
         if (c.direction === 'aToB') {
             // next = ceil(L * sqrtP / (L + dIn * sqrtP)); delta_b floors; fee ceils
             // on OUTPUT (fees are never on input for aToB). A band-crossing next
@@ -267,9 +268,9 @@ export const meteoraDammV2 = {
                 : `let q${i} = g${i} - (g${i} * f${i} + 999999999) / 1000000000;`, `if (n${i} > ${c.sqrtMaxPrice}) { q${i} = 0 }`);
         }
         // Timestamp-typed activation gates in-fragment (slot-typed nonzero points
-        // are rejected at fetch); block.timestamp is the Clock sysvar.
+        // are rejected at fetch); ctx.timestamp() is the Clock sysvar (RS spelling).
         if (c.activationType === 1 && c.activationPoint > 0n) {
-            lines.push(`if (block.timestamp < ${c.activationPoint}) { q${i} = 0 }`);
+            lines.push(`if (ctx.timestamp() < ${c.activationPoint}) { q${i} = 0 }`);
         }
         return lines.join('\n');
     },

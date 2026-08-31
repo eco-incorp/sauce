@@ -1,2 +1,2 @@
-export declare const bridge = "\nimport { SocketGatewayABI as ISocketGateway } from \"./abis\";\n\nfunction main(gatewayAddress: Address, routeId: Uint256, bridgeData: Bytes): Uint256 {\n  const gateway = ISocketGateway.at(gatewayAddress);\n  return gateway.bridge(routeId, bridgeData);\n}\n";
+export declare const bridge = "\nimport { SocketGatewayABI as ISocketGateway } from \"./abis\";\n\nfunction main(gatewayAddress: Address, routeId: Uint256, bridgeData: bytes): Uint256 {\n  const gateway = ISocketGateway.at(gatewayAddress);\n  gateway.bridge(routeId, bridgeData);\n  return 1;\n}\n";
 //# sourceMappingURL=functions.d.ts.map

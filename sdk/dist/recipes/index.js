@@ -1,29 +1,28 @@
 /**
  * @eco-incorp/sauce-sdk/recipes — reusable Sauce recipes shipped as SOURCE.
  *
- * WHAT THIS IS FOR: a partner reproduces our bytecode with the ORDINARY compiler
- * (`@eco-incorp/sauce-sdk/compiler`), not a bespoke helper. This module exists only to answer the
- * two questions a partner genuinely cannot answer themselves — "what is the program text?" and
- * "where is this package installed?" — and then gets out of the way. Every compile option stays
- * explicit at the call site, so what you pass is what you can audit:
+ * WHAT THIS IS FOR: answering the two questions a partner genuinely cannot answer themselves —
+ * "what is the program text?" and "where is this package installed?" — and then getting out of the
+ * way. It ships no compile helper, so whatever options a caller passes are the ones they can audit.
  *
- * ```ts
- * import { compile } from "@eco-incorp/sauce-sdk/compiler";
- * import { settleSource, SAUCE_BASE_DIRS } from "@eco-incorp/sauce-sdk/recipes";
+ * ⚠ THE BYTE-FOR-BYTE REPRODUCIBILITY PROMISE NO LONGER HOLDS. It rested on compile-time `args`:
+ * the retired TypeScript compiler baked `(tokens, minOut, recipient)` into a fixed PROLOGUE ahead of
+ * the body, which is the v1 wire grammar `@eco-incorp/sauce-sdk/verify` decodes. The compiler this
+ * package now uses has no `args` option, and the `defines` that replace it are constant-folded AT
+ * EACH USE SITE rather than materialized up front — measured on this program, `minOut` lands at byte
+ * 48 and `recipient` at byte 104, inside the body, and an array literal terminates with `0x92` where
+ * the grammar specifies `0x94`. So there is no prologue to decode and no argument-independent body
+ * to hash.
  *
- * const { bytecode } = compile(settleSource(), {
- *   baseDirs: SAUCE_BASE_DIRS,   // resolves the program's `./artifacts/IERC20.json` import
- *   target: "v12",               // the program is v12-only
- *   treeshake: true,
- *   tsSource: true,              // the source is TypeScript-annotated SauceScript
- *   args: [tokens.map(BigInt), minOut, BigInt(recipient)],
- * });
- * // bytecode[0] is byte-identical to the program we hand you.
- * ```
+ * Two consequences, stated plainly rather than left implied:
+ *   - Recompiling this source will NOT reproduce the bytes of a program compiled by the retired
+ *     compiler. Do not use a recompile as an equality check against one.
+ *   - `decodeSettleProgram` still works, and is still `viem`-only, but it decodes LEGACY v1-grammar
+ *     programs — those the retired compiler produced. `SETTLE_VECTORS` are the committed golden
+ *     bytes for that grammar and remain the conformance corpus for any reimplementation.
  *
- * Those five options are the whole contract — change any of them and the bytes change. They are
- * deliberately NOT exported as a pre-baked options object: a partner reproducing our output should
- * see the target and the arg order, not inherit them from a constant they never read.
+ * A replacement reproducibility story needs the program's inputs to reach the bytecode somewhere a
+ * decoder can find them, which is a design decision this module does not get to make on its own.
  *
  * PREFER `settleSource()` OVER READING THE FILE YOURSELF, but both work — the raw asset is a
  * real file inside the package and is reachable by subpath if you want to hash, diff, or vendor it:
@@ -72,4 +71,19 @@ export function settleSource() {
         cached = readFileSync(SETTLE_SOURCE_PATH, "utf-8");
     return cached;
 }
+/**
+ * The CCTP transfer demo — a BUILDER that constructs V2 `Intent`s via the cross-chain intent DSL,
+ * distinct in kind from the source-shipped `settle` recipe above but built the SAME way underneath:
+ * its two route PROGRAMS are standalone `.sauce.ts` assets (`cctp-split.sauce.ts`,
+ * `plain-transfer.sauce.ts`) whose parameterized `main` is baked with each intent's values as
+ * compile-time `args` — the `settle.sauce.ts` mechanism, a TS-compiler feature.
+ *
+ * A Base→Arbitrum USDC transfer "with interop/CCTP and without": `buildCctpSplitTransfer` splits the
+ * amount into N sub-`perMessageLimit` `depositForBurn` chunks burned in ONE atomic cook (all-or-revert
+ * on the source chain); `buildPlainTransfer` is the no-bridge baseline. Both programs read `USDC` and
+ * `Cctp.TokenMessenger` from the DSL registries — no hardcoded ABIs or addresses. `cctpSplitSource()` /
+ * `plainTransferSource()` return the raw program text (read once, cached), the same way `settleSource()`
+ * does. See `cctp-transfer.ts`.
+ */
+export { buildCctpSplitTransfer, buildPlainTransfer, cctpSplitSource, plainTransferSource, CCTP_SPLIT_SOURCE_PATH, PLAIN_TRANSFER_SOURCE_PATH, } from "./cctp-transfer.js";
 //# sourceMappingURL=index.js.map

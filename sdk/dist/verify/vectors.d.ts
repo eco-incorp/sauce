@@ -4,17 +4,19 @@ export interface ConformanceVector {
     tokens: Hex[];
     minOut: bigint;
     recipient: Hex;
-    /** The exact compiled program these args produce — measured by actually compiling
-     *  `recipes/settle.sauce.ts` at this package's compiler pin, not hand-assembled.
-     *  `sdk/test/verify.compile.test.ts` recompiles and re-checks these, so a compiler re-pin or a
-     *  program edit that changes the emission turns red here rather than drifting silently. */
+    /** The exact program these args produced under the retired compiler — measured by compiling
+     *  `recipes/settle.sauce.ts`, not hand-assembled. Frozen: nothing recompiles it any more. */
     program: Hex;
 }
 /**
  * Golden wire-format vectors — the Go/Solidity/Python conformance corpus. Each `program` was
- * obtained by actually compiling `recipes/settle.sauce.ts` with the given args (not hand-encoded),
- * so it doubles as a regression pin on the compiler's emission shape. See decode.ts's module
- * docstring for the grammar these bytes instantiate.
+ * obtained by actually compiling `recipes/settle.sauce.ts` with the given args (not hand-encoded).
+ * See decode.ts's module docstring for the grammar these bytes instantiate.
+ *
+ * They are now a FROZEN corpus rather than a regression pin on a live compiler: the compiler that
+ * produced them is retired, and its replacement folds the params into the body instead of a prologue
+ * (decode.ts explains). Nothing recompiles these — they are the definition of the v1 grammar for
+ * anyone reimplementing the decoder, which is what a conformance corpus is for.
  *
  * `v3` is the trap vector: `Z = 0x0000000000000000000000000000000000ff00aa` has two leading zero
  * bytes, so its minimal-length PUSH is only 3 bytes wide (`03 ff00aa`), not the naive 20 — a fixed

@@ -13,7 +13,7 @@ import type { AddressInput, AmountInput } from "../swap/types.js";
  * - `"erc20-approve"` — an ERC20 asset; `depositCallStatement` emits `IERC20.approve(target,
  *   amount)` immediately before the protocol call (see {@link ApprovalPolicy}).
  * - `"native-value"` — no ERC20 leg at all; the amount rides as `msg.value` on a raw
- *   `contract.call(target, value, calldata)` (a typed ABI binding can never attach value — see
+ *   `evm.call(target, value, calldata)` (a typed ABI binding can never attach value — see
  *   `sdk/src/deposit/index.ts`'s "native vs ERC20" note). No approve is ever emitted.
  * - `"none"` — a redeem/withdraw leg that burns a balance this contract already holds (e.g. Aave's
  *   `withdraw`, which burns aTokens). No approve, no value.
@@ -36,7 +36,7 @@ export interface ExtraFieldSpec {
  *
  * `token` is required for an `"erc20-approve"`/`"none"` template (the asset being approved/
  * supplied/withdrawn) and must be omitted for a `"native-value"` template (there is no ERC20 leg).
- * `beneficiary` defaults to `address.self` and must be omitted on a `beneficiary: "unsupported"`
+ * `beneficiary` defaults to `ctx.self()` and must be omitted on a `beneficiary: "unsupported"`
  * template (every such protocol credits `msg.sender` unconditionally — accepting one would silently
  * send the position to the wrong account).
  */
@@ -51,7 +51,7 @@ export interface DepositSpec {
     /** Required for an ERC20-funded template; must be omitted for a native-value one. */
     token?: AddressInput;
     amount: AmountInput;
-    /** Defaults to `address.self`. Must be omitted on a `beneficiary: "unsupported"` template. */
+    /** Defaults to `ctx.self()`. Must be omitted on a `beneficiary: "unsupported"` template. */
     beneficiary?: AddressInput;
     /** Defaults to `"exact"`. See {@link ApprovalPolicy}. */
     approvalPolicy?: ApprovalPolicy;
@@ -63,7 +63,7 @@ export interface DepositSpec {
  * {@link DepositSpec}:
  *
  * - `amount: "balance"` — emit a RUNTIME balance read instead of a baked-in literal (`IERC20.
- *   balanceOf(address.self)` for an ERC20 template, `address.balance` for a native one) — the shape
+ *   balanceOf(ctx.self())` for an ERC20 template, `ctx.selfBalance()` for a native one) — the shape
  *   a swap-then-deposit program needs when the deposit amount is an earlier leg's (unknown at
  *   compile time) output.
  * - `amount: "delta"` — only meaningful inside `swapThenDepositSource` (it needs a pre-swap balance
@@ -123,7 +123,7 @@ export interface DepositTemplate {
     readonly extras: Readonly<Record<string, ExtraFieldSpec>>;
     /**
      * Pure: the normalized deposit + the already-resolved amount EXPRESSION (a SauceScript literal
-     * like `"1000n"` or a bound identifier like `"depositAmt0"`/`"address.balance"`) -> the
+     * like `"1000n"` or a bound identifier like `"depositAmt0"`/`"ctx.selfBalance()"`) -> the
      * protocol-call statement line(s). The approve line is NOT emitted here — `depositCallStatement`
      * prepends it from `funding`/`approvalPolicy`, so the approve rule lives in exactly one place
      * across every template.

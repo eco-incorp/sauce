@@ -19,21 +19,16 @@ export const SWAP_BASE_DIRS = [join(__dirname, "..")];
 function formatBigint(value) {
     return `${value.toString()}n`;
 }
-/** `bigint` → its numeric literal; the `"self"` sentinel → the SauceScript `address.self` global. */
+/** `bigint` → its numeric literal; the `"self"` sentinel → the SauceScript `ctx.self()` global. */
 function formatAddressField(value) {
-    return value === "self" ? "address.self" : formatBigint(value);
+    return value === "self" ? "ctx.self()" : formatBigint(value);
 }
-/** `"0x"` → an empty-bytes literal; otherwise the hex bytes spelled as `Uint8Array.from([...])`. */
+/** The bytes as a SauceScript `hex` literal; `"0x"` yields the empty one. */
 function formatCallback(callback) {
-    if (callback === "0x")
-        return "Uint8Array.from([])";
-    const hex = callback.slice(2);
-    if (hex.length % 2 !== 0)
+    const digits = callback.slice(2);
+    if (digits.length % 2 !== 0)
         throw new Error(`formatCallback: odd-length hex string ${callback}`);
-    const bytes = [];
-    for (let i = 0; i < hex.length; i += 2)
-        bytes.push(parseInt(hex.slice(i, i + 2), 16));
-    return `Uint8Array.from([${bytes.join(", ")}])`;
+    return `hex\`${digits.toLowerCase()}\``;
 }
 function formatPoolKey(poolKey) {
     return (`{ currency0: ${formatBigint(poolKey.currency0)}, currency1: ${formatBigint(poolKey.currency1)}, ` +
@@ -45,7 +40,7 @@ function fieldsFromParams(params) {
     return rest;
 }
 /**
- * One `ISauceRouter.at(address.self).swap({...})` statement for `spec` — for splicing into a
+ * One `ISauceRouter.at(ctx.self()).swap({...})` statement for `spec` — for splicing into a
  * larger, hand-written program. Runs the FULL `toSwapParams` normalization/guard pass (a
  * `"balance"` `amountIn` reuses every other field's normalization, only the amount itself is
  * emitted as a runtime expression instead of a literal).
@@ -57,11 +52,11 @@ export function swapCallStatement(spec) {
     const tokenInLiteral = formatAddressField(fields.tokenIn);
     const amountExpr = spec.amountIn === "balance"
         ? spec.poolType === SwapPoolType.UniV4
-            ? `(0n - (IERC20.at(${tokenInLiteral}).balanceOf(address.self)))`
-            : `IERC20.at(${tokenInLiteral}).balanceOf(address.self)`
+            ? `(0n - (IERC20.at(${tokenInLiteral}).balanceOf(ctx.self())))`
+            : `IERC20.at(${tokenInLiteral}).balanceOf(ctx.self())`
         : formatBigint(params.amountSpecified);
     const lines = [
-        "ISauceRouter.at(address.self).swap({",
+        "ISauceRouter.at(ctx.self()).swap({",
         `  poolType: ${fields.poolType}n,`,
         `  pool: ${formatAddressField(fields.pool)},`,
         `  poolKey: ${formatPoolKey(fields.poolKey)},`,

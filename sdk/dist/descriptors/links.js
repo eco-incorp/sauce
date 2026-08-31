@@ -102,6 +102,8 @@ export const CONTRACT_LINKS = [
     // --- aerodrome ---
     { protocol: "aerodrome", roleKey: "router", abiExport: "AerodromeRouterABI", contract: "Router", kind: "singleton" },
     { protocol: "aerodrome", roleKey: "poolFactory", abiExport: "AerodromePoolFactoryABI", contract: "PoolFactory", kind: "singleton" },
+    // --- cctp (Circle CCTP v2) ---
+    { protocol: "cctp", roleKey: "tokenMessenger", abiExport: "TokenMessengerABI", contract: "TokenMessenger", kind: "singleton" },
     // --- aave-v3 ---
     { protocol: "aave-v3", roleKey: "pool", abiExport: "PoolABI", contract: "Pool", kind: "singleton" },
     // No ABI vendored for this role at all — a real, known address with no

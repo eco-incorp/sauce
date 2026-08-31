@@ -1,88 +1,86 @@
-import type { ChainAccessors } from "./builder.js";
-import type { RewardInput, RouteInput } from "./types.js";
+import type { ChainGlobals } from "./builder.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
 import type { SvmVenueAccessors } from "../svm/accessors.js";
 import type { TokenApi } from "../token/api.js";
-type Accessors = ChainAccessors<RouteInput, RewardInput>;
 declare global {
-    /** eco-routes origin accessor for Ethereum (chain id 1). */
-    const Ethereum: Accessors["Ethereum"] & ChainContracts;
-    /** eco-routes origin accessor for Optimism (chain id 10). */
-    const Optimism: Accessors["Optimism"] & ChainContracts;
-    /** eco-routes origin accessor for BNB Chain (chain id 56). */
-    const Bsc: Accessors["Bsc"] & ChainContracts;
-    /** eco-routes origin accessor for Polygon (chain id 137). */
-    const Polygon: Accessors["Polygon"] & ChainContracts;
-    /** eco-routes origin accessor for Base (chain id 8453). */
-    const Base: Accessors["Base"] & ChainContracts;
-    /** eco-routes origin accessor for Arbitrum One (chain id 42161). */
-    const Arbitrum: Accessors["Arbitrum"] & ChainContracts;
-    /** eco-routes origin accessor for Celo (chain id 42220). */
-    const Celo: Accessors["Celo"] & ChainContracts;
-    /** eco-routes origin accessor for Cronos (chain id 25). */
-    const Cronos: Accessors["Cronos"] & ChainContracts;
-    /** eco-routes origin accessor for Gnosis (chain id 100). */
-    const Gnosis: Accessors["Gnosis"] & ChainContracts;
-    /** eco-routes origin accessor for Fuse (chain id 122). */
-    const Fuse: Accessors["Fuse"] & ChainContracts;
-    /** eco-routes origin accessor for Manta Pacific (chain id 169). */
-    const Manta: Accessors["Manta"] & ChainContracts;
-    /** eco-routes origin accessor for opBNB (chain id 204). */
-    const Opbnb: Accessors["Opbnb"] & ChainContracts;
-    /** eco-routes origin accessor for Fantom (chain id 250). */
-    const Fantom: Accessors["Fantom"] & ChainContracts;
-    /** eco-routes origin accessor for Boba (chain id 288). */
-    const Boba: Accessors["Boba"] & ChainContracts;
-    /** eco-routes origin accessor for zkSync Era (chain id 324). */
-    const Zksync: Accessors["Zksync"] & ChainContracts;
-    /** eco-routes origin accessor for PulseChain (chain id 369). */
-    const Pulsechain: Accessors["Pulsechain"] & ChainContracts;
-    /** eco-routes origin accessor for Metis (chain id 1088). */
-    const Metis: Accessors["Metis"] & ChainContracts;
-    /** eco-routes origin accessor for Core (chain id 1116). */
-    const Core: Accessors["Core"] & ChainContracts;
-    /** eco-routes origin accessor for Moonbeam (chain id 1284). */
-    const Moonbeam: Accessors["Moonbeam"] & ChainContracts;
-    /** eco-routes origin accessor for Sei (chain id 1329). */
-    const Sei: Accessors["Sei"] & ChainContracts;
-    /** eco-routes origin accessor for Kava (chain id 2222). */
-    const Kava: Accessors["Kava"] & ChainContracts;
-    /** eco-routes origin accessor for Mantle (chain id 5000). */
-    const Mantle: Accessors["Mantle"] & ChainContracts;
-    /** eco-routes origin accessor for ZetaChain (chain id 7000). */
-    const Zetachain: Accessors["Zetachain"] & ChainContracts;
-    /** eco-routes origin accessor for Klaytn (chain id 8217). */
-    const Klaytn: Accessors["Klaytn"] & ChainContracts;
-    /** eco-routes origin accessor for Evmos (chain id 9001). */
-    const Evmos: Accessors["Evmos"] & ChainContracts;
-    /** eco-routes origin accessor for Mode (chain id 34443). */
-    const Mode: Accessors["Mode"] & ChainContracts;
-    /** eco-routes origin accessor for Avalanche C-Chain (chain id 43114). */
-    const Avalanche: Accessors["Avalanche"] & ChainContracts;
-    /** eco-routes origin accessor for Linea (chain id 59144). */
-    const Linea: Accessors["Linea"] & ChainContracts;
-    /** eco-routes origin accessor for Berachain (chain id 80094). */
-    const Berachain: Accessors["Berachain"] & ChainContracts;
-    /** eco-routes origin accessor for Blast (chain id 81457). */
-    const Blast: Accessors["Blast"] & ChainContracts;
-    /** eco-routes origin accessor for Scroll (chain id 534352). */
-    const Scroll: Accessors["Scroll"] & ChainContracts;
-    /** eco-routes origin accessor for Zora (chain id 7777777). */
-    const Zora: Accessors["Zora"] & ChainContracts;
-    /** eco-routes origin accessor for Aurora (chain id 1313161554). */
-    const Aurora: Accessors["Aurora"] & ChainContracts;
-    /** eco-routes origin accessor for Unichain (chain id 130). */
-    const Unichain: Accessors["Unichain"] & ChainContracts;
-    /** eco-routes origin accessor for Sonic (chain id 146). */
-    const Sonic: Accessors["Sonic"] & ChainContracts;
-    /** eco-routes origin accessor for Ronin (chain id 2020). */
-    const Ronin: Accessors["Ronin"] & ChainContracts;
-    /** eco-routes origin accessor for Plasma (chain id 9745). */
-    const Plasma: Accessors["Plasma"] & ChainContracts;
-    /** eco-routes origin accessor for Ink (chain id 57073). */
-    const Ink: Accessors["Ink"] & ChainContracts;
-    /** eco-routes origin accessor for Solana (chain id 1399811149). */
-    const Solana: Accessors["Solana"] & ChainContracts & SvmVenueAccessors;
+    /** eco-routes chain global for Ethereum (chain id 1). */
+    const Ethereum: ChainGlobals["Ethereum"] & ChainContracts;
+    /** eco-routes chain global for Optimism (chain id 10). */
+    const Optimism: ChainGlobals["Optimism"] & ChainContracts;
+    /** eco-routes chain global for BNB Chain (chain id 56). */
+    const Bsc: ChainGlobals["Bsc"] & ChainContracts;
+    /** eco-routes chain global for Polygon (chain id 137). */
+    const Polygon: ChainGlobals["Polygon"] & ChainContracts;
+    /** eco-routes chain global for Base (chain id 8453). */
+    const Base: ChainGlobals["Base"] & ChainContracts;
+    /** eco-routes chain global for Arbitrum One (chain id 42161). */
+    const Arbitrum: ChainGlobals["Arbitrum"] & ChainContracts;
+    /** eco-routes chain global for Celo (chain id 42220). */
+    const Celo: ChainGlobals["Celo"] & ChainContracts;
+    /** eco-routes chain global for Cronos (chain id 25). */
+    const Cronos: ChainGlobals["Cronos"] & ChainContracts;
+    /** eco-routes chain global for Gnosis (chain id 100). */
+    const Gnosis: ChainGlobals["Gnosis"] & ChainContracts;
+    /** eco-routes chain global for Fuse (chain id 122). */
+    const Fuse: ChainGlobals["Fuse"] & ChainContracts;
+    /** eco-routes chain global for Manta Pacific (chain id 169). */
+    const Manta: ChainGlobals["Manta"] & ChainContracts;
+    /** eco-routes chain global for opBNB (chain id 204). */
+    const Opbnb: ChainGlobals["Opbnb"] & ChainContracts;
+    /** eco-routes chain global for Fantom (chain id 250). */
+    const Fantom: ChainGlobals["Fantom"] & ChainContracts;
+    /** eco-routes chain global for Boba (chain id 288). */
+    const Boba: ChainGlobals["Boba"] & ChainContracts;
+    /** eco-routes chain global for zkSync Era (chain id 324). */
+    const Zksync: ChainGlobals["Zksync"] & ChainContracts;
+    /** eco-routes chain global for PulseChain (chain id 369). */
+    const Pulsechain: ChainGlobals["Pulsechain"] & ChainContracts;
+    /** eco-routes chain global for Metis (chain id 1088). */
+    const Metis: ChainGlobals["Metis"] & ChainContracts;
+    /** eco-routes chain global for Core (chain id 1116). */
+    const Core: ChainGlobals["Core"] & ChainContracts;
+    /** eco-routes chain global for Moonbeam (chain id 1284). */
+    const Moonbeam: ChainGlobals["Moonbeam"] & ChainContracts;
+    /** eco-routes chain global for Sei (chain id 1329). */
+    const Sei: ChainGlobals["Sei"] & ChainContracts;
+    /** eco-routes chain global for Kava (chain id 2222). */
+    const Kava: ChainGlobals["Kava"] & ChainContracts;
+    /** eco-routes chain global for Mantle (chain id 5000). */
+    const Mantle: ChainGlobals["Mantle"] & ChainContracts;
+    /** eco-routes chain global for ZetaChain (chain id 7000). */
+    const Zetachain: ChainGlobals["Zetachain"] & ChainContracts;
+    /** eco-routes chain global for Klaytn (chain id 8217). */
+    const Klaytn: ChainGlobals["Klaytn"] & ChainContracts;
+    /** eco-routes chain global for Evmos (chain id 9001). */
+    const Evmos: ChainGlobals["Evmos"] & ChainContracts;
+    /** eco-routes chain global for Mode (chain id 34443). */
+    const Mode: ChainGlobals["Mode"] & ChainContracts;
+    /** eco-routes chain global for Avalanche C-Chain (chain id 43114). */
+    const Avalanche: ChainGlobals["Avalanche"] & ChainContracts;
+    /** eco-routes chain global for Linea (chain id 59144). */
+    const Linea: ChainGlobals["Linea"] & ChainContracts;
+    /** eco-routes chain global for Berachain (chain id 80094). */
+    const Berachain: ChainGlobals["Berachain"] & ChainContracts;
+    /** eco-routes chain global for Blast (chain id 81457). */
+    const Blast: ChainGlobals["Blast"] & ChainContracts;
+    /** eco-routes chain global for Scroll (chain id 534352). */
+    const Scroll: ChainGlobals["Scroll"] & ChainContracts;
+    /** eco-routes chain global for Zora (chain id 7777777). */
+    const Zora: ChainGlobals["Zora"] & ChainContracts;
+    /** eco-routes chain global for Aurora (chain id 1313161554). */
+    const Aurora: ChainGlobals["Aurora"] & ChainContracts;
+    /** eco-routes chain global for Unichain (chain id 130). */
+    const Unichain: ChainGlobals["Unichain"] & ChainContracts;
+    /** eco-routes chain global for Sonic (chain id 146). */
+    const Sonic: ChainGlobals["Sonic"] & ChainContracts;
+    /** eco-routes chain global for Ronin (chain id 2020). */
+    const Ronin: ChainGlobals["Ronin"] & ChainContracts;
+    /** eco-routes chain global for Plasma (chain id 9745). */
+    const Plasma: ChainGlobals["Plasma"] & ChainContracts;
+    /** eco-routes chain global for Ink (chain id 57073). */
+    const Ink: ChainGlobals["Ink"] & ChainContracts;
+    /** eco-routes chain global for Solana (chain id 1399811149). */
+    const Solana: ChainGlobals["Solana"] & ChainContracts & SvmVenueAccessors;
     /** Runtime-resolved origin: `chain('eth')`, `chain(8453)`. */
     const chain: typeof import("./accessors.js").chain;
     /** Universal token interface — ERC20 on EVM targets, SPL Token on svm. */

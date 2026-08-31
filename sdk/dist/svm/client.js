@@ -36,13 +36,13 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }) 
             lookupTables,
         });
     }
-    async function buildTransaction(bytecode, plan, resolution, prepends, opts) {
-        const accounts = resolveAccounts(plan, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
+    async function buildTransaction(bytecode, manifest, resolution, prepends, opts) {
+        const accounts = resolveAccounts(manifest, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
         const executeInstruction = buildExecuteInstruction({ programId, bytecode, accounts });
         return signExecuteTransaction(executeInstruction, prepends, opts.lookupTables);
     }
-    async function simulate(bytecode, plan, resolution, opts = {}) {
-        const transaction = await buildTransaction(bytecode, plan, resolution, opts.prepends ?? [], opts);
+    async function simulate(bytecode, manifest, resolution, opts = {}) {
+        const transaction = await buildTransaction(bytecode, manifest, resolution, opts.prepends ?? [], opts);
         return simulateExecute(rpc, transaction);
     }
     function stagedPin(address, expectedSha256) {
@@ -52,16 +52,16 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }) 
         }
         return pin;
     }
-    async function buildStagedTransaction(buffer, plan, resolution, prepends, opts) {
+    async function buildStagedTransaction(buffer, manifest, resolution, prepends, opts) {
         const address = typeof buffer === 'string' ? buffer : buffer.address;
         const expectedSha256 = stagedPin(address, opts.expectedSha256 ?? (typeof buffer === 'string' ? undefined : buffer.sha256));
-        const accounts = resolveAccounts(plan, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
+        const accounts = resolveAccounts(manifest, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
         const args = opts.args && opts.args.layout.slots.length > 0 ? encodePayloadArgs(opts.args.layout, opts.args.values) : undefined;
         const executeInstruction = buildExecuteFromAccountInstruction({ programId, buffer: address, accounts, expectedSha256, args });
         return signExecuteTransaction(executeInstruction, prepends, opts.lookupTables);
     }
-    async function simulateStaged(buffer, plan, resolution, opts = {}) {
-        const transaction = await buildStagedTransaction(buffer, plan, resolution, opts.prepends ?? [], opts);
+    async function simulateStaged(buffer, manifest, resolution, opts = {}) {
+        const transaction = await buildStagedTransaction(buffer, manifest, resolution, opts.prepends ?? [], opts);
         return simulateExecute(rpc, transaction);
     }
     async function autoComputeUnitPrepends(simulateRun, opts) {
@@ -121,13 +121,13 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }) 
         payerAddress: payer.address,
         ensureLookupTable,
         simulate,
-        async execute(bytecode, plan, resolution, opts = {}) {
-            const prepends = await autoComputeUnitPrepends(() => simulate(bytecode, plan, resolution, {
+        async execute(bytecode, manifest, resolution, opts = {}) {
+            const prepends = await autoComputeUnitPrepends(() => simulate(bytecode, manifest, resolution, {
                 prepends: opts.prepends,
                 lookupTables: opts.lookupTables,
                 appendPayerSigner: opts.appendPayerSigner,
             }), opts);
-            const transaction = await buildTransaction(bytecode, plan, resolution, prepends, opts);
+            const transaction = await buildTransaction(bytecode, manifest, resolution, prepends, opts);
             return sendExecute({ rpc, rpcSubscriptions, transaction });
         },
         async stageBuffer(seed, bytecode) {
@@ -180,15 +180,15 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }) 
             return sendInstructions([buildCloseBufferInstruction({ programId, authority: payer.address, buffer: address })]);
         },
         simulateStaged,
-        async executeStaged(buffer, plan, resolution, opts = {}) {
-            const prepends = await autoComputeUnitPrepends(() => simulateStaged(buffer, plan, resolution, {
+        async executeStaged(buffer, manifest, resolution, opts = {}) {
+            const prepends = await autoComputeUnitPrepends(() => simulateStaged(buffer, manifest, resolution, {
                 prepends: opts.prepends,
                 lookupTables: opts.lookupTables,
                 appendPayerSigner: opts.appendPayerSigner,
                 args: opts.args,
                 expectedSha256: opts.expectedSha256,
             }), opts);
-            const transaction = await buildStagedTransaction(buffer, plan, resolution, prepends, opts);
+            const transaction = await buildStagedTransaction(buffer, manifest, resolution, prepends, opts);
             return sendExecute({ rpc, rpcSubscriptions, transaction });
         },
     };

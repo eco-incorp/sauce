@@ -14,7 +14,7 @@ function main(
   tokenIn: Address,
   netTokenIn: Uint256,
   tokenMintSy: Address
-): Uint256 {
+): { netPtOut: Uint256, netSyFee: Uint256, netSyInterm: Uint256 } {
   const router = IPendleRouter.at(routerAddress);
   const result = router.swapExactTokenForPt(
     receiver,
@@ -66,7 +66,7 @@ function main(
   tokenIn: Address,
   netTokenIn: Uint256,
   tokenMintSy: Address
-): Uint256 {
+): { netYtOut: Uint256, netSyFee: Uint256, netSyInterm: Uint256 } {
   const router = IPendleRouter.at(routerAddress);
   const result = router.swapExactTokenForYt(
     receiver,
@@ -118,7 +118,7 @@ function main(
   tokenIn: Address,
   netTokenIn: Uint256,
   tokenMintSy: Address
-): Uint256 {
+): { netLpOut: Uint256, netSyFee: Uint256, netSyInterm: Uint256 } {
   const router = IPendleRouter.at(routerAddress);
   const result = router.addLiquiditySingleToken(
     receiver,
@@ -165,7 +165,7 @@ function main(
   tokenOut: Address,
   minTokenOut: Uint256,
   tokenRedeemSy: Address
-): Uint256 {
+): { netTokenOut: Uint256, netSyFee: Uint256, netSyInterm: Uint256 } {
   const router = IPendleRouter.at(routerAddress);
   const result = router.removeLiquiditySingleToken(
     receiver,

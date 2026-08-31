@@ -14,7 +14,7 @@
  *
  * Two arms, chosen per call (not per accessor): the ERC20 arm (`evm.ts`) emits a typed-binding
  * `IERC20.at(token).transfer(...)` call, identical to how `swap/source.ts`/`deposit/source.ts`
- * already call protocol contracts; the SPL arm (`svm.ts`) emits `contract.call(program, data,
+ * already call protocol contracts; the SPL arm (`svm.ts`) emits `svm.call(program, accounts,
  * accounts)` against the SPL Token program, reusing the `svmSettleSource` idiom
  * (`accountData`/`accountUint`, the `le8` u64 byteswap helper, `TransferChecked`/`ApproveChecked`).
  * The two arms are NOT interchangeable at compile time — the compiler rejects a contract binding on

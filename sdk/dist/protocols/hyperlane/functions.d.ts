@@ -1,2 +1,2 @@
-export declare const dispatch = "\nimport { HyperlaneMailboxABI as IMailbox } from \"./abis\";\n\nfunction main(mailboxAddress: Address, destinationDomain: Uint256, recipientAddress: Bytes32, messageBody: Bytes): Uint256 {\n  const mailbox = IMailbox.at(mailboxAddress);\n  return mailbox.dispatch(destinationDomain, recipientAddress, messageBody);\n}\n";
+export declare const dispatch = "\nimport { HyperlaneMailboxABI as IMailbox } from \"./abis\";\n\nfunction main(mailboxAddress: Address, destinationDomain: Uint256, recipientAddress: Uint256, messageBody: bytes): Uint256 {\n  const mailbox = IMailbox.at(mailboxAddress);\n  return mailbox.dispatch(destinationDomain, recipientAddress, messageBody);\n}\n";
 //# sourceMappingURL=functions.d.ts.map

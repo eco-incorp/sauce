@@ -10,12 +10,12 @@ function formatOwner(owner) {
     if (owner === undefined)
         throw new Error("Token.balanceOf: owner is required on an EVM target");
     if (owner === "self")
-        return "address.self";
+        return "ctx.self()";
     return formatAddressField(toAddressBigint(owner, "owner"));
 }
 function amountExpr(amount, tokenLiteral) {
     if (amount === "balance")
-        return `IERC20.at(${tokenLiteral}).balanceOf(address.self)`;
+        return `IERC20.at(${tokenLiteral}).balanceOf(ctx.self())`;
     return formatBigint(typeof amount === "bigint" ? amount : BigInt(amount));
 }
 export function evmTransferStatement(spec) {

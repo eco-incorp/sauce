@@ -6,7 +6,7 @@ import type { TokenSpec, TokenTarget } from "./types.js";
 export declare const TOKEN_BASE_DIRS: readonly string[];
 /** The import lines a `tokenSource(specs, target)` program needs. On an EVM target: `IERC20`, iff
  *  any spec is `transfer`/`approve`/`balanceOf` (always — every op needs the binding). On `svm`:
- *  none (SVM ops use only the built-in `accountData`/`accountUint`/`contract.call` globals). */
+ *  none (SVM ops use only the built-in `svm.sload`/`svm.call` globals). */
 export declare function tokenImportLines(specs: readonly TokenSpec[], target: TokenTarget): readonly string[];
 /** One statement (transfer/approve) or `undefined` (balanceOf has no statement form — see
  *  {@link tokenExpression}) for `spec` on `target`, for splicing into a larger, hand-written
@@ -16,9 +16,9 @@ export declare function tokenCallStatement(spec: TokenSpec, target: TokenTarget,
 /** The expression form of `Token.balanceOf(spec)` — the only op with one. Throws (named) for
  *  `transfer`/`approve`, which have no meaningful expression form. */
 export declare function tokenExpression(spec: TokenSpec, target: TokenTarget): string;
-/** The AccountPlan refs a `transfer`/`approve` spec interns, in order — mirrors `svmSettleRefs`.
- *  Throws for `balanceOf` (a pure read; its only ref is the caller-supplied `source`) and for an
- *  EVM-target spec (no AccountPlan on that target). */
+/** The account-manifest refs a `transfer`/`approve` spec attaches, in order — mirrors
+ *  `svmSettleRefs`. Throws for `balanceOf` (a pure read; its only ref is the caller-supplied
+ *  `source`) and for an EVM-target spec (no account manifest on that target). */
 export declare function tokenAccountRefs(spec: TokenSpec, target: TokenTarget): readonly string[];
 export interface TokenSourceOptions {
     /** Defaults to `"main"`. */

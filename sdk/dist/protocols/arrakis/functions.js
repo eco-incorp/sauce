@@ -1,7 +1,7 @@
 export const addLiquidity = `
 import { ArrakisRouterABI as IArrakisRouter } from "./abis";
 
-function main(routerAddress: Address, vault: Address, receiver: Address, amount0Max: Uint256, amount1Max: Uint256): Uint256 {
+function main(routerAddress: Address, vault: Address, receiver: Address, amount0Max: Uint256, amount1Max: Uint256): { amount0: Uint256, amount1: Uint256, sharesReceived: Uint256 } {
   const router = IArrakisRouter.at(routerAddress);
   const result = router.addLiquidity({
     amount0Max: amount0Max,
@@ -19,7 +19,7 @@ function main(routerAddress: Address, vault: Address, receiver: Address, amount0
 export const removeLiquidity = `
 import { ArrakisRouterABI as IArrakisRouter } from "./abis";
 
-function main(routerAddress: Address, vault: Address, receiver: Address, burnAmount: Uint256): Uint256 {
+function main(routerAddress: Address, vault: Address, receiver: Address, burnAmount: Uint256): { amount0: Uint256, amount1: Uint256 } {
   const router = IArrakisRouter.at(routerAddress);
   const result = router.removeLiquidity({
     burnAmount: burnAmount,

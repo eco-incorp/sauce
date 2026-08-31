@@ -75,6 +75,7 @@
  * directory.
   */
 import { address, getAddressCodec } from '@solana/kit';
+import { findAssociatedTokenPda } from '@solana-program/token';
 import { readUintLE } from '../math.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
@@ -103,6 +104,82 @@ export const PRICE_PPM_DEN = 1000000n;
 const VAULT_AMOUNT_OFFSET = 64;
 /** Minimum pool account size this adapter reads from (level 9's last byte + 1). */
 export const TESSERAV_MIN_POOL_SIZE = OFF_LADDER_BA + TESSERAV_LEVEL_SLOTS * BA_STRIDE;
+/**
+ * The TesseraV vault-AUTHORITY — a FIXED GLOBAL SINGLETON, correcting the
+ * earlier "per-pool fact" framing. It is one program-owned (owner =
+ * TessVdML…), 10240-byte account that is byte-identical as the swap CPI's
+ * account[0] across every pool traced (SOL/USDC, cbBTC/USDC, BONK/USDC). It is
+ * NOT a PDA of the program under any tried seed, and NOT a mint→vault registry
+ * (the 10240 bytes contain none of the mint or vault bytes) — so it is carried
+ * as this verified constant, never derived. Verified against live swap-CPI
+ * traces (SOL/USDC sig 3p2JFpLN…, cbBTC/USDC sig 4KZPEcyC…, BONK/USDC sig
+ * 3JZMZyMy…), all giving account[0] = 8ekCy2….
+ */
+export const TESSERAV_GLOBAL_AUTH = address('8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF');
+/**
+ * Committed global-per-mint vault cache. Each TesseraV vault is a plain
+ * keypair-generated legacy-SPL token account that is (a) authority =
+ * TESSERAV_GLOBAL_AUTH and (b) GLOBAL PER MINT — one shared vault per token,
+ * reused by every pool touching that token (measured: the SOL/USDC and
+ * cbBTC/USDC pools share the SAME USDC vault 9t4P5w…). Vaults are stable, so
+ * this map is the RPC-free fast path; a mint NOT here resolves through the
+ * optional `resolveVault` (getTokenAccountsByOwner) arg of fetchTesseraVConfig
+ * — which `pickTesseraVVault` implements — or self-drops. Refresh this map with
+ * that same owner-scoped sweep, keyed off TESSERAV_GLOBAL_AUTH. Only vaults
+ * verified byte-exactly against a live swap-CPI trace are seeded here.
+ */
+export const TESSERAV_KNOWN_VAULTS = Object.freeze({
+    // wSOL — verified as swap account[3] of the SOL/USDC pool (sig 3p2JFpLN…)
+    So11111111111111111111111111111111111111112: address('5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV'),
+    // USDC — the single global USDC vault (swap account[4] of both SOL/USDC and cbBTC/USDC)
+    EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: address('9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx'),
+    // cbBTC — verified as swap account[3] of the cbBTC/USDC pool (sig 4KZPEcyC…)
+    cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij: address('37hggNyT4Ec8GEcxMLrWrZyrMSSFMSiFT6VBayRYceZH'),
+});
+/**
+ * Exclude-ATA vault picker — the GENERAL derivation core. Of the legacy-SPL
+ * token accounts owned by `owner` for `mint`, drop the canonical
+ * ATA(owner, mint, TOKEN_PROGRAM) (observed as a dust account for USDC: the
+ * real vault 9t4P5w… alongside its ATA at ~50000) and return the single
+ * remainder. 0 remainders → null (the global vault does not exist yet →
+ * self-drop). >1 remainders → the largest-balance one when balances are known,
+ * else null (ambiguous → self-drop rather than guess) — the caveat the debug
+ * flagged for the >1 case.
+ */
+export async function pickTesseraVVault(owner, mint, owned) {
+    const [ata] = await findAssociatedTokenPda({ owner, mint, tokenProgram: TOKEN_PROGRAM });
+    const nonAta = owned.filter((account) => account.address !== ata);
+    if (nonAta.length === 0)
+        return null;
+    if (nonAta.length === 1)
+        return nonAta[0].address;
+    // >1 non-ATA auth-owned account for this mint: prefer the largest balance
+    // when every candidate's balance is known (the real vault dwarfs any dust),
+    // otherwise self-drop rather than route funds to the wrong account.
+    if (nonAta.every((account) => account.amount !== undefined)) {
+        return nonAta.reduce((best, account) => (account.amount > best.amount ? account : best)).address;
+    }
+    return null;
+}
+/**
+ * Resolve one side's vault: committed cache first (RPC-free, stable), then the
+ * optional owner-scoped resolver, else a graceful self-drop. Always under
+ * TESSERAV_GLOBAL_AUTH — vaults are global per mint, never per pool.
+ */
+async function resolveTesseraVVault(mint, resolveVault, pool) {
+    const cached = TESSERAV_KNOWN_VAULTS[mint];
+    if (cached)
+        return cached;
+    if (resolveVault) {
+        const resolved = await resolveVault(TESSERAV_GLOBAL_AUTH, mint);
+        if (resolved)
+            return resolved;
+        throw new Error(`${SLUG}: dropping pool ${pool} — no auth-owned vault for mint ${mint} ` +
+            `(getTokenAccountsByOwner(${TESSERAV_GLOBAL_AUTH}, ${mint}) yielded no unambiguous non-ATA account)`);
+    }
+    throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is not in the committed vault cache and no ` +
+        `resolveVault (getTokenAccountsByOwner) was provided`);
+}
 const codec = getAddressCodec();
 const pubkeyAt = (data, offset) => codec.decode(data.subarray(offset, offset + 32));
 /** Level-0 price (ppm of 1e6) for a direction — non-increasing across slots, this adapter ships slot 0 only. */
@@ -119,7 +196,7 @@ export function level0CumOffset(direction) {
  * and a zero/absent level-0 price or capacity (an empty book for this
  * direction — self-drop, not a revert, at the orchestrator layer).
  */
-export async function fetchTesseraVConfig(load, pool, direction) {
+export async function fetchTesseraVConfig(load, pool, direction, resolveVault) {
     if (direction === 'bToA') {
         // See ladder.ts's header: the reverse swap-CPI account order was never
         // independently verified, and a launched-then-failing CPI aborts the
@@ -164,27 +241,24 @@ export async function fetchTesseraVConfig(load, pool, direction) {
             throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
         }
     }
+    // auth is the GLOBAL singleton (not per-pool); each vault is GLOBAL PER MINT
+    // and lives on the swap CPI's account list, NOT inline in the pool account,
+    // so it is resolved from the committed per-mint cache (RPC-free) or, for a
+    // mint not yet cached, the owner-scoped `resolveVault` (getTokenAccountsByOwner
+    // + exclude-ATA, see pickTesseraVVault). A mint with neither a cache hit nor a
+    // resolver-found vault self-drops the pool (a graceful "dropping pool" throw
+    // the SvmRoute orchestrator catches), rather than the old FLckH-only hard gate.
+    const vaultA = await resolveTesseraVVault(mintA, resolveVault, pool);
+    const vaultB = await resolveTesseraVVault(mintB, resolveVault, pool);
     return {
         venue: SLUG,
         pool,
         direction,
         mintA,
         mintB,
-        // The auth/vault trio is a fixed per-pool-pair fact (confirmed constant
-        // across every snapshot in this pass) but is NOT stored inline in the
-        // pool account — it rides the real swap CPI's account list, which this
-        // codebase has no on-chain source for beyond the verified live trace.
-        // Until a second pool is dumped to confirm a derivable relationship
-        // (PDA seeds, or a pointer elsewhere in the 10240-byte auth account),
-        // callers MUST supply it — see ladder.ts's buildSwapV2 doc.
-        auth: pool === address('FLckHLGMJy5gEoXWwcE68Nprde1D4araK4TGLw4pQq2n')
-            ? address('8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF')
-            : (() => {
-                throw new Error(`${SLUG}: pool ${pool} has no known auth/vault mapping yet — only the SOL/USDC pool ` +
-                    `FLckHLGMJy5gEoXWwcE68Nprde1D4araK4TGLw4pQq2n was verified in this pass`);
-            })(),
-        vaultA: address('5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV'),
-        vaultB: address('9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx'),
+        auth: TESSERAV_GLOBAL_AUTH,
+        vaultA,
+        vaultB,
     };
 }
 /** Family facade for the recipe orchestrator (ladder-only — not in the v1 registry). */

@@ -6,7 +6,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { evmApproveStatement, evmBalanceExpression, evmTransferStatement, ERC20_IMPORT_LINE } from "./evm.js";
-import { accountRefsForApprove, accountRefsForTransfer, LE8_HELPER_SOURCE, newSvmEmitState, svmApproveLines, svmBalanceExpression, svmTransferLines, } from "./svm.js";
+import { accountRefsForApprove, accountRefsForTransfer, newSvmEmitState, svmAccountParamList, svmApproveLines, svmBalanceExpression, svmTransferLines, } from "./svm.js";
 import { assertNoDuplicateSvmRefs, isEvmTarget, validateApproveSpec, validateBalanceSpec, validateTransferSpec } from "./params.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** `baseDirs` for compiling any program `tokenSource`/`tokenCallStatement` produces — resolves the
@@ -23,7 +23,7 @@ function validateSpec(spec, target) {
 }
 /** The import lines a `tokenSource(specs, target)` program needs. On an EVM target: `IERC20`, iff
  *  any spec is `transfer`/`approve`/`balanceOf` (always — every op needs the binding). On `svm`:
- *  none (SVM ops use only the built-in `accountData`/`accountUint`/`contract.call` globals). */
+ *  none (SVM ops use only the built-in `svm.sload`/`svm.call` globals). */
 export function tokenImportLines(specs, target) {
     if (!isEvmTarget(target))
         return [];
@@ -54,12 +54,12 @@ export function tokenExpression(spec, target) {
     validateSpec(spec, target);
     return isEvmTarget(target) ? evmBalanceExpression(spec) : svmBalanceExpression(spec);
 }
-/** The AccountPlan refs a `transfer`/`approve` spec interns, in order — mirrors `svmSettleRefs`.
- *  Throws for `balanceOf` (a pure read; its only ref is the caller-supplied `source`) and for an
- *  EVM-target spec (no AccountPlan on that target). */
+/** The account-manifest refs a `transfer`/`approve` spec attaches, in order — mirrors
+ *  `svmSettleRefs`. Throws for `balanceOf` (a pure read; its only ref is the caller-supplied
+ *  `source`) and for an EVM-target spec (no account manifest on that target). */
 export function tokenAccountRefs(spec, target) {
     if (isEvmTarget(target)) {
-        throw new Error(`tokenAccountRefs: no AccountPlan on an EVM target`);
+        throw new Error(`tokenAccountRefs: no account manifest on an EVM target`);
     }
     if (spec.op === "balanceOf")
         return [spec.svm.source];
@@ -80,7 +80,6 @@ export function tokenSource(spec, target, opts = {}) {
     specs.forEach((s) => validateSpec(s, target));
     if (!isEvmTarget(target))
         assertNoDuplicateSvmRefs(specs);
-    const needsLe8 = !isEvmTarget(target) && specs.some((s) => s.op === "transfer" || s.op === "approve");
     const importLines = [...tokenImportLines(specs, target), ...(opts.imports ?? [])];
     const state = newSvmEmitState();
     const bodyLines = specs.flatMap((s, i) => {
@@ -93,7 +92,9 @@ export function tokenSource(spec, target, opts = {}) {
     });
     const fnName = opts.functionName ?? "main";
     const body = bodyLines.map((line) => line.split("\n").map((l) => `  ${l}`).join("\n")).join("\n");
-    const parts = [...importLines, "", ...(needsLe8 ? [LE8_HELPER_SOURCE, ""] : []), `function ${fnName}() {`, body, "}", ""];
+    // Every SVM account is a main() param, in attach order — that declaration IS the manifest.
+    const params = isEvmTarget(target) ? "" : svmAccountParamList(specs);
+    const parts = [...importLines, "", `function ${fnName}(${params}) {`, body, "}", ""];
     return parts.join("\n");
 }
 //# sourceMappingURL=source.js.map

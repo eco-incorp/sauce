@@ -113,12 +113,14 @@ export function encodePortalCalldataWithAccounts(input) {
  * (`verifySvmSettleExecution`), not by shape: the calldata pin must equal `sha256` of the SDK's own
  * recompiled canonical settle (or the supplied `bytecode` must byte-match it). A shape-only lookalike or
  * an adversarial decoy is REJECTED — the scan keeps going and never returns a non-genuine call — so this
- * cannot be tricked into reporting attacker-chosen params. Returns `null` if no call is a genuine settle.
+ * cannot be tricked into reporting attacker-chosen params: `minOut`/`splCount` are what the CALLER
+ * expects, and a genuine verdict is itself the proof the program enforces them. Returns `null` if no
+ * call is a genuine settle.
  *
  * (To inspect a call's raw structural params without a genuineness proof — e.g. a decoy's claimed values —
  * decode the envelope with `decodePortalCalldataWithAccounts` and call `decodeSvmSettleExecution` directly.)
  */
-export function extractSvmSettleFromCalls(calls, options = {}) {
+export function extractSvmSettleFromCalls(calls, options) {
     const bytecode = options.bytecode !== undefined ? toBytes(options.bytecode, 'bytecode') : undefined;
     for (let i = 0; i < calls.length; i++) {
         let envelope;
@@ -130,7 +132,13 @@ export function extractSvmSettleFromCalls(calls, options = {}) {
         }
         let verified;
         try {
-            verified = verifySvmSettleExecution({ instructionData: envelope.instructionData, accounts: envelope.accounts, bytecode });
+            verified = verifySvmSettleExecution({
+                instructionData: envelope.instructionData,
+                accounts: envelope.accounts,
+                bytecode,
+                minOut: options.minOut,
+                splCount: options.splCount,
+            });
         }
         catch {
             continue; // a decodable envelope, but its instruction is not even settle-SHAPED — skip
@@ -150,7 +158,7 @@ export function extractSvmSettleFromCalls(calls, options = {}) {
  * intent's `fulfillmentMetadata.svm.sauceStage`) for the additional full byte-match. `null` if the intent
  * carries no genuine settle execution.
  */
-export function extractSvmSettleFromIntent(intent, options = {}) {
+export function extractSvmSettleFromIntent(intent, options) {
     return extractSvmSettleFromCalls(intent.route.calls, options);
 }
 //# sourceMappingURL=intent.js.map

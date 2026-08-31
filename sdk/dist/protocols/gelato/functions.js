@@ -1,7 +1,7 @@
 export const createTask = `
 import { GelatoAutomateABI as IAutomate } from "./abis";
 
-function main(automateAddress: Address, execAddress: Address, execData: Bytes, moduleData: Bytes, feeToken: Address): Uint256 {
+function main(automateAddress: Address, execAddress: Address, execData: bytes, moduleData: { modules: Uint256[], args: bytes[] }, feeToken: Address): Uint256 {
   const automate = IAutomate.at(automateAddress);
   return automate.createTask(execAddress, execData, moduleData, feeToken);
 }
@@ -9,9 +9,10 @@ function main(automateAddress: Address, execAddress: Address, execData: Bytes, m
 export const cancelTask = `
 import { GelatoAutomateABI as IAutomate } from "./abis";
 
-function main(automateAddress: Address, taskId: Bytes32): Uint256 {
+function main(automateAddress: Address, taskId: Uint256): Uint256 {
   const automate = IAutomate.at(automateAddress);
-  return automate.cancelTask(taskId);
+  automate.cancelTask(taskId);
+  return 1;
 }
 `;
 //# sourceMappingURL=functions.js.map

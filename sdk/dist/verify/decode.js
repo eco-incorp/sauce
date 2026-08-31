@@ -20,14 +20,16 @@
  * cannot exclude an appended transfer, branch, or unbounded call after the prologue — a
  * prologue-shaped program may do anything in its body.
  *
- * If you need "this is the program I audited", compile that program from source and byte-compare:
- * `@eco-incorp/sauce-sdk/recipes` ships the source and the one `baseDirs` entry, and the ordinary
- * compiler reproduces the exact bytes. That is a check against source you can read, which is
- * strictly better evidence than a hash constant shipped in the same package as the claim.
+ * "This is the program I audited" USED to be answerable by recompiling the shipped source and
+ * byte-comparing, because the retired compiler baked the params into this prologue and left a body
+ * that was byte-identical for every token count, minOut and recipient — so one body hash covered
+ * every argument set. Neither half survives the current compiler: it folds each value at its use
+ * site, which puts the arguments INSIDE the body (measured: `minOut` at byte 48, `recipient` at 104)
+ * and leaves no prologue at all. So `bodyHash` is still reported, but there is no longer a single
+ * argument-independent value to compare it against, and a recompile is not an equality check.
  *
- * Useful property when you do compare: the body of `recipes/settle.sauce.ts` is byte-identical for
- * every token count, every minOut and every recipient (the program is helper-free, so no jump-table
- * offsets shift with arg count) — so one body comparison covers every argument set.
+ * This decoder therefore describes a LEGACY wire format — the programs the retired compiler emitted.
+ * `SETTLE_VECTORS` are its committed golden bytes and remain the conformance corpus.
  *
  * THIS decoder is CANONICAL/STRICT: unlike the recipes package's original in-repo decoder (which
  * predates this package and accepted three malformed shapes — see the `SettleFailureCode` docs

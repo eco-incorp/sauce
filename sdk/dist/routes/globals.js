@@ -32,21 +32,37 @@ const owned = new Set();
  * `Object.keys(globalThis)`/`for...in`) and `configurable: true` (so
  * `uninstallRouteGlobals` can genuinely remove it).
  */
+/** Function intrinsics a contract/venue namespace key must never collide with once composed onto a
+ *  CALLABLE global -- unlike the plain-object global this replaced, landing on one of these would
+ *  corrupt the callable itself, not merely shadow an inert property. */
+const FUNCTION_INTRINSIC_DENYLIST = new Set([
+    "length",
+    "name",
+    "prototype",
+    "arguments",
+    "caller",
+    "bind",
+    "call",
+    "apply",
+    "toString",
+    "constructor",
+]);
 /**
- * Composes one chain global: the existing `ChainOrigin` (`chain`/`route`)
- * plus its lazy contract-namespace tree (`Uniswap`, `UniswapV4`, ...) and,
- * for an `svm`-kind chain only, the svm venue accessor tree
- * (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
+ * Composes one chain global: a FRESH callable forwarding to `origin.route`
+ * (so it stays CALLABLE — a plain object would silently drop that), plus
+ * `chain`/`route` and the lazy contract-namespace tree (`Uniswap`,
+ * `UniswapV4`, ...) and, for an `svm`-kind chain only, the svm venue
+ * accessor tree (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
  * `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's
  * memoising GETTERS stay lazy — spread would invoke every one of them
  * eagerly at install time. `origin` itself is never mutated: this returns a
- * fresh object. Throws on a name collision (e.g. a future protocol or venue
- * slug literally named "route" or "chain"), mirroring
- * `createChainAccessors`'s own duplicate-key throw. The `kind === "svm"`
- * gate is registry-derived (from `../chains/canonical.js`'s own
- * `CanonicalChain.kind`), not a hardcoded chain name -- a second SVM chain
- * added to `CANONICAL_CHAINS` gets the venue namespaces automatically, and
- * every EVM chain provably cannot.
+ * fresh function object. Throws on a name collision (e.g. a future protocol
+ * or venue slug literally named "route", "chain", or a function intrinsic
+ * like "call"/"bind"), mirroring `createChainGlobals`'s own duplicate-key
+ * throw. The `kind === "svm"` gate is registry-derived (from
+ * `../chains/canonical.js`'s own `CanonicalChain.kind`), not a hardcoded
+ * chain name -- a second SVM chain added to `CANONICAL_CHAINS` gets the
+ * venue namespaces automatically, and every EVM chain provably cannot.
  */
 function composeChainGlobal(name, origin) {
     const contracts = chainContracts(origin.chain);
@@ -55,17 +71,21 @@ function composeChainGlobal(name, origin) {
         const svmVenues = svmVenueAccessors();
         sources.push(Object.getOwnPropertyDescriptors(svmVenues));
     }
-    const originDescriptors = Object.getOwnPropertyDescriptors(origin);
-    const merged = { ...originDescriptors };
+    const fn = ((...args) => origin.route(...args));
+    const merged = {
+        chain: { value: origin.chain, enumerable: true, configurable: false, writable: false },
+        route: { value: origin.route, enumerable: true, configurable: false, writable: false },
+    };
     for (const source of sources) {
         for (const key of Object.keys(source)) {
-            if (key in merged) {
+            if (key in merged || FUNCTION_INTRINSIC_DENYLIST.has(key)) {
                 throw new Error(`routes/globals: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`);
             }
         }
         Object.assign(merged, source);
     }
-    return Object.defineProperties({}, merged);
+    Object.defineProperties(fn, merged);
+    return fn;
 }
 export function installRouteGlobals(opts = {}) {
     const target = (opts.target ?? globalThis);

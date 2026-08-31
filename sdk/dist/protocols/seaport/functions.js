@@ -19,7 +19,7 @@ function main(
   offererConduitKey: Uint256,
   fulfillerConduitKey: Uint256,
   totalOriginalAdditionalRecipients: Uint256,
-  signature: Bytes
+  signature: bytes
 ): Uint256 {
   const seaport = ISeaport.at(seaportAddress);
   return seaport.fulfillBasicOrder({

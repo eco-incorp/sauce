@@ -124,9 +124,12 @@ export const stabbleStableSwap = {
     emitQuote(cfg, i, amountIn) {
         const c = asStableConfig(cfg);
         assertStabbleU64AmountIn(amountIn, `${SLUG} emitQuote`);
-        const pool = JSON.stringify(c.pool);
         const [tokenIn, tokenOut] = c.tokens;
         const n = c.tokens.length; // always 2 in this adapter's AtoB-only scope
+        // Account model (RS/svm target): quoteAccounts() attaches only the pool, so
+        // every read is svm.sload(acc0, off, w).toLe() through main()'s single Account
+        // param (accountUint lowered to CAST_LE — .toLe() is the exact endianness
+        // match for these u64 LE fields), and block.timestamp becomes ctx.timestamp().
         const wrappedIn = calcWrappedAmount(amountIn, tokenIn);
         const lines = [`  let amp${i} = ${c.ampTargetFactor * 1000};`];
         const range = c.rampStopTs - c.rampStartTs;
@@ -135,23 +138,24 @@ export const stabbleStableSwap = {
             const lo = targetUp ? c.ampInitialFactor : c.ampTargetFactor;
             const hi = targetUp ? c.ampTargetFactor : c.ampInitialFactor;
             const interp = targetUp
-                ? `${c.ampInitialFactor * 1000} + Math.mulDiv(${(hi - lo) * 1000}, ((block.timestamp - ${c.rampStartTs}) / 60) * 60, ${range})`
-                : `${c.ampInitialFactor * 1000} - Math.mulDiv(${(hi - lo) * 1000}, ((block.timestamp - ${c.rampStartTs}) / 60) * 60, ${range})`;
-            lines.push(`  if (block.timestamp <= ${c.rampStartTs}) { amp${i} = ${c.ampInitialFactor * 1000} }`);
-            lines.push(`  else if (block.timestamp < ${c.rampStopTs}) { amp${i} = ${interp} }`);
+                ? `${c.ampInitialFactor * 1000} + Math.mulDiv(${(hi - lo) * 1000}, ((ctx.timestamp() - ${c.rampStartTs}) / 60) * 60, ${range})`
+                : `${c.ampInitialFactor * 1000} - Math.mulDiv(${(hi - lo) * 1000}, ((ctx.timestamp() - ${c.rampStartTs}) / 60) * 60, ${range})`;
+            lines.push(`  if (ctx.timestamp() <= ${c.rampStartTs}) { amp${i} = ${c.ampInitialFactor * 1000} }`);
+            lines.push(`  else if (ctx.timestamp() < ${c.rampStopTs}) { amp${i} = ${interp} }`);
         }
-        lines.push(`  const bal0_${i} = accountUint(${pool}, ${TOKENS_OFFSET + 4 + 42}, 8);`);
-        lines.push(`  const bal1_${i} = accountUint(${pool}, ${TOKENS_OFFSET + 4 + TOKEN_SIZE + 42}, 8);`);
-        // Self-contained: this v1 adapter has no shared "declare once" helper
-        // seam (unlike the ladder's helpers()), so the N-token Newton helper is
-        // declared inline, per-call — safe for a solo compile of this one
-        // fragment (this adapter's only known caller today), NOT safe to mix
-        // verbatim into a multi-pool program without deduping the declaration.
-        const helper = stableQuoteHelperSource(n);
-        const renamed = helper.source.replace(helper.name, `${helper.name}_${i}`);
-        lines.push(renamed);
-        lines.push(`  const rawOut${i} = ${helper.name}_${i}(amp${i}, bal0_${i}, bal1_${i}, ${wrappedIn});`);
-        lines.push(`  const fee${i} = accountUint(${pool}, ${SWAP_FEE_OFFSET}, 8);`);
+        lines.push(`  const bal0_${i} = svm.sload(acc0, ${TOKENS_OFFSET + 4 + 42}, 8).toLe();`);
+        lines.push(`  const bal1_${i} = svm.sload(acc0, ${TOKENS_OFFSET + 4 + TOKEN_SIZE + 42}, 8).toLe();`);
+        // The N-token Newton helper CANNOT be declared inline any more: the RS
+        // compiler forbids a nested function inside main(). Like saber-stableswap's
+        // stableD/stableY, it is a TOP-LEVEL function the caller declares from
+        // `stableQuoteHelperSource(n)` (renamed `<name>_<i>` per pool index, so a
+        // multi-pool program declares exactly one copy per emitted index) and this
+        // fragment only CALLS it — emitQuote is therefore no longer a self-contained
+        // solo compile: the caller must PREPEND that top-level declaration (see
+        // stabble-stable-swap.test.ts / the ladder's helpers() seam).
+        const helperName = `${stableQuoteHelperSource(n).name}_${i}`;
+        lines.push(`  const rawOut${i} = ${helperName}(amp${i}, bal0_${i}, bal1_${i}, ${wrappedIn});`);
+        lines.push(`  const fee${i} = svm.sload(acc0, ${SWAP_FEE_OFFSET}, 8).toLe();`);
         lines.push(`  const netOut${i} = Math.mulDiv(rawOut${i}, 1000000000 - fee${i}, 1000000000);`);
         const unwrapExpr = tokenOut.scalingFactor === 1n
             ? `netOut${i}`

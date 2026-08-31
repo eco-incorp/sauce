@@ -7,7 +7,7 @@ import { type SwapSourceSpec } from "./types.js";
  */
 export declare const SWAP_BASE_DIRS: readonly string[];
 /**
- * One `ISauceRouter.at(address.self).swap({...})` statement for `spec` — for splicing into a
+ * One `ISauceRouter.at(ctx.self()).swap({...})` statement for `spec` — for splicing into a
  * larger, hand-written program. Runs the FULL `toSwapParams` normalization/guard pass (a
  * `"balance"` `amountIn` reuses every other field's normalization, only the amount itself is
  * emitted as a runtime expression instead of a literal).

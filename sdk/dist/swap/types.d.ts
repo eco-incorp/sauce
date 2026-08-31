@@ -90,7 +90,7 @@ export declare const ZERO_POOL_KEY: PoolKey;
  * `swapCallStatement` / `swapSource`. `amountIn` is always a single, unambiguous POSITIVE
  * exact-input amount; {@link amountSpecifiedFor} does the per-path sign normalization.
  *
- * `payer`/`recipient` default to the SauceScript identifier `address.self` (Router swap entries are
+ * `payer`/`recipient` default to the SauceScript call `ctx.self()` (Router swap entries are
  * `onlySelf`) — leave them unset unless you specifically need a different payer/recipient (which
  * then disqualifies a non-empty `callback`, see `toSwapParams`'s guard).
  */
@@ -105,11 +105,11 @@ export interface SwapSpec {
     /** A positive exact-input amount. See `amountSpecifiedFor` for the per-path sign this becomes. */
     amountIn: AmountInput;
     sqrtPriceLimitX96?: AmountInput;
-    /** Defaults to `address.self`. Overriding this while also passing a non-empty `callback` is
+    /** Defaults to `ctx.self()`. Overriding this while also passing a non-empty `callback` is
      *  rejected — see `toSwapParams`'s guard mirroring `Router.sol`'s own `payer == recipient ==
      *  address(this)` check for a callback-driven swap. */
     payer?: AddressInput;
-    /** Defaults to `address.self`. See `payer`'s note. */
+    /** Defaults to `ctx.self()`. See `payer`'s note. */
     recipient?: AddressInput;
     /** Opaque, already-compiled callback bytes for a Tier-1 flash fragment. Only valid for
      *  {@link isCallbackVenue} pool types; building one is out of scope here — see
@@ -118,7 +118,7 @@ export interface SwapSpec {
 }
 /**
  * The one extra shape `swapCallStatement`/`swapSource` accept beyond {@link SwapSpec}:
- * `amountIn: "balance"` emits a RUNTIME `IERC20.at(tokenIn).balanceOf(address.self)` read instead
+ * `amountIn: "balance"` emits a RUNTIME `IERC20.at(tokenIn).balanceOf(ctx.self())` read instead
  * of a baked-in literal — the shape a multi-leg program needs when a later leg's input is an
  * earlier leg's (unknown at compile time) output. `toSwapParams` does NOT accept this shape: it
  * produces a concrete `SwapParams` object, which a runtime-derived amount cannot be.
@@ -130,7 +130,7 @@ export type SwapSourceSpec = SwapSpec | (Omit<SwapSpec, "amountIn"> & {
  * `ISauceRouter.swap`'s `SwapParams`, fully normalized — every scalar a `bigint` (SauceScript- and
  * viem-native), in exact ABI-declaration order (see `SWAP_PARAMS_FIELDS`, pinned against the
  * vendored artifact in `sdk/test/swap.test.ts`). `payer`/`recipient` are `bigint | "self"`: `"self"`
- * is the unresolved `address.self` sentinel (this contract's own address, not knowable off-chain
+ * is the unresolved `ctx.self()` sentinel (this contract's own address, not knowable off-chain
  * without the Pot address), preserved rather than eagerly resolved so a caller can tell the two
  * cases apart.
  *

@@ -1,5 +1,6 @@
 import type { Address, AddressesByLookupTableAddress, Commitment, Instruction, Signature, TransactionSigner } from '@solana/kit';
-import type { AccountPlan, ArgsLayout, ArgValue } from '@eco-incorp/sauce-compiler';
+import type { AccountManifest } from 'sauce-next';
+import type { ArgsLayout, ArgValue } from './layout.js';
 import type { AccountResolution } from './resolve.js';
 import type { SendExecuteResult, SimulateExecuteResult } from './send.js';
 export interface SauceSvmClientConfig {
@@ -13,7 +14,7 @@ export interface SimulateOpts {
     prepends?: readonly Instruction[];
     lookupTables?: AddressesByLookupTableAddress;
     /**
-     * Append the fee payer as an in-list readonly signer when the plan yields no
+     * Append the fee payer as an in-list readonly signer when the manifest yields no
      * signer meta. Needed ONLY for programs that read MSG_SENDER/TX_ORIGIN —
      * NoSigner is lazy, so everything else runs (and simulates) signerless.
      */
@@ -76,8 +77,8 @@ export interface SauceSvmClient {
      * existing path: an already-covering table sends no transactions.
      */
     ensureLookupTable(addresses: readonly Address[], opts?: EnsureLookupTableOpts): Promise<EnsuredLookupTable>;
-    simulate(bytecode: Uint8Array, plan: AccountPlan, resolution: AccountResolution, opts?: SimulateOpts): Promise<SimulateExecuteResult>;
-    execute(bytecode: Uint8Array, plan: AccountPlan, resolution: AccountResolution, opts?: ExecuteOpts): Promise<SendExecuteResult>;
+    simulate(bytecode: Uint8Array, manifest: AccountManifest, resolution: AccountResolution, opts?: SimulateOpts): Promise<SimulateExecuteResult>;
+    execute(bytecode: Uint8Array, manifest: AccountManifest, resolution: AccountResolution, opts?: ExecuteOpts): Promise<SendExecuteResult>;
     /**
      * Stages bytecode into the buffer at 32-byte `seed` (init → chunked writes → a
      * dedicated finalize sent only after every write confirmed, each tx on a fresh
@@ -88,7 +89,7 @@ export interface SauceSvmClient {
     stageBuffer(seed: Uint8Array, bytecode: Uint8Array): Promise<StagedBuffer>;
     /** Closes the buffer at 32-byte `seed`, refunding its rent to the payer (the recompile path). */
     closeBuffer(seed: Uint8Array): Promise<SendExecuteResult>;
-    simulateStaged(buffer: Address | StagedBuffer, plan: AccountPlan, resolution: AccountResolution, opts?: SimulateStagedOpts): Promise<SimulateExecuteResult>;
+    simulateStaged(buffer: Address | StagedBuffer, manifest: AccountManifest, resolution: AccountResolution, opts?: SimulateStagedOpts): Promise<SimulateExecuteResult>;
     /**
      * Executes a finalized buffer, hash-pinned, in ONE instruction. With `args`,
      * the per-execution values are encoded into the instruction payload
@@ -96,7 +97,7 @@ export interface SauceSvmClient {
      * reads them through its CALLDATA prologue, so one staged buffer serves
      * every argument set without restaging.
      */
-    executeStaged(buffer: Address | StagedBuffer, plan: AccountPlan, resolution: AccountResolution, opts?: ExecuteStagedOpts): Promise<SendExecuteResult>;
+    executeStaged(buffer: Address | StagedBuffer, manifest: AccountManifest, resolution: AccountResolution, opts?: ExecuteStagedOpts): Promise<SendExecuteResult>;
 }
 export declare function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: SauceSvmClientConfig): Promise<SauceSvmClient>;
 //# sourceMappingURL=client.d.ts.map

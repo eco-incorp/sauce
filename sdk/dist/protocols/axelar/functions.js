@@ -1,9 +1,10 @@
 export const sendToken = `
 import { AxelarGatewayABI as IGateway } from "./abis";
 
-function main(gatewayAddress: Address, destinationChain: Bytes, destinationAddress: Bytes, symbol: Bytes, amount: Uint256): Uint256 {
+function main(gatewayAddress: Address, destinationChain: string, destinationAddress: string, symbol: string, amount: Uint256): Uint256 {
   const gateway = IGateway.at(gatewayAddress);
-  return gateway.sendToken(destinationChain, destinationAddress, symbol, amount);
+  gateway.sendToken(destinationChain, destinationAddress, symbol, amount);
+  return 1;
 }
 `;
 //# sourceMappingURL=functions.js.map

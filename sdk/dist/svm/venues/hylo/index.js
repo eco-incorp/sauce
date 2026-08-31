@@ -440,16 +440,20 @@ function emitQuote(cfg, i, amountIn) {
  * address), so every call site shares one deduplicated account slot.
  */
 function readLines(c, p) {
-    const pair = JSON.stringify(`${SLUG}:pair`);
-    const pyth = JSON.stringify(`${SLUG}:pyth`);
+    // Account model (RS/svm target): reads go through main()'s ordered `acc<k>`
+    // params (k = the ref's index in quoteAccounts) — [pair=acc0, pyth=acc1,
+    // vault=acc2] — not `accountUint("<ref>", …)`. `accountUint` lowered to
+    // CAST_LE, so `.toLe()` is the exact endianness match.
+    const pair = 'acc0';
+    const pyth = 'acc1';
     const lines = [
-        `  const ${p}fee = accountUint(${pair}, ${OFF_SWAP_FEE_BITS}, 8);`,
-        `  const ${p}price = accountUint(${pyth}, ${OFF_PYTH_PRICE}, 8);`,
-        `  const ${p}conf = accountUint(${pyth}, ${OFF_PYTH_CONF}, 8);`,
+        `  const ${p}fee = svm.sload(${pair}, ${OFF_SWAP_FEE_BITS}, 8).toLe();`,
+        `  const ${p}price = svm.sload(${pyth}, ${OFF_PYTH_PRICE}, 8).toLe();`,
+        `  const ${p}conf = svm.sload(${pyth}, ${OFF_PYTH_CONF}, 8).toLe();`,
     ];
     if (c.direction === 'bToA') {
-        const vault = JSON.stringify(`${SLUG}:vault`);
-        lines.push(`  const ${p}vsupply = accountUint(${pair}, ${OFF_VIRTUAL_STABLECOIN_SUPPLY_BITS}, 8);`, `  const ${p}vault = accountUint(${vault}, ${TOKEN_ACCOUNT_AMOUNT_OFFSET}, 8);`);
+        const vault = 'acc2';
+        lines.push(`  const ${p}vsupply = svm.sload(${pair}, ${OFF_VIRTUAL_STABLECOIN_SUPPLY_BITS}, 8).toLe();`, `  const ${p}vault = svm.sload(${vault}, ${TOKEN_ACCOUNT_AMOUNT_OFFSET}, 8).toLe();`);
     }
     return lines;
 }

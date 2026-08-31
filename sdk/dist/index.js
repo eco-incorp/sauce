@@ -9,7 +9,7 @@ export * as deposit from "./deposit/index.js";
 export * as token from "./token/index.js";
 export * as contracts from "./descriptors/index.js";
 export * as svmVenues from "./svm/accessors.js";
-// eco-routes chain accessors as default globals: `Base.route(reward).Solana(route)`
+// eco-routes chain globals as default globals: `Base(() => USDC.transfer(to, amt)).reward(reward)`
 // with no import. The bare import both installs at runtime and -- load-bearing --
 // carries the generated ambient `declare global` block into a consumer's type
 // graph (dist/index.d.ts preserves a bare import verbatim through declaration

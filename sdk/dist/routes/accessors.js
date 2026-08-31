@@ -1,9 +1,9 @@
 import { requireChain } from "../chains/canonical.js";
-import { createChainAccessors, makeChainOrigin, pascalOfSlug, } from "./builder.js";
-import { assembleIntent } from "./intent.js";
+import { createChainGlobals, makeChainGlobal, pascalOfSlug, } from "./builder.js";
 export { pascalOfSlug };
-/** The generated record: `const { Base, Solana, Ethereum } = chainAccessors;`. */
-export const chainAccessors = createChainAccessors(assembleIntent);
+/** The generated record: `const { Base, Solana, Ethereum } = chainAccessors;` -- each entry is
+ *  BOTH callable (`Base(sauce, opts)`) and a namespace (`Base.chain`/`Base.route`). */
+export const chainAccessors = createChainGlobals();
 /**
  * Dynamic front door for a runtime-resolved chain (`chain('eth')`,
  * `chain(8453)`, `chain('BNB Chain')`) — delegates to `requireChain`, so it
@@ -11,6 +11,6 @@ export const chainAccessors = createChainAccessors(assembleIntent);
  */
 export function chain(ref) {
     const resolved = requireChain(ref);
-    return makeChainOrigin(resolved, assembleIntent);
+    return makeChainGlobal(resolved);
 }
 //# sourceMappingURL=accessors.js.map

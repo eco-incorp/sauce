@@ -1,2 +1,2 @@
-export declare const depositETH = "\nimport { ZkSyncDiamondProxyABI as IDiamondProxy } from \"./abis\";\n\nfunction main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint256): Uint256 {\n  const proxy = IDiamondProxy.at(diamondProxyAddress);\n  return proxy.requestL2Transaction(recipient, msg.value, 0x00, l2GasLimit, 800, [], msg.sender);\n}\n";
+export declare const depositETH = "\nimport { ZkSyncDiamondProxyABI as IDiamondProxy } from \"./abis\";\n\nfunction main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint256): Uint256 {\n  const proxy = IDiamondProxy.at(diamondProxyAddress);\n  return proxy.requestL2Transaction(recipient, ctx.msgValue(), 0x00, l2GasLimit, 800, [], ctx.msgSender());\n}\n";
 //# sourceMappingURL=functions.d.ts.map

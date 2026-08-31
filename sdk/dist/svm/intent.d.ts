@@ -1,5 +1,5 @@
 import type { Address } from '@solana/kit';
-import { type SvmSettleExecutionVerification } from './verify.js';
+import { type SvmSettleExecutionVerification, type SvmSettleExpectation } from './verify.js';
 /** One attached account, as the Portal `SerializableAccountMeta` struct serializes it. */
 export interface PortalAccountMeta {
     pubkey: Address;
@@ -53,14 +53,14 @@ export interface SvmIntentLike {
         calls: readonly SvmIntentCallLike[];
     };
 }
-export interface ExtractSvmSettleOptions {
+export interface ExtractSvmSettleOptions extends SvmSettleExpectation {
     /** OPTIONAL. The staged settle bytecode (`sauceStage.buffers[settleIdx].bytecode`), as bytes / base64 /
      *  0x-hex. When supplied, genuineness is proven by a full byte-match; when omitted, it is still proven
      *  via the calldata pin vs the SDK's own recompiled canonical settle (a partner needs no bytecode). */
     bytecode?: BytesInput;
 }
-/** The extracted settle for a call: the full `verifySvmSettleExecution` verdict (args, resolved accounts,
- *  and the `genuine` / `verifiedBy` genuineness fields), extended with the call's index. */
+/** The extracted settle for a call: the full `verifySvmSettleExecution` verdict (resolved accounts and
+ *  the `genuine` / `verifiedBy` genuineness fields), extended with the call's index. */
 export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
     /** Index of the `route.calls[]` entry the genuine settle execution was found in. */
     callIndex: number;
@@ -71,12 +71,14 @@ export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
  * (`verifySvmSettleExecution`), not by shape: the calldata pin must equal `sha256` of the SDK's own
  * recompiled canonical settle (or the supplied `bytecode` must byte-match it). A shape-only lookalike or
  * an adversarial decoy is REJECTED — the scan keeps going and never returns a non-genuine call — so this
- * cannot be tricked into reporting attacker-chosen params. Returns `null` if no call is a genuine settle.
+ * cannot be tricked into reporting attacker-chosen params: `minOut`/`splCount` are what the CALLER
+ * expects, and a genuine verdict is itself the proof the program enforces them. Returns `null` if no
+ * call is a genuine settle.
  *
  * (To inspect a call's raw structural params without a genuineness proof — e.g. a decoy's claimed values —
  * decode the envelope with `decodePortalCalldataWithAccounts` and call `decodeSvmSettleExecution` directly.)
  */
-export declare function extractSvmSettleFromCalls(calls: readonly SvmIntentCallLike[], options?: ExtractSvmSettleOptions): ExtractedSvmSettle | null;
+export declare function extractSvmSettleFromCalls(calls: readonly SvmIntentCallLike[], options: ExtractSvmSettleOptions): ExtractedSvmSettle | null;
 /**
  * Extracts the GENUINE SVM settle params + resolved account identities from an intent object — the thin
  * intent-level wrapper over `extractSvmSettleFromCalls`, and the SVM twin of `extractEvmSettleFromIntent`.
@@ -85,5 +87,5 @@ export declare function extractSvmSettleFromCalls(calls: readonly SvmIntentCallL
  * intent's `fulfillmentMetadata.svm.sauceStage`) for the additional full byte-match. `null` if the intent
  * carries no genuine settle execution.
  */
-export declare function extractSvmSettleFromIntent(intent: SvmIntentLike, options?: ExtractSvmSettleOptions): ExtractedSvmSettle | null;
+export declare function extractSvmSettleFromIntent(intent: SvmIntentLike, options: ExtractSvmSettleOptions): ExtractedSvmSettle | null;
 //# sourceMappingURL=intent.d.ts.map

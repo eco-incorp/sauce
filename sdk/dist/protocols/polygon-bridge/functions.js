@@ -3,15 +3,17 @@ import { PolygonRootChainManagerABI as IRootChainManager } from "./abis";
 
 function main(rootChainManagerAddress: Address, recipient: Address): Uint256 {
   const manager = IRootChainManager.at(rootChainManagerAddress);
-  return manager.depositEtherFor(recipient);
+  manager.depositEtherFor(recipient);
+  return 1;
 }
 `;
 export const depositERC20 = `
 import { PolygonRootChainManagerABI as IRootChainManager } from "./abis";
 
-function main(rootChainManagerAddress: Address, recipient: Address, rootToken: Address, depositData: Bytes): Uint256 {
+function main(rootChainManagerAddress: Address, recipient: Address, rootToken: Address, depositData: bytes): Uint256 {
   const manager = IRootChainManager.at(rootChainManagerAddress);
-  return manager.depositFor(recipient, rootToken, depositData);
+  manager.depositFor(recipient, rootToken, depositData);
+  return 1;
 }
 `;
 //# sourceMappingURL=functions.js.map
