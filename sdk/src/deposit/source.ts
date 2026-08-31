@@ -72,12 +72,12 @@ function resolveAmountExpr(d: NormalizedDeposit, varSuffix: string): { pre: stri
   }
   if (d.amount === "balance") {
     if (d.template.binding === null) {
-      return { pre: [], amountExpr: "address.balance" };
+      return { pre: [], amountExpr: "ctx.selfBalance()" };
     }
     if (d.token === null) throw new Error("deposit: unreachable — erc20 template without a token");
     const varName = `depositAmt${varSuffix}`;
     return {
-      pre: [`const ${varName} = IERC20.at(${formatBigint(d.token)}).balanceOf(address.self);`],
+      pre: [`const ${varName} = IERC20.at(${formatBigint(d.token)}).balanceOf(ctx.self());`],
       amountExpr: varName,
     };
   }
@@ -171,7 +171,7 @@ export interface SwapThenDepositOptions {
  * beneficiary, 0);`.
  *
  * A deposit spec with `amount: "delta"` is bracketed around the WHOLE swap block: a balance
- * snapshot (`IERC20.balanceOf`/`address.balance`, per the template's funding kind) is taken before
+ * snapshot (`IERC20.balanceOf`/`ctx.selfBalance()`, per the template's funding kind) is taken before
  * the swap statements and again after, and the deposit uses `post - pre` — the exact
  * `swapAndSupply` idiom ("never sweep pre-existing tokenOut dust", since a cook may run in a shared
  * runtime context). `amount: "balance"`/a concrete literal are unaffected and just run after the
@@ -224,13 +224,13 @@ export function swapThenDepositSource(
     const normalized = toDeposit({ ...d, amount: 0n } as DepositSpec);
     const varBase = `deposit${i}`;
     if (normalized.template.binding === null) {
-      preLines.push(`const ${varBase}Pre = address.balance;`);
-      postLines.push(`const ${varBase}Post = address.balance;`);
+      preLines.push(`const ${varBase}Pre = ctx.selfBalance();`);
+      postLines.push(`const ${varBase}Post = ctx.selfBalance();`);
     } else {
       if (normalized.token === null) throw new Error("deposit: unreachable — erc20 template without a token");
       const tokenLit = formatBigint(normalized.token);
-      preLines.push(`const ${varBase}Pre = IERC20.at(${tokenLit}).balanceOf(address.self);`);
-      postLines.push(`const ${varBase}Post = IERC20.at(${tokenLit}).balanceOf(address.self);`);
+      preLines.push(`const ${varBase}Pre = IERC20.at(${tokenLit}).balanceOf(ctx.self());`);
+      postLines.push(`const ${varBase}Post = IERC20.at(${tokenLit}).balanceOf(ctx.self());`);
     }
     postLines.push(`const ${varBase}Amt = ${varBase}Post - ${varBase}Pre;`);
     deltaAmountExprs.set(i, `${varBase}Amt`);

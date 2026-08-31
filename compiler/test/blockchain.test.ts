@@ -68,13 +68,13 @@ describe('blockchain context', () => {
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.GAS_PRICE]));
   });
 
-  it('compiles address.self', () => {
-    const result = compile('function main() { const x = address.self; }');
+  it('compiles ctx.self() (formerly address.self)', () => {
+    const result = compile('function main() { const x = ctx.self(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.THIS_ADDRESS]));
   });
 
-  it('compiles address.balance', () => {
-    const result = compile('function main() { const x = address.balance; }');
+  it('compiles ctx.selfBalance() (formerly address.balance)', () => {
+    const result = compile('function main() { const x = ctx.selfBalance(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.SELF_BALANCE]));
   });
 
@@ -97,39 +97,45 @@ describe('blockchain context', () => {
     );
   });
 
-  it('compiles address.balanceOf(addr)', () => {
-    const result = compile('function main() { const b = address.balanceOf(42); }');
+  it('compiles ctx.balance(addr) (formerly address.balanceOf(addr))', () => {
+    const result = compile('function main() { const b = ctx.balance(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.BALANCE, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles address.codeSize(addr)', () => {
-    const result = compile('function main() { const s = address.codeSize(42); }');
+  it('compiles ctx.codeSize(addr) (formerly address.codeSize(addr))', () => {
+    const result = compile('function main() { const s = ctx.codeSize(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.EXT_CODE_SIZE, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles address.codeHash(addr)', () => {
-    const result = compile('function main() { const h = address.codeHash(42); }');
+  it('compiles ctx.codeHash(addr) (formerly address.codeHash(addr))', () => {
+    const result = compile('function main() { const h = ctx.codeHash(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.EXT_CODE_HASH, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles address.isContract(addr)', () => {
-    const result = compile('function main() { const c = address.isContract(42); }');
+  it('compiles ctx.isContract(addr) (formerly address.isContract(addr))', () => {
+    const result = compile('function main() { const c = ctx.isContract(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.IS_CONTRACT, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles address.isEOA(addr)', () => {
-    const result = compile('function main() { const e = address.isEOA(42); }');
+  it('compiles ctx.isEOA(addr) (formerly address.isEOA(addr))', () => {
+    const result = compile('function main() { const e = ctx.isEOA(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.IS_EOA, OPS.BYTE_1, 42]),
     );
+  });
+
+  it('ctx.codeSize/codeHash/isContract/isEOA reject the svm target (EVM-only, no svm analogue)', () => {
+    for (const call of ['ctx.codeSize(42)', 'ctx.codeHash(42)', 'ctx.isContract(42)', 'ctx.isEOA(42)']) {
+      expect(() => compile(`function main() { const x = ${call}; }`, { target: 'svm' })).toThrow();
+    }
   });
 
   it('compiles context in arithmetic expression', () => {
@@ -170,10 +176,8 @@ describe('blockchain context', () => {
     );
   });
 
-  it('throws on address.balanceOf with no arguments', () => {
-    expect(() => compile('function main() { const b = address.balanceOf(); }')).toThrow(
-      'address.balanceOf() expects exactly 1 argument',
-    );
+  it('throws on ctx.balance with no arguments (formerly address.balanceOf)', () => {
+    expect(() => compile('function main() { const b = ctx.balance(); }')).toThrow(/ctx\.balance/);
   });
 
   // §1.8 / decision 0.4: `msg`/`block` are member-access-only globals (`msg.sender`,

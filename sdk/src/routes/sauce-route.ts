@@ -60,7 +60,7 @@ export interface SauceCompileOptions {
    *  (below) synthesizes. A same-named entry with a DIFFERENT abi throws (see `protocol-rewrite.ts`). */
   contracts?: ContractsConfig;
   /** The full protocol-accessor rewrite (`protocol-rewrite.ts`) -- `Uniswap.UniversalRouter.execute(...)`
-   *  -> `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `address.self`.
+   *  -> `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `ctx.self()`.
    *  Default ON (`true`); pass `false` to opt out entirely, or an options object to tune it. Default-ON
    *  is isolation-safe by measurement: the shapes it claims (a 1-3 segment member-chain call rooted at
    *  a registry namespace or canonical-chain key) do not compile at all today, so this can only turn a
@@ -158,13 +158,13 @@ export function compileSauceRoute(
     tokenMap.size > 0 ? { ...Object.fromEntries(tokenMap), ...options.defines } : options.defines;
 
   // ORDER IS LOAD-BEARING: the token pass (U4 + balance sugar) runs BEFORE the protocol-accessor
-  // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `address.self`
-  // textually; if it ran first, `self.USDC` would become `address.self.USDC` and the balance
+  // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
+  // textually; if it ran first, `self.USDC` would become `ctx.self().USDC` and the balance
   // sugar's holder would no longer be a bare Identifier, silently losing the site. Safe in the
   // other direction: the accessor pass cannot claim IERC20.at(...)'s output (neither a namespace
   // nor a chain key, and its call sits mid-chain, which `decomposeMemberChain` declines), and its
   // synthesized-binding collision check cannot trip on `IERC20` (`pascalOfSlug("erc20")` yields
-  // `IErc20_*`, not `IERC20`); the sugar's own `address.self` output is immune to the accessor
+  // `IErc20_*`, not `IERC20`); the sugar's own `ctx.self()` output is immune to the accessor
   // pass's self-sugar too (`self` there is a member PROPERTY, which its exclusion set already
   // covers). See routes-token-rewrite.test.ts's composition test for the regression lock.
   if (tokenMap.size > 0) {

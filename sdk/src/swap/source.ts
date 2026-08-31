@@ -25,9 +25,9 @@ function formatBigint(value: bigint): string {
   return `${value.toString()}n`;
 }
 
-/** `bigint` → its numeric literal; the `"self"` sentinel → the SauceScript `address.self` global. */
+/** `bigint` → its numeric literal; the `"self"` sentinel → the SauceScript `ctx.self()` global. */
 function formatAddressField(value: bigint | "self"): string {
-  return value === "self" ? "address.self" : formatBigint(value);
+  return value === "self" ? "ctx.self()" : formatBigint(value);
 }
 
 /** `"0x"` → an empty-bytes literal; otherwise the hex bytes spelled as `Uint8Array.from([...])`. */
@@ -54,7 +54,7 @@ function fieldsFromParams(params: SwapParams): Omit<SwapParams, "amountSpecified
 }
 
 /**
- * One `ISauceRouter.at(address.self).swap({...})` statement for `spec` — for splicing into a
+ * One `ISauceRouter.at(ctx.self()).swap({...})` statement for `spec` — for splicing into a
  * larger, hand-written program. Runs the FULL `toSwapParams` normalization/guard pass (a
  * `"balance"` `amountIn` reuses every other field's normalization, only the amount itself is
  * emitted as a runtime expression instead of a literal).
@@ -68,12 +68,12 @@ export function swapCallStatement(spec: SwapSourceSpec): string {
   const amountExpr =
     spec.amountIn === "balance"
       ? spec.poolType === SwapPoolType.UniV4
-        ? `(0n - (IERC20.at(${tokenInLiteral}).balanceOf(address.self)))`
-        : `IERC20.at(${tokenInLiteral}).balanceOf(address.self)`
+        ? `(0n - (IERC20.at(${tokenInLiteral}).balanceOf(ctx.self())))`
+        : `IERC20.at(${tokenInLiteral}).balanceOf(ctx.self())`
       : formatBigint(params.amountSpecified);
 
   const lines = [
-    "ISauceRouter.at(address.self).swap({",
+    "ISauceRouter.at(ctx.self()).swap({",
     `  poolType: ${fields.poolType}n,`,
     `  pool: ${formatAddressField(fields.pool)},`,
     `  poolKey: ${formatPoolKey(fields.poolKey)},`,

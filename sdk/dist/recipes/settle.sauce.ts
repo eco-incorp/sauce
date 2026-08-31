@@ -82,7 +82,7 @@ import { IERC20 } from "./artifacts/IERC20.json";
 // body-hash mismatch, not on the decode step.
 function main(tokens: Address[], minOut: Uint256, recipient: Address): Uint256 {
   const floorToken = IERC20.at(tokens[0]);
-  const floorBal: Uint256 = floorToken.balanceOf(address.self);
+  const floorBal: Uint256 = floorToken.balanceOf(ctx.self());
   if (minOut > 0) {
     if (floorBal < minOut) {
       throw "settle: balance below minOut";
@@ -90,7 +90,7 @@ function main(tokens: Address[], minOut: Uint256, recipient: Address): Uint256 {
   }
   for (let i = 0; i < tokens.length; i = i + 1) {
     const t = IERC20.at(tokens[i]);
-    const bal: Uint256 = t.balanceOf(address.self);
+    const bal: Uint256 = t.balanceOf(ctx.self());
     if (bal > 0) {
       t.transfer(recipient, bal);
     }

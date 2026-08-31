@@ -106,7 +106,7 @@ export interface TransferChildOptions {
    *  own balance is already short of the declared cap. Default `false`. */
   readonly requireCap?: boolean;
   /** `"skip"` omits the native leg entirely even when `child.reward.nativeAmount > 0`. Default
-   *  `"balance"` — transfer `address.balance`, clamped/guarded exactly like an ERC20 leg. */
+   *  `"balance"` — transfer `ctx.selfBalance()`, clamped/guarded exactly like an ERC20 leg. */
   readonly native?: "balance" | "skip";
 }
 
@@ -257,7 +257,7 @@ export function assertNestingInvariants(args: AssertNestingInvariantsArgs): void
 // posture (see `intent-dsl.ts`, which owns the `compile()` + call-slotting seam). Per child, per
 // reward token: a `balanceOf(self)` read, an optional cap-underfunded revert, an optional clamp to
 // the declared cap, and a zero-guarded `transfer` to the resolved vault address. A native leg mirrors
-// the same shape using `address.balance` + `contract.call(vault, amount, [])`.
+// the same shape using `ctx.selfBalance()` + `contract.call(vault, amount, [])`.
 
 /** Resolves `resolution` into a Sauce expression assignment for this child's vault address, bound to
  *  a fresh `n<index>_vault` local so a multi-token/native child only ever resolves it ONCE. */
@@ -341,7 +341,7 @@ export function nestedTransferStatements(
     const capLit = formatBigint(t.amount);
     const balVar = `n${index}_bal${i}`;
     const amtVar = `n${index}_amt${i}`;
-    stmts.push(`const ${balVar} = IERC20.at(${tokenLit}).balanceOf(address.self);`);
+    stmts.push(`const ${balVar} = IERC20.at(${tokenLit}).balanceOf(ctx.self());`);
     if (requireCap) {
       stmts.push(`if (${balVar} < ${capLit}) { throw 'nest: child underfunded'; }`);
     }
@@ -356,7 +356,7 @@ export function nestedTransferStatements(
     const capLit = formatBigint(child.reward.nativeAmount);
     const nbalVar = `n${index}_nbal`;
     const namtVar = `n${index}_namt`;
-    stmts.push(`const ${nbalVar} = address.balance;`);
+    stmts.push(`const ${nbalVar} = ctx.selfBalance();`);
     if (requireCap) {
       stmts.push(`if (${nbalVar} < ${capLit}) { throw 'nest: child underfunded'; }`);
     }

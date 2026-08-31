@@ -29,7 +29,7 @@ const RPC = 'http://127.0.0.1:8546';
 describe('integration: same-file function return-kind inference (dynamic/heap round-trip)', () => {
   it('the EXACT motivating case: main() assigns a helper-returned new Array(n), overwrites arr[0] with a genuinely runtime value, and returns it', () => {
     // Precisely the shape from the task's own repro — `arr[0]` is overwritten with a
-    // value that cannot be compile-time-folded (`address.balance`), so this can only pass
+    // value that cannot be compile-time-folded (`ctx.selfBalance()`), so this can only pass
     // via a real SET_INDEX/heap round-trip, never a lucky constant fold.
     const source = `
       function helper() {
@@ -41,13 +41,13 @@ describe('integration: same-file function return-kind inference (dynamic/heap ro
       }
       function main() {
         let arr = helper();
-        arr[0] = address.balance;
+        arr[0] = ctx.selfBalance();
         return arr[0];
       }
     `;
 
     const viaMutatedArray = BigInt(cook(source));
-    const viaDirect = BigInt(cook('function main() { return address.balance; }'));
+    const viaDirect = BigInt(cook('function main() { return ctx.selfBalance(); }'));
 
     expect(viaMutatedArray).toBe(viaDirect);
   });

@@ -346,12 +346,12 @@ describe('target-capabilities — over-gating guard: the NON-gated set stays uni
     expect(hex(compileOn(decodeSrc, 'svm').bytecode[0])).toBe(hex(compileOn(decodeSrc, 'v12').bytecode[0]));
   });
 
-  it('emit, msg.sender, block.chainId, address.balance, crypto.*, eval, storage.tRead/tWrite all still compile on svm', () => {
+  it('emit, msg.sender, block.chainId, ctx.selfBalance(), crypto.*, eval, storage.tRead/tWrite all still compile on svm', () => {
     const cases = [
       'function main() { emit("Ping()") }',
       'function main() { return msg.sender }',
       'function main() { return block.chainId }',
-      'function main() { return address.balance }',
+      'function main() { return ctx.selfBalance() }',
       'function main() { return crypto.keccak256(Uint8Array.from([0x01])) }',
       'function main() { return eval("return 42") }',
       'function main() { storage.tWrite(0, 42); return storage.tRead(0) }',
