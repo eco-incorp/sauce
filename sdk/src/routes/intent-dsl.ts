@@ -16,7 +16,7 @@
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
-import { chainDefines } from "./ambient.js";
+import { chainAmbient, chainDefines } from "./ambient.js";
 import { isSauceClosure, sauceBodyToSource, type SauceBody } from "./closure.js";
 import { encodeRewardEvm, encodeRewardSvm, encodeRouteEvm, encodeRouteSvm, hashIntent } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
@@ -412,10 +412,24 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
   // inside the body wins over all of this via the compiler's own getConstant/getVar precedence.
   const ambientDefines = chainDefines(destination, { tokens: options.tokenDefines });
   const mergedDefines = { ...ambientDefines, ...options.defines, ...options.compile?.defines };
+
+  // P7 — the ambient-MODULE half of the chain bundle (`ambientDefines` above is the scalar half).
+  // `chainAmbient(destination)` is the plugin's chain-scoped ambient module list (empty by default
+  // on this branch, see `ambient.ts#chainAmbient`/`plugin/index.ts`'s own notes); merged with any
+  // caller-supplied `options.compile.ambient` (deduped -- either side may legitimately name the
+  // same module). `ambient` only works through the RS/WASM compiler (`rs-compile.ts`), so a
+  // non-empty merged list defaults `compiler` to `'rs'` UNLESS the caller already picked one
+  // explicitly -- never overriding an explicit choice. When the merged list is empty (today's
+  // default), both `ambient` and `compiler` fall through to `options.compile`'s own values
+  // unchanged, so an existing route compiles byte-identically through the TS compiler exactly as
+  // it did before this feature existed.
+  const mergedAmbient = Array.from(new Set([...chainAmbient(destination), ...(options.compile?.ambient ?? [])]));
   const compileOptions: SauceCompileOptions = {
     ...options.compile,
     defines: mergedDefines,
     tokens: options.compile?.tokens ?? options.tokenDefines,
+    ambient: mergedAmbient.length > 0 ? mergedAmbient : options.compile?.ambient,
+    compiler: options.compile?.compiler ?? (mergedAmbient.length > 0 ? "rs" : undefined),
   };
 
   let compiledRoute: CompiledSauceRoute;
