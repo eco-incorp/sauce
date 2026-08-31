@@ -87,15 +87,7 @@ function discoverAllProtocolFunctions(): ProtocolFunction[] {
  * Templates the published Rust compiler cannot yet compile. Every entry is a real gap with a named
  * cause, not a tolerance: a template that fails for any OTHER reason still fails this suite, and a
  * listed one that starts compiling fails it too, so the list cannot rot.
- *
- * `empty-array-literal` is a compiler-version gap, not a corpus one — sauce #351 gives an empty
- * `[]` its element type from the position it sits in, and landed after the 0.4.1 this workspace
- * depends on. Delete those entries when the dependency is bumped past it.
  */
-// Templates the Rust compiler cannot compile. An entry here is asserted to THROW, so a gap that
-// closes fails this suite rather than passing quietly — which is how the 18 `empty-array-literal`
-// entries measured against published 0.4.1 were caught: the pinned compiler takes an empty array
-// literal's element type from the position it sits in, so they all compile now.
 const RUST_COMPILER_GAPS: Record<string, string> = {
   'erc20/storageTransfer': 'needs storage.read/write and emit(), which the Rust compiler does not provide',
 };

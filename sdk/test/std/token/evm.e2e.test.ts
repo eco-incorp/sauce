@@ -26,7 +26,8 @@
  * `hnc -r` cannot produce it — Runtime.huff's CONSTRUCTOR returns its own bytecode, so the deployed
  * runtime is only known at deployment time — so deploy the creation bytecode and read the code back.
  * CI does exactly this, from the `v12-evm-v0.3.0` release's `runtime.creation.hex` (built from the
- * same sauce commit `sauce-next` pins the compiler to); by hand, from a local sauce checkout:
+ * same sauce commit the published compiler's `compiler-v0.5.0` tag is cut from); by hand, from a
+ * local sauce checkout:
  *   cd <sauce>/v12-evm && anvil --port 8799 --silent &
  *   KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80  # anvil's first account
  *   ADDR=$(cast send --rpc-url http://127.0.0.1:8799 --private-key $KEY --create \

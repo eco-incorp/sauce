@@ -1,8 +1,8 @@
 /**
- * `@sauce/token` (sdk/src/std/token) compiled through the RUST compiler — built from the
- * SHA-pinned `sauce-next` dep, NOT the in-repo TypeScript one every other suite here uses.
- * That is the whole point: the library ships as SauceScript source, so the only thing that proves it
- * is the compiler that will actually consume it downstream.
+ * `@sauce/token` (sdk/src/std/token) compiled through the RUST compiler — the published
+ * `@eco-incorp/sauce-compiler` (`sauce-next`), NOT the in-repo TypeScript one every other suite here
+ * uses. That is the whole point: the library ships as SauceScript source, so the only thing that
+ * proves it is the compiler that will actually consume it downstream.
  *
  * The library's four files are byte-identical copies of the sauce repo's conformance fixture
  * (`compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token/`), which is the source of truth —
@@ -24,34 +24,19 @@ import { fileURLToPath } from 'node:url';
 
 // The compiler's own types, not a local restatement of them. A hand-written mirror of a published
 // type is exactly the defect 0.4.1 fixed one repo up; re-declaring them here would reintroduce it
-// one repo down, with nothing to catch the drift. wasm-pack emits them alongside the module it
-// builds, so they track the pinned SHA for free.
-import type { CompileOptions, CompileResult, SauceTarget } from '../../../.sauce-wasm/sauce_wasm.js';
+// one repo down, with nothing to catch the drift. The package ships them, so they track the
+// resolved version for free.
+import type { CompileOptions, CompileResult, SauceTarget } from 'sauce-next';
 
-export type {
-  AccountEntry,
-  AccountManifest,
-  CompileOptions,
-  CompileResult,
-  SauceTarget,
-} from '../../../.sauce-wasm/sauce_wasm.js';
+export type { AccountEntry, AccountManifest, CompileOptions, CompileResult, SauceTarget } from 'sauce-next';
 
-// The Rust SauceScript compiler is built from the SHA-pinned `sauce-next` dep into `sdk/.sauce-wasm/`
-// by scripts/build-wasm.mjs, which the sdk `pretest` runs — so it is present whenever this suite is.
-// A missing build is a HARD ERROR rather than a skip: a suite that skips reads exactly like one that
-// passed, and this is the only thing proving the library compiles at all.
+// The Rust SauceScript compiler, aliased `sauce-next` because its real name
+// (`@eco-incorp/sauce-compiler`) is still this workspace's TypeScript one.
 //
-// Required via `createRequire`, not `import`: wasm-pack's `--target nodejs` output is CommonJS that
-// reads its sibling `.wasm` off disk at load. Node's own CJS loader is the one that resolves that
-// sibling — jest's ESM transform does not.
-const WASM_ENTRY = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '.sauce-wasm', 'sauce_wasm.js');
-if (!existsSync(WASM_ENTRY)) {
-  throw new Error(
-    `Rust SauceScript compiler not built at ${WASM_ENTRY}. Run \`pnpm --filter ./sdk build:wasm\` ` +
-      '(needs Rust + wasm-pack); the sdk `pretest` runs it automatically.',
-  );
-}
-const { compile } = createRequire(import.meta.url)(WASM_ENTRY) as {
+// Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build
+// that reads its sibling `.wasm` off disk at load. Node's own CJS loader is the one that resolves
+// that sibling — jest's ESM transform does not.
+const { compile } = createRequire(import.meta.url)('sauce-next') as {
   compile: (options: CompileOptions) => CompileResult;
 };
 

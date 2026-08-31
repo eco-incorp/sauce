@@ -6,32 +6,19 @@
  * source files since the published compiler only resolves JSON imports.
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import ts from 'typescript';
 import { keccak256, toBytes, toHex } from 'viem';
-import type { CompileResult as RustCompileResult, SauceTarget } from '../.sauce-wasm/sauce_wasm.js';
+import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-next';
 import { compile, type ContractsConfig, type Abi } from '../../compiler/dist/index.js';
 
-// The Rust SauceScript compiler is built from the SHA-pinned `sauce-next` dep into `sdk/.sauce-wasm/`
-// by scripts/build-wasm.mjs, which the sdk `pretest` runs. It is loaded by PATH, not by package
-// specifier: since the dep became a git SHA there is no resolvable `sauce-next` package for jest to
-// find — `test/std/token/harness.ts` loads it the same way, for the same reason.
-//
-// Required via `createRequire` because wasm-pack's `--target nodejs` output is CommonJS that reads
-// its sibling `.wasm` off disk at load; Node's CJS loader resolves that sibling and jest's ESM
-// transform does not.
-//
-// A missing build is a hard error, not a skip: a skipped suite reads exactly like a passing one.
-const WASM_ENTRY = join(dirname(fileURLToPath(import.meta.url)), '..', '.sauce-wasm', 'sauce_wasm.js');
-if (!existsSync(WASM_ENTRY)) {
-  throw new Error(
-    `Rust SauceScript compiler not built at ${WASM_ENTRY}. Run \`pnpm --filter ./sdk build:wasm\`.`,
-  );
-}
-const { compile: compileRust } = createRequire(import.meta.url)(WASM_ENTRY) as {
+// The Rust SauceScript compiler, aliased because its real name (`@eco-incorp/sauce-compiler`) is
+// still this workspace's TypeScript one. Required via `createRequire` for the same reason
+// `test/std/token/harness.ts` does: the package's `node` condition is a CommonJS build that reads
+// its sibling `.wasm` off disk at load, and jest's ESM transform does not resolve that sibling.
+const { compile: compileRust } = createRequire(import.meta.url)('sauce-next') as {
   compile: (options: {
     target: SauceTarget;
     entry?: string;
