@@ -1,16 +1,15 @@
 /**
  * Comprehensive compilation and structure tests for all SDK protocol SauceScript functions.
  *
- * The corpus is written for the RUST compiler, so that is what compiles it here — the published
- * `@eco-incorp/sauce-compiler` from npm, aliased `sauce-next`. Tier 1 selector
- * verification still runs through the in-repo TypeScript compiler, which is what can read a
- * segment's bytes.
+ * The corpus is compiled by the published compiler (`@eco-incorp/sauce-compiler` from npm, aliased
+ * `sauce-compiler`) — including Tier 1 selector verification, which scans the emitted program for the
+ * selector bytes it must contain.
  */
 
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readdirSync, existsSync, readFileSync } from 'fs';
-import { compileSauceFunction, compileSauceFunctionRust, computeSelector, extractSelectors } from './helpers';
+import { compileSauceFunctionRust, computeSelector, extractSelectors } from './helpers';
 
 const SDK_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PROTOCOLS_DIR = join(SDK_ROOT, 'src', 'protocols');
@@ -83,15 +82,6 @@ function discoverAllProtocolFunctions(): ProtocolFunction[] {
 // 1. SauceScript Compilation Tests
 // ---------------------------------------------------------------------------
 
-/**
- * Templates the published Rust compiler cannot yet compile. Every entry is a real gap with a named
- * cause, not a tolerance: a template that fails for any OTHER reason still fails this suite, and a
- * listed one that starts compiling fails it too, so the list cannot rot.
- */
-const RUST_COMPILER_GAPS: Record<string, string> = {
-  'erc20/storageTransfer': 'needs storage.read/write and emit(), which the Rust compiler does not provide',
-};
-
 describe('SauceScript compilation', () => {
   const allFunctions = discoverAllProtocolFunctions();
 
@@ -111,18 +101,10 @@ describe('SauceScript compilation', () => {
   for (const [slug, functions] of byProtocol) {
     describe(slug, () => {
       for (const fn of functions) {
-        const gap = RUST_COMPILER_GAPS[`${slug}/${fn.functionName}`];
-
-        it(gap ? `${fn.functionName} does not compile yet — ${gap}` : `${fn.functionName} compiles successfully`, () => {
+        it(`${fn.functionName} compiles successfully`, () => {
           const protocolDir = join(PROTOCOLS_DIR, slug);
-          const compileIt = () => compileSauceFunctionRust(fn.sauceScript, protocolDir);
 
-          if (gap) {
-            expect(compileIt).toThrow();
-            return;
-          }
-
-          expect(compileIt().bytecode.length).toBeGreaterThan(0);
+          expect(compileSauceFunctionRust(fn.sauceScript, protocolDir).bytecode.length).toBeGreaterThan(0);
         });
       }
     });
@@ -138,7 +120,7 @@ describe('Tier 1 selector verification', () => {
     it('swap contains exactInputSingle selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'uniswap-v3');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.swap, protocolDir);
+      const result = compileSauceFunctionRust(functions.swap, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       // ABI uses uint32 (widened from Solidity's uint24 for compiler compatibility)
@@ -153,7 +135,7 @@ describe('Tier 1 selector verification', () => {
     it('supply contains supply selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'aave-v3');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.supply, protocolDir);
+      const result = compileSauceFunctionRust(functions.supply, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       const expectedSelector = computeSelector('supply(address,uint256,address,uint16)');
@@ -163,7 +145,7 @@ describe('Tier 1 selector verification', () => {
     it('borrow contains borrow selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'aave-v3');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.borrow, protocolDir);
+      const result = compileSauceFunctionRust(functions.borrow, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       const expectedSelector = computeSelector('borrow(address,uint256,uint256,uint16,address)');
@@ -175,7 +157,7 @@ describe('Tier 1 selector verification', () => {
     it('submit contains submit selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'lido');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.submit, protocolDir);
+      const result = compileSauceFunctionRust(functions.submit, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       const expectedSelector = computeSelector('submit(address)');
@@ -187,7 +169,7 @@ describe('Tier 1 selector verification', () => {
     it('swap contains swapExactTokensForTokens selector', () => {
       const protocolDir = join(PROTOCOLS_DIR, 'uniswap-v2');
       const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
-      const result = compileSauceFunction(functions.swap, protocolDir);
+      const result = compileSauceFunctionRust(functions.swap, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       const expectedSelector = computeSelector(

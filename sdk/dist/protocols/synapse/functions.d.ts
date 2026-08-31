@@ -1,2 +1,0 @@
-export declare const bridge = "\nimport { SynapseBridgeABI as ISynapseBridge } from \"./abis\";\n\nfunction main(bridgeAddress: Address, recipient: Address, chainId: Uint256, token: Address, amount: Uint256): Uint256 {\n  const bridge = ISynapseBridge.at(bridgeAddress);\n  return bridge.deposit(recipient, chainId, token, amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

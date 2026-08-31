@@ -1,2 +1,0 @@
-export declare const swap = "\nimport { LBRouterABI as ILBRouter } from \"./abis\";\n\nfunction main(routerAddress: Address, path: Tuple, amountIn: Uint256, amountOutMin: Uint256, recipient: Address): Uint256 {\n  const router = ILBRouter.at(routerAddress);\n  return router.swapExactTokensForTokens(amountIn, amountOutMin, path, recipient, 99999999999);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

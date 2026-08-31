@@ -1,3 +1,0 @@
-export declare const flashFee = "\nimport { FlashLenderABI as IFlashLender } from \"./abis\";\n\nfunction main(lenderAddress: Address, token: Address, amount: Uint256): Uint256 {\n  const lender = IFlashLender.at(lenderAddress);\n  return lender.flashFee(token, amount);\n}\n";
-export declare const maxFlashLoan = "\nimport { FlashLenderABI as IFlashLender } from \"./abis\";\n\nfunction main(lenderAddress: Address, token: Address): Uint256 {\n  const lender = IFlashLender.at(lenderAddress);\n  return lender.maxFlashLoan(token);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

@@ -87,13 +87,14 @@ function resolveAmountExpr(d: NormalizedDeposit, varSuffix: string): { pre: stri
 /**
  * One deposit's full statement block (any `"balance"` binding line, the approve line if
  * applicable, then the protocol call) for `spec` — for splicing into a larger, hand-written
- * program. `varSuffix` disambiguates the bound `depositAmtN` local when multiple `"balance"`
- * deposits share one program (`depositSource` passes the spec's own index).
+ * program. `varSuffix` disambiguates EVERY local this block binds — the `depositAmtN` balance read
+ * and a template's own selector const — when several deposits share one program (`depositSource`
+ * passes the spec's own index).
  */
 export function depositCallStatement(spec: DepositSourceSpec, varSuffix = ""): string {
   const normalized = toDeposit(spec);
   const { pre, amountExpr } = resolveAmountExpr(normalized, varSuffix);
-  const lines = [...pre, ...approveLines(normalized, amountExpr), ...normalized.template.emit(normalized, amountExpr)];
+  const lines = [...pre, ...approveLines(normalized, amountExpr), ...normalized.template.emit(normalized, amountExpr, varSuffix)];
   return lines.join("\n");
 }
 
@@ -240,7 +241,7 @@ export function swapThenDepositSource(
     const deltaExpr = deltaAmountExprs.get(i);
     if (deltaExpr === undefined) return depositCallStatement(d, String(i));
     const normalized = toDeposit({ ...d, amount: 0n } as DepositSpec);
-    const lines = [...approveLines(normalized, deltaExpr), ...normalized.template.emit(normalized, deltaExpr)];
+    const lines = [...approveLines(normalized, deltaExpr), ...normalized.template.emit(normalized, deltaExpr, String(i))];
     return lines.join("\n");
   });
 

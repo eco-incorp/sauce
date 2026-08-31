@@ -1,1 +1,0 @@
-{"version":3,"file":"addresses.js","sourceRoot":"","sources":["../../../src/protocols/optimism-bridge/addresses.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,WAAW,GAAsB;IAC5C;QACE,OAAO,EAAE,CAAC;QACV,SAAS,EAAE,UAAU;QACrB,SAAS,EAAE;YACT,gBAAgB,EAAE,4CAA4C;SAC/D;KACF;IACD;QACE,OAAO,EAAE,EAAE;QACX,SAAS,EAAE,UAAU;QACrB,SAAS,EAAE;YACT,gBAAgB,EAAE,4CAA4C;SAC/D;KACF;CACF,CAAC"}

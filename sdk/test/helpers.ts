@@ -1,43 +1,114 @@
 /**
  * SDK Test Helpers
  *
- * Compilation utilities for testing SauceScript functions against the
- * @eco-incorp/sauce-compiler. Handles ABI import resolution from TypeScript
- * source files since the published compiler only resolves JSON imports.
+ * Compilation utilities for testing SauceScript functions. Handles ABI import resolution from
+ * TypeScript source files, since the compiler resolves a contract import as JSON.
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { createRequire } from 'node:module';
 import { join } from 'path';
-import ts from 'typescript';
+import { ensureVoidMain } from '../src/routes/rs-compile.js';
 import { keccak256, toBytes, toHex } from 'viem';
-import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-next';
-import { compile, type ContractsConfig, type Abi } from '../../compiler/dist/index.js';
+import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-compiler';
 
-// The Rust SauceScript compiler, aliased because its real name (`@eco-incorp/sauce-compiler`) is
-// still this workspace's TypeScript one. Required via `createRequire` for the same reason
-// `test/std/token/harness.ts` does: the package's `node` condition is a CommonJS build that reads
-// its sibling `.wasm` off disk at load, and jest's ESM transform does not resolve that sibling.
-const { compile: compileRust } = createRequire(import.meta.url)('sauce-next') as {
+// The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, depended on under the alias
+// `sauce-compiler` (`"sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0"`) because the in-repo
+// `compiler/` workspace package claims the scoped name itself.
+//
+// Required via `createRequire` for the same reason `test/std/token/harness.ts` does: the package's
+// `node` condition is a CommonJS build that reads its sibling `.wasm` off disk at load, and jest's
+// ESM transform does not resolve that sibling.
+const { compile: compileRust } = createRequire(import.meta.url)('sauce-compiler') as {
   compile: (options: {
     target: SauceTarget;
     entry?: string;
     resolve: (path: string) => Uint8Array | undefined;
+    defines?: Array<[name: string, value: string]>;
+    inlineContracts?: Array<[name: string, abi: string]>;
   }) => RustCompileResult;
 };
 
-/**
- * Strip TypeScript type annotations from SauceScript, returning plain JS.
- */
-function stripTypes(source: string): string {
-  const result = ts.transpileModule(source, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ESNext,
-      module: ts.ModuleKind.ESNext,
-    },
-  });
-  return result.outputText;
+/** The option surface the real-compile suites already call with. */
+export interface CompileProgramOptions extends CompileSourceOptions {
+  /** The compiler's two backends. Defaults to `'evm'`. */
+  target?: 'evm' | 'svm';
+  /** Contract bindings holding a PARSED ABI, as `protocol-rewrite.ts` synthesizes them. */
+  contracts?: Readonly<Record<string, { abi: unknown }>>;
 }
+
+/**
+ * Compile one program and return its bytecode as a SEGMENT LIST.
+ *
+ * The compiler emits exactly one program, but these suites were written against a segmented result
+ * and index `bytecode[0]`; wrapping here keeps that call shape in one place instead of touching
+ * every assertion. There is no `warnings` channel — a real problem throws — so it is always empty.
+ */
+export function compileProgram(
+  source: string,
+  { target = 'evm', baseDirs, contracts, defines }: CompileProgramOptions = {},
+): { bytecode: Uint8Array[]; warnings: string[] } {
+  const entry = 'main.js';
+  const resolve = (path: string): Uint8Array | undefined => {
+    const key = path.replace(/^\.\//, '');
+    if (key === entry) return Buffer.from(ensureVoidMain(source));
+    for (const dir of baseDirs ?? []) {
+      const full = join(dir, key);
+      if (existsSync(full)) return readFileSync(full);
+    }
+
+    return undefined;
+  };
+
+  const inline = Object.entries(contracts ?? {}).map(([name, cfg]) => [name, JSON.stringify(cfg.abi)] as [string, string]);
+  const { bytecode } = compileRust({
+    target: target === 'svm' ? 'svm' : 'evm',
+    entry,
+    resolve,
+    ...(inline.length > 0 ? { inlineContracts: inline } : {}),
+    ...(defines ? { defines: Object.entries(defines).map(([k, v]) => [k, v.toString()] as [string, string]) } : {}),
+  });
+
+  return { bytecode: [bytecode], warnings: [] };
+}
+
+export interface CompileSourceOptions {
+  /** Roots a non-entry import (e.g. `./artifacts/IERC20.json`) is resolved against, in order. */
+  baseDirs?: readonly string[];
+  /** Compile-time consts, as the builders pass them. */
+  defines?: Readonly<Record<string, bigint | number | string>>;
+}
+
+/**
+ * Compile a complete SauceScript program through the Rust compiler, resolving any non-entry import
+ * off disk against `baseDirs` — the shared seam the real-compile suites use, so the whole corpus
+ * loads the wasm module once and states its resolve rules in one place.
+ */
+export function compileSource(
+  source: string,
+  target: SauceTarget,
+  { baseDirs = [], defines }: CompileSourceOptions = {},
+): RustCompileResult {
+  const entry = 'main.js';
+  const resolve = (path: string): Uint8Array | undefined => {
+    const key = path.replace(/^\.\//, '');
+    if (key === entry) return Buffer.from(ensureVoidMain(source));
+    for (const dir of baseDirs) {
+      const full = join(dir, key);
+      if (existsSync(full)) return readFileSync(full);
+    }
+
+    return undefined;
+  };
+
+  return compileRust({
+    target,
+    entry,
+    resolve,
+    ...(defines ? { defines: Object.entries(defines).map(([k, v]) => [k, v.toString()] as [string, string]) } : {}),
+  });
+}
+
 
 /**
  * Parsed import: `import { ExportName as LocalName } from "./abis"`
@@ -72,13 +143,6 @@ function parseImports(source: string): ParsedImport[] {
     }
   }
   return imports;
-}
-
-/**
- * Strip import lines from SauceScript source.
- */
-function stripImports(source: string): string {
-  return source.replace(/import\s*\{[^}]+\}\s*from\s*["'][^"']+["']\s*;?\s*\n?/g, '');
 }
 
 /**
@@ -173,46 +237,6 @@ function loadProtocolAbis(protocolDir: string): Record<string, unknown> {
   return extractExportsFromTs(tsSource);
 }
 
-export interface CompileResult {
-  bytecode: Uint8Array[];
-  warnings: string[];
-}
-
-/**
- * Compile a SauceScript string, resolving ABI imports from the given protocol directory.
- *
- * @param sauceScript - The SauceScript source code (template literal content)
- * @param protocolDir - Absolute path to the protocol's directory (containing abis.ts)
- * @returns Compiled bytecode segments and warnings
- */
-export function compileSauceFunction(sauceScript: string, protocolDir: string): CompileResult {
-  const imports = parseImports(sauceScript);
-  // Strip TS types first (preserves ESM imports), then remove import lines
-  const jsSource = stripTypes(sauceScript);
-  const strippedSource = stripImports(jsSource);
-
-  // Build contracts config from imports
-  const contracts: ContractsConfig = {};
-
-  if (imports.length > 0) {
-    const abiExports = loadProtocolAbis(protocolDir);
-
-    for (const imp of imports) {
-      const abi = abiExports[imp.exportName];
-      if (!abi) {
-        throw new Error(
-          `ABI export "${imp.exportName}" not found in ${protocolDir}/abis.ts. ` +
-          `Available exports: ${Object.keys(abiExports).join(', ')}`
-        );
-      }
-      contracts[imp.localName] = { abi: abi as Abi };
-    }
-  }
-
-  const result = compile(strippedSource, { contracts });
-  return { bytecode: result.bytecode, warnings: result.warnings };
-}
-
 /**
  * Compile a SauceScript program with the RUST compiler — the one the corpus is written for, and
  * the one that will consume it downstream.
@@ -228,7 +252,7 @@ export function compileSauceFunctionRust(
 ): RustCompileResult {
   const [contractImport] = parseImports(sauceScript);
   const abi = contractImport
-    ? (loadProtocolAbis(protocolDir)[contractImport.exportName] as Abi | undefined)
+    ? (loadProtocolAbis(protocolDir)[contractImport.exportName] as unknown[] | undefined)
     : undefined;
 
   if (contractImport && !abi) {
@@ -255,9 +279,9 @@ export function compileSauceFunctionRust(
  * Extract 4-byte function selectors from compiled bytecode segments.
  * Selectors appear as the first 4 bytes of ABI-encoded CALL data within the bytecode.
  */
-export function extractSelectors(bytecode: Uint8Array[]): string[] {
+export function extractSelectors(bytecode: Uint8Array | Uint8Array[]): string[] {
   const selectors: string[] = [];
-  for (const segment of bytecode) {
+  for (const segment of Array.isArray(bytecode) ? bytecode : [bytecode]) {
     // Look for CALL opcode patterns that contain 4-byte selectors
     // In Sauce bytecode, selectors are embedded as BYTE_4 (opcode 0x04) followed by 4 bytes
     for (let i = 0; i < segment.length - 4; i++) {

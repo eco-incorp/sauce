@@ -3,7 +3,7 @@
  * `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `ctx.self()`.
  * See `src/routes/protocol-rewrite.ts`'s module doc for the design.
  */
-import { compile } from "@eco-incorp/sauce-compiler";
+import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
 import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";
@@ -43,8 +43,8 @@ describe("rewriteProtocolAccessors: THE DECISIVE STEP -- a real protocol accesso
 
     const handWritten = `function main() { IUniswapV4_UniversalRouter.at(${BigInt(BASE_UNIVERSAL_ROUTER)}n).execute("0x0a", ["0x00"], 0n); }`;
 
-    const a = compile(rewritten, { target: "v12", contracts });
-    const b = compile(handWritten, { target: "v12", contracts });
+    const a = compile(rewritten, { contracts });
+    const b = compile(handWritten, { contracts });
     expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
     expect(a.bytecode[0]!.length).toBeGreaterThan(0);
   });
@@ -97,8 +97,8 @@ describe("rewriteProtocolAccessors: .view vs .at binding", () => {
     expect(out).toContain(".view(");
 
     const atVariant = out.replace(".view(", ".at(");
-    const a = compile(out, { target: "v12", contracts });
-    const b = compile(atVariant, { target: "v12", contracts });
+    const a = compile(out, { contracts });
+    const b = compile(atVariant, { contracts });
     expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
   });
 
@@ -146,8 +146,8 @@ describe("rewriteProtocolAccessors: bare self -> ctx.self()", () => {
     expect(selfSites).toBe(1);
     expect(out).toContain("return ctx.self();");
 
-    const a = compile(out, { target: "v12" });
-    const b = compile(`function main() { return ctx.self(); }`, { target: "v12" });
+    const a = compile(out);
+    const b = compile(`function main() { return ctx.self(); }`);
     expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
   });
 

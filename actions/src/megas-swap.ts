@@ -1,4 +1,26 @@
-import { Saucer, CompilerContext } from '../../compiler/dist/index.js';
+/**
+ * Greedy split routing across several pools, as ONE SauceScript program.
+ *
+ * BREAKING, AND UNAVOIDABLE: this used to return `N + 3` separate bytecodes — one per candidate
+ * quote, plus two dispatchers, plus `main` — because the retired TypeScript compiler had no module
+ * linker: cross-program calls went through the v1 engine's function table, with a hand-managed slot
+ * convention (`ctx.setVar('amount', 'scalar')` = slot 0, and the CALLER wrote the argument there).
+ * The Rust compiler has ordinary functions and one output, so `quote_i` / `quote_any` / `swap_any`
+ * are declared functions in a single module and the whole thing compiles to one program.
+ *
+ * The return type stays `Uint8Array[]` so the call site does not change: it is still exactly what
+ * `Sauce.cook(bytes[])` takes, now a one-element list (a cook executes `ingredients[0]`).
+ */
+import {
+  formatBigint,
+  fn,
+  indent,
+  newEmitter,
+  type Emitter,
+  type Expr,
+  type Stmt,
+} from './emit.js';
+import { compileEvm } from './compile.js';
 import { buildAction } from './to-sauce.js';
 import { actionToQuote, type QuoteOpts } from './to-quote.js';
 import type {
@@ -23,32 +45,31 @@ export interface MegasSwapOpts extends QuoteOpts {
 }
 
 /**
- * Emit Sauce bytecode that performs a greedy split-routing across `candidates`.
+ * Emit the SauceScript for a greedy split-routing across `candidates`.
  *
- * Programs returned (in `cook(bytes[])` order):
- *   [0..N-1]  quote_i(amount: uint256) -> uint256
- *             One per candidate; invokes the protocol quoter with a runtime amount.
- *   [N]       quote_any(idx: uint256, amount: uint256) -> uint256
- *             Compile-time if/else dispatch to the matching quote_i.
- *   [N+1]     swap_any(idx: uint256, amount: uint256) -> void
- *             Same dispatch pattern, but for executing the swap.
- *   [N+2]     main
+ * Declared functions:
+ *   quote_i(amount)        One per candidate; invokes the protocol quoter with a runtime amount.
+ *   quote_any(idx, amount) if/else dispatch to the matching quote_i.
+ *   swap_any(idx, amount)  Same dispatch, but executing the swap.
+ *   main()                 The three passes below.
  *
- * Main algorithm (all three passes are real on-chain `for` loops — the
- * per-candidate state lives in transient storage keyed by `i`):
+ * Main algorithm (all three passes are real `for` loops — the per-candidate state lives in
+ * transient storage keyed by `i`):
  *   1. Init:    for i in 0..N-1 { marg[i] = quote_any(i, bucket); }
  *               used[i] and total[i] default to 0 (TLOAD of untouched keys).
  *   2. Greedy:  for iter in 0..n-1 {
- *                 for i in 0..N-1 argmax → (best_marg, best_idx);
- *                 used[best_idx]  += 1;
- *                 total[best_idx] += marg[best_idx];          // cached, no call
- *                 marg[best_idx]   = quote_any(best_idx, (used[best_idx]+1)*bucket)
- *                                    - total[best_idx];
+ *                 for i in 0..N-1 argmax → (bestMarg, bestIdx);
+ *                 used[bestIdx]  += 1;
+ *                 total[bestIdx] += marg[bestIdx];          // cached, no call
+ *                 marg[bestIdx]   = quote_any(bestIdx, (used[bestIdx]+1)*bucket)
+ *                                    - total[bestIdx];
  *               }
  *   3. Execute: for i in 0..N-1 if (used[i] > 0) swap_any(i, used[i]*bucket);
  *
- * Bytecode size is O(N): the `_any` dispatchers are emitted once and every
- * main-level pass is a fixed-size loop that calls through them.
+ * SIZE, CHANGED: the retired compiler kept every main-level pass a fixed-size loop, so the program
+ * was O(N). The Rust compiler's constant folder UNROLLS a loop whose bound it knows, and `N`/`n`
+ * are compile-time constants here, so the emitted main is O(N + n·N) instructions. Behaviour is
+ * identical; only the byte count grows. Reach for a runtime bound if that ever matters.
  *
  * Requirements:
  * - n >= 1. n=1 reduces to "pick the single best pool at full size".
@@ -56,12 +77,12 @@ export interface MegasSwapOpts extends QuoteOpts {
  * - Swap builders must accept a runtime amountIn expression; UniswapV4 does
  *   not and will embed a stale compile-time amount.
  */
-export function megasSwapToSauce(
+export function megasSwapToSauceSource(
   candidates: SwapAction[],
   amountIn: bigint,
   n: number,
   opts: MegasSwapOpts = {},
-): Uint8Array[] {
+): string {
   if (candidates.length === 0) {
     throw new Error('megasSwapToSauce requires at least one candidate');
   }
@@ -80,6 +101,7 @@ export function megasSwapToSauce(
   }
 
   const N = candidates.length;
+  const emit = newEmitter();
 
   // Resolve dynamic-quote builders; fail early on unsupported protocols.
   const dynQuotes = candidates.map((cand, i) => {
@@ -92,200 +114,139 @@ export function megasSwapToSauce(
     return q.toSauceDynamic;
   });
 
-  // ── One function per candidate: quote_i(amount) -> uint256 ──────────────
-  const quoteFuncBytecodes = dynQuotes.map((dyn) => {
-    const fctx = new CompilerContext();
-    fctx.setVar('amount', 'scalar'); // slot 0 — caller writes the param here
-    const fs = new Saucer(fctx);
-    return dyn(fs, fs.read('amount')).build();
+  const quoteFns = dynQuotes.map((dyn, i) => {
+    const quote = dyn(emit, 'amount');
+
+    return fn(`quote_${i}`, ['amount: Uint256'], 'Uint256', [...quote.stmts, `return ${quote.expr};`]);
   });
 
-  // ── quote_any(idx, amount): nested if/else dispatcher ───────────────────
-  const quoteAnyBc = buildDispatcher(
-    N,
-    (i, innerS) => innerS.callFunction(`quote_${i}`, [innerS.read('amount')]),
-    { withQuoteFuncs: true },
-  );
+  const quoteAny = fn('quote_any', ['idx: Uint256', 'amount: Uint256'], 'Uint256', [
+    ...outOfRangeGuard(N),
+    ...returnDispatch(N, (i) => `return quote_${i}(amount);`),
+  ]);
 
-  // ── swap_any(idx, amount): dispatcher that runs the winning swap ────────
-  const swapAnyBc = buildDispatcher(
-    N,
-    (i, innerS) => buildAction(innerS, candidates[i], innerS.read('amount'), false).call,
-    { withQuoteFuncs: false },
-  );
+  const swapAny = fn('swap_any', ['idx: Uint256', 'amount: Uint256'], 'void', [
+    ...outOfRangeGuard(N),
+    ...blockDispatch(N, (i) => buildAction(emit, candidates[i], 'amount', false).stmts),
+  ]);
 
-  // ── Main ───────────────────────────────────────────────────────────────
-  const ctx = new CompilerContext();
-  for (let i = 0; i < N; i++) ctx.addFunc(`quote_${i}`);
-  ctx.addFunc('quote_any');
-  ctx.addFunc('swap_any');
-  const s = new Saucer(ctx);
+  return [...quoteFns, quoteAny, swapAny, mainFn(emit, N, n, bucket, opts)].join('\n\n') + '\n';
+}
 
-  // Transient-storage key layout (compile-time offsets; indexed at runtime):
+export function megasSwapToSauce(
+  candidates: SwapAction[],
+  amountIn: bigint,
+  n: number,
+  opts: MegasSwapOpts = {},
+): Uint8Array[] {
+  return [compileEvm(megasSwapToSauceSource(candidates, amountIn, n, opts))];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispatchers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Turns an otherwise-silent fall-through (any out-of-range idx would land on branch N-1) into an
+ * explicit revert, so callers can't accidentally route an invalid index to the last candidate.
+ */
+function outOfRangeGuard(N: number): Stmt[] {
+  return [`if (idx >= ${N}n) { revert(); }`];
+}
+
+/** `if (idx == 0) return …; … return <last>;` — every path returns. */
+function returnDispatch(N: number, branch: (i: number) => Stmt): Stmt[] {
+  const early = Array.from({ length: N - 1 }, (_, i) => `if (idx == ${i}n) { ${branch(i)} }`);
+
+  return [...early, branch(N - 1)];
+}
+
+/** `if (idx == 0) { … } else if … else { <last> }` — exactly one branch runs. */
+function blockDispatch(N: number, branch: (i: number) => readonly Stmt[]): Stmt[] {
+  if (N === 1) return [...branch(0)];
+
+  const lines: Stmt[] = [];
+  for (let i = 0; i < N - 1; i++) {
+    lines.push(`${i === 0 ? '' : '} else '}if (idx == ${i}n) {`);
+    lines.push(indent(branch(i)));
+  }
+  lines.push('} else {');
+  lines.push(indent(branch(N - 1)));
+  lines.push('}');
+
+  return lines;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// main
+// ─────────────────────────────────────────────────────────────────────────────
+
+function mainFn(
+  emit: Emitter,
+  N: number,
+  n: number,
+  bucket: bigint,
+  opts: MegasSwapOpts,
+): string {
+  // Transient-storage key layout (compile-time bases; indexed at runtime):
   //   used[i]  at key i
   //   total[i] at key N + i
   //   marg[i]  at key 2N + i
-  const USED_BASE = 0n;
-  const TOTAL_BASE = BigInt(N);
-  const MARG_BASE = BigInt(2 * N);
-  const usedKey = (idxExpr: Saucer) => s.add(s.int(USED_BASE), idxExpr);
-  const totalKey = (idxExpr: Saucer) => s.add(s.int(TOTAL_BASE), idxExpr);
-  const margKey = (idxExpr: Saucer) => s.add(s.int(MARG_BASE), idxExpr);
-  const bucketExpr = () => s.int(bucket);
+  const key = (base: number, idx: Expr): Expr => (base === 0 ? idx : `${base}n + ${idx}`);
+  const used = (idx: Expr): Expr => `evm.tload(${key(0, idx)})`;
+  const total = (idx: Expr): Expr => `evm.tload(${key(N, idx)})`;
+  const marg = (idx: Expr): Expr => `evm.tload(${key(2 * N, idx)})`;
+  const bucketExpr = formatBigint(bucket);
 
-  let chain: Saucer = s;
+  const body: Stmt[] = [];
 
-  // Prepend: inline user-provided approvals so the whole split-swap runs in
-  // a single `cook` call. Each approval uses its own `amount` field — no
-  // chaining, no runtime slots.
+  // Prepend: inline user-provided approvals so the whole split-swap runs in a single `cook` call.
+  // Each approval uses its own `amount` field — no chaining, no runtime slots.
   for (const action of opts.prepend ?? []) {
     if (action.amount === undefined) {
       throw new Error(
         `prepend approve action for token ${action.token} has no amount; megasSwapToSauce requires an explicit amount on every prepend approval`,
       );
     }
-    const { call } = buildAction(s, action, s.int(BigInt(action.amount)), false);
-    chain = chain.join(call);
+    body.push(...buildAction(emit, action, formatBigint(BigInt(action.amount)), false).stmts);
   }
 
   // Init loop: marg[i] = quote_any(i, bucket).
-  chain = chain.join(
-    s.for(
-      s.store('__i', s.int(0n)),
-      s.lt(s.read('__i'), s.int(BigInt(N))),
-      s.store('__i', s.add(s.read('__i'), s.int(1n))),
-    ).loop(
-      s.tstore(
-        margKey(s.read('__i')),
-        s.callFunction('quote_any', [s.read('__i'), bucketExpr()]),
-      ),
-    ),
+  body.push(
+    `for (let i = 0n; i < ${N}n; i = i + 1n) {`,
+    `  evm.tstore(${key(2 * N, 'i')}, quote_any(i, ${bucketExpr}));`,
+    '}',
   );
 
-  // Greedy outer loop.
-  chain = chain.join(
-    s.for(
-      s.store('__iter', s.int(0n)),
-      s.lt(s.read('__iter'), s.int(BigInt(n))),
-      s.store('__iter', s.add(s.read('__iter'), s.int(1n))),
-    ).loop(buildIterBody(s, N, bucket, margKey, totalKey, usedKey, bucketExpr)),
+  // Greedy loop.
+  body.push(
+    'let bestMarg = 0n;',
+    'let bestIdx = 0n;',
+    `for (let iter = 0n; iter < ${n}n; iter = iter + 1n) {`,
+    '  bestMarg = 0n;',
+    '  bestIdx = 0n;',
+    `  for (let j = 0n; j < ${N}n; j = j + 1n) {`,
+    `    if (${marg('j')} > bestMarg) {`,
+    `      bestMarg = ${marg('j')};`,
+    '      bestIdx = j;',
+    '    }',
+    '  }',
+    `  evm.tstore(${key(0, 'bestIdx')}, ${used('bestIdx')} + 1n);`,
+    `  evm.tstore(${key(N, 'bestIdx')}, ${total('bestIdx')} + ${marg('bestIdx')});`,
+    `  evm.tstore(${key(2 * N, 'bestIdx')}, quote_any(bestIdx, (${used('bestIdx')} + 1n) * ${bucketExpr}) - ${total('bestIdx')});`,
+    '}',
   );
 
   // Execute loop: dispatch the swap for every candidate with used > 0.
-  chain = chain.join(
-    s.for(
-      s.store('__i', s.int(0n)),
-      s.lt(s.read('__i'), s.int(BigInt(N))),
-      s.store('__i', s.add(s.read('__i'), s.int(1n))),
-    ).loop(
-      s.if(s.gt(s.tload(usedKey(s.read('__i'))), s.int(0n))).then(
-        s.callFunction('swap_any', [
-          s.read('__i'),
-          s.mul(s.tload(usedKey(s.read('__i'))), bucketExpr()),
-        ]),
-      ),
-    ),
+  body.push(
+    `for (let k = 0n; k < ${N}n; k = k + 1n) {`,
+    `  if (${used('k')} > 0n) {`,
+    `    swap_any(k, ${used('k')} * ${bucketExpr});`,
+    '  }',
+    '}',
   );
 
-  return [...quoteFuncBytecodes, quoteAnyBc, swapAnyBc, chain.build()];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Build a dispatcher function body of the form
- *   if (idx >= N) revert
- *   if (idx == 0) branch(0)
- *   else if (idx == 1) branch(1)
- *   ...
- *   else branch(N-1)
- * with `idx` at slot 0 and `amount` at slot 1.
- *
- * The leading `idx >= N` guard turns an otherwise-silent fall-through (any
- * out-of-range idx would land on branch(N-1)) into an explicit revert, so
- * callers can't accidentally route an invalid index to the last candidate.
- */
-function buildDispatcher(
-  N: number,
-  branch: (i: number, s: Saucer) => Saucer,
-  opts: { withQuoteFuncs: boolean },
-): Uint8Array {
-  const fctx = new CompilerContext();
-  fctx.setVar('idx', 'scalar'); // slot 0
-  fctx.setVar('amount', 'scalar'); // slot 1
-  if (opts.withQuoteFuncs) {
-    for (let i = 0; i < N; i++) fctx.addFunc(`quote_${i}`);
-  }
-  const fs = new Saucer(fctx);
-
-  let body: Saucer = branch(N - 1, fs);
-  for (let i = N - 2; i >= 0; i--) {
-    body = fs
-      .if(fs.eq(fs.read('idx'), fs.int(BigInt(i))))
-      .then(branch(i, fs))
-      .else(body);
-  }
-  // Out-of-range guard: revert with empty data. Without this, idx >= N would
-  // silently dispatch to branch(N-1).
-  const guard = fs
-    .if(fs.gte(fs.read('idx'), fs.int(BigInt(N))))
-    .then(fs.revert(fs.bytes(new Uint8Array(0))));
-  return guard.join(body).build();
-}
-
-/** Body of the n-iteration greedy loop. */
-function buildIterBody(
-  s: Saucer,
-  N: number,
-  _bucket: bigint,
-  margKey: (e: Saucer) => Saucer,
-  totalKey: (e: Saucer) => Saucer,
-  usedKey: (e: Saucer) => Saucer,
-  bucketExpr: () => Saucer,
-): Saucer {
-  // Reset best tracker.
-  let body: Saucer = s
-    .store('__best_marg', s.int(0n))
-    .join(s.store('__best_idx', s.int(0n)));
-
-  // Argmax loop over marg[].
-  body = body.join(
-    s.for(
-      s.store('__i', s.int(0n)),
-      s.lt(s.read('__i'), s.int(BigInt(N))),
-      s.store('__i', s.add(s.read('__i'), s.int(1n))),
-    ).loop(
-      s.if(s.gt(s.tload(margKey(s.read('__i'))), s.read('__best_marg'))).then(
-        s.store('__best_marg', s.tload(margKey(s.read('__i'))))
-          .join(s.store('__best_idx', s.read('__i'))),
-      ),
-    ),
-  );
-
-  // Commit winning bucket.
-  const bestIdx = () => s.read('__best_idx');
-  body = body
-    // used[best]++
-    .join(s.tstore(usedKey(bestIdx()), s.add(s.tload(usedKey(bestIdx())), s.int(1n))))
-    // total[best] += marg[best]  (cached; avoids a quoter call)
-    .join(s.tstore(totalKey(bestIdx()), s.add(s.tload(totalKey(bestIdx())), s.tload(margKey(bestIdx())))))
-    // marg[best] = quote_any(best, (used[best]+1)*bucket) - total[best]
-    .join(
-      s.tstore(
-        margKey(bestIdx()),
-        s.sub(
-          s.callFunction('quote_any', [
-            bestIdx(),
-            s.mul(s.add(s.tload(usedKey(bestIdx())), s.int(1n)), bucketExpr()),
-          ]),
-          s.tload(totalKey(bestIdx())),
-        ),
-      ),
-    );
-
-  return body;
+  return fn('main', [], 'void', body);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

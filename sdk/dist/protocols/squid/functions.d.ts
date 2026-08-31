@@ -1,2 +1,0 @@
-export declare const bridge = "\nimport { SquidRouterABI as ISquidRouter } from \"./abis\";\n\nfunction main(routerAddress: Address, token: Address, amount: Uint256, bridgedTokenSymbol: Bytes, destinationChain: Bytes, destinationAddress: Bytes): Uint256 {\n  const router = ISquidRouter.at(routerAddress);\n  return router.callBridge(token, amount, bridgedTokenSymbol, destinationChain, destinationAddress, 0x00);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

@@ -30,14 +30,12 @@ function formatAddressField(value: bigint | "self"): string {
   return value === "self" ? "ctx.self()" : formatBigint(value);
 }
 
-/** `"0x"` → an empty-bytes literal; otherwise the hex bytes spelled as `Uint8Array.from([...])`. */
+/** The bytes as a SauceScript `hex` literal; `"0x"` yields the empty one. */
 function formatCallback(callback: Hex): string {
-  if (callback === "0x") return "Uint8Array.from([])";
-  const hex = callback.slice(2);
-  if (hex.length % 2 !== 0) throw new Error(`formatCallback: odd-length hex string ${callback}`);
-  const bytes: number[] = [];
-  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.slice(i, i + 2), 16));
-  return `Uint8Array.from([${bytes.join(", ")}])`;
+  const digits = callback.slice(2);
+  if (digits.length % 2 !== 0) throw new Error(`formatCallback: odd-length hex string ${callback}`);
+
+  return `hex\`${digits.toLowerCase()}\``;
 }
 
 function formatPoolKey(poolKey: PoolKey): string {

@@ -1,7 +1,7 @@
 /**
  * Closure route bodies — `sauceBodyToSource` extraction + end-to-end via `openRoute`.
  */
-import { compile } from "@eco-incorp/sauce-compiler";
+import { compileProgram as compile } from "./helpers";
 import * as acorn from "acorn";
 import { isSauceClosure, sauceBodyToSource } from "../src/routes/closure.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
@@ -24,7 +24,7 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
 }
 
 function bytecodeOf(source: string): Uint8Array {
-  const { bytecode } = compile(source, { target: "v12" });
+  const { bytecode } = compile(source);
   return bytecode[0]!;
 }
 

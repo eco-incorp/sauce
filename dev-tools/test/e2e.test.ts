@@ -23,9 +23,35 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { readFileSync } from "fs";
 import { execSync, spawn } from "child_process";
-import ts from "typescript";
 
-import { compile } from "../../compiler/dist/index.js";
+import { createRequire } from "node:module";
+
+// wasm-pack `--target nodejs` output: a CommonJS build reading its sibling `.wasm` at load.
+const { compile } = createRequire(import.meta.url)("sauce-compiler") as {
+  compile: (options: {
+    target: "evm" | "svm";
+    entry: string;
+    resolve: (path: string) => Uint8Array | undefined;
+    defines?: Array<[name: string, value: string]>;
+  }) => { bytecode: Uint8Array };
+};
+
+const ENTRY = "main.js";
+
+/** Resolve the entry, plus any import, off disk from `ROOT`. */
+const resolverFor = (source: string) => (path: string): Uint8Array | undefined => {
+  const key = path.replace(/^\.\//, "");
+  if (key === ENTRY) return Buffer.from(source);
+  for (const dir of [ROOT, join(ROOT, "node_modules")]) {
+    const candidate = join(dir, key);
+    if (existsSync(candidate)) return readFileSync(candidate);
+  }
+
+  return undefined;
+};
+
+const toDefines = (defines: Record<string, bigint | string>): Array<[string, string]> =>
+  Object.entries(defines).map(([k, v]) => [k, v.toString()] as [string, string]);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -77,30 +103,27 @@ function eq(actual: bigint | string, expected: bigint | string, msg?: string) {
 
 // ── Compile helpers ──────────────────────────────────────────
 
-function stripTypes(source: string): string {
-  return ts.transpileModule(source, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ESNext,
-      module: ts.ModuleKind.ESNext,
-    },
-  }).outputText;
+function compileScript(path: string, defines: Record<string, bigint | string> = {}): Hex[] {
+  // The compiler reads the annotated source directly, so a `.ts` script needs no strip step.
+  const source = readFileSync(path, "utf-8");
+  const entries = toDefines(defines);
+  const result = compile({
+    target: "evm",
+    entry: ENTRY,
+    resolve: resolverFor(source),
+    ...(entries.length > 0 ? { defines: entries } : {}),
+  });
+
+  // One program; `cook()` takes a list and executes `calls[0]`.
+  return [("0x" + Buffer.from(result.bytecode).toString("hex")) as Hex];
 }
 
-function compileScript(path: string, args?: (bigint | string)[]): Hex[] {
-  let source = readFileSync(path, "utf-8");
-  if (path.endsWith(".ts")) source = stripTypes(source);
-  const result = compile(source, { baseDir: ROOT, args });
-  return result.bytecodes.map(
-    (b: Uint8Array) => ("0x" + Buffer.from(b).toString("hex")) as Hex,
-  );
-}
-
-/** Compile a sauce script to V12 single blob */
+/** Compile a sauce script to a V12 single blob */
 function compileV12(path: string): Hex {
-  let source = readFileSync(path, "utf-8");
-  if (path.endsWith(".ts")) source = stripTypes(source);
-  const result = compile(source, { target: "v12", baseDir: ROOT });
-  return ("0x" + Buffer.from(result.bytecodes[0]).toString("hex")) as Hex;
+  const source = readFileSync(path, "utf-8");
+  const result = compile({ target: "evm", entry: ENTRY, resolve: resolverFor(source) });
+
+  return ("0x" + Buffer.from(result.bytecode).toString("hex")) as Hex;
 }
 
 // ── Sauce helpers ─────────────────────────────────────────────
@@ -116,10 +139,10 @@ type Client = {
 async function cook(
   client: Client,
   scriptPath: string,
-  args: (bigint | string)[],
+  defines: Record<string, bigint | string>,
   account = privateKeyToAccount(ACCOUNT0_KEY),
 ): Promise<Hex> {
-  const bytecodes = compileScript(scriptPath, args);
+  const bytecodes = compileScript(scriptPath, defines);
 
   const hash = await client.walletClient.writeContract({
     address: client.sauceAddress,
@@ -148,10 +171,10 @@ async function cook(
 async function view(
   client: Client,
   scriptPath: string,
-  args: (bigint | string)[],
+  defines: Record<string, bigint | string>,
   account = ACCOUNT0 as Hex,
 ): Promise<Hex> {
-  const bytecodes = compileScript(scriptPath, args);
+  const bytecodes = compileScript(scriptPath, defines);
   const { result } = await client.publicClient.simulateContract({
     address: client.sauceAddress,
     abi: sauceAbi,
@@ -462,23 +485,23 @@ function encodeCall(
 
 // ── Test suites ──────────────────────────────────────────────
 
-/** Test a simple script (JS + TS) with given args and expected return */
+/** Test a simple script (JS + TS) with given defines and expected return */
 async function testSimpleScript(
   client: Client,
   name: string,
-  args: bigint[],
+  defines: Record<string, bigint>,
   expected: bigint,
 ) {
   const jsPath = join(JS_DIR, `${name}.js`);
   const tsPath = join(TS_DIR, `${name}.ts`);
 
   await test(`${name}.js returns ${expected}`, async () => {
-    const result = await view(client, jsPath, args);
+    const result = await view(client, jsPath, defines);
     eq(resultToUint(result), expected);
   });
 
   await test(`${name}.ts returns ${expected}`, async () => {
-    const result = await view(client, tsPath, args);
+    const result = await view(client, tsPath, defines);
     eq(resultToUint(result), expected);
   });
 }
@@ -724,18 +747,18 @@ async function main() {
     // ── Simple scripts (JS + TS) ────────────────────
 
     console.log("add");
-    await testSimpleScript(client, "add", [5n, 10n], 15n);
-    await testSimpleScript(client, "add", [0n, 0n], 0n);
-    await testSimpleScript(client, "add", [100n, 200n], 300n);
+    await testSimpleScript(client, "add", { A: 5n, B: 10n }, 15n);
+    await testSimpleScript(client, "add", { A: 0n, B: 0n }, 0n);
+    await testSimpleScript(client, "add", { A: 100n, B: 200n }, 300n);
 
     console.log("\nfibonacci");
-    await testSimpleScript(client, "fibonacci", [1n], 1n);
-    await testSimpleScript(client, "fibonacci", [10n], 55n);
-    await testSimpleScript(client, "fibonacci", [20n], 6765n);
+    await testSimpleScript(client, "fibonacci", { N: 1n }, 1n);
+    await testSimpleScript(client, "fibonacci", { N: 10n }, 55n);
+    await testSimpleScript(client, "fibonacci", { N: 20n }, 6765n);
 
     console.log("\nexample");
-    await testSimpleScript(client, "example", [42n, 58n], 100n);
-    await testSimpleScript(client, "example", [1n, 0n], 1n);
+    await testSimpleScript(client, "example", { A: 42n, B: 58n }, 100n);
+    await testSimpleScript(client, "example", { A: 1n, B: 0n }, 1n);
 
     // ── call.js (requires fork, skip on local) ──────
 

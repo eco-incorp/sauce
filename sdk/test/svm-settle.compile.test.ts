@@ -3,20 +3,22 @@
  * `verify.compile.test.ts`.
  *
  * We hand partners a snippet (see `sdk/src/svm/recipes/index.ts`'s module doc) that compiles the SVM
- * `settle.sauce.ts` with the ORDINARY compiler at `{ target: 'svm', staged: true, treeshake: true }`
- * and tells them the result is byte-identical to the program we hand them, REGARDLESS of the
- * placeholder arg values passed at compile time (staged mode never bakes args into the blob). This
- * test IS that snippet, run for real, plus the structural checks a partner would want before
- * trusting the compiled AccountPlan / ArgsLayout shape.
+ * `settle.sauce.ts` with the ORDINARY compiler for `target: 'svm'`, passing this intent's
+ * `SETTLE_MIN_OUT`/`SETTLE_SPL_COUNT` as `defines`, and tells them the result is byte-identical to
+ * the program we hand them. This test IS that snippet, run for real, plus the structural checks a
+ * partner would want before trusting the compiled account manifest.
  *
  * Options stay LITERAL below, never behind a helper — a partner reproducing our bytes needs to see
- * the target/staged/treeshake/args surface directly. NEGATIVE CONTROL ON REPO POLICY: this file must
- * never gain an expected-hash / expected-bytecode constant — partner verify is "recompile and
- * byte-compare against what you received", never "compare against a hash we shipped".
+ * the target/defines surface directly, which is why this file loads the compiler itself instead of
+ * going through `test/helpers.ts`'s `compileSource` (that wrapper supplies `entry` and `resolve` and
+ * marshals the defines, i.e. exactly the surface a partner has to match). NEGATIVE CONTROL ON REPO
+ * POLICY: this file must never gain an expected-hash / expected-bytecode constant — partner verify is
+ * "recompile and byte-compare against what you received", never "compare against a hash we shipped".
  */
 import { readFileSync } from 'fs';
+import { createRequire } from 'node:module';
 import { basename, resolve } from 'path';
-import { compile } from '../../compiler/dist/index.js';
+import type { CompileOptions, CompileResult } from 'sauce-compiler';
 import {
   SVM_MAX_ESCROWS,
   SVM_SETTLE_SOURCE_PATH,
@@ -24,33 +26,47 @@ import {
   svmSettleSource,
 } from '../src/svm/index.js';
 
-// Real token-program ids, only as sample arg values — the blob never bakes them in (staged).
-const TOKENKEG = 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9n;
-const TOKEN_2022 = 0x06ddf6e1ee758fde18425dbce46ccddab61afc4d83b90d27febdf928d8a18bfcn;
+// Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build that
+// reads its sibling `.wasm` off disk at load, and jest's ESM transform does not resolve that sibling.
+const { compile } = createRequire(import.meta.url)('sauce-compiler') as {
+  compile: (options: CompileOptions) => CompileResult;
+};
 
-/** THE SNIPPET — kept verbatim-equivalent to the one in `svm/recipes/index.ts`'s docstring.
- *  `main(minOut, splCount, tokenProgram0, tokenProgram1)`; args are placeholders in staged mode. */
-function partnerCompile(escrowCount = 1, args: bigint[] = [0n, 0n, TOKENKEG, TOKENKEG]) {
-  return compile(svmSettleSource(escrowCount), {
+/** `main`'s declared slots as `[name, writable, signer]` — the manifest's whole content. */
+const slots = (manifest: { accounts: readonly unknown[] } | undefined): [string, boolean, boolean][] =>
+  (manifest?.accounts ?? []).flatMap((entry) => {
+    const slot = entry as { kind: string; name: string; requires: string };
+    if (slot.kind !== 'slot') return [];
+
+    return [[slot.name, slot.requires.startsWith('writable'), slot.requires.endsWith('signer')] as [string, boolean, boolean]];
+  });
+
+/** THE SNIPPET — kept verbatim-equivalent to the one in `svm/recipes/index.ts`'s docstring. */
+function partnerCompile(escrowCount = 1, minOut = 0n, splCount = 0n): CompileResult {
+  const source = svmSettleSource(escrowCount);
+
+  return compile({
     target: 'svm',
-    staged: true,
-    treeshake: true,
-    args,
+    entry: 'main.js',
+    resolve: (path) => (path === 'main.js' ? Buffer.from(source) : undefined),
+    defines: [
+      ['SETTLE_MIN_OUT', String(minOut)],
+      ['SETTLE_SPL_COUNT', String(splCount)],
+    ],
   });
 }
 
+const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
+
 describe('svm settle — partner reproducibility', () => {
-  it('the documented snippet compiles: real bytecode, accountPlan, and argsLayout', () => {
-    const { bytecode, accountPlan, argsLayout } = partnerCompile();
-    expect(bytecode[0]!.length).toBeGreaterThan(0);
-    expect(accountPlan).toBeDefined();
-    expect(argsLayout).toBeDefined();
+  it('the documented snippet compiles: real bytecode and an account manifest', () => {
+    const { bytecode, manifest } = partnerCompile();
+    expect(bytecode.length).toBeGreaterThan(0);
+    expect(manifest).toBeDefined();
   });
 
-  it('N=1: the account plan is the documented refs, in order, with the right roles, no raw indices', () => {
-    const { accountPlan } = partnerCompile(1);
-    expect(accountPlan!.usesRawIndices).toBeFalsy();
-    expect(accountPlan!.metas.map((m) => [m.ref, !!m.writable, !!m.signer])).toEqual([
+  it('N=1: the manifest is the documented refs, in order, with the right roles', () => {
+    expect(slots(partnerCompile(1).manifest)).toEqual([
       ['tokenProgram0', false, false],
       ['tokenProgram1', false, false],
       ['escrow0', true, false], // source, drained
@@ -60,25 +76,24 @@ describe('svm settle — partner reproducibility', () => {
     ]);
   });
 
-  it('★ svmSettleRefs(n) matches the compiled AccountPlan order for every n', () => {
-    // Refs intern on FIRST USE, so `owner` sits right after escrow0's trio, not last. A caller
+  it('★ svmSettleRefs(n) matches the compiled manifest order for every n', () => {
+    // `owner` sits right after escrow0's trio, not last — that is `main`'s declaration order. A caller
     // builds its AccountResolution from svmSettleRefs, so a wrong order would land accounts in the
     // wrong slots — pinned against a real compile rather than asserted by eye.
     for (const n of [1, 2, 3, 5, SVM_MAX_ESCROWS]) {
-      const { accountPlan } = partnerCompile(n);
-      expect(accountPlan!.metas.map((m) => m.ref)).toEqual(svmSettleRefs(n));
+      expect(slots(partnerCompile(n).manifest).map(([name]) => name)).toEqual(svmSettleRefs(n));
     }
   });
 
   it('per escrow attaches (escrow, mint, dest); mint is there because TransferChecked (ix 12) reads its decimals', () => {
     const src = svmSettleSource(2);
-    expect(src).toContain('Uint8Array.from([12])'); // TransferChecked discriminator, not legacy 3
-    expect(src).toContain('accountUint("mint0", 44, 1)'); // decimals read on-chain from the mint
-    expect(src).toContain('accountUint("mint1", 44, 1)');
-    // both token programs are attached so `splCount` can route each escrow at runtime
-    expect(src).toContain('accountData("tokenProgram0", 0, 0)');
-    expect(src).toContain('accountData("tokenProgram1", 0, 0)');
-    expect(src).toContain('tp0 = 0 < splCount ? tokenProgram0 : tokenProgram1');
+    expect(src).toContain('hex`0c`'); // TransferChecked discriminator, not legacy 3
+    expect(src).toContain('svm.sload(mint0, 44, 1).toLe()'); // decimals read on-chain from the mint
+    expect(src).toContain('svm.sload(mint1, 44, 1).toLe()');
+    // both token programs are declared slots so SETTLE_SPL_COUNT can route each escrow
+    expect(src).toContain('tokenProgram0: Account');
+    expect(src).toContain('tokenProgram1: Account');
+    expect(src).toContain('tp0 = 0 < SETTLE_SPL_COUNT ? tokenProgram0 : tokenProgram1');
   });
 
   it('escrowCount is validated', () => {
@@ -88,27 +103,37 @@ describe('svm settle — partner reproducibility', () => {
     }
   });
 
-  it('args are four plain SCALARs — minOut, splCount, tokenProgram0, tokenProgram1', () => {
-    const { bytecode, argsLayout } = partnerCompile(1);
-    expect(argsLayout!.mode).toBe('calldata');
-    expect(argsLayout!.programLength).toBe(bytecode[0]!.length);
-    expect(argsLayout!.slots).toEqual([
-      { arg: 0, kind: 'scalar', offset: 0, length: 32 },
-      { arg: 1, kind: 'scalar', offset: 32, length: 32 },
-      { arg: 2, kind: 'scalar', offset: 64, length: 32 },
-      { arg: 3, kind: 'scalar', offset: 96, length: 32 },
-    ]);
+  it('★ the blob is a deterministic function of (escrowCount, minOut, splCount) — and ONLY those', () => {
+    // The genericity claim, restated for compile-time defines: recompiling the same three inputs
+    // reproduces the bytes exactly, which is what makes "recompile and byte-compare" a valid check.
+    // Every ACCOUNT identity is an attach slot and never enters the bytecode, so one blob still
+    // serves every mint/recipient/owner — that is what the manifest above is for.
+    //
+    // Two calls back to back cannot fail this short of nondeterminism, so the recompile happens AFTER
+    // four other triples have gone through the compiler: the wasm module is one long-lived instance
+    // shared by every compile in the process, so the real risk is a previous compile leaking into the
+    // next one, not a call disagreeing with itself.
+    const first = hex(partnerCompile(3, 12345n, 2n).bytecode);
+    const others: [number, bigint, bigint][] = [
+      [2, 1n, 0n],
+      [5, 0n, 5n],
+      [1, 1n << 200n, 1n],
+      [3, 999n, 2n],
+    ];
+    for (const [n, minOut, splCount] of others) partnerCompile(n, minOut, splCount);
+
+    expect(hex(partnerCompile(3, 12345n, 2n).bytecode)).toBe(first);
+    // ...and the source it compiles is itself a pure function of the escrow count, which is the other
+    // half of "a function of the triple": a generator that varied would break the pin without the
+    // compiler moving at all.
+    expect(svmSettleSource(3)).toBe(svmSettleSource(3));
   });
 
-  it('★ ONE canonical blob per escrow count — the genericity claim, asserted across arg values', () => {
-    const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
-    const variants = [
-      partnerCompile(3, [0n, 0n, TOKENKEG, TOKENKEG]), // all classic
-      partnerCompile(3, [12345n, 2n, TOKENKEG, TOKEN_2022]), // 2 classic + 1 Token-2022, with a floor
-      partnerCompile(3, [1n << 40n, 1n, TOKEN_2022, TOKENKEG]), // any split, any programs
-    ];
-    const bodies = new Set(variants.map((v) => hex(v.bytecode[0]!)));
-    expect(bodies.size).toBe(1);
+  it('★ ...and it is SENSITIVE to each of them — so a byte-match pins all three', () => {
+    const base = hex(partnerCompile(3, 12345n, 2n).bytecode);
+    expect(hex(partnerCompile(3, 999n, 2n).bytecode)).not.toBe(base); // minOut
+    expect(hex(partnerCompile(3, 12345n, 1n).bytecode)).not.toBe(base); // splCount
+    expect(hex(partnerCompile(2, 12345n, 2n).bytecode)).not.toBe(base); // escrowCount
   });
 });
 

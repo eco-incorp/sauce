@@ -12,7 +12,6 @@
  * pure function of state + params + an explicit `now`.
  */
 import { resolve } from 'path';
-import { compile } from '@eco-incorp/sauce-compiler';
 import { address } from '@solana/kit';
 import {
   bisonfi,

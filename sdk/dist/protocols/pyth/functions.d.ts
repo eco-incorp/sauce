@@ -1,2 +1,0 @@
-export declare const getPrice = "\nimport { PythOracleABI as IPythOracle } from \"./abis\";\n\nfunction main(oracleAddress: Address, priceId: Bytes32): Uint256 {\n  const oracle = IPythOracle.at(oracleAddress);\n  return oracle.getPrice(priceId);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

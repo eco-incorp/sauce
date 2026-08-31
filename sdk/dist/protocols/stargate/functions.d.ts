@@ -1,2 +1,0 @@
-export declare const bridge = "\nimport { StargatePoolABI as IStargatePool } from \"./abis\";\n\nfunction main(poolAddress: Address, dstEid: Uint256, recipient: Uint256, amount: Uint256, minAmount: Uint256): Uint256 {\n  const pool = IStargatePool.at(poolAddress);\n  return pool.send({dstEid: dstEid, to: recipient, amountLD: amount, minAmountLD: minAmount, extraOptions: 0x00, composeMsg: 0x00, oftCmd: 0x00}, {nativeFee: msg.value, lzTokenFee: 0}, msg.sender);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

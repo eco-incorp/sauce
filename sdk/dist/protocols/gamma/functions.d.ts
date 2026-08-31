@@ -1,3 +1,0 @@
-export declare const deposit = "\nimport { UniProxyABI as IUniProxy } from \"./abis\";\n\nfunction main(uniProxyAddress: Address, deposit0: Uint256, deposit1: Uint256, to: Address, pos: Address): Uint256 {\n  const proxy = IUniProxy.at(uniProxyAddress);\n  return proxy.deposit(deposit0, deposit1, to, pos, [0, 0, 0, 0]);\n}\n";
-export declare const withdraw = "\nimport { HypervisorABI as IHypervisor } from \"./abis\";\n\nfunction main(hypervisorAddress: Address, shares: Uint256, to: Address, from: Address): Uint256 {\n  const hv = IHypervisor.at(hypervisorAddress);\n  hv.withdraw(shares, to, from, [0, 0, 0, 0]);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

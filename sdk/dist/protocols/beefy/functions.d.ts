@@ -1,5 +1,0 @@
-export declare const deposit = "\nimport { BeefyVaultABI as IBeefyVault } from \"./abis\";\n\nfunction main(vaultAddress: Address, amount: Uint256): Uint256 {\n  const vault = IBeefyVault.at(vaultAddress);\n  vault.deposit(amount);\n  return 1;\n}\n";
-export declare const depositAll = "\nimport { BeefyVaultABI as IBeefyVault } from \"./abis\";\n\nfunction main(vaultAddress: Address): Uint256 {\n  const vault = IBeefyVault.at(vaultAddress);\n  vault.depositAll();\n  return 1;\n}\n";
-export declare const withdraw = "\nimport { BeefyVaultABI as IBeefyVault } from \"./abis\";\n\nfunction main(vaultAddress: Address, shares: Uint256): Uint256 {\n  const vault = IBeefyVault.at(vaultAddress);\n  vault.withdraw(shares);\n  return 1;\n}\n";
-export declare const withdrawAll = "\nimport { BeefyVaultABI as IBeefyVault } from \"./abis\";\n\nfunction main(vaultAddress: Address): Uint256 {\n  const vault = IBeefyVault.at(vaultAddress);\n  vault.withdrawAll();\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

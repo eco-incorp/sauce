@@ -1,2 +1,0 @@
-export declare const sendMessage = "\nimport { CCIPRouterABI as ICCIPRouter } from \"./abis\";\n\nfunction main(routerAddress: Address, destinationChainSelector: Uint256, receiver: Bytes, data: Bytes): Uint256 {\n  const router = ICCIPRouter.at(routerAddress);\n  return router.ccipSend(destinationChainSelector, {receiver: receiver, data: data, tokenAmounts: [], feeToken: 0x0000000000000000000000000000000000000000, extraArgs: 0x00});\n}\n";
-//# sourceMappingURL=functions.d.ts.map

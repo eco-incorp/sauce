@@ -2,7 +2,7 @@
  * E4.1/E4.2 composition seam — real-compile tests, mirroring `swap.compile.test.ts`'s "the E3
  * seam, end to end" case, extended one leg further (swap -> deposit).
  */
-import { compile } from "../../compiler/dist/index.js";
+import { compileProgram as compile } from "./helpers";
 import { bytesToHex, decodeFunctionData } from "viem";
 
 import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
@@ -41,13 +41,11 @@ function aaveSupply(overrides: Partial<DepositSpec & { amount: "balance" | "delt
 }
 
 describe("swapThenDepositSource — swap output feeds a deposit, one program", () => {
-  for (const target of ["v1", "v12"] as const) {
-    it(`compiles on ${target} (amount: 'balance')`, () => {
-      const src = swapThenDepositSource(univ3Leg, aaveSupply());
-      const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target, treeshake: true });
-      expect(bytecode[0]!.length).toBeGreaterThan(0);
-    });
-  }
+  it(`compiles (amount: 'balance')`, () => {
+    const src = swapThenDepositSource(univ3Leg, aaveSupply());
+    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
+    expect(bytecode[0]!.length).toBeGreaterThan(0);
+  });
 
   it("'delta' variant compiles and its source contains the pre/post/delta bracket", () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply({ amount: "delta" }));
@@ -55,7 +53,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
     expect(src).toMatch(/const deposit0Post = IERC20\.at\(.*\)\.balanceOf\(ctx\.self\(\)\);/);
     expect(src).toMatch(/const deposit0Amt = deposit0Post - deposit0Pre;/);
 
-    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target: "v12", treeshake: true });
+    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -68,7 +66,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
 
   it("the E3 seam, end to end: compile -> bytesToHex -> buildSauceEvmCall -> normalizeRoute", () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply());
-    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target: "v12", treeshake: true });
+    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
     const ingredient = bytesToHex(bytecode[0]!);
     const call = buildSauceEvmCall({ pot: POT, ingredients: [ingredient] });
 
@@ -96,11 +94,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
 
 describe("negative control — swapSource alone is unaffected by the swapImportLines extraction", () => {
   it("still compiles fine (regression pin for the swapImportLines extraction)", () => {
-    const { bytecode } = compile(swapSource(univ3Leg), {
-      baseDirs: [...SWAP_BASE_DIRS],
-      target: "v12",
-      treeshake: true,
-    });
+    const { bytecode } = compile(swapSource(univ3Leg), { baseDirs: [...SWAP_BASE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

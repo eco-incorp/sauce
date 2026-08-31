@@ -1,2 +1,0 @@
-export declare const depositToL2 = "\nimport { ArbitrumL1GatewayRouterABI as IL1GatewayRouter } from \"./abis\";\n\nfunction main(routerAddress: Address, token: Address, recipient: Address, amount: Uint256, maxGas: Uint256, gasPriceBid: Uint256): Uint256 {\n  const router = IL1GatewayRouter.at(routerAddress);\n  return router.outboundTransfer(token, recipient, amount, maxGas, gasPriceBid, 0x00);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

@@ -18,16 +18,18 @@
 // the escrows' balances — a swap, a bridge, an airdrop, or nothing at all. Keep it that way: no
 // caller-specific names, in the code OR in the revert string (identical to the EVM twin's).
 //
-// THE SHAPE: `main(minOut, splCount, tokenProgram0, tokenProgram1)`.
-//   - `minOut` is an ordinary scalar arg — the direct mirror of the EVM twin's `minOut` — and applies
+// THE SHAPE: `main(<accounts…>)` with `SETTLE_MIN_OUT` / `SETTLE_SPL_COUNT` supplied as compile-time
+// `defines`. Every ACCOUNT is a `main` parameter, declared in the order a caller attaches them —
+// that declaration is the account manifest.
+//   - `SETTLE_MIN_OUT` is the direct mirror of the EVM twin's `minOut` — and applies
 //     to `escrow0` ONLY, exactly as the EVM floor applies to `tokens[0]`. Every other escrow is swept
 //     unconditionally (a dust sweep).
 //   - `splCount` groups escrows by token program: escrow i sweeps via `tokenProgram0` when
 //     `i < splCount`, else `tokenProgram1`. Classic SPL and Token-2022 in one settle; order escrows
 //     classic-first. When every mint shares one program, pass `tokenProgram1 == tokenProgram0`.
 //   - Every identity — which escrows, which recipient ATAs, which owner authorizes, which token
-//     programs — binds at EXECUTION time via the AccountPlan's refs, so one blob per escrow count
-//     serves every mint/recipient/split.
+//     programs — binds at EXECUTION time via the manifest's slots, so one blob serves every
+//     mint/recipient. The bytecode varies ONLY with (escrowCount, minOut, splCount).
 //
 // ONE RECIPIENT, N DESTINATIONS: the `dest_i` refs are the ONE recipient wallet's associated token
 // account per mint. An SPL token account holds a single mint, so N mints need N destination accounts
@@ -42,16 +44,10 @@
 // they need per-mint hook accounts a generic program cannot enumerate, and a transfer targeting one
 // reverts atomically. A resolver should reject a hook-configured mint up front with a clear error.
 //
-// ⚠ CONSTRUCTION GOTCHA, LOAD-BEARING: the two `accountData("tokenProgram*", 0, 0)` reads are
-// zero-length reads that look like dead code, but the engine resolves a `contract.call` CPI target
-// by scanning the instruction's ATTACHED accounts for the target's pubkey — so each token program
-// must occupy an AccountPlan slot. Omit them and the compile still succeeds, but the CPI fails
-// pre-flight the moment it runs.
-//
-// ⚠ EACH `tokenProgram_p` IS TWO INDEPENDENT BINDINGS a caller makes at execution time — the scalar
-// argument (the CPI target value) and the account ref (so the engine finds it attached). Nothing
-// here enforces they name the same program; a mismatch is a loud, atomic pre-flight CPI failure that
-// moves nothing. Bind both from the same source value.
+// EACH `tokenProgram_p` IS ONE BINDING: it is an `Account` parameter, and `svm.call` takes that
+// same account as its CPI target — so there is nothing for a caller to keep in sync. Nothing here
+// pins WHICH program arrives at that slot, though: whoever attaches the accounts chooses, so a
+// caller that cares must compare the attached account itself.
 //
 // KNOWN PROPERTY, DOCUMENTED AND ACCEPTED — NOT DEFENDED AGAINST: the floor and the sweeps read
 // CURRENT balances, not a delta against a baseline, so a donated balance counts toward `minOut` and
@@ -64,42 +60,30 @@
 //
 // PARTNER VERIFY: recompile `svmSettleSource(n)` yourself with the options in
 // sdk/src/svm/recipes/index.ts and byte-compare against what you were handed. There is no golden hash.
-/** 64-bit byte swap: the LE image of a u64 amount, MSTORE'd big-endian by abi.encode. */
-function le8(x) {
-  return ((x & 255) << 56) | ((x & 65280) << 40) | ((x & 16711680) << 24) | ((x & 4278190080) << 8)
-    | ((x >> 8) & 4278190080) | ((x >> 24) & 16711680) | ((x >> 40) & 65280) | (x >> 56);
-}
+// Per-execution values arrive as `defines`, which replace these declarations and constant-fold, so
+// a given (minOut, splCount) pair yields fixed bytecode. The defaults keep this file compilable and
+// readable on its own.
+const SETTLE_MIN_OUT = 0n;
+const SETTLE_SPL_COUNT = 0n;
 
-function main(minOut, splCount, tokenProgram0, tokenProgram1) {
-  // Load-bearing: interns both token-program accounts so the TransferChecked CPIs can resolve their
-  // target from the instruction's attached accounts. See the header note above.
-  accountData("tokenProgram0", 0, 0);
-  accountData("tokenProgram1", 0, 0);
-
-  const floorBal = accountUint("escrow0", 64, 8);
-  if (minOut > 0) {
-    if (floorBal < minOut) {
+function main(tokenProgram0: Account, tokenProgram1: Account, escrow0: Account<Writable>, mint0: Account, dest0: Account<Writable>, owner: Account<Signer>): Uint256 {
+  const floorBal = svm.sload(escrow0, 64, 8).toLe();
+  if (SETTLE_MIN_OUT > 0) {
+    if (floorBal < SETTLE_MIN_OUT) {
       throw "settle: balance below minOut";
     }
   }
 
-  // escrow 0: read balance then decimals (fixed order → deterministic AccountPlan slots), then
-  // TransferChecked the whole balance to this recipient's ATA, via this escrow's token program
-  // (tokenProgram0 for the first `splCount` escrows, tokenProgram1 for the rest).
-  const bal0 = accountUint("escrow0", 64, 8);
-  const dec0 = accountUint("mint0", 44, 1);
+  // escrow 0: read balance then decimals, then TransferChecked the whole balance to this
+  // recipient's ATA, via this escrow's token program (tokenProgram0 for the first
+  // `SETTLE_SPL_COUNT` escrows, tokenProgram1 for the rest).
+  const bal0 = svm.sload(escrow0, 64, 8).toLe();
+  const dec0 = svm.sload(mint0, 44, 1).toLe();
   if (bal0 > 0) {
-    const tp0 = 0 < splCount ? tokenProgram0 : tokenProgram1;
-    const tag0 = Uint8Array.from([12]);                     // TransferChecked
-    const amt0 = abi.encode(le8(bal0)).slice(24, 32);     // 8-byte LE amount
-    const dcb0 = abi.encode(dec0).slice(31, 32);          // 1-byte decimals
-    const data0 = tag0.concat(amt0).concat(dcb0);
-    contract.call(tp0, data0, [
-      { ref: "escrow0", writable: true },
-      { ref: "mint0" },
-      { ref: "dest0", writable: true },
-      { ref: "owner", signer: true }
-    ]);
+    const tp0 = 0 < SETTLE_SPL_COUNT ? tokenProgram0 : tokenProgram1;
+    const tag0 = hex`0c`;                                   // TransferChecked
+    const data0 = tag0.concat(bal0.toBytesLe(8)).concat(dec0.toBytesLe(1));
+    svm.call(tp0, [escrow0, mint0, dest0, owner], data0);
   }
 
   return floorBal;

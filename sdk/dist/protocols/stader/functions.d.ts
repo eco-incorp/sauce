@@ -1,2 +1,0 @@
-export declare const deposit = "\nimport { StakePoolManagerABI as IStakePoolManager } from \"./abis\";\n\nfunction main(stakePoolManagerAddress: Address, receiver: Address): Uint256 {\n  const pool = IStakePoolManager.at(stakePoolManagerAddress);\n  return pool.deposit(receiver);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

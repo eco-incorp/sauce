@@ -5,10 +5,9 @@ export interface ConformanceVector {
   tokens: Hex[];
   minOut: bigint;
   recipient: Hex;
-  /** The exact compiled program these args produce — measured by actually compiling
-   *  `recipes/settle.sauce.ts` at this package's compiler pin, not hand-assembled.
-   *  `sdk/test/verify.compile.test.ts` recompiles and re-checks these, so a compiler re-pin or a
-   *  program edit that changes the emission turns red here rather than drifting silently. */
+  /** The exact program these args produce — measured by compiling `recipes/settle.sauce.ts` with
+   *  the in-repo TypeScript compiler, which no longer exists in this repo. FROZEN: nothing
+   *  recompiles these, and nothing can (see the note above `SETTLE_VECTORS`). */
   program: Hex;
 }
 
@@ -18,9 +17,17 @@ const Z = "0x0000000000000000000000000000000000ff00aa" as Hex; // leading-zero-b
 
 /**
  * Golden wire-format vectors — the Go/Solidity/Python conformance corpus. Each `program` was
- * obtained by actually compiling `recipes/settle.sauce.ts` with the given args (not hand-encoded),
- * so it doubles as a regression pin on the compiler's emission shape. See decode.ts's module
- * docstring for the grammar these bytes instantiate.
+ * obtained by actually compiling `recipes/settle.sauce.ts` with the given args (not hand-encoded).
+ * See decode.ts's module docstring for the grammar these bytes instantiate.
+ *
+ * They are the definition of the v1 grammar for anyone reimplementing the decoder — which is what
+ * a conformance corpus is for, and now their only purpose. They are NOT a regression pin: the
+ * compiler that produced them was the in-repo TypeScript one, which this repo no longer contains,
+ * and nothing recompiles them.
+ *
+ * The published Rust compiler does not reproduce them and is not meant to: it folds the params into
+ * the body instead of emitting them as a decodable prologue (decode.ts explains). So these bytes
+ * describe programs already on chain, not anything the SDK emits today.
  *
  * `v3` is the trap vector: `Z = 0x0000000000000000000000000000000000ff00aa` has two leading zero
  * bytes, so its minimal-length PUSH is only 3 bytes wide (`03 ff00aa`), not the naive 20 — a fixed

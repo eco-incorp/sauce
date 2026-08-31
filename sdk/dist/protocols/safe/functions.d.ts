@@ -1,2 +1,0 @@
-export declare const getThreshold = "\nimport { SafeABI as ISafe } from \"./abis\";\n\nfunction main(safeAddress: Address): Uint256 {\n  const safe = ISafe.at(safeAddress);\n  return safe.getThreshold();\n}\n";
-//# sourceMappingURL=functions.d.ts.map

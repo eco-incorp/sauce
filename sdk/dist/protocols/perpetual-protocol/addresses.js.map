@@ -1,1 +1,0 @@
-{"version":3,"file":"addresses.js","sourceRoot":"","sources":["../../../src/protocols/perpetual-protocol/addresses.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,WAAW,GAAsB;IAC5C;QACE,OAAO,EAAE,EAAE;QACX,SAAS,EAAE,UAAU;QACrB,SAAS,EAAE;YACT,aAAa,EAAE,4CAA4C;YAC3D,KAAK,EAAE,4CAA4C;SACpD;KACF;CACF,CAAC"}

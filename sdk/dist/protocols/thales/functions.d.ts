@@ -1,3 +1,0 @@
-export declare const exerciseMarket = "\nimport { ThalesAMMABI as IThalesAMM } from \"./abis\";\n\nfunction main(thalesAMMAddress: Address, market: Address): Uint256 {\n  const amm = IThalesAMM.at(thalesAMMAddress);\n  amm.exerciseMaturedMarket(market);\n  return 1;\n}\n";
-export declare const buyFromAMM = "\nimport { ThalesAMMABI as IThalesAMM } from \"./abis\";\n\nfunction main(thalesAMMAddress: Address, market: Address, position: Uint256, amount: Uint256, expectedPayout: Uint256, slippage: Uint256): Uint256 {\n  const amm = IThalesAMM.at(thalesAMMAddress);\n  amm.buyFromAMM(market, position, amount, expectedPayout, slippage);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

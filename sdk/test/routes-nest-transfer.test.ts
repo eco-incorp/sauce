@@ -4,9 +4,9 @@
  * `"publishAndFund"`, see `nest.ts`'s `NestVia` doc).
  *
  * Pure: hand-built `Intent`s + text assertions, plus a real `compile()` proof that the emitted
- * program actually compiles at `target: 'v12'` (no network, no anvil).
+ * program actually compiles (no network, no anvil).
  */
-import { compile } from "@eco-incorp/sauce-compiler";
+import { compileProgram as compile } from "./helpers";
 import { hexToBytes, type Hex } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
@@ -114,7 +114,8 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
       `const n0_vault = ${BigInt(VAULT)}n;`,
       `const n0_nbal = ctx.selfBalance();`,
       `const n0_namt = n0_nbal > 77n ? 77n : n0_nbal;`,
-      `if (n0_namt > 0n) { contract.call(n0_vault, n0_namt, Uint8Array.from([])); }`,
+      "const n0_ndata = hex``;",
+      `if (n0_namt > 0n) { evm.call(n0_vault, n0_namt, n0_ndata); }`,
     ]);
 
     const tokenOnlyChild = childIntent({
@@ -204,7 +205,7 @@ describe("nest.ts: vault-address resolution rungs", () => {
 });
 
 describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
-  it("a 1-token, 1-child program compiles at target 'v12'", () => {
+  it("a 1-token, 1-child program compiles", () => {
     const child = childIntent({
       reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 500n }] }),
     });
@@ -212,7 +213,7 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
     expect(imports).toEqual([expect.stringContaining("IERC20")]);
     expect(baseDirs.length).toBeGreaterThan(0);
 
-    const result = compile(source, { target: "v12", baseDirs: [...baseDirs] });
+    const result = compile(source, { baseDirs: [...baseDirs] });
     expect(result.bytecode.length).toBeGreaterThan(0);
     expect(result.bytecode[0]!.length).toBeGreaterThan(0);
   });
@@ -254,7 +255,7 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
     ];
     const { source, baseDirs } = nestedTransferProgram(entries);
 
-    const result = compile(source, { target: "v12", baseDirs: [...baseDirs, ...TOKEN_BASE_DIRS] });
+    const result = compile(source, { baseDirs: [...baseDirs, ...TOKEN_BASE_DIRS] });
     expect(result.bytecode.length).toBeGreaterThan(0);
     // sanity: every per-child local is namespaced by index, so no `already declared` collision.
     expect(source).toContain("n0_vault");
@@ -270,7 +271,7 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
     const { source, imports, baseDirs } = nestedTransferProgram([{ child, opts: explicitOpts }]);
     expect(imports).toEqual([]);
     expect(baseDirs).toEqual([]);
-    const result = compile(source, { target: "v12" });
+    const result = compile(source);
     expect(result.bytecode.length).toBeGreaterThan(0);
   });
 });

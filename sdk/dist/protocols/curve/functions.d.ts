@@ -1,4 +1,0 @@
-export declare const swap = "\nimport { CurveStableSwapABI as IStableSwap } from \"./abis\";\n\nfunction main(poolAddress: Address, i: Uint256, j: Uint256, amountIn: Uint256, minAmountOut: Uint256): Uint256 {\n  const pool = IStableSwap.at(poolAddress);\n  return pool.exchange(i, j, amountIn, minAmountOut);\n}\n";
-export declare const addLiquidity = "\nimport { CurveStableSwapABI as IStableSwap } from \"./abis\";\n\nfunction main(poolAddress: Address, amounts: Tuple, minMintAmount: Uint256): Uint256 {\n  const pool = IStableSwap.at(poolAddress);\n  return pool.add_liquidity(amounts, minMintAmount);\n}\n";
-export declare const removeLiquidity = "\nimport { CurveStableSwapABI as IStableSwap } from \"./abis\";\n\nfunction main(poolAddress: Address, amount: Uint256, minAmounts: Tuple): Uint256 {\n  const pool = IStableSwap.at(poolAddress);\n  return pool.remove_liquidity(amount, minAmounts);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

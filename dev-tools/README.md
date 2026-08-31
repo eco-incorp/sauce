@@ -81,9 +81,29 @@ npm run sauce sauce/call.js \
 
 ## Arguments
 
-Arguments are parsed as:
-- Decimal numbers: `123`, `456`
-- Hex values: `0x1a2b3c...`
+Positional arguments are RUNTIME values for `main`'s parameters. They are appended to the compiled
+program as ABI-encoded words, so the program bytes are the same whatever you pass. They parse as:
+- Decimal numbers: `123`, `456`, `-1`
+- Hex values: `0x1a2b3c...` (over 32 bytes: passed as `bytes`)
+
+A `NAME=VALUE` operand is a COMPILE-TIME define instead: it replaces the module's own `const NAME`
+and is constant-folded, so a different value is a different program.
+
+```javascript
+const AMOUNT = 0n;            // overridden by AMOUNT=4242
+
+function main(a) {
+  return a + AMOUNT;          // `a` comes from a positional arg
+}
+```
+
+Run with: `npm run sauce script.js 10 AMOUNT=4242`. The two are told apart by shape — a define's
+name is an identifier, which no integer or hex literal can look like — so they may be interleaved.
+
+A define's VALUE is one unsigned 256-bit word. `0x`-hex is passed through as written; any other
+spelling JavaScript's `BigInt` reads (decimal, `0b`/`0o`, a leading `+`, leading zeros, surrounding
+whitespace) is normalized to decimal, because the compiler's own define grammar accepts only decimal
+or `0x`-hex. An empty, all-whitespace, negative, or non-integer value is rejected at the CLI.
 
 ## Project Structure
 

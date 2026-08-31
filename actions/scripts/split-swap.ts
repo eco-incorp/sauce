@@ -45,7 +45,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { execSync, spawn, type ChildProcess } from 'child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { actionsToSauce } from '../src/to-sauce.js';
 import type { RoutingAction } from '../src/types.js';
@@ -204,19 +204,39 @@ async function startHardhat(): Promise<ChildProcess> {
   return proc;
 }
 
+/**
+ * Deploy the V12 Sauce engine — the one the published Rust compiler emits for.
+ *
+ * Was the v1 `Sauce.sol`, entered through `cook(bytes[])`. The V12 runtime's creation code returns
+ * its own bytecode, so the deployed contract IS the engine and a program is sent to it as raw
+ * calldata. Same source and fallback order as `tests/to-sauce.test.ts`.
+ */
 async function deploySauce(): Promise<Address> {
-  const artifactPath = resolve(REPO_ROOT, 'engine/out/Sauce.sol/Sauce.json');
-  const artifact = JSON.parse(readFileSync(artifactPath, 'utf-8'));
-  const bytecode = artifact.bytecode.object as Hex;
-  const abi = artifact.abi;
+  const override = process.env.SAUCE_V12_RUNTIME_CREATION_HEX;
+  const creationCode = override
+    ? (`0x${readFileSync(override, 'utf-8').trim().replace(/^0x/, '')}` as Hex)
+    : (JSON.parse(
+        readFileSync(
+          [
+            resolve(REPO_ROOT, 'sdk/dist/artifacts/V12RuntimeBytecode.json'),
+            resolve(REPO_ROOT, 'sdk/src/artifacts/V12RuntimeBytecode.json'),
+          ].find(existsSync) ??
+            (() => {
+              throw new Error(
+                "V12RuntimeBytecode.json not found — run `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines`",
+              );
+            })(),
+          'utf-8',
+        ),
+      ).runtimeCreationCode as Hex);
 
   const account = privateKeyToAccount(PK);
   const publicClient = makeClient();
   const walletClient = createWalletClient({ account, chain: localChain, transport: http(RPC) });
 
-  const hash = await walletClient.deployContract({ abi, bytecode, account, chain: localChain });
+  const hash = await walletClient.sendTransaction({ account, chain: localChain, data: creationCode, gas: 30_000_000n });
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  if (!receipt.contractAddress) throw new Error('Sauce deployment failed');
+  if (!receipt.contractAddress) throw new Error('V12 runtime deployment failed');
   return receipt.contractAddress;
 }
 
@@ -228,11 +248,12 @@ function toHex(bytes: Uint8Array): string {
   return '0x' + Buffer.from(bytes).toString('hex');
 }
 
+/** Run a program on the V12 engine — the compiled bytecode IS the calldata. */
 function cookSend(sauce: Address, bytecode: Uint8Array, value?: string): Hex {
   const hex = toHex(bytecode);
   const valueFlag = value ? `--value ${value}` : '';
   const result = execSync(
-    `cast send ${sauce} "cook(bytes[])" "[${hex}]" --rpc-url ${RPC} --private-key ${PK} ${valueFlag} --gas-limit 10000000 --json 2>&1`,
+    `cast send ${sauce} ${hex} --rpc-url ${RPC} --private-key ${PK} ${valueFlag} --gas-limit 10000000 --json 2>&1`,
     { encoding: 'utf8' },
   ).trim();
   const tx = JSON.parse(result);

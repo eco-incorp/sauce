@@ -1,4 +1,0 @@
-export declare const deposit = "\nimport { VaultABI as IVault } from \"./abis\";\n\nfunction main(vaultAddress: Address, amount: Uint256): Uint256 {\n  const vault = IVault.at(vaultAddress);\n  vault.deposit(amount);\n  return 1;\n}\n";
-export declare const withdraw = "\nimport { VaultABI as IVault } from \"./abis\";\n\nfunction main(vaultAddress: Address, shares: Uint256): Uint256 {\n  const vault = IVault.at(vaultAddress);\n  vault.withdraw(shares);\n  return 1;\n}\n";
-export declare const getPricePerFullShare = "\nimport { VaultABI as IVault } from \"./abis\";\n\nfunction main(vaultAddress: Address): Uint256 {\n  const vault = IVault.at(vaultAddress);\n  return vault.getPricePerFullShare();\n}\n";
-//# sourceMappingURL=functions.d.ts.map

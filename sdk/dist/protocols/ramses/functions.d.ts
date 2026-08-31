@@ -1,2 +1,0 @@
-export declare const swap = "\nimport { RamsesRouterABI as IRouter } from \"./abis\";\n\nfunction main(routerAddress: Address, tokenIn: Address, tokenOut: Address, stable: Bool, amountIn: Uint256, amountOutMin: Uint256, recipient: Address): Uint256 {\n  const router = IRouter.at(routerAddress);\n  return router.swapExactTokensForTokens(amountIn, amountOutMin, [{from: tokenIn, to: tokenOut, stable: stable}], recipient, 99999999999);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

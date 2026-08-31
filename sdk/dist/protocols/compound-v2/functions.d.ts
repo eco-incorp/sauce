@@ -1,5 +1,0 @@
-export declare const supply = "\nimport { CErc20ABI as ICErc20 } from \"./abis\";\n\nfunction main(cTokenAddress: Address, amount: Uint256): Uint256 {\n  const cToken = ICErc20.at(cTokenAddress);\n  return cToken.mint(amount);\n}\n";
-export declare const withdraw = "\nimport { CErc20ABI as ICErc20 } from \"./abis\";\n\nfunction main(cTokenAddress: Address, amount: Uint256): Uint256 {\n  const cToken = ICErc20.at(cTokenAddress);\n  return cToken.redeemUnderlying(amount);\n}\n";
-export declare const borrow = "\nimport { CErc20ABI as ICErc20 } from \"./abis\";\n\nfunction main(cTokenAddress: Address, amount: Uint256): Uint256 {\n  const cToken = ICErc20.at(cTokenAddress);\n  return cToken.borrow(amount);\n}\n";
-export declare const repay = "\nimport { CErc20ABI as ICErc20 } from \"./abis\";\n\nfunction main(cTokenAddress: Address, amount: Uint256): Uint256 {\n  const cToken = ICErc20.at(cTokenAddress);\n  return cToken.repayBorrow(amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

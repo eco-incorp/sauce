@@ -1,4 +1,0 @@
-export declare const deposit = "\nimport { BoosterABI as IBooster } from \"./abis\";\n\nfunction main(boosterAddress: Address, pid: Uint256, amount: Uint256): Uint256 {\n  const booster = IBooster.at(boosterAddress);\n  booster.deposit(pid, amount, true);\n  return 1;\n}\n";
-export declare const withdraw = "\nimport { BoosterABI as IBooster } from \"./abis\";\n\nfunction main(boosterAddress: Address, pid: Uint256, amount: Uint256): Uint256 {\n  const booster = IBooster.at(boosterAddress);\n  booster.withdraw(pid, amount);\n  return 1;\n}\n";
-export declare const getReward = "\nimport { BaseRewardPoolABI as IBaseRewardPool } from \"./abis\";\n\nfunction main(rewardPoolAddress: Address, account: Address): Uint256 {\n  const pool = IBaseRewardPool.at(rewardPoolAddress);\n  pool.getReward(account, true);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

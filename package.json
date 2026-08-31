@@ -21,8 +21,8 @@
       "default": "./sdk/dist/index.js"
     },
     "./compiler": {
-      "types": "./compiler/dist/index.d.ts",
-      "default": "./compiler/dist/index.js"
+      "types": "./sdk/dist/compiler.d.ts",
+      "default": "./sdk/dist/compiler.js"
     },
     "./actions": {
       "types": "./actions/dist/index.d.ts",
@@ -79,11 +79,10 @@
     "sauce-dev-tools": "./dev-tools/scripts/init.js"
   },
   "files": [
-    "compiler/dist",
     "sdk/dist",
+    "actions/dist",
     "sdk/src/skills",
     "sdk/src/protocols",
-    "actions/dist",
     "dev-tools/scripts",
     "dev-tools/src",
     "dev-tools/sauce",
@@ -93,7 +92,7 @@
     "artifacts/svm/engine.so"
   ],
   "scripts": {
-    "build": "pnpm --filter './compiler' build && pnpm -r --filter './sdk' --filter './actions' build",
+    "build": "pnpm -r --filter './sdk' --filter './actions' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "format": "pnpm -r --if-present format",
@@ -107,7 +106,7 @@
     "@solana/kit": "^6.10.0",
     "acorn": "^8.15.0",
     "dotenv": "^17.3.1",
-    "ts-evaluator": "^2.0.0",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0",
     "typescript": "^5.7.0",
     "viem": "^2.45.3"
   },
@@ -121,7 +120,8 @@
   },
   "devDependencies": {
     "@uniswap/v3-core": "^1.0.1",
-    "hardhat": "^2.22.0"
+    "hardhat": "^2.22.0",
+    "sauce": "github:eco-incorp/sauce#d1c900d03d8d5befd8f049c7890e11a16fd24d91"
   },
   "packageManager": "pnpm@10.28.2",
   "engines": {

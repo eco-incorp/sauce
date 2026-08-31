@@ -1,37 +1,31 @@
 /**
- * P6 — the RS/WASM compiler adapter for `compileSauceRoute`'s compiler-selector seam
- * (`sauce-route.ts`).
+ * The SDK's one compiler seam.
  *
- * Loads the ambient-capable Rust SauceScript compiler (`sauce-next`, the published
- * `@eco-incorp/sauce-compiler` — the same load pattern `test/std/token/harness.ts` already uses) and
- * adapts its `compile({ resolve, resolvePackage, ... })` signature to the shape `sauce-route.ts`
- * already calls the TS compiler with: a `source` string plus `baseDirs`/`defines`/`contracts`,
- * returning a `CompileResult` (`@eco-incorp/sauce-compiler`'s own type) so the RS path slots into
- * `CompiledSauceRoute` with no caller-visible difference.
- *
- * WHY THIS EXISTS: `ambient` (broadcasting a module's exports into every module with no `import`
- * line) exists ONLY on the RS compiler today — this is the seam that lets an SDK caller opt into
- * it. Every other option below is a best-effort translation of what the TS call site already
- * passes; see the per-field notes.
+ * Loads the SauceScript compiler (`sauce-compiler`, the published `@eco-incorp/sauce-compiler` wasm
+ * package) and adapts its `compile({ resolve, resolvePackage, ... })` signature to the source-plus-
+ * options shape `sauce-route.ts` calls with: a `source` string plus `baseDirs`/`defines`/`contracts`,
+ * returning a `CompileResult` (`compile-types.ts`) so `CompiledSauceRoute` never names a compiler
+ * type. Every other node-side recompile in the SDK (`svm/verify.ts`) goes through here too, so the
+ * wasm module is loaded in exactly one place.
  */
 import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve as resolvePath } from "node:path";
 
-import type { CompileResult, CompileTarget, ContractsConfig } from "@eco-incorp/sauce-compiler";
+import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 // The RS compiler's own option/result types, from the package this file loads at runtime -- a
 // hand-written mirror of them would drift with nothing to catch it.
 import type {
   CompileOptions as RsCompileOptions,
   CompileResult as RsCompileResult,
   SauceTarget as RsTarget,
-} from "sauce-next";
+} from "sauce-compiler";
 
 const ENTRY = "main.js";
 
 let rsCompileFn: ((options: RsCompileOptions) => RsCompileResult) | undefined;
 
-/** Lazily loads the wasm module — only paid by a caller that actually picks `compiler: 'rs'`. */
+/** Lazily loads the wasm module — only paid once something actually compiles. */
 function loadRsCompile(): (options: RsCompileOptions) => RsCompileResult {
   if (rsCompileFn) return rsCompileFn;
   // Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build
@@ -39,10 +33,10 @@ function loadRsCompile(): (options: RsCompileOptions) => RsCompileResult {
   // resolves that sibling -- an ESM/bundler loader does not. Mirrors `test/std/token/harness.ts`.
   let mod: { compile: (options: RsCompileOptions) => RsCompileResult };
   try {
-    mod = createRequire(import.meta.url)("sauce-next") as typeof mod;
+    mod = createRequire(import.meta.url)("sauce-compiler") as typeof mod;
   } catch (cause) {
     throw new Error(
-      "compiler: 'rs' requires the Rust SauceScript compiler (`sauce-next` -> @eco-incorp/sauce-compiler).",
+      "the SauceScript compiler (`sauce-compiler` -> the published @eco-incorp/sauce-compiler) failed to load.",
       { cause },
     );
   }
@@ -55,8 +49,7 @@ function mapTarget(target: CompileTarget): RsTarget {
   return target === "svm" ? "svm" : "evm";
 }
 
-/** Matches the TS compiler's own `defines` convention ("Booleans map to 1n/0n") -- the RS
- *  compiler's `defines` takes each value as a literal integer string instead of a typed union. */
+/** A define is one 256-bit word, spelled as a literal integer string; booleans map to 1/0. */
 function defineValue(v: bigint | boolean | number): string {
   if (typeof v === "bigint") return v.toString();
   if (typeof v === "boolean") return v ? "1" : "0";
@@ -87,8 +80,8 @@ function toInlineContracts(contracts: ContractsConfig | undefined): Array<[strin
 
 /**
  * A `resolve` that serves `source` as the entry and everything else from `baseDirs` — mirroring
- * the TS compiler's own multi-root probing (`CompilerContext#resolveInRoots`), but simpler:
- * confirmed empirically (see the P6 report) that RS hands `resolve` a specifier ALREADY joined
+ * multi-root probing, but simpler: confirmed empirically that the compiler hands `resolve` a
+ * specifier ALREADY joined
  * against its importing module's own directory -- a relative import two hops deep arrives
  * pre-joined (e.g. `./sub/b.js`), never the raw `./b.js` as written at the call site -- so this
  * only ever needs to try each root directly, never re-derive an importer directory itself.
@@ -110,10 +103,8 @@ function makeResolve(source: string, baseDirs: readonly string[]): (path: string
 }
 
 /**
- * Walks up from each baseDir looking for `node_modules/<pkg>`, mirroring the TS compiler's own
- * `findPackageDir`/`packageEntry` (`compiler/src/context.ts`) -- so a bare specifier (e.g.
- * `@sauce/token`) resolves the same way on both compiler paths whenever a caller's baseDirs sit
- * under a real node_modules tree. Returns an ABSOLUTE path; `makeResolve`'s
+ * Walks up from each baseDir looking for `node_modules/<pkg>` -- so a bare specifier (e.g.
+ * `@sauce/token`) resolves whenever a caller's baseDirs sit under a real node_modules tree. Returns an ABSOLUTE path; `makeResolve`'s
  * `resolvePath(dir, path)` returns an absolute input unchanged regardless of which `dir` is tried,
  * so this slots straight back through the same resolver.
  */
@@ -146,7 +137,7 @@ function findPackageDir(pkg: string, baseDirs: readonly string[]): string | unde
 }
 
 /** `.`/"module"/"main" only -- a small, deliberately non-exhaustive subset of real Node
- *  resolution, matching the TS compiler's own `packageEntry`. Falls back to `index.js`. */
+ *  resolution. Falls back to `index.js`. */
 function packageEntry(pkgDir: string): string {
   try {
     const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf-8")) as Record<string, unknown>;
@@ -156,6 +147,114 @@ function packageEntry(pkgDir: string): string {
     // fall through to the default below
   }
   return "index.js";
+}
+
+/**
+ * Index of the closing quote of the string/template literal opening at `open`.
+ *
+ * Template interpolation does not nest here: `${…}` is scanned as ordinary string body, so a
+ * backtick inside one would end the literal early. That is sound only because the language subset
+ * rejects template literals outright (`\`{ return }\`` fails as "not supported in the M1 subset"),
+ * leaving `hex\`…\`` -- the one tagged form it accepts -- which cannot contain an interpolation.
+ */
+function endOfString(source: string, open: number): number {
+  const quote = source[open];
+  for (let i = open + 1; i < source.length; i++) {
+    if (source[i] === "\\") i++;
+    else if (source[i] === quote) return i;
+  }
+
+  return source.length;
+}
+
+/** Index of the last character of the `//` or block comment opening at `open`. */
+function endOfComment(source: string, open: number): number {
+  if (source[open + 1] === "/") {
+    const newline = source.indexOf("\n", open);
+
+    return newline === -1 ? source.length - 1 : newline;
+  }
+  const close = source.indexOf("*/", open);
+
+  return close === -1 ? source.length - 1 : close + 1;
+}
+
+/**
+ * `source` with every string, template literal and comment replaced by spaces (newlines kept).
+ * LENGTH-PRESERVING, so an index into the original still names the same character — which is what
+ * lets the brace search in `mainBody` run on the blanked copy.
+ */
+function blankLiterals(source: string): string {
+  const blank = (text: string): string => text.replace(/[^\n]/g, " ");
+  const blanked: string[] = [];
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    const isLiteral = ch === '"' || ch === "'" || ch === "`";
+    const isComment = ch === "/" && (source[i + 1] === "/" || source[i + 1] === "*");
+    if (!isLiteral && !isComment) {
+      blanked.push(ch);
+      continue;
+    }
+    const end = isLiteral ? endOfString(source, i) : endOfComment(source, i);
+    blanked.push(blank(source.slice(i, end + 1)));
+    i = end;
+  }
+
+  return blanked.join("");
+}
+
+/**
+ * `main`'s OWN body — its opening brace to the matching close — taken from an ALREADY-blanked
+ * `code`. Stopping at the closing brace keeps a helper declared AFTER `main` out of the `return`
+ * scan below, and the blanking keeps a thrown `"…return…"` message from reading as code.
+ */
+function mainBody(code: string, from: number): string {
+  const open = code.indexOf("{", from);
+  if (open === -1) return "";
+
+  let depth = 0;
+  for (let i = open; i < code.length; i++) {
+    const ch = code[i];
+    if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) return code.slice(open, i + 1);
+  }
+
+  return code.slice(open);
+}
+
+/**
+ * Declare `main` void when it falls off the end.
+ *
+ * The compiler requires a function's return type to be declared rather than inferred, but the SDK's
+ * source generators must emit PLAIN JS: the token-member and protocol-accessor rewrites are
+ * acorn-based and cannot parse a type annotation. So the annotation is added here, at the single
+ * compile seam, after every rewrite pass has run.
+ */
+export function ensureVoidMain(source: string): string {
+  // EVERY search below runs on the blanked copy, never the raw source: an earlier string or comment
+  // containing `function main()` would otherwise be the match, and a paren inside a parameter's
+  // default-value string would close the param list early — either one lands `: void` mid-source.
+  // Blanking is length-preserving, so every index still names the same character in `source`.
+  const code = blankLiterals(source);
+  const signature = /function(\s+)main(\s*)\(/.exec(code);
+  if (signature === null) return source;
+
+  // Walk to the signature's closing paren — a param list can nest (`Account<Writable>`), but never
+  // parens, so counting them is enough.
+  let depth = 0;
+  let i = signature.index + signature[0].length - 1;
+  for (; i < code.length; i++) {
+    if (code[i] === "(") depth++;
+    else if (code[i] === ")" && --depth === 0) break;
+  }
+  // Already annotated: leave it alone.
+  if (/^\s*:/.test(code.slice(i + 1))) return source;
+  // It returns a value: leave it alone. Scanned over `mainBody` rather than the rest of the FILE,
+  // which would also see a helper declared after `main`.
+  if (/(^|[^.\w])return(\s|;)/.test(mainBody(code, i + 1))) return source;
+
+  return `${source.slice(0, i + 1)}: void${source.slice(i + 1)}`;
 }
 
 export interface RsCompileInput {
@@ -170,16 +269,13 @@ export interface RsCompileInput {
 }
 
 /**
- * Compiles `input.source` through the RS/WASM compiler and adapts its result back to the TS
- * compiler's own `CompileResult` shape, so `compileSauceRoute` can slot it into
- * `CompiledSauceRoute` unchanged.
+ * Compiles `input.source` and adapts the result to the seam's own `CompileResult`, so
+ * `compileSauceRoute` can slot it into `CompiledSauceRoute`.
  *
- * NOTE: the RS `manifest` (SVM account list) is NOT translated into the TS compiler's
- * `accountPlan` -- the two shapes are lossy in different directions (RS's `AccountEntry` carries
- * no writable/signer flags; the TS `AccountPlan`'s `AccountMeta` carries no `remaining`-tail
- * marker) and nothing `compileSauceRoute` returns today reads `compiled.accountPlan` -- so this is
- * a deliberate, documented scope cut, not an oversight. `warnings` is always `[]` -- the RS
- * compiler throws on a real problem rather than returning warnings.
+ * `bytecode` is a one-element list because a cook executes `ingredients[0]`; `warnings` is always
+ * empty, since a real problem throws rather than being reported. The SVM account `manifest` is not
+ * carried through -- nothing `compileSauceRoute` returns reads it, and an SVM caller that needs the
+ * attach contract compiles through `svm/` directly.
  */
 export function compileWithRs(input: RsCompileInput): CompileResult {
   const compile = loadRsCompile();
@@ -188,7 +284,7 @@ export function compileWithRs(input: RsCompileInput): CompileResult {
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
-    resolve: makeResolve(input.source, baseDirs),
+    resolve: makeResolve(ensureVoidMain(input.source), baseDirs),
     resolvePackage: makeResolvePackage(baseDirs),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,

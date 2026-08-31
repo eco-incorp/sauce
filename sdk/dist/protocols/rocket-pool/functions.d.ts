@@ -1,3 +1,0 @@
-export declare const deposit = "\nimport { RocketDepositPoolABI as IRocketDepositPool } from \"./abis\";\n\nfunction main(depositPoolAddress: Address): Uint256 {\n  const pool = IRocketDepositPool.at(depositPoolAddress);\n  pool.deposit();\n  return 1;\n}\n";
-export declare const burn = "\nimport { RETHABI as IRETH } from \"./abis\";\n\nfunction main(rethAddress: Address, amount: Uint256): Uint256 {\n  const reth = IRETH.at(rethAddress);\n  reth.burn(amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

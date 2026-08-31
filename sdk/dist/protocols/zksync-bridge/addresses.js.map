@@ -1,1 +1,0 @@
-{"version":3,"file":"addresses.js","sourceRoot":"","sources":["../../../src/protocols/zksync-bridge/addresses.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,WAAW,GAAsB;IAC5C;QACE,OAAO,EAAE,CAAC;QACV,SAAS,EAAE,UAAU;QACrB,SAAS,EAAE;YACT,YAAY,EAAE,4CAA4C;SAC3D;KACF;IACD;QACE,OAAO,EAAE,GAAG;QACZ,SAAS,EAAE,QAAQ;QACnB,SAAS,EAAE;YACT,QAAQ,EAAE,4CAA4C;SACvD;KACF;CACF,CAAC"}

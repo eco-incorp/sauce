@@ -28,11 +28,12 @@
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --env-file-if-exists=.env --test --test-concurrency=1 tests/to-sauce.test.ts tests/to-quote.test.ts tests/megas-swap.unit.test.ts",
-    "test:unit": "tsx --test --test-concurrency=1 tests/megas-swap.unit.test.ts",
+    "test": "tsx --env-file-if-exists=.env --test --test-concurrency=1 tests/to-sauce.test.ts tests/to-quote.test.ts tests/to-sauce.unit.test.ts tests/megas-swap.unit.test.ts",
+    "test:unit": "tsx --test --test-concurrency=1 tests/to-sauce.unit.test.ts tests/megas-swap.unit.test.ts",
     "test:megas-swap": "tsx --env-file-if-exists=.env --test --test-concurrency=1 tests/megas-swap.test.ts"
   },
   "dependencies": {
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {

@@ -1,3 +1,0 @@
-export declare const transfer = "\nimport { CbETHABI as ICbETH } from \"./abis\";\n\nfunction main(cbethAddress: Address, to: Address, amount: Uint256): Uint256 {\n  const cbeth = ICbETH.at(cbethAddress);\n  cbeth.transfer(to, amount);\n  return 1;\n}\n";
-export declare const approve = "\nimport { CbETHABI as ICbETH } from \"./abis\";\n\nfunction main(cbethAddress: Address, spender: Address, amount: Uint256): Uint256 {\n  const cbeth = ICbETH.at(cbethAddress);\n  cbeth.approve(spender, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

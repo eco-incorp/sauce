@@ -8,7 +8,10 @@
 // `execute_from_account` instruction data (`[disc][flags][pin?][slice?][args]`) and `accounts` is that
 // instruction's account list. This module decodes that envelope and hands the two halves to
 // `decodeSvmSettleExecution` / `verifySvmSettleExecution`, so an external partner goes from a published
-// intent to `(minOut, splCount, tokenProgram0/1)` + resolved account identities with ONLY this package.
+// intent to the staged-execute header + resolved account identities with ONLY this package. `minOut`
+// and `splCount` are NOT decodable -- they are defines folded into the bytecode -- so a partner who
+// needs them states them as an expectation and `verifySvmSettleExecution` establishes them by
+// recompiling and byte-comparing. See `verify.ts`'s note on `DecodedSvmSettleExecution`.
 //
 // WHY THIS LIVES IN THE SDK (not in a solver adapter): this surface is for partners CONSUMING Eco
 // intents, who have neither the solver's internals nor its `decodeRouteCall`. So the Portal envelope
@@ -41,7 +44,7 @@ import {
   getU32Encoder,
 } from '@solana/kit';
 import type { Address } from '@solana/kit';
-import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from './verify.js';
+import { verifySvmSettleExecution, type SvmSettleExecutionVerification, type SvmSettleExpectation } from './verify.js';
 
 // ── Portal CalldataWithAccounts envelope (Eco Portal program IDL) ──
 
@@ -175,15 +178,15 @@ export interface SvmIntentLike {
   route: { calls: readonly SvmIntentCallLike[] };
 }
 
-export interface ExtractSvmSettleOptions {
+export interface ExtractSvmSettleOptions extends SvmSettleExpectation {
   /** OPTIONAL. The staged settle bytecode (`sauceStage.buffers[settleIdx].bytecode`), as bytes / base64 /
    *  0x-hex. When supplied, genuineness is proven by a full byte-match; when omitted, it is still proven
    *  via the calldata pin vs the SDK's own recompiled canonical settle (a partner needs no bytecode). */
   bytecode?: BytesInput;
 }
 
-/** The extracted settle for a call: the full `verifySvmSettleExecution` verdict (args, resolved accounts,
- *  and the `genuine` / `verifiedBy` genuineness fields), extended with the call's index. */
+/** The extracted settle for a call: the full `verifySvmSettleExecution` verdict (resolved accounts and
+ *  the `genuine` / `verifiedBy` genuineness fields), extended with the call's index. */
 export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
   /** Index of the `route.calls[]` entry the genuine settle execution was found in. */
   callIndex: number;
@@ -195,14 +198,16 @@ export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
  * (`verifySvmSettleExecution`), not by shape: the calldata pin must equal `sha256` of the SDK's own
  * recompiled canonical settle (or the supplied `bytecode` must byte-match it). A shape-only lookalike or
  * an adversarial decoy is REJECTED — the scan keeps going and never returns a non-genuine call — so this
- * cannot be tricked into reporting attacker-chosen params. Returns `null` if no call is a genuine settle.
+ * cannot be tricked into reporting attacker-chosen params: `minOut`/`splCount` are what the CALLER
+ * expects, and a genuine verdict is itself the proof the program enforces them. Returns `null` if no
+ * call is a genuine settle.
  *
  * (To inspect a call's raw structural params without a genuineness proof — e.g. a decoy's claimed values —
  * decode the envelope with `decodePortalCalldataWithAccounts` and call `decodeSvmSettleExecution` directly.)
  */
 export function extractSvmSettleFromCalls(
   calls: readonly SvmIntentCallLike[],
-  options: ExtractSvmSettleOptions = {},
+  options: ExtractSvmSettleOptions,
 ): ExtractedSvmSettle | null {
   const bytecode = options.bytecode !== undefined ? toBytes(options.bytecode, 'bytecode') : undefined;
 
@@ -216,7 +221,13 @@ export function extractSvmSettleFromCalls(
 
     let verified: SvmSettleExecutionVerification;
     try {
-      verified = verifySvmSettleExecution({ instructionData: envelope.instructionData, accounts: envelope.accounts, bytecode });
+      verified = verifySvmSettleExecution({
+        instructionData: envelope.instructionData,
+        accounts: envelope.accounts,
+        bytecode,
+        minOut: options.minOut,
+        splCount: options.splCount,
+      });
     } catch {
       continue; // a decodable envelope, but its instruction is not even settle-SHAPED — skip
     }
@@ -236,6 +247,6 @@ export function extractSvmSettleFromCalls(
  * intent's `fulfillmentMetadata.svm.sauceStage`) for the additional full byte-match. `null` if the intent
  * carries no genuine settle execution.
  */
-export function extractSvmSettleFromIntent(intent: SvmIntentLike, options: ExtractSvmSettleOptions = {}): ExtractedSvmSettle | null {
+export function extractSvmSettleFromIntent(intent: SvmIntentLike, options: ExtractSvmSettleOptions): ExtractedSvmSettle | null {
   return extractSvmSettleFromCalls(intent.route.calls, options);
 }

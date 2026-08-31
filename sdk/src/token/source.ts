@@ -10,8 +10,8 @@ import { evmApproveStatement, evmBalanceExpression, evmTransferStatement, ERC20_
 import {
   accountRefsForApprove,
   accountRefsForTransfer,
-  LE8_HELPER_SOURCE,
   newSvmEmitState,
+  svmAccountParamList,
   svmApproveLines,
   svmBalanceExpression,
   svmTransferLines,
@@ -35,7 +35,7 @@ function validateSpec(spec: TokenSpec, target: TokenTarget): void {
 
 /** The import lines a `tokenSource(specs, target)` program needs. On an EVM target: `IERC20`, iff
  *  any spec is `transfer`/`approve`/`balanceOf` (always — every op needs the binding). On `svm`:
- *  none (SVM ops use only the built-in `accountData`/`accountUint`/`contract.call` globals). */
+ *  none (SVM ops use only the built-in `svm.sload`/`svm.call` globals). */
 export function tokenImportLines(specs: readonly TokenSpec[], target: TokenTarget): readonly string[] {
   if (!isEvmTarget(target)) return [];
   return specs.length > 0 ? [ERC20_IMPORT_LINE] : [];
@@ -69,12 +69,12 @@ export function tokenExpression(spec: TokenSpec, target: TokenTarget): string {
   return isEvmTarget(target) ? evmBalanceExpression(spec) : svmBalanceExpression(spec);
 }
 
-/** The AccountPlan refs a `transfer`/`approve` spec interns, in order — mirrors `svmSettleRefs`.
- *  Throws for `balanceOf` (a pure read; its only ref is the caller-supplied `source`) and for an
- *  EVM-target spec (no AccountPlan on that target). */
+/** The account-manifest refs a `transfer`/`approve` spec attaches, in order — mirrors
+ *  `svmSettleRefs`. Throws for `balanceOf` (a pure read; its only ref is the caller-supplied
+ *  `source`) and for an EVM-target spec (no account manifest on that target). */
 export function tokenAccountRefs(spec: TokenSpec, target: TokenTarget): readonly string[] {
   if (isEvmTarget(target)) {
-    throw new Error(`tokenAccountRefs: no AccountPlan on an EVM target`);
+    throw new Error(`tokenAccountRefs: no account manifest on an EVM target`);
   }
   if (spec.op === "balanceOf") return [spec.svm!.source];
   const refs = spec.svm!;
@@ -101,7 +101,6 @@ export function tokenSource(spec: TokenSpec | readonly TokenSpec[], target: Toke
   specs.forEach((s) => validateSpec(s, target));
   if (!isEvmTarget(target)) assertNoDuplicateSvmRefs(specs);
 
-  const needsLe8 = !isEvmTarget(target) && specs.some((s) => s.op === "transfer" || s.op === "approve");
   const importLines = [...tokenImportLines(specs, target), ...(opts.imports ?? [])];
   const state = newSvmEmitState();
 
@@ -117,6 +116,8 @@ export function tokenSource(spec: TokenSpec | readonly TokenSpec[], target: Toke
   const fnName = opts.functionName ?? "main";
   const body = bodyLines.map((line) => line.split("\n").map((l) => `  ${l}`).join("\n")).join("\n");
 
-  const parts = [...importLines, "", ...(needsLe8 ? [LE8_HELPER_SOURCE, ""] : []), `function ${fnName}() {`, body, "}", ""];
+  // Every SVM account is a main() param, in attach order — that declaration IS the manifest.
+  const params = isEvmTarget(target) ? "" : svmAccountParamList(specs);
+  const parts = [...importLines, "", `function ${fnName}(${params}) {`, body, "}", ""];
   return parts.join("\n");
 }

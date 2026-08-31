@@ -113,33 +113,37 @@ describe("Token: SVM source emission", () => {
   const svmApprove = { op: "approve" as const, amount: 5n, svm: { source: "src0", mint: "mint0", delegate: "dlg0" } };
   const svmBalance = { op: "balanceOf" as const, svm: { source: "src0" } };
 
-  it("transfer emits accountData/accountUint/contract.call with TransferChecked (12)", () => {
+  it("transfer emits svm.sload/svm.call with TransferChecked (0x0c) over annotated Account params", () => {
     const src = Token.transfer(svmTransfer).source("svm");
-    expect(src).toContain("function le8(x)");
-    expect(src).toContain('accountData("tokenProgram", 0, 0);');
-    expect(src).toContain('accountUint("mint0", 44, 1)');
-    expect(src).toContain("Uint8Array.from([12])");
-    expect(src).toContain('{ ref: "src0", writable: true }');
-    expect(src).toContain('{ ref: "dst0", writable: true }');
-    expect(src).toContain('{ ref: "owner", signer: true }');
+    expect(src).toContain(
+      "function main(tokenProgram: Account, mint0: Account, src0: Account<Writable>, dst0: Account<Writable>, owner: Account<Signer>) {",
+    );
+    expect(src).toContain("svm.sload(mint0, 44, 1).toLe()");
+    expect(src).toContain("const disc0 = hex`0c`;");
+    expect(src).toContain("svm.call(tokenProgram, [src0, mint0, dst0, owner], data0);");
+    // The CPI target is an attach slot now, so which program arrives is pinned explicitly.
+    expect(src).toContain("require(tokenProgram == ");
+    expect(src).not.toContain("function le8(x)");
+    expect(src).not.toContain("accountData");
+    expect(src).not.toContain("accountUint");
     expect(src).not.toContain("IERC20");
   });
 
-  it("approve emits ApproveChecked (13) with a non-writable delegate ref", () => {
+  it("approve emits ApproveChecked (0x0d) and declares the delegate NON-writable", () => {
     const src = Token.approve(svmApprove).source("svm");
-    expect(src).toContain("Uint8Array.from([13])");
-    expect(src).toContain('{ ref: "dlg0" }');
-    expect(src).not.toContain('{ ref: "dlg0", writable: true }');
+    expect(src).toContain("const disc0 = hex`0d`;");
+    expect(src).toContain("dlg0: Account,");
+    expect(src).not.toContain("dlg0: Account<Writable>");
   });
 
-  it("balanceOf emits a pure accountUint read, no le8, no CPI", () => {
+  it("balanceOf emits a pure svm.sload read, no CPI and no program pin", () => {
     const src = Token.balanceOf(svmBalance).source("svm");
     expect(src).toBe(
-      ["", "function main() {", "  return accountUint(\"src0\", 64, 8);", "}", ""].join("\n"),
+      ["", "function main(src0: Account) {", "  return svm.sload(src0, 64, 8).toLe();", "}", ""].join("\n"),
     );
   });
 
-  it("accountRefs() returns the AccountPlan intern order for transfer/approve", () => {
+  it("accountRefs() returns the manifest attach order for transfer/approve", () => {
     expect(Token.transfer(svmTransfer).accountRefs()).toEqual(["tokenProgram", "mint0", "src0", "dst0", "owner"]);
     expect(Token.approve(svmApprove).accountRefs()).toEqual(["tokenProgram", "mint0", "src0", "dlg0", "owner"]);
   });
@@ -155,7 +159,7 @@ describe("Token: SVM source emission", () => {
     expect(() => Token.transfer({ amount: 2n ** 64n, svm: svmTransfer.svm }).source("svm")).toThrow(/u64/);
   });
 
-  it("tokenProgram accountData is interned exactly once across a multi-op program (dedup)", () => {
+  it("the tokenProgram pin and its param appear exactly once across a multi-op program (dedup)", () => {
     const src = Token.program(
       [
         { op: "transfer", amount: 1n, svm: { source: "a", mint: "am", dest: "ad" } },
@@ -163,8 +167,34 @@ describe("Token: SVM source emission", () => {
       ],
       { target: "svm" },
     );
-    expect(src.match(/accountData\("tokenProgram", 0, 0\)/g)?.length).toBe(1);
-    expect(src.match(/function le8\(x\)/g)?.length).toBe(1);
+    expect(src.match(/require\(tokenProgram == /g)?.length).toBe(1);
+    expect(src.match(/tokenProgram: Account/g)?.length).toBe(1);
+    // Both ops CPI through the one shared program slot.
+    expect(src.match(/svm\.call\(tokenProgram, /g)?.length).toBe(2);
+  });
+
+  it("two specs pinning one tokenProgram ref to different programs are rejected", () => {
+    expect(() =>
+      Token.program(
+        [
+          { op: "transfer", amount: 1n, svm: { source: "a", mint: "am", dest: "ad" }, tokenProgram: "spl" },
+          { op: "transfer", amount: 2n, svm: { source: "b", mint: "bm", dest: "bd" }, tokenProgram: "token-2022" },
+        ],
+        { target: "svm" },
+      ),
+    ).toThrow(/one ref is one attached account/);
+  });
+
+  it("two specs on the SAME program still share one pin and one param", () => {
+    const src = Token.program(
+      [
+        { op: "transfer", amount: 1n, svm: { source: "a", mint: "am", dest: "ad" }, tokenProgram: "token-2022" },
+        { op: "transfer", amount: 2n, svm: { source: "b", mint: "bm", dest: "bd" }, tokenProgram: "token-2022" },
+      ],
+      { target: "svm" },
+    );
+    expect(src.match(/require\(tokenProgram == /g)?.length).toBe(1);
+    expect(src).toContain(`require(tokenProgram == ${Token.TOKEN_2022_PROGRAM.toString()}n);`);
   });
 
   it("duplicate instance refs across specs in one program are rejected", () => {
@@ -179,12 +209,14 @@ describe("Token: SVM source emission", () => {
     ).toThrow(/reused across specs/);
   });
 
-  it("tokenProgramValueExpr: 'spl' / 'token-2022' / a literal bigint / an {arg} name", () => {
+  it("tokenProgramValueExpr picks the pinned pubkey: 'token-2022' / a raw bigint", () => {
     const literalSpec = { op: "transfer" as const, amount: 1n, svm: svmTransfer.svm, tokenProgram: "token-2022" as const };
-    expect(Token.transfer(literalSpec).source("svm")).toContain(`contract.call(${Token.TOKEN_2022_PROGRAM.toString()}n,`);
+    expect(Token.transfer(literalSpec).source("svm")).toContain(
+      `require(tokenProgram == ${Token.TOKEN_2022_PROGRAM.toString()}n);`,
+    );
 
-    const argSpec = { op: "transfer" as const, amount: 1n, svm: svmTransfer.svm, tokenProgram: { arg: "tp" } };
-    expect(Token.transfer(argSpec).source("svm")).toContain("contract.call(tp,");
+    const rawSpec = { op: "transfer" as const, amount: 1n, svm: svmTransfer.svm, tokenProgram: 0x1234n };
+    expect(Token.transfer(rawSpec).source("svm")).toContain("require(tokenProgram == 4660n);");
   });
 
   it("toCall() rejects an svm-shaped spec with a named error", () => {

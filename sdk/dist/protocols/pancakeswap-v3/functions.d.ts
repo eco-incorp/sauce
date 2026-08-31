@@ -1,2 +1,0 @@
-export declare const swap = "\nimport { PancakeSwapV3SmartRouterABI as ISmartRouter } from \"./abis\";\n\nfunction main(routerAddress: Address, tokenIn: Address, tokenOut: Address, fee: Uint256, amountIn: Uint256, amountOutMin: Uint256, recipient: Address): Uint256 {\n  const router = ISmartRouter.at(routerAddress);\n  return router.exactInputSingle({tokenIn: tokenIn, tokenOut: tokenOut, fee: fee, recipient: recipient, amountIn: amountIn, amountOutMinimum: amountOutMin, sqrtPriceLimitX96: 0});\n}\n";
-//# sourceMappingURL=functions.d.ts.map

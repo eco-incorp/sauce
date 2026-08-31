@@ -101,7 +101,7 @@
  * pool account already being read — no tree walk. The one missing datum
  * (`Clock::get()?.slot`, the LIVE current slot) is read via SauceScript's
  * `ctx.blockNumber()`, which the SVM engine profile documents as having a
- * fork-parity analog for every EVM chain op (compiler/dist/saucer/
+ * fork-parity analog for every EVM chain op (the compiler's saucer/
  * svm-profile.js) — EMPIRICALLY CONFIRMED here (not merely trusted from that
  * comment) by compiling `function main(){ return abi.encode(ctx.blockNumber(),
  * ctx.timestamp()) }` for target 'svm' and executing it on the real engine.so

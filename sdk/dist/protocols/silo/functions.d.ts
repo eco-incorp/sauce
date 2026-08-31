@@ -1,5 +1,0 @@
-export declare const deposit = "\nimport { SiloABI as ISilo } from \"./abis\";\n\nfunction main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {\n  const silo = ISilo.at(siloAddress);\n  silo.deposit(asset, amount, false);\n  return 1;\n}\n";
-export declare const withdraw = "\nimport { SiloABI as ISilo } from \"./abis\";\n\nfunction main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {\n  const silo = ISilo.at(siloAddress);\n  return silo.withdraw(asset, amount, false);\n}\n";
-export declare const borrow = "\nimport { SiloABI as ISilo } from \"./abis\";\n\nfunction main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {\n  const silo = ISilo.at(siloAddress);\n  silo.borrow(asset, amount);\n  return 1;\n}\n";
-export declare const repay = "\nimport { SiloABI as ISilo } from \"./abis\";\n\nfunction main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {\n  const silo = ISilo.at(siloAddress);\n  silo.repay(asset, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

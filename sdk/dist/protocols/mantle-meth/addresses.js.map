@@ -1,1 +1,0 @@
-{"version":3,"file":"addresses.js","sourceRoot":"","sources":["../../../src/protocols/mantle-meth/addresses.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,WAAW,GAAsB;IAC5C;QACE,OAAO,EAAE,CAAC;QACV,SAAS,EAAE,UAAU;QACrB,SAAS,EAAE;YACT,IAAI,EAAE,4CAA4C;SACnD;KACF;CACF,CAAC"}

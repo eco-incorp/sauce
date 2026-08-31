@@ -1,3 +1,0 @@
-export declare const depositETH = "\nimport { PolygonRootChainManagerABI as IRootChainManager } from \"./abis\";\n\nfunction main(rootChainManagerAddress: Address, recipient: Address): Uint256 {\n  const manager = IRootChainManager.at(rootChainManagerAddress);\n  return manager.depositEtherFor(recipient);\n}\n";
-export declare const depositERC20 = "\nimport { PolygonRootChainManagerABI as IRootChainManager } from \"./abis\";\n\nfunction main(rootChainManagerAddress: Address, recipient: Address, rootToken: Address, depositData: Bytes): Uint256 {\n  const manager = IRootChainManager.at(rootChainManagerAddress);\n  return manager.depositFor(recipient, rootToken, depositData);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

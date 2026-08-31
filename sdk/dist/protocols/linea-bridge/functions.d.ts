@@ -1,2 +1,0 @@
-export declare const bridgeETH = "\nimport { LineaL1MessageServiceABI as IL1MessageService } from \"./abis\";\n\nfunction main(messageServiceAddress: Address, recipient: Address, fee: Uint256): Uint256 {\n  const service = IL1MessageService.at(messageServiceAddress);\n  return service.sendMessage(recipient, fee, 0x00);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

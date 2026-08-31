@@ -1,2 +1,0 @@
-export declare const swap = "\nimport { DODOV2ProxyABI as IDODOProxy } from \"./abis\";\n\nfunction main(proxyAddress: Address, fromToken: Address, toToken: Address, fromAmount: Uint256, minReturn: Uint256, dodoPairs: Tuple, direction: Uint256): Uint256 {\n  const proxy = IDODOProxy.at(proxyAddress);\n  return proxy.dodoSwapV2TokenToToken(fromToken, toToken, fromAmount, minReturn, dodoPairs, direction, false, 99999999999);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

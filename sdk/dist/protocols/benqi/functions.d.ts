@@ -1,5 +1,0 @@
-export declare const supply = "\nimport { QiTokenABI as IQiToken } from \"./abis\";\n\nfunction main(qiTokenAddress: Address, amount: Uint256): Uint256 {\n  const qiToken = IQiToken.at(qiTokenAddress);\n  return qiToken.mint(amount);\n}\n";
-export declare const withdraw = "\nimport { QiTokenABI as IQiToken } from \"./abis\";\n\nfunction main(qiTokenAddress: Address, amount: Uint256): Uint256 {\n  const qiToken = IQiToken.at(qiTokenAddress);\n  return qiToken.redeemUnderlying(amount);\n}\n";
-export declare const borrow = "\nimport { QiTokenABI as IQiToken } from \"./abis\";\n\nfunction main(qiTokenAddress: Address, amount: Uint256): Uint256 {\n  const qiToken = IQiToken.at(qiTokenAddress);\n  return qiToken.borrow(amount);\n}\n";
-export declare const repay = "\nimport { QiTokenABI as IQiToken } from \"./abis\";\n\nfunction main(qiTokenAddress: Address, amount: Uint256): Uint256 {\n  const qiToken = IQiToken.at(qiTokenAddress);\n  return qiToken.repayBorrow(amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

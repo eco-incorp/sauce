@@ -1,2 +1,0 @@
-export declare const sendToken = "\nimport { AxelarGatewayABI as IGateway } from \"./abis\";\n\nfunction main(gatewayAddress: Address, destinationChain: Bytes, destinationAddress: Bytes, symbol: Bytes, amount: Uint256): Uint256 {\n  const gateway = IGateway.at(gatewayAddress);\n  return gateway.sendToken(destinationChain, destinationAddress, symbol, amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

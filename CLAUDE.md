@@ -18,7 +18,6 @@ consumers import everything from one name.
 | --- | --- | --- | --- |
 | `compiler/` | `@eco-incorp/sauce-compiler` | `/compiler` | SauceScript (JS subset) → Sauce bytecode |
 | `sdk/` | `@eco-incorp/sauce-sdk-source` | `.`, `/protocols/*`, `/chains`, `/skills`, `/recipes` | 127+ protocol registry, chains, recipes, AI skill files |
-| `actions/` | `@eco-incorp/sauce-actions` | `/actions` | High-level routing actions (swaps/bridges) → bytecode |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools` | Local/forked hardhat env + recipe runner |
 
 This repo was **extracted from `../sauce`** (the source of truth, which still has its own copies of
@@ -41,13 +40,11 @@ pnpm test           # all workspaces
 Per-workspace (`--filter`):
 
 ```sh
-pnpm --filter './compiler' test          # jest: unit test/ + integration-test/ (needs Foundry)
-pnpm --filter './compiler' lint          # eslint; also: format:check (CI enforces)
 pnpm --filter './sdk' test               # compiles every protocol's SauceScript fn (1400+ tests)
 pnpm --filter './actions' test:unit      # fork-free subset CI runs
 ```
 
-Single test file: jest (compiler/sdk) → `pnpm --filter './compiler' test -- arithmetic.test.ts`.
+Single test file: jest (sdk) → `pnpm --filter './sdk' test -- routes-void-main.test.ts`.
 Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter './actions' exec tsx
 --test tests/megas-swap.unit.test.ts`.
 
@@ -66,8 +63,8 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   `cargo build-sbf` in the sauce repo's `svm/`). The SVM integration suites
   (`compiler/integration-test/svm-*.test.ts`, `sdk/test/svm/*.test.ts`) run compiled
   `target: 'svm'` bytecode on it via LiteSVM. The binary is **vendored** at
-  `artifacts/svm/engine.so` (committed, force-added — `.so` is gitignored — same
-  convention as the committed `compiler/dist`/`sdk/dist`) and that's the default both
+  `artifacts/svm/engine.so` (committed, force-added — `artifacts/` is gitignored; it is the
+  only force-added path left, since no `dist/` is tracked) and that's the default both
   locally and in CI, so these suites run **offline by default**, same as the EVM ones; the
   suites **skip cleanly** only if that binary is somehow missing. Set `SAUCE_ENGINE_SO` to
   override — e.g. to test a freshly built engine before repinning the `sauce` dep. **Refresh
@@ -76,14 +73,16 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   force-commit — nothing re-derives this automatically, so a repin without a refresh silently
   tests against a stale engine again. The `'svm'` compile target, its account-plan output,
   and the `/svm` SDK subpath are documented in `docs/plans/2026-07-03-solana-svm-support.md`.
-- **`SAUCE_RUST_ENGINE_SO` / `SAUCE_RUST_V12_RUNTIME`** — the two engines the `sdk/test/std/token`
-  execution suites need, and **deliberately separate variables** from `SAUCE_ENGINE_SO` above.
-  Those suites are the only ones here that compile through the published **Rust** compiler
-  (`@eco-incorp/sauce-compiler` from the public npm registry, a `sdk/` devDependency aliased as
-  `sauce-next` because its real name is still this workspace's TypeScript compiler at `compiler/`;
-  nothing is built locally and no Rust toolchain is needed), which emits for the sauce `main` engine
-  lineage — while everything else in this repo compiles through the TypeScript compiler and runs on
-  the pinned `release/beta` lineage.
+- **`SAUCE_RUST_ENGINE_SO` / `SAUCE_RUST_V12_RUNTIME`** — the two engines every suite that EXECUTES
+  compiled bytecode needs, and **deliberately separate variables** from `SAUCE_ENGINE_SO` above.
+  The SDK compiles through the published compiler (`@eco-incorp/sauce-compiler` from the public npm
+  registry, depended on under the alias `sauce-compiler` because the in-repo `compiler/` workspace
+  package claims the scoped name itself; nothing is built locally and no Rust toolchain is needed),
+  which emits for the sauce `main`
+  engine lineage. `SAUCE_ENGINE_SO`'s vendored `artifacts/svm/engine.so` is built from the pinned
+  `release/beta` lineage, so it can only serve suites that do NOT run freshly compiled bytecode
+  (instruction builders, PDA derivation, decoders). Anything that does run it gates on
+  `describeRustSvm`/`SAUCE_RUST_ENGINE_SO` instead, which hard-fails in CI rather than skipping.
   **The two wire formats have diverged, measured in both directions**: on the SVM, `JUMP`/`JUMP_I`
   (0xB0/0xB1) exist only on `main` and `NEW_ARRAY` (0x92) encodes its scalar elements differently, so
   Rust-compiled bytecode carrying any `require`/`if` is rejected by the vendored `engine.so` with
@@ -92,55 +91,51 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   value-returning program's epilogue) are `do_unknown` on the pin, so a Rust-compiled `balanceOf`
   either returns empty or dies with `MemoryOOG` on the `V12RuntimeBytecode` this repo generates.
   Pointing `SAUCE_ENGINE_SO` itself at a `main` engine is therefore **not** a workaround — it breaks
-  `sdk/test/svm/staged.e2e` and `svm-settle.e2e`, which need the pinned one. Both suites skip when
-  their variable is unset LOCALLY, so the default `pnpm test` is green and engine-free — but in CI
+  the suites that exercise the SDK's staged-execution instruction builders, which encode the pinned
+  engine's layout. **Staged execution is a known gap**: those builders and `main`-lineage bytecode
+  cannot both be satisfied today, so `svm-settle.e2e` runs its programs INLINE and the staged-path
+  e2e is gone. Restoring it needs the v12-svm v0.4.0 instruction layout; it is unrelated to which
+  compiler the SDK uses. Engine-gated suites skip when their variable is unset LOCALLY, so the
+  default `pnpm test` is green and engine-free — but in CI
   an unset variable is a hard failure, and CI supplies both from the `v12-svm-v0.4.0` and
   `v12-evm-v0.3.0` release artifacts, which are built from the same sauce commit the published
   compiler's `compiler-v0.5.0` tag is cut from. (They cannot come from the `sauce` git dep:
   `release/beta` is the wrong lineage, and sauce `main` deleted the `engine/` tree
   `sync-engine-artifacts.mjs` reads.)
-  Locally, the `.so` is `cd <sauce>/v12-svm && make build`. The runtime is *not*
-  `hnc -r` — that refuses on `Runtime.huff`, whose CONSTRUCTOR returns its own bytecode, so the
-  deployed code is only known once deployed. Deploy the creation bytecode and read it back:
-
-  ```sh
-  cd <sauce>/v12-evm && anvil --port 8799 --silent &
-  KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80  # anvil's first account
-  ADDR=$(cast send --rpc-url http://127.0.0.1:8799 --private-key $KEY --create \
-    "0x$(hnc -s . -b v12/Runtime.huff | tr -d '[:space:]')" --json | jq -r .contractAddress)
-  cast code "$ADDR" --rpc-url http://127.0.0.1:8799 > /tmp/v12-runtime.hex
-  ```
-
-  (the EVM suite also needs `anvil` on `PATH`). **Repinning `sauce` to a lineage that matches the
-  published Rust compiler is the real fix; until then these two suites cannot run in CI.**
-- **Committed EVM engine artifacts** (`sdk/dist/artifacts/` — `Router`, `SauceRouter`,
+  `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines` fetches both from those releases,
+  digest-verified against values pinned in the script, so no Huff toolchain and no local sauce
+  checkout is needed. Building by hand is only for an **unreleased** engine: the `.so` is
+  `cd <sauce>/v12-svm && make build`, and the EVM runtime cannot come from `hnc -r` at all —
+  `Runtime.huff`'s CONSTRUCTOR returns its own bytecode, so the deployed code is only known once
+  deployed; deploy the creation code to an anvil and read it back with `cast code`. (The EVM suite
+  needs `anvil` on `PATH` either way.)
+- **EVM engine artifacts** (`sdk/{src,dist}/artifacts/` — `Router`, `SauceRouter`,
   `ISauceRouter`, `V12Pot`, `V12Kitchen`, `V12RuntimeBytecode`, `IERC20`, `IUniswapV3Pool`,
   `IStateView`) ship to downstream SDK consumers, which read them for local tests/deploys, so
-  they must track the pinned `sauce` engine. Unlike `compiler/dist`, they are **not** build
-  output — `tsc` never emits them — so a `sauce` repin would silently leave them stale. **After
-  any repin run `pnpm --filter './sdk' sync-engine-artifacts`** (copies the 8 forge artifacts
-  from the pinned dep's `engine/out/`) **and commit the result**. CI enforces this: it re-syncs
-  from the freshly-installed engine (foundry v1.5.1 + solc 0.8.27 → byte-reproducible) and fails
-  on any drift, so a forgotten re-sync can't merge.
-- **`V12RuntimeBytecode.json` is the one artifact the sync script does NOT re-derive** (it is
-  listed in `OPTIONAL_SOURCES`, not `SOURCES`). It used to be a snapshot committed inside the
-  dep at `engine-v12/snapshots/`, so syncing was a plain copy. The engine **deleted that
-  committed copy** (`chore(v12): compile the runtime at deploy time`) because it was a second
-  source of truth that rotted — a change to six `.huff` handlers shipped with a snapshot built
-  from the pre-change source, through green CI, and the deploy script would have pushed those
-  stale bytes to eleven live chains. The engine now compiles `v12/Runtime.huff` with `hnc` at
-  deploy time, where `hnc` is a first-class dep. **It is not one here** — this repo's CI installs
-  Foundry only, and that same CI re-runs the sync and fails on drift, so requiring the snapshot
-  would make the drift check unsatisfiable. The engine keeps its generator
-  (`engine-v12/script/V12RuntimeBytecode.s.sol`) precisely for this consumer; its doc comment
-  names "the sauce-sdk viem test harness" as the reason. **When the v12 runtime changes, refresh
-  it by hand** from a checkout of the pinned commit, with `hnc` on `PATH`:
-  `cd engine-v12 && git submodule update --init --recursive --depth 1 && forge script
-  script/V12RuntimeBytecode.s.sol --sig "run()" --ffi`, then copy
-  `snapshots/V12RuntimeBytecode.json` over `sdk/src/artifacts/` + `sdk/dist/artifacts/` and
-  commit. The generator sanity-deploys the creation code before writing, so a broken snapshot
-  fails there rather than in a downstream consumer. Nothing in this repo re-derives or verifies
-  it, so a v12 runtime change without this step silently ships stale creation code to consumers.
+  they must track the pinned `sauce` engine. **Nothing is tracked** — `artifacts/` is gitignored,
+  as is every `dist/` — so they exist only where a build has run, and `tsc` does not emit them:
+  **after any repin run `pnpm --filter './sdk' sync-engine-artifacts`** (copies the 8 forge
+  artifacts from the pinned dep's `engine/out/`). CI runs that same sync from the
+  freshly-installed engine (foundry v1.5.1 + solc 0.8.27 → byte-reproducible) and asserts all 9
+  JSONs landed, so a broken generation fails there rather than shipping an empty dir. The one
+  thing it drift-checks against the index is `sdk/src/deployments`, which *is* committed.
+- **`V12RuntimeBytecode.json` comes from a pinned release asset, not from the `sauce` git dep.**
+  The engine deleted its committed `engine-v12/snapshots/` copy (`chore(v12): compile the runtime
+  at deploy time`) because a second source of truth rotted — six changed `.huff` handlers once
+  shipped with a snapshot built from pre-change source, through green CI.
+  `sync-engine-artifacts.mjs:279` now wraps `v12-evm-v0.3.0`'s `runtime.creation.hex` in the JSON
+  shape consumers already read. No Huff toolchain is involved in producing it.
+- **A tag is not a pin.** A GitHub tag is movable, so each asset is checked against a digest
+  committed in the script itself (`keccak256` of the *decoded* creation code; `sha256` of the
+  `.so`), cross-checked against the release manifest's `creationCodeKeccak`/`soSha256`, **and**
+  against `manifest.commit`. A moved tag throws rather than silently supplying a different engine.
+  Assets cache under `node_modules/.cache/sauce-engine-releases/<tag>/`, so a warm tree needs no
+  network, and a corrupt cache is caught by re-hashing and refetched.
+- **`hnc` is still a CI dependency, for a different reason.** It no longer produces the runtime,
+  but `compiler/integration-test/{v12-execution,v12-solidity-parity}.test.ts` compile
+  `v12/Runtime.huff` themselves and `describe.skip` without it — 63 tests. The version stays
+  pinned and verified because a skipped suite and a passing suite are the same line in jest's
+  summary.
 
 ## Architecture
 
@@ -1707,4 +1702,4 @@ Tag-driven (`.github/workflows/publish.yml`): `git tag v1.2.3 && git push origin
 (`NPM_TOKEN`) and GitHub Packages (`GITHUB_TOKEN`). Only the root version is published; workspace
 packages stay `private`.
 
-**The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce-sdk` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, aliased `sauce-next`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.
+**The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce-sdk` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, imported as `sauce-compiler`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.

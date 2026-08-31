@@ -178,7 +178,7 @@ describe("emission shape — approvals", () => {
   it("a native-value template (weth:wrap) emits no approve at all", () => {
     const stmt = depositCallStatement({ protocol: "weth", action: "wrap", target: TARGET, amount: 1_000n });
     expect(stmt).not.toMatch(/\.approve\(/);
-    expect(stmt).toMatch(/contract\.call\(/);
+    expect(stmt).toMatch(/evm\.call\(/);
   });
 
   it("a 'none'-funded template (aave-v3:withdraw) emits no approve", () => {

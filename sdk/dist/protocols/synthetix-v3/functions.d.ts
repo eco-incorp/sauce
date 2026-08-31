@@ -1,3 +1,0 @@
-export declare const deposit = "\nimport { CoreProxyABI as ICoreProxy } from \"./abis\";\n\nfunction main(coreProxyAddress: Address, accountId: Uint256, collateralType: Address, amount: Uint256): Uint256 {\n  const core = ICoreProxy.at(coreProxyAddress);\n  core.deposit(accountId, collateralType, amount);\n  return 1;\n}\n";
-export declare const withdraw = "\nimport { CoreProxyABI as ICoreProxy } from \"./abis\";\n\nfunction main(coreProxyAddress: Address, accountId: Uint256, collateralType: Address, amount: Uint256): Uint256 {\n  const core = ICoreProxy.at(coreProxyAddress);\n  core.withdraw(accountId, collateralType, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

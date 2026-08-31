@@ -35,7 +35,6 @@ Sources are organised as a pnpm workspace for development; everything ships unde
 
 | Path | What's in it | Subpath |
 | --- | --- | --- |
-| [`compiler/`](compiler/) | Recipe compiler (JS → Sauce bytecode) | `/compiler` |
 | [`sdk/`](sdk/) | Protocols, chains, skills | `/`, `/protocols/*`, `/chains`, `/skills` |
 | [`actions/`](actions/) | High-level action primitives | `/actions` |
 | [`dev-tools/`](dev-tools/) | Local fork environment, script runner, examples | bin: `sauce-dev-tools` |
@@ -44,7 +43,7 @@ Sources are organised as a pnpm workspace for development; everything ships unde
 
 ```sh
 pnpm install
-pnpm build       # build compiler first, then sdk + actions
+pnpm build       # sdk + actions
 pnpm typecheck   # typecheck all areas
 pnpm test        # run all tests
 ```

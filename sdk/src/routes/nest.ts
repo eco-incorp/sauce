@@ -257,7 +257,7 @@ export function assertNestingInvariants(args: AssertNestingInvariantsArgs): void
 // posture (see `intent-dsl.ts`, which owns the `compile()` + call-slotting seam). Per child, per
 // reward token: a `balanceOf(self)` read, an optional cap-underfunded revert, an optional clamp to
 // the declared cap, and a zero-guarded `transfer` to the resolved vault address. A native leg mirrors
-// the same shape using `ctx.selfBalance()` + `contract.call(vault, amount, [])`.
+// the same shape using `ctx.selfBalance()` + `evm.call(vault, amount, hex``)`.
 
 /** Resolves `resolution` into a Sauce expression assignment for this child's vault address, bound to
  *  a fresh `n<index>_vault` local so a multi-token/native child only ever resolves it ONCE. */
@@ -364,7 +364,12 @@ export function nestedTransferStatements(
     if (clamp) {
       stmts.push(`const ${namtVar} = ${nbalVar} > ${capLit} ? ${capLit} : ${nbalVar};`);
     }
-    stmts.push(`if (${namtExpr} > 0n) { contract.call(${vaultVar}, ${namtExpr}, Uint8Array.from([])); }`);
+    // The empty calldata is BOUND, not inline: a method call on a `hex` literal is outside the
+    // compiler's supported subset. Per-child, like every other name here, so the statements stay
+    // valid on their own and several children merge into one program without redeclaring.
+    const dataVar = `n${index}_ndata`;
+    stmts.push(`const ${dataVar} = hex\`\`;`);
+    stmts.push(`if (${namtExpr} > 0n) { evm.call(${vaultVar}, ${namtExpr}, ${dataVar}); }`);
   }
 
   return stmts;

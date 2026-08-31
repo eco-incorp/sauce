@@ -1,2 +1,0 @@
-export declare const bridge = "\nimport { CelerBridgeABI as IBridge } from \"./abis\";\n\nfunction main(bridgeAddress: Address, receiver: Address, token: Address, amount: Uint256, dstChainId: Uint256, maxSlippage: Uint256): Uint256 {\n  const bridge = IBridge.at(bridgeAddress);\n  return bridge.send(receiver, token, amount, dstChainId, 0, maxSlippage);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

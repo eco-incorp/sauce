@@ -4,7 +4,7 @@
 // minimal-length push primitive both decode.ts and report.ts build on.
 
 /** Wire-format constants for the sweep-program v12 wire shape. All values measured against
- *  the compiler's actual emission (`@eco-incorp/sauce-sdk/compiler` at this package's pin) —
+ *  the retired in-repo TypeScript compiler's actual emission —
  *  none of these are arbitrary choices. */
 export const SETTLE_WIRE = {
   /** The compiler's TUPLE-build opcode. Not a legal PUSH width (`0x94 > 0x20`), which is exactly

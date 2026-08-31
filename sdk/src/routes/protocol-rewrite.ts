@@ -26,7 +26,7 @@
  *
  * ARTIFACT SERVING: the compiler's `CompileOptions.contracts` (`ContractsConfig`) is a landed,
  * already-shipped option — `new CompilerContext` registers every `contracts` entry's ABI directly,
- * with ZERO import line and ZERO baseDirs (verified against compiler/dist; see the design doc's
+ * with ZERO import line and ZERO baseDirs (verified by compiling; see the design doc's
  * "artifactServing" section for the full measurement). This pass therefore returns a `contracts`
  * map the caller (`sauce-route.ts`) merges straight into its own `compile()` call — no temp files,
  * no compiler change.
@@ -40,7 +40,7 @@
  */
 import * as acorn from "acorn";
 import type { Address } from "viem";
-import type { ContractsConfig } from "@eco-incorp/sauce-compiler";
+import type { ContractsConfig } from "./compile-types.js";
 
 import { requireChain, type CanonicalChain, type ChainRef } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";

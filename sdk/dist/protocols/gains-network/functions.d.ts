@@ -1,4 +1,0 @@
-export declare const closeTradeMarket = "\nimport { DiamondABI as IDiamond } from \"./abis\";\n\nfunction main(diamondAddress: Address, pairIndex: Uint256, index: Uint256): Uint256 {\n  const diamond = IDiamond.at(diamondAddress);\n  diamond.closeTradeMarket(pairIndex, index);\n  return 1;\n}\n";
-export declare const updateStopLoss = "\nimport { DiamondABI as IDiamond } from \"./abis\";\n\nfunction main(diamondAddress: Address, pairIndex: Uint256, index: Uint256, newSl: Uint256): Uint256 {\n  const diamond = IDiamond.at(diamondAddress);\n  diamond.updateSl(pairIndex, index, newSl);\n  return 1;\n}\n";
-export declare const updateTakeProfit = "\nimport { DiamondABI as IDiamond } from \"./abis\";\n\nfunction main(diamondAddress: Address, pairIndex: Uint256, index: Uint256, newTp: Uint256): Uint256 {\n  const diamond = IDiamond.at(diamondAddress);\n  diamond.updateTp(pairIndex, index, newTp);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

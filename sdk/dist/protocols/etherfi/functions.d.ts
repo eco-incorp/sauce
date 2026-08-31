@@ -1,4 +1,0 @@
-export declare const deposit = "\nimport { LiquidityPoolABI as ILiquidityPool } from \"./abis\";\n\nfunction main(liquidityPoolAddress: Address): Uint256 {\n  const pool = ILiquidityPool.at(liquidityPoolAddress);\n  return pool.deposit();\n}\n";
-export declare const wrap = "\nimport { WeETHABI as IWeETH } from \"./abis\";\n\nfunction main(weethAddress: Address, amount: Uint256): Uint256 {\n  const weeth = IWeETH.at(weethAddress);\n  return weeth.wrap(amount);\n}\n";
-export declare const unwrap = "\nimport { WeETHABI as IWeETH } from \"./abis\";\n\nfunction main(weethAddress: Address, amount: Uint256): Uint256 {\n  const weeth = IWeETH.at(weethAddress);\n  return weeth.unwrap(amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

@@ -1,4 +1,0 @@
-export declare const submitAndDeposit = "\nimport { FrxETHMinterABI as IFrxETHMinter } from \"./abis\";\n\nfunction main(minterAddress: Address, recipient: Address): Uint256 {\n  const minter = IFrxETHMinter.at(minterAddress);\n  return minter.submitAndDeposit(recipient);\n}\n";
-export declare const deposit = "\nimport { SfrxETHABI as ISfrxETH } from \"./abis\";\n\nfunction main(sfrxethAddress: Address, assets: Uint256, receiver: Address): Uint256 {\n  const sfrxeth = ISfrxETH.at(sfrxethAddress);\n  return sfrxeth.deposit(assets, receiver);\n}\n";
-export declare const redeem = "\nimport { SfrxETHABI as ISfrxETH } from \"./abis\";\n\nfunction main(sfrxethAddress: Address, shares: Uint256, receiver: Address, owner: Address): Uint256 {\n  const sfrxeth = ISfrxETH.at(sfrxethAddress);\n  return sfrxeth.redeem(shares, receiver, owner);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

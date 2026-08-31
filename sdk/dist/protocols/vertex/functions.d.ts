@@ -1,2 +1,0 @@
-export declare const depositCollateral = "\nimport { EndpointABI as IEndpoint } from \"./abis\";\n\nfunction main(endpointAddress: Address, productId: Uint256, amount: Uint256): Uint256 {\n  const endpoint = IEndpoint.at(endpointAddress);\n  endpoint.depositCollateral(0x000000000000000000000000, productId, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

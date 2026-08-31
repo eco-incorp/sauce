@@ -1,29 +1,47 @@
 /**
  * @eco-incorp/sauce-sdk/recipes — reusable Sauce recipes shipped as SOURCE.
  *
- * WHAT THIS IS FOR: a partner reproduces our bytecode with the ORDINARY compiler
- * (`@eco-incorp/sauce-sdk/compiler`), not a bespoke helper. This module exists only to answer the
- * two questions a partner genuinely cannot answer themselves — "what is the program text?" and
- * "where is this package installed?" — and then gets out of the way. Every compile option stays
- * explicit at the call site, so what you pass is what you can audit:
+ * WHAT THIS IS FOR: answering the two questions a partner genuinely cannot answer themselves —
+ * "what is the program text?" and "where is this package installed?" — and then getting out of the
+ * way. It ships no compile helper, so whatever options a caller passes are the ones they can audit.
+ *
+ * BYTE-FOR-BYTE REPRODUCIBILITY IS NO LONGER OFFERED — it was against the in-repo TypeScript compiler,
+ * the TypeScript compiler this repo used to ship. It was the only one with compile-time `args`, which is
+ * what bakes `(tokens, minOut, recipient)` into the fixed PROLOGUE that IS the v1 wire grammar
+ * `@eco-incorp/sauce-sdk/verify` decodes:
  *
  * ```ts
  * import { compile } from "@eco-incorp/sauce-sdk/compiler";
  * import { settleSource, SAUCE_BASE_DIRS } from "@eco-incorp/sauce-sdk/recipes";
  *
- * const { bytecode } = compile(settleSource(), {
- *   baseDirs: SAUCE_BASE_DIRS,   // resolves the program's `./artifacts/IERC20.json` import
- *   target: "v12",               // the program is v12-only
- *   treeshake: true,
- *   tsSource: true,              // the source is TypeScript-annotated SauceScript
- *   args: [tokens.map(BigInt), minOut, BigInt(recipient)],
+ * // A raw compile is right HERE and not for the generated programs: settle's `main` declares its
+ * // own return type, so it needs no annotating. It takes `(tokens, minOut, recipient)` as RUNTIME
+ * // entry arguments -- they ride the payload after the program bytes, not baked at compile time.
+ * const { bytecode } = compile({
+ *   target: "evm",
+ *   entry: "settle.sauce.ts",
+ *   resolve: (path) =>
+ *     path.endsWith("settle.sauce.ts")
+ *       ? new TextEncoder().encode(settleSource())
+ *       : readFrom(SAUCE_BASE_DIRS, path),   // serves the program's `./artifacts/IERC20.json`
  * });
- * // bytecode[0] is byte-identical to the program we hand you.
+ * // bytecode -- 391 bytes
  * ```
  *
- * Those five options are the whole contract — change any of them and the bytes change. They are
+ * Those three compile inputs are the whole contract — change any of them and the bytes change. They are
  * deliberately NOT exported as a pre-baked options object: a partner reproducing our output should
  * see the target and the arg order, not inherit them from a constant they never read.
+ * No test runs this against `SETTLE_VECTORS` any more — that suite went with the compiler,
+ * so the promise is a live pin rather than a claim.
+ *
+ * ⚠ THE PUBLISHED RUST COMPILER IS A DIFFERENT LINEAGE AND DOES NOT REPRODUCE THESE BYTES. It has no
+ * `args` option, and the `defines` that stand in for it are constant-folded AT EACH USE SITE rather
+ * than materialized up front — measured on this program, `minOut` lands at byte 48 and `recipient` at
+ * byte 104, inside the body, and an array literal terminates with `0x92` where the grammar specifies
+ * `0x94`. So its output has no prologue to decode and no argument-independent body to hash, and
+ * `decodeSettleProgram` correctly refuses it. Reproducibility and `/verify` both mean the compiler
+ * named above; the SDK's own route builders (`routes/`, `svm/`) compile through the Rust one, which is
+ * why nothing there is decodable by `/verify` either.
  *
  * PREFER `settleSource()` OVER READING THE FILE YOURSELF, but both work — the raw asset is a
  * real file inside the package and is reachable by subpath if you want to hash, diff, or vendor it:

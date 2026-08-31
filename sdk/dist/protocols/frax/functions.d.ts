@@ -1,3 +1,0 @@
-export declare const transfer = "\nimport { FraxERC20ABI as IFRAX } from \"./abis\";\n\nfunction main(fraxAddress: Address, to: Address, amount: Uint256): Uint256 {\n  const frax = IFRAX.at(fraxAddress);\n  return frax.transfer(to, amount);\n}\n";
-export declare const approve = "\nimport { FraxERC20ABI as IFRAX } from \"./abis\";\n\nfunction main(fraxAddress: Address, spender: Address, amount: Uint256): Uint256 {\n  const frax = IFRAX.at(fraxAddress);\n  return frax.approve(spender, amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

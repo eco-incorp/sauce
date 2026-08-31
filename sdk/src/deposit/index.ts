@@ -23,15 +23,19 @@
  * `ingredients[0]`, exactly like `swap`'s own multi-leg story.
  *
  * ```ts
- * import { compile } from "@eco-incorp/sauce-sdk/compiler";
- * import { deposit } from "@eco-incorp/sauce-sdk";
- * import { bytesToHex } from "viem";
+ * import { routes, deposit } from "@eco-incorp/sauce-sdk";
  *
- * const { bytecode } = compile(
- *   deposit.swapThenDepositSource(swapLeg, { protocol: "aave-v3", action: "supply", target: aavePool,
- *     token: tokenOut, amount: "delta", extra: { referralCode: 0n } }),
- *   { baseDirs: deposit.COMPOSED_BASE_DIRS, target: "v12", treeshake: true, tsSource: true },
+ * // routes.compileSauceRoute, not the compiler directly: a generated `main` falls off the end and
+ * // has no return type of its own, so a raw compile rejects it with "`main` does not return on
+ * // every path". compileSauceRoute annotates it before compiling.
+ * const { compiled } = routes.compileSauceRoute(
+ *   "base",
+ *   deposit.depositSource({ protocol: "aave-v3", action: "supply", target: aavePool,
+ *     token: tokenIn, amount: 500n, extra: { referralCode: 0n } }),
+ *   { pot },
+ *   { baseDirs: deposit.DEPOSIT_BASE_DIRS },
  * );
+ * // compiled.bytecode[0] -- 132 bytes for this spec
  * ```
  *
  * ## Starter templates (eleven; see `templates.ts` for the full registry)
@@ -51,10 +55,10 @@
  * A TYPED ABI binding can never attach ETH: the compiler's non-view external-call path hardcodes
  * `value = 0` (`compiler/src/processor/expression.ts`'s `processContractCall`), and there is no
  * `.value()`/`{value:}` syntax anywhere in SauceScript. The only way to attach value is the raw
- * builtin `contract.call(target, value, calldata)` (`compiler/src/globals.ts`). So every
+ * builtin `evm.call(target, value, calldata)`. So every
  * `funding: "native-value"` template (`weth:wrap`, `lido:stake`) emits a raw call instead of a
  * typed one — `WETH.deposit(){value}` becomes
- * `contract.call(<weth>, <amount>, Uint8Array.from([0xd0, 0xe3, 0x0d, 0xb0]))`. `weth:unwrap` is
+ * `evm.call(<weth>, <amount>, hex`d0e30db0`)`. `weth:unwrap` is
  * ALSO a raw call (no vendored ABI exists for WETH at all — see below) but attaches no value; its
  * amount rides as an `abi.encode`d calldata word instead.
  *
@@ -63,7 +67,7 @@
  * - **WETH has NO vendored SDK ABI anywhere** (there is no `weth`/`wrapped-native` protocol slug
  *   among the SDK's ~130 entries, and `sdk/src/artifacts/` — `.gitignore`d, engine artifacts only —
  *   could not host a hand-added one even if invented). Both WETH templates therefore use the raw
- *   `contract.call` path with WETH9's two well-known selectors as SDK constants, forced anyway for
+ *   `evm.call` path with WETH9's two well-known selectors as SDK constants, forced anyway for
  *   `wrap` (native value) and costing nothing for `unwrap`. The selectors are pinned in
  *   `sdk/test/deposit.test.ts` against `toFunctionSelector`, so they cannot silently rot.
  * - **`morpho-blue`'s `supply`** really does exist in the vendored ABI and does compile, but is

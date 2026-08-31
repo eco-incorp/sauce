@@ -16,7 +16,7 @@
  * a comment, or a default parameter breaks naive slicing, which is exactly why acorn is used.
  *
  * CAPTURE: there is none, by construction, and that is CORRECT — a free identifier that is neither
- * a chain-scoped ambient name nor a caller-supplied `defines` entry is a hard `undefined variable: X`
+ * a chain-scoped ambient name nor a caller-supplied `defines` entry is a hard "`X` is not a declared variable"
  * compile error, which can never silently bake a stale JS value into bytecode.
  */
 import * as acorn from "acorn";

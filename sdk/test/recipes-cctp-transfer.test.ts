@@ -69,12 +69,20 @@ describe("cctp-transfer — Base→Arbitrum, DSL-native (no hardcoded ABIs/addre
     expect(bytesToHex(built.compiled.bytecode[0]!).slice(2).includes(DEPOSIT_FOR_BURN)).toBe(true);
   });
 
-  it("splits at RUNTIME: exactly TWO depositForBurn sites (full-chunk loop + remainder), not one per chunk", () => {
-    // 10 chunks' worth, yet the program carries exactly two depositForBurn call sites — the loop body
-    // and the remainder burn — so count = amount / chunkSize is computed ON-CHAIN, not unrolled.
-    const built = buildCctpSplitTransfer(params({ amount: 10_000_000n }));
+  it("splits at RUNTIME: ONE loop site plus a remainder site, never one per chunk", () => {
+    // 2.5 chunks' worth: the program carries exactly two depositForBurn call sites — the loop body
+    // and the remainder burn — so the burns are driven by a loop, not unrolled per chunk.
+    const built = buildCctpSplitTransfer(params({ amount: 2_500_000n }));
     const hex = bytesToHex(built.compiled.bytecode[0]!).slice(2);
     expect(hex.split(DEPOSIT_FOR_BURN).length - 1).toBe(2);
+  });
+
+  it("an evenly divisible amount drops the remainder burn entirely (the branch is dead at compile time)", () => {
+    // `amount % chunkSize` folds to 0 from the compile-time defines, so `if (remainder > 0n)` is
+    // provably false and the second call site is not emitted at all.
+    const built = buildCctpSplitTransfer(params({ amount: 10_000_000n }));
+    const hex = bytesToHex(built.compiled.bytecode[0]!).slice(2);
+    expect(hex.split(DEPOSIT_FOR_BURN).length - 1).toBe(1);
   });
 
   it("a sub-cap amount builds too (count = 0, just the remainder burn)", () => {

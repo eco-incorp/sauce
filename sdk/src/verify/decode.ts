@@ -20,14 +20,18 @@
  * cannot exclude an appended transfer, branch, or unbounded call after the prologue — a
  * prologue-shaped program may do anything in its body.
  *
- * If you need "this is the program I audited", compile that program from source and byte-compare:
- * `@eco-incorp/sauce-sdk/recipes` ships the source and the one `baseDirs` entry, and the ordinary
- * compiler reproduces the exact bytes. That is a check against source you can read, which is
- * strictly better evidence than a hash constant shipped in the same package as the claim.
+ * "This is the program I audited" is answerable by recompiling the shipped source and byte-comparing,
+ * but against the retired in-repo TypeScript compiler, which this package
+ * ships. It bakes the params into this prologue and leaves a body that is byte-identical for every
+ * token count, minOut and recipient — so one `bodyHash` covers every argument set, which is what
+ * makes the comparison meaningful. Neither half holds for the published RUST compiler: it folds each
+ * value at its use site, which puts the arguments INSIDE the body (measured: `minOut` at byte 48,
+ * `recipient` at 104) and leaves no prologue at all, so this decoder refuses its output outright.
  *
- * Useful property when you do compare: the body of `recipes/settle.sauce.ts` is byte-identical for
- * every token count, every minOut and every recipient (the program is helper-free, so no jump-table
- * offsets shift with arg count) — so one body comparison covers every argument set.
+ * This decoder therefore describes the v1 wire format. `SETTLE_VECTORS` are its committed golden
+ * bytes and the conformance corpus — frozen, not pinned: the compiler that produced them is no
+ * longer in this repo and nothing recompiles them. The grammar below and that compiler can no
+ * longer drift apart, because only one of the two still exists.
  *
  * THIS decoder is CANONICAL/STRICT: unlike the recipes package's original in-repo decoder (which
  * predates this package and accepted three malformed shapes — see the `SettleFailureCode` docs

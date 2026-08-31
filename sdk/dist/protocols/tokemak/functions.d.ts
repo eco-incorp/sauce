@@ -1,4 +1,0 @@
-export declare const deposit = "\nimport { AutopoolABI as IAutopool } from \"./abis\";\n\nfunction main(autopoolAddress: Address, assets: Uint256, receiver: Address): Uint256 {\n  const autopool = IAutopool.at(autopoolAddress);\n  return autopool.deposit(assets, receiver);\n}\n";
-export declare const withdraw = "\nimport { AutopoolABI as IAutopool } from \"./abis\";\n\nfunction main(autopoolAddress: Address, assets: Uint256, receiver: Address, owner: Address): Uint256 {\n  const autopool = IAutopool.at(autopoolAddress);\n  return autopool.withdraw(assets, receiver, owner);\n}\n";
-export declare const redeem = "\nimport { AutopoolABI as IAutopool } from \"./abis\";\n\nfunction main(autopoolAddress: Address, shares: Uint256, receiver: Address, owner: Address): Uint256 {\n  const autopool = IAutopool.at(autopoolAddress);\n  return autopool.redeem(shares, receiver, owner);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

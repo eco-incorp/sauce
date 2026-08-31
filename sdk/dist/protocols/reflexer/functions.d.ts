@@ -1,3 +1,0 @@
-export declare const exitRai = "\nimport { CoinJoinABI as ICoinJoin } from \"./abis\";\n\nfunction main(coinJoinAddress: Address, account: Address, amount: Uint256): Uint256 {\n  const coinJoin = ICoinJoin.at(coinJoinAddress);\n  coinJoin.exit(account, amount);\n  return 1;\n}\n";
-export declare const joinRai = "\nimport { CoinJoinABI as ICoinJoin } from \"./abis\";\n\nfunction main(coinJoinAddress: Address, account: Address, amount: Uint256): Uint256 {\n  const coinJoin = ICoinJoin.at(coinJoinAddress);\n  coinJoin.join(account, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

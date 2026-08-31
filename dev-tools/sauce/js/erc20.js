@@ -8,11 +8,11 @@ function balanceSlot(account) {
 function main(to, amount) {
   const from = ctx.msgSender();
   const fromSlot = balanceSlot(from);
-  const fromBalance = storage.read(fromSlot);
+  const fromBalance = evm.sload(fromSlot);
   if (fromBalance < amount) throw "insufficient balance";
-  storage.write(fromSlot, fromBalance - amount);
+  evm.sstore(fromSlot, fromBalance - amount);
   const toSlot = balanceSlot(to);
-  storage.write(toSlot, storage.read(toSlot) + amount);
-  emit("Transfer(address,address,uint256)", { from, to, amount }, "from", "to");
+  evm.sstore(toSlot, evm.sload(toSlot) + amount);
+  log(abi.encode(from, to, amount), crypto.keccak256("Transfer(address,address,uint256)"));
   return 1;
 }

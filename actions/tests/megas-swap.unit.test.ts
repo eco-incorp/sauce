@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { megasSwapToSauce } from '../src/megas-swap.js';
+import { megasSwapToSauce, megasSwapToSauceSource } from '../src/megas-swap.js';
 import type {
   AmbientSwapAction,
   ApproveAction,
@@ -85,30 +85,62 @@ function makeCandidates(amount: string, count: number): SwapAction[] {
 // Tests
 // =============================================================================
 
-describe('megasSwapToSauce — bytecode shape', () => {
-  it('returns N+3 programs (per-candidate quotes + quote_any + swap_any + main)', () => {
+/**
+ * The retired TypeScript compiler emitted `N + 3` programs (one per candidate quote, two
+ * dispatchers, `main`) because cross-program calls went through the v1 engine's function table.
+ * The Rust compiler links declared functions into ONE program, so the count is always 1 and the
+ * structure is asserted on the emitted SOURCE instead — which is what the old count was standing in
+ * for, and is a stronger check: it names the functions rather than counting anonymous blobs.
+ */
+describe('megasSwapToSauce — program shape', () => {
+  it('declares quote_0..quote_N-1 + both dispatchers + main, and compiles to one program', () => {
     for (const N of [1, 2, 3, 4]) {
       const amountIn = 1_000_000n * BigInt(N);
-      const programs = megasSwapToSauce(makeCandidates(amountIn.toString(), N), amountIn, N, QUOTER_OPTS);
-      assert.equal(
-        programs.length,
-        N + 3,
-        `expected N+3=${N + 3} programs for N=${N}, got ${programs.length}`,
-      );
-      // Every emitted program is non-empty bytecode.
-      for (let i = 0; i < programs.length; i++) {
-        assert.ok(programs[i].length > 0, `program[${i}] is empty for N=${N}`);
+      const candidates = makeCandidates(amountIn.toString(), N);
+      const source = megasSwapToSauceSource(candidates, amountIn, N, QUOTER_OPTS);
+
+      for (let i = 0; i < N; i++) {
+        assert.match(source, new RegExp(`function quote_${i}\\(amount: Uint256\\): Uint256`), `N=${N}: missing quote_${i}`);
       }
+      assert.doesNotMatch(source, new RegExp(`function quote_${N}\\(`), `N=${N}: declared a quote for a candidate that does not exist`);
+      assert.match(source, /function quote_any\(idx: Uint256, amount: Uint256\): Uint256/, `N=${N}: missing quote_any`);
+      assert.match(source, /function swap_any\(idx: Uint256, amount: Uint256\): void/, `N=${N}: missing swap_any`);
+      assert.match(source, /function main\(\): void/, `N=${N}: missing main`);
+      // The out-of-range guard both dispatchers carry, so an invalid idx reverts instead of
+      // silently landing on the last candidate.
+      assert.equal(source.match(new RegExp(`if \\(idx >= ${N}n\\) \\{ revert\\(\\); \\}`, 'g'))?.length, 2, `N=${N}: expected both dispatchers to guard idx`);
+
+      const programs = megasSwapToSauce(candidates, amountIn, N, QUOTER_OPTS);
+      assert.equal(programs.length, 1, `N=${N}: expected one program`);
+      assert.ok(programs[0].length > 0, `N=${N}: program is empty`);
     }
   });
 
-  it('shape pins under varying n (number of buckets) too', () => {
+  it('shape holds under varying n (number of buckets) too', () => {
     const N = 3;
     for (const n of [1, 2, 5, 10]) {
       const amountIn = BigInt(n) * 1_000_000n;
-      const programs = megasSwapToSauce(makeCandidates(amountIn.toString(), N), amountIn, n, QUOTER_OPTS);
-      assert.equal(programs.length, N + 3);
+      const candidates = makeCandidates(amountIn.toString(), N);
+      const source = megasSwapToSauceSource(candidates, amountIn, n, QUOTER_OPTS);
+      // n drives the greedy loop's bound and nothing else about the structure.
+      assert.match(source, new RegExp(`for \\(let iter = 0n; iter < ${n}n;`), `n=${n}: greedy loop bound`);
+      assert.match(source, new RegExp(`for \\(let i = 0n; i < ${N}n;`), `n=${n}: init loop bound`);
+      assert.equal(megasSwapToSauce(candidates, amountIn, n, QUOTER_OPTS).length, 1);
     }
+  });
+
+  it('every candidate quote is reachable from quote_any, and every swap from swap_any', () => {
+    const N = 4;
+    const amountIn = 4_000_000n;
+    const source = megasSwapToSauceSource(makeCandidates(amountIn.toString(), N), amountIn, N, QUOTER_OPTS);
+    const quoteAny = source.slice(source.indexOf('function quote_any'), source.indexOf('function swap_any'));
+    for (let i = 0; i < N; i++) {
+      assert.match(quoteAny, new RegExp(`return quote_${i}\\(amount\\);`), `quote_any does not dispatch to quote_${i}`);
+    }
+    // swap_any's branches are inlined action statements, so assert the branch count instead.
+    const swapAny = source.slice(source.indexOf('function swap_any'), source.indexOf('function main'));
+    assert.equal(swapAny.match(/if \(idx == \d+n\) \{/g)?.length, N - 1, 'swap_any branch count');
+    assert.match(swapAny, /\} else \{/, 'swap_any needs an else tail — a bare if chain would run the last branch for every idx');
   });
 });
 
@@ -116,7 +148,7 @@ describe('megasSwapToSauce — degenerate / edge n', () => {
   it('n=1 (single bucket) compiles', () => {
     const amountIn = 1_000_000n;
     const programs = megasSwapToSauce(makeCandidates(amountIn.toString(), 3), amountIn, 1, QUOTER_OPTS);
-    assert.equal(programs.length, 6); // 3 quote_i + quote_any + swap_any + main
+    assert.equal(programs.length, 1);
   });
 
   it('n=N (one bucket per candidate) compiles', () => {
@@ -124,7 +156,7 @@ describe('megasSwapToSauce — degenerate / edge n', () => {
     const n = N;
     const amountIn = BigInt(n) * 1_000_000n;
     const programs = megasSwapToSauce(makeCandidates(amountIn.toString(), N), amountIn, n, QUOTER_OPTS);
-    assert.equal(programs.length, N + 3);
+    assert.equal(programs.length, 1);
   });
 
   it('n > N (more buckets than candidates) compiles', () => {
@@ -132,7 +164,7 @@ describe('megasSwapToSauce — degenerate / edge n', () => {
     const n = 8;
     const amountIn = BigInt(n) * 1_000_000n;
     const programs = megasSwapToSauce(makeCandidates(amountIn.toString(), N), amountIn, n, QUOTER_OPTS);
-    assert.equal(programs.length, N + 3);
+    assert.equal(programs.length, 1);
   });
 });
 
@@ -221,7 +253,7 @@ describe('megasSwapToSauce — prepend handling', () => {
   it('prepend = [] (default) compiles', () => {
     const amountIn = 1_000_000n;
     const programs = megasSwapToSauce(makeCandidates(amountIn.toString(), 2), amountIn, 1, QUOTER_OPTS);
-    assert.equal(programs.length, 5); // 2 quotes + dispatchers + main
+    assert.equal(programs.length, 1);
   });
 
   it('prepend = [] (explicit empty array) compiles', () => {
@@ -230,10 +262,10 @@ describe('megasSwapToSauce — prepend handling', () => {
       ...QUOTER_OPTS,
       prepend: [],
     });
-    assert.equal(programs.length, 5);
+    assert.equal(programs.length, 1);
   });
 
-  it('prepend with multiple approvals compiles, and main grows monotonically', () => {
+  it('prepend with multiple approvals compiles, and the program grows monotonically', () => {
     const amountIn = 1_000_000n;
     const candidates = makeCandidates(amountIn.toString(), 2);
     const baseline = megasSwapToSauce(candidates, amountIn, 1, QUOTER_OPTS);
@@ -247,9 +279,12 @@ describe('megasSwapToSauce — prepend handling', () => {
     const prependMainLen = withPrepend[withPrepend.length - 1].length;
 
     assert.equal(withPrepend.length, baseline.length, 'prepend does not change program count');
+    // One `approve` selector const per prepended approval, in the emitted source.
+    const source = megasSwapToSauceSource(candidates, amountIn, 1, { ...QUOTER_OPTS, prepend: approves });
+    assert.equal(source.match(/hex`095ea7b3`/g)?.length, approves.length, 'one approve selector per prepended approval');
     assert.ok(
       prependMainLen > baseMainLen,
-      `prepend should add bytes to main (was ${baseMainLen}, now ${prependMainLen})`,
+      `prepend should add bytes to the program (was ${baseMainLen}, now ${prependMainLen})`,
     );
   });
 });

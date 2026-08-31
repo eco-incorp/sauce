@@ -1,3 +1,0 @@
-export declare const transfer = "\nimport { CrvUSDERC20ABI as ICrvUSD } from \"./abis\";\n\nfunction main(crvusdAddress: Address, to: Address, amount: Uint256): Uint256 {\n  const crvusd = ICrvUSD.at(crvusdAddress);\n  return crvusd.transfer(to, amount);\n}\n";
-export declare const approve = "\nimport { CrvUSDERC20ABI as ICrvUSD } from \"./abis\";\n\nfunction main(crvusdAddress: Address, spender: Address, amount: Uint256): Uint256 {\n  const crvusd = ICrvUSD.at(crvusdAddress);\n  return crvusd.approve(spender, amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

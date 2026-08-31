@@ -1,2 +1,0 @@
-export declare const depositIntoStrategy = "\nimport { StrategyManagerABI as IStrategyManager } from \"./abis\";\n\nfunction main(strategyManagerAddress: Address, strategy: Address, token: Address, amount: Uint256): Uint256 {\n  const sm = IStrategyManager.at(strategyManagerAddress);\n  return sm.depositIntoStrategy(strategy, token, amount);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

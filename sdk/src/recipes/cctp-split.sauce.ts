@@ -1,17 +1,19 @@
 /**
- * cctp-split — move a USDC `amount` in CCTP burns capped at `chunkSize`, ATOMIC in one Sauce cook.
+ * cctp-split — move a USDC `CCTP_AMOUNT` in CCTP burns capped at `CCTP_CHUNK_SIZE`, ATOMIC in one
+ * Sauce cook.
  *
- * The INTERFACE is the whole point: you pass the TOTAL `amount` and the per-message `chunkSize`, and
+ * The INTERFACE is the whole point: you pass the TOTAL amount and the per-message chunk size, and
  * THE SCRIPT does the splitting — `count = amount / chunkSize` full-cap burns, then one final burn of
  * the leftover `remainder = amount % chunkSize` when it isn't zero. No divisibility assumption, no
  * remainder dropped: `$2.50` at a `$1` cap becomes `$1 + $1 + $0.50`. The TypeScript builder computes
  * nothing; it only hands the script its two numbers.
  *
- * `main` is parameterized; the builder (`recipes/cctp-transfer.ts`) bakes THIS intent's concrete
- * values in as compile-time `args`. The compiler pushes them via a call prologue and `main` receives
- * them as ordinary runtime params, so `count`/`remainder` are computed on-chain — the burn count is
- * decided from `amount`/`chunkSize`, not precomputed off-chain. Standalone asset, not a string
- * assembled in TypeScript. Same shape as `settle.sauce.ts`.
+ * THIS INTENT'S VALUES ARRIVE AS `defines`. The five consts below are declared with placeholder
+ * defaults so this file reads (and compiles) standalone; the builder
+ * (`recipes/cctp-transfer.ts`) overrides each one per intent, and a define REPLACES the module's own
+ * `const` of that name. They are constant-folded, so a given set of values yields fixed bytecode —
+ * the same property the compile-time-argument form had. Standalone asset, not a string assembled in
+ * TypeScript. Same shape as `settle.sauce.ts`.
  *
  * DSL-NATIVE, ZERO HARDCODING — no ABI, no address:
  *   • `USDC` resolves to the source chain's USDC address from the token registry.
@@ -23,18 +25,24 @@
  * One approval for the whole amount, then the burns against it — if any burn reverts (e.g. it
  * exceeds Circle's per-message cap) the entire source-chain tx reverts (all-or-nothing).
  *
- * Params are intentionally UNANNOTATED: the DSL accessor rewrite that resolves `USDC`/`Cctp` is
+ * Declarations are intentionally UNANNOTATED: the DSL accessor rewrite that resolves `USDC`/`Cctp` is
  * acorn-based (plain JS), so a `.sauce.ts` routed through it must carry no TypeScript type syntax.
  */
-function main(recipient, amount, chunkSize, destinationDomain, maxFee) {
-  USDC.approve(Cctp.TokenMessenger, amount);
-  let count = amount / chunkSize;
+const CCTP_RECIPIENT = 0n;
+const CCTP_AMOUNT = 0n;
+const CCTP_CHUNK_SIZE = 1n;
+const CCTP_DEST_DOMAIN = 0n;
+const CCTP_MAX_FEE = 0n;
+
+function main() {
+  USDC.approve(Cctp.TokenMessenger, CCTP_AMOUNT);
+  let count = CCTP_AMOUNT / CCTP_CHUNK_SIZE;
   for (let i = 0n; i < count; i++) {
-    Cctp.TokenMessenger.depositForBurn(chunkSize, destinationDomain, recipient, USDC, 0n, maxFee, 0n);
+    Cctp.TokenMessenger.depositForBurn(CCTP_CHUNK_SIZE, CCTP_DEST_DOMAIN, CCTP_RECIPIENT, USDC, 0n, CCTP_MAX_FEE, 0n);
   }
-  let remainder = amount % chunkSize;
+  let remainder = CCTP_AMOUNT % CCTP_CHUNK_SIZE;
   if (remainder > 0n) {
-    Cctp.TokenMessenger.depositForBurn(remainder, destinationDomain, recipient, USDC, 0n, maxFee, 0n);
+    Cctp.TokenMessenger.depositForBurn(remainder, CCTP_DEST_DOMAIN, CCTP_RECIPIENT, USDC, 0n, CCTP_MAX_FEE, 0n);
   }
   return 0n;
 }

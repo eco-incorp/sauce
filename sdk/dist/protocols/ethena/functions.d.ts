@@ -1,4 +1,0 @@
-export declare const stakeUSDe = "\nimport { StakedUSDeABI as IStakedUSDe } from \"./abis\";\n\nfunction main(susdeAddress: Address, amount: Uint256, receiver: Address): Uint256 {\n  const susde = IStakedUSDe.at(susdeAddress);\n  return susde.deposit(amount, receiver);\n}\n";
-export declare const cooldownAssets = "\nimport { StakedUSDeABI as IStakedUSDe } from \"./abis\";\n\nfunction main(susdeAddress: Address, assets: Uint256): Uint256 {\n  const susde = IStakedUSDe.at(susdeAddress);\n  return susde.cooldownAssets(assets);\n}\n";
-export declare const unstake = "\nimport { StakedUSDeABI as IStakedUSDe } from \"./abis\";\n\nfunction main(susdeAddress: Address, receiver: Address): Uint256 {\n  const susde = IStakedUSDe.at(susdeAddress);\n  susde.unstake(receiver);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

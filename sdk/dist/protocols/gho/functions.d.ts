@@ -1,3 +1,0 @@
-export declare const transfer = "\nimport { GhoTokenABI as IGhoToken } from \"./abis\";\n\nfunction main(ghoAddress: Address, to: Address, amount: Uint256): Uint256 {\n  const gho = IGhoToken.at(ghoAddress);\n  gho.transfer(to, amount);\n  return 1;\n}\n";
-export declare const approve = "\nimport { GhoTokenABI as IGhoToken } from \"./abis\";\n\nfunction main(ghoAddress: Address, spender: Address, amount: Uint256): Uint256 {\n  const gho = IGhoToken.at(ghoAddress);\n  gho.approve(spender, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

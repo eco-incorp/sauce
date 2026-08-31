@@ -1,2 +1,0 @@
-export declare const getLatestPrice = "\nimport { AggregatorV3ABI as IAggregatorV3 } from \"./abis\";\n\nfunction main(feedAddress: Address): Uint256 {\n  const feed = IAggregatorV3.at(feedAddress);\n  return feed.latestRoundData();\n}\n";
-//# sourceMappingURL=functions.d.ts.map

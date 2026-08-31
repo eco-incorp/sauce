@@ -1,3 +1,0 @@
-export declare const deposit = "\nimport { PufferVaultABI as IPufferVault } from \"./abis\";\n\nfunction main(pufferVaultAddress: Address, assets: Uint256, receiver: Address): Uint256 {\n  const vault = IPufferVault.at(pufferVaultAddress);\n  return vault.deposit(assets, receiver);\n}\n";
-export declare const redeem = "\nimport { PufferVaultABI as IPufferVault } from \"./abis\";\n\nfunction main(pufferVaultAddress: Address, shares: Uint256, receiver: Address, owner: Address): Uint256 {\n  const vault = IPufferVault.at(pufferVaultAddress);\n  return vault.redeem(shares, receiver, owner);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

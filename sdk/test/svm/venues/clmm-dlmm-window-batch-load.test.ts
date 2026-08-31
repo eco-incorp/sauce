@@ -21,6 +21,7 @@
  */
 import { resolve } from 'path';
 import { address } from '@solana/kit';
+import type { Address } from '@solana/kit';
 import {
   coalescingAccountLoader,
   fetchMeteoraDlmmConfig,
@@ -28,7 +29,7 @@ import {
   LB_PAIR_DISCRIMINATOR,
   RAYDIUM_CLMM_POOL_DISCRIMINATOR,
 } from '../../../src/svm/index.js';
-import type { Address, BatchAccountLoader, LoadedAccount } from '../../../src/svm/index.js';
+import type { BatchAccountLoader, LoadedAccount } from '../../../src/svm/index.js';
 import { fixtureData, loadFixtures } from '../fixtures.js';
 import type { AccountFixture } from '../fixtures.js';
 

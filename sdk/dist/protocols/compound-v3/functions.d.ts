@@ -1,5 +1,0 @@
-export declare const supply = "\nimport { CometABI as IComet } from \"./abis\";\n\nfunction main(cometAddress: Address, asset: Address, amount: Uint256): Uint256 {\n  const comet = IComet.at(cometAddress);\n  comet.supply(asset, amount);\n  return 1;\n}\n";
-export declare const withdraw = "\nimport { CometABI as IComet } from \"./abis\";\n\nfunction main(cometAddress: Address, asset: Address, amount: Uint256): Uint256 {\n  const comet = IComet.at(cometAddress);\n  comet.withdraw(asset, amount);\n  return 1;\n}\n";
-export declare const supplyTo = "\nimport { CometABI as IComet } from \"./abis\";\n\nfunction main(cometAddress: Address, dst: Address, asset: Address, amount: Uint256): Uint256 {\n  const comet = IComet.at(cometAddress);\n  comet.supplyTo(dst, asset, amount);\n  return 1;\n}\n";
-export declare const withdrawTo = "\nimport { CometABI as IComet } from \"./abis\";\n\nfunction main(cometAddress: Address, to: Address, asset: Address, amount: Uint256): Uint256 {\n  const comet = IComet.at(cometAddress);\n  comet.withdrawTo(to, asset, amount);\n  return 1;\n}\n";
-//# sourceMappingURL=functions.d.ts.map

@@ -1,4 +1,0 @@
-export declare const depositToSDAI = "\nimport { SavingsDaiABI as ISavingsDai } from \"./abis\";\n\nfunction main(sDAIAddress: Address, amount: Uint256, receiver: Address): Uint256 {\n  const sDAI = ISavingsDai.at(sDAIAddress);\n  return sDAI.deposit(amount, receiver);\n}\n";
-export declare const withdrawFromSDAI = "\nimport { SavingsDaiABI as ISavingsDai } from \"./abis\";\n\nfunction main(sDAIAddress: Address, amount: Uint256, receiver: Address, owner: Address): Uint256 {\n  const sDAI = ISavingsDai.at(sDAIAddress);\n  return sDAI.withdraw(amount, receiver, owner);\n}\n";
-export declare const redeemFromSDAI = "\nimport { SavingsDaiABI as ISavingsDai } from \"./abis\";\n\nfunction main(sDAIAddress: Address, shares: Uint256, receiver: Address, owner: Address): Uint256 {\n  const sDAI = ISavingsDai.at(sDAIAddress);\n  return sDAI.redeem(shares, receiver, owner);\n}\n";
-//# sourceMappingURL=functions.d.ts.map

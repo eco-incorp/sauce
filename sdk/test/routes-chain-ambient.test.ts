@@ -50,13 +50,12 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
-  it("is byte-identical to calling compileSauceRoute directly with compiler:'rs' + the same ambient list", () => {
+  it("is byte-identical to calling compileSauceRoute directly with the same ambient list", () => {
     const viaOpenRoute = openRoute("base", bareBody, evmOptions({
       compile: { baseDirs: [AMBIENT_FIXTURE_DIR], ambient: ["./math-helpers.js"] },
     })).reward(0n);
 
     const direct = compileSauceRoute(requireChain("base"), bareBody, { pot: POT }, {
-      compiler: "rs",
       baseDirs: [AMBIENT_FIXTURE_DIR],
       ambient: ["./math-helpers.js"],
       // openRoute also threads chain-scoped scalar defines (chainId/CHAIN_ID) underneath -- match
@@ -67,28 +66,17 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     expect(Array.from(viaOpenRoute.compiled.bytecode[0]!)).toEqual(Array.from(direct.compiled.bytecode[0]!));
   });
 
-  it("an explicit compiler:'ts' choice is never overridden, even with a non-empty ambient list (and fails, as documented)", () => {
-    // Proves the gate respects an explicit caller choice rather than always forcing 'rs' -- the TS
-    // compiler this repo vendors has no `ambient` concept, so the identical body still fails here.
-    expect(() =>
-      openRoute("base", bareBody, evmOptions({
-        compile: { compiler: "ts", baseDirs: [AMBIENT_FIXTURE_DIR], ambient: ["./math-helpers.js"] },
-      })).reward(0n),
-    ).toThrow();
-  });
-
-  it("default (empty ambient bundle): compiler stays 'ts'/unset and bytecode is unaffected by this feature", () => {
+  it("default (empty ambient bundle): bytecode is unaffected by this feature", () => {
     const built = openRoute("base", "return chainId;", evmOptions()).reward(0n);
     expect(built.compiled.bytecode.length).toBe(1);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
 
-    // Byte-identical to the pre-P7 TS-default path (routes-ambient.test.ts already pins this same
-    // equivalence for chainDefines alone -- this re-confirms it still holds now that the ambient
-    // merge/compiler-gate logic sits in the same code path).
-    const explicitTs = compileSauceRoute(requireChain("base"), "return chainId;", { pot: POT }, {
-      compiler: "ts",
+    // Byte-identical to compiling with only the chain defines openRoute threads underneath --
+    // routes-ambient.test.ts pins the same equivalence for chainDefines alone; this re-confirms it
+    // holds now that the ambient merge sits in the same code path.
+    const withoutAmbient = compileSauceRoute(requireChain("base"), "return chainId;", { pot: POT }, {
       defines: { chainId: BigInt(requireChain("base").id), CHAIN_ID: BigInt(requireChain("base").id) },
     });
-    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(Array.from(explicitTs.compiled.bytecode[0]!));
+    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(Array.from(withoutAmbient.compiled.bytecode[0]!));
   });
 });
