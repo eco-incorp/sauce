@@ -165,5 +165,14 @@ jobs:
       - name: SDK — test
         run: pnpm --filter './sdk' test
 
+      - name: Actions — typecheck
+        run: pnpm --filter './actions' typecheck
+
+      - name: Actions — build
+        run: pnpm --filter './actions' build
+
+      - name: Actions — unit tests
+        run: pnpm --filter './actions' test:unit
+
       - name: Dev Tools — test
         run: pnpm --filter './dev-tools' test

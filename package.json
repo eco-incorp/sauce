@@ -20,6 +20,10 @@
       "types": "./sdk/dist/index.d.ts",
       "default": "./sdk/dist/index.js"
     },
+    "./compiler": {
+      "types": "./compiler/dist/index.d.ts",
+      "default": "./compiler/dist/index.js"
+    },
     "./protocols/*": {
       "types": "./sdk/dist/protocols/*/index.d.ts",
       "default": "./sdk/dist/protocols/*/index.js"
@@ -71,6 +75,7 @@
     "sauce-dev-tools": "./dev-tools/scripts/init.js"
   },
   "files": [
+    "compiler/dist",
     "sdk/dist",
     "sdk/src/skills",
     "sdk/src/protocols",
@@ -83,7 +88,7 @@
     "artifacts/svm/engine.so"
   ],
   "scripts": {
-    "build": "pnpm --filter './sdk' build",
+    "build": "pnpm --filter './compiler' build && pnpm --filter './sdk' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "format": "pnpm -r --if-present format",

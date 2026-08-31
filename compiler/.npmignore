@@ -1,0 +1,10 @@
+# Intentionally does NOT ignore dist/.
+#
+# compiler/.gitignore lists `dist/` so the built output is not tracked during
+# normal development (it is force-added only for git-URL consumption). But
+# npm-packlist honors a nested .gitignore even when the root package `files`
+# whitelist lists `compiler/dist`, which would silently drop compiler/dist from
+# a git-URL / tarball install. A present .npmignore overrides the sibling
+# .gitignore for npm only, so `compiler/dist` is packed while git keeps
+# ignoring it. Keep this file (even empty) as long as dist is committed for
+# git-URL consumers.

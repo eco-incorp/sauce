@@ -1,0 +1,43 @@
+{
+  "name": "@eco-incorp/sauce-actions",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eco-incorp/sauce-sdk.git",
+    "directory": "actions"
+  },
+  "homepage": "https://github.com/eco-incorp/sauce-sdk#readme",
+  "bugs": "https://github.com/eco-incorp/sauce-sdk/issues",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --env-file-if-exists=.env --test --test-concurrency=1 tests/to-sauce.test.ts tests/to-quote.test.ts tests/megas-swap.unit.test.ts",
+    "test:unit": "tsx --test --test-concurrency=1 tests/megas-swap.unit.test.ts",
+    "test:megas-swap": "tsx --env-file-if-exists=.env --test --test-concurrency=1 tests/megas-swap.test.ts"
+  },
+  "dependencies": {
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.8.0"
+  }
+}
