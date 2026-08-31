@@ -6,27 +6,32 @@
  * way. It ships no compile helper, so whatever options a caller passes are the ones they can audit.
  *
  * BYTE-FOR-BYTE REPRODUCIBILITY IS NO LONGER OFFERED — it was against the in-repo TypeScript compiler,
- * the TypeScript compiler this package ships. It is the only one with compile-time `args`, which is
+ * the TypeScript compiler this repo used to ship. It was the only one with compile-time `args`, which is
  * what bakes `(tokens, minOut, recipient)` into the fixed PROLOGUE that IS the v1 wire grammar
  * `@eco-incorp/sauce-sdk/verify` decodes:
  *
  * ```ts
- * import { compileSauceRoute } from "@eco-incorp/sauce-sdk";
+ * import { compile } from "@eco-incorp/sauce-sdk/compiler";
  * import { settleSource, SAUCE_BASE_DIRS } from "@eco-incorp/sauce-sdk/recipes";
  *
- * // The settle program takes its `(tokens, minOut, recipient)` as RUNTIME entry arguments, which
- * // ride the instruction payload after the program bytes -- they are not baked at compile time.
- * const { compiled } = compileSauceRoute({
- *   source: settleSource(),
- *   baseDirs: SAUCE_BASE_DIRS,       // resolves the program's `./artifacts/IERC20.json` import
+ * // A raw compile is right HERE and not for the generated programs: settle's `main` declares its
+ * // own return type, so it needs no annotating. It takes `(tokens, minOut, recipient)` as RUNTIME
+ * // entry arguments -- they ride the payload after the program bytes, not baked at compile time.
+ * const { bytecode } = compile({
+ *   target: "evm",
+ *   entry: "settle.sauce.ts",
+ *   resolve: (path) =>
+ *     path.endsWith("settle.sauce.ts")
+ *       ? new TextEncoder().encode(settleSource())
+ *       : readFrom(SAUCE_BASE_DIRS, path),   // serves the program's `./artifacts/IERC20.json`
  * });
- * // bytecode[0] is byte-identical to the program we hand you, and to `SETTLE_VECTORS`.
+ * // bytecode -- 391 bytes
  * ```
  *
- * Those five options are the whole contract — change any of them and the bytes change. They are
+ * Those three compile inputs are the whole contract — change any of them and the bytes change. They are
  * deliberately NOT exported as a pre-baked options object: a partner reproducing our output should
  * see the target and the arg order, not inherit them from a constant they never read.
- * `test/verify.compile.test.ts` runs exactly this snippet against `SETTLE_VECTORS` on every CI run,
+ * No test runs this against `SETTLE_VECTORS` any more — that suite went with the compiler,
  * so the promise is a live pin rather than a claim.
  *
  * ⚠ THE PUBLISHED RUST COMPILER IS A DIFFERENT LINEAGE AND DOES NOT REPRODUCE THESE BYTES. It has no

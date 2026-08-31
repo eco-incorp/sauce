@@ -40,13 +40,11 @@ pnpm test           # all workspaces
 Per-workspace (`--filter`):
 
 ```sh
-pnpm --filter './compiler' test          # jest: unit test/ + integration-test/ (needs Foundry)
-pnpm --filter './compiler' lint          # eslint; also: format:check (CI enforces)
 pnpm --filter './sdk' test               # compiles every protocol's SauceScript fn (1400+ tests)
 pnpm --filter './actions' test:unit      # fork-free subset CI runs
 ```
 
-Single test file: jest (compiler/sdk) → `pnpm --filter './compiler' test -- arithmetic.test.ts`.
+Single test file: jest (sdk) → `pnpm --filter './sdk' test -- routes-void-main.test.ts`.
 Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter './actions' exec tsx
 --test tests/megas-swap.unit.test.ts`.
 

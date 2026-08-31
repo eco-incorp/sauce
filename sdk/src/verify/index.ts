@@ -13,17 +13,19 @@
 // has no `args` option, and the `defines` standing in for it are constant-folded at each USE SITE —
 // on `recipes/settle.sauce.ts`, `minOut` lands at byte 48 and `recipient` at byte 104, with `0x92`
 // rather than `0x94` terminating the array. Such a program has no prologue and this decoder
-// correctly refuses it. So: use this for programs compiled by `/compiler` (and for any
-// reimplementation checked against `SETTLE_VECTORS`), not as a general "decode any settle" tool —
-// and note that the SDK's own route builders compile through the Rust one.
+// correctly refuses it. So: use this for v1-grammar programs — the ones already on chain, and any
+// reimplementation checked against `SETTLE_VECTORS` — not as a general "decode any settle" tool.
+// Nothing the SDK emits today is v1-grammar, `/compiler` included: that subpath now serves the Rust
+// compiler.
 //
 // SCOPE, stated plainly: this decodes the PROLOGUE. It tells you which tokens, floor and recipient a
 // program carries, and it is strict about the encoding (every push minimal-length, addresses capped
 // at 20 bytes, a zero recipient rejected), so an accepted program is the UNIQUE byte encoding of the
 // values it decodes to. It does NOT tell you the trailing body is a program you have audited — a
 // prologue-shaped program can carry anything after it. Recompile-and-byte-compare answers THAT, and
-// still does for `/compiler` output (`test/verify.compile.test.ts` runs it); it is a node-side check
-// with a compiler in its closure, which is why it does not live in this module.
+// `verifySvmSettleExecution` is the surviving example of the shape — a node-side check with a
+// compiler in its closure, which is why it does not live in this module. There is no longer an EVM
+// counterpart: the compiler that produced these bytes is not in the tree.
 //
 // The `intent.js` exports (`decodeSettleCall`, `extractEvmSettleFromIntent`) go one wrapper further:
 // a producer hands you an intent whose `route.calls[]` ends in a `Pot.cook(bytes[])` call, not a bare

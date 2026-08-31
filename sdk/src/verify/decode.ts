@@ -28,9 +28,10 @@
  * value at its use site, which puts the arguments INSIDE the body (measured: `minOut` at byte 48,
  * `recipient` at 104) and leaves no prologue at all, so this decoder refuses its output outright.
  *
- * This decoder therefore describes the `/compiler` wire format. `SETTLE_VECTORS` are its committed
- * golden bytes and the conformance corpus; `test/verify.compile.test.ts` recompiles them on every
- * run, so the grammar below and the compiler that emits it cannot drift apart silently.
+ * This decoder therefore describes the v1 wire format. `SETTLE_VECTORS` are its committed golden
+ * bytes and the conformance corpus — frozen, not pinned: the compiler that produced them is no
+ * longer in this repo and nothing recompiles them. The grammar below and that compiler can no
+ * longer drift apart, because only one of the two still exists.
  *
  * THIS decoder is CANONICAL/STRICT: unlike the recipes package's original in-repo decoder (which
  * predates this package and accepted three malformed shapes — see the `SettleFailureCode` docs

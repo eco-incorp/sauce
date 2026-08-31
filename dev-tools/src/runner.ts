@@ -30,11 +30,15 @@ const MAX_DEFINE_VALUE = (1n << 256n) - 1n
 // A define REPLACES a module `const` of that name, so the name has to be one the source could have
 // declared. Same shape `scripts/run.ts` uses to tell a define operand from a runtime arg.
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+// Every word the pinned compiler refuses as a const name -- MEASURED against it, not copied from a
+// JS keyword list. `arguments`, `eval`, `as`, `of`, `get`, `set` and `async` are NOT here because it
+// accepts them; adding them would reject valid input.
 const RESERVED = new Set([
-  'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'delete', 'do', 'else', 'enum',
-  'export', 'extends', 'false', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-  'let', 'new', 'null', 'return', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var',
-  'void', 'while', 'with', 'yield',
+  'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete',
+  'do', 'else', 'enum', 'export', 'extends', 'false', 'finally', 'for', 'function', 'if',
+  'implements', 'import', 'in', 'instanceof', 'interface', 'let', 'new', 'null', 'package',
+  'private', 'protected', 'public', 'return', 'static', 'super', 'switch', 'this', 'throw', 'true',
+  'try', 'typeof', 'var', 'void', 'while', 'with', 'yield',
 ])
 
 const sauceAbi = parseAbi([

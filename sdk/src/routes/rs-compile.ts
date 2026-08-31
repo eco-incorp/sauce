@@ -149,7 +149,14 @@ function packageEntry(pkgDir: string): string {
   return "index.js";
 }
 
-/** Index of the closing quote of the string/template literal opening at `open`. */
+/**
+ * Index of the closing quote of the string/template literal opening at `open`.
+ *
+ * Template interpolation does not nest here: `${…}` is scanned as ordinary string body, so a
+ * backtick inside one would end the literal early. That is sound only because the language subset
+ * rejects template literals outright (`\`{ return }\`` fails as "not supported in the M1 subset"),
+ * leaving `hex\`…\`` -- the one tagged form it accepts -- which cannot contain an interpolation.
+ */
 function endOfString(source: string, open: number): number {
   const quote = source[open];
   for (let i = open + 1; i < source.length; i++) {

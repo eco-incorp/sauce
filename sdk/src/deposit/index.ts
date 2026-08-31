@@ -23,16 +23,19 @@
  * `ingredients[0]`, exactly like `swap`'s own multi-leg story.
  *
  * ```ts
- * import { compileSauceRoute, deposit } from "@eco-incorp/sauce-sdk";
+ * import { routes, deposit } from "@eco-incorp/sauce-sdk";
  *
- * // compileSauceRoute, not the compiler directly: it applies the source post-processing a
- * // generated program needs (a `main` that falls off the end has no return type of its own,
- * // and a raw compile rejects it with "`main` does not return on every path").
- * const { compiled } = compileSauceRoute({
- *   source: deposit.swapThenDepositSource(swapLeg, { protocol: "aave-v3", action: "supply",
- *     target: aavePool, token: tokenOut, amount: "delta", extra: { referralCode: 0n } }),
- *   baseDirs: deposit.COMPOSED_BASE_DIRS,
- * });
+ * // routes.compileSauceRoute, not the compiler directly: a generated `main` falls off the end and
+ * // has no return type of its own, so a raw compile rejects it with "`main` does not return on
+ * // every path". compileSauceRoute annotates it before compiling.
+ * const { compiled } = routes.compileSauceRoute(
+ *   "base",
+ *   deposit.depositSource({ protocol: "aave-v3", action: "supply", target: aavePool,
+ *     token: tokenIn, amount: 500n, extra: { referralCode: 0n } }),
+ *   { pot },
+ *   { baseDirs: deposit.DEPOSIT_BASE_DIRS },
+ * );
+ * // compiled.bytecode[0] -- 132 bytes for this spec
  * ```
  *
  * ## Starter templates (eleven; see `templates.ts` for the full registry)

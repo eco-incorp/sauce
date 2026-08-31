@@ -16,18 +16,17 @@
  * ## Composing with E3 (route.calls)
  *
  * ```ts
- * import { compileSauceRoute, swap } from "@eco-incorp/sauce-sdk";
+ * import { routes, swap } from "@eco-incorp/sauce-sdk";
  *
- * // compileSauceRoute, not the compiler directly: it applies the source post-processing a
- * // generated program needs. A raw compile rejects a `main` that falls off the end with
- * // "`main` does not return on every path".
- * const { compiled } = compileSauceRoute({
- *   source: swap.swapSource(spec),
- *   baseDirs: swap.SWAP_BASE_DIRS,   // resolves ./artifacts/ISauceRouter.json (+ IERC20 if needed)
- * });
- *
- * const call = routes.buildSauceEvmCall({ pot, ingredients: [bytesToHex(bytecode[0])] });
- * // -> CallInput; drops straight into RouteInput.calls, flows through normalizeRoute/encodeRouteEvm.
+ * // routes.compileSauceRoute, not the compiler directly: a generated `main` falls off the end and
+ * // a raw compile rejects it with "`main` does not return on every path".
+ * const { compiled } = routes.compileSauceRoute(
+ *   "base",
+ *   swap.swapSource({ poolType: swap.SwapPoolType.UniV3, pool, tokenIn, tokenOut, amountIn: 1_000n }),
+ *   { pot },
+ *   { baseDirs: swap.SWAP_BASE_DIRS },
+ * );
+ * // compiled.bytecode[0] -- 124 bytes for this spec
  * ```
  *
  * A v12 program's `swap()` call self-targets `ctx.self()` (Router entries are `onlySelf`); the

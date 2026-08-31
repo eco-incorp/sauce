@@ -104,9 +104,17 @@ test("rejects an empty value", () => {
 });
 
 test("rejects a reserved word as a name", () => {
-  // Identifier SHAPE is not enough: `const=5` passes the regex, then the compiler refuses it with a
-  // bare "compiling the program failed" that names nothing. Measured against the pinned compiler.
-  for (const word of ["const", "class", "function", "return", "let", "void", "if"]) {
+  // The CLASS, not a sample: every word the guard carries must be rejected. If the set shrinks, this
+  // fails. The list is measured against the pinned compiler -- `arguments`, `eval`, `as`, `of`,
+  // `get`, `set` and `async` are deliberately absent because it ACCEPTS those as const names.
+  const RESERVED = [
+    "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete",
+    "do", "else", "enum", "export", "extends", "false", "finally", "for", "function", "if",
+    "implements", "import", "in", "instanceof", "interface", "let", "new", "null", "package",
+    "private", "protected", "public", "return", "static", "super", "switch", "this", "throw", "true",
+    "try", "typeof", "var", "void", "while", "with", "yield",
+  ];
+  for (const word of RESERVED) {
     let threw = false;
     try {
       parseDefine(`${word}=5`);
@@ -114,6 +122,10 @@ test("rejects a reserved word as a name", () => {
       threw = true;
     }
     ok(threw, `should reject reserved word ${JSON.stringify(word)}`);
+  }
+  // and the ones the compiler accepts must still pass, or the guard is over-broad
+  for (const word of ["arguments", "eval", "as", "of", "get", "set", "async"]) {
+    ok(parseDefine(`${word}=5`)[0] === word, `should accept ${JSON.stringify(word)}`);
   }
 });
 

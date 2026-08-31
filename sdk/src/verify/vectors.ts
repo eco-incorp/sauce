@@ -20,16 +20,14 @@ const Z = "0x0000000000000000000000000000000000ff00aa" as Hex; // leading-zero-b
  * obtained by actually compiling `recipes/settle.sauce.ts` with the given args (not hand-encoded).
  * See decode.ts's module docstring for the grammar these bytes instantiate.
  *
- * They serve two purposes at once. They are the definition of the v1 grammar for anyone
- * reimplementing the decoder, which is what a conformance corpus is for; and they are a LIVE
- * regression pin on the compiler that produces the grammar — `test/verify.compile.test.ts` compiles
- * `recipes/settle.sauce.ts` with the in-repo TypeScript compiler (which this
- * package ships) and byte-compares against these vectors, so a program edit or a compiler change
- * shows up as a real diff.
+ * They are the definition of the v1 grammar for anyone reimplementing the decoder — which is what
+ * a conformance corpus is for, and now their only purpose. They are NOT a regression pin: the
+ * compiler that produced them was the in-repo TypeScript one, which this repo no longer contains,
+ * and nothing recompiles them.
  *
- * The published Rust compiler does NOT reproduce them, and is not meant to: it folds the params
- * into the body instead of emitting them as a decodable prologue (decode.ts explains), so these
- * bytes pin the `/compiler` v1 grammar only.
+ * The published Rust compiler does not reproduce them and is not meant to: it folds the params into
+ * the body instead of emitting them as a decodable prologue (decode.ts explains). So these bytes
+ * describe programs already on chain, not anything the SDK emits today.
  *
  * `v3` is the trap vector: `Z = 0x0000000000000000000000000000000000ff00aa` has two leading zero
  * bytes, so its minimal-length PUSH is only 3 bytes wide (`03 ff00aa`), not the naive 20 — a fixed
