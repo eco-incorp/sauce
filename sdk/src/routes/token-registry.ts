@@ -91,6 +91,12 @@ export const TOKEN_REGISTRY: Readonly<Record<number, readonly TokenRegistryRow[]
     { symbol: "WETH", address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", decimals: 18, source: "probe:polygon@2026-08-11" },
     { symbol: "WPOL", address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", decimals: 18, source: "probe:polygon@2026-08-11" },
   ],
+  // monad (143) -- probe-verified 2026-08-31 (getCode + symbol() + decimals(), via rpc-mainnet.monadinfra.com).
+  // Native Circle USDC (v2.2, per circle.com/multi-chain-usdc/monad) + the wrapped native WMON.
+  143: [
+    { symbol: "USDC", address: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603", decimals: 6, source: "probe:monad@2026-08-31" },
+    { symbol: "WMON", address: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A", decimals: 18, source: "probe:monad@2026-08-31" },
+  ],
   // base (8453) -- USDC/WETH already pinned in verify/vectors.ts (Tier 0); re-probed 2026-08-11 to
   // confirm the pinned constants still match a live symbol()/decimals() read.
   8453: [
