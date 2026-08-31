@@ -10,8 +10,6 @@ npm install @eco-incorp/sauce-sdk
 The SauceScript compiler comes with it as a dependency. The only optional extra is
 `@solana/web3.js`, needed just for the `/svm/engine/web3js` interop subpath.
 
-A `sauce-dev-tools` binary ships with the package for the local fork environment and script runner.
-
 ## Quickstart
 
 Open a route on a destination chain, and the SDK compiles the program and assembles the intent:
@@ -47,7 +45,9 @@ built.intent                 // the assembled Intent, ready to publish
 
 ## Building programs without writing SauceScript
 
-The `token`, `swap` and `deposit` namespaces emit SauceScript for you:
+The `token`, `swap` and `deposit` namespaces emit SauceScript for you. `token` returns the source
+and its base dirs together; `swap` and `deposit` return a bare string, with base dirs as separate
+constants:
 
 ```ts
 import { routes, token } from '@eco-incorp/sauce-sdk'
@@ -69,10 +69,19 @@ that import. Spread them: `toSauceScript`'s array is `readonly`, the option is n
 
 `.source(target)` gives you the source alone if you are supplying `baseDirs` yourself.
 
+`swap` and `deposit` have no `toSauceScript`. They return the source directly, so pair each with its
+own constant:
+
+```ts
+routes.compileSauceRoute('base', swap.swapSource(spec),    { pot }, { baseDirs: [...swap.SWAP_BASE_DIRS] })
+routes.compileSauceRoute('base', deposit.depositSource(s), { pot }, { baseDirs: [...deposit.DEPOSIT_BASE_DIRS] })
+```
+
 **On the SVM target this route path does not work.** `toSauceScript('svm')` emits `main` with typed
 account parameters — that parameter list *is* the account manifest, so it cannot be dropped — and a
-route runs an acorn-based accessor rewrite that rejects annotations. Pass
-`compile: { accessors: false }`, or compile the source directly.
+route runs an acorn-based accessor rewrite that rejects annotations. `compile: { accessors: false }` gets past the parse, but a route then still requires
+`execution.buffer` naming an already-staged program buffer, so unless you have staged one, compile
+the source directly instead.
 
 ## The compiler
 
@@ -88,8 +97,10 @@ const { bytecode } = compile({
 })
 ```
 
-`main` may take parameters — they arrive at run time as 32-byte words appended to the program, so one
-program serves many argument sets. Compile-time substitution is `defines` instead.
+On **EVM**, `main` may take parameters and they arrive at run time as 32-byte words appended to the
+program, so one program serves many argument sets. Compile-time substitution is `defines` instead.
+On **SVM** a `main` parameter is an `Account` slot rather than a decoded word — the parameter list is
+the account manifest, returned as `CompileResult.manifest`.
 
 A `main` that falls off the end has no return type of its own, and a raw `compile` rejects it
 (`` `main` does not return on every path ``). Generated programs — the `token`/`swap`/`deposit`
