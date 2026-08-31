@@ -25,9 +25,18 @@ import type { CompileTarget, CompilerContext } from './context.js';
  * NOT gated, deliberately (verified by compiling each on target 'svm' — see
  * test/target-capabilities.test.ts's over-gating guard): abi.encode/decode (the ABI CODEC
  * itself is universal — only the ABI-*typed-binding* surface below is EVM-only), emit/LOG,
- * crypto.*, msg.*, block.*, tx.*, address.*, gasLeft/blockHash/blobHash, storage.tRead/tWrite
- * (transient storage — a divergent-lowering, fork-parity op, not a gated one), eval, Math.*,
- * Uint8Array.from. A future edit MUST NOT "complete" this table with any of those.
+ * crypto.*, the PORTABLE ctx.* reads (the unified context namespace — `ctx.self()`/
+ * `ctx.selfBalance()`/`ctx.balance()`/`ctx.msgSender()`/`ctx.msgData()`/`ctx.chainId()`/
+ * `ctx.blockNumber()`/`ctx.timestamp()`; the `address.*` namespace these used to alias, and the
+ * `msg.*`/`block.*`/`tx.*` members some also used to alias, were both dropped entirely in favor of
+ * `ctx.*` — see compiler-parity ECO-2163), the freestanding gasLeft/blockHash/blobHash intrinsics,
+ * storage.tRead/tWrite (transient storage — a divergent-lowering, fork-parity op, not a gated one),
+ * eval, Math.*, Uint8Array.from. A future edit MUST NOT "complete" this table with any of those.
+ * (The EVM-only ctx.* members ARE gated — the four former `address.codeSize`/`codeHash`/
+ * `isContract`/`isEOA` code-inspection reads and `ctx.msgValue` (the EVM-only half of the retired
+ * `msg.value`) — via the `ctx.*` rows below, matching RS main, which keeps every context read under
+ * `ctx.*` and gates the EVM-only ones per-read. The other former `msg`/`block`/`tx` EVM-only env
+ * reads (origin/gasPrice/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee) were DROPPED, not gated.)
  */
 /** One gated feature: the targets it's allowed on, plus how to phrase the rejection. */
 interface CapabilityRow {
@@ -36,8 +45,11 @@ interface CapabilityRow {
     /** Suggested replacement, embedded in the derived message ("...; use <hint>"). */
     readonly hint?: string;
     /** Full message override, for a feature whose rejection needs bespoke phrasing
-     *  the generic formatter can't produce (e.g. destructuring's two-clause sentence). */
-    readonly message?: string;
+     *  the generic formatter can't produce (e.g. destructuring's two-clause sentence).
+     *  A function form receives the current target, for a message that must name the
+     *  specific rejecting target inline (e.g. the nested-array-literal row, which reads
+     *  differently on 'v12' vs 'svm'). */
+    readonly message?: string | ((target: CompileTarget) => string);
 }
 /**
  * TARGET_CAPABILITIES — one row per gated feature. This is the single source of truth: every

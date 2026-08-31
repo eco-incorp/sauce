@@ -62,7 +62,7 @@ export declare const RESERVED_NAMES: Set<string>;
  * (`Namespace`, `lower/mod.rs`; decision 0.4).
  *
  * Deliberately NARROWER than `RESERVED_NAMES`: every OTHER TS global (`msg`, `block`,
- * `tx`, `address`, `contract`, `storage`, `Uint8Array`) is a member-access-only or
+ * `tx`, `contract`, `storage`, `Uint8Array`) is a member-access-only or
  * call-only surface a plain value binding cannot shadow (member reads check `GLOBALS`
  * first; bare calls resolve `GLOBAL_FUNCTIONS` first) — so RS accepts `let msg = 1n;` /
  * `let block = 1n;` and, with this set, so does TS. `evm`/`svm` are reserved ahead of

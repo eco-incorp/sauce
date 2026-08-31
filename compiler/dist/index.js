@@ -101,8 +101,14 @@ function compileFresh(source, options = {}) {
     ctx.setStaged(staged);
     if (pre && pre.wideReturnArrays.size > 0)
         ctx.wideReturnArrays = pre.wideReturnArrays;
+    // §1.5 — explicit storage-kind annotations captured before the ts-frontend's type strip.
+    // Empty (untouched) for a non-tsSource compile, so `storeExpression`'s cross-check is inert.
+    if (pre && pre.annotatedKinds.size > 0)
+        ctx.setAnnotatedKinds(pre.annotatedKinds);
     if (options.defines)
         ctx.setDefines(options.defines);
+    if (options.ambient && options.ambient.length > 0)
+        ctx.ambient = options.ambient;
     if (options.args && options.args.length > 0) {
         ctx.mainArgTypes = options.args.map(inferArgType);
     }

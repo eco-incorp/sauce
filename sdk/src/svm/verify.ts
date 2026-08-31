@@ -21,7 +21,6 @@
 //
 // Unlike `@eco-incorp/sauce-sdk/verify`, this pulls the compiler in to recompile — a node-side check.
 import { createHash } from 'node:crypto';
-import { getAddressDecoder } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { compileWithRs } from '../routes/rs-compile.js';
 import {
@@ -167,9 +166,11 @@ export function verifySvmSettleProgram(
 //   - an executed engine instruction (e.g. eco-solver's Portal `CalldataWithAccounts` after its own
 //     envelope decode) — the full `execute_from_account` data + the full account list `[buffer, …user]`.
 // `decodeSvmSettleExecution` consumes either shape at once: it parses the execute payload grammar off
-// the calldata, decodes the four settle args, and resolves each `svmSettleRefs(N)` slot to its attached
-// pubkey — so a caller gets `(minOut, splCount, tokenProgram0/1)` AND which account is which ref from a
-// single call. `verifySvmSettleExecution` adds the bytecode genuineness check and the pin↔bytecode tie.
+// the calldata and resolves each `svmSettleRefs(N)` slot to its attached pubkey — so a caller gets the
+// staged-execute header (`instruction`, `pin`, `slice`) AND which account is which ref from a single
+// call. It does NOT yield `minOut`/`splCount`: those are defines folded into the bytecode and never
+// ride the calldata, so the only way to establish them is the recompile — `verifySvmSettleExecution`,
+// which adds the bytecode genuineness check and the pin↔bytecode tie.
 
 /** The execute payload grammar: `[disc:8][flags:1][pin:32 iff 0x01][slice:8 iff 0x02][args…]`. */
 export interface ParsedExecutePayload {
@@ -256,8 +257,9 @@ function classifyAccountList(length: number): { escrowCount: number; hasBuffer: 
 export interface SvmSettleExecutionInput {
   /**
    * The full `execute_from_account` / `execute_and_close` instruction data
-   * (`[disc][flags][pin?][slice?][args:128]`). From the recipes split response this is
-   * base64-decode(`execution.instructionData`); from an executed instruction it is the raw ix data.
+   * (`[disc][flags][pin?][slice?]`, and no args tail — a settle's params are defines folded into the
+   * bytecode). From the recipes split response this is base64-decode(`execution.instructionData`);
+   * from an executed instruction it is the raw ix data.
    */
   instructionData: Uint8Array;
   /**
@@ -291,23 +293,27 @@ export interface DecodedSvmSettleExecution {
 }
 
 /**
- * Decodes a full settle execution — the calldata AND the account list — into its params and resolved
- * account identities in one call. It parses the execute payload grammar off `instructionData`, decodes
- * the four settle args from the tail, infers the escrow count from the account-list length, and resolves
- * each `svmSettleRefs(N)` slot to the attached pubkey. Consumes the sauce-recipes `split=1` settle sauce
+ * Decodes a full settle execution — the calldata AND the account list — into its staged-execute header
+ * and resolved account identities in one call. It parses the execute payload grammar off
+ * `instructionData`, infers the escrow count from the account-list length, and resolves each
+ * `svmSettleRefs(N)` slot to the attached pubkey. Consumes the sauce-recipes `split=1` settle sauce
  * (`execution.instructionData` + `execution.accounts[]`) directly, and equally an executed engine
  * instruction (full data + `[buffer, …user]` account list).
  *
- * Nothing is trusted: the args are re-derived from the raw calldata (not read from a receipt), the
- * account identities are resolved positionally against the canonical refs (not from caller-supplied
- * labels), and `tokenProgramsConsistent` cross-checks the two independent bindings of each token program
- * — exactly the "decode from the bytes, then compare against expectation" contract of the EVM decoder.
+ * `minOut`/`splCount` are NOT among the results, and cannot be: they are defines folded into the
+ * bytecode, so no amount of reading the calldata recovers them. `verifySvmSettleExecution` establishes
+ * them the only way available — by recompiling with the values a caller expects and byte-comparing.
+ *
+ * What IS here is not trusted either: the header comes from the raw calldata (not from a receipt), and
+ * the account identities are resolved positionally against the canonical refs, never from
+ * caller-supplied labels — `labeledRefsConsistent` only reports whether a label the caller happened to
+ * attach agreed with the slot it landed in.
  *
  * IMPORTANT — this is a STRUCTURAL decode, NOT a genuineness proof. Unlike the EVM `decodeSettleProgram`
- * (whose prologue grammar is a settle-specific signature), a STAGED settle's args carry no structural
- * signature: any staged Sauce execute with a 128-byte args tail and a `3N+3`/`3N+4` account count has
- * this exact shape. So a non-settle execution (or an adversarial decoy) decodes here without error into
- * any staged program at all. To prove the execution actually runs the genuine settle program, use
+ * (whose prologue grammar is a settle-specific signature), a staged settle's calldata carries no
+ * structural signature at all: any staged Sauce execute with a `3N+3`/`3N+4` account count has this
+ * exact shape. So a non-settle execution (or an adversarial decoy) decodes here without error into any
+ * staged program at all. To prove the execution actually runs the genuine settle program, use
  * `verifySvmSettleExecution` (or `extractSvmSettleFromIntent`), which ties the calldata to the SDK's
  * own recompiled canonical settle bytecode.
  */

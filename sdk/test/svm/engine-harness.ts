@@ -15,7 +15,7 @@ import { resolve } from 'path';
 import { getAddressCodec, generateKeyPairSigner, lamports } from '@solana/kit';
 import type { Address, AddressesByLookupTableAddress, Instruction, KeyPairSigner } from '@solana/kit';
 import { Clock, FailedTransactionMetadata, FeatureSet, LiteSVM } from 'litesvm';
-import type { AccountManifest, AccountRole as SlotRole } from 'sauce-compiler';
+import type { AccountManifest } from 'sauce-compiler';
 import {
   buildComputeBudgetPrepend,
   buildExecuteFromAccountInstruction,

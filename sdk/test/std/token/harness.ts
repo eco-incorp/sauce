@@ -29,9 +29,9 @@ import type { CompileOptions, CompileResult, SauceTarget } from 'sauce-compiler'
 
 export type { AccountEntry, AccountManifest, CompileOptions, CompileResult, SauceTarget } from 'sauce-compiler';
 
-// The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, imported under the short
-// name `sauce-compiler` because the in-repo workspace package still holds the scoped
-// name (`@eco-incorp/sauce-compiler`) when the alias was introduced.
+// The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, depended on under the alias
+// `sauce-compiler` (`"sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0"`) because the in-repo
+// `compiler/` workspace package claims the scoped name itself.
 //
 // Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build
 // that reads its sibling `.wasm` off disk at load. Node's own CJS loader is the one that resolves

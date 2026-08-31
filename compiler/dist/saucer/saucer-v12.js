@@ -12,7 +12,6 @@ const SWAPPED_OPS = new Set([
     OPS.EXP,
     OPS.S_DIV,
     OPS.S_MOD,
-    OPS.SIGN_EXTEND,
     OPS.BOOL_GT,
     OPS.BOOL_LT,
     OPS.BOOL_GTE,
@@ -106,6 +105,10 @@ export class V12Saucer {
         return new V12Saucer(this.ctx, concat(this._bytes, o._bytes), this.stackEffect + o.stackEffect, o.isDynamic, calls, refs);
     }
     // ── core operand shapes ──
+    // Operand EMISSION ORDER for every op below (v12 postfix `[a][b]…[OP]`, with SWAPPED_OPS/index/
+    // setIndex/nary reversals) is stated once, verified against real emission, and diffed against
+    // compiler-rs's `push_order.rs` in `test/push-order.parity.test.ts` (§1.7). Change an operand
+    // order here → update that table.
     binary(op, aL, bL, isDynamic = false) {
         const a = aL;
         const b = bL;
@@ -157,7 +160,7 @@ export class V12Saucer {
         // heap (25% of it at 16 KB), and the staged arg prologue already owns the
         // single sanctioned one — per-execution values arrive as payload args.
         if (this.ctx.isSvm && this.ctx.staged) {
-            throw new Error('msg.data is not supported in staged svm mode (CALLDATA copies the whole staged program to the heap); pass per-execution values as payload args instead');
+            throw new Error('ctx.msgData() is not supported in staged svm mode (CALLDATA copies the whole staged program to the heap); pass per-execution values as payload args instead');
         }
         return this.withBytes([OPS.CALLDATA], this.stackEffect + 1, true);
     }
@@ -444,22 +447,25 @@ export class V12Saucer {
     sMod(a, b) {
         return this.binary(OPS.S_MOD, a, b);
     }
-    sAr(value, shift) {
+    sShr(value, shift) {
         return this.binary(OPS.S_AR, value, shift);
     }
-    signExtend(k, value) {
-        return this.binary(OPS.SIGN_EXTEND, k, value);
+    // Math.signExtend(value, fromByte): SIGN_EXTEND wants the byte index (fromByte) on top
+    // (popped first), so operands push in source order — SIGN_EXTEND is intentionally NOT in
+    // SWAPPED_OPS, matching compiler-rs's `math_operand_order` (source order for signExtend).
+    signExtend(value, fromByte) {
+        return this.binary(OPS.SIGN_EXTEND, value, fromByte);
     }
-    sgt(l, r) {
+    sGt(l, r) {
         return this.binary(OPS.BOOL_SGT, l, r);
     }
-    slt(l, r) {
+    sLt(l, r) {
         return this.binary(OPS.BOOL_SLT, l, r);
     }
-    sgte(l, r) {
+    sGte(l, r) {
         return this.binary(OPS.BOOL_SGTE, l, r);
     }
-    slte(l, r) {
+    sLte(l, r) {
         return this.binary(OPS.BOOL_SLTE, l, r);
     }
     // ── crypto ──

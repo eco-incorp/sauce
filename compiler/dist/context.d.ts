@@ -69,7 +69,7 @@ interface SharedModule {
     /**
      * svm: compiling for staged execution (execute_from_account). Compile-time
      * args are NOT baked into the blob — the prologue SLICEs them out of the
-     * CALLDATA composite (`program ++ payload args`) — and user-level msg.data
+     * CALLDATA composite (`program ++ payload args`) — and user-level ctx.msgData()
      * is rejected (the prologue owns the single CALLDATA; a second one copies
      * the whole staged program to the heap again). Module-shared so every
      * function context sees the gate.
@@ -90,6 +90,17 @@ interface SharedModule {
      * and callers fall back to the pre-existing ctx-free inference.
      */
     returnKinds: Map<string, VariableKind>;
+    /**
+     * §1.5 — explicit storage-kind annotations from the ts-frontend, keyed by variable name
+     * (`let xs: uint256[] = …` → 'dynamic', `let x: Uint256 = …` → 'scalar'). Populated once by
+     * `compile()` from `tsPartialEvalWithMeta`'s out-of-band channel (annotations are stripped
+     * before acorn, so they cannot ride in the AST), and module-shared like `returnKinds` so a
+     * v12/svm helper's own child context (`forFunction()`) sees the SAME map. `storeExpression`
+     * cross-checks each annotated variable against the heuristic `inferKindWithContext`. Empty for
+     * a non-tsSource compile (annotations are a ts-frontend-only feature), so the whole mechanism
+     * is inert and byte-identical when unused.
+     */
+    annotatedKinds: Map<string, VariableKind>;
 }
 export declare class CompilerContext {
     readonly warnings: string[];
@@ -170,6 +181,17 @@ export declare class CompilerContext {
      */
     transformModule?: (code: string, filePath: string) => string;
     /**
+     * Ambient-import specifiers (CompileOptions.ambient): each listed module's exported
+     * functions/consts are broadcast into this compile's global resolution set with NO import
+     * line anywhere in the source. Set once by `compile()` (index.ts) before `processNode` ever
+     * runs — a plain instance field, never module-shared, since ambient resolution happens ONCE
+     * at the top of `processProgram`, against the top-level `ctx`, before any per-function child
+     * context (`forFunction()`) exists (exactly like `transformModule` immediately above, which
+     * is consulted at the same point for the same reason). See processor/index.ts's
+     * `collectAmbientExports`/`registerAmbientConsts` for the mechanism.
+     */
+    ambient?: string[];
+    /**
      * Drop functions unreachable from main() after constant folding (CompileOptions.treeshake,
      * default true — set false for the legacy "every declared/imported function is emitted"
      * shape).
@@ -202,12 +224,20 @@ export declare class CompilerContext {
     get isV12(): boolean;
     /** True only for the Solana target ('svm' is a v12 dialect with divergent call/storage lowering). */
     get isSvm(): boolean;
-    /** svm: compiling for staged execution — args read from the payload via CALLDATA; msg.data rejected. */
+    /** svm: compiling for staged execution — args read from the payload via CALLDATA; ctx.msgData() rejected. */
     get staged(): boolean;
     /** svm: mark the module staged (set once by compile() before processing). */
     setStaged(staged: boolean): void;
     /** The function index table (shared across a v12 module's contexts). */
     get functions(): string[];
+    /**
+     * Names of every contract registered so far (shared across a v12 module's contexts) — a
+     * `.json` ABI import's local binding name, from `registerContract`. Used by the ambient-import
+     * mechanism (processor/index.ts's `processProgram`) to snapshot which names a user's own
+     * import graph already claims, so an ambient function of the same name is filtered out rather
+     * than added (see `lookupContract`, which checks one name at a time; this exposes the full set).
+     */
+    get contractNames(): string[];
     /** v12: per-function build artifacts collected during processing. */
     get funcMeta(): FunctionMeta[];
     /** Target-aware builder factory — the seam that keeps the processor agnostic. */
@@ -236,6 +266,14 @@ export declare class CompilerContext {
     setFunctionReturnKind(name: string, kind: VariableKind): void;
     /** A same-file function's analyzed return kind, or undefined if never recorded. */
     getFunctionReturnKind(name: string): VariableKind | undefined;
+    /**
+     * §1.5 — record the ts-frontend's explicit storage-kind annotations (see
+     * `SharedModule.annotatedKinds`). Called once by `compile()` before processing; copied into a
+     * fresh Map so the caller's channel object can't be mutated through the context.
+     */
+    setAnnotatedKinds(annotatedKinds: ReadonlyMap<string, VariableKind>): void;
+    /** A variable's explicit storage-kind annotation, or undefined if it was never annotated. */
+    getAnnotatedKind(name: string): VariableKind | undefined;
     /** Push a named value onto the (tracked) EVM stack — e.g. a function param. */
     pushStack(name: string): void;
     /** Absolute 1-indexed stack position of a tracked variable (0 = not found). */
@@ -266,7 +304,10 @@ export declare class CompilerContext {
     /**
      * Register a top-level `const X = <literal>` as a compile-time constant (so it can fold
      * branch conditions). A define of the same name already set via CompileOptions wins (an
-     * explicit override), so a const never clobbers a caller-provided flag.
+     * explicit override), so a const never clobbers a caller-provided flag. Also reused, as-is,
+     * by the ambient-import const channel (processor/index.ts's `registerAmbientConsts`) — the
+     * same insert-if-absent rule gives an ambient module's exported const the identical
+     * "user code wins" precedence for free.
      */
     registerConstant(name: string, value: bigint): void;
     /** Compile-time value of a name (define or folded top-level const), or undefined if unknown. */

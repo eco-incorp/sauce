@@ -49,12 +49,13 @@ interface WasmCompileOptions {
   resolve: (path: string) => Uint8Array;
 }
 
-// The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, imported under the short
-// name `sauce-compiler` because the in-repo workspace package still holds the scoped
-// name (`@eco-incorp/sauce-compiler`) when the alias was introduced. Required via `createRequire` for the same reason
-// `test/std/token/harness.ts` and `test/helpers.ts` do: the package's `node` condition is a
-// CommonJS build that reads its sibling `.wasm` off disk at load, and jest's ESM transform does not
-// resolve that sibling.
+// The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, depended on under the alias
+// `sauce-compiler` (`"sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0"`) because the in-repo
+// `compiler/` workspace package claims the scoped name itself.
+//
+// Required via `createRequire` for the same reason `test/std/token/harness.ts` and `test/helpers.ts`
+// do: the package's `node` condition is a CommonJS build that reads its sibling `.wasm` off disk at
+// load, and jest's ESM transform does not resolve that sibling.
 const { compile } = createRequire(import.meta.url)('sauce-compiler') as {
   compile: (options: WasmCompileOptions) => SvmArtifact;
 };

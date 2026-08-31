@@ -9,19 +9,28 @@
  * partner would want before trusting the compiled account manifest.
  *
  * Options stay LITERAL below, never behind a helper — a partner reproducing our bytes needs to see
- * the target/defines surface directly. NEGATIVE CONTROL ON REPO POLICY: this file must never gain an
- * expected-hash / expected-bytecode constant — partner verify is "recompile and byte-compare against
- * what you received", never "compare against a hash we shipped".
+ * the target/defines surface directly, which is why this file loads the compiler itself instead of
+ * going through `test/helpers.ts`'s `compileSource` (that wrapper supplies `entry` and `resolve` and
+ * marshals the defines, i.e. exactly the surface a partner has to match). NEGATIVE CONTROL ON REPO
+ * POLICY: this file must never gain an expected-hash / expected-bytecode constant — partner verify is
+ * "recompile and byte-compare against what you received", never "compare against a hash we shipped".
  */
 import { readFileSync } from 'fs';
+import { createRequire } from 'node:module';
 import { basename, resolve } from 'path';
+import type { CompileOptions, CompileResult } from 'sauce-compiler';
 import {
   SVM_MAX_ESCROWS,
   SVM_SETTLE_SOURCE_PATH,
   svmSettleRefs,
   svmSettleSource,
 } from '../src/svm/index.js';
-import { compileSource } from './helpers';
+
+// Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build that
+// reads its sibling `.wasm` off disk at load, and jest's ESM transform does not resolve that sibling.
+const { compile } = createRequire(import.meta.url)('sauce-compiler') as {
+  compile: (options: CompileOptions) => CompileResult;
+};
 
 /** `main`'s declared slots as `[name, writable, signer]` — the manifest's whole content. */
 const slots = (manifest: { accounts: readonly unknown[] } | undefined): [string, boolean, boolean][] =>
@@ -33,9 +42,17 @@ const slots = (manifest: { accounts: readonly unknown[] } | undefined): [string,
   });
 
 /** THE SNIPPET — kept verbatim-equivalent to the one in `svm/recipes/index.ts`'s docstring. */
-function partnerCompile(escrowCount = 1, minOut = 0n, splCount = 0n) {
-  return compileSource(svmSettleSource(escrowCount), 'svm', {
-    defines: { SETTLE_MIN_OUT: minOut, SETTLE_SPL_COUNT: splCount },
+function partnerCompile(escrowCount = 1, minOut = 0n, splCount = 0n): CompileResult {
+  const source = svmSettleSource(escrowCount);
+
+  return compile({
+    target: 'svm',
+    entry: 'main.js',
+    resolve: (path) => (path === 'main.js' ? Buffer.from(source) : undefined),
+    defines: [
+      ['SETTLE_MIN_OUT', String(minOut)],
+      ['SETTLE_SPL_COUNT', String(splCount)],
+    ],
   });
 }
 
@@ -91,7 +108,25 @@ describe('svm settle — partner reproducibility', () => {
     // reproduces the bytes exactly, which is what makes "recompile and byte-compare" a valid check.
     // Every ACCOUNT identity is an attach slot and never enters the bytecode, so one blob still
     // serves every mint/recipient/owner — that is what the manifest above is for.
-    expect(hex(partnerCompile(3, 12345n, 2n).bytecode)).toBe(hex(partnerCompile(3, 12345n, 2n).bytecode));
+    //
+    // Two calls back to back cannot fail this short of nondeterminism, so the recompile happens AFTER
+    // four other triples have gone through the compiler: the wasm module is one long-lived instance
+    // shared by every compile in the process, so the real risk is a previous compile leaking into the
+    // next one, not a call disagreeing with itself.
+    const first = hex(partnerCompile(3, 12345n, 2n).bytecode);
+    const others: [number, bigint, bigint][] = [
+      [2, 1n, 0n],
+      [5, 0n, 5n],
+      [1, 1n << 200n, 1n],
+      [3, 999n, 2n],
+    ];
+    for (const [n, minOut, splCount] of others) partnerCompile(n, minOut, splCount);
+
+    expect(hex(partnerCompile(3, 12345n, 2n).bytecode)).toBe(first);
+    // ...and the source it compiles is itself a pure function of the escrow count, which is the other
+    // half of "a function of the triple": a generator that varied would break the pin without the
+    // compiler moving at all.
+    expect(svmSettleSource(3)).toBe(svmSettleSource(3));
   });
 
   it('★ ...and it is SENSITIVE to each of them — so a byte-match pins all three', () => {

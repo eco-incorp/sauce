@@ -124,12 +124,12 @@ export declare class V12Saucer implements SaucerLike {
     mulMod(a: SaucerLike, b: SaucerLike, n: SaucerLike): V12Saucer;
     sDiv(a: SaucerLike, b: SaucerLike): V12Saucer;
     sMod(a: SaucerLike, b: SaucerLike): V12Saucer;
-    sAr(value: SaucerLike, shift: SaucerLike): V12Saucer;
-    signExtend(k: SaucerLike, value: SaucerLike): V12Saucer;
-    sgt(l: SaucerLike, r: SaucerLike): V12Saucer;
-    slt(l: SaucerLike, r: SaucerLike): V12Saucer;
-    sgte(l: SaucerLike, r: SaucerLike): V12Saucer;
-    slte(l: SaucerLike, r: SaucerLike): V12Saucer;
+    sShr(value: SaucerLike, shift: SaucerLike): V12Saucer;
+    signExtend(value: SaucerLike, fromByte: SaucerLike): V12Saucer;
+    sGt(l: SaucerLike, r: SaucerLike): V12Saucer;
+    sLt(l: SaucerLike, r: SaucerLike): V12Saucer;
+    sGte(l: SaucerLike, r: SaucerLike): V12Saucer;
+    sLte(l: SaucerLike, r: SaucerLike): V12Saucer;
     keccak256(dataL: SaucerLike): V12Saucer;
     ecdsaVerify(signer: SaucerLike, hash: SaucerLike, signature: SaucerLike): V12Saucer;
     sload(slot: SaucerLike): V12Saucer;

@@ -173,36 +173,53 @@ function endOfComment(source: string, open: number): number {
 }
 
 /**
+ * `source` with every string, template literal and comment replaced by spaces (newlines kept).
+ * LENGTH-PRESERVING, so an index into the original still names the same character — which is what
+ * lets the brace search in `mainBody` run on the blanked copy.
+ */
+function blankLiterals(source: string): string {
+  const blank = (text: string): string => text.replace(/[^\n]/g, " ");
+  const blanked: string[] = [];
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    const isLiteral = ch === '"' || ch === "'" || ch === "`";
+    const isComment = ch === "/" && (source[i + 1] === "/" || source[i + 1] === "*");
+    if (!isLiteral && !isComment) {
+      blanked.push(ch);
+      continue;
+    }
+    const end = isLiteral ? endOfString(source, i) : endOfComment(source, i);
+    blanked.push(blank(source.slice(i, end + 1)));
+    i = end;
+  }
+
+  return blanked.join("");
+}
+
+/**
  * `main`'s OWN body — its opening brace to the matching close — with every string, template and
  * comment blanked out. Both halves are load-bearing for the `return` scan below: stopping at the
  * closing brace keeps a helper declared AFTER `main` out of it, and blanking literals keeps a
  * thrown `"…return…"` message from reading as code.
+ *
+ * The blanking runs BEFORE the opening brace is located, not alongside the walk. A block comment
+ * between the parameter list and the body can contain a brace, and searching the raw source finds
+ * THAT one — the walk then starts a level in, never balances, and runs to EOF.
  */
 function mainBody(source: string, from: number): string {
-  const open = source.indexOf("{", from);
+  const code = blankLiterals(source);
+  const open = code.indexOf("{", from);
   if (open === -1) return "";
 
-  const code: string[] = [];
   let depth = 0;
-
-  for (let i = open; i < source.length; i++) {
-    const ch = source[i];
-    if (ch === '"' || ch === "'" || ch === "`") {
-      i = endOfString(source, i);
-      code.push(" ");
-      continue;
-    }
-    if (ch === "/" && (source[i + 1] === "/" || source[i + 1] === "*")) {
-      i = endOfComment(source, i);
-      code.push(" ");
-      continue;
-    }
-    code.push(ch);
+  for (let i = open; i < code.length; i++) {
+    const ch = code[i];
     if (ch === "{") depth++;
-    else if (ch === "}" && --depth === 0) break;
+    else if (ch === "}" && --depth === 0) return code.slice(open, i + 1);
   }
 
-  return code.join("");
+  return code.slice(open);
 }
 
 /**

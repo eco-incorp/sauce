@@ -100,6 +100,11 @@ function main(a) {
 Run with: `npm run sauce script.js 10 AMOUNT=4242`. The two are told apart by shape — a define's
 name is an identifier, which no integer or hex literal can look like — so they may be interleaved.
 
+A define's VALUE is one unsigned 256-bit word. `0x`-hex is passed through as written; any other
+spelling JavaScript's `BigInt` reads (decimal, `0b`/`0o`, a leading `+`, leading zeros, surrounding
+whitespace) is normalized to decimal, because the compiler's own define grammar accepts only decimal
+or `0x`-hex. An empty, all-whitespace, negative, or non-integer value is rejected at the CLI.
+
 ## Project Structure
 
 ```

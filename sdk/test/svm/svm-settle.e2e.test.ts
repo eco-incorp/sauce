@@ -25,7 +25,7 @@
  * of the attached mint, so they always agree). The fee-mint case itself is the token program's own
  * logic, not this recipe's — this suite proves the recipe emits ix 12 correctly for both programs.
  */
-import { assertAccountExists, getAddressCodec, type Address } from '@solana/kit';
+import { assertAccountExists, type Address } from '@solana/kit';
 import {
   describeRustSvm,
   execute,

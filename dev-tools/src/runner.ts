@@ -48,14 +48,23 @@ export function parseDefine(pair: string): [string, string] {
   const eq = pair.indexOf('=')
   if (eq < 1) throw new Error(`expected NAME=VALUE, got '${pair}'`)
   const name = pair.slice(0, eq)
-  const value = pair.slice(eq + 1)
+  const value = pair.slice(eq + 1).trim()
   // `BigInt('')` is 0n, not a throw, so the emptiness check has to be its own — otherwise
-  // `NAME=` reaches the compiler as an empty literal it will refuse mid-compile.
+  // `NAME=` reaches the compiler as an empty literal it will refuse mid-compile. Trimmed first, so an
+  // all-whitespace value is empty rather than 0.
   if (value.length === 0) throw new Error(`define '${name}' has no value: expected NAME=VALUE`)
-  // Reject early rather than handing the compiler something it will refuse mid-compile.
-  BigInt(value)
+  // `BigInt` is a WIDER acceptor than the compiler's define grammar: it also reads `0b`/`0o`, a
+  // leading `+`, and leading zeros, every one of which the compiler refuses mid-compile. Returning
+  // the parsed value's own decimal form is what keeps the two in step — a canonical decimal is always
+  // in grammar, so no form `BigInt` reads can slip past. An already-`0x` literal is passed through
+  // instead: it is in grammar as written, and the radix a caller chose is the one they want echoed
+  // back at them.
+  const parsed = BigInt(value)
+  // A define is one UNSIGNED 256-bit word, and a minus sign survives normalization, so a negative
+  // needs its own rejection rather than reaching the compiler as `-5`.
+  if (parsed < 0n) throw new Error(`define '${name}' is negative ('${value}'): a define is one unsigned 256-bit word`)
 
-  return [name, value]
+  return [name, /^0x/i.test(value) ? value : parsed.toString()]
 }
 
 function toHex(bytes: Uint8Array): Hex {

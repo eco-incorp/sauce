@@ -103,6 +103,41 @@ test("rejects an empty value", () => {
   ok(threw, "should reject NAME= with no value");
 });
 
+test("rejects an all-whitespace value", () => {
+  // Same 0n trap as the empty case: BigInt(" ") and BigInt("\n") are both 0n.
+  for (const spelling of ["AMOUNT= ", "AMOUNT=   ", "AMOUNT=\n", "AMOUNT=\t"]) {
+    let threw = false;
+    try {
+      parseDefine(spelling);
+    } catch {
+      threw = true;
+    }
+    ok(threw, `should reject ${JSON.stringify(spelling)}`);
+  }
+});
+
+test("rejects a negative value", () => {
+  // BigInt("-5") is -5n and the minus sign survives normalization, so this needs its own guard.
+  let threw = false;
+  try {
+    parseDefine("AMOUNT=-5");
+  } catch {
+    threw = true;
+  }
+  ok(threw, "a define is one unsigned 256-bit word");
+});
+
+// BigInt accepts more spellings than the compiler's `decimal or 0x-hex` define grammar, so every one
+// of these used to pass parseDefine and then fail mid-compile. They are normalized instead.
+test("normalizes the spellings the compiler's define grammar does not accept", () => {
+  eq(parseDefine("AMOUNT=  12  ")[1], "12", "surrounding whitespace");
+  eq(parseDefine("AMOUNT=0b101")[1], "5", "binary literal");
+  eq(parseDefine("AMOUNT=0o7")[1], "7", "octal literal");
+  eq(parseDefine("AMOUNT=+5")[1], "5", "leading plus");
+  eq(parseDefine("AMOUNT=00042")[1], "42", "leading zeros");
+  eq(parseDefine("AMOUNT=  0xff  ")[1], "0xff", "a padded hex literal keeps its radix, trimmed");
+});
+
 // --- compileScript (no args) ---
 
 console.log("\ncompileScript without args");
@@ -192,6 +227,18 @@ test("a define folds into the program while an arg only extends its tail", () =>
   const defined = compileScript(fixture, ROOT, { defines: { AMOUNT: 4242n }, args: [1n] });
   ok(plain.bytecodes[0] !== defined.bytecodes[0], "a define should change the emitted bytes");
   eq(plain.bytecodes[0].slice(-64), defined.bytecodes[0].slice(-64), "the arg word should be identical");
+});
+
+// Everything parseDefine accepts must actually COMPILE — the property the normalization above exists
+// for. Each spelling is fed through the same path the CLI uses (parseDefine -> compileScript) and must
+// produce the bytes of its canonical decimal form; a spelling the compiler refuses throws here.
+test("every spelling parseDefine accepts compiles, and to the same bytes as its decimal form", () => {
+  const compileWith = (pair: string) =>
+    compileScript(FIXTURE, ROOT, { defines: Object.fromEntries([parseDefine(pair)]) }).bytecodes[0];
+  const canonical = compileWith("AMOUNT=42");
+  for (const spelling of ["AMOUNT=  42  ", "AMOUNT=0b101010", "AMOUNT=0o52", "AMOUNT=+42", "AMOUNT=00042", "AMOUNT=0x2a"]) {
+    eq(compileWith(spelling), canonical, `${spelling} should compile to the bytes of AMOUNT=42`);
+  }
 });
 
 // --- summary ---

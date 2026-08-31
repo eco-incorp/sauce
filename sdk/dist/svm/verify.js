@@ -163,23 +163,27 @@ function classifyAccountList(length) {
     return null;
 }
 /**
- * Decodes a full settle execution — the calldata AND the account list — into its params and resolved
- * account identities in one call. It parses the execute payload grammar off `instructionData`, decodes
- * the four settle args from the tail, infers the escrow count from the account-list length, and resolves
- * each `svmSettleRefs(N)` slot to the attached pubkey. Consumes the sauce-recipes `split=1` settle sauce
+ * Decodes a full settle execution — the calldata AND the account list — into its staged-execute header
+ * and resolved account identities in one call. It parses the execute payload grammar off
+ * `instructionData`, infers the escrow count from the account-list length, and resolves each
+ * `svmSettleRefs(N)` slot to the attached pubkey. Consumes the sauce-recipes `split=1` settle sauce
  * (`execution.instructionData` + `execution.accounts[]`) directly, and equally an executed engine
  * instruction (full data + `[buffer, …user]` account list).
  *
- * Nothing is trusted: the args are re-derived from the raw calldata (not read from a receipt), the
- * account identities are resolved positionally against the canonical refs (not from caller-supplied
- * labels), and `tokenProgramsConsistent` cross-checks the two independent bindings of each token program
- * — exactly the "decode from the bytes, then compare against expectation" contract of the EVM decoder.
+ * `minOut`/`splCount` are NOT among the results, and cannot be: they are defines folded into the
+ * bytecode, so no amount of reading the calldata recovers them. `verifySvmSettleExecution` establishes
+ * them the only way available — by recompiling with the values a caller expects and byte-comparing.
+ *
+ * What IS here is not trusted either: the header comes from the raw calldata (not from a receipt), and
+ * the account identities are resolved positionally against the canonical refs, never from
+ * caller-supplied labels — `labeledRefsConsistent` only reports whether a label the caller happened to
+ * attach agreed with the slot it landed in.
  *
  * IMPORTANT — this is a STRUCTURAL decode, NOT a genuineness proof. Unlike the EVM `decodeSettleProgram`
- * (whose prologue grammar is a settle-specific signature), a STAGED settle's args carry no structural
- * signature: any staged Sauce execute with a 128-byte args tail and a `3N+3`/`3N+4` account count has
- * this exact shape. So a non-settle execution (or an adversarial decoy) decodes here without error into
- * any staged program at all. To prove the execution actually runs the genuine settle program, use
+ * (whose prologue grammar is a settle-specific signature), a staged settle's calldata carries no
+ * structural signature at all: any staged Sauce execute with a `3N+3`/`3N+4` account count has this
+ * exact shape. So a non-settle execution (or an adversarial decoy) decodes here without error into any
+ * staged program at all. To prove the execution actually runs the genuine settle program, use
  * `verifySvmSettleExecution` (or `extractSvmSettleFromIntent`), which ties the calldata to the SDK's
  * own recompiled canonical settle bytecode.
  */

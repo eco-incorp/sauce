@@ -39,17 +39,11 @@ const PROGRAM = 'CuHCniNMWLSkZWBQKon9tudGujZeXJRUwG2PCLDq4ipJ';
 const BUFFER = 'So11111111111111111111111111111111111111112';
 
 const addrDecoder = getAddressDecoder();
-const addrEncoder = getAddressEncoder();
 function makeAddr(seed: number): string {
   return addrDecoder.decode(new Uint8Array(32).fill(seed));
 }
 function sha256(bytes: Uint8Array): Uint8Array {
   return new Uint8Array(createHash('sha256').update(bytes).digest());
-}
-function addressScalar(addr: string): bigint {
-  let v = 0n;
-  for (const b of addrEncoder.encode(addr as never)) v = (v << 8n) | BigInt(b);
-  return v;
 }
 
 // The inverse of the SDK's Portal envelope decoder — used only to build fixtures for the extraction path.

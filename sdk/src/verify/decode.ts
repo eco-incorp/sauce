@@ -20,16 +20,17 @@
  * cannot exclude an appended transfer, branch, or unbounded call after the prologue — a
  * prologue-shaped program may do anything in its body.
  *
- * "This is the program I audited" USED to be answerable by recompiling the shipped source and
- * byte-comparing, because the retired compiler baked the params into this prologue and left a body
- * that was byte-identical for every token count, minOut and recipient — so one body hash covered
- * every argument set. Neither half survives the current compiler: it folds each value at its use
- * site, which puts the arguments INSIDE the body (measured: `minOut` at byte 48, `recipient` at 104)
- * and leaves no prologue at all. So `bodyHash` is still reported, but there is no longer a single
- * argument-independent value to compare it against, and a recompile is not an equality check.
+ * "This is the program I audited" is answerable by recompiling the shipped source and byte-comparing,
+ * but against ONE compiler: `@eco-incorp/sauce-sdk/compiler`, the TypeScript compiler this package
+ * ships. It bakes the params into this prologue and leaves a body that is byte-identical for every
+ * token count, minOut and recipient — so one `bodyHash` covers every argument set, which is what
+ * makes the comparison meaningful. Neither half holds for the published RUST compiler: it folds each
+ * value at its use site, which puts the arguments INSIDE the body (measured: `minOut` at byte 48,
+ * `recipient` at 104) and leaves no prologue at all, so this decoder refuses its output outright.
  *
- * This decoder therefore describes a LEGACY wire format — the programs the retired compiler emitted.
- * `SETTLE_VECTORS` are its committed golden bytes and remain the conformance corpus.
+ * This decoder therefore describes the `/compiler` wire format. `SETTLE_VECTORS` are its committed
+ * golden bytes and the conformance corpus; `test/verify.compile.test.ts` recompiles them on every
+ * run, so the grammar below and the compiler that emits it cannot drift apart silently.
  *
  * THIS decoder is CANONICAL/STRICT: unlike the recipes package's original in-repo decoder (which
  * predates this package and accepted three malformed shapes — see the `SettleFailureCode` docs

@@ -21,7 +21,21 @@
 export interface TsPartialEvalResult {
     readonly text: string;
     readonly wideReturnArrays: ReadonlySet<string>;
+    /**
+     * §1.5 — explicit storage-kind annotations, keyed by variable name, captured BEFORE the
+     * type strip (`ts.transpileModule` removes every type annotation, so it cannot survive in
+     * the emitted text — it rides alongside it out-of-band, the same channel shape
+     * `wideReturnArrays` uses). `compile()` (src/index.ts) hands this to `CompilerContext`, where
+     * `storeExpression` (processor/statement.ts) cross-checks each annotated variable against the
+     * heuristic `inferKindWithContext`. Only names with an UNAMBIGUOUS annotation are recorded —
+     * a name annotated with two different kinds, or also declared WITHOUT an annotation anywhere
+     * in the file, is omitted, so a same-name binding in another (function) scope can never be
+     * cross-checked against the wrong annotation. See `collectStorageKindAnnotations`.
+     */
+    readonly annotatedKinds: ReadonlyMap<string, StorageKind>;
 }
+/** Storage kind an annotation resolves to — the same 'scalar' | 'dynamic' split as `VariableKind`. */
+export type StorageKind = 'scalar' | 'dynamic';
 export declare function tsPartialEvalWithMeta(code: string, filePath: string): TsPartialEvalResult;
 /**
  * Fold provably-constant branches/expressions/loops in a `.ts`/`.sauce.ts` module and

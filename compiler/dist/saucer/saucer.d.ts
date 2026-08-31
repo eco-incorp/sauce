@@ -88,6 +88,16 @@ export declare class Saucer implements SaucerLike {
     exp(left: Saucer, right: Saucer): Saucer;
     sqrt(operand: Saucer): Saucer;
     mulDiv(a: Saucer, b: Saucer, c: Saucer): Saucer;
+    addMod(a: Saucer, b: Saucer, n: Saucer): Saucer;
+    mulMod(a: Saucer, b: Saucer, n: Saucer): Saucer;
+    sDiv(a: Saucer, b: Saucer): Saucer;
+    sMod(a: Saucer, b: Saucer): Saucer;
+    sShr(value: Saucer, shift: Saucer): Saucer;
+    signExtend(value: Saucer, fromByte: Saucer): Saucer;
+    sLt(a: Saucer, b: Saucer): Saucer;
+    sGt(a: Saucer, b: Saucer): Saucer;
+    sLte(a: Saucer, b: Saucer): Saucer;
+    sGte(a: Saucer, b: Saucer): Saucer;
     keccak256(data: Saucer): Saucer;
     ecdsaVerify(signer: Saucer, hash: Saucer, signature: Saucer): Saucer;
     sload(slot: Saucer): Saucer;

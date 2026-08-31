@@ -449,51 +449,46 @@ export const GLOBALS = {
             },
         },
     },
-    // msg.sender  — caller address (uint256)
-    // msg.value   — wei sent with the call (uint256)
-    // msg.data    — raw calldata (bytes)
-    msg: {
-        sender: { kind: 'scalar', compile: (s) => s.msgSender() },
-        value: { kind: 'scalar', compile: (s) => s.msgValue() },
-        data: { kind: 'dynamic', compile: (s) => s.msgData() },
-    },
-    // block.number      — current block number
-    // block.timestamp    — current block timestamp (seconds since epoch)
-    // block.coinbase     — block miner/validator address
-    // block.prevrandao   — previous RANDAO value
-    // block.gasLimit     — block gas limit
-    // block.baseFee      — base fee per gas (EIP-1559)
-    // block.blobBaseFee  — blob base fee (EIP-4844)
-    // block.chainId      — chain ID (e.g. 1 for mainnet, 31337 for anvil)
-    block: {
-        number: { kind: 'scalar', compile: (s) => s.blockNumber() },
-        timestamp: { kind: 'scalar', compile: (s) => s.blockTimestamp() },
-        coinbase: { kind: 'scalar', compile: (s) => s.blockCoinbase() },
-        prevrandao: { kind: 'scalar', compile: (s) => s.blockPrevrandao() },
-        gasLimit: { kind: 'scalar', compile: (s) => s.blockGasLimit() },
-        baseFee: { kind: 'scalar', compile: (s) => s.blockBaseFee() },
-        blobBaseFee: { kind: 'scalar', compile: (s) => s.blockBlobBaseFee() },
-        chainId: { kind: 'scalar', compile: (s) => s.blockChainId() },
-    },
-    // tx.origin    — transaction originator address
-    // tx.gasPrice  — gas price of the transaction
-    tx: {
-        origin: { kind: 'scalar', compile: (s) => s.txOrigin() },
-        gasPrice: { kind: 'scalar', compile: (s) => s.txGasPrice() },
-    },
-    // ctx.*  — unified context namespace (compiler-parity §1.4, adopted from compiler-rs).
-    // EXACTLY 7 members, ALL call-form (`ctx.foo()`); `self` is a METHOD (unlike the `address.self`
-    // PROPERTY), and `gasPrice`/`origin` are deliberately excluded (RS raises CtxUnknownMethod).
-    // Each aliases the pre-existing msg.*/block.*/address.* spelling, emitting byte-identical bytecode.
-    // A nullary here still takes the (ignored) args param so `compile.length !== 1` — that routes it
+    // The `msg.*`/`block.*`/`tx.*` namespaces were REMOVED here (ECO-2163 continuation, compiler-
+    // parity §1.4/§1.5 mirroring RS PR #382/#383: Rust's namespacing is the standard, and RS models
+    // this whole surface under `ctx.*`, never `msg`/`block`/`tx`). The portable reads moved to `ctx.*`
+    // (msgSender/msgData/chainId/blockNumber/timestamp — see the `ctx:` block below); `msg.value`
+    // moved to the gated `ctx.msgValue()` there too (EVM-only per-read gate, matching RS main #348).
+    // The other EVM-only env reads (tx.origin/tx.gasPrice, block.coinbase/prevrandao/gasLimit/baseFee/
+    // blobBaseFee) were DROPPED entirely — they have zero consumers and sit in neither compiler's
+    // canonical `ctx.*`; RS raises CtxUnknownMethod for them. The freestanding `gasLeft()`/
+    // `blockHash(n)`/`blobHash(n)` intrinsics are unaffected (they were never `msg`/`block`/`tx`
+    // members). `msg`/`block`/`tx` are no longer recognized namespace roots at all; see
+    // test/ctx-namespace.test.ts's rejection coverage.
+    // ctx.*  — unified context namespace (compiler-parity §1.4/§1.5, adopted from compiler-rs).
+    // ALL members are call-form (`ctx.foo()`); `self`/`selfBalance`/`balance`/`msgValue` and the four
+    // code-inspection reads are METHODS — the standalone `address.self`/`address.balance`/
+    // `address.balanceOf` namespace they used to alias has been REMOVED entirely (ECO-2163: Rust's
+    // namespacing is the standard, and RS never had an `address.*` namespace of its own). The seven
+    // PORTABLE reads (msgSender/msgData/self/chainId/blockNumber/timestamp/selfBalance/balance —
+    // `msgData` is §1.5, RS PR #382, the portable half of the retired `msg.*`) work on every target;
+    // `msgValue` and the four code-inspection reads (codeSize/codeHash/isContract/isEOA) are EVM-only
+    // and `assertCapability`-gated per-read, exactly as RS main gates its own `ctx.msgValue`. Gating
+    // `msgValue` here — rather than parking it in a separate `evm.*` namespace — is the NS-CONVERGE
+    // decision: RS keeps every context read under `ctx.*`. `gasPrice`/`origin` and the other EVM-only
+    // env reads were DROPPED, not relocated (RS raises CtxUnknownMethod; they have no consumers). A
+    // nullary member still takes the (ignored) args param so `compile.length !== 1` — that routes it
     // through processStaticMethod (call form) and makes bare `ctx.foo` (no call) fail closed, matching
-    // RS's call-only rule. Oracle: sauce-core/src/lower/contract.rs:463-472.
+    // RS's call-only rule.
+    // Oracle: sauce-core/src/lower/contract.rs:463-472 (§1.4), plus PR #382 (§1.5: msgData).
     ctx: {
         msgSender: {
             kind: 'scalar',
             compile: (s, args) => {
                 expectArity('ctx.msgSender()', 0, args);
                 return s.msgSender();
+            },
+        },
+        msgData: {
+            kind: 'dynamic',
+            compile: (s, args) => {
+                expectArity('ctx.msgData()', 0, args);
+                return s.msgData();
             },
         },
         self: {
@@ -538,53 +533,65 @@ export const GLOBALS = {
                 return s.balanceOf(process(args[0]));
             },
         },
-    },
-    // address.self               — this contract's address
-    // address.balance            — this contract's ETH balance (wei)
-    // address.balanceOf(addr)    — ETH balance of addr (wei)
-    // address.codeSize(addr)     — deployed code size of addr (bytes)
-    // address.codeHash(addr)     — keccak256 hash of addr's code
-    // address.isContract(addr)   — 1 if addr has code, 0 otherwise
-    // address.isEOA(addr)        — 1 if addr has no code, 0 otherwise
-    address: {
-        self: { kind: 'scalar', compile: (s) => s.addressSelf() },
-        balance: { kind: 'scalar', compile: (s) => s.addressBalance() },
-        balanceOf: {
+        // EVM-only wei-sent-with-the-call read (§1.5, the EVM-only half of the retired `msg.value`).
+        // Gated per-read under `ctx.*` — NS-CONVERGE: RS main keeps this under `ctx.msgValue` and gates
+        // it the same way, rather than in a separate `evm.*` namespace. The other former `msg`/`block`/
+        // `tx` EVM-only env reads (origin/gasPrice/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee) were
+        // DROPPED rather than moved here — no consumers, and in neither compiler's canonical `ctx.*`.
+        msgValue: {
             kind: 'scalar',
-            compile: (s, args, process) => {
-                expectArity('address.balanceOf()', 1, args);
-                return s.balanceOf(process(args[0]));
+            compile: (s, args) => {
+                assertCapability(s.ctx, 'ctx.msgValue');
+                expectArity('ctx.msgValue()', 0, args);
+                return s.msgValue();
             },
         },
+        // EVM-only code-inspection reads, gated exactly like the `ctx.msgValue` above (NS-CONVERGE,
+        // ECO-2163): the RS compiler keeps every context read under `ctx.*` and expresses target
+        // availability with a per-read capability gate, not a separate `evm.*` namespace. RS itself has
+        // none of these four (no clean oracle), so `ctx.*`-gated is the closest convergent home. Unlike
+        // the seven portable reads above, these `assertCapability` EVM-only first.
         codeSize: {
             kind: 'scalar',
             compile: (s, args, process) => {
-                expectArity('address.codeSize()', 1, args);
+                assertCapability(s.ctx, 'ctx.codeSize', args[0]);
+                expectArity('ctx.codeSize()', 1, args);
                 return s.codeSize(process(args[0]));
             },
         },
         codeHash: {
             kind: 'scalar',
             compile: (s, args, process) => {
-                expectArity('address.codeHash()', 1, args);
+                assertCapability(s.ctx, 'ctx.codeHash', args[0]);
+                expectArity('ctx.codeHash()', 1, args);
                 return s.codeHash(process(args[0]));
             },
         },
         isContract: {
             kind: 'scalar',
             compile: (s, args, process) => {
-                expectArity('address.isContract()', 1, args);
+                assertCapability(s.ctx, 'ctx.isContract', args[0]);
+                expectArity('ctx.isContract()', 1, args);
                 return s.isContract(process(args[0]));
             },
         },
         isEOA: {
             kind: 'scalar',
             compile: (s, args, process) => {
-                expectArity('address.isEOA()', 1, args);
+                assertCapability(s.ctx, 'ctx.isEOA', args[0]);
+                expectArity('ctx.isEOA()', 1, args);
                 return s.isEOA(process(args[0]));
             },
         },
     },
+    // The `address.*` namespace (self/balance/balanceOf/codeSize/codeHash/isContract/isEOA) was
+    // REMOVED here (ECO-2163: Rust's namespacing is the standard, and RS never had this namespace).
+    // self/balance/balanceOf moved to `ctx.self()`/`ctx.selfBalance()`/`ctx.balance(addr)` above;
+    // codeSize/codeHash/isContract/isEOA moved to `ctx.codeSize`/`ctx.codeHash`/`ctx.isContract`/
+    // `ctx.isEOA` above (NS-CONVERGE: RS keeps every context read under `ctx.*` and gates EVM-only
+    // ones per-read — like its own `ctx.msgValue` — rather than parking them in a separate `evm.*`
+    // namespace; these four gate EVM-only exactly the same way). `address` is no longer a recognized
+    // namespace root at all; see test/ctx-namespace.test.ts's rejection coverage.
     // contract.call(target, value, calldata)             — raw external call
     //   target 'svm': contract.call(target, calldata, accounts[]) — accounts is an
     //   array literal of string refs / {ref, writable?, signer?} objects / raw indices
@@ -859,6 +866,11 @@ GLOBALS.evm = {
     delegate: gatedAlias('evm.delegate', GLOBALS.contract.delegate),
     sload: gatedAlias('evm.sload', GLOBALS.storage.read),
     sstore: gatedAlias('evm.sstore', GLOBALS.storage.write),
+    tload: gatedAlias('evm.tload', GLOBALS.storage.tRead),
+    tstore: gatedAlias('evm.tstore', GLOBALS.storage.tWrite),
+    // NB: code-inspection reads (codeSize/codeHash/isContract/isEOA) are NOT here — NS-CONVERGE moved
+    // them to gated `ctx.*` (see the ctx block above). `evm.*` now carries ONLY the storage/call
+    // target-duals (the ones mirrored by `svm.*` below), matching RS main's namespace split.
 };
 GLOBALS.svm = {
     sload: gatedAlias('svm.sload', GLOBAL_FUNCTIONS.accountData),
@@ -900,7 +912,7 @@ export const RESERVED_NAMES = new Set([...Object.keys(GLOBALS), ...Object.keys(G
  * (`Namespace`, `lower/mod.rs`; decision 0.4).
  *
  * Deliberately NARROWER than `RESERVED_NAMES`: every OTHER TS global (`msg`, `block`,
- * `tx`, `address`, `contract`, `storage`, `Uint8Array`) is a member-access-only or
+ * `tx`, `contract`, `storage`, `Uint8Array`) is a member-access-only or
  * call-only surface a plain value binding cannot shadow (member reads check `GLOBALS`
  * first; bare calls resolve `GLOBAL_FUNCTIONS` first) — so RS accepts `let msg = 1n;` /
  * `let block = 1n;` and, with this set, so does TS. `evm`/`svm` are reserved ahead of

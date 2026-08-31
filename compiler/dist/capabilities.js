@@ -39,8 +39,58 @@ export const TARGET_CAPABILITIES = {
         message: `an accounts list (string refs / {ref, writable?, signer?} objects) is not supported on an EVM target — ` +
             `that argument slot is raw calldata bytes there, not an svm account list`,
     },
+    // v1-only: a NESTED array LITERAL (`[[1, 2], [3, 4]]`). This is a pure target-gate on a
+    // syntactic construct (detected at the emit site in collection.ts by an ArrayExpression
+    // element, exactly like the 'array destructuring'/'accounts list' rows detect their own
+    // shapes) — NOT a value/kind-shape guard: it never consults dynamic-vs-scalar kind
+    // inference, so it is safe to centralize here (unlike the K-family descriptor guards in
+    // processor/statement.ts + collection.ts, which stay put by design). v1 handles the
+    // nested-literal encoding; the engine-v12/svm runtimes have no nested-ARRAY encoding yet.
+    'nested array literal': {
+        targets: ['v1'],
+        // Names the specific rejecting target ('v12' or 'svm') inline, so the phrasing needs
+        // the current target — hence the function form rather than a static string.
+        message: (target) => `nested array literals (e.g. [[1, 2], [3, 4]]) are not supported on target '${target}' — the ` +
+            `engine-v12 runtime has no nested-ARRAY encoding yet (a v1-only capability today); build the nested ` +
+            `structure with new Array(n) instead (e.g. \`let outer = new Array(2); outer[0] = inner;\`), which is ` +
+            `supported on every target`,
+    },
     // v12-dialect-only (v12 + svm): v1's Saucer builder has no cast surface at all.
     uint: { targets: V12_DIALECT_TARGETS },
+    // evm.* namespace (compiler-parity §1.3, adopted from compiler-rs): the EVM-only mirror of the
+    // storage.*/contract.* surface. RS gates each with `require_available(..., Builtin::Evm*)` and
+    // rejects it on the svm target (contract.rs `evm_call`, statement.rs `evm_sstore`).
+    'evm.call': { targets: EVM_TARGETS },
+    'evm.static': { targets: EVM_TARGETS },
+    'evm.delegate': { targets: EVM_TARGETS },
+    'evm.sload': { targets: EVM_TARGETS },
+    'evm.sstore': { targets: EVM_TARGETS },
+    // Transient storage (EIP-1153) mirror. RS gates these EVM-only via
+    // `Feature::TransientStorage` (targets.rs — Unavailable on svm); the underlying
+    // storage.tRead/tWrite spelling is deliberately UNGATED as a universal fork op, but the
+    // evm.* namespace already implies an EVM target, so these match RS and gate EVM-only.
+    'evm.tload': { targets: EVM_TARGETS },
+    'evm.tstore': { targets: EVM_TARGETS },
+    // Code-inspection reads (EXTCODESIZE/EXTCODEHASH-style, no svm analogue) — gated EVM-only. Post
+    // NS-CONVERGE they live under `ctx.*` (not `evm.*`), matching RS main, which keeps every
+    // context/address read under `ctx.*` and expresses target availability with a per-read gate like
+    // its own `ctx.msgValue`; the gate here is identical, only the namespace changed.
+    'ctx.codeSize': { targets: EVM_TARGETS },
+    'ctx.codeHash': { targets: EVM_TARGETS },
+    'ctx.isContract': { targets: EVM_TARGETS },
+    'ctx.isEOA': { targets: EVM_TARGETS },
+    // §1.5 (ECO-2163 continuation): the EVM-only wei-sent-with-the-call read, the EVM-only half of the
+    // retired `msg.value`. Gated under `ctx.*` (NS-CONVERGE) — RS main carries the identical
+    // `ctx.msgValue` (RS #348) and gates it per-read the same way. The other former `msg`/`block`/`tx`
+    // EVM-only env reads (origin/gasPrice/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee) were
+    // DROPPED entirely rather than gated here — no consumers, not in either compiler's canonical ctx.*.
+    'ctx.msgValue': { targets: EVM_TARGETS },
+    // svm.* namespace (§1.3): the svm-only mirror of the accountData/CPI surface. RS gates each with
+    // `require_available(..., Builtin::Svm*)` and rejects it on any EVM target (contract.rs
+    // `svm_call`, statement.rs `svm_sstore`).
+    'svm.sload': { targets: SVM_ONLY },
+    'svm.sstore': { targets: SVM_ONLY },
+    'svm.call': { targets: SVM_ONLY },
 };
 /** Re-derived, not hand-listed — kept only for `saucer/svm-profile.ts`'s existing named
  *  export shape (`SVM_GATED`), so nothing outside this file needs a second source of truth. */
@@ -64,7 +114,7 @@ function targetList(targets) {
  */
 function deriveMessage(feature, row, target) {
     if (row.message)
-        return row.message;
+        return typeof row.message === 'function' ? row.message(target) : row.message;
     if (!row.targets.includes('svm')) {
         return `${feature} is not supported on target '${target}'${row.hint ? `; use ${row.hint}` : ''}`;
     }

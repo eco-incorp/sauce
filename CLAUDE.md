@@ -78,8 +78,9 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
 - **`SAUCE_RUST_ENGINE_SO` / `SAUCE_RUST_V12_RUNTIME`** — the two engines every suite that EXECUTES
   compiled bytecode needs, and **deliberately separate variables** from `SAUCE_ENGINE_SO` above.
   The SDK compiles through the published compiler (`@eco-incorp/sauce-compiler` from the public npm
-  registry, imported under the short name `sauce-compiler` because the workspace package holds the real
-  name; nothing is built locally and no Rust toolchain is needed), which emits for the sauce `main`
+  registry, depended on under the alias `sauce-compiler` because the in-repo `compiler/` workspace
+  package claims the scoped name itself; nothing is built locally and no Rust toolchain is needed),
+  which emits for the sauce `main`
   engine lineage. `SAUCE_ENGINE_SO`'s vendored `artifacts/svm/engine.so` is built from the pinned
   `release/beta` lineage, so it can only serve suites that do NOT run freshly compiled bytecode
   (instruction builders, PDA derivation, decoders). Anything that does run it gates on

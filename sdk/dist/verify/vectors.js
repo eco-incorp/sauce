@@ -9,12 +9,13 @@ const Z = "0x0000000000000000000000000000000000ff00aa"; // leading-zero-byte add
  * They serve two purposes at once. They are the definition of the v1 grammar for anyone
  * reimplementing the decoder, which is what a conformance corpus is for; and they are a LIVE
  * regression pin on the compiler that produces the grammar — `test/verify.compile.test.ts` compiles
- * `recipes/settle.sauce.ts` with the in-repo TypeScript compiler and byte-compares against these
- * vectors, so a program edit or a compiler change shows up as a real diff.
+ * `recipes/settle.sauce.ts` with `@eco-incorp/sauce-sdk/compiler` (the TypeScript compiler this
+ * package ships) and byte-compares against these vectors, so a program edit or a compiler change
+ * shows up as a real diff.
  *
  * The published Rust compiler does NOT reproduce them, and is not meant to: it folds the params
  * into the body instead of emitting them as a decodable prologue (decode.ts explains), so these
- * bytes pin the v1 grammar only.
+ * bytes pin the `/compiler` v1 grammar only.
  *
  * `v3` is the trap vector: `Z = 0x0000000000000000000000000000000000ff00aa` has two leading zero
  * bytes, so its minimal-length PUSH is only 3 bytes wide (`03 ff00aa`), not the naive 20 — a fixed

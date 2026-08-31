@@ -220,7 +220,8 @@ export function storeExpression(name, expr, ctx, saucer) {
             return processUpdateStore(name, expr, ctx, saucer);
         default: {
             const value = processExpression(expr, ctx);
-            const kind = singleDynamicAbiOutputKind(expr, ctx) ?? inferKindWithContext(expr, ctx);
+            const inferred = singleDynamicAbiOutputKind(expr, ctx) ?? inferKindWithContext(expr, ctx);
+            const kind = crossCheckAnnotatedKind(name, inferred, ctx);
             rejectV1ScalarToDynamicReassignment(name, kind, ctx);
             const result = saucer.store(name, value, kind, inferElementTypeWithContext(expr, ctx), inferStructTypeWithContext(expr, ctx));
             // Track whether the variable now holds an immutable packed array literal, so
@@ -317,6 +318,37 @@ function rejectV1ScalarToDynamicReassignment(name, kind, ctx) {
             `dynamic contract-call result) on its FIRST assignment instead`);
     }
 }
+/**
+ * §1.5 — reconcile a variable's HEURISTIC storage kind with an explicit author annotation
+ * (`let xs: uint256[] = …`, captured by the ts-frontend before the type strip and threaded
+ * through `CompilerContext.annotatedKinds`). Returns the storage kind to actually use:
+ *
+ *   - no annotation, or the annotation AGREES with the heuristic → the heuristic kind, unchanged
+ *     (byte-identical to the unannotated source — the whole feature is inert when unused).
+ *   - annotate DYNAMIC where the heuristic inferred SCALAR → the SAFE direction: honor the
+ *     annotation (promote to heap). Storing a scalar in a v1 HEAP slot round-trips losslessly
+ *     (the same rule the return-kind/ternary promotions already rely on), and this is exactly
+ *     the K-bug fix for a genuinely dynamic value the heuristic under-inferred.
+ *   - annotate SCALAR where the heuristic inferred DYNAMIC → the UNSAFE direction: a v1 scalar
+ *     (WRITE_VALUE) slot drops the value's TUPLE/heap descriptor (the K-bug failure mode), so the
+ *     annotation is either a genuine mis-annotation or a claim the value cannot satisfy. Reject it
+ *     at compile time — a clear error beats a silent runtime revert.
+ *
+ * The promotion (case 2) changes v1 bytecode only; v12/svm derive the real kind from
+ * `value.isDynamic` and ignore this parameter (see `rejectV1ScalarToDynamicReassignment`'s note),
+ * so the annotation's only cross-target-visible effect is the compile-time rejection (case 3).
+ */
+function crossCheckAnnotatedKind(name, inferred, ctx) {
+    const annotated = ctx.getAnnotatedKind(name);
+    if (!annotated || annotated === inferred)
+        return inferred;
+    if (annotated === 'scalar' && inferred === 'dynamic') {
+        throw new Error(`variable '${name}' is annotated as a scalar type but its initializer is a dynamic (heap) value — ` +
+            `a scalar slot would drop the value's descriptor (SauceInvalidOperationArgs on a later indexed read); ` +
+            `annotate '${name}' as a dynamic type (bytes, string, an array T[], or an inline object type) or remove the annotation`);
+    }
+    return annotated; // 'dynamic' — the safe promotion of a heuristic-scalar store
+}
 function processTernaryStore(name, expr, ctx, saucer) {
     // Conditional compilation (mirrors processIfStatement / collectCalls): a const-known
     // test stores ONLY the taken side, so a guarded handler call in the untaken side is
@@ -356,7 +388,10 @@ function processTernaryStore(name, expr, ctx, saucer) {
     // `integration-test/dynamic-kind-sweep.test.ts`'s "ternary branchKind" describe block.
     const consequentKind = singleDynamicAbiOutputKind(expr.consequent, ctx) ?? inferKindWithContext(expr.consequent, ctx);
     const alternateKind = singleDynamicAbiOutputKind(expr.alternate, ctx) ?? inferKindWithContext(expr.alternate, ctx);
-    const branchKind = consequentKind === 'dynamic' || alternateKind === 'dynamic' ? 'dynamic' : 'scalar';
+    const inferredBranchKind = consequentKind === 'dynamic' || alternateKind === 'dynamic' ? 'dynamic' : 'scalar';
+    // §1.5 — an explicit annotation on the ternary's target reconciles the same way a plain store's
+    // does (promote a heuristic-scalar to heap; reject a scalar annotation over a dynamic value).
+    const branchKind = crossCheckAnnotatedKind(name, inferredBranchKind, ctx);
     // v1 can only apply that promotion on a FIRST declaration (Saucer.store lets the
     // passed kind decide when `ctx.getVar(name)` finds nothing yet) — a REASSIGNMENT of
     // an already-scalar variable can't be repaired the same way (see

@@ -5,24 +5,39 @@
  * "what is the program text?" and "where is this package installed?" — and then getting out of the
  * way. It ships no compile helper, so whatever options a caller passes are the ones they can audit.
  *
- * ⚠ THE BYTE-FOR-BYTE REPRODUCIBILITY PROMISE NO LONGER HOLDS. It rested on compile-time `args`:
- * the retired TypeScript compiler baked `(tokens, minOut, recipient)` into a fixed PROLOGUE ahead of
- * the body, which is the v1 wire grammar `@eco-incorp/sauce-sdk/verify` decodes. The compiler this
- * package now uses has no `args` option, and the `defines` that replace it are constant-folded AT
- * EACH USE SITE rather than materialized up front — measured on this program, `minOut` lands at byte
- * 48 and `recipient` at byte 104, inside the body, and an array literal terminates with `0x92` where
- * the grammar specifies `0x94`. So there is no prologue to decode and no argument-independent body
- * to hash.
+ * BYTE-FOR-BYTE REPRODUCIBILITY IS AGAINST ONE NAMED COMPILER — `@eco-incorp/sauce-sdk/compiler`,
+ * the TypeScript compiler this package ships. It is the only one with compile-time `args`, which is
+ * what bakes `(tokens, minOut, recipient)` into the fixed PROLOGUE that IS the v1 wire grammar
+ * `@eco-incorp/sauce-sdk/verify` decodes:
  *
- * Two consequences, stated plainly rather than left implied:
- *   - Recompiling this source will NOT reproduce the bytes of a program compiled by the retired
- *     compiler. Do not use a recompile as an equality check against one.
- *   - `decodeSettleProgram` still works, and is still `viem`-only, but it decodes LEGACY v1-grammar
- *     programs — those the retired compiler produced. `SETTLE_VECTORS` are the committed golden
- *     bytes for that grammar and remain the conformance corpus for any reimplementation.
+ * ```ts
+ * import { compile } from "@eco-incorp/sauce-sdk/compiler";
+ * import { settleSource, SAUCE_BASE_DIRS } from "@eco-incorp/sauce-sdk/recipes";
  *
- * A replacement reproducibility story needs the program's inputs to reach the bytecode somewhere a
- * decoder can find them, which is a design decision this module does not get to make on its own.
+ * const { bytecode } = compile(settleSource(), {
+ *   baseDirs: SAUCE_BASE_DIRS,   // resolves the program's `./artifacts/IERC20.json` import
+ *   target: "v12",               // the program is v12-only
+ *   treeshake: true,
+ *   tsSource: true,              // the source is TypeScript-annotated SauceScript
+ *   args: [tokens.map(BigInt), minOut, BigInt(recipient)],
+ * });
+ * // bytecode[0] is byte-identical to the program we hand you, and to `SETTLE_VECTORS`.
+ * ```
+ *
+ * Those five options are the whole contract — change any of them and the bytes change. They are
+ * deliberately NOT exported as a pre-baked options object: a partner reproducing our output should
+ * see the target and the arg order, not inherit them from a constant they never read.
+ * `test/verify.compile.test.ts` runs exactly this snippet against `SETTLE_VECTORS` on every CI run,
+ * so the promise is a live pin rather than a claim.
+ *
+ * ⚠ THE PUBLISHED RUST COMPILER IS A DIFFERENT LINEAGE AND DOES NOT REPRODUCE THESE BYTES. It has no
+ * `args` option, and the `defines` that stand in for it are constant-folded AT EACH USE SITE rather
+ * than materialized up front — measured on this program, `minOut` lands at byte 48 and `recipient` at
+ * byte 104, inside the body, and an array literal terminates with `0x92` where the grammar specifies
+ * `0x94`. So its output has no prologue to decode and no argument-independent body to hash, and
+ * `decodeSettleProgram` correctly refuses it. Reproducibility and `/verify` both mean the compiler
+ * named above; the SDK's own route builders (`routes/`, `svm/`) compile through the Rust one, which is
+ * why nothing there is decodable by `/verify` either.
  *
  * PREFER `settleSource()` OVER READING THE FILE YOURSELF, but both work — the raw asset is a
  * real file inside the package and is reachable by subpath if you want to hash, diff, or vendor it:

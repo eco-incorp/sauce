@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseAbiMethods } from './contracts.js';
-import { RESERVED_NAMES } from './globals.js';
+import { RESERVED_BINDING_NAMES, RESERVED_NAMES } from './globals.js';
 import { Saucer } from './saucer/saucer.js';
 import { V12Saucer } from './saucer/saucer-v12.js';
 import { AccountRegistry } from './planner/registry.js';
@@ -153,6 +153,17 @@ export class CompilerContext {
      */
     transformModule;
     /**
+     * Ambient-import specifiers (CompileOptions.ambient): each listed module's exported
+     * functions/consts are broadcast into this compile's global resolution set with NO import
+     * line anywhere in the source. Set once by `compile()` (index.ts) before `processNode` ever
+     * runs — a plain instance field, never module-shared, since ambient resolution happens ONCE
+     * at the top of `processProgram`, against the top-level `ctx`, before any per-function child
+     * context (`forFunction()`) exists (exactly like `transformModule` immediately above, which
+     * is consulted at the same point for the same reason). See processor/index.ts's
+     * `collectAmbientExports`/`registerAmbientConsts` for the mechanism.
+     */
+    ambient;
+    /**
      * Drop functions unreachable from main() after constant folding (CompileOptions.treeshake,
      * default true — set false for the legacy "every declared/imported function is emitted"
      * shape).
@@ -202,6 +213,7 @@ export class CompilerContext {
             accounts: new AccountRegistry(),
             staged: false,
             returnKinds: new Map(),
+            annotatedKinds: new Map(),
         };
         for (const [name, config] of Object.entries(contracts)) {
             this.registerContract(name, config.abi);
@@ -215,7 +227,7 @@ export class CompilerContext {
     get isSvm() {
         return this.target === 'svm';
     }
-    /** svm: compiling for staged execution — args read from the payload via CALLDATA; msg.data rejected. */
+    /** svm: compiling for staged execution — args read from the payload via CALLDATA; ctx.msgData() rejected. */
     get staged() {
         return this.module.staged;
     }
@@ -226,6 +238,16 @@ export class CompilerContext {
     /** The function index table (shared across a v12 module's contexts). */
     get functions() {
         return this.module.functions;
+    }
+    /**
+     * Names of every contract registered so far (shared across a v12 module's contexts) — a
+     * `.json` ABI import's local binding name, from `registerContract`. Used by the ambient-import
+     * mechanism (processor/index.ts's `processProgram`) to snapshot which names a user's own
+     * import graph already claims, so an ambient function of the same name is filtered out rather
+     * than added (see `lookupContract`, which checks one name at a time; this exposes the full set).
+     */
+    get contractNames() {
+        return [...this.module.contracts.keys()];
     }
     /** v12: per-function build artifacts collected during processing. */
     get funcMeta() {
@@ -270,6 +292,18 @@ export class CompilerContext {
     /** A same-file function's analyzed return kind, or undefined if never recorded. */
     getFunctionReturnKind(name) {
         return this.module.returnKinds.get(name);
+    }
+    /**
+     * §1.5 — record the ts-frontend's explicit storage-kind annotations (see
+     * `SharedModule.annotatedKinds`). Called once by `compile()` before processing; copied into a
+     * fresh Map so the caller's channel object can't be mutated through the context.
+     */
+    setAnnotatedKinds(annotatedKinds) {
+        this.module.annotatedKinds = new Map(annotatedKinds);
+    }
+    /** A variable's explicit storage-kind annotation, or undefined if it was never annotated. */
+    getAnnotatedKind(name) {
+        return this.module.annotatedKinds.get(name);
     }
     // ── v12 stack-variable tracking ──
     /** Push a named value onto the (tracked) EVM stack — e.g. a function param. */
@@ -336,7 +370,7 @@ export class CompilerContext {
         return this.scopes[this.scopes.length - 1];
     }
     setVar(name, kind = 'scalar', elementType, structType, isParam = false) {
-        if (RESERVED_NAMES.has(name))
+        if (RESERVED_BINDING_NAMES.has(name))
             throw new Error(`'${name}' is a reserved name`);
         const scope = this.currentScope;
         if (scope.variables.has(name)) {
@@ -402,7 +436,10 @@ export class CompilerContext {
     /**
      * Register a top-level `const X = <literal>` as a compile-time constant (so it can fold
      * branch conditions). A define of the same name already set via CompileOptions wins (an
-     * explicit override), so a const never clobbers a caller-provided flag.
+     * explicit override), so a const never clobbers a caller-provided flag. Also reused, as-is,
+     * by the ambient-import const channel (processor/index.ts's `registerAmbientConsts`) — the
+     * same insert-if-absent rule gives an ambient module's exported const the identical
+     * "user code wins" precedence for free.
      */
     registerConstant(name, value) {
         if (!this.defines.has(name))

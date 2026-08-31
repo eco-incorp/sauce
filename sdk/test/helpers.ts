@@ -13,11 +13,13 @@ import { ensureVoidMain } from '../src/routes/rs-compile.js';
 import { keccak256, toBytes, toHex } from 'viem';
 import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-compiler';
 
-// The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, imported under the short
-// name `sauce-compiler` because the in-repo workspace package still holds the scoped
-// name (`@eco-incorp/sauce-compiler`) when the alias was introduced. Required via `createRequire` for the same reason
-// `test/std/token/harness.ts` does: the package's `node` condition is a CommonJS build that reads
-// its sibling `.wasm` off disk at load, and jest's ESM transform does not resolve that sibling.
+// The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, depended on under the alias
+// `sauce-compiler` (`"sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0"`) because the in-repo
+// `compiler/` workspace package claims the scoped name itself.
+//
+// Required via `createRequire` for the same reason `test/std/token/harness.ts` does: the package's
+// `node` condition is a CommonJS build that reads its sibling `.wasm` off disk at load, and jest's
+// ESM transform does not resolve that sibling.
 const { compile: compileRust } = createRequire(import.meta.url)('sauce-compiler') as {
   compile: (options: {
     target: SauceTarget;
@@ -34,10 +36,6 @@ export interface CompileProgramOptions extends CompileSourceOptions {
   target?: 'evm' | 'svm';
   /** Contract bindings holding a PARSED ABI, as `protocol-rewrite.ts` synthesizes them. */
   contracts?: Readonly<Record<string, { abi: unknown }>>;
-  /** Accepted and ignored: the compiler always constant-folds, and has no compile cache to bypass. */
-  treeshake?: boolean;
-  /** Accepted and ignored — see `treeshake`. */
-  cache?: boolean;
 }
 
 /**
@@ -112,18 +110,6 @@ export function compileSource(
   });
 }
 
-/**
- * Strip TypeScript type annotations from SauceScript, returning plain JS.
- */
-function stripTypes(source: string): string {
-  const result = ts.transpileModule(source, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ESNext,
-      module: ts.ModuleKind.ESNext,
-    },
-  });
-  return result.outputText;
-}
 
 /**
  * Parsed import: `import { ExportName as LocalName } from "./abis"`
@@ -160,11 +146,6 @@ function parseImports(source: string): ParsedImport[] {
   return imports;
 }
 
-/**
- * Strip import lines from SauceScript source.
- */
-function stripImports(source: string): string {
-  return source.replace(/import\s*\{[^}]+\}\s*from\s*["'][^"']+["']\s*;?\s*\n?/g, '');
 }
 
 /**
