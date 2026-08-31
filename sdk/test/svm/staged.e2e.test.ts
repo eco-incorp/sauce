@@ -170,7 +170,7 @@ describeSvm('lazy NoSigner: signerless executes are valid unless MSG_SENDER is r
   });
 
   it('a MSG_SENDER-reading program fails NoSigner without an in-list signer, passes with appendPayerSigner', async () => {
-    const { bytecode, accountPlan } = compile('function main() { return msg.sender }', { target: 'svm' });
+    const { bytecode, accountPlan } = compile('function main() { return ctx.msgSender() }', { target: 'svm' });
 
     const signerless = buildExecuteInstruction({
       programId: harness.programId,

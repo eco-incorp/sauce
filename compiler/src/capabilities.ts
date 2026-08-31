@@ -26,14 +26,18 @@ import type { CompileTarget, CompilerContext } from './context.js';
  * NOT gated, deliberately (verified by compiling each on target 'svm' — see
  * test/target-capabilities.test.ts's over-gating guard): abi.encode/decode (the ABI CODEC
  * itself is universal — only the ABI-*typed-binding* surface below is EVM-only), emit/LOG,
- * crypto.*, msg.*, block.*, tx.*, ctx.* (the unified context namespace — `ctx.self()`/
- * `ctx.selfBalance()`/`ctx.balance()` included; the `address.*` namespace these used to alias was
- * dropped entirely in favor of `ctx.*` — see compiler-parity ECO-2163), gasLeft/blockHash/blobHash,
+ * crypto.*, the PORTABLE ctx.* reads (the unified context namespace — `ctx.self()`/
+ * `ctx.selfBalance()`/`ctx.balance()`/`ctx.msgSender()`/`ctx.msgData()`/`ctx.chainId()`/
+ * `ctx.blockNumber()`/`ctx.timestamp()`; the `address.*` namespace these used to alias, and the
+ * `msg.*`/`block.*`/`tx.*` members some also used to alias, were both dropped entirely in favor of
+ * `ctx.*` — see compiler-parity ECO-2163), the freestanding gasLeft/blockHash/blobHash intrinsics,
  * storage.tRead/tWrite (transient storage — a divergent-lowering, fork-parity op, not a gated one),
  * eval, Math.*, Uint8Array.from. A future edit MUST NOT "complete" this table with any of those.
- * (The former `address.codeSize`/`codeHash`/`isContract`/`isEOA` — EVM-only concepts with no svm
- * analogue — moved to the `evm.*` namespace below and ARE gated, unlike the rest of the old
- * `address.*` surface; they were never covered by the over-gating guard above.)
+ * (The EVM-only ctx.* members ARE gated — the four former `address.codeSize`/`codeHash`/
+ * `isContract`/`isEOA` code-inspection reads and `ctx.msgValue` (the EVM-only half of the retired
+ * `msg.value`) — via the `ctx.*` rows below, matching RS main, which keeps every context read under
+ * `ctx.*` and gates the EVM-only ones per-read. The other former `msg`/`block`/`tx` EVM-only env
+ * reads (origin/gasPrice/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee) were DROPPED, not gated.)
  */
 
 /** One gated feature: the targets it's allowed on, plus how to phrase the rejection. */
@@ -138,6 +142,12 @@ export const TARGET_CAPABILITIES: Record<string, CapabilityRow> = {
   'ctx.codeHash': { targets: EVM_TARGETS },
   'ctx.isContract': { targets: EVM_TARGETS },
   'ctx.isEOA': { targets: EVM_TARGETS },
+  // §1.5 (ECO-2163 continuation): the EVM-only wei-sent-with-the-call read, the EVM-only half of the
+  // retired `msg.value`. Gated under `ctx.*` (NS-CONVERGE) — RS main carries the identical
+  // `ctx.msgValue` (RS #348) and gates it per-read the same way. The other former `msg`/`block`/`tx`
+  // EVM-only env reads (origin/gasPrice/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee) were
+  // DROPPED entirely rather than gated here — no consumers, not in either compiler's canonical ctx.*.
+  'ctx.msgValue': { targets: EVM_TARGETS },
 
   // svm.* namespace (§1.3): the svm-only mirror of the accountData/CPI surface. RS gates each with
   // `require_available(..., Builtin::Svm*)` and rejects it on any EVM target (contract.rs

@@ -2,36 +2,29 @@ import { keccak256, toBytes, encodeAbiParameters } from 'viem';
 import { cook, cookSend, getSauceAddress, getNonce } from './utils.js';
 
 describe('integration: blockchain context', () => {
-  it('block.chainId returns anvil chain id', () => {
-    expect(BigInt(cook('function main() { return block.chainId; }'))).toBe(31337n);
+  it('ctx.chainId() returns anvil chain id (formerly block.chainId)', () => {
+    expect(BigInt(cook('function main() { return ctx.chainId(); }'))).toBe(31337n);
   });
 
-  it('block.number returns non-zero', () => {
-    expect(BigInt(cook('function main() { return block.number; }'))).toBeGreaterThan(0n);
+  it('ctx.blockNumber() returns non-zero (formerly block.number)', () => {
+    expect(BigInt(cook('function main() { return ctx.blockNumber(); }'))).toBeGreaterThan(0n);
   });
 
-  it('block.timestamp returns non-zero', () => {
-    expect(BigInt(cook('function main() { return block.timestamp; }'))).toBeGreaterThan(0n);
+  it('ctx.timestamp() returns non-zero (formerly block.timestamp)', () => {
+    expect(BigInt(cook('function main() { return ctx.timestamp(); }'))).toBeGreaterThan(0n);
   });
 
-  it('block.gasLimit returns non-zero', () => {
-    expect(BigInt(cook('function main() { return block.gasLimit; }'))).toBeGreaterThan(0n);
-  });
-
-  it('block.baseFee returns non-negative', () => {
-    expect(BigInt(cook('function main() { return block.baseFee; }'))).toBeGreaterThanOrEqual(0n);
-  });
+  // block.gasLimit/baseFee/coinbase/prevrandao/blobBaseFee and tx.origin/gasPrice were DROPPED in the
+  // NS-CONVERGE rework (ECO-2163 §1.5) — no consumers, in neither compiler's canonical ctx.* — so
+  // their cook coverage was removed with them. The freestanding gasLeft()/blockHash() intrinsics
+  // (never msg/block/tx members, kept ungated) retain their coverage below.
 
   it('gasLeft() returns non-zero', () => {
     expect(BigInt(cook('function main() { return gasLeft(); }'))).toBeGreaterThan(0n);
   });
 
-  it('msg.sender does not revert', () => {
-    expect(BigInt(cook('function main() { return msg.sender; }'))).toBeGreaterThanOrEqual(0n);
-  });
-
-  it('tx.origin does not revert', () => {
-    expect(BigInt(cook('function main() { return tx.origin; }'))).toBeGreaterThanOrEqual(0n);
+  it('ctx.msgSender() does not revert (formerly msg.sender)', () => {
+    expect(BigInt(cook('function main() { return ctx.msgSender(); }'))).toBeGreaterThanOrEqual(0n);
   });
 
   it('ctx.self() returns non-zero (formerly address.self)', () => {
@@ -43,39 +36,23 @@ describe('integration: blockchain context', () => {
   });
 
   it('context value in arithmetic', () => {
-    expect(BigInt(cook('function main() { return block.number + 1; }'))).toBeGreaterThan(1n);
+    expect(BigInt(cook('function main() { return ctx.blockNumber() + 1; }'))).toBeGreaterThan(1n);
   });
 
   it('context value in conditional', () => {
-    expect(BigInt(cook('function main() { let x = 0; if (block.chainId > 0) { x = 1; } return x; }'))).toBe(1n);
+    expect(BigInt(cook('function main() { let x = 0; if (ctx.chainId() > 0) { x = 1; } return x; }'))).toBe(1n);
   });
 
-  it('msg.data returns dynamic bytes with non-zero length', () => {
-    expect(BigInt(cook('function main() { const data = msg.data; return data.length; }'))).toBeGreaterThan(0n);
+  it('ctx.msgData() returns dynamic bytes with non-zero length (formerly msg.data)', () => {
+    expect(BigInt(cook('function main() { const data = ctx.msgData(); return data.length; }'))).toBeGreaterThan(0n);
   });
 
-  it('block.coinbase does not revert', () => {
-    expect(BigInt(cook('function main() { return block.coinbase; }'))).toBeGreaterThanOrEqual(0n);
+  it('ctx.msgValue() returns zero for non-payable call (formerly msg.value; gated EVM-only under ctx.*)', () => {
+    expect(BigInt(cook('function main() { return ctx.msgValue(); }'))).toBe(0n);
   });
 
-  it('block.prevrandao does not revert', () => {
-    expect(BigInt(cook('function main() { return block.prevrandao; }'))).toBeGreaterThanOrEqual(0n);
-  });
-
-  it('block.blobBaseFee does not revert', () => {
-    expect(BigInt(cook('function main() { return block.blobBaseFee; }'))).toBeGreaterThanOrEqual(0n);
-  });
-
-  it('tx.gasPrice does not revert', () => {
-    expect(BigInt(cook('function main() { return tx.gasPrice; }'))).toBeGreaterThanOrEqual(0n);
-  });
-
-  it('msg.value returns zero for non-payable call', () => {
-    expect(BigInt(cook('function main() { return msg.value; }'))).toBe(0n);
-  });
-
-  it('blockHash(block.number - 1) returns non-zero', () => {
-    expect(BigInt(cook('function main() { return blockHash(block.number - 1); }'))).toBeGreaterThan(0n);
+  it('blockHash(ctx.blockNumber() - 1) returns non-zero', () => {
+    expect(BigInt(cook('function main() { return blockHash(ctx.blockNumber() - 1); }'))).toBeGreaterThan(0n);
   });
 
   it('ctx.balance(ctx.self()) matches ctx.selfBalance() (formerly address.balanceOf(address.self)/address.balance)', () => {
@@ -99,8 +76,8 @@ describe('integration: blockchain context', () => {
   });
 
   // crypto tests
-  it('crypto.keccak256 of msg.data returns non-zero hash', () => {
-    expect(BigInt(cook('function main() { return crypto.keccak256(msg.data); }'))).toBeGreaterThan(0n);
+  it('crypto.keccak256 of ctx.msgData() returns non-zero hash (formerly msg.data)', () => {
+    expect(BigInt(cook('function main() { return crypto.keccak256(ctx.msgData()); }'))).toBeGreaterThan(0n);
   });
 
   it('crypto.keccak256 of known bytes returns expected hash', () => {
@@ -112,7 +89,7 @@ describe('integration: blockchain context', () => {
   it('crypto.ecdsaVerify returns 0 for invalid signature', () => {
     // Invalid signature should return 0
     const result = cook(
-      'function main() { return crypto.ecdsaVerify(msg.sender, 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef, msg.data); }',
+      'function main() { return crypto.ecdsaVerify(ctx.msgSender(), 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef, ctx.msgData()); }',
     );
     expect(BigInt(result)).toBe(0n);
   });

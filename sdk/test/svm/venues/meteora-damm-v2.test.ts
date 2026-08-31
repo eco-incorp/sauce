@@ -461,16 +461,16 @@ describe('meteora-damm-v2 emitQuote', () => {
     expect(bToA).not.toContain('throw');
   });
 
-  it('emits the block.timestamp activation gate for a timestamp-typed nonzero activation point', async () => {
+  it('emits the ctx.timestamp() activation gate for a timestamp-typed nonzero activation point (formerly block.timestamp)', async () => {
     const cfg = await fetchCfg(); // fixture: activation_type 1, activation_point 1754985927
     const fragment = meteoraDammV2.emitQuote(cfg, 6, ONE_SOL);
-    expect(fragment).toContain('if (block.timestamp < 1754985927) { q6 = 0 }');
+    expect(fragment).toContain('if (ctx.timestamp() < 1754985927) { q6 = 0 }');
     expect(compileFragment(fragment, 6).bytecode[0].length).toBeGreaterThan(0);
   });
 
   it('omits the activation gate when activation_point is 0', async () => {
     const cfg: MeteoraDammV2PoolConfig = { ...(await fetchCfg()), activationPoint: 0n };
-    expect(meteoraDammV2.emitQuote(cfg, 8, ONE_SOL)).not.toContain('block.timestamp');
+    expect(meteoraDammV2.emitQuote(cfg, 8, ONE_SOL)).not.toContain('ctx.timestamp()');
   });
 
   it('compiles the dynamic-fee variant with the capped fee', async () => {

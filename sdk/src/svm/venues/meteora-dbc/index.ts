@@ -42,7 +42,7 @@
  *   rejects rate-limiter/scheduled fees entirely for the same reason).
  * - A fee-scheduler in force (`period_frequency != 0`) on a SLOT-typed
  *   `activation_type` (0): a slot number is not live-readable in-VM (no
- *   `block.slot` — only `block.timestamp`), the SAME gate meteora-damm-v2
+ *   `block.slot` — only `ctx.timestamp()`), the SAME gate meteora-damm-v2
  *   already applies to slot-typed activation points.
  * - Either mint is Token-2022 with a transfer-fee extension (wire amounts
  *   would desync from the curve math) — the same `assertNoTransferFee` TLV
@@ -405,7 +405,7 @@ export const meteoraDbc = {
       `if (s${i}freq !== 0) {`,
       `  const s${i}act = accountUint(${poolRef}, ${OFF_ACTIVATION_POINT}, 8);`,
       `  let s${i}per = 0;`,
-      `  if (block.timestamp >= s${i}act) { s${i}per = (block.timestamp - s${i}act) / s${i}freq }`,
+      `  if (ctx.timestamp() >= s${i}act) { s${i}per = (ctx.timestamp() - s${i}act) / s${i}freq }`,
       `  const s${i}np = accountUint(${cfgRef}, ${OFF_NUMBER_OF_PERIOD}, 2);`,
       `  if (s${i}per > s${i}np) { s${i}per = s${i}np }`,
       `  const s${i}red = accountUint(${cfgRef}, ${OFF_REDUCTION_FACTOR}, 8);`,
@@ -429,7 +429,7 @@ export const meteoraDbc = {
         `const s${i}liq = accountUint(${cfgRef}, ${upperOff + 16}, 16);`,
         `let s${i}cap = 0;`,
         `if (s${i}up > s${i}sp) { s${i}cap = (s${i}liq * (s${i}up - s${i}sp) + ${Q128 - 1n}) / ${Q128} }`,
-        `if (s${i}freq !== 0) { if (block.timestamp < accountUint(${poolRef}, ${OFF_ACTIVATION_POINT}, 8)) { s${i}cap = 0 } }`,
+        `if (s${i}freq !== 0) { if (ctx.timestamp() < accountUint(${poolRef}, ${OFF_ACTIVATION_POINT}, 8)) { s${i}cap = 0 } }`,
         `let s${i}x = ${amountIn};`,
         `if (s${i}x > s${i}cap) { s${i}x = s${i}cap }`,
         `const s${i}cfm = accountUint(${cfgRef}, ${OFF_COLLECT_FEE_MODE}, 1);`,
@@ -446,7 +446,7 @@ export const meteoraDbc = {
         `const s${i}liq = accountUint(${cfgRef}, ${upperOff + 16}, 16);`,
         `let s${i}cap = 0;`,
         `if (s${i}sp > s${i}lo) { s${i}cap = (s${i}liq * (s${i}sp - s${i}lo) + s${i}lo * s${i}sp - 1) / (s${i}lo * s${i}sp) }`,
-        `if (s${i}freq !== 0) { if (block.timestamp < accountUint(${poolRef}, ${OFF_ACTIVATION_POINT}, 8)) { s${i}cap = 0 } }`,
+        `if (s${i}freq !== 0) { if (ctx.timestamp() < accountUint(${poolRef}, ${OFF_ACTIVATION_POINT}, 8)) { s${i}cap = 0 } }`,
         `let s${i}x = ${amountIn};`,
         `if (s${i}x > s${i}cap) { s${i}x = s${i}cap }`,
         `const s${i}den = s${i}liq + s${i}x * s${i}sp;`,

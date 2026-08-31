@@ -6,7 +6,7 @@ describe('contract.call() builtin', () => {
     const source = `
       function main() {
         const addr = 1;
-        const data = msg.data;
+        const data = ctx.msgData();
         contract.call(addr, 0, data);
       }
     `;

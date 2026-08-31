@@ -243,12 +243,12 @@ describe('saber-stableswap emitQuote', () => {
     expect(fragment).toContain(`const dstRes0 = accountUint("${VAULT_B}", 64, 8);`);
   });
 
-  it('bakes the down-ramp amp interpolation behind a block.timestamp check', () => {
+  it('bakes the down-ramp amp interpolation behind a ctx.timestamp() check (formerly block.timestamp)', () => {
     const fragment = saberStableswap.emitQuote(cfg, 0, 1_000_000n);
     expect(fragment).toContain('let amp0 = 5000;');
     // range = 1747719515 - 1747460323 = 259192; down-ramp 8000 -> 5000.
     expect(fragment).toContain(
-      'if (block.timestamp < 1747719515) { amp0 = 8000 - Math.mulDiv(3000, block.timestamp - 1747460323, 259192) }',
+      'if (ctx.timestamp() < 1747719515) { amp0 = 8000 - Math.mulDiv(3000, ctx.timestamp() - 1747460323, 259192) }',
     );
   });
 

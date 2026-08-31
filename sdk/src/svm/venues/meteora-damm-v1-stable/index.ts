@@ -322,7 +322,7 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
   quoteAccounts(cfg: PoolConfig): VenueAccount[] {
     const c = cfg as MeteoraDammV1StablePoolConfig;
     const refs = poolRefs(c.pool);
-    // 8 read-only accounts; t comes from block.timestamp (Clock sysvar), and
+    // 8 read-only accounts; t comes from ctx.timestamp() (Clock sysvar), and
     // only the OUT-side token vault is read (idle-float liquidity bound).
     return [
       { ref: refs.pool, address: c.pool },
@@ -350,7 +350,7 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
       // denominator 1e12). t < last_report cannot happen on-chain (the vault
       // crank stamps last_report from the same clock); if it ever wrapped, the
       // ratio would exceed 1e12 and the fragment falls back to total_amount.
-      `const t${i} = block.timestamp;`,
+      `const t${i} = ctx.timestamp();`,
       `const aTot${i} = accountUint(${aVault}, ${VAULT_OFFSETS.totalAmount}, 8);`,
       `const aLok${i} = accountUint(${aVault}, ${VAULT_OFFSETS.lastUpdatedLockedProfit}, 8);`,
       `const aRatio${i} = (t${i} - accountUint(${aVault}, ${VAULT_OFFSETS.lastReport}, 8)) * accountUint(${aVault}, ${VAULT_OFFSETS.lockedProfitDegradation}, 8);`,

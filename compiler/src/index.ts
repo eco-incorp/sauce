@@ -163,7 +163,7 @@ export interface CompileOptions {
    * Compile-time `args` are not baked into the bytecode — the prologue reads
    * them from the instruction payload via CALLDATA (see the staged arg ABI
    * above) so one staged buffer serves every per-execution argument set. User
-   * refs intern from index 0 (no reserved accounts); msg.data is rejected (the
+   * refs intern from index 0 (no reserved accounts); ctx.msgData() is rejected (the
    * prologue owns the single CALLDATA). The result carries `argsLayout`, the
    * contract the SDK encodes execute payload args against.
    */

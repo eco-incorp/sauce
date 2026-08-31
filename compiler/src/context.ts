@@ -151,7 +151,7 @@ interface SharedModule {
   /**
    * svm: compiling for staged execution (execute_from_account). Compile-time
    * args are NOT baked into the blob — the prologue SLICEs them out of the
-   * CALLDATA composite (`program ++ payload args`) — and user-level msg.data
+   * CALLDATA composite (`program ++ payload args`) — and user-level ctx.msgData()
    * is rejected (the prologue owns the single CALLDATA; a second one copies
    * the whole staged program to the heap again). Module-shared so every
    * function context sees the gate.
@@ -370,7 +370,7 @@ export class CompilerContext {
     return this.target === 'svm';
   }
 
-  /** svm: compiling for staged execution — args read from the payload via CALLDATA; msg.data rejected. */
+  /** svm: compiling for staged execution — args read from the payload via CALLDATA; ctx.msgData() rejected. */
   get staged(): boolean {
     return this.module.staged;
   }

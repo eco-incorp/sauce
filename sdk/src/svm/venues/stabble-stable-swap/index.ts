@@ -200,10 +200,10 @@ export const stabbleStableSwap: SvmVenueAdapter = {
       const lo = targetUp ? c.ampInitialFactor : c.ampTargetFactor;
       const hi = targetUp ? c.ampTargetFactor : c.ampInitialFactor;
       const interp = targetUp
-        ? `${c.ampInitialFactor * 1000} + Math.mulDiv(${(hi - lo) * 1000}, ((block.timestamp - ${c.rampStartTs}) / 60) * 60, ${range})`
-        : `${c.ampInitialFactor * 1000} - Math.mulDiv(${(hi - lo) * 1000}, ((block.timestamp - ${c.rampStartTs}) / 60) * 60, ${range})`;
-      lines.push(`  if (block.timestamp <= ${c.rampStartTs}) { amp${i} = ${c.ampInitialFactor * 1000} }`);
-      lines.push(`  else if (block.timestamp < ${c.rampStopTs}) { amp${i} = ${interp} }`);
+        ? `${c.ampInitialFactor * 1000} + Math.mulDiv(${(hi - lo) * 1000}, ((ctx.timestamp() - ${c.rampStartTs}) / 60) * 60, ${range})`
+        : `${c.ampInitialFactor * 1000} - Math.mulDiv(${(hi - lo) * 1000}, ((ctx.timestamp() - ${c.rampStartTs}) / 60) * 60, ${range})`;
+      lines.push(`  if (ctx.timestamp() <= ${c.rampStartTs}) { amp${i} = ${c.ampInitialFactor * 1000} }`);
+      lines.push(`  else if (ctx.timestamp() < ${c.rampStopTs}) { amp${i} = ${interp} }`);
     }
     lines.push(`  const bal0_${i} = accountUint(${pool}, ${TOKENS_OFFSET + 4 + 42}, 8);`);
     lines.push(`  const bal1_${i} = accountUint(${pool}, ${TOKENS_OFFSET + 4 + TOKEN_SIZE + 42}, 8);`);

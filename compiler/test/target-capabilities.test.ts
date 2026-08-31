@@ -24,6 +24,16 @@ describe('target-capabilities — EVM-only features rejected on svm, compile on 
     ['function main() { return contract.predictCreate2(1, 2, 3) }', 'create2Address'],
     ['function main() { return contract.predictCreate3(1) }', 'create3Address'],
     ['function main() { return contract.delegate(1, Uint8Array.from([0x00])) }', 'delegatecall'],
+    // §1.5 (ECO-2163 continuation, NS-CONVERGE): the EVM-only context reads now gated per-read under
+    // `ctx.*` — `ctx.msgValue` (the surviving EVM-only half of the retired `msg.value`) and the
+    // code-inspection quartet (unchanged from #141). The other former msg.*/block.*/tx.* EVM-only env
+    // reads (origin/gasPrice/coinbase/prevrandao/gasLimit/baseFee/blobBaseFee) were DROPPED entirely,
+    // and `evm.*` was trimmed back to storage-call duals — so neither has a capability row anymore.
+    ['function main() { return ctx.msgValue() }', 'ctx.msgValue'],
+    ['function main() { return ctx.codeSize(1) }', 'ctx.codeSize'],
+    ['function main() { return ctx.codeHash(1) }', 'ctx.codeHash'],
+    ['function main() { return ctx.isContract(1) }', 'ctx.isContract'],
+    ['function main() { return ctx.isEOA(1) }', 'ctx.isEOA'],
   ];
 
   it.each(cases)('%s is rejected on svm', (src) => {
@@ -346,11 +356,11 @@ describe('target-capabilities — over-gating guard: the NON-gated set stays uni
     expect(hex(compileOn(decodeSrc, 'svm').bytecode[0])).toBe(hex(compileOn(decodeSrc, 'v12').bytecode[0]));
   });
 
-  it('emit, msg.sender, block.chainId, ctx.selfBalance(), crypto.*, eval, storage.tRead/tWrite all still compile on svm', () => {
+  it('emit, ctx.msgSender(), ctx.chainId(), ctx.selfBalance(), crypto.*, eval, storage.tRead/tWrite all still compile on svm (formerly msg.sender/block.chainId)', () => {
     const cases = [
       'function main() { emit("Ping()") }',
-      'function main() { return msg.sender }',
-      'function main() { return block.chainId }',
+      'function main() { return ctx.msgSender() }',
+      'function main() { return ctx.chainId() }',
       'function main() { return ctx.selfBalance() }',
       'function main() { return crypto.keccak256(Uint8Array.from([0x01])) }',
       'function main() { return eval("return 42") }',

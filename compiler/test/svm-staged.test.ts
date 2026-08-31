@@ -143,11 +143,11 @@ describe('staged svm — gates and validation', () => {
     );
   });
 
-  it('rejects msg.data (the arg prologue owns the single CALLDATA)', () => {
-    const src = 'function main() { const d = msg.data; return d[0] }';
+  it('rejects ctx.msgData() (the arg prologue owns the single CALLDATA) — formerly msg.data', () => {
+    const src = 'function main() { const d = ctx.msgData(); return d[0] }';
 
     expect(() => compile(src, { target: 'svm', staged: true })).toThrow(
-      /msg\.data is not supported in staged svm mode/,
+      /ctx\.msgData\(\) is not supported in staged svm mode/,
     );
     // inline svm keeps it
     expect(() => compile(src, { target: 'svm' })).not.toThrow();
