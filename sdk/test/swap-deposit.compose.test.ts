@@ -44,7 +44,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
   for (const target of ["v1", "v12"] as const) {
     it(`compiles on ${target} (amount: 'balance')`, () => {
       const src = swapThenDepositSource(univ3Leg, aaveSupply());
-      const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target, treeshake: true });
+      const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target });
       expect(bytecode[0]!.length).toBeGreaterThan(0);
     });
   }
@@ -55,7 +55,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
     expect(src).toMatch(/const deposit0Post = IERC20\.at\(.*\)\.balanceOf\(ctx\.self\(\)\);/);
     expect(src).toMatch(/const deposit0Amt = deposit0Post - deposit0Pre;/);
 
-    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target: "v12", treeshake: true });
+    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target: "v12" });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -68,7 +68,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
 
   it("the E3 seam, end to end: compile -> bytesToHex -> buildSauceEvmCall -> normalizeRoute", () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply());
-    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target: "v12", treeshake: true });
+    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS], target: "v12" });
     const ingredient = bytesToHex(bytecode[0]!);
     const call = buildSauceEvmCall({ pot: POT, ingredients: [ingredient] });
 
@@ -99,7 +99,6 @@ describe("negative control — swapSource alone is unaffected by the swapImportL
     const { bytecode } = compile(swapSource(univ3Leg), {
       baseDirs: [...SWAP_BASE_DIRS],
       target: "v12",
-      treeshake: true,
     });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });

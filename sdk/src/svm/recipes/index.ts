@@ -9,7 +9,7 @@
  * with an SPL `TransferChecked` CPI (no ERC20 `transfer`).
  *
  * ```ts
- * import { compile } from "sauce-compiler";
+ * import { compile } from "@eco-incorp/sauce-compiler";
  * import { svmSettleSource } from "@eco-incorp/sauce-sdk/svm";
  *
  * const { bytecode, manifest } = compile({

@@ -113,6 +113,22 @@ describe('resolveAccounts', () => {
     expect(metas).toEqual([{ address: POOL, role: AccountRole.WRITABLE }]);
   });
 
+  it('rejects a `remaining` marker that is not last instead of silently dropping the slots after it', () => {
+    // Nothing in the manifest TYPE enforces "always last", and stopping at it would drop 'oracle'
+    // from `metas` — shifting the index of every account the caller then appends as its own tail.
+    const manifest: AccountManifest = {
+      accounts: [
+        { kind: 'slot', index: 0, name: 'pool', requires: 'writable' },
+        { kind: 'remaining', from: 1 } satisfies AccountEntry,
+        { kind: 'slot', index: 2, name: 'oracle', requires: 'readonly' },
+      ],
+    };
+
+    expect(() => resolveAccounts(manifest, { pool: POOL, oracle: ORACLE }, PAYER)).toThrow(
+      "account manifest: a 'remaining' entry must be last, but index 1 of 3 is followed by 'oracle'",
+    );
+  });
+
   it('allows duplicate addresses across refs', () => {
     const metas = resolveAccounts(manifestOf(['a', 'readonly'], ['b', 'writable']), { a: POOL, b: POOL }, PAYER);
 

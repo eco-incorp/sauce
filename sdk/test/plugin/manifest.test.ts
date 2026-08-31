@@ -6,14 +6,20 @@
  *
  * `nameParity` documents a SauceScript SURFACE name (the keyword/global a caller writes) mapped
  * to the underlying engine opcode name it lowers to — so it only carries rows where the two
- * DIVERGE. The check is that the surface still compiles: the compiler package exports no opcode
- * table, so a numeric-emission assertion has nothing to resolve against, and a renamed or removed
- * surface is what the manifest would actually be lying about.
+ * DIVERGE. Checked two ways, so either direction of drift fails: the surface still COMPILES (a
+ * rename or removal is what the manifest would be lying about), and it still emits the opcode
+ * VALUE the row names. The published compiler exports no opcode table, so that value is declared
+ * here — the same posture as `sdk/src/verify/wire.ts`'s `SETTLE_WIRE`, and measured the same way,
+ * against the compiler's actual emission.
  */
 import { loadPlugin } from '../../src/plugin/index.js';
 import { compileProgram as compile } from '../helpers';
 
 const TARGETS = ['v1', 'v12'] as const;
+
+/** The engine's REVERT opcode — measured against the published compiler's emission for `throw`,
+ *  the same way `SETTLE_WIRE`'s constants are. Identical on both EVM and SVM. */
+const REVERT_OP = 0xb6;
 
 describe('plugin manifest (Layer C)', () => {
   // Empty, and an entry is not free to add: the SDK's route path (`routes/ambient.ts#chainAmbient`)
@@ -38,12 +44,15 @@ describe('plugin manifest (Layer C)', () => {
       return n;
     };
 
-    it.each(TARGETS)('the `throw` surface the manifest aliases still compiles on target %s', (target) => {
+    it.each(TARGETS)('`throw` lowers to the REVERT opcode on target %s', (target) => {
       const { nameParity } = loadPlugin();
 
       expect(nameParity.throw.toUpperCase()).toBe('REVERT');
-      // A removed or renamed surface is the drift this can still catch without an opcode table.
-      expect(compile('function main(): void { throw "nope"; }', { target }).bytecode[0]!.length).toBeGreaterThan(0);
+
+      const { bytecode: control } = compile('function main(): Uint256 { return 1n; }', { target });
+      const { bytecode: test } = compile('function main(): void { throw "nope"; }', { target });
+
+      expect(countByte(test[0]!, REVERT_OP)).toBeGreaterThan(countByte(control[0]!, REVERT_OP));
     });
 
     it.each(TARGETS)('`log` is a surface in its own right, so the map carries no row for it (%s)', (target) => {

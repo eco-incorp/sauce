@@ -1,11 +1,11 @@
 /**
- * Tests for the SauceScript runner (compilation + define injection).
+ * Tests for the SauceScript runner (compilation + define injection + runtime arg injection).
  * Run with: npm run test:runner
  */
 
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { compileScript, parseDefine } from "../src/runner";
+import { compileScript, parseArg, parseDefine } from "../src/runner";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -34,6 +34,29 @@ function eq(actual: any, expected: any, msg?: string) {
     throw new Error(msg || `Expected ${expected}, got ${actual}`);
   }
 }
+
+// --- parseArg ---
+
+console.log("\nparseArg");
+
+test("parses integer as bigint", () => {
+  eq(parseArg("42"), 42n);
+});
+
+test("parses negative integer as bigint", () => {
+  eq(parseArg("-1"), -1n);
+});
+
+test("parses short hex as bigint", () => {
+  // 0x followed by up to 64 hex chars (32 bytes) → bigint
+  eq(parseArg("0xff"), 255n);
+});
+
+test("parses long hex as string", () => {
+  // > 66 chars (0x + 64) → kept as string (bytes)
+  const longHex = "0x" + "ab".repeat(33); // 68 chars
+  eq(parseArg(longHex), longHex);
+});
 
 // --- parseDefine ---
 
@@ -69,6 +92,17 @@ test("rejects a non-integer value early", () => {
   ok(threw, "should reject a value the compiler could not read");
 });
 
+test("rejects an empty value", () => {
+  // BigInt("") is 0n rather than a throw, so the guard cannot be the BigInt call alone.
+  let threw = false;
+  try {
+    parseDefine("AMOUNT=");
+  } catch {
+    threw = true;
+  }
+  ok(threw, "should reject NAME= with no value");
+});
+
 // --- compileScript (no args) ---
 
 console.log("\ncompileScript without args");
@@ -100,20 +134,64 @@ const FIXTURE = join(__dirname, "fixtures/defined.js");
 
 test("a define overrides the script's own const and changes the bytecode", () => {
   const plain = compileScript(FIXTURE, ROOT);
-  const defined = compileScript(FIXTURE, ROOT, { AMOUNT: 4242n });
+  const defined = compileScript(FIXTURE, ROOT, { defines: { AMOUNT: 4242n } });
   ok(plain.bytecodes[0] !== defined.bytecodes[0], "a define should change the emitted bytes");
 });
 
 test("the same define reproduces the same bytecode", () => {
-  const a = compileScript(FIXTURE, ROOT, { AMOUNT: 7n });
-  const b = compileScript(FIXTURE, ROOT, { AMOUNT: 7n });
+  const a = compileScript(FIXTURE, ROOT, { defines: { AMOUNT: 7n } });
+  const b = compileScript(FIXTURE, ROOT, { defines: { AMOUNT: 7n } });
   eq(a.bytecodes[0], b.bytecodes[0], "compilation should be deterministic");
 });
 
 test("a 0x-hex define value is accepted", () => {
-  const result = compileScript(FIXTURE, ROOT, { AMOUNT: "0xff" });
+  const result = compileScript(FIXTURE, ROOT, { defines: { AMOUNT: "0xff" } });
   eq(result.bytecodes.length, 1, "should produce 1 segment");
   ok(result.bytecodes[0].startsWith("0x"), "bytecode should be hex");
+});
+
+// --- compileScript (with runtime args) ---
+
+console.log("\ncompileScript with runtime args");
+
+const ADD = join(ROOT, "sauce/js/add.js");
+
+test("args are APPENDED to the program, leaving the program bytes unchanged", () => {
+  const plain = compileScript(ADD, ROOT);
+  const withArgs = compileScript(ADD, ROOT, { args: [5n, 10n] });
+  ok(withArgs.bytecodes[0].startsWith(plain.bytecodes[0]), "the program must be the same bytes");
+  eq(
+    withArgs.bytecodes[0].length - plain.bytecodes[0].length,
+    128,
+    "two scalar args should add two 32-byte words",
+  );
+});
+
+test("a scalar arg lands as a 32-byte big-endian word", () => {
+  const tail = compileScript(ADD, ROOT, { args: [5n, 10n] }).bytecodes[0].slice(-128);
+  eq(tail.slice(0, 64), "5".padStart(64, "0"));
+  eq(tail.slice(64), "a".padStart(64, "0"));
+});
+
+test("a negative arg lands as its two's complement word", () => {
+  const tail = compileScript(ADD, ROOT, { args: [-1n, 0n] }).bytecodes[0].slice(-128);
+  eq(tail.slice(0, 64), "f".repeat(64));
+});
+
+test("erc20.js — main(to, amount) — takes runtime args", () => {
+  const result = compileScript(join(ROOT, "sauce/js/erc20.js"), ROOT, {
+    args: [0x1111111111111111111111111111111111111111n, 1000n],
+  });
+  eq(result.warnings.length, 0, "should have no warnings");
+  ok(result.bytecodes[0].length > 2, "bytecode should be hex");
+});
+
+test("a define folds into the program while an arg only extends its tail", () => {
+  const fixture = join(__dirname, "fixtures/defined-args.js");
+  const plain = compileScript(fixture, ROOT, { args: [1n] });
+  const defined = compileScript(fixture, ROOT, { defines: { AMOUNT: 4242n }, args: [1n] });
+  ok(plain.bytecodes[0] !== defined.bytecodes[0], "a define should change the emitted bytes");
+  eq(plain.bytecodes[0].slice(-64), defined.bytecodes[0].slice(-64), "the arg word should be identical");
 });
 
 // --- summary ---

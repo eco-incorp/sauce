@@ -132,8 +132,12 @@ export interface DepositTemplate {
    * protocol-call statement line(s). The approve line is NOT emitted here — `depositCallStatement`
    * prepends it from `funding`/`approvalPolicy`, so the approve rule lives in exactly one place
    * across every template.
+   *
+   * `varSuffix` is the emitting spec's own index within the program (the same one
+   * `depositCallStatement` uses for `depositAmtN`), so a template that BINDS a local must suffix it
+   * — two deposits of the same kind in one `main` would otherwise redeclare one name.
    */
-  emit(d: NormalizedDeposit, amountExpr: string): readonly string[];
+  emit(d: NormalizedDeposit, amountExpr: string, varSuffix: string): readonly string[];
 }
 
 /** A short, human-readable note on a protocol considered but not registered as a template. */

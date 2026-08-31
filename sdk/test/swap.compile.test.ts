@@ -57,7 +57,6 @@ describe("swap adapter compiles for every dispatchable poolType, both targets", 
         const { bytecode } = compile(swapSource(specFor(poolType)), {
           baseDirs: [...SWAP_BASE_DIRS],
           target,
-          treeshake: true,
         });
         expect(bytecode[0]!.length).toBeGreaterThan(0);
       });
@@ -85,7 +84,7 @@ describe("a realistic 2-leg balance-chained program (UniV3 positive -> UniV4 neg
 
   for (const target of ["v1", "v12"] as const) {
     it(`compiles on ${target}`, () => {
-      const { bytecode } = compile(src, { baseDirs: [...SWAP_BASE_DIRS], target, treeshake: true });
+      const { bytecode } = compile(src, { baseDirs: [...SWAP_BASE_DIRS], target });
       expect(bytecode[0]!.length).toBeGreaterThan(0);
     });
   }
@@ -96,12 +95,10 @@ describe("the sign is actually in the bytes", () => {
     const univ3 = compile(swapSource(specFor(SwapPoolType.UniV3)), {
       baseDirs: [...SWAP_BASE_DIRS],
       target: "v1",
-      treeshake: true,
     }).bytecode[0]!;
     const univ4 = compile(swapSource(specFor(SwapPoolType.UniV4)), {
       baseDirs: [...SWAP_BASE_DIRS],
       target: "v1",
-      treeshake: true,
     }).bytecode[0]!;
 
     // 1000n minimal-width push: 0x03e8 (2 bytes) should be present in the UniV3 blob.
@@ -131,7 +128,6 @@ describe("the E3 seam, end to end", () => {
     const { bytecode } = compile(swapSource(specFor(SwapPoolType.UniV3)), {
       baseDirs: [...SWAP_BASE_DIRS],
       target: "v12",
-      treeshake: true,
     });
     const ingredient = bytesToHex(bytecode[0]!);
     const call = buildSauceEvmCall({ pot: POT, ingredients: [ingredient] });

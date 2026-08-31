@@ -5,7 +5,8 @@
  * Used by scripts/run.ts CLI and can be imported programmatically.
  */
 
-import { createPublicClient, createWalletClient, http, parseAbi, Hex, defineChain } from 'viem'
+import { createPublicClient, createWalletClient, encodeAbiParameters, http, parseAbi, Hex, defineChain } from 'viem'
+import type { AbiParameter } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'fs'
@@ -28,6 +29,9 @@ const sauceAbi = parseAbi([
   'function cook(bytes[] memory calls) public payable returns (bytes memory)'
 ])
 
+/**
+ * Parse one positional CLI arg — a RUNTIME value for a `main` parameter, not a compile-time define.
+ */
 export function parseArg(arg: string): bigint | string {
   // Hex strings longer than 32 bytes (66 chars with 0x) are passed as bytes, not bigint
   if (arg.startsWith('0x') && arg.length > 66) {
@@ -45,6 +49,9 @@ export function parseDefine(pair: string): [string, string] {
   if (eq < 1) throw new Error(`expected NAME=VALUE, got '${pair}'`)
   const name = pair.slice(0, eq)
   const value = pair.slice(eq + 1)
+  // `BigInt('')` is 0n, not a throw, so the emptiness check has to be its own — otherwise
+  // `NAME=` reaches the compiler as an empty literal it will refuse mid-compile.
+  if (value.length === 0) throw new Error(`define '${name}' has no value: expected NAME=VALUE`)
   // Reject early rather than handing the compiler something it will refuse mid-compile.
   BigInt(value)
 
@@ -55,6 +62,24 @@ function toHex(bytes: Uint8Array): Hex {
   return ('0x' + Buffer.from(bytes).toString('hex')) as Hex
 }
 
+/**
+ * `main`'s runtime args, as the byte tail the engine reads them from.
+ *
+ * A parameterized `main` compiles to a prologue that reads arg i out of the composite `program ++
+ * args` at a baked offset, so the args are APPENDED to the program rather than passed alongside it
+ * — and the tail is the ordinary ABI encoding of the arg tuple. For the scalars that is one 32-byte
+ * big-endian word each, the same shape `sdk/src/svm/args.ts` gives a `scalar` slot; a `>32`-byte hex
+ * string is a `bytes` param, which is dynamic and therefore head/tail encoded. A negative value is
+ * `int256` so it lands as the two's complement word the source's signed ops expect.
+ */
+function encodeArgs(args: readonly (bigint | string)[]): string {
+  const params: AbiParameter[] = args.map((arg) =>
+    typeof arg === 'bigint' ? { type: arg < 0n ? 'int256' : 'uint256' } : { type: 'bytes' },
+  )
+
+  return encodeAbiParameters(params, args as unknown[]).slice(2)
+}
+
 export interface CompileScriptResult {
   /** Compiled bytecode segments (ready for cook()) */
   bytecodes: Hex[]
@@ -62,18 +87,27 @@ export interface CompileScriptResult {
   warnings: string[]
 }
 
+export interface CompileScriptOptions {
+  /**
+   * Compile-time consts, by name: each REPLACES the module's own `const` of that name and is
+   * constant-folded, so a given set of values yields fixed bytecode.
+   */
+  defines?: Record<string, bigint | string>
+  /**
+   * Positional RUNTIME values for `main`'s parameters, appended to the compiled program (see
+   * {@link encodeArgs}). Unlike a define these do not change the program bytes, so one compile
+   * serves every set of values.
+   */
+  args?: (bigint | string)[]
+}
+
 /**
  * Compile a SauceScript file to bytecode segments.
- *
- * `defines` are compile-time consts: each REPLACES the module's own `const` of that name and is
- * constant-folded, so a given set of values yields fixed bytecode. (The compiler has no
- * positional compile-time `args`; a script that wants build-time values declares consts and the
- * caller overrides them by name.)
  */
 export function compileScript(
   scriptPath: string,
   baseDir: string,
-  defines?: Record<string, bigint | string>,
+  { defines, args = [] }: CompileScriptOptions = {},
 ): CompileScriptResult {
   const sauceScript = readFileSync(scriptPath, 'utf-8')
   const scriptDir = dirname(scriptPath)
@@ -100,13 +134,20 @@ export function compileScript(
   })
 
   // The compiler emits ONE program; `cook()` takes a list, and executes `calls[0]`.
-  return { bytecodes: [toHex(result.bytecode)], warnings: [] }
+  const program = toHex(result.bytecode)
+
+  return {
+    bytecodes: [args.length > 0 ? ((program + encodeArgs(args)) as Hex) : program],
+    warnings: [],
+  }
 }
 
 export interface RunOptions {
   scriptPath: string
-  /** Compile-time consts, by name — see {@link compileScript}. */
+  /** Compile-time consts, by name — see {@link CompileScriptOptions}. */
   defines?: Record<string, bigint | string>
+  /** Positional runtime args for `main` — see {@link CompileScriptOptions}. */
+  args?: (bigint | string)[]
   sauceAddress: string
   rpcUrl: string
   forkUrl?: string
@@ -118,7 +159,7 @@ export interface RunOptions {
  * Compile and execute a SauceScript on a Sauce contract.
  */
 export async function executeScript(options: RunOptions): Promise<void> {
-  const { scriptPath, defines = {}, sauceAddress, rpcUrl, forkUrl, baseDir } = options
+  const { scriptPath, defines = {}, args = [], sauceAddress, rpcUrl, forkUrl, baseDir } = options
 
   console.log('=== SauceScript Runner ===\n')
   console.log('File:', scriptPath)
@@ -131,6 +172,9 @@ export async function executeScript(options: RunOptions): Promise<void> {
   if (defineEntries.length > 0) {
     console.log('Defines:', defineEntries.map(([k, v]) => `${k}=${v}`).join(', '))
   }
+  if (args.length > 0) {
+    console.log('Arguments:', args.map((a) => a.toString()).join(', '))
+  }
   console.log('')
 
   // Read and display source
@@ -139,7 +183,10 @@ export async function executeScript(options: RunOptions): Promise<void> {
   console.log(sauceScript)
 
   console.log('Compiling...')
-  const compiled = compileScript(scriptPath, baseDir, defineEntries.length > 0 ? defines : undefined)
+  const compiled = compileScript(scriptPath, baseDir, {
+    ...(defineEntries.length > 0 ? { defines } : {}),
+    args,
+  })
 
   console.log('Segments:', compiled.bytecodes.length)
   for (let i = 0; i < compiled.bytecodes.length; i++) {

@@ -65,7 +65,9 @@ function isSignerSlot(role: SlotRole): boolean {
  *
  * A `remaining` entry is a POSITION, not an account: it marks where the
  * caller's own variable-length tail begins, so resolution stops there and the
- * caller appends its tail itself.
+ * caller appends its tail itself. It must be the LAST entry, and one that is not
+ * throws — stopping early would drop the slots after it from `metas` and shift
+ * the index of every account the caller then appends.
  *
  * MSG_SENDER/TX_ORIGIN is the first in-list signer, resolved LAZILY by the
  * engine (NoSigner only when the program actually reads the sender) — so no
@@ -81,10 +83,22 @@ export function resolveAccounts(
   const unresolved: string[] = [];
   const metas: ResolvedAccountMeta[] = [];
 
-  for (const entry of manifest.accounts) {
-    // A `remaining` marker is always last and carries no role: everything after it is the
-    // caller's own tail, which only the caller can enumerate.
-    if (entry.kind !== 'slot') break;
+  for (const [index, entry] of manifest.accounts.entries()) {
+    // A `remaining` marker carries no role: everything after it is the caller's own tail, which only
+    // the caller can enumerate. It has to be LAST for that to hold — a slot after it would be
+    // dropped from `metas`, shifting the index of every account the caller then appends.
+    if (entry.kind !== 'slot') {
+      const after = manifest.accounts.slice(index + 1);
+
+      if (after.length > 0) {
+        const names = after.map(later => (later.kind === 'slot' ? later.name : later.kind));
+        throw new Error(
+          `account manifest: a '${entry.kind}' entry must be last, but index ${index} of ${manifest.accounts.length} is followed by '${names.join("', '")}'`,
+        );
+      }
+
+      break;
+    }
 
     const meta = { ref: entry.name, writable: isWritableSlot(entry.requires) };
     let address: Address | undefined;

@@ -209,14 +209,14 @@ describe("Token: SVM source emission", () => {
     ).toThrow(/reused across specs/);
   });
 
-  it("tokenProgramValueExpr picks the pinned pubkey: 'token-2022' / an {arg} name", () => {
+  it("tokenProgramValueExpr picks the pinned pubkey: 'token-2022' / a raw bigint", () => {
     const literalSpec = { op: "transfer" as const, amount: 1n, svm: svmTransfer.svm, tokenProgram: "token-2022" as const };
     expect(Token.transfer(literalSpec).source("svm")).toContain(
       `require(tokenProgram == ${Token.TOKEN_2022_PROGRAM.toString()}n);`,
     );
 
-    const argSpec = { op: "transfer" as const, amount: 1n, svm: svmTransfer.svm, tokenProgram: { arg: "tp" } };
-    expect(Token.transfer(argSpec).source("svm")).toContain("require(tokenProgram == tp);");
+    const rawSpec = { op: "transfer" as const, amount: 1n, svm: svmTransfer.svm, tokenProgram: 0x1234n };
+    expect(Token.transfer(rawSpec).source("svm")).toContain("require(tokenProgram == 4660n);");
   });
 
   it("toCall() rejects an svm-shaped spec with a named error", () => {

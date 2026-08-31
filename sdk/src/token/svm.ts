@@ -60,8 +60,7 @@ export const TOKEN_2022_PROGRAM_BIGINT: bigint = addressToBigint(TOKEN_2022_PROG
 export function tokenProgramValueExpr(input: SvmTokenProgramInput | undefined): string {
   if (input === undefined || input === "spl") return formatBigint(TOKEN_PROGRAM_BIGINT);
   if (input === "token-2022") return formatBigint(TOKEN_2022_PROGRAM_BIGINT);
-  if (typeof input === "bigint") return formatBigint(input);
-  return input.arg;
+  return formatBigint(input);
 }
 
 export function assertRefIsIdentifier(ref: string, label: string): void {

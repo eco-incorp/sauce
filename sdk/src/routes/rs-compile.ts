@@ -149,6 +149,62 @@ function packageEntry(pkgDir: string): string {
   return "index.js";
 }
 
+/** Index of the closing quote of the string/template literal opening at `open`. */
+function endOfString(source: string, open: number): number {
+  const quote = source[open];
+  for (let i = open + 1; i < source.length; i++) {
+    if (source[i] === "\\") i++;
+    else if (source[i] === quote) return i;
+  }
+
+  return source.length;
+}
+
+/** Index of the last character of the `//` or block comment opening at `open`. */
+function endOfComment(source: string, open: number): number {
+  if (source[open + 1] === "/") {
+    const newline = source.indexOf("\n", open);
+
+    return newline === -1 ? source.length - 1 : newline;
+  }
+  const close = source.indexOf("*/", open);
+
+  return close === -1 ? source.length - 1 : close + 1;
+}
+
+/**
+ * `main`'s OWN body — its opening brace to the matching close — with every string, template and
+ * comment blanked out. Both halves are load-bearing for the `return` scan below: stopping at the
+ * closing brace keeps a helper declared AFTER `main` out of it, and blanking literals keeps a
+ * thrown `"…return…"` message from reading as code.
+ */
+function mainBody(source: string, from: number): string {
+  const open = source.indexOf("{", from);
+  if (open === -1) return "";
+
+  const code: string[] = [];
+  let depth = 0;
+
+  for (let i = open; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      i = endOfString(source, i);
+      code.push(" ");
+      continue;
+    }
+    if (ch === "/" && (source[i + 1] === "/" || source[i + 1] === "*")) {
+      i = endOfComment(source, i);
+      code.push(" ");
+      continue;
+    }
+    code.push(ch);
+    if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) break;
+  }
+
+  return code.join("");
+}
+
 /**
  * Declare `main` void when it falls off the end.
  *
@@ -170,8 +226,11 @@ export function ensureVoidMain(source: string): string {
     else if (source[i] === ")" && --depth === 0) break;
   }
   const afterParams = source.slice(i + 1);
-  // Already annotated, or it returns a value: leave it alone.
-  if (/^\s*:/.test(afterParams) || /(^|[^.\w])return(\s|;)/.test(afterParams)) return source;
+  // Already annotated: leave it alone.
+  if (/^\s*:/.test(afterParams)) return source;
+  // It returns a value: leave it alone. Scanned over `mainBody` rather than the rest of the FILE,
+  // which would also see a helper declared after `main` and the word inside a thrown message.
+  if (/(^|[^.\w])return(\s|;)/.test(mainBody(source, i + 1))) return source;
 
   return `${source.slice(0, i + 1)}: void${afterParams}`;
 }
