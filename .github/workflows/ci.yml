@@ -56,15 +56,6 @@ jobs:
       - name: Verify hnc is the pinned version
         run: hnc --version | grep -q '1\.5\.13' || { echo "::error::hnc is not the pinned 1.5.13"; hnc --version; exit 1; }
 
-      # The Rust SauceScript compiler. It is a SOURCE dep — `sauce-next` in sdk/package.json pins the
-      # sauce repo by SHA, and that repo has no root package.json and ships no prebuilt wasm — so the
-      # compiler is built here, by scripts/build-wasm.mjs, the same 'install a host toolchain' pattern
-      # as Foundry/hnc above. 1.97.1 matches the pinned repo's rust-toolchain.toml.
-      - name: Install Rust + wasm-pack (SauceScript compiler)
-        run: |
-          rustup toolchain install 1.97.1 --profile minimal --target wasm32-unknown-unknown
-          curl -sSfL https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.2
@@ -78,13 +69,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Its own step so a build failure is attributed to the compiler, not to whichever suite ran
-      # first. Idempotent with the sdk `pretest` that would otherwise do it.
-      - name: Build the Rust SauceScript compiler (wasm)
-        run: pnpm --filter './sdk' build:wasm
-      - name: Verify the compiler built
-        run: test -s sdk/.sauce-wasm/sauce_wasm.js || { echo "::error::sdk/.sauce-wasm/sauce_wasm.js missing — the Rust compiler did not build"; exit 1; }
-
       # ---- v12 engines for the @sauce/token execution suites ----------------
       # sdk/test/std/token/{evm,svm}.e2e.test.ts run the library's COMPILED bytecode on the real
       # engines. Both gate on an env var and `describe.skip` without it, and nothing ever set one —
@@ -97,8 +81,9 @@ jobs:
       # `sauce#release/beta`, which is the wrong LINEAGE (both suites' headers document the opcode
       # divergence in detail), and sauce `main` deleted the `engine/` tree `sync-engine-artifacts.mjs`
       # reads — so repinning it would break the engine sync instead. They come from the v12 release
-      # artifacts, and both releases are built from fcedc167a, the same commit `sauce-next` pins the
-      # compiler to: compiler and engines are one lineage by construction, not by coincidence.
+      # artifacts, and both releases are built from fcedc167a, the commit the published compiler's
+      # `compiler-v0.5.0` tag is cut from: compiler and engines are one lineage by construction, not
+      # by coincidence.
       - name: Fetch the v12 engines (same commit as the compiler pin)
         env:
           GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}

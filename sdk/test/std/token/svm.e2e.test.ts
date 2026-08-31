@@ -31,8 +31,8 @@
  * variables let both halves run in one `pnpm test`, each against the engine it actually targets.
  *
  * So: point SAUCE_RUST_ENGINE_SO at a `main`-lineage engine to run these. CI downloads one from the
- * `v12-svm-v0.4.0` release, which is built from the same sauce commit `sauce-next` pins the compiler
- * to; locally, either do the same or build it —
+ * `v12-svm-v0.4.0` release, which is built from the same sauce commit the published compiler's
+ * `compiler-v0.5.0` tag is cut from; locally, either do the same or build it —
  *   cd <sauce>/v12-svm && make build
  *   SAUCE_RUST_ENGINE_SO=<sauce>/v12-svm/target/deploy/engine.so pnpm --filter './sdk' test
  */
