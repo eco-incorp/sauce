@@ -8,7 +8,7 @@ import { IERC20 } from "./artifacts/IERC20.json";
 // nothing at all. Its contract is exactly "these tokens, this floor, this recipient", so any caller
 // that needs a Pot emptied to a destination can compile and run it. Keep it that way: no
 // caller-specific names, in the code OR in the revert string (the string is inside the compiled
-// body, so changing it rotates the pinned authenticity root — see sdk/src/verify/template.ts).
+// program, so changing it rotates SETTLE_WIRE.PROGRAM_HASH — see sdk/src/verify/wire.ts).
 //
 // COMPOSING IT AFTER ANOTHER PROGRAM (the common case, and the reason the floor exists): a
 // V12Pot.cook executes ONLY ingredients[0] and silently ignores the rest, so ONE cook cannot run
@@ -27,17 +27,21 @@ import { IERC20 } from "./artifacts/IERC20.json";
 //
 // COMPILED BY THE ORDINARY COMPILER — see `sdk/src/recipes/index.ts` for the exact snippet and
 // options. This file is the ONE source of truth for the program text; consumers compile it rather
-// than keeping a second copy. `sdk/src/verify/` itself is the DECODING /
-// authenticity surface (turn program bytes back into `(tokens, minOut, recipient)` and prove the
-// body is this audited template); the program source lives here, outside it, because a reusable
-// program is not a verification concern.
+// than keeping a second copy. `sdk/src/verify/` itself is the DECODING / authenticity surface (turn
+// a payload's bytes back into `(tokens, minOut, recipient)` and prove the program half is this
+// audited template); the program source lives here, outside it, because a reusable program is not a
+// verification concern.
 //
-// THE COMPILED SHAPE IS A FUNCTION OF THIS FILE AND THE COMPILER PIN ONLY — never of the arguments
-// (measured: identical 165-byte body for 1/2/3/5-element token lists with varying minOut/recipient).
-// That holds because the sweep below stays REAL RUNTIME code: `tokens.length` is not a compile-time
-// constant, so the TS front-end's loop unroller has no constant bound to unroll against. If that
-// loop ever DID unroll, the body would vary with the token count and the pinned-hash design would
-// collapse — keep it a runtime loop.
+// THE COMPILED PROGRAM IS A FUNCTION OF THIS FILE AND THE COMPILER PIN ONLY — never of the
+// arguments. `main`'s three parameters below are RUNTIME ENTRY ARGUMENTS: the caller appends them
+// to the compiled program as 32-byte words and the program reads them back through CALLDATA, so no
+// value a caller picks is visible to the compiler at all. One 391-byte blob therefore serves every
+// token list, floor and recipient, which is what lets `sdk/src/verify/` pin a single
+// `keccak256(program)` and still report per-payload params.
+//
+// KEEP THEM PARAMETERS. Moving any of the three to a compile-time `define` would fold it into the
+// program and make the bytes vary per caller — the pinned-hash design would collapse, and the whole
+// `/verify` surface with it.
 //
 // THE SHAPE: `main(tokens, minOut, recipient)` sweeps the Pot's CURRENT balance of EVERY token in
 // `tokens` to `recipient` — a full-balance sweep is the EXPLICIT INTENT (not a hazard to guard
@@ -68,18 +72,15 @@ import { IERC20 } from "./artifacts/IERC20.json";
 // on its own, against a Pot holding nothing, sweeps whatever is there (0, ordinarily) — there is
 // nothing to "orphan" against, since its target and floor are self-contained.
 //
-// THE DECODER (sdk/src/verify/decode.ts's decodeSettleProgram/validateSettleProgram): this template
-// is helper-free (no jump-table offsets, no branches beyond the floor check) and always compiles
-// to the SAME shape — N minimal-length pushes for `tokens` (reversed), a TUPLE-build opcode
-// carrying the array's arity as its one operand, then one minimal-length push each for `minOut`
-// and `recipient` — followed by a BODY that is a byte-for-byte CONSTANT regardless of the array's
-// length or any of the three values (confirmed by direct compile: identical body hash for 1, 2, 3
-// and 5-element token arrays with varying minOut/recipient). decodeSettleProgram parses that
-// prologue back into (tokens, minOut, recipient); validateSettleProgram additionally hashes the
-// trailing body against the hash of a genuine compile, so a settle-shaped program that decodes
-// cleanly (parses as that exact prologue shape) but carries different/extra behavior after it
-// (e.g. sweeping to a hardcoded address instead of the decoded `recipient`) is rejected on the
-// body-hash mismatch, not on the decode step.
+// THE DECODER (sdk/src/verify/decode.ts's decodeSettleProgram/validateSettleProgram): a payload is
+// `program || args`, and the two regions are disjoint. decodeSettleProgram pins the program's
+// LENGTH and reads the argument tail — three 32-byte head words (a pointer to the token array,
+// `minOut`, `recipient`) followed by the array's count and its elements — so it names the values a
+// payload will run with. validateSettleProgram adds `keccak256` over the WHOLE program against the
+// pinned hash, which is a COMPLETE authenticity answer here: a program carrying different or extra
+// behaviour (say, sweeping to a hardcoded address instead of the supplied `recipient`) is different
+// bytes, so it fails the hash. There is no body/prologue split to reason about any more, and no
+// argument-independent suffix to hash separately — the whole program is argument-independent.
 function main(tokens: Address[], minOut: Uint256, recipient: Address): Uint256 {
   const floorToken = IERC20.at(tokens[0]);
   const floorBal: Uint256 = floorToken.balanceOf(ctx.self());

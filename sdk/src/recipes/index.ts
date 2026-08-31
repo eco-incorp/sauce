@@ -5,18 +5,17 @@
  * "what is the program text?" and "where is this package installed?" — and then getting out of the
  * way. It ships no compile helper, so whatever options a caller passes are the ones they can audit.
  *
- * BYTE-FOR-BYTE REPRODUCIBILITY IS NO LONGER OFFERED — it was against the in-repo TypeScript compiler,
- * the TypeScript compiler this repo used to ship. It was the only one with compile-time `args`, which is
- * what bakes `(tokens, minOut, recipient)` into the fixed PROLOGUE that IS the v1 wire grammar
- * `@eco-incorp/sauce-sdk/verify` decodes:
+ * BYTE-FOR-BYTE REPRODUCIBILITY, against the published Rust compiler this package depends on. The
+ * program is a pure function of the source, the target and the compiler pin — nothing about a
+ * caller's `(tokens, minOut, recipient)` reaches it, because `main` takes them as RUNTIME entry
+ * arguments:
  *
  * ```ts
  * import { compile } from "@eco-incorp/sauce-sdk/compiler";
  * import { settleSource, SAUCE_BASE_DIRS } from "@eco-incorp/sauce-sdk/recipes";
  *
  * // A raw compile is right HERE and not for the generated programs: settle's `main` declares its
- * // own return type, so it needs no annotating. It takes `(tokens, minOut, recipient)` as RUNTIME
- * // entry arguments -- they ride the payload after the program bytes, not baked at compile time.
+ * // own return type, so it needs no annotating.
  * const { bytecode } = compile({
  *   target: "evm",
  *   entry: "settle.sauce.ts",
@@ -25,23 +24,22 @@
  *       ? new TextEncoder().encode(settleSource())
  *       : readFrom(SAUCE_BASE_DIRS, path),   // serves the program's `./artifacts/IERC20.json`
  * });
- * // bytecode -- 391 bytes
+ * // bytecode -- 391 bytes, keccak256 === SETTLE_WIRE.PROGRAM_HASH, for every caller and every value
  * ```
  *
  * Those three compile inputs are the whole contract — change any of them and the bytes change. They are
  * deliberately NOT exported as a pre-baked options object: a partner reproducing our output should
- * see the target and the arg order, not inherit them from a constant they never read.
- * No test runs this against `SETTLE_VECTORS` any more — that suite went with the compiler,
- * so the promise is a live pin rather than a claim.
+ * see the target and the entry, not inherit them from a constant they never read.
+ * `test/verify.compile.test.ts` runs exactly this snippet on every test run and compares the result
+ * against `SETTLE_PROGRAM` and `SETTLE_WIRE.PROGRAM_HASH`, so the promise is a live pin, not a claim.
  *
- * ⚠ THE PUBLISHED RUST COMPILER IS A DIFFERENT LINEAGE AND DOES NOT REPRODUCE THESE BYTES. It has no
- * `args` option, and the `defines` that stand in for it are constant-folded AT EACH USE SITE rather
- * than materialized up front — measured on this program, `minOut` lands at byte 48 and `recipient` at
- * byte 104, inside the body, and an array literal terminates with `0x92` where the grammar specifies
- * `0x94`. So its output has no prologue to decode and no argument-independent body to hash, and
- * `decodeSettleProgram` correctly refuses it. Reproducibility and `/verify` both mean the compiler
- * named above; the SDK's own route builders (`routes/`, `svm/`) compile through the Rust one, which is
- * why nothing there is decodable by `/verify` either.
+ * THE VALUES RIDE THE PAYLOAD, NOT THE PROGRAM. `(tokens, minOut, recipient)` are appended after the
+ * program as 32-byte big-endian words — `[program | tokensPtr | minOut | recipient | count | token…]`
+ * — and read back through CALLDATA. That is why one 391-byte blob serves every argument set, and why
+ * `@eco-incorp/sauce-sdk/verify` can answer "is this the audited settle, and what will it do?" from
+ * the bytes alone with `viem` as its only dependency. `@eco-incorp/sauce-sdk/verify`'s
+ * `encodeSettleProgram` builds the tail; its `validateSettleProgram` reads it back and checks the
+ * program half against the pinned hash. The full layout is `sdk/src/verify/decode.ts`.
  *
  * PREFER `settleSource()` OVER READING THE FILE YOURSELF, but both work — the raw asset is a
  * real file inside the package and is reachable by subpath if you want to hash, diff, or vendor it:
@@ -53,8 +51,8 @@
  * A bare `readFileSync("@eco-incorp/sauce-sdk/...")` does NOT work — `readFileSync` takes a
  * filesystem path and performs no package resolution. Use either form above.
  *
- * To go the other direction — compiled bytecode back to `(tokens, minOut, recipient)` — use
- * `@eco-incorp/sauce-sdk/verify`'s `decodeSettleProgram`, whose dependency closure is `viem` only.
+ * To go the other direction — a compiled payload back to `(tokens, minOut, recipient)` — use
+ * `@eco-incorp/sauce-sdk/verify`'s `validateSettleProgram`, whose dependency closure is `viem` only.
  *
  * THIS MODULE IS EVM/v12 ONLY. The SVM twin — the SVM `settle.sauce.ts`, same contract, adapted to
  * SPL's account model — lives under the SVM subtree with the rest of the SVM SDK and is exported from

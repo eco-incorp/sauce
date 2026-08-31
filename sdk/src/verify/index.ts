@@ -1,39 +1,39 @@
-// @eco-incorp/sauce-sdk/verify — turn a v1-grammar Sauce program's bytes back into the input params
-// it was compiled with: `(tokens, minOut, recipient)`.
+// @eco-incorp/sauce-sdk/verify — turn a compiled Sauce settle payload's bytes back into the
+// `(tokens, minOut, recipient)` it will run with, and prove the program half is the audited one.
 //
 // That is the whole job. Dependency closure is `viem` ONLY (no node:fs, no compiler, no @solana/*,
 // no artifact resolution, no program source on disk), so this surface is safe to import anywhere —
 // including a browser or an edge runtime. That closure is the reason this decodes rather than
-// recompiling-and-comparing: a recompile would put a ~2 MB wasm compiler in every consumer's
-// dependency graph to answer a question `viem` alone answers today.
+// recompiling-and-comparing: a recompile would put a 1.96 MB wasm compiler in every consumer's
+// dependency graph to answer a question `viem` alone answers with one `keccak256`.
 //
-// ⚠ WHICH PROGRAMS. The v1 grammar is an ARTIFACT of compile-time `args`, so it is the grammar of
-// the retired in-repo TypeScript compiler, which this package
-// ships, which bakes the params into a fixed prologue ahead of the body. The published RUST compiler
-// has no `args` option, and the `defines` standing in for it are constant-folded at each USE SITE —
-// on `recipes/settle.sauce.ts`, `minOut` lands at byte 48 and `recipient` at byte 104, with `0x92`
-// rather than `0x94` terminating the array. Such a program has no prologue and this decoder
-// correctly refuses it. So: use this for v1-grammar programs — the ones already on chain, and any
-// reimplementation checked against `SETTLE_VECTORS` — not as a general "decode any settle" tool.
-// Nothing the SDK emits today is v1-grammar, `/compiler` included: that subpath now serves the Rust
-// compiler.
+// WHICH PROGRAMS. The settle program this decodes is what the PUBLISHED RUST COMPILER emits for
+// `recipes/settle.sauce.ts` — the only compiler this package ships against. `main` takes
+// `(tokens, minOut, recipient)` as RUNTIME entry arguments, so the compiled program is a
+// 391-byte constant and the arguments ride the payload AFTER it, as 32-byte big-endian words the
+// engine reads back through CALLDATA. `SETTLE_VECTORS` is the conformance corpus and
+// `verify.test.ts` recompiles the program and re-pins it on every run.
 //
-// SCOPE, stated plainly: this decodes the PROLOGUE. It tells you which tokens, floor and recipient a
-// program carries, and it is strict about the encoding (every push minimal-length, addresses capped
-// at 20 bytes, a zero recipient rejected), so an accepted program is the UNIQUE byte encoding of the
-// values it decodes to. It does NOT tell you the trailing body is a program you have audited — a
-// prologue-shaped program can carry anything after it. Recompile-and-byte-compare answers THAT, and
-// `verifySvmSettleExecution` is the surviving example of the shape — a node-side check with a
-// compiler in its closure, which is why it does not live in this module. There is no longer an EVM
-// counterpart: the compiler that produced these bytes is not in the tree.
+// SCOPE, stated plainly, in two tiers:
+//   • `decodeSettleProgram` is STRUCTURAL. It pins the program's LENGTH and reads the argument tail,
+//     so it names the tokens, floor and recipient a payload carries and nothing about what those
+//     391 bytes do. It is strict about the encoding (§4 of decode.ts: the canonical tokens pointer,
+//     no trailing slack, no dirty bytes above an address, a nonzero recipient), so an accepted
+//     payload is the UNIQUE byte encoding of the values it decodes to.
+//   • `validateSettleProgram` adds the authenticity half: one `keccak256` over the WHOLE program
+//     against `SETTLE_WIRE.PROGRAM_HASH`. Because the arguments are no longer inside the program,
+//     a match means the payload runs the audited `settle.sauce.ts` and nothing else — the complete
+//     answer, from bytes alone, with no compiler. Prefer it; the structural tier exists for callers
+//     inspecting a payload they already know is not canonical.
 //
 // The `intent.js` exports (`decodeSettleCall`, `extractEvmSettleFromIntent`) go one wrapper further:
 // a producer hands you an intent whose `route.calls[]` ends in a `Pot.cook(bytes[])` call, not a bare
-// program, so these unwrap the cook calldata and hand the settle ingredient to the decoder above — same
-// viem-only dependency closure, same strict decode.
-export { SETTLE_WIRE, scanMinimalPush, encodeMinimalPush, type PushScanResult } from "./wire.js";
+// payload, so these unwrap the cook calldata and hand the settle ingredient to `validateSettleProgram`
+// — same viem-only dependency closure, same strict decode, and identification by program hash.
+export { SETTLE_WIRE } from "./wire.js";
 export {
   decodeSettleProgram,
+  validateSettleProgram,
   encodeSettleProgram,
   parseSettleProgram,
   bestEffortDecode,
@@ -43,7 +43,14 @@ export {
   type SettleParse,
   type Address20,
 } from "./decode.js";
-export { SETTLE_VECTORS, type ConformanceVector } from "./vectors.js";
+export {
+  SETTLE_PROGRAM,
+  SETTLE_VECTORS,
+  SETTLE_REJECTIONS,
+  settlePayload,
+  type ConformanceVector,
+  type RejectionVector,
+} from "./vectors.js";
 export {
   decodeSettleCall,
   extractEvmSettleFromCalls,

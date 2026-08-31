@@ -1,144 +1,202 @@
 /**
- * @eco-incorp/sauce-sdk/verify — decoder coverage.
+ * @eco-incorp/sauce-sdk/verify — decoder coverage against the appended-args wire.
  *
- * This file used to be ~960 lines, most of it covering a template/authenticity layer
- * (`template.ts` + `report.ts` + `internal/root-testing.ts`, and their
- * `inspectSettleProgram`/`verifySettleProgram`/`formatSettleReport` surface) that has been deleted:
- * `verify/` answers one question now — what `(tokens, minOut, recipient)` was a program compiled
- * with. "Is this body a program I audited" is answered by compiling the source and byte-comparing
- * (`@eco-incorp/sauce-sdk/recipes`), which is evidence a partner derives rather than a hash
- * constant shipped in the same package as the claim it supports.
+ * The corpus this runs on is `SETTLE_VECTORS` (payloads a conformant decoder must accept) and
+ * `SETTLE_REJECTIONS` (payloads it must refuse). The rejection half is the load-bearing one: three
+ * of its six are byte strings a REAL v12 runtime accepts and executes identically to the canonical
+ * payload beside them, so a decoder that takes them is not injective — see decode.ts §4.
  *
- * What survived is everything that tested the DECODER: golden-vector conformance, the encode
- * round-trip, the three canonicality gaps a partner-facing decoder must not repeat, and the wire
- * constants a foreign (Go/Solidity/Python) implementer needs.
+ * `verify.compile.test.ts` re-derives `SETTLE_PROGRAM` from source on every run, so the pins here
+ * are live rather than frozen; `verify-execution.e2e.test.ts` runs these same vectors on the engine.
  */
 import {
+  bestEffortDecode,
   decodeSettleProgram,
   encodeSettleProgram,
   parseSettleProgram,
+  settlePayload,
+  validateSettleProgram,
   SettleDecodeError,
+  SETTLE_PROGRAM,
+  SETTLE_REJECTIONS,
   SETTLE_VECTORS,
   SETTLE_WIRE,
 } from '../src/verify/index';
 import type { Hex } from 'viem';
 
+/** The `.code` a call is expected to reject with — asserted on the error, not just on "it threw". */
+const expectCode = (run: () => unknown, code: string): void => {
+  expect(run).toThrow(SettleDecodeError);
+  try {
+    run();
+  } catch (e) {
+    expect((e as SettleDecodeError).code).toBe(code);
+  }
+};
+
 describe('@eco-incorp/sauce-sdk/verify', () => {
   describe('golden vectors — wire conformance', () => {
     for (const v of SETTLE_VECTORS) {
       it(`decodes ${v.name}`, () => {
-        const d = decodeSettleProgram(v.program);
+        const d = decodeSettleProgram(settlePayload(v.args));
         expect(d.tokens.map((t) => BigInt(t))).toEqual(v.tokens.map((t) => BigInt(t)));
         expect(d.minOut).toBe(v.minOut);
         expect(BigInt(d.recipient)).toBe(BigInt(v.recipient));
         expect(d.floorToken).toBe(d.tokens[0]);
       });
 
+      it(`validates ${v.name} against the pinned program hash`, () => {
+        expect(validateSettleProgram(settlePayload(v.args)).programHash).toBe(SETTLE_WIRE.PROGRAM_HASH);
+      });
+
       it(`round-trips ${v.name} through encodeSettleProgram`, () => {
-        const d = decodeSettleProgram(v.program);
-        const reencoded = encodeSettleProgram(v.tokens, v.minOut, v.recipient, d.body);
-        expect(reencoded.toLowerCase()).toBe(v.program.toLowerCase());
+        const reencoded = encodeSettleProgram(v.tokens, v.minOut, v.recipient, SETTLE_PROGRAM);
+        expect(reencoded.toLowerCase()).toBe(settlePayload(v.args).toLowerCase());
+      });
+
+      it(`${v.name} occupies exactly 128 + 32N argument bytes`, () => {
+        const d = decodeSettleProgram(settlePayload(v.args));
+        expect(d.argsSize).toBe(128 + 32 * v.tokens.length);
+        expect(d.payloadSize).toBe(SETTLE_WIRE.PROGRAM_BYTES + d.argsSize);
       });
     }
 
-    it('every vector shares one identical body — the program is helper-free, so the suffix does not vary with the args', () => {
-      // This is the property that lets a SINGLE body comparison cover every argument set. Asserted
-      // as an invariant across the corpus rather than against a pinned hash constant, so nothing
-      // here has to be rotated when the program legitimately changes.
-      const bodies = new Set(SETTLE_VECTORS.map((v) => decodeSettleProgram(v.program).bodyHash));
-      expect(bodies.size).toBe(1);
-      const sizes = new Set(SETTLE_VECTORS.map((v) => decodeSettleProgram(v.program).bodySize));
-      expect(sizes.size).toBe(1);
+    it('every vector shares ONE identical program — the arguments never reach the compiler', () => {
+      // The property the whole appended-args model rests on, and the reason a single hash pin covers
+      // every argument set. Asserted across the corpus, and re-derived from source in
+      // verify.compile.test.ts rather than only pinned here.
+      const programs = new Set(SETTLE_VECTORS.map((v) => decodeSettleProgram(settlePayload(v.args)).program));
+      expect(programs.size).toBe(1);
+      expect([...programs][0]).toBe(SETTLE_PROGRAM.toLowerCase());
     });
 
-    it('the trap vector (v3) encodes the leading-zero-byte address as a 3-byte push, not 20', () => {
-      const trap = SETTLE_VECTORS.find((v) => v.name.includes('TRAP'))!;
-      // 0x14 (20-byte push) for U, then the SECOND leading push for Z must be 0x03, not 0x14.
-      const bytes = trap.program.slice(2);
-      expect(bytes.startsWith('14833589fcd6edb6e08f4c7c32d4f71b54bda02913')).toBe(true);
-      expect(bytes.slice(42, 44)).toBe('03');
+    it('tokens are in SOURCE order — index 0 is the floor token, the wire does not reverse', () => {
+      // The v1 prologue emitted the token pushes reversed; this wire does not. A decoder carrying
+      // the old reversal over would silently name the wrong floor token on every multi-token sweep.
+      const v = SETTLE_VECTORS.find((c) => c.tokens.length > 1)!;
+      const d = decodeSettleProgram(settlePayload(v.args));
+      expect(d.tokens).toEqual(v.tokens.map((t) => t.toLowerCase()));
+      expect(BigInt(d.floorToken)).toBe(BigInt(v.tokens[0]!));
     });
 
-    it('minOut=0 encodes as a 1-byte push of 0x00, never a bare 0x00 opcode', () => {
-      const v1 = SETTLE_VECTORS.find((v) => v.minOut === 0n)!;
-      const d = decodeSettleProgram(v1.program);
-      expect(d.minOut).toBe(0n);
-    });
-  });
-
-  describe('canonicality — the three gaps a partner-facing decoder must not repeat', () => {
-    const goodBody = decodeSettleProgram(SETTLE_VECTORS[0]!.program).body;
-
-    it('rejects a non-minimal-length token push (leading zero byte)', () => {
-      // 0x15 (21-byte width) with a leading 0x00 byte, then the rest of a well-formed v1 program.
-      const nonMinimal = ('0x15' + '00' + '833589fcd6edb6e08f4c7c32d4f71b54bda02913' + '9401' + '0100' + '144200000000000000000000000000000000000006' + goodBody.slice(2)) as Hex;
-      expect(() => decodeSettleProgram(nonMinimal)).toThrow(SettleDecodeError);
-      try {
-        decodeSettleProgram(nonMinimal);
-      } catch (e) {
-        expect((e as SettleDecodeError).code).toBe('NON_MINIMAL_PUSH');
-      }
-    });
-
-    it('rejects an oversize (32-byte) token push', () => {
-      const oversize = ('0x20' + 'ff'.repeat(32) + '9401' + '0100' + '144200000000000000000000000000000000000006' + goodBody.slice(2)) as Hex;
-      expect(() => decodeSettleProgram(oversize)).toThrow(SettleDecodeError);
-      try {
-        decodeSettleProgram(oversize);
-      } catch (e) {
-        expect((e as SettleDecodeError).code).toBe('OVERSIZE_ADDRESS');
-      }
-    });
-
-    it('rejects a zero recipient', () => {
-      const zeroRecipient = ('0x14833589fcd6edb6e08f4c7c32d4f71b54bda02913' + '9401' + '0100' + '0100' + goodBody.slice(2)) as Hex;
-      expect(() => decodeSettleProgram(zeroRecipient)).toThrow(SettleDecodeError);
-      try {
-        decodeSettleProgram(zeroRecipient);
-      } catch (e) {
-        expect((e as SettleDecodeError).code).toBe('ZERO_RECIPIENT');
-      }
+    it('an address with leading zero bytes is an ordinary 32-byte word — the v1 trap is gone', () => {
+      // Z = 0x…00ff00aa cost 3 bytes under the minimal-length push grammar and 32 here. Nothing
+      // about it is special any more, which is exactly what this pins.
+      const v = SETTLE_VECTORS.find((c) => c.name.includes('leading-zero-byte'))!;
+      const d = decodeSettleProgram(settlePayload(v.args));
+      expect(d.argsSize).toBe(128 + 32 * v.tokens.length);
+      expect(BigInt(d.recipient)).toBe(BigInt('0x0000000000000000000000000000000000ff00aa'));
     });
   });
 
-  describe('body length', () => {
-    const PROLOGUE = ('0x14833589fcd6edb6e08f4c7c32d4f71b54bda02913' + '9401' + '0100' + '144200000000000000000000000000000000000006') as Hex;
+  describe('canonicality — the payloads a conformant decoder must refuse', () => {
+    for (const r of SETTLE_REJECTIONS) {
+      it(`rejects ${r.name} with ${r.code}`, () => {
+        expectCode(() => decodeSettleProgram(settlePayload(r.args)), r.code);
+      });
+    }
 
-    it('rejects a prologue with no body at all', () => {
-      expect(() => decodeSettleProgram(PROLOGUE)).toThrow(SettleDecodeError);
-      try {
-        decodeSettleProgram(PROLOGUE);
-      } catch (e) {
-        expect((e as SettleDecodeError).code).toBe('BODY_LENGTH');
-      }
+    it('the three traps are byte strings the ENGINE accepts — strictness here is deliberate, not defensive', () => {
+      // If this count ever drops, a rejection stopped being a trap and became an ordinary malformed
+      // input, and the case for refusing it needs restating rather than silently inheriting.
+      expect(SETTLE_REJECTIONS.filter((r) => r.engineAccepts).map((r) => r.code)).toEqual([
+        'TOKENS_OFFSET',
+        'ARGS_OVERLONG',
+        'DIRTY_ADDRESS_WORD',
+      ]);
     });
 
-    it('accepts any non-empty body — the exact length is deliberately NOT pinned here', () => {
-      // A program whose body differs in length is still decodable for its PARAMS. Deciding whose
-      // body it is belongs to whoever compiles the source and byte-compares, not to this decoder —
-      // the old bare `165` gate rejected such a program before its params were ever read.
-      const shortBody = (PROLOGUE + 'c000') as Hex;
-      const d = decodeSettleProgram(shortBody);
-      expect(d.bodySize).toBe(2);
-      expect(BigInt(d.tokens[0]!)).toBe(BigInt('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'));
+    it('a dirty token word decodes to the SAME address it would sweep — which is why it is refused', () => {
+      // bestEffortDecode shows what the payload MEANS; decodeSettleProgram refuses it anyway,
+      // because the engine masks those upper bytes and the two byte strings would decode alike.
+      const trap = SETTLE_REJECTIONS.find((r) => r.name.startsWith('upperBytes'))!;
+      const parse = parseSettleProgram(settlePayload(trap.args));
+      expect(parse.tokenWords[0]! >> 160n).not.toBe(0n);
+      expect(bestEffortDecode(parse)!.tokens[0]).toBe(SETTLE_VECTORS[0]!.tokens[0]!.toLowerCase());
+    });
+
+    it('a dirty recipient word likewise decodes to the address it names', () => {
+      const trap = SETTLE_REJECTIONS.find((r) => r.name.startsWith('dirtyRecipient'))!;
+      const parse = parseSettleProgram(settlePayload(trap.args));
+      expect(parse.fatal?.code).toBe('DIRTY_ADDRESS_WORD');
+      expect(bestEffortDecode(parse)!.recipient).toBe(SETTLE_VECTORS[0]!.recipient.toLowerCase());
+    });
+  });
+
+  describe('the program half', () => {
+    it('rejects a payload shorter than the program', () => {
+      expectCode(() => decodeSettleProgram(SETTLE_PROGRAM.slice(0, -2) as Hex), 'PROGRAM_TRUNCATED');
+    });
+
+    it('rejects a payload with no argument tail at all', () => {
+      expectCode(() => decodeSettleProgram(SETTLE_PROGRAM), 'ARGS_TRUNCATED');
+    });
+
+    it('decodeSettleProgram accepts ANY 391 bytes — it pins length, not identity', () => {
+      // The structural tier deliberately says nothing about what the program does. This is the gap
+      // validateSettleProgram closes, and the reason intent.ts identifies by hash.
+      const impostor = ('0x' + 'ee'.repeat(SETTLE_WIRE.PROGRAM_BYTES) + SETTLE_VECTORS[0]!.args.slice(2)) as Hex;
+      expect(decodeSettleProgram(impostor).minOut).toBe(0n);
+      expectCode(() => validateSettleProgram(impostor), 'PROGRAM_HASH');
+    });
+
+    it('validateSettleProgram rejects a single flipped program byte', () => {
+      const flipped = (SETTLE_PROGRAM.slice(0, 100) + (SETTLE_PROGRAM[100] === '0' ? '1' : '0') + SETTLE_PROGRAM.slice(101) + SETTLE_VECTORS[0]!.args.slice(2)) as Hex;
+      expectCode(() => validateSettleProgram(flipped), 'PROGRAM_HASH');
+    });
+  });
+
+  describe('encodeSettleProgram', () => {
+    const { tokens, minOut, recipient } = SETTLE_VECTORS[0]!;
+
+    it('refuses an empty token list', () => {
+      expect(() => encodeSettleProgram([], minOut, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
+    });
+
+    it('refuses a zero recipient', () => {
+      expect(() => encodeSettleProgram(tokens, minOut, 0n, SETTLE_PROGRAM)).toThrow(RangeError);
+    });
+
+    it('refuses a token that does not fit in 20 bytes', () => {
+      expect(() => encodeSettleProgram([(1n << 161n)], minOut, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
+    });
+
+    it('refuses a minOut outside uint256', () => {
+      expect(() => encodeSettleProgram(tokens, 1n << 256n, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
+      expect(() => encodeSettleProgram(tokens, -1n, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
+    });
+
+    it('refuses a program that is not 391 bytes', () => {
+      expect(() => encodeSettleProgram(tokens, minOut, recipient, '0xdead' as Hex)).toThrow(RangeError);
     });
   });
 
   describe('never throws', () => {
     it('parseSettleProgram reports malformed input instead of throwing', () => {
-      for (const bad of ['', '0x', '0xzz', '0x1', '0x94'] as Hex[]) {
+      for (const bad of ['', '0x', '0xzz', '0x1', SETTLE_PROGRAM] as Hex[]) {
         expect(() => parseSettleProgram(bad)).not.toThrow();
         expect(parseSettleProgram(bad).fatal).not.toBeNull();
       }
+    });
+
+    it('an absurd token count is reported, never allocated against', () => {
+      // The count is a full uint256 on the wire, so a hostile payload can claim 2^255 elements. It
+      // must be measured against the bytes actually present, not turned into a length.
+      const absurd = ('0x' + (96n).toString(16).padStart(64, '0') + '0'.repeat(64) + '11'.repeat(32) + 'ff'.repeat(32)) as Hex;
+      const parse = parseSettleProgram(settlePayload(absurd));
+      expect(parse.fatal?.code).toBe('ARGS_TRUNCATED');
+      expect(parse.tokenWords).toEqual([]);
     });
   });
 
   describe('closure', () => {
     it('SETTLE_WIRE exposes the wire constants a foreign implementer needs', () => {
-      expect(SETTLE_WIRE.TUPLE_OP).toBe(0x94);
-      expect(SETTLE_WIRE.PUSH_MIN).toBe(0x01);
-      expect(SETTLE_WIRE.PUSH_MAX).toBe(0x20);
+      expect(SETTLE_WIRE.PROGRAM_BYTES).toBe(391);
+      expect(SETTLE_WIRE.WORD_BYTES).toBe(32);
       expect(SETTLE_WIRE.ADDRESS_BYTES).toBe(20);
+      expect(SETTLE_WIRE.HEAD_SLOTS).toBe(3);
+      expect(SETTLE_WIRE.HEAD_BYTES).toBe(96);
+      expect(SETTLE_WIRE.PROGRAM_HASH).toMatch(/^0x[0-9a-f]{64}$/);
     });
   });
 });
