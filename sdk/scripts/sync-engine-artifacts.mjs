@@ -1,80 +1,237 @@
 #!/usr/bin/env node
-// Sync the committed Sauce engine artifacts (Router/SauceRouter/V12 runtime +
-// interfaces) that downstream SDK consumers read for local tests and deploys,
-// FROM the pinned `sauce` git dep's build output. These live at
-// sdk/dist/artifacts/ (committed — sdk/dist ships to git-URL/tarball consumers)
-// and were previously hand-maintained, so a `sauce` repin silently left them
-// stale (their ABI + bytecode drift from the pinned engine). This script is the
-// single source of truth; CI runs it and `git diff --exit-status`es the result,
-// so a repin without a re-sync fails loudly instead of shipping a stale engine.
+// Produce the Sauce engine artifacts the SDK ships and its tests read, from sources that live
+// OUTSIDE `compiler/`. Two provenances, deliberately different:
 //
-// Provenance:
-//   - 8 EVM artifacts (REQUIRED): engine/out/<Sol>/<Name>.json — present after
-//     `pnpm install`, whose compiler postinstall `forge build`s engine/. Foundry,
-//     solc 0.8.27 pinned → byte-reproducible across machines on the same foundry
-//     version, which CI pins to match. These are what CI's drift check enforces.
-//   - V12RuntimeBytecode (OPTIONAL): engine-v12/snapshots/V12RuntimeBytecode.json.
+//   1. The v12 EVM runtime — from the eco-incorp/sauce GitHub RELEASE, pinned to an immutable tag
+//      and checked against a digest committed here. No Huff toolchain, no submodule fetch, no
+//      compile step: the release publishes the exact bytes.
+//   2. The 8 Solidity forge artifacts + the deploy record — from the `sauce` git dep, pinned to an
+//      immutable COMMIT (not a branch) and declared in the ROOT package.json, so it resolves at
+//      `<repo>/node_modules/sauce`. It used to be a devDep of `compiler/`, which made `rm -rf
+//      compiler/` break the sdk build and ~13 test suites. The releases cannot replace it: they
+//      publish only `Router`/`IRouter`/`Pot`/`Kitchen`, and `IERC20`, `IUniswapV3Pool`, `IStateView`
+//      and `SauceRouter` appear in no release asset.
 //
-// Why the v12 runtime is OPTIONAL rather than required. It used to be a snapshot
-// committed IN the dep, so this script just copied it. The engine dropped that
-// committed copy (`chore(v12): compile the runtime at deploy time` — it was a
-// second source of truth that rotted: a change to six .huff handlers shipped with
-// a snapshot built from the pre-change source, through green CI, and the deploy
-// script would have pushed those stale bytes to eleven live chains). The engine
-// now compiles `v12/Runtime.huff` via `hnc` at deploy time, and `hnc` is a
-// first-class dependency THERE.
+// The artifacts land in sdk/dist/artifacts (shipped to git-URL/tarball consumers) and sdk/src/artifacts
+// (gitignored, read by the drift tests). Neither is committed; CI re-runs this script and asserts all
+// nine files exist, so a broken generation fails there instead of shipping an empty dir.
 //
-// It is not one here: this repo's CI installs Foundry only (no Huff toolchain, no
-// Solana toolchain — see .github/workflows/ci.yml), and that same CI re-runs this
-// script and fails on any drift in sdk/dist/artifacts. So requiring the snapshot
-// would make the drift check unsatisfiable on every pin that lacks it. The
-// engine's own generator (engine-v12/script/V12RuntimeBytecode.s.sol) exists for
-// exactly this consumer — its doc comment names "the sauce-sdk viem test harness,
-// which deploys engine runtimes from checked-in creation code" as the reason it
-// still writes the JSON on demand.
-//
-// So: when the pinned dep HAS the snapshot it is copied (older pins keep working
-// unchanged); when it does not, the committed copy is left alone and reported.
-// Refreshing it after a v12 runtime change is a deliberate, Huff-toolchain-local
-// step — from a checkout of the pinned commit, with `hnc` on PATH:
-//   cd engine-v12 && git submodule update --init --recursive --depth 1
-//   forge script script/V12RuntimeBytecode.s.sol --sig "run()" --ffi
-// then copy snapshots/V12RuntimeBytecode.json over sdk/src/artifacts/ +
-// sdk/dist/artifacts/ and commit. The generator sanity-deploys the creation code
-// before writing, so a broken snapshot fails there rather than downstream.
+// Why the v12 runtime comes from the release rather than from the pin. The engine dropped its
+// committed snapshot (`chore(v12): compile the runtime at deploy time` — a second source of truth
+// that rotted: a change to six .huff handlers shipped with a snapshot built from the pre-change
+// source). This script then compiled `v12/Runtime.huff` with `hnc` itself, which needed the huff-neo
+// toolchain, three cloned harness submodules and a forge script run — and still produced the
+// `release/beta` LINEAGE, whose opcode table has diverged from the one the published compiler emits
+// for (see sdk/test/std/token/evm.e2e.test.ts's header). The release asset is the same bytes the
+// engine's own deploy uses, from the commit the published compiler's tag is cut from, so it is both
+// cheaper to obtain and the correct lineage.
 //
 // Run: `pnpm --filter './sdk' sync-engine-artifacts` (after `pnpm install`).
-// NOTE: a `rm -rf sdk/dist` clean build drops these (tsc emits no JSON) — re-run
-// this after such a build. The normal `tsc` build leaves them in place.
-import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+// `--fetch-v12-engines` additionally downloads the SVM engine binary and prints every cached path as
+// `NAME=<path>` lines — how CI gets SAUCE_RUST_ENGINE_SO / the runtime creation code.
+// NOTE: a `rm -rf sdk/dist` clean build drops these (tsc emits no JSON) — re-run this after such a
+// build. The normal `tsc` build leaves them in place.
+import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { execFileSync, execSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+import { keccak256, toBytes } from 'viem';
 import { generateEngineAbi } from './gen-engine-abi.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const SDK_DIR = resolve(SCRIPT_DIR, '..');
 const REPO_ROOT = resolve(SDK_DIR, '..');
 
-// The `sauce` dep is a devDep of the compiler; pnpm exposes it under a
-// stable-named symlink there (or hoisted at the root). Same resolution rule as
-// dev-tools/scripts/sync-artifacts.js — never hardcode the SHA-pinned store path.
-const SAUCE_CANDIDATES = [
-  resolve(REPO_ROOT, 'compiler', 'node_modules', 'sauce'),
-  resolve(REPO_ROOT, 'node_modules', 'sauce'),
-];
-const sauce = SAUCE_CANDIDATES.find((p) => existsSync(p));
+// ---------------------------------------------------------------------------
+// Release-sourced v12 engine assets.
+//
+// IMMUTABLE TAGS. A git tag is movable on GitHub, so the tag alone is not a pin — every asset is
+// checked against a digest committed HERE, not only against the manifest downloaded beside it. Both
+// releases are built from sauce fcedc167adf762347986feba6e53ed48800a6bfd, the commit the published
+// `@eco-incorp/sauce-compiler` 0.5.0 (`compiler-v0.5.0`) is cut from: compiler and engines are one
+// lineage by construction. To bump: change the tag, run this script, and paste the digest it reports.
+const RELEASE_COMMIT = 'fcedc167adf762347986feba6e53ed48800a6bfd';
 
-if (!sauce) {
+const V12_EVM = {
+  tag: 'v12-evm-v0.3.0',
+  asset: 'runtime.creation.hex',
+  // keccak256 of the creation code, cross-checked against the release manifest's `creationCodeKeccak`.
+  digest: '0x1102d0061f378fe2a8e3f6644c37a2050c351224a382d3f18be6253d68831ff2',
+  manifestKey: 'creationCodeKeccak',
+  // The manifest hashes the DECODED creation bytecode, not the hex file's bytes.
+  hash: (buf) => keccak256(toBytes(buf.toString('utf8').trim())),
+};
+
+const V12_SVM = {
+  tag: 'v12-svm-v0.4.0',
+  asset: 'engine.so',
+  digest: '983ff01645885eecc55c3437339e57de270a367fe18814111be5a26c74440a54',
+  manifestKey: 'soSha256',
+  hash: (buf) => createHash('sha256').update(buf).digest('hex'),
+};
+
+// Inside node_modules so it needs no .gitignore entry and is wiped with the install it belongs to.
+// Keyed by tag: a bump downloads afresh rather than silently reusing the old bytes.
+const CACHE_ROOT = resolve(REPO_ROOT, 'node_modules', '.cache', 'sauce-engine-releases');
+
+const REPO = 'eco-incorp/sauce';
+
+const onPath = (bin) => {
+  try {
+    execSync(`command -v ${bin}`, { stdio: 'ignore' });
+
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Download one release asset to `dest`. `gh` first (it carries the user's own credentials for this
+ * PRIVATE repo); otherwise the REST API with a token. Throws with both remedies named — an absent
+ * credential must not read as a mysterious 404.
+ */
+function download(tag, asset, dest) {
+  const tmp = `${dest}.partial`;
+  rmSync(tmp, { force: true });
+
+  if (onPath('gh')) {
+    execFileSync('gh', ['release', 'download', tag, '--repo', REPO, '--pattern', asset, '--output', tmp, '--clobber'], {
+      stdio: ['ignore', 'ignore', 'inherit'],
+    });
+    renameSync(tmp, dest);
+
+    return;
+  }
+
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.ECO_INCORP_TOKEN;
+  if (!token) {
+    throw new Error(
+      `cannot download ${tag}/${asset}: eco-incorp/sauce is a PRIVATE repo, and neither the \`gh\` CLI ` +
+        'nor a token was found. Install + `gh auth login`, or export GITHUB_TOKEN / GH_TOKEN with read ' +
+        'access on eco-incorp/sauce.',
+    );
+  }
+
+  const id = execFileSync(
+    'curl',
+    [
+      '-sSfL',
+      '-H', `Authorization: Bearer ${token}`,
+      '-H', 'Accept: application/vnd.github+json',
+      `https://api.github.com/repos/${REPO}/releases/tags/${tag}`,
+    ],
+    { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+  );
+  const found = JSON.parse(id).assets.find((a) => a.name === asset);
+  if (!found) throw new Error(`release ${tag} has no asset named ${asset}`);
+
+  execFileSync('curl', [
+    '-sSfL',
+    '-H', `Authorization: Bearer ${token}`,
+    '-H', 'Accept: application/octet-stream',
+    '-o', tmp,
+    found.url,
+  ]);
+  renameSync(tmp, dest);
+}
+
+/**
+ * Cached, integrity-checked fetch of one release asset. Returns its path.
+ *
+ * A cached file is re-hashed on every run, so a truncated or tampered cache entry is replaced rather
+ * than trusted; a verifying cache entry means zero network. The asset's own digest is the gate — the
+ * manifest is fetched too and cross-checked, but it is downloaded from the same place as the asset,
+ * so it can only corroborate, never authenticate.
+ */
+function fetchReleaseAsset({ tag, asset, digest, manifestKey, hash }) {
+  const dir = resolve(CACHE_ROOT, tag);
+  mkdirSync(dir, { recursive: true });
+  const dest = resolve(dir, asset);
+
+  const digestOf = () => hash(readFileSync(dest));
+  if (!existsSync(dest) || digestOf() !== digest) {
+    if (existsSync(dest)) console.warn(`[sync-engine-artifacts] cached ${tag}/${asset} failed its digest — refetching`);
+    download(tag, asset, dest);
+    const actual = digestOf();
+    if (actual !== digest) {
+      rmSync(dest, { force: true });
+      throw new Error(
+        `${tag}/${asset} digest ${actual} != the pinned ${digest}. Either the download is corrupt or the ` +
+          'tag was moved; do not proceed on an unverified engine.',
+      );
+    }
+  }
+
+  const manifest = resolve(dir, 'manifest.json');
+  if (!existsSync(manifest)) download(tag, 'manifest.json', manifest);
+  const record = JSON.parse(readFileSync(manifest, 'utf8'));
+  const claimed = manifestKey.split('.').reduce((o, k) => o?.[k], record);
+  if (claimed !== digest) {
+    throw new Error(`${tag} manifest ${manifestKey} is ${claimed}, not the pinned ${digest} — the tag moved.`);
+  }
+  if (record.commit !== RELEASE_COMMIT) {
+    throw new Error(`${tag} was built from ${record.commit}, not the pinned ${RELEASE_COMMIT} — the tag moved.`);
+  }
+
+  return dest;
+}
+
+// ---------------------------------------------------------------------------
+// The `sauce` git dep. Declared in the ROOT package.json (see the header), so `<repo>/node_modules/sauce`
+// is the only place it can be. The old candidate list also looked in `compiler/node_modules/sauce`,
+// which is what tied the sdk build to `compiler/` existing.
+const SAUCE = resolve(REPO_ROOT, 'node_modules', 'sauce');
+
+/**
+ * `engine/out` is forge BUILD OUTPUT — the dep arrives without it, and pnpm does not recurse git
+ * submodules, so the OpenZeppelin sources `engine/src` imports are missing too. Fetch them at the
+ * SHA the engine's own submodule pins and build. Previously done by `compiler`'s postinstall
+ * (integration-test/fetch-engine-libs.js), which is the other half of what made the sdk build depend
+ * on `compiler/`.
+ *
+ * Non-fatal without Foundry: the caller reports the missing artifacts, and SYNC_OPTIONAL_FORGE=1
+ * downgrades that to a warning for local dev.
+ */
+const OPENZEPPELIN_SHA = '33abe27ddb835a49d4b0ecc4717eeff03535a4cd';
+
+function prepareEngineBuild() {
+  const engine = resolve(SAUCE, 'engine');
+  if (existsSync(resolve(engine, 'out', 'Router.sol', 'Router.json'))) return;
+
+  const oz = resolve(engine, 'lib', 'openzeppelin-contracts');
+  if (!existsSync(resolve(oz, 'contracts'))) {
+    console.log(`[sync-engine-artifacts] fetching engine lib openzeppelin-contracts@${OPENZEPPELIN_SHA.slice(0, 7)}`);
+    mkdirSync(oz, { recursive: true });
+    execSync(`git init -q ${JSON.stringify(oz)}`, { stdio: 'inherit' });
+    execSync(`git -C ${JSON.stringify(oz)} fetch -q --depth 1 https://github.com/OpenZeppelin/openzeppelin-contracts.git ${OPENZEPPELIN_SHA}`, { stdio: 'inherit' });
+    execSync(`git -C ${JSON.stringify(oz)} checkout -q FETCH_HEAD`, { stdio: 'inherit' });
+  }
+
+  if (!onPath('forge')) {
+    console.warn('[sync-engine-artifacts] forge not on PATH — cannot build the engine (install Foundry).');
+
+    return;
+  }
+
+  // --skip test --skip script keeps the build off forge-std / huff-neo, which are submodules of the
+  // harness rather than of the contracts this reads.
+  console.log('[sync-engine-artifacts] forge build engine/src …');
+  execSync('forge build --skip test --skip script', { cwd: engine, stdio: 'inherit' });
+}
+
+if (!existsSync(SAUCE)) {
   console.error(
-    '[sync-engine-artifacts] `sauce` dep not found. Run `pnpm install` first ' +
-      '(with Foundry installed so the compiler postinstall can `forge build` the engine).',
+    '[sync-engine-artifacts] the `sauce` dep is not installed at node_modules/sauce. Run `pnpm install` ' +
+      'first (it is a devDependency of the ROOT package.json).',
   );
   process.exit(1);
 }
 
-// name -> path within the sauce dep. Order/set matches the committed
-// sdk/dist/artifacts contents exactly.
+prepareEngineBuild();
+
+// name -> path within the sauce dep. Order/set matches the shipped sdk/dist/artifacts exactly.
 const SOURCES = {
   Router: 'engine/out/Router.sol/Router.json',
   SauceRouter: 'engine/out/SauceRouter.sol/SauceRouter.json',
@@ -86,20 +243,14 @@ const SOURCES = {
   IStateView: 'engine/out/IUniswapV4.sol/IStateView.json',
 };
 
-// Copied when the pinned dep provides it, skipped (committed copy left intact)
-// when it does not — see the header for why this one cannot be required here.
-const OPTIONAL_SOURCES = {
-  V12RuntimeBytecode: 'engine-v12/snapshots/V12RuntimeBytecode.json',
-};
-
-// Committed + shipped location first; the gitignored src copy is kept coherent
-// for local dev (nothing imports it today, but a stale copy there is confusing).
+// Committed + shipped location first; the gitignored src copy is kept coherent for local dev (the
+// drift tests read it).
 const DESTS = [resolve(SDK_DIR, 'dist', 'artifacts'), resolve(SDK_DIR, 'src', 'artifacts')];
 for (const d of DESTS) mkdirSync(d, { recursive: true });
 
 const missing = [];
 for (const [name, rel] of Object.entries(SOURCES)) {
-  const src = resolve(sauce, rel);
+  const src = resolve(SAUCE, rel);
 
   if (!existsSync(src)) {
     missing.push(`${name} (${rel})`);
@@ -112,10 +263,10 @@ for (const [name, rel] of Object.entries(SOURCES)) {
 if (missing.length) {
   const message =
     `[sync-engine-artifacts] missing from the pinned engine build: ${missing.join(', ')}. ` +
-    'Ensure Foundry is installed and `pnpm install` ran the engine forge build.';
+    'Ensure Foundry is installed so the engine forge build can run.';
   // Wired into the sdk build, so a local build without Foundry must not hard-fail: SYNC_OPTIONAL_FORGE=1
   // downgrades to a warning (dist/artifacts is then incomplete locally). CI/publish install Foundry, so
-  // they still produce every artifact; the drift check fails there on any gap.
+  // they still produce every artifact; the existence check fails there on any gap.
   if (process.env.SYNC_OPTIONAL_FORGE === '1') {
     console.warn(`${message} (SYNC_OPTIONAL_FORGE=1 → continuing; dist/artifacts will be incomplete)`);
   } else {
@@ -124,98 +275,54 @@ if (missing.length) {
   }
 }
 
-// Generate V12RuntimeBytecode from the pinned engine-v12 by compiling v12/Runtime.huff with hnc via
-// the engine's own forge generator. Requires hnc + forge on PATH; fetches the (harness-only)
-// submodules the script imports. Returns the produced snapshot path, or null when the toolchain is
-// unavailable (local dev without hnc) — the caller then simply skips this one artifact.
-function generateV12Runtime(sauceRoot) {
-  const engineV12 = resolve(sauceRoot, 'engine-v12');
-  const generator = resolve(engineV12, 'script', 'V12RuntimeBytecode.s.sol');
-  if (!existsSync(generator)) return null; // this pin ships no generator
+// ---------------------------------------------------------------------------
+// V12RuntimeBytecode — the release's creation code, wrapped in the JSON shape consumers already read.
+//
+// CREATION code, not the deployed runtime: `Runtime.huff`'s CONSTRUCTOR appends the runtime's own
+// address as a trailing code word, so the deployed bytes are not known until the contract has one. A
+// harness that wants to `setCode` a runtime must deploy this once and read the code back (CI's
+// "Derive the deployed v12 runtime bytecode" step does exactly that).
+//
+// Non-fatal: a developer with no credentials and no cache keeps whatever copy is already there and
+// gets a warning, the same latitude the previous hnc-based generation had.
+const RUNTIME_DEST = 'V12RuntimeBytecode.json';
+let runtimeCreationPath;
 
-  const onPath = (bin) => {
-    try { execSync(`command -v ${bin}`, { stdio: 'ignore' }); return true; } catch { return false; }
-  };
-  if (!onPath('hnc') || !onPath('forge')) {
-    console.warn('[sync-engine-artifacts] V12RuntimeBytecode: hnc and/or forge not on PATH — skipping generation (install the huff-neo compiler + Foundry to generate it locally).');
-    return null;
-  }
-
-  // The forge script imports forge-std (Script) + foundry-huff-neo (the hnc deployer). Their versions
-  // do NOT affect the hnc-produced bytecode — they are the Script harness only, not the compiler.
-  const SUBMODULES = {
-    'forge-std': 'https://github.com/foundry-rs/forge-std',
-    'foundry-huff-neo': 'https://github.com/cakevm/foundry-huff-neo',
-    'openzeppelin-contracts': 'https://github.com/OpenZeppelin/openzeppelin-contracts',
-  };
-  for (const [name, url] of Object.entries(SUBMODULES)) {
-    const dir = resolve(engineV12, 'lib', name);
-    if (existsSync(dir)) continue;
-    console.log(`[sync-engine-artifacts] fetching engine-v12 harness lib: ${name}`);
-    execSync(`git clone --depth 1 -q ${url} ${JSON.stringify(dir)}`, { stdio: 'inherit' });
-  }
-
-  console.log('[sync-engine-artifacts] generating V12RuntimeBytecode (hnc compiles v12/Runtime.huff) …');
-  try {
-    execSync('forge script script/V12RuntimeBytecode.s.sol --sig "run()" --ffi', { cwd: engineV12, stdio: 'inherit' });
-  } catch (e) {
-    console.warn(`[sync-engine-artifacts] V12RuntimeBytecode generation failed: ${e.message} — skipping.`);
-    return null;
-  }
-  const snap = resolve(engineV12, 'snapshots', 'V12RuntimeBytecode.json');
-  return existsSync(snap) ? snap : null;
-}
-
-// Optional artifacts: copy when the pin ships them; otherwise GENERATE (V12RuntimeBytecode) or skip.
-// Never fatal — a pin that compiles its Huff runtime at deploy time ships no snapshot, and a build
-// host without the huff toolchain still produces every other artifact.
-const skipped = [];
-for (const [name, rel] of Object.entries(OPTIONAL_SOURCES)) {
-  let src = resolve(sauce, rel);
-
-  // A pin that compiles its Huff runtime at deploy time ships no snapshot to copy — so GENERATE it
-  // (commit-nothing, generate-everything). This is the ONLY byte-faithful method: the engine's own
-  // forge generator has foundry-huff-neo invoke `hnc <Runtime.huff> -b -e <evmVersion>` with the evm
-  // version from foundry.toml (matching those flags by hand risks byte drift). Non-fatal if the
-  // toolchain is absent (local dev without hnc/forge) — that one artifact is simply skipped there.
-  if (!existsSync(src) && name === 'V12RuntimeBytecode') {
-    const generated = generateV12Runtime(sauce);
-    if (generated) src = generated;
-  }
-
-  if (!existsSync(src)) {
-    skipped.push(name);
-    continue;
-  }
-
-  for (const dest of DESTS) copyFileSync(src, resolve(dest, `${name}.json`));
+try {
+  runtimeCreationPath = fetchReleaseAsset(V12_EVM);
+  const creationCode = readFileSync(runtimeCreationPath, 'utf8').trim();
+  const json = `${JSON.stringify({ runtimeCreationCode: creationCode }, null, 2)}\n`;
+  for (const dest of DESTS) writeFileSync(resolve(dest, RUNTIME_DEST), json);
+} catch (e) {
+  const present = DESTS.every((d) => existsSync(resolve(d, RUNTIME_DEST)));
+  console.warn(
+    `[sync-engine-artifacts] V12RuntimeBytecode: ${e.message} — ` +
+      (present ? 'kept the copy already on disk.' : 'NOT produced.'),
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Deployed-address record -> a typed TS module.
 //
-// The engine records where its stack actually lives in `deployments/v12.json`
-// (written by its own dev-tools/scripts/deploy-v12.ts). Without this, the npm
-// package shipped ABIs and runtime creation code but no way to discover the
-// ADDRESSES of the deployed router/kitchen/runtime, or the SVM engine's program
-// id — consumers had to hardcode them out of band. `createSauceSvmClient` in
-// particular takes a required `programId` with no default.
+// The engine records where its stack actually lives in `deployments/v12.json` (written by its own
+// dev-tools/scripts/deploy-v12.ts). Without this, the package shipped ABIs and runtime creation code
+// but no way to discover the ADDRESSES of the deployed router/kitchen/runtime, or the SVM engine's
+// program id — consumers had to hardcode them out of band. `createSauceSvmClient` in particular takes
+// a required `programId` with no default.
 //
-// Generated as TypeScript rather than copied as JSON on purpose: a runtime JSON
-// import needs ESM import attributes (`with { type: 'json' }`) to work in Node,
-// which is a portability trap for consumers. Emitting literals sidesteps it
-// entirely and keeps the values fully typed and tree-shakeable.
+// Generated as TypeScript rather than copied as JSON on purpose: a runtime JSON import needs ESM
+// import attributes (`with { type: 'json' }`) to work in Node, which is a portability trap for
+// consumers. Emitting literals sidesteps it and keeps the values typed and tree-shakeable.
 //
-// Generated, not hand-written, so it cannot drift from the pinned engine across
-// a repin — the same reason the artifacts above are synced rather than
-// maintained by hand. CI re-runs this and fails on drift.
-const DEPLOYMENTS_SRC = resolve(sauce, 'deployments', 'v12.json');
+// Generated, not hand-written, so it cannot drift from the pinned engine across a repin. CI re-runs
+// this and fails on drift.
+const DEPLOYMENTS_SRC = resolve(SAUCE, 'deployments', 'v12.json');
 const GENERATED = resolve(SDK_DIR, 'src', 'deployments', 'v12.generated.ts');
 
 if (!existsSync(DEPLOYMENTS_SRC)) {
   console.error(
     '[sync-engine-artifacts] deployments/v12.json missing from the pinned engine. Pin a commit that ' +
-      'records a deploy (release/beta does); `main` carries no deployments/ directory.',
+      'records a deploy; the v12 release lineage carries no deployments/ directory.',
   );
   process.exit(1);
 }
@@ -273,16 +380,15 @@ ${clusters.map((k) => `    ${q(k)}: { cluster: ${q(dep.svm.clusters[k].cluster)}
 mkdirSync(dirname(GENERATED), { recursive: true });
 writeFileSync(GENERATED, generated);
 
-// SVM wire ABI -> a generated TS module of the wire constants (discriminators,
-// header offsets/sizes, payload flags, seed scheme). Same rationale as the
-// deployments module above: generated so it cannot drift from the pinned engine,
-// CI git-diffs the result. OPTIONAL like V12RuntimeBytecode — older pins predate
-// svm/abi/engine-abi.json, so its absence keeps the committed copy, never fatal.
+// SVM wire ABI -> a generated TS module of the wire constants (discriminators, header
+// offsets/sizes, payload flags, seed scheme). Same rationale as the deployments module above:
+// generated so it cannot drift from the pinned engine, CI git-diffs the result. OPTIONAL — older
+// pins predate svm/abi/engine-abi.json, so its absence keeps the committed copy, never fatal.
 const abiResult = generateEngineAbi();
 
 const liveCount = chainIds.filter((id) => dep.evm.chains[id].live === true).length;
 
-console.log(`[sync-engine-artifacts] synced ${Object.keys(SOURCES).length} artifacts from ${sauce}`);
+console.log(`[sync-engine-artifacts] synced ${Object.keys(SOURCES).length} forge artifacts from ${SAUCE}`);
 console.log(
   abiResult.generated
     ? '[sync-engine-artifacts] generated src/svm/engine-abi.generated.ts from svm/abi/engine-abi.json'
@@ -293,10 +399,13 @@ console.log(
     `${chainIds.length} EVM chains, svm programId ${dep.svm.programId}`,
 );
 
-if (skipped.length) {
-  console.log(
-    `[sync-engine-artifacts] kept the committed copy of: ${skipped.join(', ')} — not shipped by this ` +
-      'pin (the engine compiles its v12 Huff runtime at deploy time). Refresh it with the engine\'s own ' +
-      'generator when the v12 runtime changes; see this script\'s header for the exact commands.',
-  );
+// `--fetch-v12-engines`: also place the SVM engine binary in the cache, and print every cached path
+// as `NAME=<path>`. CI appends these to $GITHUB_ENV so SAUCE_RUST_ENGINE_SO and the runtime-derivation
+// step read the same verified, cached bytes this script already fetched — one download, one digest
+// check, no second implementation in YAML.
+if (process.argv.includes('--fetch-v12-engines')) {
+  const enginePath = fetchReleaseAsset(V12_SVM);
+  if (!runtimeCreationPath) throw new Error('--fetch-v12-engines: the v12 EVM runtime creation code was not fetched');
+  console.log(`SAUCE_RUST_ENGINE_SO=${enginePath}`);
+  console.log(`SAUCE_V12_RUNTIME_CREATION_HEX=${runtimeCreationPath}`);
 }

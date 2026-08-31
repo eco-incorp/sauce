@@ -43,19 +43,6 @@ jobs:
         with:
           version: v1.5.1
 
-      # The huff-neo compiler (hnc) — sync-engine-artifacts compiles engine-v12/v12/Runtime.huff with
-      # it to GENERATE V12RuntimeBytecode.json (nothing is committed). PINNED: the produced creation
-      # bytecode is a pure function of the hnc version + the source, and there is no committed golden
-      # to byte-check against, so the version is the reproducibility anchor.
-      - name: Install huff-neo compiler (hnc)
-        run: |
-          export HUFF_NEO_DIR="$HOME/.huff-neo"   # pin the install dir (runner sets XDG_CONFIG_HOME, which the installer would otherwise use)
-          curl -L https://raw.githubusercontent.com/cakevm/huff-neo/main/hnc-up/install | bash
-          "$HUFF_NEO_DIR/bin/hnc-up" --install 1.5.13
-          echo "$HUFF_NEO_DIR/bin" >> "$GITHUB_PATH"
-      - name: Verify hnc is the pinned version
-        run: hnc --version | grep -q '1\.5\.13' || { echo "::error::hnc is not the pinned 1.5.13"; hnc --version; exit 1; }
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.2
@@ -69,36 +56,47 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ---- v12 engines for the @sauce/token execution suites ----------------
-      # sdk/test/std/token/{evm,svm}.e2e.test.ts run the library's COMPILED bytecode on the real
-      # engines. Both gate on an env var and `describe.skip` without it, and nothing ever set one —
-      # so from the day they were written to the day this step landed, neither had executed once.
-      # A skipped suite and a passing suite are the same line in jest's summary; that is the whole
-      # reason this went unnoticed. Each suite now also HARD-FAILS in CI if its variable is absent,
-      # so a future edit here cannot quietly return them to skipping.
+      # ---- engine artifacts + the v12 engines --------------------------------
+      # The EVM engine artifacts (sdk/{dist,src}/artifacts — Router, SauceRouter, V12*, interfaces)
+      # ship to downstream SDK consumers for their local tests/deploys, so they must track the pinned
+      # `sauce` engine. Nothing is committed, so this both regenerates them and asserts the
+      # generation produced every one.
       #
-      # The engines cannot come from the `sauce` git dep. `compiler/package.json` pins
-      # `sauce#release/beta`, which is the wrong LINEAGE (both suites' headers document the opcode
-      # divergence in detail), and sauce `main` deleted the `engine/` tree `sync-engine-artifacts.mjs`
-      # reads — so repinning it would break the engine sync instead. They come from the v12 release
-      # artifacts, and both releases are built from fcedc167a, the commit the published compiler's
-      # `compiler-v0.5.0` tag is cut from: compiler and engines are one lineage by construction, not
-      # by coincidence.
-      - name: Fetch the v12 engines (same commit as the compiler pin)
+      # The same run fetches the v12 engines the @sauce/token execution suites need:
+      # sdk/test/std/token/{evm,svm}.e2e.test.ts run the library's COMPILED bytecode on the real
+      # engines. Those come from the v12 RELEASES, not from the `sauce` git dep — the dep's lineage
+      # opcode table has diverged from the one the published compiler emits for (both suites' headers
+      # document the divergence in detail), while both releases are built from fcedc167a, the commit
+      # the published compiler's `compiler-v0.5.0` tag is cut from: compiler and engines are one
+      # lineage by construction, not by coincidence. `--fetch-v12-engines` downloads them into a
+      # cache, checks each against a digest committed in the script, and prints the paths; the grep
+      # hands those to the steps below. GH_TOKEN because eco-incorp/sauce is a private repo.
+      #
+      # Both suites HARD-FAIL when their variable is absent, so a future edit here cannot quietly
+      # return them to skipping — a skipped suite and a passing suite are the same line in jest's
+      # summary, which is how they went unrun for their whole life before.
+      - name: Sync engine artifacts and fetch the v12 engines
         env:
           GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/v12"
-          gh release download v12-svm-v0.4.0 --repo eco-incorp/sauce --dir "$RUNNER_TEMP/v12" \
-            --pattern engine.so --pattern manifest.json
-          # The release manifest publishes the binary's sha256. Check it: a truncated download is a
-          # confusing engine-level failure three steps later, and a silent one if the suite skips.
-          EXPECTED=$(python3 -c "import json;print(json.load(open('$RUNNER_TEMP/v12/manifest.json'))['soSha256'])")
-          ACTUAL=$(sha256sum "$RUNNER_TEMP/v12/engine.so" | cut -d' ' -f1)
-          [ "$EXPECTED" = "$ACTUAL" ] || { echo "::error::engine.so sha256 $ACTUAL != manifest $EXPECTED"; exit 1; }
-          gh release download v12-evm-v0.3.0 --repo eco-incorp/sauce --dir "$RUNNER_TEMP/v12" \
-            --pattern runtime.creation.hex
+          pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines | tee "$RUNNER_TEMP/sync.log"
+          grep -E '^(SAUCE_RUST_ENGINE_SO|SAUCE_V12_RUNTIME_CREATION_HEX)=' "$RUNNER_TEMP/sync.log" >> "$GITHUB_ENV"
+          # sdk/src/deployments/v12.generated.ts is COMMITTED (src, generated from the pin's deploy
+          # record) — it must match a fresh sync, else a repin that moved the record wasn't committed.
+          if [ -n "$(git status --porcelain -- sdk/src/deployments)" ]; then
+            echo "::error::sdk/src/deployments is stale vs the pinned engine. Run 'pnpm --filter ./sdk sync-engine-artifacts' and commit the result.";
+            git --no-pager diff -- sdk/src/deployments;
+            exit 1;
+          fi
+          # dist/artifacts is BUILD OUTPUT (git-ignored, nothing committed): the 8 forge JSONs come
+          # from the engine build, V12RuntimeBytecode from the release asset. Assert the sync produced
+          # all 9, so a broken generation (missing Foundry, a failed submodule fetch, an unreachable
+          # release) fails CI here instead of shipping an empty dir — the exact regression that broke
+          # 0.7.0.
+          for a in IERC20 ISauceRouter IStateView IUniswapV3Pool Router SauceRouter V12Kitchen V12Pot V12RuntimeBytecode; do
+            test -s "sdk/dist/artifacts/$a.json" || { echo "::error::sync did not produce sdk/dist/artifacts/$a.json (is Foundry set up?)"; exit 1; }
+          done
 
       # The EVM suite etches DEPLOYED runtime bytecode at a fixed address, and the release publishes
       # CREATION code — Runtime.huff's constructor returns its own bytecode, so the deployed form
@@ -107,6 +105,7 @@ jobs:
       - name: Derive the deployed v12 runtime bytecode
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/v12"
           anvil --port 8599 --silent &
           for _ in $(seq 1 60); do
             cast block-number --rpc-url http://127.0.0.1:8599 >/dev/null 2>&1 && break
@@ -115,12 +114,13 @@ jobs:
           # anvil's first dev account — a published test key, not a secret.
           ADDR=$(cast send --rpc-url http://127.0.0.1:8599 \
             --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-            --create "$(cat "$RUNNER_TEMP/v12/runtime.creation.hex")" --json | jq -r .contractAddress)
+            --create "$(cat "$SAUCE_V12_RUNTIME_CREATION_HEX")" --json | jq -r .contractAddress)
           cast code "$ADDR" --rpc-url http://127.0.0.1:8599 > "$RUNNER_TEMP/v12/runtime.hex"
           # `cast code` prints `0x` for an address with no code, so a failed deploy lands as a
           # 3-byte file rather than an error. Size is the check.
           BYTES=$(wc -c < "$RUNNER_TEMP/v12/runtime.hex")
           [ "$BYTES" -gt 1000 ] || { echo "::error::deployed v12 runtime is $BYTES bytes — the deploy did not take"; exit 1; }
+          echo "SAUCE_RUST_V12_RUNTIME=$RUNNER_TEMP/v12/runtime.hex" >> "$GITHUB_ENV"
           echo "deployed v12 runtime: $BYTES hex chars from $ADDR"
       # -----------------------------------------------------------------------
 
@@ -136,35 +136,6 @@ jobs:
       # silently and look green.
       - name: Verify vendored SVM engine binary
         run: test -s artifacts/svm/engine.so || { echo "::error::artifacts/svm/engine.so missing or empty"; exit 1; }
-      # -----------------------------------------------------------------------
-
-      # The committed EVM engine artifacts (sdk/dist/artifacts — Router,
-      # SauceRouter, V12*, interfaces) ship to downstream SDK consumers for their
-      # local tests/deploys, so they must track the pinned `sauce` engine. They
-      # are not build output, so a repin would otherwise leave them stale
-      # silently. Re-sync from the freshly-installed engine build (foundry v1.5.1
-      # + solc 0.8.27 → byte-reproducible) and fail if the committed copies drift.
-      # sdk/src/deployments/v12.generated.ts is covered by the same check: it is
-      # generated from the pinned dep's deployments/v12.json (the deployed
-      # router/kitchen/runtime addresses + SVM program id that the package now
-      # exports), so a repin that moves the deploy record must be committed too.
-      - name: Verify engine artifacts generate cleanly from the pinned engine
-        run: |
-          pnpm --filter './sdk' sync-engine-artifacts
-          # sdk/src/deployments/v12.generated.ts is COMMITTED (src, generated from the pin's deploy
-          # record) — it must match a fresh sync, else a repin that moved the record wasn't committed.
-          if [ -n "$(git status --porcelain -- sdk/src/deployments)" ]; then
-            echo "::error::sdk/src/deployments is stale vs the pinned engine. Run 'pnpm --filter ./sdk sync-engine-artifacts' and commit the result.";
-            git --no-pager diff -- sdk/src/deployments;
-            exit 1;
-          fi
-          # dist/artifacts is a BUILD OUTPUT (git-ignored, generated — nothing committed): the 8 forge
-          # JSONs are synced from the engine build, V12RuntimeBytecode is compiled with hnc. Assert the
-          # sync produced all 9, so a broken generation (missing hnc/Foundry, submodule-fetch failure)
-          # fails CI here instead of shipping an empty dir — the exact regression that broke 0.7.0.
-          for a in IERC20 ISauceRouter IStateView IUniswapV3Pool Router SauceRouter V12Kitchen V12Pot V12RuntimeBytecode; do
-            test -s "sdk/dist/artifacts/$a.json" || { echo "::error::sync did not produce sdk/dist/artifacts/$a.json (is hnc/Foundry set up?)"; exit 1; }
-          done
       # -----------------------------------------------------------------------
 
       - name: Build compiler
@@ -188,10 +159,10 @@ jobs:
       - name: SDK — build
         run: pnpm --filter './sdk' build
 
+      # SAUCE_RUST_ENGINE_SO / SAUCE_RUST_V12_RUNTIME come from $GITHUB_ENV, exported by the two
+      # engine steps above. Both @sauce/token e2e suites hard-fail in CI when either is unset, so a
+      # broken export is loud rather than a silent skip.
       - name: SDK — test
-        env:
-          SAUCE_RUST_ENGINE_SO: ${{ runner.temp }}/v12/engine.so
-          SAUCE_RUST_V12_RUNTIME: ${{ runner.temp }}/v12/runtime.hex
         run: pnpm --filter './sdk' test
 
       - name: Actions — typecheck
