@@ -91,7 +91,7 @@ jobs:
       # GH_TOKEN: the sdk build's sync step downloads V12RuntimeBytecode from the eco-incorp/sauce
       # v12-evm release, and that repo is private. Without it the artifact is skipped with a warning
       # and the verify step below refuses to publish.
-      - name: Build all areas (compiler first, then sdk/actions in parallel)
+      - name: Build all areas (sdk + actions)
         env:
           GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
         run: pnpm build
@@ -106,7 +106,10 @@ jobs:
           done
           test -s sdk/dist/recipes/settle.sauce.ts || { echo "::error::missing sdk/dist/recipes/settle.sauce.ts"; exit 1; }
           test -s sdk/dist/svm/recipes/settle.sauce.ts || { echo "::error::missing sdk/dist/svm/recipes/settle.sauce.ts"; exit 1; }
-          echo "verified: 9 engine artifacts + both settle templates present"
+          # exports["./compiler"] points here. It exists only if the sdk build ran, and a missing file
+          # would ship a package whose /compiler subpath cannot resolve -- the 0.7.0 failure shape.
+          test -s sdk/dist/compiler.js || { echo "::error::missing sdk/dist/compiler.js — the ./compiler subpath would not resolve"; exit 1; }
+          echo "verified: 9 engine artifacts + both settle templates + the ./compiler entry point"
 
       - name: Resolve version
         id: version
