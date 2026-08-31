@@ -20,7 +20,7 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 ```typescript
 // Borrow MIM from Cauldron
 import { CauldronABI as ICauldron } from "./abis";
-function main(cauldronAddress: Address, to: Address, amount: Uint256): Uint256 {
+function main(cauldronAddress: Address, to: Address, amount: Uint256): { part: Uint256, share: Uint256 } {
   const cauldron = ICauldron.at(cauldronAddress);
   return cauldron.borrow(to, amount);
 }

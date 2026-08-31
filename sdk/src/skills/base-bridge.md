@@ -14,7 +14,8 @@ import { BaseL1StandardBridgeABI as IL1StandardBridge } from "./abis";
 
 function main(bridgeAddress: Address): Uint256 {
   const bridge = IL1StandardBridge.at(bridgeAddress);
-  return bridge.depositETH(200000, 0x00);
+  bridge.depositETH(200000, 0x00);
+  return 1;
 }
 ```
 - ETH amount is sent as `msg.value`
@@ -28,7 +29,8 @@ import { BaseL1StandardBridgeABI as IL1StandardBridge } from "./abis";
 
 function main(bridgeAddress: Address, l1Token: Address, l2Token: Address, amount: Uint256): Uint256 {
   const bridge = IL1StandardBridge.at(bridgeAddress);
-  return bridge.depositERC20(l1Token, l2Token, amount, 200000, 0x00);
+  bridge.depositERC20(l1Token, l2Token, amount, 200000, 0x00);
+  return 1;
 }
 ```
 - `l1Token`: Token address on Ethereum L1
