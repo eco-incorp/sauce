@@ -1,6 +1,9 @@
-// Basic example: arithmetic with sender check
-function main(a: Uint256, b: Uint256): Uint256 {
+// Basic example: arithmetic with sender check. `sauce example.ts A=5 B=10`.
+const A: Uint256 = 0;
+const B: Uint256 = 0;
+
+function main(): Uint256 {
   const sender = ctx.msgSender();
-  if (!(a > 0)) throw "a must be positive";
-  return a + b;
+  if (!(A > 0)) throw "a must be positive";
+  return A + B;
 }
