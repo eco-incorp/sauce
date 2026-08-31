@@ -173,6 +173,30 @@ describe("Token: SVM source emission", () => {
     expect(src.match(/svm\.call\(tokenProgram, /g)?.length).toBe(2);
   });
 
+  it("two specs pinning one tokenProgram ref to different programs are rejected", () => {
+    expect(() =>
+      Token.program(
+        [
+          { op: "transfer", amount: 1n, svm: { source: "a", mint: "am", dest: "ad" }, tokenProgram: "spl" },
+          { op: "transfer", amount: 2n, svm: { source: "b", mint: "bm", dest: "bd" }, tokenProgram: "token-2022" },
+        ],
+        { target: "svm" },
+      ),
+    ).toThrow(/one ref is one attached account/);
+  });
+
+  it("two specs on the SAME program still share one pin and one param", () => {
+    const src = Token.program(
+      [
+        { op: "transfer", amount: 1n, svm: { source: "a", mint: "am", dest: "ad" }, tokenProgram: "token-2022" },
+        { op: "transfer", amount: 2n, svm: { source: "b", mint: "bm", dest: "bd" }, tokenProgram: "token-2022" },
+      ],
+      { target: "svm" },
+    );
+    expect(src.match(/require\(tokenProgram == /g)?.length).toBe(1);
+    expect(src).toContain(`require(tokenProgram == ${Token.TOKEN_2022_PROGRAM.toString()}n);`);
+  });
+
   it("duplicate instance refs across specs in one program are rejected", () => {
     expect(() =>
       Token.program(

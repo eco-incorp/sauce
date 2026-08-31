@@ -72,11 +72,12 @@ export function assertRefIsIdentifier(ref: string, label: string): void {
 
 /** Per-program emission state: a token program is pinned at most once per ref per program. */
 export interface SvmEmitState {
-  pinnedTokenPrograms: Set<string>;
+  /** token-program ref -> the program value it was pinned to, so a second op cannot repoint it. */
+  pinnedTokenPrograms: Map<string, string>;
 }
 
 export function newSvmEmitState(): SvmEmitState {
-  return { pinnedTokenPrograms: new Set() };
+  return { pinnedTokenPrograms: new Map() };
 }
 
 // ── account parameters ──
@@ -160,12 +161,24 @@ function amountExpr(amount: bigint | number | "balance", sourceRef: string): str
   return formatBigint(typeof amount === "bigint" ? amount : BigInt(amount));
 }
 
-/** `require(<ref> == <pubkey>)`, emitted at most once per token-program ref per program. */
+/**
+ * `require(<ref> == <pubkey>)`, emitted once per (ref, program) pair. A ref names ONE attached
+ * account, so two ops pinning the same ref to different programs cannot both be satisfied -- the
+ * second would silently execute against the first's program. Distinct programs need distinct refs.
+ */
 function tokenProgramPin(ref: string, tokenProgram: SvmTokenProgramInput | undefined, state: SvmEmitState): string | undefined {
-  if (state.pinnedTokenPrograms.has(ref)) return undefined;
-  state.pinnedTokenPrograms.add(ref);
+  const value = tokenProgramValueExpr(tokenProgram);
+  const pinned = state.pinnedTokenPrograms.get(ref);
+  if (pinned === value) return undefined;
+  if (pinned !== undefined) {
+    throw new Error(
+      `svm token: ref '${ref}' is pinned to ${pinned} and cannot also be ${value} -- one ref is one ` +
+        `attached account. Give the ops distinct svm.tokenProgram refs.`,
+    );
+  }
+  state.pinnedTokenPrograms.set(ref, value);
 
-  return `require(${ref} == ${tokenProgramValueExpr(tokenProgram)});`;
+  return `require(${ref} == ${value});`;
 }
 
 /**
