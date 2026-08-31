@@ -3,11 +3,10 @@
  * interop/CCTP and without".
  *
  * The two route PROGRAMS are standalone `.sauce.ts` assets (`cctp-split.sauce.ts`,
- * `plain-transfer.sauce.ts`) — NOT strings assembled here. Each defines a parameterized `main(...)`;
- * this builder reads the asset from disk (like `settleSource()`) and bakes THIS intent's concrete
- * values in as compile-time `args`, exactly the mechanism `settle.sauce.ts` uses. Because `args` is a
- * TS-compiler feature (the RS/WASM compiler has no args field), the routes compile through the
- * default TS compiler.
+ * `plain-transfer.sauce.ts`) — NOT strings assembled here. Each declares its inputs as module-scope
+ * consts with placeholder defaults; this builder reads the asset from disk (like `settleSource()`)
+ * and overrides each one with THIS intent's value via `defines`, which replace a module's own const
+ * of that name and are constant-folded — so a given intent yields fixed bytecode.
  *
  * DSL-NATIVE BY CONSTRUCTION — the programs hardcode NO ABI and NO address. `USDC` resolves to the
  * source chain's USDC from the token registry; `Cctp.TokenMessenger.depositForBurn(...)` resolves
@@ -89,8 +88,8 @@ function common(params: CctpTransferParams) {
  * WITH CCTP — one intent whose route drains `amount` in `depositForBurn`s capped at
  * `perMessageLimit` (the script splits: full-cap burns until the last, which takes the remainder),
  * atomic in one cook. Fulfilled locally on the source chain, so the intent's destination IS its
- * source. The builder hands the program only its two numbers; `main(recipient, amount, chunkSize,
- * destinationDomain, maxFee)` is baked with this intent's values as compile-time `args`.
+ * source. The builder hands the program only its two numbers; the program's `CCTP_*` consts are
+ * overridden with this intent's values via `defines`.
  */
 export function buildCctpSplitTransfer(params: CctpTransferParams): BuiltIntent {
   const dest = requireChain(params.to);
@@ -104,20 +103,28 @@ export function buildCctpSplitTransfer(params: CctpTransferParams): BuiltIntent 
 
   return openRoute(params.from, cctpSplitSource(), {
     ...common(params),
-    compile: { args: [recipient, params.amount, params.perMessageLimit, BigInt(destDomain), maxFee] },
+    compile: {
+      defines: {
+        CCTP_RECIPIENT: recipient,
+        CCTP_AMOUNT: params.amount,
+        CCTP_CHUNK_SIZE: params.perMessageLimit,
+        CCTP_DEST_DOMAIN: BigInt(destDomain),
+        CCTP_MAX_FEE: maxFee,
+      },
+    },
   }).reward(params.reward);
 }
 
 /**
  * WITHOUT CCTP (the baseline) — a plain cross-chain USDC transfer intent: the solver delivers
  * `amount` USDC to `recipient` on the destination chain via the normal Eco flow, no bridge stitch.
- * `main(recipient, amount)` is baked with this intent's values as compile-time `args`.
+ * The program's `XFER_*` consts are overridden with this intent's values via `defines`.
  */
 export function buildPlainTransfer(params: CctpTransferParams): BuiltIntent {
   const recipient = toBig(params.recipient);
 
   return openRoute(params.to, plainTransferSource(), {
     ...common(params),
-    compile: { args: [recipient, params.amount] },
+    compile: { defines: { XFER_RECIPIENT: recipient, XFER_AMOUNT: params.amount } },
   }).reward(params.reward);
 }
