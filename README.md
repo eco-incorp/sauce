@@ -1,7 +1,6 @@
 # @eco-incorp/sauce-sdk
 
-Build, compile and verify Sauce programs — cross-chain intents that execute as bytecode on the Eco
-Portal. One package, TypeScript, EVM and SVM.
+Build, compile and verify Sauce programs — cross-chain intents whose programs execute as bytecode on the Eco Pot. One package, TypeScript, EVM and SVM.
 
 ```sh
 npm install @eco-incorp/sauce-sdk
@@ -73,9 +72,17 @@ that import. Spread them: `toSauceScript`'s array is `readonly`, the option is n
 own constant:
 
 ```ts
-routes.compileSauceRoute('base', swap.swapSource(spec),    { pot }, { baseDirs: [...swap.SWAP_BASE_DIRS] })
-routes.compileSauceRoute('base', deposit.depositSource(s), { pot }, { baseDirs: [...deposit.DEPOSIT_BASE_DIRS] })
+import { routes, swap, deposit } from '@eco-incorp/sauce-sdk'
+
+routes.openRoute('base', swap.swapSource(spec),
+  { ...options, compile: { baseDirs: [...swap.SWAP_BASE_DIRS] } }).reward(reward)
+
+routes.openRoute('base', deposit.depositSource(spec),
+  { ...options, compile: { baseDirs: [...deposit.DEPOSIT_BASE_DIRS] } }).reward(reward)
 ```
+
+`routes.compileSauceRoute` is the lower level underneath, if you want the compiled call without an
+intent — it returns `{ calls, compiled, source }` and has no `.reward()`.
 
 **On the SVM target this route path does not work.** `toSauceScript('svm')` emits `main` with typed
 account parameters — that parameter list *is* the account manifest, so it cannot be dropped — and a
@@ -117,7 +124,8 @@ needs an already-staged buffer, so it is the route path rather than a bare compi
 import { listProtocols, getProtocol, requireChain } from '@eco-incorp/sauce-sdk'
 
 listProtocols().length          // 129
-getProtocol('uniswap-v3')       // ABIs, addresses, per-chain deployments
+getProtocol('uniswap-v3')       // metadata: category, per-chain deployments, audit status
+                                // (ABIs live on the subpath: '@eco-incorp/sauce-sdk/protocols/uniswap-v3')
 ```
 
 `requireChain` and `getChain` read different registries: `CANONICAL_CHAINS` has all 39, while the
