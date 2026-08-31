@@ -31,6 +31,10 @@ const ASSETS = [
   { subdir: "recipes", file: "cctp-split.sauce.ts" },
   { subdir: "recipes", file: "plain-transfer.sauce.ts" },
   { subdir: join("svm", "recipes"), file: "settle.sauce.ts" },
+  // Layer-C plugin manifest — `loadPlugin()` reads it via `readFileSync` from the same dir
+  // as its own compiled JS (see `src/plugin/index.ts`), so it must land in `dist/plugin/`.
+  // `tsc` only emits the compiled `.js`/`.d.ts` and doesn't copy JSON to outDir.
+  { subdir: "plugin", file: "manifest.json" },
 ];
 
 for (const { subdir, file } of ASSETS) {

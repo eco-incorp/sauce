@@ -79,7 +79,7 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     const stmts = nestedTransferStatements(child, 0, explicitOpts);
 
     expect(stmts[0]).toBe(`const n0_vault = ${BigInt(VAULT)}n;`);
-    expect(stmts[1]).toBe(`const n0_bal0 = IERC20.at(${BigInt(TOKEN_A)}n).balanceOf(address.self);`);
+    expect(stmts[1]).toBe(`const n0_bal0 = IERC20.at(${BigInt(TOKEN_A)}n).balanceOf(ctx.self());`);
     expect(stmts[2]).toBe(`const n0_amt0 = n0_bal0 > 500n ? 500n : n0_bal0;`);
     expect(stmts[3]).toBe(`if (n0_amt0 > 0n) { IERC20.at(${BigInt(TOKEN_A)}n).transfer(n0_vault, n0_amt0); }`);
     expect(stmts).toHaveLength(4);
@@ -112,7 +112,7 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     const stmts = nestedTransferStatements(nativeChild, 0, explicitOpts);
     expect(stmts).toEqual([
       `const n0_vault = ${BigInt(VAULT)}n;`,
-      `const n0_nbal = address.balance;`,
+      `const n0_nbal = ctx.selfBalance();`,
       `const n0_namt = n0_nbal > 77n ? 77n : n0_nbal;`,
       `if (n0_namt > 0n) { contract.call(n0_vault, n0_namt, Uint8Array.from([])); }`,
     ]);
@@ -121,7 +121,7 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
       reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 1n }] }),
     });
     const stmts2 = nestedTransferStatements(tokenOnlyChild, 0, explicitOpts);
-    expect(stmts2.some((s) => s.includes("address.balance"))).toBe(false);
+    expect(stmts2.some((s) => s.includes("ctx.selfBalance()"))).toBe(false);
   });
 
   it("native: 'skip' suppresses the native leg even for a native-declaring child", () => {
@@ -135,7 +135,7 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
       }),
     });
     const stmts = nestedTransferStatements(child, 0, { ...explicitOpts, native: "skip" });
-    expect(stmts.some((s) => s.includes("address.balance"))).toBe(false);
+    expect(stmts.some((s) => s.includes("ctx.selfBalance()"))).toBe(false);
     expect(stmts.some((s) => s.includes("IERC20"))).toBe(true);
   });
 

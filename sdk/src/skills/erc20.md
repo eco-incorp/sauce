@@ -55,7 +55,7 @@ function balanceSlot(account: any) {
   return crypto.keccak256(abi.encode(account, 1));
 }
 function main(to: any, amount: any) {
-  const from = msg.sender;
+  const from = ctx.msgSender();
   const fromSlot = balanceSlot(from);
   const fromBalance = storage.read(fromSlot);
   if (fromBalance < amount) throw "insufficient balance";

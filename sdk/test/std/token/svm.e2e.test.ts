@@ -30,7 +30,9 @@
  * TypeScript-compiler output (`svm/staged.e2e`, `svm/svm-settle.e2e`) — measured, not assumed. Two
  * variables let both halves run in one `pnpm test`, each against the engine it actually targets.
  *
- * So: point SAUCE_RUST_ENGINE_SO at a `main`-lineage engine to run these —
+ * So: point SAUCE_RUST_ENGINE_SO at a `main`-lineage engine to run these. CI downloads one from the
+ * `v12-svm-v0.4.0` release, which is built from the same sauce commit the published compiler's
+ * `compiler-v0.5.0` tag is cut from; locally, either do the same or build it —
  *   cd <sauce>/v12-svm && make build
  *   SAUCE_RUST_ENGINE_SO=<sauce>/v12-svm/target/deploy/engine.so pnpm --filter './sdk' test
  */
@@ -67,6 +69,17 @@ const COMPUTE_UNITS = 1_400_000;
 const RUST_ENGINE_SO = process.env.SAUCE_RUST_ENGINE_SO;
 
 const describeStdToken = RUST_ENGINE_SO ? describe : describe.skip;
+
+// The gate above is a local-developer convenience, never a CI outcome: a skipped suite and a passing
+// one are the same line in jest's summary, which is how these two went unrun for their whole life.
+// CI supplies the engine (see .github/workflows/ci.yml) — so in CI, an absent one is a failure.
+if (!RUST_ENGINE_SO && process.env.CI) {
+  throw new Error(
+    'SAUCE_RUST_ENGINE_SO is unset in CI. This suite must never skip here — see the ' +
+      '"Fetch the v12 engines" step in .github/workflows/ci.yml.',
+  );
+}
+
 
 const codec = getAddressCodec();
 

@@ -14,7 +14,8 @@ import { ScrollL1GatewayRouterABI as IL1GatewayRouter } from "./abis";
 
 function main(gatewayRouterAddress: Address, amount: Uint256, gasLimit: Uint256): Uint256 {
   const router = IL1GatewayRouter.at(gatewayRouterAddress);
-  return router.depositETH(amount, gasLimit);
+  router.depositETH(amount, gasLimit);
+  return 1;
 }
 ```
 - `amount`: Amount of ETH to deposit (also send as `msg.value`)
@@ -28,7 +29,8 @@ import { ScrollL1GatewayRouterABI as IL1GatewayRouter } from "./abis";
 
 function main(gatewayRouterAddress: Address, token: Address, amount: Uint256, gasLimit: Uint256): Uint256 {
   const router = IL1GatewayRouter.at(gatewayRouterAddress);
-  return router.depositERC20(token, amount, gasLimit);
+  router.depositERC20(token, amount, gasLimit);
+  return 1;
 }
 ```
 - `token`: L1 ERC-20 token address

@@ -1,6 +1,6 @@
 /**
  * Full protocol-accessor rewrite -- `Uniswap.UniversalRouter.execute(...)` ->
- * `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `address.self`.
+ * `IUniswapV4_UniversalRouter.at(<addr>n).execute(...)`, plus bare `self` -> `ctx.self()`.
  * See `src/routes/protocol-rewrite.ts`'s module doc for the design.
  */
 import { compile } from "@eco-incorp/sauce-compiler";
@@ -68,7 +68,7 @@ describe("rewriteProtocolAccessors: shape coverage (A-D)", () => {
   });
 
   it("shape B: <Protocol>.<method> uses the protocol's single default contract", () => {
-    const source = `function main() { AaveV3.getUserAccountData(address.self); }`;
+    const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
     const { rewrote, source: out, contracts } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(true);
     expect(out).toContain(`IAaveV3_Pool.view(${BigInt(BASE_AAVE_POOL)}n).getUserAccountData`);
@@ -83,7 +83,7 @@ describe("rewriteProtocolAccessors: shape coverage (A-D)", () => {
   });
 
   it("shape D: <Chain>.<Protocol>.<method> reaches the NAMED chain's default contract", () => {
-    const source = `function main() { Base.AaveV3.getUserAccountData(address.self); }`;
+    const source = `function main() { Base.AaveV3.getUserAccountData(ctx.self()); }`;
     const { rewrote, source: out } = rewriteProtocolAccessors(source, OPTIMISM);
     expect(rewrote).toBe(true);
     expect(out).toContain(`IAaveV3_Pool.view(${BigInt(BASE_AAVE_POOL)}n)`);
@@ -92,7 +92,7 @@ describe("rewriteProtocolAccessors: shape coverage (A-D)", () => {
 
 describe("rewriteProtocolAccessors: .view vs .at binding", () => {
   it("a view/pure method binds via .view(), byte-identical bytecode to .at()", () => {
-    const source = `function main() { AaveV3.getUserAccountData(address.self); }`;
+    const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
     const { source: out, contracts } = rewriteProtocolAccessors(source, BASE);
     expect(out).toContain(".view(");
 
@@ -103,7 +103,7 @@ describe("rewriteProtocolAccessors: .view vs .at binding", () => {
   });
 
   it("a nonpayable method binds via .at(), never .view()", () => {
-    const source = `function main() { AaveV3.Pool.supply(address.self, 1n, address.self, 0n); }`;
+    const source = `function main() { AaveV3.Pool.supply(ctx.self(), 1n, ctx.self(), 0n); }`;
     const { source: out } = rewriteProtocolAccessors(source, BASE);
     expect(out).toContain(".at(");
     expect(out).not.toContain(".view(");
@@ -112,7 +112,7 @@ describe("rewriteProtocolAccessors: .view vs .at binding", () => {
 
 describe("rewriteProtocolAccessors: chain-scoped addresses differ", () => {
   it("the same protocol accessor resolves to a DIFFERENT address on Base vs Ethereum", () => {
-    const source = `function main() { AaveV3.getUserAccountData(address.self); }`;
+    const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
     const onBase = rewriteProtocolAccessors(source, BASE);
     const onEthereum = rewriteProtocolAccessors(source, ETHEREUM);
     expect(onBase.source).toContain(`${BigInt(BASE_AAVE_POOL)}n`);
@@ -123,31 +123,31 @@ describe("rewriteProtocolAccessors: chain-scoped addresses differ", () => {
 
 describe("rewriteProtocolAccessors: qualified ancestor reference", () => {
   it("Base.AaveV3.getUserAccountData inside an Optimism-enclosing body inlines the BASE address, not Optimism's", () => {
-    const source = `function main() { Base.AaveV3.getUserAccountData(address.self); }`;
+    const source = `function main() { Base.AaveV3.getUserAccountData(ctx.self()); }`;
     const { source: out } = rewriteProtocolAccessors(source, OPTIMISM);
     expect(out).toContain(`${BigInt(BASE_AAVE_POOL)}n`);
 
-    const enclosing = rewriteProtocolAccessors(`function main() { AaveV3.getUserAccountData(address.self); }`, OPTIMISM);
+    const enclosing = rewriteProtocolAccessors(`function main() { AaveV3.getUserAccountData(ctx.self()); }`, OPTIMISM);
     expect(enclosing.source).not.toContain(`${BigInt(BASE_AAVE_POOL)}n`);
   });
 
   it("nesting rebinds for free: a child compiled for a different destination resolves its own chain's address", () => {
-    const onOptimism = rewriteProtocolAccessors(`function main(){ AaveV3.getUserAccountData(address.self); }`, OPTIMISM);
-    const onBase = rewriteProtocolAccessors(`function main(){ AaveV3.getUserAccountData(address.self); }`, BASE);
+    const onOptimism = rewriteProtocolAccessors(`function main(){ AaveV3.getUserAccountData(ctx.self()); }`, OPTIMISM);
+    const onBase = rewriteProtocolAccessors(`function main(){ AaveV3.getUserAccountData(ctx.self()); }`, BASE);
     expect(onOptimism.source).not.toEqual(onBase.source);
   });
 });
 
-describe("rewriteProtocolAccessors: bare self -> address.self", () => {
-  it("rewrites a bare `self` read, byte-identical to hand-written address.self", () => {
+describe("rewriteProtocolAccessors: bare self -> ctx.self()", () => {
+  it("rewrites a bare `self` read, byte-identical to hand-written ctx.self()", () => {
     const source = `function main() { return self; }`;
     const { source: out, rewrote, selfSites } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(true);
     expect(selfSites).toBe(1);
-    expect(out).toContain("return address.self;");
+    expect(out).toContain("return ctx.self();");
 
     const a = compile(out, { target: "v12" });
-    const b = compile(`function main() { return address.self; }`, { target: "v12" });
+    const b = compile(`function main() { return ctx.self(); }`, { target: "v12" });
     expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
   });
 
@@ -193,7 +193,7 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
 
   it("known contract, not deployed on this chain -> named error", () => {
     // AaveV3 has no descriptor entry on linea in the starter set.
-    const source = `function main() { AaveV3.getUserAccountData(address.self); }`;
+    const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
     expect(() => rewriteProtocolAccessors(source, requireChain("linea"))).toThrow(/is not deployed on 'linea'/);
   });
 
@@ -214,7 +214,7 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
   });
 
   it("an interface descriptor (Erc20.ERC20) -> named error", () => {
-    const source = `function main() { Erc20.ERC20.transfer(address.self, 1n); }`;
+    const source = `function main() { Erc20.ERC20.transfer(ctx.self(), 1n); }`;
     expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/interface descriptor/);
   });
 

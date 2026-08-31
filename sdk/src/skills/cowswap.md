@@ -18,7 +18,7 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 ```typescript
 // Pre-sign order on-chain
 import { GPv2SettlementABI as IGPv2Settlement } from "./abis";
-function main(settlementAddress: Address, orderUid: Bytes): Uint256 {
+function main(settlementAddress: Address, orderUid: bytes): Uint256 {
   const settlement = IGPv2Settlement.at(settlementAddress);
   settlement.setPreSignature(orderUid, true);
   return 1;
@@ -26,7 +26,7 @@ function main(settlementAddress: Address, orderUid: Bytes): Uint256 {
 
 // Invalidate/cancel order
 import { GPv2SettlementABI as IGPv2Settlement } from "./abis";
-function main(settlementAddress: Address, orderUid: Bytes): Uint256 {
+function main(settlementAddress: Address, orderUid: bytes): Uint256 {
   const settlement = IGPv2Settlement.at(settlementAddress);
   settlement.invalidateOrder(orderUid);
   return 1;

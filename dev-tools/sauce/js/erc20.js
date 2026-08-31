@@ -1,12 +1,12 @@
 // ERC20-like transfer operation
-// Demonstrates: storage, crypto, abi encode/decode, events, msg.sender
+// Demonstrates: storage, crypto, abi encode/decode, events, ctx.msgSender()
 
 function balanceSlot(account) {
   return crypto.keccak256(abi.encode(account, 1));
 }
 
 function main(to, amount) {
-  const from = msg.sender;
+  const from = ctx.msgSender();
   const fromSlot = balanceSlot(from);
   const fromBalance = storage.read(fromSlot);
   if (fromBalance < amount) throw "insufficient balance";

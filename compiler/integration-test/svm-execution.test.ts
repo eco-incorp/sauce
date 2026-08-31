@@ -609,15 +609,44 @@ describeSvm('integration: svm chain context', () => {
     h = await startSvm();
   });
 
-  it('msg.sender returns the payer address', async () => {
-    const r = await svmCook(h, 'function main() { return msg.sender }');
+  it('ctx.msgSender() returns the payer address (formerly msg.sender)', async () => {
+    const r = await svmCook(h, 'function main() { return ctx.msgSender() }');
     const payerBytes = getAddressCodec().encode(h.payer.address);
 
     expect(svmHex(r)).toBe('0x' + Buffer.from(payerBytes).toString('hex'));
   });
 
-  it('block.chainId returns the synthetic devnet chain id', async () => {
+  it('ctx.chainId() returns the synthetic devnet chain id (formerly block.chainId)', async () => {
     // Default (non-mainnet) engine build reports 1399811150.
-    expect(svmUint(await svmCook(h, 'function main() { return block.chainId }'))).toBe(1399811150n);
+    expect(svmUint(await svmCook(h, 'function main() { return ctx.chainId() }'))).toBe(1399811150n);
+  });
+
+  it('ctx.msgData().length returns non-zero (formerly msg.data.length — new ctx.* member, §1.5)', async () => {
+    expect(svmUint(await svmCook(h, 'function main() { return ctx.msgData().length }'))).toBeGreaterThan(0n);
+  });
+
+  // KNOWN GAP, investigated for ECO-2163 (compiler-parity §1.5): the EVM-only code-inspection reads
+  // (codeSize/codeHash/isContract/isEOA) plus `ctx.msgValue` live under the portable `ctx.*`
+  // namespace as of NS-CONVERGE (#141), but are `assertCapability`-GATED EVM-only — so they cannot
+  // even compile for target 'svm' (a clean compile error, never a compiles-but-reverts surface). That
+  // gate is correct because IS_CONTRACT (0x75) / IS_EOA (0x76) — like BALANCE (0x70) — are in the same
+  // "context-unary" opcode block, and the VENDORED svm engine.so rejects that whole calling
+  // convention at REAL EXECUTION with `InvalidInstructionData` (contrast SLOAD/SSTORE/CALL, which
+  // svm-profile.ts documents as having an explicit `ctx.isSvm` reinterpretation to an account-INDEX
+  // operand — BALANCE/IS_CONTRACT/IS_EOA have no such reinterpretation). The surprising part, and the
+  // actual still-open GAP: the ALREADY-SHIPPED, UNGATED, PORTABLE `ctx.balance()` (BALANCE, 0x70)
+  // hits the same wall — it DOES compile for svm and then reverts, confirmed directly below. Whether
+  // `ctx.balance` needs an svm-side fix or should itself become gated is the live question flagged to
+  // the team lead. (IS_EOA (0x76) itself isn't independently re-probed here — the gated ctx.* surface
+  // has no svm-reachable path to it; a one-off manual probe during this investigation showed it fails
+  // identically to IS_CONTRACT, both InvalidInstructionData, but that isn't re-asserted as its own test.
+  it('KNOWN GAP: ctx.balance() (BALANCE 0x70, shipped/ungated since #141) reverts InvalidInstructionData on real svm execution, despite compiling cleanly', async () => {
+    const addr = randomSvmAddress();
+    const bytes = getAddressCodec().encode(addr);
+    const big = BigInt('0x' + Buffer.from(bytes).toString('hex'));
+    const r = await svmCook(h, 'function main(a){ return ctx.balance(a) }', { args: [big] });
+
+    expect(r.ok).toBe(false);
+    expect(r.err).toContain('InvalidInstructionData');
   });
 });

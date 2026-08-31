@@ -31,7 +31,7 @@
  * // -> CallInput; drops straight into RouteInput.calls, flows through normalizeRoute/encodeRouteEvm.
  * ```
  *
- * A v12 program's `swap()` call self-targets `address.self` (Router entries are `onlySelf`); the
+ * A v12 program's `swap()` call self-targets `ctx.self()` (Router entries are `onlySelf`); the
  * V12Pot's own `fallback` delegatecalls it into the v1 Router — see `V12Pot.sol`'s own header for
  * that mechanism. This module never rebuilds any of that seam, only emits the SauceScript that
  * exercises it.

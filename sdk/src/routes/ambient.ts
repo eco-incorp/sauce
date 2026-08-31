@@ -13,14 +13,13 @@
  * one symbol never drops an unrelated registry symbol for the same chain).
  *
  * Deliberately NOT here: `self` (a runtime intrinsic, not a `bigint|boolean|number` constant — the
- * working spelling stays the compiler's own `address.self`); SVM venue programIds; family-alias
+ * working spelling stays the compiler's own `ctx.self()`); SVM venue programIds; family-alias
  * spellings (`Uniswap_UniversalRouter` alongside `UniswapV4_UniversalRouter`); qualified cross-scope
  * `Base.USDC` (needs nesting).
  */
 import type { CanonicalChain } from "../chains/canonical.js";
-import { DESCRIPTORS } from "../descriptors/registry.js";
+import { loadPlugin, loadPluginData } from "../plugin/index.js";
 import { pascalOfSlug } from "./builder.js";
-import { resolveTokenMap } from "./token-registry.js";
 import type { AddressInput } from "./types.js";
 
 export interface AmbientDefinesOptions {
@@ -35,6 +34,12 @@ function toBigIntAddress(input: AddressInput): bigint {
 /**
  * The chain-scoped ambient defines map for `chain`: `chainId`/`CHAIN_ID`, every EVM protocol
  * contract address that has a real entry on `chain.id`, and any caller-supplied token symbols.
+ *
+ * P8: `protocolAddresses`/`tokens` are read through `loadPluginData()` (`plugin/index.ts`) rather
+ * than importing `descriptors/registry.ts`/`token-registry.ts` directly — the SAME underlying
+ * array/function, re-exposed through the plugin accessor as the single point the SDK reads
+ * Layer-B data through. Byte-identical output: `loadPluginData().protocolAddresses` IS
+ * `DESCRIPTORS` and `.tokens` IS `resolveTokenMap`, not a copy.
  */
 export function chainDefines(
   chain: CanonicalChain,
@@ -45,8 +50,10 @@ export function chainDefines(
     CHAIN_ID: BigInt(chain.id),
   };
 
+  const plugin = loadPluginData();
+
   if (chain.kind === "evm") {
-    for (const d of DESCRIPTORS) {
+    for (const d of plugin.protocolAddresses) {
       const address = d.perChainAddress[chain.id];
       if (address === undefined) continue;
       const key = `${pascalOfSlug(d.protocol)}_${d.contract}`;
@@ -54,10 +61,26 @@ export function chainDefines(
     }
   }
 
-  const tokenMap = resolveTokenMap(chain, opts.tokens);
+  const tokenMap = plugin.tokens(chain, opts.tokens);
   for (const [symbol, address] of tokenMap) {
     defines[symbol] = address;
   }
 
   return defines;
+}
+
+/**
+ * P7 — the ambient-MODULE half of a chain bundle (`chainDefines` above is the scalar-defines
+ * half). Returns the ambient module specifier list active for `chain`: RS-compiler-only (see
+ * `sauce-route.ts#SauceCompileOptions.ambient`/`rs-compile.ts`) module exports broadcast into a
+ * chain's compiled program with no `import` line.
+ *
+ * Currently a SINGLE source of truth, not yet chain-specific: every chain gets the same list, the
+ * plugin manifest's own `ambient` array (`plugin/index.ts#loadPlugin`) — empty by default on this
+ * branch, see that file's own note. Extensible to a genuinely per-chain bundle later (e.g. an SVM
+ * destination activating an SVM-only ambient module an EVM one shouldn't see) without changing
+ * this function's signature — a caller already threads `chain` through.
+ */
+export function chainAmbient(_chain: CanonicalChain): string[] {
+  return loadPlugin().ambient;
 }

@@ -24,7 +24,7 @@ function main(
   routerAddress: Address, receiver: Address, market: Address, minPtOut: Uint256,
   guessMin: Uint256, guessMax: Uint256, guessOffchain: Uint256, maxIteration: Uint256, eps: Uint256,
   tokenIn: Address, netTokenIn: Uint256, tokenMintSy: Address
-): Uint256 {
+): { netPtOut: Uint256, netSyFee: Uint256, netSyInterm: Uint256 } {
   const router = IPendleRouter.at(routerAddress);
   const result = router.swapExactTokenForPt(
     receiver, market, minPtOut,
@@ -42,7 +42,7 @@ import { PendleRouterABI as IPendleRouter } from "./abis";
 function main(
   routerAddress: Address, receiver: Address, market: Address, netLpToRemove: Uint256,
   tokenOut: Address, minTokenOut: Uint256, tokenRedeemSy: Address
-): Uint256 {
+): { netTokenOut: Uint256, netSyFee: Uint256, netSyInterm: Uint256 } {
   const router = IPendleRouter.at(routerAddress);
   const result = router.removeLiquiditySingleToken(
     receiver, market, netLpToRemove,

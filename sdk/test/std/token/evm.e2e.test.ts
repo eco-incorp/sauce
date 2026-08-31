@@ -24,7 +24,10 @@
  *
  * So: point SAUCE_RUST_V12_RUNTIME at a file of `main`-lineage DEPLOYED runtime hex to run these.
  * `hnc -r` cannot produce it — Runtime.huff's CONSTRUCTOR returns its own bytecode, so the deployed
- * runtime is only known at deployment time — so deploy the creation bytecode and read the code back:
+ * runtime is only known at deployment time — so deploy the creation bytecode and read the code back.
+ * CI does exactly this, from the `v12-evm-v0.3.0` release's `runtime.creation.hex` (built from the
+ * same sauce commit the published compiler's `compiler-v0.5.0` tag is cut from); by hand, from a
+ * local sauce checkout:
  *   cd <sauce>/v12-evm && anvil --port 8799 --silent &
  *   KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80  # anvil's first account
  *   ADDR=$(cast send --rpc-url http://127.0.0.1:8799 --private-key $KEY --create \
@@ -48,6 +51,17 @@ const RUNTIME_HEX_PATH = process.env.SAUCE_RUST_V12_RUNTIME;
 
 /** Skips unless a main-lineage runtime is supplied — see the header for why the repo's own pin won't do. */
 const describeEvm = RUNTIME_HEX_PATH ? describe : describe.skip;
+
+// The gate above is a local-developer convenience, never a CI outcome: a skipped suite and a passing
+// one are the same line in jest's summary, which is how these two went unrun for their whole life.
+// CI supplies the engine (see .github/workflows/ci.yml) — so in CI, an absent one is a failure.
+if (!RUNTIME_HEX_PATH && process.env.CI) {
+  throw new Error(
+    'SAUCE_RUST_V12_RUNTIME is unset in CI. This suite must never skip here — see the ' +
+      '"Fetch the v12 engines" step in .github/workflows/ci.yml.',
+  );
+}
+
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const MOCK_ERC20 = JSON.parse(readFileSync(join(FIXTURES, 'MockERC20.json'), 'utf8')) as { creationCode: Hex };

@@ -10,7 +10,7 @@ function main(poolAddress: Address, i: Uint256, j: Uint256, amountIn: Uint256, m
 export const addLiquidity = `
 import { CurveStableSwapABI as IStableSwap } from "./abis";
 
-function main(poolAddress: Address, amounts: Tuple, minMintAmount: Uint256): Uint256 {
+function main(poolAddress: Address, amounts: Uint256[], minMintAmount: Uint256): Uint256 {
   const pool = IStableSwap.at(poolAddress);
   return pool.add_liquidity(amounts, minMintAmount);
 }
@@ -19,7 +19,7 @@ function main(poolAddress: Address, amounts: Tuple, minMintAmount: Uint256): Uin
 export const removeLiquidity = `
 import { CurveStableSwapABI as IStableSwap } from "./abis";
 
-function main(poolAddress: Address, amount: Uint256, minAmounts: Tuple): Uint256 {
+function main(poolAddress: Address, amount: Uint256, minAmounts: Uint256[]): Uint256[] {
   const pool = IStableSwap.at(poolAddress);
   return pool.remove_liquidity(amount, minAmounts);
 }

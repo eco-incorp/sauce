@@ -8,7 +8,7 @@
  *
  * Generalizes U4 (`token-rewrite.ts`, ERC20-only) to arbitrary protocol accessors, driven by the
  * E2.3 descriptor registry (`descriptors/registry.ts#DESCRIPTORS`) via the registry-derived name
- * index in `accessor-index.ts`. Also rewrites bare `self` -> `address.self` in the same pass (same
+ * index in `accessor-index.ts`. Also rewrites bare `self` -> `ctx.self()` in the same pass (same
  * acorn parse, same reverse-ordered splice, disjoint ranges by construction).
  *
  * FOUR recognized callee shapes (see the module design doc,
@@ -59,7 +59,7 @@ export interface ProtocolRewriteOptions {
   /** Restricts a chain-QUALIFIED accessor (shapes C/D) to a named allowlist. Default: any canonical
    *  chain (unrestricted — see the module doc's "names a chain, not an ancestor" note). */
   chainScope?: readonly ChainRef[];
-  /** Rewrites bare `self` -> `address.self` in read position. Default `true`. */
+  /** Rewrites bare `self` -> `ctx.self()` in read position. Default `true`. */
   selfSugar?: boolean;
   /** Caller-supplied `compile.contracts` bundle this rewrite's own synthesized bindings must not
    *  silently collide with (a same-name entry with a DIFFERENT ABI throws). */
@@ -387,7 +387,7 @@ function resolveCandidate(
   };
 }
 
-// -- self-sugar: bare `self` -> `address.self` in genuine read position -------------------------
+// -- self-sugar: bare `self` -> `ctx.self()` in genuine read position -------------------------
 
 /** Collects, by node identity, every Identifier node that must NEVER be treated as a `self` READ
  *  even if its name happens to be `"self"`: a declarator id, a function/arrow parameter, a
@@ -429,7 +429,7 @@ function collectSelfSites(program: AstNode, excluded: ReadonlySet<AstNode>, shad
   const sites: Splice[] = [];
   walk(program, (n) => {
     if (n.type === "Identifier" && (n as unknown as { name: string }).name === "self" && !excluded.has(n)) {
-      sites.push({ start: n.start, end: n.end, replacement: "address.self" });
+      sites.push({ start: n.start, end: n.end, replacement: "ctx.self()" });
     }
   });
   return sites;

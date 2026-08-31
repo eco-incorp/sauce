@@ -3,78 +3,59 @@ import { GLOBAL_FUNCTIONS, RESERVED_BINDING_NAMES, STDLIB_FUNCTIONS } from '../s
 import { OPS } from '../src/saucer/index.js';
 
 describe('blockchain context', () => {
-  it('compiles msg.sender', () => {
-    const result = compile('function main() { const x = msg.sender; }');
+  it('compiles ctx.msgSender() (formerly msg.sender)', () => {
+    const result = compile('function main() { const x = ctx.msgSender(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.MSG_SENDER]));
   });
 
-  it('compiles msg.value', () => {
-    const result = compile('function main() { const x = msg.value; }');
+  it('compiles ctx.msgValue() (formerly msg.value; gated EVM-only under ctx.*)', () => {
+    const result = compile('function main() { const x = ctx.msgValue(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.CALL_VALUE]));
   });
 
-  it('compiles msg.data to heap slot', () => {
-    const result = compile('function main() { const data = msg.data; }');
+  it('compiles ctx.msgData() to heap slot (formerly msg.data)', () => {
+    const result = compile('function main() { const data = ctx.msgData(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_HEAP, 1, OPS.WRITE_HEAP, 0, OPS.CALLDATA]));
   });
 
-  it('compiles block.number', () => {
-    const result = compile('function main() { const x = block.number; }');
+  it('compiles ctx.blockNumber() (formerly block.number)', () => {
+    const result = compile('function main() { const x = ctx.blockNumber(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.BLOCK_NUMBER]));
   });
 
-  it('compiles block.timestamp', () => {
-    const result = compile('function main() { const x = block.timestamp; }');
+  it('compiles ctx.timestamp() (formerly block.timestamp)', () => {
+    const result = compile('function main() { const x = ctx.timestamp(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.TIMESTAMP]));
   });
 
-  it('compiles block.coinbase', () => {
-    const result = compile('function main() { const x = block.coinbase; }');
-    expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.COINBASE]));
-  });
+  // The former EVM-only env reads block.coinbase/prevrandao/gasLimit/baseFee/blobBaseFee and
+  // tx.origin/tx.gasPrice were DROPPED entirely in the NS-CONVERGE rework (ECO-2163 §1.5): they had
+  // zero consumers and are in neither compiler's canonical `ctx.*`. Their compile tests were removed
+  // with them; `msg.value` alone survived, as the gated `ctx.msgValue()` above.
 
-  it('compiles block.prevrandao', () => {
-    const result = compile('function main() { const x = block.prevrandao; }');
-    expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.PREVRANDAO]));
-  });
-
-  it('compiles block.gasLimit', () => {
-    const result = compile('function main() { const x = block.gasLimit; }');
-    expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.GAS_LIMIT]));
-  });
-
-  it('compiles block.baseFee', () => {
-    const result = compile('function main() { const x = block.baseFee; }');
-    expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.BASE_FEE]));
-  });
-
-  it('compiles block.blobBaseFee', () => {
-    const result = compile('function main() { const x = block.blobBaseFee; }');
-    expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.BLOB_BASE_FEE]));
-  });
-
-  it('compiles block.chainId', () => {
-    const result = compile('function main() { const x = block.chainId; }');
+  it('compiles ctx.chainId() (formerly block.chainId)', () => {
+    const result = compile('function main() { const x = ctx.chainId(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.CHAIN_ID]));
   });
 
-  it('compiles tx.origin', () => {
-    const result = compile('function main() { const x = tx.origin; }');
-    expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.TX_ORIGIN]));
+  // The full "rejected on svm, compiles on v1/v12" matrix for the gated EVM-only ctx.* reads
+  // (codeSize/codeHash/isContract/isEOA and msgValue) lives in test/target-capabilities.test.ts's
+  // EVM-only `cases` list. The freestanding gasLeft()/blockHash(n)/blobHash(n) intrinsics were never
+  // `msg`/`block`/`tx` members and stay ungated/portable on every target (the dropped `evm.*` did
+  // NOT add a gated spelling of them):
+  it('freestanding gasLeft()/blockHash(n)/blobHash(n) stay ungated on svm', () => {
+    expect(() => compile('function main() { const x = gasLeft(); }', { target: 'svm' })).not.toThrow();
+    expect(() => compile('function main() { const x = blockHash(1); }', { target: 'svm' })).not.toThrow();
+    expect(() => compile('function main() { const x = blobHash(1); }', { target: 'svm' })).not.toThrow();
   });
 
-  it('compiles tx.gasPrice', () => {
-    const result = compile('function main() { const x = tx.gasPrice; }');
-    expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.GAS_PRICE]));
-  });
-
-  it('compiles address.self', () => {
-    const result = compile('function main() { const x = address.self; }');
+  it('compiles ctx.self() (formerly address.self)', () => {
+    const result = compile('function main() { const x = ctx.self(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.THIS_ADDRESS]));
   });
 
-  it('compiles address.balance', () => {
-    const result = compile('function main() { const x = address.balance; }');
+  it('compiles ctx.selfBalance() (formerly address.balance)', () => {
+    const result = compile('function main() { const x = ctx.selfBalance(); }');
     expect(result.bytecode[0]).toEqual(new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.SELF_BALANCE]));
   });
 
@@ -97,43 +78,53 @@ describe('blockchain context', () => {
     );
   });
 
-  it('compiles address.balanceOf(addr)', () => {
-    const result = compile('function main() { const b = address.balanceOf(42); }');
+  it('compiles ctx.balance(addr) (formerly address.balanceOf(addr))', () => {
+    const result = compile('function main() { const b = ctx.balance(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.BALANCE, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles address.codeSize(addr)', () => {
-    const result = compile('function main() { const s = address.codeSize(42); }');
+  it('compiles ctx.codeSize(addr) (formerly address.codeSize(addr))', () => {
+    const result = compile('function main() { const s = ctx.codeSize(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.EXT_CODE_SIZE, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles address.codeHash(addr)', () => {
-    const result = compile('function main() { const h = address.codeHash(42); }');
+  it('compiles ctx.codeHash(addr) (formerly address.codeHash(addr))', () => {
+    const result = compile('function main() { const h = ctx.codeHash(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.EXT_CODE_HASH, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles address.isContract(addr)', () => {
-    const result = compile('function main() { const c = address.isContract(42); }');
+  it('compiles ctx.isContract(addr) (formerly address.isContract(addr))', () => {
+    const result = compile('function main() { const c = ctx.isContract(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.IS_CONTRACT, OPS.BYTE_1, 42]),
     );
   });
 
-  it('compiles address.isEOA(addr)', () => {
-    const result = compile('function main() { const e = address.isEOA(42); }');
+  it('compiles ctx.isEOA(addr) (formerly address.isEOA(addr))', () => {
+    const result = compile('function main() { const e = ctx.isEOA(42); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.IS_EOA, OPS.BYTE_1, 42]),
     );
   });
 
+  it('ctx.codeSize/codeHash/isContract/isEOA reject the svm target (EVM-only, no svm analogue)', () => {
+    for (const call of ['ctx.codeSize(42)', 'ctx.codeHash(42)', 'ctx.isContract(42)', 'ctx.isEOA(42)']) {
+      expect(() => compile(`function main() { const x = ${call}; }`, { target: 'svm' })).toThrow();
+    }
+  });
+
+  it('ctx.msgValue() rejects the svm target (EVM-only, no svm analogue)', () => {
+    expect(() => compile('function main() { const v = ctx.msgValue(); }', { target: 'svm' })).toThrow();
+  });
+
   it('compiles context in arithmetic expression', () => {
-    const result = compile('function main() { const x = block.number + 1; }');
+    const result = compile('function main() { const x = ctx.blockNumber() + 1; }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.ADD, OPS.BLOCK_NUMBER, OPS.BYTE_1, 1]),
     );
@@ -170,31 +161,33 @@ describe('blockchain context', () => {
     );
   });
 
-  it('throws on address.balanceOf with no arguments', () => {
-    expect(() => compile('function main() { const b = address.balanceOf(); }')).toThrow(
-      'address.balanceOf() expects exactly 1 argument',
-    );
+  it('throws on ctx.balance with no arguments (formerly address.balanceOf)', () => {
+    expect(() => compile('function main() { const b = ctx.balance(); }')).toThrow(/ctx\.balance/);
   });
 
-  // §1.8 / decision 0.4: `msg`/`block` are member-access-only globals (`msg.sender`,
-  // `block.number`), not namespace roots, so a plain value binding cannot shadow them
-  // — RS accepts the binding and now so does TS. (Full matrix in the dedicated
-  // "reserved-name narrowing" describe block below.)
-  it('allows a variable named msg (member-access-only global)', () => {
+  // §1.8 / decision 0.4, superseded for msg/block/tx by §1.5 (ECO-2163): `msg`/`block`/`tx` used to
+  // be member-access-only globals (`msg.sender`, `block.number`); they've since been REMOVED
+  // entirely (portable members moved to `ctx.*`, `msg.value` to the gated `ctx.msgValue()`, and the
+  // other EVM-only env reads were dropped), so `msg`/`block`/`tx` are now ordinary,
+  // completely unreserved identifiers — not even member-access-only, just gone. (Full matrix in the
+  // dedicated "reserved-name narrowing" describe block below.)
+  it('allows a variable named msg (former global, now fully unreserved)', () => {
     expect(() => compile('function main() { const msg = 5n; return msg; }')).not.toThrow();
   });
 
-  it('allows a variable named block (member-access-only global)', () => {
+  it('allows a variable named block (former global, now fully unreserved)', () => {
     expect(() => compile('function main() { const block = 5n; return block; }')).not.toThrow();
   });
 
-  it('throws on function named tx', () => {
-    // A function DECLARATION keeps the broader callable reservation (RESERVED_NAMES),
-    // so `tx` is still refused here even though `let tx` is now allowed.
+  it('throws on function named gasLeft', () => {
+    // A function DECLARATION keeps the broader callable reservation (RESERVED_NAMES), so a
+    // freestanding-builtin name like `gasLeft` is still refused here even though `let gasLeft` is
+    // allowed (this test used `tx` before §1.5 removed msg/block/tx entirely — `tx` is no longer
+    // reserved in ANY form, so it could no longer demonstrate this distinction; `gasLeft` still can).
     // Called from main — treeshake defaults to true, so an unreferenced function is
     // dropped (never compiled, never validated); this must stay reachable to fire.
-    expect(() => compile('function tx() { return 1; }\nfunction main() { return tx(); }')).toThrow(
-      "'tx' is a reserved name",
+    expect(() => compile('function gasLeft() { return 1; }\nfunction main() { return gasLeft(); }')).toThrow(
+      "'gasLeft' is a reserved name",
     );
   });
 
@@ -230,9 +223,13 @@ describe('blockchain context', () => {
     expect(() => compile('function main() { const blobHash = 5n; return blobHash; }')).not.toThrow();
   });
 
-  it('throws on calling a property as a method', () => {
-    expect(() => compile('function main() { const x = msg.sender(); }')).toThrow('not implemented: msg.sender');
-  });
+  // "throws on calling a property as a method" (the msg.sender()-shaped case) had no replacement
+  // written here: §1.5 (ECO-2163) removed the LAST remaining property-only (non-call-form) global
+  // in this compiler — every surviving GLOBALS member, on every namespace, is now call-form only
+  // (confirmed: zero remaining single-argument `compile: (s) => ...` GlobalDefs anywhere in
+  // globals.ts) — so there is no longer any genuine property that COULD be miscalled as a method.
+  // The opposite direction (a call-form member accessed bare, no call) is still covered by
+  // test/ctx-namespace.test.ts's "bare property access `ctx.msgSender` (no call) is rejected".
 
   it('throws on blobHash with no arguments', () => {
     expect(() => compile('function main() { const h = blobHash(); }')).toThrow('blobHash() expects exactly 1 argument');
@@ -242,13 +239,13 @@ describe('blockchain context', () => {
     expect(() => compile('function main() { const x = Math.sqrt(); }')).toThrow('Math.sqrt expects exactly 1 argument');
   });
 
-  it('throws on unknown global property', () => {
-    expect(() => compile('function main() { const x = msg.foo(); }')).toThrow('not implemented: msg.foo');
+  it('throws on unknown global property (formerly msg.foo(), now ctx.foo() — msg no longer exists at all)', () => {
+    expect(() => compile('function main() { const x = ctx.foo(); }')).toThrow('not implemented: ctx.foo');
   });
 
   // crypto tests
   it('compiles crypto.keccak256 with bytes', () => {
-    const result = compile('function main() { const h = crypto.keccak256(msg.data); }');
+    const result = compile('function main() { const h = crypto.keccak256(ctx.msgData()); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([OPS.ALLOCATE_VALUE, 1, OPS.WRITE_VALUE, 0, OPS.KECCAK256, OPS.CALLDATA]),
     );
@@ -261,7 +258,7 @@ describe('blockchain context', () => {
   });
 
   it('compiles crypto.ecdsaVerify', () => {
-    const result = compile('function main() { const valid = crypto.ecdsaVerify(42, 100, msg.data); }');
+    const result = compile('function main() { const valid = crypto.ecdsaVerify(42, 100, ctx.msgData()); }');
     expect(result.bytecode[0]).toEqual(
       new Uint8Array([
         OPS.ALLOCATE_VALUE,
@@ -546,10 +543,16 @@ describe('reserved-name narrowing (compiler-parity §1.8 / decision 0.4)', () =>
     ).not.toThrow();
   });
 
-  // A read-position member access on a namespace root still resolves to the global,
-  // so existing usage is unaffected by the binding narrowing.
-  it('keeps msg.sender / block.number resolving to the global', () => {
-    expect(() => compile('function main() { const a = msg.sender; const b = block.number; return a; }')).not.toThrow();
+  // A read-position member access on a still-member-access-only global (storage/contract) still
+  // resolves to the global, so existing usage is unaffected by the binding narrowing. (msg/block/tx
+  // — this test's original example pair — no longer exist in ANY form as of ECO-2163 §1.5; their
+  // portable members moved to the ctx.* namespace root (msg.value to the gated ctx.msgValue(), the
+  // other EVM-only env reads dropped), which this describe block's OWN "still refuses" cases below
+  // already cover.)
+  it('keeps storage.read / contract.call resolving to the global', () => {
+    expect(() =>
+      compile('function main() { const a = storage.read(0); contract.call(1, 0, Uint8Array.from([])); return a; }'),
+    ).not.toThrow();
   });
 
   // The namespace roots stay refused as bindings — matching RS exactly.
@@ -562,9 +565,11 @@ describe('reserved-name narrowing (compiler-parity §1.8 / decision 0.4)', () =>
 
   // Callable-name reservation is unchanged (broader than RS by design): a function
   // declaration named for a builtin the call path resolves first is still refused.
-  it('still refuses a function declaration named tx', () => {
-    expect(() => compile('function tx() { return 1; }\nfunction main() { return tx(); }')).toThrow(
-      "'tx' is a reserved name",
+  // (`tx` — this test's original example — was removed entirely by §1.5/ECO-2163 along with
+  // msg/block, so it is no longer reserved in ANY form; `blockHash` demonstrates the same rule now.)
+  it('still refuses a function declaration named blockHash', () => {
+    expect(() => compile('function blockHash() { return 1; }\nfunction main() { return blockHash(); }')).toThrow(
+      "'blockHash' is a reserved name",
     );
   });
 });

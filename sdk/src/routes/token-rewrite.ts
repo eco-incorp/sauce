@@ -123,13 +123,13 @@ function collectValuePositionExclusions(program: AstNode): ReadonlySet<AstNode> 
 
 /** Resolves `object` (the `<holder>` in `<holder>.<Sym>`) to its emitted text, or `undefined` if
  *  `object` is not one of the three authorized holder shapes (or is itself rejected -- an ambiguous
- *  token-symbol holder, a namespace/chain key, or the `address` intrinsic namespace). */
+ *  token-symbol holder, a namespace/chain key, or a name reserved by the compiler). */
 function resolveHolder(object: AstNode | undefined, tokens: TokenSymbols, source: string): string | undefined {
   if (!object) return undefined;
   if (object.type === "Identifier") {
     const name = (object as unknown as { name: string }).name;
-    if (name === "self") return "address.self";
-    if (name === "address") return undefined; // the compiler's own address.* intrinsic namespace
+    if (name === "self") return "ctx.self()";
+    if (name === "address") return undefined; // reserved defensively -- no longer a compiler namespace root (address.* was dropped for gated ctx.*), but a bare `address` holder is still excluded rather than re-opened
     if (tokens.has(name)) return undefined; // ambiguous: USDC.WETH belongs to neither feature
     if (isChainKey(name)) return undefined; // owned by a qualified-token spelling, not this sugar
     if (resolveNamespace(name) !== undefined) return undefined; // owned by the protocol-accessor pass

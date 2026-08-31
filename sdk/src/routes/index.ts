@@ -108,7 +108,7 @@ export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
 export type { VaultConfig } from "./vault.js";
 
 export { isSauceClosure, sauceBodyToSource } from "./closure.js";
-export { chainDefines } from "./ambient.js";
+export { chainAmbient, chainDefines } from "./ambient.js";
 export type { AmbientDefinesOptions } from "./ambient.js";
 export { rewriteTokenMembers, REWRITABLE_METHODS } from "./token-rewrite.js";
 export type { TokenRewriteResult, TokenSymbols } from "./token-rewrite.js";

@@ -2,8 +2,8 @@
  * Shared RS/WASM SauceScript compile helper for SVM venue tests — the venue-side
  * analogue of `sdk/test/std/token/harness.ts`'s loader, generalized so any venue
  * test can compile an Account-model quote program through the PUBLISHED RUST
- * compiler (`@eco-incorp/sauce-compiler-wasm`, built into `sdk/.sauce-wasm/` by
- * scripts/build-wasm.mjs) and read back the SVM account manifest.
+ * compiler (the `sauce-next` dep, i.e. the npm `@eco-incorp/sauce-compiler`
+ * wasm package) and read back the SVM account manifest.
  *
  * This is the compiler the migrated venues target: the Account model — typed
  * `Account` params on `main(...)` plus `svm.sload(acct, off, w).toLe()` reads —
@@ -20,10 +20,7 @@
  *   - the emitted `manifest.accounts` slots come back in that same param order,
  *     so `manifest.accounts[k]` binds to `quoteAccounts(cfg)[k].address`.
  */
-import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 /**
  * The role a slot account requires of the caller — the `requires` field the RS compiler emits on
@@ -53,19 +50,12 @@ interface WasmCompileOptions {
   resolve: (path: string) => Uint8Array;
 }
 
-// The Rust compiler is built FROM the `sauce-next` dep into `sdk/.sauce-wasm/` by scripts/build-wasm.mjs
-// (the sdk `pretest` runs it). It is REQUIRED — the RS compiler is the SDK's SVM compiler going forward —
-// so a missing build is a HARD ERROR, not a skip. `--target nodejs` output is CommonJS plus a sibling
-// `.wasm` read through `fs`, so `createRequire` hands it to Node's own CJS loader (the only one that
-// resolves the `.wasm` sibling), not jest's ESM transform.
-const WASM_ENTRY = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.sauce-wasm', 'sauce_wasm.js');
-if (!existsSync(WASM_ENTRY)) {
-  throw new Error(
-    `Rust SauceScript compiler not built at ${WASM_ENTRY}. Run \`pnpm --filter ./sdk build:wasm\` ` +
-      '(needs Rust + wasm-pack); the sdk `pretest` runs it automatically.',
-  );
-}
-const { compile } = createRequire(import.meta.url)(WASM_ENTRY) as {
+// The Rust compiler, aliased `sauce-next` because its real name (`@eco-incorp/sauce-compiler`) is
+// still this workspace's TypeScript one. Required via `createRequire` for the same reason
+// `test/std/token/harness.ts` and `test/helpers.ts` do: the package's `node` condition is a
+// CommonJS build that reads its sibling `.wasm` off disk at load, and jest's ESM transform does not
+// resolve that sibling.
+const { compile } = createRequire(import.meta.url)('sauce-next') as {
   compile: (options: WasmCompileOptions) => SvmArtifact;
 };
 

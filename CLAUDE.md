@@ -79,10 +79,11 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
 - **`SAUCE_RUST_ENGINE_SO` / `SAUCE_RUST_V12_RUNTIME`** — the two engines the `sdk/test/std/token`
   execution suites need, and **deliberately separate variables** from `SAUCE_ENGINE_SO` above.
   Those suites are the only ones here that compile through the published **Rust** compiler
-  (the `sauce` repo pinned by SHA as the `sdk/` devDependency `sauce-next`, built to wasm by
-  `sdk/scripts/build-wasm.mjs` into the gitignored `sdk/.sauce-wasm/`; needs Rust + wasm-pack, which
-  CI installs), which emits for the sauce `main` engine lineage — while everything else in this repo compiles through the TypeScript compiler
-  and runs on the pinned `release/beta` lineage.
+  (`@eco-incorp/sauce-compiler` from the public npm registry, a `sdk/` devDependency aliased as
+  `sauce-next` because its real name is still this workspace's TypeScript compiler at `compiler/`;
+  nothing is built locally and no Rust toolchain is needed), which emits for the sauce `main` engine
+  lineage — while everything else in this repo compiles through the TypeScript compiler and runs on
+  the pinned `release/beta` lineage.
   **The two wire formats have diverged, measured in both directions**: on the SVM, `JUMP`/`JUMP_I`
   (0xB0/0xB1) exist only on `main` and `NEW_ARRAY` (0x92) encodes its scalar elements differently, so
   Rust-compiled bytecode carrying any `require`/`if` is rejected by the vendored `engine.so` with
@@ -92,8 +93,13 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   either returns empty or dies with `MemoryOOG` on the `V12RuntimeBytecode` this repo generates.
   Pointing `SAUCE_ENGINE_SO` itself at a `main` engine is therefore **not** a workaround — it breaks
   `sdk/test/svm/staged.e2e` and `svm-settle.e2e`, which need the pinned one. Both suites skip when
-  their variable is unset (so the default `pnpm test` is green and engine-free); supply them to run
-  the real executions. The `.so` is `cd <sauce>/v12-svm && make build`. The runtime is *not*
+  their variable is unset LOCALLY, so the default `pnpm test` is green and engine-free — but in CI
+  an unset variable is a hard failure, and CI supplies both from the `v12-svm-v0.4.0` and
+  `v12-evm-v0.3.0` release artifacts, which are built from the same sauce commit the published
+  compiler's `compiler-v0.5.0` tag is cut from. (They cannot come from the `sauce` git dep:
+  `release/beta` is the wrong lineage, and sauce `main` deleted the `engine/` tree
+  `sync-engine-artifacts.mjs` reads.)
+  Locally, the `.so` is `cd <sauce>/v12-svm && make build`. The runtime is *not*
   `hnc -r` — that refuses on `Runtime.huff`, whose CONSTRUCTOR returns its own bytecode, so the
   deployed code is only known once deployed. Deploy the creation bytecode and read it back:
 
@@ -1701,4 +1707,4 @@ Tag-driven (`.github/workflows/publish.yml`): `git tag v1.2.3 && git push origin
 (`NPM_TOKEN`) and GitHub Packages (`GITHUB_TOKEN`). Only the root version is published; workspace
 packages stay `private`.
 
-**The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce-sdk` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is built from a SHA-pinned git dep rather than fetched from any registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.
+**The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce-sdk` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, aliased `sauce-next`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.

@@ -151,7 +151,7 @@ interface SharedModule {
   /**
    * svm: compiling for staged execution (execute_from_account). Compile-time
    * args are NOT baked into the blob — the prologue SLICEs them out of the
-   * CALLDATA composite (`program ++ payload args`) — and user-level msg.data
+   * CALLDATA composite (`program ++ payload args`) — and user-level ctx.msgData()
    * is rejected (the prologue owns the single CALLDATA; a second one copies
    * the whole staged program to the heap again). Module-shared so every
    * function context sees the gate.
@@ -281,6 +281,18 @@ export class CompilerContext {
   transformModule?: (code: string, filePath: string) => string;
 
   /**
+   * Ambient-import specifiers (CompileOptions.ambient): each listed module's exported
+   * functions/consts are broadcast into this compile's global resolution set with NO import
+   * line anywhere in the source. Set once by `compile()` (index.ts) before `processNode` ever
+   * runs — a plain instance field, never module-shared, since ambient resolution happens ONCE
+   * at the top of `processProgram`, against the top-level `ctx`, before any per-function child
+   * context (`forFunction()`) exists (exactly like `transformModule` immediately above, which
+   * is consulted at the same point for the same reason). See processor/index.ts's
+   * `collectAmbientExports`/`registerAmbientConsts` for the mechanism.
+   */
+  ambient?: string[];
+
+  /**
    * Drop functions unreachable from main() after constant folding (CompileOptions.treeshake,
    * default true — set false for the legacy "every declared/imported function is emitted"
    * shape).
@@ -358,7 +370,7 @@ export class CompilerContext {
     return this.target === 'svm';
   }
 
-  /** svm: compiling for staged execution — args read from the payload via CALLDATA; msg.data rejected. */
+  /** svm: compiling for staged execution — args read from the payload via CALLDATA; ctx.msgData() rejected. */
   get staged(): boolean {
     return this.module.staged;
   }
@@ -371,6 +383,17 @@ export class CompilerContext {
   /** The function index table (shared across a v12 module's contexts). */
   get functions(): string[] {
     return this.module.functions;
+  }
+
+  /**
+   * Names of every contract registered so far (shared across a v12 module's contexts) — a
+   * `.json` ABI import's local binding name, from `registerContract`. Used by the ambient-import
+   * mechanism (processor/index.ts's `processProgram`) to snapshot which names a user's own
+   * import graph already claims, so an ambient function of the same name is filtered out rather
+   * than added (see `lookupContract`, which checks one name at a time; this exposes the full set).
+   */
+  get contractNames(): string[] {
+    return [...this.module.contracts.keys()];
   }
 
   /** v12: per-function build artifacts collected during processing. */
@@ -604,7 +627,10 @@ export class CompilerContext {
   /**
    * Register a top-level `const X = <literal>` as a compile-time constant (so it can fold
    * branch conditions). A define of the same name already set via CompileOptions wins (an
-   * explicit override), so a const never clobbers a caller-provided flag.
+   * explicit override), so a const never clobbers a caller-provided flag. Also reused, as-is,
+   * by the ambient-import const channel (processor/index.ts's `registerAmbientConsts`) — the
+   * same insert-if-absent rule gives an ambient module's exported const the identical
+   * "user code wins" precedence for free.
    */
   registerConstant(name: string, value: bigint): void {
     if (!this.defines.has(name)) this.defines.set(name, value);

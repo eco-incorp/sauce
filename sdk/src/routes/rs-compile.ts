@@ -2,69 +2,50 @@
  * P6 — the RS/WASM compiler adapter for `compileSauceRoute`'s compiler-selector seam
  * (`sauce-route.ts`).
  *
- * Loads the ambient-capable Rust SauceScript compiler (`sauce-next`, vendored at
- * `sdk/.sauce-wasm/` by `scripts/build-wasm.mjs` — the same load pattern
- * `test/std/token/harness.ts` already uses) and adapts its `compile({ resolve, resolvePackage,
- * ... })` signature to the shape `sauce-route.ts` already calls the TS compiler with: a `source`
- * string plus `baseDirs`/`defines`/`contracts`, returning a `CompileResult`
- * (`@eco-incorp/sauce-compiler`'s own type) so the RS path slots into `CompiledSauceRoute` with no
- * caller-visible difference.
+ * Loads the ambient-capable Rust SauceScript compiler (`sauce-next`, the published
+ * `@eco-incorp/sauce-compiler` — the same load pattern `test/std/token/harness.ts` already uses) and
+ * adapts its `compile({ resolve, resolvePackage, ... })` signature to the shape `sauce-route.ts`
+ * already calls the TS compiler with: a `source` string plus `baseDirs`/`defines`/`contracts`,
+ * returning a `CompileResult` (`@eco-incorp/sauce-compiler`'s own type) so the RS path slots into
+ * `CompiledSauceRoute` with no caller-visible difference.
  *
  * WHY THIS EXISTS: `ambient` (broadcasting a module's exports into every module with no `import`
  * line) exists ONLY on the RS compiler today — this is the seam that lets an SDK caller opt into
  * it. Every other option below is a best-effort translation of what the TS call site already
  * passes; see the per-field notes.
  */
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import type { CompileResult, CompileTarget, ContractsConfig } from "@eco-incorp/sauce-compiler";
-
-// sdk/src/routes/rs-compile.ts -> sdk/.sauce-wasm/sauce_wasm.js (two levels up to the sdk root).
-const WASM_ENTRY = join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".sauce-wasm", "sauce_wasm.js");
+// The RS compiler's own option/result types, from the package this file loads at runtime -- a
+// hand-written mirror of them would drift with nothing to catch it.
+import type {
+  CompileOptions as RsCompileOptions,
+  CompileResult as RsCompileResult,
+  SauceTarget as RsTarget,
+} from "sauce-next";
 
 const ENTRY = "main.js";
-
-type RsTarget = "evm" | "svm";
-
-interface RsCompileOptions {
-  target: RsTarget;
-  entry?: string;
-  resolve: (path: string) => Uint8Array | undefined;
-  resolvePackage?: (specifier: string, importer: string) => string | undefined;
-  inlineContracts?: Array<[name: string, abi: string]>;
-  ambient?: string[];
-  defines?: Array<[name: string, value: string]>;
-}
-
-interface RsAccountEntry {
-  kind: "slot" | "remaining";
-  [key: string]: unknown;
-}
-
-interface RsCompileResult {
-  bytecode: Uint8Array;
-  manifest?: { accounts: RsAccountEntry[] };
-}
 
 let rsCompileFn: ((options: RsCompileOptions) => RsCompileResult) | undefined;
 
 /** Lazily loads the wasm module — only paid by a caller that actually picks `compiler: 'rs'`. */
 function loadRsCompile(): (options: RsCompileOptions) => RsCompileResult {
   if (rsCompileFn) return rsCompileFn;
-  if (!existsSync(WASM_ENTRY)) {
+  // Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build
+  // that reads its sibling `.wasm` off disk at load, and Node's own CJS loader is the one that
+  // resolves that sibling -- an ESM/bundler loader does not. Mirrors `test/std/token/harness.ts`.
+  let mod: { compile: (options: RsCompileOptions) => RsCompileResult };
+  try {
+    mod = createRequire(import.meta.url)("sauce-next") as typeof mod;
+  } catch (cause) {
     throw new Error(
-      `compiler: 'rs' requires the RS/WASM compiler built at ${WASM_ENTRY} -- run \`pnpm --filter ./sdk build:wasm\` (needs Rust + wasm-pack).`,
+      "compiler: 'rs' requires the Rust SauceScript compiler (`sauce-next` -> @eco-incorp/sauce-compiler).",
+      { cause },
     );
   }
-  // wasm-pack's `--target nodejs` output is CommonJS plus a sibling `.wasm` it reads through `fs`
-  // at load, so `createRequire` hands it to Node's own CJS loader -- the only one that resolves
-  // the `.wasm` sibling -- rather than a bundler/ESM loader. Mirrors `test/std/token/harness.ts`.
-  const mod = createRequire(import.meta.url)(WASM_ENTRY) as {
-    compile: (options: RsCompileOptions) => RsCompileResult;
-  };
   rsCompileFn = mod.compile;
   return rsCompileFn;
 }

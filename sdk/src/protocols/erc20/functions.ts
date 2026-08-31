@@ -39,14 +39,14 @@ function main(token: Address, account: Address): Uint256 {
 
 export const storageTransfer = `
 // ERC20-like transfer using storage operations.
-// Demonstrates: storage, crypto, abi encode/decode, events, msg.sender
+// Demonstrates: storage, crypto, abi encode/decode, events, ctx.msgSender()
 
 function balanceSlot(account: any) {
   return crypto.keccak256(abi.encode(account, 1));
 }
 
 function main(to: any, amount: any) {
-  const from = msg.sender;
+  const from = ctx.msgSender();
   const fromSlot = balanceSlot(from);
   const fromBalance = storage.read(fromSlot);
   if (fromBalance < amount) throw "insufficient balance";

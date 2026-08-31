@@ -42,7 +42,7 @@
  *   rejects rate-limiter/scheduled fees entirely for the same reason).
  * - A fee-scheduler in force (`period_frequency != 0`) on a SLOT-typed
  *   `activation_type` (0): a slot number is not live-readable in-VM (no
- *   `block.slot` — only `block.timestamp`), the SAME gate meteora-damm-v2
+ *   `block.slot` — only `ctx.timestamp()`), the SAME gate meteora-damm-v2
  *   already applies to slot-typed activation points.
  * - Either mint is Token-2022 with a transfer-fee extension (wire amounts
  *   would desync from the curve math) — the same `assertNoTransferFee` TLV
