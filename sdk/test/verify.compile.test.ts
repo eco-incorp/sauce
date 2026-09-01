@@ -15,7 +15,7 @@
  */
 import { existsSync, readFileSync } from 'fs';
 import { createRequire } from 'node:module';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { keccak256 } from 'viem';
 import type { Hex } from 'viem';
 
@@ -35,6 +35,18 @@ import {
 const { compile } = createRequire(import.meta.url)('sauce-compiler') as {
   compile: (options: { target: 'evm' | 'svm'; entry?: string; resolve: (path: string) => Uint8Array | undefined }) => { bytecode: Uint8Array };
 };
+
+/** The resolved compiler's own manifest. `./package.json` is not in the package's `exports` map, so
+ *  requiring it directly throws — resolve the entry and walk up to the manifest that owns it. */
+function compilerPackage(): { name: string; version: string } {
+  let dir = dirname(createRequire(import.meta.url).resolve('sauce-compiler'));
+  for (let up = 0; up < 10; up++) {
+    const manifest = join(dir, 'package.json');
+    if (existsSync(manifest)) return JSON.parse(readFileSync(manifest, 'utf-8'));
+    dir = dirname(dir);
+  }
+  throw new Error('could not locate the sauce-compiler package.json');
+}
 
 /** The compile `src/recipes/index.ts` documents to partners, run for real. */
 function compileSettle(): Hex {
@@ -79,6 +91,14 @@ describe('the settle program pin, recompiled', () => {
 
   it('is deterministic — a second compile is the same bytes', () => {
     expect(compileSettle()).toBe(compiled);
+  });
+
+  // The dependency is a caret range, so the pins above can stay green while a resolved 0.5.x that
+  // did not change codegen quietly makes `PROGRAM_COMPILER` name a producer that is not the one
+  // that ran. Assert the resolved version, or the provenance string records nothing.
+  it('was produced by the compiler SETTLE_WIRE.PROGRAM_COMPILER names', () => {
+    const { name, version } = compilerPackage();
+    expect(`${name}@${version}`).toBe(SETTLE_WIRE.PROGRAM_COMPILER);
   });
 });
 

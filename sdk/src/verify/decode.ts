@@ -32,22 +32,19 @@
  * `encodeSettleProgram`'s re-encode-and-compare (§5) at odds with a decode-and-compare, so all
  * three are refused: an accepted payload is the UNIQUE byte encoding of the values it decodes to.
  *
- * WHAT WAS DROPPED WITH THE v1 GRAMMAR, AND WHY. The retired TypeScript compiler baked the
- * arguments into a variable-length PUSH prologue ahead of a constant body, so a decoder had to walk
- * that prologue and enforce minimal-length pushes and a 20-byte cap per push to keep the encoding
- * unique. There are no pushes on this wire — every value is a fixed 32-byte word — so
- * `NON_MINIMAL_PUSH`, the `TUPLE`/arity pair and `BODY_LENGTH` describe nothing that can happen
- * here. Their uniqueness role is taken by §4 above, and `OVERSIZE_ADDRESS`'s role by
- * `DIRTY_ADDRESS_WORD`.
+ * DO NOT PORT A POSITIONAL DECODER ONTO THIS WIRE. Values here are fixed 32-byte words and the
+ * tokens head word is a POINTER, not a value (§2) — so a reader that walks the tail by position,
+ * as a decoder for a PUSH-prologue encoding must, lands on the offset and returns a plausible
+ * wrong answer instead of failing. That is the one mistake this format invites, and §4 is what
+ * closes it.
  *
  * WHAT THIS PROVES. `decodeSettleProgram` is STRUCTURAL: it pins the program's LENGTH and reads the
  * tail, so it tells you which `(tokens, minOut, recipient)` a payload carries and nothing about
  * what the 391 program bytes do. `validateSettleProgram` adds the authenticity half — one
  * `keccak256` over the WHOLE program against `SETTLE_WIRE.PROGRAM_HASH` — and that is now a
  * complete answer rather than a partial one: because the arguments left the program, a matching
- * hash means the payload runs the audited `settle.sauce.ts` and nothing else. Under the v1 grammar
- * no such statement was available from bytes alone, which is why the old decoder reported a
- * `bodyHash` for the caller to compare against something they compiled themselves.
+ * hash means the payload runs the audited `settle.sauce.ts` and nothing else — a statement about
+ * the bytes alone, needing nothing the caller has to compile and compare for themselves.
  *
  * Dependency closure is `viem` only (`keccak256`) — no compiler, no `node:*`, no artifact
  * resolution — so this surface stays safe to import in a browser or an edge runtime. That closure
@@ -62,7 +59,8 @@ import { SETTLE_WIRE } from "./wire.js";
 /** Canonical `args` length for `count` tokens: the three head words, the count word, the elements. */
 const argsLengthFor = (count: bigint): bigint => BigInt(SETTLE_WIRE.HEAD_BYTES + SETTLE_WIRE.WORD_BYTES) + BigInt(SETTLE_WIRE.WORD_BYTES) * count;
 
-/** Everything above the low 20 bytes of a word — nonzero means the word is not a clean address. */
+/** The low 20 bytes of a word — an address's own bits. A value ABOVE this has dirty upper bytes and
+ *  is not a clean address; `dirtyWord` (§ below) reports those upper bytes themselves. */
 const ADDRESS_MASK = (1n << BigInt(SETTLE_WIRE.ADDRESS_BYTES * 8)) - 1n;
 
 /** Stable failure codes — safe to `switch` on. Every one is a REAL rejection this decoder makes. */

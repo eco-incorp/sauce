@@ -84,10 +84,18 @@ export interface ExtractedEvmSettle extends DecodedSettleCall {
 }
 
 /**
- * Scans an intent's `route.calls[]` and returns the settle params from the first `cook` call carrying the
- * settle payload — the EVM settle in a batch is a `Pot.cook(settleBytecodes)` alongside a
+ * Scans an intent's `route.calls[]` and returns the settle params from the first `cook` call carrying
+ * the settle payload — the EVM settle in a batch is a `Pot.cook(settleBytecodes)` alongside a
  * `Pot.cook(swapBytecodes)`, so this finds it by CONTENT (which cook validates as settle), not by
  * position. `null` if no call carries one.
+ *
+ * LOCATES THE SETTLE; DOES NOT CLEAR THE INTENT. Unlike a cook's sibling ingredients — where only
+ * ingredient 0 runs, so reading further would describe dead bytes — EVERY entry in `route.calls[]`
+ * executes. This returns the first entry that validates and leaves the others UNEXAMINED, so a
+ * non-null result answers "this intent contains the audited settle, with these parameters" and NOT
+ * "this intent does only that": in `[cook([drain]), cook([settle])]` the drain is real, executes
+ * first, and is not reported. A caller deciding whether an intent is safe must check `callIndex`
+ * against its own expectation and account for the remaining calls itself.
  */
 export function extractEvmSettleFromCalls(calls: readonly IntentCallLike[]): ExtractedEvmSettle | null {
   for (let i = 0; i < calls.length; i++) {

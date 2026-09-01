@@ -12,7 +12,7 @@
 // `(tokens, minOut, recipient)` as RUNTIME entry arguments, so the compiled program is a
 // 391-byte constant and the arguments ride the payload AFTER it, as 32-byte big-endian words the
 // engine reads back through CALLDATA. `SETTLE_VECTORS` is the conformance corpus and
-// `verify.test.ts` recompiles the program and re-pins it on every run.
+// `verify.compile.test.ts` recompiles the program and re-pins it on every run.
 //
 // SCOPE, stated plainly, in two tiers:
 //   • `decodeSettleProgram` is STRUCTURAL. It pins the program's LENGTH and reads the argument tail,

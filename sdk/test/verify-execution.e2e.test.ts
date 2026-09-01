@@ -81,6 +81,13 @@ const balanceOf = (token: Address, holder: Address): Promise<bigint> =>
 
 /** A token no vector names, so the floor-violation case cannot inherit a balance from one. */
 const FLOOR_TOKEN: Address = '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA';
+
+// ENGINE NOTE — do not use `0x1111…11` as a token address here. Observed while building this corpus:
+// as an ARRAY ELEMENT value it makes the v12 runtime revert `MemoryOOG` rather than perform (or
+// cleanly refuse) the sweep, and the failure is value-dependent — neighbouring addresses run fine.
+// It is this repo's usual placeholder address, so it is the natural thing for the next person to
+// reach for. Unresolved against the engine at the time of writing; the corpus avoids it instead.
+
 /** Every distinct address the corpus names as a token or a recipient, plus [`FLOOR_TOKEN`]. The
  *  rejection vectors reuse the first vector's addresses, so they add none of their own. */
 const addressesInPlay = (): Address[] => {
@@ -97,10 +104,18 @@ const addressesInPlay = (): Address[] => {
  */
 const startEvm = async (): Promise<ChildProcess> => {
   const anvil = spawn('anvil', ['--port', String(PORT), '--silent'], { stdio: 'ignore' });
-    // Everything after the spawn is guarded: a waitForRpc timeout, a setCode failure or a deploy
-    // revert would otherwise leave the child holding this port for the rest of the job.
-    try {
-    await waitForRpc(Date.now() + STARTUP_TIMEOUT_MS);
+
+  // A failed spawn — no `anvil` on PATH — reports asynchronously as an 'error' event, not a throw
+  // from `spawn`. With no listener that event kills the jest worker with a raw ENOENT before the
+  // startup timeout below can say what is wrong. Race it so the failure arrives named, and at once.
+  const spawnFailed = new Promise<never>((_, reject) => {
+    anvil.once('error', (err: Error) => reject(new Error(`could not start anvil (is it on PATH?): ${err.message}`)));
+  });
+
+  // Everything after the spawn is guarded: a waitForRpc timeout, a setCode failure or a deploy
+  // revert would otherwise leave the child holding this port for the rest of the job.
+  try {
+    await Promise.race([waitForRpc(Date.now() + STARTUP_TIMEOUT_MS), spawnFailed]);
     await testClient.setCode({ address: ENGINE, bytecode: `0x${readFileSync(RUNTIME_HEX_PATH as string, 'utf8').trim().replace(/^0x/, '')}` });
 
     const hash = await walletClient.sendTransaction({ account: DEPLOYER, chain: null, data: MOCK_ERC20.creationCode, gas: GAS_LIMIT });
@@ -108,12 +123,11 @@ const startEvm = async (): Promise<ChildProcess> => {
     const erc20Runtime = await publicClient.getCode({ address: contractAddress as Address });
     for (const address of addressesInPlay()) await testClient.setCode({ address, bytecode: erc20Runtime as Hex });
 
-  
-      return anvil;
-    } catch (err) {
-      anvil.kill();
-      throw err;
-    }
+    return anvil;
+  } catch (err) {
+    anvil.kill();
+    throw err;
+  }
 };
 
 /** Await the exit rather than firing a bare `kill()`: an un-awaited kill leaves the child alive long

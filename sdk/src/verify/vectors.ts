@@ -9,7 +9,7 @@ import type { SettleFailureCode } from "./decode.js";
  *
  * ONE constant covers the whole corpus because the program is INVARIANT: `main` takes
  * `(tokens, minOut, recipient)` as runtime entry arguments, so no caller value reaches the
- * compiler. That is the property the appended-args model rests on, and `verify.test.ts` recompiles
+ * compiler. That is the property the appended-args model rests on, and `verify.compile.test.ts` recompiles
  * this and compares — a LIVE pin, unlike the v1 corpus it replaces, whose compiler no longer exists.
  */
 export const SETTLE_PROGRAM: Hex =

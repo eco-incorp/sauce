@@ -85,8 +85,10 @@ let cached: string | null = null;
  * recipient, with a minimum-output floor on `tokens[0]`. Read once and cached.
  *
  * Returned as the raw source (not pre-stripped, not pre-compiled) so a partner can read, hash, or
- * diff exactly what gets compiled. Pass `tsSource: true` so the compiler's own front-end handles
- * the TypeScript annotations.
+ * diff exactly what gets compiled. The compiler's own front-end handles the TypeScript annotations,
+ * so the source needs no pre-processing and no extra option — `CompileOptions` is
+ * `{ target, resolve, resolvePackage?, entry?, contracts?, inlineContracts?, ambient?, defines?,
+ * optimize? }`.
  */
 export function settleSource(): string {
   if (cached === null) cached = readFileSync(SETTLE_SOURCE_PATH, "utf-8");
@@ -97,8 +99,10 @@ export function settleSource(): string {
  * The CCTP transfer demo — a BUILDER that constructs V2 `Intent`s via the cross-chain intent DSL,
  * distinct in kind from the source-shipped `settle` recipe above but built the SAME way underneath:
  * its two route PROGRAMS are standalone `.sauce.ts` assets (`cctp-split.sauce.ts`,
- * `plain-transfer.sauce.ts`) whose parameterized `main` is baked with each intent's values as
- * compile-time `args` — the `settle.sauce.ts` mechanism, a TS-compiler feature.
+ * `plain-transfer.sauce.ts`) whose module-level `XFER_*` consts are replaced with each intent's
+ * values via `defines` (see `cctp-transfer.ts:107,128`). That is the compile-time channel, and it
+ * is a DIFFERENT mechanism from `settle.sauce.ts`, whose `main` takes its values as runtime entry
+ * arguments and so compiles to one invariant program.
  *
  * A Base→Arbitrum USDC transfer "with interop/CCTP and without": `buildCctpSplitTransfer` splits the
  * amount into N sub-`perMessageLimit` `depositForBurn` chunks burned in ONE atomic cook (all-or-revert
