@@ -1,12 +1,10 @@
 /**
- * The two assertions from `verify.compile.test.ts` that never needed a compiler.
+ * The two assertions in `verify.compile.test.ts`'s neighbourhood that need no compiler at all.
  *
- * That suite recompiled `SETTLE_VECTORS` through the in-repo TypeScript compiler; with the compiler
- * deleted there is nothing to recompile them against, and the vectors are a frozen corpus of the v1
- * prologue grammar (see `src/verify/vectors.ts`). These two are about the SHIPPED ASSETS, not about
- * any compiler: the recipe the SDK hands partners must be the file on disk, and the base dir must
- * resolve the ABI that file imports. The second one is load-bearing — `src/artifacts/` is generated
- * and gitignored, and a dozen suites fail with nothing naming the cause when it is absent.
+ * They are about the SHIPPED ASSETS: the recipe the SDK hands partners must be the file on disk, and
+ * the base dir must resolve the ABI that file imports. The second one is load-bearing —
+ * `src/artifacts/` is generated and gitignored, and a dozen suites fail with nothing naming the cause
+ * when it is absent. Whether those assets COMPILE to the pinned program is `verify.compile.test.ts`.
  */
 import { readFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';

@@ -11,9 +11,10 @@
  * THIS INTENT'S VALUES ARRIVE AS `defines`. The five consts below are declared with placeholder
  * defaults so this file reads (and compiles) standalone; the builder
  * (`recipes/cctp-transfer.ts`) overrides each one per intent, and a define REPLACES the module's own
- * `const` of that name. They are constant-folded, so a given set of values yields fixed bytecode —
- * the same property the compile-time-argument form had. Standalone asset, not a string assembled in
- * TypeScript. Same shape as `settle.sauce.ts`.
+ * `const` of that name. They are constant-folded, so a given set of values yields fixed bytecode.
+ * Standalone asset, not a string assembled in TypeScript. NOT the same shape as `settle.sauce.ts`: that one takes its values as runtime entry
+ * arguments precisely so its bytecode stays invariant and hash-pinnable (`settle.sauce.ts:44`), where
+ * these fold the values in and change bytecode with them.
  *
  * DSL-NATIVE, ZERO HARDCODING — no ABI, no address:
  *   • `USDC` resolves to the source chain's USDC address from the token registry.

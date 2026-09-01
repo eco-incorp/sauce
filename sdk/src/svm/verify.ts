@@ -309,13 +309,18 @@ export interface DecodedSvmSettleExecution {
  * caller-supplied labels — `labeledRefsConsistent` only reports whether a label the caller happened to
  * attach agreed with the slot it landed in.
  *
- * IMPORTANT — this is a STRUCTURAL decode, NOT a genuineness proof. Unlike the EVM `decodeSettleProgram`
- * (whose prologue grammar is a settle-specific signature), a staged settle's calldata carries no
- * structural signature at all: any staged Sauce execute with a `3N+3`/`3N+4` account count has this
- * exact shape. So a non-settle execution (or an adversarial decoy) decodes here without error into any
- * staged program at all. To prove the execution actually runs the genuine settle program, use
- * `verifySvmSettleExecution` (or `extractSvmSettleFromIntent`), which ties the calldata to the SDK's
- * own recompiled canonical settle bytecode.
+ * IMPORTANT — this is a STRUCTURAL decode, NOT a genuineness proof. A staged settle's calldata
+ * carries no structural signature: any staged Sauce execute with a `3N+3`/`3N+4` account count has
+ * this exact shape. So a non-settle execution (or an adversarial decoy) decodes here without error
+ * into any staged program at all. To prove the execution actually runs the genuine settle program,
+ * use `verifySvmSettleExecution` (or `extractSvmSettleFromIntent`), which ties the calldata to the
+ * SDK's own recompiled canonical settle bytecode.
+ *
+ * The EVM half splits the same two questions the same way — `decodeSettleProgram` is structural and
+ * accepts any 391-byte program, `validateSettleProgram` is the genuineness proof — but reaches the
+ * second one WITHOUT a compiler: an EVM settle's params ride the payload after the program, so the
+ * program is a constant and one `keccak256` settles it. Here they are `defines` folded into the
+ * bytecode, which is why this side recompiles.
  */
 export function decodeSvmSettleExecution(input: SvmSettleExecutionInput): DecodedSvmSettleExecution {
   const { instruction, pin, slice } = parseExecutePayload(input.instructionData);

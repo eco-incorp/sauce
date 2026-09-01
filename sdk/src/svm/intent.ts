@@ -19,8 +19,10 @@
 // with `@solana/kit` codecs (no new dependency). `test/svm/intent.test.ts` pins the byte layout against
 // a hand-built fixture so a Portal IDL change can't drift it silently.
 //
-// GENUINENESS WITHOUT PARTNER BYTECODE. A staged settle carries no structural signature (unlike EVM's
-// prologue), so "right shape" is NOT "is a settle" — a non-settle staged execute, or an adversarial
+// GENUINENESS WITHOUT PARTNER BYTECODE. A staged settle carries no structural signature (unlike an
+// EVM settle, whose whole program is a constant that hashes to a pinned value — see
+// `@eco-incorp/sauce-sdk/verify`'s `validateSettleProgram`), so "right shape" is NOT "is a settle" —
+// a non-settle staged execute, or an adversarial
 // decoy, has the same shape. The extraction here therefore does not trust shape: it recompiles the
 // canonical `svmSettleSource(N)` ITSELF and requires the calldata pin to equal `sha256(canonical settle)`
 // (or, if the caller passes the staged `bytecode` from `fulfillmentMetadata.svm.sauceStage`, a full
