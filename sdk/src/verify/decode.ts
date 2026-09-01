@@ -180,10 +180,15 @@ export interface SettleParse {
    *  not mask that word. Differs from `recipient` exactly when the upper 12 bytes are dirty. */
   recipientWord: bigint | null;
   recipientNonZero: boolean;
-  /** The declared element count. Values past what the payload can hold are recorded here and
-   *  reported as `ARGS_TRUNCATED`. */
+  /** The declared element count, READ AT THE CANONICAL OFFSET 96. Values past what the payload can
+   *  hold are recorded here and reported as `ARGS_TRUNCATED`.
+   *
+   *  When `fatal.code` is `TOKENS_OFFSET` this is NOT what the engine reads: the engine follows the
+   *  payload's own pointer, this reads at 96, and the two name different arrays. Use
+   *  `bestEffortDecode`, which declines that case, rather than reporting off raw parse state. */
   tokenCount: bigint | null;
-  /** Element words as they appear on the wire, unmasked, so a dirty word is visible to a report. */
+  /** Element words as they appear on the wire, unmasked, so a dirty word is visible to a report. Read
+   *  at the canonical offset — same `TOKENS_OFFSET` caveat as `tokenCount`. */
   tokenWords: bigint[];
   /** The first fatal failure, in scan order — null iff the payload is canonical. */
   fatal: { code: SettleFailureCode; message: string } | null;
