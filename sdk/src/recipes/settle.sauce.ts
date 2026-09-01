@@ -65,7 +65,8 @@ import { IERC20 } from "./artifacts/IERC20.json";
 // maintainer chose (the Pot ending clean is the point), not an oversight — do not add baseline/
 // delta machinery to defend against it.
 //
-// A given compile's `tokens`/`minOut`/`recipient` are ordinary compile-time args — there is no
+// A given execution's `tokens`/`minOut`/`recipient` arrive as RUNTIME ENTRY ARGUMENTS, appended after
+// the program as 32-byte words (see `verify/decode.ts` for the layout) — there is no
 // cross-cook or cross-program handoff of any kind (an earlier design used a tagged EIP-1153
 // transient-storage handoff between two cooks; the sweep model made it unnecessary — this program
 // simply carries its own destination and floor, and reads only the Pot's live balances). Running it

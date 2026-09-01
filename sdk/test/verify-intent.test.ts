@@ -171,6 +171,18 @@ describe('extractEvmSettleFromCalls / extractEvmSettleFromIntent', () => {
     expect(extractEvmSettleFromCalls([call])).not.toBeNull();
   });
 
+  // The SauceRouter hazard the docstring names: index 0 validates, the rest run too. A caller can only
+  // act on that if the count is visible, so it is reported rather than only described.
+  it('reports how many ingredients the cook carried', () => {
+    const decoy = `0x${'11'.repeat(64)}` as Hex;
+
+    expect(decodeSettleCall(cook([SETTLE_PAYLOAD]))!.ingredientCount).toBe(1);
+    expect(decodeSettleCall(cook([SETTLE_PAYLOAD, decoy]))!.ingredientCount).toBe(2);
+    // still index 0, still the same parameters -- the count is the only thing that differs
+    expect(decodeSettleCall(cook([SETTLE_PAYLOAD, decoy]))!.ingredientIndex).toBe(0);
+    expect(decodeSettleCall(cook([SETTLE_PAYLOAD, decoy]))!.minOut).toBe(MINOUT);
+  });
+
   it('returns null when no call carries a settle cook', () => {
     expect(extractEvmSettleFromCalls([calls[0]!, calls[1]!])).toBeNull();
   });

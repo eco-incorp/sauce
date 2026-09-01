@@ -38,6 +38,12 @@ export interface DecodedSettleCall extends DecodedSettleProgram {
    *  executes, so only ingredient 0 is examined. Kept as a field because it is what the caller must
    *  reason about, not because it varies. */
   ingredientIndex: number;
+  /** How many ingredients the cook carried. **A caller on a v1 `SauceRouter` must require this to be
+   *  1.** On a `V12Pot` the rest are inert, so a settle here is the whole call; a SauceRouter executes
+   *  EVERY ingredient, so `cook([settlePayload, drainPayload])` validates index 0 and returns a clean
+   *  settle while the drain runs too. That is the one hazard in this module a caller cannot see from
+   *  `(tokens, minOut, recipient)` — hence this count, in the same spirit as `target`. */
+  ingredientCount: number;
 }
 
 /**
@@ -49,7 +55,8 @@ export interface DecodedSettleCall extends DecodedSettleProgram {
  * The index-0 rule is a `V12Pot` property, and on a v1 `SauceRouter` it cuts BOTH ways, because a
  * SauceRouter executes EVERY ingredient. A settle at index ≥1 reads as `null` here (a missed settle —
  * harmless); but `cook([settlePayload, drainPayload])` on a SauceRouter validates index 0, returns the
- * settle, and the drain runs too — a settle reported for a call that does more than settle. So a
+ * settle, and the drain runs too — a settle reported for a call that does more than settle. The
+ * returned `ingredientCount` is how a caller detects that: require it to be 1 on a SauceRouter. So a
  * non-null result is a statement about a v12 cook ONLY. On a SauceRouter it is not sufficient, for the
  * same reason `extractEvmSettleFromCalls` is not sufficient across `route.calls[]`. The detection IS `validateSettleProgram` (the pinned
  * program hash, plus a canonical tail), so an accepted ingredient is the audited settle program AND the
@@ -76,7 +83,11 @@ export function decodeSettleCall(callData: Hex, accepted?: readonly (Hex | Progr
     // so this returns `null` -- fail-closed, matching that layer. Falling back to the built-in pin
     // would be fail-OPEN: a caller whose configured accept-list resolved to empty would be told
     // "this is the audited settle" against a trust anchor they never listed.
-    return { ...validateSettleProgram(ingredients[0]!, ...(accepted ? [accepted] : [])), ingredientIndex: 0 };
+    return {
+      ...validateSettleProgram(ingredients[0]!, ...(accepted ? [accepted] : [])),
+      ingredientIndex: 0,
+      ingredientCount: ingredients.length,
+    };
   } catch (error) {
     // Only a DECODE failure means "this cook does not settle". A malformed pin -- a `{ hash: null }`
     // from config -- would otherwise be swallowed as that, and every intent would report no settle

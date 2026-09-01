@@ -60,7 +60,10 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
       it(`${v.name} occupies exactly 128 + 32N argument bytes`, () => {
         const d = decodeSettleProgram(settlePayload(v.args));
         expect(d.argsSize).toBe(128 + 32 * v.tokens.length);
-        expect(d.payloadSize).toBe(SETTLE_WIRE.PROGRAM_BYTES + d.argsSize);
+        // Against the VECTOR's own byte length, not `PROGRAM_BYTES + argsSize` -- that identity holds
+        // for any input by construction (`argsSize` is `payloadSize - programBytes`), so it could not
+        // fail even if SETTLE_PROGRAM's length had drifted from the constant.
+        expect(d.payloadSize).toBe(settlePayload(v.args).length / 2 - 1);
       });
     }
 
@@ -200,6 +203,12 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
   });
 
   describe('the program half', () => {
+    // This suite's only guard against SETTLE_PROGRAM and PROGRAM_BYTES drifting apart.
+    // verify.compile.test.ts re-derives both from source, but it needs the wasm compiler; this does not.
+    it('SETTLE_PROGRAM is exactly SETTLE_WIRE.PROGRAM_BYTES long', () => {
+      expect((SETTLE_PROGRAM.length - 2) / 2).toBe(SETTLE_WIRE.PROGRAM_BYTES);
+    });
+
     it('rejects a payload shorter than the program', () => {
       expectCode(() => decodeSettleProgram(SETTLE_PROGRAM.slice(0, -2) as Hex), 'PROGRAM_TRUNCATED');
     });

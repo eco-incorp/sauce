@@ -22,14 +22,15 @@ export const SETTLE_WIRE = {
    *  `(tokens, minOut, recipient)` as runtime entry arguments, so nothing about the caller's values
    *  reaches the compiler. This length is what locates the argument tail. */
   PROGRAM_BYTES: 391,
-  /** `keccak256` of those 391 bytes — the authenticity pin `validateSettleProgram` enforces.
-   *  Whole-program, not a body slice: program and arguments are disjoint byte regions now.
-   *
-   *  PRODUCED BY `@eco-incorp/sauce-compiler@0.5.0`. The dependency is a caret range, so a later
-   *  0.5.x that changes codegen would make a consumer's own compile fail this pin. When that happens
-   *  the fix is to re-pin here (`verify.compile.test.ts` recomputes both constants every run and will
-   *  fail first), not to loosen the check. */
+  /** Which compiler produced the bytes `PROGRAM_HASH` pins. The dependency is a caret range, so a
+   *  later 0.5.x that changes codegen would make a consumer's own compile fail that pin; the fix then
+   *  is to re-pin both, not to loosen the check. `verify.compile.test.ts` asserts this exact version
+   *  against the resolved package, so it cannot silently describe a producer that never ran. */
   PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@0.5.0",
+  /** `keccak256` of those `PROGRAM_BYTES` bytes — the authenticity pin `validateSettleProgram`
+   *  enforces, and the reason a matching payload runs the audited program and nothing else.
+   *  Whole-program, not a body slice: program and arguments are disjoint byte regions on this wire.
+   *  `verify.compile.test.ts` recomputes it from source every run and fails before any consumer does. */
   PROGRAM_HASH: "0x39ef0a5f26a7c586649ca3c59726cb4c1156105805ce5f39edfff9ff8704c743",
   /** Every argument word is 32 bytes, big-endian. */
   WORD_BYTES: 32,
