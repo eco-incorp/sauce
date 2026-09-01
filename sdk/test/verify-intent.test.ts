@@ -109,6 +109,21 @@ describe('extractEvmSettleFromCalls / extractEvmSettleFromIntent', () => {
     expect(found!.tokens.map((t) => BigInt(t))).toEqual([BigInt(TOKEN0), BigInt(TOKEN1)]);
   });
 
+  // The pin is re-pinned when compiler codegen changes; every intent already on chain still carries
+  // the OLD program. Without an accepted-hash override those become unverifiable, which is the exact
+  // failure this module exists to prevent.
+  it('accepts a caller-supplied hash set, so a re-pin does not orphan published intents', () => {
+    const hypotheticalNewPin = ('0x' + '99'.repeat(32)) as Hex;
+
+    // pin rotated and the old hash NOT accepted -> the on-chain payload stops verifying
+    expect(extractEvmSettleFromCalls([{ data: cook([SETTLE_PAYLOAD]) }], [hypotheticalNewPin])).toBeNull();
+
+    // the same payload, with the historical hash still accepted -> readable again
+    const found = extractEvmSettleFromCalls([{ data: cook([SETTLE_PAYLOAD]) }], [hypotheticalNewPin, SETTLE_WIRE.PROGRAM_HASH as Hex]);
+    expect(found).not.toBeNull();
+    expect(found!.minOut).toBe(MINOUT);
+  });
+
   it('returns null when no call carries a settle cook', () => {
     expect(extractEvmSettleFromCalls([calls[0]!, calls[1]!])).toBeNull();
   });

@@ -194,6 +194,12 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
       expect(() => encodeSettleProgram(tokens, minOut, recipient, '0xdead' as Hex)).toThrow(RangeError);
     });
 
+    it('refuses a minOut that is not a bigint as RangeError, not TypeError', () => {
+      // A caller deserializing minOut from JSON gets a number; the word-write loop would otherwise
+      // raise TypeError from a BigInt mix, breaking the RangeError contract every other input keeps.
+      expect(() => encodeSettleProgram(tokens, 1000 as unknown as bigint, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
+    });
+
     it('refuses a recipient above the 20-byte range', () => {
       expect(() => encodeSettleProgram(tokens, minOut, 1n << 161n, SETTLE_PROGRAM)).toThrow(RangeError);
     });

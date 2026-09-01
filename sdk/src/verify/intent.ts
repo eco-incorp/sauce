@@ -55,7 +55,7 @@ export interface DecodedSettleCall extends DecodedSettleProgram {
  * program hash, plus a canonical tail), so an accepted ingredient is the audited settle program AND the
  * unique byte encoding of the `(tokens, minOut, recipient)` reported.
  */
-export function decodeSettleCall(callData: Hex): DecodedSettleCall | null {
+export function decodeSettleCall(callData: Hex, accepted?: readonly Hex[]): DecodedSettleCall | null {
   let ingredients: readonly Hex[];
   try {
     const decoded = decodeFunctionData({ abi: COOK_ABI, data: callData });
@@ -72,7 +72,7 @@ export function decodeSettleCall(callData: Hex): DecodedSettleCall | null {
   // answer for what executes.
   if (ingredients.length === 0) return null;
   try {
-    return { ...validateSettleProgram(ingredients[0]!), ingredientIndex: 0 };
+    return { ...validateSettleProgram(ingredients[0]!, ...(accepted ? [accepted] : [])), ingredientIndex: 0 };
   } catch {
     return null; // ingredient 0 is not a settle payload — this cook does not settle
   }
@@ -114,9 +114,9 @@ export interface ExtractedEvmSettle extends DecodedSettleCall {
  * `target` is carried through on the result for exactly this check — compare it against a V12Pot address
  * you trust. Unvalidated, the parameters describe bytes that were handed to an unknown contract.
  */
-export function extractEvmSettleFromCalls(calls: readonly IntentCallLike[]): ExtractedEvmSettle | null {
+export function extractEvmSettleFromCalls(calls: readonly IntentCallLike[], accepted?: readonly Hex[]): ExtractedEvmSettle | null {
   for (let i = 0; i < calls.length; i++) {
-    const decoded = decodeSettleCall(calls[i]!.data);
+    const decoded = decodeSettleCall(calls[i]!.data, accepted);
     if (decoded) return { ...decoded, callIndex: i, target: calls[i]!.target };
   }
   return null;
@@ -133,6 +133,6 @@ export interface IntentLike {
  * intent-level wrapper over `extractEvmSettleFromCalls`. Duck-typed on `{ route: { calls } }`, so it takes
  * an eco-solver `Intent` (runtime or persisted) as-is. `null` if the intent carries no settle cook.
  */
-export function extractEvmSettleFromIntent(intent: IntentLike): ExtractedEvmSettle | null {
-  return extractEvmSettleFromCalls(intent.route.calls);
+export function extractEvmSettleFromIntent(intent: IntentLike, accepted?: readonly Hex[]): ExtractedEvmSettle | null {
+  return extractEvmSettleFromCalls(intent.route.calls, accepted);
 }

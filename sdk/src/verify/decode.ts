@@ -63,7 +63,16 @@ const argsLengthFor = (count: bigint): bigint => BigInt(SETTLE_WIRE.HEAD_BYTES +
  *  is not a clean address; `dirtyWord` (§ below) reports those upper bytes themselves. */
 const ADDRESS_MASK = (1n << BigInt(SETTLE_WIRE.ADDRESS_BYTES * 8)) - 1n;
 
-/** Stable failure codes — safe to `switch` on. Every one is a REAL rejection this decoder makes. */
+/** Stable failure codes — safe to `switch` on. Every one is a REAL rejection this decoder makes.
+ *
+ *  BREAKING vs the v1 grammar: eight codes are GONE, because the defects they named cannot occur on a
+ *  fixed-width wire. `NON_MINIMAL_PUSH`, `TRUNCATED_PUSH`, `TRUNCATED_MINOUT`, `TRUNCATED_RECIPIENT`
+ *  and `OVERSIZE_ADDRESS` all described a variable-length PUSH prologue that no longer exists;
+ *  `ARITY_MISMATCH` and `NOT_SETTLE_SHAPED` described shape inference the whole-program hash now
+ *  settles outright; `BODY_LENGTH` described a body slice that is no longer a separate region. Their
+ *  uniqueness role is taken by §4's canonicality rules and `PROGRAM_HASH`. Only `EMPTY` and
+ *  `ZERO_RECIPIENT` carry over. A consumer with an exhaustive `switch` on the old union will compile
+ *  and silently stop matching, which is why this ships as a breaking change. */
 export type SettleFailureCode =
   | "EMPTY"
   | "PROGRAM_TRUNCATED"
@@ -352,17 +361,36 @@ export function decodeSettleProgram(payload: Hex): DecodedSettleProgram {
  *
  * Throws `SettleDecodeError` with code `PROGRAM_HASH` when the program is a different 391 bytes,
  * and whatever `decodeSettleProgram` would throw otherwise.
+ *
+ * `accepted` overrides the pin. The dependency is a caret range and `SETTLE_WIRE` documents that a
+ * codegen change is answered by RE-PINNING — at which point every intent already on chain carries the
+ * OLD program, and a single hard-coded pin makes all of them unverifiable. Pass the hashes you accept
+ * (the current pin plus any historical ones) to keep those payloads readable across a re-pin. Defaults
+ * to `[SETTLE_WIRE.PROGRAM_HASH]`.
  */
-export function validateSettleProgram(payload: Hex): DecodedSettleProgram {
+export function validateSettleProgram(payload: Hex, accepted: readonly Hex[] = [SETTLE_WIRE.PROGRAM_HASH]): DecodedSettleProgram {
   const decoded = decodeSettleProgram(payload);
-  if (decoded.programHash !== SETTLE_WIRE.PROGRAM_HASH) {
+  if (!accepted.includes(decoded.programHash as Hex)) {
     throw new SettleDecodeError(
       "PROGRAM_HASH",
-      `validateSettleProgram: program hashes to ${decoded.programHash}, not the pinned ${SETTLE_WIRE.PROGRAM_HASH}`,
+      `validateSettleProgram: program hashes to ${decoded.programHash}, not ${accepted.length === 1 ? `the pinned ${accepted[0]}` : `any of the ${accepted.length} accepted hashes`}`,
     );
   }
 
   return decoded;
+}
+
+/** `BigInt` is the wrong gate for a caller-supplied address: `BigInt("")` is `0n` rather than a throw,
+ *  so an empty string would encode as `address(0)` and sweep it; and malformed hex raises `SyntaxError`,
+ *  where every other rejection here is a `RangeError` callers already catch. Require the canonical
+ *  `0x`-prefixed spelling and report both as `RangeError`. */
+function coerceAddressValue(value: bigint | `0x${string}`, label: string): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{1,40}$/.test(value)) {
+    throw new RangeError(`encodeSettleProgram: ${label} is not a 0x-prefixed hex address: ${String(value)}`);
+  }
+
+  return BigInt(value);
 }
 
 /**
@@ -386,19 +414,6 @@ export function validateSettleProgram(payload: Hex): DecodedSettleProgram {
  * shipped alongside the claim they support. `SETTLE_WIRE.PROGRAM_HASH` is what to check them
  * against once you have them.
  */
-/** `BigInt` is the wrong gate for a caller-supplied address: `BigInt("")` is `0n` rather than a throw,
- *  so an empty string would encode as `address(0)` and sweep it; and malformed hex raises `SyntaxError`,
- *  where every other rejection here is a `RangeError` callers already catch. Require the canonical
- *  `0x`-prefixed spelling and report both as `RangeError`. */
-function coerceAddressValue(value: bigint | `0x${string}`, label: string): bigint {
-  if (typeof value === "bigint") return value;
-  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{1,40}$/.test(value)) {
-    throw new RangeError(`encodeSettleProgram: ${label} is not a 0x-prefixed hex address: ${String(value)}`);
-  }
-
-  return BigInt(value);
-}
-
 export function encodeSettleProgram(tokens: readonly (bigint | `0x${string}`)[], minOut: bigint, recipient: bigint | `0x${string}`, programHex: Hex): Hex {
   if (tokens.length === 0) throw new RangeError("encodeSettleProgram: tokens must have at least one entry");
   const tokenValues = tokens.map((token, i) => coerceAddressValue(token, `tokens[${i}]`));
@@ -416,6 +431,10 @@ export function encodeSettleProgram(tokens: readonly (bigint | `0x${string}`)[],
   if (recipientValue < 0n || recipientValue > ADDRESS_MASK) {
     throw new RangeError(`encodeSettleProgram: recipient does not fit in ${SETTLE_WIRE.ADDRESS_BYTES} bytes`);
   }
+  // Guarded like the addresses above, and for the same reason: a runtime caller bypassing the type
+  // system (minOut deserialized from JSON as a number) would otherwise reach the word-write loop and
+  // raise TypeError from a BigInt mix, where every rejection here is a RangeError callers catch.
+  if (typeof minOut !== "bigint") throw new RangeError(`encodeSettleProgram: minOut must be a bigint, got ${typeof minOut}`);
   if (minOut < 0n || minOut >= 1n << 256n) throw new RangeError(`encodeSettleProgram: minOut ${minOut} is out of uint256 range`);
 
   const programBytes = hexToBytesLocal(programHex);
