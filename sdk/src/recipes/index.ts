@@ -85,10 +85,11 @@ let cached: string | null = null;
  * recipient, with a minimum-output floor on `tokens[0]`. Read once and cached.
  *
  * Returned as the raw source (not pre-stripped, not pre-compiled) so a partner can read, hash, or
- * diff exactly what gets compiled. The compiler's own front-end handles the TypeScript annotations,
- * so the source needs no pre-processing and no extra option — `CompileOptions` is
- * `{ target, resolve, resolvePackage?, entry?, contracts?, inlineContracts?, ambient?, defines?,
- * optimize? }`.
+ * diff exactly what gets compiled. The compiler's own front-end handles the TypeScript annotations, so
+ * the source needs no pre-processing and no extra option — pass the `CompileOptions` the compiler
+ * package itself exports (`import type { CompileOptions } from "sauce-compiler"`). Deliberately not
+ * restated here: `routes/rs-compile.ts` imports that type for the same reason, since a hand-written
+ * mirror drifts on the next compiler minor with nothing to catch it.
  */
 export function settleSource(): string {
   if (cached === null) cached = readFileSync(SETTLE_SOURCE_PATH, "utf-8");

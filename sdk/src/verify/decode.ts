@@ -353,7 +353,12 @@ function parseToDecoded(parse: SettleParse): DecodedSettleProgram | null {
  *  A dirty TOKEN word is NOT declined: the engine masks a call target to 160 bits, so there the masked
  *  answer is exactly what executes, and reporting it is what shows the payload's true meaning. */
 export function bestEffortDecode(parse: SettleParse): DecodedSettleProgram | null {
-  if (parse.fatal?.code === "TOKENS_OFFSET") return null;
+  // Both declines read STATE, not `fatal.code`. Gating on the code would be correct only while the
+  // pointer check is the first non-returning fatal: add an earlier one, reorder the scan, or hand this
+  // a caller-built `SettleParse` (the type is exported and is this function's only parameter) and the
+  // decline would silently stop firing -- reporting tokens read at offset 96 for a payload the engine
+  // reads elsewhere, the exact wrong answer this exists to refuse.
+  if (parse.tokensOffset !== null && parse.tokensOffset !== BigInt(SETTLE_WIRE.HEAD_BYTES)) return null;
   if (parse.recipientWord !== null && parse.recipientWord !== (parse.recipient ?? 0n)) return null;
 
   return parseToDecoded(parse);

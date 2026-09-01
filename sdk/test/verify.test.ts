@@ -23,6 +23,7 @@ import {
   SETTLE_REJECTIONS,
   SETTLE_VECTORS,
   SETTLE_WIRE,
+  type SettleParse,
 } from '../src/verify/index';
 import { keccak256 } from 'viem';
 import type { Hex } from 'viem';
@@ -158,6 +159,21 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
     // Unlike a dirty TOKEN word -- which the engine masks as a call target, so the masked answer is
     // what executes -- the recipient word is passed through unmasked. Reporting the masked address
     // would name a different 256-bit key than the transfer actually uses, so this declines instead.
+    // Gated on parse STATE, not on which fatal won the scan. Exercised through a hand-built
+    // SettleParse -- the type is exported and is bestEffortDecode's only parameter -- carrying a
+    // non-canonical pointer under a DIFFERENT fatal code. A `fatal.code === 'TOKENS_OFFSET'` gate
+    // would not fire here and would confidently report tokens read at the canonical offset.
+    it('DECLINES a non-canonical pointer even when another fatal won the scan', () => {
+      const canonical = parseSettleProgram(settlePayload(SETTLE_VECTORS[0]!.args));
+      const reordered: SettleParse = {
+        ...canonical,
+        tokensOffset: 128n,
+        fatal: { code: 'ARGS_OVERLONG', message: 'some earlier check reported first' },
+      };
+
+      expect(bestEffortDecode(reordered)).toBeNull();
+    });
+
     it('DECLINES a dirty recipient word rather than reporting the masked address', () => {
       const trap = SETTLE_REJECTIONS.find((r) => r.name.startsWith('dirtyRecipient'))!;
       const parse = parseSettleProgram(settlePayload(trap.args));
