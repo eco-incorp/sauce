@@ -115,6 +115,19 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
       expect(bestEffortDecode(parse)!.tokens[0]).toBe(SETTLE_VECTORS[0]!.tokens[0]!.toLowerCase());
     });
 
+    it('DECLINES a non-canonical tokens pointer rather than reporting what it read', () => {
+      // The engine follows the pointer; parseSettleProgram reads at the canonical offset. On this
+      // payload those name different tokens, so a confident report would be the wrong answer.
+      // The vector's padding word is 0x02 so the canonical read parses fully and the decline is
+      // what produces null -- with an inconsistent count the parse bails first and cannot see it.
+      const trap = SETTLE_REJECTIONS.find((r) => r.name.startsWith('tokensPointer'))!;
+      const parse = parseSettleProgram(settlePayload(trap.args));
+
+      expect(parse.fatal?.code).toBe('TOKENS_OFFSET');
+      expect(parse.tokenWords.length).toBeGreaterThan(0);
+      expect(bestEffortDecode(parse)).toBeNull();
+    });
+
     it('a dirty recipient word likewise decodes to the address it names', () => {
       const trap = SETTLE_REJECTIONS.find((r) => r.name.startsWith('dirtyRecipient'))!;
       const parse = parseSettleProgram(settlePayload(trap.args));
@@ -179,6 +192,23 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
 
     it('refuses a program that is not 391 bytes', () => {
       expect(() => encodeSettleProgram(tokens, minOut, recipient, '0xdead' as Hex)).toThrow(RangeError);
+    });
+
+    it('refuses a recipient above the 20-byte range', () => {
+      expect(() => encodeSettleProgram(tokens, minOut, 1n << 161n, SETTLE_PROGRAM)).toThrow(RangeError);
+    });
+
+    it('refuses a programHex that is not valid hex', () => {
+      expect(() => encodeSettleProgram(tokens, minOut, recipient, '0xzz' as Hex)).toThrow(RangeError);
+    });
+
+    // `BigInt('')` is `0n`, not a throw, so an empty string would have encoded as address(0) and
+    // swept it. Malformed hex raised SyntaxError, where every other rejection here is a RangeError.
+    it('refuses an empty or malformed address string as RangeError, not address(0)', () => {
+      for (const bad of ['', '0x', '0xzz', '0x42..', '833589fcd6edb6e08f4c7c32d4f71b54bda02913']) {
+        expect(() => encodeSettleProgram([bad as Hex], minOut, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
+        expect(() => encodeSettleProgram(tokens, minOut, bad as Hex, SETTLE_PROGRAM)).toThrow(RangeError);
+      }
     });
   });
 

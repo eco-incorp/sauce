@@ -94,11 +94,18 @@ export interface RejectionVector {
  * injective, and `encodeSettleProgram` re-encode-and-compare stops agreeing with decode-and-compare.
  * `upperBytes` is the sharpest: the engine masks a call target to 160 bits, so twelve arbitrary
  * bytes ride along in a token word and sweep the very same token.
+ *
+ * Each vector's `code` is reachable under ANY check order, so a Go or Solidity reimplementation is not
+ * required to match this decoder's sequence to pass. `tokensPointer` is the one that has to be built
+ * for that: its padding word is `0x02` so that the count read at the canonical offset agrees with the
+ * tail length, leaving the non-canonical pointer as the only complaint. A length-first decoder and a
+ * pointer-first decoder both report `TOKENS_OFFSET`. (The engine reads its array from offset 128, so
+ * that word is not in its read path -- `engineAccepts` is unaffected by its value.)
  */
 export const SETTLE_REJECTIONS: readonly RejectionVector[] = [
   {
     name: "tokensPointer — 0x80 with a padding word, instead of the canonical 0x60",
-    args: "0x000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004200000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000dead0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
+    args: "0x00000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000420000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "TOKENS_OFFSET",
     engineAccepts: true,
   },

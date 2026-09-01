@@ -250,7 +250,10 @@ export function parseSettleProgram(payload: Hex): SettleParse {
     result.fatal = result.fatal ?? { code: "TOKENS_EMPTY", message: "token count is 0 — a settle sweeps at least its floor token" };
   }
 
-  // Scan order: the recipient word precedes the array, so its complaint is reported first.
+  // Within the dirty check only: the recipient word precedes the array, so its complaint wins over a
+  // token's. This says nothing about ordering ACROSS codes -- `fatal` is first-wins by check position,
+  // not by byte position, and ARGS_OVERLONG and TOKENS_EMPTY are both recorded above. Trailing slack
+  // plus a dirty recipient reports ARGS_OVERLONG.
   const dirtyToken = result.tokenWords.map((word, i) => dirtyWord(word, `tokens[${i}]`)).find((message) => message !== null);
   const dirty = dirtyWord(recipientWord, "recipient") ?? dirtyToken ?? null;
   if (dirty !== null) {
@@ -383,10 +386,23 @@ export function validateSettleProgram(payload: Hex): DecodedSettleProgram {
  * shipped alongside the claim they support. `SETTLE_WIRE.PROGRAM_HASH` is what to check them
  * against once you have them.
  */
+/** `BigInt` is the wrong gate for a caller-supplied address: `BigInt("")` is `0n` rather than a throw,
+ *  so an empty string would encode as `address(0)` and sweep it; and malformed hex raises `SyntaxError`,
+ *  where every other rejection here is a `RangeError` callers already catch. Require the canonical
+ *  `0x`-prefixed spelling and report both as `RangeError`. */
+function coerceAddressValue(value: bigint | `0x${string}`, label: string): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{1,40}$/.test(value)) {
+    throw new RangeError(`encodeSettleProgram: ${label} is not a 0x-prefixed hex address: ${String(value)}`);
+  }
+
+  return BigInt(value);
+}
+
 export function encodeSettleProgram(tokens: readonly (bigint | `0x${string}`)[], minOut: bigint, recipient: bigint | `0x${string}`, programHex: Hex): Hex {
   if (tokens.length === 0) throw new RangeError("encodeSettleProgram: tokens must have at least one entry");
-  const tokenValues = tokens.map((t) => (typeof t === "bigint" ? t : BigInt(t)));
-  const recipientValue = typeof recipient === "bigint" ? recipient : BigInt(recipient);
+  const tokenValues = tokens.map((token, i) => coerceAddressValue(token, `tokens[${i}]`));
+  const recipientValue = coerceAddressValue(recipient, "recipient");
   if (recipientValue === 0n) throw new RangeError("encodeSettleProgram: recipient must be nonzero");
   // Negatives need their own rejection, not just the upper bound: `-1n > ADDRESS_MASK` is FALSE and
   // `-1n === 0n` is FALSE, so a negative clears both guards -- and the write loop below terminates on
