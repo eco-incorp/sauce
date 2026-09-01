@@ -24,14 +24,14 @@ const TARGETS = ['evm', 'svm'] as const;
 const REVERT_OP = 0xb6;
 
 describe('plugin manifest (Layer C)', () => {
-  // Empty, and an entry is not free to add: the SDK's route path (`routes/ambient.ts#chainAmbient`)
-  // hands this list to EVERY `openRoute` compile, and the RS compiler resolves a bare specifier by
-  // walking up from the caller's `baseDirs` — which `openRoute` does not supply. `@sauce/token`
-  // lives at `sdk/src/std/token/` and is installed into no node_modules tree, so declaring it here
-  // makes every route throw `failed to import module "@sauce/token"`. It belongs here once the SDK
-  // resolves its own stdlib on the route path.
-  it('declares no ambient module — none resolves on the route path yet', () => {
-    expect(loadPlugin().ambient).toEqual([]);
+  // `@sauce/token` is the default ambient MODULE: `chainAmbient()` (routes/ambient.ts) hands this
+  // list to EVERY `openRoute` compile, and it resolves because `rs-compile.ts`'s `SDK_STD_PACKAGES`
+  // maps it to the SDK's own vendored copy (`dist/std/token` when built) regardless of `baseDirs`.
+  // An entry that is NOT resolvable on the route path (e.g. an npm package a consumer may not have
+  // installed) would make every route throw `failed to import module "..."`, so this list must only
+  // ever name modules the SDK can resolve itself.
+  it('declares @sauce/token as the default ambient module', () => {
+    expect(loadPlugin().ambient).toEqual(['@sauce/token']);
   });
 
   describe('nameParity matches what the compiler actually implements', () => {

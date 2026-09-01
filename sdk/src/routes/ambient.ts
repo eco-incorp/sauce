@@ -70,16 +70,18 @@ export function chainDefines(
 }
 
 /**
- * P7 — the ambient-MODULE half of a chain bundle (`chainDefines` above is the scalar-defines
- * half). Returns the ambient module specifier list active for `chain`: RS-compiler-only (see
- * `sauce-route.ts#SauceCompileOptions.ambient`/`rs-compile.ts`) module exports broadcast into a
- * chain's compiled program with no `import` line.
+ * The ambient-MODULE half of a chain bundle (`chainDefines` above is the scalar-DEFINES half — two
+ * distinct mechanisms, see `plugin/index.ts`'s note). Returns the ambient module specifier list
+ * active for `chain`: whole SauceScript library modules whose exported functions/consts are
+ * broadcast into a chain's compiled program with no `import` line (see
+ * `sauce-route.ts#SauceCompileOptions.ambient`/`rs-compile.ts`).
  *
  * Currently a SINGLE source of truth, not yet chain-specific: every chain gets the same list, the
- * plugin manifest's own `ambient` array (`plugin/index.ts#loadPlugin`) — empty by default on this
- * branch, see that file's own note. Extensible to a genuinely per-chain bundle later (e.g. an SVM
- * destination activating an SVM-only ambient module an EVM one shouldn't see) without changing
- * this function's signature — a caller already threads `chain` through.
+ * plugin manifest's own `ambient` array (`plugin/index.ts#loadPlugin`) — `["@sauce/token"]` by
+ * default, resolved to the SDK's own vendored copy on the route path. Extensible to a genuinely
+ * per-chain bundle later (e.g. an SVM destination activating an SVM-only ambient module an EVM one
+ * shouldn't see) without changing this function's signature — a caller already threads `chain`
+ * through.
  */
 export function chainAmbient(_chain: CanonicalChain): string[] {
   return loadPlugin().ambient;

@@ -22,20 +22,29 @@ const manifestPath = join(thisDir, "manifest.json");
  * compilers' loaders are meant to read (see
  * `docs/plans/P5-plugin-skeleton-design.md`).
  *
- * `ambient` ships EMPTY, and an entry is not free to add: `chainAmbient()` (routes/ambient.ts)
- * hands this list to EVERY `openRoute` compile, which both activates the RS compiler and makes the
- * compile fail unless each specifier resolves. `rs-compile.ts` resolves a bare specifier by walking
- * up from the caller's `baseDirs` looking for `node_modules/<pkg>`, and `openRoute` supplies no
- * `baseDirs` — so a specifier that is not installed in a real `node_modules` tree makes every route
- * throw `failed to import module "<name>"`.
+ * TWO SEPARATE MECHANISMS, one word. Don't conflate them:
+ *   • ambient DEFINES  (`routes/ambient.ts#chainDefines`) — chain-scoped SCALARS (chainId, protocol
+ *     contract addresses, token symbol -> address) injected as compile-time `defines`. Always on.
+ *   • ambient MODULES  (this `ambient` list, via `chainAmbient`) — whole SauceScript LIBRARY modules
+ *     whose exported functions/consts are broadcast into every route with no `import` line.
  *
- * `@sauce/token` is exactly that case today: it lives at `sdk/src/std/token/` and is never
- * installed anywhere the walk can find it (the token suites reach it through a synthetic resolver
- * in their own harness). It belongs here once the SDK can resolve its own stdlib on the route path,
- * not before.
+ * `ambient` now ships with `@sauce/token`: `chainAmbient()` (routes/ambient.ts) hands this list to
+ * EVERY `openRoute` compile, so every route can call the token stdlib's `approve`/`transfer`/
+ * `balanceOf`/... with zero import. This is only safe because `rs-compile.ts` resolves `@sauce/token`
+ * to the SDK's OWN vendored copy (`SDK_STD_PACKAGES`, from `dist/std/token` when built) regardless of
+ * `baseDirs` — a specifier the compile can't resolve makes EVERY route throw
+ * `failed to import module "<name>"`, so an entry is not free to add: it must be resolvable on the
+ * route path first (an npm package a consumer may not have installed is exactly what this list must
+ * NOT name).
+ *
+ * NOTE: the token FUNCTION surface is what's live (`approve(token, spender, amount)`), NOT a
+ * `Token(addr).approve(...)` wrapper — the published compiler's M1 subset rejects a method call on a
+ * call result, so the wrapper is gated on a compiler feature. Once `@sauce/token` can export a
+ * `Token`, it appears globally for free, already broadcast from here.
  */
 export interface SaucePlugin {
-  /** Module specifiers broadcast into every compile's global resolution set with no import line. */
+  /** Ambient MODULE specifiers — library modules whose exports broadcast into every compile with no
+   *  import line (distinct from the ambient DEFINES `chainDefines` threads in). */
   ambient: string[];
   /** SauceScript surface name -> the underlying engine/opcode name each compiler actually implements. */
   nameParity: Record<string, string>;
