@@ -25,10 +25,13 @@
  * spends its word on a pointer to `[count][element…]`, ABI-style, rooted at the start of `args`.
  *
  * §4 CANONICALITY — WHY THIS IS STRICTER THAN THE ENGINE. Measured on a real v12 runtime, the
- * engine ACCEPTS three payloads this decoder rejects: a `tokens_ptr` other than 96 (it follows any
- * offset), trailing bytes past the token array, and a token word whose upper 12 bytes are dirty
- * (the call target is masked to 160 bits, so it sweeps the same token). Each is a DIFFERENT byte
- * string producing IDENTICAL behavior. Accepting them would make the decode non-injective and put
+ * engine ACCEPTS four payloads this decoder rejects: a `tokens_ptr` other than 96 (it follows any
+ * offset), trailing bytes past the token array, a token word whose upper 12 bytes are dirty (the
+ * call target is masked to 160 bits, so it sweeps the same token), and a dirty RECIPIENT word —
+ * which the engine passes through unmasked, so it reaches the token as-is. The first three move the
+ * same tokens against any ERC20; the fourth is stopped only by the callee's own `address` check, so
+ * against a token that omits it (Vyper, older solc, a forwarding proxy) it too delivers identically.
+ * Each is a DIFFERENT byte string producing IDENTICAL behavior. Accepting them would make the decode non-injective and put
  * `encodeSettleProgram`'s re-encode-and-compare (§5) at odds with a decode-and-compare, so all
  * three are refused: an accepted payload is the UNIQUE byte encoding of the values it decodes to.
  *
@@ -370,7 +373,11 @@ export function decodeSettleProgram(payload: Hex): DecodedSettleProgram {
  */
 export function validateSettleProgram(payload: Hex, accepted: readonly Hex[] = [SETTLE_WIRE.PROGRAM_HASH]): DecodedSettleProgram {
   const decoded = decodeSettleProgram(payload);
-  if (!accepted.includes(decoded.programHash as Hex)) {
+  // Compared case-insensitively: `programHash` is always viem's lowercase keccak, so a historical pin
+  // supplied in any other spelling would silently fail to match and orphan exactly the payloads this
+  // parameter exists to keep readable -- surfacing through the intent path as a bare `null`.
+  const normalized = accepted.map((hash) => hash.toLowerCase());
+  if (!normalized.includes(decoded.programHash.toLowerCase() as Hex)) {
     throw new SettleDecodeError(
       "PROGRAM_HASH",
       `validateSettleProgram: program hashes to ${decoded.programHash}, not ${accepted.length === 1 ? `the pinned ${accepted[0]}` : `any of the ${accepted.length} accepted hashes`}`,

@@ -24,8 +24,17 @@ export interface ConformanceVector {
   args: Hex;
 }
 
-/** The full on-the-wire payload for a vector's tail: `program || args`. */
+/** The full on-the-wire payload for a vector's tail: `program || args`.
+ *
+ *  Exported from `./verify`, so it takes a caller's hex rather than only this file's literals: an
+ *  unprefixed tail would otherwise lose its first byte to the slice and resurface as a puzzling
+ *  `ARGS_TRUNCATED`, and a `0X` prefix — which the decoder itself tolerates — would produce garbage.
+ *  Requires the canonical `0x`, consistent with `encodeSettleProgram`'s inputs. */
 export function settlePayload(args: Hex): Hex {
+  if (typeof args !== "string" || !/^0x([0-9a-fA-F]{2})*$/.test(args)) {
+    throw new RangeError(`settlePayload: args must be 0x-prefixed hex of whole bytes, got ${String(args)}`);
+  }
+
   return (SETTLE_PROGRAM + args.slice(2)) as Hex;
 }
 
@@ -83,6 +92,11 @@ export interface RejectionVector {
    *  this decoder being stricter than the engine on purpose (decode.ts §4), and the vector is
    *  load-bearing: a lax implementation would pass every other test in this corpus. */
   engineAccepts: boolean;
+  /** Whether the whole call then SUCCEEDS and moves the same tokens as the canonical payload, against
+   *  a standard solc ERC20. Distinct from `engineAccepts`, and the e2e's on-chain equivalence loop
+   *  filters on THIS: the engine can run a payload that the *callee* refuses, in which case the
+   *  identical-behavior claim holds only for tokens that do not perform the callee's check. */
+  sweepsIdentically: boolean;
 }
 
 /**
@@ -108,41 +122,53 @@ export const SETTLE_REJECTIONS: readonly RejectionVector[] = [
     args: "0x00000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000420000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "TOKENS_OFFSET",
     engineAccepts: true,
+    sweepsIdentically: true,
   },
   {
     name: "trailingSlack — a canonical tail with 32 zero bytes appended",
     args: "0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000042000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000000000000000000000000000000000000000000000" as Hex,
     code: "ARGS_OVERLONG",
     engineAccepts: true,
+    sweepsIdentically: true,
   },
   {
     name: "upperBytes — tokens[0] carries 0xff in all 12 bytes above its address",
     args: "0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000042000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffff833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "DIRTY_ADDRESS_WORD",
     engineAccepts: true,
+    sweepsIdentically: true,
   },
   {
     name: "dirtyRecipient — the recipient word carries 0xff above its address",
     args: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffff42000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "DIRTY_ADDRESS_WORD",
-    engineAccepts: false,
+    // The engine passes the RECIPIENT word through unmasked -- unlike a token word, which it masks as
+    // a CALL target -- so it executes this payload and emits `a9059cbb <dirty recipient> ...`. The
+    // revert against a solc ERC20 is that callee's own dirty-`address` ABI check, not the engine's.
+    // A token that does not perform it (Vyper, older solc, a raw-forwarding proxy) delivers to the
+    // same recipient as the canonical payload, which is the non-injectivity §4 exists to refuse.
+    engineAccepts: true,
+    sweepsIdentically: false,
   },
   {
     name: "shortArray — count says 2, one element word present",
     args: "0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000042000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000002000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "ARGS_TRUNCATED",
     engineAccepts: false,
+    sweepsIdentically: false,
   },
   {
     name: "zeroRecipient — the recipient word is 0",
     args: "0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "ZERO_RECIPIENT",
     engineAccepts: false,
+    sweepsIdentically: false,
   },
   {
     name: "emptyArray — count is 0, so there is no floor token",
     args: "0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000042000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000" as Hex,
     code: "TOKENS_EMPTY",
     engineAccepts: false,
+    sweepsIdentically: false,
   },
 ];

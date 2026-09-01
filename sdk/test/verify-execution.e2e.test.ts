@@ -3,7 +3,7 @@
  *
  * Everything else about `/verify` is a claim about bytes: that `SETTLE_VECTORS[i].args` is what the
  * settle program will read as `(tokens, minOut, recipient)`, and that the three
- * `engineAccepts: true` entries in `SETTLE_REJECTIONS` are byte strings the engine cannot tell apart
+ * `sweepsIdentically: true` entries in `SETTLE_REJECTIONS` are byte strings the engine cannot tell apart
  * from the canonical payload. Neither claim is provable by encoding and decoding with this package's
  * own two functions — that only shows they agree with each other. This suite runs the committed
  * payload bytes VERBATIM on a real v12 runtime against real ERC20s and reads the result off chain.
@@ -192,7 +192,10 @@ describeEvm('settle payload execution on the real V12 EVM engine', () => {
   describe('the traps — payloads the ENGINE cannot tell from the canonical one', () => {
     const canonical = SETTLE_VECTORS[0]!;
 
-    for (const trap of SETTLE_REJECTIONS.filter((r) => r.engineAccepts)) {
+    // `sweepsIdentically`, not `engineAccepts`: the engine also runs the dirty-RECIPIENT payload, but
+    // a solc ERC20's own address check refuses it, so it cannot be shown equivalent against the
+    // ERC20Mock etched here. It is still a trap for the decoder -- see vectors.ts.
+    for (const trap of SETTLE_REJECTIONS.filter((r) => r.sweepsIdentically)) {
       it(`${trap.name} runs identically to ${canonical.name}`, async () => {
         // This is the whole case for decode.ts §4. The decoder refuses these bytes; the engine does
         // not, and produces the same transfer. Two byte strings, one meaning — so a decoder that

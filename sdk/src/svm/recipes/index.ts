@@ -41,9 +41,10 @@
  *     Transfer-HOOK mints are out of scope; a resolver should reject one with a clear error.
  *
  * `svmSettleRefs(n)` gives the manifest order to resolve against. There is no
- * `decodeSvmSettleProgram` and there cannot be one: the account identities are never in the
- * bytecode on SVM (Solana requires them attached), so there is no prologue carrying them to parse
- * back. Verification is by RECOMPILE, in `@eco-incorp/sauce-sdk/svm/verify`:
+ * `decodeSvmSettleProgram` and there cannot be one: the account identities are never in the bytecode
+ * on SVM (Solana requires them attached), so there is nothing in the program to parse them back out
+ * of. The EVM side decodes because its values ride an argument TAIL appended after the program, not
+ * because they are embedded in it. Verification is by RECOMPILE, in `@eco-incorp/sauce-sdk/svm/verify`:
  * `verifySvmSettleProgram` recompiles this source with the caller's expected
  * `(escrowCount, minOut, splCount)` and byte-compares — proving the logic is genuine AND pinning
  * those two scalars, since both are folded in. The resolved account identities come from the

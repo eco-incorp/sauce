@@ -10,6 +10,11 @@
 // live in the program at all — they ride a fixed-width 32-byte-word tail — so there is no push to
 // scan and no minimality to enforce. The uniqueness those checks bought is now bought by the fixed
 // layout itself, plus `HEAD_BYTES` and the zero-upper-bytes rule (decode.ts, §4).
+//
+// ALSO GONE FROM `SETTLE_WIRE` in that change: `TUPLE_OP`, `PUSH_MIN`, `PUSH_MAX`, `MAX_ARITY`. All
+// four described that same prologue — there are no pushes to bound and no arity to cap when every
+// value is a fixed 32-byte word. A build breaking on one of them wants `PROGRAM_BYTES`, `WORD_BYTES`
+// or `HEAD_BYTES` instead. This is a breaking change to the published `./verify` subpath.
 
 /** Wire-format constants for the settle payload on engine target v12. */
 export const SETTLE_WIRE = {

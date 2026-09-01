@@ -72,7 +72,13 @@ export function decodeSettleCall(callData: Hex, accepted?: readonly Hex[]): Deco
   // answer for what executes.
   if (ingredients.length === 0) return null;
   try {
-    return { ...validateSettleProgram(ingredients[0]!, ...(accepted ? [accepted] : [])), ingredientIndex: 0 };
+    // An EMPTY list must fall back to the pin, not forward: `[]` is truthy and a default parameter
+    // only fires on `undefined`, so forwarding it either way accepts nothing and turns every intent
+    // into a bare `null` -- the exact orphaning `accepted` exists to prevent. A list assembled from
+    // config that matched nothing lands here.
+    const pins = accepted?.length ? accepted : undefined;
+
+    return { ...validateSettleProgram(ingredients[0]!, ...(pins ? [pins] : [])), ingredientIndex: 0 };
   } catch {
     return null; // ingredient 0 is not a settle payload — this cook does not settle
   }

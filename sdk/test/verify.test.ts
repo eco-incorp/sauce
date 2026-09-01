@@ -96,14 +96,27 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
       });
     }
 
-    it('the three traps are byte strings the ENGINE accepts — strictness here is deliberate, not defensive', () => {
+    it('the traps are byte strings the ENGINE accepts — strictness here is deliberate, not defensive', () => {
       // If this count ever drops, a rejection stopped being a trap and became an ordinary malformed
       // input, and the case for refusing it needs restating rather than silently inheriting.
       expect(SETTLE_REJECTIONS.filter((r) => r.engineAccepts).map((r) => r.code)).toEqual([
         'TOKENS_OFFSET',
         'ARGS_OVERLONG',
         'DIRTY_ADDRESS_WORD',
+        'DIRTY_ADDRESS_WORD',
       ]);
+    });
+
+    // The engine runs the dirty-recipient payload; a solc ERC20's own ABI check is what refuses it.
+    // So it is a trap for the decoder but not provable on chain against a standard token, which is
+    // why the e2e equivalence loop filters on `sweepsIdentically` rather than `engineAccepts`.
+    it('separates engine acceptance from on-chain equivalence', () => {
+      const engineRuns = SETTLE_REJECTIONS.filter((r) => r.engineAccepts);
+      const provable = SETTLE_REJECTIONS.filter((r) => r.sweepsIdentically);
+
+      expect(engineRuns).toHaveLength(4);
+      expect(provable).toHaveLength(3);
+      expect(provable.every((r) => r.engineAccepts)).toBe(true);
     });
 
     it('a dirty token word decodes to the SAME address it would sweep — which is why it is refused', () => {
@@ -192,6 +205,15 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
 
     it('refuses a program that is not 391 bytes', () => {
       expect(() => encodeSettleProgram(tokens, minOut, recipient, '0xdead' as Hex)).toThrow(RangeError);
+    });
+
+    it('settlePayload refuses a tail that is not canonical 0x hex', () => {
+      // Exported from ./verify, so an unprefixed tail would lose its first byte to the slice and
+      // resurface as a puzzling ARGS_TRUNCATED rather than a clear rejection.
+      for (const bad of ['', '0x1', '0Xdead', 'dead', '0xzz']) {
+        expect(() => settlePayload(bad as Hex)).toThrow(RangeError);
+      }
+      expect(() => settlePayload(SETTLE_VECTORS[0]!.args)).not.toThrow();
     });
 
     it('refuses a minOut that is not a bigint as RangeError, not TypeError', () => {

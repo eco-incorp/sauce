@@ -124,6 +124,25 @@ describe('extractEvmSettleFromCalls / extractEvmSettleFromIntent', () => {
     expect(found!.minOut).toBe(MINOUT);
   });
 
+  // programHash is always viem's lowercase keccak, so an uppercase historical pin would silently fail
+  // to match and orphan the payloads `accepted` exists to keep readable -- as a bare null, with nothing
+  // to diagnose it.
+  it('matches accepted hashes case-insensitively', () => {
+    const found = extractEvmSettleFromCalls([{ data: cook([SETTLE_PAYLOAD]) }], [SETTLE_WIRE.PROGRAM_HASH.toUpperCase() as Hex]);
+
+    expect(found).not.toBeNull();
+    expect(found!.minOut).toBe(MINOUT);
+  });
+
+  // `[]` is truthy and a default parameter only fires on undefined, so an empty list assembled from
+  // config that matched nothing must fall back to the pin rather than accepting nothing.
+  it('falls back to the pin for an empty accepted list', () => {
+    const found = extractEvmSettleFromCalls([{ data: cook([SETTLE_PAYLOAD]) }], []);
+
+    expect(found).not.toBeNull();
+    expect(found!.minOut).toBe(MINOUT);
+  });
+
   it('returns null when no call carries a settle cook', () => {
     expect(extractEvmSettleFromCalls([calls[0]!, calls[1]!])).toBeNull();
   });
