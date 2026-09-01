@@ -218,8 +218,26 @@ The per-arm signatures genuinely differ where the account models force it — SV
 methods, the SVM account manifest, and the no-neutral-arm packaging invariant — always runs, no engine
 needed) plus `svm.e2e.test.ts`/`evm.e2e.test.ts`, which EXECUTE the compiled bytecode against real SPL
 accounts and a real deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_RUST_V12_RUNTIME` above for why
-those two are gated. `src/std/` is **not** in the package `files` list yet, so it does not ship to
-consumers — this is validation-only for now.
+those two are gated. `src/std/token` now **ships**: `copy-verify-assets.mjs` copies it into
+`dist/std/token` (and `dist/` is in the package `files` list), because the route path resolves
+`@sauce/token` to this vendored copy — see the next paragraph.
+
+`@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
+list (`["@sauce/token"]`) is handed by `chainAmbient()` to EVERY `openRoute`/`compileSauceRoute`
+compile, so its exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any route
+body with **zero import**. This resolves because `rs-compile.ts`'s `SDK_STD_PACKAGES` maps the bare
+`@sauce/token` specifier to the SDK's own vendored `std/token` dir (`STD_ROOT`, = `dist/std` once
+built) regardless of `baseDirs` — an ambient module the compile can't resolve makes EVERY route
+throw, so that list must only ever name modules the SDK resolves itself. Two DISTINCT mechanisms
+share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
+protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports). **Known
+gap:** the published compiler's **M1 subset rejects a method call on a call result**
+(`Token(addr).approve(...)` → `calling anything other than a plain function name is not supported`),
+so only the FUNCTION surface is live, not a `Token(addr)` wrapper. `let t = IERC20.at(x);
+t.approve(...)` DOES compile, so the missing piece is small — an exportable/aliasable contract
+binding, or `Token(addr)` `.at()`-sugar — but it is a **`sauce`-repo compiler feature**, not an SDK
+change. Once it lands, `@sauce/token` adds a `Token` export and the wrapper appears globally for
+free, already broadcast from the ambient list.
 
 **`actions/`** — `actionsToSauce(actions)` lowers routing intents (`uniswapV3ExactInput`, bridges,
 wraps, stakes) to bytecode. Actions **chain**: output feeds the next implicitly (no `amountIn`) or via
