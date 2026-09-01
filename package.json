@@ -1,6 +1,6 @@
 {
   "name": "@eco-incorp/sauce-sdk",
-  "version": "0.10.5",
+  "version": "0.12.0",
   "description": "Sauce protocol tooling: SDK, action primitives, and a local dev environment.",
   "type": "module",
   "repository": {
