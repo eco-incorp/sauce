@@ -37,15 +37,20 @@ const { compile } = createRequire(import.meta.url)('sauce-compiler') as {
 };
 
 /** The resolved compiler's own manifest. `./package.json` is not in the package's `exports` map, so
- *  requiring it directly throws — resolve the entry and walk up to the manifest that owns it. */
+ *  requiring it directly throws — resolve the entry and walk up. Not every `package.json` on that walk
+ *  is the manifest: the package already ships `web/package.json`, which is only `{"type":"module"}`,
+ *  so anchor on the one that NAMES the package rather than the first one found. */
 function compilerPackage(): { name: string; version: string } {
   let dir = dirname(createRequire(import.meta.url).resolve('sauce-compiler'));
   for (let up = 0; up < 10; up++) {
     const manifest = join(dir, 'package.json');
-    if (existsSync(manifest)) return JSON.parse(readFileSync(manifest, 'utf-8'));
+    if (existsSync(manifest)) {
+      const parsed = JSON.parse(readFileSync(manifest, 'utf-8')) as Partial<{ name: string; version: string }>;
+      if (parsed.name === '@eco-incorp/sauce-compiler' && parsed.version) return { name: parsed.name, version: parsed.version };
+    }
     dir = dirname(dir);
   }
-  throw new Error('could not locate the sauce-compiler package.json');
+  throw new Error('could not locate the @eco-incorp/sauce-compiler manifest');
 }
 
 /** The compile `src/recipes/index.ts` documents to partners, run for real. */

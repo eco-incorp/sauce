@@ -34,15 +34,22 @@ import { validateSettleProgram, type DecodedSettleProgram } from "./decode.js";
 const COOK_ABI = parseAbi(["function cook(bytes[] ingredients) payable returns (bytes)"]);
 
 export interface DecodedSettleCall extends DecodedSettleProgram {
-  /** Index of the `cook` ingredient that validated as the settle payload (the batch may carry others). */
+  /** Index of the `cook` ingredient that validated as the settle payload. Always 0: only ingredient 0
+   *  executes, so only ingredient 0 is examined. Kept as a field because it is what the caller must
+   *  reason about, not because it varies. */
   ingredientIndex: number;
 }
 
 /**
  * Decodes one `Pot.cook(bytes[])` / `SauceRouter.cook(bytes[])` call and returns the settle payload it
- * carries — or `null` if the calldata is not a `cook` call, or no ingredient is the settle payload.
- * Never throws for a non-cook / non-settle input: a mismatched selector, malformed ABI, or a cook whose
- * ingredients are all non-settle all return `null`. The detection IS `validateSettleProgram` (the pinned
+ * carries — or `null` if the calldata is not a `cook` call, or ingredient 0 is not the settle payload.
+ * Never throws for a non-cook / non-settle input: a mismatched selector, malformed ABI, or a non-settle
+ * ingredient 0 all return `null`.
+ *
+ * The index-0 rule is a `V12Pot` property. A v1 `SauceRouter` executes EVERY ingredient, so a settle
+ * sitting at index ≥1 there reads as `null` here. That is the safe direction — a missed settle, never
+ * a settle reported for a call that does something else — but it means a non-null result is a
+ * statement about a v12 cook. The detection IS `validateSettleProgram` (the pinned
  * program hash, plus a canonical tail), so an accepted ingredient is the audited settle program AND the
  * unique byte encoding of the `(tokens, minOut, recipient)` reported.
  */

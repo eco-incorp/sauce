@@ -99,8 +99,8 @@ export function settleSource(): string {
  * The CCTP transfer demo — a BUILDER that constructs V2 `Intent`s via the cross-chain intent DSL,
  * distinct in kind from the source-shipped `settle` recipe above but built the SAME way underneath:
  * its two route PROGRAMS are standalone `.sauce.ts` assets (`cctp-split.sauce.ts`,
- * `plain-transfer.sauce.ts`) whose module-level `XFER_*` consts are replaced with each intent's
- * values via `defines` (see `cctp-transfer.ts:107,128`). That is the compile-time channel, and it
+ * `plain-transfer.sauce.ts`) whose module-level consts are replaced with each intent's values via
+ * `defines` — `CCTP_*` for the split (`cctp-transfer.ts:107`), `XFER_*` for the baseline (`:128`). That is the compile-time channel, and it
  * is a DIFFERENT mechanism from `settle.sauce.ts`, whose `main` takes its values as runtime entry
  * arguments and so compiles to one invariant program.
  *
