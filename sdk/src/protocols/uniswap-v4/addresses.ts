@@ -2,6 +2,18 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Monad (143) — Uniswap V4 (developers.uniswap.org/…/v4/deployments). Every address
+    // getCode-verified on-chain 2026-08-31 (rpc-mainnet.monadinfra.com). universalRouter
+    // is shared with the V3 deployment (same 0x0d97dc… on this chain).
+    chainId: 143,
+    chainName: "Monad",
+    addresses: {
+      poolManager: "0x188d586ddcf52439676ca21a244753fa19f9ea8e",
+      universalRouter: "0x0d97dc33264bfc1c226207428a79b26757fb9dc3",
+      positionManager: "0x5b7ec4a94ff9bedb700fb82ab09d5846972f4016",
+    },
+  },
+  {
     chainId: 1,
     chainName: "Ethereum",
     addresses: {
