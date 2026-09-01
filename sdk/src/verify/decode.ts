@@ -31,12 +31,15 @@
  * which the engine passes through unmasked, so it reaches the token as-is. The first three move the
  * same tokens against any ERC20; the fourth is stopped only by the callee's own `address` check, so
  * against a token that omits it (Vyper, older solc, a forwarding proxy) it too delivers identically.
- * Each is a DIFFERENT byte string producing IDENTICAL behavior. Accepting them would make the decode non-injective and put
- * `encodeSettleProgram`'s re-encode-and-compare (§5) at odds with a decode-and-compare, so all
- * three are refused: an accepted payload is the UNIQUE byte encoding of the values it decodes to.
+ * Each is a DIFFERENT byte string producing IDENTICAL behavior. Accepting them would make the decode
+ * non-injective and put `encodeSettleProgram`'s re-encode-and-compare (§5) at odds with a
+ * decode-and-compare, so ALL FOUR are refused — the recipient one included, precisely because whether
+ * it is caught depends on the callee rather than on the payload. An accepted payload is the UNIQUE
+ * byte encoding of the values it decodes to.
  *
  * DO NOT PORT A POSITIONAL DECODER ONTO THIS WIRE. Values here are fixed 32-byte words and the
- * tokens head word is a POINTER, not a value (§2) — so a reader that walks the tail by position,
+ * tokens head word is a POINTER, not a value (see the layout at the top of this file) — so a reader
+ * that walks the tail by position,
  * as a decoder for a PUSH-prologue encoding must, lands on the offset and returns a plausible
  * wrong answer instead of failing. That is the one mistake this format invites, and §4 is what
  * closes it.
@@ -65,6 +68,14 @@ const argsLengthFor = (count: bigint): bigint => BigInt(SETTLE_WIRE.HEAD_BYTES +
 /** The low 20 bytes of a word — an address's own bits. A value ABOVE this has dirty upper bytes and
  *  is not a clean address; `dirtyWord` (§ below) reports those upper bytes themselves. */
 const ADDRESS_MASK = (1n << BigInt(SETTLE_WIRE.ADDRESS_BYTES * 8)) - 1n;
+
+/** An accepted program: its `keccak256` AND the byte length the payload splits at. Both are needed —
+ *  the split happens before any hash is computed, so a historical pin whose program was a different
+ *  length cannot be matched by hash alone. */
+export interface ProgramPin {
+  hash: Hex;
+  bytes: number;
+}
 
 /** Stable failure codes — safe to `switch` on. Every one is a REAL rejection this decoder makes.
  *
@@ -174,7 +185,7 @@ export interface SettleParse {
 /** Best-effort single left-to-right pass — never throws. This is the shared engine both
  *  `decodeSettleProgram` (throws on `parse.fatal`) and `bestEffortDecode` (keeps whatever DID
  *  parse even when a later stage failed) run on top of. */
-export function parseSettleProgram(payload: Hex): SettleParse {
+export function parseSettleProgram(payload: Hex, programBytes: number = SETTLE_WIRE.PROGRAM_BYTES): SettleParse {
   const decodedHex = hexToBytesLocal(payload);
   const bytes = decodedHex ?? new Uint8Array(0);
   const result: SettleParse = {
@@ -198,17 +209,17 @@ export function parseSettleProgram(payload: Hex): SettleParse {
     result.fatal = { code: "EMPTY", message: "empty payload" };
     return result;
   }
-  if (bytes.length < SETTLE_WIRE.PROGRAM_BYTES) {
+  if (bytes.length < programBytes) {
     result.fatal = {
       code: "PROGRAM_TRUNCATED",
-      message: `payload is ${bytes.length} bytes, shorter than the ${SETTLE_WIRE.PROGRAM_BYTES}-byte settle program`,
+      message: `payload is ${bytes.length} bytes, shorter than the ${programBytes}-byte settle program`,
     };
     return result;
   }
 
-  result.program = bytes.subarray(0, SETTLE_WIRE.PROGRAM_BYTES);
+  result.program = bytes.subarray(0, programBytes);
   result.programHash = keccak256(bytesToHexLocal(result.program));
-  const args = bytes.subarray(SETTLE_WIRE.PROGRAM_BYTES);
+  const args = bytes.subarray(programBytes);
   result.args = args;
 
   // The head plus the array's count word is the smallest readable tail; below that nothing can be
@@ -342,8 +353,8 @@ export function bestEffortDecode(parse: SettleParse): DecodedSettleProgram | nul
  * It does NOT prove those 391 bytes are the settle program you audited — any 391-byte prefix
  * passes. Use `validateSettleProgram` when that matters, which is nearly always.
  */
-export function decodeSettleProgram(payload: Hex): DecodedSettleProgram {
-  const parse = parseSettleProgram(payload);
+export function decodeSettleProgram(payload: Hex, programBytes: number = SETTLE_WIRE.PROGRAM_BYTES): DecodedSettleProgram {
+  const parse = parseSettleProgram(payload, programBytes);
   if (parse.fatal) {
     throw new SettleDecodeError(parse.fatal.code, `decodeSettleProgram: ${parse.fatal.message}`);
   }
@@ -367,24 +378,50 @@ export function decodeSettleProgram(payload: Hex): DecodedSettleProgram {
  *
  * `accepted` overrides the pin. The dependency is a caret range and `SETTLE_WIRE` documents that a
  * codegen change is answered by RE-PINNING — at which point every intent already on chain carries the
- * OLD program, and a single hard-coded pin makes all of them unverifiable. Pass the hashes you accept
- * (the current pin plus any historical ones) to keep those payloads readable across a re-pin. Defaults
- * to `[SETTLE_WIRE.PROGRAM_HASH]`.
+ * OLD program, and a single hard-coded pin makes all of them unverifiable. Pass the pins you accept
+ * (the current one plus any historical ones) to keep those payloads readable across a re-pin.
+ *
+ * A PIN IS A HASH *AND* A LENGTH, which is why a bare hash is not enough. The payload is split into
+ * program and argument tail at a byte offset, before any hash is computed — so if a re-pin changes the
+ * program's length (the likely outcome of a codegen change), splitting a historical payload at the NEW
+ * length yields a wrong program and a truncated tail, and it dies as `ARGS_TRUNCATED` without any hash
+ * ever being compared. Each entry may be `{ hash, bytes }`; a bare `Hex` means the CURRENT
+ * `SETTLE_WIRE.PROGRAM_BYTES` and is only safe for a same-length re-pin. Candidates are tried in order
+ * and the first whose program hash matches wins. Defaults to the current pin.
  */
-export function validateSettleProgram(payload: Hex, accepted: readonly Hex[] = [SETTLE_WIRE.PROGRAM_HASH]): DecodedSettleProgram {
-  const decoded = decodeSettleProgram(payload);
+export function validateSettleProgram(
+  payload: Hex,
+  accepted: readonly (Hex | ProgramPin)[] = [{ hash: SETTLE_WIRE.PROGRAM_HASH as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES }],
+): DecodedSettleProgram {
   // Compared case-insensitively: `programHash` is always viem's lowercase keccak, so a historical pin
   // supplied in any other spelling would silently fail to match and orphan exactly the payloads this
   // parameter exists to keep readable -- surfacing through the intent path as a bare `null`.
-  const normalized = accepted.map((hash) => hash.toLowerCase());
-  if (!normalized.includes(decoded.programHash.toLowerCase() as Hex)) {
-    throw new SettleDecodeError(
+  const pins: ProgramPin[] = accepted.map((pin) =>
+    typeof pin === "string"
+      ? { hash: pin.toLowerCase() as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES }
+      : { hash: pin.hash.toLowerCase() as Hex, bytes: pin.bytes },
+  );
+
+  let lastError: unknown = null;
+  for (const pin of pins) {
+    let candidate: DecodedSettleProgram;
+    try {
+      candidate = decodeSettleProgram(payload, pin.bytes);
+    } catch (error) {
+      lastError = error; // this length does not parse -- try the next pin before giving up
+      continue;
+    }
+    if (candidate.programHash.toLowerCase() === pin.hash) return candidate;
+    lastError = new SettleDecodeError(
       "PROGRAM_HASH",
-      `validateSettleProgram: program hashes to ${decoded.programHash}, not ${accepted.length === 1 ? `the pinned ${accepted[0]}` : `any of the ${accepted.length} accepted hashes`}`,
+      `validateSettleProgram: program hashes to ${candidate.programHash}, not the pinned ${pin.hash}`,
     );
   }
+  if (lastError !== null) throw lastError;
 
-  return decoded;
+  // Only reachable for an empty pin list, which accepts nothing and would otherwise return a
+  // successful decode of a program no caller vouched for.
+  throw new SettleDecodeError("PROGRAM_HASH", "validateSettleProgram: no accepted program pins were supplied");
 }
 
 /** `BigInt` is the wrong gate for a caller-supplied address: `BigInt("")` is `0n` rather than a throw,
@@ -393,7 +430,7 @@ export function validateSettleProgram(payload: Hex, accepted: readonly Hex[] = [
  *  `0x`-prefixed spelling and report both as `RangeError`. */
 function coerceAddressValue(value: bigint | `0x${string}`, label: string): bigint {
   if (typeof value === "bigint") return value;
-  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{1,40}$/.test(value)) {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(value)) {
     throw new RangeError(`encodeSettleProgram: ${label} is not a 0x-prefixed hex address: ${String(value)}`);
   }
 

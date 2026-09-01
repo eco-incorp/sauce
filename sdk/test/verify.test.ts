@@ -2,9 +2,11 @@
  * @eco-incorp/sauce-sdk/verify — decoder coverage against the appended-args wire.
  *
  * The corpus this runs on is `SETTLE_VECTORS` (payloads a conformant decoder must accept) and
- * `SETTLE_REJECTIONS` (payloads it must refuse). The rejection half is the load-bearing one: three
- * of its seven are byte strings a REAL v12 runtime accepts and executes identically to the canonical
- * payload beside them, so a decoder that takes them is not injective — see decode.ts §4.
+ * `SETTLE_REJECTIONS` (payloads it must refuse). The rejection half is the load-bearing one: FOUR of
+ * its seven are byte strings a REAL v12 runtime accepts and runs, so a decoder that takes them is not
+ * injective — see decode.ts §4. Three of those four are also provable identical ON CHAIN against a
+ * standard ERC20 (`sweepsIdentically`); the dirty-recipient one is stopped by the callee's own
+ * `address` check rather than by the engine, so it is a trap for the decoder all the same.
  *
  * `verify.compile.test.ts` re-derives `SETTLE_PROGRAM` from source on every run, so the pins here
  * are live rather than frozen; `verify-execution.e2e.test.ts` runs these same vectors on the engine.
@@ -149,6 +151,14 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
     });
   });
 
+  describe('validateSettleProgram pins', () => {
+    // An empty list accepts nothing; returning a decode would hand back a program no caller vouched for.
+    it('refuses an empty pin list rather than decoding unvouched bytes', () => {
+      const payload = settlePayload(SETTLE_VECTORS[0]!.args);
+      expectCode(() => validateSettleProgram(payload, []), 'PROGRAM_HASH');
+    });
+  });
+
   describe('the program half', () => {
     it('rejects a payload shorter than the program', () => {
       expectCode(() => decodeSettleProgram(SETTLE_PROGRAM.slice(0, -2) as Hex), 'PROGRAM_TRUNCATED');
@@ -205,6 +215,14 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
 
     it('refuses a program that is not 391 bytes', () => {
       expect(() => encodeSettleProgram(tokens, minOut, recipient, '0xdead' as Hex)).toThrow(RangeError);
+    });
+
+    it('refuses an address that is short by a character rather than left-padding it', () => {
+      // 39 nibbles: a transcription slip. Left-padding would silently encode a DIFFERENT address,
+      // and this is the encoder behind the recommended encode-and-compare path.
+      const short = '0x833589fcd6edb6e08f4c7c32d4f71b54bda0291' as Hex;
+      expect(() => encodeSettleProgram([short], minOut, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
+      expect(() => encodeSettleProgram(tokens, minOut, short, SETTLE_PROGRAM)).toThrow(RangeError);
     });
 
     it('settlePayload refuses a tail that is not canonical 0x hex', () => {

@@ -27,7 +27,7 @@
 // of reading the calldata recovers them; this EVM path needs no compiler for the same verdict, which is
 // what keeps `/verify` viem-only.
 import { decodeFunctionData, parseAbi, type Hex } from "viem";
-import { validateSettleProgram, type DecodedSettleProgram } from "./decode.js";
+import { validateSettleProgram, type DecodedSettleProgram, type ProgramPin } from "./decode.js";
 
 /** `Pot.cook` / `SauceRouter.cook` — identical input signature on both (`sdk/src/artifacts/*.json`), so
  *  one fragment decodes either. Only the input array matters for decoding a call. */
@@ -55,7 +55,7 @@ export interface DecodedSettleCall extends DecodedSettleProgram {
  * program hash, plus a canonical tail), so an accepted ingredient is the audited settle program AND the
  * unique byte encoding of the `(tokens, minOut, recipient)` reported.
  */
-export function decodeSettleCall(callData: Hex, accepted?: readonly Hex[]): DecodedSettleCall | null {
+export function decodeSettleCall(callData: Hex, accepted?: readonly (Hex | ProgramPin)[]): DecodedSettleCall | null {
   let ingredients: readonly Hex[];
   try {
     const decoded = decodeFunctionData({ abi: COOK_ABI, data: callData });
@@ -120,7 +120,7 @@ export interface ExtractedEvmSettle extends DecodedSettleCall {
  * `target` is carried through on the result for exactly this check — compare it against a V12Pot address
  * you trust. Unvalidated, the parameters describe bytes that were handed to an unknown contract.
  */
-export function extractEvmSettleFromCalls(calls: readonly IntentCallLike[], accepted?: readonly Hex[]): ExtractedEvmSettle | null {
+export function extractEvmSettleFromCalls(calls: readonly IntentCallLike[], accepted?: readonly (Hex | ProgramPin)[]): ExtractedEvmSettle | null {
   for (let i = 0; i < calls.length; i++) {
     const decoded = decodeSettleCall(calls[i]!.data, accepted);
     if (decoded) return { ...decoded, callIndex: i, target: calls[i]!.target };
@@ -139,6 +139,6 @@ export interface IntentLike {
  * intent-level wrapper over `extractEvmSettleFromCalls`. Duck-typed on `{ route: { calls } }`, so it takes
  * an eco-solver `Intent` (runtime or persisted) as-is. `null` if the intent carries no settle cook.
  */
-export function extractEvmSettleFromIntent(intent: IntentLike, accepted?: readonly Hex[]): ExtractedEvmSettle | null {
+export function extractEvmSettleFromIntent(intent: IntentLike, accepted?: readonly (Hex | ProgramPin)[]): ExtractedEvmSettle | null {
   return extractEvmSettleFromCalls(intent.route.calls, accepted);
 }

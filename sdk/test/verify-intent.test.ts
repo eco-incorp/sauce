@@ -12,7 +12,7 @@
  * `SETTLE_PROGRAM`, not a stand-in. That is the point of the two impostor cases below: a 391-byte
  * ingredient with a perfectly canonical argument tail is NOT the settle, and this layer must say so.
  */
-import { encodeFunctionData, parseAbi } from 'viem';
+import { encodeFunctionData, keccak256, parseAbi } from 'viem';
 import type { Hex } from 'viem';
 import {
   decodeSettleCall,
@@ -141,6 +141,28 @@ describe('extractEvmSettleFromCalls / extractEvmSettleFromIntent', () => {
 
     expect(found).not.toBeNull();
     expect(found!.minOut).toBe(MINOUT);
+  });
+
+  // The payload is split into program and tail at a byte offset BEFORE any hash is computed, so a
+  // re-pin that changes the program's length -- the likely outcome of a codegen change -- cannot be
+  // rescued by a bare hash: the historical payload splits at the CURRENT length, yielding a wrong
+  // program and a short tail, and dies without any hash being compared. A pin carries its own length.
+  it('reads a payload whose program is a different LENGTH, which a bare hash cannot', () => {
+    // stand-in for a future compiler's longer settle: the real program plus 9 bytes
+    const longerProgram = (SETTLE_PROGRAM + 'ab'.repeat(9)) as Hex;
+    const longerBytes = SETTLE_WIRE.PROGRAM_BYTES + 9;
+    const longerHash = keccak256(longerProgram);
+    const payload = (longerProgram + SETTLE_PAYLOAD.slice(2 + SETTLE_WIRE.PROGRAM_BYTES * 2)) as Hex;
+    const call = { data: cook([payload]) };
+
+    // the same hash as a BARE entry is read at the current 391, so the program never hashes to it
+    expect(extractEvmSettleFromCalls([call], [longerHash])).toBeNull();
+
+    // carrying its length, the very same hash matches and the tail decodes
+    const found = extractEvmSettleFromCalls([call], [{ hash: longerHash, bytes: longerBytes }]);
+    expect(found).not.toBeNull();
+    expect(found!.minOut).toBe(MINOUT);
+    expect(found!.programHash).toBe(longerHash);
   });
 
   it('returns null when no call carries a settle cook', () => {

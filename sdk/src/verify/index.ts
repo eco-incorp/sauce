@@ -39,6 +39,7 @@ export {
   bestEffortDecode,
   SettleDecodeError,
   type DecodedSettleProgram,
+  type ProgramPin,
   type SettleFailureCode,
   type SettleParse,
   type Address20,

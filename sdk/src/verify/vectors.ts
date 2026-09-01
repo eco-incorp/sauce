@@ -90,7 +90,13 @@ export interface RejectionVector {
   code: SettleFailureCode;
   /** Whether a real v12 runtime ACCEPTS this payload — measured. Where it does, the rejection is
    *  this decoder being stricter than the engine on purpose (decode.ts §4), and the vector is
-   *  load-bearing: a lax implementation would pass every other test in this corpus. */
+   *  load-bearing: a lax implementation would pass every other test in this corpus.
+   *
+   *  NOT SELF-VERIFYING for every row. The e2e filters on `sweepsIdentically`, so only those rows
+   *  re-measure themselves on chain each run; a row that is `engineAccepts` WITHOUT
+   *  `sweepsIdentically` is asserted nowhere but here, and would keep claiming it if the engine
+   *  changed. Today that is `dirtyRecipient` alone. Proving it needs a token fixture that skips the
+   *  callee's `address` check — without one, the engine's acceptance is invisible behind that revert. */
   engineAccepts: boolean;
   /** Whether the whole call then SUCCEEDS and moves the same tokens as the canonical payload, against
    *  a standard solc ERC20. Distinct from `engineAccepts`, and the e2e's on-chain equivalence loop
@@ -102,7 +108,7 @@ export interface RejectionVector {
 /**
  * Payloads a conformant decoder MUST refuse — the successor to the v1 corpus's `v3` trap.
  *
- * The first three are the trap proper, and they are the reason this corpus exists at all: the
+ * The first four are the trap proper, and they are the reason this corpus exists at all: the
  * engine RUNS them and produces exactly the behavior of the canonical payload beside them, so they
  * are distinct byte strings with identical meaning. A decoder that accepts any of them is not
  * injective, and `encodeSettleProgram` re-encode-and-compare stops agreeing with decode-and-compare.
