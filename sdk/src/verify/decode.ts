@@ -366,10 +366,17 @@ export function validateSettleProgram(payload: Hex): DecodedSettleProgram {
  * §5 of the wire spec — the cheaper, EQUIVALENT alternative to scan-and-check: when the caller
  * already knows the intended `(tokens, minOut, recipient)` (the normal case — they asked for the
  * swap), encode them directly and `memcmp`/hash-compare the whole payload rather than decoding.
- * Given §4 this produces the UNIQUE canonical encoding, so `encodeSettleProgram(...) === payload`
- * is exactly equivalent to `validateSettleProgram(payload)` succeeding with those values — in one
+ * Given §4 this produces the UNIQUE canonical encoding, so `encodeSettleProgram(...)` equals
+ * `payload` exactly when `validateSettleProgram(payload)` succeeds with those values — in one
  * comparison, with no parser exposed to a hostile input at all. This is the recommended
- * non-TypeScript (Solidity/Go/Python) implementation.
+ * non-TypeScript (Solidity/Go/Python) implementation, where a payload is bytes and the comparison is
+ * a plain `memcmp`.
+ *
+ * THE EQUIVALENCE IS OVER BYTES, NOT OVER HEX SPELLINGS. `validateSettleProgram` accepts any spelling
+ * of the same bytes — uppercase, a `0X` prefix, no prefix at all — while this returns canonical
+ * lowercase `0x`. So `validateSettleProgram(p.toUpperCase())` succeeds where
+ * `encodeSettleProgram(...) === p.toUpperCase()` is `false`. A string `===` is only equivalent once
+ * both sides are in canonical spelling; normalize first, or compare decoded bytes.
  *
  * `programHex` is supplied by the caller — pass the program you compiled yourself. There is
  * deliberately no default: the bytes you compare against should be ones you derived, not ones

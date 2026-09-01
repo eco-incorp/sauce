@@ -113,6 +113,19 @@ describe('extractEvmSettleFromCalls / extractEvmSettleFromIntent', () => {
     expect(extractEvmSettleFromCalls([calls[0]!, calls[1]!])).toBeNull();
   });
 
+  // Matching is on the cook selector and the ingredient bytes only -- the callee is never inspected.
+  // The index-0 rule that makes a non-null result meaningful is a V12Pot property, so it carries no
+  // weight for an arbitrary contract exposing the same selector. Pinned because the reported params
+  // look correct here while the callee may ignore the payload entirely: `target` is the caller's check.
+  it('reports a settle for a cook sent to ANY target — validating it is the caller\'s job', () => {
+    const attacker = ('0x' + 'ff'.repeat(20)) as `0x${string}`;
+    const found = extractEvmSettleFromCalls([{ data: cook([SETTLE_PAYLOAD]), target: attacker }]);
+
+    expect(found).not.toBeNull();
+    expect(found!.minOut).toBe(MINOUT);
+    expect(found!.target).toBe(attacker);
+  });
+
   // `V12Pot.cook` runs ingredients[0] and ignores the rest, so a scan that kept looking would report
   // the honest settle at index 1 for a payload whose index 0 is what actually executes.
   it('does not report a settle sitting behind a non-settle ingredient 0', () => {

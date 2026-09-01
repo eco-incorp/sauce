@@ -46,10 +46,12 @@ export interface DecodedSettleCall extends DecodedSettleProgram {
  * Never throws for a non-cook / non-settle input: a mismatched selector, malformed ABI, or a non-settle
  * ingredient 0 all return `null`.
  *
- * The index-0 rule is a `V12Pot` property. A v1 `SauceRouter` executes EVERY ingredient, so a settle
- * sitting at index ≥1 there reads as `null` here. That is the safe direction — a missed settle, never
- * a settle reported for a call that does something else — but it means a non-null result is a
- * statement about a v12 cook. The detection IS `validateSettleProgram` (the pinned
+ * The index-0 rule is a `V12Pot` property, and on a v1 `SauceRouter` it cuts BOTH ways, because a
+ * SauceRouter executes EVERY ingredient. A settle at index ≥1 reads as `null` here (a missed settle —
+ * harmless); but `cook([settlePayload, drainPayload])` on a SauceRouter validates index 0, returns the
+ * settle, and the drain runs too — a settle reported for a call that does more than settle. So a
+ * non-null result is a statement about a v12 cook ONLY. On a SauceRouter it is not sufficient, for the
+ * same reason `extractEvmSettleFromCalls` is not sufficient across `route.calls[]`. The detection IS `validateSettleProgram` (the pinned
  * program hash, plus a canonical tail), so an accepted ingredient is the audited settle program AND the
  * unique byte encoding of the `(tokens, minOut, recipient)` reported.
  */
@@ -103,6 +105,14 @@ export interface ExtractedEvmSettle extends DecodedSettleCall {
  * "this intent does only that": in `[cook([drain]), cook([settle])]` the drain is real, executes
  * first, and is not reported. A caller deciding whether an intent is safe must check `callIndex`
  * against its own expectation and account for the remaining calls itself.
+ *
+ * AND IT MUST VALIDATE `target`. Matching is on the `cook(bytes[])` selector and the ingredient bytes
+ * ONLY — nothing here looks at the callee. But the index-0 rule that makes a non-null result meaningful
+ * is a property of `V12Pot.cook`, so it says nothing about an arbitrary contract that merely exposes
+ * that selector: for `[{ target: attackerContract, data: cook([canonicalSettlePayload]) }]` this returns
+ * the correct `(tokens, minOut, recipient)` while the attacker's `cook` ignores the payload entirely.
+ * `target` is carried through on the result for exactly this check — compare it against a V12Pot address
+ * you trust. Unvalidated, the parameters describe bytes that were handed to an unknown contract.
  */
 export function extractEvmSettleFromCalls(calls: readonly IntentCallLike[]): ExtractedEvmSettle | null {
   for (let i = 0; i < calls.length; i++) {
