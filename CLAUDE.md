@@ -16,8 +16,7 @@ consumers import everything from one name.
 
 | Workspace | Internal name | Published as | Role |
 | --- | --- | --- | --- |
-| `compiler/` | `@eco-incorp/sauce-compiler` | `/compiler` | SauceScript (JS subset) → Sauce bytecode |
-| `sdk/` | `@eco-incorp/sauce-sdk-source` | `.`, `/protocols/*`, `/chains`, `/skills`, `/recipes` | 127+ protocol registry, chains, recipes, AI skill files |
+| `sdk/` | `@eco-incorp/sauce-sdk-source` | `.`, `/protocols/*`, `/chains`, `/skills`, `/recipes` | 129-protocol registry, chains, recipes, AI skill files |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools` | Local/forked hardhat env + recipe runner |
 
 This repo was **extracted from `../sauce`** (the source of truth, which still has its own copies of
@@ -32,7 +31,7 @@ the compiler builds first (the `build` script enforces this).
 
 ```sh
 pnpm install
-pnpm build          # compiler, THEN sdk + actions
+pnpm build          # sdk + actions
 pnpm typecheck      # all workspaces
 pnpm test           # all workspaces
 ```
@@ -139,21 +138,11 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
 
 ## Architecture
 
-**`compiler/`** — parses **SauceScript** (a uint256-only JS subset; no closures/classes/async, strict
-equality; full surface in `compiler/README.md`) to bytecode. `src/index.ts` `compile()` parses via
-`acorn` and emits `Uint8Array[]`; `src/processor/` walks the AST (expression/statement/collection/
-inference); `src/saucer/` emits bytecode (`Saucer` builder, `ops.ts` opcode table, per-type encoders);
-`src/context.ts` tracks functions/var kinds/ABIs; `src/contracts.ts` loads contract ABIs from artifact
-JSON for `import { X } from "./X.json"` + `.at()/.view()/.lib()` binding.
-
-**TS front-end (`src/ts-frontend.ts`) — `.ts`/`.sauce.ts` sources/imports only.** The core pipeline
-is acorn-only; a `.ts`/`.sauce.ts` source opts into a front-end that runs strictly BEFORE acorn: it
-parses with the real `typescript` compiler, folds provably-constant `if`/ternary branches, literal
-expressions, and countable `for` loops, then strips types via `ts.transpileModule` — handing acorn
-plain JS text. Wired at both the import seam (`ctx.transformModule`, default for any resolved
-`.ts`-suffixed module — a caller-supplied `transformModule` always overrides it) and the top level
-(`CompileOptions.tsSource`).
-
+**SauceScript** is compiled by the published Rust/wasm compiler
+(`@eco-incorp/sauce-compiler`, imported under the short name `sauce-compiler`). There is no in-repo
+compiler: `compiler/` was deleted, and `sdk/src/compiler.ts` re-exports the published one as the
+`./compiler` subpath. Its surface is `compile({ target, entry, resolve, defines?, ambient? })`
+returning `{ bytecode, manifest? }` — source text in, bytecode out, with no opcode-level builder.
 TWO evaluators, layered: `tsEvalConst` (a hand-rolled bigint evaluator mirroring
 `processor/const-eval.ts`, retargeted to `ts.Node`) is the PRIMARY one — because
 **`ts-evaluator@2.0.0` cannot reliably evaluate bigint arithmetic at all** (`BigInt(node.text)` on a

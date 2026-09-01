@@ -8,7 +8,9 @@ npm install @eco-incorp/sauce-sdk
 
 **Node only.** The compiler is loaded through `createRequire` (its `node` build is CommonJS reading a
 sibling `.wasm` off disk), and the route path imports `node:fs`/`node:path`, so the Quickstart, the
-builders and `/compiler` all require a Node runtime. `/verify` is the exception — see below. The
+builders and `/compiler` all require a Node runtime. The registry and decoding subpaths import no
+Node builtin and work anywhere: `/verify`, `/chains`, `/deployments`, `/protocols/*`, `/evm/engine`
+and `/svm/engine`. The
 compiler package does ship a browser build, but this package does not expose it.
 
 The SauceScript compiler comes with it as a dependency. The only optional extra is
@@ -24,8 +26,8 @@ import { routes } from '@eco-incorp/sauce-sdk'
 // Both deadlines are ABSOLUTE unix timestamps, not durations: the chain compares
 // `block.timestamp > route.deadline`. And rewardDeadline must be >= deadline — a solver may fulfil
 // right up to the route deadline, so an earlier reward deadline is already refundable by then.
-// pot, portal, sourcePortal, creator, prover and usdc are addresses for YOUR deployment — the
-// package ships no defaults for them (`/deployments` carries the engine's own contracts, not these).
+// pot, portal, sourcePortal, creator and prover are addresses for YOUR deployment; the package
+// ships no defaults for those. Token addresses it does ship — see the registry note below.
 const now = BigInt(Math.floor(Date.now() / 1000))
 
 const built = routes.openRoute('base', 'function main() { return 1n; }', {
@@ -42,6 +44,11 @@ built.compiled.bytecode[0]   // the program
 built.intent                 // the assembled Intent
 built.publishCalldata()      // calldata for sourcePortal — omit sourcePortal above and this throws
 ```
+
+Common token addresses are already there: `routes.TOKEN_REGISTRY` carries probe-verified `USDC`,
+`WETH` and (where deployed) `USDT` for ethereum, optimism, polygon, base and arbitrum, reachable as
+`routes.registryTokenAddress(requireChain('base'), 'USDC')`. `openRoute` also folds them in as
+ambient defines, so a route body can write `USDC.transfer(to, amount)` with no configuration at all.
 
 `routes.openRoute(destination, …)` is what the chain globals forward to, so
 `Base(sauce, options).reward(…)` is the same call. Those globals are installed on `globalThis` as a
@@ -122,6 +129,10 @@ const { bytecode } = compile({
 `main` may take parameters. They arrive at run time as 32-byte big-endian words appended after the
 program, on **both** targets, so one program serves many argument sets — compile-time substitution is
 `defines` instead.
+
+That applies to a **direct `compile`**. A route slots `compiled.bytecode[0]` in as the whole cook
+ingredient and appends no argument tail, so a parameterized `main` in a route body reads past the end
+of its own ingredient. Use `defines` for routes, parameters for programs you assemble yourself.
 
 A `bytes` parameter is not padded — it occupies its fixed compile-time length, so the tail is not
 uniformly 32-byte words once one is present.

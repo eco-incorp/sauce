@@ -14,9 +14,11 @@
  *
  * NOT RESTORED: the payload-args pair ("stage once, execute many with different args in ONE
  * instruction"). Those depended on `compile(..., { staged: true, args })` — a `argsLayout` the SDK
- * fed to `encodePayloadArgs` — and the compiler this repo now uses has neither option: a program's
- * per-execution values are `defines` folded into the bytecode, so one blob no longer serves several
- * arg sets. There is nothing left to assert, not a gap in coverage.
+ * fed to `encodePayloadArgs` — and `compile` has neither option, returning `{ bytecode, manifest? }`
+ * with no argument layout, which is why `svm/layout.ts` owns that type now. A parameterized `main`
+ * still compiles to arg-independent bytecode, so one blob CAN serve several arg sets; what is gone is
+ * the SDK-supplied layout that told `encodePayloadArgs` where each value goes. There is nothing left
+ * to assert here, not a gap in coverage.
  */
 import { createHash } from 'node:crypto';
 import {
