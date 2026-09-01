@@ -46,8 +46,12 @@ built.publishCalldata()      // calldata for sourcePortal — omit sourcePortal 
 ```
 
 Common token addresses are already there: `routes.TOKEN_REGISTRY` carries probe-verified `USDC`,
-`WETH` and (where deployed) `USDT` for ethereum, optimism, polygon, base and arbitrum, reachable as
-`routes.registryTokenAddress(requireChain('base'), 'USDC')`. `openRoute` also folds them in as
+`WETH` and (where deployed) `USDT` for ethereum, optimism, polygon, base and arbitrum. Look one up
+with `routes.registryTokenAddress(requireChain('base'), 'USDC')` (`requireChain` is a root export --
+see [Registries](#registries)), which returns a **`bigint`**, or `undefined` when that chain does not
+carry the symbol -- not a `0x` string, so format it yourself if you need one:
+`'0x' + address.toString(16).padStart(40, '0')` gives base USDC as
+`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`. `openRoute` also folds them in as
 ambient defines, so a route body can write `USDC.transfer(to, amount)` with no configuration at all.
 
 `routes.openRoute(destination, …)` is what the chain globals forward to, so

@@ -57,7 +57,9 @@ export interface StagedBuffer {
   signatures: Signature[];
 }
 
-/** Per-execution args for a staged program, matching the compile's argsLayout. */
+/** Per-execution args for a staged program. The layout is CALLER-SUPPLIED: `compile` returns
+ *  `{ bytecode, manifest? }` and no argument layout, so `ArgsLayout` is the SDK's own type
+ *  (`./layout.ts`) describing where each value sits in the payload tail. */
 export interface StagedArgs {
   layout: ArgsLayout;
   values: readonly ArgValue[];
