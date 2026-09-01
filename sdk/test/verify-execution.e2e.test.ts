@@ -97,15 +97,23 @@ const addressesInPlay = (): Address[] => {
  */
 const startEvm = async (): Promise<ChildProcess> => {
   const anvil = spawn('anvil', ['--port', String(PORT), '--silent'], { stdio: 'ignore' });
-  await waitForRpc(Date.now() + STARTUP_TIMEOUT_MS);
-  await testClient.setCode({ address: ENGINE, bytecode: `0x${readFileSync(RUNTIME_HEX_PATH as string, 'utf8').trim().replace(/^0x/, '')}` });
+    // Everything after the spawn is guarded: a waitForRpc timeout, a setCode failure or a deploy
+    // revert would otherwise leave the child holding this port for the rest of the job.
+    try {
+    await waitForRpc(Date.now() + STARTUP_TIMEOUT_MS);
+    await testClient.setCode({ address: ENGINE, bytecode: `0x${readFileSync(RUNTIME_HEX_PATH as string, 'utf8').trim().replace(/^0x/, '')}` });
 
-  const hash = await walletClient.sendTransaction({ account: DEPLOYER, chain: null, data: MOCK_ERC20.creationCode, gas: GAS_LIMIT });
-  const { contractAddress } = await publicClient.waitForTransactionReceipt({ hash });
-  const erc20Runtime = await publicClient.getCode({ address: contractAddress as Address });
-  for (const address of addressesInPlay()) await testClient.setCode({ address, bytecode: erc20Runtime as Hex });
+    const hash = await walletClient.sendTransaction({ account: DEPLOYER, chain: null, data: MOCK_ERC20.creationCode, gas: GAS_LIMIT });
+    const { contractAddress } = await publicClient.waitForTransactionReceipt({ hash });
+    const erc20Runtime = await publicClient.getCode({ address: contractAddress as Address });
+    for (const address of addressesInPlay()) await testClient.setCode({ address, bytecode: erc20Runtime as Hex });
 
-  return anvil;
+  
+      return anvil;
+    } catch (err) {
+      anvil.kill();
+      throw err;
+    }
 };
 
 /** Await the exit rather than firing a bare `kill()`: an un-awaited kill leaves the child alive long

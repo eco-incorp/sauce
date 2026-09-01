@@ -56,14 +56,17 @@ export function decodeSettleCall(callData: Hex): DecodedSettleCall | null {
     return null; // not a cook call (wrong selector / malformed calldata)
   }
 
-  for (let i = 0; i < ingredients.length; i++) {
-    try {
-      return { ...validateSettleProgram(ingredients[i]!), ingredientIndex: i };
-    } catch {
-      // not the settle payload (e.g. the swap half) — keep looking
-    }
+  // ONLY ingredient 0. `V12Pot.cook` executes `ingredients[0]` and silently ignores the rest
+  // (`recipes/settle.sauce.ts`), so scanning further reports a payload that never runs: given
+  // `cook([drainProgram, honestSettle])` a scan would skip the drain, validate the settle at index 1,
+  // and hand the caller the honest program's parameters for an intent that drains. A verifier must
+  // answer for what executes.
+  if (ingredients.length === 0) return null;
+  try {
+    return { ...validateSettleProgram(ingredients[0]!), ingredientIndex: 0 };
+  } catch {
+    return null; // ingredient 0 is not a settle payload — this cook does not settle
   }
-  return null;
 }
 
 /** An intent call, duck-typed: only `data` (the cook calldata) is required; `target` (the Pot address)

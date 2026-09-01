@@ -18,7 +18,13 @@ export const SETTLE_WIRE = {
    *  reaches the compiler. This length is what locates the argument tail. */
   PROGRAM_BYTES: 391,
   /** `keccak256` of those 391 bytes — the authenticity pin `validateSettleProgram` enforces.
-   *  Whole-program, not a body slice: program and arguments are disjoint byte regions now. */
+   *  Whole-program, not a body slice: program and arguments are disjoint byte regions now.
+   *
+   *  PRODUCED BY `@eco-incorp/sauce-compiler@0.5.0`. The dependency is a caret range, so a later
+   *  0.5.x that changes codegen would make a consumer's own compile fail this pin. When that happens
+   *  the fix is to re-pin here (`verify.compile.test.ts` recomputes both constants every run and will
+   *  fail first), not to loosen the check. */
+  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@0.5.0",
   PROGRAM_HASH: "0x39ef0a5f26a7c586649ca3c59726cb4c1156105805ce5f39edfff9ff8704c743",
   /** Every argument word is 32 bytes, big-endian. */
   WORD_BYTES: 32,

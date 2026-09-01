@@ -305,10 +305,17 @@ function parseToDecoded(parse: SettleParse): DecodedSettleProgram | null {
 }
 
 /** Decode whenever the shape is well-formed enough to name a full `(tokens, minOut, recipient)` —
- *  even when a check that does not block reading (a non-canonical tokens pointer, a trailing-slack
- *  tail, a dirty address word, a zero recipient) would make `decodeSettleProgram` throw — so a
- *  rejected payload's decoded intent is still visible to a caller debugging the rejection. */
+ *  even when a check that does not block reading (a trailing-slack tail, a dirty address word, a
+ *  zero recipient) would make `decodeSettleProgram` throw — so a rejected payload's decoded intent is
+ *  still visible to a caller debugging the rejection.
+ *
+ *  DECLINES on a non-canonical tokens pointer. The engine follows that pointer; this reads at the
+ *  canonical offset, so on exactly the payload this function exists for — a hostile one — the report
+ *  and execution would name different tokens. Reporting nothing beats reporting the wrong answer
+ *  confidently. */
 export function bestEffortDecode(parse: SettleParse): DecodedSettleProgram | null {
+  if (parse.fatal?.code === "TOKENS_OFFSET") return null;
+
   return parseToDecoded(parse);
 }
 

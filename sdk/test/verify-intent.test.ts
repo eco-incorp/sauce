@@ -51,10 +51,10 @@ describe('decodeSettleCall', () => {
     expect(decoded!.programHash).toBe(SETTLE_WIRE.PROGRAM_HASH);
   });
 
-  it('finds the settle ingredient past a non-settle one in the same cook', () => {
-    const decoded = decodeSettleCall(cook([SWAP_JUNK, SETTLE_PAYLOAD]));
-    expect(decoded!.ingredientIndex).toBe(1);
-    expect(decoded!.minOut).toBe(MINOUT);
+  it('does NOT report a settle sitting behind a non-settle ingredient 0', () => {
+    // cook() runs ingredients[0] and ignores the rest, so reporting the settle at index 1 would
+    // describe a program that never executes -- for `cook([drain, honestSettle])`, the honest one.
+    expect(decodeSettleCall(cook([SWAP_JUNK, SETTLE_PAYLOAD]))).toBeNull();
   });
 
   it('returns null for a non-cook call (wrong selector)', () => {
@@ -75,10 +75,10 @@ describe('decodeSettleCall', () => {
     expect(decodeSettleCall(cook([IMPOSTOR]))).toBeNull();
   });
 
-  it('skips the impostor and finds the genuine settle later in the same cook', () => {
-    const decoded = decodeSettleCall(cook([IMPOSTOR, SETTLE_PAYLOAD]));
-    expect(decoded!.ingredientIndex).toBe(1);
-    expect(decoded!.programHash).toBe(SETTLE_WIRE.PROGRAM_HASH);
+  it('does NOT look past an impostor at ingredient 0 to a genuine settle behind it', () => {
+    expect(decodeSettleCall(cook([IMPOSTOR, SETTLE_PAYLOAD]))).toBeNull();
+    // the genuine payload at index 0 still decodes — a position rule, not a blanket refusal
+    expect(decodeSettleCall(cook([SETTLE_PAYLOAD, IMPOSTOR]))!.ingredientIndex).toBe(0);
   });
 
   it('returns null for the genuine program carrying a non-canonical tail', () => {
@@ -111,5 +111,15 @@ describe('extractEvmSettleFromCalls / extractEvmSettleFromIntent', () => {
 
   it('returns null when no call carries a settle cook', () => {
     expect(extractEvmSettleFromCalls([calls[0]!, calls[1]!])).toBeNull();
+  });
+
+  // `V12Pot.cook` runs ingredients[0] and ignores the rest, so a scan that kept looking would report
+  // the honest settle at index 1 for a payload whose index 0 is what actually executes.
+  it('does not report a settle sitting behind a non-settle ingredient 0', () => {
+    const decoy = `0x${'11'.repeat(64)}` as Hex;
+
+    expect(decodeSettleCall(cook([decoy, SETTLE_PAYLOAD]))).toBeNull();
+    // and the honest payload alone still decodes, so this is not just a blanket refusal
+    expect(decodeSettleCall(cook([SETTLE_PAYLOAD]))).not.toBeNull();
   });
 });
