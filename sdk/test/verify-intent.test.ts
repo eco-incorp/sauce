@@ -134,13 +134,10 @@ describe('extractEvmSettleFromCalls / extractEvmSettleFromIntent', () => {
     expect(found!.minOut).toBe(MINOUT);
   });
 
-  // `[]` is truthy and a default parameter only fires on undefined, so an empty list assembled from
-  // config that matched nothing must fall back to the pin rather than accepting nothing.
-  it('falls back to the pin for an empty accepted list', () => {
-    const found = extractEvmSettleFromCalls([{ data: cook([SETTLE_PAYLOAD]) }], []);
-
-    expect(found).not.toBeNull();
-    expect(found!.minOut).toBe(MINOUT);
+  // Fail-CLOSED, matching validateSettleProgram, which refuses an empty pin list. Falling back to the
+  // built-in pin would report "this is the audited settle" against an anchor the caller never listed.
+  it('reports nothing for an empty accepted list rather than falling back to the pin', () => {
+    expect(extractEvmSettleFromCalls([{ data: cook([SETTLE_PAYLOAD]) }], [])).toBeNull();
   });
 
   // The payload is split into program and tail at a byte offset BEFORE any hash is computed, so a

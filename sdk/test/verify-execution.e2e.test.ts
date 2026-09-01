@@ -125,7 +125,10 @@ const startEvm = async (): Promise<ChildProcess> => {
 
     return anvil;
   } catch (err) {
-    anvil.kill();
+    // Through `stopEvm`, awaited: a bare kill() here is the exact leak that helper documents. This is
+    // the path a waitForRpc timeout or a reverting deploy takes, and jest then moves to the next
+    // suite -- which binds this same PORT and would fail with EADDRINUSE, masking the real error.
+    await stopEvm(anvil);
     throw err;
   }
 };

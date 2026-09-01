@@ -24,6 +24,7 @@ import {
   SETTLE_VECTORS,
   SETTLE_WIRE,
 } from '../src/verify/index';
+import { keccak256 } from 'viem';
 import type { Hex } from 'viem';
 
 /** The `.code` a call is expected to reject with — asserted on the error, not just on "it threw". */
@@ -157,6 +158,32 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
       const payload = settlePayload(SETTLE_VECTORS[0]!.args);
       expectCode(() => validateSettleProgram(payload, []), 'PROGRAM_HASH');
     });
+
+    // A pin whose length does not fit the payload produces a parse error about bytes read at the wrong
+    // offset -- an artefact of trying that candidate. A hash mismatch is the real answer, so it must
+    // win regardless of pin order; otherwise `.code` depends on configuration and a payload with a
+    // perfectly canonical tail gets reported as having a malformed one.
+    it('reports PROGRAM_HASH, not a later pin\'s parse error, whatever the pin order', () => {
+      const impostor = ('0x' + 'ee'.repeat(SETTLE_WIRE.PROGRAM_BYTES) + settlePayload(SETTLE_VECTORS[0]!.args).slice(2 + SETTLE_WIRE.PROGRAM_BYTES * 2)) as Hex;
+      const longer = { hash: ('0x' + '99'.repeat(32)) as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES + 9 };
+      const current = { hash: SETTLE_WIRE.PROGRAM_HASH as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES };
+
+      expectCode(() => validateSettleProgram(impostor, [current, longer]), 'PROGRAM_HASH');
+      expectCode(() => validateSettleProgram(impostor, [longer, current]), 'PROGRAM_HASH');
+    });
+
+    // §5 offers encode-and-compare as the equivalent of validateSettleProgram, which now accepts
+    // historical pins of other lengths. Pinning the current constant in the encoder would make the two
+    // halves diverge for exactly the re-pin ProgramPin.bytes exists to survive.
+    it('encodes against a program of a historical length, matching what a pin can validate', () => {
+      const { tokens, minOut, recipient } = SETTLE_VECTORS[0]!;
+      const longerProgram = (SETTLE_PROGRAM + 'ab'.repeat(9)) as Hex;
+      const encoded = encodeSettleProgram(tokens, minOut, recipient, longerProgram);
+      const decoded = validateSettleProgram(encoded, [{ hash: keccak256(longerProgram), bytes: SETTLE_WIRE.PROGRAM_BYTES + 9 }]);
+
+      expect(decoded.minOut).toBe(minOut);
+      expect(BigInt(decoded.recipient)).toBe(BigInt(recipient));
+    });
   });
 
   describe('the program half', () => {
@@ -213,8 +240,14 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
       expect(() => encodeSettleProgram(tokens, -1n, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
     });
 
-    it('refuses a program that is not 391 bytes', () => {
-      expect(() => encodeSettleProgram(tokens, minOut, recipient, '0xdead' as Hex)).toThrow(RangeError);
+    // The program's LENGTH is the caller's now, not the current constant -- that is what lets a
+    // historical pin be encoded against (see the ProgramPin test above). A wrong program is still
+    // caught, but at validate, where the hash is the thing that decides.
+    it('takes the program length from programHex, and a wrong program fails at validation', () => {
+      expect(() => encodeSettleProgram(tokens, minOut, recipient, '0x' as Hex)).toThrow(RangeError);
+
+      const encoded = encodeSettleProgram(tokens, minOut, recipient, '0xdead' as Hex);
+      expectCode(() => validateSettleProgram(encoded), 'PROGRAM_TRUNCATED');
     });
 
     it('refuses an address that is short by a character rather than left-padding it', () => {

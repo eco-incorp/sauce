@@ -114,7 +114,8 @@ export interface DecodedSettleProgram {
   recipient: Address20;
   /** `tokens[0]` — the floor token, named for readability at call sites. */
   floorToken: Address20;
-  /** The leading `SETTLE_WIRE.PROGRAM_BYTES` bytes — argument-independent. */
+  /** The leading bytes the payload was split at — `SETTLE_WIRE.PROGRAM_BYTES` by default, or the
+   *  matched `ProgramPin.bytes` when validating against a historical pin. Argument-independent. */
   program: Hex;
   /** `keccak256(program)`. Compare against `SETTLE_WIRE.PROGRAM_HASH`, or let
    *  `validateSettleProgram` do it. */
@@ -402,22 +403,30 @@ export function validateSettleProgram(
       : { hash: pin.hash.toLowerCase() as Hex, bytes: pin.bytes },
   );
 
-  let lastError: unknown = null;
+  // Two kinds of failure, and they are NOT interchangeable. A pin whose length does not fit the
+  // payload yields a parse error about bytes read at the wrong offset -- an artefact of trying that
+  // candidate, not a fact about the payload. A pin that parses but does not match is the real answer:
+  // these are not the audited program. So a hash mismatch always outranks a length-mismatch parse
+  // error, whatever order the pins were supplied in; otherwise `.code` would depend on pin order and a
+  // payload with a perfectly canonical tail could be reported as having a malformed one.
+  let hashMismatch: SettleDecodeError | null = null;
+  let parseError: unknown = null;
   for (const pin of pins) {
     let candidate: DecodedSettleProgram;
     try {
       candidate = decodeSettleProgram(payload, pin.bytes);
     } catch (error) {
-      lastError = error; // this length does not parse -- try the next pin before giving up
+      parseError = parseError ?? error;
       continue;
     }
     if (candidate.programHash.toLowerCase() === pin.hash) return candidate;
-    lastError = new SettleDecodeError(
+    hashMismatch = hashMismatch ?? new SettleDecodeError(
       "PROGRAM_HASH",
       `validateSettleProgram: program hashes to ${candidate.programHash}, not the pinned ${pin.hash}`,
     );
   }
-  if (lastError !== null) throw lastError;
+  if (hashMismatch !== null) throw hashMismatch;
+  if (parseError !== null) throw parseError;
 
   // Only reachable for an empty pin list, which accepts nothing and would otherwise return a
   // successful decode of a program no caller vouched for.
@@ -483,8 +492,12 @@ export function encodeSettleProgram(tokens: readonly (bigint | `0x${string}`)[],
 
   const programBytes = hexToBytesLocal(programHex);
   if (programBytes === null) throw new RangeError(`encodeSettleProgram: programHex is not valid hex: ${programHex}`);
-  if (programBytes.length !== SETTLE_WIRE.PROGRAM_BYTES) {
-    throw new RangeError(`encodeSettleProgram: programHex is ${programBytes.length} bytes, not the ${SETTLE_WIRE.PROGRAM_BYTES} a settle program occupies`);
+  // Deliberately NOT compared against `SETTLE_WIRE.PROGRAM_BYTES`. `programHex` is the program the
+  // caller compiled, and §5 offers this as the equivalent of `validateSettleProgram` — which now
+  // accepts historical pins of other lengths. Pinning the current constant here would make the two
+  // halves of that equivalence diverge for exactly the re-pin `ProgramPin.bytes` exists to survive.
+  if (programBytes.length === 0) {
+    throw new RangeError("encodeSettleProgram: programHex is empty");
   }
 
   const words = [BigInt(SETTLE_WIRE.HEAD_BYTES), minOut, recipientValue, BigInt(tokenValues.length), ...tokenValues];
