@@ -21,8 +21,7 @@
     "artifacts",
     "hardhat.config.cjs",
     "tsconfig.json",
-    "README.md",
-    "COMPILER.md"
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"

@@ -1,13 +1,15 @@
 /**
- * Staged payload-args encoder — the SDK half of the compiler's staged arg ABI
- * (CompileResult.argsLayout, mode 'calldata'). Per-execution args ride the
- * execute_from_account INSTRUCTION PAYLOAD after the flags byte and optional
- * hash pin; the engine exposes the composite `buffer bytecode ++ args` through
- * CALLDATA and the compiled prologue reads arg i at composite offset
+ * Staged payload-args encoder, against an `ArgsLayout` (mode 'calldata') the
+ * caller supplies. The layout is SDK-owned (`./layout.ts`) — neither `CompileResult` carries an
+ * argument layout: the compiler's is `{ bytecode, manifest? }`, the route seam's
+ * (`routes/compile-types.ts`) is `{ bytecode: Uint8Array[], warnings }`. Per-execution args
+ * ride the execute_from_account INSTRUCTION PAYLOAD after the flags byte and
+ * optional hash pin; the engine exposes the composite `buffer bytecode ++ args`
+ * through CALLDATA and the compiled prologue reads arg i at composite offset
  * `programLength + slot.offset` — so this module's byte layout must mirror the
  * layout's slots exactly.
  *
- * Slot ABI (normative, mirrored from the compiler):
+ * Slot ABI (normative, and what the engine's prologue reads):
  * - scalar slots: 32 bytes, u256 BIG-ENDIAN (the prologue reads them with
  *   SLICE + CAST_BE);
  * - bytes slots: the raw bytes, length fixed at compile time.
@@ -57,14 +59,14 @@ export function encodeArgSlot(slot: ArgsLayoutSlot, value: ArgValue): Uint8Array
   const bytes = hexToBytes(value);
 
   if (bytes.length !== slot.length) {
-    throw new Error(`arg ${slot.arg} bytes length ${bytes.length} does not match the compiled slot length ${slot.length}`);
+    throw new Error(`arg ${slot.arg} bytes length ${bytes.length} does not match the layout slot length ${slot.length}`);
   }
 
   return bytes;
 }
 
 /**
- * Encodes the full payload-args tail against the compile's argsLayout: slot i's
+ * Encodes the full payload-args tail against the caller-supplied `ArgsLayout`: slot i's
  * bytes land at exactly layout.slots[i].offset, back to back — the compiled
  * prologue's baked SLICE offsets leave no room for drift, so any layout/value
  * mismatch throws instead of producing silently shifted reads.
