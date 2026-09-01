@@ -3,7 +3,7 @@
  *
  * The corpus this runs on is `SETTLE_VECTORS` (payloads a conformant decoder must accept) and
  * `SETTLE_REJECTIONS` (payloads it must refuse). The rejection half is the load-bearing one: three
- * of its six are byte strings a REAL v12 runtime accepts and executes identically to the canonical
+ * of its seven are byte strings a REAL v12 runtime accepts and executes identically to the canonical
  * payload beside them, so a decoder that takes them is not injective — see decode.ts §4.
  *
  * `verify.compile.test.ts` re-derives `SETTLE_PROGRAM` from source on every run, so the pins here
@@ -159,6 +159,17 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
 
     it('refuses a token that does not fit in 20 bytes', () => {
       expect(() => encodeSettleProgram([(1n << 161n)], minOut, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
+    });
+
+    // A negative bigint clears BOTH `> ADDRESS_MASK` and `=== 0n`, and the encoder's write loop
+    // terminates on `value > 0n` before writing a byte — so before the guard, `-1n` encoded as an
+    // all-zero word: a recipient that defeats the nonzero check, or a token that sweeps address(0).
+    it('refuses a negative recipient rather than encoding address(0)', () => {
+      expect(() => encodeSettleProgram(tokens, minOut, -1n, SETTLE_PROGRAM)).toThrow(RangeError);
+    });
+
+    it('refuses a negative token rather than encoding address(0)', () => {
+      expect(() => encodeSettleProgram([-1n], minOut, recipient, SETTLE_PROGRAM)).toThrow(RangeError);
     });
 
     it('refuses a minOut outside uint256', () => {

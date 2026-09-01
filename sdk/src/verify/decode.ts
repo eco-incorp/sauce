@@ -219,8 +219,10 @@ export function parseSettleProgram(payload: Hex): SettleParse {
   result.recipientNonZero = result.recipient !== 0n;
 
   if (result.tokensOffset !== BigInt(SETTLE_WIRE.HEAD_BYTES)) {
-    // Continue anyway, reading the array where a canonical payload puts it: the engine would follow
-    // this pointer, so a report showing what the payload MEANT is more useful than stopping here.
+    // Reported at the CANONICAL offset, not at `result.tokensOffset`: this reads the array where a
+    // conforming payload puts it. It does NOT follow the pointer the way the engine does, so for a
+    // non-canonical payload the report and on-chain behaviour can differ -- which is exactly why this
+    // is a fatal code rather than a silent reinterpretation.
     result.fatal = {
       code: "TOKENS_OFFSET",
       message: `tokens pointer is ${result.tokensOffset}, not the canonical ${SETTLE_WIRE.HEAD_BYTES} — the token array must follow the head immediately`,
@@ -374,10 +376,18 @@ export function encodeSettleProgram(tokens: readonly (bigint | `0x${string}`)[],
   const tokenValues = tokens.map((t) => (typeof t === "bigint" ? t : BigInt(t)));
   const recipientValue = typeof recipient === "bigint" ? recipient : BigInt(recipient);
   if (recipientValue === 0n) throw new RangeError("encodeSettleProgram: recipient must be nonzero");
+  // Negatives need their own rejection, not just the upper bound: `-1n > ADDRESS_MASK` is FALSE and
+  // `-1n === 0n` is FALSE, so a negative clears both guards -- and the write loop below terminates on
+  // `value > 0n` before writing a byte, leaving an all-zero word. A negative recipient would encode as
+  // address(0), defeating the nonzero check above; a negative token would sweep it.
   for (const [i, value] of tokenValues.entries()) {
-    if (value > ADDRESS_MASK) throw new RangeError(`encodeSettleProgram: tokens[${i}] does not fit in ${SETTLE_WIRE.ADDRESS_BYTES} bytes`);
+    if (value < 0n || value > ADDRESS_MASK) {
+      throw new RangeError(`encodeSettleProgram: tokens[${i}] does not fit in ${SETTLE_WIRE.ADDRESS_BYTES} bytes`);
+    }
   }
-  if (recipientValue > ADDRESS_MASK) throw new RangeError(`encodeSettleProgram: recipient does not fit in ${SETTLE_WIRE.ADDRESS_BYTES} bytes`);
+  if (recipientValue < 0n || recipientValue > ADDRESS_MASK) {
+    throw new RangeError(`encodeSettleProgram: recipient does not fit in ${SETTLE_WIRE.ADDRESS_BYTES} bytes`);
+  }
   if (minOut < 0n || minOut >= 1n << 256n) throw new RangeError(`encodeSettleProgram: minOut ${minOut} is out of uint256 range`);
 
   const programBytes = hexToBytesLocal(programHex);
