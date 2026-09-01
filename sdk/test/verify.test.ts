@@ -120,6 +120,13 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
 
       expect(engineRuns).toHaveLength(5);
       expect(provable).toHaveLength(3);
+
+      // The unverified-claims ledger: engine-accepted but not provable on chain, so asserted nowhere
+      // but the corpus. Pinned here so it cannot drift the way the prose naming rows did.
+      expect(SETTLE_REJECTIONS.filter((r) => r.engineAccepts && !r.sweepsIdentically).map((r) => r.name.split(' ')[0])).toEqual([
+        'dirtyRecipient',
+        'zeroRecipient',
+      ]);
       expect(provable.every((r) => r.engineAccepts)).toBe(true);
     });
 

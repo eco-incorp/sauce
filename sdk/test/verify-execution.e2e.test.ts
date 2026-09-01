@@ -34,7 +34,7 @@ const describeEvm = RUNTIME_HEX_PATH ? describe : describe.skip;
 if (!RUNTIME_HEX_PATH && process.env.CI) {
   throw new Error(
     'SAUCE_RUST_V12_RUNTIME is unset in CI. This suite must never skip here — see the ' +
-      '"Fetch the v12 engines" step in .github/workflows/ci.yml.',
+      '"Derive the deployed v12 runtime bytecode" step in .github/workflows/ci.yml.',
   );
 }
 

@@ -162,6 +162,15 @@ describe('extractEvmSettleFromCalls / extractEvmSettleFromIntent', () => {
     expect(found!.programHash).toBe(longerHash);
   });
 
+  // A decode failure means "this cook does not settle"; a malformed pin is a configuration bug and
+  // must not wear that costume, or a monitor built on this reports no settle for every intent.
+  it('lets a malformed pin escape instead of reporting no settle', () => {
+    const call = { data: cook([SETTLE_PAYLOAD]) };
+
+    expect(() => extractEvmSettleFromCalls([call], [{ hash: null as unknown as Hex, bytes: 391 }])).toThrow(TypeError);
+    expect(extractEvmSettleFromCalls([call])).not.toBeNull();
+  });
+
   it('returns null when no call carries a settle cook', () => {
     expect(extractEvmSettleFromCalls([calls[0]!, calls[1]!])).toBeNull();
   });

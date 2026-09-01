@@ -36,8 +36,8 @@
  * case to address(0).
  * Each is a DIFFERENT byte string producing IDENTICAL behavior. Accepting them would make the decode
  * non-injective and put `encodeSettleProgram`'s re-encode-and-compare (§5) at odds with a
- * decode-and-compare, so ALL FOUR are refused — the recipient one included, precisely because whether
- * it is caught depends on the callee rather than on the payload. An accepted payload is the UNIQUE
+ * decode-and-compare, so ALL of them are refused — the recipient cases included, precisely because
+ * whether they are caught depends on the callee rather than on the payload. An accepted payload is the UNIQUE
  * byte encoding of the values it decodes to.
  *
  * DO NOT PORT A POSITIONAL DECODER ONTO THIS WIRE. Values here are fixed 32-byte words and the
@@ -424,6 +424,13 @@ export function validateSettleProgram(
   // these are not the audited program. So a hash mismatch always outranks a length-mismatch parse
   // error, whatever order the pins were supplied in; otherwise `.code` would depend on pin order and a
   // payload with a perfectly canonical tail could be reported as having a malformed one.
+  //
+  // That precedence is the guarantee, and it is the whole of it. Among parse errors there is no such
+  // ordering: each is an artefact of the candidate that produced it, and the FIRST supplied pin's is
+  // the one reported -- so with several pins and no match at all, the code can still differ by pin
+  // order (a 391-byte program read at 359 reports TOKENS_OFFSET where reading it at 391 reports
+  // ARGS_TRUNCATED). Diagnostic only: through `intent.ts` every one of them collapses to `null`, and
+  // with a single pin -- the default and common case -- there is no order to depend on.
   let hashMismatch: SettleDecodeError | null = null;
   let parseError: unknown = null;
   for (const pin of pins) {

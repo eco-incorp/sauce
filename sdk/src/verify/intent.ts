@@ -27,7 +27,7 @@
 // of reading the calldata recovers them; this EVM path needs no compiler for the same verdict, which is
 // what keeps `/verify` viem-only.
 import { decodeFunctionData, parseAbi, type Hex } from "viem";
-import { validateSettleProgram, type DecodedSettleProgram, type ProgramPin } from "./decode.js";
+import { SettleDecodeError, validateSettleProgram, type DecodedSettleProgram, type ProgramPin } from "./decode.js";
 
 /** `Pot.cook` / `SauceRouter.cook` — identical input signature on both (`sdk/src/artifacts/*.json`), so
  *  one fragment decodes either. Only the input array matters for decoding a call. */
@@ -77,7 +77,12 @@ export function decodeSettleCall(callData: Hex, accepted?: readonly (Hex | Progr
     // would be fail-OPEN: a caller whose configured accept-list resolved to empty would be told
     // "this is the audited settle" against a trust anchor they never listed.
     return { ...validateSettleProgram(ingredients[0]!, ...(accepted ? [accepted] : [])), ingredientIndex: 0 };
-  } catch {
+  } catch (error) {
+    // Only a DECODE failure means "this cook does not settle". A malformed pin -- a `{ hash: null }`
+    // from config -- would otherwise be swallowed as that, and every intent would report no settle
+    // while a monitor built on this went silently blind. Let a programmer error escape.
+    if (!(error instanceof SettleDecodeError)) throw error;
+
     return null; // ingredient 0 is not a settle payload — this cook does not settle
   }
 }

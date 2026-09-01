@@ -1,8 +1,9 @@
 /**
  * cctp-transfer demo — Base→Arbitrum USDC, with CCTP and without. The route PROGRAMS are standalone
- * `.sauce.ts` assets (`cctp-split.sauce.ts` / `plain-transfer.sauce.ts`) whose parameterized `main`
- * is baked with this intent's values as compile-time `args` (the `settle.sauce.ts` mechanism — a TS
- * compiler feature; RS binds entry params by runtime-decode instead). The point of these assertions:
+ * `.sauce.ts` assets (`cctp-split.sauce.ts` / `plain-transfer.sauce.ts`) whose module-level consts
+ * are replaced with this intent's values via `defines` — `CCTP_*` for the split, `XFER_*` for the
+ * baseline. That is the compile-time channel, and it is a DIFFERENT mechanism from `settle.sauce.ts`,
+ * whose `main` takes its values as runtime entry arguments and so compiles to one invariant program. The point of these assertions:
  * the programs are DSL-native (USDC + Cctp.TokenMessenger resolve from the registries), and the CCTP
  * variant is ONE atomic cook.
  */

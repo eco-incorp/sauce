@@ -93,10 +93,12 @@ export interface RejectionVector {
    *  load-bearing: a lax implementation would pass every other test in this corpus.
    *
    *  NOT SELF-VERIFYING for every row. The e2e filters on `sweepsIdentically`, so only those rows
-   *  re-measure themselves on chain each run; a row that is `engineAccepts` WITHOUT
-   *  `sweepsIdentically` is asserted nowhere but here, and would keep claiming it if the engine
-   *  changed. Today that is `dirtyRecipient` alone. Proving it needs a token fixture that skips the
-   *  callee's `address` check — without one, the engine's acceptance is invisible behind that revert. */
+   *  re-measure themselves on chain each run. Any row that is `engineAccepts` WITHOUT
+   *  `sweepsIdentically` is asserted nowhere but here and would keep claiming it if the engine changed
+   *  — `SETTLE_REJECTIONS.filter(r => r.engineAccepts && !r.sweepsIdentically)` is that ledger, and the
+   *  suite pins it rather than this comment naming rows that then drift. Each is refused by the CALLEE
+   *  rather than the engine, so proving one needs a token fixture that skips the check in question;
+   *  without that, the engine's acceptance is invisible behind the revert. */
   engineAccepts: boolean;
   /** Whether the whole call then SUCCEEDS and moves the same tokens as the canonical payload, against
    *  a standard solc ERC20. Distinct from `engineAccepts`, and the e2e's on-chain equivalence loop
