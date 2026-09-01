@@ -108,7 +108,7 @@ export interface RejectionVector {
 /**
  * Payloads a conformant decoder MUST refuse — the successor to the v1 corpus's `v3` trap.
  *
- * The first four are the trap proper, and they are the reason this corpus exists at all: the
+ * The `engineAccepts` rows are the trap proper, and they are the reason this corpus exists at all: the
  * engine RUNS them and produces exactly the behavior of the canonical payload beside them, so they
  * are distinct byte strings with identical meaning. A decoder that accepts any of them is not
  * injective, and `encodeSettleProgram` re-encode-and-compare stops agreeing with decode-and-compare.
@@ -167,7 +167,12 @@ export const SETTLE_REJECTIONS: readonly RejectionVector[] = [
     name: "zeroRecipient — the recipient word is 0",
     args: "0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "ZERO_RECIPIENT",
-    engineAccepts: false,
+    // Same fact as `dirtyRecipient`, not a separate measurement: the engine passes the recipient word
+    // through unmasked and performs no check on it, so zero is simply another value of that word --
+    // there is no mechanism by which the engine would single it out. A standard solc ERC20's own
+    // zero-address check in `_transfer` is what refuses this; a callee that permits it sends the
+    // tokens to address(0).
+    engineAccepts: true,
     sweepsIdentically: false,
   },
   {

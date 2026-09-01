@@ -24,13 +24,16 @@
  * ABI: a scalar entry argument occupies one word at `PROGRAM_BYTES + slot*32`, and a dynamic array
  * spends its word on a pointer to `[count][element…]`, ABI-style, rooted at the start of `args`.
  *
- * §4 CANONICALITY — WHY THIS IS STRICTER THAN THE ENGINE. Measured on a real v12 runtime, the
- * engine ACCEPTS four payloads this decoder rejects: a `tokens_ptr` other than 96 (it follows any
- * offset), trailing bytes past the token array, a token word whose upper 12 bytes are dirty (the
- * call target is masked to 160 bits, so it sweeps the same token), and a dirty RECIPIENT word —
- * which the engine passes through unmasked, so it reaches the token as-is. The first three move the
- * same tokens against any ERC20; the fourth is stopped only by the callee's own `address` check, so
- * against a token that omits it (Vyper, older solc, a forwarding proxy) it too delivers identically.
+ * §4 CANONICALITY — WHY THIS IS STRICTER THAN THE ENGINE. Measured on a real v12 runtime, the engine
+ * ACCEPTS five payloads this decoder rejects — `SETTLE_REJECTIONS.filter(r => r.engineAccepts)` is the
+ * list, and the suite pins it, so this prose is a description and not the source of truth. They are: a
+ * `tokens_ptr` other than 96 (it follows any offset), trailing bytes past the token array, a token
+ * word whose upper 12 bytes are dirty (the call target is masked to 160 bits, so it sweeps the same
+ * token), a dirty RECIPIENT word, and a ZERO recipient. The first three move the same tokens against
+ * any ERC20. The last two both follow from one fact: the engine passes the recipient word through
+ * UNMASKED and never inspects it, so what refuses them is the callee's own `address` / zero check —
+ * against a token that omits those (Vyper, older solc, a forwarding proxy) they deliver too, the zero
+ * case to address(0).
  * Each is a DIFFERENT byte string producing IDENTICAL behavior. Accepting them would make the decode
  * non-injective and put `encodeSettleProgram`'s re-encode-and-compare (§5) at odds with a
  * decode-and-compare, so ALL FOUR are refused — the recipient one included, precisely because whether
@@ -173,6 +176,9 @@ export interface SettleParse {
   tokensOffset: bigint | null;
   minOut: bigint | null;
   recipient: bigint | null;
+  /** The recipient word BEFORE masking — what the engine actually passes to the token, since it does
+   *  not mask that word. Differs from `recipient` exactly when the upper 12 bytes are dirty. */
+  recipientWord: bigint | null;
   recipientNonZero: boolean;
   /** The declared element count. Values past what the payload can hold are recorded here and
    *  reported as `ARGS_TRUNCATED`. */
@@ -197,6 +203,7 @@ export function parseSettleProgram(payload: Hex, programBytes: number = SETTLE_W
     tokensOffset: null,
     minOut: null,
     recipient: null,
+    recipientWord: null,
     recipientNonZero: false,
     tokenCount: null,
     tokenWords: [],
@@ -238,6 +245,7 @@ export function parseSettleProgram(payload: Hex, programBytes: number = SETTLE_W
   result.minOut = wordAt(args, 1);
   const recipientWord = wordAt(args, 2);
   result.recipient = recipientWord & ADDRESS_MASK;
+  result.recipientWord = recipientWord;
   result.recipientNonZero = result.recipient !== 0n;
 
   if (result.tokensOffset !== BigInt(SETTLE_WIRE.HEAD_BYTES)) {
@@ -334,12 +342,19 @@ function parseToDecoded(parse: SettleParse): DecodedSettleProgram | null {
  *  zero recipient) would make `decodeSettleProgram` throw — so a rejected payload's decoded intent is
  *  still visible to a caller debugging the rejection.
  *
- *  DECLINES on a non-canonical tokens pointer. The engine follows that pointer; this reads at the
- *  canonical offset, so on exactly the payload this function exists for — a hostile one — the report
- *  and execution would name different tokens. Reporting nothing beats reporting the wrong answer
- *  confidently. */
+ *  DECLINES wherever the report would not match execution — the whole point being that on a hostile
+ *  payload, reporting nothing beats reporting a wrong answer confidently. Two cases:
+ *
+ *  - a non-canonical tokens pointer: the engine follows it, this reads at the canonical offset, so the
+ *    two name different TOKENS.
+ *  - a dirty RECIPIENT word: `recipient` is masked here, but the engine does not mask that word (§4),
+ *    so execution addresses a different 256-bit key than the masked answer would suggest.
+ *
+ *  A dirty TOKEN word is NOT declined: the engine masks a call target to 160 bits, so there the masked
+ *  answer is exactly what executes, and reporting it is what shows the payload's true meaning. */
 export function bestEffortDecode(parse: SettleParse): DecodedSettleProgram | null {
   if (parse.fatal?.code === "TOKENS_OFFSET") return null;
+  if (parse.recipientWord !== null && parse.recipientWord !== (parse.recipient ?? 0n)) return null;
 
   return parseToDecoded(parse);
 }

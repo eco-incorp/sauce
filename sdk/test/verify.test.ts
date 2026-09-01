@@ -2,11 +2,11 @@
  * @eco-incorp/sauce-sdk/verify — decoder coverage against the appended-args wire.
  *
  * The corpus this runs on is `SETTLE_VECTORS` (payloads a conformant decoder must accept) and
- * `SETTLE_REJECTIONS` (payloads it must refuse). The rejection half is the load-bearing one: FOUR of
- * its seven are byte strings a REAL v12 runtime accepts and runs, so a decoder that takes them is not
- * injective — see decode.ts §4. Three of those four are also provable identical ON CHAIN against a
- * standard ERC20 (`sweepsIdentically`); the dirty-recipient one is stopped by the callee's own
- * `address` check rather than by the engine, so it is a trap for the decoder all the same.
+ * `SETTLE_REJECTIONS` (payloads it must refuse). The rejection half is the load-bearing one: the
+ * `engineAccepts` rows are byte strings a REAL v12 runtime accepts and runs, so a decoder that takes
+ * them is not injective — see decode.ts §4. The `sweepsIdentically` subset is also provable identical
+ * ON CHAIN against a standard ERC20; the rest are refused by the callee rather than by the engine, so
+ * they are traps for the decoder all the same. The counts live in the assertions below, not here.
  *
  * `verify.compile.test.ts` re-derives `SETTLE_PROGRAM` from source on every run, so the pins here
  * are live rather than frozen; `verify-execution.e2e.test.ts` runs these same vectors on the engine.
@@ -107,6 +107,7 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
         'ARGS_OVERLONG',
         'DIRTY_ADDRESS_WORD',
         'DIRTY_ADDRESS_WORD',
+        'ZERO_RECIPIENT',
       ]);
     });
 
@@ -117,7 +118,7 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
       const engineRuns = SETTLE_REJECTIONS.filter((r) => r.engineAccepts);
       const provable = SETTLE_REJECTIONS.filter((r) => r.sweepsIdentically);
 
-      expect(engineRuns).toHaveLength(4);
+      expect(engineRuns).toHaveLength(5);
       expect(provable).toHaveLength(3);
       expect(provable.every((r) => r.engineAccepts)).toBe(true);
     });
@@ -144,11 +145,16 @@ describe('@eco-incorp/sauce-sdk/verify', () => {
       expect(bestEffortDecode(parse)).toBeNull();
     });
 
-    it('a dirty recipient word likewise decodes to the address it names', () => {
+    // Unlike a dirty TOKEN word -- which the engine masks as a call target, so the masked answer is
+    // what executes -- the recipient word is passed through unmasked. Reporting the masked address
+    // would name a different 256-bit key than the transfer actually uses, so this declines instead.
+    it('DECLINES a dirty recipient word rather than reporting the masked address', () => {
       const trap = SETTLE_REJECTIONS.find((r) => r.name.startsWith('dirtyRecipient'))!;
       const parse = parseSettleProgram(settlePayload(trap.args));
+
       expect(parse.fatal?.code).toBe('DIRTY_ADDRESS_WORD');
-      expect(bestEffortDecode(parse)!.recipient).toBe(SETTLE_VECTORS[0]!.recipient.toLowerCase());
+      expect(parse.recipientWord).not.toBe(parse.recipient);
+      expect(bestEffortDecode(parse)).toBeNull();
     });
   });
 
