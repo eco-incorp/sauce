@@ -2,6 +2,16 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Monad (143) — Aave V3.7. Both addresses getCode-verified on-chain 2026-08-31
+    // (rpc-mainnet.monadinfra.com). Source: bgd-labs/aave-address-book AaveV3Monad.sol.
+    chainId: 143,
+    chainName: "Monad",
+    addresses: {
+      pool: "0x69a5F9AD4f96ebf0a0C792dD42a01cC5C0102fef",
+      poolAddressesProvider: "0x34793Fb9935F7bB5E5aE920fb963F39063E7A615",
+    },
+  },
+  {
     chainId: 1,
     chainName: "Ethereum",
     addresses: {

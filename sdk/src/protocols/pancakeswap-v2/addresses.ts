@@ -2,6 +2,17 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Monad (143) — PancakeSwap V2. Both addresses getCode-verified on-chain 2026-08-31.
+    // Source: pancakeswap/pancake-developer contracts/v2/addresses. The Factory is a
+    // shared CREATE2 address (identical across several chains); the Router is Monad-specific.
+    chainId: 143,
+    chainName: "Monad",
+    addresses: {
+      factory: "0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E",
+      router: "0xB1Bc24c34e88f7D43D5923034E3a14B24DaACfF9",
+    },
+  },
+  {
     chainId: 56,
     chainName: "BSC",
     addresses: {
