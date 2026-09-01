@@ -2,6 +2,20 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Monad (143) — Uniswap V3 core/periphery v1.0.0, SwapRouter02 v1.1.0
+    // (developers.uniswap.org/…/v3-monad-deployments). Every address getCode-verified
+    // on-chain 2026-08-31 (rpc-mainnet.monadinfra.com). Only SwapRouter02 was deployed
+    // (no legacy SwapRouter), matching Base's shape.
+    chainId: 143,
+    chainName: "Monad",
+    addresses: {
+      factory: "0x204faca1764b154221e35c0d20abb3c525710498",
+      swapRouter02: "0xfe31f71c1b106eac32f1a19239c9a9a72ddfb900",
+      quoterV2: "0x661e93cca42afacb172121ef892830ca3b70f08d",
+      nonfungiblePositionManager: "0x7197e214c0b767cfb76fb734ab638e2c192f4e53",
+    },
+  },
+  {
     chainId: 1,
     chainName: "Ethereum",
     addresses: {
