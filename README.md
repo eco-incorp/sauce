@@ -45,8 +45,14 @@ built.intent                 // the assembled Intent
 built.publishCalldata()      // calldata for sourcePortal — omit sourcePortal above and this throws
 ```
 
-Common token addresses are already there: `routes.TOKEN_REGISTRY` carries probe-verified `USDC`,
-`WETH` and (where deployed) `USDT` for ethereum, optimism, polygon, base and arbitrum. Look one up
+Common token addresses are already there: `routes.TOKEN_REGISTRY` carries probe-verified `USDC` and
+`WETH` for ethereum, optimism, polygon, base and arbitrum, the wrapped native under whatever symbol
+it actually reports (polygon's is `WPOL`), and `USDT` on ethereum and optimism only. `USDT` is absent
+elsewhere because a row is registered under a ticker only when the deployed contract's own `symbol()`
+string-equals it: the Tether-migrated polygon and arbitrum deployments return `USDT0`/`USD₮0` and
+fail that gate, and base's was never probed. So a missing row means "not provenance-verified under
+that ticker", NOT "not deployed" — `tokenDefines` overrides any key when you want one anyway.
+Ask `routes.knownTokenSymbols(requireChain('polygon'))` for what a chain actually carries. Look one up
 with `routes.registryTokenAddress(requireChain('base'), 'USDC')` (`requireChain` is a root export --
 see [Registries](#registries)), which returns a **`bigint`**, or `undefined` when that chain does not
 carry the symbol -- not a `0x` string, so format it yourself if you need one:
@@ -141,9 +147,19 @@ of its own ingredient. Use `defines` for routes, parameters for programs you ass
 A `bytes` parameter is not padded — it occupies its fixed compile-time length, so the tail is not
 uniformly 32-byte words once one is present.
 
-The compiler returns `{ bytecode, manifest? }` and no argument layout, so callers build the tail
-themselves. On **SVM** an `Account`-typed parameter is not a payload argument at all: those become
-the account manifest in `CompileResult.manifest`.
+Neither call returns an argument layout, so callers build the tail themselves. Mind which
+`CompileResult` you have — there are two, and they are not the same shape:
+
+| | shape | from |
+|---|---|---|
+| the compiler's | `{ bytecode: Uint8Array; manifest? }` | a direct `compile` |
+| the SDK's | `{ bytecode: Uint8Array[]; warnings: string[] }` | `built.compiled`, `compileSauceRoute` |
+
+The SDK's `bytecode` is a list of SEGMENTS, so `compiled.bytecode[0]` is the first segment, not the
+first byte. On **SVM** an `Account`-typed parameter is not a payload argument at all: it becomes the
+account manifest in the COMPILER's `CompileResult.manifest` — the route seam drops it
+(`rs-compile.ts`), so `built.compiled.manifest` is `undefined` with no error. An SVM caller that
+needs the manifest compiles through `svm/` directly.
 
 A `main` that falls off the end has no return type of its own, and a raw `compile` rejects it
 (`` `main` does not return on every path ``). Generated programs hit this whenever they fall through

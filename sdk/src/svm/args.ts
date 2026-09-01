@@ -1,7 +1,8 @@
 /**
  * Staged payload-args encoder, against an `ArgsLayout` (mode 'calldata') the
- * caller supplies. The layout is SDK-owned (`./layout.ts`) — `CompileResult` is
- * `{ bytecode, manifest? }` and carries no argument layout. Per-execution args
+ * caller supplies. The layout is SDK-owned (`./layout.ts`) — neither `CompileResult` carries an
+ * argument layout: the compiler's is `{ bytecode, manifest? }`, the route seam's
+ * (`routes/compile-types.ts`) is `{ bytecode: Uint8Array[], warnings }`. Per-execution args
  * ride the execute_from_account INSTRUCTION PAYLOAD after the flags byte and
  * optional hash pin; the engine exposes the composite `buffer bytecode ++ args`
  * through CALLDATA and the compiled prologue reads arg i at composite offset

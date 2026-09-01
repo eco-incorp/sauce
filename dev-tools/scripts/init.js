@@ -42,7 +42,6 @@ const templateItems = [
   "hardhat.config.cjs",
   "tsconfig.json",
   "README.md",
-  "COMPILER.md",
 ];
 
 for (const item of templateItems) {

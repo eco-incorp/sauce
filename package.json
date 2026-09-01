@@ -87,6 +87,8 @@
     "dev-tools/src",
     "dev-tools/sauce",
     "dev-tools/artifacts",
+    "dev-tools/package.json",
+    "dev-tools/tsconfig.json",
     "dev-tools/hardhat.config.cjs",
     "dev-tools/README.md",
     "artifacts/svm/engine.so"
