@@ -26,7 +26,7 @@ import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs } from "./rs-compile.js";
-import { rewriteTokenMembers } from "./token-rewrite.js";
+import { rewriteTokenFactory, rewriteTokenMembers } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
@@ -163,19 +163,33 @@ export function compileSauceRoute(
   // `IErc20_*`, not `IERC20`); the sugar's own `ctx.self()` output is immune to the accessor
   // pass's self-sugar too (`self` there is a member PROPERTY, which its exclusion set already
   // covers). See routes-token-rewrite.test.ts's composition test for the regression lock.
+  // Two ERC20 rewrites, both lowering to `IERC20.at(...)`: the `<Sym>.transfer(...)` symbol sugar
+  // (only when the chain has resolved token symbols) and the `Token(addr)` global wrapper (always —
+  // it takes an arbitrary address, not a registry symbol). Whichever fires, the `IERC20` import is
+  // injected ONCE and `TOKEN_BASE_DIRS` unioned in once; on svm either is the same EVM-only error.
+  let tokenRewrote = false;
   if (tokenMap.size > 0) {
     const rewritten = rewriteTokenMembers(source, tokenMap);
     if (rewritten.rewrote) {
-      if (chain.kind === "svm") {
-        throw new Error(
-          `compileSauceRoute: destination '${chain.slug}' is svm — the ERC20 member rewrite ` +
-            "(options.tokens) is EVM-only; an SVM route needs the SPL account-plan `Token` emitter " +
-            "(see token/api.ts) instead.",
-        );
-      }
-      source = `${ERC20_IMPORT_LINE}\n${rewritten.source}`;
-      baseDirs = [...(options.baseDirs ?? []), ...TOKEN_BASE_DIRS];
+      source = rewritten.source;
+      tokenRewrote = true;
     }
+  }
+  const factory = rewriteTokenFactory(source);
+  if (factory.rewrote) {
+    source = factory.source;
+    tokenRewrote = true;
+  }
+  if (tokenRewrote) {
+    if (chain.kind === "svm") {
+      throw new Error(
+        `compileSauceRoute: destination '${chain.slug}' is svm — the ERC20 token rewrite ` +
+          "(`Token(addr)` / `<Sym>.transfer(...)`) is EVM-only; an SVM route needs the SPL " +
+          "account-plan `Token` emitter (see token/api.ts) instead.",
+      );
+    }
+    source = `${ERC20_IMPORT_LINE}\n${source}`;
+    baseDirs = [...(options.baseDirs ?? []), ...TOKEN_BASE_DIRS];
   }
 
   if (options.accessors !== false) {

@@ -173,6 +173,75 @@ function collectBalanceSites(
   return sites;
 }
 
+// -- Token(addr) factory: Token(<expr>) -> IERC20.at(<expr>) in ANY position ----------------------
+
+/** The DSL's global token WRAPPER name. */
+export const TOKEN_FACTORY_NAME = "Token";
+
+export interface TokenFactoryResult {
+  readonly source: string;
+  readonly rewrote: boolean;
+  /** Count of `Token(...)` call sites rewritten. */
+  readonly sites: number;
+}
+
+/**
+ * Rewrites every `Token(<expr>)` call to `IERC20.at(<expr>)` — the DSL's global token WRAPPER, the
+ * `Token(addr)` sibling of the `<Sym>.transfer(...)` sugar above. This is what makes
+ * `Token(addr).approve(spender, amt)` and `let t = Token(addr); t.approve(...)` compile in a route
+ * body with no import: only the callee `Token` is replaced, so the result is the ordinary
+ * `IERC20.at(addr)` binding the compiler already supports — it never sees a method call on a
+ * `Token(...)` result (which the compiler's M1 subset rejects). Fires on ANY argument (a literal, a
+ * variable, an ambient `USDC` define), so — unlike the symbol sugar — it does NOT depend on the
+ * token-symbol map, and works on every EVM chain including registry-less ones.
+ *
+ * Shadow-safe: a user who declares their own `Token` (let/const/function/param) anywhere in the
+ * program owns the name, and EVERY `Token(...)` call is then left untouched — the same conservative
+ * whole-program rule the symbol rewrite applies. Purely textual, acorn-range-driven, like the rest
+ * of this module.
+ */
+export function rewriteTokenFactory(source: string): TokenFactoryResult {
+  // Cheap bail before parsing: no `Token` token, nothing to do (a mention in a comment/string still
+  // parses, but that is rare and the parse is cheap).
+  if (!source.includes(TOKEN_FACTORY_NAME)) {
+    return { source, rewrote: false, sites: 0 };
+  }
+  const program = acorn.parse(source, { ecmaVersion: "latest", sourceType: "module" }) as unknown as AstNode;
+  // A locally-declared `Token` shadows the global wrapper — skip the whole program, conservatively.
+  // `collectDeclaredNames` covers `let`/`const Token` and a param named `Token`; a `function Token`
+  // declaration's OWN name is not a `VariableDeclarator`, so it is checked here as well.
+  let shadowed = collectDeclaredNames(program).has(TOKEN_FACTORY_NAME);
+  if (!shadowed) {
+    walk(program, (n) => {
+      if (n.type !== "FunctionDeclaration") return;
+      const id = (n as { id?: AstNode }).id as { name?: string } | undefined;
+      if (id?.name === TOKEN_FACTORY_NAME) shadowed = true;
+    });
+  }
+  if (shadowed) {
+    return { source, rewrote: false, sites: 0 };
+  }
+
+  const sites: Splice[] = [];
+  walk(program, (n) => {
+    if (n.type !== "CallExpression") return;
+    const callee = (n as { callee?: AstNode }).callee;
+    if (!callee || callee.type !== "Identifier") return;
+    if ((callee as unknown as { name: string }).name !== TOKEN_FACTORY_NAME) return;
+    // Replace ONLY the callee identifier: `Token(<args>)` -> `IERC20.at(<args>)`. The args and the
+    // surrounding `.approve(...)`/binding are left for the compiler.
+    sites.push({ start: callee.start, end: callee.end, replacement: "IERC20.at" });
+  });
+  if (sites.length === 0) return { source, rewrote: false, sites: 0 };
+
+  const ordered = [...sites].sort((a, b) => b.start - a.start);
+  let out = source;
+  for (const site of ordered) {
+    out = out.slice(0, site.start) + site.replacement + out.slice(site.end);
+  }
+  return { source: out, rewrote: true, sites: sites.length };
+}
+
 /**
  * Rewrites every `<Sym>.transfer/.approve/.balanceOf(...)` call (U4) and every `<holder>.<Sym>`
  * value-position read (balance sugar) whose `<Sym>` is in `tokens` (and not shadowed anywhere in
