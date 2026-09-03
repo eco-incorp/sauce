@@ -4,10 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Developer-facing tooling for the **Sauce protocol** — an on-chain bytecode runtime that executes
-Turing-complete, atomic scripts in a single EVM transaction. The runtime engine itself lives in the
-separate private `eco-incorp/sauce` repo (often checked out at `../sauce`); this repo only *targets*
-it.
+**Sauce** — the developer-facing package for the **Sauce protocol**, an on-chain bytecode runtime
+that executes Turing-complete, atomic scripts in a single EVM transaction. This is the whole `sauce`
+repo (`eco-incorp/sauce`, **renamed from `eco-incorp/sauce-sdk`** — the old name still redirects). The
+runtime **engine** it *targets* lives in the separate private **`eco-incorp/v12`** repo (**renamed
+from `eco-incorp/sauce`**; the engine, not this package, is what took the `v12` name — often checked
+out at `../v12`).
 
 A **pnpm monorepo** of three workspace packages (`pnpm-workspace.yaml`: `dev-tools`, `sdk`,
 `actions`), all `private: true`, bundled and published as a **single npm package
@@ -21,9 +23,9 @@ everything from one name.
 | `actions/` | `@eco-incorp/sauce-actions` | `/actions` | Routing-intent → bytecode lowering |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools` | Local/forked hardhat env + recipe runner |
 
-This repo was **extracted from `../sauce`** (the source of truth, which still has its own copies of
-these packages, generally more built-out). The packages here are **siblings, not generations**:
-`dev-tools` is a dev harness, not a legacy `sdk`.
+This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
+which may still carry older copies of these packages. The packages here are **siblings, not
+generations**: `dev-tools` is a dev harness, not a legacy `sdk`.
 
 ## Build, test, lint
 
@@ -51,12 +53,16 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
 
 ## Toolchain gotchas (why a fresh clone may fail)
 
-- **Private `sauce` git dep.** The ROOT `package.json` devDepends on `sauce` from
-  `github:eco-incorp/sauce#<sha>` (private). It is no longer the compiler's dependency — the compiler
-  comes from npm — it is where `sdk/scripts/sync-engine-artifacts.mjs` gets the Solidity engine
-  sources and the deploy record. Cloning needs GitHub auth — locally `gh auth setup-git` or an
-  `~/.npmrc` token; CI uses the `ECO_INCORP_TOKEN` secret via a `git config insteadOf` rewrite
-  (`.github/workflows/ci.yml` rewrites the HTTPS *and* SSH forms, because the lockfile may pin either).
+- **Private engine git dep.** The ROOT `package.json` devDepends on the engine from
+  `github:eco-incorp/v12#<sha>` (private) — **the dependency KEY stays `sauce`** (so it installs to
+  `node_modules/sauce` and `sync-engine-artifacts.mjs` still finds it), but the URL points at the
+  **renamed engine repo `eco-incorp/v12`** (it was `eco-incorp/sauce` before the SDK took that name —
+  a repin to the old URL now resolves to THIS repo and fails, since the pinned SHA lives on `v12`). It
+  is no longer the compiler's dependency — the compiler comes from npm — it is where
+  `sdk/scripts/sync-engine-artifacts.mjs` gets the Solidity engine sources and the deploy record.
+  Cloning needs GitHub auth — locally `gh auth setup-git` or an `~/.npmrc` token; CI uses the
+  `ECO_INCORP_TOKEN` secret via a `git config insteadOf` rewrite (`.github/workflows/ci.yml` rewrites
+  the HTTPS *and* SSH forms, because the lockfile may pin either).
 - **Foundry is still required**, for two reasons that have nothing to do with the deleted compiler:
   (1) `forge` for `pnpm --filter './sdk' sync-engine-artifacts`, which `forge build`s the `sauce`
   dep's `engine/src` to produce the 8 artifact JSONs — the script also git-fetches the OpenZeppelin
@@ -71,7 +77,7 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
 - **`FORK_URL`** — actions `test`/`test:megas-swap` and dev-tools fork flows hit a hardhat mainnet
   fork (loaded from `.env`). `test:unit` is the fork-free subset.
 - **`SAUCE_ENGINE_SO`** — path to the Solana engine binary (`engine.so`, built with
-  `cargo build-sbf` in the sauce repo's `svm/`). The SVM integration suites (`sdk/test/svm/*.test.ts`)
+  `cargo build-sbf` in the engine (`v12`) repo's `svm/`). The SVM integration suites (`sdk/test/svm/*.test.ts`)
   run compiled `target: 'svm'` bytecode on it via LiteSVM. The binary is **vendored** at
   `artifacts/svm/engine.so` (committed, force-added — `artifacts/` is gitignored; it is the
   only force-added path left, since no `dist/` is tracked) and that's the default both
@@ -115,7 +121,7 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines` fetches both from those releases,
   digest-verified against values pinned in the script, so no Huff toolchain and no local sauce
   checkout is needed. Building by hand is only for an **unreleased** engine: the `.so` is
-  `cd <sauce>/v12-svm && make build`, and the EVM runtime cannot come from `hnc -r` at all —
+  `cd <v12>/v12-svm && make build`, and the EVM runtime cannot come from `hnc -r` at all —
   `Runtime.huff`'s CONSTRUCTOR returns its own bytecode, so the deployed code is only known once
   deployed; deploy the creation code to an anvil and read it back with `cast code`. (The EVM suite
   needs `anvil` on `PATH` either way.)
@@ -198,14 +204,14 @@ run (see the Foundry gotcha above).
 
 `src/std/` is the SauceScript **standard library** — source shipped for the compiler to consume, not
 TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), a
-**byte-identical copy** of the sauce repo's conformance fixture
+**byte-identical copy** of the engine (`v12`) repo's conformance fixture
 (`compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token/`), kept identical on purpose so
 drift between the two repos shows up as a diff rather than as silently divergent behavior — **do not
 edit it here; change it in sauce and re-copy.** Nothing here enforces that: the `sauce` git dep is
 pinned to a commit that predates the Rust compiler's move into `compiler/crates/`, so that fixture
 path does not exist in `node_modules/sauce` and there is nothing on disk to compare against. The
 check is manual —
-`diff -r sdk/src/std/token <sauce>/compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token`
+`diff -r sdk/src/std/token <v12>/compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token`
 against a local checkout. What CI *does* pin is the SPL Token program id the SVM arm guards on:
 `test/std/token/compile.test.ts` derives it from the canonical base58 address and counts it in the
 emitted bytecode, so a wrong digit or a deleted `require` fails there. It has two per-target arms (`token.evm.js`, `token.svm.js`) and
@@ -228,7 +234,7 @@ wraps, stakes) to bytecode. Actions **chain**: output feeds the next implicitly 
 **`dev-tools/`** — harness: `start:local`/`start:fork` boot a hardhat net + deploy the engine;
 `npm run sauce <file.js> [args]` compiles+runs a SauceScript; `npm run recipe …` runs recipes.
 
-## The swap Router (`../sauce/engine/src/Router.sol`)
+## The swap Router (`../v12/engine/src/Router.sol`)
 
 Lives in the **private engine repo**, not here, but recipes target it (its `Router`/`SauceRouter`
 artifacts are what `cook()` runs against). `SauceRouter` is a thin delegatecall proxy → `Router`

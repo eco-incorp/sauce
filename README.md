@@ -1,10 +1,15 @@
-# @eco-incorp/sauce-sdk
+# Sauce
 
-Build, compile and verify Sauce programs — cross-chain intents whose programs execute as bytecode on the Eco Pot. One package, TypeScript, EVM and SVM.
+**Sauce** — build, compile and verify Sauce programs: cross-chain intents whose programs execute as
+bytecode on the Eco Pot. One TypeScript package for EVM and SVM. Published as `@eco-incorp/sauce-sdk`.
 
 ```sh
 npm install @eco-incorp/sauce-sdk
 ```
+
+> The runtime **engine** (the on-chain interpreter these programs execute on) lives in the separate
+> `eco-incorp/v12` repo. This repo — `eco-incorp/sauce` — is the developer-facing Sauce package that
+> *targets* it.
 
 **Node only.** The compiler is loaded through `createRequire` (its `node` build is CommonJS reading a
 sibling `.wasm` off disk), and the route path imports `node:fs`/`node:path`, so the Quickstart, the
