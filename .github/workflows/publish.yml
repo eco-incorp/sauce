@@ -19,7 +19,7 @@ name: Publish
 # not publishing there at all.
 #
 # Required repo secrets:
-#   ECO_INCORP_TOKEN   PAT with read on eco-incorp/sauce (for pnpm install
+#   ECO_INCORP_TOKEN   PAT with read on eco-incorp/v12 (for pnpm install
 #                      of the private git dep `sauce`)
 #   NPM_TOKEN          npmjs.com automation token with publish rights on
 #                      the @eco-incorp scope
@@ -50,12 +50,12 @@ jobs:
           ECO_INCORP_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
         run: |
           if [ -z "${ECO_INCORP_TOKEN:-}" ]; then
-            echo "::error::Missing repo secret ECO_INCORP_TOKEN — required to clone the private eco-incorp/sauce git dep. Add a PAT with read access on eco-incorp/sauce under Settings -> Secrets and variables -> Actions."
+            echo "::error::Missing repo secret ECO_INCORP_TOKEN — required to clone the private eco-incorp/v12 git dep. Add a PAT with read access on eco-incorp/v12 under Settings -> Secrets and variables -> Actions."
             exit 1
           fi
           # Kept identical to ci.yml's block. This workflow previously rewrote ONLY the
           # https:// form, which is not the form the lockfile pins: pnpm-lock.yaml records
-          # `git+https://git@github.com:eco-incorp/sauce.git#<sha>` (the SSH spelling) when
+          # `git+https://git@github.com:eco-incorp/v12.git#<sha>` (the SSH spelling) when
           # regenerated on a machine that has an `insteadOf` for git@github.com:, so the
           # fetch fell through to SSH on a runner with no SSH key and `pnpm install` failed
           # before anything could be published — every publish attempt died at step 7.
@@ -88,7 +88,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # GH_TOKEN: the sdk build's sync step downloads V12RuntimeBytecode from the eco-incorp/sauce
+      # GH_TOKEN: the sdk build's sync step downloads V12RuntimeBytecode from the eco-incorp/v12
       # v12-evm release, and that repo is private. Without it the artifact is skipped with a warning
       # and the verify step below refuses to publish.
       - name: Build all areas (sdk + actions)

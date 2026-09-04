@@ -2,7 +2,7 @@
 // Produce the Sauce engine artifacts the SDK ships and its tests read, from sources that live
 // OUTSIDE `compiler/`. Two provenances, deliberately different:
 //
-//   1. The v12 EVM runtime — from the eco-incorp/sauce GitHub RELEASE, pinned to an immutable tag
+//   1. The v12 EVM runtime — from the eco-incorp/v12 GitHub RELEASE, pinned to an immutable tag
 //      and checked against a digest committed here. No Huff toolchain, no submodule fetch, no
 //      compile step: the release publishes the exact bytes.
 //   2. The 8 Solidity forge artifacts + the deploy record — from the `sauce` git dep, pinned to an
@@ -75,7 +75,7 @@ const V12_SVM = {
 // Keyed by tag: a bump downloads afresh rather than silently reusing the old bytes.
 const CACHE_ROOT = resolve(REPO_ROOT, 'node_modules', '.cache', 'sauce-engine-releases');
 
-const REPO = 'eco-incorp/sauce';
+const REPO = 'eco-incorp/v12';
 
 const onPath = (bin) => {
   try {
@@ -108,9 +108,9 @@ function download(tag, asset, dest) {
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.ECO_INCORP_TOKEN;
   if (!token) {
     throw new Error(
-      `cannot download ${tag}/${asset}: eco-incorp/sauce is a PRIVATE repo, and neither the \`gh\` CLI ` +
+      `cannot download ${tag}/${asset}: eco-incorp/v12 is a PRIVATE repo, and neither the \`gh\` CLI ` +
         'nor a token was found. Install + `gh auth login`, or export GITHUB_TOKEN / GH_TOKEN with read ' +
-        'access on eco-incorp/sauce.',
+        'access on eco-incorp/v12.',
     );
   }
 

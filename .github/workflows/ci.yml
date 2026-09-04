@@ -12,11 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The `sauce` npm dep is a private git dependency (eco-incorp/sauce). Configure
+      # The `sauce` npm dep is a private git dependency (eco-incorp/v12). Configure
       # git to use a PAT so `pnpm install` can clone it. Set ECO_INCORP_TOKEN as a repo
-      # secret (a PAT with `repo` read on eco-incorp/sauce).
+      # secret (a PAT with `repo` read on eco-incorp/v12).
       # NOTE: the package.json specifier is HTTPS, but pnpm-lock.yaml may pin the SSH
-      # form (git@github.com:eco-incorp/sauce.git) if it was regenerated on a machine
+      # form (git@github.com:eco-incorp/v12.git) if it was regenerated on a machine
       # with `url."git@github.com:".insteadOf "https://github.com/"`. The runner has no
       # SSH key, so we rewrite both the HTTPS and SSH forms to the token-authed HTTPS URL.
       - name: Configure git auth for private deps
@@ -24,7 +24,7 @@ jobs:
           ECO_INCORP_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
         run: |
           if [ -z "${ECO_INCORP_TOKEN:-}" ]; then
-            echo "::error::Missing repo secret ECO_INCORP_TOKEN — required to clone the private eco-incorp/sauce git dep. Add a PAT with read access on eco-incorp/sauce under Settings -> Secrets and variables -> Actions."
+            echo "::error::Missing repo secret ECO_INCORP_TOKEN — required to clone the private eco-incorp/v12 git dep. Add a PAT with read access on eco-incorp/v12 under Settings -> Secrets and variables -> Actions."
             exit 1
           fi
           # Keep this block in lockstep with publish.yml's. They drifted once: publish.yml
@@ -70,7 +70,7 @@ jobs:
       # the published compiler's `compiler-v0.5.0` tag is cut from: compiler and engines are one
       # lineage by construction, not by coincidence. `--fetch-v12-engines` downloads them into a
       # cache, checks each against a digest committed in the script, and prints the paths; the grep
-      # hands those to the steps below. GH_TOKEN because eco-incorp/sauce is a private repo.
+      # hands those to the steps below. GH_TOKEN because eco-incorp/v12 is a private repo.
       #
       # Both suites HARD-FAIL when their variable is absent, so a future edit here cannot quietly
       # return them to skipping — a skipped suite and a passing suite are the same line in jest's
