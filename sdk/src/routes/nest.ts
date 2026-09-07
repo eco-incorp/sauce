@@ -45,7 +45,7 @@ function toCallInput(tx: PortalTx): CallInput {
 
 /**
  * The calls a static child contributes to the PARENT's own `route.calls`:
- * `[...approve(P, amount) per reward token, publishAndFund(childDestination, childRouteBytes,
+ * `[...approve(P, amount) per distinct reward token, publishAndFund(childDestination, childRouteBytes,
  * childReward, allowPartial)]`, all issued against `opts.portal` (the parent's own `route.portal`).
  * Reuses `portal.ts#approvalTxs`/`publishAndFundTx` entirely — no second encoder.
  */

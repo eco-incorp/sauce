@@ -1185,6 +1185,9 @@ Details that are decisions, not incidentals:
   `reward.nativeAmount` (native needs `value`, not an approval). Zero-amount reward tokens are
   emitted as-is rather than filtered — the caller asked for that reward shape; silently dropping a
   leg of it is worse than a useless-but-harmless approve.
+  * SUPERSEDED as shipped: one-per-entry meant a duplicate token's later entry replaced the earlier
+    allowance. `approvalTxs` now emits one approve per DISTINCT token, for the largest of its
+    amounts, in first-seen order. See `portal.ts#approvalTxs`.
 * We do **not** emit `allowance`/`balanceOf` read-calls to let a caller skip a redundant approve. The
   module doc says so and points at `isIntentFundedCall` for the "is this already funded?" question.
 

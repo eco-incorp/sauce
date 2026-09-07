@@ -167,7 +167,87 @@ describe("portal.ts: approvalTxs", () => {
     const intent = evmIntent({ reward: baseReward({ tokens: [], nativeAmount: 5n }) });
     expect(approvalTxs(intent, { portal: PORTAL })).toEqual([]);
   });
+
+  it("descending duplicates collapse to one approve for the largest amount, not the last", () => {
+    const intent = evmIntent({
+      reward: baseReward({
+        tokens: [
+          { token: evmAddr("77"), amount: 20n },
+          { token: evmAddr("77"), amount: 10n },
+        ],
+      }),
+    });
+    const txs = approvalTxs(intent, { portal: PORTAL });
+
+    expect(txs).toHaveLength(1);
+    expect(txs[0]!.to.toLowerCase()).toBe(("0x" + "77".repeat(20)).toLowerCase());
+    expect(decodeApprove(txs[0]!.data)).toEqual([PORTAL.toLowerCase(), 20n]);
+  });
+
+  it("non-monotonic duplicates collapse to one approve for the maximum, never the sum", () => {
+    const intent = evmIntent({
+      reward: baseReward({
+        tokens: [
+          { token: evmAddr("77"), amount: 10n },
+          { token: evmAddr("77"), amount: 20n },
+          { token: evmAddr("77"), amount: 15n },
+        ],
+      }),
+    });
+    const txs = approvalTxs(intent, { portal: PORTAL });
+
+    expect(txs).toHaveLength(1);
+    expect(decodeApprove(txs[0]!.data)).toEqual([PORTAL.toLowerCase(), 20n]);
+  });
+
+  it("interleaved duplicates keep first-seen token order", () => {
+    const intent = evmIntent({
+      reward: baseReward({
+        tokens: [
+          { token: evmAddr("88"), amount: 3n },
+          { token: evmAddr("77"), amount: 20n },
+          { token: evmAddr("88"), amount: 9n },
+          { token: evmAddr("77"), amount: 10n },
+        ],
+      }),
+    });
+    const txs = approvalTxs(intent, { portal: PORTAL });
+
+    expect(txs.map((tx) => tx.to.toLowerCase())).toEqual([
+      ("0x" + "88".repeat(20)).toLowerCase(),
+      ("0x" + "77".repeat(20)).toLowerCase(),
+    ]);
+    expect(txs.map((tx) => decodeApprove(tx.data)[1])).toEqual([9n, 20n]);
+  });
+
+  it("a token whose largest entry is zero is still emitted as approve(portal, 0)", () => {
+    const intent = evmIntent({
+      reward: baseReward({
+        tokens: [
+          { token: evmAddr("77"), amount: 0n },
+          { token: evmAddr("88"), amount: 5n },
+        ],
+      }),
+    });
+    const txs = approvalTxs(intent, { portal: PORTAL });
+
+    expect(txs).toHaveLength(2);
+    expect(decodeApprove(txs[0]!.data)).toEqual([PORTAL.toLowerCase(), 0n]);
+    expect(decodeApprove(txs[1]!.data)).toEqual([PORTAL.toLowerCase(), 5n]);
+  });
 });
+
+/** Decodes an ERC20 `approve` calldata into `[lowercased spender, amount]`. */
+function decodeApprove(data: Hex): readonly [string, bigint] {
+  const decoded = decodeFunctionData({ abi: [
+    { type: "function", name: "approve", stateMutability: "nonpayable",
+      inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }],
+      outputs: [{ type: "bool" }] },
+  ] as const, data });
+  const [spender, amount] = decoded.args as readonly [Hex, bigint];
+
+  return [spender.toLowerCase(), amount];
+}
 
 describe("portal.ts: intentVaultAddressCall", () => {
   it("decodes a hand-built 32-byte address word", () => {
