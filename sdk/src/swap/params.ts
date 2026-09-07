@@ -2,6 +2,7 @@
  * Normalization core for E4.1's universal swap adapter — `toSwapParams` + `amountSpecifiedFor`.
  * See `sdk/src/swap/index.ts` for the module overview.
  */
+import { toExactBigInt } from "../numeric.js";
 import {
   isCallbackVenue,
   SwapPoolType,
@@ -25,15 +26,7 @@ const MAX_UNIV2_FEE_PPM = 1_000_000n;
 
 function toBigIntStrict(value: AmountInput, label: string): bigint {
   if (typeof value === "bigint") return value;
-  if (typeof value === "number") {
-    if (!Number.isInteger(value)) throw new Error(`${label}: expected an integer, got ${value}`);
-    // Past 2^53-1 the double was already rounded before it got here, so BigInt() would return an
-    // exact-looking wrong value.
-    if (!Number.isSafeInteger(value)) {
-      throw new Error(`${label}: expected a safe integer, got ${value} — pass a bigint or a string instead`);
-    }
-    return BigInt(value);
-  }
+  if (typeof value === "number") return toExactBigInt(value, label);
   // string: decimal or 0x-hex, either accepted by BigInt() directly.
   return BigInt(value);
 }

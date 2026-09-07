@@ -3,6 +3,7 @@
  * only normalizes caller-friendly inputs (`RouteInput`/`RewardInput`) into the
  * strict runtime shapes (`Route`/`Reward`) declared in `types.ts`.
  */
+import { toExactBigInt } from "../numeric.js";
 import type {
   AddressInput,
   Call,
@@ -48,11 +49,10 @@ export function toUniversalAddress(input: AddressInput): UniversalAddress {
 /**
  * Accepts `bigint | number | string`; rejects negative or non-integer values.
  *
- * A `number` must also be a SAFE integer: past 2^53-1 a double has already been rounded before
- * this function ever sees it, so `BigInt(value)` would return an exact-looking wrong amount. Pass
- * a large value as a `bigint` (`10n ** 18n`) or as a PLAIN DECIMAL string (`'1000000000000000000'`)
- * — exponent notation like `'1e21'` is rejected too, being no more an integer string than `1e21`
- * as a `number` is a safe one.
+ * A `number` goes through {@link toExactBigInt}, so it must also be a SAFE integer. Pass a large
+ * value as a `bigint` (`10n ** 18n`) or as a PLAIN DECIMAL string (`'1000000000000000000'`) —
+ * exponent notation like `'1e21'` is rejected too, being no more an integer string than `1e21` as
+ * a `number` is a safe one.
  */
 export function toBigInt(value: bigint | number | string): bigint {
   if (typeof value === "bigint") {
@@ -60,15 +60,9 @@ export function toBigInt(value: bigint | number | string): bigint {
     return value;
   }
   if (typeof value === "number") {
-    if (!Number.isInteger(value) || value < 0) {
-      throw new Error(`Expected a non-negative integer number, got ${value}`);
-    }
-    if (!Number.isSafeInteger(value)) {
-      throw new Error(
-        `Expected a safe integer number, got ${value} — pass a bigint or a plain decimal string`,
-      );
-    }
-    return BigInt(value);
+    const exact = toExactBigInt(value);
+    if (exact < 0n) throw new Error(`Expected a non-negative integer number, got ${value}`);
+    return exact;
   }
   if (typeof value === "string") {
     if (!/^-?\d+$/.test(value)) {

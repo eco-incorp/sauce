@@ -2,6 +2,7 @@
  * Normalization core for E4.2's universal deposit adapter — `toDeposit`. See
  * `sdk/src/deposit/index.ts` for the module overview.
  */
+import { toExactBigInt } from "../numeric.js";
 import type { AddressInput, AmountInput } from "../swap/types.js";
 import { depositTemplateFor } from "./templates.js";
 import type { ApprovalPolicy, DepositSpec, DepositTemplate, NormalizedDeposit } from "./types.js";
@@ -13,15 +14,7 @@ function toAddressBigint(value: AddressInput, label: string): bigint {
 
 function toBigIntStrict(value: AmountInput, label: string): bigint {
   if (typeof value === "bigint") return value;
-  if (typeof value === "number") {
-    if (!Number.isInteger(value)) throw new Error(`${label}: expected an integer, got ${value}`);
-    // Past 2^53-1 the double was already rounded before it got here, so BigInt() would return an
-    // exact-looking wrong value.
-    if (!Number.isSafeInteger(value)) {
-      throw new Error(`${label}: expected a safe integer, got ${value} — pass a bigint or a string instead`);
-    }
-    return BigInt(value);
-  }
+  if (typeof value === "number") return toExactBigInt(value, label);
   return BigInt(value);
 }
 

@@ -74,6 +74,45 @@ describe("Token: EVM source emission", () => {
   });
 });
 
+describe("Token: an unsafe number amount never reaches emitted source or calldata", () => {
+  // 1234567890123456789 is past 2^53-1, so it arrives already rounded and the two ways of reading
+  // it disagree: BigInt() gives 1234567890123456768n, .toString() gives "1234567890123456800".
+  const UNSAFE = 1234567890123456789;
+  const LABEL = /Token\.(transfer|approve) amount: expected a safe integer/;
+
+  it("transfer rejects it on every EVM surface", () => {
+    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: UNSAFE }).toCall()).toThrow(LABEL);
+    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: UNSAFE }).source("evm")).toThrow(LABEL);
+    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: UNSAFE }).statement("v12")).toThrow(LABEL);
+  });
+
+  it("approve rejects it on every EVM surface", () => {
+    expect(() => Token.approve({ token: TOKEN, spender: SPENDER, amount: UNSAFE }).toCall()).toThrow(LABEL);
+    expect(() => Token.approve({ token: TOKEN, spender: SPENDER, amount: UNSAFE }).source("evm")).toThrow(LABEL);
+  });
+
+  it("transfer rejects it on the SVM surface, where it is well under the u64 ceiling", () => {
+    expect(() =>
+      Token.transfer({ amount: UNSAFE, svm: { source: "src0", mint: "mint0", dest: "dst0" } }).source("svm"),
+    ).toThrow(LABEL);
+  });
+
+  it("a number amount at MAX_SAFE_INTEGER is still emitted and encoded exactly", () => {
+    const spec = { token: TOKEN, to: TO, amount: Number.MAX_SAFE_INTEGER } as const;
+    expect(Token.transfer(spec).source("evm")).toContain("9007199254740991n");
+    expect(Token.transfer(spec).toCall().data).toBe(Token.transfer({ ...spec, amount: 9007199254740991n }).toCall().data);
+    expect(
+      Token.transfer({ amount: Number.MAX_SAFE_INTEGER, svm: { source: "src0", mint: "mint0", dest: "dst0" } }).source("svm"),
+    ).toContain("9007199254740991n");
+  });
+
+  it("a non-integer number amount throws the integer message under the same label", () => {
+    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: 1.5 }).toCall()).toThrow(
+      "Token.transfer amount: expected an integer, got 1.5",
+    );
+  });
+});
+
 describe("Token: EVM toCall() selectors are pinned against viem + drift-checked against IERC20.json", () => {
   const IERC20_ABI = JSON.parse(
     readFileSync(resolve(process.cwd(), "src/artifacts/IERC20.json"), "utf-8"),

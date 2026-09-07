@@ -37,11 +37,14 @@ describe("toBigInt: number", () => {
     expect(() => toBigInt(1e21)).toThrow("Expected a safe integer number, got 1e+21");
   });
 
-  it("still rejects non-integers, negatives, NaN and Infinity with the integer message", () => {
-    expect(() => toBigInt(1.5)).toThrow("Expected a non-negative integer number, got 1.5");
+  it("still rejects non-integers, NaN and Infinity with the integer message", () => {
+    expect(() => toBigInt(1.5)).toThrow("Expected an integer number, got 1.5");
+    expect(() => toBigInt(NaN)).toThrow("Expected an integer number, got NaN");
+    expect(() => toBigInt(Infinity)).toThrow("Expected an integer number, got Infinity");
+  });
+
+  it("still rejects a negative integer with the non-negative message", () => {
     expect(() => toBigInt(-1)).toThrow("Expected a non-negative integer number, got -1");
-    expect(() => toBigInt(NaN)).toThrow("Expected a non-negative integer number, got NaN");
-    expect(() => toBigInt(Infinity)).toThrow("Expected a non-negative integer number, got Infinity");
   });
 });
 

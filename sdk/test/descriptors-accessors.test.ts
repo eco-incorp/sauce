@@ -131,6 +131,22 @@ describe("descriptors accessors: toCall / toSauceScript", () => {
     expect(script.baseDirs.length).toBe(2);
   });
 
+  it("toSauceScript() renders an unsafe number argument as no literal at all", () => {
+    // The rendered text becomes compiled bytecode, and the number has already been rounded:
+    // BigInt() would bake 1234567890123456768n, .toString() 1234567890123456800n.
+    const base = chainContracts("base");
+    const call = invoke(base.AaveV3.Pool, "supply", "0x1111111111111111111111111111111111111111", 1234567890123456789, "0x2222222222222222222222222222222222222222", 0);
+    expect(() => call.toSauceScript()).toThrow(
+      "toSauceScript: number argument for supply: expected a safe integer, got 1234567890123456800 — pass a bigint or a string instead",
+    );
+  });
+
+  it("toSauceScript() renders a number argument at MAX_SAFE_INTEGER exactly", () => {
+    const base = chainContracts("base");
+    const call = invoke(base.AaveV3.Pool, "supply", "0x1111111111111111111111111111111111111111", Number.MAX_SAFE_INTEGER, "0x2222222222222222222222222222222222222222", 0);
+    expect(call.toSauceScript().statement).toContain("9007199254740991n");
+  });
+
   it("a widened call refuses toSauceScript too", () => {
     const base = chainContracts("base");
     const call = invoke(base.UniswapV3.Factory, "getPool", "0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222", 3000n);

@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { CanonicalChain } from "../chains/canonical.js";
+import { toExactBigInt } from "../numeric.js";
 import type { ContractDescriptor, DescriptorMethod } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -75,19 +76,26 @@ function assertFidelity(descriptor: ContractDescriptor, method: DescriptorMethod
   );
 }
 
+const renderBigintArg = (value: bigint): string => `${value.toString()}n`;
+
 /** Renders one JS value as a SauceScript literal expression, or throws a named error for a shape
- *  `toSauceScript` can't spell yet (a caller should reach for `encode()`/`toCall()` instead). */
+ *  `toSauceScript` can't spell yet (a caller should reach for `encode()`/`toCall()` instead).
+ *
+ *  Every numeric literal is rendered from a `bigint`: a `number` past 2^53-1 would stringify to a
+ *  DIFFERENT rounded value than `BigInt()` gives it, and this text becomes compiled bytecode. A
+ *  non-integer is rejected here rather than by `toExactBigInt` because the fix is a different call
+ *  (`encode()`), not a different literal type. */
 function renderSauceArg(value: unknown, methodName: string): string {
-  if (typeof value === "bigint") return `${value.toString()}n`;
+  if (typeof value === "bigint") return renderBigintArg(value);
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") {
     if (!Number.isInteger(value)) {
       throw new Error(`toSauceScript: cannot render non-integer number argument for ${methodName} — use encode()/toCall() instead`);
     }
-    return `${value.toString()}n`;
+    return renderBigintArg(toExactBigInt(value, `toSauceScript: number argument for ${methodName}`));
   }
   if (typeof value === "string") {
-    if (/^0x[0-9a-fA-F]{40}$/.test(value)) return `${BigInt(value).toString()}n`;
+    if (/^0x[0-9a-fA-F]{40}$/.test(value)) return renderBigintArg(BigInt(value));
     throw new Error(`toSauceScript: cannot render string argument "${value}" for ${methodName} (only a 20-byte address literal is supported) — use encode()/toCall() instead`);
   }
   if (Array.isArray(value)) {
