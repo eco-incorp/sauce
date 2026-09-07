@@ -6,8 +6,12 @@
  * so N chunks = N serial RPC round-trips. It now fires every chunk at once via
  * Promise.all. The "both chunks in flight before either resolves" assertion
  * FAILS on the old sequential code and PASSES on the fix.
+ *
+ * The concurrency tests lock the OTHER end of the same knob: fan-out is
+ * bounded by maxConcurrentChunks, so a large batch cannot open one request per
+ * chunk (10,000 of them at k = 1,000,000).
  */
-import { address } from '@solana/kit';
+import { address, getAddressDecoder } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { coalescingAccountLoader, type BatchAccountLoader, type LoadedAccount } from '../../src/svm/loader.js';
 
@@ -24,6 +28,36 @@ const POOL = [
 const OWNER = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 const acct = (byte: number): LoadedAccount => ({ data: new Uint8Array([byte]), owner: OWNER });
+
+/** `count` unique deterministic addresses (a 24-bit counter in the first three bytes). */
+function distinctAddresses(count: number): Address[] {
+  return Array.from({ length: count }, (_, i) => {
+    const bytes = new Uint8Array(32);
+    bytes[0] = i & 0xff;
+    bytes[1] = (i >> 8) & 0xff;
+    bytes[2] = (i >> 16) & 0xff;
+
+    return getAddressDecoder().decode(bytes);
+  });
+}
+
+/** A transport that resolves a macrotask later, tracking concurrent calls. */
+function inFlightTracker(): { loadMany: BatchAccountLoader; max: () => number; calls: () => number } {
+  let inFlight = 0;
+  let max = 0;
+  let calls = 0;
+  const loadMany: BatchAccountLoader = async (addrs) => {
+    inFlight += 1;
+    calls += 1;
+    max = Math.max(max, inFlight);
+    await new Promise((r) => setTimeout(r, 0));
+    inFlight -= 1;
+
+    return addrs.map(() => acct(4));
+  };
+
+  return { loadMany, max: () => max, calls: () => calls };
+}
 
 describe('coalescingAccountLoader', () => {
   it('coalesces same-tick loads into ONE sweep (deduped)', async () => {
@@ -70,6 +104,38 @@ describe('coalescingAccountLoader', () => {
     const results = await pending;
     expect(results.length).toBe(6);
     expect(results.every((r) => r !== null)).toBe(true);
+  });
+
+  it('caps in-flight chunks at maxConcurrentChunks (default 16) over a 5,000-address batch', async () => {
+    const { loadMany, max, calls } = inFlightTracker();
+    const load = coalescingAccountLoader(loadMany); // default chunkSize 100 => 50 chunks
+    const addresses = distinctAddresses(5_000);
+
+    const results = await Promise.all(addresses.map((a) => load(a)));
+
+    expect(calls()).toBe(50); // every chunk still swept
+    expect(max()).toBe(16);
+    expect(results.length).toBe(5_000);
+    expect(results.every((r) => r !== null)).toBe(true);
+  });
+
+  it('serializes chunks at maxConcurrentChunks 1 (the escape hatch)', async () => {
+    const { loadMany, max, calls } = inFlightTracker();
+    const load = coalescingAccountLoader(loadMany, { chunkSize: 1, maxConcurrentChunks: 1 });
+
+    const results = await Promise.all(POOL.map((p) => load(p)));
+
+    expect(calls()).toBe(6);
+    expect(max()).toBe(1);
+    expect(results.every((r) => r !== null)).toBe(true);
+  });
+
+  it('rejects a non-positive maxConcurrentChunks', () => {
+    const loadMany: BatchAccountLoader = async (addrs) => addrs.map(() => acct(5));
+
+    expect(() => coalescingAccountLoader(loadMany, { maxConcurrentChunks: 0 })).toThrow(
+      'coalescingAccountLoader maxConcurrentChunks must be a positive integer, got 0',
+    );
   });
 
   it('isolates a chunk failure to its own waiters', async () => {
