@@ -202,14 +202,39 @@ export interface ExtractSvmSettleOptions extends SvmSettleExpectation {
   bytecode?: BytesInput;
 }
 
+/** The callee of an extracted settle — three states a caller must keep apart. `program`: the call's
+ *  `target`, resolved to a program id to compare against the engine you trust. `absent`: the call carried
+ *  no `target` at all. `unreadable`: it carried one that is not a 32-byte universal address, so there is
+ *  nothing to compare it to.
+ *
+ *  Collapsing `unreadable` into `absent` is the bypass this shape exists to prevent. A caller may
+ *  legitimately skip the callee check for a call that named no callee; skipping it because the callee it
+ *  named was garbage accepts a settle whose callee is unknown. Only `program` is ever safe to clear. */
+export type SvmSettleTarget =
+  | { readonly kind: 'program'; readonly address: Address }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'unreadable'; readonly reason: string };
+
 /** The extracted settle for a call: the full `verifySvmSettleExecution` verdict (resolved accounts and
  *  the `genuine` / `verifiedBy` genuineness fields), extended with the call's index and callee. */
 export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
   /** Index of the `route.calls[]` entry the genuine settle execution was found in. */
   callIndex: number;
-  /** The call's `target` (the callee program), as base58, when the input carried one. */
-  target?: Address;
+  /** The call's callee — always reported, as one of `SvmSettleTarget`'s three states. */
+  target: SvmSettleTarget;
 };
+
+/** Total, so the `… | null` scan around it stays total: a `target` this cannot resolve becomes
+ *  `unreadable` rather than an exception thrown out of a function no caller of that type would guard. */
+function resolveSettleTarget(input: BytesInput | undefined): SvmSettleTarget {
+  if (input === undefined) return { kind: 'absent' };
+
+  try {
+    return { kind: 'program', address: toTargetAddress(input) };
+  } catch (error) {
+    return { kind: 'unreadable', reason: error instanceof Error ? error.message : String(error) };
+  }
+}
 
 /**
  * Scans SVM intent calls and returns the first call that is a GENUINE settle execution — the SVM twin of
@@ -230,8 +255,10 @@ export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
  * says nothing about an arbitrary one that merely accepts the same discriminator and ignores the pin
  * field. For `[{ target: attackerProgram, data: <envelope pinned to the canonical settle> }]` this returns
  * a `genuine` verdict while the attacker's program runs whatever it likes. `target` is carried through on
- * the result for exactly this check — compare it against the Sauce engine program id you trust
- * (`v12SvmProgramId`). Unvalidated, a genuine verdict describes bytes handed to an unknown program.
+ * the result for exactly this check — require `{ kind: 'program' }` and compare its `address` against the
+ * Sauce engine program id you trust (`v12SvmProgramId`). `absent` (the call named no callee) and
+ * `unreadable` (it named something that is not a 32-byte universal address) are NOT interchangeable, and
+ * neither clears the call. Unvalidated, a genuine verdict describes bytes handed to an unknown program.
  */
 export function extractSvmSettleFromCalls(
   calls: readonly SvmIntentCallLike[],
@@ -260,10 +287,7 @@ export function extractSvmSettleFromCalls(
       continue; // a decodable envelope, but its instruction is not even settle-SHAPED — skip
     }
 
-    if (verified.genuine) {
-      const target = calls[i]!.target;
-      return { ...verified, callIndex: i, target: target === undefined ? undefined : toTargetAddress(target) };
-    }
+    if (verified.genuine) return { ...verified, callIndex: i, target: resolveSettleTarget(calls[i]!.target) };
     // shape-matched but NOT a genuine settle (decoy / wrong program / wrong escrow count) — keep scanning,
     // so a genuine settle later in the batch is never masked by an earlier lookalike.
   }

@@ -48,6 +48,7 @@ export {
   type SvmIntentLike,
   type ExtractSvmSettleOptions,
   type ExtractedSvmSettle,
+  type SvmSettleTarget,
 } from './intent.js';
 
 // ── what a caller expects a settle program to enforce ──
@@ -379,7 +380,8 @@ export interface SvmSettleExecutionVerifyInput extends SvmSettleExecutionInput, 
  *  staged buffer's CONTENTS against the pin and reverts on a mismatch. That gate is the engine's, so it
  *  binds the buffer and nothing else: the instruction's CALLEE is outside every verdict here, and an
  *  arbitrary program accepting the same discriminator can ignore the pin field entirely — see
- *  `ExtractedSvmSettle.target`, which a caller must compare against the engine program id it trusts.
+ *  `ExtractedSvmSettle.target`, whose `program` state a caller must compare against the engine program
+ *  id it trusts.
  *  `none`: no pin and no bytecode — genuineness cannot be established from structure alone, so `genuine`
  *  is false. */
 export type SvmSettleVerifiedBy = 'bytecode' | 'pin' | 'none';

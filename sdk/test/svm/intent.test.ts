@@ -21,6 +21,7 @@ import {
   getStructEncoder,
   getU8Encoder,
   getU32Encoder,
+  type Address,
 } from '@solana/kit';
 import { EXECUTE_FROM_ACCOUNT_DISCRIMINATOR } from '../../src/svm/engine.js';
 import { buildExecuteFromAccountInstruction } from '../../src/svm/instructions.js';
@@ -201,10 +202,10 @@ describe('extractSvmSettleFromIntent / extractSvmSettleFromCalls', () => {
     const fx = buildIntentFixture(1);
     const fromHex = extractSvmSettleFromCalls([{ data: fx.envelope, target: universalAddress(PROGRAM) }], fx.expected);
     const fromBase58 = extractSvmSettleFromCalls([{ data: fx.envelope, target: PROGRAM }], fx.expected);
-    expect(fromHex!.target).toBe(PROGRAM);
-    expect(fromBase58!.target).toBe(PROGRAM);
-    // A call that carried no target reports none — the field is optional, not defaulted.
-    expect(extractSvmSettleFromCalls([{ data: fx.envelope }], fx.expected)!.target).toBeUndefined();
+    expect(fromHex!.target).toEqual({ kind: 'program', address: PROGRAM });
+    expect(fromBase58!.target).toEqual({ kind: 'program', address: PROGRAM });
+    // A call that carried no target says so in its own state — not `program`, and not `unreadable`.
+    expect(extractSvmSettleFromCalls([{ data: fx.envelope }], fx.expected)!.target).toEqual({ kind: 'absent' });
   });
 
   // Matching is on the envelope's instruction data only — the callee is never inspected. The pin gate
@@ -218,14 +219,40 @@ describe('extractSvmSettleFromIntent / extractSvmSettleFromCalls', () => {
 
     expect(found).not.toBeNull();
     expect(found!.genuine).toBe(true);
-    expect(found!.target).toBe(attacker);
+    expect(found!.target).toEqual({ kind: 'program', address: attacker });
   });
 
-  it('throws on a target that is not a 32-byte universal address', () => {
+  // The scan is typed `… | null` and reads attacker-supplied calls, so an unresolvable `target` must not
+  // leave it by throwing — a caller holding that type writes no `try`. Reported as its OWN state, never
+  // as `absent`: a callee check skipped because nothing was supplied is the caller's call, one skipped
+  // because the supplied callee was garbage is a bypass.
+  it('reports an unresolvable target as `unreadable` instead of aborting the scan', () => {
     const fx = buildIntentFixture(1);
-    expect(() => extractSvmSettleFromCalls([{ data: fx.envelope, target: '0xdeadbeef' }], fx.expected)).toThrow(
-      /target is 4 bytes/,
+    const shortHex = extractSvmSettleFromCalls([{ data: fx.envelope, target: '0xdeadbeef' }], fx.expected);
+    const notBase58 = extractSvmSettleFromCalls([{ data: fx.envelope, target: 'not a program id' as Address }], fx.expected);
+
+    // The genuine settle is still FOUND — the whole extraction used to abort on the malformed target.
+    for (const found of [shortHex, notBase58]) {
+      expect(found).not.toBeNull();
+      expect(found!.genuine).toBe(true);
+      expect(found!.target.kind).toBe('unreadable');
+    }
+    expect(shortHex!.target).toEqual({ kind: 'unreadable', reason: expect.stringContaining('target is 4 bytes') });
+    expect(notBase58!.target).toEqual({ kind: 'unreadable', reason: expect.stringContaining('base58') });
+    // Distinguishable from the call that supplied nothing at all.
+    expect(extractSvmSettleFromCalls([{ data: fx.envelope }], fx.expected)!.target).toEqual({ kind: 'absent' });
+  });
+
+  it('never reads the target of a call it rejects — a decoy\'s malformed target cannot abort the scan', () => {
+    const fx = buildIntentFixture(1);
+    const decoy = buildIntentFixture(1, { minOut: 1n }).envelope; // settle-shaped, wrong floor → not genuine
+    const found = extractSvmSettleFromCalls(
+      [{ data: decoy, target: '0xbeef' }, { data: fx.envelope, target: PROGRAM }],
+      fx.expected,
     );
+
+    expect(found!.callIndex).toBe(1);
+    expect(found!.target).toEqual({ kind: 'program', address: PROGRAM });
   });
 
   it('returns null when no call carries a settle execution', () => {
