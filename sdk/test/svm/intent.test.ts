@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import {
   AccountRole,
   addEncoderSizePrefix,
+  address,
   getAddressDecoder,
   getAddressEncoder,
   getArrayEncoder,
@@ -36,11 +37,11 @@ import { compileSource } from '../helpers';
 
 const TOKENKEG = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 const TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
-const PROGRAM = 'CuHCniNMWLSkZWBQKon9tudGujZeXJRUwG2PCLDq4ipJ';
+const PROGRAM = 'CuHCniNMWLSkZWBQKon9tudGujZeXJRUwG2PCLDq4ipJ' as Address;
 const BUFFER = 'So11111111111111111111111111111111111111112';
 
 const addrDecoder = getAddressDecoder();
-function makeAddr(seed: number): string {
+function makeAddr(seed: number): Address {
   return addrDecoder.decode(new Uint8Array(32).fill(seed));
 }
 function sha256(bytes: Uint8Array): Uint8Array {
@@ -92,8 +93,8 @@ function u32le(n: number): number[] {
 }
 
 /** A route call's `target` as it rides the wire: the callee's 32-byte universal address, 0x-hex. */
-function universalAddress(base58: string): string {
-  return `0x${Buffer.from(getAddressEncoder().encode(base58 as never)).toString('hex')}`;
+function universalAddress(programId: Address): `0x${string}` {
+  return `0x${Buffer.from(getAddressEncoder().encode(programId)).toString('hex')}`;
 }
 
 describe('decodePortalCalldataWithAccounts', () => {
@@ -226,6 +227,23 @@ describe('extractSvmSettleFromIntent / extractSvmSettleFromCalls', () => {
   // leave it by throwing — a caller holding that type writes no `try`. Reported as its OWN state, never
   // as `absent`: a callee check skipped because nothing was supplied is the caller's call, one skipped
   // because the supplied callee was garbage is a bypass.
+  // `data` and `target` read a bare string differently — base64 for the Portal envelope, base58 for an
+  // address — so `target` deliberately does NOT take `BytesInput`. Only a branded `Address` may be spent
+  // as its base58 form, and that is the whole barrier between the two encodings; nothing at runtime can
+  // tell which a caller meant. So the guard is the expect-error below: it fails
+  // `tsc -p tsconfig.test.json` the moment the parameter widens back to a bare string.
+  it('does not accept a bare string as a target — the base64/base58 split is enforced by the type', () => {
+    const fx = buildIntentFixture(1);
+    const unvalidated: string = 'CuHCniNMWLSkZWBQKon9tudGujZeXJRUwG2PCLDq4ipJ';
+
+    // @ts-expect-error a bare string is base64 under `BytesInput`; a target is bytes, 0x-hex, or `Address`
+    expect(extractSvmSettleFromCalls([{ data: fx.envelope, target: unvalidated }], fx.expected)).not.toBeNull();
+
+    // Validated into an `Address`, the same characters resolve as base58 — never as base64.
+    const found = extractSvmSettleFromCalls([{ data: fx.envelope, target: address(unvalidated) }], fx.expected);
+    expect(found!.target).toEqual({ kind: 'program', address: PROGRAM });
+  });
+
   it('reports an unresolvable target as `unreadable` instead of aborting the scan', () => {
     const fx = buildIntentFixture(1);
     const shortHex = extractSvmSettleFromCalls([{ data: fx.envelope, target: '0xdeadbeef' }], fx.expected);

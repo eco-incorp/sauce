@@ -44,6 +44,7 @@ export {
   type PortalCalldataWithAccounts,
   type PortalCalldataWithAccountsInput,
   type BytesInput,
+  type UniversalAddressInput,
   type SvmIntentCallLike,
   type SvmIntentLike,
   type ExtractSvmSettleOptions,

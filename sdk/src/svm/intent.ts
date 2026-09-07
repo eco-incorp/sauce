@@ -84,9 +84,18 @@ const calldataWithAccountsDecoder = getStructDecoder([
   ['accounts', getArrayDecoder(accountMetaDecoder, { size: getU32Decoder() })],
 ]);
 
-/** `Uint8Array` as-is; a `0x`-prefixed hex string (the viem `Hex` form `route.calls[].data` uses); or a
- *  base64 string (the Solana convention) for anything not 0x-prefixed. */
+/** An opaque byte payload: `Uint8Array` as-is; a `0x`-prefixed hex string (the viem `Hex` form
+ *  `route.calls[].data` uses); or a base64 string (the Solana convention) for anything not 0x-prefixed.
+ *  A BARE STRING IS BASE64 HERE. For an address, use `UniversalAddressInput` — same three carriage
+ *  forms, but a bare string there is base58, and the two must never be handed to the same reader. */
 export type BytesInput = Uint8Array | string;
+
+/** A 32-byte universal address, in the forms one arrives in: raw bytes, `0x`-hex (what
+ *  `buildSauceSvmCall` emits into `route.calls[].target`), or the base58 program id itself. Deliberately
+ *  NOT `BytesInput`, whose bare-string form is base64 — only a branded `Address` may be spent as the
+ *  base58 form, so an unvalidated `string` does not typecheck and the two encodings cannot be confused
+ *  at a call site. */
+export type UniversalAddressInput = Uint8Array | `0x${string}` | Address;
 
 function toBytes(input: BytesInput, label: string): Uint8Array {
   if (input instanceof Uint8Array) return input;
@@ -102,10 +111,10 @@ function toBytes(input: BytesInput, label: string): Uint8Array {
   return new Uint8Array(Buffer.from(input, 'base64'));
 }
 
-/** An SVM route call's `target` is the callee program as a 32-byte universal address — `0x`-hex on the
- *  wire, or base58 when a caller holds the program id itself — resolved here to the same base58 `Address`
- *  form the rest of a settle verdict reports accounts in, so it compares directly against a program id. */
-function toTargetAddress(input: BytesInput): Address {
+/** Resolves any `UniversalAddressInput` to the base58 `Address` form the rest of a settle verdict reports
+ *  accounts in, so it compares directly against a program id. Throws on input that is not a 32-byte
+ *  universal address; `resolveSettleTarget` is what makes that non-fatal for a scan. */
+function toTargetAddress(input: UniversalAddressInput): Address {
   if (typeof input === 'string' && !input.startsWith('0x') && !input.startsWith('0X')) return address(input);
   const bytes = toBytes(input, 'target');
   if (bytes.length !== 32) throw new Error(`target is ${bytes.length} bytes — an SVM universal address is 32`);
@@ -185,9 +194,9 @@ export function encodePortalCalldataWithAccounts(input: PortalCalldataWithAccoun
  *  carry `data` as viem `Hex`). */
 export interface SvmIntentCallLike {
   data: BytesInput;
-  /** The callee, as a 32-byte universal address: `0x`-hex on the wire (what `buildSauceSvmCall` emits),
-   *  or base58 when a caller holds the program id itself. */
-  target?: BytesInput;
+  /** The callee, as a 32-byte universal address — `0x`-hex on the wire (what `buildSauceSvmCall` emits),
+   *  raw bytes, or a base58 `Address`. NOT `BytesInput`: see `UniversalAddressInput`. */
+  target?: UniversalAddressInput;
 }
 
 /** An intent, duck-typed to just the SVM route calls this reads. */
@@ -226,7 +235,7 @@ export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
 
 /** Total, so the `… | null` scan around it stays total: a `target` this cannot resolve becomes
  *  `unreadable` rather than an exception thrown out of a function no caller of that type would guard. */
-function resolveSettleTarget(input: BytesInput | undefined): SvmSettleTarget {
+function resolveSettleTarget(input: UniversalAddressInput | undefined): SvmSettleTarget {
   if (input === undefined) return { kind: 'absent' };
 
   try {
