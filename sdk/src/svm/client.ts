@@ -116,8 +116,9 @@ export interface SauceSvmClient {
    * blockhash). The buffer at that seed must not be finalized — close it first
    * (closeBuffer) to recompile at the same address. The same seed is resumable:
    * it always derives the same address, and the content-hash pin is recorded
-   * before the first transaction, so a run that dies part-way still leaves
-   * executeStaged/simulateStaged able to address the buffer.
+   * just before the finalize send, so a run that dies after the buffer is
+   * finalized on-chain still leaves executeStaged/simulateStaged able to
+   * address it.
    */
   stageBuffer(seed: Uint8Array, bytecode: Uint8Array): Promise<StagedBuffer>;
   /** Closes the buffer at 32-byte `seed`, refunding its rent to the payer (the recompile path). */
@@ -331,10 +332,6 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
       // Copy into a fresh ArrayBuffer-backed view (subtle.digest rejects
       // SharedArrayBuffer-backed views at the type level).
       const sha256 = new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytecode)));
-      // Pinned before anything is sent: the digest is known up front and the
-      // on-chain hash gate enforces it either way, so staging stays resumable
-      // through executeStaged wherever a run dies.
-      stagedHashes.set(address, sha256);
       const currentBytes = await currentDataSize(address);
       const signatures: Signature[] = [];
 
@@ -373,6 +370,13 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
         length: bytecode.length,
         sha256,
       });
+      // Pinned immediately before the finalize send: the only step that follows
+      // is sendExecute's post-confirmation meta read, so the pin survives a
+      // throw there and still leaves the finalized buffer addressable. Any
+      // earlier, and a restage that cannot land — the buffer at this seed is
+      // already finalized — would overwrite the good pin of the bytes the
+      // buffer actually holds.
+      stagedHashes.set(address, sha256);
       signatures.push((await sendInstructions([finalize])).signature);
 
       return { address, seed, sha256, signatures };

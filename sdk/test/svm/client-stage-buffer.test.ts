@@ -1,10 +1,17 @@
 /**
- * stageBuffer's content-hash pin: it is recorded before the first transaction,
- * so a staging run that dies after the on-chain finalize — the post-confirmation
- * `getTransaction` meta read is the realistic place — still leaves the buffer
- * addressable by executeStaged. Pinning last strands the caller instead: the
- * buffer IS finalized on-chain, so restaging at the same seed is barred, and
- * executeStaged rejects the address as "not staged by this client".
+ * stageBuffer's content-hash pin is recorded immediately before the finalize
+ * send — the narrowest window covering both ways the placement can go wrong.
+ *
+ * Pinning AFTER the run strands the caller: sendExecute's post-confirmation
+ * `getTransaction` meta read can throw once the buffer is already finalized
+ * on-chain, so restaging at the same seed is barred and executeStaged rejects
+ * the address as "not staged by this client".
+ *
+ * Pinning at the TOP of the function poisons the other direction: a restage
+ * that cannot land — the buffer is finalized, and closeBuffer is the documented
+ * recompile path — overwrites a good pin with the digest of bytes the buffer
+ * does not hold, and executeStaged then builds a call that reverts on the
+ * engine's hash gate.
  *
  * The client builds its own RPC and subscriptions from `rpcUrl`, so the seams
  * are `globalThis.fetch` and `globalThis.WebSocket`. Kit's channel factory
@@ -23,6 +30,7 @@ const SIGNATURE =
   '5VERd6cyLU4t7yQxsjfqLNsRWjM4tt7YivsTMkYnbxHBjBHqvfMoSotYAtvyRZcpFvsPeqrDNbG7XNCn9SNWbfXo' as Signature;
 const SEED = new Uint8Array(32).fill(7);
 const BYTECODE = new Uint8Array([0x00, 0x01, 0x02, 0x03]);
+const OTHER_BYTECODE = new Uint8Array([0x04, 0x05, 0x06, 0x07]);
 const MANIFEST: AccountManifest = { accounts: [] };
 const RESOLUTION: AccountResolution = {};
 
@@ -79,10 +87,18 @@ function carriesFinalize(base64Transaction: string): boolean {
  * sendExecute reads meta AFTER irreversible confirmation. Failing every
  * `getTransaction` instead aborts on the init send — an unfinalized buffer,
  * freely restageable, which is a different scenario entirely.
+ *
+ * With `failSends`, every `sendTransaction` answers a JSON-RPC error: what the
+ * engine does to a staging run aimed at an already-finalized buffer.
  */
-function installFetchStub({ failMetaReadBehindFinalize = false } = {}): { methods: () => string[]; restore: () => void } {
+function installFetchStub({ failMetaReadBehindFinalize = false, failSends = false } = {}): {
+  methods: () => string[];
+  sends: () => string[];
+  restore: () => void;
+} {
   const original = globalThis.fetch;
   const methods: string[] = [];
+  const sends: string[] = [];
   let finalizeSent = false;
   const results: Record<string, unknown> = {
     getLatestBlockhash: { context: { slot: 100 }, value: { blockhash: BLOCKHASH, lastValidBlockHeight: 10_000 } },
@@ -102,12 +118,25 @@ function installFetchStub({ failMetaReadBehindFinalize = false } = {}): { method
 
     // Each send is followed by its own meta read, so this flips exactly before
     // the finalize transaction's getTransaction and stays set for it.
-    if (method === 'sendTransaction' && carriesFinalize(params[0] as string)) finalizeSent = true;
+    if (method === 'sendTransaction') {
+      sends.push(params[0] as string);
+      if (carriesFinalize(params[0] as string)) finalizeSent = true;
+    }
 
     const body =
       method === 'getTransaction' && failMetaReadBehindFinalize && finalizeSent
         ? { jsonrpc: '2.0', id, error: { code: -32004, message: 'Block not available for slot 101' } }
-        : { jsonrpc: '2.0', id, result: results[method] ?? null };
+        : method === 'sendTransaction' && failSends
+          ? {
+              jsonrpc: '2.0',
+              id,
+              error: {
+                code: -32002,
+                message: 'Transaction simulation failed: buffer is finalized',
+                data: { err: { InstructionError: [0, { Custom: 6 }] }, logs: ['Program log: buffer is finalized'], accounts: null, unitsConsumed: 0 },
+              },
+            }
+          : { jsonrpc: '2.0', id, result: results[method] ?? null };
 
     return { ok: true, status: 200, text: async () => JSON.stringify(body) };
   };
@@ -116,6 +145,7 @@ function installFetchStub({ failMetaReadBehindFinalize = false } = {}): { method
 
   return {
     methods: () => methods,
+    sends: () => sends,
     restore: () => {
       globalThis.fetch = original;
     },
@@ -182,8 +212,51 @@ describe('stageBuffer', () => {
 
       const executing = installFetchStub();
       try {
-        // Without the hoisted pin this throws "was not staged by this client".
+        // Pinned any later than the finalize send, this throws "was not staged
+        // by this client".
         await expect(client.executeStaged(buffer, MANIFEST, RESOLUTION)).resolves.toMatchObject({ logs: [] });
+      } finally {
+        executing.restore();
+      }
+    } finally {
+      staging.restore();
+    }
+  });
+
+  it('leaves a good pin intact when a restage at the same seed cannot land', async () => {
+    const payer = await newPayer();
+    const otherSha256 = new Uint8Array(await crypto.subtle.digest('SHA-256', OTHER_BYTECODE));
+    const staging = installFetchStub();
+    let buffer: Address;
+    let stagedSha256: Uint8Array;
+
+    try {
+      const client = await createSauceSvmClient({ rpcUrl: RPC_URL, programId: ENGINE_PROGRAM, payer });
+      ({ address: buffer } = await deriveBufferPda(ENGINE_PROGRAM, payer.address, SEED));
+      ({ sha256: stagedSha256 } = await client.stageBuffer(SEED, BYTECODE));
+      staging.restore();
+
+      // A restage without closeBuffer first: the buffer is finalized, so the
+      // engine rejects the run and the pin must go on describing the bytes the
+      // buffer actually holds.
+      const restage = installFetchStub({ failSends: true });
+      try {
+        // Kit collapses a -32002 preflight failure to this; the injected data
+        // carries the engine's own rejection underneath it.
+        await expect(client.stageBuffer(SEED, OTHER_BYTECODE)).rejects.toThrow('Transaction simulation failed');
+      } finally {
+        restage.restore();
+      }
+
+      const executing = installFetchStub();
+      try {
+        await expect(client.executeStaged(buffer, MANIFEST, RESOLUTION)).resolves.toMatchObject({ logs: [] });
+
+        // The pin travels as 32 raw bytes in the execute instruction data, so
+        // the wire tells which digest the call was actually built against.
+        const wire = Buffer.concat(executing.sends().map((transaction) => Buffer.from(transaction, 'base64')));
+        expect(wire.includes(Buffer.from(stagedSha256))).toBe(true);
+        expect(wire.includes(Buffer.from(otherSha256))).toBe(false);
       } finally {
         executing.restore();
       }
