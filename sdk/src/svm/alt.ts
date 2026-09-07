@@ -28,6 +28,15 @@ import type { SignedExecuteTransaction } from './transaction.js';
 const MAX_ADDRESSES_PER_EXTEND = 30;
 const MAX_ADDRESSES_PER_EXTEND_DISTINCT_AUTHORITY = 27;
 
+/**
+ * Hard on-chain capacity of one address lookup table (LOOKUP_TABLE_MAX_ADDRESSES
+ * in solana-program). The extend instruction that would cross it fails, and
+ * because the extends are sent sequentially the earlier ones have already
+ * landed — so callers must reject an oversized set BEFORE sending anything
+ * rather than leave a half-filled, rent-funded table behind.
+ */
+export const LOOKUP_TABLE_MAX_ADDRESSES = 256;
+
 /** Extend chunk size for a (payer, authority) pair — 30 same-key, 27 when a distinct authority costs a second signature. */
 function extendChunkSize(payer: Address, authority: Address): number {
   return payer === authority ? MAX_ADDRESSES_PER_EXTEND : MAX_ADDRESSES_PER_EXTEND_DISTINCT_AUTHORITY;
@@ -71,6 +80,9 @@ export interface CreateAltInput {
  * and authority are distinct signers). Returns the table address and a slot
  * upper bound for the last extend — feed it to `waitForAltActive` before
  * compressing a transaction against the table.
+ *
+ * More than LOOKUP_TABLE_MAX_ADDRESSES addresses throws before the create
+ * transaction is built, so no table is funded.
  */
 export async function createAltWithAddresses({
   rpc,
@@ -80,6 +92,12 @@ export async function createAltWithAddresses({
   sendAndConfirm,
   commitment = 'confirmed',
 }: CreateAltInput): Promise<{ lookupTableAddress: Address; lastExtendedSlot: bigint }> {
+  if (addresses.length > LOOKUP_TABLE_MAX_ADDRESSES) {
+    throw new Error(
+      `cannot create an address lookup table with ${addresses.length} addresses: one table holds at most ${LOOKUP_TABLE_MAX_ADDRESSES}`,
+    );
+  }
+
   const recentSlot = await rpc.getSlot({ commitment: 'finalized' }).send();
   const [createInstruction, [lookupTableAddress]] = await Promise.all([
     getCreateLookupTableInstructionAsync({ authority: authority.address, payer, recentSlot }),
