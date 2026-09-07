@@ -90,6 +90,11 @@ function u32le(n: number): number[] {
   return [n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >> 24) & 0xff];
 }
 
+/** A route call's `target` as it rides the wire: the callee's 32-byte universal address, 0x-hex. */
+function universalAddress(base58: string): string {
+  return `0x${Buffer.from(getAddressEncoder().encode(base58 as never)).toString('hex')}`;
+}
+
 describe('decodePortalCalldataWithAccounts', () => {
   it('decodes a HAND-BUILT envelope byte-for-byte (independent layout pin)', () => {
     // [u32 data_len][data][u8 account_count][u32 accounts_len][ N×(32 pubkey + 1 isSigner + 1 isWritable) ]
@@ -188,6 +193,39 @@ describe('extractSvmSettleFromIntent / extractSvmSettleFromCalls', () => {
     expect(found).not.toBeNull();
     expect(found!.callIndex).toBe(1); // scanned past the decoy to the genuine settle
     expect(found!.genuine).toBe(true);
+  });
+
+  // ── the callee ──
+
+  it('surfaces the call target as base58, from either the 0x-hex or the base58 input form', () => {
+    const fx = buildIntentFixture(1);
+    const fromHex = extractSvmSettleFromCalls([{ data: fx.envelope, target: universalAddress(PROGRAM) }], fx.expected);
+    const fromBase58 = extractSvmSettleFromCalls([{ data: fx.envelope, target: PROGRAM }], fx.expected);
+    expect(fromHex!.target).toBe(PROGRAM);
+    expect(fromBase58!.target).toBe(PROGRAM);
+    // A call that carried no target reports none — the field is optional, not defaulted.
+    expect(extractSvmSettleFromCalls([{ data: fx.envelope }], fx.expected)!.target).toBeUndefined();
+  });
+
+  // Matching is on the envelope's instruction data only — the callee is never inspected. The pin gate
+  // that makes a genuine verdict meaningful is the Sauce engine's, so it carries no weight for an
+  // arbitrary program accepting the same discriminator. Pinned because the verdict is `genuine` here
+  // while that program may ignore the pin entirely: `target` is the caller's check.
+  it('reports a genuine settle sent to ANY target — validating it is the caller\'s job', () => {
+    const fx = buildIntentFixture(2);
+    const attacker = makeAddr(0xfe);
+    const found = extractSvmSettleFromCalls([{ data: fx.envelope, target: attacker }], fx.expected);
+
+    expect(found).not.toBeNull();
+    expect(found!.genuine).toBe(true);
+    expect(found!.target).toBe(attacker);
+  });
+
+  it('throws on a target that is not a 32-byte universal address', () => {
+    const fx = buildIntentFixture(1);
+    expect(() => extractSvmSettleFromCalls([{ data: fx.envelope, target: '0xdeadbeef' }], fx.expected)).toThrow(
+      /target is 4 bytes/,
+    );
   });
 
   it('returns null when no call carries a settle execution', () => {

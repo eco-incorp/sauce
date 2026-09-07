@@ -30,6 +30,7 @@
 import {
   addDecoderSizePrefix,
   addEncoderSizePrefix,
+  address,
   getArrayDecoder,
   getArrayEncoder,
   getAddressDecoder,
@@ -101,6 +102,16 @@ function toBytes(input: BytesInput, label: string): Uint8Array {
   return new Uint8Array(Buffer.from(input, 'base64'));
 }
 
+/** An SVM route call's `target` is the callee program as a 32-byte universal address — `0x`-hex on the
+ *  wire, or base58 when a caller holds the program id itself — resolved here to the same base58 `Address`
+ *  form the rest of a settle verdict reports accounts in, so it compares directly against a program id. */
+function toTargetAddress(input: BytesInput): Address {
+  if (typeof input === 'string' && !input.startsWith('0x') && !input.startsWith('0X')) return address(input);
+  const bytes = toBytes(input, 'target');
+  if (bytes.length !== 32) throw new Error(`target is ${bytes.length} bytes — an SVM universal address is 32`);
+  return getAddressDecoder().decode(bytes);
+}
+
 /**
  * Decodes a Portal `CalldataWithAccounts` envelope (the form of every SVM `route.calls[].data`) into the
  * wrapped instruction data and its account list. Accepts the envelope as raw bytes, `0x`-hex (the viem
@@ -169,10 +180,14 @@ export function encodePortalCalldataWithAccounts(input: PortalCalldataWithAccoun
 
 // ── intent extraction ──
 
-/** An intent call, duck-typed to the one field this reads. Matches eco-solver's `Call` / persisted
- *  `IntentCall` (both carry `data` as viem `Hex`). */
+/** An intent call, duck-typed: only `data` (the Portal envelope) is required; `target` (the callee
+ *  program) is carried through when present. Matches eco-solver's `Call` / persisted `IntentCall` (both
+ *  carry `data` as viem `Hex`). */
 export interface SvmIntentCallLike {
   data: BytesInput;
+  /** The callee, as a 32-byte universal address: `0x`-hex on the wire (what `buildSauceSvmCall` emits),
+   *  or base58 when a caller holds the program id itself. */
+  target?: BytesInput;
 }
 
 /** An intent, duck-typed to just the SVM route calls this reads. */
@@ -188,10 +203,12 @@ export interface ExtractSvmSettleOptions extends SvmSettleExpectation {
 }
 
 /** The extracted settle for a call: the full `verifySvmSettleExecution` verdict (resolved accounts and
- *  the `genuine` / `verifiedBy` genuineness fields), extended with the call's index. */
+ *  the `genuine` / `verifiedBy` genuineness fields), extended with the call's index and callee. */
 export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
   /** Index of the `route.calls[]` entry the genuine settle execution was found in. */
   callIndex: number;
+  /** The call's `target` (the callee program), as base58, when the input carried one. */
+  target?: Address;
 };
 
 /**
@@ -206,6 +223,15 @@ export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
  *
  * (To inspect a call's raw structural params without a genuineness proof — e.g. a decoy's claimed values —
  * decode the envelope with `decodePortalCalldataWithAccounts` and call `decodeSvmSettleExecution` directly.)
+ *
+ * AND IT MUST VALIDATE `target`. Matching is on the envelope's instruction data ONLY — nothing here looks
+ * at the callee. But the pin is not self-enforcing: it proves genuineness because the SAUCE ENGINE gates
+ * the staged buffer's content hash against it on-chain, so the guarantee is a property of that program and
+ * says nothing about an arbitrary one that merely accepts the same discriminator and ignores the pin
+ * field. For `[{ target: attackerProgram, data: <envelope pinned to the canonical settle> }]` this returns
+ * a `genuine` verdict while the attacker's program runs whatever it likes. `target` is carried through on
+ * the result for exactly this check — compare it against the Sauce engine program id you trust
+ * (`v12SvmProgramId`). Unvalidated, a genuine verdict describes bytes handed to an unknown program.
  */
 export function extractSvmSettleFromCalls(
   calls: readonly SvmIntentCallLike[],
@@ -234,7 +260,10 @@ export function extractSvmSettleFromCalls(
       continue; // a decodable envelope, but its instruction is not even settle-SHAPED — skip
     }
 
-    if (verified.genuine) return { ...verified, callIndex: i };
+    if (verified.genuine) {
+      const target = calls[i]!.target;
+      return { ...verified, callIndex: i, target: target === undefined ? undefined : toTargetAddress(target) };
+    }
     // shape-matched but NOT a genuine settle (decoy / wrong program / wrong escrow count) — keep scanning,
     // so a genuine settle later in the batch is never masked by an earlier lookalike.
   }
@@ -247,7 +276,8 @@ export function extractSvmSettleFromCalls(
  * Duck-typed on `{ route: { calls } }`, so it takes an eco-solver `Intent` (runtime or persisted) as-is.
  * Genuineness is proven from the intent alone (recompile + pin); pass `options.bytecode` (from the
  * intent's `fulfillmentMetadata.svm.sauceStage`) for the additional full byte-match. `null` if the intent
- * carries no genuine settle execution.
+ * carries no genuine settle execution. The `target` duty documented on `extractSvmSettleFromCalls` applies
+ * here unchanged.
  */
 export function extractSvmSettleFromIntent(intent: SvmIntentLike, options: ExtractSvmSettleOptions): ExtractedSvmSettle | null {
   return extractSvmSettleFromCalls(intent.route.calls, options);
