@@ -20,15 +20,17 @@ export function getProtocolIndex(): string {
  * Load a specific protocol's skill file by slug.
  * Returns markdown describing the protocol, its operations,
  * SauceScript examples, contract addresses, and ABI methods.
+ *
+ * The slug is matched against `listSkillSlugs()` before it ever reaches `join`, so it can only name
+ * a skill file this package ships — a caller-supplied path can never escape `skillsDir`. Anything
+ * else, including a slug whose file is unreadable, surfaces as the same not-found error.
  */
 export function getProtocolSkill(slug: string): string {
-  const filePath = join(skillsDir, `${slug}.md`);
+  if (!listSkillSlugs().includes(slug)) throw unknownSlug(slug);
   try {
-    return readFileSync(filePath, "utf-8");
+    return readFileSync(join(skillsDir, `${slug}.md`), "utf-8");
   } catch {
-    throw new Error(
-      `No skill file found for protocol "${slug}". Check listSkillSlugs() for valid slugs.`,
-    );
+    throw unknownSlug(slug);
   }
 }
 
@@ -46,3 +48,9 @@ export function listSkillSlugs(): string[] {
  * Absolute path to the skills directory (for direct file access).
  */
 export const SKILLS_DIR = skillsDir;
+
+function unknownSlug(slug: string): Error {
+  return new Error(
+    `No skill file found for protocol "${slug}". Check listSkillSlugs() for valid slugs.`,
+  );
+}
