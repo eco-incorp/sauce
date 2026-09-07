@@ -137,7 +137,12 @@ export interface ExtendAltInput {
   authority: TransactionSigner;
   /** The existing table to extend (must already be created and owned by `authority`). */
   lookupTableAddress: Address;
-  /** Addresses to append — the caller has already removed any the table holds. */
+  /**
+   * Addresses to append — the caller has already removed any the table holds.
+   * extendAlt never reads the table, so it can only reject a set too large for
+   * ANY table; a caller appending to a partly-full one owns the held + appended
+   * sum (ensureLookupTable checks exactly that).
+   */
   addresses: readonly Address[];
   sendAndConfirm: SendAndConfirmTransaction;
   commitment?: Commitment;
@@ -149,6 +154,10 @@ export interface ExtendAltInput {
  * extend. Feed it to `waitForAltActive` before compressing against the table.
  * An empty `addresses` sends nothing and returns the current slot (the table is
  * already sufficient) — this is the idempotent no-op the reuse path relies on.
+ *
+ * More than LOOKUP_TABLE_MAX_ADDRESSES throws before the first chunk goes out:
+ * the chunks are sent sequentially, so a set that cannot fit would otherwise
+ * rent-fund a half-filled table before failing on-chain.
  */
 export async function extendAlt({
   rpc,
@@ -159,6 +168,12 @@ export async function extendAlt({
   sendAndConfirm,
   commitment = 'confirmed',
 }: ExtendAltInput): Promise<{ lastExtendedSlot: bigint }> {
+  if (addresses.length > LOOKUP_TABLE_MAX_ADDRESSES) {
+    throw new Error(
+      `cannot extend lookup table ${lookupTableAddress} with ${addresses.length} addresses: one table holds at most ${LOOKUP_TABLE_MAX_ADDRESSES}`,
+    );
+  }
+
   const chunkSize = extendChunkSize(payer.address, authority.address);
 
   for (let i = 0; i < addresses.length; i += chunkSize) {
