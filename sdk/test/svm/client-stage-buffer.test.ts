@@ -66,15 +66,24 @@ class SubscriptionAckSocket extends EventTarget {
 const nativeWebSocket = globalThis.WebSocket;
 globalThis.WebSocket = SubscriptionAckSocket as unknown as typeof globalThis.WebSocket;
 
+/** True when a base64 transaction payload carries the finalize-buffer instruction. */
+function carriesFinalize(base64Transaction: string): boolean {
+  return Buffer.from(base64Transaction, 'base64').includes(Buffer.from(finalizeDiscriminator));
+}
+
 /**
  * Answers the JSON-RPC calls a stage/execute round trip makes. With
- * `failGetTransaction`, `getTransaction` answers a JSON-RPC error — the failure
- * this test exists for, and the one that lands AFTER the transaction is
- * irreversibly confirmed.
+ * `failMetaReadBehindFinalize`, ONLY the `getTransaction` behind the finalize
+ * send answers a JSON-RPC error: every staging transaction confirms, so the
+ * buffer really is finalized on-chain, and the failure lands exactly where
+ * sendExecute reads meta AFTER irreversible confirmation. Failing every
+ * `getTransaction` instead aborts on the init send — an unfinalized buffer,
+ * freely restageable, which is a different scenario entirely.
  */
-function installFetchStub({ failGetTransaction = false } = {}): { methods: () => string[]; restore: () => void } {
+function installFetchStub({ failMetaReadBehindFinalize = false } = {}): { methods: () => string[]; restore: () => void } {
   const original = globalThis.fetch;
   const methods: string[] = [];
+  let finalizeSent = false;
   const results: Record<string, unknown> = {
     getLatestBlockhash: { context: { slot: 100 }, value: { blockhash: BLOCKHASH, lastValidBlockHeight: 10_000 } },
     getAccountInfo: { context: { slot: 100 }, value: null },
@@ -88,10 +97,15 @@ function installFetchStub({ failGetTransaction = false } = {}): { methods: () =>
   };
 
   const stub = async (_url: unknown, init: { body: string }): Promise<unknown> => {
-    const { id, method } = JSON.parse(init.body) as { id: number; method: string };
+    const { id, method, params } = JSON.parse(init.body) as { id: number; method: string; params: unknown[] };
     methods.push(method);
+
+    // Each send is followed by its own meta read, so this flips exactly before
+    // the finalize transaction's getTransaction and stays set for it.
+    if (method === 'sendTransaction' && carriesFinalize(params[0] as string)) finalizeSent = true;
+
     const body =
-      method === 'getTransaction' && failGetTransaction
+      method === 'getTransaction' && failMetaReadBehindFinalize && finalizeSent
         ? { jsonrpc: '2.0', id, error: { code: -32004, message: 'Block not available for slot 101' } }
         : { jsonrpc: '2.0', id, result: results[method] ?? null };
 
@@ -110,11 +124,13 @@ function installFetchStub({ failGetTransaction = false } = {}): { methods: () =>
 
 let createSauceSvmClient: typeof import('../../src/svm/client.js')['createSauceSvmClient'];
 let deriveBufferPda: typeof import('../../src/svm/pda.js')['deriveBufferPda'];
+let finalizeDiscriminator: Uint8Array;
 let newPayer: () => Promise<TransactionSigner>;
 
 beforeAll(async () => {
   ({ createSauceSvmClient } = await import('../../src/svm/client.js'));
   ({ deriveBufferPda } = await import('../../src/svm/pda.js'));
+  ({ FINALIZE_BUFFER_DISCRIMINATOR: finalizeDiscriminator } = await import('../../src/svm/engine-abi.generated.js'));
   const { generateKeyPairSigner } = await import('@solana/kit');
   newPayer = generateKeyPairSigner;
 });
@@ -146,7 +162,7 @@ describe('stageBuffer', () => {
 
   it('records the pin even when the post-confirmation meta read fails, keeping executeStaged usable', async () => {
     const payer = await newPayer();
-    const staging = installFetchStub({ failGetTransaction: true });
+    const staging = installFetchStub({ failMetaReadBehindFinalize: true });
     let buffer: Address;
 
     try {
@@ -156,6 +172,12 @@ describe('stageBuffer', () => {
       // Every staging transaction confirms; only the meta read behind the last
       // one fails, so the buffer is finalized on-chain and cannot be restaged.
       await expect(client.stageBuffer(SEED, BYTECODE)).rejects.toThrow('Block not available');
+      // All three staging transactions went out (init + one write + finalize)
+      // and each was confirmed and read back: the buffer IS finalized, and the
+      // read that failed is the finalize one. Without this the stub would abort
+      // on the init send and never exercise a finalized buffer at all.
+      expect(staging.methods().filter((method) => method === 'sendTransaction')).toHaveLength(3);
+      expect(staging.methods().filter((method) => method === 'getTransaction')).toHaveLength(3);
       staging.restore();
 
       const executing = installFetchStub();
