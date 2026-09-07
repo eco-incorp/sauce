@@ -272,9 +272,9 @@ export async function fetchManifestConfig(load: AccountLoader, pool: Address): P
     }
   }
 
-  // ONE budget for both sides: the bids, asks and seats trees share the
-  // account's block region, so a full traversal of every one of them together
-  // still fits inside a bound sized on the whole region.
+  // ONE budget for both sides: the bids and asks trees share the account's
+  // block region, so sizing the bound on the whole region covers a full
+  // traversal of both of them together (see makeTreeWalkBudget).
   const spendHop = makeTreeWalkBudget(SLUG, Math.floor((data.length - MARKET_FIXED_SIZE) / BLOCK_SIZE));
 
   return {
