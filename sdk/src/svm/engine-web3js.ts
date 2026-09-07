@@ -12,8 +12,6 @@
 // fs-free invariant is preserved. This module is itself CJS-require-safe (no `import.meta` /
 // `__dirname`), so it loads under ts-jest / babel-jest CommonJS transforms.
 
-import { createHash } from 'node:crypto';
-
 import { AccountRole, isSignerRole, isWritableRole } from '@solana/kit';
 import type { Address, Instruction } from '@solana/kit';
 import { PublicKey, TransactionInstruction } from '@solana/web3.js';
@@ -33,6 +31,11 @@ import {
 
 // Plan builder carries no instructions to convert — re-export it verbatim for one-import ergonomics.
 export { buildStagingPlan };
+
+// The content-hash helper web3.js consumers need for `buildFinalizeBufferInstruction`'s `sha256`
+// argument. It lives in `instructions.js` (no web3.js dependency) so every pin producer shares one
+// implementation; re-exported here so this subpath stays a one-import surface.
+export { bytecodeSha256 } from './instructions.js';
 
 /** web3.js v1 account meta — the shape `TransactionInstruction.keys` uses. */
 export interface Web3JsAccountMeta {
@@ -231,11 +234,3 @@ export function deriveBufferPda(
   return pda;
 }
 
-/**
- * sha256 of the bytecode — the content hash `finalize_buffer` pins and `execute` may verify. Sync
- * (node:crypto) so web3.js consumers compute the `sha256` argument for
- * `buildFinalizeBufferInstruction` inline; the kit client hashes the same bytes via async WebCrypto.
- */
-export function bytecodeSha256(bytecode: Uint8Array): Uint8Array {
-  return createHash('sha256').update(bytecode).digest();
-}

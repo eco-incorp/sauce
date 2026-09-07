@@ -38,8 +38,8 @@
  *      web3.js twin in `../svm/engine-web3js.js`) to get the buffer address.
  *   2. `buildInitBufferInstructions` / `buildWriteBufferInstruction` / `buildFinalizeBufferInstruction`
  *      (`@eco-incorp/sauce-sdk/svm/engine`, or `/svm/engine/web3js` for the web3.js-typed twins) to
- *      create, fill, and finalize it — `bytecodeSha256(bytecode)` (web3js subpath) or an equivalent
- *      sha256 supplies the finalize/pin hash.
+ *      create, fill, and finalize it — `bytecodeSha256(bytecode)` (both subpaths export it) or an
+ *      equivalent sha256 supplies the finalize/pin hash.
  *   3. Only THEN does a `StagedBufferRef.buffer` naming that address produce a call that will
  *      actually execute — an unstaged, half-written, or unfinalized buffer fails at FULFILL time
  *      (the engine dispatches on the account's own header, not on anything this module can see), not

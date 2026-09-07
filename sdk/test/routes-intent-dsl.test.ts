@@ -19,6 +19,7 @@ import {
 } from "../src/routes/encode.js";
 import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
 import { buildSauceSvmCall } from "../src/routes/sauce-calls.js";
+import { bytecodeSha256 } from "../src/svm/instructions.js";
 import { compileSauceRoute, wrapSauceBody } from "../src/routes/sauce-route.js";
 import { predictVaultAddress } from "../src/routes/vault.js";
 import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
@@ -168,9 +169,11 @@ describe("openRoute: SVM destination", () => {
     const call = built.intent.route.calls[0]!;
     expect(call.value).toBe(0n);
 
+    // The pin is injected from the compile, so the equivalent direct call must carry it too.
     const direct = buildSauceSvmCall({
       buffer: BUFFER,
       accounts: [{ pubkey: ACCOUNT, isSigner: false, isWritable: false }],
+      expectedSha256: bytecodeSha256(built.compiled.bytecode[0]!),
     });
     expect(call).toEqual(direct);
   });
@@ -191,6 +194,44 @@ describe("openRoute: SVM destination", () => {
         rewardDeadline: 1000n,
       }),
     ).toThrow(/value/i);
+  });
+});
+
+describe("compileSauceRoute: SVM content pin", () => {
+  const BUFFER = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+  const ACCOUNT = address("So11111111111111111111111111111111111111112");
+  const SAUCE = "function main() { return 1n; }";
+  const accounts = [{ pubkey: ACCOUNT, isSigner: false, isWritable: false }];
+
+  it("injects sha256(compiled.bytecode[0]) as expectedSha256 when the caller passes no pin", () => {
+    const { calls, compiled } = compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts });
+    const pin = bytecodeSha256(compiled.bytecode[0]!);
+
+    expect(calls[0]).toEqual(buildSauceSvmCall({ buffer: BUFFER, accounts, expectedSha256: pin }));
+    // Pinning is what the calldata grows by: flags(1) + pin(32) vs flags(1) alone.
+    const pinless = buildSauceSvmCall({ buffer: BUFFER, accounts });
+    expect((calls[0]!.data.length - pinless.data.length) / 2).toBe(32);
+  });
+
+  it("accepts a caller pin that matches the compiled program", () => {
+    const { compiled } = compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts });
+    const pin = bytecodeSha256(compiled.bytecode[0]!);
+    const { calls } = compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts, expectedSha256: pin });
+
+    expect(calls[0]).toEqual(buildSauceSvmCall({ buffer: BUFFER, accounts, expectedSha256: pin }));
+  });
+
+  it("throws when the caller pin names bytecode other than the compiled program", () => {
+    expect(() =>
+      compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts, expectedSha256: new Uint8Array(32) }),
+    ).toThrow(/does not match sha256 of the compiled program/);
+  });
+
+  it("leaves a foreign-path execution (slice) unpinned", () => {
+    const slice = { offset: 0, len: 8 };
+    const { calls } = compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts, slice });
+
+    expect(calls[0]).toEqual(buildSauceSvmCall({ buffer: BUFFER, accounts, slice }));
   });
 });
 

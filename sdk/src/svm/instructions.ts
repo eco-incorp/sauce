@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { AccountRole } from '@solana/kit';
 import type { Address, Instruction } from '@solana/kit';
 import { SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
@@ -295,6 +297,15 @@ export function buildWriteBufferInstruction({ programId, authority, buffer, offs
     ],
     data: withDiscriminator(WRITE_BUFFER_DISCRIMINATOR, u32Le(offset), chunk),
   };
+}
+
+/**
+ * sha256 of the bytecode — the content hash `finalize_buffer` pins and `execute` may verify. Lives
+ * beside the builders that take it so every producer of a pin (kit, web3.js, route compile) shares one
+ * implementation. Sync (node:crypto); the kit client hashes the same bytes via async WebCrypto.
+ */
+export function bytecodeSha256(bytecode: Uint8Array): Uint8Array {
+  return createHash('sha256').update(bytecode).digest();
 }
 
 export interface FinalizeBufferInstructionInput {
