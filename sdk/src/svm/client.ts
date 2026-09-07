@@ -115,7 +115,9 @@ export interface SauceSvmClient {
    * dedicated finalize sent only after every write confirmed, each tx on a fresh
    * blockhash). The buffer at that seed must not be finalized — close it first
    * (closeBuffer) to recompile at the same address. The same seed is resumable:
-   * it always derives the same address.
+   * it always derives the same address, and the content-hash pin is recorded
+   * before the first transaction, so a run that dies part-way still leaves
+   * executeStaged/simulateStaged able to address the buffer.
    */
   stageBuffer(seed: Uint8Array, bytecode: Uint8Array): Promise<StagedBuffer>;
   /** Closes the buffer at 32-byte `seed`, refunding its rent to the payer (the recompile path). */
@@ -329,6 +331,10 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
       // Copy into a fresh ArrayBuffer-backed view (subtle.digest rejects
       // SharedArrayBuffer-backed views at the type level).
       const sha256 = new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytecode)));
+      // Pinned before anything is sent: the digest is known up front and the
+      // on-chain hash gate enforces it either way, so staging stays resumable
+      // through executeStaged wherever a run dies.
+      stagedHashes.set(address, sha256);
       const currentBytes = await currentDataSize(address);
       const signatures: Signature[] = [];
 
@@ -368,8 +374,6 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
         sha256,
       });
       signatures.push((await sendInstructions([finalize])).signature);
-
-      stagedHashes.set(address, sha256);
 
       return { address, seed, sha256, signatures };
     },
