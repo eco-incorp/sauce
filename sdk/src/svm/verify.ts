@@ -375,16 +375,16 @@ export interface SvmSettleExecutionVerifyInput extends SvmSettleExecutionInput, 
   bytecode?: Uint8Array;
 }
 
-/** How genuineness was established. `bytecode`: the supplied bytes byte-match the canonical settle (and
- *  tie to the pin). `pin`: no bytecode, but the calldata pin equals `sha256(canonical settle)` — proof
+/** How genuineness was established. `bytecode`: the supplied bytes byte-match the canonical settle AND
+ *  the calldata pin ties to them — a pinless calldata commits to nothing, so it is never genuine on this
+ *  path however good the bytes are. `pin`: no bytecode, but the calldata pin equals `sha256(canonical settle)` — proof
  *  that the program committed by this calldata IS the genuine settle, because the Sauce engine gates the
  *  staged buffer's CONTENTS against the pin and reverts on a mismatch. That gate is the engine's, so it
  *  binds the buffer and nothing else: the instruction's CALLEE is outside every verdict here, and an
  *  arbitrary program accepting the same discriminator can ignore the pin field entirely — see
  *  `ExtractedSvmSettle.target`, whose `program` state a caller must compare against the engine program
- *  id it trusts.
- *  `none`: no pin and no bytecode — genuineness cannot be established from structure alone, so `genuine`
- *  is false. */
+ *  id it trusts. `none`: no pin and no bytecode — genuineness cannot be established from structure
+ *  alone, so `genuine` is false. */
 export type SvmSettleVerifiedBy = 'bytecode' | 'pin' | 'none';
 
 export interface SvmSettleExecutionVerification extends DecodedSvmSettleExecution {
