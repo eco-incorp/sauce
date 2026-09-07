@@ -15,6 +15,11 @@ function toBigIntStrict(value: AmountInput, label: string): bigint {
   if (typeof value === "bigint") return value;
   if (typeof value === "number") {
     if (!Number.isInteger(value)) throw new Error(`${label}: expected an integer, got ${value}`);
+    // Past 2^53-1 the double was already rounded before it got here, so BigInt() would return an
+    // exact-looking wrong value.
+    if (!Number.isSafeInteger(value)) {
+      throw new Error(`${label}: expected a safe integer, got ${value} — pass a bigint or a string instead`);
+    }
     return BigInt(value);
   }
   return BigInt(value);
@@ -33,8 +38,10 @@ function toBigIntStrict(value: AmountInput, label: string): bigint {
  * Throws (never emits a program that would misbehave on-chain) for: an unknown `protocol:action`;
  * `token` supplied to a native-value template; `token` omitted from an erc20-approve/none template;
  * `beneficiary` supplied to a `beneficiary: "unsupported"` template; `amount: "max"` on a template
- * with `allowsMaxAmount: false`; an unrecognized `extra` field name; and whatever the field's own
- * `ExtraFieldSpec.normalize` throws for an out-of-range extra value.
+ * with `allowsMaxAmount: false`; an unrecognized `extra` field name; an `amount` given as a `number`
+ * that is not a safe integer (past 2^53-1 pass a bigint or a string, since the double has already
+ * been rounded); and whatever the field's own `ExtraFieldSpec.normalize` throws for an out-of-range
+ * extra value.
  */
 export function toDeposit(
   spec: DepositSpec | (Omit<DepositSpec, "amount"> & { amount: "balance" | "delta" | "max" }),

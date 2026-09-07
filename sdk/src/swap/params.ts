@@ -27,6 +27,11 @@ function toBigIntStrict(value: AmountInput, label: string): bigint {
   if (typeof value === "bigint") return value;
   if (typeof value === "number") {
     if (!Number.isInteger(value)) throw new Error(`${label}: expected an integer, got ${value}`);
+    // Past 2^53-1 the double was already rounded before it got here, so BigInt() would return an
+    // exact-looking wrong value.
+    if (!Number.isSafeInteger(value)) {
+      throw new Error(`${label}: expected a safe integer, got ${value} — pass a bigint or a string instead`);
+    }
     return BigInt(value);
   }
   // string: decimal or 0x-hex, either accepted by BigInt() directly.
@@ -122,7 +127,9 @@ function normalizeCallback(
  * Throws (never emits a program that would revert on-chain) for: poolType 9/10 (Infinity — not
  * dispatchable through `swap()`, see {@link UndispatchablePoolType}); any other out-of-range
  * poolType; UniV4 missing `poolKey`; UniV2 `poolKey.fee >= 1_000_000`; a non-empty `callback` on a
- * non-callback-driven pool type; a non-empty `callback` with an overridden `payer`/`recipient`.
+ * non-callback-driven pool type; a non-empty `callback` with an overridden `payer`/`recipient`; and
+ * any numeric field given as a `number` that is not a safe integer (past 2^53-1 pass a bigint or a
+ * string, since the double has already been rounded).
  */
 export function toSwapParams(spec: SwapSpec): SwapParams {
   const { poolType } = spec;

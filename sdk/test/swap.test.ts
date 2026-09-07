@@ -140,6 +140,33 @@ describe("toSwapParams — guards", () => {
     const params = toSwapParams(spec({ poolType: SwapPoolType.UniV2, poolKey: { fee: 0n } }));
     expect(params.poolKey.fee).toBe(0n);
   });
+
+  it("amountIn at Number.MAX_SAFE_INTEGER is accepted exactly", () => {
+    expect(toSwapParams(spec({ amountIn: Number.MAX_SAFE_INTEGER })).amountSpecified).toBe(
+      9007199254740991n,
+    );
+  });
+
+  it("an unsafe integer amountIn throws under its label instead of silently rounding", () => {
+    expect(() => toSwapParams(spec({ amountIn: Number.MAX_SAFE_INTEGER + 1 }))).toThrow(
+      /amountIn: expected a safe integer, got 9007199254740992/,
+    );
+    expect(() => toSwapParams(spec({ amountIn: 1e18 }))).toThrow(
+      /amountIn: expected a safe integer, got 1000000000000000000/,
+    );
+  });
+
+  it("an unsafe integer poolKey.fee throws under its own label", () => {
+    expect(() =>
+      toSwapParams(spec({ poolType: SwapPoolType.UniV4, poolKey: { fee: 1e18 } })),
+    ).toThrow(/poolKey\.fee: expected a safe integer, got 1000000000000000000/);
+  });
+
+  it("a non-integer amountIn still throws the plain integer message", () => {
+    expect(() => toSwapParams(spec({ amountIn: 1.5 }))).toThrow(
+      /amountIn: expected an integer, got 1\.5/,
+    );
+  });
 });
 
 describe("toSwapParams — defaults", () => {

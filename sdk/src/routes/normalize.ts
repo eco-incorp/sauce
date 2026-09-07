@@ -45,7 +45,15 @@ export function toUniversalAddress(input: AddressInput): UniversalAddress {
   );
 }
 
-/** Accepts `bigint | number | string`; rejects negative or non-integer values. */
+/**
+ * Accepts `bigint | number | string`; rejects negative or non-integer values.
+ *
+ * A `number` must also be a SAFE integer: past 2^53-1 a double has already been rounded before
+ * this function ever sees it, so `BigInt(value)` would return an exact-looking wrong amount. Pass
+ * a large value as a `bigint` (`10n ** 18n`) or as a PLAIN DECIMAL string (`'1000000000000000000'`)
+ * — exponent notation like `'1e21'` is rejected too, being no more an integer string than `1e21`
+ * as a `number` is a safe one.
+ */
 export function toBigInt(value: bigint | number | string): bigint {
   if (typeof value === "bigint") {
     if (value < 0n) throw new Error(`Expected a non-negative bigint, got ${value}`);
@@ -54,6 +62,11 @@ export function toBigInt(value: bigint | number | string): bigint {
   if (typeof value === "number") {
     if (!Number.isInteger(value) || value < 0) {
       throw new Error(`Expected a non-negative integer number, got ${value}`);
+    }
+    if (!Number.isSafeInteger(value)) {
+      throw new Error(
+        `Expected a safe integer number, got ${value} — pass a bigint or a plain decimal string`,
+      );
     }
     return BigInt(value);
   }
