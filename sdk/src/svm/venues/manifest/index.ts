@@ -73,6 +73,8 @@
 import { address, getAddressCodec } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import { readUintLE } from '../math.js';
+import { makeTreeWalkBudget } from '../tree-walk.js';
+import type { SpendHop } from '../tree-walk.js';
 import type { AccountLoader, PoolConfig } from '../types.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
@@ -103,6 +105,7 @@ export const OFF_ASKS_BEST = 168;
 
 // Block layout: 16-byte RBNode overhead then the 64-byte RestingOrder payload.
 // Offsets are RELATIVE TO the block base (= MARKET_FIXED_SIZE + DataIndex).
+const BLOCK_SIZE = 80;
 export const OFF_NODE_LEFT = 0;
 export const OFF_NODE_RIGHT = 4;
 export const OFF_NODE_PARENT = 8;
@@ -169,18 +172,25 @@ function isLeftChild(data: Uint8Array, idx: number): boolean {
  * The venue's get_next_lower_index (red_black_tree.rs): the in-order
  * predecessor in the tree's Ord, which — because the tree's max is the BEST
  * order (bids Ord by price, asks Ord by inverse price) — is the taker's next
- * match. Bounded off-chain by the account size; unaffordable in-VM.
+ * match. Every pointer hop draws from the caller's whole-walk budget;
+ * unaffordable in-VM.
  */
-function nextLower(data: Uint8Array, idx: number): number {
+function nextLower(data: Uint8Array, idx: number, spendHop: SpendHop): number {
   if (idx === NIL) return NIL;
   const left = treeLeft(data, idx);
   if (left !== NIL) {
     let cur = left;
-    for (let guard = 0; guard < 1_000_000 && treeRight(data, cur) !== NIL; guard++) cur = treeRight(data, cur);
+    while (treeRight(data, cur) !== NIL) {
+      spendHop();
+      cur = treeRight(data, cur);
+    }
     return cur;
   }
   let cur = idx;
-  for (let guard = 0; guard < 1_000_000 && isLeftChild(data, cur); guard++) cur = treeParent(data, cur);
+  while (isLeftChild(data, cur)) {
+    spendHop();
+    cur = treeParent(data, cur);
+  }
   return treeParent(data, cur);
 }
 
@@ -190,11 +200,13 @@ function nextLower(data: Uint8Array, idx: number): number {
  * order (the venue's IOC taker halts there without the global accounts) or the
  * first expiring order (the in-VM model carries no clock). Skips zero-size
  * orders (the venue removes them mid-walk) but keeps walking past them.
+ * `spendHop` is the whole-walk iteration budget — a market whose tree pointers
+ * cycle exhausts it and throws rather than spinning.
  */
-function resolveWindow(data: Uint8Array, bestOffset: number): ManifestWindow {
+function resolveWindow(data: Uint8Array, bestOffset: number, spendHop: SpendHop): ManifestWindow {
   const orders: ManifestOrder[] = [];
   let cur = Number(readUintLE(data, bestOffset, 4));
-  for (let guard = 0; guard < 1_000_000 && cur !== NIL && orders.length < MANIFEST_MAX_ORDERS; guard++) {
+  while (cur !== NIL && orders.length < MANIFEST_MAX_ORDERS) {
     const base = nodeBase(cur);
     const orderType = data[base + OFF_ORDER_TYPE];
     const lastValidSlot = Number(readUintLE(data, base + OFF_ORDER_LAST_VALID_SLOT, 4));
@@ -204,7 +216,8 @@ function resolveWindow(data: Uint8Array, bestOffset: number): ManifestWindow {
     if (size > 0n) {
       orders.push({ dataIndex: cur, sequenceNumber: readUintLE(data, base + OFF_ORDER_SEQ, 8) });
     }
-    cur = nextLower(data, cur);
+    spendHop();
+    cur = nextLower(data, cur, spendHop);
   }
   return { orders };
 }
@@ -259,6 +272,11 @@ export async function fetchManifestConfig(load: AccountLoader, pool: Address): P
     }
   }
 
+  // ONE budget for both sides: the bids, asks and seats trees share the
+  // account's block region, so a full traversal of every one of them together
+  // still fits inside a bound sized on the whole region.
+  const spendHop = makeTreeWalkBudget(SLUG, Math.floor((data.length - MARKET_FIXED_SIZE) / BLOCK_SIZE));
+
   return {
     venue: SLUG,
     pool,
@@ -271,8 +289,8 @@ export async function fetchManifestConfig(load: AccountLoader, pool: Address): P
     quoteDecimals: data[OFF_QUOTE_MINT_DECIMALS],
     windows: {
       // base-in sells base -> matches the BIDS; quote-in buys base -> matches the ASKS.
-      baseIn: resolveWindow(data, OFF_BIDS_BEST),
-      quoteIn: resolveWindow(data, OFF_ASKS_BEST),
+      baseIn: resolveWindow(data, OFF_BIDS_BEST, spendHop),
+      quoteIn: resolveWindow(data, OFF_ASKS_BEST, spendHop),
     },
   };
 }
