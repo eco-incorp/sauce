@@ -225,18 +225,28 @@ export function fundTx(intent: Intent, allowPartial: boolean, target: PortalTarg
 }
 
 /**
- * One `approve(portal, amount)` per reward token, in order — see the module doc's funding-mechanics
- * table: the allowance is to the PORTAL, never the vault. Emits nothing for `reward.nativeAmount`
- * (that needs `value`, not an approval); a zero-amount reward token is emitted as-is rather than
- * filtered. Does NOT emit `allowance`/`balanceOf` read-calls to let a caller skip a redundant
- * approve — see `isIntentFundedCall` for the "is this already funded?" question.
+ * One `approve(portal, amount)` per DISTINCT reward token, in first-seen order — see the module
+ * doc's funding-mechanics table: the allowance is to the PORTAL, never the vault. Several reward
+ * entries naming the same token collapse into ONE approve for the LARGEST of their amounts, never
+ * their sum: `IntentSource._fundToken` compares each leg against the vault's TOTAL balance and
+ * short-circuits, so the largest leg is the binding allowance. Emits nothing for
+ * `reward.nativeAmount` (that needs `value`, not an approval); a token whose largest entry is zero
+ * is emitted as `approve(portal, 0)` rather than filtered. Does NOT emit `allowance`/`balanceOf`
+ * read-calls to let a caller skip a redundant approve — see `isIntentFundedCall` for the "is this
+ * already funded?" question.
  */
 export function approvalTxs(intent: Intent, target: PortalTarget): readonly PortalTx[] {
   assertEvmSource(intent, "approvalTxs");
   const portal = portalAddress(target);
-  return intent.reward.tokens.map((t) => ({
-    to: denormalizeToEvm(t.token),
-    data: encodeFunctionData({ abi: ERC20ABI, functionName: "approve", args: [portal, t.amount] }),
+  const maxByToken = new Map<Hex, bigint>();
+  for (const { token, amount } of intent.reward.tokens) {
+    const evmToken = denormalizeToEvm(token);
+    const previous = maxByToken.get(evmToken);
+    if (previous === undefined || amount > previous) maxByToken.set(evmToken, amount);
+  }
+  return [...maxByToken].map(([token, amount]) => ({
+    to: token,
+    data: encodeFunctionData({ abi: ERC20ABI, functionName: "approve", args: [portal, amount] }),
     value: 0n,
   }));
 }
