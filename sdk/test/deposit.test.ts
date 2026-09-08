@@ -148,8 +148,33 @@ describe("toDeposit guards", () => {
     expect(() => toDeposit(aaveSpec({ extra: { referralCode: 65_536n } }))).toThrow(/expected a uint16/);
   });
 
+  it("rejects an unsafe integer referralCode before the range check sees a rounded value", () => {
+    expect(() => toDeposit(aaveSpec({ extra: { referralCode: 1234567890123456789 } }))).toThrow(
+      /referralCode: expected a safe integer/,
+    );
+  });
+
+  it("rejects a non-integer referralCode with a labelled message", () => {
+    expect(() => toDeposit(aaveSpec({ extra: { referralCode: 1.5 } }))).toThrow(
+      /referralCode: expected an integer, got 1\.5/,
+    );
+  });
+
   it("rejects a non-integer number amount", () => {
-    expect(() => toDeposit(aaveSpec({ amount: 1.5 }))).toThrow(/expected an integer/);
+    expect(() => toDeposit(aaveSpec({ amount: 1.5 }))).toThrow(/amount: expected an integer, got 1\.5/);
+  });
+
+  it("accepts a number amount at Number.MAX_SAFE_INTEGER exactly", () => {
+    expect(toDeposit(aaveSpec({ amount: Number.MAX_SAFE_INTEGER })).amount).toBe(9007199254740991n);
+  });
+
+  it("rejects an unsafe integer number amount instead of silently rounding it", () => {
+    expect(() => toDeposit(aaveSpec({ amount: Number.MAX_SAFE_INTEGER + 1 }))).toThrow(
+      /amount: expected a safe integer, got 9007199254740992/,
+    );
+    expect(() => toDeposit(aaveSpec({ amount: 1e18 }))).toThrow(
+      /amount: expected a safe integer, got 1000000000000000000/,
+    );
   });
 
   it("defaults beneficiary to 'self' and referralCode to 0n", () => {

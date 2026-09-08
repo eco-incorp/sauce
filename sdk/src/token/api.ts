@@ -8,7 +8,7 @@ import { encodeFunctionData, type Hex } from "viem";
 
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { ata } from "../svm/venues/scale-common.js";
-import { toAddressBigint, validateApproveSpec, validateBalanceSpec, validateTransferSpec } from "./params.js";
+import { toAddressBigint, toAmountBigint, validateApproveSpec, validateBalanceSpec, validateTransferSpec } from "./params.js";
 import { tokenAccountRefs, tokenExpression, TOKEN_BASE_DIRS, tokenCallStatement, tokenImportLines, tokenSource } from "./source.js";
 import { TOKEN_PROGRAM_BIGINT, TOKEN_2022_PROGRAM_BIGINT } from "./svm.js";
 import {
@@ -91,7 +91,7 @@ function makeTokenCall(spec: TokenSpec): TokenCall {
           data: encodeFunctionData({
             abi: ERC20ABI,
             functionName: "transfer",
-            args: [hexAddress(spec.to, "to"), toAmount(spec.amount)],
+            args: [hexAddress(spec.to, "to"), toAmountBigint(spec.amount, "Token.transfer amount")],
           }),
           value: 0n,
         };
@@ -101,7 +101,7 @@ function makeTokenCall(spec: TokenSpec): TokenCall {
         data: encodeFunctionData({
           abi: ERC20ABI,
           functionName: "approve",
-          args: [hexAddress(spec.spender, "spender"), toAmount(spec.amount)],
+          args: [hexAddress(spec.spender, "spender"), toAmountBigint(spec.amount, "Token.approve amount")],
         }),
         value: 0n,
       };
@@ -120,9 +120,6 @@ function hexAddress(value: TokenTransferSpec["token"], label: string): `0x${stri
   return `0x${big.toString(16).padStart(40, "0")}`;
 }
 
-function toAmount(amount: bigint | number): bigint {
-  return typeof amount === "bigint" ? amount : BigInt(amount);
-}
 
 export interface TokenApi {
   transfer(spec: TokenTransferSpec): TokenCall;

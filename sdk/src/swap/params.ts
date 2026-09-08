@@ -2,6 +2,7 @@
  * Normalization core for E4.1's universal swap adapter — `toSwapParams` + `amountSpecifiedFor`.
  * See `sdk/src/swap/index.ts` for the module overview.
  */
+import { toExactBigInt } from "../numeric.js";
 import {
   isCallbackVenue,
   SwapPoolType,
@@ -25,10 +26,7 @@ const MAX_UNIV2_FEE_PPM = 1_000_000n;
 
 function toBigIntStrict(value: AmountInput, label: string): bigint {
   if (typeof value === "bigint") return value;
-  if (typeof value === "number") {
-    if (!Number.isInteger(value)) throw new Error(`${label}: expected an integer, got ${value}`);
-    return BigInt(value);
-  }
+  if (typeof value === "number") return toExactBigInt(value, label);
   // string: decimal or 0x-hex, either accepted by BigInt() directly.
   return BigInt(value);
 }
@@ -122,7 +120,9 @@ function normalizeCallback(
  * Throws (never emits a program that would revert on-chain) for: poolType 9/10 (Infinity — not
  * dispatchable through `swap()`, see {@link UndispatchablePoolType}); any other out-of-range
  * poolType; UniV4 missing `poolKey`; UniV2 `poolKey.fee >= 1_000_000`; a non-empty `callback` on a
- * non-callback-driven pool type; a non-empty `callback` with an overridden `payer`/`recipient`.
+ * non-callback-driven pool type; a non-empty `callback` with an overridden `payer`/`recipient`; and
+ * any numeric field given as a `number` that is not a safe integer (past 2^53-1 pass a bigint or a
+ * string, since the double has already been rounded).
  */
 export function toSwapParams(spec: SwapSpec): SwapParams {
   const { poolType } = spec;

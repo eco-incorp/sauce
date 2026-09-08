@@ -38,7 +38,7 @@ import {
   type TokenSpec,
   type TokenTransferSpec,
 } from "./types.js";
-import { ownerRef, tokenProgramRef } from "./params.js";
+import { ownerRef, toAmountBigint, tokenProgramRef } from "./params.js";
 
 const ADDRESS_ENCODER = getAddressEncoder();
 
@@ -154,10 +154,12 @@ export function svmAccountParamList(specs: readonly TokenSpec[]): string {
 
 // ── statements ──
 
-function amountExpr(amount: bigint | number | "balance", sourceRef: string): string {
+function amountExpr(amount: bigint | number | "balance", sourceRef: string, label: string): string {
   if (amount === "balance") return `svm.sload(${sourceRef}, ${SPL_AMOUNT_OFFSET}, 8).toLe()`;
 
-  return formatBigint(typeof amount === "bigint" ? amount : BigInt(amount));
+  // formatBigint takes a bigint, so a `number` amount CANNOT be stringified into the emitted
+  // source without going through toAmountBigint first.
+  return formatBigint(toAmountBigint(amount, label));
 }
 
 /**
@@ -192,9 +194,11 @@ function checkedCallLines(opts: {
   amount: bigint | number | "balance";
   tokenProgram: SvmTokenProgramInput | undefined;
   counterpartyRef: string;
+  /** Names the op in an amount error — `amountExpr` validates before it formats. */
+  label: string;
   state: SvmEmitState;
 }): readonly string[] {
-  const { index, discriminant, refs, amount, tokenProgram, counterpartyRef, state } = opts;
+  const { index, discriminant, refs, amount, tokenProgram, counterpartyRef, label, state } = opts;
   const mintRef = refs.mint!;
   const sourceRef = refs.source;
   const ownerName = ownerRef(refs);
@@ -206,7 +210,7 @@ function checkedCallLines(opts: {
 
   lines.push(
     `const disc${index} = hex\`${discriminant.toString(16).padStart(2, "0")}\`;`,
-    `const amtv${index} = ${amountExpr(amount, sourceRef)};`,
+    `const amtv${index} = ${amountExpr(amount, sourceRef, label)};`,
     `const dec${index} = svm.sload(${mintRef}, ${MINT_DECIMALS_OFFSET}, 1).toLe();`,
     `const data${index} = disc${index}.concat(amtv${index}.toBytesLe(8)).concat(dec${index}.toBytesLe(1));`,
     `svm.call(${tpRef}, [${sourceRef}, ${mintRef}, ${counterpartyRef}, ${ownerName}], data${index});`,
@@ -225,6 +229,7 @@ export function svmTransferLines(spec: TokenTransferSpec, index: number, state: 
     amount: spec.amount,
     tokenProgram: spec.tokenProgram,
     counterpartyRef: refs.dest!,
+    label: "Token.transfer amount",
     state,
   });
 }
@@ -239,6 +244,7 @@ export function svmApproveLines(spec: TokenApproveSpec, index: number, state: Sv
     amount: spec.amount,
     tokenProgram: spec.tokenProgram,
     counterpartyRef: refs.delegate!,
+    label: "Token.approve amount",
     state,
   });
 }

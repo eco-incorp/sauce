@@ -2,6 +2,7 @@
  * Normalization core for E4.2's universal deposit adapter — `toDeposit`. See
  * `sdk/src/deposit/index.ts` for the module overview.
  */
+import { toExactBigInt } from "../numeric.js";
 import type { AddressInput, AmountInput } from "../swap/types.js";
 import { depositTemplateFor } from "./templates.js";
 import type { ApprovalPolicy, DepositSpec, DepositTemplate, NormalizedDeposit } from "./types.js";
@@ -13,10 +14,7 @@ function toAddressBigint(value: AddressInput, label: string): bigint {
 
 function toBigIntStrict(value: AmountInput, label: string): bigint {
   if (typeof value === "bigint") return value;
-  if (typeof value === "number") {
-    if (!Number.isInteger(value)) throw new Error(`${label}: expected an integer, got ${value}`);
-    return BigInt(value);
-  }
+  if (typeof value === "number") return toExactBigInt(value, label);
   return BigInt(value);
 }
 
@@ -33,8 +31,10 @@ function toBigIntStrict(value: AmountInput, label: string): bigint {
  * Throws (never emits a program that would misbehave on-chain) for: an unknown `protocol:action`;
  * `token` supplied to a native-value template; `token` omitted from an erc20-approve/none template;
  * `beneficiary` supplied to a `beneficiary: "unsupported"` template; `amount: "max"` on a template
- * with `allowsMaxAmount: false`; an unrecognized `extra` field name; and whatever the field's own
- * `ExtraFieldSpec.normalize` throws for an out-of-range extra value.
+ * with `allowsMaxAmount: false`; an unrecognized `extra` field name; an `amount` given as a `number`
+ * that is not a safe integer (past 2^53-1 pass a bigint or a string, since the double has already
+ * been rounded); and whatever the field's own `ExtraFieldSpec.normalize` throws for an out-of-range
+ * extra value.
  */
 export function toDeposit(
   spec: DepositSpec | (Omit<DepositSpec, "amount"> & { amount: "balance" | "delta" | "max" }),

@@ -2,6 +2,7 @@
  * Normalization + guards for the universal token interface. Mirrors `swap/params.ts`'s posture:
  * throws (never emits a program that would revert on-chain) rather than guessing.
  */
+import { toExactBigInt } from "../numeric.js";
 import type {
   AddressInput,
   SvmTokenRefs,
@@ -31,9 +32,7 @@ export function assertU64Range(amount: bigint, label: string): void {
 }
 
 export function toAmountBigint(amount: bigint | number, label: string): bigint {
-  if (typeof amount === "bigint") return amount;
-  if (!Number.isInteger(amount)) throw new Error(`${label}: expected an integer, got ${amount}`);
-  return BigInt(amount);
+  return typeof amount === "bigint" ? amount : toExactBigInt(amount, label);
 }
 
 function requireEvmField<T>(value: T | undefined, label: string): T {
@@ -59,32 +58,40 @@ export function tokenProgramRef(refs: SvmTokenRefs): string {
   return refs.tokenProgram ?? "tokenProgram";
 }
 
+/**
+ * The amount gate both targets share. An unsafe `number` is as wrong in ERC20 calldata as it is in
+ * an SPL instruction, so `toAmountBigint` runs on either target; only the u64 ceiling is SVM's.
+ */
+function assertAmountInput(amount: bigint | number | "balance", label: string, target: TokenTarget): void {
+  if (amount === "balance") return;
+  const exact = toAmountBigint(amount, label);
+  if (!isEvmTarget(target)) assertU64Range(exact, label);
+}
+
 export function validateTransferSpec(spec: TokenTransferSpec, target: TokenTarget): void {
   if (isEvmTarget(target)) {
     requireEvmField(spec.token, "token");
     requireEvmField(spec.to, "to");
+    assertAmountInput(spec.amount, "Token.transfer amount", target);
     return;
   }
   const refs = requireSvmRefs(spec, "Token.transfer");
   if (refs.mint === undefined) throw new Error("Token.transfer: svm.mint is required on target 'svm'");
   if (refs.dest === undefined) throw new Error("Token.transfer: svm.dest is required on target 'svm'");
-  if (spec.amount !== "balance") {
-    assertU64Range(toAmountBigint(spec.amount, "Token.transfer amount"), "Token.transfer amount");
-  }
+  assertAmountInput(spec.amount, "Token.transfer amount", target);
 }
 
 export function validateApproveSpec(spec: TokenApproveSpec, target: TokenTarget): void {
   if (isEvmTarget(target)) {
     requireEvmField(spec.token, "token");
     requireEvmField(spec.spender, "spender");
+    assertAmountInput(spec.amount, "Token.approve amount", target);
     return;
   }
   const refs = requireSvmRefs(spec, "Token.approve");
   if (refs.mint === undefined) throw new Error("Token.approve: svm.mint is required on target 'svm'");
   if (refs.delegate === undefined) throw new Error("Token.approve: svm.delegate is required on target 'svm'");
-  if (spec.amount !== "balance") {
-    assertU64Range(toAmountBigint(spec.amount, "Token.approve amount"), "Token.approve amount");
-  }
+  assertAmountInput(spec.amount, "Token.approve amount", target);
 }
 
 export function validateBalanceSpec(spec: TokenBalanceSpec, target: TokenTarget): void {

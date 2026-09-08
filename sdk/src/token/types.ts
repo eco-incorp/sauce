@@ -61,6 +61,10 @@ export interface TokenTransferSpec {
   token?: AddressInput;
   /** EVM: the recipient. Required on an EVM target. */
   to?: AddressInput;
+  /**
+   * `"balance"` reads the live balance instead. A `number` must be a SAFE integer: past 2^53-1 the
+   * double has already been rounded, so pass a bigint.
+   */
   amount: bigint | number | "balance";
   /** SVM: the account refs this op touches. Required on `target: "svm"`. */
   svm?: SvmTokenRefs;
@@ -72,6 +76,10 @@ export interface TokenApproveSpec {
   token?: AddressInput;
   /** EVM: the approved spender. Required on an EVM target. */
   spender?: AddressInput;
+  /**
+   * `"balance"` reads the live balance instead. A `number` must be a SAFE integer: past 2^53-1 the
+   * double has already been rounded, so pass a bigint.
+   */
   amount: bigint | number | "balance";
   svm?: SvmTokenRefs;
   tokenProgram?: SvmTokenProgramInput;
