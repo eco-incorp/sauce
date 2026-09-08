@@ -16,6 +16,7 @@ import {
   SPL_AMOUNT_OFFSET,
   SPL_APPROVE_CHECKED,
   SPL_TRANSFER_CHECKED,
+  type AddressInput,
   type TokenApproveSpec,
   type TokenBalanceSpec,
   type TokenSpec,
@@ -120,6 +121,33 @@ function hexAddress(value: TokenTransferSpec["token"], label: string): `0x${stri
   return `0x${big.toString(16).padStart(40, "0")}`;
 }
 
+
+/**
+ * What `Token(<addr>)` yields **inside a route body** — the wrapper form, not the runtime API.
+ *
+ * Route-body calls are positional (`Token(a).approve(spender, amt)`) where the runtime
+ * [`TokenApi`] takes a spec object, because the body is compiled to Sauce bytecode rather than
+ * executed: `token-rewrite.ts#rewriteTokenFactory` replaces the callee with `IERC20.at` before the
+ * compiler sees it, and these signatures are what let a **typed closure** body typecheck on the way
+ * there. Nothing calls these at run time, which is why they live here rather than on `TokenApi`.
+ */
+export interface TokenBinding {
+  transfer(to: AddressInput, amount: bigint): void;
+  approve(spender: AddressInput, amount: bigint): void;
+  balanceOf(owner: AddressInput): bigint;
+}
+
+/**
+ * The call signature the **ambient** `Token` global carries, intersected onto [`TokenApi`] by
+ * `gen-route-globals.mjs` — the same way each chain global is `ChainGlobals[...] & ChainContracts`.
+ *
+ * Deliberately NOT on `TokenApi` itself: the runtime `Token` export is a frozen object and is not
+ * callable, so typing it as callable would promise something that throws. The ambient declaration
+ * describes what is legal in a route body, where the call never survives to run.
+ */
+export interface TokenFactory {
+  (address: AddressInput): TokenBinding;
+}
 
 export interface TokenApi {
   transfer(spec: TokenTransferSpec): TokenCall;

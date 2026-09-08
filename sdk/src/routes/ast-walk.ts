@@ -32,20 +32,79 @@ export function walk(node: unknown, visit: (n: AstNode) => void): void {
   }
 }
 
-/** Every name introduced by a `let`/`const`/`var` declarator or a function parameter, anywhere in
- *  the tree -- deliberately whole-program, not scope-sensitive (see the module doc's shadowing note). */
+/** Every name a binding PATTERN introduces -- an identifier, or any nesting of object/array
+ *  destructuring, defaults and rest. Collecting only the `Identifier` case would miss
+ *  `const { Token } = x` and `function f({ Token })`, which bind the name just as plainly. */
+function collectPatternNames(pattern: unknown, names: Set<string>): void {
+  if (pattern === null || typeof pattern !== "object") return;
+  const node = pattern as AstNode;
+  switch (node.type) {
+    case "Identifier":
+      names.add((node as unknown as { name: string }).name);
+      return;
+    case "ObjectPattern":
+      for (const property of ((node as { properties?: AstNode[] }).properties ?? [])) {
+        // A `Property`'s VALUE is the binding (`{ a: Token }` binds `Token`, not `a`); a
+        // `RestElement`'s argument is.
+        collectPatternNames((property as { value?: unknown }).value ?? (property as { argument?: unknown }).argument, names);
+      }
+      return;
+    case "ArrayPattern":
+      for (const element of ((node as { elements?: AstNode[] }).elements ?? [])) {
+        collectPatternNames(element, names);
+      }
+      return;
+    case "AssignmentPattern":
+      collectPatternNames((node as { left?: unknown }).left, names);
+      return;
+    case "RestElement":
+      collectPatternNames((node as { argument?: unknown }).argument, names);
+      return;
+    default:
+      return;
+  }
+}
+
+/** Every name the program introduces that could shadow a rewritten global, anywhere in the tree --
+ *  deliberately whole-program, not scope-sensitive (see the module doc's shadowing note).
+ *
+ *  Covers every form that BINDS a name, not just the common ones: `let`/`const`/`var` declarators
+ *  (including destructuring), function and arrow parameters, a function's or class's own name, a
+ *  `catch` parameter, and every `import` clause. The import and class cases are not hypothetical --
+ *  an `import { Token } from "./mine.js"` is a user's own `Token` by any reading, and missing it
+ *  meant their call was silently redirected to an ERC20 they never named. Fail closed on all of
+ *  them: over-collecting only ever declines a rewrite, which is the safe direction. */
 export function collectDeclaredNames(program: AstNode): ReadonlySet<string> {
   const names = new Set<string>();
   walk(program, (n) => {
-    if (n.type === "VariableDeclarator" && (n as { id?: AstNode }).id?.type === "Identifier") {
-      const id = (n as { id?: AstNode }).id as unknown as { name: string };
-      names.add(id.name);
-    }
-    if (n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression") {
-      const params = (n as { params?: AstNode[] }).params ?? [];
-      for (const p of params) {
-        if (p.type === "Identifier") names.add((p as unknown as { name: string }).name);
-      }
+    switch (n.type) {
+      case "VariableDeclarator":
+        collectPatternNames((n as { id?: unknown }).id, names);
+        return;
+      case "FunctionDeclaration":
+      case "FunctionExpression":
+      case "ArrowFunctionExpression":
+        // The function's own name binds too (`function Token(...)`), and an arrow has none.
+        collectPatternNames((n as { id?: unknown }).id, names);
+        for (const param of ((n as { params?: AstNode[] }).params ?? [])) {
+          collectPatternNames(param, names);
+        }
+        return;
+      case "ClassDeclaration":
+      case "ClassExpression":
+        collectPatternNames((n as { id?: unknown }).id, names);
+        return;
+      case "CatchClause":
+        collectPatternNames((n as { param?: unknown }).param, names);
+        return;
+      case "ImportSpecifier":
+      case "ImportDefaultSpecifier":
+      case "ImportNamespaceSpecifier":
+        // `local` is the name brought into scope — `import { a as Token }` binds `Token`.
+        collectPatternNames((n as { local?: unknown }).local, names);
+        return;
+      default:
+        return;
     }
   });
   return names;

@@ -224,8 +224,35 @@ The per-arm signatures genuinely differ where the account models force it — SV
 methods, the SVM account manifest, and the no-neutral-arm packaging invariant — always runs, no engine
 needed) plus `svm.e2e.test.ts`/`evm.e2e.test.ts`, which EXECUTE the compiled bytecode against real SPL
 accounts and a real deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_RUST_V12_RUNTIME` above for why
-those two are gated. `src/std/` is **not** in the package `files` list yet, so it does not ship to
-consumers — this is validation-only for now.
+those two are gated. `src/std/token` now **ships**: `copy-verify-assets.mjs` copies it into
+`dist/std/token` (and `dist/` is in the package `files` list), because the route path resolves
+`@sauce/token` to this vendored copy — see the next paragraph.
+
+`@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
+list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
+exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any route body opened that
+way with **zero import**. `openRoute` and no further: `chainAmbient` has exactly one call site
+(`intent-dsl.ts`), and `compileSauceRoute` passes its caller's `ambient` straight through without
+merging this list in — so a direct `compileSauceRoute(..., {})` gets no ambient module at all. This resolves because `rs-compile.ts`'s `SDK_STD_PACKAGES` maps the bare
+`@sauce/token` specifier to the SDK's own vendored `std/token` dir (`STD_ROOT`, = `dist/std` once
+built) regardless of `baseDirs` — an ambient module the compile can't resolve makes EVERY route
+throw, so that list must only ever name modules the SDK resolves itself. Two DISTINCT mechanisms
+share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
+protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
+
+The **`Token(addr)` global wrapper** (`Token(addr).approve(spender, amt)` / `let t = Token(addr);
+t.approve(...)`, zero import) is delivered by `token-rewrite.ts#rewriteTokenFactory`, a TEXTUAL
+rewrite `Token(<expr>)` → `IERC20.at(<expr>)` run in `compileSauceRoute` before the compiler — the
+SAME mechanism as the `<Sym>.transfer(...)` symbol sugar. So the compiler only ever sees the
+supported `IERC20.at(addr)` binding, never a method call on a `Token(...)` result — no compiler
+feature needed. It fires on ANY argument (a literal, a variable, an ambient `USDC` define), so unlike
+the symbol sugar it does NOT depend on the token-symbol map and works on every EVM chain; it is
+shadow-safe and svm-rejected the same way. **This is why the earlier "`Token(addr)` needs a compiler
+feature" framing was a red herring:** it only applies to the DIFFERENT approach of making `@sauce/token`
+*export* a real `Token` value (blocked by the M1 subset — a SauceScript function can't return a
+contract binding, no re-export, no method-on-call-result). The rewrite sidesteps all of that. The
+`@sauce/token` ambient module above still provides the FUNCTION surface (`approve(token, …)`); the two
+are complementary spellings, not competitors.
 
 **`actions/`** — `actionsToSauce(actions)` lowers routing intents (`uniswapV3ExactInput`, bridges,
 wraps, stakes) to bytecode. Actions **chain**: output feeds the next implicitly (no `amountIn`) or via

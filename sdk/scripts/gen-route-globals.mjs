@@ -116,18 +116,25 @@ function render(chains) {
 // by \`PascalOf<ChainSlug>\`, so a name that no longer exists in the registry
 // fails \`tsc\` here before the drift test even runs. A \`const\` typed with a
 // call-signature-bearing interface is callable in TS, so \`Base(sauce)\`
-// typechecks zero-import through this ambient chain.
+// typechecks zero-import through this ambient chain. \`Token\` gets its call
+// signature the same way -- intersected in as \`TokenFactory\`, which is what
+// makes \`Token(addr).approve(...)\` typecheck in a TYPED CLOSURE body and not
+// only in one supplied as source text. It is intersected here rather than
+// declared on \`TokenApi\` because the runtime \`Token\` export is a frozen
+// object and is not callable.
 import type { ChainGlobals } from "./builder.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
 import type { SvmVenueAccessors } from "../svm/accessors.js";
-import type { TokenApi } from "../token/api.js";
+import type { TokenApi, TokenFactory } from "../token/api.js";
 
 declare global {
 ${lines.join('\n')}
   /** Runtime-resolved origin: \`chain('eth')\`, \`chain(8453)\`. */
   const chain: typeof import("./accessors.js").chain;
-  /** Universal token interface — ERC20 on EVM targets, SPL Token on svm. */
-  const Token: TokenApi;
+  /** Universal token interface — ERC20 on EVM targets, SPL Token on svm. Callable as
+   *  \`Token(addr)\` in a route body (the wrapper, rewritten to \`IERC20.at(addr)\`), and carries
+   *  the runtime spec-object API for use outside one. */
+  const Token: TokenApi & TokenFactory;
 }
 
 export {};

@@ -135,6 +135,44 @@ describe("routes globals: ambient types resolve with zero import", () => {
     expect(diagnostics).toHaveLength(0);
   });
 
+  it("Token(addr) is CALLABLE zero-import — the wrapper spelling typechecks in a typed body, not only as source text", () => {
+    // The wrapper is the headline spelling, and `globals.generated.ts` exists so a TYPED CLOSURE
+    // body typechecks. Before `TokenFactory` was intersected in, `Token` was declared as the
+    // object-only `TokenApi` and this was TS2349 "has no call signatures" — so the rewrite only
+    // ever fired for bodies supplied as strings, and the typed form was rejected by tsc before
+    // `rewriteTokenFactory` could ever see it.
+    const diagnostics = typecheckProbe(`
+      const spender = 0x1111111111111111111111111111111111111111n;
+      const addr = 0x2222222222222222222222222222222222222222n;
+      Token(addr).approve(spender, 5n);
+      Token(addr).transfer(spender, 5n);
+      const bal: bigint = Token(addr).balanceOf(spender);
+      const bound = Token(addr);
+      bound.approve(spender, 5n);
+      export {};
+    `);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("negative control: `Token(addr)` is not `any` — an unknown method on the result is a real TS2339", () => {
+    // Without this, the test above would pass just as happily if the call returned `any`.
+    const diagnostics = typecheckProbe(`
+      const x: unknown = Token(0x1111111111111111111111111111111111111111n).nope(1n);
+      export {};
+    `);
+    expect(diagnostics.some((d) => d.code === 2339)).toBe(true);
+  });
+
+  it("Token keeps its object API alongside the call signature — both capabilities, one global", () => {
+    const diagnostics = typecheckProbe(`
+      const viaCall: unknown = Token(0x1111111111111111111111111111111111111111n).approve(0x2n, 1n);
+      const viaApi: unknown = Token.transfer({ token: "0x1", to: "0x2", amount: 1n });
+      const constant: bigint = Token.TOKEN_PROGRAM;
+      export {};
+    `);
+    expect(diagnostics).toHaveLength(0);
+  });
+
   it("negative control: an unknown property on Token is a real error (TS2339, not silently `any`)", () => {
     const diagnostics = typecheckProbe(`
       const x: unknown = Token.transfer({ token: "0x1", to: "0x2", amount: 1n }).nope;

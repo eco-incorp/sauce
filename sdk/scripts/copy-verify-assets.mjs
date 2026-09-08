@@ -35,6 +35,15 @@ const ASSETS = [
   // as its own compiled JS (see `src/plugin/index.ts`), so it must land in `dist/plugin/`.
   // `tsc` only emits the compiled `.js`/`.d.ts` and doesn't copy JSON to outDir.
   { subdir: "plugin", file: "manifest.json" },
+  // `@sauce/token` — the vendored SauceScript stdlib served on the route path (`rs-compile.ts`'s
+  // `SDK_STD_PACKAGES`, resolved relative to `dist/std` once built). SauceScript source + its ABI,
+  // never TypeScript `tsc` parses, so the four files must be copied verbatim. `dist/` is in the
+  // package `files` list, so this is what makes `@sauce/token` resolvable for a published consumer's
+  // own `openRoute` compile — not only the in-repo suites.
+  { subdir: join("std", "token"), file: "token.evm.js" },
+  { subdir: join("std", "token"), file: "token.svm.js" },
+  { subdir: join("std", "token"), file: "erc20.abi.json" },
+  { subdir: join("std", "token"), file: "package.json" },
 ];
 
 for (const { subdir, file } of ASSETS) {

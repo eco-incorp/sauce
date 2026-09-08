@@ -14,6 +14,8 @@ import { compileSauceRoute } from "../src/routes/sauce-route.js";
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const AMBIENT_FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "rs-ambient");
+/** The SPL Token program — any valid base58 program id serves as an SVM execution buffer here. */
+const SVM_BUFFER = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" as const;
 
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
@@ -29,13 +31,13 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
 }
 
 describe("chainAmbient", () => {
-  // Empty is the only satisfiable value today: a manifest entry is activated for every openRoute
-  // compile, and nothing openRoute passes lets `rs-compile.ts` resolve a bare specifier — see
-  // `plugin/index.ts`. The default-path test at the bottom of this file is what fails if that
-  // changes without the resolver changing with it.
-  it("is empty for every chain — no ambient module resolves on openRoute's default path yet", () => {
-    expect(chainAmbient(requireChain("base"))).toEqual([]);
-    expect(chainAmbient(requireChain("solana"))).toEqual([]);
+  // `@sauce/token` ships as the default ambient MODULE: it is activated for every openRoute compile,
+  // resolvable because `rs-compile.ts` maps it to the SDK's own vendored copy (`SDK_STD_PACKAGES`)
+  // regardless of baseDirs. The default-path test at the bottom of this file proves an UNUSED
+  // ambient module leaves bytecode untouched.
+  it("is ['@sauce/token'] for every chain — the token stdlib is the default ambient module", () => {
+    expect(chainAmbient(requireChain("base"))).toEqual(["@sauce/token"]);
+    expect(chainAmbient(requireChain("solana"))).toEqual(["@sauce/token"]);
   });
 });
 
@@ -57,7 +59,9 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
 
     const direct = compileSauceRoute(requireChain("base"), bareBody, { pot: POT }, {
       baseDirs: [AMBIENT_FIXTURE_DIR],
-      ambient: ["./math-helpers.js"],
+      // openRoute merges chainAmbient() (`@sauce/token`) with the caller's list -- match that merge
+      // here so this is a true apples-to-apples bytecode comparison, not a false negative.
+      ambient: ["@sauce/token", "./math-helpers.js"],
       // openRoute also threads chain-scoped scalar defines (chainId/CHAIN_ID) underneath -- match
       // them here so this is a true apples-to-apples bytecode comparison, not a false negative.
       defines: { chainId: BigInt(requireChain("base").id), CHAIN_ID: BigInt(requireChain("base").id) },
@@ -66,17 +70,51 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     expect(Array.from(viaOpenRoute.compiled.bytecode[0]!)).toEqual(Array.from(direct.compiled.bytecode[0]!));
   });
 
-  it("default (empty ambient bundle): bytecode is unaffected by this feature", () => {
+  it("default bundle (@sauce/token, UNUSED): bytecode is byte-identical to no ambient module at all", () => {
     const built = openRoute("base", "return chainId;", evmOptions()).reward(0n);
     expect(built.compiled.bytecode.length).toBe(1);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
 
-    // Byte-identical to compiling with only the chain defines openRoute threads underneath --
-    // routes-ambient.test.ts pins the same equivalence for chainDefines alone; this re-confirms it
-    // holds now that the ambient merge sits in the same code path.
+    // The default `@sauce/token` ambient module is broadcast into this compile but the program uses
+    // none of its exports, so it treeshakes away -- the bytecode is byte-identical to compiling with
+    // NO ambient module, only the chain defines openRoute threads underneath. This is what proves the
+    // default flip costs a token-free route nothing (routes-ambient.test.ts pins the chainDefines
+    // half of the same equivalence).
     const withoutAmbient = compileSauceRoute(requireChain("base"), "return chainId;", { pot: POT }, {
       defines: { chainId: BigInt(requireChain("base").id), CHAIN_ID: BigInt(requireChain("base").id) },
     });
+    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(Array.from(withoutAmbient.compiled.bytecode[0]!));
+  });
+
+  it("default bundle on an SVM destination too: an unused @sauce/token treeshakes to the same bytes", () => {
+    // The EVM twin above proved the default flip is free for a token-free EVM route. `chainAmbient`
+    // returns the same list for every chain, so the SVM arm (`token.svm.js`) is broadcast into an
+    // SVM compile just as unconditionally — and a treeshake regression there would be invisible to
+    // the EVM assertion.
+    const body = "return chainId;";
+    const built = openRoute("solana", body, {
+      execution: { buffer: SVM_BUFFER, accounts: [] },
+      deadline: 2000n,
+      portal: PORTAL,
+      source: "base",
+      creator: "0x3333333333333333333333333333333333333333",
+      prover: "0x4444444444444444444444444444444444444444",
+      rewardDeadline: 1000n,
+    }).reward(0n);
+    expect(built.compiled.bytecode.length).toBe(1);
+    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+
+    const withoutAmbient = compileSauceRoute(
+      requireChain("solana"),
+      body,
+      { buffer: SVM_BUFFER, accounts: [] },
+      {
+        defines: {
+          chainId: BigInt(requireChain("solana").id),
+          CHAIN_ID: BigInt(requireChain("solana").id),
+        },
+      },
+    );
     expect(Array.from(built.compiled.bytecode[0]!)).toEqual(Array.from(withoutAmbient.compiled.bytecode[0]!));
   });
 });

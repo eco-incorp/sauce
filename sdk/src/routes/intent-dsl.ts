@@ -414,8 +414,8 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
   const mergedDefines = { ...ambientDefines, ...options.defines, ...options.compile?.defines };
 
   // P7 — the ambient-MODULE half of the chain bundle (`ambientDefines` above is the scalar half).
-  // `chainAmbient(destination)` is the plugin's chain-scoped ambient module list (empty by default
-  // on this branch, see `ambient.ts#chainAmbient`/`plugin/index.ts`'s own notes); merged with any
+  // `chainAmbient(destination)` is the plugin's chain-scoped ambient module list (`["@sauce/token"]`
+  // by default, see `ambient.ts#chainAmbient`/`plugin/index.ts`'s own notes); merged with any
   // caller-supplied `options.compile.ambient` (deduped -- either side may legitimately name the
   // same module).
   const mergedAmbient = Array.from(new Set([...chainAmbient(destination), ...(options.compile?.ambient ?? [])]));
