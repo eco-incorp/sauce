@@ -117,7 +117,10 @@ export interface SauceSvmClient {
    * dedicated finalize sent only after every write confirmed, each tx on a fresh
    * blockhash). The buffer at that seed must not be finalized — close it first
    * (closeBuffer) to recompile at the same address. The same seed is resumable:
-   * it always derives the same address.
+   * it always derives the same address, and the content-hash pin is recorded
+   * just before the finalize send, so a run that dies after the buffer is
+   * finalized on-chain still leaves executeStaged/simulateStaged able to
+   * address it.
    */
   stageBuffer(seed: Uint8Array, bytecode: Uint8Array): Promise<StagedBuffer>;
   /** Closes the buffer at 32-byte `seed`, refunding its rent to the payer (the recompile path). */
@@ -374,9 +377,14 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
         length: bytecode.length,
         sha256,
       });
-      signatures.push((await sendInstructions([finalize])).signature);
-
+      // Pinned immediately before the finalize send: the only step that follows
+      // is sendExecute's post-confirmation meta read, so the pin survives a
+      // throw there and still leaves the finalized buffer addressable. Any
+      // earlier, and a restage that cannot land — the buffer at this seed is
+      // already finalized — would overwrite the good pin of the bytes the
+      // buffer actually holds.
       stagedHashes.set(address, sha256);
+      signatures.push((await sendInstructions([finalize])).signature);
 
       return { address, seed, sha256, signatures };
     },
