@@ -1,7 +1,26 @@
 import { AccountRole, address, generateKeyPairSigner, getAddressDecoder, getCompiledTransactionMessageDecoder } from '@solana/kit';
 import type { Blockhash, TransactionSigner } from '@solana/kit';
-import { createAltWithAddresses, extendAlt, getTransactionSize, selectAltAddresses, waitForAltActive } from '../../src/svm/index.js';
+import type { Address } from '@solana/kit';
+import {
+  LOOKUP_TABLE_MAX_ADDRESSES,
+  createAltWithAddresses,
+  extendAlt,
+  getTransactionSize,
+  selectAltAddresses,
+  waitForAltActive,
+} from '../../src/svm/index.js';
 import type { SignedExecuteTransaction } from '../../src/svm/index.js';
+
+/** `count` unique deterministic addresses (a 16-bit counter in the first two bytes). */
+function distinctAddresses(count: number): Address[] {
+  return Array.from({ length: count }, (_, i) => {
+    const bytes = new Uint8Array(32);
+    bytes[0] = i & 0xff;
+    bytes[1] = (i >> 8) & 0xff;
+
+    return getAddressDecoder().decode(bytes);
+  });
+}
 
 const A = address('So11111111111111111111111111111111111111112');
 const B = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
@@ -63,13 +82,17 @@ describe('createAltWithAddresses', () => {
     return rpc as unknown as Parameters<typeof createAltWithAddresses>[0]['rpc'];
   }
 
-  async function runWith(payer: TransactionSigner, authority: TransactionSigner): Promise<SignedExecuteTransaction[]> {
+  async function runWith(
+    payer: TransactionSigner,
+    authority: TransactionSigner,
+    toAdd: readonly Address[] = addresses,
+  ): Promise<SignedExecuteTransaction[]> {
     const sent: SignedExecuteTransaction[] = [];
     await createAltWithAddresses({
       rpc: altRpcStub(),
       payer,
       authority,
-      addresses,
+      addresses: toAdd,
       sendAndConfirm: async transaction => {
         sent.push(transaction);
       },
@@ -109,6 +132,34 @@ describe('createAltWithAddresses', () => {
     expect(extendedCount(sent[1])).toBe(27);
     expect(extendedCount(sent[2])).toBe(3);
     for (const transaction of sent) expect(getTransactionSize(transaction)).toBeLessThanOrEqual(1232);
+  });
+
+  it('fills a table to exactly the on-chain 256-address capacity', async () => {
+    const payer = await generateKeyPairSigner();
+
+    const sent = await runWith(payer, payer, distinctAddresses(LOOKUP_TABLE_MAX_ADDRESSES));
+
+    expect(sent).toHaveLength(10); // create + ceil(256 / 30) extends
+    expect(extendedCount(sent[9])).toBe(16);
+    for (const transaction of sent) expect(getTransactionSize(transaction)).toBeLessThanOrEqual(1232);
+  });
+
+  it('rejects one address past capacity before sending anything (a partial table cannot be un-funded)', async () => {
+    const payer = await generateKeyPairSigner();
+    const sent: SignedExecuteTransaction[] = [];
+
+    await expect(
+      createAltWithAddresses({
+        rpc: altRpcStub(),
+        payer,
+        authority: payer,
+        addresses: distinctAddresses(LOOKUP_TABLE_MAX_ADDRESSES + 1),
+        sendAndConfirm: async transaction => {
+          sent.push(transaction);
+        },
+      }),
+    ).rejects.toThrow('cannot create an address lookup table with 257 addresses: one table holds at most 256');
+    expect(sent).toHaveLength(0);
   });
 });
 
@@ -178,6 +229,35 @@ describe('extendAlt', () => {
 
     expect(sent).toHaveLength(0);
     expect(slot).toBe(200n);
+  });
+
+  it('appends exactly the on-chain 256-address capacity', async () => {
+    const payer = await generateKeyPairSigner();
+
+    const { sent } = await runExtend(payer, payer, distinctAddresses(LOOKUP_TABLE_MAX_ADDRESSES));
+
+    expect(sent).toHaveLength(9); // ceil(256 / 30)
+    expect(extendedCount(sent[8])).toBe(16);
+    for (const transaction of sent) expect(getTransactionSize(transaction)).toBeLessThanOrEqual(1232);
+  });
+
+  it('rejects one address past capacity before sending anything (a partial table cannot be un-funded)', async () => {
+    const payer = await generateKeyPairSigner();
+    const sent: SignedExecuteTransaction[] = [];
+
+    await expect(
+      extendAlt({
+        rpc: altRpcStub(),
+        payer,
+        authority: payer,
+        lookupTableAddress: TABLE,
+        addresses: distinctAddresses(LOOKUP_TABLE_MAX_ADDRESSES + 1),
+        sendAndConfirm: async transaction => {
+          sent.push(transaction);
+        },
+      }),
+    ).rejects.toThrow(`cannot extend lookup table ${TABLE} with 257 addresses: one table holds at most 256`);
+    expect(sent).toHaveLength(0);
   });
 });
 

@@ -2,7 +2,7 @@ import { createSolanaRpc, createSolanaRpcSubscriptions, sendAndConfirmTransactio
 import type { Address, AddressesByLookupTableAddress, Commitment, Instruction, Signature, TransactionSigner } from '@solana/kit';
 import type { AccountManifest } from 'sauce-compiler';
 import type { ArgsLayout, ArgValue } from './layout.js';
-import { createAltWithAddresses, extendAlt, fetchAlt, waitForAltActive } from './alt.js';
+import { LOOKUP_TABLE_MAX_ADDRESSES, createAltWithAddresses, extendAlt, fetchAlt, waitForAltActive } from './alt.js';
 import { encodePayloadArgs } from './args.js';
 import {
   buildCloseBufferInstruction,
@@ -105,7 +105,9 @@ export interface SauceSvmClient {
    * `addresses`, waits for it to warm up, and returns it in the shape the
    * execute/simulate `lookupTables` option consumes. Signers must NOT be in
    * `addresses` — they have to stay static message accounts. Idempotent on the
-   * existing path: an already-covering table sends no transactions.
+   * existing path: an already-covering table sends no transactions. A set that
+   * would take the table past LOOKUP_TABLE_MAX_ADDRESSES throws before any
+   * transaction is sent — a partially-extended table cannot be un-funded.
    */
   ensureLookupTable(addresses: readonly Address[], opts?: EnsureLookupTableOpts): Promise<EnsuredLookupTable>;
   simulate(bytecode: Uint8Array, manifest: AccountManifest, resolution: AccountResolution, opts?: SimulateOpts): Promise<SimulateExecuteResult>;
@@ -271,6 +273,11 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
       const current = (await fetchAlt(rpc, opts.existing))[opts.existing] ?? [];
       const have = new Set(current);
       const missing = deduped.filter((address) => !have.has(address));
+      if (current.length + missing.length > LOOKUP_TABLE_MAX_ADDRESSES) {
+        throw new Error(
+          `lookup table ${opts.existing} holds ${current.length} addresses and cannot take ${missing.length} more: one table holds at most ${LOOKUP_TABLE_MAX_ADDRESSES}`,
+        );
+      }
       if (missing.length > 0) {
         const { lastExtendedSlot } = await extendAlt({
           rpc,
