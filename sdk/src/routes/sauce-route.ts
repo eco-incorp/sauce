@@ -18,12 +18,19 @@
  * ONE COOK = ONE PROGRAM: `V12Pot.cook` only ever executes `ingredients[0]`, so a route body is
  * always compiled to exactly one bytecode blob (`compiled.bytecode[0]`) and slotted as exactly one
  * `Call` — a multi-statement body is one program with N statements, never N cooks.
+ *
+ * THE SVM CALL COMMITS TO THE COMPILE: an EVM call carries the compiled bytecode itself, but a staged
+ * SVM call names only a buffer address, so this module injects `sha256(compiled.bytecode[0])` as the
+ * execution's `expectedSha256` — the engine's content-hash pin. Without it the returned calldata says
+ * nothing about the program just compiled and the engine would run whatever those bytes turn out to be.
+ * See `svmExecutionPinnedToCompile`.
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import { bytesToHex } from "viem";
 
 import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
+import { bytecodeSha256 } from "../svm/instructions.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs } from "./rs-compile.js";
 import { rewriteTokenMembers } from "./token-rewrite.js";
@@ -81,7 +88,9 @@ export interface SauceEvmExecutionInput {
 /**
  * Verbatim the existing `sauce-calls.ts#SauceSvmCallParams` shape (`StagedBufferRef` + `accounts` +
  * `programId?`/`executor?`) — a route's SVM execution input IS a staged-buffer execution, no new
- * fields needed.
+ * fields needed. `expectedSha256` is the one field a caller normally leaves off here: on the managed
+ * path `compileSauceRoute` fills it from the compile (`svmExecutionPinnedToCompile`), and a value that
+ * disagrees with the compiled program is rejected.
  */
 export type SauceSvmExecutionInput = SauceSvmCallParams;
 
@@ -108,6 +117,37 @@ export function wrapSauceBody(sauce: string): string {
 
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
+}
+
+/**
+ * Binds a staged SVM execution to the program just compiled, via the engine's content-hash pin.
+ *
+ * A caller-supplied `expectedSha256` must AGREE with the compile — a pin naming other bytes would have
+ * the call execute a program this function did not produce, so the disagreement is an error, not an
+ * override. `slice` is the FOREIGN path (a buffer whose bytecode extent the caller names, staged by
+ * something other than this compile), where a pin over the compiled program is meaningless: that
+ * execution is passed through untouched.
+ */
+function svmExecutionPinnedToCompile(
+  execution: SauceSvmExecutionInput,
+  bytecode: Uint8Array,
+): SauceSvmExecutionInput {
+  if (execution.slice !== undefined) return execution;
+
+  const pin = bytecodeSha256(bytecode);
+  if (execution.expectedSha256 === undefined) return { ...execution, expectedSha256: pin };
+
+  const compiledPinHex = bytesToHex(pin);
+  const callerPinHex = bytesToHex(execution.expectedSha256);
+  if (callerPinHex !== compiledPinHex) {
+    throw new Error(
+      `compileSauceRoute: execution.expectedSha256 ${callerPinHex} does not match sha256 of the ` +
+        `compiled program ${compiledPinHex} — the call would pin a buffer holding different bytecode. ` +
+        "Stage `compiled.bytecode[0]` and drop the pin (it is injected from the compile), or fix the pin.",
+    );
+  }
+
+  return execution;
 }
 
 /**
@@ -213,7 +253,7 @@ export function compileSauceRoute(
           "in `compiled.bytecode[0]`.",
       );
     }
-    const call = buildSauceSvmCall(svmExecution);
+    const call = buildSauceSvmCall(svmExecutionPinnedToCompile(svmExecution, compiled.bytecode[0]!));
     return { calls: [call], compiled, source };
   }
 
