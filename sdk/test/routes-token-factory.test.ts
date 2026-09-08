@@ -62,6 +62,38 @@ describe("rewriteTokenFactory (unit)", () => {
     expect(rewriteTokenFactory(src)).toEqual({ source: src, rewrote: false, sites: 0 });
   });
 
+  // Every form that BINDS the name, not just the two that were originally checked. `import` and
+  // `class` used to fall through and get rewritten, which silently redirected a user's own `Token`
+  // call to an ERC20 they never named — the worst shape of this bug, since it produces working
+  // bytecode for the wrong contract rather than an error.
+  it.each([
+    ["let", "let Token = mine;"],
+    ["const", "const Token = mine;"],
+    ["var", "var Token = mine;"],
+    ["function declaration", "function Token(x) { return x; }"],
+    ["class declaration", "class Token {}"],
+    ["named import", 'import { Token } from "./mine.js";'],
+    ["aliased import", 'import { thing as Token } from "./mine.js";'],
+    ["default import", 'import Token from "./mine.js";'],
+    ["namespace import", 'import * as Token from "./mine.js";'],
+    ["object destructure", "const { Token } = mine;"],
+    ["renamed object destructure", "const { thing: Token } = mine;"],
+    ["array destructure", "const [Token] = mine;"],
+    ["defaulted destructure", "const { Token = fallback } = mine;"],
+    ["rest destructure", "const { ...Token } = mine;"],
+  ])("leaves every `Token(...)` alone when the name is bound by a %s", (_form, declaration) => {
+    const src = `${declaration}\nconst x = Token(0x11n).approve(a, b);`;
+    expect(rewriteTokenFactory(src)).toEqual({ source: src, rewrote: false, sites: 0 });
+  });
+
+  it.each([
+    ["a parameter", "function f(Token) { return Token(0x11n).approve(a, b); }"],
+    ["a destructured parameter", "function f({ Token }) { return Token(0x11n).approve(a, b); }"],
+    ["a catch parameter", "try { g(); } catch (Token) { Token(0x11n).approve(a, b); }"],
+  ])("leaves every `Token(...)` alone when the name is bound by %s", (_form, src) => {
+    expect(rewriteTokenFactory(src)).toEqual({ source: src, rewrote: false, sites: 0 });
+  });
+
   it("no `Token` at all: a no-op that never even parses", () => {
     const src = "IERC20.at(0x1).approve(a, b);";
     expect(rewriteTokenFactory(src)).toEqual({ source: src, rewrote: false, sites: 0 });

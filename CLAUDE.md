@@ -223,9 +223,11 @@ those two are gated. `src/std/token` now **ships**: `copy-verify-assets.mjs` cop
 `@sauce/token` to this vendored copy — see the next paragraph.
 
 `@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
-list (`["@sauce/token"]`) is handed by `chainAmbient()` to EVERY `openRoute`/`compileSauceRoute`
-compile, so its exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any route
-body with **zero import**. This resolves because `rs-compile.ts`'s `SDK_STD_PACKAGES` maps the bare
+list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
+exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any route body opened that
+way with **zero import**. `openRoute` and no further: `chainAmbient` has exactly one call site
+(`intent-dsl.ts`), and `compileSauceRoute` passes its caller's `ambient` straight through without
+merging this list in — so a direct `compileSauceRoute(..., {})` gets no ambient module at all. This resolves because `rs-compile.ts`'s `SDK_STD_PACKAGES` maps the bare
 `@sauce/token` specifier to the SDK's own vendored `std/token` dir (`STD_ROOT`, = `dist/std` once
 built) regardless of `baseDirs` — an ambient module the compile can't resolve makes EVERY route
 throw, so that list must only ever name modules the SDK resolves itself. Two DISTINCT mechanisms

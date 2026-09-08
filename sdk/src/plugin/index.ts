@@ -29,18 +29,21 @@ const manifestPath = join(thisDir, "manifest.json");
  *     whose exported functions/consts are broadcast into every route with no `import` line.
  *
  * `ambient` now ships with `@sauce/token`: `chainAmbient()` (routes/ambient.ts) hands this list to
- * EVERY `openRoute` compile, so every route can call the token stdlib's `approve`/`transfer`/
- * `balanceOf`/... with zero import. This is only safe because `rs-compile.ts` resolves `@sauce/token`
- * to the SDK's OWN vendored copy (`SDK_STD_PACKAGES`, from `dist/std/token` when built) regardless of
- * `baseDirs` — a specifier the compile can't resolve makes EVERY route throw
- * `failed to import module "<name>"`, so an entry is not free to add: it must be resolvable on the
- * route path first (an npm package a consumer may not have installed is exactly what this list must
- * NOT name).
+ * every `openRoute` compile, so those routes can call the token stdlib's `approve`/`transfer`/
+ * `balanceOf`/... with zero import. **The `openRoute` path only** — `chainAmbient` has that one call
+ * site (`intent-dsl.ts`), and `compileSauceRoute` forwards whatever `ambient` its caller passed
+ * without merging this list in, so a direct `compileSauceRoute(..., {})` gets no ambient module.
+ * This is only safe because `rs-compile.ts` resolves `@sauce/token` to the SDK's OWN vendored copy
+ * (`SDK_STD_PACKAGES`, from `dist/std/token` when built) regardless of `baseDirs` — a specifier the
+ * compile can't resolve makes EVERY route throw `failed to import module "<name>"`, so an entry is
+ * not free to add: it must be resolvable on the route path first (an npm package a consumer may not
+ * have installed is exactly what this list must NOT name).
  *
- * NOTE: the token FUNCTION surface is what's live (`approve(token, spender, amount)`), NOT a
- * `Token(addr).approve(...)` wrapper — the published compiler's M1 subset rejects a method call on a
- * call result, so the wrapper is gated on a compiler feature. Once `@sauce/token` can export a
- * `Token`, it appears globally for free, already broadcast from here.
+ * Both token surfaces are live: the FUNCTION form (`approve(token, spender, amount)`), exported by
+ * the ambient module itself, and the `Token(addr).approve(...)` WRAPPER. The wrapper needs no
+ * compiler feature — `token-rewrite.ts#rewriteTokenFactory` replaces the callee with `IERC20.at`
+ * before the compiler runs, so it never sees a method call on a call result (which its M1 subset
+ * does reject).
  */
 export interface SaucePlugin {
   /** Ambient MODULE specifiers — library modules whose exports broadcast into every compile with no

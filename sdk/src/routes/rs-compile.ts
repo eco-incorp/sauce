@@ -33,6 +33,10 @@ const ENTRY = "main.js";
  */
 const STD_ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), "..", "std");
 
+/** The vendored-stdlib root, exported so a test can build the `"." + <abs>` shapes
+ *  `vendoredStdlibPath` decides between without restating how the root is derived. */
+export const VENDORED_STD_ROOT = STD_ROOT;
+
 /**
  * The SDK stdlib packages resolvable by their bare specifier on the route path, mapped to their
  * directory under `STD_ROOT`. These resolve to the SDK's OWN vendored copy regardless of `baseDirs`
@@ -103,6 +107,25 @@ function toInlineContracts(contracts: ContractsConfig | undefined): Array<[strin
 }
 
 /**
+ * The absolute path a `"." + <abs>` specifier names, when it names a file inside the vendored
+ * stdlib — otherwise `undefined`.
+ *
+ * The compiler prefixes an importer-joined specifier with ".", so a vendored package's own relative
+ * import (`./erc20.abi.json`) arrives as `"."` + its absolute location under `STD_ROOT`. This is
+ * **disambiguation, not containment**: `makeResolve` already serves any absolute path directly, so
+ * the `STD_ROOT` test is not a sandbox and is not load-bearing for safety. What it decides is which
+ * of two same-looking shapes this is — a stripped absolute stdlib path, or a genuine `./rel` from
+ * an entry program, which must fall through to `baseDirs` instead of being read as a path from the
+ * filesystem root.
+ */
+export function vendoredStdlibPath(path: string): string | undefined {
+  if (!path.startsWith("./")) return undefined;
+  const abs = path.slice(1);
+
+  return isAbsolute(abs) && abs.startsWith(STD_ROOT) ? abs : undefined;
+}
+
+/**
  * A `resolve` that serves `source` as the entry and everything else from `baseDirs` — mirroring
  * multi-root probing, but simpler: confirmed empirically that the compiler hands `resolve` a
  * specifier ALREADY joined
@@ -131,10 +154,8 @@ function makeResolve(source: string, baseDirs: readonly string[]): (path: string
     // (`./erc20.abi.json`) therefore arrives as "." + "/abs/path". Strip the single leading "." and
     // serve it ONLY when the remainder is an absolute path inside STD_ROOT -- so a genuine "./rel"
     // (an entry program's own import, served from `baseDirs` below) is never mistaken for one.
-    if (path.startsWith("./")) {
-      const abs = path.slice(1);
-      if (isAbsolute(abs) && abs.startsWith(STD_ROOT)) return readFile(abs);
-    }
+    const vendored = vendoredStdlibPath(path);
+    if (vendored !== undefined) return readFile(vendored);
     for (const dir of baseDirs) {
       const bytes = readFile(resolvePath(dir, path));
       if (bytes !== undefined) return bytes;

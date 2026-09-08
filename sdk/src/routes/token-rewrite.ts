@@ -195,10 +195,12 @@ export interface TokenFactoryResult {
  * variable, an ambient `USDC` define), so — unlike the symbol sugar — it does NOT depend on the
  * token-symbol map, and works on every EVM chain including registry-less ones.
  *
- * Shadow-safe: a user who declares their own `Token` (let/const/function/param) anywhere in the
- * program owns the name, and EVERY `Token(...)` call is then left untouched — the same conservative
- * whole-program rule the symbol rewrite applies. Purely textual, acorn-range-driven, like the rest
- * of this module.
+ * Shadow-safe: a user who declares their own `Token` anywhere in the program owns the name, and
+ * EVERY `Token(...)` call is then left untouched — the same conservative whole-program rule the
+ * symbol rewrite applies. `collectDeclaredNames` decides that, and it covers every binding form,
+ * `import { Token }` and `class Token` included: an imported `Token` is the user's own by any
+ * reading, and rewriting past it would silently redirect their call to an ERC20 they never named.
+ * Purely textual, acorn-range-driven, like the rest of this module.
  */
 export function rewriteTokenFactory(source: string): TokenFactoryResult {
   // Cheap bail before parsing: no `Token` token, nothing to do (a mention in a comment/string still
@@ -208,17 +210,9 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
   }
   const program = acorn.parse(source, { ecmaVersion: "latest", sourceType: "module" }) as unknown as AstNode;
   // A locally-declared `Token` shadows the global wrapper — skip the whole program, conservatively.
-  // `collectDeclaredNames` covers `let`/`const Token` and a param named `Token`; a `function Token`
-  // declaration's OWN name is not a `VariableDeclarator`, so it is checked here as well.
-  let shadowed = collectDeclaredNames(program).has(TOKEN_FACTORY_NAME);
-  if (!shadowed) {
-    walk(program, (n) => {
-      if (n.type !== "FunctionDeclaration") return;
-      const id = (n as { id?: AstNode }).id as { name?: string } | undefined;
-      if (id?.name === TOKEN_FACTORY_NAME) shadowed = true;
-    });
-  }
-  if (shadowed) {
+  // Every binding form counts, which is `collectDeclaredNames`'s whole job; this used to add its own
+  // `FunctionDeclaration` walk on top and still missed `import { Token }` and `class Token`.
+  if (collectDeclaredNames(program).has(TOKEN_FACTORY_NAME)) {
     return { source, rewrote: false, sites: 0 };
   }
 

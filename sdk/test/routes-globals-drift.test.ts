@@ -49,8 +49,12 @@ describe("routes globals ambient .d.ts drift guard", () => {
     expect(constDecls).toHaveLength(canonicalChains.length + 2);
   });
 
-  it("the fixed `Token` global is declared exactly once, typed as the real TokenApi (not any)", () => {
-    const matches = committed.match(/\bconst Token: TokenApi;/g) ?? [];
+  it("the fixed `Token` global is declared exactly once, as the real TokenApi INTERSECTED with its call signature", () => {
+    // Both halves are load-bearing and pinned together: `TokenApi` is the object API (and the
+    // reason this is not `any`), `TokenFactory` is the call signature that makes `Token(addr)`
+    // typecheck in a typed closure body. Dropping either silently removes a capability —
+    // `routes-globals-ambient-types.test.ts` is what proves each one actually works.
+    const matches = committed.match(/\bconst Token: TokenApi & TokenFactory;/g) ?? [];
     expect(matches).toHaveLength(1);
   });
 

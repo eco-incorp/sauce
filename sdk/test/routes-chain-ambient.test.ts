@@ -14,6 +14,8 @@ import { compileSauceRoute } from "../src/routes/sauce-route.js";
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const AMBIENT_FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "rs-ambient");
+/** The SPL Token program — any valid base58 program id serves as an SVM execution buffer here. */
+const SVM_BUFFER = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" as const;
 
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
@@ -81,6 +83,38 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     const withoutAmbient = compileSauceRoute(requireChain("base"), "return chainId;", { pot: POT }, {
       defines: { chainId: BigInt(requireChain("base").id), CHAIN_ID: BigInt(requireChain("base").id) },
     });
+    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(Array.from(withoutAmbient.compiled.bytecode[0]!));
+  });
+
+  it("default bundle on an SVM destination too: an unused @sauce/token treeshakes to the same bytes", () => {
+    // The EVM twin above proved the default flip is free for a token-free EVM route. `chainAmbient`
+    // returns the same list for every chain, so the SVM arm (`token.svm.js`) is broadcast into an
+    // SVM compile just as unconditionally — and a treeshake regression there would be invisible to
+    // the EVM assertion.
+    const body = "return chainId;";
+    const built = openRoute("solana", body, {
+      execution: { buffer: SVM_BUFFER, accounts: [] },
+      deadline: 2000n,
+      portal: PORTAL,
+      source: "base",
+      creator: "0x3333333333333333333333333333333333333333",
+      prover: "0x4444444444444444444444444444444444444444",
+      rewardDeadline: 1000n,
+    }).reward(0n);
+    expect(built.compiled.bytecode.length).toBe(1);
+    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+
+    const withoutAmbient = compileSauceRoute(
+      requireChain("solana"),
+      body,
+      { buffer: SVM_BUFFER, accounts: [] },
+      {
+        defines: {
+          chainId: BigInt(requireChain("solana").id),
+          CHAIN_ID: BigInt(requireChain("solana").id),
+        },
+      },
+    );
     expect(Array.from(built.compiled.bytecode[0]!)).toEqual(Array.from(withoutAmbient.compiled.bytecode[0]!));
   });
 });
