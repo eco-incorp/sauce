@@ -8,7 +8,10 @@ export const ControllerABI = [
       { name: "_powerPerpAmount", type: "uint256" },
       { name: "_uniTokenId", type: "uint256" },
     ],
-    outputs: [{ name: "", type: "uint256" }, { name: "", type: "uint256" }],
+    outputs: [
+      { name: "", type: "uint256" },
+      { name: "", type: "uint256" },
+    ],
   },
   {
     name: "burnPowerPerpAmount",

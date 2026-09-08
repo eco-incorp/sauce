@@ -23,7 +23,15 @@ import { bytecodeSha256 } from "../src/svm/instructions.js";
 import { compileSauceRoute, wrapSauceBody } from "../src/routes/sauce-route.js";
 import { predictVaultAddress } from "../src/routes/vault.js";
 import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
-import { approvalTxs, fundTx, intentHashCall, intentVaultAddressCall, isIntentFundedCall, publishAndFundTx, publishTx } from "../src/routes/portal.js";
+import {
+  approvalTxs,
+  fundTx,
+  intentHashCall,
+  intentVaultAddressCall,
+  isIntentFundedCall,
+  publishAndFundTx,
+  publishTx,
+} from "../src/routes/portal.js";
 import type { RewardInput, RouteInput } from "../src/routes/types.js";
 import { v12Pot } from "../src/evm/engine.js";
 
@@ -68,7 +76,9 @@ describe("openRoute: bare-body wrapping", () => {
 
     expect(bare.compiled.bytecode.length).toBe(explicit.compiled.bytecode.length);
     for (let i = 0; i < explicit.compiled.bytecode.length; i++) {
-      expect(Array.from(bare.compiled.bytecode[i]!)).toEqual(Array.from(explicit.compiled.bytecode[i]!));
+      expect(Array.from(bare.compiled.bytecode[i]!)).toEqual(
+        Array.from(explicit.compiled.bytecode[i]!),
+      );
     }
   });
 
@@ -82,8 +92,16 @@ describe("openRoute: bare-body wrapping", () => {
 describe("openRoute: precalls precede the compiled call", () => {
   it("keeps precalls first, in order, followed by the sauce call", () => {
     const precalls = [
-      { target: "0x5555555555555555555555555555555555555555" as Hex, data: "0xaa" as Hex, value: 0n },
-      { target: "0x6666666666666666666666666666666666666666" as Hex, data: "0xbb" as Hex, value: 0n },
+      {
+        target: "0x5555555555555555555555555555555555555555" as Hex,
+        data: "0xaa" as Hex,
+        value: 0n,
+      },
+      {
+        target: "0x6666666666666666666666666666666666666666" as Hex,
+        data: "0xbb" as Hex,
+        value: 0n,
+      },
     ];
     const built = openRoute("ethereum", "return 1n;", evmOptions({ precalls })).reward(0n);
 
@@ -113,7 +131,12 @@ describe("openRoute: assembled intent shape", () => {
     };
     expect(built.intent.route).toEqual(normalizeRoute(expectedRoute));
 
-    const rewardInput: RewardInput = { deadline: 1000n, creator: CREATOR, prover: PROVER, nativeAmount: 4n };
+    const rewardInput: RewardInput = {
+      deadline: 1000n,
+      creator: CREATOR,
+      prover: PROVER,
+      nativeAmount: 4n,
+    };
     expect(built.intent.reward).toEqual(normalizeReward(rewardInput));
   });
 });
@@ -216,14 +239,22 @@ describe("compileSauceRoute: SVM content pin", () => {
   it("accepts a caller pin that matches the compiled program", () => {
     const { compiled } = compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts });
     const pin = bytecodeSha256(compiled.bytecode[0]!);
-    const { calls } = compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts, expectedSha256: pin });
+    const { calls } = compileSauceRoute("solana", SAUCE, {
+      buffer: BUFFER,
+      accounts,
+      expectedSha256: pin,
+    });
 
     expect(calls[0]).toEqual(buildSauceSvmCall({ buffer: BUFFER, accounts, expectedSha256: pin }));
   });
 
   it("throws when the caller pin names bytecode other than the compiled program", () => {
     expect(() =>
-      compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts, expectedSha256: new Uint8Array(32) }),
+      compileSauceRoute("solana", SAUCE, {
+        buffer: BUFFER,
+        accounts,
+        expectedSha256: new Uint8Array(32),
+      }),
     ).toThrow(/does not match sha256 of the compiled program/);
   });
 
@@ -263,9 +294,14 @@ describe("vault(): predictVaultAddress", () => {
 
   it("throws on a missing/short vaultInitCodeHash", () => {
     const intentHash = keccak256("0x01") as Hex;
-    expect(() => predictVaultAddress(intentHash, { portal: PORTAL, vaultInitCodeHash: "0x1234" as Hex })).toThrow();
     expect(() =>
-      predictVaultAddress(intentHash, { portal: PORTAL, vaultInitCodeHash: undefined as unknown as Hex }),
+      predictVaultAddress(intentHash, { portal: PORTAL, vaultInitCodeHash: "0x1234" as Hex }),
+    ).toThrow();
+    expect(() =>
+      predictVaultAddress(intentHash, {
+        portal: PORTAL,
+        vaultInitCodeHash: undefined as unknown as Hex,
+      }),
     ).toThrow();
   });
 });
@@ -309,15 +345,21 @@ describe("openRoute: fail-closed", () => {
   });
 
   it("throws naming 'deadline' when IntentOptions.deadline is missing", () => {
-    expect(() => openRoute("ethereum", "return 1n;", { portal: PORTAL, pot: POT } as never)).toThrow(/deadline/i);
+    expect(() =>
+      openRoute("ethereum", "return 1n;", { portal: PORTAL, pot: POT } as never),
+    ).toThrow(/deadline/i);
   });
 
   it("throws naming 'portal' when IntentOptions.portal is missing", () => {
-    expect(() => openRoute("ethereum", "return 1n;", { deadline: 2000n, pot: POT } as never)).toThrow(/portal/i);
+    expect(() =>
+      openRoute("ethereum", "return 1n;", { deadline: 2000n, pot: POT } as never),
+    ).toThrow(/portal/i);
   });
 
   it("throws naming 'execution' when neither .execution nor .pot is supplied", () => {
-    expect(() => openRoute("ethereum", "return 1n;", { deadline: 2000n, portal: PORTAL } as never)).toThrow(/execution/i);
+    expect(() =>
+      openRoute("ethereum", "return 1n;", { deadline: 2000n, portal: PORTAL } as never),
+    ).toThrow(/execution/i);
   });
 
   it("throws naming 'source' when the reward has no source and options has none either", () => {
@@ -328,7 +370,12 @@ describe("openRoute: fail-closed", () => {
 
   it("throws naming 'creator' when the reward has no creator and options has none either", () => {
     expect(() =>
-      openRoute("ethereum", "return 1n;", { pot: POT, deadline: 2000n, portal: PORTAL, source: "base" }).reward(0n),
+      openRoute("ethereum", "return 1n;", {
+        pot: POT,
+        deadline: 2000n,
+        portal: PORTAL,
+        source: "base",
+      }).reward(0n),
     ).toThrow(/creator/i);
   });
 
@@ -360,13 +407,21 @@ describe("BuiltIntent: sourcePortal defaulting", () => {
   });
 
   it("uses IntentOptions.sourcePortal when no per-call target is given", () => {
-    const built = openRoute("ethereum", "return 1n;", evmOptions({ sourcePortal: SOURCE_PORTAL })).reward(0n);
+    const built = openRoute(
+      "ethereum",
+      "return 1n;",
+      evmOptions({ sourcePortal: SOURCE_PORTAL }),
+    ).reward(0n);
     expect(built.publishCalldata()).toEqual(publishTx(built.intent, { portal: SOURCE_PORTAL }));
     expect(built.vaultCall().to.toLowerCase()).toBe(SOURCE_PORTAL.toLowerCase());
   });
 
   it("a per-call target.portal overrides IntentOptions.sourcePortal", () => {
-    const built = openRoute("ethereum", "return 1n;", evmOptions({ sourcePortal: SOURCE_PORTAL })).reward(0n);
+    const built = openRoute(
+      "ethereum",
+      "return 1n;",
+      evmOptions({ sourcePortal: SOURCE_PORTAL }),
+    ).reward(0n);
     const tx = built.publishCalldata({ portal: OTHER_PORTAL });
     expect(tx).toEqual(publishTx(built.intent, { portal: OTHER_PORTAL }));
     expect(tx.to.toLowerCase()).not.toBe(SOURCE_PORTAL.toLowerCase());
@@ -374,7 +429,8 @@ describe("BuiltIntent: sourcePortal defaulting", () => {
 });
 
 describe("BuiltIntent: submission/read methods delegate to portal.ts", () => {
-  const built = () => openRoute("ethereum", "return 1n;", evmOptions({ sourcePortal: SOURCE_PORTAL })).reward(0n);
+  const built = () =>
+    openRoute("ethereum", "return 1n;", evmOptions({ sourcePortal: SOURCE_PORTAL })).reward(0n);
 
   it("publishCalldata === publishTx(intent, target)", () => {
     const b = built();
@@ -383,7 +439,9 @@ describe("BuiltIntent: submission/read methods delegate to portal.ts", () => {
 
   it("publishAndFundCalldata === publishAndFundTx(intent, allowPartial, target)", () => {
     const b = built();
-    expect(b.publishAndFundCalldata(true)).toEqual(publishAndFundTx(b.intent, true, { portal: SOURCE_PORTAL }));
+    expect(b.publishAndFundCalldata(true)).toEqual(
+      publishAndFundTx(b.intent, true, { portal: SOURCE_PORTAL }),
+    );
   });
 
   it("fundCalldata === fundTx(intent, allowPartial, target)", () => {
@@ -413,7 +471,11 @@ describe("BuiltIntent: submission/read methods delegate to portal.ts", () => {
 describe("BuiltIntent: approvals() is head-only", () => {
   it("covers exactly the head's own reward tokens, matching approvalTxs(intent, target)", () => {
     const tokens = [{ token: "0x7777777777777777777777777777777777777777" as const, amount: 5n }];
-    const built = openRoute("ethereum", "return 1n;", evmOptions({ sourcePortal: SOURCE_PORTAL })).reward(tokens);
+    const built = openRoute(
+      "ethereum",
+      "return 1n;",
+      evmOptions({ sourcePortal: SOURCE_PORTAL }),
+    ).reward(tokens);
     expect(built.approvals()).toEqual(approvalTxs(built.intent, { portal: SOURCE_PORTAL }));
     expect(built.approvals()).toHaveLength(1);
   });

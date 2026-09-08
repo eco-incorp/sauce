@@ -36,16 +36,23 @@
  *   SAUCE_RUST_V12_RUNTIME=/tmp/v12-runtime.hex pnpm --filter './sdk' test
  * Also needs `anvil` on PATH (Foundry, which CI already installs).
  */
-import { spawn } from 'node:child_process';
-import type { ChildProcess } from 'node:child_process';
-import { once } from 'node:events';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createPublicClient, createTestClient, createWalletClient, encodeFunctionData, http, parseAbi } from 'viem';
-import type { Address, Hex } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { compileStdToken } from './harness.js';
+import { spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import { once } from "node:events";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  createPublicClient,
+  createTestClient,
+  createWalletClient,
+  encodeFunctionData,
+  http,
+  parseAbi,
+} from "viem";
+import type { Address, Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { compileStdToken } from "./harness.js";
 
 const RUNTIME_HEX_PATH = process.env.SAUCE_RUST_V12_RUNTIME;
 
@@ -57,23 +64,26 @@ const describeEvm = RUNTIME_HEX_PATH ? describe : describe.skip;
 // CI supplies the engine (see .github/workflows/ci.yml) — so in CI, an absent one is a failure.
 if (!RUNTIME_HEX_PATH && process.env.CI) {
   throw new Error(
-    'SAUCE_RUST_V12_RUNTIME is unset in CI. This suite must never skip here — see the ' +
+    "SAUCE_RUST_V12_RUNTIME is unset in CI. This suite must never skip here — see the " +
       '"Fetch the v12 engines" step in .github/workflows/ci.yml.',
   );
 }
 
-
-const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
-const MOCK_ERC20 = JSON.parse(readFileSync(join(FIXTURES, 'MockERC20.json'), 'utf8')) as { creationCode: Hex };
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+const MOCK_ERC20 = JSON.parse(readFileSync(join(FIXTURES, "MockERC20.json"), "utf8")) as {
+  creationCode: Hex;
+};
 
 /** Anvil's first dev account — the deployer, and the caller of every transaction here. */
-const DEPLOYER = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+const DEPLOYER = privateKeyToAccount(
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+);
 
 /** Where the V12 runtime is etched. A fixed address keeps the engine out of the deploy nonce order. */
-const ENGINE: Address = '0x00000000000000000000000000000000000000ee';
+const ENGINE: Address = "0x00000000000000000000000000000000000000ee";
 
 /** Per-worker port so concurrent jest workers never share a node. */
-const PORT = 8600 + (Number(process.env.JEST_WORKER_ID ?? '1') % 100);
+const PORT = 8600 + (Number(process.env.JEST_WORKER_ID ?? "1") % 100);
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 
 const STARTUP_TIMEOUT_MS = 20_000;
@@ -84,14 +94,14 @@ const TOKEN_BALANCE = 0x0000_00ab_cdef_1234n;
 const APPROVED = 0x0000_0000_dead_beefn;
 const TRANSFERRED = 0x1234n;
 
-const HOLDER: Address = '0x0000000000000000000000000000000000000002';
-const RECIPIENT: Address = '0x0000000000000000000000000000000000000003';
-const SPENDER: Address = '0x0000000000000000000000000000000000000004';
+const HOLDER: Address = "0x0000000000000000000000000000000000000002";
+const RECIPIENT: Address = "0x0000000000000000000000000000000000000003";
+const SPENDER: Address = "0x0000000000000000000000000000000000000004";
 
 const erc20Abi = parseAbi([
-  'function mint(address to, uint256 amount)',
-  'function approve(address spender, uint256 value) returns (bool)',
-  'function balanceOf(address account) view returns (uint256)',
+  "function mint(address to, uint256 amount)",
+  "function approve(address spender, uint256 value) returns (bool)",
+  "function balanceOf(address account) view returns (uint256)",
 ]);
 
 // Built at module scope: viem clients are lazy (no socket until a request), so this costs nothing on
@@ -99,15 +109,15 @@ const erc20Abi = parseAbi([
 // `connection: close` is load-bearing, not tidiness: Node's global fetch pools keep-alive sockets
 // that outlive the suite, which trips jest's "worker process failed to exit gracefully" force-exit.
 // Anvil is local, so pooling buys nothing here.
-const transport = http(RPC_URL, { fetchOptions: { headers: { connection: 'close' } } });
+const transport = http(RPC_URL, { fetchOptions: { headers: { connection: "close" } } });
 const publicClient = createPublicClient({ transport });
-const testClient = createTestClient({ mode: 'anvil', transport });
+const testClient = createTestClient({ mode: "anvil", transport });
 const walletClient = createWalletClient({ account: DEPLOYER, transport });
 
 /** An address as the SauceScript bigint literal the entries bake in (the EVM arm takes plain values). */
 const literal = (value: Address): string => `${value}n`;
 
-const toHex = (bytes: Uint8Array): Hex => `0x${Buffer.from(bytes).toString('hex')}`;
+const toHex = (bytes: Uint8Array): Hex => `0x${Buffer.from(bytes).toString("hex")}`;
 
 const waitForRpc = (deadline: number): Promise<void> =>
   Date.now() >= deadline
@@ -115,47 +125,73 @@ const waitForRpc = (deadline: number): Promise<void> =>
     : publicClient
         .getChainId()
         .then(() => undefined)
-        .catch(() => new Promise((resolve) => setTimeout(resolve, 100)).then(() => waitForRpc(deadline)));
+        .catch(() =>
+          new Promise((resolve) => setTimeout(resolve, 100)).then(() => waitForRpc(deadline)),
+        );
 
 /** Wait for `hash` to land, rejecting with `what` when it reverted. */
 const confirm = (hash: Hex, what: string): Promise<void> =>
   publicClient
     .waitForTransactionReceipt({ hash })
-    .then(({ status }) => (status === 'success' ? undefined : Promise.reject(new Error(`${what} reverted`))));
+    .then(({ status }) =>
+      status === "success" ? undefined : Promise.reject(new Error(`${what} reverted`)),
+    );
 
 /** Send `data` to `to` from the deployer and wait for it to land. */
 const sendTo = (to: Address, data: Hex, what: string): Promise<void> =>
-  walletClient.sendTransaction({ account: DEPLOYER, chain: null, to, data, gas: GAS_LIMIT }).then((hash) => confirm(hash, what));
+  walletClient
+    .sendTransaction({ account: DEPLOYER, chain: null, to, data, gas: GAS_LIMIT })
+    .then((hash) => confirm(hash, what));
 
 const mintTo = (token: Address, holder: Address, amount: bigint): Promise<void> =>
-  sendTo(token, encodeFunctionData({ abi: erc20Abi, functionName: 'mint', args: [holder, amount] }), 'mint');
+  sendTo(
+    token,
+    encodeFunctionData({ abi: erc20Abi, functionName: "mint", args: [holder, amount] }),
+    "mint",
+  );
 
 const balanceOf = (token: Address, holder: Address): Promise<bigint> =>
-  publicClient.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [holder] });
+  publicClient.readContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [holder],
+  });
 
 /** Compile `entry` for the EVM and STATIC-call the engine with it, returning its 256-bit result. */
 const call = (entry: string): Promise<bigint> =>
   publicClient
-    .call({ to: ENGINE, data: toHex(compileStdToken(entry, 'evm').bytecode), gas: GAS_LIMIT })
-    .then(({ data }) => BigInt(data ?? '0x0'));
+    .call({ to: ENGINE, data: toHex(compileStdToken(entry, "evm").bytecode), gas: GAS_LIMIT })
+    .then(({ data }) => BigInt(data ?? "0x0"));
 
 /** Compile `entry` for the EVM and run it as a TRANSACTION, so its writes stick. */
-const send = (entry: string): Promise<void> => sendTo(ENGINE, toHex(compileStdToken(entry, 'evm').bytecode), 'the engine');
+const send = (entry: string): Promise<void> =>
+  sendTo(ENGINE, toHex(compileStdToken(entry, "evm").bytecode), "the engine");
 
 /** Deploy the vendored ERC20 creation code, returning its address. */
 const deployToken = (): Promise<Address> =>
   walletClient
-    .sendTransaction({ account: DEPLOYER, chain: null, data: MOCK_ERC20.creationCode, gas: GAS_LIMIT })
+    .sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      data: MOCK_ERC20.creationCode,
+      gas: GAS_LIMIT,
+    })
     .then((hash) => publicClient.waitForTransactionReceipt({ hash }))
-    .then(({ contractAddress }) => contractAddress ?? Promise.reject(new Error('the ERC20 deployment produced no address')));
+    .then(
+      ({ contractAddress }) =>
+        contractAddress ?? Promise.reject(new Error("the ERC20 deployment produced no address")),
+    );
 
 /**
  * Boot anvil, etch the runtime at [`ENGINE`] — `SAUCE_RUST_V12_RUNTIME` is already deployed bytecode
  * (see the header for how it is produced), so there is no constructor to run — and deploy the ERC20.
  */
 const startEvm = (): Promise<{ anvil: ChildProcess; token: Address }> => {
-  const anvil = spawn('anvil', ['--port', String(PORT), '--silent'], { stdio: 'ignore' });
-  const runtime = readFileSync(RUNTIME_HEX_PATH as string, 'utf8').trim().replace(/^0x/, '');
+  const anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
+  const runtime = readFileSync(RUNTIME_HEX_PATH as string, "utf8")
+    .trim()
+    .replace(/^0x/, "");
 
   return waitForRpc(Date.now() + STARTUP_TIMEOUT_MS)
     .then(() => testClient.setCode({ address: ENGINE, bytecode: `0x${runtime}` }))
@@ -170,13 +206,13 @@ const startEvm = (): Promise<{ anvil: ChildProcess; token: Address }> => {
 const stopEvm = (anvil: ChildProcess): Promise<void> => {
   if (anvil.exitCode !== null) return Promise.resolve();
 
-  const exited = once(anvil, 'exit');
+  const exited = once(anvil, "exit");
   anvil.kill();
 
   return exited.then(() => undefined);
 };
 
-describeEvm('@sauce/token e2e: the EVM arm against a real ERC20', () => {
+describeEvm("@sauce/token e2e: the EVM arm against a real ERC20", () => {
   let anvil: ChildProcess;
   let token: Address;
 
@@ -187,7 +223,7 @@ describeEvm('@sauce/token e2e: the EVM arm against a real ERC20', () => {
 
   afterAll(() => (anvil ? stopEvm(anvil) : undefined));
 
-  it('balanceOf reads the holder’s balance off the deployed ERC20', async () => {
+  it("balanceOf reads the holder’s balance off the deployed ERC20", async () => {
     const entry = `import { balanceOf } from "@sauce/token"; function main(): Uint256 { return balanceOf(${literal(token)}, ${literal(HOLDER)}); }`;
 
     // The same value the SVM half reads off a real SPL account — compared over the FULL 256-bit word,
@@ -195,7 +231,7 @@ describeEvm('@sauce/token e2e: the EVM arm against a real ERC20', () => {
     expect(await call(entry)).toBe(TOKEN_BALANCE);
   });
 
-  it('totalSupply and decimals read the token’s own state', async () => {
+  it("totalSupply and decimals read the token’s own state", async () => {
     const supply = `import { totalSupply } from "@sauce/token"; function main(): Uint256 { return totalSupply(${literal(token)}); }`;
     const decimals = `import { decimals } from "@sauce/token"; function main(): Uint256 { return decimals(${literal(token)}); }`;
 
@@ -203,7 +239,7 @@ describeEvm('@sauce/token e2e: the EVM arm against a real ERC20', () => {
     expect(await call(decimals)).toBe(18n);
   });
 
-  it('approve then allowance round-trips through the ERC20’s allowance map', async () => {
+  it("approve then allowance round-trips through the ERC20’s allowance map", async () => {
     await send(
       `import { approve } from "@sauce/token"; function main(): void { approve(${literal(token)}, ${literal(SPENDER)}, ${APPROVED}n); }`,
     );
@@ -216,7 +252,7 @@ describeEvm('@sauce/token e2e: the EVM arm against a real ERC20', () => {
     expect(await call(allowance)).toBe(APPROVED);
   });
 
-  it('transfer moves the engine’s own balance', async () => {
+  it("transfer moves the engine’s own balance", async () => {
     // `transfer` spends the caller's balance, and the caller here is the engine — so fund it first.
     await mintTo(token, ENGINE, TOKEN_BALANCE);
     await send(
@@ -227,14 +263,14 @@ describeEvm('@sauce/token e2e: the EVM arm against a real ERC20', () => {
     expect(await balanceOf(token, ENGINE)).toBe(TOKEN_BALANCE - TRANSFERRED);
   });
 
-  it('transferFrom spends an allowance the engine was granted', async () => {
+  it("transferFrom spends an allowance the engine was granted", async () => {
     // The deployer approves the engine and holds the funds, then the library's `transferFrom` pulls
     // from the deployer — the allowance path, which `transfer` above does not exercise.
     await mintTo(token, DEPLOYER.address, TRANSFERRED);
     await sendTo(
       token,
-      encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [ENGINE, APPROVED] }),
-      'approve',
+      encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [ENGINE, APPROVED] }),
+      "approve",
     );
     await send(
       `import { transferFrom } from "@sauce/token"; function main(): void { transferFrom(${literal(token)}, ${literal(DEPLOYER.address)}, ${literal(RECIPIENT)}, ${TRANSFERRED}n); }`,

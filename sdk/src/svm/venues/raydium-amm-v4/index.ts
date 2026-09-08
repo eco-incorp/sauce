@@ -15,11 +15,11 @@
  * AmmInfo is #[repr(C, packed)], no discriminator: all offsets absolute from
  * byte 0, all integers little-endian.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { ceilDiv, readUintLE } from '../math.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { ceilDiv, readUintLE } from "../math.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -28,15 +28,15 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
+} from "../types.js";
 
-const SLUG = 'raydium-amm-v4';
+const SLUG = "raydium-amm-v4";
 
-const PROGRAM_ID = address('675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const PROGRAM_ID = address("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 // create_program_address([b"amm authority", [nonce]], programId) — one PDA for
 // the whole program (AUTHORITY_AMM, processor.rs:111), pinned mainnet value.
-const AMM_AUTHORITY = address('5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1');
+const AMM_AUTHORITY = address("5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1");
 
 // AmmInfo field offsets (state.rs AmmInfo, layout table in docs/svm-venues.md).
 const AMM_INFO_SIZE = 752;
@@ -118,24 +118,30 @@ async function loadVault(
   const data = await load(vault);
   if (data === null) throw new Error(`${SLUG} ${side} vault account ${vault} not found`);
   if (data.length !== SPL_TOKEN_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} ${side} vault ${vault} must be a ${SPL_TOKEN_ACCOUNT_SIZE}-byte SPL token account, got ${data.length} bytes`);
+    throw new Error(
+      `${SLUG} ${side} vault ${vault} must be a ${SPL_TOKEN_ACCOUNT_SIZE}-byte SPL token account, got ${data.length} bytes`,
+    );
   }
   const mint = getAddressCodec().decode(data.slice(OFF_SPL_MINT, OFF_SPL_MINT + 32));
   if (mint !== expectedMint) {
-    throw new Error(`${SLUG} ${side} vault ${vault} mint ${mint} does not match pool ${side} mint ${expectedMint}`);
+    throw new Error(
+      `${SLUG} ${side} vault ${vault} mint ${mint} does not match pool ${side} mint ${expectedMint}`,
+    );
   }
 }
 
 export const raydiumAmmV4: SvmVenueAdapter = {
   slug: SLUG,
-  kind: 'constant-product',
+  kind: "constant-product",
   programId: PROGRAM_ID,
 
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<RaydiumAmmV4PoolConfig> {
     const data = await load(pool);
     if (data === null) throw new Error(`${SLUG} pool account ${pool} not found`);
     if (data.length !== AMM_INFO_SIZE) {
-      throw new Error(`${SLUG} pool ${pool} data must be ${AMM_INFO_SIZE} bytes (AmmInfo), got ${data.length}`);
+      throw new Error(
+        `${SLUG} pool ${pool} data must be ${AMM_INFO_SIZE} bytes (AmmInfo), got ${data.length}`,
+      );
     }
 
     // Orderbook gate: only status 6 (SwapOnly) and 7 (WaitingTrade) quote from
@@ -143,7 +149,9 @@ export const raydiumAmmV4: SvmVenueAdapter = {
     // open-orders + event-queue terms, status 2/3/4 have no swap permission.
     const status = readUintLE(data, OFF_STATUS, 8);
     if (status !== 6n && status !== 7n) {
-      throw new Error(`${SLUG} pool ${pool} status ${status} is not quotable: only status 6 (SwapOnly) and 7 (WaitingTrade) swap without the orderbook`);
+      throw new Error(
+        `${SLUG} pool ${pool} status ${status} is not quotable: only status 6 (SwapOnly) and 7 (WaitingTrade) swap without the orderbook`,
+      );
     }
 
     // Status 7 (WaitingTrade) rejects swaps on-chain until pool_open_time;
@@ -151,7 +159,9 @@ export const raydiumAmmV4: SvmVenueAdapter = {
     const poolOpenTime = readUintLE(data, OFF_POOL_OPEN_TIME, 8);
     const now = BigInt(Math.floor(Date.now() / 1000));
     if (status === 7n && now < poolOpenTime) {
-      throw new Error(`${SLUG} pool ${pool} is not open yet (pool_open_time ${poolOpenTime}, now ${now})`);
+      throw new Error(
+        `${SLUG} pool ${pool} is not open yet (pool_open_time ${poolOpenTime}, now ${now})`,
+      );
     }
 
     const codec = getAddressCodec();
@@ -161,8 +171,8 @@ export const raydiumAmmV4: SvmVenueAdapter = {
     const pcMint = pubkey(OFF_PC_MINT);
     const coinVault = pubkey(OFF_COIN_VAULT);
     const pcVault = pubkey(OFF_PC_VAULT);
-    await loadVault(load, coinVault, 'coin', coinMint);
-    await loadVault(load, pcVault, 'pc', pcMint);
+    await loadVault(load, coinVault, "coin", coinMint);
+    await loadVault(load, pcVault, "pc", pcMint);
 
     // Token-2022 safety: swap_base_in_v2 carries a single legacy-SPL (Tokenkeg)
     // token program, so a Token-2022 mint (or one carrying an un-routable
@@ -178,11 +188,15 @@ export const raydiumAmmV4: SvmVenueAdapter = {
       const mintData = mintDatas[mi]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -220,7 +234,9 @@ export const raydiumAmmV4: SvmVenueAdapter = {
     // off-chain; only the live reserve reads stay in-VM.
     const inAfterFee = afterFee(amountIn, c.swapFeeNumerator, c.swapFeeDenominator);
     if (inAfterFee <= 0n) {
-      throw new Error(`${SLUG} amountIn ${amountIn} is consumed entirely by the ${c.swapFeeNumerator}/${c.swapFeeDenominator} swap fee`);
+      throw new Error(
+        `${SLUG} amountIn ${amountIn} is consumed entirely by the ${c.swapFeeNumerator}/${c.swapFeeDenominator} swap fee`,
+      );
     }
 
     // reserves = vault amount (u64 LE @64) - need_take_pnl_* (AmmInfo @192/@200),
@@ -232,8 +248,8 @@ export const raydiumAmmV4: SvmVenueAdapter = {
     // `quoteAccounts()[k]`: acc0 = pool (AmmInfo, holds need_take_pnl_*), acc1 =
     // coinVault, acc2 = pcVault. `accountUint` lowered to CAST_LE, so
     // `svm.sload(…).toLe()` is the exact endianness match (u64 LE fields).
-    const inVaultAcc = c.inputIsCoin ? 'acc1' : 'acc2';
-    const outVaultAcc = c.inputIsCoin ? 'acc2' : 'acc1';
+    const inVaultAcc = c.inputIsCoin ? "acc1" : "acc2";
+    const outVaultAcc = c.inputIsCoin ? "acc2" : "acc1";
     const inPnlOff = c.inputIsCoin ? OFF_NEED_TAKE_PNL_COIN : OFF_NEED_TAKE_PNL_PC;
     const outPnlOff = c.inputIsCoin ? OFF_NEED_TAKE_PNL_PC : OFF_NEED_TAKE_PNL_COIN;
     const rIn = `svm.sload(${inVaultAcc}, ${OFF_SPL_AMOUNT}, 8).toLe() - svm.sload(acc0, ${inPnlOff}, 8).toLe()`;
@@ -242,7 +258,7 @@ export const raydiumAmmV4: SvmVenueAdapter = {
       `const rayV4In${i} = ${rIn};`,
       `const rayV4Out${i} = ${rOut};`,
       `const q${i} = rayV4Out${i} * ${inAfterFee} / (rayV4In${i} + ${inAfterFee});`,
-    ].join('\n');
+    ].join("\n");
   },
 
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
@@ -260,7 +276,7 @@ export const raydiumAmmV4: SvmVenueAdapter = {
       programId: PROGRAM_ID,
       data,
       accounts: [
-        { ref: 'token-program', address: TOKEN_PROGRAM },
+        { ref: "token-program", address: TOKEN_PROGRAM },
         { ref: poolRef(c), address: c.pool, writable: true },
         { ref: `${SLUG}:authority`, address: AMM_AUTHORITY },
         { ref: coinVaultRef(c), address: c.coinVault, writable: true },
@@ -277,33 +293,52 @@ export const raydiumAmmV4: SvmVenueAdapter = {
     checkAmountIn(amountIn);
 
     const pool = state[c.pool];
-    if (pool === undefined) throw new Error(`${SLUG} referenceQuote state is missing pool account ${c.pool}`);
+    if (pool === undefined)
+      throw new Error(`${SLUG} referenceQuote state is missing pool account ${c.pool}`);
     const vaultIn = state[c.inputIsCoin ? c.coinVault : c.pcVault];
     const vaultOut = state[c.inputIsCoin ? c.pcVault : c.coinVault];
     if (vaultIn === undefined || vaultOut === undefined) {
-      throw new Error(`${SLUG} referenceQuote state is missing vault account ${vaultIn === undefined ? (c.inputIsCoin ? c.coinVault : c.pcVault) : (c.inputIsCoin ? c.pcVault : c.coinVault)}`);
+      throw new Error(
+        `${SLUG} referenceQuote state is missing vault account ${vaultIn === undefined ? (c.inputIsCoin ? c.coinVault : c.pcVault) : c.inputIsCoin ? c.pcVault : c.coinVault}`,
+      );
     }
 
     const status = readUintLE(pool, OFF_STATUS, 8);
     if (status !== 6n && status !== 7n) {
-      throw new Error(`${SLUG} pool ${c.pool} status ${status} is not quotable: only status 6 (SwapOnly) and 7 (WaitingTrade) swap without the orderbook`);
+      throw new Error(
+        `${SLUG} pool ${c.pool} status ${status} is not quotable: only status 6 (SwapOnly) and 7 (WaitingTrade) swap without the orderbook`,
+      );
     }
     const poolOpenTime = readUintLE(pool, OFF_POOL_OPEN_TIME, 8);
     if (status === 7n && now < poolOpenTime) {
-      throw new Error(`${SLUG} pool ${c.pool} is not open yet: pool_open_time ${poolOpenTime}, now ${now}`);
+      throw new Error(
+        `${SLUG} pool ${c.pool} is not open yet: pool_open_time ${poolOpenTime}, now ${now}`,
+      );
     }
 
     // calc_total_without_take_pnl_no_orderbook (math.rs:322).
-    const rIn = readUintLE(vaultIn, OFF_SPL_AMOUNT, 8) - readUintLE(pool, c.inputIsCoin ? OFF_NEED_TAKE_PNL_COIN : OFF_NEED_TAKE_PNL_PC, 8);
-    const rOut = readUintLE(vaultOut, OFF_SPL_AMOUNT, 8) - readUintLE(pool, c.inputIsCoin ? OFF_NEED_TAKE_PNL_PC : OFF_NEED_TAKE_PNL_COIN, 8);
-    if (rIn <= 0n || rOut <= 0n) throw new Error(`${SLUG} pool ${c.pool} has empty reserves (in ${rIn}, out ${rOut})`);
+    const rIn =
+      readUintLE(vaultIn, OFF_SPL_AMOUNT, 8) -
+      readUintLE(pool, c.inputIsCoin ? OFF_NEED_TAKE_PNL_COIN : OFF_NEED_TAKE_PNL_PC, 8);
+    const rOut =
+      readUintLE(vaultOut, OFF_SPL_AMOUNT, 8) -
+      readUintLE(pool, c.inputIsCoin ? OFF_NEED_TAKE_PNL_PC : OFF_NEED_TAKE_PNL_COIN, 8);
+    if (rIn <= 0n || rOut <= 0n)
+      throw new Error(`${SLUG} pool ${c.pool} has empty reserves (in ${rIn}, out ${rOut})`);
 
     // swap_token_amount_base_in (math.rs:373): floor(rOut * inAfterFee / (rIn + inAfterFee)).
-    const inAfterFee = afterFee(amountIn, readUintLE(pool, OFF_SWAP_FEE_NUMERATOR, 8), readUintLE(pool, OFF_SWAP_FEE_DENOMINATOR, 8));
-    if (inAfterFee <= 0n) throw new Error(`${SLUG} amountIn ${amountIn} is consumed entirely by the swap fee`);
+    const inAfterFee = afterFee(
+      amountIn,
+      readUintLE(pool, OFF_SWAP_FEE_NUMERATOR, 8),
+      readUintLE(pool, OFF_SWAP_FEE_DENOMINATOR, 8),
+    );
+    if (inAfterFee <= 0n)
+      throw new Error(`${SLUG} amountIn ${amountIn} is consumed entirely by the swap fee`);
     const out = (rOut * inAfterFee) / (rIn + inAfterFee);
     if (out === 0n || out >= rOut) {
-      throw new Error(`${SLUG} pool ${c.pool} swap would revert on-chain (amount_out ${out}, reserve_out ${rOut})`);
+      throw new Error(
+        `${SLUG} pool ${c.pool} swap would revert on-chain (amount_out ${out}, reserve_out ${rOut})`,
+      );
     }
     return out;
   },

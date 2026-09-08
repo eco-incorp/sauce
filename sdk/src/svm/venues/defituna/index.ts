@@ -88,19 +88,23 @@
  *   quote — recoverable (an order fills/cancels), so it is the SAME
  *   SvmWindowDriftError self-drop class, wired via `window.hasActiveOrder`.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from '../orca-whirlpool/tick-math.js';
-import { readUintLE } from '../math.js';
-import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
-import { windowStartTicks } from '../orca-whirlpool/index.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  MAX_TICK_INDEX,
+  MIN_TICK_INDEX,
+  whirlpoolSqrtPriceAtTick,
+} from "../orca-whirlpool/tick-math.js";
+import { readUintLE } from "../math.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
+import { windowStartTicks } from "../orca-whirlpool/index.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'defituna';
-export const DEFITUNA_PROGRAM_ID = address('fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "defituna";
+export const DEFITUNA_PROGRAM_ID = address("fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const FUSION_POOL_ACCOUNT_SIZE = 423;
 /** sha256('account:FusionPool')[0..8] (IDL-given: [254,204,207,98,25,181,29,67]). */
 export const FUSION_POOL_DISCRIMINATOR = [0xfe, 0xcc, 0xcf, 0x62, 0x19, 0xb5, 0x1d, 0x43];
@@ -154,7 +158,7 @@ export interface DefiTunaWindow {
 
 export interface DefiTunaPoolConfig extends PoolConfig {
   venue: typeof SLUG;
-  direction: 'aToB' | 'bToA';
+  direction: "aToB" | "bToA";
   tokenMintA: Address;
   tokenMintB: Address;
   tokenVaultA: Address;
@@ -179,7 +183,7 @@ function getAddressEncoded(value: Address): Uint8Array {
 }
 async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Address> {
   return memoizedGetProgramDerivedAddress(DEFITUNA_PROGRAM_ID, [
-    new TextEncoder().encode('tick_array'),
+    new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     new TextEncoder().encode(String(startTick)),
   ]);
@@ -236,8 +240,14 @@ async function resolveWindow(
   tickSpacing: number,
   aToB: boolean,
 ): Promise<DefiTunaWindow> {
-  const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, aToB) as [number, number, number];
-  const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start)))) as [Address, Address, Address];
+  const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, aToB) as [
+    number,
+    number,
+    number,
+  ];
+  const tickArrays = (await Promise.all(
+    startTicks.map((start) => deriveTickArrayPda(pool, start)),
+  )) as [Address, Address, Address];
   // allSettled (not all) keeps the break-on-first-invalid contract exact: a
   // rejection is re-thrown only if the readable prefix actually reaches it.
   const loaded = await Promise.allSettled(tickArrays.map((a) => load(a)));
@@ -245,7 +255,7 @@ async function resolveWindow(
   let readable = 0;
   for (let i = 0; i < 3; i++) {
     const settled = loaded[i]!;
-    if (settled.status === 'rejected') throw settled.reason;
+    if (settled.status === "rejected") throw settled.reason;
     const data = settled.value;
     const valid =
       data !== null &&
@@ -271,7 +281,12 @@ async function resolveWindow(
           ? [...decoded].sort((x, y) => y.tick - x.tick)
           : [...decoded].sort((x, y) => x.tick - y.tick);
     for (const c of candidates) {
-      boundaries.push({ arrayIndex: a, byteOffset: c.byteOffset, tick: c.tick, sqrtPrice: whirlpoolSqrtPriceAtTick(c.tick) });
+      boundaries.push({
+        arrayIndex: a,
+        byteOffset: c.byteOffset,
+        tick: c.tick,
+        sqrtPrice: whirlpoolSqrtPriceAtTick(c.tick),
+      });
       if (c.hasOrder) hasActiveOrder = true;
       if (boundaries.length === DEFITUNA_MAX_BOUNDARIES) {
         maxStopped = true;
@@ -297,11 +312,16 @@ async function resolveWindow(
 }
 
 /** Fetch + decode one FusionPool and freeze both directions' boundary windows. Read-only against the loader. */
-export async function fetchDefiTunaPoolConfig(load: AccountLoader, pool: Address): Promise<DefiTunaPoolConfig> {
+export async function fetchDefiTunaPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<DefiTunaPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== FUSION_POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected ${FUSION_POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected ${FUSION_POOL_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, FUSION_POOL_DISCRIMINATOR)) {
     throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a FusionPool account)`);
@@ -322,11 +342,15 @@ export async function fetchDefiTunaPoolConfig(load: AccountLoader, pool: Address
     const mintData = mintDatas[mi];
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
@@ -340,7 +364,7 @@ export async function fetchDefiTunaPoolConfig(load: AccountLoader, pool: Address
   return {
     venue: SLUG,
     pool,
-    direction: 'aToB',
+    direction: "aToB",
     tokenMintA,
     tokenMintB,
     tokenVaultA: codec.decode(data.subarray(OFF_VAULT_A, OFF_VAULT_A + 32)) as Address,
@@ -361,4 +385,3 @@ export const defituna = {
   tokenProgram: TOKEN_PROGRAM,
   fetchPoolConfig: fetchDefiTunaPoolConfig,
 };
-

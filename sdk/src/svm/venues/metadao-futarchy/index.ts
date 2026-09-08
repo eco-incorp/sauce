@@ -68,19 +68,18 @@
  * see `the consuming app SVM CU-budget module`'s `CU_FAMILIES.metadao-futarchy` for how that
  * folds into the pin.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'metadao-futarchy';
+const SLUG = "metadao-futarchy";
 
-export const METADAO_FUTARCHY_PROGRAM_ID: Address<'FUTARELBfJfQ8RDGhg1wdhddq1odMAJUePHFuBYfUxKq'> = address(
-  'FUTARELBfJfQ8RDGhg1wdhddq1odMAJUePHFuBYfUxKq',
-);
-const TOKEN_PROGRAM: Address = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const METADAO_FUTARCHY_PROGRAM_ID: Address<"FUTARELBfJfQ8RDGhg1wdhddq1odMAJUePHFuBYfUxKq"> =
+  address("FUTARELBfJfQ8RDGhg1wdhddq1odMAJUePHFuBYfUxKq");
+const TOKEN_PROGRAM: Address = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 /**
  * PDA(["__event_authority"], METADAO_FUTARCHY_PROGRAM_ID) — Anchor's
  * `#[event_cpi]` self-log signer, fixed for this program (independent of any
@@ -88,7 +87,9 @@ const TOKEN_PROGRAM: Address = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ
  * against two real mainnet `spotSwap` transactions' account lists (see the
  * file header).
  */
-export const METADAO_FUTARCHY_EVENT_AUTHORITY: Address = address('DGEympSS4qLvdr9r3uGHTfACdN8snShk4iGdJtZPxuBC');
+export const METADAO_FUTARCHY_EVENT_AUTHORITY: Address = address(
+  "DGEympSS4qLvdr9r3uGHTfACdN8snShk4iGdJtZPxuBC",
+);
 
 /** sha256("account:Dao")[0:8] (Anchor account discriminator). */
 const DAO_DISCRIMINATOR = [0xa3, 0x09, 0x2f, 0x1f, 0x34, 0x55, 0xc5, 0x31];
@@ -125,7 +126,7 @@ const NET_FEE_NUM = MAX_BPS - PROTOCOL_TAKER_FEE_BPS; // 9_950n
 export interface MetaDaoFutarchySpotPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'buy' (default, quote in -> base out, SwapType::Buy=0) | 'sell' (base in -> quote out, SwapType::Sell=1). */
-  direction: 'buy' | 'sell';
+  direction: "buy" | "sell";
   baseMint: Address;
   quoteMint: Address;
   ammBaseVault: Address;
@@ -134,7 +135,8 @@ export interface MetaDaoFutarchySpotPoolConfig extends PoolConfig {
 }
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 /**
  * Off-chain gate + decode: rejects the wrong account shape (size/discriminator),
@@ -143,11 +145,16 @@ const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(dat
  * the Dao account address itself (the AMM lives embedded on it, not on a
  * separate pool account).
  */
-export async function fetchMetaDaoFutarchySpotConfig(load: AccountLoader, pool: Address): Promise<MetaDaoFutarchySpotPoolConfig> {
+export async function fetchMetaDaoFutarchySpotConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<MetaDaoFutarchySpotPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} dao ${pool} account not found`);
   if (data.length !== DAO_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} dao ${pool} account is ${data.length} bytes, expected ${DAO_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} dao ${pool} account is ${data.length} bytes, expected ${DAO_ACCOUNT_SIZE}`,
+    );
   }
   if (!DAO_DISCRIMINATOR.every((byte, i) => data[i] === byte)) {
     throw new Error(`${SLUG} dao ${pool} is not a Dao account (discriminator mismatch)`);
@@ -156,13 +163,15 @@ export async function fetchMetaDaoFutarchySpotConfig(load: AccountLoader, pool: 
   if (stateTag !== STATE_SPOT) {
     throw new Error(
       `${SLUG} dao ${pool} has an active proposal (PoolState::Futarchy, tag ${stateTag}) — conditional markets are ` +
-        'not yet served by this adapter, only PoolState::Spot (see the consuming app metadao-futarchy venue module)',
+        "not yet served by this adapter, only PoolState::Spot (see the consuming app metadao-futarchy venue module)",
     );
   }
   const quoteReserves = readUintLE(data, QUOTE_RESERVES_OFFSET, 8);
   const baseReserves = readUintLE(data, BASE_RESERVES_OFFSET, 8);
   if (quoteReserves === 0n || baseReserves === 0n) {
-    throw new Error(`${SLUG} dao ${pool} has a zero-reserve side (quote=${quoteReserves}, base=${baseReserves}) — unquotable`);
+    throw new Error(
+      `${SLUG} dao ${pool} has a zero-reserve side (quote=${quoteReserves}, base=${baseReserves}) — unquotable`,
+    );
   }
   const baseMint = pubkeyAt(data, BASE_MINT_OFFSET);
   const quoteMint = pubkeyAt(data, QUOTE_MINT_OFFSET);
@@ -178,18 +187,22 @@ export async function fetchMetaDaoFutarchySpotConfig(load: AccountLoader, pool: 
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   return {
     venue: SLUG,
     pool,
-    direction: 'buy',
+    direction: "buy",
     baseMint,
     quoteMint,
     ammBaseVault: pubkeyAt(data, AMM_BASE_VAULT_OFFSET),
@@ -205,4 +218,3 @@ export function metadaoFutarchySpotQuote(x: bigint, rin: bigint, rout: bigint): 
   if (netIn === 0n) return 0n;
   return (netIn * rout) / (rin + netIn);
 }
-

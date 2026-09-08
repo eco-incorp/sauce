@@ -147,17 +147,17 @@
  * PROVEN against the real dumped mainnet binary, not just this transcription
  * — see `the consuming app realcpi e2e test`'s `gavel` quadrilateral.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'gavel';
+const SLUG = "gavel";
 
-export const GAVEL_PROGRAM_ID = address('srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const GAVEL_PROGRAM_ID = address("srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** u64 LE @0 — accounts.rs POOL_ACCOUNT_DISCRIMINATOR ([116,210,187,119,196,196,52,137]). */
 export const GAVEL_POOL_DISCRIMINANT = 9_886_743_430_086_513_268n;
@@ -180,7 +180,7 @@ const OFF_QUOTE_RESERVES = 600;
 export interface GavelPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'baseIn' (default) sells base for quote; 'quoteIn' buys base with quote. */
-  direction: 'baseIn' | 'quoteIn';
+  direction: "baseIn" | "quoteIn";
   baseMint: Address;
   quoteMint: Address;
   baseVault: Address;
@@ -201,11 +201,16 @@ function decodeAddress(data: Uint8Array, offset: number): Address {
  * kills a cook" self-drop), and classic-SPL-only mints (the program's own
  * token_program is hardcoded to Tokenkeg — see the module header).
  */
-export async function fetchGavelConfig(load: AccountLoader, pool: Address): Promise<GavelPoolConfig> {
+export async function fetchGavelConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<GavelPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool ${pool} account not found`);
   if (data.length !== GAVEL_POOL_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} must be ${GAVEL_POOL_SIZE} bytes (PoolHeader+Amm), got ${data.length}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} must be ${GAVEL_POOL_SIZE} bytes (PoolHeader+Amm), got ${data.length}`,
+    );
   }
   if (readUintLE(data, 0, 8) !== GAVEL_POOL_DISCRIMINANT) {
     throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a Gavel PoolAccount)`);
@@ -215,7 +220,9 @@ export async function fetchGavelConfig(load: AccountLoader, pool: Address): Prom
   const baseReserves = readUintLE(data, OFF_BASE_RESERVES, 8);
   const quoteReserves = readUintLE(data, OFF_QUOTE_RESERVES, 8);
   if (totalLpShares <= 0n || baseReserves <= 0n || quoteReserves <= 0n) {
-    throw new Error(`${SLUG}: pool ${pool} is uninitialized or drained (lpShares=${totalLpShares}, base=${baseReserves}, quote=${quoteReserves})`);
+    throw new Error(
+      `${SLUG}: pool ${pool} is uninitialized or drained (lpShares=${totalLpShares}, base=${baseReserves}, quote=${quoteReserves})`,
+    );
   }
 
   const baseMint = decodeAddress(data, OFF_BASE_MINT);
@@ -234,18 +241,22 @@ export async function fetchGavelConfig(load: AccountLoader, pool: Address): Prom
     const mintData = mintDatas[mi];
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   return {
     venue: SLUG,
     pool,
-    direction: 'baseIn',
+    direction: "baseIn",
     baseMint,
     quoteMint,
     baseVault: decodeAddress(data, OFF_BASE_VAULT),
@@ -263,4 +274,3 @@ export const gavel = {
   tokenProgram: TOKEN_PROGRAM,
   fetchPoolConfig: fetchGavelConfig,
 };
-

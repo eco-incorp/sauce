@@ -92,12 +92,7 @@
         }
       }
     },
-    "key_functions": [
-      "deposit",
-      "withdraw",
-      "forcedWithdrawalRequest",
-      "forcedTradeRequest"
-    ]
+    "key_functions": ["deposit", "withdraw", "forcedWithdrawalRequest", "forcedTradeRequest"]
   },
   {
     "name": "Synthetix",
@@ -180,12 +175,7 @@
       "base": { "chainId": 8453 },
       "optimism": { "chainId": 10 }
     },
-    "key_functions": [
-      "submitOrder",
-      "cancelOrder",
-      "closePosition",
-      "modifyPosition"
-    ]
+    "key_functions": ["submitOrder", "cancelOrder", "closePosition", "modifyPosition"]
   },
   {
     "name": "Gains Network (gTrade)",
@@ -464,12 +454,7 @@
         }
       }
     },
-    "key_functions": [
-      "submitOrder",
-      "cancelOrder",
-      "deposit",
-      "withdraw"
-    ]
+    "key_functions": ["submitOrder", "cancelOrder", "deposit", "withdraw"]
   },
   {
     "name": "ApolloX (APX Finance)",
@@ -567,11 +552,7 @@
       "bsc": { "chainId": 56 },
       "polygon": { "chainId": 137 }
     },
-    "key_functions": [
-      "submitOrder",
-      "cancelOrder",
-      "closePosition"
-    ]
+    "key_functions": ["submitOrder", "cancelOrder", "closePosition"]
   },
   {
     "name": "Rage Trade",
@@ -591,13 +572,7 @@
         }
       }
     },
-    "key_functions": [
-      "deposit",
-      "withdraw",
-      "openPosition",
-      "closePosition",
-      "rebalance"
-    ]
+    "key_functions": ["deposit", "withdraw", "openPosition", "closePosition", "rebalance"]
   },
   {
     "name": "Buffer Finance",
@@ -641,13 +616,7 @@
         }
       }
     },
-    "key_functions": [
-      "deposit",
-      "withdraw",
-      "triggerDepeg",
-      "triggerEndEpoch",
-      "createNewMarket"
-    ]
+    "key_functions": ["deposit", "withdraw", "triggerDepeg", "triggerEndEpoch", "createNewMarket"]
   },
   {
     "name": "Opyn (Squeeth)",
@@ -834,14 +803,7 @@
         }
       }
     },
-    "key_functions": [
-      "purchase",
-      "settle",
-      "deposit",
-      "withdraw",
-      "exercise",
-      "compound"
-    ]
+    "key_functions": ["purchase", "settle", "deposit", "withdraw", "exercise", "compound"]
   },
   {
     "name": "Synthetix (Synthetics)",
@@ -865,13 +827,7 @@
         }
       }
     },
-    "key_functions": [
-      "issueSynths",
-      "burnSynths",
-      "exchange",
-      "stake",
-      "claim"
-    ]
+    "key_functions": ["issueSynths", "burnSynths", "exchange", "stake", "claim"]
   },
   {
     "name": "UMA Protocol",
@@ -960,12 +916,7 @@
         }
       }
     },
-    "key_functions": [
-      "deposit",
-      "initiateWithdrawal",
-      "completeWithdrawal",
-      "rollToNextRound"
-    ]
+    "key_functions": ["deposit", "initiateWithdrawal", "completeWithdrawal", "rollToNextRound"]
   },
   {
     "name": "Sommelier",
@@ -1014,11 +965,7 @@
       "ethereum": { "chainId": 1 },
       "arbitrum": { "chainId": 42161 }
     },
-    "key_functions": [
-      "deposit",
-      "withdraw",
-      "rolloverVault"
-    ]
+    "key_functions": ["deposit", "withdraw", "rolloverVault"]
   },
   {
     "name": "Thetanuts Finance",
@@ -1036,12 +983,7 @@
       "avalanche": { "chainId": 43114 },
       "polygon": { "chainId": 137 }
     },
-    "key_functions": [
-      "deposit",
-      "withdraw",
-      "initiateWithdraw",
-      "completeWithdraw"
-    ]
+    "key_functions": ["deposit", "withdraw", "initiateWithdraw", "completeWithdraw"]
   },
   {
     "name": "Jones DAO",
@@ -1060,12 +1002,6 @@
         }
       }
     },
-    "key_functions": [
-      "deposit",
-      "withdraw",
-      "compound",
-      "rebalance",
-      "emergencyWithdraw"
-    ]
+    "key_functions": ["deposit", "withdraw", "compound", "rebalance", "emergencyWithdraw"]
   }
 ]

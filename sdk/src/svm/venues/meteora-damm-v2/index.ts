@@ -28,10 +28,10 @@
  * band-violating bToA next_sqrt_price can push sqrt_price * next_sqrt_price
  * past the wrap, but every such quote is clamped to 0 before it is used.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { ceilDiv, readUintLE } from '../math.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { ceilDiv, readUintLE } from "../math.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -40,17 +40,17 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
+} from "../types.js";
 
-const SLUG = 'meteora-damm-v2';
+const SLUG = "meteora-damm-v2";
 
-const PROGRAM_ID = address('cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG');
+const PROGRAM_ID = address("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
 /** Constant PDA ['pool_authority'] of the program — owner of both vaults. */
-const POOL_AUTHORITY = address('HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC');
+const POOL_AUTHORITY = address("HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC");
 /** Constant PDA ['__event_authority'] (Anchor event_cpi). */
-const EVENT_AUTHORITY = address('3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+const EVENT_AUTHORITY = address("3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 const POOL_ACCOUNT_SIZE = 1112;
 /** sha256('account:Pool')[0..8]. */
@@ -73,7 +73,7 @@ export interface MeteoraDammV2PoolConfig extends PoolConfig {
    * fetchPoolConfig cannot see the trade). Callers flip this to 'bToA' when
    * the input mint is tokenBMint; the mints are exposed for that decision.
    */
-  direction: 'aToB' | 'bToA';
+  direction: "aToB" | "bToA";
   tokenAMint: Address;
   tokenBMint: Address;
   tokenAVault: Address;
@@ -131,10 +131,14 @@ const pubkeyAt = (data: Uint8Array, offset: number): Address =>
 /** Decodes the Pool account and applies every state gate (named errors). */
 function decodePool(pool: string, data: Uint8Array): DecodedPool {
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`meteora-damm-v2 pool ${pool} account data is ${data.length} bytes, expected 1112`);
+    throw new Error(
+      `meteora-damm-v2 pool ${pool} account data is ${data.length} bytes, expected 1112`,
+    );
   }
   if (!POOL_DISCRIMINATOR.every((byte, i) => data[i] === byte)) {
-    throw new Error(`meteora-damm-v2 pool ${pool} is not a cp-amm Pool account (discriminator mismatch)`);
+    throw new Error(
+      `meteora-damm-v2 pool ${pool} is not a cp-amm Pool account (discriminator mismatch)`,
+    );
   }
   const poolStatus = data[481];
   if (poolStatus !== 0) {
@@ -213,7 +217,7 @@ function dammV2Config(cfg: PoolConfig): MeteoraDammV2PoolConfig {
     throw new Error(`meteora-damm-v2 adapter got a config for venue '${cfg.venue}'`);
   }
   const c = cfg as MeteoraDammV2PoolConfig;
-  if (c.direction !== 'aToB' && c.direction !== 'bToA') {
+  if (c.direction !== "aToB" && c.direction !== "bToA") {
     throw new Error(`meteora-damm-v2 direction must be 'aToB' or 'bToA', got '${c.direction}'`);
   }
   return c;
@@ -228,7 +232,9 @@ function checkAmountIn(construct: string, amountIn: bigint): void {
 function tokenProgramFor(pool: string, side: string, flag: number): Address {
   if (flag === 0) return TOKEN_PROGRAM;
   if (flag === 1) return TOKEN_2022_PROGRAM;
-  throw new Error(`meteora-damm-v2 pool ${pool} token_${side}_flag=${flag} is not a known token program flag`);
+  throw new Error(
+    `meteora-damm-v2 pool ${pool} token_${side}_flag=${flag} is not a known token program flag`,
+  );
 }
 
 /**
@@ -239,7 +245,12 @@ function tokenProgramFor(pool: string, side: string, flag: number): Address {
  * transferChecked, so it self-drops. A TransferFeeConfig mint is dropped (see
  * the TODO) rather than netted.
  */
-async function assertRoutableMint(load: AccountLoader, pool: string, side: string, mint: Address): Promise<void> {
+async function assertRoutableMint(
+  load: AccountLoader,
+  pool: string,
+  side: string,
+  mint: Address,
+): Promise<void> {
   const data = await load(mint);
   if (data === null) {
     throw new Error(
@@ -248,7 +259,9 @@ async function assertRoutableMint(load: AccountLoader, pool: string, side: strin
   }
   const ext = parseMintExtensions(data);
   if (ext.blocking.length > 0) {
-    throw new Error(`meteora-damm-v2 pool ${pool} token_${side} mint ${mint} is un-routable: ${ext.blocking.join('; ')}`);
+    throw new Error(
+      `meteora-damm-v2 pool ${pool} token_${side} mint ${mint} is un-routable: ${ext.blocking.join("; ")}`,
+    );
   }
   // TODO(t22-fee-netting): a fee-bearing mint is REJECTED, not netted. Netting
   // would have to be applied IDENTICALLY in referenceQuote AND the in-VM
@@ -279,7 +292,7 @@ function totalFeeNumerator(d: DecodedPool): bigint {
 
 export const meteoraDammV2 = {
   slug: SLUG,
-  kind: 'sqrt-price',
+  kind: "sqrt-price",
   programId: PROGRAM_ID,
 
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<MeteoraDammV2PoolConfig> {
@@ -293,14 +306,14 @@ export const meteoraDammV2 = {
         `meteora-damm-v2 pool ${pool} has slot-based activation_point ${d.activationPoint} — slot-gated pools are out of scope`,
       );
     }
-    const tokenAProgram = tokenProgramFor(pool, 'a', d.tokenAFlag);
-    const tokenBProgram = tokenProgramFor(pool, 'b', d.tokenBFlag);
-    if (d.tokenAFlag === 1) await assertRoutableMint(load, pool, 'a', d.tokenAMint);
-    if (d.tokenBFlag === 1) await assertRoutableMint(load, pool, 'b', d.tokenBMint);
+    const tokenAProgram = tokenProgramFor(pool, "a", d.tokenAFlag);
+    const tokenBProgram = tokenProgramFor(pool, "b", d.tokenBFlag);
+    if (d.tokenAFlag === 1) await assertRoutableMint(load, pool, "a", d.tokenAMint);
+    if (d.tokenBFlag === 1) await assertRoutableMint(load, pool, "b", d.tokenBMint);
     return {
       venue: SLUG,
       pool,
-      direction: 'aToB',
+      direction: "aToB",
       tokenAMint: d.tokenAMint,
       tokenBMint: d.tokenBMint,
       tokenAVault: d.tokenAVault,
@@ -330,7 +343,7 @@ export const meteoraDammV2 = {
     if (!Number.isInteger(i) || i < 0) {
       throw new Error(`meteora-damm-v2 emitQuote index must be a non-negative integer, got ${i}`);
     }
-    checkAmountIn('meteora-damm-v2 emitQuote', amountIn);
+    checkAmountIn("meteora-damm-v2 emitQuote", amountIn);
     const lines: string[] = [];
     // Account model (RS compiler): quoteAccounts() attaches the pool alone, so
     // the pool is slot 0 (acc0) and every on-chain read is `svm.sload(acc0, off,
@@ -347,8 +360,11 @@ export const meteoraDammV2 = {
         `if (f${i} > ${c.maxFeeNumerator}) { f${i} = ${c.maxFeeNumerator} }`,
       );
     }
-    lines.push(`const l${i} = svm.sload(acc0, 360, 16).toLe();`, `const s${i} = svm.sload(acc0, 456, 16).toLe();`);
-    if (c.direction === 'aToB') {
+    lines.push(
+      `const l${i} = svm.sload(acc0, 360, 16).toLe();`,
+      `const s${i} = svm.sload(acc0, 456, 16).toLe();`,
+    );
+    if (c.direction === "aToB") {
       // next = ceil(L * sqrtP / (L + dIn * sqrtP)); delta_b floors; fee ceils
       // on OUTPUT (fees are never on input for aToB). A band-crossing next
       // clamps the quote to 0 (never wraps: next <= sqrtP here) so the other
@@ -384,12 +400,12 @@ export const meteoraDammV2 = {
     if (c.activationType === 1 && c.activationPoint > 0n) {
       lines.push(`if (ctx.timestamp() < ${c.activationPoint}) { q${i} = 0 }`);
     }
-    return lines.join('\n');
+    return lines.join("\n");
   },
 
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
     const c = dammV2Config(cfg);
-    checkAmountIn('meteora-damm-v2 buildSwap', amountIn);
+    checkAmountIn("meteora-damm-v2 buildSwap", amountIn);
     // discriminator || amount_in u64 LE || minimum_amount_out u64 LE — min_out
     // is 1 by contract (the recipe's post-swap delta check owns the bound).
     const data = new Uint8Array(24);
@@ -426,7 +442,7 @@ export const meteoraDammV2 = {
     const c = dammV2Config(cfg);
     const data = state[c.pool];
     if (data === undefined) throw new Error(`meteora-damm-v2 pool ${c.pool} missing from state`);
-    checkAmountIn('meteora-damm-v2 referenceQuote', amountIn);
+    checkAmountIn("meteora-damm-v2 referenceQuote", amountIn);
     const d = decodePool(c.pool, data);
     // Only timestamp-typed points compare against unix `now`; slot-typed
     // nonzero points never reach here (rejected at fetch).
@@ -436,7 +452,7 @@ export const meteoraDammV2 = {
       );
     }
     const fee = totalFeeNumerator(d);
-    const aToB = c.direction === 'aToB';
+    const aToB = c.direction === "aToB";
     // fees_on_input only for (OnlyB | Compounding) + bToA; compounding is gated.
     const feesOnInput = !aToB && d.collectFeeMode >= 1;
     let dIn = amountIn;

@@ -45,9 +45,13 @@ import {
   getU8Encoder,
   getU32Decoder,
   getU32Encoder,
-} from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { verifySvmSettleExecution, type SvmSettleExecutionVerification, type SvmSettleExpectation } from './verify.js';
+} from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  verifySvmSettleExecution,
+  type SvmSettleExecutionVerification,
+  type SvmSettleExpectation,
+} from "./verify.js";
 
 // ── Portal CalldataWithAccounts envelope (Eco Portal program IDL) ──
 
@@ -71,17 +75,17 @@ export interface PortalCalldataWithAccounts {
 // Borsh (Anchor): `bytes` = u32 LE length prefix + bytes; `Vec<T>` = u32 LE length + elements;
 // `bool` = 1 byte; `pubkey` = 32 bytes; `u8` = 1 byte. Field order is the IDL struct order.
 const calldataDecoder = getStructDecoder([
-  ['data', addDecoderSizePrefix(getBytesDecoder(), getU32Decoder())],
-  ['accountCount', getU8Decoder()],
+  ["data", addDecoderSizePrefix(getBytesDecoder(), getU32Decoder())],
+  ["accountCount", getU8Decoder()],
 ]);
 const accountMetaDecoder = getStructDecoder([
-  ['pubkey', getAddressDecoder()],
-  ['isSigner', getBooleanDecoder()],
-  ['isWritable', getBooleanDecoder()],
+  ["pubkey", getAddressDecoder()],
+  ["isSigner", getBooleanDecoder()],
+  ["isWritable", getBooleanDecoder()],
 ]);
 const calldataWithAccountsDecoder = getStructDecoder([
-  ['calldata', calldataDecoder],
-  ['accounts', getArrayDecoder(accountMetaDecoder, { size: getU32Decoder() })],
+  ["calldata", calldataDecoder],
+  ["accounts", getArrayDecoder(accountMetaDecoder, { size: getU32Decoder() })],
 ]);
 
 /** An opaque byte payload: `Uint8Array` as-is; a `0x`-prefixed hex string (the viem `Hex` form
@@ -99,25 +103,29 @@ export type UniversalAddressInput = Uint8Array | `0x${string}` | Address;
 
 function toBytes(input: BytesInput, label: string): Uint8Array {
   if (input instanceof Uint8Array) return input;
-  if (typeof input !== 'string') throw new Error(`${label} must be a Uint8Array or string, got ${typeof input}`);
-  if (input.startsWith('0x') || input.startsWith('0X')) {
+  if (typeof input !== "string")
+    throw new Error(`${label} must be a Uint8Array or string, got ${typeof input}`);
+  if (input.startsWith("0x") || input.startsWith("0X")) {
     const hex = input.slice(2);
-    if (hex.length % 2 !== 0 || /[^0-9a-fA-F]/.test(hex)) throw new Error(`${label} is not valid 0x-hex`);
+    if (hex.length % 2 !== 0 || /[^0-9a-fA-F]/.test(hex))
+      throw new Error(`${label} is not valid 0x-hex`);
     const out = new Uint8Array(hex.length / 2);
     for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
     return out;
   }
   // Not 0x-prefixed → base64 (Buffer is available; this module is node-side like the rest of svm/verify).
-  return new Uint8Array(Buffer.from(input, 'base64'));
+  return new Uint8Array(Buffer.from(input, "base64"));
 }
 
 /** Resolves any `UniversalAddressInput` to the base58 `Address` form the rest of a settle verdict reports
  *  accounts in, so it compares directly against a program id. Throws on input that is not a 32-byte
  *  universal address; `resolveSettleTarget` is what makes that non-fatal for a scan. */
 function toTargetAddress(input: UniversalAddressInput): Address {
-  if (typeof input === 'string' && !input.startsWith('0x') && !input.startsWith('0X')) return address(input);
-  const bytes = toBytes(input, 'target');
-  if (bytes.length !== 32) throw new Error(`target is ${bytes.length} bytes — an SVM universal address is 32`);
+  if (typeof input === "string" && !input.startsWith("0x") && !input.startsWith("0X"))
+    return address(input);
+  const bytes = toBytes(input, "target");
+  if (bytes.length !== 32)
+    throw new Error(`target is ${bytes.length} bytes — an SVM universal address is 32`);
   return getAddressDecoder().decode(bytes);
 }
 
@@ -127,7 +135,7 @@ function toTargetAddress(input: UniversalAddressInput): Address {
  * `Hex` a call carries), or base64. Throws on a truncated / malformed envelope.
  */
 export function decodePortalCalldataWithAccounts(data: BytesInput): PortalCalldataWithAccounts {
-  const bytes = toBytes(data, 'portal calldata');
+  const bytes = toBytes(data, "portal calldata");
   const decoded = calldataWithAccountsDecoder.decode(bytes);
   // Both `account_count` (the Calldata field) and the attached `accounts` vec length are decoded and
   // surfaced; they are NOT asserted equal here. eco-solver's own `decodeRouteCall` does not enforce it
@@ -139,7 +147,11 @@ export function decodePortalCalldataWithAccounts(data: BytesInput): PortalCallda
     // downstream payload parser (subarray / DataView) has a mutable, standard view.
     instructionData: new Uint8Array(decoded.calldata.data),
     accountCount: decoded.calldata.accountCount,
-    accounts: decoded.accounts.map((a) => ({ pubkey: a.pubkey, isSigner: a.isSigner, isWritable: a.isWritable })),
+    accounts: decoded.accounts.map((a) => ({
+      pubkey: a.pubkey,
+      isSigner: a.isSigner,
+      isWritable: a.isWritable,
+    })),
   };
 }
 
@@ -147,17 +159,17 @@ export function decodePortalCalldataWithAccounts(data: BytesInput): PortalCallda
 // `CalldataWithAccounts` Borsh layout has exactly one source of truth (field order, u32-length
 // prefixes, u8 account_count, u32-length-prefixed accounts vec).
 const calldataEncoder = getStructEncoder([
-  ['data', addEncoderSizePrefix(getBytesEncoder(), getU32Encoder())],
-  ['accountCount', getU8Encoder()],
+  ["data", addEncoderSizePrefix(getBytesEncoder(), getU32Encoder())],
+  ["accountCount", getU8Encoder()],
 ]);
 const accountMetaEncoder = getStructEncoder([
-  ['pubkey', getAddressEncoder()],
-  ['isSigner', getBooleanEncoder()],
-  ['isWritable', getBooleanEncoder()],
+  ["pubkey", getAddressEncoder()],
+  ["isSigner", getBooleanEncoder()],
+  ["isWritable", getBooleanEncoder()],
 ]);
 const calldataWithAccountsEncoder = getStructEncoder([
-  ['calldata', calldataEncoder],
-  ['accounts', getArrayEncoder(accountMetaEncoder, { size: getU32Encoder() })],
+  ["calldata", calldataEncoder],
+  ["accounts", getArrayEncoder(accountMetaEncoder, { size: getU32Encoder() })],
 ]);
 
 /** Input to {@link encodePortalCalldataWithAccounts} — the mirror of {@link PortalCalldataWithAccounts}. */
@@ -178,13 +190,19 @@ export interface PortalCalldataWithAccountsInput {
  * same field list above), so encoder and decoder cannot drift apart. This is what a route `Call.data`
  * for a staged SVM Sauce execution looks like on the wire.
  */
-export function encodePortalCalldataWithAccounts(input: PortalCalldataWithAccountsInput): `0x${string}` {
+export function encodePortalCalldataWithAccounts(
+  input: PortalCalldataWithAccountsInput,
+): `0x${string}` {
   const accountCount = input.accountCount ?? input.accounts.length;
   const encoded = calldataWithAccountsEncoder.encode({
     calldata: { data: input.instructionData, accountCount },
-    accounts: input.accounts.map((a) => ({ pubkey: a.pubkey, isSigner: a.isSigner, isWritable: a.isWritable })),
+    accounts: input.accounts.map((a) => ({
+      pubkey: a.pubkey,
+      isSigner: a.isSigner,
+      isWritable: a.isWritable,
+    })),
   });
-  return `0x${Buffer.from(Uint8Array.from(encoded as ArrayLike<number>)).toString('hex')}`;
+  return `0x${Buffer.from(Uint8Array.from(encoded as ArrayLike<number>)).toString("hex")}`;
 }
 
 // ── intent extraction ──
@@ -220,9 +238,9 @@ export interface ExtractSvmSettleOptions extends SvmSettleExpectation {
  *  legitimately skip the callee check for a call that named no callee; skipping it because the callee it
  *  named was garbage accepts a settle whose callee is unknown. Only `program` is ever safe to clear. */
 export type SvmSettleTarget =
-  | { readonly kind: 'program'; readonly address: Address }
-  | { readonly kind: 'absent' }
-  | { readonly kind: 'unreadable'; readonly reason: string };
+  | { readonly kind: "program"; readonly address: Address }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly reason: string };
 
 /** The extracted settle for a call: the full `verifySvmSettleExecution` verdict (resolved accounts and
  *  the `genuine` / `verifiedBy` genuineness fields), extended with the call's index and callee. */
@@ -236,12 +254,12 @@ export type ExtractedSvmSettle = SvmSettleExecutionVerification & {
 /** Total, so the `… | null` scan around it stays total: a `target` this cannot resolve becomes
  *  `unreadable` rather than an exception thrown out of a function no caller of that type would guard. */
 function resolveSettleTarget(input: UniversalAddressInput | undefined): SvmSettleTarget {
-  if (input === undefined) return { kind: 'absent' };
+  if (input === undefined) return { kind: "absent" };
 
   try {
-    return { kind: 'program', address: toTargetAddress(input) };
+    return { kind: "program", address: toTargetAddress(input) };
   } catch (error) {
-    return { kind: 'unreadable', reason: error instanceof Error ? error.message : String(error) };
+    return { kind: "unreadable", reason: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -273,7 +291,8 @@ export function extractSvmSettleFromCalls(
   calls: readonly SvmIntentCallLike[],
   options: ExtractSvmSettleOptions,
 ): ExtractedSvmSettle | null {
-  const bytecode = options.bytecode !== undefined ? toBytes(options.bytecode, 'bytecode') : undefined;
+  const bytecode =
+    options.bytecode !== undefined ? toBytes(options.bytecode, "bytecode") : undefined;
 
   for (let i = 0; i < calls.length; i++) {
     let envelope: PortalCalldataWithAccounts;
@@ -296,7 +315,8 @@ export function extractSvmSettleFromCalls(
       continue; // a decodable envelope, but its instruction is not even settle-SHAPED — skip
     }
 
-    if (verified.genuine) return { ...verified, callIndex: i, target: resolveSettleTarget(calls[i]!.target) };
+    if (verified.genuine)
+      return { ...verified, callIndex: i, target: resolveSettleTarget(calls[i]!.target) };
     // shape-matched but NOT a genuine settle (decoy / wrong program / wrong escrow count) — keep scanning,
     // so a genuine settle later in the batch is never masked by an earlier lookalike.
   }
@@ -312,6 +332,9 @@ export function extractSvmSettleFromCalls(
  * carries no genuine settle execution. The `target` duty documented on `extractSvmSettleFromCalls` applies
  * here unchanged.
  */
-export function extractSvmSettleFromIntent(intent: SvmIntentLike, options: ExtractSvmSettleOptions): ExtractedSvmSettle | null {
+export function extractSvmSettleFromIntent(
+  intent: SvmIntentLike,
+  options: ExtractSvmSettleOptions,
+): ExtractedSvmSettle | null {
   return extractSvmSettleFromCalls(intent.route.calls, options);
 }

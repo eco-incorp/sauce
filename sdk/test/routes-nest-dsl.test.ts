@@ -49,18 +49,21 @@ describe(".nest(): thunk form", () => {
   it("receives the parent's CanonicalChain and needs no explicit source", () => {
     let seenParentSlug: string | undefined;
     const built = openRoute("base", "return 1n;", evmOptions())
-      .nest((on) => {
-        seenParentSlug = on.slug;
-        return openRoute("arbitrum", "return 2n;", {
-          pot: POT,
-          deadline: 2000n,
-          portal: PORTAL,
-          source: on,
-          creator: CREATOR,
-          prover: PROVER,
-          rewardDeadline: 2000n,
-        }).reward(0n);
-      }, { via: "publishAndFund" })
+      .nest(
+        (on) => {
+          seenParentSlug = on.slug;
+          return openRoute("arbitrum", "return 2n;", {
+            pot: POT,
+            deadline: 2000n,
+            portal: PORTAL,
+            source: on,
+            creator: CREATOR,
+            prover: PROVER,
+            rewardDeadline: 2000n,
+          }).reward(0n);
+        },
+        { via: "publishAndFund" },
+      )
       .reward(0n);
 
     expect(seenParentSlug).toBe("base");
@@ -73,14 +76,21 @@ describe(".nest(): thunk form", () => {
 describe(".nest(): BuiltIntent form", () => {
   it("throws when the child's source does not match the parent's destination", () => {
     const mismatchedChild = childSpec("optimism", 2000n, "base").reward(0n); // source: base
-    expect(() =>
-      openRoute("arbitrum", "return 1n;", evmOptions()).nest(mismatchedChild, { via: "publishAndFund" }), // destination: arbitrum, not base
+    expect(
+      () =>
+        openRoute("arbitrum", "return 1n;", evmOptions()).nest(mismatchedChild, {
+          via: "publishAndFund",
+        }), // destination: arbitrum, not base
     ).toThrow(/source/i);
   });
 
   it("accepts a pre-built child whose source already matches the parent's destination", () => {
     const child = childSpec("optimism", 2000n, "base").reward(0n); // source: base
-    expect(() => openRoute("base", "return 1n;", evmOptions()).nest(child, { via: "publishAndFund" }).reward(0n)).not.toThrow();
+    expect(() =>
+      openRoute("base", "return 1n;", evmOptions())
+        .nest(child, { via: "publishAndFund" })
+        .reward(0n),
+    ).not.toThrow();
   });
 });
 
@@ -99,7 +109,11 @@ describe(".nest(): depth-2 cascade", () => {
       rewardDeadline: 3000n,
     }).reward(0n);
 
-    const child = openRoute("arbitrum", "return 2n;", evmOptions({ deadline: 2000n, rewardDeadline: 2000n }))
+    const child = openRoute(
+      "arbitrum",
+      "return 2n;",
+      evmOptions({ deadline: 2000n, rewardDeadline: 2000n }),
+    )
       .nest(grandchild, { via: "publishAndFund" })
       .reward(0n);
 
@@ -149,7 +163,9 @@ describe(".nest(): call ordering", () => {
       .filter((d): d is NonNullable<typeof d> => d?.functionName === "publishAndFund");
 
     expect(publishCalls).toHaveLength(2);
-    const destinations = publishCalls.map((d) => (d.args as readonly [bigint, Hex, unknown, boolean])[0]);
+    const destinations = publishCalls.map(
+      (d) => (d.args as readonly [bigint, Hex, unknown, boolean])[0],
+    );
     expect(destinations[0]).toBe(childA.intent.destination);
     expect(destinations[1]).toBe(childB.intent.destination);
   });
@@ -173,9 +189,17 @@ describe(".nest(): call ordering", () => {
   });
 
   it("precalls still lead, ahead of any nested children", () => {
-    const precalls = [{ target: "0x5555555555555555555555555555555555555555" as Hex, data: "0xaa" as Hex, value: 0n }];
+    const precalls = [
+      {
+        target: "0x5555555555555555555555555555555555555555" as Hex,
+        data: "0xaa" as Hex,
+        value: 0n,
+      },
+    ];
     const child = childSpec("arbitrum").reward(0n);
-    const built = openRoute("base", "return 1n;", evmOptions({ precalls })).nest(child, { via: "publishAndFund" }).reward(0n);
+    const built = openRoute("base", "return 1n;", evmOptions({ precalls }))
+      .nest(child, { via: "publishAndFund" })
+      .reward(0n);
     expect(built.intent.route.calls[0]!.data).toBe("0xaa");
   });
 });
@@ -190,10 +214,18 @@ describe(".nest(): no-regression control", () => {
   it("the string-body form nests identically to the closure form", () => {
     const child = childSpec("arbitrum").reward(0n);
 
-    const viaString = openRoute("base", "return 1n;", evmOptions()).nest(child, { via: "publishAndFund" }).reward(0n);
-    const viaClosure = openRoute("base", () => {
-      return 1n;
-    }, evmOptions()).nest(child, { via: "publishAndFund" }).reward(0n);
+    const viaString = openRoute("base", "return 1n;", evmOptions())
+      .nest(child, { via: "publishAndFund" })
+      .reward(0n);
+    const viaClosure = openRoute(
+      "base",
+      () => {
+        return 1n;
+      },
+      evmOptions(),
+    )
+      .nest(child, { via: "publishAndFund" })
+      .reward(0n);
 
     expect(viaString.intent.route.calls).toEqual(viaClosure.intent.route.calls);
     expect(viaString.children).toHaveLength(1);

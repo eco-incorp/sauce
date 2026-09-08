@@ -27,14 +27,21 @@ const BENEFICIARY = "0x3333333333333333333333333333333333333333" as const;
 /** Rebuilds the canonical `name(type,type,...)` signature from a vendored as-const ABI array
  *  entry — mirrors `templates.ts`'s own hand-transcribed `signature` field so the two can be
  *  compared string-for-string. */
-function signatureFromAbi(abi: readonly { name: string; inputs: readonly { type: string }[] }[], name: string): string {
+function signatureFromAbi(
+  abi: readonly { name: string; inputs: readonly { type: string }[] }[],
+  name: string,
+): string {
   const entry = abi.find((e) => e.name === name);
   if (!entry) throw new Error(`signatureFromAbi: no entry named "${name}"`);
   return `${name}(${entry.inputs.map((i) => i.type).join(",")})`;
 }
 
 describe("registry drift — every ABI-backed template's signature/selector matches the vendored ABI", () => {
-  const cases: { key: string; abi: readonly { name: string; inputs: readonly { type: string }[] }[]; method: string }[] = [
+  const cases: {
+    key: string;
+    abi: readonly { name: string; inputs: readonly { type: string }[] }[];
+    method: string;
+  }[] = [
     { key: "aave-v3:supply", abi: PoolABI, method: "supply" },
     { key: "aave-v3:withdraw", abi: PoolABI, method: "withdraw" },
     { key: "spark:supply", abi: SparkPoolABI, method: "supply" },
@@ -61,7 +68,9 @@ describe("WETH selector pins (no vendored SDK ABI exists for WETH — see the mo
     expect(DEPOSIT_TEMPLATES["weth:wrap"].selector).toBe(toFunctionSelector("function deposit()"));
   });
   it("weth:unwrap uses withdraw(uint256)'s real selector", () => {
-    expect(DEPOSIT_TEMPLATES["weth:unwrap"].selector).toBe(toFunctionSelector("function withdraw(uint256)"));
+    expect(DEPOSIT_TEMPLATES["weth:unwrap"].selector).toBe(
+      toFunctionSelector("function withdraw(uint256)"),
+    );
   });
 });
 
@@ -94,7 +103,9 @@ function aaveSpec(overrides: Partial<DepositSpec> = {}): DepositSpec {
 
 describe("toDeposit guards", () => {
   it("throws for an unknown protocol:action", () => {
-    expect(() => toDeposit(aaveSpec({ protocol: "nope" }))).toThrow(/no deposit template registered/);
+    expect(() => toDeposit(aaveSpec({ protocol: "nope" }))).toThrow(
+      /no deposit template registered/,
+    );
   });
 
   it("requires token for an erc20-approve/none template", () => {
@@ -109,24 +120,44 @@ describe("toDeposit guards", () => {
 
   it("rejects beneficiary on a beneficiary-unsupported template (weth:wrap)", () => {
     expect(() =>
-      toDeposit({ protocol: "weth", action: "wrap", target: TARGET, amount: 1n, beneficiary: BENEFICIARY }),
+      toDeposit({
+        protocol: "weth",
+        action: "wrap",
+        target: TARGET,
+        amount: 1n,
+        beneficiary: BENEFICIARY,
+      }),
     ).toThrow(/does not support a beneficiary/);
   });
 
   it("rejects beneficiary on weth:unwrap", () => {
     expect(() =>
-      toDeposit({ protocol: "weth", action: "unwrap", target: TARGET, amount: 1n, beneficiary: BENEFICIARY }),
+      toDeposit({
+        protocol: "weth",
+        action: "unwrap",
+        target: TARGET,
+        amount: 1n,
+        beneficiary: BENEFICIARY,
+      }),
     ).toThrow(/does not support a beneficiary/);
   });
 
   it("rejects beneficiary on lido:stake", () => {
     expect(() =>
-      toDeposit({ protocol: "lido", action: "stake", target: TARGET, amount: 1n, beneficiary: BENEFICIARY }),
+      toDeposit({
+        protocol: "lido",
+        action: "stake",
+        target: TARGET,
+        amount: 1n,
+        beneficiary: BENEFICIARY,
+      }),
     ).toThrow(/does not support a beneficiary/);
   });
 
   it("rejects amount 'max' on a template without allowsMaxAmount", () => {
-    expect(() => toDeposit(aaveSpec({ amount: "max" }))).toThrow(/does not document a uint256-max sentinel/);
+    expect(() => toDeposit(aaveSpec({ amount: "max" }))).toThrow(
+      /does not document a uint256-max sentinel/,
+    );
   });
 
   it("accepts amount 'max' on aave-v3:withdraw (allowsMaxAmount: true)", () => {
@@ -141,14 +172,21 @@ describe("toDeposit guards", () => {
   });
 
   it("rejects an unknown extra field", () => {
-    expect(() => toDeposit(aaveSpec({ extra: { bogus: 1n } }))).toThrow(/has no extra field "bogus"/);
+    expect(() => toDeposit(aaveSpec({ extra: { bogus: 1n } }))).toThrow(
+      /has no extra field "bogus"/,
+    );
   });
 
   it("rejects referralCode >= 65536", () => {
-    expect(() => toDeposit(aaveSpec({ extra: { referralCode: 65_536n } }))).toThrow(/expected a uint16/);
+    expect(() => toDeposit(aaveSpec({ extra: { referralCode: 65_536n } }))).toThrow(
+      /expected a uint16/,
+    );
   });
 
   it("rejects an unsafe integer referralCode before the range check sees a rounded value", () => {
+    // The imprecise literal IS the input under test: it asserts the safe-integer guard
+    // rejects it before anything reads a rounded value.
+    // eslint-disable-next-line no-loss-of-precision
     expect(() => toDeposit(aaveSpec({ extra: { referralCode: 1234567890123456789 } }))).toThrow(
       /referralCode: expected a safe integer/,
     );
@@ -161,7 +199,9 @@ describe("toDeposit guards", () => {
   });
 
   it("rejects a non-integer number amount", () => {
-    expect(() => toDeposit(aaveSpec({ amount: 1.5 }))).toThrow(/amount: expected an integer, got 1\.5/);
+    expect(() => toDeposit(aaveSpec({ amount: 1.5 }))).toThrow(
+      /amount: expected an integer, got 1\.5/,
+    );
   });
 
   it("accepts a number amount at Number.MAX_SAFE_INTEGER exactly", () => {
@@ -201,7 +241,12 @@ describe("emission shape — approvals", () => {
   });
 
   it("a native-value template (weth:wrap) emits no approve at all", () => {
-    const stmt = depositCallStatement({ protocol: "weth", action: "wrap", target: TARGET, amount: 1_000n });
+    const stmt = depositCallStatement({
+      protocol: "weth",
+      action: "wrap",
+      target: TARGET,
+      amount: 1_000n,
+    });
     expect(stmt).not.toMatch(/\.approve\(/);
     expect(stmt).toMatch(/evm\.call\(/);
   });
@@ -226,9 +271,11 @@ describe("emission shape — approvals", () => {
   });
 
   it("depositCallStatement rejects amount 'delta'", () => {
-    expect(() => depositCallStatement(aaveSpec({ amount: "delta" } as unknown as Partial<DepositSpec> as DepositSpec))).toThrow(
-      /only meaningful inside swapThenDepositSource/,
-    );
+    expect(() =>
+      depositCallStatement(
+        aaveSpec({ amount: "delta" } as unknown as Partial<DepositSpec> as DepositSpec),
+      ),
+    ).toThrow(/only meaningful inside swapThenDepositSource/);
   });
 });
 
@@ -245,7 +292,9 @@ describe("depositImportLines", () => {
   });
 
   it("omits IERC20 for a plain native-value deposit", () => {
-    const lines = depositImportLines([{ protocol: "weth", action: "wrap", target: TARGET, amount: 1n }]);
+    const lines = depositImportLines([
+      { protocol: "weth", action: "wrap", target: TARGET, amount: 1n },
+    ]);
     expect(lines.some((l) => l.includes("IERC20.json"))).toBe(false);
   });
 });

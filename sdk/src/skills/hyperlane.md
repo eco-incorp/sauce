@@ -3,20 +3,29 @@
 Permissionless interchain messaging protocol. Supports modular security with ISMs (Interchain Security Modules) across 150+ chains.
 
 ## Category
+
 cross-chain messaging | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), Avalanche (43114), BSC (56)
 
 ## SauceScript Functions
 
 ### dispatch
+
 Send a cross-chain message via Hyperlane Mailbox.
+
 ```typescript
 import { HyperlaneMailboxABI as IMailbox } from "./abis";
 
-function main(mailboxAddress: Address, destinationDomain: Uint256, recipientAddress: Uint256, messageBody: bytes): Uint256 {
+function main(
+  mailboxAddress: Address,
+  destinationDomain: Uint256,
+  recipientAddress: Uint256,
+  messageBody: bytes,
+): Uint256 {
   const mailbox = IMailbox.at(mailboxAddress);
   return mailbox.dispatch(destinationDomain, recipientAddress, messageBody);
 }
 ```
+
 - `destinationDomain`: Hyperlane domain ID (NOT EVM chain ID). Each chain has a unique uint32 domain identifier
 - `recipientAddress`: Destination contract address as bytes32 (left-padded with zeros)
 - `messageBody`: Arbitrary message payload (bytes)
@@ -25,25 +34,27 @@ function main(mailboxAddress: Address, destinationDomain: Uint256, recipientAddr
 
 ## Deployed Addresses
 
-| Chain | Contract | Address |
-|-------|----------|---------|
-| Ethereum | mailbox | `0xc005dc82818d67AF737725bD4bf75435d065D239` |
-| Arbitrum | mailbox | `0x979Ca5202784112f4738403dBec5D0F3B9daabB9` |
-| Optimism | mailbox | `0xd4C1905BB1D26BC93DAC913e13CaCC278CdCC80D` |
-| Base | mailbox | `0xeA87ae93Fa0019a82A727bfd3eBd1cFCa8f64f1D` |
-| Polygon | mailbox | `0x5d934f4e2f797775e53561bB72aca21ba36B96BB` |
-| Avalanche | mailbox | `0xFf06aFcaABaDDd1fb08371f9ccA15D73D51FeBD6` |
-| BSC | mailbox | `0x2971b9Aec44bE4eb673DF1B88cDB57b96eefe8a4` |
+| Chain     | Contract | Address                                      |
+| --------- | -------- | -------------------------------------------- |
+| Ethereum  | mailbox  | `0xc005dc82818d67AF737725bD4bf75435d065D239` |
+| Arbitrum  | mailbox  | `0x979Ca5202784112f4738403dBec5D0F3B9daabB9` |
+| Optimism  | mailbox  | `0xd4C1905BB1D26BC93DAC913e13CaCC278CdCC80D` |
+| Base      | mailbox  | `0xeA87ae93Fa0019a82A727bfd3eBd1cFCa8f64f1D` |
+| Polygon   | mailbox  | `0x5d934f4e2f797775e53561bB72aca21ba36B96BB` |
+| Avalanche | mailbox  | `0xFf06aFcaABaDDd1fb08371f9ccA15D73D51FeBD6` |
+| BSC       | mailbox  | `0x2971b9Aec44bE4eb673DF1B88cDB57b96eefe8a4` |
 
 ## ABI Reference
 
 ### HyperlaneMailboxABI
+
 - `dispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) returns (uint256)` [payable] - Send interchain message. Returns message ID
 - `quoteDispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) returns (uint256)` - Quote fee for dispatching a message (view)
 - `process(bytes _metadata, bytes _message)` - Process an inbound message on the destination chain (called by relayers)
 - `delivered(bytes32 _id) returns (bool)` - Check if a message has been delivered (view)
 
 ## Notes
+
 - This is a messaging protocol, not a direct token bridge. Token bridging uses Warp Routes built on top of Hyperlane
 - Uses domain IDs (uint32), NOT EVM chain IDs. Common domains: Ethereum=1, Arbitrum=42161, Optimism=10 (may differ from EVM chain IDs)
 - Permissionless: anyone can deploy Hyperlane to a new chain without governance approval

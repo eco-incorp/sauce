@@ -45,11 +45,11 @@
  * inference, routing/splitting, transaction assembly, and `.at(address)`
  * rebinding (a venue is a program, not a per-chain contract instance).
  */
-import type { Address } from '@solana/kit';
-import type { PascalOf } from '../routes/builder.js';
-import { pascalOfSlug } from '../routes/builder.js';
-import type { RegisteredVenueSlug } from './venues/registry.js';
-import { listVenues, venueAdapter } from './venues/registry.js';
+import type { Address } from "@solana/kit";
+import type { PascalOf } from "../routes/builder.js";
+import { pascalOfSlug } from "../routes/builder.js";
+import type { RegisteredVenueSlug } from "./venues/registry.js";
+import { listVenues, venueAdapter } from "./venues/registry.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -58,7 +58,7 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from './venues/types.js';
+} from "./venues/types.js";
 
 /** Registered venue slugs only — see this module's own header for why the other ~77 are excluded. */
 export type SvmVenueSlug = RegisteredVenueSlug;
@@ -71,7 +71,7 @@ export type SvmVenueSlug = RegisteredVenueSlug;
  */
 export interface SvmVenueAccessor {
   readonly slug: SvmVenueSlug;
-  readonly kind: SvmVenueAdapter['kind'];
+  readonly kind: SvmVenueAdapter["kind"];
   /** Mainnet program id. Zero I/O, resolvable at import. */
   readonly programId: Address;
   /** The real adapter object, by identity — the escape hatch for anything this leaf doesn't surface. */
@@ -103,7 +103,8 @@ function buildVenueAccessor(adapter: SvmVenueAdapter): SvmVenueAccessor {
     quoteAccounts: (cfg) => adapter.quoteAccounts(cfg),
     quoteSource: (cfg, i, amountIn) => adapter.emitQuote(cfg, i, amountIn),
     swap: (cfg, user, amountIn) => adapter.buildSwap(cfg, user, amountIn),
-    referenceQuote: (cfg, state, amountIn, now) => adapter.referenceQuote(cfg, state, amountIn, now),
+    referenceQuote: (cfg, state, amountIn, now) =>
+      adapter.referenceQuote(cfg, state, amountIn, now),
   };
 }
 

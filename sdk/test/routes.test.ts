@@ -109,7 +109,13 @@ describe("routes: string-body form (stage-1 compatibility) on an SVM destination
     const built = Solana.route("function main() { return 1n; }", {
       execution: {
         buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
-        accounts: [{ pubkey: "So11111111111111111111111111111111111111112", isSigner: false, isWritable: false }],
+        accounts: [
+          {
+            pubkey: "So11111111111111111111111111111111111111112",
+            isSigner: false,
+            isWritable: false,
+          },
+        ],
       },
       deadline: 2000n,
       portal: PORTAL,

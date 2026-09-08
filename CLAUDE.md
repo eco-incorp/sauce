@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Sauce** — the developer-facing package for the **Sauce protocol**, an on-chain bytecode runtime
 that executes Turing-complete, atomic scripts in a single EVM transaction. This is the whole `sauce`
 repo (`eco-incorp/sauce`, **renamed from `eco-incorp/sauce-sdk`** — the old name still redirects). The
-runtime **engine** it *targets* lives in the separate private **`eco-incorp/v12`** repo (**renamed
+runtime **engine** it _targets_ lives in the separate private **`eco-incorp/v12`** repo (**renamed
 from `eco-incorp/sauce`**; the engine, not this package, is what took the `v12` name — often checked
 out at `../v12`).
 
@@ -17,11 +17,11 @@ A **pnpm monorepo** of three workspace packages (`pnpm-workspace.yaml`: `dev-too
 bundling is the key mental model: code lives in three packages for development, consumers import
 everything from one name.
 
-| Workspace | Internal name | Published as | Role |
-| --- | --- | --- | --- |
-| `sdk/` | `@eco-incorp/sauce-sdk-source` | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`) | 129-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files |
-| `actions/` | `@eco-incorp/sauce-actions` | `/actions` | Routing-intent → bytecode lowering |
-| `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools` | Local/forked hardhat env + recipe runner |
+| Workspace    | Internal name                  | Published as                                                                                                                             | Role                                                                           |
+| ------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `sdk/`       | `@eco-incorp/sauce-sdk-source` | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`) | 129-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files |
+| `actions/`   | `@eco-incorp/sauce-actions`    | `/actions`                                                                                                                               | Routing-intent → bytecode lowering                                             |
+| `dev-tools/` | `@eco-incorp/sauce-dev-tools`  | bin `sauce-dev-tools`                                                                                                                    | Local/forked hardhat env + recipe runner                                       |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
 which may still carry older copies of these packages. The packages here are **siblings, not
@@ -38,7 +38,24 @@ pnpm install
 pnpm build          # sdk + actions
 pnpm typecheck      # all workspaces
 pnpm test           # all workspaces
+pnpm lint           # eslint, whole repo
+pnpm lint:fix       # ...with --fix
+pnpm format         # prettier --write, whole repo
+pnpm format:check   # prettier --check, what CI runs
 ```
+
+`lint` and `format:check` gate every PR (`.github/workflows/lint.yml`) and both run over the
+WHOLE tree, so there is no backlog to work around — a new file has to be clean. Prettier and
+ESLint are pinned to exact versions rather than caret ranges: a formatter that drifts between
+minors would start failing CI on a PR that changed nothing.
+
+**What the two tools deliberately do not see.** ESLint ignores SauceScript (`**/*.sauce.ts`,
+`dev-tools/sauce`, `dev-tools/test/fixtures`, `sdk/src/std`) because every finding there is a false
+positive: `main` is the entry point the Sauce compiler calls, so `no-unused-vars` fires on every
+program, and `require(cond)` is SauceScript's ASSERTION, which `no-require-imports` reads as a
+module import. Prettier's list is different and narrower — generated output (`**/*.generated.ts`,
+the two `settle.sauce.ts` recipes), captured fixtures, and `sdk/src/std` (see the byte-identity
+note below). Everything else, SauceScript included, is formatted.
 
 Per-workspace (`--filter`):
 
@@ -62,7 +79,7 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   `sdk/scripts/sync-engine-artifacts.mjs` gets the Solidity engine sources and the deploy record.
   Cloning needs GitHub auth — locally `gh auth setup-git` or an `~/.npmrc` token; CI uses the
   `ECO_INCORP_TOKEN` secret via a `git config insteadOf` rewrite (`.github/workflows/ci.yml` rewrites
-  the HTTPS *and* SSH forms, because the lockfile may pin either).
+  the HTTPS _and_ SSH forms, because the lockfile may pin either).
 - **Foundry is still required**, for two reasons that have nothing to do with the deleted compiler:
   (1) `forge` for `pnpm --filter './sdk' sync-engine-artifacts`, which `forge build`s the `sauce`
   dep's `engine/src` to produce the 8 artifact JSONs — the script also git-fetches the OpenZeppelin
@@ -134,15 +151,15 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   artifacts from the pinned dep's `engine/out/`). CI runs that same sync from the
   freshly-installed engine (foundry v1.5.1 + solc 0.8.27 → byte-reproducible) and asserts all 9
   JSONs landed, so a broken generation fails there rather than shipping an empty dir. The one
-  thing it drift-checks against the index is `sdk/src/deployments`, which *is* committed.
+  thing it drift-checks against the index is `sdk/src/deployments`, which _is_ committed.
 - **`V12RuntimeBytecode.json` comes from a pinned release asset, not from the `sauce` git dep.**
   The engine deleted its committed `engine-v12/snapshots/` copy (`chore(v12): compile the runtime
-  at deploy time`) because a second source of truth rotted — six changed `.huff` handlers once
+at deploy time`) because a second source of truth rotted — six changed `.huff` handlers once
   shipped with a snapshot built from pre-change source, through green CI.
   `sync-engine-artifacts.mjs:279` now wraps `v12-evm-v0.3.0`'s `runtime.creation.hex` in the JSON
   shape consumers already read. No Huff toolchain is involved in producing it.
 - **A tag is not a pin.** A GitHub tag is movable, so each asset is checked against a digest
-  committed in the script itself (`keccak256` of the *decoded* creation code; `sha256` of the
+  committed in the script itself (`keccak256` of the _decoded_ creation code; `sha256` of the
   `.so`), cross-checked against the release manifest's `creationCodeKeccak`/`soSha256`, **and**
   against `manifest.commit`. A moved tag throws rather than silently supplying a different engine.
   Assets cache under `node_modules/.cache/sauce-engine-releases/<tag>/`, so a warm tree needs no
@@ -180,7 +197,7 @@ CLI prints, never a WASM trap.
 (`node_modules/sauce-compiler/node/sauce_wasm.d.ts`), which document each option in detail —
 `ambient` precedence, `defines` precedence and their program-wide scope, the resolver contract
 (returning `undefined` means "nothing here" and falls back; a throw propagates). Read them rather
-than a paraphrase. Compiler *behavior* — language features, constant folding, per-target lowering —
+than a paraphrase. Compiler _behavior_ — language features, constant folding, per-target lowering —
 is documented in the `sauce` repo's `compiler/README.md` and crate doc-comments, not here.
 
 **Do not resurrect this file's old compiler notes.** ~1,470 lines here documented the deleted
@@ -212,7 +229,11 @@ pinned to a commit that predates the Rust compiler's move into `compiler/crates/
 path does not exist in `node_modules/sauce` and there is nothing on disk to compare against. The
 check is manual —
 `diff -r sdk/src/std/token <v12>/compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token`
-against a local checkout. What CI *does* pin is the SPL Token program id the SVM arm guards on:
+against a local checkout. **The formatter is kept off this path for the same reason** — `sdk/src/std`
+is in `.prettierignore`, because a reformat here breaks the invariant silently and permanently
+(a repo-wide `prettier --write` split three signatures in `token.svm.js` and that manual `diff -r`
+then reported a difference forever). Formatting it means landing the same change in `v12` first and
+re-copying. What CI _does_ pin is the SPL Token program id the SVM arm guards on:
 `test/std/token/compile.test.ts` derives it from the canonical base58 address and counts it in the
 emitted bytecode, so a wrong digit or a deleted `require` fails there. It has two per-target arms (`token.evm.js`, `token.svm.js`) and
 **deliberately no neutral `token.js`**: a token program is inherently target-specific, and a neutral
@@ -249,7 +270,7 @@ feature needed. It fires on ANY argument (a literal, a variable, an ambient `USD
 the symbol sugar it does NOT depend on the token-symbol map and works on every EVM chain; it is
 shadow-safe and svm-rejected the same way. **This is why the earlier "`Token(addr)` needs a compiler
 feature" framing was a red herring:** it only applies to the DIFFERENT approach of making `@sauce/token`
-*export* a real `Token` value (blocked by the M1 subset — a SauceScript function can't return a
+_export_ a real `Token` value (blocked by the M1 subset — a SauceScript function can't return a
 contract binding, no re-export, no method-on-call-result). The rewrite sidesteps all of that. The
 `@sauce/token` ambient module above still provides the FUNCTION surface (`approve(token, …)`); the two
 are complementary spellings, not competitors.
@@ -271,8 +292,9 @@ artifacts are what `cook()` runs against). `SauceRouter` is a thin delegatecall 
 
 **Entry points** (all the `swap*` ones are `onlySelf` — callable only via `cook()` from the same
 contract, so a recipe calls them as `ISauceRouter.at(address.self).swapX(...)`):
+
 - `swap(SwapParams)` — unified swap; dispatches on `params.poolType` to `_swapV2/_swapV3/_swapV4/
-  _swapCurve/_swapBalancerV2/_swapDODOV2/_swapTraderJoeLB/_swapMaverickV2/_swapWOOFi`.
+_swapCurve/_swapBalancerV2/_swapDODOV2/_swapTraderJoeLB/_swapMaverickV2/_swapWOOFi`.
   `SwapParams` embeds a `PoolKey` struct (`currency0,currency1,fee,tickSpacing,hooks`) used by V4 and,
   for its `fee` field only, by V2 (see the fee note below); ignored for V3. Calling this from
   SauceScript requires the compiler to order object-literal
@@ -284,7 +306,7 @@ contract, so a recipe calls them as `ISauceRouter.at(address.self).swapX(...)`):
 - `swapV3(pool, tokenIn, tokenOut, amountSpecified, sqrtPriceLimitX96, payer, recipient)` and
   `swapV4(...)` — **flat** legacy methods (no nested struct), verified working from SauceScript.
 - `quote(QuoteParams)` — off-chain simulation; performs the swap and reverts with `QuoteRevert(amountIn,
-  amountOut, sqrtPriceAfter, gas)`, which the caller decodes. Never lands a swap. **Nothing in this
+amountOut, sqrtPriceAfter, gas)`, which the caller decodes. Never lands a swap. **Nothing in this
   repo uses it** — `actions/src/to-quote.ts` calls each protocol's own quoter contract instead.
 
 **`amountSpecified` sign is inconsistent by path** (this bit us): the flat `swapV3` passes through to
@@ -299,13 +321,14 @@ PancakeInfinityCL=9, PancakeInfinityBin=10`. The last two are **flat-method only
 unified `swap()` does not dispatch them.
 
 **Callbacks vs callback-free** — the key architectural split for "where does swap logic live":
-- **V2/Solidly/Curve/DODO** are *callback-free*: `_swapV2` reads reserves, computes out (the V2 LP fee
+
+- **V2/Solidly/Curve/DODO** are _callback-free_: `_swapV2` reads reserves, computes out (the V2 LP fee
   is **parameterizable**, read from `params.poolKey.fee` as ppm — 3000 = 0.30%, 2500 = 0.25%; `0`
   defaults to 3000, which reproduces the legacy hardcoded `997/1000` math byte-for-byte, and `>=
-  1_000_000` is rejected), transfers tokenIn to the pool, calls
+1_000_000` is rejected), transfers tokenIn to the pool, calls
   `pair.swap(...)`. A recipe can replicate this **entirely in SauceScript** (transfer + `pool.swap`),
   bypassing the router — so new callback-free sources need only new SauceScript, no engine change.
-- **V3/V4 (and Maverick)** use *callbacks*: the pool re-enters the contract mid-swap
+- **V3/V4 (and Maverick)** use _callbacks_: the pool re-enters the contract mid-swap
   (`uniswapV3SwapCallback`/`pancakeV3SwapCallback`/`unlockCallback`/`maverickV2SwapCallback`) to pull
   input, reading transient-storage context set by `_swapV3`. A reentrant call during `cook()` hits the
   contract's Solidity dispatcher, **not** the paused bytecode interpreter — so callbacks can only be

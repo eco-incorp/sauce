@@ -28,7 +28,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * resolves against the SDK's protocol registry, not the engine-vendored
  * `dist/artifacts`.
  */
-export const CONTRACT_BASE_DIRS: readonly string[] = [join(__dirname, ".."), join(__dirname, "..", "..", "src")];
+export const CONTRACT_BASE_DIRS: readonly string[] = [
+  join(__dirname, ".."),
+  join(__dirname, "..", "..", "src"),
+];
 
 export interface EncodeOptions {
   /** Opts past the widened-selector refusal — see the module doc comment. */
@@ -54,7 +57,11 @@ export interface ContractCall {
   /** `encode()` with no options — throws under the same widened gate. */
   readonly data: Hex;
   encode(opts?: EncodeOptions): Hex;
-  toCall(opts?: EncodeOptions): { readonly target: Address; readonly data: Hex; readonly value: bigint };
+  toCall(opts?: EncodeOptions): {
+    readonly target: Address;
+    readonly data: Hex;
+    readonly value: bigint;
+  };
   toSauceScript(opts?: SauceScriptOptions): {
     readonly imports: readonly string[];
     readonly statement: string;
@@ -64,10 +71,16 @@ export interface ContractCall {
 }
 
 function widenedRealSelectorHint(descriptor: ContractDescriptor): string {
-  return descriptor.coverage.caveats.length > 0 ? descriptor.coverage.caveats.join("; ") : "vendored types differ from the deployed contract";
+  return descriptor.coverage.caveats.length > 0
+    ? descriptor.coverage.caveats.join("; ")
+    : "vendored types differ from the deployed contract";
 }
 
-function assertFidelity(descriptor: ContractDescriptor, method: DescriptorMethod, allowWidened: boolean | undefined): void {
+function assertFidelity(
+  descriptor: ContractDescriptor,
+  method: DescriptorMethod,
+  allowWidened: boolean | undefined,
+): void {
   if (descriptor.coverage.typeFidelity !== "widened") return;
   if (allowWidened) return;
   throw new Error(
@@ -90,13 +103,19 @@ function renderSauceArg(value: unknown, methodName: string): string {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") {
     if (!Number.isInteger(value)) {
-      throw new Error(`toSauceScript: cannot render non-integer number argument for ${methodName} — use encode()/toCall() instead`);
+      throw new Error(
+        `toSauceScript: cannot render non-integer number argument for ${methodName} — use encode()/toCall() instead`,
+      );
     }
-    return renderBigintArg(toExactBigInt(value, `toSauceScript: number argument for ${methodName}`));
+    return renderBigintArg(
+      toExactBigInt(value, `toSauceScript: number argument for ${methodName}`),
+    );
   }
   if (typeof value === "string") {
     if (/^0x[0-9a-fA-F]{40}$/.test(value)) return renderBigintArg(BigInt(value));
-    throw new Error(`toSauceScript: cannot render string argument "${value}" for ${methodName} (only a 20-byte address literal is supported) — use encode()/toCall() instead`);
+    throw new Error(
+      `toSauceScript: cannot render string argument "${value}" for ${methodName} (only a 20-byte address literal is supported) — use encode()/toCall() instead`,
+    );
   }
   if (Array.isArray(value)) {
     return `[${value.map((v) => renderSauceArg(v, methodName)).join(", ")}]`;
@@ -104,7 +123,9 @@ function renderSauceArg(value: unknown, methodName: string): string {
   if (value instanceof Uint8Array) {
     return `Uint8Array.from([${Array.from(value).join(", ")}])`;
   }
-  throw new Error(`toSauceScript: cannot render argument of type ${typeof value} for ${methodName} — use encode()/toCall() instead`);
+  throw new Error(
+    `toSauceScript: cannot render argument of type ${typeof value} for ${methodName} — use encode()/toCall() instead`,
+  );
 }
 
 export function makeContractCall(
@@ -119,7 +140,11 @@ export function makeContractCall(
 
   function encode(opts: EncodeOptions = {}): Hex {
     assertFidelity(descriptor, method, opts.allowWidened);
-    return encodeFunctionData({ abi: descriptor.abi, functionName: method.name, args: args as readonly unknown[] });
+    return encodeFunctionData({
+      abi: descriptor.abi,
+      functionName: method.name,
+      args: args as readonly unknown[],
+    });
   }
 
   function toCall(opts: EncodeOptions = {}): { target: Address; data: Hex; value: bigint } {
@@ -129,7 +154,9 @@ export function makeContractCall(
   function toSauceScript(opts: SauceScriptOptions = {}) {
     assertFidelity(descriptor, method, undefined);
     if (descriptor.abiExport === undefined) {
-      throw new Error(`toSauceScript: ${descriptor.protocol}.${descriptor.contract} has no vendored abiExport — use encode()/toCall() instead`);
+      throw new Error(
+        `toSauceScript: ${descriptor.protocol}.${descriptor.contract} has no vendored abiExport — use encode()/toCall() instead`,
+      );
     }
     const binding = opts.binding ?? descriptor.contract;
     const importLine = `import { ${binding} } from "./protocols/${descriptor.protocol}/${descriptor.abiExport}.json";`;

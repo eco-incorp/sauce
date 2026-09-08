@@ -3,16 +3,20 @@
  * whose token0Mint is a Token-2022 mint must make fetchOmnipairPoolConfig
  * REJECT (the graceful self-drop signal); the legacy path is unaffected.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { fetchOmnipairPoolConfig, PAIR_ACCOUNT_SIZE, PAIR_DISCRIMINATOR } from '../../../src/svm/venues/omnipair/index.js';
-import { makeT22Mint, makeLegacyMint } from '../fixtures/token-2022/synth.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import {
+  fetchOmnipairPoolConfig,
+  PAIR_ACCOUNT_SIZE,
+  PAIR_DISCRIMINATOR,
+} from "../../../src/svm/venues/omnipair/index.js";
+import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('Cp2nGCWWfqkUmPR3pPKoR376Fti8wuYRFrSWJZq1a9SA');
-const TOKEN0 = address('METAwkXcqyXKy1AtsSgJ8JiUHwGCafnZL38n3vYmeta');
-const TOKEN1 = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-const RATE_MODEL = address('So11111111111111111111111111111111111111112');
+const POOL = address("Cp2nGCWWfqkUmPR3pPKoR376Fti8wuYRFrSWJZq1a9SA");
+const TOKEN0 = address("METAwkXcqyXKy1AtsSgJ8JiUHwGCafnZL38n3vYmeta");
+const TOKEN1 = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const RATE_MODEL = address("So11111111111111111111111111111111111111112");
 
 const codec = getAddressCodec();
 
@@ -46,8 +50,8 @@ function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
   return async (addr: Address) => map[addr] ?? null;
 }
 
-describe('omnipair Token-2022 self-drop', () => {
-  it('REJECTS a pair whose token0Mint is a Token-2022 mint', async () => {
+describe("omnipair Token-2022 self-drop", () => {
+  it("REJECTS a pair whose token0Mint is a Token-2022 mint", async () => {
     const load = loaderFrom({
       [POOL]: buildPair(),
       [TOKEN0]: makeT22Mint(),
@@ -56,20 +60,20 @@ describe('omnipair Token-2022 self-drop', () => {
     await expect(fetchOmnipairPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
-  it('does NOT drop a classic-legacy pair', async () => {
+  it("does NOT drop a classic-legacy pair", async () => {
     const load = loaderFrom({
       [POOL]: buildPair(),
       [TOKEN0]: makeLegacyMint(),
       [TOKEN1]: makeLegacyMint(),
     });
     const cfg = await fetchOmnipairPoolConfig(load, POOL);
-    expect(cfg.venue).toBe('omnipair');
+    expect(cfg.venue).toBe("omnipair");
     expect(cfg.token0Mint).toBe(TOKEN0);
   });
 
-  it('does NOT drop when mint accounts are unreadable (falls back to legacy)', async () => {
+  it("does NOT drop when mint accounts are unreadable (falls back to legacy)", async () => {
     const load = loaderFrom({ [POOL]: buildPair() });
     const cfg = await fetchOmnipairPoolConfig(load, POOL);
-    expect(cfg.venue).toBe('omnipair');
+    expect(cfg.venue).toBe("omnipair");
   });
 });

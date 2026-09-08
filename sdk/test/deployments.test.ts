@@ -16,12 +16,12 @@ import {
   v12LiveChainIds,
   v12FailedChainIds,
   V12_EVM_CHAINS,
-} from '../src/deployments/index.js';
+} from "../src/deployments/index.js";
 
 const CHAINS = V12_EVM_CHAINS as Record<number, { name: string; live: boolean }>;
 
-describe('v12ChainSlug', () => {
-  it('returns the engine-side name for every live chain', () => {
+describe("v12ChainSlug", () => {
+  it("returns the engine-side name for every live chain", () => {
     const live = v12LiveChainIds();
     expect(live.length).toBeGreaterThan(0); // guards a vacuously-true loop
     for (const id of live) {
@@ -29,7 +29,7 @@ describe('v12ChainSlug', () => {
     }
   });
 
-  it('returns undefined for a chain whose deploy did not land', () => {
+  it("returns undefined for a chain whose deploy did not land", () => {
     const failed = v12FailedChainIds();
     expect(failed.length).toBeGreaterThan(0); // ronin — guards a vacuously-true loop
     for (const id of failed) {
@@ -37,28 +37,28 @@ describe('v12ChainSlug', () => {
     }
   });
 
-  it('returns undefined for an unknown chain', () => {
+  it("returns undefined for an unknown chain", () => {
     expect(v12ChainSlug(999999)).toBeUndefined();
   });
 
-  it('anchors the stable, load-bearing slugs', () => {
+  it("anchors the stable, load-bearing slugs", () => {
     // ethereum/base slugs are contractually stable — the Recipes API `chain=` param.
-    expect(v12ChainSlug(1)).toBe('ethereum');
-    expect(v12ChainSlug(8453)).toBe('base');
+    expect(v12ChainSlug(1)).toBe("ethereum");
+    expect(v12ChainSlug(8453)).toBe("base");
     // ronin's deploy failed (Solidity >=0.8.20 / PUSH0), so it must never resolve to a slug.
     expect(v12ChainSlug(2020)).toBeUndefined();
   });
 });
 
-describe('v12LiveChainSlugs', () => {
-  it('keys are exactly the live chain ids', () => {
+describe("v12LiveChainSlugs", () => {
+  it("keys are exactly the live chain ids", () => {
     const keys = Object.keys(v12LiveChainSlugs())
       .map(Number)
       .sort((a, b) => a - b);
     expect(keys).toEqual(v12LiveChainIds());
   });
 
-  it('every value is a non-empty slug matching v12ChainSlug', () => {
+  it("every value is a non-empty slug matching v12ChainSlug", () => {
     const map = v12LiveChainSlugs();
     expect(Object.keys(map).length).toBeGreaterThan(0);
     for (const [id, slug] of Object.entries(map)) {

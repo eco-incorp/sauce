@@ -139,16 +139,16 @@
  * (real `simulateTransaction` runs against the live mainnet tranche, both
  * instructions, three sizes each).
  */
-import { address, getAddressDecoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { findAssociatedTokenPda } from '@solana-program/token';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressDecoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-export const PERENA_STAR_PROGRAM_ID = address('save8RQVPMWNTzU18t3GBvBkN9hT7jsGjiCQ28FpD9H');
+export const PERENA_STAR_PROGRAM_ID = address("save8RQVPMWNTzU18t3GBvBkN9hT7jsGjiCQ28FpD9H");
 
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TRANCHE_STATE_DISCRIMINATOR = Uint8Array.from([212, 231, 254, 24, 238, 63, 92, 105]);
 const BANK_STATE_DISCRIMINATOR = Uint8Array.from([16, 169, 126, 99, 35, 169, 73, 200]);
 
@@ -164,14 +164,14 @@ const OFF_IS_HALTED = 152; // u8 (PodBool)
 const OFF_IS_HALTED_DEPOSIT = 153; // u8 (PodBool)
 const OFF_IS_HALTED_WITHDRAWAL = 154; // u8 (PodBool)
 function readUintLE(data: Uint8Array, offset: number, width: number): bigint {
-  if (offset + width > data.length) throw new Error('perena-star: truncated account data');
+  if (offset + width > data.length) throw new Error("perena-star: truncated account data");
   let v = 0n;
   for (let i = width - 1; i >= 0; i--) v = (v << 8n) | BigInt(data[offset + i]!);
   return v;
 }
 
 export interface PerenaStarPoolConfig extends PoolConfig {
-  venue: 'perena-star';
+  venue: "perena-star";
   bank: Address;
   bankMint: Address;
   juniorMint: Address;
@@ -181,21 +181,29 @@ export interface PerenaStarPoolConfig extends PoolConfig {
   isHaltedDeposit: boolean;
   isHaltedWithdrawal: boolean;
   /** 'stake' (default, bank mint in / junior shares out) | 'unstake' (junior shares in / bank mint out). */
-  direction: 'stake' | 'unstake';
+  direction: "stake" | "unstake";
 }
 
-async function fetchPerenaStarPoolConfig(load: AccountLoader, pool: Address): Promise<PerenaStarPoolConfig> {
+async function fetchPerenaStarPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<PerenaStarPoolConfig> {
   const decoder = getAddressDecoder();
-  const pubkey = (data: Uint8Array, offset: number): Address => decoder.decode(data.subarray(offset, offset + 32));
+  const pubkey = (data: Uint8Array, offset: number): Address =>
+    decoder.decode(data.subarray(offset, offset + 32));
 
   const trancheData = await load(pool);
   if (trancheData === null) throw new Error(`perena-star tranche ${pool} not found`);
   if (trancheData.length !== TRANCHE_STATE_SIZE) {
-    throw new Error(`perena-star tranche ${pool} data is ${trancheData.length} bytes, expected ${TRANCHE_STATE_SIZE}`);
+    throw new Error(
+      `perena-star tranche ${pool} data is ${trancheData.length} bytes, expected ${TRANCHE_STATE_SIZE}`,
+    );
   }
   for (let i = 0; i < 8; i++) {
     if (trancheData[i] !== TRANCHE_STATE_DISCRIMINATOR[i]) {
-      throw new Error(`perena-star tranche ${pool} has a wrong discriminator (not a TrancheState account)`);
+      throw new Error(
+        `perena-star tranche ${pool} has a wrong discriminator (not a TrancheState account)`,
+      );
     }
   }
 
@@ -217,40 +225,60 @@ async function fetchPerenaStarPoolConfig(load: AccountLoader, pool: Address): Pr
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`perena-star: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `perena-star: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`perena-star: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `perena-star: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   const bankData = await load(bank);
   if (bankData === null) throw new Error(`perena-star bank ${bank} not found`);
   if (bankData.length !== BANK_STATE_SIZE) {
-    throw new Error(`perena-star bank ${bank} data is ${bankData.length} bytes, expected ${BANK_STATE_SIZE}`);
+    throw new Error(
+      `perena-star bank ${bank} data is ${bankData.length} bytes, expected ${BANK_STATE_SIZE}`,
+    );
   }
   for (let i = 0; i < 8; i++) {
     if (bankData[i] !== BANK_STATE_DISCRIMINATOR[i]) {
-      throw new Error(`perena-star bank ${bank} has a wrong discriminator (not a BankState account)`);
+      throw new Error(
+        `perena-star bank ${bank} has a wrong discriminator (not a BankState account)`,
+      );
     }
   }
   const bankMintFromBank = pubkey(bankData, 320);
   if (bankMintFromBank !== bankMint) {
-    throw new Error(`perena-star bank ${bank} mint ${bankMintFromBank} does not match tranche config mint ${bankMint}`);
+    throw new Error(
+      `perena-star bank ${bank} mint ${bankMintFromBank} does not match tranche config mint ${bankMint}`,
+    );
   }
   const isHalted = readUintLE(bankData, OFF_IS_HALTED, 1) !== 0n;
   if (isHalted) {
-    throw new Error(`perena-star tranche ${pool} is halted (BankStatus.is_halted, snapshot at fetch time)`);
+    throw new Error(
+      `perena-star tranche ${pool} is halted (BankStatus.is_halted, snapshot at fetch time)`,
+    );
   }
   const isHaltedDeposit = readUintLE(bankData, OFF_IS_HALTED_DEPOSIT, 1) !== 0n;
   const isHaltedWithdrawal = readUintLE(bankData, OFF_IS_HALTED_WITHDRAWAL, 1) !== 0n;
 
-  const [escrowAta] = await findAssociatedTokenPda({ owner: pool, mint: bankMint, tokenProgram: TOKEN_PROGRAM });
-  const [lockedSharesAta] = await findAssociatedTokenPda({ owner: pool, mint: juniorMint, tokenProgram: TOKEN_PROGRAM });
+  const [escrowAta] = await findAssociatedTokenPda({
+    owner: pool,
+    mint: bankMint,
+    tokenProgram: TOKEN_PROGRAM,
+  });
+  const [lockedSharesAta] = await findAssociatedTokenPda({
+    owner: pool,
+    mint: juniorMint,
+    tokenProgram: TOKEN_PROGRAM,
+  });
 
   return {
-    venue: 'perena-star',
+    venue: "perena-star",
     pool,
     bank,
     bankMint,
@@ -259,13 +287,12 @@ async function fetchPerenaStarPoolConfig(load: AccountLoader, pool: Address): Pr
     lockedSharesAta,
     isHaltedDeposit,
     isHaltedWithdrawal,
-    direction: 'stake',
+    direction: "stake",
   };
 }
 
 export const perenaStar = {
-  slug: 'perena-star' as const,
+  slug: "perena-star" as const,
   programId: PERENA_STAR_PROGRAM_ID,
   fetchPoolConfig: fetchPerenaStarPoolConfig,
 };
-

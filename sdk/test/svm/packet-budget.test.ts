@@ -14,22 +14,22 @@
  * measurement; the drift guard (engine-abi-drift.test.ts) is what keeps the wire
  * grammar this test encodes in lockstep with that measurement across a repin.
  */
-import { address } from '@solana/kit';
+import { address } from "@solana/kit";
 import {
   EXECUTE_FROM_ACCOUNT_DISCRIMINATOR,
   buildExecuteFromAccountInstruction,
   stagedArgsBudget,
-} from '../../src/svm/index.js';
+} from "../../src/svm/index.js";
 
-const PROGRAM_ID = address('Stake11111111111111111111111111111111111111');
-const BUFFER = address('So11111111111111111111111111111111111111112');
+const PROGRAM_ID = address("Stake11111111111111111111111111111111111111");
+const BUFFER = address("So11111111111111111111111111111111111111112");
 const DISC = EXECUTE_FROM_ACCOUNT_DISCRIMINATOR.length; // 8
 
 /** Payload bytes AFTER the discriminator (what counts against the args budget). */
 const payloadLen = (ix: { data?: { length: number } }): number => (ix.data?.length ?? 0) - DISC;
 
-describe('staged execute packet budget', () => {
-  it('the shipped shape (pinned, no slice, no args) contributes flags(1) + pin(32) = 33 payload bytes', () => {
+describe("staged execute packet budget", () => {
+  it("the shipped shape (pinned, no slice, no args) contributes flags(1) + pin(32) = 33 payload bytes", () => {
     const ix = buildExecuteFromAccountInstruction({
       programId: PROGRAM_ID,
       buffer: BUFFER,
@@ -39,7 +39,7 @@ describe('staged execute packet budget', () => {
     expect(payloadLen(ix)).toBe(1 + 32);
   });
 
-  it('adding the slice costs exactly 8 more bytes (offset u32 + len u32)', () => {
+  it("adding the slice costs exactly 8 more bytes (offset u32 + len u32)", () => {
     const pinned = buildExecuteFromAccountInstruction({
       programId: PROGRAM_ID,
       buffer: BUFFER,
@@ -56,18 +56,22 @@ describe('staged execute packet budget', () => {
     expect(payloadLen(pinnedSliced) - payloadLen(pinned)).toBe(8);
   });
 
-  it('omitting the pin frees exactly 32 bytes', () => {
+  it("omitting the pin frees exactly 32 bytes", () => {
     const pinned = buildExecuteFromAccountInstruction({
       programId: PROGRAM_ID,
       buffer: BUFFER,
       accounts: [],
       expectedSha256: new Uint8Array(32),
     });
-    const pinless = buildExecuteFromAccountInstruction({ programId: PROGRAM_ID, buffer: BUFFER, accounts: [] });
+    const pinless = buildExecuteFromAccountInstruction({
+      programId: PROGRAM_ID,
+      buffer: BUFFER,
+      accounts: [],
+    });
     expect(payloadLen(pinned) - payloadLen(pinless)).toBe(32);
   });
 
-  it('the args budget follows the measured 939 − 33·N line for the shipped (pinned, sliceless) shape', () => {
+  it("the args budget follows the measured 939 − 33·N line for the shipped (pinned, sliceless) shape", () => {
     // Mirrors engine tests/payload_args.rs — see engine.ts. The SDK never emits a
     // slice on the managed staged path, so this line is the one that governs it.
     expect(stagedArgsBudget(0)).toBe(939);

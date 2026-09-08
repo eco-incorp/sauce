@@ -23,9 +23,9 @@
  * intermediates for stable pairs at D < 2^100 (u128 suffices, amp <= 10000,
  * 6-decimal magnitudes), so no fragment product approaches 2^256.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -34,14 +34,14 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+} from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'meteora-damm-v1-stable';
-const PROGRAM_ID = address('Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB');
-const VAULT_PROGRAM_ID = address('24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi');
-const TOKEN_PROGRAM_ID = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "meteora-damm-v1-stable";
+const PROGRAM_ID = address("Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB");
+const VAULT_PROGRAM_ID = address("24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi");
+const TOKEN_PROGRAM_ID = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 // sha256("account:Pool")[..8] / sha256("account:Vault")[..8].
 const POOL_DISCRIMINATOR = new Uint8Array([0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc]);
@@ -145,8 +145,8 @@ function poolRefs(pool: Address) {
 function expectDiscriminator(data: Uint8Array, expected: Uint8Array, what: string): void {
   for (let i = 0; i < 8; i++) {
     if (data[i] !== expected[i]) {
-      const got = Buffer.from(data.subarray(0, 8)).toString('hex');
-      const want = Buffer.from(expected).toString('hex');
+      const got = Buffer.from(data.subarray(0, 8)).toString("hex");
+      const want = Buffer.from(expected).toString("hex");
       throw new Error(`${SLUG} ${what} has discriminator ${got}, expected ${want}`);
     }
   }
@@ -156,12 +156,16 @@ async function loadVault(load: AccountLoader, vault: Address, side: string) {
   const data = await load(vault);
   if (data === null) throw new Error(`${SLUG} vault ${side} account ${vault} not found`);
   if (data.length < VAULT_MIN_LENGTH) {
-    throw new Error(`${SLUG} vault ${side} account ${vault} data is ${data.length} bytes, expected at least ${VAULT_MIN_LENGTH}`);
+    throw new Error(
+      `${SLUG} vault ${side} account ${vault} data is ${data.length} bytes, expected at least ${VAULT_MIN_LENGTH}`,
+    );
   }
   expectDiscriminator(data, VAULT_DISCRIMINATOR, `vault ${side} account ${vault}`);
   const codec = getAddressCodec();
   return {
-    tokenVault: codec.decode(data.subarray(VAULT_OFFSETS.tokenVault, VAULT_OFFSETS.tokenVault + 32)),
+    tokenVault: codec.decode(
+      data.subarray(VAULT_OFFSETS.tokenVault, VAULT_OFFSETS.tokenVault + 32),
+    ),
     lpMint: codec.decode(data.subarray(VAULT_OFFSETS.lpMint, VAULT_OFFSETS.lpMint + 32)),
   };
 }
@@ -186,11 +190,13 @@ function unlockedAmount(
   t: bigint,
 ): bigint {
   const duration = t - vault.lastReport;
-  if (duration < 0n) throw new Error(`${SLUG} clock ${t} is behind vault last_report ${vault.lastReport}`);
+  if (duration < 0n)
+    throw new Error(`${SLUG} clock ${t} is behind vault last_report ${vault.lastReport}`);
   const ratio = duration * vault.degradation;
-  const locked = ratio > DEGRADATION_DENOMINATOR
-    ? 0n
-    : (vault.lockedProfit * (DEGRADATION_DENOMINATOR - ratio)) / DEGRADATION_DENOMINATOR;
+  const locked =
+    ratio > DEGRADATION_DENOMINATOR
+      ? 0n
+      : (vault.lockedProfit * (DEGRADATION_DENOMINATOR - ratio)) / DEGRADATION_DENOMINATOR;
   return vault.total - locked;
 }
 
@@ -233,14 +239,19 @@ function assertU64Amount(amountIn: bigint, what: string): void {
 
 export const meteoraDammV1Stable: SvmVenueAdapter = {
   slug: SLUG,
-  kind: 'stable',
+  kind: "stable",
   programId: PROGRAM_ID,
 
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<MeteoraDammV1StablePoolConfig> {
+  async fetchPoolConfig(
+    load: AccountLoader,
+    pool: Address,
+  ): Promise<MeteoraDammV1StablePoolConfig> {
     const data = await load(pool);
     if (data === null) throw new Error(`${SLUG} pool account ${pool} not found`);
     if (data.length < POOL_MIN_LENGTH) {
-      throw new Error(`${SLUG} pool account ${pool} data is ${data.length} bytes, expected at least ${POOL_MIN_LENGTH}`);
+      throw new Error(
+        `${SLUG} pool account ${pool} data is ${data.length} bytes, expected at least ${POOL_MIN_LENGTH}`,
+      );
     }
     expectDiscriminator(data, POOL_DISCRIMINATOR, `pool account ${pool}`);
 
@@ -252,14 +263,18 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
     }
     const depegType = data[POOL_OFFSETS.depegType];
     if (depegType !== 0) {
-      throw new Error(`${SLUG} pool ${pool} depeg_type is ${depegType}, expected 0 (None) — depeg pools are out of scope`);
+      throw new Error(
+        `${SLUG} pool ${pool} depeg_type is ${depegType}, expected 0 (None) — depeg pools are out of scope`,
+      );
     }
     const activationPoint = readUintLE(data, POOL_OFFSETS.activationPoint, 8);
     const activationType = data[POOL_OFFSETS.activationType];
     // A slot-based activation point cannot be evaluated against the unix
     // clock off-chain nor in the fragment; every settled pool carries 0.
     if (activationType === 0 && activationPoint !== 0n) {
-      throw new Error(`${SLUG} pool ${pool} has slot-based activation_point ${activationPoint} — slot-gated pools are out of scope`);
+      throw new Error(
+        `${SLUG} pool ${pool} has slot-based activation_point ${activationPoint} — slot-gated pools are out of scope`,
+      );
     }
 
     const codec = getAddressCodec();
@@ -281,17 +296,21 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
       const mintData = _mintDatas[_i]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
     // Second hop: the swap/quote satellite addresses live in the two vaults.
-    const vaultA = await loadVault(load, aVault, 'a');
-    const vaultB = await loadVault(load, bVault, 'b');
+    const vaultA = await loadVault(load, aVault, "a");
+    const vaultB = await loadVault(load, bVault, "b");
 
     return {
       venue: SLUG,
@@ -338,7 +357,7 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
 
   emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
     const c = cfg as MeteoraDammV1StablePoolConfig;
-    assertU64Amount(amountIn, 'emitQuote');
+    assertU64Amount(amountIn, "emitQuote");
     const DEG = DEGRADATION_DENOMINATOR;
 
     // Account model (RS): quoteAccounts() attaches, in order,
@@ -402,12 +421,12 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
       lines.push(`if (t${i} < ${c.activationPoint}) { out${i} = 0 }`);
     }
     lines.push(`const q${i} = out${i};`);
-    return lines.map((line) => `  ${line}`).join('\n');
+    return lines.map((line) => `  ${line}`).join("\n");
   },
 
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
     const c = cfg as MeteoraDammV1StablePoolConfig;
-    assertU64Amount(amountIn, 'buildSwap');
+    assertU64Amount(amountIn, "buildSwap");
     const refs = poolRefs(c.pool);
 
     // 8-byte discriminator || in_amount u64 LE || minimum_out_amount u64 LE.
@@ -437,8 +456,8 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
         { ref: refs.bVaultLp, address: c.bVaultLp, writable: true },
         { ref: refs.protocolTokenAFee, address: c.protocolTokenAFee, writable: true },
         { ref: user.owner, signer: true },
-        { ref: 'damm1s:vault-program', address: VAULT_PROGRAM_ID },
-        { ref: 'token-program', address: TOKEN_PROGRAM_ID },
+        { ref: "damm1s:vault-program", address: VAULT_PROGRAM_ID },
+        { ref: "token-program", address: TOKEN_PROGRAM_ID },
       ],
     };
   },
@@ -447,21 +466,28 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
     const c = cfg as MeteoraDammV1StablePoolConfig;
     const bytes = (addr: Address, what: string): Uint8Array => {
       const data = state[addr];
-      if (data === undefined) throw new Error(`${SLUG} referenceQuote state is missing ${what} account ${addr}`);
+      if (data === undefined)
+        throw new Error(`${SLUG} referenceQuote state is missing ${what} account ${addr}`);
       return data;
     };
 
     if (c.activationType === 1 && now < c.activationPoint) {
-      throw new Error(`${SLUG} pool ${c.pool} is not activated until ${c.activationPoint} (now ${now})`);
+      throw new Error(
+        `${SLUG} pool ${c.pool} is not activated until ${c.activationPoint} (now ${now})`,
+      );
     }
 
     // Live fields exactly as the fragment reads them: fees and amp from the
     // pool account, share math inputs from vaults/LP accounts/mints.
-    const poolData = bytes(c.pool, 'pool');
+    const poolData = bytes(c.pool, "pool");
     const tradeFeeNumerator = readUintLE(poolData, POOL_OFFSETS.tradeFeeNumerator, 8);
     const tradeFeeDenominator = readUintLE(poolData, POOL_OFFSETS.tradeFeeDenominator, 8);
     const protocolFeeNumerator = readUintLE(poolData, POOL_OFFSETS.protocolTradeFeeNumerator, 8);
-    const protocolFeeDenominator = readUintLE(poolData, POOL_OFFSETS.protocolTradeFeeDenominator, 8);
+    const protocolFeeDenominator = readUintLE(
+      poolData,
+      POOL_OFFSETS.protocolTradeFeeDenominator,
+      8,
+    );
     const amp = readUintLE(poolData, POOL_OFFSETS.amp, 8);
 
     const vault = (addr: Address, what: string) => {
@@ -473,13 +499,13 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
         degradation: readUintLE(data, VAULT_OFFSETS.lockedProfitDegradation, 8),
       };
     };
-    const vaultA = vault(c.aVault, 'vault a');
-    const vaultB = vault(c.bVault, 'vault b');
-    const aVaultLpAmount = readUintLE(bytes(c.aVaultLp, 'a_vault_lp'), TOKEN_AMOUNT_OFFSET, 8);
-    const bVaultLpAmount = readUintLE(bytes(c.bVaultLp, 'b_vault_lp'), TOKEN_AMOUNT_OFFSET, 8);
-    const aLpSupply = readUintLE(bytes(c.aLpMint, 'a lp mint'), MINT_SUPPLY_OFFSET, 8);
-    const bLpSupply = readUintLE(bytes(c.bLpMint, 'b lp mint'), MINT_SUPPLY_OFFSET, 8);
-    const outIdleFloat = readUintLE(bytes(c.bTokenVault, 'b token vault'), TOKEN_AMOUNT_OFFSET, 8);
+    const vaultA = vault(c.aVault, "vault a");
+    const vaultB = vault(c.bVault, "vault b");
+    const aVaultLpAmount = readUintLE(bytes(c.aVaultLp, "a_vault_lp"), TOKEN_AMOUNT_OFFSET, 8);
+    const bVaultLpAmount = readUintLE(bytes(c.bVaultLp, "b_vault_lp"), TOKEN_AMOUNT_OFFSET, 8);
+    const aLpSupply = readUintLE(bytes(c.aLpMint, "a lp mint"), MINT_SUPPLY_OFFSET, 8);
+    const bLpSupply = readUintLE(bytes(c.bLpMint, "b lp mint"), MINT_SUPPLY_OFFSET, 8);
+    const outIdleFloat = readUintLE(bytes(c.bTokenVault, "b token vault"), TOKEN_AMOUNT_OFFSET, 8);
 
     // Step 1-2: reserves from vault share math at t = now.
     const unlockedA = unlockedAmount(vaultA, now);
@@ -495,7 +521,10 @@ export const meteoraDammV1Stable: SvmVenueAdapter = {
 
     // Step 5: vault deposit simulation (total' = total + inAfterProtocol).
     const inLp = (inAfterProtocol * aLpSupply) / unlockedA;
-    const unlockedAAfter = unlockedAmount({ ...vaultA, total: vaultA.total + inAfterProtocol }, now);
+    const unlockedAAfter = unlockedAmount(
+      { ...vaultA, total: vaultA.total + inAfterProtocol },
+      now,
+    );
     const afterTotal = ((inLp + aVaultLpAmount) * unlockedAAfter) / (aLpSupply + inLp);
     const actualInAfterFee = afterTotal - reserveIn - tradeFee;
 

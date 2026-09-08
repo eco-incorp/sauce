@@ -24,7 +24,11 @@ describe("descriptors accessors: the motivating path", () => {
     expect(call.protocol).toBe("uniswap-v4");
     expect(call.contract).toBe("UniversalRouter");
     expect(call.fidelity).toBe("exact");
-    const expected = encodeFunctionData({ abi: UniswapV4UniversalRouterABI, functionName: "execute", args: ["0x00", ["0x01"], 999n] });
+    const expected = encodeFunctionData({
+      abi: UniswapV4UniversalRouterABI,
+      functionName: "execute",
+      args: ["0x00", ["0x01"], 999n],
+    });
     expect(call.data).toBe(expected);
     expect(call.encode()).toBe(expected);
   });
@@ -44,7 +48,9 @@ describe("descriptors accessors: family alias", () => {
   it("an ambiguous family contract name (Factory, owned by both uniswap-v2 and uniswap-v3) is EXCLUDED from the type (TS2339) and throws at runtime", () => {
     const base = chainContracts("base");
     // @ts-expect-error -- "Factory" is deliberately excluded from FamilyContracts<"Uniswap"> (ambiguous: uniswap-v2 AND uniswap-v3 both own it).
-    expect(() => base.Uniswap.Factory).toThrow(/ambiguous under Uniswap.*uniswap-v2.*uniswap-v3|UniswapV2\.Factory or UniswapV3\.Factory/);
+    expect(() => base.Uniswap.Factory).toThrow(
+      /ambiguous under Uniswap.*uniswap-v2.*uniswap-v3|UniswapV2\.Factory or UniswapV3\.Factory/,
+    );
   });
 
   it("the unambiguous canonical path still works for the same contract name", () => {
@@ -62,7 +68,9 @@ describe("descriptors accessors: per-chain holes fail clearly", () => {
     expect(router.address).toBeUndefined();
     expect(router.chains).toContain("base");
     expect(() => router.swapExactTokensForTokens).not.toThrow();
-    expect(() => invoke(router, "swapExactTokensForTokens", 1n, 0n, [], "0x0", 0n)).toThrow(/not deployed on 'ethereum'.*available: base/);
+    expect(() => invoke(router, "swapExactTokensForTokens", 1n, 0n, [], "0x0", 0n)).toThrow(
+      /not deployed on 'ethereum'.*available: base/,
+    );
   });
 
   it("the same contract IS available on Base", () => {
@@ -75,7 +83,13 @@ describe("descriptors accessors: per-chain holes fail clearly", () => {
 describe("descriptors accessors: widened-coverage caveat is observable and gated", () => {
   it("UniswapV3.Factory carries fidelity/caveats, and encode() refuses without the opt-in", () => {
     const base = chainContracts("base");
-    const call = invoke(base.UniswapV3.Factory, "getPool", "0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222", 3000n);
+    const call = invoke(
+      base.UniswapV3.Factory,
+      "getPool",
+      "0x1111111111111111111111111111111111111111",
+      "0x2222222222222222222222222222222222222222",
+      3000n,
+    );
     expect(call.fidelity).toBe("widened");
     expect(call.caveats.length).toBeGreaterThan(0);
     expect(call.method.selector).toBe("0x71c54fc9");
@@ -95,7 +109,9 @@ describe("descriptors accessors: widened-coverage caveat is observable and gated
 describe("descriptors accessors: interface + address-only kinds", () => {
   it("Base.Erc20.ERC20.transfer throws before binding an instance", () => {
     const base = chainContracts("base");
-    expect(() => invoke(base.Erc20.ERC20, "transfer", "0x1111111111111111111111111111111111111111", 1n)).toThrow(/bind an instance/);
+    expect(() =>
+      invoke(base.Erc20.ERC20, "transfer", "0x1111111111111111111111111111111111111111", 1n),
+    ).toThrow(/bind an instance/);
   });
 
   it("Base.Erc20.ERC20.at(addr).transfer(...) encodes correctly once bound", () => {
@@ -124,7 +140,14 @@ describe("descriptors accessors: toCall / toSauceScript", () => {
 
   it("toSauceScript() emits an import line + at(...).method(...) statement using real ABI json path", () => {
     const base = chainContracts("base");
-    const call = invoke(base.AaveV3.Pool, "supply", "0x1111111111111111111111111111111111111111", 100n, "0x2222222222222222222222222222222222222222", 0);
+    const call = invoke(
+      base.AaveV3.Pool,
+      "supply",
+      "0x1111111111111111111111111111111111111111",
+      100n,
+      "0x2222222222222222222222222222222222222222",
+      0,
+    );
     const script = call.toSauceScript();
     expect(script.imports[0]).toBe('import { Pool } from "./protocols/aave-v3/PoolABI.json";');
     expect(script.statement).toMatch(/^Pool\.at\(\d+n\)\.supply\(/);
@@ -135,7 +158,17 @@ describe("descriptors accessors: toCall / toSauceScript", () => {
     // The rendered text becomes compiled bytecode, and the number has already been rounded:
     // BigInt() would bake 1234567890123456768n, .toString() 1234567890123456800n.
     const base = chainContracts("base");
-    const call = invoke(base.AaveV3.Pool, "supply", "0x1111111111111111111111111111111111111111", 1234567890123456789, "0x2222222222222222222222222222222222222222", 0);
+    const call = invoke(
+      base.AaveV3.Pool,
+      "supply",
+      "0x1111111111111111111111111111111111111111",
+      // The imprecise literal IS the input under test: it asserts the safe-integer guard
+      // rejects it before anything reads a rounded value.
+      // eslint-disable-next-line no-loss-of-precision
+      1234567890123456789,
+      "0x2222222222222222222222222222222222222222",
+      0,
+    );
     expect(() => call.toSauceScript()).toThrow(
       "toSauceScript: number argument for supply: expected a safe integer, got 1234567890123456800 — pass a bigint or a string instead",
     );
@@ -143,13 +176,26 @@ describe("descriptors accessors: toCall / toSauceScript", () => {
 
   it("toSauceScript() renders a number argument at MAX_SAFE_INTEGER exactly", () => {
     const base = chainContracts("base");
-    const call = invoke(base.AaveV3.Pool, "supply", "0x1111111111111111111111111111111111111111", Number.MAX_SAFE_INTEGER, "0x2222222222222222222222222222222222222222", 0);
+    const call = invoke(
+      base.AaveV3.Pool,
+      "supply",
+      "0x1111111111111111111111111111111111111111",
+      Number.MAX_SAFE_INTEGER,
+      "0x2222222222222222222222222222222222222222",
+      0,
+    );
     expect(call.toSauceScript().statement).toContain("9007199254740991n");
   });
 
   it("a widened call refuses toSauceScript too", () => {
     const base = chainContracts("base");
-    const call = invoke(base.UniswapV3.Factory, "getPool", "0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222", 3000n);
+    const call = invoke(
+      base.UniswapV3.Factory,
+      "getPool",
+      "0x1111111111111111111111111111111111111111",
+      "0x2222222222222222222222222222222222222222",
+      3000n,
+    );
     expect(() => call.toSauceScript()).toThrow(/allowWidened/);
   });
 });

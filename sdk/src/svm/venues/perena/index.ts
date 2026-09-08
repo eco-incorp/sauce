@@ -137,17 +137,25 @@
  * token_2022_program (TokenzQdB... — a fixed IDL `address` constraint, not
  * caller-resolved, attached unconditionally).
  */
-import { address, getAddressDecoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SvmVenueAdapter, SwapUser, VenueAccount, VenueSwap } from '../types.js';
+import { address, getAddressDecoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type {
+  AccountBytesMap,
+  AccountLoader,
+  PoolConfig,
+  SvmVenueAdapter,
+  SwapUser,
+  VenueAccount,
+  VenueSwap,
+} from "../types.js";
 
-const SLUG = 'perena';
-export const PERENA_PROGRAM_ID = address('NUMERUNsFCP3kuNmWZuXtm1AaQCPj9uw6Guv2Ekoi5P');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+const SLUG = "perena";
+export const PERENA_PROGRAM_ID = address("NUMERUNsFCP3kuNmWZuXtm1AaQCPj9uw6Guv2Ekoi5P");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 /** PDA: findProgramAddress([utf8("config")], PERENA_PROGRAM_ID) — a single program-wide singleton. */
-const NUMERAIRE_CONFIG = address('FS159v4b2jo3fjGBaUFmDzgx7k616XhpKhMwX2Q3HeeD');
+const NUMERAIRE_CONFIG = address("FS159v4b2jo3fjGBaUFmDzgx7k616XhpKhMwX2Q3HeeD");
 
 export const STABLE_POOL_ACCOUNT_SIZE = 4024;
 /** sha256('account:StablePool')[0..8]. */
@@ -213,7 +221,7 @@ function readAddr(data: Uint8Array, offset: number): Address {
 export interface PerenaPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'aToB': pair 0 (A) in -> pair 1 (B) out. 'bToA' is the reverse. */
-  direction: 'aToB' | 'bToA';
+  direction: "aToB" | "bToA";
   aMint: Address;
   aVault: Address;
   aIs2022: boolean;
@@ -233,7 +241,8 @@ export interface PerenaPoolConfig extends PoolConfig {
 }
 
 function asPerenaConfig(cfg: PoolConfig): PerenaPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder/adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder/adapter got a '${cfg.venue}' pool config`);
   return cfg as PerenaPoolConfig;
 }
 
@@ -324,7 +333,9 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Pere
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== STABLE_POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} has unexpected size ${data.length} (want ${STABLE_POOL_ACCOUNT_SIZE})`);
+    throw new Error(
+      `${SLUG} pool ${pool} has unexpected size ${data.length} (want ${STABLE_POOL_ACCOUNT_SIZE})`,
+    );
   }
   for (let i = 0; i < 8; i++) {
     if (data[i] !== STABLE_POOL_DISCRIMINATOR[i]) {
@@ -349,25 +360,41 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Pere
   const p0 = pair(0);
   const p1 = pair(1);
 
-  if (p0.ampHigh !== 0n || p1.ampHigh !== 0n || p0.aHigh !== 0n || p1.aHigh !== 0n || p0.bHigh !== 0n || p1.bHigh !== 0n) {
-    throw new Error(`${SLUG} pool ${pool} carries a curve param above u64 — outside this ladder's validated range`);
+  if (
+    p0.ampHigh !== 0n ||
+    p1.ampHigh !== 0n ||
+    p0.aHigh !== 0n ||
+    p1.aHigh !== 0n ||
+    p0.bHigh !== 0n ||
+    p1.bHigh !== 0n
+  ) {
+    throw new Error(
+      `${SLUG} pool ${pool} carries a curve param above u64 — outside this ladder's validated range`,
+    );
   }
   if (p0.ampLow !== p1.ampLow || p0.aLow !== p1.aLow || p0.bLow !== p1.bLow) {
-    throw new Error(`${SLUG} pool ${pool} has mismatched curve params between its pairs (expected pool-wide constants)`);
+    throw new Error(
+      `${SLUG} pool ${pool} has mismatched curve params between its pairs (expected pool-wide constants)`,
+    );
   }
   if (p0.aLow !== p0.bLow) {
-    throw new Error(`${SLUG} pool ${pool} has curve_a !== curve_b — outside this ladder's validated range (see module header SCOPE)`);
+    throw new Error(
+      `${SLUG} pool ${pool} has curve_a !== curve_b — outside this ladder's validated range (see module header SCOPE)`,
+    );
   }
 
   const status = readUintLE(data, OFF_STATUS, 4);
   const rateOkAtFetch =
-    p0.rateNum === p0.rateDenom && p0.rateNum > 0n && p1.rateNum === p1.rateDenom && p1.rateNum > 0n;
+    p0.rateNum === p0.rateDenom &&
+    p0.rateNum > 0n &&
+    p1.rateNum === p1.rateDenom &&
+    p1.rateNum > 0n;
   const decimalsOkAtFetch = p0.decimals === p1.decimals;
 
   return {
     venue: SLUG,
     pool,
-    direction: 'aToB',
+    direction: "aToB",
     aMint: p0.xMint,
     aVault: p0.xVault,
     aIs2022: p0.xIs2022,
@@ -384,12 +411,12 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Pere
 
 function quoteAccounts(cfg: PoolConfig): VenueAccount[] {
   const c = asPerenaConfig(cfg);
-  return [{ ref: poolRef(c, 'pool'), address: c.pool }];
+  return [{ ref: poolRef(c, "pool"), address: c.pool }];
 }
 
 function liveStateFrom(c: PerenaPoolConfig, pool: Uint8Array): PerenaLiveState {
-  const inIdx: 0 | 1 = c.direction === 'aToB' ? 0 : 1;
-  const outIdx: 0 | 1 = c.direction === 'aToB' ? 1 : 0;
+  const inIdx: 0 | 1 = c.direction === "aToB" ? 0 : 1;
+  const outIdx: 0 | 1 = c.direction === "aToB" ? 1 : 0;
   return {
     ampRaw: c.ampRaw,
     aRaw: c.aRaw,
@@ -411,7 +438,10 @@ function emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
   // `Account` params, not `accountUint("<ref>", …)` string refs. `quoteAccounts()`
   // attaches only the pool, so every read is `svm.sload(acc0, …).toLe()` and the
   // manifest comes back with the single slot 0 == quoteAccounts()[0] (the pool).
-  return [...readLines(c, 'acc0', readPrefix), ...arithmeticLines(c, readPrefix, readPrefix, String(amountIn), `q${i}`)].join('\n');
+  return [
+    ...readLines(c, "acc0", readPrefix),
+    ...arithmeticLines(c, readPrefix, readPrefix, String(amountIn), `q${i}`),
+  ].join("\n");
 }
 
 /**
@@ -426,8 +456,8 @@ function emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
  * is the exact endianness match for these u64/u32 LE fields).
  */
 function readLines(c: PerenaPoolConfig, acc: string, readPrefix: string): string[] {
-  const inIdx: 0 | 1 = c.direction === 'aToB' ? 0 : 1;
-  const outIdx: 0 | 1 = c.direction === 'aToB' ? 1 : 0;
+  const inIdx: 0 | 1 = c.direction === "aToB" ? 0 : 1;
+  const outIdx: 0 | 1 = c.direction === "aToB" ? 1 : 0;
   const p = readPrefix;
   return [
     `  const ${p}xin = svm.sload(${acc}, ${pairOff(inIdx, P_X_RESERVE)}, 8).toLe();`,
@@ -451,7 +481,13 @@ function readLines(c: PerenaPoolConfig, acc: string, readPrefix: string): string
  * "f"-suffixed since every intermediate here is a fresh `const` per
  * emission site sharing one function scope).
  */
-function arithmeticLines(c: PerenaPoolConfig, readPrefix: string, tmpPrefix: string, x: string, outVar: string): string[] {
+function arithmeticLines(
+  c: PerenaPoolConfig,
+  readPrefix: string,
+  tmpPrefix: string,
+  x: string,
+  outVar: string,
+): string[] {
   const r = readPrefix;
   const p = tmpPrefix;
   // Rescaled from PARAM_SCALE (1e6, the on-chain storage scale) to WAD
@@ -489,13 +525,13 @@ function arithmeticLines(c: PerenaPoolConfig, readPrefix: string, tmpPrefix: str
     `              if (${p}xout2 < ${r}xout) {`,
     `                const ${p}raw = ${r}xout - ${p}xout2;`,
     `                ${outVar} = Math.mulDiv(${p}raw, ${10_000n - MARGIN_BPS}, 10000);`,
-    '              }',
-    '            }',
-    '          }',
-    '        }',
-    '      }',
-    '    }',
-    '  }',
+    "              }",
+    "            }",
+    "          }",
+    "        }",
+    "      }",
+    "    }",
+    "  }",
   ];
 }
 
@@ -508,23 +544,27 @@ function arithmeticLines(c: PerenaPoolConfig, readPrefix: string, tmpPrefix: str
  * saber-stableswap/ladder.js's `roled` for the same convention, including
  * slot-scoping the token-program refs).
  */
-function perenaAccounts(c: PerenaPoolConfig, user: SwapUser, refFn: (role: string) => string): VenueAccount[] {
-  const inMint = c.direction === 'aToB' ? c.aMint : c.bMint;
-  const outMint = c.direction === 'aToB' ? c.bMint : c.aMint;
-  const inVault = c.direction === 'aToB' ? c.aVault : c.bVault;
-  const outVault = c.direction === 'aToB' ? c.bVault : c.aVault;
+function perenaAccounts(
+  c: PerenaPoolConfig,
+  user: SwapUser,
+  refFn: (role: string) => string,
+): VenueAccount[] {
+  const inMint = c.direction === "aToB" ? c.aMint : c.bMint;
+  const outMint = c.direction === "aToB" ? c.bMint : c.aMint;
+  const inVault = c.direction === "aToB" ? c.aVault : c.bVault;
+  const outVault = c.direction === "aToB" ? c.bVault : c.aVault;
   return [
-    { ref: refFn('pool'), address: c.pool, writable: true },
-    { ref: refFn('inMint'), address: inMint, writable: true },
-    { ref: refFn('outMint'), address: outMint, writable: true },
+    { ref: refFn("pool"), address: c.pool, writable: true },
+    { ref: refFn("inMint"), address: inMint, writable: true },
+    { ref: refFn("outMint"), address: outMint, writable: true },
     { ref: user.inAta, writable: true },
     { ref: user.outAta, writable: true },
-    { ref: refFn('inVault'), address: inVault, writable: true },
-    { ref: refFn('outVault'), address: outVault, writable: true },
-    { ref: refFn('numeraireConfig'), address: NUMERAIRE_CONFIG },
+    { ref: refFn("inVault"), address: inVault, writable: true },
+    { ref: refFn("outVault"), address: outVault, writable: true },
+    { ref: refFn("numeraireConfig"), address: NUMERAIRE_CONFIG },
     { ref: user.owner, signer: true },
-    { ref: refFn('tokenProgram'), address: TOKEN_PROGRAM },
-    { ref: refFn('token2022Program'), address: TOKEN_2022_PROGRAM },
+    { ref: refFn("tokenProgram"), address: TOKEN_PROGRAM },
+    { ref: refFn("token2022Program"), address: TOKEN_2022_PROGRAM },
   ];
 }
 
@@ -532,18 +572,27 @@ const poolRef = (c: PerenaPoolConfig, role: string): string => `${SLUG}:${c.pool
 
 function buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
   const c = asPerenaConfig(cfg);
-  const inIndex = c.direction === 'aToB' ? 0 : 1;
-  const outIndex = c.direction === 'aToB' ? 1 : 0;
+  const inIndex = c.direction === "aToB" ? 0 : 1;
+  const outIndex = c.direction === "aToB" ? 1 : 0;
   const data = new Uint8Array(8 + 1 + 1 + 8 + 8);
   data.set(SWAP_EXACT_IN_DISCRIMINATOR, 0);
   data[8] = inIndex;
   data[9] = outIndex;
   new DataView(data.buffer).setBigUint64(10, amountIn, true);
   new DataView(data.buffer).setBigUint64(18, 1n, true); // min_amount_out — the recipe's own delta check is the real bound
-  return { programId: PERENA_PROGRAM_ID, data, accounts: perenaAccounts(c, user, (role) => poolRef(c, role)) };
+  return {
+    programId: PERENA_PROGRAM_ID,
+    data,
+    accounts: perenaAccounts(c, user, (role) => poolRef(c, role)),
+  };
 }
 
-function referenceQuote(cfg: PoolConfig, state: AccountBytesMap, amountIn: bigint, _now: bigint): bigint {
+function referenceQuote(
+  cfg: PoolConfig,
+  state: AccountBytesMap,
+  amountIn: bigint,
+  _now: bigint,
+): bigint {
   const c = asPerenaConfig(cfg);
   const pool = state[c.pool];
   if (pool === undefined) throw new Error(`${SLUG} referenceQuote is missing account ${c.pool}`);
@@ -552,7 +601,7 @@ function referenceQuote(cfg: PoolConfig, state: AccountBytesMap, amountIn: bigin
 
 export const perena: SvmVenueAdapter = {
   slug: SLUG,
-  kind: 'stable',
+  kind: "stable",
   programId: PERENA_PROGRAM_ID,
   fetchPoolConfig,
   quoteAccounts,
@@ -560,6 +609,3 @@ export const perena: SvmVenueAdapter = {
   buildSwap,
   referenceQuote,
 };
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-

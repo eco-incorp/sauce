@@ -18,13 +18,18 @@
  * those files documents the divergence; this suite runs unconditionally because compiling needs no
  * engine at all.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import { CASES, compileStdToken, compileWith } from './harness.js';
-import type { AccountEntry } from './harness.js';
+import { address, getAddressCodec } from "@solana/kit";
+import { CASES, compileStdToken, compileWith } from "./harness.js";
+import type { AccountEntry } from "./harness.js";
 
 // `requires` is the role the slot demands of whatever account is attached there. Every account in
 // this library is a bare `Account` parameter, which is `readonly`; nothing is inferred from the CPI.
-const slot = (index: number, name: string): AccountEntry => ({ kind: 'slot', index, name, requires: 'readonly' });
+const slot = (index: number, name: string): AccountEntry => ({
+  kind: "slot",
+  index,
+  name,
+  requires: "readonly",
+});
 
 const svmEntry = (method: string): string => {
   const testCase = CASES.find((entry) => entry.method === method);
@@ -34,8 +39,8 @@ const svmEntry = (method: string): string => {
 };
 
 const manifestOf = (method: string): AccountEntry[] => {
-  const { manifest } = compileStdToken(svmEntry(method), 'svm');
-  if (!manifest) throw new Error('the svm target must emit a manifest');
+  const { manifest } = compileStdToken(svmEntry(method), "svm");
+  if (!manifest) throw new Error("the svm target must emit a manifest");
 
   return manifest.accounts;
 };
@@ -45,16 +50,20 @@ const manifestOf = (method: string): AccountEntry[] => {
  * the library. A copy would agree with the library's constant however wrong that constant was, which
  * is the one thing this must not do.
  */
-const SPL_TOKEN_PROGRAM = Buffer.from(getAddressCodec().encode(address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'))).toString('hex');
+const SPL_TOKEN_PROGRAM = Buffer.from(
+  getAddressCodec().encode(address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")),
+).toString("hex");
 
 /** How many times the compiled program carries the id inline — one per `require` that pins it. */
 const pinnedProgramIds = (method: string): number =>
-  Buffer.from(compileStdToken(svmEntry(method), 'svm').bytecode).toString('hex').split(SPL_TOKEN_PROGRAM).length - 1;
+  Buffer.from(compileStdToken(svmEntry(method), "svm").bytecode)
+    .toString("hex")
+    .split(SPL_TOKEN_PROGRAM).length - 1;
 
-describe('@sauce/token: every exported method compiles on both targets', () => {
-  it.each(CASES)('$method', ({ evm, svm }) => {
-    const compiledForEvm = compileStdToken(evm, 'evm');
-    const compiledForSvm = compileStdToken(svm, 'svm');
+describe("@sauce/token: every exported method compiles on both targets", () => {
+  it.each(CASES)("$method", ({ evm, svm }) => {
+    const compiledForEvm = compileStdToken(evm, "evm");
+    const compiledForSvm = compileStdToken(svm, "svm");
 
     expect(compiledForEvm.bytecode.length).toBeGreaterThan(0);
     expect(compiledForSvm.bytecode.length).toBeGreaterThan(0);
@@ -64,7 +73,7 @@ describe('@sauce/token: every exported method compiles on both targets', () => {
   });
 });
 
-describe('@sauce/token: the SPL Token program id', () => {
+describe("@sauce/token: the SPL Token program id", () => {
   // Every `require(… == SPL_TOKEN_PROGRAM)` compiles the id inline, so counting occurrences counts the
   // guards. Nothing else in CI can: the guards only *fire* on an engine, and both e2e suites that own
   // one are env-gated. Without this, flipping a digit of the constant — or deleting the guards
@@ -75,66 +84,70 @@ describe('@sauce/token: the SPL Token program id', () => {
   // emitted, a read's count stays at one: were the library's three writes lowered in too, it would be
   // five, so this is also where a regression in that pruning would surface.
   it.each([
-    ['balanceOf', 1],
-    ['totalSupply', 1],
-    ['decimals', 1],
-    ['allowance', 1],
-    ['transfer', 2],
-    ['transferFrom', 2],
-    ['approve', 2],
-  ])('%s pins it %i time(s)', (method, expected) => {
+    ["balanceOf", 1],
+    ["totalSupply", 1],
+    ["decimals", 1],
+    ["allowance", 1],
+    ["transfer", 2],
+    ["transferFrom", 2],
+    ["approve", 2],
+  ])("%s pins it %i time(s)", (method, expected) => {
     expect(pinnedProgramIds(method)).toBe(expected);
   });
 });
 
-describe('@sauce/token: what the library demands of its caller', () => {
+describe("@sauce/token: what the library demands of its caller", () => {
   // The manifest is exactly `main`'s declared `Account` params — an empty `main` with the same
   // signature yields the identical one — so it cannot witness anything about the library. A compile
   // failure can.
-  it('a write does not compile unless the caller declares an Account for the callee', () => {
+  it("a write does not compile unless the caller declares an Account for the callee", () => {
     const withoutTokenProgram =
       'import { transfer } from "@sauce/token"; function main(token: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, source, dest, authority, amount); }';
 
-    expect(() => compileStdToken(withoutTokenProgram, 'svm')).toThrow('expected an account, found a number');
+    expect(() => compileStdToken(withoutTokenProgram, "svm")).toThrow(
+      "expected an account, found a number",
+    );
   });
 
-  it('a write does not compile with a plain address in the callee position', () => {
+  it("a write does not compile with a plain address in the callee position", () => {
     // `svm.call`'s callee is an account the caller attaches, not a value — so an `Address` is refused
     // rather than compiled into a call against a key nobody attached.
     const addressAsCallee =
       'import { transfer } from "@sauce/token"; function main(token: Address, tokenProgram: Address, source: Account, dest: Account, authority: Account, amount: Uint256): void { transfer(token, tokenProgram, source, dest, authority, amount); }';
 
-    expect(() => compileStdToken(addressAsCallee, 'svm')).toThrow('expected an account, found a number');
+    expect(() => compileStdToken(addressAsCallee, "svm")).toThrow(
+      "expected an account, found a number",
+    );
   });
 
-  it('a read demands no program account', () => {
+  it("a read demands no program account", () => {
     // The counterpart, and the real content of "a read-only import does not drag the callee in".
     // Importing the library brings `transfer`/`transferFrom`/`approve` into scope and each CPIs into
     // the SPL Token program, but an unreachable function is never emitted, so none of them reaches
     // the bytecode. The counts above are the evidence rather than this comment: a read pins the
     // program id ONCE, where lowering the three writes in would put it there five times.
-    expect(manifestOf('balanceOf')).toEqual([slot(0, 'account')]);
+    expect(manifestOf("balanceOf")).toEqual([slot(0, "account")]);
   });
 });
 
-describe('@sauce/token: the attach order the e2e suites resolve by name', () => {
+describe("@sauce/token: the attach order the e2e suites resolve by name", () => {
   // These pin the CASES entries above, not library behaviour: on 0.4.x the manifest is `main`'s
   // `Account` params in declaration order, so what they protect is the agreement between those
   // signatures and the accounts `svm.e2e.test.ts` attaches. Change a signature there, change this.
   it.each([
-    ['transfer', ['tokenProgram', 'source', 'dest', 'authority']],
-    ['transferFrom', ['tokenProgram', 'source', 'dest', 'authority']],
-    ['approve', ['tokenProgram', 'source', 'delegate', 'authority']],
-  ])('%s', (method, names) => {
+    ["transfer", ["tokenProgram", "source", "dest", "authority"]],
+    ["transferFrom", ["tokenProgram", "source", "dest", "authority"]],
+    ["approve", ["tokenProgram", "source", "delegate", "authority"]],
+  ])("%s", (method, names) => {
     expect(manifestOf(method)).toEqual(names.map((name, index) => slot(index, name)));
   });
 });
 
-describe('@sauce/token: packaging', () => {
+describe("@sauce/token: packaging", () => {
   const entry =
     'import { balanceOf } from "@sauce/token"; function main(): Uint256 { return balanceOf(1n, 2n); }';
 
-  it('a package with no arm for the target fails on the import, not on a missing export', () => {
+  it("a package with no arm for the target fails on the import, not on a missing export", () => {
     // The package ships two arms and no neutral body, because a token program is inherently
     // target-specific. A neutral file that merely RESOLVED would be worse than none: an empty one
     // turns this into "balanceOf is not exported by @sauce/token" (pointing at the symbol, not the
@@ -145,24 +158,24 @@ describe('@sauce/token: packaging', () => {
     // would make this a hard read failure rather than the missing arm it is meant to be.
     const compileArmless = () =>
       compileWith({
-        target: 'evm',
-        resolve: (path) => (path === 'main.js' ? Buffer.from(entry) : undefined),
-        resolvePackage: () => 'node_modules/@sauce/token/token.js',
+        target: "evm",
+        resolve: (path) => (path === "main.js" ? Buffer.from(entry) : undefined),
+        resolvePackage: () => "node_modules/@sauce/token/token.js",
       });
 
     expect(compileArmless).toThrow(/failed to import module "@sauce\/token"/);
   });
 
-  it('an uninstalled package reports PackageNotFound, keeping the host resolver’s own cause', () => {
+  it("an uninstalled package reports PackageNotFound, keeping the host resolver’s own cause", () => {
     const compileUninstalled = () =>
       compileWith({
-        target: 'evm',
+        target: "evm",
         resolve: (path) => {
-          if (path === 'main.js') return Buffer.from(entry);
+          if (path === "main.js") return Buffer.from(entry);
           throw new Error(`no such module: ${path}`);
         },
         resolvePackage: () => {
-          throw new Error('nothing under node_modules');
+          throw new Error("nothing under node_modules");
         },
       });
 

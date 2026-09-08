@@ -9,7 +9,14 @@
  * fluent accessor tree (`Base.Uniswap.UniversalRouter.method`, a separate,
  * later piece of work) is built on top of.
  */
-export type { ContractDescriptor, ContractCoverage, ContractKind, DescriptorMethod, ResolvedContract, StateMutability } from "./types.js";
+export type {
+  ContractDescriptor,
+  ContractCoverage,
+  ContractKind,
+  DescriptorMethod,
+  ResolvedContract,
+  StateMutability,
+} from "./types.js";
 export type { ContractLink, ContractLinkEntry } from "./links.js";
 export { CONTRACT_LINKS } from "./links.js";
 export { DESCRIPTORS, byChain, byProtocol, byProtocolAndContract } from "./registry.js";
@@ -27,9 +34,28 @@ export {
   requireContract,
   selectorOf,
 } from "./query.js";
-export { buildDescriptor, buildMethods, buildPerChainAddress, deriveChainSlugs, deriveContractName } from "./derive.js";
+export {
+  buildDescriptor,
+  buildMethods,
+  buildPerChainAddress,
+  deriveChainSlugs,
+  deriveContractName,
+} from "./derive.js";
 
 // E2.3: the native accessor tree (`Base.Uniswap.UniversalRouter.method(...)`).
 export { chainContracts, on, type ChainContracts, type ContractAccessor } from "./accessors.js";
-export { makeContractCall, CONTRACT_BASE_DIRS, type ContractCall, type EncodeOptions, type SauceScriptOptions } from "./call.js";
-export type { ContractNameOf, FamilyContracts, FamilyKey, FamilyOf, ProtocolNamespaceKey, ProtocolSlug } from "./names.js";
+export {
+  makeContractCall,
+  CONTRACT_BASE_DIRS,
+  type ContractCall,
+  type EncodeOptions,
+  type SauceScriptOptions,
+} from "./call.js";
+export type {
+  ContractNameOf,
+  FamilyContracts,
+  FamilyKey,
+  FamilyOf,
+  ProtocolNamespaceKey,
+  ProtocolSlug,
+} from "./names.js";

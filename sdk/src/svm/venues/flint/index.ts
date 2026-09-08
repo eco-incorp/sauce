@@ -173,25 +173,14 @@
  * so the split is conservative (see budget.ts's comment) — re-pin with
  * ECO_SVM_CU_PRINT=1 once one is.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type {
-  AccountBytesMap,
-  AccountLoader,
-  PoolConfig,
-  SwapUser,
-  VenueAccount,
-} from '../types.js';
-import { readUintLE } from '../math.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 
-const SLUG = 'flint';
-export const FLINT_PROGRAM_ID = address('FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const SYSVAR_INSTRUCTIONS = address('Sysvar1nstructions1111111111111111111111111');
-
-/** SPL token account amount field offset (standard layout, both Token and Token-2022 base 165 bytes). */
-const AMOUNT_OFF = 64;
+const SLUG = "flint";
+export const FLINT_PROGRAM_ID = address("FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 /**
  * Per-direction haircut applied ON TOP OF naive constant-product (ppm of
@@ -204,16 +193,16 @@ export const FLINT_HAIRCUT_USDT_USDC_PPM = 700_000n;
 export const FLINT_HAIRCUT_PUMPCMXQ_TO_USDT_PPM = 900_000n;
 export const FLINT_HAIRCUT_USDT_TO_PUMPCMXQ_PPM = 150_000n;
 
-const USDT_MINT = address('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
-const USDC_MINT = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-const PUMPCMXQ_MINT = address('pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn');
+const USDT_MINT = address("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB");
+const USDC_MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const PUMPCMXQ_MINT = address("pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn");
 
-const USDT_MARKET = address('35JazRP82XNsPLWL31Y3kwxYr3SABLufx9UnUJLnpkZz');
-const USDT_VAULT = address('67nP7KoBRgrM6uJgPwVjDsxeV132471AvtJABLhj6jq5');
-const USDC_MARKET = address('Dj9TPFLUsN9BmGMMC3GEbRb2Nuu3q5RMCQ7rzY8tg1Ww');
-const USDC_VAULT = address('EiyYcHeonaax5m3BaUK55GkjevQrueatjCDaUoUQ7FJU');
-const PUMPCMXQ_MARKET = address('BSDnuUchVVbadoc4ZDA4jPszHsH1WX4GMA9HVtKBq4bc');
-const PUMPCMXQ_VAULT = address('zh96VSSGmkGLHiKTFpEidDS4kdJuu5Yddric3cqcbyi');
+const USDT_MARKET = address("35JazRP82XNsPLWL31Y3kwxYr3SABLufx9UnUJLnpkZz");
+const USDT_VAULT = address("67nP7KoBRgrM6uJgPwVjDsxeV132471AvtJABLhj6jq5");
+const USDC_MARKET = address("Dj9TPFLUsN9BmGMMC3GEbRb2Nuu3q5RMCQ7rzY8tg1Ww");
+const USDC_VAULT = address("EiyYcHeonaax5m3BaUK55GkjevQrueatjCDaUoUQ7FJU");
+const PUMPCMXQ_MARKET = address("BSDnuUchVVbadoc4ZDA4jPszHsH1WX4GMA9HVtKBq4bc");
+const PUMPCMXQ_VAULT = address("zh96VSSGmkGLHiKTFpEidDS4kdJuu5Yddric3cqcbyi");
 
 /** One curated Flint pair, in its DEFAULT (A -> B) orientation. */
 export interface FlintPairEntry {
@@ -282,18 +271,19 @@ export interface FlintPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   entry: FlintPairEntry;
   /** 'AtoB' = entry's default orientation; 'BtoA' only when entry.reversible. */
-  direction: 'AtoB' | 'BtoA';
+  direction: "AtoB" | "BtoA";
 }
 
 function flintConfig(cfg: PoolConfig): FlintPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as FlintPoolConfig;
 }
 
 /** The directed (in, out) roles for a config, resolving its `direction` against its `entry`. */
 function directed(cfg: FlintPoolConfig) {
   const e = cfg.entry;
-  return cfg.direction === 'BtoA'
+  return cfg.direction === "BtoA"
     ? {
         marketIn: e.marketB,
         vaultIn: e.vaultB,
@@ -316,18 +306,6 @@ function directed(cfg: FlintPoolConfig) {
       };
 }
 
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-
-/** The haircut (ppm) for a config's OWN direction — see file header "Quote curve". */
-function haircutFor(cfg: FlintPoolConfig): bigint {
-  if (cfg.direction === 'BtoA') {
-    const h = cfg.entry.haircutBtoAPpm;
-    if (h === undefined) throw new Error(`${SLUG} pool ${cfg.pool} has no haircutBtoAPpm for its 'BtoA' direction`);
-    return h;
-  }
-  return cfg.entry.haircutAtoBPpm;
-}
-
 async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<FlintPoolConfig> {
   // Per-side token programs are threaded from the curated registry (tokenProgramA/
   // tokenProgramB), each real-evidence-confirmed per pair — the Token-2022 side
@@ -348,7 +326,7 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Flin
   }
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} market ${pool} account not found`);
-  return { venue: SLUG, pool, entry, direction: 'AtoB' };
+  return { venue: SLUG, pool, entry, direction: "AtoB" };
 }
 
 function quoteAccounts(base: PoolConfig): VenueAccount[] {
@@ -362,9 +340,8 @@ function quoteAccounts(base: PoolConfig): VenueAccount[] {
 
 export const flint = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: FLINT_PROGRAM_ID,
   fetchPoolConfig,
   quoteAccounts,
 };
-

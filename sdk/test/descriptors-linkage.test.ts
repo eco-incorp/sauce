@@ -22,7 +22,13 @@ import { protocols } from "../src/protocols/index.js";
  *  `abiExport` alone (see links.ts's module comment) -- these are EXPECTED to diverge, since
  *  deriveContractName has no notion of roleKey and would otherwise collapse e.g. all three
  *  compound-v3 Comet markets to the same name "Comet". */
-const DELIBERATE_OVERRIDES = new Set(["uniswap-v3::swapRouter02", "compound-v3::cUSDCv3", "compound-v3::cWETHv3", "compound-v3::cUSDTv3", "erc4626::"]);
+const DELIBERATE_OVERRIDES = new Set([
+  "uniswap-v3::swapRouter02",
+  "compound-v3::cUSDCv3",
+  "compound-v3::cWETHv3",
+  "compound-v3::cUSDTv3",
+  "erc4626::",
+]);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -89,7 +95,11 @@ describe("descriptor linkage: starter-set coverage lint", () => {
       for (const deployment of info.chains) {
         for (const role of Object.keys(deployment.addresses)) allRoleKeys.add(role);
       }
-      const linkedRoles = new Set(LINKS.filter((l) => l.protocol === protocolSlug).map((l) => l.roleKey).filter((r): r is string => r !== undefined));
+      const linkedRoles = new Set(
+        LINKS.filter((l) => l.protocol === protocolSlug)
+          .map((l) => l.roleKey)
+          .filter((r): r is string => r !== undefined),
+      );
       for (const role of allRoleKeys) {
         if (!linkedRoles.has(role)) unlinkedRoles.push(`${protocolSlug}.${role}`);
       }
@@ -102,7 +112,11 @@ describe("descriptor linkage: starter-set coverage lint", () => {
     const unclaimed: string[] = [];
     for (const protocolSlug of starterProtocols) {
       const allExports = new Set(Object.keys(ABI_EXPORTS[protocolSlug] ?? {}));
-      const claimed = new Set(LINKS.filter((l) => l.protocol === protocolSlug).map((l) => l.abiExport).filter((x): x is string => x !== undefined));
+      const claimed = new Set(
+        LINKS.filter((l) => l.protocol === protocolSlug)
+          .map((l) => l.abiExport)
+          .filter((x): x is string => x !== undefined),
+      );
       for (const exportName of allExports) {
         if (!claimed.has(exportName)) unclaimed.push(`${protocolSlug}.${exportName}`);
       }
@@ -135,7 +149,14 @@ describe("descriptor linkage: (protocol, contract) uniqueness (E2.3's key space)
   it("every linked abiExport has a sibling protocols/<slug>/<Export>.json on disk (needed by toSauceScript's import line)", () => {
     for (const link of LINKS) {
       if (link.abiExport === undefined) continue;
-      const jsonPath = join(__dirname, "..", "src", "protocols", link.protocol, `${link.abiExport}.json`);
+      const jsonPath = join(
+        __dirname,
+        "..",
+        "src",
+        "protocols",
+        link.protocol,
+        `${link.abiExport}.json`,
+      );
       expect(existsSync(jsonPath)).toBe(true);
     }
   });
@@ -188,7 +209,9 @@ describe("descriptor linkage: address checksum invariants", () => {
   });
 
   it("uniswap-v4.UniversalRouter@8453 (lowercase in the vendored file) comes out checksummed", () => {
-    const d = DESCRIPTORS.find((x) => x.protocol === "uniswap-v4" && x.contract === "UniversalRouter")!;
+    const d = DESCRIPTORS.find(
+      (x) => x.protocol === "uniswap-v4" && x.contract === "UniversalRouter",
+    )!;
     const addr = d.perChainAddress[8453];
     expect(addr).toBe("0x6fF5693b99212Da76ad316178A184AB56D299b43");
   });

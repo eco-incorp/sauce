@@ -81,13 +81,13 @@
  * This file is the off-chain decode + CPI-account layer (PoolConfig,
  * fetchPoolConfig, quoteAccounts).
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig, VenueAccount } from '../types.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 
-const SLUG = 'obsidian';
-export const OBSIDIAN_PROGRAM_ID = address('HBVw6bZtcCaezhcBrmfyXBSBRWCdv72271xQ4GPvms2z');
+const SLUG = "obsidian";
+export const OBSIDIAN_PROGRAM_ID = address("HBVw6bZtcCaezhcBrmfyXBSBRWCdv72271xQ4GPvms2z");
 
 const POOL_ACCOUNT_SIZE = 2216;
 export const OFF_MINT_A = 80;
@@ -100,7 +100,7 @@ export const OFF_PRICE = 544;
 export const MINT_DECIMALS_OFF = 44;
 /** Clock sysvar `slot` field offset (first u64 of the Clock struct). */
 const CLOCK_SLOT_OFF = 0;
-const CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
+const CLOCK_SYSVAR = address("SysvarC1ock11111111111111111111111111111111");
 
 /**
  * Freshness bound for the off-chain prepare gate (slots; ~600 slots is ~4
@@ -115,7 +115,8 @@ const CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
 export const MAX_STALE_SLOTS = 600n;
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 export interface ObsidianPoolConfig extends PoolConfig {
   venue: typeof SLUG;
@@ -131,7 +132,8 @@ export interface ObsidianPoolConfig extends PoolConfig {
 
 /** Shared by index.ts and ladder.ts; not exported (mirrors the solfi-v2 split). */
 function obsidianConfig(cfg: PoolConfig): ObsidianPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   const c = cfg as ObsidianPoolConfig;
   if (c.direction !== 0 && c.direction !== 1) {
     throw new Error(`${SLUG} direction must be 0 or 1, got '${c.direction}'`);
@@ -143,7 +145,9 @@ async function fetchDecimals(load: AccountLoader, mint: Address): Promise<number
   const data = await load(mint);
   if (data === null) throw new Error(`${SLUG} mint ${mint} account not found`);
   if (data.length <= MINT_DECIMALS_OFF) {
-    throw new Error(`${SLUG} mint ${mint} account is ${data.length} bytes, too small for an SPL Mint`);
+    throw new Error(
+      `${SLUG} mint ${mint} account is ${data.length} bytes, too small for an SPL Mint`,
+    );
   }
   return data[MINT_DECIMALS_OFF];
 }
@@ -154,15 +158,22 @@ async function fetchDecimals(load: AccountLoader, mint: Address): Promise<number
  * header "Live-state honesty"). direction is caller-supplied (0 or 1); both
  * directions share one pool account.
  */
-async function fetchPoolConfig(load: AccountLoader, pool: Address, direction: 0 | 1 = 0): Promise<ObsidianPoolConfig> {
+async function fetchPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+  direction: 0 | 1 = 0,
+): Promise<ObsidianPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
 
   const clockData = await load(CLOCK_SYSVAR);
-  if (clockData === null) throw new Error(`${SLUG} could not read the Clock sysvar to gate pool ${pool} freshness`);
+  if (clockData === null)
+    throw new Error(`${SLUG} could not read the Clock sysvar to gate pool ${pool} freshness`);
   const liveSlot = readUintLE(clockData, CLOCK_SLOT_OFF, 8);
   const lastUpdateSlot = readUintLE(data, OFF_LAST_UPDATE_SLOT, 8);
   if (liveSlot > lastUpdateSlot && liveSlot - lastUpdateSlot > MAX_STALE_SLOTS) {
@@ -175,7 +186,10 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address, direction: 0 
   const mintB = pubkeyAt(data, OFF_MINT_B);
   const vaultA = pubkeyAt(data, OFF_VAULT_A);
   const vaultB = pubkeyAt(data, OFF_VAULT_B);
-  const [decimalsA, decimalsB] = await Promise.all([fetchDecimals(load, mintA), fetchDecimals(load, mintB)]);
+  const [decimalsA, decimalsB] = await Promise.all([
+    fetchDecimals(load, mintA),
+    fetchDecimals(load, mintB),
+  ]);
 
   return {
     venue: SLUG,
@@ -201,7 +215,7 @@ function quoteAccounts(base: PoolConfig): VenueAccount[] {
 
 export const obsidian = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: OBSIDIAN_PROGRAM_ID,
   fetchPoolConfig,
   quoteAccounts,

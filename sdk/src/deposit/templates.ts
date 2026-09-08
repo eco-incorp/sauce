@@ -31,7 +31,8 @@ function addressExtra(defaultValue = 0n): ExtraFieldSpec {
     defaultValue,
     normalize(value: AmountInput, fieldName: string): bigint {
       if (typeof value === "bigint") return value;
-      if (typeof value === "number") throw new Error(`${fieldName}: expected an address, got a number`);
+      if (typeof value === "number")
+        throw new Error(`${fieldName}: expected an address, got a number`);
       return BigInt(value);
     },
   };
@@ -91,7 +92,10 @@ export type DepositKey =
   | "lido:stake"
   | "lido:wrap";
 
-function aavePoolSupplyTemplate(protocol: "aave-v3" | "spark", exportName: string): DepositTemplate {
+function aavePoolSupplyTemplate(
+  protocol: "aave-v3" | "spark",
+  exportName: string,
+): DepositTemplate {
   const binding = protocol === "aave-v3" ? "IAavePool" : "ISparkPool";
   return {
     protocol,
@@ -114,7 +118,10 @@ function aavePoolSupplyTemplate(protocol: "aave-v3" | "spark", exportName: strin
   };
 }
 
-function aavePoolWithdrawTemplate(protocol: "aave-v3" | "spark", exportName: string): DepositTemplate {
+function aavePoolWithdrawTemplate(
+  protocol: "aave-v3" | "spark",
+  exportName: string,
+): DepositTemplate {
   const binding = protocol === "aave-v3" ? "IAavePool" : "ISparkPool";
   return {
     protocol,
@@ -174,7 +181,9 @@ export const DEPOSIT_TEMPLATES: Readonly<Record<DepositKey, DepositTemplate>> = 
     binding: "IEVault",
     extras: {},
     emit(d, amountExpr) {
-      return [`IEVault.at(${formatBigint(d.target)}).deposit(${amountExpr}, ${beneficiaryLiteral(d)});`];
+      return [
+        `IEVault.at(${formatBigint(d.target)}).deposit(${amountExpr}, ${beneficiaryLiteral(d)});`,
+      ];
     },
   },
 
@@ -228,7 +237,12 @@ export const DEPOSIT_TEMPLATES: Readonly<Record<DepositKey, DepositTemplate>> = 
     extras: { referral: addressExtra(0n) },
     emit(d, amountExpr, varSuffix) {
       const referral = d.extra.referral ?? 0n;
-      const { decl, expr } = calldataLines("dSubmit", varSuffix, LIDO_SUBMIT_SELECTOR, formatBigint(referral));
+      const { decl, expr } = calldataLines(
+        "dSubmit",
+        varSuffix,
+        LIDO_SUBMIT_SELECTOR,
+        formatBigint(referral),
+      );
       return [decl, `evm.call(${formatBigint(d.target)}, ${amountExpr}, ${expr});`];
     },
   },
@@ -264,7 +278,12 @@ export const DEPOSIT_TEMPLATES: Readonly<Record<DepositKey, DepositTemplate>> = 
     binding: null,
     extras: {},
     emit(d, amountExpr, varSuffix) {
-      const { decl, expr } = calldataLines("dUnwrap", varSuffix, WETH_WITHDRAW_SELECTOR, amountExpr);
+      const { decl, expr } = calldataLines(
+        "dUnwrap",
+        varSuffix,
+        WETH_WITHDRAW_SELECTOR,
+        amountExpr,
+      );
       return [decl, `evm.call(${formatBigint(d.target)}, 0n, ${expr});`];
     },
   },
@@ -278,7 +297,9 @@ export function depositTemplateFor(protocol: string, action: string): DepositTem
   const template = DEPOSIT_TEMPLATES[key];
   if (!template) {
     const known = Object.keys(DEPOSIT_TEMPLATES).sort().join(", ");
-    throw new Error(`depositTemplateFor: no deposit template registered for "${key}". Known: ${known}`);
+    throw new Error(
+      `depositTemplateFor: no deposit template registered for "${key}". Known: ${known}`,
+    );
   }
   return template;
 }

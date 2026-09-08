@@ -6,21 +6,21 @@
  * WrappedToken account is synthesized with a nonzero multiplier and two real
  * mint addresses at the source-verified offsets.
  */
-import { address, getAddressEncoder } from '@solana/kit';
+import { address, getAddressEncoder } from "@solana/kit";
 import {
   saberDecimalsWrapper,
   OFF_MULTIPLIER,
   OFF_UNDERLYING_MINT,
   OFF_UNDERLYING_TOKENS,
   OFF_WRAPPER_MINT,
-} from '../../../src/svm/venues/saber-decimals-wrapper/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeLegacyMint, makeT22Mint } from '../fixtures/token-2022/synth.js';
+} from "../../../src/svm/venues/saber-decimals-wrapper/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeLegacyMint, makeT22Mint } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('AnKLLfpMcceM6YXtJ9nGxYekVXqfWy8WNsMZXoQTCVQk');
-const UNDERLYING = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'); // USDC
-const WRAPPER = address('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'); // USDT (stand-in wrapper mint)
-const VAULT = address('So11111111111111111111111111111111111111112');
+const POOL = address("AnKLLfpMcceM6YXtJ9nGxYekVXqfWy8WNsMZXoQTCVQk");
+const UNDERLYING = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
+const WRAPPER = address("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"); // USDT (stand-in wrapper mint)
+const VAULT = address("So11111111111111111111111111111111111111112");
 const enc = getAddressEncoder();
 
 function synthWrapper(): Uint8Array {
@@ -41,22 +41,29 @@ function loader(mintOverrides: Record<string, Uint8Array>): AccountLoader {
   };
 }
 
-describe('saber-decimals-wrapper Token-2022 self-drop', () => {
-  it('legacy path is unchanged (mints unvendored → legacy assumption)', async () => {
+describe("saber-decimals-wrapper Token-2022 self-drop", () => {
+  it("legacy path is unchanged (mints unvendored → legacy assumption)", async () => {
     await expect(saberDecimalsWrapper.fetchPoolConfig(loader({}), POOL)).resolves.toBeDefined();
   });
 
-  it('a vendored legacy (82-byte) mint keeps the wrapper routable', async () => {
+  it("a vendored legacy (82-byte) mint keeps the wrapper routable", async () => {
     await expect(
-      saberDecimalsWrapper.fetchPoolConfig(loader({ [UNDERLYING]: makeLegacyMint(), [WRAPPER]: makeLegacyMint() }), POOL),
+      saberDecimalsWrapper.fetchPoolConfig(
+        loader({ [UNDERLYING]: makeLegacyMint(), [WRAPPER]: makeLegacyMint() }),
+        POOL,
+      ),
     ).resolves.toBeDefined();
   });
 
-  it('drops when the underlying mint is a Token-2022 mint', async () => {
-    await expect(saberDecimalsWrapper.fetchPoolConfig(loader({ [UNDERLYING]: makeT22Mint() }), POOL)).rejects.toThrow(/Token-2022/);
+  it("drops when the underlying mint is a Token-2022 mint", async () => {
+    await expect(
+      saberDecimalsWrapper.fetchPoolConfig(loader({ [UNDERLYING]: makeT22Mint() }), POOL),
+    ).rejects.toThrow(/Token-2022/);
   });
 
-  it('drops when the wrapper mint is a Token-2022 mint', async () => {
-    await expect(saberDecimalsWrapper.fetchPoolConfig(loader({ [WRAPPER]: makeT22Mint() }), POOL)).rejects.toThrow(/Token-2022/);
+  it("drops when the wrapper mint is a Token-2022 mint", async () => {
+    await expect(
+      saberDecimalsWrapper.fetchPoolConfig(loader({ [WRAPPER]: makeT22Mint() }), POOL),
+    ).rejects.toThrow(/Token-2022/);
   });
 });

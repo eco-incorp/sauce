@@ -52,7 +52,13 @@ export const CANONICAL_CHAINS = [
   // --- EVM, present in `chains` AND in the v12 deploy record (7) — slug === V12_EVM_CHAINS[id].name ---
   { id: 1, slug: "ethereum", name: "Ethereum", kind: "evm", aliases: ["mainnet", "eth"] },
   { id: 10, slug: "optimism", name: "Optimism", kind: "evm", aliases: ["op", "op-mainnet"] },
-  { id: 56, slug: "bsc", name: "BNB Chain", kind: "evm", aliases: ["bnb", "binance-smart-chain", "bnb-smart-chain"] },
+  {
+    id: 56,
+    slug: "bsc",
+    name: "BNB Chain",
+    kind: "evm",
+    aliases: ["bnb", "binance-smart-chain", "bnb-smart-chain"],
+  },
   { id: 137, slug: "polygon", name: "Polygon", kind: "evm", aliases: ["matic", "polygon-pos"] },
   { id: 8453, slug: "base", name: "Base", kind: "evm", aliases: [] },
   { id: 42161, slug: "arbitrum", name: "Arbitrum One", kind: "evm", aliases: ["arb"] },
@@ -64,11 +70,23 @@ export const CANONICAL_CHAINS = [
   { id: 122, slug: "fuse", name: "Fuse", kind: "evm", aliases: [] },
   { id: 169, slug: "manta", name: "Manta Pacific", kind: "evm", aliases: [] },
   { id: 204, slug: "opbnb", name: "opBNB", kind: "evm", aliases: [] },
-  { id: 250, slug: "fantom", name: "Fantom", kind: "evm", aliases: ["ftm", "opera", "fantom-opera"] },
+  {
+    id: 250,
+    slug: "fantom",
+    name: "Fantom",
+    kind: "evm",
+    aliases: ["ftm", "opera", "fantom-opera"],
+  },
   { id: 288, slug: "boba", name: "Boba", kind: "evm", aliases: ["boba-network"] },
   { id: 324, slug: "zksync", name: "zkSync Era", kind: "evm", aliases: [] },
   { id: 369, slug: "pulsechain", name: "PulseChain", kind: "evm", aliases: ["pls"] },
-  { id: 1088, slug: "metis", name: "Metis", kind: "evm", aliases: ["andromeda", "metis-andromeda"] },
+  {
+    id: 1088,
+    slug: "metis",
+    name: "Metis",
+    kind: "evm",
+    aliases: ["andromeda", "metis-andromeda"],
+  },
   { id: 1116, slug: "core", name: "Core", kind: "evm", aliases: ["coredao", "core-dao"] },
   { id: 1284, slug: "moonbeam", name: "Moonbeam", kind: "evm", aliases: [] },
   { id: 1329, slug: "sei", name: "Sei", kind: "evm", aliases: ["sei-evm"] },
@@ -95,7 +113,13 @@ export const CANONICAL_CHAINS = [
   { id: 57073, slug: "ink", name: "Ink", kind: "evm", aliases: [] },
 
   // --- SVM (1) ---
-  { id: 1399811149, slug: "solana", name: "Solana", kind: "svm", aliases: ["sol", "mainnet-beta", "solana-mainnet"] },
+  {
+    id: 1399811149,
+    slug: "solana",
+    name: "Solana",
+    kind: "svm",
+    aliases: ["sol", "mainnet-beta", "solana-mainnet"],
+  },
 ] as const satisfies readonly CanonicalChain[];
 
 /** The literal slug union — what the fluent accessor and route shortcuts key their builder types off. */
@@ -110,7 +134,10 @@ const bySlug = new Map<string, CanonicalChain>(canonicalChains.map((c) => [c.slu
 
 /** The ONE normalizer: lowercased, trimmed, punctuation/whitespace stripped. */
 export function normalizeChainKey(input: string): string {
-  return input.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 const byAlias = new Map<string, CanonicalChain>();
@@ -186,12 +213,18 @@ export function isSvmChain(c: CanonicalChain): c is CanonicalChain & { kind: "sv
 
 /** Every EVM chain, id-ascending. */
 export function evmChains(): CanonicalChain[] {
-  return canonicalChains.filter(isEvmChain).slice().sort((a, b) => a.id - b.id);
+  return canonicalChains
+    .filter(isEvmChain)
+    .slice()
+    .sort((a, b) => a.id - b.id);
 }
 
 /** Every SVM chain, id-ascending. */
 export function svmChains(): CanonicalChain[] {
-  return canonicalChains.filter(isSvmChain).slice().sort((a, b) => a.id - b.id);
+  return canonicalChains
+    .filter(isSvmChain)
+    .slice()
+    .sort((a, b) => a.id - b.id);
 }
 
 /** Every slug, id-ascending — for building the fluent accessor's key set. */

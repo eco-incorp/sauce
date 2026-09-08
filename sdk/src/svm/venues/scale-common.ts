@@ -46,17 +46,22 @@
  * 3 scale-vmm pairs; `Exponential` (1) is declared in the IDL but never seen live and its
  * formula is unverified, so a pool carrying it is rejected rather than guessed at.
  */
-import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { parseMintExtensions } from '../token-extensions.js';
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { parseMintExtensions } from "../token-extensions.js";
 
-export const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-export const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-export const ASSOCIATED_TOKEN_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-export const SYSTEM_PROGRAM = address('11111111111111111111111111111111');
+export const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+export const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+export const ASSOCIATED_TOKEN_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+export const SYSTEM_PROGRAM = address("11111111111111111111111111111111");
 
-export const SCALE_AMM_PROGRAM_ID = address('SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA');
-export const SCALE_VMM_PROGRAM_ID = address('SCALEWoRSpVZpMRqHEcDfNvBh3nUSe34jDr9r689gLa');
+export const SCALE_AMM_PROGRAM_ID = address("SCALEwAvEK5gtkdHiFzXfPgtk2YwJxPDzaV3aDmR7tA");
+export const SCALE_VMM_PROGRAM_ID = address("SCALEWoRSpVZpMRqHEcDfNvBh3nUSe34jDr9r689gLa");
 
 /** Anchor global instruction discriminators (sha256("global:<name>")[0..8]). */
 export const BUY_DISCRIMINATOR = Uint8Array.of(102, 6, 61, 18, 1, 218, 235, 234);
@@ -74,7 +79,9 @@ export function readUintLE(data: Uint8Array, offset: number, width: number): big
     throw new Error(`readUintLE width must be an integer in 1..=32, got ${width}`);
   }
   if (offset + width > data.length) {
-    throw new Error(`readUintLE reads [${offset}, ${offset + width}) beyond ${data.length}-byte data`);
+    throw new Error(
+      `readUintLE reads [${offset}, ${offset + width}) beyond ${data.length}-byte data`,
+    );
   }
   let value = 0n;
   for (let i = width - 1; i >= 0; i--) value = (value << 8n) | BigInt(data[offset + i]!);
@@ -97,19 +104,24 @@ export function readFeeBeneficiaries(data: Uint8Array, offset: number): FeeBenef
   const out: FeeBeneficiary[] = [];
   for (let i = 0; i < FEE_BENEFICIARY_SLOTS; i++) {
     const entryOffset = offset + i * FEE_BENEFICIARY_STRIDE;
-    out.push({ wallet: pubkeyAt(data, entryOffset), shareBps: Number(readUintLE(data, entryOffset + 32, 2)) });
+    out.push({
+      wallet: pubkeyAt(data, entryOffset),
+      shareBps: Number(readUintLE(data, entryOffset + 32, 2)),
+    });
   }
   return out;
 }
 
 /** The literal ASCII seed both programs' PlatformConfig PDA uses (seeds=["config"]). */
-export const CONFIG_SEED = new TextEncoder().encode('config');
+export const CONFIG_SEED = new TextEncoder().encode("config");
 /** The literal ASCII seed scale_amm's own (non-VMM-migrated) Pool PDA uses (seeds=["pool", owner, mint_a, mint_b]). */
-export const POOL_SEED = new TextEncoder().encode('pool');
+export const POOL_SEED = new TextEncoder().encode("pool");
 
 async function pda(seeds: (Address | Uint8Array)[], programAddress: Address): Promise<Address> {
   const encoder = getAddressEncoder();
-  const bytes = seeds.map((seed) => (seed instanceof Uint8Array ? seed : new Uint8Array(encoder.encode(seed))));
+  const bytes = seeds.map((seed) =>
+    seed instanceof Uint8Array ? seed : new Uint8Array(encoder.encode(seed)),
+  );
   const [derived] = await getProgramDerivedAddress({ programAddress, seeds: bytes });
   return derived;
 }
@@ -118,7 +130,11 @@ async function pda(seeds: (Address | Uint8Array)[], programAddress: Address): Pr
 export async function ata(owner: Address, mint: Address, tokenProgram: Address): Promise<Address> {
   const encoder = getAddressEncoder();
   return pda(
-    [new Uint8Array(encoder.encode(owner)), new Uint8Array(encoder.encode(tokenProgram)), new Uint8Array(encoder.encode(mint))],
+    [
+      new Uint8Array(encoder.encode(owner)),
+      new Uint8Array(encoder.encode(tokenProgram)),
+      new Uint8Array(encoder.encode(mint)),
+    ],
     ASSOCIATED_TOKEN_PROGRAM,
   );
 }
@@ -137,10 +153,14 @@ export { pda };
 export function detectTokenProgram(mint: Address, data: Uint8Array): Address {
   if (data.length === 82) return TOKEN_PROGRAM;
   if (data.length < 166) {
-    throw new Error(`scale venue: mint ${mint} data is ${data.length} bytes, not a token mint layout`);
+    throw new Error(
+      `scale venue: mint ${mint} data is ${data.length} bytes, not a token mint layout`,
+    );
   }
   if (data[165] !== 1) {
-    throw new Error(`scale venue: mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
+    throw new Error(
+      `scale venue: mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`,
+    );
   }
   // A NonTransferable / DefaultAccountState=frozen mint genuinely cannot route
   // through a plain transferChecked — self-drop it (safe; a dropped pool just
@@ -148,7 +168,7 @@ export function detectTokenProgram(mint: Address, data: Uint8Array): Address {
   // so a routable T22 stablecoin (PYUSD/USDG) still passes.
   const { blocking } = parseMintExtensions(data);
   if (blocking.length > 0) {
-    throw new Error(`scale venue: mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    throw new Error(`scale venue: mint ${mint} is un-routable: ${blocking.join("; ")}`);
   }
   let offset = 166;
   while (offset + 4 <= data.length) {
@@ -164,7 +184,9 @@ export function detectTokenProgram(mint: Address, data: Uint8Array): Address {
       // curve's own fee-on-input / fee-on-gross-output split is not confidently
       // determined. Rejecting self-limits (safe); a wrong net silently
       // mis-quotes — so keep the no-op (reject) path.
-      throw new Error(`scale venue: mint ${mint} carries a token-2022 TransferFeeConfig extension (wire amounts would not match the quote)`);
+      throw new Error(
+        `scale venue: mint ${mint} carries a token-2022 TransferFeeConfig extension (wire amounts would not match the quote)`,
+      );
     }
     offset += 4 + extensionLength;
   }
@@ -174,7 +196,7 @@ export function detectTokenProgram(mint: Address, data: Uint8Array): Address {
 /** CurveType::ConstantProduct — the only variant this adapter supports (see module doc). */
 export const CURVE_CONSTANT_PRODUCT = 0;
 
-export type ScaleDirection = 'aToB' | 'bToA';
+export type ScaleDirection = "aToB" | "bToA";
 
 export interface ScaleCurveState {
   reservesA: bigint;
@@ -191,11 +213,15 @@ function feeTotal(amount: bigint, state: ScaleCurveState): bigint {
 }
 
 /** TS mirror of the `qScaleCurve` SauceScript helper — see module doc for the derivation. */
-export function computeScaleQuote(state: ScaleCurveState, amountIn: bigint, direction: ScaleDirection): bigint {
+export function computeScaleQuote(
+  state: ScaleCurveState,
+  amountIn: bigint,
+  direction: ScaleDirection,
+): bigint {
   if (amountIn === 0n) return 0n;
   const vA = state.reservesA + state.shift;
   const vB = state.reservesB;
-  if (direction === 'aToB') {
+  if (direction === "aToB") {
     const net = amountIn - feeTotal(amountIn, state);
     if (net <= 0n) return 0n;
     return (vB * net) / (vA + net);
@@ -205,19 +231,29 @@ export function computeScaleQuote(state: ScaleCurveState, amountIn: bigint, dire
 }
 
 /** Effective (reserveIn, reserveOut) for the relative-depth filter — the VIRTUAL reserves the curve above actually prices against. */
-export function scaleDepthReserves(state: ScaleCurveState, direction: ScaleDirection): { reserveIn: bigint; reserveOut: bigint } {
+export function scaleDepthReserves(
+  state: ScaleCurveState,
+  direction: ScaleDirection,
+): { reserveIn: bigint; reserveOut: bigint } {
   const vA = state.reservesA + state.shift;
   const vB = state.reservesB;
-  return direction === 'aToB' ? { reserveIn: vA, reserveOut: vB } : { reserveIn: vB, reserveOut: vA };
+  return direction === "aToB"
+    ? { reserveIn: vA, reserveOut: vB }
+    : { reserveIn: vB, reserveOut: vA };
 }
 
 /** Continuous-oracle fee model (measurement only). */
-export function scaleContinuousFees(state: ScaleCurveState, direction: ScaleDirection): { gammaPpm: bigint; muPpm: bigint } {
+export function scaleContinuousFees(
+  state: ScaleCurveState,
+  direction: ScaleDirection,
+): { gammaPpm: bigint; muPpm: bigint } {
   const totalBps = state.platformFeeBps + state.shareBps.reduce((sum, bps) => sum + bps, 0n);
   const totalPpm = totalBps * 100n; // bps (1e4) -> ppm (1e6)
   const retainedPpm = 1_000_000n - totalPpm;
   // BUY charges the fee on input (gamma), SELL on output (mu); the other side is untouched.
-  return direction === 'aToB' ? { gammaPpm: retainedPpm, muPpm: 1_000_000n } : { gammaPpm: 1_000_000n, muPpm: retainedPpm };
+  return direction === "aToB"
+    ? { gammaPpm: retainedPpm, muPpm: 1_000_000n }
+    : { gammaPpm: 1_000_000n, muPpm: retainedPpm };
 }
 
 /**
@@ -226,19 +262,19 @@ export function scaleContinuousFees(state: ScaleCurveState, direction: ScaleDire
  * two programs' math is identical, only account layouts differ). `dir` is 0 for
  * aToB (buy: fee on input) and nonzero for bToA (sell: fee on gross output).
  */
-export const SCALE_CURVE_HELPER_NAME = 'qScaleCurve';
+export const SCALE_CURVE_HELPER_NAME = "qScaleCurve";
 export const SCALE_CURVE_HELPER_SOURCE = [
   `function ${SCALE_CURVE_HELPER_NAME}(x, rA, rB, shift, pbps, s0, s1, s2, s3, s4, dir) {`,
-  '  if (x === 0) { return 0 }',
-  '  const vA = rA + shift;',
-  '  const vB = rB;',
-  '  if (dir === 0) {',
-  '    const feeIn = Math.mulDiv(x, pbps, 10000) + Math.mulDiv(x, s0, 10000) + Math.mulDiv(x, s1, 10000) + Math.mulDiv(x, s2, 10000) + Math.mulDiv(x, s3, 10000) + Math.mulDiv(x, s4, 10000);',
-  '    const net = x - feeIn;',
-  '    return Math.mulDiv(vB, net, vA + net);',
-  '  }',
-  '  const gross = Math.mulDiv(vA, x, vB + x);',
-  '  const feeOut = Math.mulDiv(gross, pbps, 10000) + Math.mulDiv(gross, s0, 10000) + Math.mulDiv(gross, s1, 10000) + Math.mulDiv(gross, s2, 10000) + Math.mulDiv(gross, s3, 10000) + Math.mulDiv(gross, s4, 10000);',
-  '  return gross - feeOut;',
-  '}',
-].join('\n');
+  "  if (x === 0) { return 0 }",
+  "  const vA = rA + shift;",
+  "  const vB = rB;",
+  "  if (dir === 0) {",
+  "    const feeIn = Math.mulDiv(x, pbps, 10000) + Math.mulDiv(x, s0, 10000) + Math.mulDiv(x, s1, 10000) + Math.mulDiv(x, s2, 10000) + Math.mulDiv(x, s3, 10000) + Math.mulDiv(x, s4, 10000);",
+  "    const net = x - feeIn;",
+  "    return Math.mulDiv(vB, net, vA + net);",
+  "  }",
+  "  const gross = Math.mulDiv(vA, x, vB + x);",
+  "  const feeOut = Math.mulDiv(gross, pbps, 10000) + Math.mulDiv(gross, s0, 10000) + Math.mulDiv(gross, s1, 10000) + Math.mulDiv(gross, s2, 10000) + Math.mulDiv(gross, s3, 10000) + Math.mulDiv(gross, s4, 10000);",
+  "  return gross - feeOut;",
+  "}",
+].join("\n");

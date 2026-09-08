@@ -3,12 +3,15 @@
 Single-contract DEX (formerly CrocSwap) with ambient (full-range) and concentrated liquidity in one unified pool. Extremely gas-efficient architecture where all liquidity lives in one contract.
 
 ## Category
+
 dex | Chains: Ethereum, Scroll
 
 ## Key Operations
+
 - **swap**: Swap tokens via the CrocSwapDex contract with base/quote pair addressing
 
 ## SDK Usage
+
 ```typescript
 import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/ambient";
 ```
@@ -16,14 +19,25 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 ## SauceScript Examples
 
 ### swap
+
 ```typescript
 import { CrocSwapDexABI as ICrocSwapDex } from "./abis";
 
-function main(dexAddress: Address, base: Address, quote: Address, poolIdx: Uint256, isBuy: bool, inBaseQty: bool, qty: Uint256, minOut: Uint256): { baseFlow: Uint256, quoteFlow: Uint256 } {
+function main(
+  dexAddress: Address,
+  base: Address,
+  quote: Address,
+  poolIdx: Uint256,
+  isBuy: bool,
+  inBaseQty: bool,
+  qty: Uint256,
+  minOut: Uint256,
+): { baseFlow: Uint256; quoteFlow: Uint256 } {
   const dex = ICrocSwapDex.at(dexAddress);
   return dex.swap(base, quote, poolIdx, isBuy, inBaseQty, qty, 0, 0, minOut, 0);
 }
 ```
+
 - `dexAddress`: CrocSwapDex contract address (same on both chains: `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688`)
 - `base`: Base token address (lower address of the pair by convention)
 - `quote`: Quote token address (higher address of the pair)
@@ -35,18 +49,21 @@ function main(dexAddress: Address, base: Address, quote: Address, poolIdx: Uint2
 - Additional params set to `0`: `tip` (optional tip), `limitPrice` (no price limit), `reserveFlags` (no reserve usage)
 
 ## Key Addresses
-| Chain | Contract | Address |
-|-------|----------|---------|
+
+| Chain    | Contract    | Address                                      |
+| -------- | ----------- | -------------------------------------------- |
 | Ethereum | CrocSwapDex | `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688` |
-| Scroll | CrocSwapDex | `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688` |
+| Scroll   | CrocSwapDex | `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688` |
 
 ## ABI Methods
 
 ### CrocSwapDexABI
+
 - `swap(address base, address quote, uint256 poolIdx, bool isBuy, bool inBaseQty, uint128 qty, uint16 tip, uint128 limitPrice, uint128 minOut, uint8 reserveFlags) -> (int128 baseFlow, int128 quoteFlow)` - Execute a swap with full parameter control. Returns signed token flows (negative = tokens out from user)
 - `userCmd(uint16 callpath, bytes cmd) -> bytes result` - Execute arbitrary protocol commands (advanced: liquidity operations, governance, etc.)
 
 ## Notes
+
 - Single contract holds ALL liquidity (similar to Balancer V2 Vault and Uniswap V4 PoolManager)
 - Same contract address on both Ethereum and Scroll
 - `poolIdx` identifies the pool type: different pool indices have different fee rates and tick spacing

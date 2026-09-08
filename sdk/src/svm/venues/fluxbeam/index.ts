@@ -103,17 +103,17 @@
  * all — both are the venue-robustness "one bad pool never kills a cook"
  * self-drop class already used throughout this recipe.
  */
-import { createHash } from 'node:crypto';
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { createHash } from "node:crypto";
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-const SLUG = 'fluxbeam';
-export const FLUXBEAM_PROGRAM_ID = address('FLUXubRmkEi2q6K3Y9kBPg9248ggaZVsoSFhtJHSrm1X');
-const TOKENKEG_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
+const SLUG = "fluxbeam";
+export const FLUXBEAM_PROGRAM_ID = address("FLUXubRmkEi2q6K3Y9kBPg9248ggaZVsoSFhtJHSrm1X");
+const TOKENKEG_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+const CLOCK_SYSVAR = address("SysvarC1ock11111111111111111111111111111111");
 
 /** `SwapVersion::pack` = 1-byte version tag + the 323-byte `SwapV1` body. */
 export const FLUXBEAM_POOL_SIZE = 324;
@@ -191,11 +191,11 @@ function getAddressEncoded(value: Address): Uint8Array {
 function deriveSwapAuthority(pool: Address, bumpSeed: number): Address {
   const codec = getAddressCodec();
   return codec.decode(
-    createHash('sha256')
+    createHash("sha256")
       .update(getAddressEncoded(pool))
       .update(Uint8Array.of(bumpSeed))
       .update(getAddressEncoded(FLUXBEAM_PROGRAM_ID))
-      .update('ProgramDerivedAddress')
+      .update("ProgramDerivedAddress")
       .digest(),
   ) as Address;
 }
@@ -224,7 +224,9 @@ function scanMint(mint: Address, data: Uint8Array): MintInfo {
     const length = Number(readUintLE(data, offset + 2, 2));
     const value = offset + 4;
     if (type === EXT_TRANSFER_HOOK) {
-      throw new Error(`fluxbeam: mint ${mint} carries a TransferHook extension (unsupported — cannot safely CPI without the hook's extra accounts)`);
+      throw new Error(
+        `fluxbeam: mint ${mint} carries a TransferHook extension (unsupported — cannot safely CPI without the hook's extra accounts)`,
+      );
     }
     if (type === EXT_NON_TRANSFERABLE) {
       throw new Error(`fluxbeam: mint ${mint} is NonTransferable (cannot be swapped)`);
@@ -233,8 +235,16 @@ function scanMint(mint: Address, data: Uint8Array): MintInfo {
       // TransferFeeConfig (108 bytes): authority(32)+withdrawAuthority(32)+withheldAmount(8)+
       // older{epoch(8),maximumFee(8),bps(2)}+newer{epoch(8),maximumFee(8),bps(2)}.
       tiers = {
-        older: { epoch: readUintLE(data, value + 72, 8), max: readUintLE(data, value + 80, 8), bps: readUintLE(data, value + 88, 2) },
-        newer: { epoch: readUintLE(data, value + 90, 8), max: readUintLE(data, value + 98, 8), bps: readUintLE(data, value + 106, 2) },
+        older: {
+          epoch: readUintLE(data, value + 72, 8),
+          max: readUintLE(data, value + 80, 8),
+          bps: readUintLE(data, value + 88, 2),
+        },
+        newer: {
+          epoch: readUintLE(data, value + 90, 8),
+          max: readUintLE(data, value + 98, 8),
+          bps: readUintLE(data, value + 106, 2),
+        },
       };
     }
     offset += 4 + length;
@@ -242,22 +252,32 @@ function scanMint(mint: Address, data: Uint8Array): MintInfo {
   return { tokenProgram: TOKEN_2022_PROGRAM, tiers };
 }
 
-const activeTier = (tiers: MintTiers, epoch: bigint): FluxBeamFeeTier => (epoch >= tiers.newer.epoch ? tiers.newer : tiers.older);
+const activeTier = (tiers: MintTiers, epoch: bigint): FluxBeamFeeTier =>
+  epoch >= tiers.newer.epoch ? tiers.newer : tiers.older;
 
-export async function fetchFluxBeamPoolConfig(load: AccountLoader, pool: Address): Promise<FluxBeamPoolConfig> {
+export async function fetchFluxBeamPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<FluxBeamPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool ${pool} account not found`);
   if (data.length !== FLUXBEAM_POOL_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} data must be ${FLUXBEAM_POOL_SIZE} bytes (SwapVersion::SwapV1), got ${data.length}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} data must be ${FLUXBEAM_POOL_SIZE} bytes (SwapVersion::SwapV1), got ${data.length}`,
+    );
   }
-  if (data[OFF_VERSION] !== 1) throw new Error(`${SLUG}: pool ${pool} version must be 1 (SwapV1), got ${data[OFF_VERSION]}`);
+  if (data[OFF_VERSION] !== 1)
+    throw new Error(`${SLUG}: pool ${pool} version must be 1 (SwapV1), got ${data[OFF_VERSION]}`);
   if (data[OFF_IS_INITIALIZED] !== 1) throw new Error(`${SLUG}: pool ${pool} is not initialized`);
   if (data[OFF_CURVE_TYPE] !== 0) {
-    throw new Error(`${SLUG}: pool ${pool} curve_type must be 0 (constant product), got ${data[OFF_CURVE_TYPE]}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} curve_type must be 0 (constant product), got ${data[OFF_CURVE_TYPE]}`,
+    );
   }
 
   const codec = getAddressCodec();
-  const pubkey = (offset: number): Address => codec.decode(data.subarray(offset, offset + 32)) as Address;
+  const pubkey = (offset: number): Address =>
+    codec.decode(data.subarray(offset, offset + 32)) as Address;
   const u64 = (offset: number): bigint => readUintLE(data, offset, 8);
 
   const bumpSeed = data[OFF_BUMP_SEED]!;
@@ -268,11 +288,13 @@ export async function fetchFluxBeamPoolConfig(load: AccountLoader, pool: Address
   const ownerTradeFeeNumerator = u64(OFF_OWNER_TRADE_FEE_NUMERATOR);
   const ownerTradeFeeDenominator = u64(OFF_OWNER_TRADE_FEE_DENOMINATOR);
   for (const [name, numerator, denominator] of [
-    ['trade', tradeFeeNumerator, tradeFeeDenominator],
-    ['owner trade', ownerTradeFeeNumerator, ownerTradeFeeDenominator],
+    ["trade", tradeFeeNumerator, tradeFeeDenominator],
+    ["owner trade", ownerTradeFeeNumerator, ownerTradeFeeDenominator],
   ] as const) {
     if (numerator !== 0n && denominator === 0n) {
-      throw new Error(`${SLUG}: pool ${pool} ${name} fee denominator is 0 with nonzero numerator ${numerator}`);
+      throw new Error(
+        `${SLUG}: pool ${pool} ${name} fee denominator is 0 with nonzero numerator ${numerator}`,
+      );
     }
   }
 
@@ -285,7 +307,10 @@ export async function fetchFluxBeamPoolConfig(load: AccountLoader, pool: Address
   let epoch = 0n;
   if (infoA.tiers !== null || infoB.tiers !== null) {
     const clockData = await load(CLOCK_SYSVAR);
-    if (clockData === null) throw new Error(`${SLUG}: could not read the Clock sysvar to resolve pool ${pool}'s active transfer-fee tier`);
+    if (clockData === null)
+      throw new Error(
+        `${SLUG}: could not read the Clock sysvar to resolve pool ${pool}'s active transfer-fee tier`,
+      );
     epoch = readUintLE(clockData, 16, 8);
   }
   const feeA = infoA.tiers === null ? { bps: 0n, max: 0n } : activeTier(infoA.tiers, epoch);
@@ -319,4 +344,3 @@ export const fluxbeam = {
   programId: FLUXBEAM_PROGRAM_ID,
   fetchPoolConfig: fetchFluxBeamPoolConfig,
 };
-

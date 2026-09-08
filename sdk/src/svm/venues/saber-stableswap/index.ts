@@ -17,10 +17,10 @@
  * Quote/swap direction is token A -> token B (the adapter interface carries
  * no direction; B -> A is the same math with the roles swapped).
  */
-import { createHash } from 'node:crypto';
-import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
+import { createHash } from "node:crypto";
+import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -29,16 +29,16 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+} from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'saber-stableswap';
+const SLUG = "saber-stableswap";
 
-export const SABER_STABLESWAP_PROGRAM_ID = address('SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ');
+export const SABER_STABLESWAP_PROGRAM_ID = address("SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ");
 
 // Classic SPL Token — Saber predates Token-2022; vaults are Tokenkeg-owned.
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 const SWAP_INFO_LEN = 395;
 const U64_MAX = (1n << 64n) - 1n;
@@ -71,13 +71,16 @@ export interface SaberPoolConfig extends PoolConfig {
 }
 
 function asSaberConfig(cfg: PoolConfig): SaberPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`saber-stableswap adapter got a config for venue '${cfg.venue}'`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`saber-stableswap adapter got a config for venue '${cfg.venue}'`);
   return cfg as SaberPoolConfig;
 }
 
 function assertU64AmountIn(amountIn: bigint): void {
-  if (amountIn <= 0n) throw new Error(`saber-stableswap amountIn must be positive, got ${amountIn}`);
-  if (amountIn > U64_MAX) throw new Error(`saber-stableswap amountIn must fit u64, got ${amountIn}`);
+  if (amountIn <= 0n)
+    throw new Error(`saber-stableswap amountIn must be positive, got ${amountIn}`);
+  if (amountIn > U64_MAX)
+    throw new Error(`saber-stableswap amountIn must fit u64, got ${amountIn}`);
 }
 
 /**
@@ -87,15 +90,17 @@ function assertU64AmountIn(amountIn: bigint): void {
  */
 function deriveSwapAuthority(pool: Address, nonce: number): Address {
   const encoder = getAddressEncoder();
-  const digest = createHash('sha256')
+  const digest = createHash("sha256")
     .update(encoder.encode(pool) as Uint8Array)
     .update(Uint8Array.of(nonce))
     .update(encoder.encode(SABER_STABLESWAP_PROGRAM_ID) as Uint8Array)
-    .update('ProgramDerivedAddress')
+    .update("ProgramDerivedAddress")
     .digest();
   const authority = getAddressDecoder().decode(digest);
   if (!isOffCurveAddress(authority)) {
-    throw new Error(`saber-stableswap pool ${pool} nonce ${nonce} derives an on-curve swap authority`);
+    throw new Error(
+      `saber-stableswap pool ${pool} nonce ${nonce} derives an on-curve swap authority`,
+    );
   }
   return authority;
 }
@@ -162,17 +167,23 @@ function computeY(amp: bigint, x: bigint, d: bigint): bigint {
 
 export const saberStableswap: SvmVenueAdapter = {
   slug: SLUG,
-  kind: 'stable',
+  kind: "stable",
   programId: SABER_STABLESWAP_PROGRAM_ID,
 
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<SaberPoolConfig> {
     const data = await load(pool);
     if (data === null) throw new Error(`saber-stableswap pool account ${pool} not found`);
     if (data.length !== SWAP_INFO_LEN) {
-      throw new Error(`saber-stableswap pool ${pool} data must be ${SWAP_INFO_LEN} bytes (SwapInfo), got ${data.length}`);
+      throw new Error(
+        `saber-stableswap pool ${pool} data must be ${SWAP_INFO_LEN} bytes (SwapInfo), got ${data.length}`,
+      );
     }
-    if (data[0] !== 1) throw new Error(`saber-stableswap pool ${pool} is not initialized (is_initialized = ${data[0]})`);
-    if (data[1] !== 0) throw new Error(`saber-stableswap pool ${pool} is paused (is_paused = ${data[1]})`);
+    if (data[0] !== 1)
+      throw new Error(
+        `saber-stableswap pool ${pool} is not initialized (is_initialized = ${data[0]})`,
+      );
+    if (data[1] !== 0)
+      throw new Error(`saber-stableswap pool ${pool} is paused (is_paused = ${data[1]})`);
 
     const tradeFeeDenominator = readUintLE(data, 371, 8);
     // A zero denominator would fail on-chain with CalculationFailure and the
@@ -198,11 +209,15 @@ export const saberStableswap: SvmVenueAdapter = {
       const mintData = mintDatas[mi]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
     return {
@@ -242,7 +257,9 @@ export const saberStableswap: SvmVenueAdapter = {
   emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
     const c = asSaberConfig(cfg);
     if (!Number.isInteger(i) || i < 0) {
-      throw new Error(`saber-stableswap emitQuote pool index must be a non-negative integer, got ${i}`);
+      throw new Error(
+        `saber-stableswap emitQuote pool index must be a non-negative integer, got ${i}`,
+      );
     }
     assertU64AmountIn(amountIn);
 
@@ -267,9 +284,10 @@ export const saberStableswap: SvmVenueAdapter = {
     // past, ctx.timestamp() < stopRampTs is false and amp stays the target.
     const range = c.stopRampTs - c.startRampTs;
     if (c.stopRampTs !== 0n && range > 0n && c.initialAmpFactor !== c.targetAmpFactor) {
-      const interp = c.targetAmpFactor >= c.initialAmpFactor
-        ? `${c.initialAmpFactor} + Math.mulDiv(${c.targetAmpFactor - c.initialAmpFactor}, ctx.timestamp() - ${c.startRampTs}, ${range})`
-        : `${c.initialAmpFactor} - Math.mulDiv(${c.initialAmpFactor - c.targetAmpFactor}, ctx.timestamp() - ${c.startRampTs}, ${range})`;
+      const interp =
+        c.targetAmpFactor >= c.initialAmpFactor
+          ? `${c.initialAmpFactor} + Math.mulDiv(${c.targetAmpFactor - c.initialAmpFactor}, ctx.timestamp() - ${c.startRampTs}, ${range})`
+          : `${c.initialAmpFactor} - Math.mulDiv(${c.initialAmpFactor - c.targetAmpFactor}, ctx.timestamp() - ${c.startRampTs}, ${range})`;
       lines.push(`  if (ctx.timestamp() < ${c.stopRampTs}) { amp${i} = ${interp} }`);
     }
 
@@ -285,7 +303,7 @@ export const saberStableswap: SvmVenueAdapter = {
       `    q${i} = dy${i} - Math.mulDiv(dy${i}, ${c.tradeFeeNumerator}, ${c.tradeFeeDenominator});`,
       `  }`,
     );
-    return lines.join('\n');
+    return lines.join("\n");
   },
 
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
@@ -318,16 +336,21 @@ export const saberStableswap: SvmVenueAdapter = {
 
   referenceQuote(cfg: PoolConfig, state: AccountBytesMap, amountIn: bigint, now: bigint): bigint {
     const c = asSaberConfig(cfg);
-    if (amountIn < 0n) throw new Error(`saber-stableswap amountIn must be non-negative, got ${amountIn}`);
+    if (amountIn < 0n)
+      throw new Error(`saber-stableswap amountIn must be non-negative, got ${amountIn}`);
     if (amountIn === 0n) return 0n; // on-chain amount_in == 0 is a no-op success
-    if (amountIn > U64_MAX) throw new Error(`saber-stableswap amountIn must fit u64, got ${amountIn}`);
+    if (amountIn > U64_MAX)
+      throw new Error(`saber-stableswap amountIn must fit u64, got ${amountIn}`);
 
     const poolData = state[c.pool];
-    if (poolData === undefined) throw new Error(`saber-stableswap referenceQuote state is missing pool ${c.pool}`);
+    if (poolData === undefined)
+      throw new Error(`saber-stableswap referenceQuote state is missing pool ${c.pool}`);
     const vaultAData = state[c.vaultA];
-    if (vaultAData === undefined) throw new Error(`saber-stableswap referenceQuote state is missing vault ${c.vaultA}`);
+    if (vaultAData === undefined)
+      throw new Error(`saber-stableswap referenceQuote state is missing vault ${c.vaultA}`);
     const vaultBData = state[c.vaultB];
-    if (vaultBData === undefined) throw new Error(`saber-stableswap referenceQuote state is missing vault ${c.vaultB}`);
+    if (vaultBData === undefined)
+      throw new Error(`saber-stableswap referenceQuote state is missing vault ${c.vaultB}`);
 
     if (poolData[1] !== 0) return 0n; // paused — the fragment quotes 0
 
@@ -342,7 +365,8 @@ export const saberStableswap: SvmVenueAdapter = {
     const amp = computeAmpFactor(c, now);
     const d = computeD(amp, srcReserve, dstReserve);
     const y = computeY(amp, srcReserve + amountIn, d);
-    if (y > U64_MAX) throw new Error(`saber-stableswap pool ${c.pool} compute_y result exceeds u64`);
+    if (y > U64_MAX)
+      throw new Error(`saber-stableswap pool ${c.pool} compute_y result exceeds u64`);
 
     if (dstReserve <= y) return 0n; // checked_sub would fail on-chain — no output
     const dy = dstReserve - y - 1n;

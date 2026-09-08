@@ -35,7 +35,6 @@
     "sync-artifacts": "node scripts/sync-artifacts.js",
     "test": "npx tsx test/examples.test.ts && npx tsx test/runner.test.ts",
     "test:e2e": "npx tsx test/e2e.test.ts",
-    "format": "npx prettier --write sauce scripts test",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

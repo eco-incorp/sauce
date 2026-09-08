@@ -1,6 +1,6 @@
-import { getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { BUFFER_SEED, BUFFER_SEED_BYTES } from './engine.js';
+import { getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { BUFFER_SEED, BUFFER_SEED_BYTES } from "./engine.js";
 
 export interface EnginePda {
   address: Address;
@@ -9,7 +9,7 @@ export interface EnginePda {
 
 function assertSeed(seed: Uint8Array): void {
   if (!(seed instanceof Uint8Array) || seed.length !== BUFFER_SEED_BYTES) {
-    const got = seed instanceof Uint8Array ? `${seed.length} bytes` : 'a non-Uint8Array';
+    const got = seed instanceof Uint8Array ? `${seed.length} bytes` : "a non-Uint8Array";
     throw new Error(`buffer seed must be exactly ${BUFFER_SEED_BYTES} bytes, got ${got}`);
   }
 }
@@ -29,7 +29,11 @@ function assertSeed(seed: Uint8Array): void {
  * id — e.g. an intent hash — passes it directly, and a caller with a shorter id
  * hashes it to 32 bytes itself (the SDK does not pick a hash for you).
  */
-export async function deriveBufferPda(programId: Address, authority: Address, seed: Uint8Array): Promise<EnginePda> {
+export async function deriveBufferPda(
+  programId: Address,
+  authority: Address,
+  seed: Uint8Array,
+): Promise<EnginePda> {
   assertSeed(seed);
 
   const [address, bump] = await getProgramDerivedAddress({

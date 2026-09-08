@@ -18,12 +18,13 @@
  * accounts (stagedArgsBudget) — bigger args belong in a second buffer used as
  * a data account, read on-chain via accountData.
  */
-import type { ArgsLayout, ArgsLayoutSlot, ArgValue } from './layout.js';
+import type { ArgsLayout, ArgsLayoutSlot, ArgValue } from "./layout.js";
 
 function hexToBytes(hex: string): Uint8Array {
-  const h = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const h = hex.startsWith("0x") ? hex.slice(2) : hex;
 
-  if (h.length % 2 !== 0 || /[^0-9a-fA-F]/.test(h)) throw new Error(`invalid hex bytes value: ${hex}`);
+  if (h.length % 2 !== 0 || /[^0-9a-fA-F]/.test(h))
+    throw new Error(`invalid hex bytes value: ${hex}`);
 
   const bytes = new Uint8Array(h.length / 2);
   for (let i = 0; i < bytes.length; i++) {
@@ -35,9 +36,11 @@ function hexToBytes(hex: string): Uint8Array {
 
 /** Encodes one runtime value against its layout slot (scalar → 32B BE word, bytes → raw). */
 export function encodeArgSlot(slot: ArgsLayoutSlot, value: ArgValue): Uint8Array {
-  if (slot.kind === 'scalar') {
-    if (typeof value !== 'bigint') {
-      throw new Error(`arg ${slot.arg} is a scalar slot; got ${Array.isArray(value) ? 'array' : typeof value}`);
+  if (slot.kind === "scalar") {
+    if (typeof value !== "bigint") {
+      throw new Error(
+        `arg ${slot.arg} is a scalar slot; got ${Array.isArray(value) ? "array" : typeof value}`,
+      );
     }
 
     if (value < 0n || value >= 1n << 256n) throw new Error(`arg ${slot.arg} out of u256 range`);
@@ -52,14 +55,18 @@ export function encodeArgSlot(slot: ArgsLayoutSlot, value: ArgValue): Uint8Array
     return bytes;
   }
 
-  if (typeof value !== 'string') {
-    throw new Error(`arg ${slot.arg} is a bytes slot; got ${Array.isArray(value) ? 'array' : typeof value}`);
+  if (typeof value !== "string") {
+    throw new Error(
+      `arg ${slot.arg} is a bytes slot; got ${Array.isArray(value) ? "array" : typeof value}`,
+    );
   }
 
   const bytes = hexToBytes(value);
 
   if (bytes.length !== slot.length) {
-    throw new Error(`arg ${slot.arg} bytes length ${bytes.length} does not match the layout slot length ${slot.length}`);
+    throw new Error(
+      `arg ${slot.arg} bytes length ${bytes.length} does not match the layout slot length ${slot.length}`,
+    );
   }
 
   return bytes;
@@ -73,7 +80,9 @@ export function encodeArgSlot(slot: ArgsLayoutSlot, value: ArgValue): Uint8Array
  */
 export function encodePayloadArgs(layout: ArgsLayout, values: readonly ArgValue[]): Uint8Array {
   if (values.length !== layout.slots.length) {
-    throw new Error(`argsLayout has ${layout.slots.length} slots but ${values.length} values were provided`);
+    throw new Error(
+      `argsLayout has ${layout.slots.length} slots but ${values.length} values were provided`,
+    );
   }
 
   const payload = new Uint8Array(layout.byteLength);
@@ -81,7 +90,9 @@ export function encodePayloadArgs(layout: ArgsLayout, values: readonly ArgValue[
 
   layout.slots.forEach((slot, i) => {
     if (slot.offset !== offset) {
-      throw new Error(`argsLayout slot ${i} offset ${slot.offset} does not match the packed position ${offset}`);
+      throw new Error(
+        `argsLayout slot ${i} offset ${slot.offset} does not match the packed position ${offset}`,
+      );
     }
 
     const bytes = encodeArgSlot(slot, values[i]);
@@ -90,7 +101,9 @@ export function encodePayloadArgs(layout: ArgsLayout, values: readonly ArgValue[
   });
 
   if (offset !== layout.byteLength) {
-    throw new Error(`argsLayout byteLength ${layout.byteLength} does not match the packed length ${offset}`);
+    throw new Error(
+      `argsLayout byteLength ${layout.byteLength} does not match the packed length ${offset}`,
+    );
   }
 
   return payload;

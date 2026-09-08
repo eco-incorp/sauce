@@ -6,7 +6,12 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { evmApproveStatement, evmBalanceExpression, evmTransferStatement, ERC20_IMPORT_LINE } from "./evm.js";
+import {
+  evmApproveStatement,
+  evmBalanceExpression,
+  evmTransferStatement,
+  ERC20_IMPORT_LINE,
+} from "./evm.js";
 import {
   accountRefsForApprove,
   accountRefsForTransfer,
@@ -17,7 +22,13 @@ import {
   svmTransferLines,
   type SvmEmitState,
 } from "./svm.js";
-import { assertNoDuplicateSvmRefs, isEvmTarget, validateApproveSpec, validateBalanceSpec, validateTransferSpec } from "./params.js";
+import {
+  assertNoDuplicateSvmRefs,
+  isEvmTarget,
+  validateApproveSpec,
+  validateBalanceSpec,
+  validateTransferSpec,
+} from "./params.js";
 import type { TokenSpec, TokenTarget } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -36,7 +47,10 @@ function validateSpec(spec: TokenSpec, target: TokenTarget): void {
 /** The import lines a `tokenSource(specs, target)` program needs. On an EVM target: `IERC20`, iff
  *  any spec is `transfer`/`approve`/`balanceOf` (always — every op needs the binding). On `svm`:
  *  none (SVM ops use only the built-in `svm.sload`/`svm.call` globals). */
-export function tokenImportLines(specs: readonly TokenSpec[], target: TokenTarget): readonly string[] {
+export function tokenImportLines(
+  specs: readonly TokenSpec[],
+  target: TokenTarget,
+): readonly string[] {
   if (!isEvmTarget(target)) return [];
   return specs.length > 0 ? [ERC20_IMPORT_LINE] : [];
 }
@@ -45,17 +59,27 @@ export function tokenImportLines(specs: readonly TokenSpec[], target: TokenTarge
  *  {@link tokenExpression}) for `spec` on `target`, for splicing into a larger, hand-written
  *  program. Runs the full per-op/per-target validation. `svmState` threads dedup across multiple
  *  ops in one program (`tokenSource`'s own concern) — omit it to get a fresh, single-op program. */
-export function tokenCallStatement(spec: TokenSpec, target: TokenTarget, index = 0, svmState?: SvmEmitState): string {
+export function tokenCallStatement(
+  spec: TokenSpec,
+  target: TokenTarget,
+  index = 0,
+  svmState?: SvmEmitState,
+): string {
   validateSpec(spec, target);
   const state = svmState ?? newSvmEmitState();
 
   if (spec.op === "balanceOf") {
-    throw new Error("tokenCallStatement: Token.balanceOf has no statement form — use tokenExpression instead");
+    throw new Error(
+      "tokenCallStatement: Token.balanceOf has no statement form — use tokenExpression instead",
+    );
   }
   if (isEvmTarget(target)) {
     return spec.op === "transfer" ? evmTransferStatement(spec) : evmApproveStatement(spec);
   }
-  const lines = spec.op === "transfer" ? svmTransferLines(spec, index, state) : svmApproveLines(spec, index, state);
+  const lines =
+    spec.op === "transfer"
+      ? svmTransferLines(spec, index, state)
+      : svmApproveLines(spec, index, state);
   return lines.join("\n");
 }
 
@@ -63,7 +87,9 @@ export function tokenCallStatement(spec: TokenSpec, target: TokenTarget, index =
  *  `transfer`/`approve`, which have no meaningful expression form. */
 export function tokenExpression(spec: TokenSpec, target: TokenTarget): string {
   if (spec.op !== "balanceOf") {
-    throw new Error(`tokenExpression: Token.${spec.op} has no expression form — use tokenCallStatement instead`);
+    throw new Error(
+      `tokenExpression: Token.${spec.op} has no expression form — use tokenCallStatement instead`,
+    );
   }
   validateSpec(spec, target);
   return isEvmTarget(target) ? evmBalanceExpression(spec) : svmBalanceExpression(spec);
@@ -95,7 +121,11 @@ export interface TokenSourceOptions {
  * any, as the return value. A `balanceOf` in any OTHER position is spliced as a discarded
  * expression statement.
  */
-export function tokenSource(spec: TokenSpec | readonly TokenSpec[], target: TokenTarget, opts: TokenSourceOptions = {}): string {
+export function tokenSource(
+  spec: TokenSpec | readonly TokenSpec[],
+  target: TokenTarget,
+  opts: TokenSourceOptions = {},
+): string {
   const specs = Array.isArray(spec) ? spec : [spec as TokenSpec];
   if (specs.length === 0) throw new Error("tokenSource: at least one token spec is required");
   specs.forEach((s) => validateSpec(s, target));
@@ -114,7 +144,14 @@ export function tokenSource(spec: TokenSpec | readonly TokenSpec[], target: Toke
   });
 
   const fnName = opts.functionName ?? "main";
-  const body = bodyLines.map((line) => line.split("\n").map((l) => `  ${l}`).join("\n")).join("\n");
+  const body = bodyLines
+    .map((line) =>
+      line
+        .split("\n")
+        .map((l) => `  ${l}`)
+        .join("\n"),
+    )
+    .join("\n");
 
   // Every SVM account is a main() param, in attach order — that declaration IS the manifest.
   const params = isEvmTarget(target) ? "" : svmAccountParamList(specs);

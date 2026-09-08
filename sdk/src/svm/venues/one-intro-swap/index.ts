@@ -83,24 +83,25 @@
  * PRICE here does not come from an external oracle; it comes from the
  * pool's own self-tracked virtual-reserve pair (see ./ladder.ts).
  */
-import { getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { getAddressCodec, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'one-intro-swap';
+const SLUG = "one-intro-swap";
 
-export const ONE_INTRO_SWAP_PROGRAM_ID = 'DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm' as Address;
-const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
-const ASSOCIATED_TOKEN_PROGRAM_ID = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL' as Address;
+export const ONE_INTRO_SWAP_PROGRAM_ID = "DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm" as Address;
+const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address;
+const ASSOCIATED_TOKEN_PROGRAM_ID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" as Address;
 
 /**
  * The ONE known `MetadataState` — see the module header's "global, not
  * per-pool" evidence. Required by every swap (accounts[0], read-only).
  */
-export const ONE_INTRO_SWAP_METADATA_STATE = '5nmAbnjJfW1skrPvYjLTBNdhoKzJfznnbvDcM8G2U7Ki' as Address;
+export const ONE_INTRO_SWAP_METADATA_STATE =
+  "5nmAbnjJfW1skrPvYjLTBNdhoKzJfznnbvDcM8G2U7Ki" as Address;
 
 /**
  * The two fixed fee-collector owners — ground-truthed via the real mainnet
@@ -109,8 +110,8 @@ export const ONE_INTRO_SWAP_METADATA_STATE = '5nmAbnjJfW1skrPvYjLTBNdhoKzJfznnbv
  * lands (see ./ladder.ts for the exact per-swap amount, always
  * `floor(amountIn / 100_000)` per stream).
  */
-export const ONE_INTRO_SWAP_FEE_OWNER_A = 'ATowQwFzdJBJ9VFSfoNKmuB8GiSeo8foM5vRriwmKmFB' as Address;
-export const ONE_INTRO_SWAP_FEE_OWNER_B = '45ruCyfdRkWpRNGEqWzjCiXRHkZs8WXCLQ67Pnpye7Hp' as Address;
+export const ONE_INTRO_SWAP_FEE_OWNER_A = "ATowQwFzdJBJ9VFSfoNKmuB8GiSeo8foM5vRriwmKmFB" as Address;
+export const ONE_INTRO_SWAP_FEE_OWNER_B = "45ruCyfdRkWpRNGEqWzjCiXRHkZs8WXCLQ67Pnpye7Hp" as Address;
 
 // PoolState (432 bytes) byte offsets — see the module header.
 const POOL_STATE_SIZE = 432;
@@ -142,11 +143,12 @@ export interface OneIntroSwapPoolConfig extends PoolConfig {
   feeA1: Address;
   feeB1: Address;
   /** '0to1' (default, mint0 in) | '1to0'. */
-  direction: '0to1' | '1to0';
+  direction: "0to1" | "1to0";
 }
 
 export function oneIntroSwapConfig(base: PoolConfig): OneIntroSwapPoolConfig {
-  if (base.venue !== SLUG) throw new Error(`one-intro-swap adapter got a '${base.venue}' pool config`);
+  if (base.venue !== SLUG)
+    throw new Error(`one-intro-swap adapter got a '${base.venue}' pool config`);
   return base as OneIntroSwapPoolConfig;
 }
 
@@ -159,11 +161,16 @@ async function deriveAta(owner: Address, mint: Address): Promise<Address> {
   return ata;
 }
 
-export async function fetchOneIntroSwapPoolConfig(load: AccountLoader, pool: Address): Promise<OneIntroSwapPoolConfig> {
+export async function fetchOneIntroSwapPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<OneIntroSwapPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`one-intro-swap PoolState ${pool} not found`);
   if (data.length !== POOL_STATE_SIZE) {
-    throw new Error(`one-intro-swap PoolState ${pool} is ${data.length} bytes, expected ${POOL_STATE_SIZE}`);
+    throw new Error(
+      `one-intro-swap PoolState ${pool} is ${data.length} bytes, expected ${POOL_STATE_SIZE}`,
+    );
   }
   for (let i = 0; i < 8; i++) {
     if (data[OFF_DISC + i] !== POOL_STATE_DISCRIMINATOR[i]) {
@@ -187,7 +194,9 @@ export async function fetchOneIntroSwapPoolConfig(load: AccountLoader, pool: Add
   // "empty reserve" gate) keeps it out of the universe entirely rather than
   // surviving as a permanent zero-quote slot.
   if (virtualReserve0 === 0n || virtualReserve1 === 0n) {
-    throw new Error(`one-intro-swap PoolState ${pool} has a zero virtual reserve (0=${virtualReserve0}, 1=${virtualReserve1})`);
+    throw new Error(
+      `one-intro-swap PoolState ${pool} has a zero virtual reserve (0=${virtualReserve0}, 1=${virtualReserve1})`,
+    );
   }
 
   // Token-2022 safety: this venue's SwapExactAmountIn ix is legacy-SPL (Tokenkeg)
@@ -203,11 +212,15 @@ export async function fetchOneIntroSwapPoolConfig(load: AccountLoader, pool: Add
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
@@ -230,6 +243,6 @@ export async function fetchOneIntroSwapPoolConfig(load: AccountLoader, pool: Add
     feeB0,
     feeA1,
     feeB1,
-    direction: '0to1',
+    direction: "0to1",
   };
 }

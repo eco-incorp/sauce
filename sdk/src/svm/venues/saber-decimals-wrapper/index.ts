@@ -82,22 +82,17 @@
  * `CU_FAMILIES['saber-decimals-wrapper']` for the measured coefficients —
  * this SDK package carries the adapter only, not the recipe's own CU model.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type {
-  AccountBytesMap,
-  AccountLoader,
-  PoolConfig,
-  SwapUser,
-  VenueAccount,
-} from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'saber-decimals-wrapper';
-export const SABER_DECIMALS_WRAPPER_PROGRAM_ID = address('DecZY86MU5Gj7kppfUCEmd4LbXXuyZH1yHaP2NTqdiZB');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "saber-decimals-wrapper";
+export const SABER_DECIMALS_WRAPPER_PROGRAM_ID = address(
+  "DecZY86MU5Gj7kppfUCEmd4LbXXuyZH1yHaP2NTqdiZB",
+);
 
 /** WrappedToken account layout (8-byte Anchor disc, then the fields below). */
 const WRAPPED_TOKEN_SIZE = 114;
@@ -106,20 +101,10 @@ export const OFF_MULTIPLIER = 9;
 export const OFF_UNDERLYING_MINT = 17;
 export const OFF_UNDERLYING_TOKENS = 49;
 export const OFF_WRAPPER_MINT = 81;
-/** Standard SPL token account amount field offset. */
-const VAULT_AMOUNT_OFFSET = 64;
-
-/** sha256("global:deposit")[0..8] — verified against a real landed deposit tx (see the module doc). */
-const DEPOSIT_DISCRIMINATOR = [0xf2, 0x23, 0xc6, 0x89, 0x52, 0xe1, 0xf2, 0xb6];
-/** sha256("global:withdraw")[0..8] — same Anchor sighash derivation, same instruction shape. */
-const WITHDRAW_DISCRIMINATOR = [0xb7, 0x12, 0x46, 0x9c, 0x94, 0x6d, 0xa1, 0x22];
-
-/** u64::MAX — the wrapped mint's total-supply ceiling (deposit-direction headroom). */
-const U64_MAX = (1n << 64n) - 1n;
 
 const addressCodec = getAddressCodec();
 
-export type SaberDecimalsWrapperDirection = 'deposit' | 'withdraw';
+export type SaberDecimalsWrapperDirection = "deposit" | "withdraw";
 
 export interface SaberDecimalsWrapperPoolConfig extends PoolConfig {
   venue: typeof SLUG;
@@ -132,28 +117,36 @@ export interface SaberDecimalsWrapperPoolConfig extends PoolConfig {
 }
 
 function wrapperConfig(cfg: PoolConfig): SaberDecimalsWrapperPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as SaberDecimalsWrapperPoolConfig;
 }
 
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-
-async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<SaberDecimalsWrapperPoolConfig> {
+async function fetchPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<SaberDecimalsWrapperPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} wrapper ${pool} account not found`);
   if (data.length !== WRAPPED_TOKEN_SIZE) {
-    throw new Error(`${SLUG} wrapper ${pool} account data is ${data.length} bytes, expected ${WRAPPED_TOKEN_SIZE}`);
+    throw new Error(
+      `${SLUG} wrapper ${pool} account data is ${data.length} bytes, expected ${WRAPPED_TOKEN_SIZE}`,
+    );
   }
   const decimals = data[OFF_DECIMALS]!;
   const multiplier = readUintLE(data, OFF_MULTIPLIER, 8);
   if (multiplier === 0n) {
-    throw new Error(`${SLUG} wrapper ${pool} has a zero multiplier (not a real initialized WrappedToken)`);
+    throw new Error(
+      `${SLUG} wrapper ${pool} has a zero multiplier (not a real initialized WrappedToken)`,
+    );
   }
   const underlyingMint = pubkeyAt(data, OFF_UNDERLYING_MINT);
   const vault = pubkeyAt(data, OFF_UNDERLYING_TOKENS);
   const wrapperMint = pubkeyAt(data, OFF_WRAPPER_MINT);
   if (underlyingMint === wrapperMint) {
-    throw new Error(`${SLUG} wrapper ${pool} has identical underlying/wrapper mints — corrupt account`);
+    throw new Error(
+      `${SLUG} wrapper ${pool} has identical underlying/wrapper mints — corrupt account`,
+    );
   }
   // The deposit/withdraw CPI is legacy-SPL (Tokenkeg) only for now, so
   // SELF-DROP a wrapper whose underlying or wrapper mint is Token-2022 (or
@@ -167,11 +160,15 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Sabe
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping wrapper ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping wrapper ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping wrapper ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping wrapper ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
   return {
@@ -182,7 +179,7 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Sabe
     underlyingMint,
     vault,
     wrapperMint,
-    direction: 'deposit',
+    direction: "deposit",
   };
 }
 
@@ -192,14 +189,13 @@ function pubkeyAt(data: Uint8Array, offset: number): Address {
 
 function quoteAccounts(base: PoolConfig): VenueAccount[] {
   const cfg = wrapperConfig(base);
-  return [{ ref: 'vault', address: cfg.vault }];
+  return [{ ref: "vault", address: cfg.vault }];
 }
 
 export const saberDecimalsWrapper = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: SABER_DECIMALS_WRAPPER_PROGRAM_ID,
   fetchPoolConfig,
   quoteAccounts,
 };
-

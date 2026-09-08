@@ -45,29 +45,47 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
   const bareBody = "return double(21n);"; // no `import` line anywhere
 
   it("a program using an ambient symbol compiles via the RS path when the merged ambient list is non-empty", () => {
-    const built = openRoute("base", bareBody, evmOptions({
-      compile: { baseDirs: [AMBIENT_FIXTURE_DIR], ambient: ["./math-helpers.js"] },
-    })).reward(0n);
+    const built = openRoute(
+      "base",
+      bareBody,
+      evmOptions({
+        compile: { baseDirs: [AMBIENT_FIXTURE_DIR], ambient: ["./math-helpers.js"] },
+      }),
+    ).reward(0n);
     expect(built.compiled.bytecode.length).toBe(1);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
   it("is byte-identical to calling compileSauceRoute directly with the same ambient list", () => {
-    const viaOpenRoute = openRoute("base", bareBody, evmOptions({
-      compile: { baseDirs: [AMBIENT_FIXTURE_DIR], ambient: ["./math-helpers.js"] },
-    })).reward(0n);
+    const viaOpenRoute = openRoute(
+      "base",
+      bareBody,
+      evmOptions({
+        compile: { baseDirs: [AMBIENT_FIXTURE_DIR], ambient: ["./math-helpers.js"] },
+      }),
+    ).reward(0n);
 
-    const direct = compileSauceRoute(requireChain("base"), bareBody, { pot: POT }, {
-      baseDirs: [AMBIENT_FIXTURE_DIR],
-      // openRoute merges chainAmbient() (`@sauce/token`) with the caller's list -- match that merge
-      // here so this is a true apples-to-apples bytecode comparison, not a false negative.
-      ambient: ["@sauce/token", "./math-helpers.js"],
-      // openRoute also threads chain-scoped scalar defines (chainId/CHAIN_ID) underneath -- match
-      // them here so this is a true apples-to-apples bytecode comparison, not a false negative.
-      defines: { chainId: BigInt(requireChain("base").id), CHAIN_ID: BigInt(requireChain("base").id) },
-    });
+    const direct = compileSauceRoute(
+      requireChain("base"),
+      bareBody,
+      { pot: POT },
+      {
+        baseDirs: [AMBIENT_FIXTURE_DIR],
+        // openRoute merges chainAmbient() (`@sauce/token`) with the caller's list -- match that merge
+        // here so this is a true apples-to-apples bytecode comparison, not a false negative.
+        ambient: ["@sauce/token", "./math-helpers.js"],
+        // openRoute also threads chain-scoped scalar defines (chainId/CHAIN_ID) underneath -- match
+        // them here so this is a true apples-to-apples bytecode comparison, not a false negative.
+        defines: {
+          chainId: BigInt(requireChain("base").id),
+          CHAIN_ID: BigInt(requireChain("base").id),
+        },
+      },
+    );
 
-    expect(Array.from(viaOpenRoute.compiled.bytecode[0]!)).toEqual(Array.from(direct.compiled.bytecode[0]!));
+    expect(Array.from(viaOpenRoute.compiled.bytecode[0]!)).toEqual(
+      Array.from(direct.compiled.bytecode[0]!),
+    );
   });
 
   it("default bundle (@sauce/token, UNUSED): bytecode is byte-identical to no ambient module at all", () => {
@@ -80,10 +98,20 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     // NO ambient module, only the chain defines openRoute threads underneath. This is what proves the
     // default flip costs a token-free route nothing (routes-ambient.test.ts pins the chainDefines
     // half of the same equivalence).
-    const withoutAmbient = compileSauceRoute(requireChain("base"), "return chainId;", { pot: POT }, {
-      defines: { chainId: BigInt(requireChain("base").id), CHAIN_ID: BigInt(requireChain("base").id) },
-    });
-    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(Array.from(withoutAmbient.compiled.bytecode[0]!));
+    const withoutAmbient = compileSauceRoute(
+      requireChain("base"),
+      "return chainId;",
+      { pot: POT },
+      {
+        defines: {
+          chainId: BigInt(requireChain("base").id),
+          CHAIN_ID: BigInt(requireChain("base").id),
+        },
+      },
+    );
+    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(
+      Array.from(withoutAmbient.compiled.bytecode[0]!),
+    );
   });
 
   it("default bundle on an SVM destination too: an unused @sauce/token treeshakes to the same bytes", () => {
@@ -115,6 +143,8 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
         },
       },
     );
-    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(Array.from(withoutAmbient.compiled.bytecode[0]!));
+    expect(Array.from(built.compiled.bytecode[0]!)).toEqual(
+      Array.from(withoutAmbient.compiled.bytecode[0]!),
+    );
   });
 });

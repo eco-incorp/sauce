@@ -48,25 +48,20 @@
  * this program accepts ANY owner-of-the-source-ATA as signer, not a
  * whitelisted partner key. Landing a real cook needs no separate grant.
  */
-import {
-  address,
-  getAddressCodec,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-} from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig, VenueAccount } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'riptide';
-export const RIPTIDE_PROGRAM_ID = address('riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j');
-export const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-export const ATA_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-export const MEMO_PROGRAM = address('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
-export const SYSVAR_INSTRUCTIONS = address('Sysvar1nstructions1111111111111111111111111');
+const SLUG = "riptide";
+export const RIPTIDE_PROGRAM_ID = address("riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j");
+export const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+export const ATA_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+export const MEMO_PROGRAM = address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+export const SYSVAR_INSTRUCTIONS = address("Sysvar1nstructions1111111111111111111111111");
 /** Well-known anti-frontrun sentinel account present on every real Riptide swap observed. */
-export const JITODONTFRONT = address('jitodontfront111111111111111111111111111111');
+export const JITODONTFRONT = address("jitodontfront111111111111111111111111111111");
 
 export const POOL_ACCOUNT_SIZE = 1024;
 export const OFF_MINT_A = 72;
@@ -83,7 +78,11 @@ const pubkeyAt = (data: Uint8Array, offset: number): Address =>
 export async function deriveAta(owner: Address, mint: Address): Promise<Address> {
   const [ata] = await getProgramDerivedAddress({
     programAddress: ATA_PROGRAM,
-    seeds: [addressEncoder.encode(owner), addressEncoder.encode(TOKEN_PROGRAM), addressEncoder.encode(mint)],
+    seeds: [
+      addressEncoder.encode(owner),
+      addressEncoder.encode(TOKEN_PROGRAM),
+      addressEncoder.encode(mint),
+    ],
   });
   return ata;
 }
@@ -99,15 +98,22 @@ export interface RiptidePoolConfig extends PoolConfig {
 }
 
 export function riptideConfig(cfg: PoolConfig): RiptidePoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as RiptidePoolConfig;
 }
 
-export async function fetchPoolConfig(load: AccountLoader, pool: Address, direction: 0 | 1 = 0): Promise<RiptidePoolConfig> {
+export async function fetchPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+  direction: 0 | 1 = 0,
+): Promise<RiptidePoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   const mintA = pubkeyAt(data, OFF_MINT_A);
   const mintB = pubkeyAt(data, OFF_MINT_B);
@@ -123,11 +129,15 @@ export async function fetchPoolConfig(load: AccountLoader, pool: Address, direct
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
   const [vaultA, vaultB] = await Promise.all([deriveAta(pool, mintA), deriveAta(pool, mintB)]);
@@ -145,14 +155,14 @@ export async function fetchPoolConfig(load: AccountLoader, pool: Address, direct
 export function quoteAccounts(base: PoolConfig): VenueAccount[] {
   const cfg = riptideConfig(base);
   return [
-    { ref: 'vaultA', address: cfg.vaultA },
-    { ref: 'vaultB', address: cfg.vaultB },
+    { ref: "vaultA", address: cfg.vaultA },
+    { ref: "vaultB", address: cfg.vaultB },
   ];
 }
 
 export const riptide = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: RIPTIDE_PROGRAM_ID,
   fetchPoolConfig,
   quoteAccounts,

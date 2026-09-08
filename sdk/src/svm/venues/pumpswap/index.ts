@@ -23,10 +23,15 @@
  * in-VM product is u64 * u64-or-bps < 2^128, far inside the engine's 256-bit
  * wrap-free range; Math.mulDiv is used for the invariant products anyway.
  */
-import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { ceilDiv, readUintLE } from '../math.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { ceilDiv, readUintLE } from "../math.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -35,21 +40,21 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
+} from "../types.js";
 
-export const PUMPSWAP_PROGRAM_ID = address('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
-const FEE_PROGRAM = address('pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ');
-const GLOBAL_CONFIG = address('ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw');
-const FEE_CONFIG = address('5PHirr8joyTMp9JMm6nW7hNDVyEYdkzDqazxPD7RaTjx');
-const EVENT_AUTHORITY = address('GS4CU59F31iL7aR2Q8zVS8DRrcRnXX1yjQ66TqNVQnaR');
-const GLOBAL_VOLUME_ACCUMULATOR = address('C2aFPdENg4A2HQsmrd5rTw5TaYBX5Ku887cWjbFKtZpw');
-const PUMP_BONDING_PROGRAM = address('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
-const SYSTEM_PROGRAM = address('11111111111111111111111111111111');
-const ASSOCIATED_TOKEN_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+export const PUMPSWAP_PROGRAM_ID = address("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA");
+const FEE_PROGRAM = address("pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ");
+const GLOBAL_CONFIG = address("ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw");
+const FEE_CONFIG = address("5PHirr8joyTMp9JMm6nW7hNDVyEYdkzDqazxPD7RaTjx");
+const EVENT_AUTHORITY = address("GS4CU59F31iL7aR2Q8zVS8DRrcRnXX1yjQ66TqNVQnaR");
+const GLOBAL_VOLUME_ACCUMULATOR = address("C2aFPdENg4A2HQsmrd5rTw5TaYBX5Ku887cWjbFKtZpw");
+const PUMP_BONDING_PROGRAM = address("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
+const SYSTEM_PROGRAM = address("11111111111111111111111111111111");
+const ASSOCIATED_TOKEN_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 /** Pubkey::default — a pool with this coin_creator pays no creator fee. */
-const DEFAULT_PUBKEY = address('11111111111111111111111111111111');
+const DEFAULT_PUBKEY = address("11111111111111111111111111111111");
 
 const POOL_DISCRIMINATOR = [241, 154, 109, 4, 17, 177, 109, 188];
 const GLOBAL_CONFIG_DISCRIMINATOR = [149, 8, 156, 202, 160, 252, 176, 217];
@@ -63,15 +68,15 @@ const SELL_DISCRIMINATOR = [51, 230, 133, 164, 1, 127, 131, 173];
  * adapter cannot resolve it from pool state. buildSwap attaches it under this
  * ref for the caller to resolve.
  */
-export const USER_VOLUME_ACCUMULATOR_REF = 'pumpswap-user-volume-accumulator';
+export const USER_VOLUME_ACCUMULATOR_REF = "pumpswap-user-volume-accumulator";
 
 const BPS = 10_000n;
 const U64_MAX = (1n << 64n) - 1n;
 
 export interface PumpswapPoolConfig extends PoolConfig {
-  venue: 'pumpswap';
+  venue: "pumpswap";
   /** exactIn side: 'quoteToBase' = buy_exact_quote_in (default), 'baseToQuote' = sell. */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   baseMint: Address;
   quoteMint: Address;
   baseVault: Address;
@@ -98,7 +103,7 @@ export interface PumpswapPoolConfig extends PoolConfig {
 }
 
 function asPumpswapConfig(cfg: PoolConfig): PumpswapPoolConfig {
-  if (cfg.venue !== 'pumpswap') {
+  if (cfg.venue !== "pumpswap") {
     throw new Error(`pumpswap adapter got a '${cfg.venue}' pool config for pool ${cfg.pool}`);
   }
   return cfg as PumpswapPoolConfig;
@@ -120,7 +125,11 @@ async function pda(seeds: (string | Uint8Array)[], programAddress: Address): Pro
 async function ata(owner: Address, mint: Address, tokenProgram: Address): Promise<Address> {
   const encoder = getAddressEncoder();
   return pda(
-    [new Uint8Array(encoder.encode(owner)), new Uint8Array(encoder.encode(tokenProgram)), new Uint8Array(encoder.encode(mint))],
+    [
+      new Uint8Array(encoder.encode(owner)),
+      new Uint8Array(encoder.encode(tokenProgram)),
+      new Uint8Array(encoder.encode(mint)),
+    ],
     ASSOCIATED_TOKEN_PROGRAM,
   );
 }
@@ -139,7 +148,9 @@ function detectTokenProgram(mint: Address, data: Uint8Array): Address {
     throw new Error(`pumpswap mint ${mint} data is ${data.length} bytes, not a token mint layout`);
   }
   if (data[165] !== 1) {
-    throw new Error(`pumpswap mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
+    throw new Error(
+      `pumpswap mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`,
+    );
   }
   // Un-routable (blocking) extensions self-drop the pool: a NonTransferable or
   // default-frozen mint genuinely cannot move through a plain transferChecked,
@@ -148,7 +159,7 @@ function detectTokenProgram(mint: Address, data: Uint8Array): Address {
   // those out of `blocking`, so a zero-fee/advisory-only T22 mint still routes.
   const { blocking } = parseMintExtensions(data);
   if (blocking.length > 0) {
-    throw new Error(`pumpswap gate: mint ${mint} is un-routable — ${blocking.join('; ')}`);
+    throw new Error(`pumpswap gate: mint ${mint} is un-routable — ${blocking.join("; ")}`);
   }
   let offset = 166;
   while (offset + 4 <= data.length) {
@@ -187,7 +198,9 @@ function parseFeeTiers(data: Uint8Array): FeeTier[] {
   for (let i = 0; i < count; i++) {
     const offset = 69 + i * 40;
     if (offset + 40 > data.length) {
-      throw new Error(`pumpswap fee config declares ${count} fee tiers but tier ${i} overruns its ${data.length}-byte data`);
+      throw new Error(
+        `pumpswap fee config declares ${count} fee tiers but tier ${i} overruns its ${data.length}-byte data`,
+      );
     }
     tiers.push({
       marketCapThreshold: readUintLE(data, offset, 16),
@@ -220,14 +233,22 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
  * ceil-rounding each fee component separately, and hand back effQ after the
  * over-budget correction. The on-chain invariant swap then uses effQ - 1.
  */
-function buyEffectiveQuoteIn(spendable: bigint, lp: bigint, protocol: bigint, creator: bigint): bigint {
+function buyEffectiveQuoteIn(
+  spendable: bigint,
+  lp: bigint,
+  protocol: bigint,
+  creator: bigint,
+): bigint {
   const totalFeeBps = lp + protocol + creator;
   let eff = (spendable * BPS) / (BPS + totalFeeBps);
   const fees = ceilDiv(eff * lp, BPS) + ceilDiv(eff * protocol, BPS) + ceilDiv(eff * creator, BPS);
   const over = eff + fees - spendable;
   if (over > 0n) eff -= over;
   // Unverified edge on-chain (docs/svm-venues.md caveats): guard eff >= 2.
-  if (eff < 2n) throw new Error(`pumpswap quote amountIn ${spendable} is too small (effective quote input below 2)`);
+  if (eff < 2n)
+    throw new Error(
+      `pumpswap quote amountIn ${spendable} is too small (effective quote input below 2)`,
+    );
   return eff;
 }
 
@@ -245,12 +266,12 @@ const readonly = (addr: Address): VenueAccount => ({ ref: addr, address: addr })
 const writable = (addr: Address): VenueAccount => ({ ref: addr, address: addr, writable: true });
 
 export const pumpswapAdapter = {
-  slug: 'pumpswap',
-  kind: 'constant-product',
+  slug: "pumpswap",
+  kind: "constant-product",
   programId: PUMPSWAP_PROGRAM_ID,
 
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<PumpswapPoolConfig> {
-    const poolData = await loadAccount(load, pool, 'pool');
+    const poolData = await loadAccount(load, pool, "pool");
     if (!hasDiscriminator(poolData, POOL_DISCRIMINATOR)) {
       throw new Error(`pumpswap pool ${pool} discriminator mismatch (not a pump amm Pool account)`);
     }
@@ -258,7 +279,9 @@ export const pumpswapAdapter = {
     // predate coin_creator, which then reads as Pubkey::default (observed
     // sizes in docs/svm-venues.md).
     if (poolData.length < 211) {
-      throw new Error(`pumpswap pool ${pool} data is ${poolData.length} bytes, expected at least 211`);
+      throw new Error(
+        `pumpswap pool ${pool} data is ${poolData.length} bytes, expected at least 211`,
+      );
     }
     const creator = pubkeyAt(poolData, 11);
     const baseMint = pubkeyAt(poolData, 43);
@@ -269,21 +292,31 @@ export const pumpswapAdapter = {
     const isMayhemMode = poolData.length >= 244 && poolData[243] !== 0;
     const isCashbackCoin = poolData.length >= 245 && poolData[244] !== 0;
     if (isMayhemMode) {
-      throw new Error(`pumpswap pool ${pool} gate: is_mayhem_mode is set (mayhem fee routing is unverified)`);
+      throw new Error(
+        `pumpswap pool ${pool} gate: is_mayhem_mode is set (mayhem fee routing is unverified)`,
+      );
     }
     if (isCashbackCoin) {
-      throw new Error(`pumpswap pool ${pool} gate: is_cashback_coin is set (cashback swaps need user-derived remaining accounts)`);
+      throw new Error(
+        `pumpswap pool ${pool} gate: is_cashback_coin is set (cashback swaps need user-derived remaining accounts)`,
+      );
     }
 
-    const [globalConfigData, feeConfigData, baseMintData, quoteMintData, baseVaultData, quoteVaultData] =
-      await Promise.all([
-        loadAccount(load, GLOBAL_CONFIG, 'global config'),
-        loadAccount(load, FEE_CONFIG, 'fee config'),
-        loadAccount(load, baseMint, 'base mint'),
-        loadAccount(load, quoteMint, 'quote mint'),
-        loadAccount(load, baseVault, 'base vault'),
-        loadAccount(load, quoteVault, 'quote vault'),
-      ]);
+    const [
+      globalConfigData,
+      feeConfigData,
+      baseMintData,
+      quoteMintData,
+      baseVaultData,
+      quoteVaultData,
+    ] = await Promise.all([
+      loadAccount(load, GLOBAL_CONFIG, "global config"),
+      loadAccount(load, FEE_CONFIG, "fee config"),
+      loadAccount(load, baseMint, "base mint"),
+      loadAccount(load, quoteMint, "quote mint"),
+      loadAccount(load, baseVault, "base vault"),
+      loadAccount(load, quoteVault, "quote vault"),
+    ]);
 
     if (!hasDiscriminator(globalConfigData, GLOBAL_CONFIG_DISCRIMINATOR)) {
       throw new Error(`pumpswap global config ${GLOBAL_CONFIG} discriminator mismatch`);
@@ -306,7 +339,7 @@ export const pumpswapAdapter = {
     // flat_fees (docs/svm-venues.md fee selection).
     const encoder = getAddressEncoder();
     const poolAuthority = await pda(
-      ['pool-authority', new Uint8Array(encoder.encode(baseMint))],
+      ["pool-authority", new Uint8Array(encoder.encode(baseMint))],
       PUMP_BONDING_PROGRAM,
     );
     const canonical = creator === poolAuthority;
@@ -321,7 +354,9 @@ export const pumpswapAdapter = {
       const quoteReserve = readUintLE(quoteVaultData, 64, 8);
       const baseMintSupply = readUintLE(baseMintData, 36, 8);
       if (baseReserve === 0n) {
-        throw new Error(`pumpswap pool ${pool} base vault is empty, cannot compute the market-cap fee tier`);
+        throw new Error(
+          `pumpswap pool ${pool} base vault is empty, cannot compute the market-cap fee tier`,
+        );
       }
       const marketCap = (quoteReserve * baseMintSupply) / baseReserve;
       const tier = pickFeeTier(tiers, marketCap);
@@ -338,23 +373,27 @@ export const pumpswapAdapter = {
     const protocolFeeRecipient = pubkeyAt(globalConfigData, 57);
     const buybackFeeRecipient = pubkeyAt(globalConfigData, 643);
     const coinCreatorVaultAuthority = await pda(
-      ['creator_vault', new Uint8Array(encoder.encode(coinCreator))],
+      ["creator_vault", new Uint8Array(encoder.encode(coinCreator))],
       PUMPSWAP_PROGRAM_ID,
     );
-    const [protocolFeeRecipientTokenAccount, coinCreatorVaultAta, buybackFeeRecipientTokenAccount, poolV2] =
-      await Promise.all([
-        ata(protocolFeeRecipient, quoteMint, quoteTokenProgram),
-        ata(coinCreatorVaultAuthority, quoteMint, quoteTokenProgram),
-        ata(buybackFeeRecipient, quoteMint, quoteTokenProgram),
-        coinCreator === DEFAULT_PUBKEY
-          ? Promise.resolve(undefined)
-          : pda(['pool-v2', new Uint8Array(encoder.encode(baseMint))], PUMPSWAP_PROGRAM_ID),
-      ]);
+    const [
+      protocolFeeRecipientTokenAccount,
+      coinCreatorVaultAta,
+      buybackFeeRecipientTokenAccount,
+      poolV2,
+    ] = await Promise.all([
+      ata(protocolFeeRecipient, quoteMint, quoteTokenProgram),
+      ata(coinCreatorVaultAuthority, quoteMint, quoteTokenProgram),
+      ata(buybackFeeRecipient, quoteMint, quoteTokenProgram),
+      coinCreator === DEFAULT_PUBKEY
+        ? Promise.resolve(undefined)
+        : pda(["pool-v2", new Uint8Array(encoder.encode(baseMint))], PUMPSWAP_PROGRAM_ID),
+    ]);
 
     return {
-      venue: 'pumpswap',
+      venue: "pumpswap",
       pool,
-      direction: 'quoteToBase',
+      direction: "quoteToBase",
       baseMint,
       quoteMint,
       baseVault,
@@ -397,34 +436,39 @@ export const pumpswapAdapter = {
       `  const psBase${i} = svm.sload(acc0, 64, 8).toLe();`,
       `  const psQuote${i} = svm.sload(acc1, 64, 8).toLe();`,
     ];
-    if (c.direction === 'quoteToBase') {
+    if (c.direction === "quoteToBase") {
       // The fee arithmetic only involves compile-time constants, so it folds
       // off-chain and the live quote is one invariant division over the
       // reserves (with the on-chain effQ - 1, docs/svm-venues.md buy formula).
-      const inAmount = buyEffectiveQuoteIn(amountIn, c.lpFeeBps, c.protocolFeeBps, c.creatorFeeBps) - 1n;
-      lines.push(`  const q${i} = Math.mulDiv(psBase${i}, ${inAmount}, psQuote${i} + ${inAmount});`);
+      const inAmount =
+        buyEffectiveQuoteIn(amountIn, c.lpFeeBps, c.protocolFeeBps, c.creatorFeeBps) - 1n;
+      lines.push(
+        `  const q${i} = Math.mulDiv(psBase${i}, ${inAmount}, psQuote${i} + ${inAmount});`,
+      );
     } else {
       // sell: fees are per-component ceilDiv on the OUTPUT, so they need the
       // live quoteOut; ceilDiv(x * bps, 10000) == (x * bps + 9999) / 10000.
-      lines.push(`  const psOut${i} = Math.mulDiv(psQuote${i}, ${amountIn}, psBase${i} + ${amountIn});`);
+      lines.push(
+        `  const psOut${i} = Math.mulDiv(psQuote${i}, ${amountIn}, psBase${i} + ${amountIn});`,
+      );
       const feeTerms = [c.lpFeeBps, c.protocolFeeBps, c.creatorFeeBps]
         .filter((bps) => bps > 0n)
         .map((bps) => ` - (psOut${i} * ${bps} + 9999) / 10000`)
-        .join('');
+        .join("");
       lines.push(`  const q${i} = psOut${i}${feeTerms};`);
     }
-    return lines.join('\n');
+    return lines.join("\n");
   },
 
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
     const c = asPumpswapConfig(cfg);
     checkAmountIn(amountIn);
-    const sell = c.direction === 'baseToQuote';
+    const sell = c.direction === "baseToQuote";
     // Gate only the resolved direction: bit3 disables buys, bit4 disables sells.
     const disabled = sell ? c.disableFlags & (1 << 4) : c.disableFlags & (1 << 3);
     if (disabled !== 0) {
       throw new Error(
-        `pumpswap gate: ${sell ? 'sells' : 'buys'} are disabled (global config disable_flags ${c.disableFlags})`,
+        `pumpswap gate: ${sell ? "sells" : "buys"} are disabled (global config disable_flags ${c.disableFlags})`,
       );
     }
 
@@ -482,22 +526,29 @@ export const pumpswapAdapter = {
     checkAmountIn(amountIn);
     const baseVaultData = state[c.baseVault];
     const quoteVaultData = state[c.quoteVault];
-    if (baseVaultData === undefined) throw new Error(`pumpswap referenceQuote is missing base vault ${c.baseVault} in state`);
-    if (quoteVaultData === undefined) throw new Error(`pumpswap referenceQuote is missing quote vault ${c.quoteVault} in state`);
+    if (baseVaultData === undefined)
+      throw new Error(`pumpswap referenceQuote is missing base vault ${c.baseVault} in state`);
+    if (quoteVaultData === undefined)
+      throw new Error(`pumpswap referenceQuote is missing quote vault ${c.quoteVault} in state`);
     const baseReserve = readUintLE(baseVaultData, 64, 8);
     const quoteReserve = readUintLE(quoteVaultData, 64, 8);
 
-    if (c.direction === 'quoteToBase') {
+    if (c.direction === "quoteToBase") {
       // effQ = floor(spendable * 10000 / (10000 + totalFeeBps)); each fee
       // component ceil-rounded separately; shrink effQ by any over-budget;
       // baseOut = floor(B * (effQ - 1) / (Q + (effQ - 1))).
       const totalFeeBps = c.lpFeeBps + c.protocolFeeBps + c.creatorFeeBps;
       let eff = (amountIn * BPS) / (BPS + totalFeeBps);
       const fees =
-        ceilDiv(eff * c.lpFeeBps, BPS) + ceilDiv(eff * c.protocolFeeBps, BPS) + ceilDiv(eff * c.creatorFeeBps, BPS);
+        ceilDiv(eff * c.lpFeeBps, BPS) +
+        ceilDiv(eff * c.protocolFeeBps, BPS) +
+        ceilDiv(eff * c.creatorFeeBps, BPS);
       const over = eff + fees - amountIn;
       if (over > 0n) eff -= over;
-      if (eff < 2n) throw new Error(`pumpswap quote amountIn ${amountIn} is too small (effective quote input below 2)`);
+      if (eff < 2n)
+        throw new Error(
+          `pumpswap quote amountIn ${amountIn} is too small (effective quote input below 2)`,
+        );
       const inAmount = eff - 1n;
       return (baseReserve * inAmount) / (quoteReserve + inAmount);
     }

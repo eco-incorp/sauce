@@ -3,26 +3,37 @@
 Omnichain lending protocol on Arbitrum. Aave V2 fork with cross-chain lending capabilities via LayerZero. Requires dLP locking for emission eligibility.
 
 ## Category
+
 lending | Chains: Arbitrum (42161)
 
 ## SauceScript Functions
 
 ### deposit
+
 Deposit assets to earn interest and receive rTokens.
+
 ```typescript
 import { RadiantLendingPoolABI as IRadiantLendingPool } from "./abis";
 
-function main(lendingPoolAddress: Address, asset: Address, amount: Uint256, onBehalfOf: Address): Uint256 {
+function main(
+  lendingPoolAddress: Address,
+  asset: Address,
+  amount: Uint256,
+  onBehalfOf: Address,
+): Uint256 {
   const pool = IRadiantLendingPool.at(lendingPoolAddress);
   pool.deposit(asset, amount, onBehalfOf, 0);
   return 1;
 }
 ```
+
 - `onBehalfOf`: Address that receives rTokens (use msg.sender for self)
 - Requires ERC-20 approval to the LendingPool
 
 ### withdraw
+
 Withdraw deposited assets by burning rTokens.
+
 ```typescript
 import { RadiantLendingPoolABI as IRadiantLendingPool } from "./abis";
 
@@ -31,50 +42,71 @@ function main(lendingPoolAddress: Address, asset: Address, amount: Uint256, to: 
   return pool.withdraw(asset, amount, to);
 }
 ```
+
 - `amount`: Use `type(uint256).max` to withdraw all
 - Returns actual withdrawn amount
 
 ### borrow
+
 Borrow assets against deposited collateral.
+
 ```typescript
 import { RadiantLendingPoolABI as IRadiantLendingPool } from "./abis";
 
-function main(lendingPoolAddress: Address, asset: Address, amount: Uint256, interestRateMode: Uint256, onBehalfOf: Address): Uint256 {
+function main(
+  lendingPoolAddress: Address,
+  asset: Address,
+  amount: Uint256,
+  interestRateMode: Uint256,
+  onBehalfOf: Address,
+): Uint256 {
   const pool = IRadiantLendingPool.at(lendingPoolAddress);
   pool.borrow(asset, amount, interestRateMode, 0, onBehalfOf);
   return 1;
 }
 ```
+
 - `interestRateMode`: 1 = stable, 2 = variable
 
 ### repay
+
 Repay borrowed debt.
+
 ```typescript
 import { RadiantLendingPoolABI as IRadiantLendingPool } from "./abis";
 
-function main(lendingPoolAddress: Address, asset: Address, amount: Uint256, rateMode: Uint256, onBehalfOf: Address): Uint256 {
+function main(
+  lendingPoolAddress: Address,
+  asset: Address,
+  amount: Uint256,
+  rateMode: Uint256,
+  onBehalfOf: Address,
+): Uint256 {
   const pool = IRadiantLendingPool.at(lendingPoolAddress);
   return pool.repay(asset, amount, rateMode, onBehalfOf);
 }
 ```
+
 - `rateMode`: Must match existing debt type (1 = stable, 2 = variable)
 - Requires ERC-20 approval to the LendingPool
 
 ## Deployed Addresses
 
-| Chain | Contract | Address |
-|-------|----------|---------|
+| Chain    | Contract    | Address                                      |
+| -------- | ----------- | -------------------------------------------- |
 | Arbitrum | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` |
 
 ## ABI Reference
 
 ### RadiantLendingPoolABI
+
 - `deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)` - Deposit asset to earn interest
 - `withdraw(address asset, uint256 amount, address to) returns (uint256)` - Withdraw deposited asset
 - `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)` - Borrow against collateral
 - `repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) returns (uint256)` - Repay borrowed debt
 
 ## Notes
+
 - Same interface as Aave V2 (forked codebase) -- referralCode always 0
 - Requires dLP (dynamic liquidity provision) locking to be eligible for RDNT emissions
 - Users must lock at least 5% of deposit value in dLP to earn platform fees

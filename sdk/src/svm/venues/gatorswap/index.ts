@@ -161,62 +161,29 @@
  * see the consuming recipe's budget.ts's CU_FAMILIES entry for the fitted
  * slot/rung coefficients) ──
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
-import { readUintLE } from '../math.js';
+import { address, getAddressCodec, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 
-const SLUG = 'gatorswap';
-export const GATORSWAP_PROGRAM_ID = address('gatorLx9aC1e5ZWAXscv5QRKiLXnLPLXjftVc81h1Hr');
+const SLUG = "gatorswap";
+export const GATORSWAP_PROGRAM_ID = address("gatorLx9aC1e5ZWAXscv5QRKiLXnLPLXjftVc81h1Hr");
 
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const SYSTEM_PROGRAM = address('11111111111111111111111111111111');
-const ASSOCIATED_TOKEN_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-
-// ── The referenced pricing venue: PumpSwap. Re-declared here (not imported
-// from the wired pumpswap adapter) because this adapter only ever needs a
-// READ-ONLY vault-balance + fee-tier-free reference — importing pumpswap's
-// own fetchPoolConfig would throw on exactly the gated pools (mayhem mode,
-// cashback coins) GatorSwap exists to route around, per the file header. ──
-const PUMPSWAP_PROGRAM_ID = address('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
 const PUMPSWAP_POOL_DISCRIMINATOR = [241, 154, 109, 4, 17, 177, 109, 188];
 const PUMPSWAP_MIN_POOL_SIZE = 211;
 const PUMPSWAP_BASE_MINT_OFFSET = 43;
 const PUMPSWAP_QUOTE_MINT_OFFSET = 75;
 const PUMPSWAP_BASE_VAULT_OFFSET = 139;
 const PUMPSWAP_QUOTE_VAULT_OFFSET = 171;
-// GLOBAL_CONFIG/FEE_CONFIG/FEE_PROGRAM/EVENT_AUTHORITY/GLOBAL_VOLUME_ACCUMULATOR:
-// well-known PumpSwap protocol singletons, byte-confirmed against the wired
-// pumpswap adapter's own (module-private) constants and against every
-// sampled GatorSwap transaction's account list.
-const PUMPSWAP_GLOBAL_CONFIG = address('ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw');
-const PUMPSWAP_FEE_CONFIG = address('5PHirr8joyTMp9JMm6nW7hNDVyEYdkzDqazxPD7RaTjx');
-const PUMPSWAP_FEE_PROGRAM = address('pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ');
-const PUMPSWAP_EVENT_AUTHORITY = address('GS4CU59F31iL7aR2Q8zVS8DRrcRnXX1yjQ66TqNVQnaR');
-const PUMPSWAP_GLOBAL_VOLUME_ACCUMULATOR = address('C2aFPdENg4A2HQsmrd5rTw5TaYBX5Ku887cWjbFKtZpw');
-// protocolFeeRecipient (a wallet) + its wSOL ATA, and the buyback recipient
-// pair — all confirmed present in every sampled GatorSwap swap's account
-// list at the exact roles PumpSwap's own buildSwap uses them for.
-const PUMPSWAP_PROTOCOL_FEE_RECIPIENT = address('62qc2CNXwrYqQScmEdiZFFAnJR262PxWEuNQtxfafNgV');
-const PUMPSWAP_PROTOCOL_FEE_RECIPIENT_ATA = address('94qWNrtmfn42h3ZjUZwWvK1MEo9uVmmrBPd2hpNjYDjb');
-const PUMPSWAP_BUYBACK_FEE_RECIPIENT = address('A7hAgCzFw14fejgCp387JUJRMNyz4j89JKnhtKU8piqW');
-const PUMPSWAP_BUYBACK_FEE_RECIPIENT_ATA = address('qkYdTGRPHbWTWuBMz45bCiU6a23axRqf6sBHm9295WY');
 
 const GATOR_POOL_ACCOUNT_SIZE = 1984;
 const MINT_A_OFFSET = 8;
 const MINT_B_OFFSET = 40;
 const REF_POOL_OFFSET = 80;
-/** SPL / Token-2022 token-account amount field offset (standard layout, both programs). */
-const AMOUNT_OFF = 64;
-
-/** Conservative haircut on the reference pool's implied price — see file header. */
-const REF_HAIRCUT_BPS = 50n;
-const BPS_DEN = 10_000n;
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
-const ZERO_ADDRESS = address('11111111111111111111111111111111');
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
+const ZERO_ADDRESS = address("11111111111111111111111111111111");
 
 function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): boolean {
   return data.length >= discriminator.length && discriminator.every((b, i) => data[i] === b);
@@ -225,7 +192,7 @@ function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): b
 async function vaultPda(pool: Address, mint: Address): Promise<Address> {
   const [pda] = await getProgramDerivedAddress({
     programAddress: GATORSWAP_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('vault'), codec.encode(pool), codec.encode(mint)],
+    seeds: [new TextEncoder().encode("vault"), codec.encode(pool), codec.encode(mint)],
   });
   return pda;
 }
@@ -234,7 +201,7 @@ async function vaultPda(pool: Address, mint: Address): Promise<Address> {
 export async function deriveGatorswapPool(mintA: Address, mintB: Address): Promise<Address> {
   const [pda] = await getProgramDerivedAddress({
     programAddress: GATORSWAP_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('pool'), codec.encode(mintA), codec.encode(mintB)],
+    seeds: [new TextEncoder().encode("pool"), codec.encode(mintA), codec.encode(mintB)],
   });
   return pda;
 }
@@ -256,37 +223,43 @@ export interface GatorswapPoolConfig extends PoolConfig {
 }
 
 function gatorswapConfig(cfg: PoolConfig): GatorswapPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as GatorswapPoolConfig;
 }
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
 
 async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<GatorswapPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== GATOR_POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${GATOR_POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${GATOR_POOL_ACCOUNT_SIZE}`,
+    );
   }
   const mintA = pubkeyAt(data, MINT_A_OFFSET);
   const mintB = pubkeyAt(data, MINT_B_OFFSET);
   const refPool = pubkeyAt(data, REF_POOL_OFFSET);
   if (refPool === ZERO_ADDRESS) {
-    throw new Error(`${SLUG} pool ${pool} has no reference-venue pool set (this adapter has no other pricing source)`);
+    throw new Error(
+      `${SLUG} pool ${pool} has no reference-venue pool set (this adapter has no other pricing source)`,
+    );
   }
   const [vaultA, vaultB, refData] = await Promise.all([
     vaultPda(pool, mintA),
     vaultPda(pool, mintB),
     load(refPool),
   ]);
-  if (refData === null) throw new Error(`${SLUG} pool ${pool} reference pool ${refPool} account not found`);
+  if (refData === null)
+    throw new Error(`${SLUG} pool ${pool} reference pool ${refPool} account not found`);
   if (!hasDiscriminator(refData, PUMPSWAP_POOL_DISCRIMINATOR)) {
     throw new Error(
       `${SLUG} pool ${pool} reference ${refPool} is not a recognized PumpSwap Pool account (this adapter only models the PumpSwap-reference case)`,
     );
   }
   if (refData.length < PUMPSWAP_MIN_POOL_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} reference ${refPool} data is ${refData.length} bytes, expected at least ${PUMPSWAP_MIN_POOL_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} reference ${refPool} data is ${refData.length} bytes, expected at least ${PUMPSWAP_MIN_POOL_SIZE}`,
+    );
   }
   const refBaseMint = pubkeyAt(refData, PUMPSWAP_BASE_MINT_OFFSET);
   const refQuoteMint = pubkeyAt(refData, PUMPSWAP_QUOTE_MINT_OFFSET);
@@ -294,7 +267,9 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Gato
   const refQuoteVault = pubkeyAt(refData, PUMPSWAP_QUOTE_VAULT_OFFSET);
   const refMints = new Set([refBaseMint, refQuoteMint]);
   if (!refMints.has(mintA) || !refMints.has(mintB)) {
-    throw new Error(`${SLUG} pool ${pool} reference ${refPool} mints do not match this pool's mint pair`);
+    throw new Error(
+      `${SLUG} pool ${pool} reference ${refPool} mints do not match this pool's mint pair`,
+    );
   }
   return {
     venue: SLUG,
@@ -315,31 +290,15 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Gato
 function quoteAccounts(base: PoolConfig): VenueAccount[] {
   const cfg = gatorswapConfig(base);
   return [
-    { ref: 'refBaseVault', address: cfg.refBaseVault },
-    { ref: 'refQuoteVault', address: cfg.refQuoteVault },
+    { ref: "refBaseVault", address: cfg.refBaseVault },
+    { ref: "refQuoteVault", address: cfg.refQuoteVault },
   ];
 }
 
 export const gatorswap = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: GATORSWAP_PROGRAM_ID,
   fetchPoolConfig,
   quoteAccounts,
 };
-
-/**
- * Reference-pool vault addresses for a given trade direction: which of the
- * reference pool's base/quote vaults corresponds to our in/out side. Since
- * refBaseMint/refQuoteMint are validated (at fetch time) to be exactly
- * {mintA, mintB} in some order, this is well-defined regardless of which
- * position each landed at.
- */
-function refVaultsForDirection(cfg: GatorswapPoolConfig): { vin: Address; vout: Address } {
-  const inMint = cfg.direction === 0 ? cfg.mintA : cfg.mintB;
-  const inIsBase = cfg.refBaseMint === inMint;
-  return inIsBase
-    ? { vin: cfg.refBaseVault, vout: cfg.refQuoteVault }
-    : { vin: cfg.refQuoteVault, vout: cfg.refBaseVault };
-}
-

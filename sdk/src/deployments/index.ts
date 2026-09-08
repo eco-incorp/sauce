@@ -16,7 +16,13 @@
  * as "the stack is live everywhere": liveness is per chain, and one chain in the
  * record is not live (see `v12FailedChainIds`).
  */
-import { V12_EVM_CHAINS, V12_EVM_CONTRACTS, V12_GENERATED_BY, V12_SALT, V12_SVM } from './v12.generated.js';
+import {
+  V12_EVM_CHAINS,
+  V12_EVM_CONTRACTS,
+  V12_GENERATED_BY,
+  V12_SALT,
+  V12_SVM,
+} from "./v12.generated.js";
 
 export { V12_EVM_CHAINS, V12_EVM_CONTRACTS, V12_GENERATED_BY, V12_SALT, V12_SVM };
 
@@ -48,7 +54,10 @@ export interface V12Deployment extends V12EvmContracts {
   name: string;
 }
 
-const CHAINS = V12_EVM_CHAINS as Record<number, { name: string; live: boolean; status: string; error?: string }>;
+const CHAINS = V12_EVM_CHAINS as Record<
+  number,
+  { name: string; live: boolean; status: string; error?: string }
+>;
 
 /** Every chain id in the record, live or not, ascending. */
 export function v12ChainIds(): number[] {
@@ -128,12 +137,12 @@ export function requireV12Deployment(chainId: number): V12Deployment {
   const c = CHAINS[chainId];
   if (c === undefined) {
     throw new Error(
-      `Sauce v12 is not deployed on chain ${chainId} (known chains: ${v12ChainIds().join(', ')})`,
+      `Sauce v12 is not deployed on chain ${chainId} (known chains: ${v12ChainIds().join(", ")})`,
     );
   }
   throw new Error(
     `Sauce v12 is not live on chain ${chainId} (${c.name}): status '${c.status}'` +
-      (c.error === undefined ? '' : ` — ${c.error}`),
+      (c.error === undefined ? "" : ` — ${c.error}`),
   );
 }
 

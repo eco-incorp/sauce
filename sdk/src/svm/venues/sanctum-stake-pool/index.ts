@@ -141,21 +141,27 @@
  * runs against four live mainnet pools, ~11.3k–11.9k CU for the CPI itself)
  * and the calibration this file's header does not repeat.
  */
-import { address, getAddressDecoder, getAddressEncoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { createHash } from 'node:crypto';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { createHash } from "node:crypto";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-export const SANCTUM_STAKE_POOL_PROGRAM_ID = address('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
-export const SANCTUM_STAKE_POOL_2_PROGRAM_ID = address('SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY');
-export const SANCTUM_STAKE_POOL_3_PROGRAM_ID = address('SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn');
-export const SANCTUM_STAKE_POOL_4_PROGRAM_ID = address('stkitrT1Uoy18Dk1fTrgPw8W6MVzoCfYoAFT4MLsmhq');
+export const SANCTUM_STAKE_POOL_PROGRAM_ID = address("SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy");
+export const SANCTUM_STAKE_POOL_2_PROGRAM_ID = address(
+  "SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY",
+);
+export const SANCTUM_STAKE_POOL_3_PROGRAM_ID = address(
+  "SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn",
+);
+export const SANCTUM_STAKE_POOL_4_PROGRAM_ID = address(
+  "stkitrT1Uoy18Dk1fTrgPw8W6MVzoCfYoAFT4MLsmhq",
+);
 
-const CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
+const CLOCK_SYSVAR = address("SysvarC1ock11111111111111111111111111111111");
 /** The recipe-wide vocabulary for "the user is trading SOL" — see module header's ACCOUNTS caveat. */
-export const WSOL_MINT = address('So11111111111111111111111111111111111111112');
+export const WSOL_MINT = address("So11111111111111111111111111111111111111112");
 
 const ACCOUNT_TYPE_STAKE_POOL = 1;
 const OFF_TOTAL_LAMPORTS = 258;
@@ -167,19 +173,20 @@ class Cursor {
   }
   u8(): number {
     const v = this.buf[this.o];
-    if (v === undefined) throw new Error('sanctum-stake-pool: truncated account data');
+    if (v === undefined) throw new Error("sanctum-stake-pool: truncated account data");
     this.o += 1;
     return v;
   }
   u64(): bigint {
-    if (this.o + 8 > this.buf.length) throw new Error('sanctum-stake-pool: truncated account data');
+    if (this.o + 8 > this.buf.length) throw new Error("sanctum-stake-pool: truncated account data");
     let v = 0n;
     for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(this.buf[this.o + i]!);
     this.o += 8;
     return v;
   }
   pubkey(): Address {
-    if (this.o + 32 > this.buf.length) throw new Error('sanctum-stake-pool: truncated account data');
+    if (this.o + 32 > this.buf.length)
+      throw new Error("sanctum-stake-pool: truncated account data");
     const slice = this.buf.subarray(this.o, this.o + 32);
     this.o += 32;
     return getAddressDecoder().decode(slice);
@@ -210,10 +217,7 @@ class Cursor {
 
 export interface SanctumStakePoolConfig extends PoolConfig {
   venue:
-    | 'sanctum-stake-pool'
-    | 'sanctum-stake-pool-2'
-    | 'sanctum-stake-pool-3'
-    | 'sanctum-stake-pool-4';
+    "sanctum-stake-pool" | "sanctum-stake-pool-2" | "sanctum-stake-pool-3" | "sanctum-stake-pool-4";
   poolMint: Address;
   reserveStake: Address;
   managerFeeAccount: Address;
@@ -222,19 +226,19 @@ export interface SanctumStakePoolConfig extends PoolConfig {
   solDepositFeeNumerator: bigint;
   solDepositFeeDenominator: bigint;
   /** Fixed at the framework's single `direction` value — this family only quotes SOL -> LST. */
-  direction: 'solToLst';
+  direction: "solToLst";
 }
 
 function withdrawAuthorityAddress(programId: Address, pool: Address, bump: number): Address {
   const decoder = getAddressDecoder();
   // create_program_address(seeds=[pool, "withdraw", [bump]], programId):
   // sha256(seed_1 || ... || programId || "ProgramDerivedAddress").
-  const h = createHash('sha256');
+  const h = createHash("sha256");
   h.update(Buffer.from(getPubkeyBytes(pool)));
-  h.update(Buffer.from('withdraw'));
+  h.update(Buffer.from("withdraw"));
   h.update(Buffer.from([bump]));
   h.update(Buffer.from(getPubkeyBytes(programId)));
-  h.update(Buffer.from('ProgramDerivedAddress'));
+  h.update(Buffer.from("ProgramDerivedAddress"));
   return decoder.decode(new Uint8Array(h.digest()));
 }
 
@@ -249,7 +253,7 @@ async function fetchSanctumStakePoolConfig(
   load: AccountLoader,
   pool: Address,
   programId: Address,
-  slug: SanctumStakePoolConfig['venue'],
+  slug: SanctumStakePoolConfig["venue"],
 ): Promise<SanctumStakePoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${slug} pool ${pool} account not found`);
@@ -257,7 +261,9 @@ async function fetchSanctumStakePoolConfig(
   const c = new Cursor(data);
   const accountType = c.u8();
   if (accountType !== ACCOUNT_TYPE_STAKE_POOL) {
-    throw new Error(`${slug} pool ${pool} account_type must be ${ACCOUNT_TYPE_STAKE_POOL} (StakePool), got ${accountType}`);
+    throw new Error(
+      `${slug} pool ${pool} account_type must be ${ACCOUNT_TYPE_STAKE_POOL} (StakePool), got ${accountType}`,
+    );
   }
   c.pubkey(); // manager
   c.pubkey(); // staker
@@ -280,11 +286,15 @@ async function fetchSanctumStakePoolConfig(
   const poolMintData = await load(poolMint);
   if (poolMintData !== null) {
     if (classifyMintProgram(poolMint, poolMintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${slug}: dropping pool ${pool} — mint ${poolMint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${slug}: dropping pool ${pool} — mint ${poolMint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(poolMintData);
     if (blocking.length > 0) {
-      throw new Error(`${slug}: dropping pool ${pool} — mint ${poolMint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${slug}: dropping pool ${pool} — mint ${poolMint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
   if (c.offset() !== OFF_TOTAL_LAMPORTS) {
@@ -292,7 +302,9 @@ async function fetchSanctumStakePoolConfig(
     // this only fails if a future stake-pool version reorders the struct
     // prefix, in which case the on-chain fragment's baked accountUint
     // offsets below would silently read the wrong field. Fail loudly.
-    throw new Error(`${slug} pool ${pool}: unexpected prefix length ${c.offset()}, expected total_lamports at ${OFF_TOTAL_LAMPORTS}`);
+    throw new Error(
+      `${slug} pool ${pool}: unexpected prefix length ${c.offset()}, expected total_lamports at ${OFF_TOTAL_LAMPORTS}`,
+    );
   }
   c.u64(); // total_lamports (read LIVE on-chain via accountUint, not baked)
   c.u64(); // pool_token_supply (read LIVE on-chain via accountUint, not baked)
@@ -312,10 +324,14 @@ async function fetchSanctumStakePoolConfig(
   const solDepositFee = c.fee();
 
   if (solDepositAuthority !== undefined) {
-    throw new Error(`${slug} pool ${pool} requires a sol_deposit_authority signature — permissioned pools are not implemented by this adapter`);
+    throw new Error(
+      `${slug} pool ${pool} requires a sol_deposit_authority signature — permissioned pools are not implemented by this adapter`,
+    );
   }
   if (solDepositFee.numerator !== 0n && solDepositFee.denominator === 0n) {
-    throw new Error(`${slug} pool ${pool} sol_deposit_fee denominator is 0 with nonzero numerator ${solDepositFee.numerator}`);
+    throw new Error(
+      `${slug} pool ${pool} sol_deposit_fee denominator is 0 with nonzero numerator ${solDepositFee.numerator}`,
+    );
   }
 
   // Re-read last_update_epoch directly (fixed offset 274, right after
@@ -325,10 +341,12 @@ async function fetchSanctumStakePoolConfig(
   // pool's stored snapshot predates the current epoch — see module header.
   const lastUpdateEpoch = readU64(data, OFF_TOTAL_LAMPORTS + 16);
   const clockData = await load(CLOCK_SYSVAR);
-  if (clockData === null) throw new Error('sanctum-stake-pool: Clock sysvar account not found');
+  if (clockData === null) throw new Error("sanctum-stake-pool: Clock sysvar account not found");
   const currentEpoch = readU64(clockData, 16);
   if (lastUpdateEpoch < currentEpoch) {
-    throw new Error(`${slug} pool ${pool} is stale (last_update_epoch ${lastUpdateEpoch} < current epoch ${currentEpoch}) — needs its crank run this epoch before it can accept a deposit`);
+    throw new Error(
+      `${slug} pool ${pool} is stale (last_update_epoch ${lastUpdateEpoch} < current epoch ${currentEpoch}) — needs its crank run this epoch before it can accept a deposit`,
+    );
   }
 
   return {
@@ -340,18 +358,18 @@ async function fetchSanctumStakePoolConfig(
     withdrawAuthority: withdrawAuthorityAddress(programId, pool, stakeWithdrawBumpSeed),
     solDepositFeeNumerator: solDepositFee.numerator,
     solDepositFeeDenominator: solDepositFee.denominator,
-    direction: 'solToLst',
+    direction: "solToLst",
   };
 }
 
 function readU64(buf: Uint8Array, offset: number): bigint {
-  if (offset + 8 > buf.length) throw new Error('sanctum-stake-pool: truncated account data');
+  if (offset + 8 > buf.length) throw new Error("sanctum-stake-pool: truncated account data");
   let v = 0n;
   for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(buf[offset + i]!);
   return v;
 }
 
-function makeSanctumStakePool(slug: SanctumStakePoolConfig['venue'], programId: Address) {
+function makeSanctumStakePool(slug: SanctumStakePoolConfig["venue"], programId: Address) {
   return {
     slug,
     programId,
@@ -360,8 +378,19 @@ function makeSanctumStakePool(slug: SanctumStakePoolConfig['venue'], programId: 
   };
 }
 
-export const sanctumStakePool = makeSanctumStakePool('sanctum-stake-pool', SANCTUM_STAKE_POOL_PROGRAM_ID);
-export const sanctumStakePool2 = makeSanctumStakePool('sanctum-stake-pool-2', SANCTUM_STAKE_POOL_2_PROGRAM_ID);
-export const sanctumStakePool3 = makeSanctumStakePool('sanctum-stake-pool-3', SANCTUM_STAKE_POOL_3_PROGRAM_ID);
-export const sanctumStakePool4 = makeSanctumStakePool('sanctum-stake-pool-4', SANCTUM_STAKE_POOL_4_PROGRAM_ID);
-
+export const sanctumStakePool = makeSanctumStakePool(
+  "sanctum-stake-pool",
+  SANCTUM_STAKE_POOL_PROGRAM_ID,
+);
+export const sanctumStakePool2 = makeSanctumStakePool(
+  "sanctum-stake-pool-2",
+  SANCTUM_STAKE_POOL_2_PROGRAM_ID,
+);
+export const sanctumStakePool3 = makeSanctumStakePool(
+  "sanctum-stake-pool-3",
+  SANCTUM_STAKE_POOL_3_PROGRAM_ID,
+);
+export const sanctumStakePool4 = makeSanctumStakePool(
+  "sanctum-stake-pool-4",
+  SANCTUM_STAKE_POOL_4_PROGRAM_ID,
+);

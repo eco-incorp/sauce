@@ -3,9 +3,11 @@
 The standard interface for fungible tokens on EVM chains (EIP-20). Defines transfer, approve, transferFrom, balanceOf, allowance, totalSupply, name, symbol, and decimals.
 
 ## Category
+
 infrastructure | Chains: (standard interface, any chain)
 
 ## Key Operations
+
 - **transfer**: Send tokens to an address
 - **approve**: Authorize a spender to transfer tokens on your behalf
 - **transferFrom**: Transfer tokens from one address to another (requires approval)
@@ -13,11 +15,13 @@ infrastructure | Chains: (standard interface, any chain)
 - **allowance**: Query remaining approved amount for a spender
 
 ## SDK Usage
+
 ```typescript
 import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/erc20";
 ```
 
 ## SauceScript Examples
+
 ```typescript
 // Transfer tokens
 import { ERC20ABI as IERC20 } from "./abis";
@@ -68,7 +72,9 @@ function main(to: Address, amount: Uint256): Uint256 {
 ```
 
 ## ABI Methods
+
 ### ERC20ABI
+
 - `transfer(address,uint256)` - Transfer tokens. Params: to (recipient), amount (token amount). Returns bool success
 - `approve(address,uint256)` - Approve spender. Params: spender (authorized address), amount (max transfer amount). Returns bool success
 - `transferFrom(address,address,uint256)` - Transfer from approved address. Params: from (source), to (destination), amount. Returns bool success
@@ -80,10 +86,12 @@ function main(to: Address, amount: Uint256): Uint256 {
 - `decimals()` - Token decimals. Returns uint8 (typically 18; USDC/USDT use 6)
 
 ### Events
+
 - `Transfer(address indexed from, address indexed to, uint256 value)` - Emitted on transfer and transferFrom
 - `Approval(address indexed owner, address indexed spender, uint256 value)` - Emitted on approve
 
 ## Notes
+
 - Standard interface (EIP-20) - not a specific deployment, no fixed addresses
 - Every fungible token on every EVM chain implements this interface
 - approve before transferFrom: spender must be approved by the owner first

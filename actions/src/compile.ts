@@ -8,11 +8,11 @@
  * reason this is 30 lines rather than a copy of `sdk/src/routes/rs-compile.ts`.
  */
 
-import { createRequire } from 'node:module';
+import { createRequire } from "node:module";
 
-import type { CompileOptions, CompileResult } from 'sauce-compiler';
+import type { CompileOptions, CompileResult } from "sauce-compiler";
 
-const ENTRY = 'main.js';
+const ENTRY = "main.js";
 
 let compileFn: ((options: CompileOptions) => CompileResult) | undefined;
 
@@ -24,10 +24,10 @@ function load(): (options: CompileOptions) => CompileResult {
   // resolves that sibling. Mirrors `sdk/src/routes/rs-compile.ts`.
   let mod: { compile: (options: CompileOptions) => CompileResult };
   try {
-    mod = createRequire(import.meta.url)('sauce-compiler') as typeof mod;
+    mod = createRequire(import.meta.url)("sauce-compiler") as typeof mod;
   } catch (cause) {
     throw new Error(
-      'the SauceScript compiler (`sauce-compiler` -> the published @eco-incorp/sauce-compiler) failed to load.',
+      "the SauceScript compiler (`sauce-compiler` -> the published @eco-incorp/sauce-compiler) failed to load.",
       { cause },
     );
   }
@@ -38,10 +38,10 @@ function load(): (options: CompileOptions) => CompileResult {
 
 /** Compiles a generated SauceScript program for the EVM. */
 export function compileEvm(source: string): Uint8Array {
-  const bytes = Buffer.from(source, 'utf8');
+  const bytes = Buffer.from(source, "utf8");
 
   return load()({
-    target: 'evm',
+    target: "evm",
     entry: ENTRY,
     resolve: (path) => (path === ENTRY ? bytes : undefined),
   }).bytecode;

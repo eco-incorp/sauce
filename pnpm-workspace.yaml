@@ -1,4 +1,4 @@
 packages:
-  - 'dev-tools'
-  - 'sdk'
-  - 'actions'
+  - "dev-tools"
+  - "sdk"
+  - "actions"

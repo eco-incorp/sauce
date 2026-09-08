@@ -38,7 +38,8 @@ export function cctpSplitSource(): string {
 }
 /** The `plain-transfer.sauce.ts` program text — read once and cached. */
 export function plainTransferSource(): string {
-  if (plainTransferCache === null) plainTransferCache = readFileSync(PLAIN_TRANSFER_SOURCE_PATH, "utf-8");
+  if (plainTransferCache === null)
+    plainTransferCache = readFileSync(PLAIN_TRANSFER_SOURCE_PATH, "utf-8");
   return plainTransferCache;
 }
 
@@ -94,7 +95,8 @@ function common(params: CctpTransferParams) {
 export function buildCctpSplitTransfer(params: CctpTransferParams): BuiltIntent {
   const dest = requireChain(params.to);
   const destDomain = CCTP_DOMAIN[dest.slug];
-  if (destDomain === undefined) throw new Error(`cctp-transfer: no CCTP domain registered for destination '${dest.slug}'`);
+  if (destDomain === undefined)
+    throw new Error(`cctp-transfer: no CCTP domain registered for destination '${dest.slug}'`);
   if (params.amount <= 0n || params.perMessageLimit <= 0n) {
     throw new Error("cctp-transfer: amount and perMessageLimit must be > 0");
   }

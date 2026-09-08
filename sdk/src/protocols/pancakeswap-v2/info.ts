@@ -4,7 +4,8 @@ import { deployments } from "./addresses.js";
 export const protocolInfo: ProtocolInfo = {
   name: "PancakeSwap V2",
   slug: "pancakeswap-v2",
-  description: "The most popular DEX on BNB Chain using the constant product AMM model. Forked from Uniswap V2 with additional features like yield farming and lottery.",
+  description:
+    "The most popular DEX on BNB Chain using the constant product AMM model. Forked from Uniswap V2 with additional features like yield farming and lottery.",
   website: "https://pancakeswap.finance",
   github: "https://github.com/pancakeswap/pancake-smart-contracts",
   npm: "@pancakeswap/v2-sdk",

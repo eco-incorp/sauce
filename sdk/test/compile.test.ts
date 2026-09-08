@@ -6,13 +6,13 @@
  * selector bytes it must contain.
  */
 
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { readdirSync, existsSync, readFileSync } from 'fs';
-import { compileSauceFunctionRust, computeSelector, extractSelectors } from './helpers';
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+import { readdirSync, existsSync, readFileSync } from "fs";
+import { compileSauceFunctionRust, computeSelector, extractSelectors } from "./helpers";
 
-const SDK_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PROTOCOLS_DIR = join(SDK_ROOT, 'src', 'protocols');
+const SDK_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const PROTOCOLS_DIR = join(SDK_ROOT, "src", "protocols");
 
 // ---------------------------------------------------------------------------
 // Helpers for discovering protocol functions
@@ -30,7 +30,7 @@ interface ProtocolFunction {
  *   export const supply = `...SauceScript...`;
  */
 function extractFunctionsFromFile(filePath: string): Record<string, string> {
-  const source = readFileSync(filePath, 'utf-8');
+  const source = readFileSync(filePath, "utf-8");
   const functions: Record<string, string> = {};
 
   // Match: export const NAME = `...`;
@@ -43,8 +43,11 @@ function extractFunctionsFromFile(filePath: string): Record<string, string> {
     // Find the closing backtick (handle escaped backticks)
     let i = contentStart;
     while (i < source.length) {
-      if (source[i] === '\\') { i += 2; continue; }
-      if (source[i] === '`') break;
+      if (source[i] === "\\") {
+        i += 2;
+        continue;
+      }
+      if (source[i] === "`") break;
       i++;
     }
     if (i < source.length) {
@@ -61,12 +64,12 @@ function extractFunctionsFromFile(filePath: string): Record<string, string> {
 function discoverAllProtocolFunctions(): ProtocolFunction[] {
   const allFunctions: ProtocolFunction[] = [];
   const protocolDirs = readdirSync(PROTOCOLS_DIR, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-    .map(d => d.name)
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
     .sort();
 
   for (const slug of protocolDirs) {
-    const functionsPath = join(PROTOCOLS_DIR, slug, 'functions.ts');
+    const functionsPath = join(PROTOCOLS_DIR, slug, "functions.ts");
     if (!existsSync(functionsPath)) continue;
 
     const functions = extractFunctionsFromFile(functionsPath);
@@ -82,7 +85,7 @@ function discoverAllProtocolFunctions(): ProtocolFunction[] {
 // 1. SauceScript Compilation Tests
 // ---------------------------------------------------------------------------
 
-describe('SauceScript compilation', () => {
+describe("SauceScript compilation", () => {
   const allFunctions = discoverAllProtocolFunctions();
 
   // Group by protocol for organized output
@@ -93,7 +96,7 @@ describe('SauceScript compilation', () => {
     byProtocol.set(fn.protocolSlug, existing);
   }
 
-  it('discovers functions from all protocols', () => {
+  it("discovers functions from all protocols", () => {
     expect(byProtocol.size).toBeGreaterThanOrEqual(100);
     expect(allFunctions.length).toBeGreaterThanOrEqual(200);
   });
@@ -104,7 +107,9 @@ describe('SauceScript compilation', () => {
         it(`${fn.functionName} compiles successfully`, () => {
           const protocolDir = join(PROTOCOLS_DIR, slug);
 
-          expect(compileSauceFunctionRust(fn.sauceScript, protocolDir).bytecode.length).toBeGreaterThan(0);
+          expect(
+            compileSauceFunctionRust(fn.sauceScript, protocolDir).bytecode.length,
+          ).toBeGreaterThan(0);
         });
       }
     });
@@ -115,65 +120,65 @@ describe('SauceScript compilation', () => {
 // 2. Tier 1 Selector Verification
 // ---------------------------------------------------------------------------
 
-describe('Tier 1 selector verification', () => {
-  describe('Uniswap V3', () => {
-    it('swap contains exactInputSingle selector', () => {
-      const protocolDir = join(PROTOCOLS_DIR, 'uniswap-v3');
-      const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
+describe("Tier 1 selector verification", () => {
+  describe("Uniswap V3", () => {
+    it("swap contains exactInputSingle selector", () => {
+      const protocolDir = join(PROTOCOLS_DIR, "uniswap-v3");
+      const functions = extractFunctionsFromFile(join(protocolDir, "functions.ts"));
       const result = compileSauceFunctionRust(functions.swap, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       // ABI uses uint32 (widened from Solidity's uint24 for compiler compatibility)
       const expectedSelector = computeSelector(
-        'exactInputSingle((address,address,uint32,address,uint256,uint256,uint256,uint160))'
+        "exactInputSingle((address,address,uint32,address,uint256,uint256,uint256,uint160))",
       );
       expect(selectors).toContain(expectedSelector);
     });
   });
 
-  describe('Aave V3', () => {
-    it('supply contains supply selector', () => {
-      const protocolDir = join(PROTOCOLS_DIR, 'aave-v3');
-      const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
+  describe("Aave V3", () => {
+    it("supply contains supply selector", () => {
+      const protocolDir = join(PROTOCOLS_DIR, "aave-v3");
+      const functions = extractFunctionsFromFile(join(protocolDir, "functions.ts"));
       const result = compileSauceFunctionRust(functions.supply, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
-      const expectedSelector = computeSelector('supply(address,uint256,address,uint16)');
+      const expectedSelector = computeSelector("supply(address,uint256,address,uint16)");
       expect(selectors).toContain(expectedSelector);
     });
 
-    it('borrow contains borrow selector', () => {
-      const protocolDir = join(PROTOCOLS_DIR, 'aave-v3');
-      const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
+    it("borrow contains borrow selector", () => {
+      const protocolDir = join(PROTOCOLS_DIR, "aave-v3");
+      const functions = extractFunctionsFromFile(join(protocolDir, "functions.ts"));
       const result = compileSauceFunctionRust(functions.borrow, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
-      const expectedSelector = computeSelector('borrow(address,uint256,uint256,uint16,address)');
+      const expectedSelector = computeSelector("borrow(address,uint256,uint256,uint16,address)");
       expect(selectors).toContain(expectedSelector);
     });
   });
 
-  describe('Lido', () => {
-    it('submit contains submit selector', () => {
-      const protocolDir = join(PROTOCOLS_DIR, 'lido');
-      const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
+  describe("Lido", () => {
+    it("submit contains submit selector", () => {
+      const protocolDir = join(PROTOCOLS_DIR, "lido");
+      const functions = extractFunctionsFromFile(join(protocolDir, "functions.ts"));
       const result = compileSauceFunctionRust(functions.submit, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
-      const expectedSelector = computeSelector('submit(address)');
+      const expectedSelector = computeSelector("submit(address)");
       expect(selectors).toContain(expectedSelector);
     });
   });
 
-  describe('Uniswap V2', () => {
-    it('swap contains swapExactTokensForTokens selector', () => {
-      const protocolDir = join(PROTOCOLS_DIR, 'uniswap-v2');
-      const functions = extractFunctionsFromFile(join(protocolDir, 'functions.ts'));
+  describe("Uniswap V2", () => {
+    it("swap contains swapExactTokensForTokens selector", () => {
+      const protocolDir = join(PROTOCOLS_DIR, "uniswap-v2");
+      const functions = extractFunctionsFromFile(join(protocolDir, "functions.ts"));
       const result = compileSauceFunctionRust(functions.swap, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
       const expectedSelector = computeSelector(
-        'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)'
+        "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
       );
       expect(selectors).toContain(expectedSelector);
     });
@@ -184,17 +189,19 @@ describe('Tier 1 selector verification', () => {
 // 3. Registry Functions
 // ---------------------------------------------------------------------------
 
-describe('protocol registry', () => {
-  // Dynamic import since the registry uses .js extensions in imports
-  let protocols: Record<string, any>;
-  let getProtocol: Function;
-  let listProtocols: Function;
-  let getProtocolsByCategory: Function;
-  let getProtocolsByChain: Function;
-  let listProtocolSlugs: Function;
+describe("protocol registry", () => {
+  // Dynamic import since the registry uses .js extensions in imports. `typeof import(...)` gives
+  // each binding the module's OWN type, so these are checked rather than being `Function`/`any`.
+  type Registry = typeof import("../src/protocols/index.js");
+  let protocols: Registry["protocols"];
+  let getProtocol: Registry["getProtocol"];
+  let listProtocols: Registry["listProtocols"];
+  let getProtocolsByCategory: Registry["getProtocolsByCategory"];
+  let getProtocolsByChain: Registry["getProtocolsByChain"];
+  let listProtocolSlugs: Registry["listProtocolSlugs"];
 
   beforeAll(async () => {
-    const mod = await import('../src/protocols/index.js');
+    const mod = await import("../src/protocols/index.js");
     protocols = mod.protocols;
     getProtocol = mod.getProtocol;
     listProtocols = mod.listProtocols;
@@ -203,74 +210,74 @@ describe('protocol registry', () => {
     listProtocolSlugs = mod.listProtocolSlugs;
   });
 
-  it('getProtocol returns valid ProtocolInfo for uniswap-v3', () => {
-    const info = getProtocol('uniswap-v3');
-    expect(info).toBeDefined();
-    expect(info.name).toBe('Uniswap V3');
-    expect(info.slug).toBe('uniswap-v3');
-    expect(info.category).toBe('dex');
+  it("getProtocol returns valid ProtocolInfo for uniswap-v3", () => {
+    const info = getProtocol("uniswap-v3");
+    if (info === undefined) throw new Error("uniswap-v3 must be in the registry");
+    expect(info.name).toBe("Uniswap V3");
+    expect(info.slug).toBe("uniswap-v3");
+    expect(info.category).toBe("dex");
     expect(info.website).toBeTruthy();
     expect(info.chains.length).toBeGreaterThan(0);
   });
 
-  it('getProtocol returns valid ProtocolInfo for aave-v3', () => {
-    const info = getProtocol('aave-v3');
-    expect(info).toBeDefined();
-    expect(info.name).toBe('Aave V3');
-    expect(info.slug).toBe('aave-v3');
-    expect(info.category).toBe('lending');
+  it("getProtocol returns valid ProtocolInfo for aave-v3", () => {
+    const info = getProtocol("aave-v3");
+    if (info === undefined) throw new Error("aave-v3 must be in the registry");
+    expect(info.name).toBe("Aave V3");
+    expect(info.slug).toBe("aave-v3");
+    expect(info.category).toBe("lending");
   });
 
-  it('getProtocol returns undefined for nonexistent protocol', () => {
-    expect(getProtocol('nonexistent-protocol')).toBeUndefined();
+  it("getProtocol returns undefined for nonexistent protocol", () => {
+    expect(getProtocol("nonexistent-protocol")).toBeUndefined();
   });
 
-  it('listProtocols returns 114 protocols', () => {
+  it("listProtocols returns 114 protocols", () => {
     const all = listProtocols();
     expect(all.length).toBeGreaterThanOrEqual(114);
   });
 
-  it('listProtocolSlugs returns all slugs', () => {
+  it("listProtocolSlugs returns all slugs", () => {
     const slugs = listProtocolSlugs();
     expect(slugs.length).toBeGreaterThanOrEqual(114);
-    expect(slugs).toContain('uniswap-v3');
-    expect(slugs).toContain('aave-v3');
-    expect(slugs).toContain('lido');
+    expect(slugs).toContain("uniswap-v3");
+    expect(slugs).toContain("aave-v3");
+    expect(slugs).toContain("lido");
   });
 
-  it('getProtocolsByCategory returns only DEX protocols', () => {
-    const dexProtocols = getProtocolsByCategory('dex');
+  it("getProtocolsByCategory returns only DEX protocols", () => {
+    const dexProtocols = getProtocolsByCategory("dex");
     expect(dexProtocols.length).toBeGreaterThan(10);
     for (const p of dexProtocols) {
-      expect(p.category).toBe('dex');
+      expect(p.category).toBe("dex");
     }
   });
 
-  it('getProtocolsByCategory returns only lending protocols', () => {
-    const lendingProtocols = getProtocolsByCategory('lending');
+  it("getProtocolsByCategory returns only lending protocols", () => {
+    const lendingProtocols = getProtocolsByCategory("lending");
     expect(lendingProtocols.length).toBeGreaterThan(5);
     for (const p of lendingProtocols) {
-      expect(p.category).toBe('lending');
+      expect(p.category).toBe("lending");
     }
   });
 
-  it('getProtocolsByChain returns Ethereum protocols', () => {
+  it("getProtocolsByChain returns Ethereum protocols", () => {
     const ethProtocols = getProtocolsByChain(1);
     expect(ethProtocols.length).toBeGreaterThan(20);
     for (const p of ethProtocols) {
-      expect(p.chains.some((c: any) => c.chainId === 1)).toBe(true);
+      expect(p.chains.some((c) => c.chainId === 1)).toBe(true);
     }
   });
 
-  it('getProtocolsByChain returns Arbitrum protocols', () => {
+  it("getProtocolsByChain returns Arbitrum protocols", () => {
     const arbProtocols = getProtocolsByChain(42161);
     expect(arbProtocols.length).toBeGreaterThan(5);
     for (const p of arbProtocols) {
-      expect(p.chains.some((c: any) => c.chainId === 42161)).toBe(true);
+      expect(p.chains.some((c) => c.chainId === 42161)).toBe(true);
     }
   });
 
-  it('every protocol in registry has valid shape', () => {
+  it("every protocol in registry has valid shape", () => {
     for (const [slug, info] of Object.entries(protocols)) {
       expect(info.name).toBeTruthy();
       expect(info.slug).toBe(slug);
@@ -278,7 +285,7 @@ describe('protocol registry', () => {
       expect(info.website).toBeTruthy();
       expect(info.category).toBeTruthy();
       expect(Array.isArray(info.chains)).toBe(true);
-      expect(typeof info.audited).toBe('boolean');
+      expect(typeof info.audited).toBe("boolean");
     }
   });
 });
@@ -287,17 +294,17 @@ describe('protocol registry', () => {
 // 4. Module Structure Consistency
 // ---------------------------------------------------------------------------
 
-describe('module structure', () => {
+describe("module structure", () => {
   const protocolDirs = readdirSync(PROTOCOLS_DIR, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-    .map(d => d.name)
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
     .sort();
 
-  it('has 114 protocol directories', () => {
+  it("has 114 protocol directories", () => {
     expect(protocolDirs.length).toBeGreaterThanOrEqual(114);
   });
 
-  const requiredFiles = ['info.ts', 'addresses.ts', 'abis.ts', 'functions.ts', 'index.ts'];
+  const requiredFiles = ["info.ts", "addresses.ts", "abis.ts", "functions.ts", "index.ts"];
 
   for (const slug of protocolDirs) {
     describe(slug, () => {
@@ -308,28 +315,28 @@ describe('module structure', () => {
         });
       }
 
-      it('info.ts exports protocolInfo', () => {
-        const infoPath = join(PROTOCOLS_DIR, slug, 'info.ts');
-        const source = readFileSync(infoPath, 'utf-8');
-        expect(source).toContain('export const protocolInfo');
+      it("info.ts exports protocolInfo", () => {
+        const infoPath = join(PROTOCOLS_DIR, slug, "info.ts");
+        const source = readFileSync(infoPath, "utf-8");
+        expect(source).toContain("export const protocolInfo");
       });
 
-      it('addresses.ts exports deployments', () => {
-        const addrPath = join(PROTOCOLS_DIR, slug, 'addresses.ts');
-        const source = readFileSync(addrPath, 'utf-8');
-        expect(source).toContain('export const deployments');
+      it("addresses.ts exports deployments", () => {
+        const addrPath = join(PROTOCOLS_DIR, slug, "addresses.ts");
+        const source = readFileSync(addrPath, "utf-8");
+        expect(source).toContain("export const deployments");
       });
 
-      it('functions.ts has at least one exported function', () => {
-        const funcPath = join(PROTOCOLS_DIR, slug, 'functions.ts');
+      it("functions.ts has at least one exported function", () => {
+        const funcPath = join(PROTOCOLS_DIR, slug, "functions.ts");
         const functions = extractFunctionsFromFile(funcPath);
         expect(Object.keys(functions).length).toBeGreaterThanOrEqual(1);
       });
 
-      it('abis.ts has at least one export', () => {
-        const abisPath = join(PROTOCOLS_DIR, slug, 'abis.ts');
-        const source = readFileSync(abisPath, 'utf-8');
-        expect(source).toContain('export const');
+      it("abis.ts has at least one export", () => {
+        const abisPath = join(PROTOCOLS_DIR, slug, "abis.ts");
+        const source = readFileSync(abisPath, "utf-8");
+        expect(source).toContain("export const");
       });
     });
   }

@@ -88,24 +88,24 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'quantum';
+const SLUG = "quantum";
 
-export const QUANTUM_PROGRAM_ID = address('QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv');
+export const QUANTUM_PROGRAM_ID = address("QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv");
 /**
  * The program's single global config account (one for every pool). Lived in
  * this venue's ladder module until the merge-decomposition ladders moved out;
  * it is a program address, not decomposition state, so it stays here.
  */
-export const QUANTUM_GLOBAL = address('3JumrbigQRj9TqEuy5fKGPHsQ6zCTwqqfVGhFhyoEMqH');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const QUANTUM_GLOBAL = address("3JumrbigQRj9TqEuy5fKGPHsQ6zCTwqqfVGhFhyoEMqH");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** Exact pool account size (all 27 live mainnet pools). */
 export const QUANTUM_POOL_SIZE = 2280;
@@ -157,7 +157,7 @@ export interface QuantumWindow {
 export interface QuantumPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'zeroIn' sells token0 for token1 (side1@928); 'oneIn' is the reverse (side0@144). */
-  direction: 'zeroIn' | 'oneIn';
+  direction: "zeroIn" | "oneIn";
   mint0: Address;
   mint1: Address;
   vault0: Address;
@@ -169,28 +169,28 @@ export interface QuantumPoolConfig extends PoolConfig {
 }
 
 /** Side-struct base offset for a direction (zeroIn reads side1, oneIn reads side0). */
-export function quantumSideBase(direction: 'zeroIn' | 'oneIn'): number {
-  return direction === 'zeroIn' ? OFF_SIDE1 : OFF_SIDE0;
+export function quantumSideBase(direction: "zeroIn" | "oneIn"): number {
+  return direction === "zeroIn" ? OFF_SIDE1 : OFF_SIDE0;
 }
 
 /** 10^decimals of the direction's OUTPUT token. */
 export function quantumOutScale(cfg: QuantumPoolConfig): bigint {
-  return 10n ** BigInt(cfg.direction === 'zeroIn' ? cfg.dec1 : cfg.dec0);
+  return 10n ** BigInt(cfg.direction === "zeroIn" ? cfg.dec1 : cfg.dec0);
 }
 
 /** The direction's output vault (whose live balance is the hard out cap). */
 export function quantumOutVault(cfg: QuantumPoolConfig): Address {
-  return cfg.direction === 'zeroIn' ? cfg.vault1 : cfg.vault0;
+  return cfg.direction === "zeroIn" ? cfg.vault1 : cfg.vault0;
 }
 
 /** The direction's input vault (the swap CPI's transfer destination). */
 export function quantumInVault(cfg: QuantumPoolConfig): Address {
-  return cfg.direction === 'zeroIn' ? cfg.vault0 : cfg.vault1;
+  return cfg.direction === "zeroIn" ? cfg.vault0 : cfg.vault1;
 }
 
 /** Cached out-reserve offset for the direction (the second half of the out cap). */
 export function quantumOutReserveOffset(cfg: QuantumPoolConfig): number {
-  return cfg.direction === 'zeroIn' ? OFF_RESERVE1 : OFF_RESERVE0;
+  return cfg.direction === "zeroIn" ? OFF_RESERVE1 : OFF_RESERVE0;
 }
 
 const levelPrice = (data: Uint8Array, side: number, i: number): bigint =>
@@ -216,7 +216,8 @@ function resolveWindow(data: Uint8Array, side: number, count: number): QuantumWi
   }
   // Trailing cum == 0 levels contribute nothing; drop them so an all-no-op
   // prefix reports as empty (the orchestrator's "no shippable level" gate).
-  while (levels.length > 0 && levelCum(data, side, levels[levels.length - 1].index) === 0n) levels.pop();
+  while (levels.length > 0 && levelCum(data, side, levels[levels.length - 1].index) === 0n)
+    levels.pop();
   return { levels };
 }
 
@@ -224,11 +225,16 @@ function resolveWindow(data: Uint8Array, side: number, count: number): QuantumWi
  * Fetch + gate one Quantum pool and freeze both directions' walkable level
  * prefixes. Read-only against the loader.
  */
-export async function fetchQuantumConfig(load: AccountLoader, pool: Address): Promise<QuantumPoolConfig> {
+export async function fetchQuantumConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<QuantumPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== QUANTUM_POOL_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected ${QUANTUM_POOL_SIZE}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected ${QUANTUM_POOL_SIZE}`,
+    );
   }
   const codec = getAddressCodec();
   const mint0 = codec.decode(data.subarray(OFF_MINT0, OFF_MINT0 + 32));
@@ -247,21 +253,27 @@ export async function fetchQuantumConfig(load: AccountLoader, pool: Address): Pr
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
   const levelCount = data[OFF_LEVEL_COUNT];
   if (levelCount === 0 || levelCount > QUANTUM_LEVEL_SLOTS) {
-    throw new Error(`${SLUG}: pool ${pool} declares ${levelCount} levels (expected 1..${QUANTUM_LEVEL_SLOTS})`);
+    throw new Error(
+      `${SLUG}: pool ${pool} declares ${levelCount} levels (expected 1..${QUANTUM_LEVEL_SLOTS})`,
+    );
   }
   return {
     venue: SLUG,
     pool,
-    direction: 'zeroIn',
+    direction: "zeroIn",
     mint0,
     mint1,
     vault0: codec.decode(data.subarray(OFF_VAULT0, OFF_VAULT0 + 32)),

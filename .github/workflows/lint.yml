@@ -1,0 +1,40 @@
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Format & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-private-deps
+        with:
+          token: ${{ secrets.ECO_INCORP_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The WHOLE repo, not a changed-file subset: the commit before this one formatted every file
+      # and cleared every lint error, so there is no backlog left to grandfather. That is what lets
+      # this be four plain lines — an earlier draft carried a `git diff --merge-base` scope, which
+      # is only worth its complexity while a backlog exists.
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint

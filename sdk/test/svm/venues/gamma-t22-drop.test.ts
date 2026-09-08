@@ -12,18 +12,23 @@
  *     consuming-app follow-up — see the venue's TODO(t22-fee-netting));
  *   - a NonTransferable (blocking) extension self-drops.
  */
-import { getAddressCodec, getAddressDecoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { fetchGammaPoolConfig } from '../../../src/svm/venues/gamma/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeLegacyMint, makeT22Mint, tlvEntry, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { getAddressCodec, getAddressDecoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { fetchGammaPoolConfig } from "../../../src/svm/venues/gamma/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import {
+  makeLegacyMint,
+  makeT22Mint,
+  tlvEntry,
+  NON_TRANSFERABLE_TLV,
+} from "../fixtures/token-2022/synth.js";
 
 const codec = getAddressCodec();
 const decoder = getAddressDecoder();
 
-const TOKENKEG = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
-const TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb' as Address;
-const CLOCK = 'SysvarC1ock11111111111111111111111111111111' as Address;
+const TOKENKEG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address;
+const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" as Address;
+const CLOCK = "SysvarC1ock11111111111111111111111111111111" as Address;
 
 const pk = (seed: number): Address =>
   decoder.decode(Uint8Array.from({ length: 32 }, (_, i) => ((i * seed + seed) % 250) + 1));
@@ -110,23 +115,29 @@ function loaderWith(o: Opts): AccountLoader {
   return (async (a: string) => map[a] ?? null) as unknown as AccountLoader;
 }
 
-describe('gamma Token-2022 handling', () => {
-  it('resolves a plain legacy pool (control — legacy path unchanged)', async () => {
-    const cfg = await fetchGammaPoolConfig(loaderWith({ mint0: makeLegacyMint(), p0: TOKENKEG }), POOL);
-    expect(cfg.venue).toBe('gamma');
+describe("gamma Token-2022 handling", () => {
+  it("resolves a plain legacy pool (control — legacy path unchanged)", async () => {
+    const cfg = await fetchGammaPoolConfig(
+      loaderWith({ mint0: makeLegacyMint(), p0: TOKENKEG }),
+      POOL,
+    );
+    expect(cfg.venue).toBe("gamma");
     expect(cfg.token0Program).toBe(TOKENKEG);
     expect(cfg.token1Program).toBe(TOKENKEG);
     expect(cfg.token0Mint).toBe(MINT0);
     expect(cfg.token1Mint).toBe(MINT1);
   });
 
-  it('ROUTES a zero-fee Token-2022 mint (not dropped)', async () => {
-    const cfg = await fetchGammaPoolConfig(loaderWith({ mint0: makeT22Mint(), p0: TOKEN_2022 }), POOL);
+  it("ROUTES a zero-fee Token-2022 mint (not dropped)", async () => {
+    const cfg = await fetchGammaPoolConfig(
+      loaderWith({ mint0: makeT22Mint(), p0: TOKEN_2022 }),
+      POOL,
+    );
     expect(cfg.token0Program).toBe(TOKEN_2022);
     expect(cfg.token1Program).toBe(TOKENKEG); // opposite side stays legacy
   });
 
-  it('ROUTES a Token-2022 mint whose TransferFeeConfig is effectively 0 bps', async () => {
+  it("ROUTES a Token-2022 mint whose TransferFeeConfig is effectively 0 bps", async () => {
     const cfg = await fetchGammaPoolConfig(
       loaderWith({ mint0: makeT22Mint(feeTlv(0)), p0: TOKEN_2022, epoch: 100n }),
       POOL,
@@ -134,15 +145,21 @@ describe('gamma Token-2022 handling', () => {
     expect(cfg.token0Program).toBe(TOKEN_2022);
   });
 
-  it('SELF-DROPS a Token-2022 mint with a NONZERO active transfer fee', async () => {
+  it("SELF-DROPS a Token-2022 mint with a NONZERO active transfer fee", async () => {
     await expect(
-      fetchGammaPoolConfig(loaderWith({ mint0: makeT22Mint(feeTlv(100)), p0: TOKEN_2022, epoch: 100n }), POOL),
+      fetchGammaPoolConfig(
+        loaderWith({ mint0: makeT22Mint(feeTlv(100)), p0: TOKEN_2022, epoch: 100n }),
+        POOL,
+      ),
     ).rejects.toThrow(/ACTIVE 100bps token-2022 transfer fee/);
   });
 
-  it('SELF-DROPS a NonTransferable (blocking) Token-2022 mint', async () => {
+  it("SELF-DROPS a NonTransferable (blocking) Token-2022 mint", async () => {
     await expect(
-      fetchGammaPoolConfig(loaderWith({ mint0: makeT22Mint(NON_TRANSFERABLE_TLV), p0: TOKEN_2022 }), POOL),
+      fetchGammaPoolConfig(
+        loaderWith({ mint0: makeT22Mint(NON_TRANSFERABLE_TLV), p0: TOKEN_2022 }),
+        POOL,
+      ),
     ).rejects.toThrow(/un-routable/);
   });
 });

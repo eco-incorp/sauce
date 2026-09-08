@@ -94,10 +94,10 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig } from '../types.js';
+ */
+import { getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
 const POOL_SIZE_V1 = 417;
 const POOL_SIZE_V2 = 514;
@@ -140,7 +140,7 @@ export interface BonkswapForkPoolConfig extends PoolConfig {
   projectFee: bigint;
   mercantiFee: bigint;
   /** 'xToY' (default, tokenX in) | 'yToX'. */
-  direction: 'xToY' | 'yToX';
+  direction: "xToY" | "yToX";
 }
 
 function forkConfig(slug: string, base: PoolConfig): BonkswapForkPoolConfig {
@@ -166,12 +166,17 @@ export function makeBonkswapForkAdapter(slug: string, programId: Address): Bonks
       const data = await load(pool);
       if (data === null) throw new Error(`${slug} pool ${pool} not found`);
       if (data.length !== POOL_SIZE_V1 && data.length !== POOL_SIZE_V2) {
-        throw new Error(`${slug} pool ${pool} data is ${data.length} bytes, expected ${POOL_SIZE_V1} (Pool) or ${POOL_SIZE_V2} (PoolV2)`);
+        throw new Error(
+          `${slug} pool ${pool} data is ${data.length} bytes, expected ${POOL_SIZE_V1} (Pool) or ${POOL_SIZE_V2} (PoolV2)`,
+        );
       }
-      const expectedDisc = data.length === POOL_SIZE_V1 ? POOL_DISCRIMINATOR : POOL_V2_DISCRIMINATOR;
+      const expectedDisc =
+        data.length === POOL_SIZE_V1 ? POOL_DISCRIMINATOR : POOL_V2_DISCRIMINATOR;
       for (let i = 0; i < 8; i++) {
         if (data[i] !== expectedDisc[i]) {
-          throw new Error(`${slug} pool ${pool} has a wrong discriminator for its ${data.length}-byte size`);
+          throw new Error(
+            `${slug} pool ${pool} has a wrong discriminator for its ${data.length}-byte size`,
+          );
         }
       }
 
@@ -181,26 +186,34 @@ export function makeBonkswapForkAdapter(slug: string, programId: Address): Bonks
       const tokenXReserve = readUintLE(data, OFF_TOKEN_X_RESERVE, 8);
       const tokenYReserve = readUintLE(data, OFF_TOKEN_Y_RESERVE, 8);
       if (tokenXReserve === 0n || tokenYReserve === 0n) {
-        throw new Error(`${slug} pool ${pool} has an empty reserve (X=${tokenXReserve}, Y=${tokenYReserve})`);
+        throw new Error(
+          `${slug} pool ${pool} has an empty reserve (X=${tokenXReserve}, Y=${tokenYReserve})`,
+        );
       }
 
       const constKLo = readUintLE(data, OFF_CONST_K, 8);
       const constKHi = readUintLE(data, OFF_CONST_K + 8, 8);
-      if (constKHi === 0n && constKLo === 0n) throw new Error(`${slug} pool ${pool} has a zero constK`);
+      if (constKHi === 0n && constKLo === 0n)
+        throw new Error(`${slug} pool ${pool} has a zero constK`);
 
       const feeAt = (offset: number, name: string): bigint => {
         const lo = readUintLE(data, offset, 8);
         const hi = readUintLE(data, offset + 8, 8);
-        if (hi !== 0n) throw new Error(`${slug} pool ${pool} ${name} exceeds a u64 (hi word ${hi} nonzero) — refusing to truncate`);
+        if (hi !== 0n)
+          throw new Error(
+            `${slug} pool ${pool} ${name} exceeds a u64 (hi word ${hi} nonzero) — refusing to truncate`,
+          );
         return lo;
       };
-      const lpFee = feeAt(OFF_LP_FEE, 'lpFee');
-      const buybackFee = feeAt(OFF_BUYBACK_FEE, 'buybackFee');
-      const projectFee = feeAt(OFF_PROJECT_FEE, 'projectFee');
-      const mercantiFee = feeAt(OFF_MERCANTI_FEE, 'mercantiFee');
+      const lpFee = feeAt(OFF_LP_FEE, "lpFee");
+      const buybackFee = feeAt(OFF_BUYBACK_FEE, "buybackFee");
+      const projectFee = feeAt(OFF_PROJECT_FEE, "projectFee");
+      const mercantiFee = feeAt(OFF_MERCANTI_FEE, "mercantiFee");
       const totalFee = lpFee + buybackFee + projectFee + mercantiFee;
       if (totalFee > FEE_DENOMINATOR) {
-        throw new Error(`${slug} pool ${pool} total fee ${totalFee} exceeds 100% (${FEE_DENOMINATOR})`);
+        throw new Error(
+          `${slug} pool ${pool} total fee ${totalFee} exceeds 100% (${FEE_DENOMINATOR})`,
+        );
       }
 
       return {
@@ -216,7 +229,7 @@ export function makeBonkswapForkAdapter(slug: string, programId: Address): Bonks
         buybackFee,
         projectFee,
         mercantiFee,
-        direction: 'xToY',
+        direction: "xToY",
       };
     },
   };
@@ -225,17 +238,17 @@ export function makeBonkswapForkAdapter(slug: string, programId: Address): Bonks
 export { forkConfig as bonkswapForkConfig, readUintLE as bonkswapReadUintLE };
 
 /** Bonkswap — the original deployment. */
-export const BONKSWAP_PROGRAM_ID = 'BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p' as Address;
+export const BONKSWAP_PROGRAM_ID = "BSwp6bEBihVLdqJRKGgzjcGLHkcTuzmSo1TQkHepzH8p" as Address;
 /** Bonkswap's `state` PDA (seed "bonkswapstatev1") — verified via getProgramDerivedAddress and matches a real swap tx's account #0. */
-export const BONKSWAP_STATE = '2QWN6WjrJ3RAk51ecxLxaLPfFCYLAnmWJwJ1oKA92CRD' as Address;
+export const BONKSWAP_STATE = "2QWN6WjrJ3RAk51ecxLxaLPfFCYLAnmWJwJ1oKA92CRD" as Address;
 /** Bonkswap's vault-owning authority PDA (State.programAuthority) — matches every pool's vault SPL-token `owner` field. */
-export const BONKSWAP_PROGRAM_AUTHORITY = '8NyaPDJeC2eaBGpkRpZKnD9S448AZGgjSvumFe92DRK2' as Address;
-export const bonkswap = makeBonkswapForkAdapter('bonkswap', BONKSWAP_PROGRAM_ID);
+export const BONKSWAP_PROGRAM_AUTHORITY = "8NyaPDJeC2eaBGpkRpZKnD9S448AZGgjSvumFe92DRK2" as Address;
+export const bonkswap = makeBonkswapForkAdapter("bonkswap", BONKSWAP_PROGRAM_ID);
 
 /** Guacswap — a whitelabel fork (see module header). */
-export const GUACSWAP_PROGRAM_ID = 'Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1' as Address;
+export const GUACSWAP_PROGRAM_ID = "Gswppe6ERWKpUTXvRPfXdzHhiCyJvLadVvXGfdpBqcE1" as Address;
 /** Guacswap's `state` PDA (seed "guacswapstatev1"). */
-export const GUACSWAP_STATE = 'EzV4QKycvp4EDuAoTGjyY9HUS9Zn15vcmHkHJdNKHCnY' as Address;
+export const GUACSWAP_STATE = "EzV4QKycvp4EDuAoTGjyY9HUS9Zn15vcmHkHJdNKHCnY" as Address;
 /** Guacswap's vault-owning authority PDA. */
-export const GUACSWAP_PROGRAM_AUTHORITY = 'FRwL3qJHuT5iYTNopCyhU1tyDn1HwtHbSa1ieYF6q2m9' as Address;
-export const guacswap = makeBonkswapForkAdapter('guacswap', GUACSWAP_PROGRAM_ID);
+export const GUACSWAP_PROGRAM_AUTHORITY = "FRwL3qJHuT5iYTNopCyhU1tyDn1HwtHbSa1ieYF6q2m9" as Address;
+export const guacswap = makeBonkswapForkAdapter("guacswap", GUACSWAP_PROGRAM_ID);

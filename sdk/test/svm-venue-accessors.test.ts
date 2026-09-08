@@ -81,8 +81,12 @@ describe("svm venue accessors: delegation identity on a real fixture (meteora-da
     const cfg = await meteoraDammV2.fetchPoolConfig(loader, POOL);
 
     expect(tree.MeteoraDammV2.quoteAccounts(cfg)).toEqual(meteoraDammV2.quoteAccounts(cfg));
-    expect(tree.MeteoraDammV2.quoteSource(cfg, 0, ONE_SOL)).toBe(meteoraDammV2.emitQuote(cfg, 0, ONE_SOL));
-    expect(tree.MeteoraDammV2.swap(cfg, user, ONE_SOL)).toEqual(meteoraDammV2.buildSwap(cfg, user, ONE_SOL));
+    expect(tree.MeteoraDammV2.quoteSource(cfg, 0, ONE_SOL)).toBe(
+      meteoraDammV2.emitQuote(cfg, 0, ONE_SOL),
+    );
+    expect(tree.MeteoraDammV2.swap(cfg, user, ONE_SOL)).toEqual(
+      meteoraDammV2.buildSwap(cfg, user, ONE_SOL),
+    );
     expect(tree.MeteoraDammV2.referenceQuote(cfg, state, ONE_SOL, NOW)).toBe(
       meteoraDammV2.referenceQuote(cfg, state, ONE_SOL, NOW),
     );

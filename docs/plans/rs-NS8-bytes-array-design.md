@@ -6,7 +6,7 @@ I have everything needed — I confirmed the rejection site, the wire encoding, 
 
 ## Verdict up front
 
-**Build it.** It is genuinely the FINAL full-recipe blocker, its scope is smaller than the fire#26 "L" guess once you see what the recipe actually needs (it never reads `.length`, never `abi.decode`s, never `ecrecover`s an element — it only indexes an element out and forwards it verbatim as a `bytes` ABI arg), and — decisively — the entire heap/descriptor machinery it depends on **already exists and is exercised** by the array-of-*tuple* decode. Revised effort: **M**, not L (with one real-engine-verification caveat that keeps a residual L-shaped tail; see Risks). If the lane runs out of budget, the honest fallback is "compiles except `rfqSigs: bytes[]` — documented remaining item," but that leaves the recipe one small, well-understood PR short of green, so it is not the recommended stopping point.
+**Build it.** It is genuinely the FINAL full-recipe blocker, its scope is smaller than the fire#26 "L" guess once you see what the recipe actually needs (it never reads `.length`, never `abi.decode`s, never `ecrecover`s an element — it only indexes an element out and forwards it verbatim as a `bytes` ABI arg), and — decisively — the entire heap/descriptor machinery it depends on **already exists and is exercised** by the array-of-_tuple_ decode. Revised effort: **M**, not L (with one real-engine-verification caveat that keeps a residual L-shaped tail; see Risks). If the lane runs out of budget, the honest fallback is "compiles except `rfqSigs: bytes[]` — documented remaining item," but that leaves the recipe one small, well-understood PR short of green, so it is not the recommended stopping point.
 
 ---
 
@@ -33,7 +33,7 @@ The args region is appended verbatim and is **off-the-shelf ABI** — `entry_arg
 
 ### The layout, and how it differs from the existing array decode
 
-The current array arm assumes elements are **inline at a fixed stride** — `[count][elem0][elem1]…` (`assembly.rs:2179-2204`). That is ABI-correct only because a *static* element (scalar or static tuple) has no offset table. A `bytes[]` element is **dynamic**, so standard ABI inserts an offset table:
+The current array arm assumes elements are **inline at a fixed stride** — `[count][elem0][elem1]…` (`assembly.rs:2179-2204`). That is ABI-correct only because a _static_ element (scalar or static tuple) has no offset table. A `bytes[]` element is **dynamic**, so standard ABI inserts an offset table:
 
 ```
 base  ─▶ [ count ]                             ← word(base)
@@ -42,7 +42,8 @@ base  ─▶ [ count ]                             ← word(base)
 ```
 
 Per element `i`:
-- `off_i   = word(tableStart + i*32)`  (byte offset, relative to `tableStart` — the ABI convention for a `T[]` inner tuple of dynamic elements)
+
+- `off_i   = word(tableStart + i*32)` (byte offset, relative to `tableStart` — the ABI convention for a `T[]` inner tuple of dynamic elements)
 - `dataPos = tableStart + off_i`
 - `len_i   = word(dataPos)`
 - the element value = `slice(input, dataPos+32, dataPos+32+len_i)` — a `bytes` descriptor over `input`.
@@ -50,6 +51,7 @@ Per element `i`:
 ### What the runtime value must be — and what it need NOT be
 
 From the recipe, `rfqSigs[i]` is **only ever**: bound to a `bytes` local and forwarded verbatim as a `bytes` ABI argument. Exhaustive usage (grepped):
+
 - `signature: rsig` (Hashflow `tradeRFQT`, `ecoswap.sauce.ts:6682`)
 - `signatureBytes: bsig` (Bebop `swapSingle`, `:6736`)
 - `dsig` positional (Dexalot `partialSwap`, `:6818`)
@@ -66,7 +68,7 @@ Indexing lowers correctly with zero changes: `Expr::Index` sets `result_is_dynam
 
 ## 3. The implementation — three functions in `lower/assembly.rs`
 
-Reuse, don't reinvent. The array-of-*tuple* path already builds a real heap array of **dynamic descriptor** elements (`ArrayOfLength` + a runtime `Loop` + `SetIndex { element_is_dynamic: true }`, `assembly.rs:2246-2285`). A `bytes[]` is the same shape with (a) a different per-element value expression and (b) an offset-table indirection. All that changes is decodability admission and the element-value/guard construction.
+Reuse, don't reinvent. The array-of-_tuple_ path already builds a real heap array of **dynamic descriptor** elements (`ArrayOfLength` + a runtime `Loop` + `SetIndex { element_is_dynamic: true }`, `assembly.rs:2246-2285`). A `bytes[]` is the same shape with (a) a different per-element value expression and (b) an offset-table indirection. All that changes is decodability admission and the element-value/guard construction.
 
 ### 3a. `element_words` — admit `bytes[]` (`assembly.rs:1953`)
 
@@ -86,6 +88,7 @@ Keep `contains_account` handling intact (a nested `Account` stays permanently re
 Split the `Ty::Array` handling on whether the element is fixed-stride (today's loop, unchanged) or `Bytes` (new offset-table loop). The new loop is the existing loop skeleton with three substitutions:
 
 **Count + cap + table-presence guard (before the loop):**
+
 ```
 count     = read_word(base)                              // reuse read_word / load_base
 require(count*32 <= MAX_COLLECTION_BYTES)                // cap the offset table (≈512 elems); MAX_COLLECTION_BYTES = 16KB, assembly.rs:82
@@ -96,6 +99,7 @@ tableStart = base + 32
 ```
 
 **Per-element body (inside the existing `Stmt::Loop`, before `SetIndex`):**
+
 ```
 off_i   = read_word(tableStart + cursor*32)
 dataPos = tableStart + off_i
@@ -118,7 +122,7 @@ Every op the branch emits already has codegen: `ArrayOfLength` (0x92-family), `S
 
 ## 4. Effort + red→green test plan
 
-**Effort: M.** Admission is a 2-line predicate; the decode branch is ~40 lines of IR reusing existing closures; no codegen/targets/ArgShape change. The L-shaped residual is *verification*, not code (Risks §5b).
+**Effort: M.** Admission is a 2-line predicate; the decode branch is ~40 lines of IR reusing existing closures; no codegen/targets/ArgShape change. The L-shaped residual is _verification_, not code (Risks §5b).
 
 **Red→green tests** (in `assembly.rs` `#[cfg(test)]`, beside `an_entry_parameter_shape_the_decode_cannot_read_says_so` at `:2520`, and as CLI conformance/execution vectors):
 
@@ -137,11 +141,12 @@ Every op the branch emits already has codegen: `ArrayOfLength` (0x92-family), `S
 
 **5a. Offset semantics (medium, code-level).** ABI offsets inside a `bytes[]` are relative to the start of the inner tuple = **after** the count word (`tableStart = base+32`), not relative to `base`. Getting the base wrong is the most likely bug; test #3's unequal-length elements catch it. This is settled by spec and by matching what the single-`bytes` arm already does, so it is a "get the arithmetic right" risk, not an open design question.
 
-**5b. Descriptor round-trip through a heap array element (HIGH — the residual L; needs real-engine verification).** This is the one place the V1-audit descriptor-drop family (CLAUDE.md, extensively) is relevant. The element value is an `Expr::Slice` — a *sub-descriptor / view* over `input` (masked via `slice_pointer_mask`), a different runtime shape from the *heap-allocated* Tuple descriptor the array-of-tuples path stores. Two things must hold, on **each** engine (v1, v12, SVM):
-   1. `SetIndex{element_is_dynamic:true}` of a **Slice sub-descriptor** into a heap array slot stores something that `Index` reads back as a usable bytes value (not a dangling view or a mis-masked pointer);
-   2. that read-back value re-encodes correctly as a `bytes` ABI call argument.
+**5b. Descriptor round-trip through a heap array element (HIGH — the residual L; needs real-engine verification).** This is the one place the V1-audit descriptor-drop family (CLAUDE.md, extensively) is relevant. The element value is an `Expr::Slice` — a _sub-descriptor / view_ over `input` (masked via `slice_pointer_mask`), a different runtime shape from the _heap-allocated_ Tuple descriptor the array-of-tuples path stores. Two things must hold, on **each** engine (v1, v12, SVM):
 
-   The single-`bytes` param decode proves a Slice descriptor round-trips through a *local* and re-encodes as a `bytes` arg. What is **unproven** is the same Slice descriptor surviving a `SET_INDEX`/`INDEX` array round-trip. RS's dynamism is type-driven (`element.is_dynamic()`), not heuristically inferred, so it does not have the TS/V1 *inferKind* miscompile hazard — but whether the engine's element-boxing correctly handles a Slice-view element (vs. a heap-value element) is an **execution question, not a reasoning one**. Test #5 is the gate. If a raw Slice view does not round-trip, the fix is to **materialize** each element into a heap bytes value before `SetIndex` (copy the slice into fresh heap) — a known, contained escalation that keeps the decode sound and is the reason a residual L-tail exists. **Recommend the sonnet lane run test #5 on a real engine early, before polishing.**
+1.  `SetIndex{element_is_dynamic:true}` of a **Slice sub-descriptor** into a heap array slot stores something that `Index` reads back as a usable bytes value (not a dangling view or a mis-masked pointer);
+2.  that read-back value re-encodes correctly as a `bytes` ABI call argument.
+
+The single-`bytes` param decode proves a Slice descriptor round-trips through a _local_ and re-encodes as a `bytes` arg. What is **unproven** is the same Slice descriptor surviving a `SET_INDEX`/`INDEX` array round-trip. RS's dynamism is type-driven (`element.is_dynamic()`), not heuristically inferred, so it does not have the TS/V1 _inferKind_ miscompile hazard — but whether the engine's element-boxing correctly handles a Slice-view element (vs. a heap-value element) is an **execution question, not a reasoning one**. Test #5 is the gate. If a raw Slice view does not round-trip, the fix is to **materialize** each element into a heap bytes value before `SetIndex` (copy the slice into fresh heap) — a known, contained escalation that keeps the decode sound and is the reason a residual L-tail exists. **Recommend the sonnet lane run test #5 on a real engine early, before polishing.**
 
 **5c. No fixed-stride cap; use a count cap (low).** `MAX_COLLECTION_BYTES` bounds `count*stride` for fixed-stride arrays; a `bytes[]` has no stride. Cap the **offset table** (`count*32 <= MAX_COLLECTION_BYTES` → ≈512 elements) and let each element's data be bounded by `input.length` via the per-element guard. Real `rfqSigs` length is tiny (one per in-play RFQ venue, << 10), so the cap is purely a hostile-input bound.
 

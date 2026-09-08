@@ -22,22 +22,30 @@
  * (verified to return 0 rather than a wrapped/negative value) — that harness
  * lives outside this fast/no-engine suite (see the PR body for the numbers).
  */
-import { resolve } from 'path';
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { solfiV2, OFF_MINT_A, OFF_MINT_B, OFF_VAULT_A, OFF_VAULT_B, OFF_ORACLE, OFF_REGISTRY } from '../../../src/svm/venues/solfi-v2/index.js';
-import type { SolfiV2PoolConfig } from '../../../src/svm/venues/solfi-v2/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { fixtureBytesMap, fixtureLoader, loadFixtures } from '../fixtures.js';
+import { resolve } from "path";
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  solfiV2,
+  OFF_MINT_A,
+  OFF_MINT_B,
+  OFF_VAULT_A,
+  OFF_VAULT_B,
+  OFF_ORACLE,
+  OFF_REGISTRY,
+} from "../../../src/svm/venues/solfi-v2/index.js";
+import type { SolfiV2PoolConfig } from "../../../src/svm/venues/solfi-v2/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { fixtureLoader, loadFixtures } from "../fixtures.js";
 
-const POOL = address('65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc');
-const ORACLE = '2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou';
-const VAULT_A = 'CRo8DBwrmd97DJfAnvCv96tZPL5Mktf2NZy2ZnhDer1A'; // wSOL
-const VAULT_B = 'GhFfLFSprPpfoRaWakPMmJTMJBHuz6C694jYwxy2dAic'; // USDC
-const MINT_A = 'So11111111111111111111111111111111111111112';
-const MINT_B = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-const REGISTRY = 'FmxXDSR9WvpJTCh738D1LEDuhMoA8geCtZgHb3isy7Dp';
-const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const POOL = address("65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc");
+const ORACLE = "2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou";
+const VAULT_A = "CRo8DBwrmd97DJfAnvCv96tZPL5Mktf2NZy2ZnhDer1A"; // wSOL
+const VAULT_B = "GhFfLFSprPpfoRaWakPMmJTMJBHuz6C694jYwxy2dAic"; // USDC
+const MINT_A = "So11111111111111111111111111111111111111112";
+const MINT_B = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const REGISTRY = "FmxXDSR9WvpJTCh738D1LEDuhMoA8geCtZgHb3isy7Dp";
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 // A synthetic (zero-filled, correctly-sized) registry: fetchPoolConfig only
 // gates on its SIZE and its address (to resolve K from the static
@@ -48,7 +56,7 @@ const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 // ladder.ts's "residualRisk" doc).
 const SYNTHETIC_REGISTRY = new Uint8Array(1_048_576);
 
-function loaderFor(dir: 'dir0' | 'dir1'): AccountLoader {
+function loaderFor(dir: "dir0" | "dir1"): AccountLoader {
   const fixtures = loadFixtures(resolve(process.cwd(), `test/svm/fixtures/solfi-v2-${dir}`));
   const base = fixtureLoader(fixtures);
   return async (addr) => {
@@ -57,15 +65,10 @@ function loaderFor(dir: 'dir0' | 'dir1'): AccountLoader {
   };
 }
 
-function stateFor(dir: 'dir0' | 'dir1') {
-  const fixtures = loadFixtures(resolve(process.cwd(), `test/svm/fixtures/solfi-v2-${dir}`));
-  return fixtureBytesMap(fixtures);
-}
-
-describe('solfi-v2 fetchPoolConfig', () => {
-  it('decodes the mainnet pool account (dir0 snapshot)', async () => {
-    const cfg = (await solfiV2.fetchPoolConfig(loaderFor('dir0'), POOL, 0)) as SolfiV2PoolConfig;
-    expect(cfg.venue).toBe('solfi-v2');
+describe("solfi-v2 fetchPoolConfig", () => {
+  it("decodes the mainnet pool account (dir0 snapshot)", async () => {
+    const cfg = (await solfiV2.fetchPoolConfig(loaderFor("dir0"), POOL, 0)) as SolfiV2PoolConfig;
+    expect(cfg.venue).toBe("solfi-v2");
     expect(cfg.direction).toBe(0);
     expect(cfg.oracle).toBe(ORACLE);
     expect(cfg.vaultA).toBe(VAULT_A);
@@ -77,13 +80,15 @@ describe('solfi-v2 fetchPoolConfig', () => {
     expect(cfg.additiveK).toBe(1932n);
   });
 
-  it('throws when the pool account does not exist', async () => {
+  it("throws when the pool account does not exist", async () => {
     const empty: AccountLoader = async () => null;
-    await expect(solfiV2.fetchPoolConfig(empty, POOL, 0)).rejects.toThrow(`solfi-v2 pool ${POOL} account not found`);
+    await expect(solfiV2.fetchPoolConfig(empty, POOL, 0)).rejects.toThrow(
+      `solfi-v2 pool ${POOL} account not found`,
+    );
   });
 
-  it('gates on the pool account size', async () => {
-    const fixtures = loadFixtures(resolve(process.cwd(), 'test/svm/fixtures/solfi-v2-dir0'));
+  it("gates on the pool account size", async () => {
+    const fixtures = loadFixtures(resolve(process.cwd(), "test/svm/fixtures/solfi-v2-dir0"));
     const base = fixtureLoader(fixtures);
     const truncating: AccountLoader = async (addr) => {
       if (addr === POOL) {
@@ -97,9 +102,9 @@ describe('solfi-v2 fetchPoolConfig', () => {
     );
   });
 
-  it('rejects a pool whose additive-impact K has never been independently verified', async () => {
-    const UNVERIFIED = address('11111111111111111111111111111112');
-    const fixtures = loadFixtures(resolve(process.cwd(), 'test/svm/fixtures/solfi-v2-dir0'));
+  it("rejects a pool whose additive-impact K has never been independently verified", async () => {
+    const UNVERIFIED = address("11111111111111111111111111111112");
+    const fixtures = loadFixtures(resolve(process.cwd(), "test/svm/fixtures/solfi-v2-dir0"));
     const base = fixtureLoader(fixtures);
     // Relabel the REAL, well-formed pool bytes under an address POOL_K has no
     // entry for — the pool data itself is fine; only its address (hence K) is
@@ -114,7 +119,7 @@ describe('solfi-v2 fetchPoolConfig', () => {
   });
 });
 
-describe('per-pool K resolution — the FATAL registry-keyed bug (fixed)', () => {
+describe("per-pool K resolution — the FATAL registry-keyed bug (fixed)", () => {
   // Registry QoFvFhDZg9TaZEi4SsasWpH5xXzk3zBqfRyicGexfNQ carries (at least) two
   // live pools with DIFFERENT, independently-verified K: FkEB6uvy... (USDT/USDC)
   // needs K=0, 2Q6S8p9i... needs K=5832. The pre-fix table (90f9c3f) was keyed
@@ -125,14 +130,15 @@ describe('per-pool K resolution — the FATAL registry-keyed bug (fixed)', () =>
   // synthesize a minimal, correctly-sized pool account pointing at that
   // registry — enough to reach the K resolution step (fetchPoolConfig throws
   // or resolves before reading anything else).
-  const QOFVFHDZ_REGISTRY = address('QoFvFhDZg9TaZEi4SsasWpH5xXzk3zBqfRyicGexfNQ');
-  const USDT_USDC_POOL = address('FkEB6uvyzuoaGpgs4yRtFtxC4WJxhejNFbUkj5R6wR32');
-  const OTHER_POOL_SAME_REGISTRY = address('2Q6S8p9iZNzMvpTemiC56HqCJ3F3szNoyRkvqEKfCanY');
+  const QOFVFHDZ_REGISTRY = address("QoFvFhDZg9TaZEi4SsasWpH5xXzk3zBqfRyicGexfNQ");
+  const USDT_USDC_POOL = address("FkEB6uvyzuoaGpgs4yRtFtxC4WJxhejNFbUkj5R6wR32");
+  const OTHER_POOL_SAME_REGISTRY = address("2Q6S8p9iZNzMvpTemiC56HqCJ3F3szNoyRkvqEKfCanY");
 
   function syntheticPoolBytes(registry: Address): Uint8Array {
     const data = new Uint8Array(1728);
     const codec = getAddressCodec();
-    const put = (offset: number, addr: Address): void => data.set(new Uint8Array(codec.encode(addr)), offset);
+    const put = (offset: number, addr: Address): void =>
+      data.set(new Uint8Array(codec.encode(addr)), offset);
     put(OFF_ORACLE, address(ORACLE));
     put(OFF_MINT_A, address(MINT_A));
     put(OFF_MINT_B, address(MINT_B));
@@ -143,7 +149,9 @@ describe('per-pool K resolution — the FATAL registry-keyed bug (fixed)', () =>
   }
 
   function loaderFor(pool: Address, poolBytes: Uint8Array): AccountLoader {
-    const base = fixtureLoader(loadFixtures(resolve(process.cwd(), 'test/svm/fixtures/solfi-v2-dir0')));
+    const base = fixtureLoader(
+      loadFixtures(resolve(process.cwd(), "test/svm/fixtures/solfi-v2-dir0")),
+    );
     return async (addr) => {
       if (addr === pool) return poolBytes;
       if (addr === QOFVFHDZ_REGISTRY) return SYNTHETIC_REGISTRY;
@@ -151,12 +159,16 @@ describe('per-pool K resolution — the FATAL registry-keyed bug (fixed)', () =>
     };
   }
 
-  it('REGRESSION (fails on the pre-fix registry-keyed lookup, 90f9c3f): FkEB6uvy (USDT/USDC) resolves its OWN verified K=0, not its registry-mate 2Q6S8p9i\'s 5832', async () => {
-    const cfg = await solfiV2.fetchPoolConfig(loaderFor(USDT_USDC_POOL, syntheticPoolBytes(QOFVFHDZ_REGISTRY)), USDT_USDC_POOL, 0);
+  it("REGRESSION (fails on the pre-fix registry-keyed lookup, 90f9c3f): FkEB6uvy (USDT/USDC) resolves its OWN verified K=0, not its registry-mate 2Q6S8p9i's 5832", async () => {
+    const cfg = await solfiV2.fetchPoolConfig(
+      loaderFor(USDT_USDC_POOL, syntheticPoolBytes(QOFVFHDZ_REGISTRY)),
+      USDT_USDC_POOL,
+      0,
+    );
     expect(cfg.additiveK).toBe(0n);
   });
 
-  it('the OTHER pool on the same registry independently resolves its own verified K=5832', async () => {
+  it("the OTHER pool on the same registry independently resolves its own verified K=5832", async () => {
     const cfg = await solfiV2.fetchPoolConfig(
       loaderFor(OTHER_POOL_SAME_REGISTRY, syntheticPoolBytes(QOFVFHDZ_REGISTRY)),
       OTHER_POOL_SAME_REGISTRY,
@@ -165,29 +177,35 @@ describe('per-pool K resolution — the FATAL registry-keyed bug (fixed)', () =>
     expect(cfg.additiveK).toBe(5832n);
   });
 
-  it('an UNVERIFIED pool on that same registry is REFUSED, not silently given a registry-mate\'s K', async () => {
-    const UNVERIFIED = address('11111111111111111111111111111112');
+  it("an UNVERIFIED pool on that same registry is REFUSED, not silently given a registry-mate's K", async () => {
+    const UNVERIFIED = address("11111111111111111111111111111112");
     await expect(
-      solfiV2.fetchPoolConfig(loaderFor(UNVERIFIED, syntheticPoolBytes(QOFVFHDZ_REGISTRY)), UNVERIFIED, 0),
-    ).rejects.toThrow(`solfi-v2 pool ${UNVERIFIED} has no independently-verified additive-impact constant K`);
+      solfiV2.fetchPoolConfig(
+        loaderFor(UNVERIFIED, syntheticPoolBytes(QOFVFHDZ_REGISTRY)),
+        UNVERIFIED,
+        0,
+      ),
+    ).rejects.toThrow(
+      `solfi-v2 pool ${UNVERIFIED} has no independently-verified additive-impact constant K`,
+    );
   });
 });
 
-describe('solfi-v2 buildSwap / buildSwapV2 — CPI account shape', () => {
-  const user = { inAta: 'user:in', outAta: 'user:out', owner: 'user:owner' };
+describe("solfi-v2 buildSwap / buildSwapV2 — CPI account shape", () => {
+  const user = { inAta: "user:in", outAta: "user:out", owner: "user:owner" };
 
-  it('builds the 13-account, 18-byte swap ix (disc 0x07)', async () => {
-    const cfg = (await solfiV2.fetchPoolConfig(loaderFor('dir0'), POOL, 0)) as SolfiV2PoolConfig;
+  it("builds the 13-account, 18-byte swap ix (disc 0x07)", async () => {
+    const cfg = (await solfiV2.fetchPoolConfig(loaderFor("dir0"), POOL, 0)) as SolfiV2PoolConfig;
     const swap = solfiV2.buildSwap(cfg, user, 2_000_000_000n);
     expect(swap.data.length).toBe(18);
     expect(swap.data[0]).toBe(0x07);
     expect(swap.data[17]).toBe(0); // direction
     expect(swap.accounts).toHaveLength(13);
-    expect(swap.accounts[0]).toMatchObject({ ref: 'user:owner', signer: true });
+    expect(swap.accounts[0]).toMatchObject({ ref: "user:owner", signer: true });
     expect(swap.accounts[2]).toMatchObject({ address: ORACLE });
     // dir 0: mintA (wSOL) is the SOURCE -> userA = inAta (POSITIONAL BY MINT).
-    expect(swap.accounts[6]).toMatchObject({ ref: 'user:in' });
-    expect(swap.accounts[7]).toMatchObject({ ref: 'user:out' });
-    expect(swap.accounts[12]).toMatchObject({ ref: 'Sysvar1nstructions1111111111111111111111111' });
+    expect(swap.accounts[6]).toMatchObject({ ref: "user:in" });
+    expect(swap.accounts[7]).toMatchObject({ ref: "user:out" });
+    expect(swap.accounts[12]).toMatchObject({ ref: "Sysvar1nstructions1111111111111111111111111" });
   });
 });

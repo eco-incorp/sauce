@@ -179,20 +179,25 @@
  * the IDL fixes it to the classic Token program unconditionally (LP shares
  * are never Token-2022).
  */
-import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { findAssociatedTokenPda } from '@solana-program/token';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'voltr';
+const SLUG = "voltr";
 
-export const VOLTR_PROGRAM_ID: Address<'vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8'> = address(
-  'vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8',
+export const VOLTR_PROGRAM_ID: Address<"vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8"> = address(
+  "vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8",
 );
-export const SPL_TOKEN_PROGRAM_ID: Address<'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'> = address(
-  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+export const SPL_TOKEN_PROGRAM_ID: Address<"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"> = address(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
 );
 // ── Anchor IDL constants (voltr_vault v0.2.0, decoded from the on-chain IDL account) ──
 const VAULT_DISCRIMINATOR = [211, 8, 232, 43, 2, 152, 117, 119];
@@ -206,7 +211,7 @@ const MINT_DECIMALS_OFFSET = 44;
 export interface VoltrPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'assetToLp' (deposit_vault, default) | 'lpToAsset' (instant_withdraw_vault). */
-  direction: 'assetToLp' | 'lpToAsset';
+  direction: "assetToLp" | "lpToAsset";
   assetMint: Address;
   lpMint: Address;
   protocol: Address;
@@ -229,7 +234,7 @@ function protocolPda(): Promise<Address> {
   if (cachedProtocolPda === undefined) {
     cachedProtocolPda = getProgramDerivedAddress({
       programAddress: VOLTR_PROGRAM_ID,
-      seeds: [new TextEncoder().encode('protocol')],
+      seeds: [new TextEncoder().encode("protocol")],
     }).then(([pda]) => pda);
   }
   return cachedProtocolPda;
@@ -242,11 +247,16 @@ function protocolPda(): Promise<Address> {
  * read the two mints' decimals (needed only for the empty-vault bootstrap
  * case, fixed forever per vault so safe to bake at prepare time).
  */
-export async function fetchVoltrConfig(load: AccountLoader, pool: Address): Promise<VoltrPoolConfig> {
+export async function fetchVoltrConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<VoltrPoolConfig> {
   const raw = await load(pool);
   if (raw === null) throw new Error(`${SLUG}: vault account ${pool} not found`);
   if (raw.length < VAULT_MIN_LEN) {
-    throw new Error(`${SLUG}: vault account ${pool} is ${raw.length} bytes, want >= ${VAULT_MIN_LEN}`);
+    throw new Error(
+      `${SLUG}: vault account ${pool} is ${raw.length} bytes, want >= ${VAULT_MIN_LEN}`,
+    );
   }
   for (let i = 0; i < VAULT_DISCRIMINATOR.length; i++) {
     if (raw[i] !== VAULT_DISCRIMINATOR[i]) {
@@ -263,19 +273,21 @@ export async function fetchVoltrConfig(load: AccountLoader, pool: Address): Prom
     protocolPda(),
     getProgramDerivedAddress({
       programAddress: VOLTR_PROGRAM_ID,
-      seeds: [new TextEncoder().encode('vault_asset_idle_auth'), poolBytes],
+      seeds: [new TextEncoder().encode("vault_asset_idle_auth"), poolBytes],
     }),
     getProgramDerivedAddress({
       programAddress: VOLTR_PROGRAM_ID,
-      seeds: [new TextEncoder().encode('vault_lp_mint_auth'), poolBytes],
+      seeds: [new TextEncoder().encode("vault_lp_mint_auth"), poolBytes],
     }),
     getProgramDerivedAddress({
       programAddress: VOLTR_PROGRAM_ID,
-      seeds: [new TextEncoder().encode('vault_lp_mint'), poolBytes],
+      seeds: [new TextEncoder().encode("vault_lp_mint"), poolBytes],
     }),
   ]);
   if (derivedLpMint !== lpMint) {
-    throw new Error(`${SLUG}: vault ${pool} lp mint ${lpMint} does not match its own PDA derivation ${derivedLpMint}`);
+    throw new Error(
+      `${SLUG}: vault ${pool} lp mint ${lpMint} does not match its own PDA derivation ${derivedLpMint}`,
+    );
   }
 
   const [vaultAssetIdleAta] = await findAssociatedTokenPda({
@@ -303,18 +315,22 @@ export async function fetchVoltrConfig(load: AccountLoader, pool: Address): Prom
     [lpMint, lpMintRaw],
   ] as const) {
     if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   return {
     venue: SLUG,
     pool,
-    direction: 'assetToLp',
+    direction: "assetToLp",
     assetMint,
     lpMint,
     protocol,
@@ -325,4 +341,3 @@ export async function fetchVoltrConfig(load: AccountLoader, pool: Address): Prom
     lpDecimals,
   };
 }
-

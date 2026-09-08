@@ -23,7 +23,8 @@ const TSCONFIG_PATH = resolve(SDK_DIR, "tsconfig.json");
 
 function typecheckProbe(probeSource: string): readonly ts.Diagnostic[] {
   const configFile = ts.readConfigFile(TSCONFIG_PATH, ts.sys.readFile);
-  if (configFile.error) throw new Error(ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n"));
+  if (configFile.error)
+    throw new Error(ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n"));
   const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, SDK_DIR);
 
   const probeDir = mkdtempSync(join(tmpdir(), "routes-globals-ambient-"));
@@ -36,7 +37,8 @@ function typecheckProbe(probeSource: string): readonly ts.Diagnostic[] {
       options: { ...parsed.options, noEmit: true },
     });
     const probeSourceFile = program.getSourceFile(probePath);
-    if (probeSourceFile === undefined) throw new Error("probe file was not included in the program");
+    if (probeSourceFile === undefined)
+      throw new Error("probe file was not included in the program");
     return [
       ...program.getSyntacticDiagnostics(probeSourceFile),
       ...program.getSemanticDiagnostics(probeSourceFile),

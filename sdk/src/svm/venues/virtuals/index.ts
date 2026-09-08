@@ -113,22 +113,22 @@
  * off-chain prepare and the cook's on-chain execution is the SAME accepted drift class every
  * state-gated SVM family already carries.
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'virtuals' as const;
+const SLUG = "virtuals" as const;
 
-export const VIRTUALS_PROGRAM_ID = address_('5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki');
-const TOKEN_PROGRAM = address_('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const ATA_PROGRAM = address_('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+export const VIRTUALS_PROGRAM_ID = address_("5U3EU2ubXtK84QcRjWVmYt9RaDyA8gKxdUrPFXmZyaki");
+const TOKEN_PROGRAM = address_("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ATA_PROGRAM = address_("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 /** The program's own quote SPL mint — fixed, baked into every buy/sell account list (see header). */
-export const VIRTUALS_MINT = address_('3iQL8BFS2vE7mww4ehAqQHAsbmRNCrPxizWAT2Zfyr9y');
+export const VIRTUALS_MINT = address_("3iQL8BFS2vE7mww4ehAqQHAsbmRNCrPxizWAT2Zfyr9y");
 /** Fixed protocol fee sink — the ONLY account `buy`/`sell`'s IDL pins to a literal `address`. */
-const PLATFORM_PROTOTYPE = address_('933jV351WDG23QTcHPqLFJxyYRrEPWRTR3qoPWi3jwEL');
+const PLATFORM_PROTOTYPE = address_("933jV351WDG23QTcHPqLFJxyYRrEPWRTR3qoPWi3jwEL");
 
 /** sha256("account:VirtualsPool")[0..8]. */
 const VIRTUALS_POOL_DISCRIMINATOR = [71, 118, 5, 203, 5, 98, 135, 116];
@@ -146,7 +146,11 @@ async function ata(owner: Address, mint: Address): Promise<Address> {
   const enc = getAddressEncoder();
   const [pda] = await getProgramDerivedAddress({
     programAddress: ATA_PROGRAM,
-    seeds: [new Uint8Array(enc.encode(owner)), new Uint8Array(enc.encode(TOKEN_PROGRAM)), new Uint8Array(enc.encode(mint))],
+    seeds: [
+      new Uint8Array(enc.encode(owner)),
+      new Uint8Array(enc.encode(TOKEN_PROGRAM)),
+      new Uint8Array(enc.encode(mint)),
+    ],
   });
   return pda;
 }
@@ -159,7 +163,7 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
 export interface VirtualsPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** exactIn side: 'quoteToBase' (default, buy — VIRTUAL in, token out) | 'baseToQuote' (sell). */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   baseMint: Address;
   /** Read live off the pool account (see header) — NOT hardcoded despite being identical across
    *  every sampled pool. */
@@ -171,19 +175,23 @@ export interface VirtualsPoolConfig extends PoolConfig {
 
 export const virtuals = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: VIRTUALS_PROGRAM_ID,
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<VirtualsPoolConfig> {
-    const data = await loadAccount(load, pool, 'pool');
+    const data = await loadAccount(load, pool, "pool");
     if (!hasDiscriminator(data, VIRTUALS_POOL_DISCRIMINATOR)) {
       throw new Error(`virtuals pool ${pool} discriminator mismatch (not a VirtualsPool account)`);
     }
     if (data.length < POOL_ACCOUNT_SIZE) {
-      throw new Error(`virtuals pool ${pool} data is ${data.length} bytes, expected at least ${POOL_ACCOUNT_SIZE}`);
+      throw new Error(
+        `virtuals pool ${pool} data is ${data.length} bytes, expected at least ${POOL_ACCOUNT_SIZE}`,
+      );
     }
     const state = data[88]!;
     if (state !== 1) {
-      throw new Error(`virtuals pool ${pool} is not Active (state=${state}; 0=Initialized 2=Graduated 3=Migrated)`);
+      throw new Error(
+        `virtuals pool ${pool} is not Active (state=${state}; 0=Initialized 2=Graduated 3=Migrated)`,
+      );
     }
     const baseMint = pubkeyAt(data, 40);
     const virtualY = readUintLE(data, 72, 8);
@@ -201,11 +209,15 @@ export const virtuals = {
       const mintData = _mintDatas[_i]!;
       if (mintData === null) continue;
       if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -218,7 +230,7 @@ export const virtuals = {
     return {
       venue: SLUG,
       pool,
-      direction: 'quoteToBase',
+      direction: "quoteToBase",
       baseMint,
       virtualY,
       vpoolTokenAta,
@@ -227,4 +239,3 @@ export const virtuals = {
     };
   },
 };
-

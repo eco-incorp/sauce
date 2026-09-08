@@ -49,14 +49,14 @@ sdk/
 
 6 parallel research agents completed, covering **209+ protocols** total:
 
-| Category | Protocols | Key Players |
-|----------|-----------|-------------|
-| DEXes | 37 | Uniswap (v2/v3/v4), SushiSwap, Curve, Balancer, PancakeSwap, Velodrome, Aerodrome, Camelot, TraderJoe, + 28 chain-native DEXes |
-| Lending | 30+ | Aave (v2/v3), Compound (v2/v3), MakerDAO, Morpho Blue, Spark, Venus, Moonwell, Silo, Euler, Benqi, + 20 more |
-| Bridges | 33 | Across, Stargate, LayerZero, Wormhole, Axelar, Hyperlane, CCIP, Hop, Synapse, + native L2 bridges |
-| Derivatives | 28 | GMX, dYdX, Synthetix, Gains Network, Vertex, Opyn, Hegic, Premia, Lyra, + 19 more |
-| Yield/Staking | 31 | Lido, Rocket Pool, EigenLayer, ether.fi, Pendle, Yearn, Convex, Beefy, + 23 more |
-| Infra/Oracles | 50+ | 1inch, Paraswap, 0x, Chainlink, Pyth, MakerDAO, Liquity, Ethena, Safe, Seaport, + 40 more |
+| Category      | Protocols | Key Players                                                                                                                    |
+| ------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| DEXes         | 37        | Uniswap (v2/v3/v4), SushiSwap, Curve, Balancer, PancakeSwap, Velodrome, Aerodrome, Camelot, TraderJoe, + 28 chain-native DEXes |
+| Lending       | 30+       | Aave (v2/v3), Compound (v2/v3), MakerDAO, Morpho Blue, Spark, Venus, Moonwell, Silo, Euler, Benqi, + 20 more                   |
+| Bridges       | 33        | Across, Stargate, LayerZero, Wormhole, Axelar, Hyperlane, CCIP, Hop, Synapse, + native L2 bridges                              |
+| Derivatives   | 28        | GMX, dYdX, Synthetix, Gains Network, Vertex, Opyn, Hegic, Premia, Lyra, + 19 more                                              |
+| Yield/Staking | 31        | Lido, Rocket Pool, EigenLayer, ether.fi, Pendle, Yearn, Convex, Beefy, + 23 more                                               |
+| Infra/Oracles | 50+       | 1inch, Paraswap, 0x, Chainlink, Pyth, MakerDAO, Liquity, Ethena, Safe, Seaport, + 40 more                                      |
 
 ### Agent Skills Created
 
@@ -90,6 +90,7 @@ sdk/src/protocols/{slug}/
 ```
 
 **Priority order:**
+
 1. **Tier 1 DEXes** - Uniswap v2/v3/v4, SushiSwap, Curve, Balancer, PancakeSwap
 2. **Tier 1 Lending** - Aave v3, Compound v3, Morpho Blue, Spark
 3. **Tier 1 Staking** - Lido, Rocket Pool, EigenLayer, ether.fi
@@ -101,6 +102,7 @@ sdk/src/protocols/{slug}/
 ### Phase 4: ABI Collection
 
 For each protocol:
+
 - Download ABIs from npm packages where available (`@uniswap/v3-core`, `@aave/core-v3`, etc.)
 - Extract from GitHub repos where no npm exists
 - Verify against block explorer verified sources
@@ -111,12 +113,14 @@ For each protocol:
 For each protocol, write SauceScript functions covering every user-facing operation:
 
 **DEX functions:**
+
 - `swap(router, tokenIn, tokenOut, amountIn, amountOutMin, recipient)`
 - `addLiquidity(router, tokenA, tokenB, amountA, amountB, recipient)`
 - `removeLiquidity(router, tokenA, tokenB, liquidity, recipient)`
 - `getAmountsOut(router, amountIn, path)`
 
 **Lending functions:**
+
 - `supply(pool, asset, amount, onBehalfOf)`
 - `borrow(pool, asset, amount, interestRateMode, onBehalfOf)`
 - `repay(pool, asset, amount, interestRateMode, onBehalfOf)`
@@ -124,10 +128,12 @@ For each protocol, write SauceScript functions covering every user-facing operat
 - `flashLoan(pool, assets, amounts, modes, onBehalfOf, params)`
 
 **Bridge functions:**
+
 - `bridge(router, token, amount, destinationChainId, recipient)`
 - `sendMessage(endpoint, destinationChainId, payload)`
 
 **Staking functions:**
+
 - `stake(contract, amount)` / `unstake(contract, amount)`
 - `wrap(contract, amount)` / `unwrap(contract, amount)`
 - `deposit(strategy, token, amount)` (EigenLayer)
@@ -135,6 +141,7 @@ For each protocol, write SauceScript functions covering every user-facing operat
 ### Phase 6: Address Verification
 
 Cross-reference ALL addresses against:
+
 1. Official documentation
 2. Block explorer verified contracts
 3. npm deployment packages (e.g., `@bgd-labs/aave-address-book`)
@@ -160,6 +167,7 @@ Flag and remove any unverified addresses.
 ## Polishing Improvements
 
 ### Research Gaps to Fill
+
 - [ ] Some Tier 3 DEXes have incomplete addresses (SpaceFi, Hercules)
 - [ ] Beefy vault addresses are per-strategy (need API integration or factory enumeration)
 - [ ] Pendle market addresses are per-pool (need factory enumeration)
@@ -168,6 +176,7 @@ Flag and remove any unverified addresses.
 - [ ] Need to check for any protocols launched after research date
 
 ### Architecture Improvements
+
 - [ ] Add `getDeployment(chainId)` helper to each protocol module
 - [ ] Add `getSauceFunction(name, chainId)` that auto-fills addresses
 - [ ] Version-aware modules (Uniswap v2 vs v3 vs v4 as separate exports)
@@ -176,11 +185,13 @@ Flag and remove any unverified addresses.
 - [ ] Tree-shakeable exports (import only the protocols you need)
 
 ### Developer Experience
+
 - [ ] CLI tool: `sauce-sdk list --category dex --chain base`
 - [ ] Auto-complete for protocol names and function signatures
 - [ ] Documentation generator from protocol info + functions
 
 ### Integration with Existing Codebase
+
 - [ ] Connect to `compiler-poc/` for real compilation testing
 - [ ] Connect to `dev-tools/` for on-chain execution
 - [ ] Align with existing `dev-tools/src/contracts.ts` address registry
@@ -191,6 +202,7 @@ Flag and remove any unverified addresses.
 ## Execution Strategy
 
 Use agent teams (`/go-team-sdk`) to parallelize the build:
+
 - 5-6 builder agents, each handling a category of protocols
 - Each agent reads research data, creates protocol modules
 - Quality gate: every Sauce function must compile via `@eco-incorp/sauce-compiler`

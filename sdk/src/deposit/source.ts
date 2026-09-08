@@ -37,7 +37,9 @@ export const DEPOSIT_BASE_DIRS: readonly string[] = [
 
 /** `SWAP_BASE_DIRS` ∪ `DEPOSIT_BASE_DIRS`, de-duped — the `baseDirs` a `swapThenDepositSource`
  *  program needs. */
-export const COMPOSED_BASE_DIRS: readonly string[] = [...new Set([...SWAP_BASE_DIRS, ...DEPOSIT_BASE_DIRS])];
+export const COMPOSED_BASE_DIRS: readonly string[] = [
+  ...new Set([...SWAP_BASE_DIRS, ...DEPOSIT_BASE_DIRS]),
+];
 
 const IERC20_IMPORT = `import { IERC20 } from "./artifacts/IERC20.json";`;
 
@@ -52,16 +54,22 @@ function needsIerc20Import(d: NormalizedDeposit): boolean {
  *  template emits its own approve and none can forget one. */
 function approveLines(d: NormalizedDeposit, amountExpr: string): string[] {
   if (d.template.funding !== "erc20-approve" || d.approvalPolicy === "none") return [];
-  if (d.token === null) throw new Error("deposit: unreachable — erc20-approve template without a token");
+  if (d.token === null)
+    throw new Error("deposit: unreachable — erc20-approve template without a token");
   const approveAmount = d.approvalPolicy === "max" ? "(2n ** 256n - 1n)" : amountExpr;
-  return [`IERC20.at(${formatBigint(d.token)}).approve(${formatBigint(d.target)}, ${approveAmount});`];
+  return [
+    `IERC20.at(${formatBigint(d.token)}).approve(${formatBigint(d.target)}, ${approveAmount});`,
+  ];
 }
 
 /** Resolves `d.amount` (a literal, or `"balance"`/`"max"`) into an amount EXPRESSION, plus any
  *  binding statement(s) that must precede it (a `"balance"` read is bound once to a const so both
  *  the approve line and the protocol call reuse the SAME value). Rejects `"delta"` — that shape
  *  needs a pre-swap snapshot, which only `swapThenDepositSource` can provide. */
-function resolveAmountExpr(d: NormalizedDeposit, varSuffix: string): { pre: string[]; amountExpr: string } {
+function resolveAmountExpr(
+  d: NormalizedDeposit,
+  varSuffix: string,
+): { pre: string[]; amountExpr: string } {
   if (d.amount === "delta") {
     throw new Error(
       `depositCallStatement: amount "delta" is only meaningful inside swapThenDepositSource (it needs a pre-swap balance snapshot) — ${d.template.protocol}:${d.template.action}`,
@@ -94,14 +102,20 @@ function resolveAmountExpr(d: NormalizedDeposit, varSuffix: string): { pre: stri
 export function depositCallStatement(spec: DepositSourceSpec, varSuffix = ""): string {
   const normalized = toDeposit(spec);
   const { pre, amountExpr } = resolveAmountExpr(normalized, varSuffix);
-  const lines = [...pre, ...approveLines(normalized, amountExpr), ...normalized.template.emit(normalized, amountExpr, varSuffix)];
+  const lines = [
+    ...pre,
+    ...approveLines(normalized, amountExpr),
+    ...normalized.template.emit(normalized, amountExpr, varSuffix),
+  ];
   return lines.join("\n");
 }
 
 /** The import lines a `depositSource(specs)` program needs: each resolved template's own
  *  `imports`, plus `IERC20` iff any spec needs an approve or a `"balance"` ERC20 read. De-duped by
  *  exact line, in first-seen order (`IERC20` first, matching `swap`'s own ordering convention). */
-export function depositImportLines(specs: DepositSourceSpec | readonly DepositSourceSpec[]): readonly string[] {
+export function depositImportLines(
+  specs: DepositSourceSpec | readonly DepositSourceSpec[],
+): readonly string[] {
   const list = Array.isArray(specs) ? specs : [specs];
   const lines: string[] = [];
   const seen = new Set<string>();
@@ -190,14 +204,19 @@ export function swapThenDepositSource(
 ): string {
   const swapList = Array.isArray(swaps) ? swaps : [swaps];
   const depositList = Array.isArray(deposits) ? deposits : [deposits];
-  if (swapList.length === 0) throw new Error("swapThenDepositSource: at least one swap spec is required");
+  if (swapList.length === 0)
+    throw new Error("swapThenDepositSource: at least one swap spec is required");
   if (depositList.length === 0) {
     throw new Error("swapThenDepositSource: at least one deposit spec is required");
   }
 
   const importLines: string[] = [];
   const seen = new Set<string>();
-  for (const line of [...swapImportLines(swapList), ...depositImportLines(depositList), ...(opts.imports ?? [])]) {
+  for (const line of [
+    ...swapImportLines(swapList),
+    ...depositImportLines(depositList),
+    ...(opts.imports ?? []),
+  ]) {
     if (!seen.has(line)) {
       seen.add(line);
       importLines.push(line);
@@ -228,7 +247,8 @@ export function swapThenDepositSource(
       preLines.push(`const ${varBase}Pre = ctx.selfBalance();`);
       postLines.push(`const ${varBase}Post = ctx.selfBalance();`);
     } else {
-      if (normalized.token === null) throw new Error("deposit: unreachable — erc20 template without a token");
+      if (normalized.token === null)
+        throw new Error("deposit: unreachable — erc20 template without a token");
       const tokenLit = formatBigint(normalized.token);
       preLines.push(`const ${varBase}Pre = IERC20.at(${tokenLit}).balanceOf(ctx.self());`);
       postLines.push(`const ${varBase}Post = IERC20.at(${tokenLit}).balanceOf(ctx.self());`);
@@ -241,11 +261,16 @@ export function swapThenDepositSource(
     const deltaExpr = deltaAmountExprs.get(i);
     if (deltaExpr === undefined) return depositCallStatement(d, String(i));
     const normalized = toDeposit({ ...d, amount: 0n } as DepositSpec);
-    const lines = [...approveLines(normalized, deltaExpr), ...normalized.template.emit(normalized, deltaExpr, String(i))];
+    const lines = [
+      ...approveLines(normalized, deltaExpr),
+      ...normalized.template.emit(normalized, deltaExpr, String(i)),
+    ];
     return lines.join("\n");
   });
 
-  const bodyLines = [...preLines, swapBlock, ...postLines, ...depositBlocks].filter((l) => l.length > 0);
+  const bodyLines = [...preLines, swapBlock, ...postLines, ...depositBlocks].filter(
+    (l) => l.length > 0,
+  );
   const fnName = opts.functionName ?? "main";
   const body = indentBlock(bodyLines.join("\n"));
 

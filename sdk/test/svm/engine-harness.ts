@@ -9,13 +9,18 @@
  * accounts, no provisioning; every execute transaction carries the
  * RequestHeapFrame prepend.
  */
-import { createHash } from 'node:crypto';
-import { existsSync } from 'fs';
-import { resolve } from 'path';
-import { getAddressCodec, generateKeyPairSigner, lamports } from '@solana/kit';
-import type { Address, AddressesByLookupTableAddress, Instruction, KeyPairSigner } from '@solana/kit';
-import { Clock, FailedTransactionMetadata, FeatureSet, LiteSVM } from 'litesvm';
-import type { AccountManifest } from 'sauce-compiler';
+import { createHash } from "node:crypto";
+import { existsSync } from "fs";
+import { resolve } from "path";
+import { getAddressCodec, generateKeyPairSigner, lamports } from "@solana/kit";
+import type {
+  Address,
+  AddressesByLookupTableAddress,
+  Instruction,
+  KeyPairSigner,
+} from "@solana/kit";
+import { Clock, FailedTransactionMetadata, FeatureSet, LiteSVM } from "litesvm";
+import type { AccountManifest } from "sauce-compiler";
 import {
   buildComputeBudgetPrepend,
   buildExecuteFromAccountInstruction,
@@ -30,18 +35,24 @@ import {
   encodePayloadArgs,
   getTransactionSize,
   resolveAccounts,
-} from '../../src/svm/index.js';
-import type { AccountResolution, SignedExecuteTransaction, StagedArgs } from '../../src/svm/index.js';
-import { fixtureAccounts } from './fixtures.js';
-import type { AccountFixture } from './fixtures.js';
+} from "../../src/svm/index.js";
+import type {
+  AccountResolution,
+  SignedExecuteTransaction,
+  StagedArgs,
+} from "../../src/svm/index.js";
+import { fixtureAccounts } from "./fixtures.js";
+import type { AccountFixture } from "./fixtures.js";
 
-const sha256 = (bytes: Uint8Array): Uint8Array => new Uint8Array(createHash('sha256').update(bytes).digest());
+const sha256 = (bytes: Uint8Array): Uint8Array =>
+  new Uint8Array(createHash("sha256").update(bytes).digest());
 
 // sdk jest cwd is sdk/; the vendored binary lives at the repo-root
 // artifacts/svm/, one level up (same resolution rule as the compiler's
 // LiteSVM harness). SAUCE_ENGINE_SO overrides it, e.g. to test against a
 // freshly built engine before repinning the sauce dep.
-export const ENGINE_SO = process.env.SAUCE_ENGINE_SO ?? resolve(process.cwd(), '../artifacts/svm/engine.so');
+export const ENGINE_SO =
+  process.env.SAUCE_ENGINE_SO ?? resolve(process.cwd(), "../artifacts/svm/engine.so");
 
 /** describe when the engine binary exists, describe.skip otherwise (CI). */
 export const describeSvm = existsSync(ENGINE_SO) ? describe : describe.skip;
@@ -59,14 +70,14 @@ export const describeRustSvm = RUST_ENGINE_SO ? describe : describe.skip;
 // one are the same line in jest's summary. CI supplies the engine, so an absent one is a failure.
 if (!RUST_ENGINE_SO && process.env.CI) {
   throw new Error(
-    'SAUCE_RUST_ENGINE_SO is unset in CI. Suites executing compiler-emitted bytecode must never skip ' +
+    "SAUCE_RUST_ENGINE_SO is unset in CI. Suites executing compiler-emitted bytecode must never skip " +
       'here — see the "Fetch the v12 engines" step in .github/workflows/ci.yml.',
   );
 }
 
-export const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
-export const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb' as Address;
-const ALT_PROGRAM = 'AddressLookupTab1e1111111111111111111111111' as Address;
+export const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address;
+export const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" as Address;
+const ALT_PROGRAM = "AddressLookupTab1e1111111111111111111111111" as Address;
 
 /** Slot every harness runs at (must be > the fabricated ALT's last_extended_slot 0). */
 const HARNESS_SLOT = 1000n;
@@ -77,7 +88,8 @@ export interface EngineHarness {
   payer: KeyPairSigner;
 }
 
-export const randomAddress = (): Address => getAddressCodec().decode(crypto.getRandomValues(new Uint8Array(32)));
+export const randomAddress = (): Address =>
+  getAddressCodec().decode(crypto.getRandomValues(new Uint8Array(32)));
 
 /**
  * Boots LiteSVM with the engine program, a funded payer, and the cluster
@@ -91,7 +103,10 @@ export const randomAddress = (): Address => getAddressCodec().decode(crypto.getR
  * SAUCE_ENGINE_SO, which would redirect every other suite too (they run
  * TypeScript-compiler output and need the pinned engine).
  */
-export const startEngine = async (unixTimestamp: bigint, engineSo: string = ENGINE_SO): Promise<EngineHarness> => {
+export const startEngine = async (
+  unixTimestamp: bigint,
+  engineSo: string = ENGINE_SO,
+): Promise<EngineHarness> => {
   // The default constructor's program runtime misses the
   // sol_remaining_compute_units syscall (the engine's GasLeft, 0x62 — the
   // SvmRoute CU-floor guard); rebuilding the runtime with every feature
@@ -208,7 +223,10 @@ export const setMint = (
  * deactivating, fully extended before the harness slot) + raw addresses.
  * Returns the table in the shape `buildExecuteTransaction` compresses with.
  */
-export const fabricateAlt = (harness: EngineHarness, addresses: readonly Address[]): AddressesByLookupTableAddress => {
+export const fabricateAlt = (
+  harness: EngineHarness,
+  addresses: readonly Address[],
+): AddressesByLookupTableAddress => {
   const codec = getAddressCodec();
   const table = randomAddress();
   const data = new Uint8Array(56 + 32 * addresses.length);
@@ -305,10 +323,16 @@ export const buildExecuteTransactionForHarness = async (
 };
 
 /** Builds, signs, and sends one transaction of `instructions`; returns the run result. */
-export const sendInstructions = async (harness: EngineHarness, instructions: readonly Instruction[]): Promise<RunResult> =>
+export const sendInstructions = async (
+  harness: EngineHarness,
+  instructions: readonly Instruction[],
+): Promise<RunResult> =>
   sendSigned(harness, await buildExecuteTransactionForHarness(harness, instructions));
 
-export const sendSigned = (harness: EngineHarness, transaction: SignedExecuteTransaction): RunResult => {
+export const sendSigned = (
+  harness: EngineHarness,
+  transaction: SignedExecuteTransaction,
+): RunResult => {
   const result = harness.svm.sendTransaction(transaction);
 
   if (result instanceof FailedTransactionMetadata) {
@@ -328,20 +352,24 @@ export const execute = async (
   output: ExecutableOutput,
   resolution: AccountResolution,
   options: ExecuteOptions = {},
-): Promise<RunResult> => sendSigned(harness, await signExecuteTransaction(harness, output, resolution, options));
+): Promise<RunResult> =>
+  sendSigned(harness, await signExecuteTransaction(harness, output, resolution, options));
 
 export const expectOk = (result: RunResult): { returnData: Uint8Array; logs: string[] } => {
-  if (!result.ok) throw new Error(`expected success, got: ${result.err}\n${result.logs.join('\n')}`);
+  if (!result.ok)
+    throw new Error(`expected success, got: ${result.err}\n${result.logs.join("\n")}`);
   return result;
 };
 
-export const expectFail = (result: RunResult): { revertData: Uint8Array; err: string; logs: string[] } => {
-  if (result.ok) throw new Error('expected the transaction to fail, but it succeeded');
+export const expectFail = (
+  result: RunResult,
+): { revertData: Uint8Array; err: string; logs: string[] } => {
+  if (result.ok) throw new Error("expected the transaction to fail, but it succeeded");
   return result;
 };
 
 export const toBigInt = (bytes: Uint8Array): bigint =>
-  bytes.length === 0 ? 0n : BigInt('0x' + Buffer.from(bytes).toString('hex'));
+  bytes.length === 0 ? 0n : BigInt("0x" + Buffer.from(bytes).toString("hex"));
 
 /** Deterministic 32-byte PDA seed from a small integer — the test-side stand-in for the old u8 index. */
 export const seed32 = (n: number): Uint8Array => {
@@ -356,7 +384,11 @@ export const seed32 = (n: number): Uint8Array => {
  * lifecycle drives the SAME real protocol rather than a copy that could silently diverge from it on
  * the next engine change.
  */
-export const stageBytecode = async (harness: EngineHarness, seed: Uint8Array, bytecode: Uint8Array): Promise<Address> => {
+export const stageBytecode = async (
+  harness: EngineHarness,
+  seed: Uint8Array,
+  bytecode: Uint8Array,
+): Promise<Address> => {
   const plan = buildStagingPlan(bytecode.length);
   const { address: buffer } = await deriveBufferPda(harness.programId, harness.payer.address, seed);
   const shared = { programId: harness.programId, authority: harness.payer.address, buffer };
@@ -373,7 +405,9 @@ export const stageBytecode = async (harness: EngineHarness, seed: Uint8Array, by
     capacity: bytecode.length,
   });
   if (initInstructions.length !== plan.initInstructionCount) {
-    throw new Error(`expected ${plan.initInstructionCount} init instructions, got ${initInstructions.length}`);
+    throw new Error(
+      `expected ${plan.initInstructionCount} init instructions, got ${initInstructions.length}`,
+    );
   }
   expectOk(await sendInstructions(harness, initInstructions));
 
@@ -385,14 +419,20 @@ export const stageBytecode = async (harness: EngineHarness, seed: Uint8Array, by
     });
     const transaction = await buildExecuteTransactionForHarness(harness, [write]);
     if (getTransactionSize(transaction) > 1232) {
-      throw new Error(`staged write transaction exceeds 1232 bytes (${getTransactionSize(transaction)})`);
+      throw new Error(
+        `staged write transaction exceeds 1232 bytes (${getTransactionSize(transaction)})`,
+      );
     }
     expectOk(await sendInstructions(harness, [write]));
   }
 
   expectOk(
     await sendInstructions(harness, [
-      buildFinalizeBufferInstruction({ ...shared, length: bytecode.length, sha256: sha256(bytecode) }),
+      buildFinalizeBufferInstruction({
+        ...shared,
+        length: bytecode.length,
+        sha256: sha256(bytecode),
+      }),
     ]),
   );
 

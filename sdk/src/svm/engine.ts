@@ -63,7 +63,7 @@ export {
   CLOSE_BUFFER_CHECKED_DISCRIMINATOR,
   // the whole structural mirror, for the drift test
   ENGINE_ABI,
-} from './engine-abi.generated.js';
+} from "./engine-abi.generated.js";
 
 // ── interpreter memory (BPF heap frame) ──
 

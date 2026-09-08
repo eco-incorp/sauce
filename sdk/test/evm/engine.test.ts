@@ -13,33 +13,33 @@
  * to be updated together. It additionally pins the load-bearing shapes: deployPot(address,bytes32)
  * inputs, and that encodeCook / encodeDeployPot emit the matching 4-byte selector.
  */
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { getAbiItem, toFunctionSelector, type Abi, type AbiFunction } from 'viem';
-import { v12Pot, v12PotAbi, v12Kitchen, v12KitchenAbi } from '../../src/evm/engine.js';
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { getAbiItem, toFunctionSelector, type Abi, type AbiFunction } from "viem";
+import { v12Pot, v12PotAbi, v12Kitchen, v12KitchenAbi } from "../../src/evm/engine.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ARTIFACTS = resolve(HERE, '../../src/artifacts');
+const ARTIFACTS = resolve(HERE, "../../src/artifacts");
 
 /** Read the vendored artifact JSON and return its `abi` array (the compiler/forge output shape). */
 const loadArtifactAbi = (name: string): Abi =>
-  JSON.parse(readFileSync(resolve(ARTIFACTS, `${name}.json`), 'utf8')).abi as Abi;
+  JSON.parse(readFileSync(resolve(ARTIFACTS, `${name}.json`), "utf8")).abi as Abi;
 
 /** Every function whose signature the exported viem ABI is contracted to mirror, per artifact. */
 const CONTRACTS: { artifact: string; exportedAbi: Abi; fns: string[] }[] = [
-  { artifact: 'V12Pot', exportedAbi: v12PotAbi, fns: ['cook', 'owner', 'router', 'v12Runtime'] },
+  { artifact: "V12Pot", exportedAbi: v12PotAbi, fns: ["cook", "owner", "router", "v12Runtime"] },
   {
-    artifact: 'V12Kitchen',
+    artifact: "V12Kitchen",
     exportedAbi: v12KitchenAbi,
-    fns: ['deployPot', 'predictPot', 'router', 'v12Runtime'],
+    fns: ["deployPot", "predictPot", "router", "v12Runtime"],
   },
 ];
 
 /** 4-byte selector prefix of encoded calldata (`0x` + 8 hex chars). */
 const selectorOf = (calldata: string): string => calldata.slice(0, 10);
 
-describe('evm/engine ABI drift guard', () => {
+describe("evm/engine ABI drift guard", () => {
   for (const { artifact, exportedAbi, fns } of CONTRACTS) {
     describe(`${artifact}`, () => {
       const jsonAbi = loadArtifactAbi(artifact);
@@ -58,29 +58,29 @@ describe('evm/engine ABI drift guard', () => {
   }
 });
 
-describe('evm/engine load-bearing shapes', () => {
-  it('v12KitchenAbi deployPot inputs are exactly [address, bytes32] (canonical form)', () => {
-    const deployPot = getAbiItem({ abi: v12KitchenAbi, name: 'deployPot' }) as AbiFunction;
-    expect(deployPot.inputs.map((i) => i.type)).toEqual(['address', 'bytes32']);
+describe("evm/engine load-bearing shapes", () => {
+  it("v12KitchenAbi deployPot inputs are exactly [address, bytes32] (canonical form)", () => {
+    const deployPot = getAbiItem({ abi: v12KitchenAbi, name: "deployPot" }) as AbiFunction;
+    expect(deployPot.inputs.map((i) => i.type)).toEqual(["address", "bytes32"]);
   });
 
-  it('the vendored V12Kitchen.json deployPot is also (address, bytes32) — no salt-only variant', () => {
+  it("the vendored V12Kitchen.json deployPot is also (address, bytes32) — no salt-only variant", () => {
     const jsonDeployPot = getAbiItem({
-      abi: loadArtifactAbi('V12Kitchen'),
-      name: 'deployPot',
+      abi: loadArtifactAbi("V12Kitchen"),
+      name: "deployPot",
     }) as AbiFunction;
-    expect(jsonDeployPot.inputs.map((i) => i.type)).toEqual(['address', 'bytes32']);
+    expect(jsonDeployPot.inputs.map((i) => i.type)).toEqual(["address", "bytes32"]);
   });
 
-  it('encodeCook calldata selector equals toFunctionSelector of cook(bytes[])', () => {
-    const calldata = v12Pot.encodeCook(['0xdeadbeef']);
-    expect(selectorOf(calldata)).toBe(toFunctionSelector('cook(bytes[])'));
+  it("encodeCook calldata selector equals toFunctionSelector of cook(bytes[])", () => {
+    const calldata = v12Pot.encodeCook(["0xdeadbeef"]);
+    expect(selectorOf(calldata)).toBe(toFunctionSelector("cook(bytes[])"));
   });
 
-  it('encodeDeployPot uses (address,bytes32) — its selector equals deployPot(address,bytes32)', () => {
-    const owner = '0x00000000000000000000000000000000000000A1';
-    const salt = `0x${'00'.repeat(32)}` as const;
+  it("encodeDeployPot uses (address,bytes32) — its selector equals deployPot(address,bytes32)", () => {
+    const owner = "0x00000000000000000000000000000000000000A1";
+    const salt = `0x${"00".repeat(32)}` as const;
     const calldata = v12Kitchen.encodeDeployPot(owner, salt);
-    expect(selectorOf(calldata)).toBe(toFunctionSelector('deployPot(address,bytes32)'));
+    expect(selectorOf(calldata)).toBe(toFunctionSelector("deployPot(address,bytes32)"));
   });
 });

@@ -6,29 +6,29 @@
  * fee + authority catalogs are seeded for this synthetic pool so the pre-mint
  * gates pass and the mint check is reached.
  */
-import { address, getAddressEncoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
+import { address, getAddressEncoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
 import {
   zerofi,
   ZEROFI_POOL_ACCOUNT_SIZE,
   ZEROFI_ORACLE_ACCOUNT_SIZE,
   ZEROFI_POOL_FEE_PPM,
   ZEROFI_POOL_AUTHORITY,
-} from '../../../src/svm/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+} from "../../../src/svm/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG');
-const ORACLE = address('CsyasUrpePHQAJeQHMytaTbyxEag8FCuCBiQKQvBc3GV');
-const VAULT_A = address('5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV');
-const VAULT_B = address('9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx');
-const COMPANION_A = address('BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H');
-const COMPANION_B = address('7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK');
-const MINT_A = address('JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN'); // JUP
-const MINT_B = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'); // USDC
-const AUTHORITY = address('544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX');
-const ATA_A = address('ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9');
-const ATA_B = address('Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo');
+const POOL = address("H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG");
+const ORACLE = address("CsyasUrpePHQAJeQHMytaTbyxEag8FCuCBiQKQvBc3GV");
+const VAULT_A = address("5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV");
+const VAULT_B = address("9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx");
+const COMPANION_A = address("BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H");
+const COMPANION_B = address("7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK");
+const MINT_A = address("JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"); // JUP
+const MINT_B = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
+const AUTHORITY = address("544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX");
+const ATA_A = address("ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9");
+const ATA_B = address("Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo");
 
 function poolBytes(): Uint8Array {
   const out = new Uint8Array(ZEROFI_POOL_ACCOUNT_SIZE);
@@ -60,30 +60,33 @@ function loader(mintA: Uint8Array, mintB: Uint8Array): AccountLoader {
 
 beforeAll(() => {
   (ZEROFI_POOL_FEE_PPM as Record<string, bigint>)[POOL] = 1_000n;
-  (ZEROFI_POOL_AUTHORITY as Record<string, { authority: Address; authorityAtaA: Address; authorityAtaB: Address }>)[
-    POOL
-  ] = { authority: AUTHORITY, authorityAtaA: ATA_A, authorityAtaB: ATA_B };
+  (
+    ZEROFI_POOL_AUTHORITY as Record<
+      string,
+      { authority: Address; authorityAtaA: Address; authorityAtaB: Address }
+    >
+  )[POOL] = { authority: AUTHORITY, authorityAtaA: ATA_A, authorityAtaB: ATA_B };
 });
 afterAll(() => {
   delete (ZEROFI_POOL_FEE_PPM as Record<string, bigint>)[POOL];
   delete (ZEROFI_POOL_AUTHORITY as Record<string, unknown>)[POOL];
 });
 
-describe('zerofi Token-2022 self-drop', () => {
-  test('legacy mints decode — legacy path unchanged', async () => {
+describe("zerofi Token-2022 self-drop", () => {
+  test("legacy mints decode — legacy path unchanged", async () => {
     const cfg = await zerofi.fetchPoolConfig(loader(makeLegacyMint(), makeLegacyMint()), POOL, 0);
-    expect(cfg.venue).toBe('zerofi');
+    expect(cfg.venue).toBe("zerofi");
     expect(cfg.mintA).toBe(MINT_A);
     expect(cfg.mintB).toBe(MINT_B);
   });
 
-  test('a Token-2022 mintA self-drops', async () => {
-    await expect(zerofi.fetchPoolConfig(loader(makeT22Mint(), makeLegacyMint()), POOL, 0)).rejects.toThrow(
-      /dropping pool/,
-    );
+  test("a Token-2022 mintA self-drops", async () => {
+    await expect(
+      zerofi.fetchPoolConfig(loader(makeT22Mint(), makeLegacyMint()), POOL, 0),
+    ).rejects.toThrow(/dropping pool/);
   });
 
-  test('a NonTransferable mintB self-drops as un-routable', async () => {
+  test("a NonTransferable mintB self-drops as un-routable", async () => {
     await expect(
       zerofi.fetchPoolConfig(loader(makeLegacyMint(), makeT22Mint(NON_TRANSFERABLE_TLV)), POOL, 0),
     ).rejects.toThrow(/dropping pool/);

@@ -4,7 +4,7 @@
  * pool state off-chain, emits the in-VM SauceScript quote fragment, builds the
  * venue's swap CPI, and mirrors the quote math in TS for tests.
  */
-import type { Address } from '@solana/kit';
+import type { Address } from "@solana/kit";
 
 /**
  * RPC-or-fixture account source: address in, raw account data out (null when
@@ -82,7 +82,7 @@ export interface VenueSwap {
 
 export interface SvmVenueAdapter {
   slug: string;
-  kind: 'constant-product' | 'stable' | 'sqrt-price';
+  kind: "constant-product" | "stable" | "sqrt-price";
   /** Mainnet program id. */
   programId: Address;
   /**

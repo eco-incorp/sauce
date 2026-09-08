@@ -69,20 +69,20 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import { makeTreeWalkBudget } from '../tree-walk.js';
-import type { SpendHop } from '../tree-walk.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import { makeTreeWalkBudget } from "../tree-walk.js";
+import type { SpendHop } from "../tree-walk.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'manifest';
+const SLUG = "manifest";
 
-export const MANIFEST_PROGRAM_ID = address('MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const MANIFEST_PROGRAM_ID = address("MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** MarketFixed size — the dynamic RB-tree/free-list region begins here. */
 export const MARKET_FIXED_SIZE = 256;
@@ -146,7 +146,7 @@ export interface ManifestWindow {
 export interface ManifestPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'baseIn' (default) sells base for quote; 'quoteIn' buys base with quote. */
-  direction: 'baseIn' | 'quoteIn';
+  direction: "baseIn" | "quoteIn";
   baseMint: Address;
   quoteMint: Address;
   baseVault: Address;
@@ -159,9 +159,12 @@ export interface ManifestPoolConfig extends PoolConfig {
 
 // --- off-chain red-black-tree helpers over the raw market bytes ---
 const nodeBase = (dataIndex: number): number => MARKET_FIXED_SIZE + dataIndex;
-const treeLeft = (data: Uint8Array, idx: number): number => Number(readUintLE(data, nodeBase(idx) + OFF_NODE_LEFT, 4));
-const treeRight = (data: Uint8Array, idx: number): number => Number(readUintLE(data, nodeBase(idx) + OFF_NODE_RIGHT, 4));
-const treeParent = (data: Uint8Array, idx: number): number => Number(readUintLE(data, nodeBase(idx) + OFF_NODE_PARENT, 4));
+const treeLeft = (data: Uint8Array, idx: number): number =>
+  Number(readUintLE(data, nodeBase(idx) + OFF_NODE_LEFT, 4));
+const treeRight = (data: Uint8Array, idx: number): number =>
+  Number(readUintLE(data, nodeBase(idx) + OFF_NODE_RIGHT, 4));
+const treeParent = (data: Uint8Array, idx: number): number =>
+  Number(readUintLE(data, nodeBase(idx) + OFF_NODE_PARENT, 4));
 
 function isLeftChild(data: Uint8Array, idx: number): boolean {
   const parent = treeParent(data, idx);
@@ -232,14 +235,21 @@ function hasDiscriminant(data: Uint8Array): boolean {
  * loader; the whole book is in this one account, so a quote needs no other
  * account.
  */
-export async function fetchManifestConfig(load: AccountLoader, pool: Address): Promise<ManifestPoolConfig> {
+export async function fetchManifestConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<ManifestPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: market account ${pool} not found`);
   if (data.length < MARKET_FIXED_SIZE) {
-    throw new Error(`${SLUG}: market ${pool} has ${data.length} bytes, expected >= ${MARKET_FIXED_SIZE}`);
+    throw new Error(
+      `${SLUG}: market ${pool} has ${data.length} bytes, expected >= ${MARKET_FIXED_SIZE}`,
+    );
   }
   if (!hasDiscriminant(data)) {
-    throw new Error(`${SLUG}: market ${pool} has a foreign discriminant (not a Manifest MarketFixed account)`);
+    throw new Error(
+      `${SLUG}: market ${pool} has a foreign discriminant (not a Manifest MarketFixed account)`,
+    );
   }
 
   const codec = getAddressCodec();
@@ -268,19 +278,24 @@ export async function fetchManifestConfig(load: AccountLoader, pool: Address): P
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping market ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping market ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   // ONE budget for both sides: the bids and asks trees share the account's
   // block region, so sizing the bound on the whole region covers a full
   // traversal of both of them together (see makeTreeWalkBudget).
-  const spendHop = makeTreeWalkBudget(SLUG, Math.floor((data.length - MARKET_FIXED_SIZE) / BLOCK_SIZE));
+  const spendHop = makeTreeWalkBudget(
+    SLUG,
+    Math.floor((data.length - MARKET_FIXED_SIZE) / BLOCK_SIZE),
+  );
 
   return {
     venue: SLUG,
     pool,
-    direction: 'baseIn',
+    direction: "baseIn",
     baseMint,
     quoteMint,
     baseVault: codec.decode(data.subarray(OFF_BASE_VAULT, OFF_BASE_VAULT + 32)),

@@ -9,14 +9,14 @@ inventoried at `docs/compiler-feature-inventory.md` (114 features, IDs `A1`…`X
 
 1. **SauceScript becomes a subset of TypeScript.** Official support for JS-like SauceScript is
    **dropped**. Type annotations are what let the compiler do real work (partial evaluation, kind
-   resolution); doing it in untyped JS is painful. This is *why* `compiler-rs` uses OXC — it parses TS
+   resolution); doing it in untyped JS is painful. This is _why_ `compiler-rs` uses OXC — it parses TS
    natively, so partial eval is language-agnostic there, whereas the TS compiler's whole fold family
    is TS-only precisely because it reused the `typescript` library.
 2. **Global namespacing for native EVM/SVM opcodes differs and must be pinned down and adopted.**
    `compiler-rs`'s `evm.*`/`svm.*` per-target split (delta §4) is the target shape, not the TS
    compiler's flat `GLOBALS` table with one name branching internally on target.
 
-**Two parts.** **Part 1** makes the current TS compiler *resemble* `compiler-rs` in the design and
+**Two parts.** **Part 1** makes the current TS compiler _resemble_ `compiler-rs` in the design and
 syntax decisions that matter, reaching basic parity. **Part 2** is a sequenced worklist of PRs into
 `../sauce` porting every TS-compiler feature missing or partial in `compiler-rs`.
 
@@ -42,14 +42,14 @@ imports.
 Two of these are audits, the rest are decisions. Every one is cheap relative to the work it unblocks,
 and several Part 2 items cannot be scoped without them.
 
-| # | Task | Why it gates | Effort |
-| --- | --- | --- | --- |
-| **0.1** | **Adversarial audit of `compiler-rs`'s scope-sharing in `fold.rs`.** Port the TS compiler's exact `if`/`while`-scope-sharing fixtures (`const FEE = 100n; function f(cond) { if (cond) { let FEE = 5n; } return FEE; }` and its four documented variants) as tests against `fold.rs`. | This bug family cost the TS compiler **four** separate fix-and-regression-lock cycles across four different passes, each found only by real execution, and each produced a *wrong program*, not a missed fold. `fold.rs`'s shadowing model was not audited (delta §9.5). Every partial-eval port in Part 2 sits on top of whatever `fold.rs` believes about scope. | S |
-| **0.2** | **Read-and-classify audit of `codegen.rs` (6,370 lines) + the unread bulk of `lower/assembly.rs` (3,869).** Output: confirmed-present/absent for `A6`–`A8` and `G1`–`G24`. | Those 27 inventory IDs are **unknown**, not absent (delta §9.1). Nothing in Category `G` can be scheduled until this lands. | M |
-| **0.3** | **Decide the `ctx.*` question.** Adopt `compiler-rs`'s single `ctx.*` root in the TS compiler (replacing `msg`/`block`/`tx`/`address`), or push back and have `compiler-rs` adopt the four-root split. | Determines whether Part 1's §1.4 or Part 2's PR-1 is the migration, and they are mutually exclusive shapes. Recommendation: **adopt `ctx.*`** — one root, target-neutral naming, and it is the side already shipping. | S (decision) |
-| **0.4** | **Decide the reserved-name policy.** `compiler-rs` reserves three identifiers and lets namespace roots be shadowed; the TS compiler reserves every root and global function name. | Recommendation: **converge on `compiler-rs`'s narrower rule**, because its reasoning is mechanical rather than stylistic — a namespace root is only recognized at a static-member-callee position, so a variable by that name can shadow nothing (`lower/mod.rs:1700-1701`). Reserving `emit` in particular actively blocks the library that should own it (`lower/mod.rs:1703-1706`). | S (decision) |
-| **0.5** | **Decide the destructuring question.** `compiler-rs`'s frontend rejects `const [a, b] = …` outright; a multi-output call is a `Ty::Tuple` projected by index/field. The TS compiler built a dedicated destructuring lowering (`K10`) for exactly this. | This is the one item where "port the TS compiler's syntax" and "adopt `compiler-rs`'s shape" **actively conflict**. Recommendation: **adopt `compiler-rs`'s tuple projection** — it is the capability that matters, and real TypeScript destructuring is a bigger grammar commitment than the SauceScript-invented `const [a,b] = call()` form. | S (decision) |
-| **0.6** | **Decide `emit()`'s home** (`L14`). Builtin (TS compiler today) or library function over `log` + `abi.encode` + a precomputed topic (`compiler-rs`'s stated position). | Recommendation: **library**, per `compiler-rs`'s own reasoning. This *removes* `L14` from the port list rather than scheduling it. | S (decision) |
+| #       | Task                                                                                                                                                                                                                                                                                  | Why it gates                                                                                                                                                                                                                                                                                                                                                                           | Effort       |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| **0.1** | **Adversarial audit of `compiler-rs`'s scope-sharing in `fold.rs`.** Port the TS compiler's exact `if`/`while`-scope-sharing fixtures (`const FEE = 100n; function f(cond) { if (cond) { let FEE = 5n; } return FEE; }` and its four documented variants) as tests against `fold.rs`. | This bug family cost the TS compiler **four** separate fix-and-regression-lock cycles across four different passes, each found only by real execution, and each produced a _wrong program_, not a missed fold. `fold.rs`'s shadowing model was not audited (delta §9.5). Every partial-eval port in Part 2 sits on top of whatever `fold.rs` believes about scope.                     | S            |
+| **0.2** | **Read-and-classify audit of `codegen.rs` (6,370 lines) + the unread bulk of `lower/assembly.rs` (3,869).** Output: confirmed-present/absent for `A6`–`A8` and `G1`–`G24`.                                                                                                            | Those 27 inventory IDs are **unknown**, not absent (delta §9.1). Nothing in Category `G` can be scheduled until this lands.                                                                                                                                                                                                                                                            | M            |
+| **0.3** | **Decide the `ctx.*` question.** Adopt `compiler-rs`'s single `ctx.*` root in the TS compiler (replacing `msg`/`block`/`tx`/`address`), or push back and have `compiler-rs` adopt the four-root split.                                                                                | Determines whether Part 1's §1.4 or Part 2's PR-1 is the migration, and they are mutually exclusive shapes. Recommendation: **adopt `ctx.*`** — one root, target-neutral naming, and it is the side already shipping.                                                                                                                                                                  | S (decision) |
+| **0.4** | **Decide the reserved-name policy.** `compiler-rs` reserves three identifiers and lets namespace roots be shadowed; the TS compiler reserves every root and global function name.                                                                                                     | Recommendation: **converge on `compiler-rs`'s narrower rule**, because its reasoning is mechanical rather than stylistic — a namespace root is only recognized at a static-member-callee position, so a variable by that name can shadow nothing (`lower/mod.rs:1700-1701`). Reserving `emit` in particular actively blocks the library that should own it (`lower/mod.rs:1703-1706`). | S (decision) |
+| **0.5** | **Decide the destructuring question.** `compiler-rs`'s frontend rejects `const [a, b] = …` outright; a multi-output call is a `Ty::Tuple` projected by index/field. The TS compiler built a dedicated destructuring lowering (`K10`) for exactly this.                                | This is the one item where "port the TS compiler's syntax" and "adopt `compiler-rs`'s shape" **actively conflict**. Recommendation: **adopt `compiler-rs`'s tuple projection** — it is the capability that matters, and real TypeScript destructuring is a bigger grammar commitment than the SauceScript-invented `const [a,b] = call()` form.                                        | S (decision) |
+| **0.6** | **Decide `emit()`'s home** (`L14`). Builtin (TS compiler today) or library function over `log` + `abi.encode` + a precomputed topic (`compiler-rs`'s stated position).                                                                                                                | Recommendation: **library**, per `compiler-rs`'s own reasoning. This _removes_ `L14` from the port list rather than scheduling it.                                                                                                                                                                                                                                                     | S (decision) |
 
 ---
 
@@ -61,14 +61,15 @@ copies, the concrete change in `/Users/er/Documents/Projects/sauce-sdk/compiler`
 ### 1.1 — Declare SauceScript a TypeScript subset; demote the plain-acorn path
 
 **`compiler-rs` shape.** One parser, TS grammar always (`frontend.rs:89`), plus a default-deny subset
-gate collecting all violations (`frontend.rs:14-24`). `frontend.rs:1`: *"parse SauceScript (a
-TypeScript subset)."*
+gate collecting all violations (`frontend.rs:14-24`). `frontend.rs:1`: _"parse SauceScript (a
+TypeScript subset)."_
 
 **Changes in `compiler/`.**
+
 - Document in `compiler/README.md` and the repo `CLAUDE.md` that a `.ts`/`.sauce.ts` source (or
   `tsSource: true`) is the **only supported** entry point going forward. `.js`/`.sauce` becomes
   legacy-supported, not removed.
-- Flip the *documented default* and consider flipping the actual default of `tsSource` for new call
+- Flip the _documented default_ and consider flipping the actual default of `tsSource` for new call
   sites, so the fold family is the compiler's behavior rather than an opt-in extra.
 - Do **not** delete acorn. The ts-frontend's contract is "parse TS, strip types, hand acorn plain JS
   text" (`src/ts-frontend.ts`); acorn stays the bytecode-facing parser. What changes is which entry
@@ -96,14 +97,14 @@ behavior, the dropped ERC20 bool, the descriptor pointer ceiling).
 **Risk: NONE (documentation).** But it is the prerequisite for 1.3/1.4 being principled rather than
 cosmetic — without the rule, the namespace split is just a rename.
 
-**Why this comes before the rename:** the rule is what decides *which* names move. `keccak256` and
+**Why this comes before the rename:** the rule is what decides _which_ names move. `keccak256` and
 `Math.*` must **not** be namespaced (shared meaning, reconciled encoding); `sload`/`sstore`/`call`
 must be (same opcode byte, divergent semantics).
 
 ### 1.3 — Adopt the `evm.*` / `svm.*` namespace split
 
 **`compiler-rs` shape** (delta §4b/4c): six namespace roots recognized structurally
-(`lower/contract.rs:807-892`), per-target primitives as *distinct* constructs sharing a bytecode
+(`lower/contract.rs:807-892`), per-target primitives as _distinct_ constructs sharing a bytecode
 opcode, each gated by its own `Feature`.
 
 **TS compiler today** (`compiler/src/globals.ts`): one flat `GLOBALS` table — `storage.read/write`
@@ -112,6 +113,7 @@ opcode, each gated by its own `Feature`.
 `writeAccountData` (:814), `accountUint` (:831), namespaced under nothing at all.
 
 **Changes in `compiler/src/globals.ts`.**
+
 1. Add `svm` as a real `GLOBALS` root: `svm.sload`, `svm.sstore`, `svm.call`, and move the four bare
    svm globals under it (`svm.uint`, `svm.accountData`, `svm.writeAccountData`, `svm.accountUint`).
 2. Add `evm` as a real root: `evm.sload`, `evm.sstore`, `evm.call`, `evm.static`, `evm.delegate`, and
@@ -138,21 +140,22 @@ not the other — which is exactly the failure mode 1.6 exists to close. Land 1.
 `ctx.chainId()`, `ctx.blockNumber()`, `ctx.timestamp()`, `ctx.selfBalance()`, `ctx.balance(addr)`
 mapping to the existing `msg.sender`, `address.self`, `block.chainId`, `block.number`,
 `block.timestamp`, and the two balance reads. Keep `msg`/`block`/`tx`/`address` as the deprecated
-supersets — the TS compiler has 21 context entry points to `compiler-rs`'s 7, so this is *additive on
-the TS side and a port target on the rs side* (Part 2, PR-1).
+supersets — the TS compiler has 21 context entry points to `compiler-rs`'s 7, so this is _additive on
+the TS side and a port target on the rs side_ (Part 2, PR-1).
 
 **Risk: LOW.** Purely additive naming. The one substantive decision embedded here is whether
-`ctx.blockNumber()` on the SVM meaning *slot height* is acceptable under one name —
+`ctx.blockNumber()` on the SVM meaning _slot height_ is acceptable under one name —
 `compiler-rs` classifies that as **inherently divergent, won't-fix** (`README.md:214`), which is a
 reasonable position to inherit rather than relitigate.
 
 ### 1.5 — Let type annotations settle storage kind; retire the heuristic incrementally
 
 **`compiler-rs` shape.** `lower::annotation_ty` resolves each annotation to a checked `Ty`, and
-`is_dynamic`/`ElementTag` are *derived* from it once, during lowering (delta §1/§3).
+`is_dynamic`/`ElementTag` are _derived_ from it once, during lowering (delta §1/§3).
 
 **Changes in `compiler/`.** This is the highest-leverage item in Part 1, because it is what the nine
 documented kind-inference bug generations (`K1`–`K15`) all trace back to.
+
 - Teach the ts-frontend to **read** a `let`/`const`/parameter type annotation (it is currently
   annotation-blind — it strips types via `ts.transpileModule` and hands acorn plain JS) and thread it
   through to the processor as an authoritative kind.
@@ -169,14 +172,14 @@ documented kind-inference bug generations (`K1`–`K15`) all trace back to.
 **Risk: MEDIUM-HIGH, but the good kind.** Threading a new authoritative kind source into the pipeline
 that produced nine descriptor-drop bugs is not risk-free. Mitigate exactly the way this repo already
 does: every change in this area gets a real-execution regression test, per the `CLAUDE.md` fix log's
-own methodology. The cross-check-and-error design means the failure mode is a *compile error*, never a
+own methodology. The cross-check-and-error design means the failure mode is a _compile error_, never a
 silent runtime revert.
 
 ### 1.6 — Consolidate target gating into one `Feature` × availability matrix
 
 **`compiler-rs` shape.** One matrix (`targets.rs:64-140`), consulted from exactly two places — the
 lowering-time gate (`require_available`) and the pre-codegen pass (`capability::check`) — documented as
-*"the single mapping both gates read … so they cannot ask about different cells for one call"*
+_"the single mapping both gates read … so they cannot ask about different cells for one call"_
 (`targets.rs:172-176`). The pass reports the **leftmost** unsupported construct in source order.
 
 **Changes in `compiler/`.** Fold today's scattered gating into one declarative table plus one check:
@@ -184,7 +187,7 @@ lowering-time gate (`require_available`) and the pre-codegen pass (`capability::
 `assertNoDynamicVariableObjectField` (`K13`), `rejectV1ScalarToDynamicReassignment` (`K8`), the
 `multiOutputCall` tag (`K9`), and the `ctx.isV12`/`ctx.isSvm` branches through `processor/`.
 
-**Risk: MEDIUM.** These guards were each landed to close a *specific* measured miscompile, and several
+**Risk: MEDIUM.** These guards were each landed to close a _specific_ measured miscompile, and several
 have subtle conditions (the `_bytes.length === 2` narrowing in `assertNoDynamicVariableObjectField`
 exists because v12's postfix encoding puts `READ_HEAP` first for a genuinely scalar expression). Do
 not rewrite the conditions while relocating them — move each guard's predicate verbatim into a matrix
@@ -202,7 +205,7 @@ drifted before consolidation.
 **Changes in `compiler/`.** A single lookup table naming each `Saucer`/`V12Saucer` method's operand
 push order and stack effect, consulted rather than restated. The TS compiler has the identical
 structural exposure today: this branch's `V12Saucer.store` SSWAP bug (silently returning the
-*pre-write* value for a plain scalar parameter write, with no revert) existed because the write path
+_pre-write_ value for a plain scalar parameter write, with no revert) existed because the write path
 omitted two terms the read path already accounted for.
 
 **Risk: LOW to state, MEDIUM to enforce.** Adding the table is safe; making every site consult it
@@ -214,7 +217,7 @@ If 0.4 lands on `compiler-rs`'s narrower rule: shrink `RESERVED_NAMES` (`globals
 `GLOBALS` key + every `GLOBAL_FUNCTIONS` key" toward the primitives only, and drop the enforcement in
 `compiler/src/context.ts:502,560` / `processor/inline.ts:90` for namespace roots.
 
-**Risk: LOW-MEDIUM, and asymmetric.** *Relaxing* a reservation can only make previously-rejected
+**Risk: LOW-MEDIUM, and asymmetric.** _Relaxing_ a reservation can only make previously-rejected
 programs compile — it cannot break a compiling one. But keep the reservation for anything the compiler
 intercepts **before** name resolution, or you reintroduce `compiler-rs`'s own ECO-2011 bug
 (`import { transfer as log }` bound a callee no call could reach; the call emitted a bare `LOG` and
@@ -241,12 +244,13 @@ Small, but they are what "basic parity" means at the source level:
 
 ### 1.10 — Per-function build-artifact cache (follow-up; added 2026-08-19)
 
-**Goal (user).** Cache the per-function *build artifact* (the Saucer / `funcMeta` entry) in memory, keyed
+**Goal (user).** Cache the per-function _build artifact_ (the Saucer / `funcMeta` entry) in memory, keyed
 by the function, and clone+reuse it across compiles — so recompiling `main(x)=>a(x)+b(x)+c(x)` reuses
 the already-built `a` and `b` artifacts instead of re-walking their ASTs. **This caches the build
 output, not bytecode** — bytes are still (re)emitted per compile because args/offsets differ.
 
 **Why it's feasible (the seam already exists).** `compile()` is genuinely two-phase:
+
 - **Build** (per-function): `processFunction`/`processFunctionV12` walk each function's AST into its own
   Saucer artifact; v12 collects them in `ctx.funcMeta` (`context.ts:128`). Cross-function calls are
   emitted as sentinels `0xFF00|funcIndex` (`callPositions`); param reads as SDUP sentinels
@@ -256,20 +260,21 @@ output, not bytecode** — bytes are still (re)emitted per compile because args/
   `assembleV12`/`buildMain` resolve sentinels → absolute byte offsets, concrete `SDUPn`, `ALLOCATE`
   prefix, arg-prologue. Cheap; re-runs every compile.
 
-So the build artifact is a discrete object produced *before* the assembler, and offsets/args are
+So the build artifact is a discrete object produced _before_ the assembler, and offsets/args are
 late-bound — exactly what makes clone-and-reuse sound. (The whole-program `cache.ts` is a coarser,
-separate layer; its own header rejects caching *bytecode* bodies, which is a different claim.)
+separate layer; its own header rejects caching _bytecode_ bodies, which is a different claim.)
 
-**The one caveat.** `patchCalls` resolves the sentinel's *offset*, but the callee's **registry index**
+**The one caveat.** `patchCalls` resolves the sentinel's _offset_, but the callee's **registry index**
 is still baked into the sentinel at build time (`0xFF00|funcIndex`, index from `ctx.addFunc` order,
 `processor/index.ts:468`). Two tiers follow:
+
 - **Tier 1 — leaf helpers** (no CALL_FUNCTION, no top-level-const/ABI reads): artifact is a pure
   function of `(functionSource, target)`. Soundly cacheable with **zero architectural change**. Covers
   the `tickArg`/`kyberOut`-shaped arithmetic helpers.
 - **Tier 2 — callers**: cacheable only if the key also fingerprints callee registry indices + any
   consts/ABIs/callee-return-kinds the body reads. **Unlock:** make the call sentinel **name-based** and
   resolve `name→offset` in `patchCalls` (instead of `index→offset`) — then no build artifact bakes a
-  program-specific index, and the key collapses to pure source. Small change *because* the post-build
+  program-specific index, and the key collapses to pure source. Small change _because_ the post-build
   patcher already exists.
 
 **Changes in `compiler/`.** A build-artifact store consulted before `processFunction*`, populated in
@@ -303,15 +308,15 @@ inherit the inventory's `P0`–`P3` where they exist, adjusted for `compiler-rs`
 
 ### Wave 1 — small, additive, no new architecture
 
-| PR | Scope | IDs | Status in rs | Prio | Depends on |
-| --- | --- | --- | --- | --- | --- |
-| **PR-1** | **Complete the `ctx.*` context surface.** Add the missing reads as `ContextOp` variants plus match arms in `ctx_call`: `msg.value`, `msg.data`, `tx.origin`, `tx.gasPrice`, `block.coinbase`, `block.prevrandao`, `block.gasLimit`, `block.baseFee`, `block.blobBaseFee`, `address.balanceOf/codeSize/codeHash/isContract/isEOA`, `gasLeft`, `blockHash`, `blobHash` — under `ctx.*` names. | `L11` | PARTIAL (7 of 21; `ctx.gasPrice()` rejected by test at `lower/contract.rs:2135-2139`) | P1 | 0.3 |
-| **PR-2** | **svm sugar intrinsics.** `uint()`, `accountData()`, `writeAccountData()`, `accountUint()` as `svm.*` methods over the existing `svm.sload`/`svm.sstore` primitives. | `L16` | ABSENT (sugar only — primitive present) | P1 | — |
-| **PR-3** | **Transient storage surface.** Wire `evm.tload`/`evm.tstore` to the already-present `Feature::TransientStorage` matrix cell. | `L8` | PARTIAL (matrix cell only, no call surface) | P1 | — |
-| **PR-4** | **`CompileOptions.defines`.** One additive field, threaded into `fold.rs`'s existing constant environment alongside its own `known` map. | `D4` | ABSENT | P1 | — |
-| **PR-5** | **`.catch(handler)` / try-catch surface.** `Feature::TryCatch` exists but `frontend.rs:956` rejects `try`/`catch` as out-of-subset and `ir.rs` has no `Stmt::Try`. Needs frontend acceptance + an IR node + codegen. | `C4` | ABSENT (matrix cell only) | P1 | — |
-| **PR-6** | **Compile cache.** Memoized `(source, options, resolved-import bytes)` → result, defensive clone in/out, bounded LRU. Note `compiler-rs`'s core is I/O-free, so the import-bytes term must key off the `Resolver`'s answers, not the filesystem. | `X1`–`X3` | ABSENT | P2 | — |
-| **PR-6b** | **Per-function build-artifact cache** (companion to TS §1.10; added 2026-08-19). Cache the per-function lowered **IR** (the pre-`codegen.rs` artifact), keyed by function, and reuse it across compiles so a new `main` reusing helpers `a`/`b` skips re-lowering them. **Structurally easier than in TS:** `main` already has an IR→`codegen.rs` split, and IR is program-relative — cross-function references and offsets are resolved entirely in codegen, so an IR artifact is index-relocatable **for free** (no name-based-sentinel change needed, unlike the TS Tier-2 caveat). Key on `(functionSource, target)` for leaf functions; add the read-consts/ABIs fingerprint for callers. Land after PR-6's cache infra + the Wave-2 IR-pass foundation exists. | `X1`–`X3` (finer grain) | ABSENT | P2 | PR-6, PR-8 |
+| PR        | Scope                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | IDs                     | Status in rs                                                                          | Prio | Depends on |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------- | ---- | ---------- |
+| **PR-1**  | **Complete the `ctx.*` context surface.** Add the missing reads as `ContextOp` variants plus match arms in `ctx_call`: `msg.value`, `msg.data`, `tx.origin`, `tx.gasPrice`, `block.coinbase`, `block.prevrandao`, `block.gasLimit`, `block.baseFee`, `block.blobBaseFee`, `address.balanceOf/codeSize/codeHash/isContract/isEOA`, `gasLeft`, `blockHash`, `blobHash` — under `ctx.*` names.                                                                                                                                                                                                                                                                                                                                                                          | `L11`                   | PARTIAL (7 of 21; `ctx.gasPrice()` rejected by test at `lower/contract.rs:2135-2139`) | P1   | 0.3        |
+| **PR-2**  | **svm sugar intrinsics.** `uint()`, `accountData()`, `writeAccountData()`, `accountUint()` as `svm.*` methods over the existing `svm.sload`/`svm.sstore` primitives.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `L16`                   | ABSENT (sugar only — primitive present)                                               | P1   | —          |
+| **PR-3**  | **Transient storage surface.** Wire `evm.tload`/`evm.tstore` to the already-present `Feature::TransientStorage` matrix cell.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `L8`                    | PARTIAL (matrix cell only, no call surface)                                           | P1   | —          |
+| **PR-4**  | **`CompileOptions.defines`.** One additive field, threaded into `fold.rs`'s existing constant environment alongside its own `known` map.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `D4`                    | ABSENT                                                                                | P1   | —          |
+| **PR-5**  | **`.catch(handler)` / try-catch surface.** `Feature::TryCatch` exists but `frontend.rs:956` rejects `try`/`catch` as out-of-subset and `ir.rs` has no `Stmt::Try`. Needs frontend acceptance + an IR node + codegen.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `C4`                    | ABSENT (matrix cell only)                                                             | P1   | —          |
+| **PR-6**  | **Compile cache.** Memoized `(source, options, resolved-import bytes)` → result, defensive clone in/out, bounded LRU. Note `compiler-rs`'s core is I/O-free, so the import-bytes term must key off the `Resolver`'s answers, not the filesystem.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `X1`–`X3`               | ABSENT                                                                                | P2   | —          |
+| **PR-6b** | **Per-function build-artifact cache** (companion to TS §1.10; added 2026-08-19). Cache the per-function lowered **IR** (the pre-`codegen.rs` artifact), keyed by function, and reuse it across compiles so a new `main` reusing helpers `a`/`b` skips re-lowering them. **Structurally easier than in TS:** `main` already has an IR→`codegen.rs` split, and IR is program-relative — cross-function references and offsets are resolved entirely in codegen, so an IR artifact is index-relocatable **for free** (no name-based-sentinel change needed, unlike the TS Tier-2 caveat). Key on `(functionSource, target)` for leaf functions; add the read-consts/ABIs fingerprint for callers. Land after PR-6's cache infra + the Wave-2 IR-pass foundation exists. | `X1`–`X3` (finer grain) | ABSENT                                                                                | P2   | PR-6, PR-8 |
 
 **Why these first:** each is bounded, needs no new pass, and PR-1/PR-2/PR-3 are also the items most
 likely to be load-bearing for real SDK SauceScript (protocol functions read `msg.value` and
@@ -321,23 +326,23 @@ likely to be load-bearing for real SDK SauceScript (protocol functions read `msg
 
 This is the largest genuine gap (delta §3/§7): `fold.rs` does constant-subtree collapse and
 assigned-once propagation; the TS compiler's Categories `TS`/`Unroll`/`Inline` are 26 features. The
-inventory's own instruction (lines 48-58) is to treat Category `TS` as *the specification* and
+inventory's own instruction (lines 48-58) is to treat Category `TS` as _the specification_ and
 implement it once, language-agnostically — which on `compiler-rs` means **as IR passes**, not as
 source-AST transformers.
 
-| PR | Scope | IDs | Status in rs | Prio | Depends on |
-| --- | --- | --- | --- | --- | --- |
-| **PR-7** | **Scope-model hardening + regression suite.** Land 0.1's fixtures as tests; fix whatever they find. | `TS6` (the discipline) | UNKNOWN → must be settled | **P0** | 0.1 |
-| **PR-8** | **Statement-splice infrastructure + iteration cap.** The IR analogue of `U4`: splice N `Stmt`s into a `Vec<Stmt>`, with the 256-iteration cap and a declaration-collision guard. On `compiler-rs` the collision guard is *cheaper* than in TS — there is no text round-trip through `acorn` to crash, but `LocalId` uniqueness still has to hold. | `U4` | ABSENT | **P0** (infrastructure) | PR-7 |
-| **PR-9** | **Numeric `for` unrolling + the `while`-counting idiom.** Both are one core (`unrollCountingLoop` in TS). | `U1`, `U2` | ABSENT | P1 | PR-8 |
-| **PR-10** | **Local per-function constant propagation, incl. ternary and compound-assignment RHS.** In TS this is a control-flow-sensitive abstract interpreter with an explicit if/else merge rule and a "every name written anywhere in a loop is NAC" rule (deliberately not a fixpoint). On the IR this is a natural pass. | `TS15`, `TS16` | ABSENT as a distinct pass | P1 | PR-7 |
-| **PR-11** | **Lookup-table folding** (top-level array/object constant tables, whole-program allowlist safety scan, constant-index read substitution, dead-declaration removal). | `TS12` | ABSENT | P1 | PR-10 |
-| **PR-12** | **`for…of` unrolling over a tracked table.** In TS this is *enabling*, not merely optimizing — plain acorn has no `ForOfStatement` at all. Check whether `compiler-rs`'s frontend accepts `for…of` before scoping: `frontend.rs:14-24`'s accepted list names `for`/`while` and not `for…of`, so this may be a frontend-grammar addition too. | `U3` | ABSENT | P1 | PR-11, PR-8 |
-| **PR-13** | **Local `new Array(n)` construction folding + the `return arr;` escape fold.** `Expr::ArrayOfLength` already exists in the IR, so the candidate shape is representable. The TS version's forced-BYTE_32 return-width channel exists only because `tsPartialEval` returns *text* that acorn re-parses — on `compiler-rs` the width can ride on the IR node, so **do not port the fingerprint channel**, port the intent. | `TS13`, `TS14` | ABSENT | P2 | PR-10 |
-| **PR-14** | **Same-file call folding** (a call to a side-effect-free, single-`return`-expression, non-recursive, zero-nested-call same-file function folds at the call site). | `TS4` | ABSENT | P2 | PR-10 |
+| PR        | Scope                                                                                                                                                                                                                                                                                                                                                                                                                   | IDs                    | Status in rs              | Prio                    | Depends on  |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------- | ----------------------- | ----------- |
+| **PR-7**  | **Scope-model hardening + regression suite.** Land 0.1's fixtures as tests; fix whatever they find.                                                                                                                                                                                                                                                                                                                     | `TS6` (the discipline) | UNKNOWN → must be settled | **P0**                  | 0.1         |
+| **PR-8**  | **Statement-splice infrastructure + iteration cap.** The IR analogue of `U4`: splice N `Stmt`s into a `Vec<Stmt>`, with the 256-iteration cap and a declaration-collision guard. On `compiler-rs` the collision guard is _cheaper_ than in TS — there is no text round-trip through `acorn` to crash, but `LocalId` uniqueness still has to hold.                                                                       | `U4`                   | ABSENT                    | **P0** (infrastructure) | PR-7        |
+| **PR-9**  | **Numeric `for` unrolling + the `while`-counting idiom.** Both are one core (`unrollCountingLoop` in TS).                                                                                                                                                                                                                                                                                                               | `U1`, `U2`             | ABSENT                    | P1                      | PR-8        |
+| **PR-10** | **Local per-function constant propagation, incl. ternary and compound-assignment RHS.** In TS this is a control-flow-sensitive abstract interpreter with an explicit if/else merge rule and a "every name written anywhere in a loop is NAC" rule (deliberately not a fixpoint). On the IR this is a natural pass.                                                                                                      | `TS15`, `TS16`         | ABSENT as a distinct pass | P1                      | PR-7        |
+| **PR-11** | **Lookup-table folding** (top-level array/object constant tables, whole-program allowlist safety scan, constant-index read substitution, dead-declaration removal).                                                                                                                                                                                                                                                     | `TS12`                 | ABSENT                    | P1                      | PR-10       |
+| **PR-12** | **`for…of` unrolling over a tracked table.** In TS this is _enabling_, not merely optimizing — plain acorn has no `ForOfStatement` at all. Check whether `compiler-rs`'s frontend accepts `for…of` before scoping: `frontend.rs:14-24`'s accepted list names `for`/`while` and not `for…of`, so this may be a frontend-grammar addition too.                                                                            | `U3`                   | ABSENT                    | P1                      | PR-11, PR-8 |
+| **PR-13** | **Local `new Array(n)` construction folding + the `return arr;` escape fold.** `Expr::ArrayOfLength` already exists in the IR, so the candidate shape is representable. The TS version's forced-BYTE_32 return-width channel exists only because `tsPartialEval` returns _text_ that acorn re-parses — on `compiler-rs` the width can ride on the IR node, so **do not port the fingerprint channel**, port the intent. | `TS13`, `TS14`         | ABSENT                    | P2                      | PR-10       |
+| **PR-14** | **Same-file call folding** (a call to a side-effect-free, single-`return`-expression, non-recursive, zero-nested-call same-file function folds at the call site).                                                                                                                                                                                                                                                       | `TS4`                  | ABSENT                    | P2                      | PR-10       |
 
 **Sequencing note.** `TS1`/`TS2`/`TS3`/`TS5`/`TS7`/`TS8` are **not** rows above on purpose: they are
-artifacts of the TS compiler's *seam* (two evaluators, the `ts-evaluator` fallback and its guards,
+artifacts of the TS compiler's _seam_ (two evaluators, the `ts-evaluator` fallback and its guards,
 `getText()` precision, the module-scope fold's own ternary branch). On `compiler-rs` their substance
 is already covered — `fold.rs` uses checked `ruint::U256` (no float round-trip to guard),
 `eval_order::normalize` lowers `Expr::Conditional` into per-arm `Stmt::If`, and there is no second
@@ -345,10 +350,10 @@ evaluator to keep shadow-safe. Porting them by name would be porting scar tissue
 
 ### Wave 3 — inline functions
 
-| PR | Scope | IDs | Status in rs | Prio | Depends on |
-| --- | --- | --- | --- | --- | --- |
-| **PR-15** | **Inline validation + recursion/cycle detection first.** Bail conditions and a call-graph cycle check over inline *and* real functions (including a cycle routing through an intervening real function), plus a total-expansion cap. Validate-then-splice, never the reverse. | `I2`, `I4` | ABSENT | **P0** *within this feature* | PR-8 |
-| **PR-16** | **Declaration convention + splicing.** `const NAME = (params) => body;` marks inline; per-call-site argument binding, alpha-renaming, and return-elimination (a shared result variable plus a `done` flag, with everything after a returning `if` wrapped in a `done === 0` guard). Check first whether `compiler-rs`'s frontend accepts an arrow function at all — grep found no `ArrowFunctionExpression` handling in `frontend.rs`, so this likely needs a grammar addition. | `I1`, `I3` | ABSENT | P1 | PR-15 |
+| PR        | Scope                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | IDs        | Status in rs | Prio                         | Depends on |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------ | ---------------------------- | ---------- |
+| **PR-15** | **Inline validation + recursion/cycle detection first.** Bail conditions and a call-graph cycle check over inline _and_ real functions (including a cycle routing through an intervening real function), plus a total-expansion cap. Validate-then-splice, never the reverse.                                                                                                                                                                                                   | `I2`, `I4` | ABSENT       | **P0** _within this feature_ | PR-8       |
+| **PR-16** | **Declaration convention + splicing.** `const NAME = (params) => body;` marks inline; per-call-site argument binding, alpha-renaming, and return-elimination (a shared result variable plus a `done` flag, with everything after a returning `if` wrapped in a `done === 0` guard). Check first whether `compiler-rs`'s frontend accepts an arrow function at all — grep found no `ArrowFunctionExpression` handling in `frontend.rs`, so this likely needs a grammar addition. | `I1`, `I3` | ABSENT       | P1                           | PR-15      |
 
 **`I5` and `I6` are not scheduled.** `I5` (dynamic-return placeholder seeding) exists only to work
 around v1's `rejectV1ScalarToDynamicReassignment` guard — with kind coming from a checked type, an
@@ -358,12 +363,12 @@ inlined callee's return kind is known from its annotation, so the mechanism is m
 
 ### Wave 4 — blocked on a design decision or an upstream milestone
 
-| PR | Scope | IDs | Status in rs | Prio | Blocker |
-| --- | --- | --- | --- | --- | --- |
-| **PR-17** | **CREATE family + address prediction.** | `L12` | ABSENT — `Create` is named as future work in `targets.rs:67` | P2 | Upstream milestone. **Do not front-run it** with an ad hoc namespace addition. Also settle SVM applicability first: Solana has no CREATE-family analogue, so this is plausibly `evm.*`-only. |
-| **PR-18** | **`eval()` compile-time nested compilation.** | `L15` | ABSENT — `Eval` named as future work | P2 | A **reentrancy design question**: the TS `eval()` recursively calls `compile()` from inside lowering. In `compiler-rs` that means `compile()` reachable from `lower`, with `Resolver` and the arena's lifetimes in play. Resolve deliberately, not by accident. Note also `README.md:207` flags `EVAL` of caller-supplied bytecode as a live route into an EVM/SVM array-slot-kind divergence. |
-| **PR-19** | **`` $`…` `` quasiquote bytecode construction.** | `L18` | ABSENT — tagged templates not in the accepted subset | P2 | Frontend grammar addition; low demand. Confirm a real consumer exists before spending here. |
-| **PR-20** | **`A6`–`A8` / `G1`–`G24` codegen and arg-encoding parity.** | 27 IDs | **UNKNOWN** | — | **0.2.** Not schedulable. Any estimate before that audit is fiction. |
+| PR        | Scope                                                       | IDs    | Status in rs                                                 | Prio | Blocker                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------- | ----------------------------------------------------------- | ------ | ------------------------------------------------------------ | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **PR-17** | **CREATE family + address prediction.**                     | `L12`  | ABSENT — `Create` is named as future work in `targets.rs:67` | P2   | Upstream milestone. **Do not front-run it** with an ad hoc namespace addition. Also settle SVM applicability first: Solana has no CREATE-family analogue, so this is plausibly `evm.*`-only.                                                                                                                                                                                                   |
+| **PR-18** | **`eval()` compile-time nested compilation.**               | `L15`  | ABSENT — `Eval` named as future work                         | P2   | A **reentrancy design question**: the TS `eval()` recursively calls `compile()` from inside lowering. In `compiler-rs` that means `compile()` reachable from `lower`, with `Resolver` and the arena's lifetimes in play. Resolve deliberately, not by accident. Note also `README.md:207` flags `EVAL` of caller-supplied bytecode as a live route into an EVM/SVM array-slot-kind divergence. |
+| **PR-19** | **`` $`…` `` quasiquote bytecode construction.**            | `L18`  | ABSENT — tagged templates not in the accepted subset         | P2   | Frontend grammar addition; low demand. Confirm a real consumer exists before spending here.                                                                                                                                                                                                                                                                                                    |
+| **PR-20** | **`A6`–`A8` / `G1`–`G24` codegen and arg-encoding parity.** | 27 IDs | **UNKNOWN**                                                  | —    | **0.2.** Not schedulable. Any estimate before that audit is fiction.                                                                                                                                                                                                                                                                                                                           |
 
 ### Verify-rather-than-port
 
@@ -377,13 +382,13 @@ Not ports; do them anyway, in parallel.
 2. **`K15`'s call-argument shape as a positive test.** The gap is v1-only and confirmed absent on
    v12/svm by real execution on all three engines. Port
    `function h(a){ return a[1]; } function main(){ const arr = new Array(3); …; return h(arr); }` into
-   `compiler-rs` as a *passing* test, so a future change cannot reintroduce an analogous split. Cheap.
+   `compiler-rs` as a _passing_ test, so a future change cannot reintroduce an analogous split. Cheap.
 3. **`C3`'s struct-arg ordering.** Prove `compiler-rs` orders struct/tuple fields by the ABI's
    declared component order and not alphabetically. This exact bug scrambled `SwapParams`'s nested
    `PoolKey` into an empty revert in the TS compiler (repo `CLAUDE.md`, "The swap Router"); the fix
    there is unit-pinned by `compiler/test/struct-arg-order.test.ts`, which is a ready-made fixture.
 4. **`K12`'s nested-array-literal shape.** The TS compiler rejects it at compile time on v12/svm
-   because the *engines* have no nested-array static encoding. Check whether `compiler-rs` rejects,
+   because the _engines_ have no nested-array static encoding. Check whether `compiler-rs` rejects,
    supports, or silently miscompiles it. Confirmed-unknown (delta §9.7).
 5. **`manifest.rs` vs the SDK's `accountPlan`** (`A9`/`G22`) — compare field-for-field against the SDK
    consumer, since the SDK is the downstream that must attach accounts correctly.
@@ -398,18 +403,18 @@ Stated explicitly so nobody spends a sprint on legacy. All of these are v1-only,
 has **no v1 target** — `Target::{Evm, Svm}` only (`options.rs:6-12`), matching the inventory's own
 porting-scope section (lines 39-47).
 
-| ID(s) | Feature | Why not |
-| --- | --- | --- |
-| `A5` | v1 `main()` args as an appended `CALL_FUNCTION` segment | v12/svm use the arg-prologue instead (`A6`). |
-| `G8`, `G10` | v1 memory model, ALLOCATE prefix, 255-slot cap; the v1 prefix builder | Prefix encoding does not exist in `compiler-rs`. |
-| `G24` (v1 half) | Out-of-band `ctx.dynamicResult` descriptor model | v12/svm use one in-band 32-byte descriptor word. This is the root of most of Category `K`. |
-| `K4`–`K9`, `K11` | Return-kind fixpoint, `localBoundContracts`, `applyDestructuringKinds`, `singleDynamicAbiOutputKind`, the scalar→dynamic reassignment rejection, `multiOutputCall` tagging, ternary kind promotion | All exist because v1 destroys a descriptor stored in a value slot. `V12Saucer.store` ignores its `_kind` argument entirely and derives the kind from the value; `compiler-rs` derives it from a checked `Ty`. Port the **invariant** (a dynamic value must never round-trip through a scalar slot), not the machinery. |
-| `K15` | The call-argument gap and the silent `.length`-through-a-parameter bug | v1's `funcHeap`/`funcValues` two-index split. Confirmed absent on v12/svm by real execution on all three engines. See "Verify" #2 — it becomes a positive test, not a fix. |
-| `I5` | Inline dynamic-return placeholder seeding | Works around `K8`, which is v1-only. Moot with typed returns. |
-| `T1`'s `treeshake: false` | Preserving the v1 function-table index layout | No v1 table. `compiler-rs` computes reachability once, pre-fold, and shares it (`reachability.rs`). |
-| `L14` | `emit()` as a builtin | Not v1 — a **design decision**. `compiler-rs` deliberately leaves `emit` unreserved so a library can export it (`lower/mod.rs:1703-1706`). Executes 0.6. |
-| `K10`'s syntax half | `const [a, b] = call()` destructuring | `compiler-rs`'s frontend rejects destructuring outright; the capability lives as `Ty::Tuple` index/field projection. Executes 0.5 — a decision, not a gap. |
-| `TS1`–`TS3`, `TS5`, `TS7`, `TS8` | ts-frontend seams, the second bigint evaluator, `getText()` precision, the `ts-evaluator` fallback and its guards, module-scope ternary folding | Scar tissue from the acorn+`typescript` seam and from `ts-evaluator@2.0.0`'s inability to evaluate bigint. `compiler-rs` has one frontend, checked `ruint` arithmetic, and lowers ternaries in `eval_order`. Port the *specification* they implement (Wave 2), not the workarounds. |
+| ID(s)                            | Feature                                                                                                                                                                                            | Why not                                                                                                                                                                                                                                                                                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `A5`                             | v1 `main()` args as an appended `CALL_FUNCTION` segment                                                                                                                                            | v12/svm use the arg-prologue instead (`A6`).                                                                                                                                                                                                                                                                           |
+| `G8`, `G10`                      | v1 memory model, ALLOCATE prefix, 255-slot cap; the v1 prefix builder                                                                                                                              | Prefix encoding does not exist in `compiler-rs`.                                                                                                                                                                                                                                                                       |
+| `G24` (v1 half)                  | Out-of-band `ctx.dynamicResult` descriptor model                                                                                                                                                   | v12/svm use one in-band 32-byte descriptor word. This is the root of most of Category `K`.                                                                                                                                                                                                                             |
+| `K4`–`K9`, `K11`                 | Return-kind fixpoint, `localBoundContracts`, `applyDestructuringKinds`, `singleDynamicAbiOutputKind`, the scalar→dynamic reassignment rejection, `multiOutputCall` tagging, ternary kind promotion | All exist because v1 destroys a descriptor stored in a value slot. `V12Saucer.store` ignores its `_kind` argument entirely and derives the kind from the value; `compiler-rs` derives it from a checked `Ty`. Port the **invariant** (a dynamic value must never round-trip through a scalar slot), not the machinery. |
+| `K15`                            | The call-argument gap and the silent `.length`-through-a-parameter bug                                                                                                                             | v1's `funcHeap`/`funcValues` two-index split. Confirmed absent on v12/svm by real execution on all three engines. See "Verify" #2 — it becomes a positive test, not a fix.                                                                                                                                             |
+| `I5`                             | Inline dynamic-return placeholder seeding                                                                                                                                                          | Works around `K8`, which is v1-only. Moot with typed returns.                                                                                                                                                                                                                                                          |
+| `T1`'s `treeshake: false`        | Preserving the v1 function-table index layout                                                                                                                                                      | No v1 table. `compiler-rs` computes reachability once, pre-fold, and shares it (`reachability.rs`).                                                                                                                                                                                                                    |
+| `L14`                            | `emit()` as a builtin                                                                                                                                                                              | Not v1 — a **design decision**. `compiler-rs` deliberately leaves `emit` unreserved so a library can export it (`lower/mod.rs:1703-1706`). Executes 0.6.                                                                                                                                                               |
+| `K10`'s syntax half              | `const [a, b] = call()` destructuring                                                                                                                                                              | `compiler-rs`'s frontend rejects destructuring outright; the capability lives as `Ty::Tuple` index/field projection. Executes 0.5 — a decision, not a gap.                                                                                                                                                             |
+| `TS1`–`TS3`, `TS5`, `TS7`, `TS8` | ts-frontend seams, the second bigint evaluator, `getText()` precision, the `ts-evaluator` fallback and its guards, module-scope ternary folding                                                    | Scar tissue from the acorn+`typescript` seam and from `ts-evaluator@2.0.0`'s inability to evaluate bigint. `compiler-rs` has one frontend, checked `ruint` arithmetic, and lowers ternaries in `eval_order`. Port the _specification_ they implement (Wave 2), not the workarounds.                                    |
 
 ---
 
@@ -431,7 +436,7 @@ Where this plan does **not** know enough to sequence work, said plainly:
   beyond grepping `frontend.rs` (which returned nothing for arrow handling, and whose accepted-statement
   list names `for`/`while` but not `for…of`). PR-12 and PR-16 may each need a grammar addition on top
   of the pass work — scope them after a five-minute confirm, not from this doc's estimate.
-- **`abi.rs`'s stale doc comment** (*"nothing consumes a `ContractAbi` yet"*) contradicts working,
+- **`abi.rs`'s stale doc comment** (_"nothing consumes a `ContractAbi` yet"_) contradicts working,
   tested calling code in `lower/contract.rs`. Read as doc rot; worth a one-line upstream fix PR, but
   not treated here as evidence of a gap.
 

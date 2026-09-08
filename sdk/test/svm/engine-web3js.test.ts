@@ -1,5 +1,5 @@
-import { AccountRole } from '@solana/kit';
-import { PublicKey } from '@solana/web3.js';
+import { AccountRole } from "@solana/kit";
+import { PublicKey } from "@solana/web3.js";
 
 import {
   buildExecuteFromAccountInstruction,
@@ -7,18 +7,18 @@ import {
   bytecodeSha256,
   deriveBufferPda,
   toWeb3JsInstruction,
-} from '../../src/svm/engine-web3js.js';
-import { buildWriteBufferInstruction as kitBuildWriteBuffer } from '../../src/svm/instructions.js';
-import { deriveBufferPda as kitDeriveBufferPda } from '../../src/svm/pda.js';
+} from "../../src/svm/engine-web3js.js";
+import { buildWriteBufferInstruction as kitBuildWriteBuffer } from "../../src/svm/instructions.js";
+import { deriveBufferPda as kitDeriveBufferPda } from "../../src/svm/pda.js";
 
 // Arbitrary valid base58 pubkeys — the conversion is structural, addresses are opaque.
-const PROGRAM = new PublicKey('11111111111111111111111111111111');
-const AUTHORITY = new PublicKey('So11111111111111111111111111111111111111112');
-const BUFFER = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const OTHER = new PublicKey('Sysvar1nstructions1111111111111111111111111');
+const PROGRAM = new PublicKey("11111111111111111111111111111111");
+const AUTHORITY = new PublicKey("So11111111111111111111111111111111111111112");
+const BUFFER = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const OTHER = new PublicKey("Sysvar1nstructions1111111111111111111111111");
 
-describe('svm/engine/web3js adapter', () => {
-  it('toWeb3JsInstruction decodes all four account roles and copies data verbatim', () => {
+describe("svm/engine/web3js adapter", () => {
+  it("toWeb3JsInstruction decodes all four account roles and copies data verbatim", () => {
     const ix = {
       programAddress: PROGRAM.toBase58(),
       accounts: [
@@ -42,7 +42,7 @@ describe('svm/engine/web3js adapter', () => {
     expect(v1.data).toEqual(Buffer.from([0xde, 0xad, 0xbe, 0xef]));
   });
 
-  it('a wrapped builder is byte-identical to the kit builder it wraps', () => {
+  it("a wrapped builder is byte-identical to the kit builder it wraps", () => {
     const chunk = new Uint8Array([1, 2, 3, 4, 5]);
     const v1 = buildWriteBufferInstruction({
       programId: PROGRAM,
@@ -70,7 +70,7 @@ describe('svm/engine/web3js adapter', () => {
     );
   });
 
-  it('buildExecuteFromAccountInstruction lists the buffer first and read-only', () => {
+  it("buildExecuteFromAccountInstruction lists the buffer first and read-only", () => {
     const v1 = buildExecuteFromAccountInstruction({
       programId: PROGRAM,
       buffer: BUFFER,
@@ -81,7 +81,7 @@ describe('svm/engine/web3js adapter', () => {
     expect(v1.keys[0].isWritable).toBe(false);
   });
 
-  it('deriveBufferPda matches the SDK async kit derivation (identical seed scheme)', async () => {
+  it("deriveBufferPda matches the SDK async kit derivation (identical seed scheme)", async () => {
     const seed = new Uint8Array(32).fill(7);
     const v1Pda = deriveBufferPda(PROGRAM, AUTHORITY, seed);
     const kit = await kitDeriveBufferPda(
@@ -92,14 +92,14 @@ describe('svm/engine/web3js adapter', () => {
     expect(v1Pda.toBase58()).toEqual(kit.address);
   });
 
-  it('deriveBufferPda rejects a non-32-byte seed', () => {
+  it("deriveBufferPda rejects a non-32-byte seed", () => {
     expect(() => deriveBufferPda(PROGRAM, AUTHORITY, new Uint8Array(16))).toThrow();
   });
 
-  it('bytecodeSha256 matches the known sha256 vectors', () => {
+  it("bytecodeSha256 matches the known sha256 vectors", () => {
     // sha256("") — the canonical empty-input digest.
-    expect(Buffer.from(bytecodeSha256(new Uint8Array())).toString('hex')).toEqual(
-      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    expect(Buffer.from(bytecodeSha256(new Uint8Array())).toString("hex")).toEqual(
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     );
     expect(bytecodeSha256(new Uint8Array([1, 2, 3]))).toHaveLength(32);
   });

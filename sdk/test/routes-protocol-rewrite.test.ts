@@ -35,10 +35,17 @@ function evmOptions() {
 describe("rewriteProtocolAccessors: THE DECISIVE STEP -- a real protocol accessor for a real chain", () => {
   it("Uniswap.UniversalRouter.execute(...) on Base compiles byte-identically to hand-written IUniswapV4_UniversalRouter.at(<addr>n).execute(...) with NO import line and NO baseDirs", () => {
     const source = `function main() { Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); }`;
-    const { source: rewritten, rewrote, contracts, accessorSites } = rewriteProtocolAccessors(source, BASE);
+    const {
+      source: rewritten,
+      rewrote,
+      contracts,
+      accessorSites,
+    } = rewriteProtocolAccessors(source, BASE);
     expect(rewrote).toBe(true);
     expect(accessorSites).toBe(1);
-    expect(rewritten).toContain(`IUniswapV4_UniversalRouter.at(${BigInt(BASE_UNIVERSAL_ROUTER).toString()}n).execute`);
+    expect(rewritten).toContain(
+      `IUniswapV4_UniversalRouter.at(${BigInt(BASE_UNIVERSAL_ROUTER).toString()}n).execute`,
+    );
     expect(Object.keys(contracts)).toEqual(["IUniswapV4_UniversalRouter"]);
 
     const handWritten = `function main() { IUniswapV4_UniversalRouter.at(${BigInt(BASE_UNIVERSAL_ROUTER)}n).execute("0x0a", ["0x00"], 0n); }`;
@@ -127,13 +134,22 @@ describe("rewriteProtocolAccessors: qualified ancestor reference", () => {
     const { source: out } = rewriteProtocolAccessors(source, OPTIMISM);
     expect(out).toContain(`${BigInt(BASE_AAVE_POOL)}n`);
 
-    const enclosing = rewriteProtocolAccessors(`function main() { AaveV3.getUserAccountData(ctx.self()); }`, OPTIMISM);
+    const enclosing = rewriteProtocolAccessors(
+      `function main() { AaveV3.getUserAccountData(ctx.self()); }`,
+      OPTIMISM,
+    );
     expect(enclosing.source).not.toContain(`${BigInt(BASE_AAVE_POOL)}n`);
   });
 
   it("nesting rebinds for free: a child compiled for a different destination resolves its own chain's address", () => {
-    const onOptimism = rewriteProtocolAccessors(`function main(){ AaveV3.getUserAccountData(ctx.self()); }`, OPTIMISM);
-    const onBase = rewriteProtocolAccessors(`function main(){ AaveV3.getUserAccountData(ctx.self()); }`, BASE);
+    const onOptimism = rewriteProtocolAccessors(
+      `function main(){ AaveV3.getUserAccountData(ctx.self()); }`,
+      OPTIMISM,
+    );
+    const onBase = rewriteProtocolAccessors(
+      `function main(){ AaveV3.getUserAccountData(ctx.self()); }`,
+      BASE,
+    );
     expect(onOptimism.source).not.toEqual(onBase.source);
   });
 });
@@ -194,7 +210,9 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
   it("known contract, not deployed on this chain -> named error", () => {
     // AaveV3 has no descriptor entry on linea in the starter set.
     const source = `function main() { AaveV3.getUserAccountData(ctx.self()); }`;
-    expect(() => rewriteProtocolAccessors(source, requireChain("linea"))).toThrow(/is not deployed on 'linea'/);
+    expect(() => rewriteProtocolAccessors(source, requireChain("linea"))).toThrow(
+      /is not deployed on 'linea'/,
+    );
   });
 
   it("a widened-selector descriptor is refused by default, with a named error quoting the caveat", () => {
@@ -225,7 +243,9 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
 
   it("a method not in the vendored ABI -> named error", () => {
     const source = `function main() { AaveV3.Pool.nope(1n); }`;
-    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/'nope' is not in .*Pool's vendored ABI/);
+    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(
+      /'nope' is not in .*Pool's vendored ABI/,
+    );
   });
 
   it("a binding-name collision with an existing user identifier -> named error", () => {
@@ -236,38 +256,30 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
 
   it("an svm destination throws via compileSauceRoute -- every starter-set descriptor is EVM-only, so it fails closed on 'not deployed' before an accessor site could ever resolve", () => {
     expect(() =>
-      openRoute(
-        "solana",
-        `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`,
-        {
-          execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-          deadline: 2000n,
-          portal: PORTAL,
-          source: "base",
-          creator: "0x3333333333333333333333333333333333333333",
-          prover: "0x4444444444444444444444444444444444444444",
-          rewardDeadline: 1000n,
-        },
-      ),
+      openRoute("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
+        execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        deadline: 2000n,
+        portal: PORTAL,
+        source: "base",
+        creator: "0x3333333333333333333333333333333333333333",
+        prover: "0x4444444444444444444444444444444444444444",
+        rewardDeadline: 1000n,
+      }),
     ).toThrow(/not deployed on 'solana'/);
   });
 
   it("accessors: false makes an svm destination unaffected by the rewrite entirely (falls through to the compiler's own error)", () => {
     expect(() =>
-      openRoute(
-        "solana",
-        `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`,
-        {
-          execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-          deadline: 2000n,
-          portal: PORTAL,
-          source: "base",
-          creator: "0x3333333333333333333333333333333333333333",
-          prover: "0x4444444444444444444444444444444444444444",
-          rewardDeadline: 1000n,
-          compile: { accessors: false },
-        },
-      ),
+      openRoute("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
+        execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        deadline: 2000n,
+        portal: PORTAL,
+        source: "base",
+        creator: "0x3333333333333333333333333333333333333333",
+        prover: "0x4444444444444444444444444444444444444444",
+        rewardDeadline: 1000n,
+        compile: { accessors: false },
+      }),
     ).toThrow();
   });
 });
@@ -282,8 +294,14 @@ describe("rewriteProtocolAccessors: negative controls -- isolation", () => {
   });
 
   it("a body with zero accessor/self sites compiles byte-identically with accessors on and off", () => {
-    const built1 = openRoute("base", `return 5n;`, { ...evmOptions(), compile: { accessors: true } }).reward(0n);
-    const built2 = openRoute("base", `return 5n;`, { ...evmOptions(), compile: { accessors: false } }).reward(0n);
+    const built1 = openRoute("base", `return 5n;`, {
+      ...evmOptions(),
+      compile: { accessors: true },
+    }).reward(0n);
+    const built2 = openRoute("base", `return 5n;`, {
+      ...evmOptions(),
+      compile: { accessors: false },
+    }).reward(0n);
     expect(built1.intent.route.calls[0]!.data).toEqual(built2.intent.route.calls[0]!.data);
   });
 
@@ -291,11 +309,10 @@ describe("rewriteProtocolAccessors: negative controls -- isolation", () => {
     // Left untouched -> the base compiler throws its own generic property-access error, at
     // openRoute() time (compileSauceRoute runs eagerly, not deferred to .reward()).
     expect(() =>
-      openRoute(
-        "base",
-        `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`,
-        { ...evmOptions(), compile: { accessors: false } },
-      ),
+      openRoute("base", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
+        ...evmOptions(),
+        compile: { accessors: false },
+      }),
     ).toThrow();
   });
 });
@@ -344,7 +361,11 @@ describe("rewriteProtocolAccessors: VALUE position -- an accessor used as an add
   });
 
   it("END TO END: USDC.approve(Cctp.TokenMessenger, x) compiles through openRoute (dot form as a spender)", () => {
-    const built = openRoute("base", `function main() { USDC.approve(Cctp.TokenMessenger, 1000000n); }`, evmOptions()).reward(0n);
+    const built = openRoute(
+      "base",
+      `function main() { USDC.approve(Cctp.TokenMessenger, 1000000n); }`,
+      evmOptions(),
+    ).reward(0n);
     expect(built.intent.route.calls).toHaveLength(1);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });

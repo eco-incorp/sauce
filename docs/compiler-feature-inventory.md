@@ -15,25 +15,25 @@ generalized to JS).
 `compile(source, options) → CompileResult` turns **SauceScript** — a uint256-only JavaScript subset
 (no closures, classes, `async`, `var`, `==`) — into Sauce engine bytecode. The pipeline is
 **acorn AST → processor walk → a `Saucer` builder that emits bytes as the walk proceeds**. There is
-no separate IR: builder nodes (`{_bytes, …}`) *are* the intermediate representation, which is why
+no separate IR: builder nodes (`{_bytes, …}`) _are_ the intermediate representation, which is why
 several analyses (capability gating, dynamic-field guards) inspect emitted bytes rather than a typed
 tree.
 
 Three **targets**, all from one processor:
 
-| Target | Engine | Encoding | Variables | Notes |
-| --- | --- | --- | --- | --- |
-| `v1` (default) | Solidity tree interpreter (`Sauce.sol`) | **prefix** `[OP][a][b]` | all in memory slots | dynamic values carry an out-of-band `ctx.dynamicResult` |
-| `v12` | Huff runtime (`engine-v12`) | **postfix** `[a][b][OP]` | locals in slots, **params on the EVM stack** | dynamic value = one in-band 32-byte descriptor word |
-| `svm` | Solana engine (`engine.so`) | postfix — a **v12 dialect** | same as v12 | divergent CALL/SLOAD/SSTORE shapes, account plan, packet budget, `staged` mode |
+| Target         | Engine                                  | Encoding                    | Variables                                    | Notes                                                                          |
+| -------------- | --------------------------------------- | --------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------ |
+| `v1` (default) | Solidity tree interpreter (`Sauce.sol`) | **prefix** `[OP][a][b]`     | all in memory slots                          | dynamic values carry an out-of-band `ctx.dynamicResult`                        |
+| `v12`          | Huff runtime (`engine-v12`)             | **postfix** `[a][b][OP]`    | locals in slots, **params on the EVM stack** | dynamic value = one in-band 32-byte descriptor word                            |
+| `svm`          | Solana engine (`engine.so`)             | postfix — a **v12 dialect** | same as v12                                  | divergent CALL/SLOAD/SSTORE shapes, account plan, packet budget, `staged` mode |
 
 Two front doors into the parser: plain acorn (`.js`/`.sauce`), or the **TypeScript front-end**
 (`tsSource: true`, or any `.ts`/`.sauce.ts` import) which runs six constant-folding transformer
-stages *before* acorn ever sees the text.
+stages _before_ acorn ever sees the text.
 
 ## Porting scope (compiler-rs)
 
-Two target-model assumptions the port makes. Everything else in this doc describes the *current* TS
+Two target-model assumptions the port makes. Everything else in this doc describes the _current_ TS
 compiler faithfully — read these two first so you can map it onto `compiler-rs`:
 
 - **v1 is NOT a port target.** v1 is deprecated and **deleted in sauce `main`**, so `compiler-rs`
@@ -42,17 +42,17 @@ compiler faithfully — read these two first so you can map it onto `compiler-rs
   **v1-specific are legacy context, not things to port** — notably: v1's out-of-band
   `ctx.dynamicResult` dynamic-value model (v12/svm use one in-band 32-byte descriptor word instead);
   the v1 `funcHeap`/`funcValues` two-index calling convention and the **K15** call-argument gap that
-  rides on it; the **K8/K9** v1 scalar→dynamic reassignment *rejections* (v12/svm derive kind from
+  rides on it; the **K8/K9** v1 scalar→dynamic reassignment _rejections_ (v12/svm derive kind from
   the value node, so they never need them); v1 helper-declaration-order; and the v1 function-table
   index layout that `treeshake: false` exists to preserve. Skip these.
 - **Partial evaluation is IN scope and must cover JS, not just TS.** In the current compiler the
-  entire **partial-eval / fold family (Category TS, 16 features)** is reachable *only* via the
+  entire **partial-eval / fold family (Category TS, 16 features)** is reachable _only_ via the
   TypeScript front-end — **but that is a reuse artifact, not a design boundary.** Those passes were
   built on the `typescript` library + `ts-evaluator` because they were already on hand (the TS
-  entries below repeatedly note working *around* `ts-evaluator@2.0.0`'s inability to evaluate
+  entries below repeatedly note working _around_ `ts-evaluator@2.0.0`'s inability to evaluate
   bigint). `compiler-rs`'s objective is to compile **JS and TS**, so partial evaluation should be
-  reimplemented **language-agnostically** and run on the **JS path too**. Treat Category TS as *the
-  partial-evaluation specification* — const folding, branch/ternary folding, constant propagation +
+  reimplemented **language-agnostically** and run on the **JS path too**. Treat Category TS as _the
+  partial-evaluation specification_ — const folding, branch/ternary folding, constant propagation +
   dead-declaration elimination, effectively-const detection, same-file call folding, lookup-table
   folding, `for...of`/loop unrolling, local `new Array` folding, per-function const propagation — to
   be implemented once, for both source languages, not gated behind a TS surface.
@@ -64,10 +64,10 @@ summary table. Each entry carries:
 
 - **WHAT** — one line.
 - **EXAMPLE** — a tiny SauceScript snippet, where it clarifies.
-- **EDGE / BAIL** — fail-closed behavior. *Almost every* analysis in this compiler fails closed:
+- **EDGE / BAIL** — fail-closed behavior. _Almost every_ analysis in this compiler fails closed:
   an unresolvable fold leaves the node untouched, an unprovable safety property declines the
   optimization. Where a feature instead **rejects at compile time**, that is called out — it is
-  always because the alternative is a *silent* runtime miscompile.
+  always because the alternative is a _silent_ runtime miscompile.
 - **SOURCE** — file(s), with function names (prefer names over line numbers; lines drift).
 - **TARGETS** — v1 / v12 / svm support.
 - **PORTING** — priority (P0 highest … P3) plus the invariant a reimplementation must preserve.
@@ -78,122 +78,122 @@ meaningful if a matching engine constraint exists.
 
 ## Summary table (porting checklist)
 
-| ID | Feature | Category | Targets | Prio |
-| --- | --- | --- | --- | --- |
-| A1 | `compile()` entry + `CompileResult` | API | all | P0 |
-| A2 | `CompileOptions` surface | API | all | P0 |
-| A3 | Target dispatch + `staged` gate | API | all | P0 |
-| A4 | Fixed pipeline stage order | API | all | P0 |
-| A5 | v1 `main()` args (appended CALL_FUNCTION segment) | API | v1 | P1 |
-| A6 | v12 arg-prologue (inlined-main fall-through) | API | v12/svm | P1 |
-| A7 | Staged svm args over CALLDATA (`ArgsLayout`) | API | svm | P2 |
-| A8 | Arg value encoding (scalar/bytes/array/struct) | API | all | P1 |
-| A9 | svm `accountPlan` + budget warnings in result | API | svm | P2 |
-| L1 | uint256-only type model + literals | Language | all | P0 |
-| L2 | Operator set (incl. strict-equality-only) | Language | all | P0 |
-| L3 | Control flow + the unsupported-statement list | Language | all | P0 |
-| L4 | Functions, `main()`, recursion, decl order | Language | all | P0 |
-| L5 | Arrays: literal vs `new Array(n)`, index/length/concat/slice | Language | all | P0 |
-| L6 | Objects / structs | Language | all | P1 |
-| L7 | bytes / string / Uint8Array | Language | all | P1 |
-| L8 | `storage.read/write` + `tRead/tWrite` | Language | all* | P1 |
-| L9 | `crypto.keccak256` / `ecdsaVerify` | Language | all | P1 |
-| L10 | `abi.encode` / `abi.decode` + type specs | Language | all | P1 |
-| L11 | `msg.*` / `tx.*` / `block.*` / `address.*` / `gasLeft` | Language | all | P1 |
-| L12 | CREATE family + address prediction | Language | v1/v12 | P2 |
-| L13 | `contract.call/static/delegate` (raw) | Language | all* | P1 |
-| L14 | `emit()` events | Language | all | P2 |
-| L15 | `eval()` compile-time nested compilation | Language | all | P2 |
-| L16 | svm intrinsics: `uint`, `accountData`, refs | Language | svm(+v12 `uint`) | P1 |
-| L17 | Reserved names, `var` rejection, top-level shape | Language | all | P1 |
-| L18 | `` $`...` `` tagged-template bytecode construction (quasiquote) | Language | all | P2 |
-| D1 | `evalConst` / `evalConstBool` | Defines | all | P0 |
-| D2 | `literalToBigint` `.raw` precision fix | Defines | all | P0 |
-| D3 | Top-level `const` registration + read substitution | Defines | all | P0 |
-| D4 | `CompileOptions.defines` | Defines | all | P1 |
-| D5 | `if`/`else if` constant folding | Defines | all | P0 |
-| D6 | Ternary constant folding | Defines | all | P1 |
-| T1 | `treeshake` (drop unreachable functions) | Deadcode | all | P0 |
-| T2 | `collectCalls` fold-aware reachability | Deadcode | all | P0 |
-| TS1 | `tsPartialEval` / `WithMeta` + both wiring seams | Frontend | all | P1 |
-| TS2 | `tsEvalConst` / Unary / Binary (bigint evaluator) | Frontend | all | P0 |
-| TS3 | Numeric-literal precision (`getText()`) | Frontend | all | P0 |
-| TS4 | `tsEvalCall` same-file call folding | Frontend | all | P2 |
-| TS5 | `foldExpression` + ts-evaluator fallback + guards | Frontend | all | P1 |
-| TS6 | Shadow-safety discipline (cross-cutting) | Frontend | all | P0 |
-| TS7 | If-branch flattening + splice-collision guard | Frontend | all | P1 |
-| TS8 | Module-scope ternary folding | Frontend | all | P1 |
-| TS9 | Constant propagation to reads | Frontend | all | P1 |
-| TS10 | Dead-declaration elimination | Frontend | all | P2 |
-| TS11 | Effectively-const `let`/`var` (PRIMARY + STRETCH) | Frontend | all | P2 |
-| TS12 | Array/object lookup-table folding | Frontend | all | P1 |
-| TS13 | Local `new Array(n)` construction folding | Frontend | all | P2 |
-| TS14 | `return arr;` escape fold + forced BYTE_32 channel | Frontend | all | P2 |
-| TS15 | Local per-function constant propagation | Frontend | all | P1 |
-| TS16 | Ternary folding in the local pass (+compound RHS) | Frontend | all | P1 |
-| U1 | Numeric `for` unrolling | Unroll | all | P1 |
-| U2 | `while`-counting-idiom unrolling | Unroll | all | P2 |
-| U3 | `for...of` over a tracked array table | Unroll | all | P1 |
-| U4 | Statement-list splice drivers + 256 cap | Unroll | all | P0 |
-| I1 | Inline (arrow-const) declaration + extraction | Inline | all | P1 |
-| I2 | Inline validation / bail conditions | Inline | all | P0 |
-| I3 | Splicing: hygiene, hoisting, return-elimination | Inline | all | P1 |
-| I4 | Inline recursion / cycle detection | Inline | all | P0 |
-| I5 | Dynamic-return placeholder seeding | Inline | v1 | P2 |
-| I6 | Known gap: unreachable inline validated eagerly | Inline | all | P3 |
-| M1 | Source-file function imports (recursive collection) | Imports | all | P0 |
-| M2 | Per-target arm selection (`.v12.js`/`.svm.js`) | Imports | all | P1 |
-| M3 | Bare-specifier / node_modules resolution | Imports | all | P2 |
-| M4 | Escape-root guard | Imports | all | P1 |
-| C1 | ABI JSON contract imports | Contracts | v1/v12 | P0 |
-| C2 | `.at()/.view()/.lib()` binding + call lowering | Contracts | v1/v12 | P0 |
-| C3 | Struct-arg reordering + static-tuple flattening | Contracts | v1/v12 | P0 |
-| C4 | `.catch(handler)` chaining | Contracts | all | P1 |
-| C5 | `CompileOptions.contracts` | Contracts | v1/v12 | P2 |
-| C6 | Bidirectional capability gate | Contracts | all | P0 |
-| C7 | `SVM_UNSUPPORTED` + svm profile | Contracts | svm | P1 |
-| K1 | The scalar-vs-dynamic storage-kind model | Kinds | all | P0 |
-| K2 | `inferKind` (ctx-free baseline) | Kinds | all | P0 |
-| K3 | `inferKindWithContext` | Kinds | all | P0 |
-| K4 | `analyzeFunctionReturnKinds` fixpoint | Kinds | v1 (fatal) | P0 |
-| K5 | Fixpoint `localBoundContracts` tracking | Kinds | v1 | P1 |
-| K6 | `applyDestructuringKinds` | Kinds | v1 | P1 |
-| K7 | `singleDynamicAbiOutputKind` | Kinds | v1 | P1 |
-| K8 | v1 scalar→dynamic reassignment rejection | Kinds | v1 | P1 |
-| K9 | `multiOutputCall` tagging | Kinds | v1 | P2 |
-| K10 | Multi-output-call destructuring lowering | Kinds | all (v12 fast path) | P0 |
-| K11 | Ternary storage-kind promotion | Kinds | v1 | P1 |
-| K12 | Nested-array-literal rejection | Kinds | v12/svm | P2 |
-| K13 | Dynamic-variable object-field rejection | Kinds | all | P1 |
-| K14 | Immutable packed-array write rejection | Kinds | all | P1 |
-| K15 | Known open gaps (call-arg, silent `.length`) | Kinds | v1 | P1 |
-| G1 | `SaucerLike` abstraction + `newSaucer()` | Codegen | all | P0 |
-| G2 | `OPS` opcode table | Codegen | all | P0 |
-| G3 | `OPS_V12` stack opcodes | Codegen | v12/svm | P0 |
-| G4 | Integer auto-narrowing (`encodeInt`, BYTE_OPS) | Codegen | all | P0 |
-| G5 | bytes/string encoding | Codegen | all | P0 |
-| G6 | Array encoding + `forcedWidth` + packed-immutability | Codegen | all | P0 |
-| G7 | Tuple encoding | Codegen | all | P1 |
-| G8 | v1 memory model + ALLOCATE prefix + 255-slot cap | Codegen | v1 | P0 |
-| G9 | Slot allocation, scope free-list reuse, `freshTemp` | Codegen | all | P0 |
-| G10 | v1 prefix builder: control flow, calls, catch, return | Codegen | v1 | P0 |
-| G11 | V12Saucer postfix core (order, swaps, composition) | Codegen | v12/svm | P0 |
-| G12 | v12 parameter frame (SDUP read / SSWAP write) | Codegen | v12/svm | P0 |
-| G13 | v12 sentinel patching + blob assembly layout | Codegen | v12/svm | P0 |
-| G14 | v12 ALLOCATE frame-stride prefix | Codegen | v12/svm | P0 |
-| G15 | `return()` / FUNC_RETURN semantics | Codegen | v12/svm | P0 |
-| G16 | `dropIfUnused` | Codegen | v12/svm | P0 |
-| G17 | v12 heap-array ops + `binaryRaw`/`ternaryRaw` | Codegen | v12/svm | P1 |
-| G18 | svm divergent call/storage lowering | Codegen | svm | P1 |
-| G19 | svm empty-stack `build()` + staged `msg.data` reject | Codegen | svm | P1 |
-| G20 | v12 if/loop encoding + wide-jump upgrades | Codegen | v12/svm | P0 |
-| G21 | v12 `break`/`continue` unsupported (gap) | Codegen | v12/svm | P1 |
-| G22 | svm `AccountRegistry` | Codegen | svm | P1 |
-| G23 | Packet budget estimator + `stagingTransactionCount` | Codegen | svm | P2 |
-| G24 | Dynamic-value descriptor model (v1 vs v12/svm) | Codegen | all | P0 |
-| X1 | Compile cache + `compileCacheKey` | Cache | all | P2 |
-| X2 | `cloneCompileResult` defensive copy | Cache | all | P2 |
-| X3 | Bounded LRU store + stats + clear | Cache | all | P3 |
+| ID   | Feature                                                         | Category  | Targets             | Prio |
+| ---- | --------------------------------------------------------------- | --------- | ------------------- | ---- |
+| A1   | `compile()` entry + `CompileResult`                             | API       | all                 | P0   |
+| A2   | `CompileOptions` surface                                        | API       | all                 | P0   |
+| A3   | Target dispatch + `staged` gate                                 | API       | all                 | P0   |
+| A4   | Fixed pipeline stage order                                      | API       | all                 | P0   |
+| A5   | v1 `main()` args (appended CALL_FUNCTION segment)               | API       | v1                  | P1   |
+| A6   | v12 arg-prologue (inlined-main fall-through)                    | API       | v12/svm             | P1   |
+| A7   | Staged svm args over CALLDATA (`ArgsLayout`)                    | API       | svm                 | P2   |
+| A8   | Arg value encoding (scalar/bytes/array/struct)                  | API       | all                 | P1   |
+| A9   | svm `accountPlan` + budget warnings in result                   | API       | svm                 | P2   |
+| L1   | uint256-only type model + literals                              | Language  | all                 | P0   |
+| L2   | Operator set (incl. strict-equality-only)                       | Language  | all                 | P0   |
+| L3   | Control flow + the unsupported-statement list                   | Language  | all                 | P0   |
+| L4   | Functions, `main()`, recursion, decl order                      | Language  | all                 | P0   |
+| L5   | Arrays: literal vs `new Array(n)`, index/length/concat/slice    | Language  | all                 | P0   |
+| L6   | Objects / structs                                               | Language  | all                 | P1   |
+| L7   | bytes / string / Uint8Array                                     | Language  | all                 | P1   |
+| L8   | `storage.read/write` + `tRead/tWrite`                           | Language  | all*                | P1   |
+| L9   | `crypto.keccak256` / `ecdsaVerify`                              | Language  | all                 | P1   |
+| L10  | `abi.encode` / `abi.decode` + type specs                        | Language  | all                 | P1   |
+| L11  | `msg.*` / `tx.*` / `block.*` / `address.*` / `gasLeft`          | Language  | all                 | P1   |
+| L12  | CREATE family + address prediction                              | Language  | v1/v12              | P2   |
+| L13  | `contract.call/static/delegate` (raw)                           | Language  | all*                | P1   |
+| L14  | `emit()` events                                                 | Language  | all                 | P2   |
+| L15  | `eval()` compile-time nested compilation                        | Language  | all                 | P2   |
+| L16  | svm intrinsics: `uint`, `accountData`, refs                     | Language  | svm(+v12 `uint`)    | P1   |
+| L17  | Reserved names, `var` rejection, top-level shape                | Language  | all                 | P1   |
+| L18  | `` $`...` `` tagged-template bytecode construction (quasiquote) | Language  | all                 | P2   |
+| D1   | `evalConst` / `evalConstBool`                                   | Defines   | all                 | P0   |
+| D2   | `literalToBigint` `.raw` precision fix                          | Defines   | all                 | P0   |
+| D3   | Top-level `const` registration + read substitution              | Defines   | all                 | P0   |
+| D4   | `CompileOptions.defines`                                        | Defines   | all                 | P1   |
+| D5   | `if`/`else if` constant folding                                 | Defines   | all                 | P0   |
+| D6   | Ternary constant folding                                        | Defines   | all                 | P1   |
+| T1   | `treeshake` (drop unreachable functions)                        | Deadcode  | all                 | P0   |
+| T2   | `collectCalls` fold-aware reachability                          | Deadcode  | all                 | P0   |
+| TS1  | `tsPartialEval` / `WithMeta` + both wiring seams                | Frontend  | all                 | P1   |
+| TS2  | `tsEvalConst` / Unary / Binary (bigint evaluator)               | Frontend  | all                 | P0   |
+| TS3  | Numeric-literal precision (`getText()`)                         | Frontend  | all                 | P0   |
+| TS4  | `tsEvalCall` same-file call folding                             | Frontend  | all                 | P2   |
+| TS5  | `foldExpression` + ts-evaluator fallback + guards               | Frontend  | all                 | P1   |
+| TS6  | Shadow-safety discipline (cross-cutting)                        | Frontend  | all                 | P0   |
+| TS7  | If-branch flattening + splice-collision guard                   | Frontend  | all                 | P1   |
+| TS8  | Module-scope ternary folding                                    | Frontend  | all                 | P1   |
+| TS9  | Constant propagation to reads                                   | Frontend  | all                 | P1   |
+| TS10 | Dead-declaration elimination                                    | Frontend  | all                 | P2   |
+| TS11 | Effectively-const `let`/`var` (PRIMARY + STRETCH)               | Frontend  | all                 | P2   |
+| TS12 | Array/object lookup-table folding                               | Frontend  | all                 | P1   |
+| TS13 | Local `new Array(n)` construction folding                       | Frontend  | all                 | P2   |
+| TS14 | `return arr;` escape fold + forced BYTE_32 channel              | Frontend  | all                 | P2   |
+| TS15 | Local per-function constant propagation                         | Frontend  | all                 | P1   |
+| TS16 | Ternary folding in the local pass (+compound RHS)               | Frontend  | all                 | P1   |
+| U1   | Numeric `for` unrolling                                         | Unroll    | all                 | P1   |
+| U2   | `while`-counting-idiom unrolling                                | Unroll    | all                 | P2   |
+| U3   | `for...of` over a tracked array table                           | Unroll    | all                 | P1   |
+| U4   | Statement-list splice drivers + 256 cap                         | Unroll    | all                 | P0   |
+| I1   | Inline (arrow-const) declaration + extraction                   | Inline    | all                 | P1   |
+| I2   | Inline validation / bail conditions                             | Inline    | all                 | P0   |
+| I3   | Splicing: hygiene, hoisting, return-elimination                 | Inline    | all                 | P1   |
+| I4   | Inline recursion / cycle detection                              | Inline    | all                 | P0   |
+| I5   | Dynamic-return placeholder seeding                              | Inline    | v1                  | P2   |
+| I6   | Known gap: unreachable inline validated eagerly                 | Inline    | all                 | P3   |
+| M1   | Source-file function imports (recursive collection)             | Imports   | all                 | P0   |
+| M2   | Per-target arm selection (`.v12.js`/`.svm.js`)                  | Imports   | all                 | P1   |
+| M3   | Bare-specifier / node_modules resolution                        | Imports   | all                 | P2   |
+| M4   | Escape-root guard                                               | Imports   | all                 | P1   |
+| C1   | ABI JSON contract imports                                       | Contracts | v1/v12              | P0   |
+| C2   | `.at()/.view()/.lib()` binding + call lowering                  | Contracts | v1/v12              | P0   |
+| C3   | Struct-arg reordering + static-tuple flattening                 | Contracts | v1/v12              | P0   |
+| C4   | `.catch(handler)` chaining                                      | Contracts | all                 | P1   |
+| C5   | `CompileOptions.contracts`                                      | Contracts | v1/v12              | P2   |
+| C6   | Bidirectional capability gate                                   | Contracts | all                 | P0   |
+| C7   | `SVM_UNSUPPORTED` + svm profile                                 | Contracts | svm                 | P1   |
+| K1   | The scalar-vs-dynamic storage-kind model                        | Kinds     | all                 | P0   |
+| K2   | `inferKind` (ctx-free baseline)                                 | Kinds     | all                 | P0   |
+| K3   | `inferKindWithContext`                                          | Kinds     | all                 | P0   |
+| K4   | `analyzeFunctionReturnKinds` fixpoint                           | Kinds     | v1 (fatal)          | P0   |
+| K5   | Fixpoint `localBoundContracts` tracking                         | Kinds     | v1                  | P1   |
+| K6   | `applyDestructuringKinds`                                       | Kinds     | v1                  | P1   |
+| K7   | `singleDynamicAbiOutputKind`                                    | Kinds     | v1                  | P1   |
+| K8   | v1 scalar→dynamic reassignment rejection                        | Kinds     | v1                  | P1   |
+| K9   | `multiOutputCall` tagging                                       | Kinds     | v1                  | P2   |
+| K10  | Multi-output-call destructuring lowering                        | Kinds     | all (v12 fast path) | P0   |
+| K11  | Ternary storage-kind promotion                                  | Kinds     | v1                  | P1   |
+| K12  | Nested-array-literal rejection                                  | Kinds     | v12/svm             | P2   |
+| K13  | Dynamic-variable object-field rejection                         | Kinds     | all                 | P1   |
+| K14  | Immutable packed-array write rejection                          | Kinds     | all                 | P1   |
+| K15  | Known open gaps (call-arg, silent `.length`)                    | Kinds     | v1                  | P1   |
+| G1   | `SaucerLike` abstraction + `newSaucer()`                        | Codegen   | all                 | P0   |
+| G2   | `OPS` opcode table                                              | Codegen   | all                 | P0   |
+| G3   | `OPS_V12` stack opcodes                                         | Codegen   | v12/svm             | P0   |
+| G4   | Integer auto-narrowing (`encodeInt`, BYTE_OPS)                  | Codegen   | all                 | P0   |
+| G5   | bytes/string encoding                                           | Codegen   | all                 | P0   |
+| G6   | Array encoding + `forcedWidth` + packed-immutability            | Codegen   | all                 | P0   |
+| G7   | Tuple encoding                                                  | Codegen   | all                 | P1   |
+| G8   | v1 memory model + ALLOCATE prefix + 255-slot cap                | Codegen   | v1                  | P0   |
+| G9   | Slot allocation, scope free-list reuse, `freshTemp`             | Codegen   | all                 | P0   |
+| G10  | v1 prefix builder: control flow, calls, catch, return           | Codegen   | v1                  | P0   |
+| G11  | V12Saucer postfix core (order, swaps, composition)              | Codegen   | v12/svm             | P0   |
+| G12  | v12 parameter frame (SDUP read / SSWAP write)                   | Codegen   | v12/svm             | P0   |
+| G13  | v12 sentinel patching + blob assembly layout                    | Codegen   | v12/svm             | P0   |
+| G14  | v12 ALLOCATE frame-stride prefix                                | Codegen   | v12/svm             | P0   |
+| G15  | `return()` / FUNC_RETURN semantics                              | Codegen   | v12/svm             | P0   |
+| G16  | `dropIfUnused`                                                  | Codegen   | v12/svm             | P0   |
+| G17  | v12 heap-array ops + `binaryRaw`/`ternaryRaw`                   | Codegen   | v12/svm             | P1   |
+| G18  | svm divergent call/storage lowering                             | Codegen   | svm                 | P1   |
+| G19  | svm empty-stack `build()` + staged `msg.data` reject            | Codegen   | svm                 | P1   |
+| G20  | v12 if/loop encoding + wide-jump upgrades                       | Codegen   | v12/svm             | P0   |
+| G21  | v12 `break`/`continue` unsupported (gap)                        | Codegen   | v12/svm             | P1   |
+| G22  | svm `AccountRegistry`                                           | Codegen   | svm                 | P1   |
+| G23  | Packet budget estimator + `stagingTransactionCount`             | Codegen   | svm                 | P2   |
+| G24  | Dynamic-value descriptor model (v1 vs v12/svm)                  | Codegen   | all                 | P0   |
+| X1   | Compile cache + `compileCacheKey`                               | Cache     | all                 | P2   |
+| X2   | `cloneCompileResult` defensive copy                             | Cache     | all                 | P2   |
+| X3   | Bounded LRU store + stats + clear                               | Cache     | all                 | P3   |
 
 \* `storage.*` and `contract.call/static` exist on all three targets but with **different
 semantics/shapes** on svm — see C6/G18.
@@ -226,25 +226,25 @@ each blob separately) and the "budget problems are warnings, not errors" rule.
 
 **WHAT.** Every knob, with its default:
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `label` | — | filename for TS front-end diagnostics; has no default of its own — when `tsSource` is set it falls back to `'source.ts'` (`label ?? 'source.ts'`, index.ts:307); unused when `tsSource` is false |
-| `baseDirs` | `[]` | roots imports may resolve inside (M1–M4) |
-| `contracts` | — | pre-register ABIs without an import (C5) |
-| `args` | — | compile-time `main()` args (A5–A8) |
-| `target` | `'v1'` | `'v1' \| 'v12' \| 'svm'` |
-| `staged` | `false` | svm-only staged buffer mode (A7) |
-| `transformModule` | — | override the import-time text transform (M1) |
-| `tsSource` | `false` | treat top-level source as TypeScript (TS1) |
-| `treeshake` | `true` | drop functions unreachable from `main()` (T1) |
-| `fold` | `true` | fold constant `if`/ternary conditions (D5/D6) |
-| `defines` | — | compile-time constants; booleans → `1n`/`0n` (D4) |
-| `cache` | `true` | process-global cache, `false` to bypass, or an instance (X1) |
-| `cacheKeyExtra` | — | fingerprint for inputs the key cannot see (X1) |
+| Option            | Default | Effect                                                                                                                                                                                           |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `label`           | —       | filename for TS front-end diagnostics; has no default of its own — when `tsSource` is set it falls back to `'source.ts'` (`label ?? 'source.ts'`, index.ts:307); unused when `tsSource` is false |
+| `baseDirs`        | `[]`    | roots imports may resolve inside (M1–M4)                                                                                                                                                         |
+| `contracts`       | —       | pre-register ABIs without an import (C5)                                                                                                                                                         |
+| `args`            | —       | compile-time `main()` args (A5–A8)                                                                                                                                                               |
+| `target`          | `'v1'`  | `'v1' \| 'v12' \| 'svm'`                                                                                                                                                                         |
+| `staged`          | `false` | svm-only staged buffer mode (A7)                                                                                                                                                                 |
+| `transformModule` | —       | override the import-time text transform (M1)                                                                                                                                                     |
+| `tsSource`        | `false` | treat top-level source as TypeScript (TS1)                                                                                                                                                       |
+| `treeshake`       | `true`  | drop functions unreachable from `main()` (T1)                                                                                                                                                    |
+| `fold`            | `true`  | fold constant `if`/ternary conditions (D5/D6)                                                                                                                                                    |
+| `defines`         | —       | compile-time constants; booleans → `1n`/`0n` (D4)                                                                                                                                                |
+| `cache`           | `true`  | process-global cache, `false` to bypass, or an instance (X1)                                                                                                                                     |
+| `cacheKeyExtra`   | —       | fingerprint for inputs the key cannot see (X1)                                                                                                                                                   |
 
 **SOURCE.** `compiler/src/index.ts` (`CompileOptions`).
 
-**PORTING (P0).** Defaults are load-bearing twice over: they define the compiler's behavior *and*
+**PORTING (P0).** Defaults are load-bearing twice over: they define the compiler's behavior _and_
 they are duplicated inside `compileCacheKey` (X1) — a Rust port must derive both from one place or
 keep them provably in sync.
 
@@ -288,7 +288,7 @@ adjacency has a documented failure mode if swapped.
 ### A5. v1 `main()` args — appended CALL_FUNCTION segment
 
 **WHAT.** With `options.args`, v1 appends one extra blob:
-`[CALL_FUNCTION][mainIndex][argCount][…encoded args]`. Arg *types* are inferred
+`[CALL_FUNCTION][mainIndex][argCount][…encoded args]`. Arg _types_ are inferred
 (`inferArgType`) into `ctx.mainArgTypes`, so `main`'s parameters get real kinds
 (`scalar`/`dynamic`, plus `elementType`/`structType`) — unlike a helper's parameters, which are
 always tagged scalar (K15).
@@ -306,7 +306,7 @@ marshal `main`'s params. With args, the assembler synthesizes a no-param ENTRY t
 (forward order, so `arg0` is deepest) and then **inlines main's body immediately after** so
 execution falls through with the args already on the stack.
 
-**EDGE / BAIL.** Deliberately *not* a `CALL_FUNCTION` wrapper: a call frame adds a frame-pointer
+**EDGE / BAIL.** Deliberately _not_ a `CALL_FUNCTION` wrapper: a call frame adds a frame-pointer
 word above the params, pushing a `main` reading its first param under ~7 live locals to `SDUP17` —
 past the EVM `DUP16` ceiling. Consequence: **`main` can never be recursive on v12** (it is inlined,
 not a table entry); `patchCalls` raises `calling main() is not supported` if a `CALL_FUNCTION`
@@ -316,8 +316,8 @@ targets it. v1 likewise cannot call `main`.
 
 **TARGETS.** v12, svm.
 
-**PORTING (P1).** Preserve the ceiling reasoning: the arg-passing strategy is chosen by *stack-depth
-budget*, not elegance. Any port that switches to a call frame must re-derive the SDUP16 headroom.
+**PORTING (P1).** Preserve the ceiling reasoning: the arg-passing strategy is chosen by _stack-depth
+budget_, not elegance. Any port that switches to a call frame must re-derive the SDUP16 headroom.
 
 ### A7. Staged svm args over CALLDATA (`ArgsLayout`)
 
@@ -330,7 +330,7 @@ contract.
 
 **EDGE / BAIL.** Array and struct args are rejected in staged mode (ABI-encode into a bytes arg
 instead). Scalars are fixed 32-byte big-endian words; bytes args take their compile-time length, no
-padding. Prologue length is a *pure function of the layout* — which breaks the circularity that
+padding. Prologue length is a _pure function of the layout_ — which breaks the circularity that
 offsets embed the total program length. `programLength + byteLength > 65_535` throws
 (`MAX_COMPOSITE_BYTES`, the engine's `MAX_BUFFER_CAPACITY`). Net stack effect is +1 per arg —
 identical to the inline literal pushes it replaces, so SDUP patching is untouched.
@@ -353,7 +353,7 @@ alphabetically** (`localeCompare`), recursively. Two mirrored encoders exist: `e
 **EDGE / BAIL.** The alphabetical field order is not cosmetic — it must match
 `extractStructType`/`processObjectExpression` so `main()` reads `param.field` with the same
 `INDEX` lowering as an in-script object literal. `structTypeFromArg` reproduces the same order for
-the *type* side.
+the _type_ side.
 
 **SOURCE.** `compiler/src/index.ts` (`encodeArgValue`, `encodeArgValueV12`, `structTypeFromArg`,
 `sortedArgObjectKeys`, `hexToBytes`).
@@ -375,8 +375,8 @@ derive all three from a single canonical "sorted field list" helper.
 
 # Category L — language surface & intrinsics
 
-*(The authoritative prose surface is `compiler/README.md`; every claim below was checked against
-the dispatch tables in `globals.ts` / `processor/*`.)*
+_(The authoritative prose surface is `compiler/README.md`; every claim below was checked against
+the dispatch tables in `globals.ts` / `processor/*`.)_
 
 ### L1. uint256-only type model + literals
 
@@ -415,7 +415,7 @@ constant path (D2) — see D2 for the precision bug this avoids.
 **EDGE / BAIL.** `==`/`!=` and `>>>` are hard compile errors (`>>>` says "use >> instead").
 `arr[i]++` → `not implemented: update on MemberExpression`. A ternary anywhere else →
 `ternary must be used directly in an assignment` (which is why the front-end's ternary folds,
-TS8/TS16, can *enable* otherwise-invalid programs). `BOOL_SGT/SLT/SGTE/SLTE` and `BOOL_XOR` exist
+TS8/TS16, can _enable_ otherwise-invalid programs). `BOOL_SGT/SLT/SGTE/SLTE` and `BOOL_XOR` exist
 in the opcode table with **no** SauceScript surface (flagged, see "Unverified" at the end).
 
 **SOURCE.** `compiler/src/processor/expression.ts` (`applyBinaryOp`, `processLogicalExpression`),
@@ -435,13 +435,13 @@ JS form — `.catch()` on a call chain is a different, supported mechanism, C4),
 `for...in`, `do...while`, labeled statements. Each throws `not implemented: <NodeType>`. `for...of`
 compiles **only** when the TS front-end unrolls it away (U3). Scoping subtlety that ripples through
 half this document: **only `for` pushes a scope** — `processIfStatement`/`processWhileStatement`
-never call `ctx.pushScope`, so a `let` first declared inside an `if` body is the *same persisting
-variable* after the branch.
+never call `ctx.pushScope`, so a `let` first declared inside an `if` body is the _same persisting
+variable_ after the branch.
 
 **SOURCE.** `compiler/src/processor/statement.ts` (`processIfStatement`, `processWhileStatement`,
 `processForStatement`), `compiler/src/processor/index.ts` (statement dispatch).
 
-**PORTING (P0).** The if/while-share-scope rule is a *language* fact that at least six separate
+**PORTING (P0).** The if/while-share-scope rule is a _language_ fact that at least six separate
 analyses in this compiler must agree on. Decide it once, expose it as one predicate.
 
 ### L4. Functions, `main()`, recursion, declaration order
@@ -465,7 +465,7 @@ day one.
 
 **WHAT.** Two distinct things:
 
-- **Array literal** `[1n, 2n, 3n]` — packed at the *minimum* byte width across elements (G4/G6),
+- **Array literal** `[1n, 2n, 3n]` — packed at the _minimum_ byte width across elements (G4/G6),
   and **immutable**: the engine reverts `SET_INDEX` on a packed static array, so the compiler
   rejects element assignment at compile time (K14).
 - **`new Array(n)`** — a heap TUPLE (`NEW_ARRAY` 0x9c), writable via `SET_INDEX` (0x9b), readable
@@ -474,14 +474,14 @@ day one.
 Shared surface: `arr[i]`, `.length` (`LENGTH`), `.concat(other)` (`CONCAT`), `.slice(start,end)`
 (`SLICE`, strict arity 2), `arr[i] = v` and compound `arr[i] += v` on mutable containers.
 
-**EDGE / BAIL.** Nested array *literals* work on v1 but are rejected at compile time on v12/svm
+**EDGE / BAIL.** Nested array _literals_ work on v1 but are rejected at compile time on v12/svm
 (K12) with a pointer at the working `new Array(n)` construction. A `new Array(n)` local that is
 fully constant and never escapes may be folded away entirely (TS13/TS14).
 
 **SOURCE.** `compiler/src/processor/collection.ts`, `compiler/src/saucer/array.ts`,
 `compiler/src/processor/expression.ts` (`NewExpression`).
 
-**PORTING (P0).** The literal-vs-heap split, and *which* is mutable, is a core semantic — not an
+**PORTING (P0).** The literal-vs-heap split, and _which_ is mutable, is a core semantic — not an
 optimization detail.
 
 ### L6. Objects / structs
@@ -492,15 +492,15 @@ field read `obj.a.b`, field mutation `obj.field = x` (object-literal bindings on
 `abi.decode`'s struct type spec.
 
 **EDGE / BAIL.** Two guards: an object-literal field that is a **bare read of an existing dynamic
-variable** is rejected on all targets (K13); `saucer.tuple()` performs *no* static/dynamic
+variable** is rejected on all targets (K13); `saucer.tuple()` performs _no_ static/dynamic
 consistency check of its own (unlike array encoding), which is exactly why that guard exists.
-Object-literal *property* reads/writes on a bare parameter are rejected — there is no object-shaped
+Object-literal _property_ reads/writes on a bare parameter are rejected — there is no object-shaped
 local whose storage kind could be mis-inferred. Spread properties are rejected.
 
 **SOURCE.** `compiler/src/processor/collection.ts` (`processObjectExpression`,
 `extractStructType`), `compiler/src/saucer/tuple.ts`.
 
-**PORTING (P1).** If a port's tuple encoding *does* box its fields, K13's guard may become
+**PORTING (P1).** If a port's tuple encoding _does_ box its fields, K13's guard may become
 unnecessary — verify against the engine, don't copy blindly.
 
 ### L7. bytes / string / Uint8Array
@@ -547,7 +547,7 @@ from `ABI_TYPE_SPECS` (`uint8…uint256`, `bool`, `address`, `bytes`, `string`),
 fields alphabetized), or a single-element array (`['uint256']`, exactly one element enforced).
 
 **EDGE / BAIL.** Explicitly **not** capability-gated on svm — the codec is universal; only the
-ABI-*typed-binding* surface (C2) is EVM-only.
+ABI-_typed-binding_ surface (C2) is EVM-only.
 
 **SOURCE.** `compiler/src/globals.ts` (`abi.*`, `resolveAbiTypeSpec`, `ABI_TYPE_SPECS`).
 
@@ -636,12 +636,12 @@ mixing raw and symbolic modes across the eval boundary still fails loud (G22). P
   or a raw integer index 0–255.
 
 **EDGE / BAIL.** Raw and symbolic ref modes cannot be mixed in one compile (G22). `uint` is the one
-"v12-dialect-only" capability row — allowed on v12 *and* svm, denied on v1.
+"v12-dialect-only" capability row — allowed on v12 _and_ svm, denied on v1.
 
 **SOURCE.** `compiler/src/globals.ts`, `compiler/src/saucer/saucer-v12.ts`
 (`castBe`, `castLe`, `svmAccountData`, `svmWriteAccountData`), `compiler/src/capabilities.ts`.
 
-**PORTING (P1).** The endianness rule lives on the *builtin*, not the opcode — one surface, two
+**PORTING (P1).** The endianness rule lives on the _builtin_, not the opcode — one surface, two
 lowerings.
 
 ### L17. Reserved names, `var` rejection, top-level shape validation
@@ -678,7 +678,7 @@ expressions must use $`...` ``.
   with the runtime-encoded outer expressions (scalar → `encodeScalarAsBytecode`, dynamic →
   `encodeDynamicAsBytecode`).
 
-**EXAMPLE.** `` const bc = $`function main(){ return ${x} + 1n; }`; `` → raw spliced bytecode with
+**EXAMPLE.** ``const bc = $`function main(){ return ${x} + 1n; }`;`` → raw spliced bytecode with
 `x`'s runtime value encoded in place.
 
 **EDGE / BAIL.** Distinct from `eval()` (L15): `eval()` embeds the nested program behind an `EVAL`
@@ -711,17 +711,22 @@ Consulted **only** at fold sites (D5, D6) and by the reachability walk (T2) — 
 emission path, so ordinary bytecode is byte-identical whether a fold succeeds or not.
 
 **EXAMPLE.**
+
 ```js
 const HAS_CURVE = true;
-if (HAS_CURVE) { curve(x); } else { other(x); }   // → just curve(x); other() becomes unreachable
+if (HAS_CURVE) {
+  curve(x);
+} else {
+  other(x);
+} // → just curve(x); other() becomes unreachable
 ```
 
 **EDGE / BAIL.** Operators: unary `! - + ~`; binary `+ - * / % ** === == !== != < <= > >= & | ^ <<
->>`. Division/modulo by zero and a negative exponent yield `undefined` (never a crash). `&&`/`||`
-resolve correctly with only **one** side known (a falsy left collapses `&&` to `0n` regardless of the
-right). Any unrecognized node kind → `undefined`. `evalConstBool` is `v !== 0n` layered on top.
-Identifier resolution is `ctx.getConstant(name)` — the union of `defines` and folded top-level
-consts (D3/D4).
+
+> > `. Division/modulo by zero and a negative exponent yield `undefined`(never a crash).`&&`/`||`resolve correctly with only **one** side known (a falsy left collapses`&&`to`0n`regardless of the
+right). Any unrecognized node kind →`undefined`. `evalConstBool`is`v !== 0n`layered on top.
+Identifier resolution is`ctx.getConstant(name)`— the union of`defines` and folded top-level
+> > consts (D3/D4).
 
 **SOURCE.** `compiler/src/processor/const-eval.ts`.
 
@@ -739,7 +744,7 @@ short-circuit resolution, and div/mod-by-zero → unknown.
 IEEE-754 double **at parse time**, so `.value` can already be wrong. The confirmed real case:
 `0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000` (`2^256 − 2^24`, legal uint256)
 rounds **up to exactly `2^256`**, which then throws `value exceeds 32 bytes (uint256 max)`; a smaller
-over-`2^53` value instead folds silently to the *wrong* constant. Non-integer forms (float,
+over-`2^53` value instead folds silently to the _wrong_ constant. Non-integer forms (float,
 exponential) still decline to fold — `BigInt()` throws and is caught → `undefined` — which
 generalizes the old `Number.isInteger` reject via an exact parse. The TS front-end has the
 independent twin of this bug/fix (TS3).
@@ -749,7 +754,7 @@ independent twin of this bug/fix (TS3).
 
 **TARGETS.** all.
 
-**PORTING (P0), low effort.** Never route a compile-time literal through a float. Audit *every*
+**PORTING (P0), low effort.** Never route a compile-time literal through a float. Audit _every_
 literal path (there are three in this compiler; two had the bug).
 
 ### D3. Top-level `const` registration + constant read substitution
@@ -805,12 +810,13 @@ compile-time constant.
 with a foldable test it recurses through `storeExpression` on the taken side only.
 
 **EXAMPLE.**
+
 ```js
 const FLAG = true;
-let x = FLAG ? handlerA() : handlerB();   // → let x = handlerA(); handlerB becomes unreachable
+let x = FLAG ? handlerA() : handlerB(); // → let x = handlerA(); handlerB becomes unreachable
 ```
 
-**EDGE / BAIL.** When the test is *not* foldable, both branches compile and their storage kinds are
+**EDGE / BAIL.** When the test is _not_ foldable, both branches compile and their storage kinds are
 reconciled — a separate concern, see K11.
 
 **SOURCE.** `compiler/src/processor/statement.ts` (`processTernaryStore`).
@@ -836,7 +842,7 @@ index. `main` is always kept regardless of reachability. Runs **after** inline e
 
 **TARGETS.** all (runs pre-dispatch on the shared declaration list).
 
-**PORTING (P0).** Note the interaction with I6: an *unreachable inline* function is still validated,
+**PORTING (P0).** Note the interaction with I6: an _unreachable inline_ function is still validated,
 unlike an unreachable real function which is silently dropped.
 
 ### T2. `collectCalls` fold-aware reachability
@@ -862,7 +868,7 @@ both the walker and the emitter.
 
 # Category TS — the TypeScript front-end (fold / eval / propagate)
 
-> **Porting scope:** this category is TS-gated in the *current* compiler **only because it was built
+> **Porting scope:** this category is TS-gated in the _current_ compiler **only because it was built
 > on the `typescript` library + `ts-evaluator`** — a reuse artifact, not a design boundary. For
 > `compiler-rs`, partial evaluation is in scope for **JS as well as TS**; treat these 16 features as
 > the language-agnostic partial-eval spec, run on both source languages. (See "Porting scope" up top.)
@@ -887,7 +893,7 @@ path ends in `.ts` runs through `tsPartialEval` automatically unless a caller-su
 `ctx.transformModule` overrides it. `.js`/`.sauce`/`.mjs` never invoke any of this.
 
 **EDGE / BAIL.** The import seam uses the **plain** wrapper, so the wide-return-array signal is
-*not* threaded through imports — provably safe because TS14's fold is gated to `function main` and an
+_not_ threaded through imports — provably safe because TS14's fold is gated to `function main` and an
 imported module may never define `main` (M1). A ts-evaluator policy caps runtime
 (`deterministic: true`, no io/network/process/console, `maxOps` 100 000, `maxOpDuration` 2000 ms,
 `environment: { preset: 'NONE' }` — hence **no `ts.Program`/checker**, so no cross-file or
@@ -927,7 +933,7 @@ is reused verbatim by every other pass in the file — that uniformity is what l
 **WHAT.** The numeric-literal branch parses `node.getText().replace(/_/g, '')` into a `BigInt` —
 **not** `Number(node.text)`.
 
-**EDGE / BAIL.** `ts.NumericLiteral.text` is *not* raw source: the TS scanner normalizes it through
+**EDGE / BAIL.** `ts.NumericLiteral.text` is _not_ raw source: the TS scanner normalizes it through
 the same lossy float round-trip, so `getText()` (the literal exactly as written) is required, with
 numeric separators stripped because `BigInt()` rejects them. `getText()` **throws** on a
 factory-synthesized node (no source position) — caught by the evaluator's own try/catch, which is why
@@ -945,21 +951,24 @@ literals carry their value, because the unroller produces them.
 `return <expr>;` when every argument resolves to a constant.
 
 **EXAMPLE.**
+
 ```ts
-function double(x) { return x * 2n; }
-const y = double(21n);      // → const y = 42n;  (then TS9/TS10 can inline and delete y)
+function double(x) {
+  return x * 2n;
+}
+const y = double(21n); // → const y = 42n;  (then TS9/TS10 can inline and delete y)
 ```
 
 **EDGE / BAIL.** Three hard boundaries, deliberately not relaxed: (1) the callee body must contain
 **zero** `CallExpression`/`NewExpression` anywhere — not merely no recursive call, no call to
-*anything* — which is the entire soundness argument (a body that never calls out cannot recurse, so
+_anything_ — which is the entire soundness argument (a body that never calls out cannot recurse, so
 no recursion analysis is needed); (2) same-file only; (3) the callee's own declaration is **never**
 touched or eliminated (it may still be called with non-constant args, or imported cross-file).
 Also declines: generators and `async` functions (neither returns its value directly), destructuring
 or rest parameters, too many arguments, a shadowed callee name. Parameters bind as a temporary
 overlay on `consts` (never mutating it); an omitted argument evaluates its default left-to-right;
 **every** parameter name is excluded from the overlay's initial seed so an earlier default cannot
-silently read an outer const sharing a *later* parameter's name (real parameter-list TDZ would
+silently read an outer const sharing a _later_ parameter's name (real parameter-list TDZ would
 throw).
 
 **SOURCE.** `compiler/src/ts-frontend.ts` (`tsEvalCall`, `foldableReturnExpr`, `containsCallOrNew`).
@@ -969,18 +978,19 @@ throw).
 ### TS5. `foldExpression` + the ts-evaluator fallback and its guards
 
 **WHAT.** Tries `tsEvalConst` first; only for shapes it cannot resolve does it fall back to
-`ts-evaluator`'s `evaluate()` (wrapped in try/catch, since it *throws* on a bare BigInt literal).
+`ts-evaluator`'s `evaluate()` (wrapped in try/catch, since it _throws_ on a bare BigInt literal).
 
 **EDGE / BAIL.** Three guards refuse the fallback outright:
+
 - **`ASSIGNMENT_OPERATOR_TOKENS`** — TS models `=`/`+=`/`&&=` as `BinaryExpression`, and
   `evaluate(a = 1)` "succeeds" with `1`, which would rewrite `a = 1;` to bare `1;`, silently
   discarding the write. Checked before either evaluator runs.
 - **`CallExpression`** — call folding is governed entirely by TS4's rules, never delegated to
   whatever a no-checker `evaluate()` happens to do today.
-- **`containsShadowedIdentifier`** — the fallback does its *own* identifier resolution and is
+- **`containsShadowedIdentifier`** — the fallback does its _own_ identifier resolution and is
   confirmed to ignore local shadowing entirely. The reproduced bug:
   `const FLAG = true; function f(FLAG) { if (FLAG) { return 1; } return 2; }` — `tsEvalConst`
-  correctly declined, then the fallback resolved the *parameter* `FLAG` against the outer const and
+  correctly declined, then the fallback resolved the _parameter_ `FLAG` against the outer const and
   pruned the function to `return 1;`, discarding the parameter and the other branch. A genuinely
   wrong program, not a missed optimization.
 
@@ -995,7 +1005,7 @@ boolean/string identifiers, template literals). That removes an entire class of 
 
 **WHAT.** Every pass threads a `shadowed: ReadonlySet<string>` grown on the way down through
 scope-introducing nodes (function/method/getter/setter bodies, blocks, catch clauses,
-`for`/`for-in`/`for-of`). A name reserved by *anything* between the current node and top level is
+`for`/`for-in`/`for-of`). A name reserved by _anything_ between the current node and top level is
 never resolved against the top-level `consts`/`functions`/`tables` maps.
 
 **EDGE / BAIL.** Helpers: `collectBindingNames`; `collectVarNames` (`var` hoists to the enclosing
@@ -1003,7 +1013,7 @@ never resolved against the top-level `consts`/`functions`/`tables` maps.
 `collectLexicalNamesInScope` (`let`/`const`/nested named `function`, crossing
 `if`/`while`/bare-block boundaries but stopping at function/class); `collectDirectlyDeclaredNames`.
 **The rule that makes this non-obvious:** the real compiler shares scope across `if`/`while` bodies
-(L3), so a name first declared inside a branch is the *same* variable after it — a shadow set built
+(L3), so a name first declared inside a branch is the _same_ variable after it — a shadow set built
 only from a scope's direct statement list is wrong. Reproduced bug family: `const FEE = 100n;
 function f(c) { if (c) { let FEE = 5n; } return FEE; }` wrongly substituted `100n`. This was fixed
 independently in **five** places that each compute their own shadow set:
@@ -1035,7 +1045,7 @@ branch (`if (true) return 5;`) cannot trigger this (JS grammar forbids a lexical
 **SOURCE.** `compiler/src/ts-frontend.ts` (`foldTransformer`'s if case,
 `collidesWithSurroundingDeclarations`).
 
-**PORTING (P1).** If the target IR *does* support a nested block statement, keep the block and skip
+**PORTING (P1).** If the target IR _does_ support a nested block statement, keep the block and skip
 this entire mechanism — strictly simpler.
 
 ### TS8. Module-scope ternary folding
@@ -1046,7 +1056,7 @@ branch, recursing into it (so a nested ternary in the taken branch cascades).
 
 **EDGE / BAIL.** `tsEvalConst` has **no** case for conditional expressions anywhere — this is a
 separate mechanism by design, not a gap. The fallback path (`tryEvaluate` on a whole ternary node) is
-only reached from a calling context that bypasses this branch, e.g. an `if` whose test *is* a bare
+only reached from a calling context that bypasses this branch, e.g. an `if` whose test _is_ a bare
 ternary. **This can be enabling, not just optimizing:** the base grammar rejects a ternary outside
 assignment position (L2), so folding a nested one away is what makes such a program compile at all.
 
@@ -1063,8 +1073,8 @@ composite expressions, never a bare identifier (which might be an lvalue). Chain
 
 **EDGE / BAIL.** `visitAssignmentTarget` walks an assignment/update **target** without substituting
 the bound identifier(s), while still substituting genuine nested reads (a computed member key, a
-destructuring default's value) — necessary because TypeScript represents destructuring *assignment*
-with the same node kinds as an object/array literal *value*; only position distinguishes them.
+destructuring default's value) — necessary because TypeScript represents destructuring _assignment_
+with the same node kinds as an object/array literal _value_; only position distinguishes them.
 Shadow sets are computed once per scope up front (matching real TDZ, where a block-scoped name is
 reserved from the top of its scope). Entirely skipped (not even recursed into):
 type nodes/parameters, class/enum/module/interface/type-alias declarations, import/export
@@ -1087,7 +1097,7 @@ removed together — never leaving an orphaned `let x;`.
 **EDGE / BAIL.** Deliberately a simple **whole-file, not scope-aware** reference count
 (`countIdentifierRefs`, which does skip label-ish positions such as a non-computed property key): a
 const sharing its name with an unrelated nested declaration may be kept (inert, its value already
-propagated) — a missed cleanup, never a wrong substitution. Because it runs *after* fold+unroll, a
+propagated) — a missed cleanup, never a wrong substitution. Because it runs _after_ fold+unroll, a
 const used only as a now-unrolled loop bound or only inside a pruned branch is correctly removed.
 `findPairStatements` **re-derives** a STRETCH pair's statements structurally from whichever tree it
 is handed, since earlier stages may have rebuilt the assignment (a node reference would be stale).
@@ -1111,10 +1121,10 @@ semantically a `const` (the classic "effectively final" analysis) and is folded 
    resolved independently.
 
 **EDGE / BAIL.** "Written once" is a flat **syntactic** count (`collectWriteCounts`, shadow-aware) of
-every assignment/compound-assignment/update/destructuring target — *not* a reachability analysis: a
+every assignment/compound-assignment/update/destructuring target — _not_ a reachability analysis: a
 second write inside a never-executed branch still disqualifies. STRETCH **poisons** a pending
 predeclared name the moment any other statement references it (since `let x;` is legally readable as
-undefined before its assignment, folding despite an intervening read would substitute a *future*
+undefined before its assignment, folding despite an intervening read would substitute a _future_
 value into an earlier read). Interaction with U2: a genuine loop counter is always written again by
 its own increment, so PRIMARY disqualifies it; STRETCH only matches a **no-initializer**
 predeclaration, which U2's own pairing check never accepts — and `consts` is fully precomputed before
@@ -1133,9 +1143,12 @@ a tick-spacing table — becomes a compile-time lookup table whose `NAME[k]` / `
 `NAME["prop"]` accesses fold to literals, after which TS10 deletes the declaration.
 
 **EXAMPLE.**
+
 ```ts
 const TIERS = [500n, 3000n, 10000n];
-function main() { return TIERS[1]; }     // → return 3000n;  (TIERS deleted)
+function main() {
+  return TIERS[1];
+} // → return 3000n;  (TIERS deleted)
 ```
 
 **EDGE / BAIL.** Candidacy requires every element/property to fold via `tsEvalConst` (it may
@@ -1151,7 +1164,7 @@ disqualifying use kills the whole table (no partial tracking), and a use inside 
 scalar passes, encountering a class/enum/namespace body **disqualifies** rather than being skipped
 (a method could mutate the table without reassigning its binding).
 
-An access that *isn't* resolvable (non-constant index, out-of-bounds/negative array index,
+An access that _isn't_ resolvable (non-constant index, out-of-bounds/negative array index,
 non-string-literal computed key) is left untouched and does **not** disqualify other accesses.
 **Important caveat:** "left untouched" only avoids a worse fold — it does not guarantee the file
 compiles, because the base compiler has no representation for an array/object literal inside a
@@ -1164,7 +1177,7 @@ literals, `for...in`.
 `foldObjectLiteralProps`, `checkTableSafety`, `isSafeTableRead`, `isTableAccessUnsafeUsage`,
 `tableFoldTransformer`, `foldTableAccess`).
 
-**PORTING (P1).** Allowlist, never blocklist. And note the *base-compiler* consequence: this feature
+**PORTING (P1).** Allowlist, never blocklist. And note the _base-compiler_ consequence: this feature
 is closer to enabling than optimizing.
 
 ### TS13. Local `new Array(n)` construction folding
@@ -1173,10 +1186,13 @@ is closer to enabling than optimizing.
 read index are provably constant and the binding provably never escapes.
 
 **EXAMPLE.**
+
 ```ts
 function main() {
   const arr = new Array(3);
-  for (let i = 0n; i < 3n; i++) { arr[i] = i * 2n; }
+  for (let i = 0n; i < 3n; i++) {
+    arr[i] = i * 2n;
+  }
   return arr[1];
 }
 // compiles byte-identically to: function main() { return 2n; }
@@ -1184,7 +1200,7 @@ function main() {
 
 **EDGE / BAIL — pipeline position is load-bearing at both ends.** It runs **after**
 `foldTransformer` (it only recognizes already-straight-line `arr[k] = v;` statements, which exist
-*because* U1 splices counter-substituted body copies into the enclosing list — recognizing an
+_because_ U1 splices counter-substituted body copies into the enclosing list — recognizing an
 un-unrolled loop would duplicate the whole unroller and its cap), **after** the table/const passes
 (so a write value spelled `TIERS[0]` is already a literal), and **before** TS15 (a folded element
 read is what lets the local scalar pass finish an accumulator: `total += fees[0]` → `total += 100n` →
@@ -1192,7 +1208,7 @@ read is what lets the local scalar pass finish an accumulator: `total += fees[0]
 value only local scalar reasoning could resolve (`let base = 10n; arr[0] = base;`) is not folded.
 
 **Why a separate pass rather than a new value in TS15's env:** TS15's `collectWrittenNames`
-deliberately does not collect `arr[i] = x` *because* an array-shaped local is NAC regardless —
+deliberately does not collect `arr[i] = x` _because_ an array-shaped local is NAC regardless —
 teaching that env about arrays would falsify that justification and make a non-unrollable
 `while (cond) { arr[0] = x; }` a genuine stale-value unsoundness. Also, deletion is a whole-function
 verdict that an emit-as-you-go forward walk cannot decide.
@@ -1207,20 +1223,20 @@ every remaining occurrence must be an in-range constant-index element read after
 region, **or** TS14's authorized `return arr;`. A strict allowlist whose default branch disqualifies:
 aliasing, call argument, spread, `for...of`, `.length`, any method call, rebinding, compound element
 write, destructuring target, an occurrence before the declaration (TDZ), an occurrence inside a
-nested function-like scope (a real hazard: `.catch()` handlers compile against the *same*
+nested function-like scope (a real hazard: `.catch()` handlers compile against the _same_
 `CompilerContext`), or a redeclaration anywhere in the function.
 
 **Two ways it is stricter than TS12, and why:** (a) safe is not enough — every surviving occurrence
-must also be **resolvable**, because this pass *deletes the allocation*, so one unresolvable read
+must also be **resolvable**, because this pass _deletes the allocation_, so one unresolvable read
 would dangle (TS12 can leave an access untouched because it only removes an already-zero-reference
 declaration); (b) all-or-nothing per array — keeping it alive for one runtime-indexed read means
 keeping every write anyway.
 
-**Two mechanism notes.** *The parent-pointer trap:* TS12's classifiers walk **up** through
+**Two mechanism notes.** _The parent-pointer trap:_ TS12's classifiers walk **up** through
 `node.parent`, but a node synthesized by an earlier stage (exactly what unrolling produces) has
 `parent === undefined`, which would make an unrolled `arr[0] = 5n;` look like a safe read — so this
 pass uses a **top-down** scan (`scanArrayUses`) that classifies before descending and never consults
-`.parent`. *Post-condition guard:* after rewriting, `localArrayFoldTransformer` re-checks that no
+`.parent`. _Post-condition guard:_ after rewriting, `localArrayFoldTransformer` re-checks that no
 deleted name still occurs anywhere in the body, discarding the whole rewrite if it does — sound by
 construction, not only by argument.
 
@@ -1291,7 +1307,7 @@ helper; and a negative element is rejected up front so it never risks the match.
 **TARGETS.** v1, v12, svm — one shared encoder covers all three (v1 adds its trailing halt byte).
 
 **PORTING (P2).** If a port fixes the cross-function heap-descriptor gap, revisit whether to extend
-this to helpers *before* copying the `main`-only restriction.
+this to helpers _before_ copying the `main`-only restriction.
 
 ### TS15. Local (per-function) constant propagation
 
@@ -1301,22 +1317,23 @@ point and substituting reads with known values. It is the only pass that reasons
 declared and reassigned **inside** a function.
 
 **EDGE / BAIL — the rules.**
+
 - **Snapshot, not a second evaluator.** Every evaluation uses the same 4-arg `tsEvalConst` family;
   `resolveLocalEnv`/`LocalResolution` translates the evolving env into `(consts, functions,
-  shadowed)`: a NAC name is **excluded from the consts map entirely** (never merely unresolved — a
-  stale top-level entry of the same name must not leak) *and* added to `shadowed`; a known local
+shadowed)`: a NAC name is **excluded from the consts map entirely** (never merely unresolved — a
+  stale top-level entry of the same name must not leak) _and_ added to `shadowed`; a known local
   overlays the top-level map. Free consequence: it can fold a TS4 call whose argument only becomes
   constant through local flow (`let x = 3n; let y = double(x);`).
 - **Straight-line.** A declaration/assignment/compound/update's value is evaluated against the
   current env; resolvable → tracked, else NAC. A destructuring assignment target invalidates every
   name it writes (not currently reachable through `compile()`, fixed defensively). An
   expression-statement's leading `ParenthesizedExpression` is unwrapped first — object-destructuring
-  assignment *must* be parenthesized in real JS, so without unwrapping the write never reaches the
+  assignment _must_ be parenthesized in real JS, so without unwrapping the write never reaches the
   invalidating path.
 - **`if`/`else`.** Both branches walk from independent env copies, then merge: a name keeps its value
   only if both agree (an untouched branch agrees with the pre-`if` value); any disagreement or either
   side NAC → NAC. The merge only revisits names already keyed in `env`, which is why the function's
-  env is **pre-seeded** with every parameter *and* every `collectLexicalNamesInScope` name in the
+  env is **pre-seeded** with every parameter _and_ every `collectLexicalNamesInScope` name in the
   whole body (TS6's rule).
 - **Loops.** **No fixpoint** (bigint is an unbounded lattice; a real fixpoint needs widening plus a
   termination proof). Instead every name written anywhere in the loop is forced NAC both inside it
@@ -1333,14 +1350,15 @@ declared and reassigned **inside** a function.
   dead-code-after-terminator peepholes.
 
 Note a strict improvement it enables: `const RATE = 10n; function f() { const RATE = 2n; return RATE
-+ 1n; }` → `return 3n;` (the *own-scope* value — earlier passes correctly declined the outer one).
+
+- 1n; }`→`return 3n;` (the _own-scope_ value — earlier passes correctly declined the outer one).
 
 **SOURCE.** `compiler/src/ts-frontend.ts` (`localConstPropagationTransformer`, `resolveLocalEnv`,
 `foldOrSubstitute`, `walkStatement`/`walkIfStatement`/`walkLoopStatement`/`walkStatementList`,
 `collectWrittenNames`, `functionBails`, `containsDisallowedConstruct`, `bailsForOuterClosure`,
 `transformFunctionLikeScopeBody`, `updateFunctionLikeBody`).
 
-**PORTING (P1).** Preserve the bail list *and* keep it tied to what the statement processor actually
+**PORTING (P1).** Preserve the bail list _and_ keep it tied to what the statement processor actually
 supports — over-bailing is always safe, under-bailing is not.
 
 ### TS16. Ternary folding in the local pass (+ compound-assignment RHS)
@@ -1356,7 +1374,7 @@ ternary-free case, unchanged cost), and only on failure hand the expression to `
 to collapse any resolvable ternary and re-attempt. This is what makes a ternary **nested inside a
 larger expression** fold (`let b = (cond ? 2n : 3n) + 1n;`) — which matters beyond optimization,
 since the base grammar rejects a nested ternary outright (L2). `evalCompoundAssignmentResult` routes
-its RHS through the *same* bridge, so `x += cond ? 1n : 2n;` updates the tracked value exactly like
+its RHS through the _same_ bridge, so `x += cond ? 1n : 2n;` updates the tracked value exactly like
 the plain-assignment spelling (previously the emitted code was already correct but the tracked value
 stayed NAC — sound, needlessly missed). A ternary whose condition depends on a NAC name declines
 naturally; one resolved via the `if`/`else` merge uses the already-merged value; one inside a bailed
@@ -1377,7 +1395,7 @@ path for ternaries.
 none: `processor/statement.ts`'s `processForStatement`/`processWhileStatement` always emit real
 runtime loop bytecode (`saucer.for(...).loop(...)` / `saucer.while(...).loop(...)`, i.e.
 `JUMP_BACK`). A grep for `unroll` under `compiler/src/processor/` finds one hit — a comment in
-`inline.ts` pointing *out* to `ts-frontend.ts`. Plain `.js`/`.sauce` sources never unroll anything.
+`inline.ts` pointing _out_ to `ts-frontend.ts`. Plain `.js`/`.sauce` sources never unroll anything.
 
 ### U1. Numeric `for` unrolling
 
@@ -1386,9 +1404,12 @@ with the counter substituted by its per-iteration literal. Accepted steps: `i++`
 `i -= s`, `i = i + s`, `i = i - s`. The bound may be a literal or a same-file const.
 
 **EXAMPLE.**
+
 ```ts
 const N = 3n;
-for (let i = 0n; i < N; i++) { total += FEES[i]; }   // → three literal-indexed statements
+for (let i = 0n; i < N; i++) {
+  total += FEES[i];
+} // → three literal-indexed statements
 ```
 
 **EDGE / BAIL (all fall back gracefully to real `JUMP_BACK` runtime code).** Direction sanity: a
@@ -1396,7 +1417,7 @@ forward comparison (`<`/`<=`) needs a positive step, backward needs negative —
 rather than looping forever. Step resolving to 0 bails. `bodyBlocksUnrolling` bails on a body
 containing `break`/`continue`/`return` or redeclaring the counter name. Over
 `MAX_UNROLL_ITERATIONS` (256) bails. Output colliding with surrounding declarations bails (TS7's
-guard — the confirmed crash was a body declaring any *other* local, e.g. `let doubled = i * 2n;`,
+guard — the confirmed crash was a body declaring any _other_ local, e.g. `let doubled = i * 2n;`,
 unrolling into N same-named declarations in one scope). Each unrolled iteration **re-enters** the
 fold pass, so a nested `if`/inner loop keyed on the counter cascades to fully-resolved literals.
 
@@ -1433,13 +1454,13 @@ accesses exactly like U1.
 
 **EDGE / BAIL — a harder failure than U1/U2.** Plain acorn has **no `ForOfStatement` handling at
 all** (`compile()` throws `not implemented: ForOfStatement` outright), so unrolling is what makes
-`for...of` compilable *at all* — there is no runtime-bytecode fallback. Therefore a decline is a hard
+`for...of` compilable _at all_ — there is no runtime-bytecode fallback. Therefore a decline is a hard
 error, not suboptimal code: a table with more than 256 elements still throws
 `not implemented: ForOfStatement` even with `tsSource: true`. Also declines: `for await...of`, a
 destructured loop variable (single plain identifier only), a body `bodyBlocksUnrolling` rejects, and
 a `for...of` sitting in a single-statement slot (an un-braced `for`/`if` body) rather than a genuine
 statement list. Iterating an array table this way is always a safe read-only use, so it never
-disqualifies the table from tracking regardless of whether *this* loop unrolls.
+disqualifies the table from tracking regardless of whether _this_ loop unrolls.
 
 **SOURCE.** `compiler/src/ts-frontend.ts` (`tryUnrollForOfArrayTable`, `visitStatementList`).
 
@@ -1453,7 +1474,7 @@ disqualifies the table from tracking regardless of whether *this* loop unrolls.
 **WHAT.** Two list-level drivers exist because every unroll replaces one/two list entries with N:
 `foldStatementList` (numeric + while idiom) and `visitStatementList` (`for...of`). Both operate on
 `Block.statements` / `SourceFile.statements`. `MAX_UNROLL_ITERATIONS` = 256 bounds emitted bytecode
-growth; TS13's `MAX_FOLDED_ARRAY_ELEMENTS` is a *separate* constant with the same value bounding a
+growth; TS13's `MAX_FOLDED_ARRAY_ELEMENTS` is a _separate_ constant with the same value bounding a
 different thing (tracked elements), and TS14's is deliberately smaller (64).
 
 **SOURCE.** `compiler/src/ts-frontend.ts` (`foldStatementList`, `visitStatementList`,
@@ -1479,12 +1500,17 @@ mechanism (M1) — is spliced in at compile time instead of emitting a `CALL_FUN
 entry.
 
 **EXAMPLE.**
+
 ```js
 const tickArg = (tick, offset) => {
-  if (tick < 0n) { return (tick + offset) | HIGH_MASK; }
+  if (tick < 0n) {
+    return (tick + offset) | HIGH_MASK;
+  }
   return tick + offset;
 };
-function main(t) { return tickArg(t, 5n); }   // spliced; no CALL_FUNCTION emitted
+function main(t) {
+  return tickArg(t, 5n);
+} // spliced; no CALL_FUNCTION emitted
 ```
 
 **EDGE / BAIL.** A concise `=> expr` body normalizes to `[ReturnStatement(expr)]`. Every parameter
@@ -1506,6 +1532,7 @@ body: `VariableDeclaration` (plain identifier target), `IfStatement`, `ReturnSta
 `ExpressionStatement`, `ThrowStatement`.
 
 **EDGE / BAIL — every one is a clear compile error, never a silent fallback.**
+
 - A `for`/`while` loop, `switch`, `try`/`catch`, labeled or bare-block statement, destructuring
   parameter/declaration, or a nested function/arrow anywhere in the body (deep-scanned by
   `assertNoNestedFunction`) — the error names the construct and points at using a real `function`.
@@ -1525,7 +1552,7 @@ body: `VariableDeclaration` (plain identifier target), `IfStatement`, `ReturnSta
 `hoistExpr`/`hoistStatementOwnExprs`).
 
 **PORTING (P0 within this category).** Get the allowlist right; the numeric cap value is tunable but
-*some* cap must exist.
+_some_ cap must exist.
 
 ### I3. Splicing algorithm — hygiene, hoisting, return-elimination
 
@@ -1559,7 +1586,7 @@ than expression hoisting, so inline calls inside a catch handler expand correctl
 
 **PORTING (P1, high implementation care).** Preserve: the guaranteed-collision-free renaming scheme
 (a gensym/de Bruijn approach is fine and probably better than textual `#` names); the
-done-flag+result-var shape (specifically: a branch's computation is *not* unconditionally hoisted);
+done-flag+result-var shape (specifically: a branch's computation is _not_ unconditionally hoisted);
 evaluate-arguments-once, left-to-right; innermost-first hoisting.
 
 ### I4. Recursion / cycle detection
@@ -1617,7 +1644,7 @@ compile if it violates a bail condition or participates in a cycle. An unreachab
 is silently dropped by T1 before it is ever compiled.
 
 **EDGE / BAIL.** Left as-is deliberately: a correct fix must also make the splicing pass skip
-unreachable declarations, since gating only *validation* would trade a clean error for a possible
+unreachable declarations, since gating only _validation_ would trade a clean error for a possible
 hang while splicing a genuinely recursive unreachable function.
 
 **SOURCE.** `compiler/src/processor/inline.ts` (`expandInlineFunctionsInDeclarations`), contrasted
@@ -1630,7 +1657,7 @@ should handle both together.
 
 # Category M — source-file imports, arm selection, module resolution
 
-*(This subsystem is not described in `CLAUDE.md`; the entries below are grounded directly in source.)*
+_(This subsystem is not described in `CLAUDE.md`; the entries below are grounded directly in source.)_
 
 ### M1. Source-file function imports + recursive collection
 
@@ -1639,8 +1666,9 @@ out of another SauceScript/TS module into the **same function table** as the imp
 recursively through transitive imports.
 
 **EDGE / BAIL.**
+
 - Resolution first tries `ctx.resolveModuleSource`; `undefined` means "not a module" and the import
-  falls through to the `.json` ABI path (C1). A `.json` specifier is *never* a module.
+  falls through to the `.json` ABI path (C1). A `.json` specifier is _never_ a module.
 - **Dedup** by `mod.dedupKey ?? mod.filePath` in a `visited` set — a module imported by two parents
   is parsed once. `dedupKey` is the arm-agnostic **neutral** identity (M2).
 - Recurses into the imported module's own imports **first**, so a transitive function/contract is
@@ -1667,7 +1695,7 @@ the three things that silently corrupt a function table if got wrong.
 **WHAT.** For each candidate root, resolution tries **target-arm siblings before the neutral
 candidate**: with `target: 'v12'`, `./token.js` probes `./token.v12.js` first, then the other
 extensions' arms, then the neutral candidates in fixed order
-(`MODULE_EXTS = ['.ts', '.sauce.ts', '.js', '.sauce', '.mjs']`). The arm for a *different* target is
+(`MODULE_EXTS = ['.ts', '.sauce.ts', '.js', '.sauce', '.mjs']`). The arm for a _different_ target is
 never read from disk. This is the machinery a "universal interfaces" source tree relies on.
 
 **EDGE / BAIL.** Probing is **per-root** (arm-then-neutral within each root, then the next root) —
@@ -1700,7 +1728,7 @@ rejected (`import the package root`), as is a scoped specifier missing its `/nam
 folds `.`/`..` segments **string-level on the entry value itself** (never resolve-then-compare) and
 rejects an absolute entry or one climbing above the package root before touching disk. A package that
 is simply not installed returns `undefined` and falls through to the `.json`-ABI error path, but a
-package that *exists* and then fails (subpath, escaping entry, unresolvable entry) **throws** — a
+package that _exists_ and then fails (subpath, escaping entry, unresolvable entry) **throws** — a
 config error should not masquerade as "file not found". The discovered package dir becomes an
 additional allowed root, so the package's own internal imports resolve inside it even if it sits
 above every `baseDir`. The `exports` support is a deliberately non-exhaustive Node subset (arrays,
@@ -1709,7 +1737,7 @@ non-`.` top-level keys, null, numbers → fall through to `module`/`main`).
 **SOURCE.** `compiler/src/context.ts` (`resolvePackage`, `findPackageDir`, `packageEntry`,
 `exportsEntry`, `normalizeEntry`).
 
-**PORTING (P2).** Port the *subset*, not Node's full algorithm, and keep the
+**PORTING (P2).** Port the _subset_, not Node's full algorithm, and keep the
 "exists-but-broken throws, missing falls through" distinction.
 
 ### M4. Escape-root guard
@@ -1740,7 +1768,7 @@ by `resolveModuleSource` before any of this.
 
 **EDGE / BAIL.** The file must be either a bare ABI array or a build artifact with an `.abi` field
 (forge/hardhat/OZ shapes) — otherwise `import "<s>" does not contain an ABI.` **Exactly one**
-binding name per `.json` import, checked *before* the file is read
+binding name per `.json` import, checked _before_ the file is read
 (`a .json ABI import binds exactly one`); a source-file import may bind N. Re-import is **idempotent
 if structurally identical** (`abisEqual`/`canonicalJson`, key-order-independent) and otherwise throws
 `Conflicting ABIs registered for "<name>".` `registerContract` itself additionally throws on a
@@ -1751,7 +1779,7 @@ typed but ignored.
 `hexToBytes`), `compiler/src/processor/index.ts` (`processImportDeclaration`),
 `compiler/src/context.ts` (`registerContract`, `lookupContract`).
 
-**TARGETS.** registration is target-agnostic; every *call* built from it is EVM-only (C6).
+**TARGETS.** registration is target-agnostic; every _call_ built from it is EVM-only (C6).
 
 **PORTING (P0).** Selector computation and the tuple-recursive canonical type string must match
 byte-for-byte — dispatch depends on it.
@@ -1761,10 +1789,11 @@ byte-for-byte — dispatch depends on it.
 **WHAT.** Three call shapes, one lowering path:
 
 ```js
-Pool.at(addr).slot0()             // inline chain — auto: CALL, or STATICCALL for view/pure
-let p = Pool.at(addr); p.slot0(); // standalone binding, then variable-bound calls
-Pool.view(addr).slot0()           // force STATICCALL
-Pool.lib(addr).slot0()           // force DELEGATECALL
+Pool.at(addr).slot0(); // inline chain — auto: CALL, or STATICCALL for view/pure
+let p = Pool.at(addr);
+p.slot0(); // standalone binding, then variable-bound calls
+Pool.view(addr).slot0(); // force STATICCALL
+Pool.lib(addr).slot0(); // force DELEGATECALL
 ```
 
 Calldata = `selector ++ abiEncode(tuple(args))` (or bare selector for a zero-arg method). Call type:
@@ -1834,7 +1863,7 @@ why TS15 and TS13 must bail on nested scopes touching outer locals.
 `declareCatchParam`, `buildCatchSaucer`, `resolveVariableBoundCatch`, `resolveRawCallCatch`),
 `compiler/src/saucer/saucer.ts` / `saucer-v12.ts` (`catch`).
 
-**TARGETS.** all (raw-call catch works on svm; a *bound-contract* catch inherits C2's EVM gate).
+**TARGETS.** all (raw-call catch works on svm; a _bound-contract_ catch inherits C2's EVM gate).
 
 **PORTING (P1).** The "same context" semantics is load-bearing for two other features' soundness.
 
@@ -1859,16 +1888,16 @@ hits `processImportDeclaration`'s idempotency check: structurally identical → 
 **subset** of targets — checked in both directions (EVM-only, SVM-only, and one v12-dialect-only
 row):
 
-| Feature | Allowed | Hint / note |
-| --- | --- | --- |
-| `storage.read` / `storage.write` | v1, v12 | → `accountData` / `writeAccountData` |
-| `create`, `create2`, `create3`, `createAddress`, `create2Address`, `create3Address` | v1, v12 | svm engine raises `UnsupportedOpcode` |
-| `delegatecall` | v1, v12 | |
-| `contract bindings` | v1, v12 | → `contract.call(target, calldata, accounts)` |
-| `array destructuring` | v1, v12 | → read `contract.call` returndata via `slice()`/`uint()` |
-| `accountData`, `writeAccountData`, `accountUint` | svm | |
-| `accounts list` | svm | that operand is raw calldata bytes on EVM |
-| `uint` | v12, svm | v1's builder has no cast surface |
+| Feature                                                                             | Allowed  | Hint / note                                              |
+| ----------------------------------------------------------------------------------- | -------- | -------------------------------------------------------- |
+| `storage.read` / `storage.write`                                                    | v1, v12  | → `accountData` / `writeAccountData`                     |
+| `create`, `create2`, `create3`, `createAddress`, `create2Address`, `create3Address` | v1, v12  | svm engine raises `UnsupportedOpcode`                    |
+| `delegatecall`                                                                      | v1, v12  |                                                          |
+| `contract bindings`                                                                 | v1, v12  | → `contract.call(target, calldata, accounts)`            |
+| `array destructuring`                                                               | v1, v12  | → read `contract.call` returndata via `slice()`/`uint()` |
+| `accountData`, `writeAccountData`, `accountUint`                                    | svm      |                                                          |
+| `accounts list`                                                                     | svm      | that operand is raw calldata bytes on EVM                |
+| `uint`                                                                              | v12, svm | v1's builder has no cast surface                         |
 
 **EDGE / BAIL.** Deliberately **not** a pre-codegen IR pass — there is no IR — so `assertCapability`
 is called **at the emit sites**, which means a gated feature inside an already-dead branch (pruned by
@@ -1892,7 +1921,7 @@ than silently pass. `SVM_GATED_HINTS` is **re-derived** from the table (every ro
 
 **SOURCE.** `compiler/src/capabilities.ts`, `compiler/src/saucer/svm-profile.ts`.
 
-**TARGETS.** this *is* the target-differentiation mechanism.
+**TARGETS.** this _is_ the target-differentiation mechanism.
 
 **PORTING (P0).** Port the negative list as seriously as the positive one — over-gating `abi.encode`
 or `msg.*` on svm would be a regression, and the TS side has a test enforcing both directions.
@@ -1923,7 +1952,7 @@ CPI failures — once `invoke()` launches, a failing callee aborts the transacti
 # Category K — storage-kind (scalar vs dynamic) & return-kind inference
 
 The largest and most bug-history-laden area. Nine distinct instances of one bug class were fixed
-here, several found only by a second round of adversarial audit *after* the "obvious" fix landed and
+here, several found only by a second round of adversarial audit _after_ the "obvious" fix landed and
 was tested. Read K1 first — it explains why a wrong answer is fatal on v1 and inert on v12/svm.
 
 ### K1. The scalar-vs-dynamic storage-kind model
@@ -1934,7 +1963,7 @@ the whole subject of this category.
 
 **Why it is fatal on v1.** v1 represents a dynamic value **out of band**: the descriptor lives in
 `ctx.dynamicResult`, and only the returned `bytes32` goes into a value slot. So a scalar store of a
-dynamic value **destroys the descriptor** — the word actually persisted is the array's byte *length*
+dynamic value **destroys the descriptor** — the word actually persisted is the array's byte _length_
 (96 for 3 elements), not a descriptor. A later `arr[0]` reverts
 `SauceInvalidOperationArgs(0x97)` (`INDEX`) and `arr[0] = x` reverts `0x9b` (`SET_INDEX`). The
 reverse direction is **safe**: `_writeHeap` stores a non-dynamic result as a plain `BYTE_32`
@@ -1954,7 +1983,7 @@ engine-side.
 
 **PORTING (P0).** Before porting K2–K15, **verify the target engine's memory model**. If it has no
 value-slot-vs-heap-descriptor asymmetry (e.g. a uniform tagged representation, or the v12-style
-in-band descriptor), most of this category is unnecessary complexity. If it *does*, port the whole
+in-band descriptor), most of this category is unnecessary complexity. If it _does_, port the whole
 family — and prefer a structural fix: make it impossible to call the store codegen without threading
 a kind produced by **one** canonical dispatcher, instead of the current "several call sites, each
 remembering the right combination of helpers".
@@ -2004,13 +2033,20 @@ family exists.
 of declaration order.
 
 **EXAMPLE.**
+
 ```js
-function helper() { let arr = new Array(3); /* …filled at runtime… */ return arr; }
-function main()   { let arr = helper(); return arr[0]; }   // must store arr as dynamic
+function helper() {
+  let arr = new Array(3);
+  /* …filled at runtime… */ return arr;
+}
+function main() {
+  let arr = helper();
+  return arr[0];
+} // must store arr as dynamic
 ```
 
 **EDGE / BAIL — why a fixpoint, not one pass.** Recording kinds while compiling bodies is
-declaration-order dependent: a caller declared *before* its dynamic callee would see the pre-analysis
+declaration-order dependent: a caller declared _before_ its dynamic callee would see the pre-analysis
 scalar default (confirmed reachable via a 3-level forward-reference chain). Instead: seed every
 function `'scalar'`, only ever **promote** to `'dynamic'` (monotone, height-1 lattice), iterating up
 to `declarations.length + 1` passes (enough for an N-function chain in the worst order, plus one
@@ -2037,7 +2073,7 @@ parameters stays scalar (K15).
 real EVM execution across: the motivating shape, mutation and read-only variants, plain aliasing,
 reverse declaration order, a 3-level forward chain, a mixed-return helper, and all of those again
 with `tsSource: true`. A scalar-returning helper compiles to byte-identical bytecode (negative
-control) — this can only ever *widen* a kind.
+control) — this can only ever _widen_ a kind.
 
 **PORTING (P0 for a v1-shaped engine).** Preserve: monotone promote-only with the `n+1` bound; the
 flat (not block-scoped) local map; running strictly before any body compiles, with the result shared
@@ -2112,7 +2148,7 @@ plain store site and in `processTernaryStore`; mirrored in
 
 **TARGETS.** v1 consequence; v12/svm bytecode unchanged.
 
-**PORTING (P1).** Override-never-downgrade, applied at *every* store-decision site.
+**PORTING (P1).** Override-never-downgrade, applied at _every_ store-decision site.
 
 ### K8. v1 scalar→dynamic reassignment rejection
 
@@ -2122,7 +2158,7 @@ plain store site and in `processTernaryStore`; mirrored in
 dropped the descriptor at runtime (confirmed `0x97` on the later indexed read in every case). v1
 cannot re-class a slot after declaration, so `rejectV1ScalarToDynamicReassignment` **rejects at
 compile time** when `!ctx.isV12 && existing?.kind === 'scalar' && newKind === 'dynamic'`, with an
-error explaining the fix (give the variable a dynamic value on its *first* assignment).
+error explaining the fix (give the variable a dynamic value on its _first_ assignment).
 
 **EDGE / BAIL.** The reverse direction (a scalar stored into an already-dynamic slot) is untouched and
 still round-trips. v12/svm are structurally exempt (K1) and every rejected shape compiles there.
@@ -2135,7 +2171,7 @@ function until I5 landed.
 
 **TARGETS.** v1 only.
 
-**PORTING (P1).** Keep the *pattern* even if the trigger differs: when the engine makes a hazard
+**PORTING (P1).** Keep the _pattern_ even if the trigger differs: when the engine makes a hazard
 unrepairable, reject loudly at compile time rather than emitting it.
 
 ### K9. `multiOutputCall` tagging
@@ -2150,7 +2186,7 @@ alternative (K10). A bare `return s` is untouched — shipping protocol function
 path — a spurious rejection at worst, never a silent miscompile); cleared on any other kind of
 assignment; propagated through plain identifier aliasing (`const t = s`); computed only for a scalar
 destination and only on v1 (`ctx.isV12` short-circuits to `undefined`). **Documented holes:** a
-ternary with only *one* multi-output branch stays untagged (the other path may be perfectly
+ternary with only _one_ multi-output branch stays untagged (the other path may be perfectly
 indexable), and the tag does not cross a call boundary into a helper.
 
 **SOURCE.** `compiler/src/context.ts` (`Variable.multiOutputCall`),
@@ -2170,6 +2206,7 @@ so the descriptor cannot be dropped — raw heap bytes round-trip fine, a decode
 bound name's kind is its own per-output ABI kind.
 
 **EDGE / BAIL.**
+
 - **v12 EVM fast path:** when every output occupies exactly one 32-byte head word
   (`outputs.every(o => o.type !== 'tuple')`) **and** `ctx.target === 'v12'` specifically (**not**
   `svm`, whose SLICE/CAST_BE handlers are unvalidated ports), an elementary-static component skips
@@ -2177,10 +2214,10 @@ bound name's kind is its own per-output ABI kind.
   to the engine's own scalar mask, including a negative signed `intN` via the byte-precise slice.
 - Rejections: a `.catch()`-chain initializer (`cannot destructure a .catch() chain`); a non-contract-call
   initializer; zero outputs; more pattern elements than outputs; a `tuple`-typed output bound to a
-  name (points at chained indexing instead — a *hole* over such an output is fine); a rest element or
+  name (points at chained indexing instead — a _hole_ over such an output is fine); a rest element or
   non-Identifier/non-hole element (`not implemented`); destructuring into an **existing** variable
   whose kind differs from the required output kind (since if-bodies share scope, a name reuse
-  resolves to the existing variable and `store()` would silently use *its* kind — reject rather than
+  resolves to the existing variable and `store()` would silently use _its_ kind — reject rather than
   miscompile; a matching kind reassigns like a plain const). A hole skips that output index.
 - Capability-gated off svm entirely (`array destructuring`, C6).
 
@@ -2192,7 +2229,7 @@ bound name's kind is its own per-output ABI kind.
 **PORTING (P0).** The raw-temp-plus-redecode architecture is the canonical safe way to consume a
 multi-output call on v1 and the alternative K9's error points at. If a port's engine has no
 "decoded tuple does not survive a variable round-trip" asymmetry, this complexity may be unnecessary
-*for that target* — verify first.
+_for that target_ — verify first.
 
 ### K11. Ternary storage-kind promotion
 
@@ -2246,11 +2283,11 @@ and — unlike array encoding — no static/dynamic consistency check. So `{ a: 
 `inner` is an existing dynamic-kind variable (a `new Array(2)` local, an alias of one, or a stored
 single-dynamic-output call result), compiled cleanly on **both** v1 and v12 and then returned a raw
 internal heap-descriptor artifact when `s.a` was read back — confirmed by real execution on both
-engines returning the *identical* wrong word (the sibling scalar field read back fine, isolating the
+engines returning the _identical_ wrong word (the sibling scalar field read back fine, isolating the
 fault to the dynamic field). Rejected structurally: the field's **processed bytes** are exactly a bare
 `READ_HEAP` read.
 
-**EDGE / BAIL.** A **directly constructed** dynamic value at a property position is *not* rejected
+**EDGE / BAIL.** A **directly constructed** dynamic value at a property position is _not_ rejected
 (a string/array literal, a `.concat()`/`.slice()` call, a nested object literal) — each allocates its
 own fresh dynamic value rather than re-embedding an existing descriptor, verified to round-trip on
 both targets. A violation nested inside an object literal's own nested-struct field is still caught,
@@ -2263,7 +2300,7 @@ false positive. On v12/svm's **postfix** encoding `unary()` appends its opcode, 
 genuine scalar, so a bare `bytes[0] === READ_HEAP` check false-positived (`{ x: arr.length }` threw on
 v12/svm while compiling on v1; also reachable via `keccak256(arr)`). Requiring **exactly 2 bytes** —
 a bare read is always `[READ_HEAP, slot]` on either encoding, since a slot index is one byte
-(`context.ts`'s own invariant) — narrows the check to "the whole expression *is* a bare variable read"
+(`context.ts`'s own invariant) — narrows the check to "the whole expression _is_ a bare variable read"
 without reopening the real bug, and is a no-op on v1.
 
 **SOURCE.** `compiler/src/processor/collection.ts` (`assertNoDynamicVariableObjectField`, called from
@@ -2305,7 +2342,7 @@ programs.
   (`function h(a){ return a[1]; } function main(){ const arr = new Array(3); …; return h(arr); }`)
   still reverts `0x97`. Two compounding causes, neither addressed: `processFunction`/
   `processFunctionV12` always tag a helper's own parameters `argType?.kind ?? 'scalar'` — there is
-  **no per-call-site parameter-kind inference at all** (unlike `main`'s params, A5) — *and* v1's
+  **no per-call-site parameter-kind inference at all** (unlike `main`'s params, A5) — _and_ v1's
   engine splits a call's arguments into **two positional index spaces** by dynamism
   (`funcHeap[heapI++]` vs `funcValues[valuesI++]`), which the compiler's argument lowering does not
   model. A real fix needs both, which is materially bigger than the return-direction fix.
@@ -2329,7 +2366,7 @@ programs.
 **SOURCE.** `compiler/src/processor/index.ts` (the parameter tagging in `processFunction` /
 `processFunctionV12`).
 
-**PORTING (P1 to *document or gate*, P3 to fix).** For a v1-shaped target, either implement full
+**PORTING (P1 to _document or gate_, P3 to fix).** For a v1-shaped target, either implement full
 per-call-site parameter-kind propagation (respecting the two-array split) **or** add an explicit
 compile-time rejection of "dynamic value passed as a call argument" — mirroring K8/K9's
 "cannot repair it, so refuse it" pattern — rather than leaving a silent revert-or-wrong-value hazard
@@ -2429,7 +2466,7 @@ bijection must stay derived from one table.
   `[ARRAY|ARRAY_2, …len, BYTE_OPS[width], …zero-left-padded element bytes]`.
 - **all-dynamic** (`BYTES`/`BYTES_2`/`ARRAY`/`ARRAY_2`/`TUPLE` literals, or runtime-dynamic
   `READ_HEAP`/`CONCAT`/`SLICE`/`ABI_ENCODE`): `[op, …len, elementTypeMarker, …element bytes
-  concatenated]`, where the marker is the first element's own dynamic-literal op, or `BYTES` for
+concatenated]`, where the marker is the first element's own dynamic-literal op, or `BYTES` for
   runtime-computed elements.
 
 **EDGE / BAIL.** An empty array is `[ARRAY, 0, BYTE_1]`. Over 65 535 elements throws. A **mixed**
@@ -2444,7 +2481,7 @@ back this encoding to classify mutability.
 `encodeLength`, `maxByteWidth`, `allStatic`/`allDynamic`, `encodeIndex`, `encodeSetIndex`,
 `encodeNewArray`, `isImmutablePackedArray`).
 
-**TARGETS.** all — v12/svm reuse this exact encoder (only the *operand order* of the heap ops differs,
+**TARGETS.** all — v12/svm reuse this exact encoder (only the _operand order_ of the heap ops differs,
 G17).
 
 **PORTING (P0).** Preserve: widest-element narrowing, the static/dynamic mixing rejection, and
@@ -2549,7 +2586,7 @@ corrupt everything if wrong.
 ### G12. v12 parameter frame — SDUP read / SSWAP write
 
 **WHAT.** Locals stay in slots even on v12; only **parameters** live on the EVM stack. A parameter
-**read** emits an SDUP *sentinel* plus a `RefPlaceholder { position, paramIndex, depth }`, patched at
+**read** emits an SDUP _sentinel_ plus a `RefPlaceholder { position, paramIndex, depth }`, patched at
 assembly to `SDUP1 + realPos - 1` where
 `realPos = depth + frame + paramCount - paramIndex` (`frame` = 1 for a helper's call-frame
 return-address word, 0 for the inlined `main`). A parameter **write** emits
@@ -2581,7 +2618,7 @@ branch), `compiler/src/index.ts` (`patchSdup` and the two `patchMainRefs`/helper
 
 **TARGETS.** v12, svm.
 
-**PORTING (P0).** If a port uses a stack-based parameter convention, derive read *and* write positions
+**PORTING (P0).** If a port uses a stack-based parameter convention, derive read _and_ write positions
 from **one** shared depth computation. The bug existed because the two were computed independently.
 
 ### G13. Sentinel patching + blob assembly layout
@@ -2638,9 +2675,9 @@ assembly terminates it (`MSTORE` + trailing `STOP`). A **helper** is entered via
 **EDGE / BAIL.** This **must** include an early return inside a conditional: without `FUNC_RETURN` the
 value is merely left on the stack and execution **falls through** into the rest of the body, leaking
 one stack item per call (over a loop of calls → EVM "out of stack"). For the builder's own
-bookkeeping, a helper `return` is modeled as **net-neutral** (reporting the height *before* the return
+bookkeeping, a helper `return` is modeled as **net-neutral** (reporting the height _before_ the return
 value) because control leaves there — any continuation (an enclosing `if`'s fall-through, which only
-runs when the branch was *not* taken) must see the returning branch as height-neutral, not +1. The
+runs when the branch was _not_ taken) must see the returning branch as height-neutral, not +1. The
 function's tail return self-terminates, making the assembly's trailing `FUNC_RETURN` dead but harmless.
 
 **SOURCE.** `compiler/src/saucer/saucer-v12.ts` (`return`).
@@ -2722,7 +2759,7 @@ staged program to the heap, and the prologue owns the single one (A7).
 `if`: `[cond][IF skip][then]`, upgraded to `IF_2` with a 2-byte skip when the then-body exceeds 255
 bytes. `else`: appends `[JUMP len][else]` and **grows the IF skip** so a false condition jumps past
 both the then-body and the JUMP. `for`: `[parent][JUMP incrLen][update][condition][IF skip][body]
-[JUMP_BACK count]` — the back-jump lands at the *increment* (after the jump-over-increment header),
+[JUMP_BACK count]` — the back-jump lands at the _increment_ (after the jump-over-increment header),
 so that header is excluded from the count.
 
 **EDGE / BAIL.** Three size thresholds each with their own upgrade path and error: a then/else body
@@ -2812,7 +2849,7 @@ features depend on it:
 - **v1**: a dynamic value is **out of band** — `ctx.dynamicResult` carries the descriptor, and a value
   slot holds only a `bytes32`. `_writeHeap` copies the descriptor; `_executeWriteValue` does not.
   Hence K1's fatal asymmetry, the two-index-space call convention (K15), and the fact that a
-  `new Array(n)` TUPLE *returned* from a program leaks raw memory addresses (TS14).
+  `new Array(n)` TUPLE _returned_ from a program leaks raw memory addresses (TS14).
 - **v12/svm**: a dynamic value is **one in-band 32-byte descriptor word**, and the value/heap write
   handlers are the same `mstore` differing only in memory region — so a descriptor round-trips through
   either region losslessly, which is why `V12Saucer.store` can ignore the kind tag and derive
@@ -2848,14 +2885,14 @@ deterministic: bigints tagged with a trailing `n` (so `1n`/`"1"`/`1` stay distin
 sorted (field order never causes a spurious miss).
 
 **EDGE / BAIL — the environment contract.** Two inputs the key structurally **cannot** capture:
-`transformModule`'s *behavior* (only its presence is keyed) and the **on-disk bytes** of anything
+`transformModule`'s _behavior_ (only its presence is keyed) and the **on-disk bytes** of anything
 reachable via `baseDirs`. Keep both stable within a process, or a repeat compile of identical
 `(source, options)` returns **stale bytecode**. Escape hatches: `cache: false`,
 `clearDefaultCompileCache()` (after editing an imported file), or `cacheKeyExtra` (a fingerprint —
 e.g. a hash of the transform config plus imported files' mtime/size). `baseDirs` are resolved absolute
 precisely because a relative dir is read against `process.cwd()` at file-read time, so keying the raw
 relative string would let a cwd change mis-hit. **Whole-program memoization only, never per-function**:
-a v1 function body embeds `CALL_FUNCTION` operands that are the callee's index in *that program's*
+a v1 function body embeds `CALL_FUNCTION` operands that are the callee's index in _that program's_
 registry (G10), so a body is not portable across programs registering a different function set —
 whereas whole-program results have no such coupling, and "the same solver/template recompiled
 repeatedly" is the actual recurring pattern.
@@ -2880,7 +2917,7 @@ compile can never corrupt an earlier caller's result.
 
 **SOURCE.** `compiler/src/cache.ts` (`cloneCompileResult`).
 
-**PORTING (P2).** In Rust, ownership makes this mostly free — but keep the *semantics* (a cached entry
+**PORTING (P2).** In Rust, ownership makes this mostly free — but keep the _semantics_ (a cached entry
 is never aliased).
 
 ### X3. Bounded LRU store + stats + clear
@@ -2906,7 +2943,7 @@ map satisfies it.
    or nearly vacuous (G24, K1). Do not port K2–K15 defensively.
 
 2. **Compute the scope/shadow model once.** "Only `for` pushes a scope; `if`/`while` share the
-   enclosing one" (L3) is a *language* fact that at least eight analyses must agree on — and at least
+   enclosing one" (L3) is a _language_ fact that at least eight analyses must agree on — and at least
    four documented bugs came from one of them not knowing it (TS6, K4). One predicate, consumed
    everywhere.
 
@@ -2971,14 +3008,14 @@ These three survive:
 
 Per the brief, these are called out rather than stated as fact.
 
-1. **Loop unrolling is *not* in the acorn core** — the task framing implied otherwise. Verified: it
+1. **Loop unrolling is _not_ in the acorn core** — the task framing implied otherwise. Verified: it
    lives only in `ts-frontend.ts`; `processor/statement.ts`'s loop handlers always emit real
    `JUMP_BACK` bytecode, and the only `unroll` mention under `processor/` is a comment pointing out to
    `ts-frontend.ts`. See Category U's placement note.
 
 2. **A "scalar-only import/export boundary" capability does not exist.** The task's feature list
    mentioned one; no such gate was found in `capabilities.ts`, `globals.ts`, or the import-collection
-   code. The scalar/dynamic *storage-kind* family (K) is a different concern (variable storage width,
+   code. The scalar/dynamic _storage-kind_ family (K) is a different concern (variable storage width,
    not an import boundary). Reported as absent rather than invented.
 
 3. **Engine-side claims** are taken from source comments and `CLAUDE.md` only — the private engine
@@ -3001,7 +3038,7 @@ Per the brief, these are called out rather than stated as fact.
    entries is a question for the team, not a settled fact.
 
 6. **`RESERVED_NAMES`' enforcement points** were confirmed at `setVar`/`addFunc` in `context.ts`; a
-   full sweep for any *other* enforcement site was not performed.
+   full sweep for any _other_ enforcement site was not performed.
 
 7. **String-specific intrinsics** beyond `[i]`/`.length`/`.concat`/`.slice` were not traced against a
    dedicated string code path — L7 assumes strings share the array/bytes dispatch, consistent with

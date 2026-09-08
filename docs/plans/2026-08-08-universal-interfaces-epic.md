@@ -11,7 +11,7 @@ via parallel workflows and continue to the next unblocked task without waiting f
 - **Model routing (per workflow phase):** design → `claude-opus-5`; implementation → `claude-sonnet-5`;
   verification → `claude-opus-4-8`.
 - **Merge policy:** feature branch → run **LOCAL CI green** → merge to `main`. Gate = `pnpm --filter './sdk'
-  typecheck` (src-only, `tsconfig.json`) + the package's `test`. **ALSO** `tsc -p tsconfig.test.json --noEmit`
+typecheck` (src-only, `tsconfig.json`) + the package's `test`. **ALSO** `tsc -p tsconfig.test.json --noEmit`
   and require **no NEW errors in the files this task touched** — the src-only `typecheck` does NOT check test
   files (they're excluded), and jest runs ts-jest with `diagnostics:false`, so a test-file type error (even
   one masking a real bug — see the c6 bigint fix) slips through otherwise. The `test/svm/*` baseline is now **0** (cleared in PR #120) — test-typecheck must be FULLY clean. **AND for compiler changes: `pnpm --filter './compiler' format:check`** (CI
@@ -36,8 +36,9 @@ via parallel workflows and continue to the next unblocked task without waiting f
 ## Sub-epics
 
 ### E1 — Port compiler-rs import/interface MACHINERY into our TS compiler
+
 **Reframed after research:** compiler-rs "universal interfaces" = **no built-in prelude**. Two mechanisms:
-(a) Solidity-ABI imports (EVM-only interface), (b) a *library* pattern — a "universal" `@sauce/token` with
+(a) Solidity-ABI imports (EVM-only interface), (b) a _library_ pattern — a "universal" `@sauce/token` with
 per-target arms `token.evm.js`(ERC20)/`token.svm.js`(SPL)/neutral `token.js`, resolved via bare-specifier +
 node_modules + **per-target arm selection**, made portable by a **bidirectional capability gate**.
 `@sauce/token` itself is **not implemented upstream** (data, not compiler logic). So "port the feature" =
@@ -45,6 +46,7 @@ port the RESOLUTION + LINKING + GATE machinery; the stdlib is a separate future 
 Upstream source: `../sauce/compiler/crates/sauce-core/src/{frontend,lower/assembly,lower/contract,abi,
 resolver,path,capability,targets}.rs`; design doc `docs/superpowers/specs/2026-07-29-libraries-and-
 external-contract-support-design.md`. All merged to `origin/main` (tip #286).
+
 - **E1.1** `DONE` (PR #111, `f15a073`) **Per-target arm selection** in `resolveModuleSource` — probes
   `<base>.<target>.<ext>` (v1/v12/svm) before neutral, per baseDir (arms-then-neutral, baseDir precedence);
   unselected arm never read; dedup key stays NEUTRAL (`dedupKey` threaded into `collectImportedFunctions`);
@@ -63,8 +65,8 @@ external-contract-support-design.md`. All merged to `origin/main` (tip #286).
   bindings, CREATE*/DELEGATE, EVM storage, array-destructured calls) reject on svm; svm-only
   (accountData/writeAccountData/accountUint + the `contract.call` accounts-list shape) reject on v1/v12;
   v12-dialect `uint()` rejects on v1. **Closed a real SILENT MISCOMPILE**: `contract.call(t,calldata,
-  accounts[])` used to compile clean on v1/v12 while mis-encoding accounts→calldata + calldata→value. Brief
-  correction landed: abi *codec* is universal (only typed bindings are EVM-only). dist rebuilt. 480 tests.
+accounts[])` used to compile clean on v1/v12 while mis-encoding accounts→calldata + calldata→value. Brief
+  correction landed: abi _codec_ is universal (only typed bindings are EVM-only). dist rebuilt. 480 tests.
 - **E1.4** `DONE` (PR #119, `cb5507a`) Import-form parity audit — closed 3 real gaps: bare-array `.json`
   ABI import accepted; multi-binding `.json` contract import now errors (was silently aliasing to one ABI);
   above-root specifier escape rejected on both `.json` + module paths (`assertDoesNotEscapeRoots`). Type-only
@@ -83,13 +85,15 @@ external-contract-support-design.md`. All merged to `origin/main` (tip #286).
 - **E1.0** `DONE` compiler-rs feature spec captured (agent `a87347…`).
 
 ### E2 — Native on-chain interface accessors from the SDK registry
+
 `Base.Uniswap.UniversalRouter.exactIn(...)` — typed accessors over deployed contracts.
+
 - **E2.0** `DONE` (PR #105, `a6f509e`) Canonical chain registry `sdk/src/chains/canonical.ts` —
   `CanonicalChain{id,slug,name,kind:'evm'|'svm',aliases}`, 39 entries (33 `chains` + 5 v12-only EVM +
   Solana), `chainById/chainBySlug/chainByAlias/resolveChain/requireChain/isEvm/isSvm` + `ChainSlug` union.
   Additive (one `export *` line), zero coupling to deployments/protocols. 28 tests. Unblocks E2/E3.
 - **E2.1** `DONE` (PR #117, `09dbe81`) `sdk/src/descriptors/` — `ContractDescriptor{protocol,contract,kind,
-  perChainAddress(sparse),abi,methods,chains,coverage}` + query API + reverse index. Linkage is NOT in the
+perChainAddress(sparse),abi,methods,chains,coverage}` + query API + reverse index. Linkage is NOT in the
   data (measured: 60.5% role↔ABI name-match across 128 protocols), so v1 ships a hand-authored,
   machine-CHECKED `CONTRACT_LINKS` table validated against vendored data. 3-way `ContractKind` (singleton /
   address-only / interface). `coverage.typeFidelity='widened'` flags partial ABIs whose selectors won't hit
@@ -99,12 +103,13 @@ external-contract-support-design.md`. All merged to `origin/main` (tip #286).
   `exactIn`). No external ingestion (Decision #3). Deep per-method type-accuracy fixes remain optional.
 - **E2.3** `DONE` (PR #118, `54a7fd8`) `chainContracts(ref)` — lazy Chain→Protocol→Contract→method tree over
   descriptors, composed onto the E3.5 global `Base` (one `Base`: `route(...)` AND `Uniswap.UniversalRouter
-  .execute(...)`). Leaf `.method(...)`→ContractCall {encode/toCall/toSauceScript}. Fail-closed family
+.execute(...)`). Leaf `.method(...)`→ContractCall {encode/toCall/toSauceScript}. Fail-closed family
   aliases; literal names from `CONTRACT_LINKS as const`; per-chain holes + coverage respected; NO E3.5
   regression. 89 tests. `contracts.on(ref)` is the dynamic front door (= E5).
 - **E2.4** `MOSTLY DONE` (via E2.1) per-chain holes are represented by the descriptor's SPARSE `perChainAddress` + derived `chains`. Any accessor-level surfacing folds into E2.3.
 
 ### E3 — eco-routes native fluent intent DSL
+
 `Base.route(reward).Solana(route).route(reward).Ethereum();` — chain shortcuts fill source/destination;
 each leg carries route + reward; SVM route encoded; Sauce program compiled `target: 'svm'` (the v12 svm
 dialect — there is NO `v12-svm` target string; Decision #2 resolved).
@@ -115,6 +120,7 @@ deadline,portal,nativeAmount,tokens:TokenAmount[],calls:Call[]}, reward{deadline
 nativeAmount,tokens:TokenAmount[]} }`; `TokenAmount{token,amount}`, `Call{target,data,value}` (SVM `Call`
 has **no** `value`). Addresses are `UniversalAddress` (bytes32-normalized). Hash =
 `keccak(encodePacked(destination, routeHash, rewardHash))`.
+
 - **E3.0** `DONE` eco-routes schema captured (agent `a6ac1f…`).
 - **E3.1** `DONE` (PR #106, `0ccbcb2`) Fluent chain-shortcut builder `sdk/src/routes/` — top-level chain
   accessors generated from the canonical registry (`createChainAccessors`, PascalCase-keyed, collision-
@@ -137,7 +143,7 @@ has **no** `value`). Addresses are `UniversalAddress` (bytes32-normalized). Hash
   **Accepted caveat:** the ~39 ambient decls can't be opted out at the TYPE level → a consumer's own
   `const Base` hits TS2451 (inherent to the feature; user: "maybe change our mind later").
 - **E3.3** `DONE` (PR #110, `dc5cd0a`) `sdk/src/routes/sauce-calls.ts` — EVM `{target:pot, data:
-  v12Pot.encodeCook(ingredients), value:0n}`; SVM `execute_from_account` (buffer-first READONLY, sha256 pin +
+v12Pot.encodeCook(ingredients), value:0n}`; SVM `execute_from_account` (buffer-first READONLY, sha256 pin +
   slice/args, cross-call flag OR-merge) wrapped in the Portal `CalldataWithAccounts` envelope via a NEW
   `encodePortalCalldataWithAccounts` added beside the existing decoder (svm/intent.ts, one source of truth,
   now also on the `/svm/verify` barrel). web3.js `PublicKey` duck-typed (optional peer stays out of the main
@@ -146,6 +152,7 @@ has **no** `value`). Addresses are `UniversalAddress` (bytes32-normalized). Hash
 - **E3.4** `TODO` Fluent/promise ergonomics + final naming (Decision #1).
 
 ### E4 — Universal swap/deposit adapter (SDK-side), mirroring release/beta Router
+
 - **E4.1** `DONE` (PR #115, `049af80`) `sdk/src/swap/` — `toSwapParams(spec)` normalizes a swap into a
   `SwapParams` object (ABI order, bigint, payer/recipient default `address.self` for the onlySelf router) +
   `swapSource` emits the `ISauceRouter.at(address.self).swap({...})` SauceScript (compiler-free, caller runs
@@ -163,7 +170,9 @@ has **no** `value`). Addresses are `UniversalAddress` (bytes32-normalized). Hash
 - **E4.3** `DONE` (subsumed by E4.1, PR #115) `amountSpecifiedFor` — sign rule read from Router source.
 
 ### E5 — Dynamic cross-chain protocol import from the SDK
+
 `Base.Uniswap.UniversalRouter…` resolved dynamically per chain. Superset of E2; depends on E2.0/E2.1/E2.2.
+
 - **E5.1** `TODO` Design the dynamic import/resolution surface (SDK export shape) once E2 lands.
 
 ---
@@ -207,7 +216,7 @@ has **no** `value`). Addresses are `UniversalAddress` (bytes32-normalized). Hash
 - **Pre-existing test-type debt — `DONE`** (PR #120, `770190b`): the 13 `test/svm/*` type errors are cleared
   (behavior-neutral narrowing); `tsc -p tsconfig.test.json` is now fully clean. Gate baseline = 0.
 - **SVM encoder on-chain byte-parity (from E3.2):** the SVM Borsh schema replicates the Portal IDL layout and
-  is pinned by golden vectors, but parity with the *deployed* Portal program isn't proven. Needs one real
+  is pinned by golden vectors, but parity with the _deployed_ Portal program isn't proven. Needs one real
   integration vector — a mainnet `publish`/`publishAndFund` tx whose emitted `intentHash` our `hashIntent`
   reproduces. Deferred (needs network/a captured tx), not bundled into E3.2.
 
@@ -230,6 +239,7 @@ has **no** `value`). Addresses are `UniversalAddress` (bytes32-normalized). Hash
 4. **Backlog doc in git?** ✅ **Keep LOCAL** (stays untracked under `docs/plans/`; never staged/committed).
 
 ### Newly surfaced by E3.1 design (non-blocking — sensible defaults chosen, confirm when convenient)
+
 5. **Top-level export ergonomics (→ E3.5):** ✅ **DEFAULT GLOBALS — no import.** The user wants `Base`,
    `Solana`, `Ethereum`, … (and the route DSL surface) available as ambient globals so `Base.route(...)`
    works with zero import. Implement as (a) a side-effect install that assigns the registry-generated
@@ -347,7 +357,7 @@ admin-merged through the GitHub Actions outage. npm frozen at 0.8.0; main at 0.9
 - **E2 native on-chain accessors** — DONE (E2.0 chains, E2.1 descriptors, E2.2 existing-ABI/coverage, E2.3
   accessor tree). `Base.Uniswap.UniversalRouter.execute(...)` works as a default global.
 - **E3 eco-routes DSL** — DONE (E3.0–E3.3 + E3.5). `Base.route(r).Solana(route)...` builds/encodes intents
-  + slots Sauce bytecode; default globals. E3.4 ergonomics = optional polish.
+  - slots Sauce bytecode; default globals. E3.4 ergonomics = optional polish.
 - **E4 universal swap/deposit adapter** — DONE (E4.1 swap, E4.2 deposit, E4.3 sign rule).
 - **E5 dynamic cross-chain protocol import** — DONE via E2.3 (`contracts.on(ref)` + the per-chain accessor).
 
@@ -359,6 +369,7 @@ gate). Gate hardened 3× (test-typecheck no-new-errors, compiler format:check, c
 byte-parity vector, 13 pre-existing `test/svm/*` type errors. **When the user lifts the publish freeze:** cut
 the release (0.9.0 already tagged/unpublished, or bump) — a LOT of new public surface (routes, swap, deposit,
 descriptors, compiler import machinery) has accumulated on main since 0.8.0.
+
 - **2026-08-08 c22–c23:** E1.4 import-form parity merged (PR #119, `cb5507a`) — 3 gaps closed, dist rebuilt,
   gate re-confirmed by hand (typecheck 0, 68 tests, format clean, drift 0). Dismissed a `derive.ts`
   `ContractLinkEntry` IDE phantom via the git blob (main was always clean). 🎉 **E1 compiler-import port
@@ -375,6 +386,7 @@ descriptors, compiler import machinery) has accumulated on main since 0.8.0.
   (E1.5 stdlib, the release) or optional polish (E3.4 fluent ergonomics). Awaiting user steer.
 
 ## Open scope question (surfaced c24)
+
 - **SVM-side native accessors** ("native interfaces to everything for EVM AND SVM"): E2's accessor tree is
   EVM-only (built from `sdk/src/protocols` addresses/ABIs). SVM venues (`sdk/src/svm/venues`) are IMPERATIVE
   adapters with NO ABI/IDL, and their quote-ladders are proprietary (relocated to sauce-recipes). The SVM

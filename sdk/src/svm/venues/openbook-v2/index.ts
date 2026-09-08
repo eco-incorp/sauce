@@ -170,13 +170,13 @@
  * - a direction with NO shippable Fixed-tree TIF=0 orders — `SvmWindowDriftError`,
  *   wired via the FAMILIES gate exactly like manifest's empty-window case.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-const SLUG = 'openbook-v2';
-export const OPENBOOK_V2_PROGRAM_ID = address('opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb');
+const SLUG = "openbook-v2";
+export const OPENBOOK_V2_PROGRAM_ID = address("opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb");
 export const MARKET_ACCOUNT_SIZE = 848;
 export const BOOKSIDE_ACCOUNT_SIZE = 90952;
 /** Absolute byte offset of `nodes[0]` within a BookSide account (312 + 528). */
@@ -212,7 +212,7 @@ export interface OpenBookV2Window {
 export interface OpenBookV2PoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'baseIn' (default, sell base — opposes bids) | 'quoteIn' (buy base — opposes asks). */
-  direction: 'baseIn' | 'quoteIn';
+  direction: "baseIn" | "quoteIn";
   baseMint: Address;
   quoteMint: Address;
   bidsAccount: Address;
@@ -251,7 +251,10 @@ function readPubkeyIsZero(data: Uint8Array, offset: number): boolean {
 
 /** Best-first order over the FULL 128-bit key: descending for bids (highest key first), ascending
  * for asks (lowest key first) — see the header's bookside.rs citation for why price alone is unsafe. */
-function sortBestFirst(orders: { nodeOffset: number; key: bigint; priceLots: bigint }[], descending: boolean): OpenBookV2Order[] {
+function sortBestFirst(
+  orders: { nodeOffset: number; key: bigint; priceLots: bigint }[],
+  descending: boolean,
+): OpenBookV2Order[] {
   const sorted = [...orders].sort((a, b) => {
     if (a.key === b.key) return 0;
     if (descending) return a.key > b.key ? -1 : 1;
@@ -271,7 +274,8 @@ function walkFixedTree(data: Uint8Array): { nodeOffset: number; key: bigint; pri
   let visited = 0;
   const BOUND = 4096; // 1024 slots, generous bound against a malformed/cyclic tree
   while (stack.length > 0) {
-    if (++visited > BOUND) throw new Error(`${SLUG}: BookSide tree walk exceeded ${BOUND} visits — refusing to loop`);
+    if (++visited > BOUND)
+      throw new Error(`${SLUG}: BookSide tree walk exceeded ${BOUND} visits — refusing to loop`);
     const idx = stack.pop()!;
     const nodeOffset = NODES_BASE + idx * NODE_SIZE;
     const tag = Number(readUintLE(data, nodeOffset, 1));
@@ -291,14 +295,21 @@ function walkFixedTree(data: Uint8Array): { nodeOffset: number; key: bigint; pri
   return out;
 }
 
-export async function fetchOpenBookV2Config(load: AccountLoader, pool: Address): Promise<OpenBookV2PoolConfig> {
+export async function fetchOpenBookV2Config(
+  load: AccountLoader,
+  pool: Address,
+): Promise<OpenBookV2PoolConfig> {
   const market = await load(pool);
   if (market === null) throw new Error(`${SLUG} market ${pool} does not exist`);
   if (market.length !== MARKET_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} market ${pool} has unexpected size ${market.length} (want ${MARKET_ACCOUNT_SIZE})`);
+    throw new Error(
+      `${SLUG} market ${pool} has unexpected size ${market.length} (want ${MARKET_ACCOUNT_SIZE})`,
+    );
   }
   if (!readPubkeyIsZero(market, 88)) {
-    throw new Error(`${SLUG} market ${pool} has a configured openOrdersAdmin — no third-party signer available`);
+    throw new Error(
+      `${SLUG} market ${pool} has a configured openOrdersAdmin — no third-party signer available`,
+    );
   }
   const timeExpiry = readInt64LE(market, 48);
   const baseDecimals = Number(readUintLE(market, 9, 1));
@@ -336,7 +347,7 @@ export async function fetchOpenBookV2Config(load: AccountLoader, pool: Address):
   return {
     venue: SLUG,
     pool,
-    direction: 'baseIn',
+    direction: "baseIn",
     baseMint,
     quoteMint,
     bidsAccount,
@@ -364,7 +375,7 @@ export async function fetchOpenBookV2Config(load: AccountLoader, pool: Address):
 // this recipe does not otherwise need for a pure-decode path — bs58-encode
 // the 32 raw bytes ourselves (the SAME alphabet/algorithm @solana/kit uses)
 // and validate through `address()`, which is already imported.
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58Encode(bytes: Uint8Array): string {
   const digits = [0];
   for (let i = 0; i < bytes.length; i++) {
@@ -381,11 +392,10 @@ function base58Encode(bytes: Uint8Array): string {
   }
   let leadingZeros = 0;
   for (let i = 0; i < bytes.length && bytes[i] === 0; i++) leadingZeros++;
-  let out = '1'.repeat(leadingZeros);
+  let out = "1".repeat(leadingZeros);
   for (let i = digits.length - 1; i >= 0; i--) out += BASE58_ALPHABET[digits[i]];
-  return out === '' ? '1' : out;
+  return out === "" ? "1" : out;
 }
 function decodeAddressFrom(data: Uint8Array, offset: number): Address {
   return address(base58Encode(data.subarray(offset, offset + 32)));
 }
-

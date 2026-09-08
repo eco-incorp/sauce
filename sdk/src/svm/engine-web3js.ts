@@ -12,11 +12,11 @@
 // fs-free invariant is preserved. This module is itself CJS-require-safe (no `import.meta` /
 // `__dirname`), so it loads under ts-jest / babel-jest CommonJS transforms.
 
-import { AccountRole, isSignerRole, isWritableRole } from '@solana/kit';
-import type { Address, Instruction } from '@solana/kit';
-import { PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { AccountRole, isSignerRole, isWritableRole } from "@solana/kit";
+import type { Address, Instruction } from "@solana/kit";
+import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 
-import { BUFFER_SEED, BUFFER_SEED_BYTES } from './engine.js';
+import { BUFFER_SEED, BUFFER_SEED_BYTES } from "./engine.js";
 import {
   buildCloseBufferCheckedInstruction as kitBuildCloseBufferChecked,
   buildCloseBufferInstruction as kitBuildCloseBuffer,
@@ -27,7 +27,7 @@ import {
   buildInitBufferInstructions as kitBuildInitBuffer,
   buildStagingPlan,
   buildWriteBufferInstruction as kitBuildWriteBuffer,
-} from './instructions.js';
+} from "./instructions.js";
 
 // Plan builder carries no instructions to convert — re-export it verbatim for one-import ergonomics.
 export { buildStagingPlan };
@@ -35,7 +35,7 @@ export { buildStagingPlan };
 // The content-hash helper web3.js consumers need for `buildFinalizeBufferInstruction`'s `sha256`
 // argument. It lives in `instructions.js` (no web3.js dependency) so every pin producer shares one
 // implementation; re-exported here so this subpath stays a one-import surface.
-export { bytecodeSha256 } from './instructions.js';
+export { bytecodeSha256 } from "./instructions.js";
 
 /** web3.js v1 account meta — the shape `TransactionInstruction.keys` uses. */
 export interface Web3JsAccountMeta {
@@ -222,15 +222,14 @@ export function deriveBufferPda(
   seed: Uint8Array,
 ): PublicKey {
   if (!(seed instanceof Uint8Array) || seed.length !== BUFFER_SEED_BYTES) {
-    const got = seed instanceof Uint8Array ? `${seed.length} bytes` : 'a non-Uint8Array';
+    const got = seed instanceof Uint8Array ? `${seed.length} bytes` : "a non-Uint8Array";
     throw new Error(`buffer seed must be exactly ${BUFFER_SEED_BYTES} bytes, got ${got}`);
   }
 
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from(BUFFER_SEED, 'utf8'), authority.toBuffer(), Buffer.from(seed)],
+    [Buffer.from(BUFFER_SEED, "utf8"), authority.toBuffer(), Buffer.from(seed)],
     programId,
   );
 
   return pda;
 }
-

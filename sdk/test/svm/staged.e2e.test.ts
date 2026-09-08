@@ -20,7 +20,7 @@
  * the SDK-supplied layout that told `encodePayloadArgs` where each value goes. There is nothing left
  * to assert here, not a gap in coverage.
  */
-import { createHash } from 'node:crypto';
+import { createHash } from "node:crypto";
 import {
   buildCloseBufferInstruction,
   buildExecuteFromAccountInstruction,
@@ -28,7 +28,7 @@ import {
   buildHeapFramePrepend,
   buildStagingPlan,
   resolveAccounts,
-} from '../../src/svm/index.js';
+} from "../../src/svm/index.js";
 import {
   buildExecuteTransactionForHarness,
   describeRustSvm,
@@ -43,20 +43,21 @@ import {
   stageBytecode,
   startEngine,
   toBigInt,
-} from './engine-harness.js';
-import type { EngineHarness } from './engine-harness.js';
-import { compileSource } from '../helpers';
+} from "./engine-harness.js";
+import type { EngineHarness } from "./engine-harness.js";
+import { compileSource } from "../helpers";
 
-const sha256 = (bytes: Uint8Array): Uint8Array => new Uint8Array(createHash('sha256').update(bytes).digest());
+const sha256 = (bytes: Uint8Array): Uint8Array =>
+  new Uint8Array(createHash("sha256").update(bytes).digest());
 
-describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account → close)', () => {
+describeSvm("staged e2e: buffer lifecycle (stage 4 KB → execute_from_account → close)", () => {
   let harness: EngineHarness;
 
   beforeAll(async () => {
     harness = await startEngine(1_700_000_000n);
   });
 
-  it('stages a ~4 KB program in the pinned 8-tx protocol, executes it, and closes for a full refund', async () => {
+  it("stages a ~4 KB program in the pinned 8-tx protocol, executes it, and closes for a full refund", async () => {
     // A ~4 KB straight-line program: n x [BYTE_1 42][SDROP], then BYTE_2 0xBEEF, STOP.
     const filler = Array.from({ length: 1364 }, () => [0x01, 0x2a, 0xe0]).flat();
     const bytecode = new Uint8Array([...filler, 0x02, 0xbe, 0xef, 0x00]);
@@ -67,7 +68,9 @@ describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account �
     // no declared slots, no signer needed: pure compute never reads MSG_SENDER
     const accounts = resolveAccounts({ accounts: [] }, {}, harness.payer.address);
 
-    const result = expectOk(await executeStaged(harness, buffer, accounts, { pin: sha256(bytecode) }));
+    const result = expectOk(
+      await executeStaged(harness, buffer, accounts, { pin: sha256(bytecode) }),
+    );
     expect(toBigInt(result.returnData)).toBe(0xbeefn);
 
     // close: rent lands back on the payer, the account is reaped
@@ -76,14 +79,18 @@ describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account �
     expect(bufferLamports).toBeGreaterThan(0n);
     expectOk(
       await sendInstructions(harness, [
-        buildCloseBufferInstruction({ programId: harness.programId, authority: harness.payer.address, buffer }),
+        buildCloseBufferInstruction({
+          programId: harness.programId,
+          authority: harness.payer.address,
+          buffer,
+        }),
       ]),
     );
     expect(harness.svm.getBalance(buffer) ?? 0n).toBe(0n); // reaped
     expect(harness.svm.getBalance(harness.payer.address)).toBe(before! + bufferLamports! - 5000n); // minus the tx fee
   });
 
-  it('rejects a wrong 32-byte hash pin (BufferHashMismatch) — the cross-lifecycle trust anchor', async () => {
+  it("rejects a wrong 32-byte hash pin (BufferHashMismatch) — the cross-lifecycle trust anchor", async () => {
     const bytecode = new Uint8Array([0x01, 0x2a, 0x00]); // BYTE_1 42, STOP
     const buffer = await stageBytecode(harness, seed32(1), bytecode);
     const accounts = resolveAccounts({ accounts: [] }, {}, harness.payer.address);
@@ -93,11 +100,16 @@ describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account �
     expectFail(await executeStaged(harness, buffer, accounts, { pin: wrongPin }));
 
     // the correct pin (and the pinless owner path) still execute
-    expect(toBigInt(expectOk(await executeStaged(harness, buffer, accounts, { pin: sha256(bytecode) })).returnData)).toBe(42n);
+    expect(
+      toBigInt(
+        expectOk(await executeStaged(harness, buffer, accounts, { pin: sha256(bytecode) }))
+          .returnData,
+      ),
+    ).toBe(42n);
     expect(toBigInt(expectOk(await executeStaged(harness, buffer, accounts)).returnData)).toBe(42n);
   });
 
-  it('an execute transaction without RequestHeapFrame aborts before any opcode', async () => {
+  it("an execute transaction without RequestHeapFrame aborts before any opcode", async () => {
     const bytecode = new Uint8Array([0x01, 0x2a, 0x00]); // BYTE_1 42, STOP
     const buffer = await stageBytecode(harness, seed32(5), bytecode);
     const accounts = resolveAccounts({ accounts: [] }, {}, harness.payer.address);
@@ -113,7 +125,7 @@ describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account �
     expectFail(await sendInstructions(harness, [bare]));
   });
 
-  it('a signerless staged execute works too (the buffer is not a signer)', async () => {
+  it("a signerless staged execute works too (the buffer is not a signer)", async () => {
     const bytecode = new Uint8Array([0x01, 0x07, 0x01, 0x06, 0x23, 0x00]); // 7 * 6, STOP
     const buffer = await stageBytecode(harness, seed32(6), bytecode);
 
@@ -128,14 +140,14 @@ describeSvm('staged e2e: buffer lifecycle (stage 4 KB → execute_from_account �
   });
 });
 
-describeSvm('staged e2e: a program too large for the packet runs staged — the whole point', () => {
+describeSvm("staged e2e: a program too large for the packet runs staged — the whole point", () => {
   let harness: EngineHarness;
 
   beforeAll(async () => {
     harness = await startEngine(1_700_000_000n);
   });
 
-  it('a ~1.5 KB program cannot ship inline (packet overflow) but executes from a buffer', async () => {
+  it("a ~1.5 KB program cannot ship inline (packet overflow) but executes from a buffer", async () => {
     // Same straight-line shape as the 4 KB case, sized just past the packet cap: n x [BYTE_1 42]
     // [SDROP], then BYTE_2 0xBEEF, STOP.
     const filler = Array.from({ length: 500 }, () => [0x01, 0x2a, 0xe0]).flat();
@@ -156,7 +168,7 @@ describeSvm('staged e2e: a program too large for the packet runs staged — the 
   });
 });
 
-describeRustSvm('lazy NoSigner: signerless executes are valid unless MSG_SENDER is read', () => {
+describeRustSvm("lazy NoSigner: signerless executes are valid unless MSG_SENDER is read", () => {
   let harness: EngineHarness;
 
   // Compiled bytecode, so this runs INLINE on the `main`-lineage engine rather than staged on the
@@ -165,8 +177,11 @@ describeRustSvm('lazy NoSigner: signerless executes are valid unless MSG_SENDER 
     harness = await startEngine(1_700_000_000n, RUST_ENGINE_SO!);
   });
 
-  it('a pure-compute program executes with an EMPTY instruction account list', async () => {
-    const { bytecode, manifest } = compileSource('function main(): Uint256 { return 41n + 1n; }', 'svm');
+  it("a pure-compute program executes with an EMPTY instruction account list", async () => {
+    const { bytecode, manifest } = compileSource(
+      "function main(): Uint256 { return 41n + 1n; }",
+      "svm",
+    );
     const accounts = resolveAccounts(manifest!, {}, harness.payer.address);
     expect(accounts).toHaveLength(0); // signerless — and valid
 
@@ -175,10 +190,13 @@ describeRustSvm('lazy NoSigner: signerless executes are valid unless MSG_SENDER 
     expect(toBigInt(result.returnData)).toBe(42n);
   });
 
-  it('a MSG_SENDER-reading program fails NoSigner without an in-list signer, passes with appendPayerSigner', async () => {
+  it("a MSG_SENDER-reading program fails NoSigner without an in-list signer, passes with appendPayerSigner", async () => {
     // The manifest is EMPTY for this program too — MSG_SENDER is not a declared slot, which is what
     // makes the check lazy: the engine refuses at the read, not at attach time.
-    const { bytecode, manifest } = compileSource('function main(): Uint256 { return ctx.msgSender(); }', 'svm');
+    const { bytecode, manifest } = compileSource(
+      "function main(): Uint256 { return ctx.msgSender(); }",
+      "svm",
+    );
     expect(manifest!.accounts).toHaveLength(0);
 
     const signerless = buildExecuteInstruction({

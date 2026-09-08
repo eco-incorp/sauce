@@ -106,18 +106,18 @@
  * ZEROFI_POOL_FEE_PPM. A pool absent from the catalog THROWS at
  * fetchPoolConfig (refuse, don't guess — the solfi-v2 POOL_K precedent).
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
-import { INSTRUCTIONS_SYSVAR } from '../../cpi-probe.js';
-import { ieee754ScaleParams } from './ieee754.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { INSTRUCTIONS_SYSVAR } from "../../cpi-probe.js";
+import { ieee754ScaleParams } from "./ieee754.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'zerofi';
-export const ZEROFI_PROGRAM_ID = address('ZERor4xhbUycZ6gb9ntrhqscUcZmAbQDjEAtCf4hbZY');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "zerofi";
+export const ZEROFI_PROGRAM_ID = address("ZERor4xhbUycZ6gb9ntrhqscUcZmAbQDjEAtCf4hbZY");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const POOL_ACCOUNT_SIZE = 38_176;
 export const ORACLE_ACCOUNT_SIZE = 128;
@@ -138,7 +138,8 @@ export const PRICE_OFFSET = 0x30;
 export const ZEROFI_SWAP_DISCRIMINATOR = 0x10;
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 /**
  * Per-pool, per-direction fee/spread the ladder charges against the raw
@@ -158,7 +159,7 @@ export const ZEROFI_POOL_FEE_PPM: Readonly<Record<string, bigint>> = {
   // 3 fresh sizes (10,000,000 / 1,000,000,000 / 50,000,000,000 raw BONK,
   // 2026-07-31). Worst (smallest) ratio 0.995581 -> 4419ppm; rounded up to
   // 4500ppm for margin.
-  '5Dp922oSaj9rdLHTxZzq1B7QV7KmwY7U7K1JNCRhc45J': 4_500n,
+  "5Dp922oSaj9rdLHTxZzq1B7QV7KmwY7U7K1JNCRhc45J": 4_500n,
 };
 
 /**
@@ -239,7 +240,7 @@ const MINT_DECIMALS_OFFSET = 44;
 
 export const zerofi = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: ZEROFI_PROGRAM_ID,
 
   /**
@@ -253,11 +254,17 @@ export const zerofi = {
    * changes wire semantics this adapter has not verified against, the
    * same scope restriction obric-v2 documents for itself).
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address, direction: 0 | 1 = 0): Promise<ZeroFiPoolConfig> {
+  async fetchPoolConfig(
+    load: AccountLoader,
+    pool: Address,
+    direction: 0 | 1 = 0,
+  ): Promise<ZeroFiPoolConfig> {
     const data = await load(pool);
     if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
     if (data.length !== POOL_ACCOUNT_SIZE) {
-      throw new Error(`${SLUG} pool ${pool} account is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+      throw new Error(
+        `${SLUG} pool ${pool} account is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+      );
     }
     const feePpm = ZEROFI_POOL_FEE_PPM[pool];
     if (feePpm === undefined) {
@@ -283,7 +290,8 @@ export const zerofi = {
     const oracle = pubkeyAt(data, OFF_ORACLE);
 
     const oracleData = await load(oracle);
-    if (oracleData === null) throw new Error(`${SLUG} pool ${pool} oracle ${oracle} account not found`);
+    if (oracleData === null)
+      throw new Error(`${SLUG} pool ${pool} oracle ${oracle} account not found`);
     if (oracleData.length !== ORACLE_ACCOUNT_SIZE) {
       throw new Error(
         `${SLUG} pool ${pool} oracle ${oracle} is ${oracleData.length} bytes, expected ${ORACLE_ACCOUNT_SIZE}`,
@@ -294,7 +302,10 @@ export const zerofi = {
     if (mintAData === null || mintBData === null) {
       throw new Error(`${SLUG} pool ${pool} mint account(s) not found`);
     }
-    if (mintAData.length < MINT_DECIMALS_OFFSET + 1 || mintBData.length < MINT_DECIMALS_OFFSET + 1) {
+    if (
+      mintAData.length < MINT_DECIMALS_OFFSET + 1 ||
+      mintBData.length < MINT_DECIMALS_OFFSET + 1
+    ) {
       throw new Error(`${SLUG} pool ${pool} mint account(s) too short to be an SPL mint`);
     }
 
@@ -309,11 +320,15 @@ export const zerofi = {
       [mintB, mintBData],
     ] as const) {
       if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -321,7 +336,9 @@ export const zerofi = {
     const decimalsB = mintBData[MINT_DECIMALS_OFFSET];
 
     if (oracleData.length < PRICE_OFFSET + 8) {
-      throw new Error(`${SLUG} pool ${pool} oracle ${oracle} is too short to hold the price word at offset ${PRICE_OFFSET}`);
+      throw new Error(
+        `${SLUG} pool ${pool} oracle ${oracle} is too short to hold the price word at offset ${PRICE_OFFSET}`,
+      );
     }
     const rawPriceBits = readUintLE(oracleData, PRICE_OFFSET, 8);
     const scale = ieee754ScaleParams(rawPriceBits, decimalsA, decimalsB);
@@ -418,19 +435,19 @@ export function zerofiSwapAccounts(
   const companionIn = aIn ? c.companionA : c.companionB;
   const companionOut = aIn ? c.companionB : c.companionA;
   return [
-    make(r('pool'), c.pool, true),
-    make(r('oracle'), c.oracle, true),
-    make(r('cin'), companionIn, true),
-    make(r('vin'), vaultIn, true),
-    make(r('cout'), companionOut, true),
-    make(r('vout'), vaultOut, true),
-    make(r('aatab'), c.authorityAtaB, true),
-    make(r('aataa'), c.authorityAtaA, true),
+    make(r("pool"), c.pool, true),
+    make(r("oracle"), c.oracle, true),
+    make(r("cin"), companionIn, true),
+    make(r("vin"), vaultIn, true),
+    make(r("cout"), companionOut, true),
+    make(r("vout"), vaultOut, true),
+    make(r("aatab"), c.authorityAtaB, true),
+    make(r("aataa"), c.authorityAtaA, true),
     { ref: c.authority, signer: true },
-    make(r('tpa'), c.tokenProgramA),
-    make(r('ma'), c.mintA),
-    make(r('tpb'), c.tokenProgramB),
-    make(r('mb'), c.mintB),
+    make(r("tpa"), c.tokenProgramA),
+    make(r("ma"), c.mintA),
+    make(r("tpb"), c.tokenProgramB),
+    make(r("mb"), c.mintB),
     { ref: INSTRUCTIONS_SYSVAR },
   ];
 }

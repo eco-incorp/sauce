@@ -59,7 +59,9 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
 
   it("unions the IERC20 import line exactly once even though both sides need it", () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply());
-    const ierc20Count = (src.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []).length;
+    const ierc20Count = (
+      src.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []
+    ).length;
     expect(ierc20Count).toBe(1);
     expect(src).toContain('import { ISauceRouter } from "./artifacts/ISauceRouter.json";');
   });

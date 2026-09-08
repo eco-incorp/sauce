@@ -10,18 +10,18 @@
  * StablePool (curve params equal across pairs and a == b, as fetchPoolConfig
  * requires).
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { perena } from '../../../src/svm/venues/perena/index.js';
-import type { PerenaPoolConfig } from '../../../src/svm/venues/perena/index.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { perena } from "../../../src/svm/venues/perena/index.js";
+import type { PerenaPoolConfig } from "../../../src/svm/venues/perena/index.js";
 
-const POOL = address('2w4A1eGyjRutakyFdmVyBiLPf98qKxNTC2LpuwhaCruZ');
-const A_MINT = address('So11111111111111111111111111111111111111112');
-const B_MINT = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-const A_VAULT = address('GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL');
-const B_VAULT = address('4MYrPgjgFceyhtwhG1ZX8UVb4wn1aQB5wzMimtFqg7U8');
-const TOKENKEG = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
-const TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+const POOL = address("2w4A1eGyjRutakyFdmVyBiLPf98qKxNTC2LpuwhaCruZ");
+const A_MINT = address("So11111111111111111111111111111111111111112");
+const B_MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const A_VAULT = address("GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL");
+const B_VAULT = address("4MYrPgjgFceyhtwhG1ZX8UVb4wn1aQB5wzMimtFqg7U8");
+const TOKENKEG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 
 const STABLE_POOL_ACCOUNT_SIZE = 4024;
 const STABLE_POOL_DISCRIMINATOR = [0xef, 0x5b, 0x5d, 0xa2, 0xab, 0x0e, 0x2a, 0x42];
@@ -65,7 +65,15 @@ function makeStablePool(a2022: boolean, b2022: boolean): Uint8Array {
 
   const amp = 1000n;
   const a = 100n; // curve_a === curve_b required
-  const pair = (i: 0 | 1, xMint: Address, xVault: Address, is2022: boolean, xRes: bigint, yRes: bigint, l: bigint) => {
+  const pair = (
+    i: 0 | 1,
+    xMint: Address,
+    xVault: Address,
+    is2022: boolean,
+    xRes: bigint,
+    yRes: bigint,
+    l: bigint,
+  ) => {
     u64(buf, pairOff(i, P_X_RESERVE), xRes);
     u64(buf, pairOff(i, P_Y_RESERVE), yRes);
     u64(buf, pairOff(i, P_CURVE_AMP), amp); // u128 low; high 8 bytes stay 0
@@ -84,31 +92,40 @@ function makeStablePool(a2022: boolean, b2022: boolean): Uint8Array {
   return buf;
 }
 
-const loaderFor = (bytes: Uint8Array) => async (addr: Address) => (addr === POOL ? new Uint8Array(bytes) : null);
+const loaderFor = (bytes: Uint8Array) => async (addr: Address) =>
+  addr === POOL ? new Uint8Array(bytes) : null;
 
-describe('perena Token-2022 handling', () => {
-  it('routes a Token-2022-side pool (fetchPoolConfig resolves, is2022 flag recorded)', async () => {
-    const cfg = (await perena.fetchPoolConfig(loaderFor(makeStablePool(true, false)), POOL)) as PerenaPoolConfig;
-    expect(cfg.venue).toBe('perena');
+describe("perena Token-2022 handling", () => {
+  it("routes a Token-2022-side pool (fetchPoolConfig resolves, is2022 flag recorded)", async () => {
+    const cfg = (await perena.fetchPoolConfig(
+      loaderFor(makeStablePool(true, false)),
+      POOL,
+    )) as PerenaPoolConfig;
+    expect(cfg.venue).toBe("perena");
     expect(cfg.aIs2022).toBe(true);
     expect(cfg.bIs2022).toBe(false);
   });
 
-  it('buildSwap always attaches BOTH the legacy and Token-2022 program accounts', async () => {
+  it("buildSwap always attaches BOTH the legacy and Token-2022 program accounts", async () => {
     const cfg = await perena.fetchPoolConfig(loaderFor(makeStablePool(true, false)), POOL);
-    const user = { inAta: 'user-in', outAta: 'user-out', owner: 'user-owner' } as never;
+    const user = { inAta: "user-in", outAta: "user-out", owner: "user-owner" } as never;
     const swap = perena.buildSwap!(cfg, user, 1_000_000n);
     const addrs = swap.accounts.map((acc) => acc.address);
     expect(addrs).toContain(TOKENKEG);
     expect(addrs).toContain(TOKEN_2022);
   });
 
-  it('quote is token-program-agnostic: a Token-2022 pool and a legacy pool quote identically', async () => {
+  it("quote is token-program-agnostic: a Token-2022 pool and a legacy pool quote identically", async () => {
     const t22 = await perena.fetchPoolConfig(loaderFor(makeStablePool(true, true)), POOL);
     const legacy = await perena.fetchPoolConfig(loaderFor(makeStablePool(false, false)), POOL);
     const amountIn = 1_000_000n;
     const qT22 = perena.referenceQuote!(t22, { [POOL]: makeStablePool(true, true) }, amountIn, 0n);
-    const qLegacy = perena.referenceQuote!(legacy, { [POOL]: makeStablePool(false, false) }, amountIn, 0n);
+    const qLegacy = perena.referenceQuote!(
+      legacy,
+      { [POOL]: makeStablePool(false, false) },
+      amountIn,
+      0n,
+    );
     expect(qLegacy).toBe(qT22);
     expect(qT22).toBeGreaterThan(0n);
   });

@@ -12,21 +12,7 @@ import { chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 import { installRouteGlobals, uninstallRouteGlobals } from "../src/routes/globals.js";
 import type { IntentOptions } from "../src/routes/index.js";
 
-const POT = "0x1111111111111111111111111111111111111111" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
-
-function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
-  return {
-    pot: POT,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: "0x3333333333333333333333333333333333333333",
-    prover: "0x4444444444444444444444444444444444444444",
-    rewardDeadline: 1000n,
-    ...overrides,
-  };
-}
 
 const g = globalThis as unknown as Record<string, unknown>;
 
@@ -45,7 +31,18 @@ describe("svm venue globals: ambient + runtime, no import of the tree", () => {
 
   it("every registered venue slug appears on the installed Solana global under its PascalCase name", () => {
     const solana = g.Solana as Record<string, unknown>;
-    for (const slug of ["raydium-cp-swap", "raydium-amm-v4", "pumpswap", "orca-legacy-token-swap", "meteora-damm-v2", "saber-stableswap", "meteora-damm-v1-stable", "meteora-dbc", "stabble-stable-swap", "stabble-weighted-swap"]) {
+    for (const slug of [
+      "raydium-cp-swap",
+      "raydium-amm-v4",
+      "pumpswap",
+      "orca-legacy-token-swap",
+      "meteora-damm-v2",
+      "saber-stableswap",
+      "meteora-damm-v1-stable",
+      "meteora-dbc",
+      "stabble-stable-swap",
+      "stabble-weighted-swap",
+    ]) {
       expect(solana[pascalOfSlug(slug)]).toBeDefined();
     }
   });
@@ -60,18 +57,20 @@ describe("svm venue globals: coexistence with .route", () => {
     };
     expect(solana.chain.slug).toBe("solana");
     expect(solana.RaydiumCpSwap).toBeDefined();
-    const built = solana.route("function main() { return 1n; }", {
-      execution: {
-        buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
-        accounts: [],
-      },
-      deadline: 2000n,
-      portal: PORTAL,
-      source: "base",
-      creator: "0x3333333333333333333333333333333333333333",
-      prover: "0x4444444444444444444444444444444444444444",
-      rewardDeadline: 1000n,
-    }).reward(0n);
+    const built = solana
+      .route("function main() { return 1n; }", {
+        execution: {
+          buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          accounts: [],
+        },
+        deadline: 2000n,
+        portal: PORTAL,
+        source: "base",
+        creator: "0x3333333333333333333333333333333333333333",
+        prover: "0x4444444444444444444444444444444444444444",
+        rewardDeadline: 1000n,
+      })
+      .reward(0n);
     expect(built).toBeDefined();
   });
 
@@ -82,7 +81,10 @@ describe("svm venue globals: coexistence with .route", () => {
 
 describe("svm venue globals: EVM chains unaffected", () => {
   it("Base.Uniswap.UniversalRouter still resolves (regression) and carries no svm venue namespace", () => {
-    const base = g.Base as { Uniswap: { UniversalRouter: { address: unknown } }; UniswapV4: { UniversalRouter: unknown } };
+    const base = g.Base as {
+      Uniswap: { UniversalRouter: { address: unknown } };
+      UniswapV4: { UniversalRouter: unknown };
+    };
     expect(base.Uniswap.UniversalRouter.address).toBeDefined();
     expect(base.Uniswap.UniversalRouter).toBe(base.UniswapV4.UniversalRouter);
     expect((base as unknown as Record<string, unknown>).RaydiumCpSwap).toBeUndefined();

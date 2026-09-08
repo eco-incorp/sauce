@@ -1,14 +1,14 @@
-import type { SvmVenueAdapter } from './types.js';
-import { meteoraDammV1Stable } from './meteora-damm-v1-stable/index.js';
-import { meteoraDammV2 } from './meteora-damm-v2/index.js';
-import { meteoraDbc } from './meteora-dbc/index.js';
-import { orcaLegacyTokenSwap } from './orca-legacy-token-swap/index.js';
-import { pumpswapAdapter } from './pumpswap/index.js';
-import { raydiumAmmV4 } from './raydium-amm-v4/index.js';
-import { raydiumCpSwap } from './raydium-cp-swap/index.js';
-import { saberStableswap } from './saber-stableswap/index.js';
-import { stabbleStableSwap } from './stabble-stable-swap/index.js';
-import { stabbleWeightedSwap } from './stabble-weighted-swap/index.js';
+import type { SvmVenueAdapter } from "./types.js";
+import { meteoraDammV1Stable } from "./meteora-damm-v1-stable/index.js";
+import { meteoraDammV2 } from "./meteora-damm-v2/index.js";
+import { meteoraDbc } from "./meteora-dbc/index.js";
+import { orcaLegacyTokenSwap } from "./orca-legacy-token-swap/index.js";
+import { pumpswapAdapter } from "./pumpswap/index.js";
+import { raydiumAmmV4 } from "./raydium-amm-v4/index.js";
+import { raydiumCpSwap } from "./raydium-cp-swap/index.js";
+import { saberStableswap } from "./saber-stableswap/index.js";
+import { stabbleStableSwap } from "./stabble-stable-swap/index.js";
+import { stabbleWeightedSwap } from "./stabble-weighted-swap/index.js";
 
 // Adapter table. Keys MUST equal adapter.slug — venueAdapter reports them as
 // the known-venue list, and the accessor tree below (svm/accessors.ts) walks
@@ -19,21 +19,23 @@ import { stabbleWeightedSwap } from './stabble-weighted-swap/index.js';
 // right below promotes the "keys MUST equal slug" invariant from a comment
 // into a module-eval assertion.
 const adaptersTyped = {
-  'raydium-cp-swap': raydiumCpSwap,
-  'raydium-amm-v4': raydiumAmmV4,
+  "raydium-cp-swap": raydiumCpSwap,
+  "raydium-amm-v4": raydiumAmmV4,
   pumpswap: pumpswapAdapter,
-  'orca-legacy-token-swap': orcaLegacyTokenSwap,
-  'meteora-damm-v2': meteoraDammV2,
-  'saber-stableswap': saberStableswap,
-  'meteora-damm-v1-stable': meteoraDammV1Stable,
-  'meteora-dbc': meteoraDbc,
-  'stabble-stable-swap': stabbleStableSwap,
-  'stabble-weighted-swap': stabbleWeightedSwap,
+  "orca-legacy-token-swap": orcaLegacyTokenSwap,
+  "meteora-damm-v2": meteoraDammV2,
+  "saber-stableswap": saberStableswap,
+  "meteora-damm-v1-stable": meteoraDammV1Stable,
+  "meteora-dbc": meteoraDbc,
+  "stabble-stable-swap": stabbleStableSwap,
+  "stabble-weighted-swap": stabbleWeightedSwap,
 } as const satisfies Record<string, SvmVenueAdapter>;
 
 for (const [key, adapter] of Object.entries(adaptersTyped)) {
   if (key !== adapter.slug) {
-    throw new Error(`svm/venues/registry: table key '${key}' does not match adapter.slug '${adapter.slug}'`);
+    throw new Error(
+      `svm/venues/registry: table key '${key}' does not match adapter.slug '${adapter.slug}'`,
+    );
   }
 }
 
@@ -52,7 +54,9 @@ export function venueAdapter(slug: string): SvmVenueAdapter {
   const adapter = adapters[slug];
   if (adapter === undefined) {
     const known = listVenues();
-    throw new Error(`unknown venue '${slug}' (known venues: ${known.length > 0 ? known.join(', ') : 'none'})`);
+    throw new Error(
+      `unknown venue '${slug}' (known venues: ${known.length > 0 ? known.join(", ") : "none"})`,
+    );
   }
   return adapter;
 }

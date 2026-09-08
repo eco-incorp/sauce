@@ -7,7 +7,7 @@ import {
   setTransactionMessageFeePayerSigner,
   setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners,
-} from '@solana/kit';
+} from "@solana/kit";
 import type {
   AddressesByLookupTableAddress,
   BlockhashLifetimeConstraint,
@@ -16,12 +16,14 @@ import type {
   Transaction,
   TransactionSigner,
   TransactionWithBlockhashLifetime,
-} from '@solana/kit';
+} from "@solana/kit";
 
 /** Byte length of the encoded wire transaction (kit's own measure; limit is 1232). */
-export { getTransactionSize } from '@solana/kit';
+export { getTransactionSize } from "@solana/kit";
 
-export type SignedExecuteTransaction = SendableTransaction & Transaction & TransactionWithBlockhashLifetime;
+export type SignedExecuteTransaction = SendableTransaction &
+  Transaction &
+  TransactionWithBlockhashLifetime;
 
 export interface BuildExecuteTransactionInput {
   payer: TransactionSigner;
@@ -39,12 +41,14 @@ export async function buildExecuteTransaction({
 }: BuildExecuteTransactionInput): Promise<SignedExecuteTransaction> {
   const message = pipe(
     createTransactionMessage({ version: 0 }),
-    m => setTransactionMessageFeePayerSigner(payer, m),
-    m => appendTransactionMessageInstructions(instructions, m),
-    m => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, m),
+    (m) => setTransactionMessageFeePayerSigner(payer, m),
+    (m) => appendTransactionMessageInstructions(instructions, m),
+    (m) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, m),
   );
 
-  const compressed = lookupTables ? compressTransactionMessageUsingAddressLookupTables(message, lookupTables) : message;
+  const compressed = lookupTables
+    ? compressTransactionMessageUsingAddressLookupTables(message, lookupTables)
+    : message;
   const transaction = await signTransactionMessageWithSigners(compressed);
   assertIsTransactionWithBlockhashLifetime(transaction);
 

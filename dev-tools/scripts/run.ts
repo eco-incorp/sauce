@@ -46,9 +46,7 @@ async function main() {
   // Check if deployment exists
   const deploymentPath = join(repoRoot, ".deployment.json");
   if (!existsSync(deploymentPath)) {
-    console.error(
-      "Error: No deployment found. Run `npm run start:local` first.",
-    );
+    console.error("Error: No deployment found. Run `npm run start:local` first.");
     process.exit(1);
   }
 

@@ -11,7 +11,7 @@ on:
         description: 'Space-separated versions to deprecate (e.g. "0.5.0 0.5.1 0.6.0")'
         required: true
       message:
-        description: 'Deprecation message shown to consumers on install'
+        description: "Deprecation message shown to consumers on install"
         required: true
 
 jobs:
@@ -20,8 +20,8 @@ jobs:
     steps:
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
       - name: Deprecate each version
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

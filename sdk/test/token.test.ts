@@ -34,12 +34,16 @@ describe("Token: EVM source emission", () => {
   it("transfer emits an IERC20 typed-binding call", () => {
     const src = Token.transfer({ token: TOKEN, to: TO, amount: 5n }).source("evm");
     expect(src).toContain('import { IERC20 } from "./artifacts/IERC20.json";');
-    expect(src).toContain(`IERC20.at(${BigInt(TOKEN).toString()}n).transfer(${BigInt(TO).toString()}n, 5n);`);
+    expect(src).toContain(
+      `IERC20.at(${BigInt(TOKEN).toString()}n).transfer(${BigInt(TO).toString()}n, 5n);`,
+    );
   });
 
   it("approve emits an IERC20 typed-binding call", () => {
     const src = Token.approve({ token: TOKEN, spender: SPENDER, amount: 7n }).source("v12");
-    expect(src).toContain(`IERC20.at(${BigInt(TOKEN).toString()}n).approve(${BigInt(SPENDER).toString()}n, 7n);`);
+    expect(src).toContain(
+      `IERC20.at(${BigInt(TOKEN).toString()}n).approve(${BigInt(SPENDER).toString()}n, 7n);`,
+    );
   });
 
   it("balanceOf emits an expression, and Token.balanceOf('self') resolves to ctx.self()", () => {
@@ -53,13 +57,19 @@ describe("Token: EVM source emission", () => {
   });
 
   it("statement() throws for balanceOf; expression() throws for transfer/approve", () => {
-    expect(() => Token.balanceOf({ token: TOKEN, owner: "self" }).statement("evm")).toThrow(/statement form/);
-    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: 1n }).expression("evm")).toThrow(/expression form/);
+    expect(() => Token.balanceOf({ token: TOKEN, owner: "self" }).statement("evm")).toThrow(
+      /statement form/,
+    );
+    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: 1n }).expression("evm")).toThrow(
+      /expression form/,
+    );
   });
 
   it("missing required EVM fields throw a named error", () => {
     expect(() => Token.transfer({ to: TO, amount: 1n }).source("evm")).toThrow(/token is required/);
-    expect(() => Token.transfer({ token: TOKEN, amount: 1n }).source("evm")).toThrow(/to is required/);
+    expect(() => Token.transfer({ token: TOKEN, amount: 1n }).source("evm")).toThrow(
+      /to is required/,
+    );
   });
 
   it("importLines de-dupes across a multi-op program (exactly one IERC20 line)", () => {
@@ -77,32 +87,51 @@ describe("Token: EVM source emission", () => {
 describe("Token: an unsafe number amount never reaches emitted source or calldata", () => {
   // 1234567890123456789 is past 2^53-1, so it arrives already rounded and the two ways of reading
   // it disagree: BigInt() gives 1234567890123456768n, .toString() gives "1234567890123456800".
+  // The imprecise literal IS the input under test: it asserts the safe-integer guard
+  // rejects it before anything reads a rounded value.
+  // eslint-disable-next-line no-loss-of-precision
   const UNSAFE = 1234567890123456789;
   const LABEL = /Token\.(transfer|approve) amount: expected a safe integer/;
 
   it("transfer rejects it on every EVM surface", () => {
     expect(() => Token.transfer({ token: TOKEN, to: TO, amount: UNSAFE }).toCall()).toThrow(LABEL);
-    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: UNSAFE }).source("evm")).toThrow(LABEL);
-    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: UNSAFE }).statement("v12")).toThrow(LABEL);
+    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: UNSAFE }).source("evm")).toThrow(
+      LABEL,
+    );
+    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: UNSAFE }).statement("v12")).toThrow(
+      LABEL,
+    );
   });
 
   it("approve rejects it on every EVM surface", () => {
-    expect(() => Token.approve({ token: TOKEN, spender: SPENDER, amount: UNSAFE }).toCall()).toThrow(LABEL);
-    expect(() => Token.approve({ token: TOKEN, spender: SPENDER, amount: UNSAFE }).source("evm")).toThrow(LABEL);
+    expect(() =>
+      Token.approve({ token: TOKEN, spender: SPENDER, amount: UNSAFE }).toCall(),
+    ).toThrow(LABEL);
+    expect(() =>
+      Token.approve({ token: TOKEN, spender: SPENDER, amount: UNSAFE }).source("evm"),
+    ).toThrow(LABEL);
   });
 
   it("transfer rejects it on the SVM surface, where it is well under the u64 ceiling", () => {
     expect(() =>
-      Token.transfer({ amount: UNSAFE, svm: { source: "src0", mint: "mint0", dest: "dst0" } }).source("svm"),
+      Token.transfer({
+        amount: UNSAFE,
+        svm: { source: "src0", mint: "mint0", dest: "dst0" },
+      }).source("svm"),
     ).toThrow(LABEL);
   });
 
   it("a number amount at MAX_SAFE_INTEGER is still emitted and encoded exactly", () => {
     const spec = { token: TOKEN, to: TO, amount: Number.MAX_SAFE_INTEGER } as const;
     expect(Token.transfer(spec).source("evm")).toContain("9007199254740991n");
-    expect(Token.transfer(spec).toCall().data).toBe(Token.transfer({ ...spec, amount: 9007199254740991n }).toCall().data);
+    expect(Token.transfer(spec).toCall().data).toBe(
+      Token.transfer({ ...spec, amount: 9007199254740991n }).toCall().data,
+    );
     expect(
-      Token.transfer({ amount: Number.MAX_SAFE_INTEGER, svm: { source: "src0", mint: "mint0", dest: "dst0" } }).source("svm"),
+      Token.transfer({
+        amount: Number.MAX_SAFE_INTEGER,
+        svm: { source: "src0", mint: "mint0", dest: "dst0" },
+      }).source("svm"),
     ).toContain("9007199254740991n");
   });
 
@@ -137,8 +166,12 @@ describe("Token: EVM toCall() selectors are pinned against viem + drift-checked 
   });
 
   it("toCall() throws for amount: 'balance' and for balanceOf('self') (no fixed calldata)", () => {
-    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: "balance" }).toCall()).toThrow(/no fixed calldata/);
-    expect(() => Token.balanceOf({ token: TOKEN, owner: "self" }).toCall()).toThrow(/no fixed calldata/);
+    expect(() => Token.transfer({ token: TOKEN, to: TO, amount: "balance" }).toCall()).toThrow(
+      /no fixed calldata/,
+    );
+    expect(() => Token.balanceOf({ token: TOKEN, owner: "self" }).toCall()).toThrow(
+      /no fixed calldata/,
+    );
   });
 
   it("balanceOf(explicit owner) has fixed calldata", () => {
@@ -148,8 +181,16 @@ describe("Token: EVM toCall() selectors are pinned against viem + drift-checked 
 });
 
 describe("Token: SVM source emission", () => {
-  const svmTransfer = { op: "transfer" as const, amount: 5n, svm: { source: "src0", mint: "mint0", dest: "dst0" } };
-  const svmApprove = { op: "approve" as const, amount: 5n, svm: { source: "src0", mint: "mint0", delegate: "dlg0" } };
+  const svmTransfer = {
+    op: "transfer" as const,
+    amount: 5n,
+    svm: { source: "src0", mint: "mint0", dest: "dst0" },
+  };
+  const svmApprove = {
+    op: "approve" as const,
+    amount: 5n,
+    svm: { source: "src0", mint: "mint0", delegate: "dlg0" },
+  };
   const svmBalance = { op: "balanceOf" as const, svm: { source: "src0" } };
 
   it("transfer emits svm.sload/svm.call with TransferChecked (0x0c) over annotated Account params", () => {
@@ -178,24 +219,44 @@ describe("Token: SVM source emission", () => {
   it("balanceOf emits a pure svm.sload read, no CPI and no program pin", () => {
     const src = Token.balanceOf(svmBalance).source("svm");
     expect(src).toBe(
-      ["", "function main(src0: Account) {", "  return svm.sload(src0, 64, 8).toLe();", "}", ""].join("\n"),
+      [
+        "",
+        "function main(src0: Account) {",
+        "  return svm.sload(src0, 64, 8).toLe();",
+        "}",
+        "",
+      ].join("\n"),
     );
   });
 
   it("accountRefs() returns the manifest attach order for transfer/approve", () => {
-    expect(Token.transfer(svmTransfer).accountRefs()).toEqual(["tokenProgram", "mint0", "src0", "dst0", "owner"]);
-    expect(Token.approve(svmApprove).accountRefs()).toEqual(["tokenProgram", "mint0", "src0", "dlg0", "owner"]);
+    expect(Token.transfer(svmTransfer).accountRefs()).toEqual([
+      "tokenProgram",
+      "mint0",
+      "src0",
+      "dst0",
+      "owner",
+    ]);
+    expect(Token.approve(svmApprove).accountRefs()).toEqual([
+      "tokenProgram",
+      "mint0",
+      "src0",
+      "dlg0",
+      "owner",
+    ]);
   });
 
   it("missing svm refs throw a named error", () => {
     expect(() => Token.transfer({ amount: 1n }).source("svm")).toThrow(/svm refs are required/);
-    expect(() => Token.transfer({ amount: 1n, svm: { source: "s", dest: "d" } }).source("svm")).toThrow(
-      /svm.mint is required/,
-    );
+    expect(() =>
+      Token.transfer({ amount: 1n, svm: { source: "s", dest: "d" } }).source("svm"),
+    ).toThrow(/svm.mint is required/);
   });
 
   it("amount >= 2^64 is rejected on svm", () => {
-    expect(() => Token.transfer({ amount: 2n ** 64n, svm: svmTransfer.svm }).source("svm")).toThrow(/u64/);
+    expect(() => Token.transfer({ amount: 2n ** 64n, svm: svmTransfer.svm }).source("svm")).toThrow(
+      /u64/,
+    );
   });
 
   it("the tokenProgram pin and its param appear exactly once across a multi-op program (dedup)", () => {
@@ -216,8 +277,18 @@ describe("Token: SVM source emission", () => {
     expect(() =>
       Token.program(
         [
-          { op: "transfer", amount: 1n, svm: { source: "a", mint: "am", dest: "ad" }, tokenProgram: "spl" },
-          { op: "transfer", amount: 2n, svm: { source: "b", mint: "bm", dest: "bd" }, tokenProgram: "token-2022" },
+          {
+            op: "transfer",
+            amount: 1n,
+            svm: { source: "a", mint: "am", dest: "ad" },
+            tokenProgram: "spl",
+          },
+          {
+            op: "transfer",
+            amount: 2n,
+            svm: { source: "b", mint: "bm", dest: "bd" },
+            tokenProgram: "token-2022",
+          },
         ],
         { target: "svm" },
       ),
@@ -227,8 +298,18 @@ describe("Token: SVM source emission", () => {
   it("two specs on the SAME program still share one pin and one param", () => {
     const src = Token.program(
       [
-        { op: "transfer", amount: 1n, svm: { source: "a", mint: "am", dest: "ad" }, tokenProgram: "token-2022" },
-        { op: "transfer", amount: 2n, svm: { source: "b", mint: "bm", dest: "bd" }, tokenProgram: "token-2022" },
+        {
+          op: "transfer",
+          amount: 1n,
+          svm: { source: "a", mint: "am", dest: "ad" },
+          tokenProgram: "token-2022",
+        },
+        {
+          op: "transfer",
+          amount: 2n,
+          svm: { source: "b", mint: "bm", dest: "bd" },
+          tokenProgram: "token-2022",
+        },
       ],
       { target: "svm" },
     );
@@ -249,12 +330,22 @@ describe("Token: SVM source emission", () => {
   });
 
   it("tokenProgramValueExpr picks the pinned pubkey: 'token-2022' / a raw bigint", () => {
-    const literalSpec = { op: "transfer" as const, amount: 1n, svm: svmTransfer.svm, tokenProgram: "token-2022" as const };
+    const literalSpec = {
+      op: "transfer" as const,
+      amount: 1n,
+      svm: svmTransfer.svm,
+      tokenProgram: "token-2022" as const,
+    };
     expect(Token.transfer(literalSpec).source("svm")).toContain(
       `require(tokenProgram == ${Token.TOKEN_2022_PROGRAM.toString()}n);`,
     );
 
-    const rawSpec = { op: "transfer" as const, amount: 1n, svm: svmTransfer.svm, tokenProgram: 0x1234n };
+    const rawSpec = {
+      op: "transfer" as const,
+      amount: 1n,
+      svm: svmTransfer.svm,
+      tokenProgram: 0x1234n,
+    };
     expect(Token.transfer(rawSpec).source("svm")).toContain("require(tokenProgram == 4660n);");
   });
 

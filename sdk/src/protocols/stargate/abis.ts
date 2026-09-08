@@ -34,7 +34,14 @@ export const StargatePoolABI = [
         components: [
           { name: "guid", type: "uint256" },
           { name: "nonce", type: "uint64" },
-          { name: "fee", type: "tuple", components: [{ name: "nativeFee", type: "uint256" }, { name: "lzTokenFee", type: "uint256" }] },
+          {
+            name: "fee",
+            type: "tuple",
+            components: [
+              { name: "nativeFee", type: "uint256" },
+              { name: "lzTokenFee", type: "uint256" },
+            ],
+          },
         ],
       },
       {

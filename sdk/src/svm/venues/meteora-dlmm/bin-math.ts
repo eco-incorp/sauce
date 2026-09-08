@@ -27,12 +27,12 @@ export const MAX_BIN_ID = 443636;
 const MAX_EXPONENTIAL = 0x80000; // 1048576
 const U128_MAX = (1n << 128n) - 1n;
 
-export type Rounding = 'up' | 'down';
+export type Rounding = "up" | "down";
 
 /** mul_div(x, y, d, rounding) — round(x·y/d). */
 function mulDiv(x: bigint, y: bigint, d: bigint, rounding: Rounding): bigint {
   const p = x * y;
-  return rounding === 'up' ? (p + d - 1n) / d : p / d;
+  return rounding === "up" ? (p + d - 1n) / d : p / d;
 }
 
 /** mul_shr(x, y, 64, rounding) = round(x·y / 2^64). */
@@ -94,13 +94,25 @@ export function priceFromId(binId: number, binStep: number): bigint {
 }
 
 /** get_amount_out(amount_in, price, swap_for_y, rounding). */
-export function amountOut(amountIn: bigint, price: bigint, swapForY: boolean, rounding: Rounding): bigint {
+export function amountOut(
+  amountIn: bigint,
+  price: bigint,
+  swapForY: boolean,
+  rounding: Rounding,
+): bigint {
   return swapForY ? mulShr(price, amountIn, rounding) : shlDiv(amountIn, price, rounding);
 }
 
 /** get_amount_in(amount_out, price, swap_for_y, rounding). */
-export function amountIn(amountOutValue: bigint, price: bigint, swapForY: boolean, rounding: Rounding): bigint {
-  return swapForY ? shlDiv(amountOutValue, price, rounding) : mulShr(amountOutValue, price, rounding);
+export function amountIn(
+  amountOutValue: bigint,
+  price: bigint,
+  swapForY: boolean,
+  rounding: Rounding,
+): bigint {
+  return swapForY
+    ? shlDiv(amountOutValue, price, rounding)
+    : mulShr(amountOutValue, price, rounding);
 }
 
 /** floor(bin_id / 70) — the bin array index (toward negative infinity). */

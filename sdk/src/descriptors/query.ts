@@ -1,12 +1,21 @@
 import type { Address, Hex } from "viem";
-import { requireChain, resolveChain, type CanonicalChain, type ChainRef, type ChainSlug } from "../chains/canonical.js";
+import {
+  requireChain,
+  resolveChain,
+  type CanonicalChain,
+  type ChainRef,
+  type ChainSlug,
+} from "../chains/canonical.js";
 import { getProtocol } from "../protocols/index.js";
 import type { ProtocolInfo } from "../core/types.js";
 import { DESCRIPTORS, byChain, byProtocol, byProtocolAndContract } from "./registry.js";
 import type { ContractDescriptor, DescriptorMethod, ResolvedContract } from "./types.js";
 
 function normalizeKey(input: string): string {
-  return input.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 /** The whole flat registry, stable order. */
@@ -57,7 +66,10 @@ export function addressOn(descriptor: ContractDescriptor, chain: ChainRef): Addr
 }
 
 /** Name-keyed method lookup. Safe for this dataset: zero overloaded function names across every starter-set ABI (see the linkage test). */
-export function methodOf(descriptor: ContractDescriptor, name: string): DescriptorMethod | undefined {
+export function methodOf(
+  descriptor: ContractDescriptor,
+  name: string,
+): DescriptorMethod | undefined {
   return descriptor.methods.find((m) => m.name === name);
 }
 
@@ -71,7 +83,11 @@ export function descriptorChains(descriptor: ContractDescriptor): readonly Canon
 }
 
 /** THE thin resolver: (chain, protocol, contract) -> address + abi + methods for that chain, or undefined. E2.3's typed accessor tree is a walk over this, not a reimplementation of it. */
-export function describeContract(chain: ChainRef, protocol: string, contract: string): ResolvedContract | undefined {
+export function describeContract(
+  chain: ChainRef,
+  protocol: string,
+  contract: string,
+): ResolvedContract | undefined {
   const resolvedChain = resolveChain(chain);
   if (resolvedChain === undefined) return undefined;
   const descriptor = getDescriptor(protocol, contract);
@@ -79,13 +95,26 @@ export function describeContract(chain: ChainRef, protocol: string, contract: st
   if (descriptor.kind !== "interface") {
     const address = addressOn(descriptor, resolvedChain);
     if (address === undefined) return undefined;
-    return { descriptor, chain: resolvedChain, address, methods: new Map(descriptor.methods.map((m) => [m.name, m])) };
+    return {
+      descriptor,
+      chain: resolvedChain,
+      address,
+      methods: new Map(descriptor.methods.map((m) => [m.name, m])),
+    };
   }
-  return { descriptor, chain: resolvedChain, methods: new Map(descriptor.methods.map((m) => [m.name, m])) };
+  return {
+    descriptor,
+    chain: resolvedChain,
+    methods: new Map(descriptor.methods.map((m) => [m.name, m])),
+  };
 }
 
 /** Throwing sibling of describeContract, mirroring requireChain/requireV12Deployment's "here is the known set" error style. */
-export function requireContract(chain: ChainRef, protocol: string, contract: string): ResolvedContract {
+export function requireContract(
+  chain: ChainRef,
+  protocol: string,
+  contract: string,
+): ResolvedContract {
   const protocolDescriptors = listContracts(protocol);
   if (protocolDescriptors.length === 0) {
     const known = new Set(DESCRIPTORS.map((d) => d.protocol));
@@ -100,7 +129,9 @@ export function requireContract(chain: ChainRef, protocol: string, contract: str
   const resolved = describeContract(resolvedChain, protocol, contract);
   if (resolved === undefined) {
     const known = descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)";
-    throw new Error(`Contract '${descriptor.contract}' (${descriptor.protocol}) is not deployed on '${resolvedChain.slug}' (available: ${known})`);
+    throw new Error(
+      `Contract '${descriptor.contract}' (${descriptor.protocol}) is not deployed on '${resolvedChain.slug}' (available: ${known})`,
+    );
   }
   return resolved;
 }

@@ -3,12 +3,15 @@
 Cross-chain bridge aggregator that finds optimal routes across multiple bridges and DEXes for token transfers.
 
 ## Category
+
 bridge aggregator | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114)
 
 ## SauceScript Functions
 
 ### bridge
+
 Bridge tokens via Socket Gateway using a pre-computed route.
+
 ```typescript
 import { SocketGatewayABI as ISocketGateway } from "./abis";
 
@@ -18,6 +21,7 @@ function main(gatewayAddress: Address, routeId: Uint256, bridgeData: bytes): Uin
   return 1;
 }
 ```
+
 - `routeId`: Route identifier obtained from the Socket API. Each route corresponds to a specific bridge integration (uint32)
 - `bridgeData`: ABI-encoded bridge parameters specific to the selected route. Obtained from the Socket API
 - Socket requires off-chain route computation via their API before on-chain execution
@@ -25,23 +29,25 @@ function main(gatewayAddress: Address, routeId: Uint256, bridgeData: bytes): Uin
 
 ## Deployed Addresses
 
-| Chain | Contract | Address |
-|-------|----------|---------|
-| Ethereum | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| Arbitrum | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| Optimism | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| Base | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| Polygon | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| BSC | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
+| Chain     | Contract      | Address                                      |
+| --------- | ------------- | -------------------------------------------- |
+| Ethereum  | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
+| Arbitrum  | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
+| Optimism  | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
+| Base      | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
+| Polygon   | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
+| BSC       | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
 | Avalanche | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
 
 ## ABI Reference
 
 ### SocketGatewayABI
+
 - `bridge(uint32 routeId, bytes bridgeData)` [payable] - Execute a bridge transaction using a pre-computed route
 - `executeRoute(uint32 routeId, bytes data) returns (bytes result)` [payable] - Execute a generic route (bridge, swap, or combined). Returns result data
 
 ## Notes
+
 - Socket is a bridge **aggregator** -- routes through underlying bridges (Across, Stargate, Hop, cBridge, Connext, etc.)
 - Two-step process: (1) call Socket API to get optimal route + encoded `bridgeData`, (2) execute on-chain via `bridge()` or `executeRoute()`
 - `bridge()` is for pure bridge operations; `executeRoute()` is the general-purpose entry point for bridge, swap, or combined operations

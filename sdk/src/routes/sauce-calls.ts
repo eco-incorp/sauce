@@ -165,7 +165,11 @@ export type SvmAddressInput = string | Address | { toBase58(): string };
 
 function toSvmAddress(input: SvmAddressInput, label: string): Address {
   if (typeof input === "string") return address(input);
-  if (input !== null && typeof input === "object" && typeof (input as { toBase58?: unknown }).toBase58 === "function") {
+  if (
+    input !== null &&
+    typeof input === "object" &&
+    typeof (input as { toBase58?: unknown }).toBase58 === "function"
+  ) {
     return address((input as { toBase58(): string }).toBase58());
   }
   throw new Error(
@@ -263,7 +267,9 @@ function applyMergedFlags(
 ): SauceSvmAccountMeta[] {
   return accounts.map((a) => {
     const flags = merged.get(svmAddressKey(a.pubkey, "account.pubkey"));
-    return flags === undefined ? a : { ...a, isSigner: flags.isSigner, isWritable: flags.isWritable };
+    return flags === undefined
+      ? a
+      : { ...a, isSigner: flags.isSigner, isWritable: flags.isWritable };
   });
 }
 
@@ -280,7 +286,9 @@ function forceExecutorNonSigner(
 
 function assertSvmValue(value: bigint | number | string | undefined): void {
   if (value !== undefined && toBigInt(value) !== 0n) {
-    throw new Error("buildSauceSvmCall: SVM Call has no value field (nonzero value cannot be encoded)");
+    throw new Error(
+      "buildSauceSvmCall: SVM Call has no value field (nonzero value cannot be encoded)",
+    );
   }
 }
 
@@ -358,7 +366,7 @@ export interface SauceSvmCallsParams {
 export function buildSauceSvmCalls(params: SauceSvmCallsParams): CallInput[] {
   const programId = toSvmAddress(params.programId ?? v12SvmProgramId, "programId");
   const merged =
-    params.mergeAccountFlags ?? true ? mergeSvmAccountFlags(params.executions) : undefined;
+    (params.mergeAccountFlags ?? true) ? mergeSvmAccountFlags(params.executions) : undefined;
   return params.executions.map((execution) =>
     buildOneSauceSvmCall(programId, execution, params.executor, merged),
   );

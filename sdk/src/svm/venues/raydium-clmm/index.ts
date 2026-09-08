@@ -68,22 +68,22 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
-import { MAX_TICK, MIN_TICK, raydiumSqrtPriceAtTick } from './tick-math.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
+import { MAX_TICK, MIN_TICK, raydiumSqrtPriceAtTick } from "./tick-math.js";
 
-const SLUG = 'raydium-clmm';
+const SLUG = "raydium-clmm";
 
-export const RAYDIUM_CLMM_PROGRAM_ID = address('CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const MEMO_PROGRAM = address('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+export const RAYDIUM_CLMM_PROGRAM_ID = address("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+const MEMO_PROGRAM = address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
 export const POOL_ACCOUNT_SIZE = 1544;
 export const AMM_CONFIG_ACCOUNT_SIZE = 117;
@@ -173,7 +173,7 @@ export interface RaydiumClmmWindow {
 export interface RaydiumClmmPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** Trade direction: '0to1' (default) sells token_0 for token_1 (zero_for_one, price down). */
-  direction: '0to1' | '1to0';
+  direction: "0to1" | "1to0";
   ammConfig: Address;
   tokenMint0: Address;
   tokenMint1: Address;
@@ -190,7 +190,7 @@ export interface RaydiumClmmPoolConfig extends PoolConfig {
   sqrtPrice: bigint;
   tickCurrentIndex: number;
   /** Direction-keyed prepare-declared windows (see the header). */
-  windows: { '0to1': RaydiumClmmWindow; '1to0': RaydiumClmmWindow };
+  windows: { "0to1": RaydiumClmmWindow; "1to0": RaydiumClmmWindow };
 }
 
 const readI32 = (data: Uint8Array, offset: number): number => {
@@ -210,7 +210,7 @@ async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Add
   const be = new Uint8Array(4);
   new DataView(be.buffer).setInt32(0, startTick, false); // start_tick_index.to_be_bytes()
   return memoizedGetProgramDerivedAddress(RAYDIUM_CLMM_PROGRAM_ID, [
-    new TextEncoder().encode('tick_array'),
+    new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     be,
   ]);
@@ -230,7 +230,11 @@ export function arrayStartIndex(tickIndex: number, tickSpacing: number): number 
  * Raydium's first swap array is always the live-tick array (no whirlpool-style
  * shifted-window rule — next_initialized_tick searches within it first).
  */
-export function windowStartTicks(tickCurrentIndex: number, tickSpacing: number, zeroForOne: boolean): [number, number, number] {
+export function windowStartTicks(
+  tickCurrentIndex: number,
+  tickSpacing: number,
+  zeroForOne: boolean,
+): [number, number, number] {
   const span = TICK_ARRAY_SIZE * tickSpacing;
   const base = arrayStartIndex(tickCurrentIndex, tickSpacing);
   return zeroForOne ? [base, base - span, base - 2 * span] : [base, base + span, base + 2 * span];
@@ -272,11 +276,9 @@ async function resolveWindow(
   zeroForOne: boolean,
 ): Promise<RaydiumClmmWindow> {
   const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, zeroForOne);
-  const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start)))) as [
-    Address,
-    Address,
-    Address,
-  ];
+  const tickArrays = (await Promise.all(
+    startTicks.map((start) => deriveTickArrayPda(pool, start)),
+  )) as [Address, Address, Address];
 
   // Read the whole window in ONE batched round instead of an outward serial
   // walk: the tick-array PDAs are all derived above (from the live tick +
@@ -293,7 +295,7 @@ async function resolveWindow(
   let readable = 0;
   for (let i = 0; i < 3; i++) {
     const settled = loaded[i];
-    if (settled.status === 'rejected') throw settled.reason;
+    if (settled.status === "rejected") throw settled.reason;
     const data = settled.value;
     const valid =
       data !== null &&
@@ -326,7 +328,7 @@ async function resolveWindow(
         // per-venue self-drop, exactly like the other named gates.
         throw new Error(
           `${SLUG}: pool ${pool} has active limit orders at tick ${start + offset * tickSpacing} ` +
-            '— the ladder does not model limit-order matching',
+            "— the ladder does not model limit-order matching",
         );
       }
       if (tickInitialized(data, offset)) {
@@ -341,7 +343,7 @@ async function resolveWindow(
     }
   }
 
-  let edge: RaydiumClmmWindow['edge'] = null;
+  let edge: RaydiumClmmWindow["edge"] = null;
   if (readable > 0 && !maxStopped) {
     const lastStart = startTicks[readable - 1];
     let tick: number;
@@ -361,11 +363,16 @@ async function resolveWindow(
  * Fetch + gate one Raydium CLMM pool (see the header for the gate list) and
  * freeze both directions' boundary windows. Read-only against the loader.
  */
-export async function fetchRaydiumClmmConfig(load: AccountLoader, pool: Address): Promise<RaydiumClmmPoolConfig> {
+export async function fetchRaydiumClmmConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<RaydiumClmmPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, POOL_DISCRIMINATOR)) {
     throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a PoolState account)`);
@@ -385,7 +392,7 @@ export async function fetchRaydiumClmmConfig(load: AccountLoader, pool: Address)
     if (data[OFF_DYNAMIC_FEE_INFO + i] !== 0) {
       throw new Error(
         `${SLUG}: pool ${pool} has a dynamic fee configured — its swap walks tick-spacing-bounded steps with a per-step ` +
-          'volatility fee the in-VM quote does not model',
+          "volatility fee the in-VM quote does not model",
       );
     }
   }
@@ -405,18 +412,28 @@ export async function fetchRaydiumClmmConfig(load: AccountLoader, pool: Address)
     const mintData = await load(mint);
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   const cfgData = await load(ammConfig);
-  if (cfgData === null) throw new Error(`${SLUG}: AmmConfig ${ammConfig} of pool ${pool} not found`);
-  if (cfgData.length !== AMM_CONFIG_ACCOUNT_SIZE || !hasDiscriminator(cfgData, AMM_CONFIG_DISCRIMINATOR)) {
-    throw new Error(`${SLUG}: AmmConfig ${ammConfig} of pool ${pool} has an unexpected size/discriminator`);
+  if (cfgData === null)
+    throw new Error(`${SLUG}: AmmConfig ${ammConfig} of pool ${pool} not found`);
+  if (
+    cfgData.length !== AMM_CONFIG_ACCOUNT_SIZE ||
+    !hasDiscriminator(cfgData, AMM_CONFIG_DISCRIMINATOR)
+  ) {
+    throw new Error(
+      `${SLUG}: AmmConfig ${ammConfig} of pool ${pool} has an unexpected size/discriminator`,
+    );
   }
 
   const tickSpacing = Number(readUintLE(data, OFF_TICK_SPACING, 2));
@@ -425,7 +442,7 @@ export async function fetchRaydiumClmmConfig(load: AccountLoader, pool: Address)
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
     memoizedGetProgramDerivedAddress(RAYDIUM_CLMM_PROGRAM_ID, [
-      new TextEncoder().encode('pool_tick_array_bitmap_extension'),
+      new TextEncoder().encode("pool_tick_array_bitmap_extension"),
       getAddressEncoded(pool),
     ]),
   ]);
@@ -433,7 +450,7 @@ export async function fetchRaydiumClmmConfig(load: AccountLoader, pool: Address)
   return {
     venue: SLUG,
     pool,
-    direction: '0to1',
+    direction: "0to1",
     ammConfig,
     tokenMint0,
     tokenMint1,
@@ -446,7 +463,7 @@ export async function fetchRaydiumClmmConfig(load: AccountLoader, pool: Address)
     liquidity: readUintLE(data, OFF_LIQUIDITY, 16),
     sqrtPrice: readUintLE(data, OFF_SQRT_PRICE, 16),
     tickCurrentIndex,
-    windows: { '0to1': zeroForOne, '1to0': oneForZero },
+    windows: { "0to1": zeroForOne, "1to0": oneForZero },
   };
 }
 

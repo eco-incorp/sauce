@@ -18,7 +18,9 @@
 export function toExactBigInt(value: number, label?: string): bigint {
   if (!Number.isInteger(value)) {
     throw new Error(
-      label === undefined ? `Expected an integer number, got ${value}` : `${label}: expected an integer, got ${value}`,
+      label === undefined
+        ? `Expected an integer number, got ${value}`
+        : `${label}: expected an integer, got ${value}`,
     );
   }
   if (!Number.isSafeInteger(value)) {

@@ -18,7 +18,7 @@ export interface ActionChainInput {
 }
 
 /** Alias for actions that produce a capturable output (e.g. swaps). */
-export interface ActionChainOptions extends ActionChainInput {}
+export type ActionChainOptions = ActionChainInput;
 
 // =============================================================================
 // SWAP ACTIONS
@@ -400,10 +400,7 @@ export interface HyperlaneBridgeAction extends ActionChainInput {
 }
 
 export type BridgeAction =
-  | AcrossBridgeAction
-  | StargateBridgeAction
-  | CCTPBridgeAction
-  | HyperlaneBridgeAction;
+  AcrossBridgeAction | StargateBridgeAction | CCTPBridgeAction | HyperlaneBridgeAction;
 
 // =============================================================================
 // WRAP / UNWRAP ACTIONS
@@ -441,11 +438,7 @@ export interface UnwrapStETHAction extends ActionChainInput {
   wstETHAmount?: string;
 }
 
-export type WrapAction =
-  | WrapETHAction
-  | UnwrapETHAction
-  | WrapStETHAction
-  | UnwrapStETHAction;
+export type WrapAction = WrapETHAction | UnwrapETHAction | WrapStETHAction | UnwrapStETHAction;
 
 // =============================================================================
 // LIQUID STAKING ACTIONS

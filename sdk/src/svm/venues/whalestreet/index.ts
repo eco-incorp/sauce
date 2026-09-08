@@ -142,31 +142,20 @@
  * still executes WhaleStreet's OWN pricing regardless of this model's
  * accuracy — this curve only shapes off-chain election/sizing.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type {
-  AccountBytesMap,
-  AccountLoader,
-  PoolConfig,
-  SwapUser,
-  VenueAccount,
-} from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'whalestreet';
-export const WHALESTREET_PROGRAM_ID = address('FW6zUqn4iKRaeopwwhwsquTY6ABWLLgjxtrC3VPnaWBf');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const SYSVAR_INSTRUCTIONS = address('Sysvar1nstructions1111111111111111111111111');
+const SLUG = "whalestreet";
+export const WHALESTREET_PROGRAM_ID = address("FW6zUqn4iKRaeopwwhwsquTY6ABWLLgjxtrC3VPnaWBf");
 
 const POOL_ACCOUNT_SIZE = 605;
 export const WHALESTREET_OFF_MINT_A = 22;
 export const WHALESTREET_OFF_VAULT_A = 54;
 export const WHALESTREET_OFF_MINT_B = 137;
 export const WHALESTREET_OFF_VAULT_B = 169;
-/** SPL token account `amount` field offset (Tokenkeg layout). */
-const AMOUNT_OFF = 64;
 
 /**
  * The REAL, validated 9-byte instruction-data prefix — opcode 0x01 plus an
@@ -174,14 +163,13 @@ const AMOUNT_OFF = 64;
  * sizes + a repeat + the reverse direction) on the ONE pool this
  * integration validated against. See the module doc's "INSTRUCTION DATA".
  */
-export const WHALESTREET_IX_PREFIX = Uint8Array.from([0x01, 0x20, 0xac, 0x01, 0xb7, 0xb5, 0x52, 0x70, 0xe6]);
-
-/** Conservative haircut on the modeled OUTPUT side — see the module doc's "QUOTE MODEL". */
-const OUT_HAIRCUT_NUM = 7n;
-const OUT_HAIRCUT_DEN = 10n;
+export const WHALESTREET_IX_PREFIX = Uint8Array.from([
+  0x01, 0x20, 0xac, 0x01, 0xb7, 0xb5, 0x52, 0x70, 0xe6,
+]);
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 export interface WhalestreetPoolConfig extends PoolConfig {
   venue: typeof SLUG;
@@ -194,17 +182,21 @@ export interface WhalestreetPoolConfig extends PoolConfig {
 }
 
 function whalestreetConfig(cfg: PoolConfig): WhalestreetPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as WhalestreetPoolConfig;
 }
 
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-
-export async function fetchWhalestreetPoolConfig(load: AccountLoader, pool: Address): Promise<WhalestreetPoolConfig> {
+export async function fetchWhalestreetPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<WhalestreetPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   const mintA = pubkeyAt(data, WHALESTREET_OFF_MINT_A);
   const mintB = pubkeyAt(data, WHALESTREET_OFF_MINT_B);
@@ -220,11 +212,15 @@ export async function fetchWhalestreetPoolConfig(load: AccountLoader, pool: Addr
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
   return {
@@ -241,17 +237,16 @@ export async function fetchWhalestreetPoolConfig(load: AccountLoader, pool: Addr
 function quoteAccounts(base: PoolConfig): VenueAccount[] {
   const cfg = whalestreetConfig(base);
   return [
-    { ref: 'vaultA', address: cfg.vaultA },
-    { ref: 'vaultB', address: cfg.vaultB },
+    { ref: "vaultA", address: cfg.vaultA },
+    { ref: "vaultB", address: cfg.vaultB },
   ];
 }
 
 /** Partial v1-shaped helper (fetchPoolConfig/quoteAccounts only) — this venue is ladder-only (v2); see whalestreetLadder below for the full adapter surface. */
 export const whalestreet = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: WHALESTREET_PROGRAM_ID,
   fetchPoolConfig: fetchWhalestreetPoolConfig,
   quoteAccounts,
 };
-

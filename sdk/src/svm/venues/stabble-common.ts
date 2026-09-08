@@ -45,24 +45,36 @@
  * quoting needs no Vault-account read for the swap MATH (only for the CPI's
  * account list: `withdrawAuthority`/`authorityBump`/`beneficiary`).
  */
-import { createHash } from 'node:crypto';
-import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress, isOffCurveAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from './math.js';
+import { createHash } from "node:crypto";
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+  isOffCurveAddress,
+} from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "./math.js";
 
-export const STABLE_SWAP_PROGRAM_ID = address('swapNyd8XiQwJ6ianp9snpu4brUqFxadzvHebnAXjJZ');
-export const WEIGHTED_SWAP_PROGRAM_ID = address('swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW');
-export const STABBLE_VAULT_PROGRAM_ID = address('vo1tWgqZMjG61Z2T9qUaMYKqZ75CYzMuaZ2LZP1n7HV');
-export const STABBLE_TOKEN_PROGRAM_ID = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-export const STABBLE_TOKEN_2022_PROGRAM_ID = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-export const STABBLE_ATA_PROGRAM_ID = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+export const STABLE_SWAP_PROGRAM_ID = address("swapNyd8XiQwJ6ianp9snpu4brUqFxadzvHebnAXjJZ");
+export const WEIGHTED_SWAP_PROGRAM_ID = address("swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW");
+export const STABBLE_VAULT_PROGRAM_ID = address("vo1tWgqZMjG61Z2T9qUaMYKqZ75CYzMuaZ2LZP1n7HV");
+export const STABBLE_TOKEN_PROGRAM_ID = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+export const STABBLE_TOKEN_2022_PROGRAM_ID = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+export const STABBLE_ATA_PROGRAM_ID = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /** sha256("account:Pool")[..8] — shared by BOTH variants (Anchor discriminators are name-, not program-, keyed; verified against live pool accounts of both programs). */
-export const STABBLE_POOL_DISCRIMINATOR = new Uint8Array([0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc]);
+export const STABBLE_POOL_DISCRIMINATOR = new Uint8Array([
+  0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc,
+]);
 /** sha256("account:Vault")[..8]. */
-export const STABBLE_VAULT_DISCRIMINATOR = new Uint8Array([0xd3, 0x08, 0xe8, 0x2b, 0x02, 0x98, 0x75, 0x77]);
+export const STABBLE_VAULT_DISCRIMINATOR = new Uint8Array([
+  0xd3, 0x08, 0xe8, 0x2b, 0x02, 0x98, 0x75, 0x77,
+]);
 /** sha256("global:swap")[..8] — the v1 `swap(amount_in: Option<u64>, minimum_amount_out: u64)` entry point. */
-export const STABBLE_SWAP_DISCRIMINATOR = new Uint8Array([0xf8, 0xc6, 0x9e, 0x91, 0xe1, 0x75, 0x87, 0xc8]);
+export const STABBLE_SWAP_DISCRIMINATOR = new Uint8Array([
+  0xf8, 0xc6, 0x9e, 0x91, 0xe1, 0x75, 0x87, 0xc8,
+]);
 
 export const STABBLE_ONE = 1_000_000_000n; // fixed-point SCALE=9 (both variants' `fixed_math::ONE`)
 const U64_MAX = (1n << 64n) - 1n;
@@ -131,7 +143,8 @@ export interface StabblePoolTokenBase {
 }
 
 function decodeTokensVec(data: Uint8Array, offset: number, tokenSize: number, weighted: boolean) {
-  const count = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
+  const count =
+    data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
   let cursor = offset + 4;
   const pubkey = getAddressDecoder();
   const tokens: Array<StabblePoolTokenBase & { weight?: bigint }> = [];
@@ -141,7 +154,13 @@ function decodeTokensVec(data: Uint8Array, offset: number, tokenSize: number, we
     const scalingUp = data[cursor + 33] !== 0;
     const scalingFactor = readUintLE(data, cursor + 34, 8);
     const balance = readUintLE(data, cursor + 42, 8);
-    const token: StabblePoolTokenBase & { weight?: bigint } = { mint, decimals, scalingUp, scalingFactor, balance };
+    const token: StabblePoolTokenBase & { weight?: bigint } = {
+      mint,
+      decimals,
+      scalingUp,
+      scalingFactor,
+      balance,
+    };
     if (weighted) token.weight = readUintLE(data, cursor + 50, 8);
     tokens.push(token);
     cursor += tokenSize;
@@ -161,7 +180,10 @@ export interface StabbleVaultInfo {
 
 export function decodeStabbleVault(pool: Address, data: Uint8Array | null): StabbleVaultInfo {
   if (data === null) throw new Error(`stabble vault account (pool ${pool}'s vault) not found`);
-  if (data.length < 115) throw new Error(`stabble vault account for pool ${pool} is ${data.length} bytes, expected >= 115`);
+  if (data.length < 115)
+    throw new Error(
+      `stabble vault account for pool ${pool} is ${data.length} bytes, expected >= 115`,
+    );
   for (let i = 0; i < 8; i++) {
     if (data[i] !== STABBLE_VAULT_DISCRIMINATOR[i]) {
       throw new Error(`stabble vault account for pool ${pool} has the wrong discriminator`);
@@ -190,7 +212,9 @@ export function decodeStabblePoolCommon(
 ) {
   if (data === null) throw new Error(`${programLabel} pool account ${pool} not found`);
   if (data.length < minLength) {
-    throw new Error(`${programLabel} pool account ${pool} data is ${data.length} bytes, expected at least ${minLength}`);
+    throw new Error(
+      `${programLabel} pool account ${pool} data is ${data.length} bytes, expected at least ${minLength}`,
+    );
   }
   for (let i = 0; i < 8; i++) {
     if (data[i] !== STABBLE_POOL_DISCRIMINATOR[i]) {
@@ -220,10 +244,10 @@ export function decodeStabblePoolCommon(
  */
 export function createProgramAddress(seeds: Uint8Array[], programId: Address): Address {
   const encoder = getAddressEncoder();
-  const h = createHash('sha256');
+  const h = createHash("sha256");
   for (const seed of seeds) h.update(seed);
   h.update(encoder.encode(programId) as Uint8Array);
-  h.update(Buffer.from('ProgramDerivedAddress'));
+  h.update(Buffer.from("ProgramDerivedAddress"));
   const digest = h.digest();
   const decoded = getAddressDecoder().decode(digest);
   if (!isOffCurveAddress(decoded)) {
@@ -236,7 +260,11 @@ export function createProgramAddress(seeds: Uint8Array[], programId: Address): A
 export function deriveStabbleVaultAuthority(vault: Address, authorityBump: number): Address {
   const encoder = getAddressEncoder();
   return createProgramAddress(
-    [Buffer.from('vault_authority'), encoder.encode(vault) as Uint8Array, Uint8Array.of(authorityBump)],
+    [
+      Buffer.from("vault_authority"),
+      encoder.encode(vault) as Uint8Array,
+      Uint8Array.of(authorityBump),
+    ],
     STABBLE_VAULT_PROGRAM_ID,
   );
 }
@@ -246,7 +274,11 @@ export async function findStabbleAta(owner: Address, mint: Address): Promise<Add
   const encoder = getAddressEncoder();
   const [ata] = await getProgramDerivedAddress({
     programAddress: STABBLE_ATA_PROGRAM_ID,
-    seeds: [encoder.encode(owner) as Uint8Array, encoder.encode(STABBLE_TOKEN_PROGRAM_ID) as Uint8Array, encoder.encode(mint) as Uint8Array],
+    seeds: [
+      encoder.encode(owner) as Uint8Array,
+      encoder.encode(STABBLE_TOKEN_PROGRAM_ID) as Uint8Array,
+      encoder.encode(mint) as Uint8Array,
+    ],
   });
   return ata;
 }
@@ -291,7 +323,8 @@ export function stableCalcInvariantN(amplification: bigint, balances: readonly b
     invariant = mulDivDown(
       mulDivDown(ampTimesTotal, sum0, STABLE_AMP_PRECISION) + p * n,
       invariant,
-      mulDivDown(ampTimesTotal - STABLE_AMP_PRECISION, invariant, STABLE_AMP_PRECISION) + (n + 1n) * p,
+      mulDivDown(ampTimesTotal - STABLE_AMP_PRECISION, invariant, STABLE_AMP_PRECISION) +
+        (n + 1n) * p,
     );
     const diff = invariant > prev ? invariant - prev : prev - invariant;
     if (diff <= STABLE_DEFAULT_INV_THRESHOLD) return invariant;
@@ -302,7 +335,13 @@ export function stableCalcInvariantN(amplification: bigint, balances: readonly b
 }
 
 /** get_token_balance_given_invariant_n_all_other_balances — <=64 rounds, converged when |Δ| <= 1. */
-function stableSolveY(amplification: bigint, balances: readonly bigint[], invariant: bigint, excludedBalance: bigint, y0: bigint): bigint {
+function stableSolveY(
+  amplification: bigint,
+  balances: readonly bigint[],
+  invariant: bigint,
+  excludedBalance: bigint,
+  y0: bigint,
+): bigint {
   const n = BigInt(balances.length);
   const ampTimesTotal = amplification * n;
   let sum = balances[0];
@@ -373,7 +412,12 @@ export function stableCalcOutGivenIn(
 ): bigint {
   const newBalances = balances.map((b, i) => (i === tokenIndexIn ? b + amountIn : b));
   const balanceOut = balances[tokenIndexOut];
-  const finalBalanceOut = stableGetBalanceGivenInvariant(amplification, newBalances, invariant, balanceOut);
+  const finalBalanceOut = stableGetBalanceGivenInvariant(
+    amplification,
+    newBalances,
+    invariant,
+    balanceOut,
+  );
   if (finalBalanceOut + 1n >= balanceOut) return 0n; // checked_sub would fail on-chain
   return balanceOut - finalBalanceOut - 1n;
 }
@@ -435,11 +479,13 @@ export function stableGetAmplification(
  */
 export function stableDHelperSource(n: number): { name: string; source: string } {
   if (!Number.isInteger(n) || n < STABLE_MIN_TOKENS || n > STABLE_MAX_TOKENS) {
-    throw new Error(`stableDHelperSource needs N in [${STABLE_MIN_TOKENS}, ${STABLE_MAX_TOKENS}], got ${n}`);
+    throw new Error(
+      `stableDHelperSource needs N in [${STABLE_MIN_TOKENS}, ${STABLE_MAX_TOKENS}], got ${n}`,
+    );
   }
   const name = `stabbleStableDN${n}`;
-  const balParams = Array.from({ length: n }, (_, i) => `bal${i}`).join(', ');
-  const sumExpr = Array.from({ length: n }, (_, i) => `bal${i}`).join(' + ');
+  const balParams = Array.from({ length: n }, (_, i) => `bal${i}`).join(", ");
+  const sumExpr = Array.from({ length: n }, (_, i) => `bal${i}`).join(" + ");
   const lines: string[] = [];
   lines.push(`function ${name}(amp, ${balParams}) {`);
   lines.push(`  const sum = ${sumExpr};`);
@@ -461,7 +507,7 @@ export function stableDHelperSource(n: number): { name: string; source: string }
   lines.push(`  }`);
   lines.push(`  return d;`);
   lines.push(`}`);
-  return { name, source: lines.join('\n') };
+  return { name, source: lines.join("\n") };
 }
 
 /**
@@ -479,16 +525,18 @@ export function stableDHelperSource(n: number): { name: string; source: string }
  */
 export function stableYWarmHelperSource(n: number): { name: string; source: string } {
   if (!Number.isInteger(n) || n < STABLE_MIN_TOKENS || n > STABLE_MAX_TOKENS) {
-    throw new Error(`stableYWarmHelperSource needs N in [${STABLE_MIN_TOKENS}, ${STABLE_MAX_TOKENS}], got ${n}`);
+    throw new Error(
+      `stableYWarmHelperSource needs N in [${STABLE_MIN_TOKENS}, ${STABLE_MAX_TOKENS}], got ${n}`,
+    );
   }
   const name = `stabbleStableYWarmN${n}`;
-  const balParams = Array.from({ length: n }, (_, i) => `bal${i}`).join(', ');
+  const balParams = Array.from({ length: n }, (_, i) => `bal${i}`).join(", ");
   const lines: string[] = [];
   lines.push(`function ${name}(amp, ${balParams}, amountIn, d, y0) {`);
   lines.push(`  const ampN = amp * ${n};`);
   lines.push(`  const newBal0 = bal0 + amountIn;`);
-  const sum2Terms = ['newBal0', ...Array.from({ length: n - 1 }, (_, i) => `bal${i + 1}`)];
-  lines.push(`  let sum2 = ${sum2Terms.join(' + ')};`);
+  const sum2Terms = ["newBal0", ...Array.from({ length: n - 1 }, (_, i) => `bal${i + 1}`)];
+  lines.push(`  let sum2 = ${sum2Terms.join(" + ")};`);
   lines.push(`  let p2 = newBal0 * ${n};`);
   for (let i = 1; i < n; i++) lines.push(`  p2 = Math.mulDiv(p2, bal${i} * ${n}, d);`);
   lines.push(`  sum2 = sum2 - bal1;`);
@@ -518,16 +566,18 @@ export function stableYWarmHelperSource(n: number): { name: string; source: stri
   lines.push(`  }`);
   lines.push(`  return y;`);
   lines.push(`}`);
-  return { name, source: lines.join('\n') };
+  return { name, source: lines.join("\n") };
 }
 
 export function stableQuoteHelperSource(n: number): { name: string; source: string } {
   if (!Number.isInteger(n) || n < STABLE_MIN_TOKENS || n > STABLE_MAX_TOKENS) {
-    throw new Error(`stableQuoteHelperSource needs N in [${STABLE_MIN_TOKENS}, ${STABLE_MAX_TOKENS}], got ${n}`);
+    throw new Error(
+      `stableQuoteHelperSource needs N in [${STABLE_MIN_TOKENS}, ${STABLE_MAX_TOKENS}], got ${n}`,
+    );
   }
   const name = `stabbleStableQuoteN${n}`;
-  const balParams = Array.from({ length: n }, (_, i) => `bal${i}`).join(', ');
-  const sumExpr = Array.from({ length: n }, (_, i) => `bal${i}`).join(' + ');
+  const balParams = Array.from({ length: n }, (_, i) => `bal${i}`).join(", ");
+  const sumExpr = Array.from({ length: n }, (_, i) => `bal${i}`).join(" + ");
   const lines: string[] = [];
   lines.push(`function ${name}(amp, ${balParams}, amountIn) {`);
   lines.push(`  let result = 0;`);
@@ -547,8 +597,8 @@ export function stableQuoteHelperSource(n: number): { name: string; source: stri
   lines.push(`      if (prevD > d) { ddiff = prevD - d }`);
   lines.push(`    }`);
   lines.push(`    const newBal0 = bal0 + amountIn;`);
-  const sum2Terms = ['newBal0', ...Array.from({ length: n - 1 }, (_, i) => `bal${i + 1}`)];
-  lines.push(`    let sum2 = ${sum2Terms.join(' + ')};`);
+  const sum2Terms = ["newBal0", ...Array.from({ length: n - 1 }, (_, i) => `bal${i + 1}`)];
+  lines.push(`    let sum2 = ${sum2Terms.join(" + ")};`);
   lines.push(`    let p2 = newBal0 * ${n};`);
   for (let i = 1; i < n; i++) lines.push(`    p2 = Math.mulDiv(p2, bal${i} * ${n}, d);`);
   lines.push(`    sum2 = sum2 - bal1;`);
@@ -574,7 +624,7 @@ export function stableQuoteHelperSource(n: number): { name: string; source: stri
   lines.push(`  }`);
   lines.push(`  return result;`);
   lines.push(`}`);
-  return { name, source: lines.join('\n') };
+  return { name, source: lines.join("\n") };
 }
 
 // ======================================================================
@@ -737,7 +787,12 @@ export function weightedCalcOutGivenIn(
  * approximation); everything else uses the conservative sqrt ladder (see
  * `weightedPowUp`'s doc for the accuracy/conservatism proof).
  */
-export function weightedPowUpSource(weightIn: bigint, weightOut: bigint, baseVar: string, out: string): string[] {
+export function weightedPowUpSource(
+  weightIn: bigint,
+  weightOut: bigint,
+  baseVar: string,
+  out: string,
+): string[] {
   const exponent = divDown(weightIn, weightOut);
   const mulUpExpr = (a: string, b: string): string => `((${a} * ${b} + 999999999) / 1000000000)`;
 
@@ -745,15 +800,22 @@ export function weightedPowUpSource(weightIn: bigint, weightOut: bigint, baseVar
   if (exponent === POW_ONE) return [`const ${out} = ${baseVar};`];
   if (exponent === POW_TWO) return [`const ${out} = ${mulUpExpr(baseVar, baseVar)};`];
   if (exponent === POW_THREE) {
-    return [`const ${out}sq = ${mulUpExpr(baseVar, baseVar)};`, `const ${out} = ${mulUpExpr(`${out}sq`, baseVar)};`];
+    return [
+      `const ${out}sq = ${mulUpExpr(baseVar, baseVar)};`,
+      `const ${out} = ${mulUpExpr(`${out}sq`, baseVar)};`,
+    ];
   }
   if (exponent === POW_FOUR) {
-    return [`const ${out}sq = ${mulUpExpr(baseVar, baseVar)};`, `const ${out} = ${mulUpExpr(`${out}sq`, `${out}sq`)};`];
+    return [
+      `const ${out}sq = ${mulUpExpr(baseVar, baseVar)};`,
+      `const ${out} = ${mulUpExpr(`${out}sq`, `${out}sq`)};`,
+    ];
   }
 
   const intPart = exponent / STABBLE_ONE;
   const frac = exponent % STABBLE_ONE;
-  const mulInternalCeilExpr = (a: string, b: string): string => `((${a} * ${b} + 999999999999999999) / ${ISCALE})`;
+  const mulInternalCeilExpr = (a: string, b: string): string =>
+    `((${a} * ${b} + 999999999999999999) / ${ISCALE})`;
 
   const lines: string[] = [];
   lines.push(`const ${out}bi = ${baseVar} * ${ISCALE_PER_ONE};`);
@@ -767,7 +829,9 @@ export function weightedPowUpSource(weightIn: bigint, weightOut: bigint, baseVar
       if (n & 1n) lines.push(`${out}r = ${mulInternalCeilExpr(`${out}r`, `${out}bp${idx}`)};`);
       n >>= 1n;
       if (n > 0n) {
-        lines.push(`let ${out}bp${idx + 1} = ${mulInternalCeilExpr(`${out}bp${idx}`, `${out}bp${idx}`)};`);
+        lines.push(
+          `let ${out}bp${idx + 1} = ${mulInternalCeilExpr(`${out}bp${idx}`, `${out}bp${idx}`)};`,
+        );
         idx++;
       }
     }

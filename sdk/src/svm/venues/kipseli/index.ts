@@ -156,29 +156,17 @@
  * CP-family baseline plus this REAL, margin-padded CPI cost — never the ~50k placeholder every
  * pre-2026-07-31 pin used).
  */
-import {
-  address,
-  getAddressCodec,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-} from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type {
-  AccountBytesMap,
-  AccountLoader,
-  PoolConfig,
-  SwapUser,
-  VenueAccount,
-} from '../types.js';
-import { readUintLE } from '../math.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { readUintLE } from "../math.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'kipseli';
-export const KIPSELI_PROGRAM_ID = address('3TK9D8aoBFYjYZtKCjciPrVrRStsnvo7KmpcJqDavpaU');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const SYSTEM_PROGRAM = address('11111111111111111111111111111111');
-const ASSOCIATED_TOKEN_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+const SLUG = "kipseli";
+export const KIPSELI_PROGRAM_ID = address("3TK9D8aoBFYjYZtKCjciPrVrRStsnvo7KmpcJqDavpaU");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ASSOCIATED_TOKEN_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /**
  * Ref for the `[b"ban", real_user]` PDA (accounts 11/12 of the swap CPI — see the module doc). Not
@@ -187,14 +175,14 @@ const ASSOCIATED_TOKEN_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsL
  * `USER_VOLUME_ACCUMULATOR_REF` situation. `deriveKipseliBanEntry` below performs the derivation for
  * a caller holding the real owner address.
  */
-export const KIPSELI_BAN_ENTRY_REF = 'kipseli-ban-entry';
+export const KIPSELI_BAN_ENTRY_REF = "kipseli-ban-entry";
 
 /** `[b"ban", owner]` under the Kipseli program — see the module doc's "34 tiny 9-byte accounts" section. */
 export async function deriveKipseliBanEntry(owner: Address): Promise<Address> {
   const encoder = getAddressEncoder();
   const [pda] = await getProgramDerivedAddress({
     programAddress: KIPSELI_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('ban'), new Uint8Array(encoder.encode(owner))],
+    seeds: [new TextEncoder().encode("ban"), new Uint8Array(encoder.encode(owner))],
   });
   return pda;
 }
@@ -220,33 +208,22 @@ const POOL_DISCRIMINATOR = [0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc];
 const POOL_ACCOUNT_SIZE = 496;
 const OFF_BASE_MINT = 72;
 const OFF_QUOTE_MINT = 104;
-const OFF_PRICE = 136;
 const OFF_EXPIRY_MS = 144;
 
 /** Standard SPL Mint layout: `decimals` is a single byte at offset 44 (82-byte classic mint). */
 const MINT_DECIMALS_OFFSET = 44;
 const MINT_MIN_SIZE = 45;
 
-/** Standard SPL token account: `amount` is a u64 LE at offset 64. */
-const VAULT_AMOUNT_OFFSET = 64;
 const VAULT_MIN_SIZE = 165;
 
-/** Anchor `sha256("global:swap_v2")[:8]` (see the module doc's Rust source-path evidence). */
-const SWAP_V2_DISCRIMINATOR = Uint8Array.from([0x2b, 0x04, 0xed, 0x0b, 0x1a, 0xc9, 0x1e, 0x62]);
-
-/** `price` scale: `price` is `(quote-per-base, human units) * PRICE_SCALE` — see PRICING MODEL. */
-const PRICE_SCALE = 1_000_000_000n;
-/** Conservative safety margin — ~10x the measured max deviation (0.0496%, see the module doc). */
-const HAIRCUT_NUM = 995n;
-const HAIRCUT_DEN = 1000n;
-
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 export interface KipseliPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'quoteToBase' (default, quote in / base out) | 'baseToQuote'. */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   baseMint: Address;
   quoteMint: Address;
   baseVault: Address;
@@ -260,7 +237,8 @@ export interface KipseliPoolConfig extends PoolConfig {
 }
 
 function kipseliConfig(cfg: PoolConfig): KipseliPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as KipseliPoolConfig;
 }
 
@@ -268,7 +246,9 @@ async function fetchDecimals(load: AccountLoader, mint: Address): Promise<number
   const data = await load(mint);
   if (data === null) throw new Error(`${SLUG} mint ${mint} not found`);
   if (data.length < MINT_MIN_SIZE) {
-    throw new Error(`${SLUG} mint ${mint} account is ${data.length} bytes, too small for a Mint (want >= ${MINT_MIN_SIZE})`);
+    throw new Error(
+      `${SLUG} mint ${mint} account is ${data.length} bytes, too small for a Mint (want >= ${MINT_MIN_SIZE})`,
+    );
   }
   return data[MINT_DECIMALS_OFFSET];
 }
@@ -283,7 +263,9 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE} (out of scope — see module doc)`);
+    throw new Error(
+      `${SLUG} pool ${pool} is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE} (out of scope — see module doc)`,
+    );
   }
   if (!POOL_DISCRIMINATOR.every((b, i) => data[i] === b)) {
     throw new Error(`${SLUG} pool ${pool} has an unexpected account discriminator`);
@@ -306,11 +288,15 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
@@ -322,20 +308,25 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
   ]);
 
   const _vaults = [
-    ['base', baseVault, baseMint],
-    ['quote', quoteVault, quoteMint],
+    ["base", baseVault, baseMint],
+    ["quote", quoteVault, quoteMint],
   ] as const;
   const _vaultDatas = await Promise.all(_vaults.map(([, vault]) => load(vault)));
   for (let _i = 0; _i < _vaults.length; _i++) {
     const [role, vault, mint] = _vaults[_i]!;
     const vaultData = _vaultDatas[_i]!;
-    if (vaultData === null) throw new Error(`${SLUG} pool ${pool}: derived ${role} vault ${vault} does not exist`);
+    if (vaultData === null)
+      throw new Error(`${SLUG} pool ${pool}: derived ${role} vault ${vault} does not exist`);
     if (vaultData.length < VAULT_MIN_SIZE) {
-      throw new Error(`${SLUG} pool ${pool}: ${role} vault ${vault} is ${vaultData.length} bytes, not an SPL token account`);
+      throw new Error(
+        `${SLUG} pool ${pool}: ${role} vault ${vault} is ${vaultData.length} bytes, not an SPL token account`,
+      );
     }
     const vaultMint = pubkeyAt(vaultData, 0);
     if (vaultMint !== mint) {
-      throw new Error(`${SLUG} pool ${pool}: ${role} vault ${vault} holds mint ${vaultMint}, expected ${mint}`);
+      throw new Error(
+        `${SLUG} pool ${pool}: ${role} vault ${vault} holds mint ${vaultMint}, expected ${mint}`,
+      );
     }
   }
 
@@ -346,7 +337,7 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Kips
   return {
     venue: SLUG,
     pool,
-    direction: 'quoteToBase',
+    direction: "quoteToBase",
     baseMint,
     quoteMint,
     baseVault,
@@ -367,11 +358,8 @@ function quoteAccounts(base: PoolConfig): VenueAccount[] {
 
 export const kipseli = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: KIPSELI_PROGRAM_ID,
   fetchPoolConfig,
   quoteAccounts,
 };
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-

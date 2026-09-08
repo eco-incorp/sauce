@@ -139,7 +139,9 @@ export const SVM_SETTLE_SOURCE_PATH: string = join(__dirname, "settle.sauce.ts")
 
 function assertEscrowCount(fn: string, escrowCount: number): void {
   if (!Number.isInteger(escrowCount) || escrowCount < 1 || escrowCount > SVM_MAX_ESCROWS) {
-    throw new Error(`${fn}: escrowCount must be an integer 1..${SVM_MAX_ESCROWS}, got ${escrowCount}`);
+    throw new Error(
+      `${fn}: escrowCount must be an integer 1..${SVM_MAX_ESCROWS}, got ${escrowCount}`,
+    );
   }
 }
 
@@ -169,7 +171,11 @@ export function svmSettleSource(escrowCount: number = 1): string {
   // the manifest the caller attaches against.
   const params = ["tokenProgram0: Account", "tokenProgram1: Account"];
   for (let i = 0; i < escrowCount; i++) {
-    params.push(`escrow${i}: Account<Writable>`, `mint${i}: Account`, `dest${i}: Account<Writable>`);
+    params.push(
+      `escrow${i}: Account<Writable>`,
+      `mint${i}: Account`,
+      `dest${i}: Account<Writable>`,
+    );
     if (i === 0) params.push("owner: Account<Signer>");
   }
 

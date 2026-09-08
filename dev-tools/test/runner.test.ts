@@ -18,9 +18,9 @@ function test(name: string, fn: () => void) {
     fn();
     console.log(`  ✓ ${name}`);
     passed++;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.log(`  ✕ ${name}`);
-    console.log(`    ${e.message}`);
+    console.log(`    ${(e as Error).message}`);
     failed++;
   }
 }
@@ -29,7 +29,7 @@ function ok(condition: boolean, msg: string) {
   if (!condition) throw new Error(msg);
 }
 
-function eq(actual: any, expected: any, msg?: string) {
+function eq(actual: unknown, expected: unknown, msg?: string) {
   if (actual !== expected) {
     throw new Error(msg || `Expected ${expected}, got ${actual}`);
   }
@@ -108,11 +108,52 @@ test("rejects a reserved word as a name", () => {
   // fails. The list is measured against the pinned compiler -- `arguments`, `eval`, `as`, `of`,
   // `get`, `set` and `async` are deliberately absent because it ACCEPTS those as const names.
   const RESERVED = [
-    "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete",
-    "do", "else", "enum", "export", "extends", "false", "finally", "for", "function", "if",
-    "implements", "import", "in", "instanceof", "interface", "let", "new", "null", "package",
-    "private", "protected", "public", "return", "static", "super", "switch", "this", "throw", "true",
-    "try", "typeof", "var", "void", "while", "with", "yield",
+    "await",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "implements",
+    "import",
+    "in",
+    "instanceof",
+    "interface",
+    "let",
+    "new",
+    "null",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "return",
+    "static",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
   ];
   for (const word of RESERVED) {
     let threw = false;
@@ -304,7 +345,11 @@ test("a define folds into the program while an arg only extends its tail", () =>
   const plain = compileScript(fixture, ROOT, { args: [1n] });
   const defined = compileScript(fixture, ROOT, { defines: { AMOUNT: 4242n }, args: [1n] });
   ok(plain.bytecodes[0] !== defined.bytecodes[0], "a define should change the emitted bytes");
-  eq(plain.bytecodes[0].slice(-64), defined.bytecodes[0].slice(-64), "the arg word should be identical");
+  eq(
+    plain.bytecodes[0].slice(-64),
+    defined.bytecodes[0].slice(-64),
+    "the arg word should be identical",
+  );
 });
 
 // Everything parseDefine accepts must actually COMPILE — the property the normalization above exists
@@ -314,7 +359,14 @@ test("every spelling parseDefine accepts compiles, and to the same bytes as its 
   const compileWith = (pair: string) =>
     compileScript(FIXTURE, ROOT, { defines: Object.fromEntries([parseDefine(pair)]) }).bytecodes[0];
   const canonical = compileWith("AMOUNT=42");
-  for (const spelling of ["AMOUNT=  42  ", "AMOUNT=0b101010", "AMOUNT=0o52", "AMOUNT=+42", "AMOUNT=00042", "AMOUNT=0x2a"]) {
+  for (const spelling of [
+    "AMOUNT=  42  ",
+    "AMOUNT=0b101010",
+    "AMOUNT=0o52",
+    "AMOUNT=+42",
+    "AMOUNT=00042",
+    "AMOUNT=0x2a",
+  ]) {
     eq(compileWith(spelling), canonical, `${spelling} should compile to the bytes of AMOUNT=42`);
   }
 });

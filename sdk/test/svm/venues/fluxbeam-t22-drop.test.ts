@@ -10,18 +10,26 @@
  *   - a NONZERO transfer-fee Token-2022 leg is HANDLED (fee baked, not dropped);
  *   - NonTransferable / TransferHook legs self-drop (genuinely un-routable).
  */
-import { getAddressCodec, getAddressDecoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { fetchFluxBeamPoolConfig, FLUXBEAM_POOL_SIZE } from '../../../src/svm/venues/fluxbeam/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeLegacyMint, makeT22Mint, tlvEntry, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { getAddressCodec, getAddressDecoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  fetchFluxBeamPoolConfig,
+  FLUXBEAM_POOL_SIZE,
+} from "../../../src/svm/venues/fluxbeam/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import {
+  makeLegacyMint,
+  makeT22Mint,
+  tlvEntry,
+  NON_TRANSFERABLE_TLV,
+} from "../fixtures/token-2022/synth.js";
 
 const codec = getAddressCodec();
 const decoder = getAddressDecoder();
 
-const TOKENKEG = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
-const TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb' as Address;
-const CLOCK = 'SysvarC1ock11111111111111111111111111111111' as Address;
+const TOKENKEG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address;
+const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" as Address;
+const CLOCK = "SysvarC1ock11111111111111111111111111111111" as Address;
 
 const pk = (seed: number): Address =>
   decoder.decode(Uint8Array.from({ length: 32 }, (_, i) => ((i * seed + seed) % 250) + 1));
@@ -85,8 +93,8 @@ function loaderWith(mintA: Uint8Array, mintB: Uint8Array, epoch = 0n): AccountLo
   return (async (a: string) => map[a] ?? null) as unknown as AccountLoader;
 }
 
-describe('fluxbeam Token-2022 handling', () => {
-  it('resolves a plain legacy pool with zero fees (control — legacy path unchanged)', async () => {
+describe("fluxbeam Token-2022 handling", () => {
+  it("resolves a plain legacy pool with zero fees (control — legacy path unchanged)", async () => {
     const cfg = await fetchFluxBeamPoolConfig(loaderWith(makeLegacyMint(), makeLegacyMint()), POOL);
     expect(cfg.tokenProgramA).toBe(TOKENKEG);
     expect(cfg.tokenProgramB).toBe(TOKENKEG);
@@ -94,29 +102,38 @@ describe('fluxbeam Token-2022 handling', () => {
     expect(cfg.feeB).toEqual({ bps: 0n, max: 0n });
   });
 
-  it('ROUTES a zero-fee Token-2022 leg (Token-2022 program, zero baked fee)', async () => {
+  it("ROUTES a zero-fee Token-2022 leg (Token-2022 program, zero baked fee)", async () => {
     const cfg = await fetchFluxBeamPoolConfig(loaderWith(makeT22Mint(), makeLegacyMint()), POOL);
     expect(cfg.tokenProgramA).toBe(TOKEN_2022);
     expect(cfg.tokenProgramB).toBe(TOKENKEG);
     expect(cfg.feeA).toEqual({ bps: 0n, max: 0n });
   });
 
-  it('HANDLES a nonzero transfer-fee Token-2022 leg (fee baked, NOT dropped)', async () => {
-    const cfg = await fetchFluxBeamPoolConfig(loaderWith(makeT22Mint(feeTlv(200)), makeLegacyMint(), 100n), POOL);
+  it("HANDLES a nonzero transfer-fee Token-2022 leg (fee baked, NOT dropped)", async () => {
+    const cfg = await fetchFluxBeamPoolConfig(
+      loaderWith(makeT22Mint(feeTlv(200)), makeLegacyMint(), 100n),
+      POOL,
+    );
     expect(cfg.tokenProgramA).toBe(TOKEN_2022);
     expect(cfg.feeA.bps).toBe(200n);
     expect(cfg.feeB).toEqual({ bps: 0n, max: 0n });
   });
 
-  it('SELF-DROPS a NonTransferable Token-2022 leg', async () => {
+  it("SELF-DROPS a NonTransferable Token-2022 leg", async () => {
     await expect(
-      fetchFluxBeamPoolConfig(loaderWith(makeT22Mint(NON_TRANSFERABLE_TLV), makeLegacyMint()), POOL),
+      fetchFluxBeamPoolConfig(
+        loaderWith(makeT22Mint(NON_TRANSFERABLE_TLV), makeLegacyMint()),
+        POOL,
+      ),
     ).rejects.toThrow(/NonTransferable/);
   });
 
-  it('SELF-DROPS a TransferHook Token-2022 leg', async () => {
+  it("SELF-DROPS a TransferHook Token-2022 leg", async () => {
     await expect(
-      fetchFluxBeamPoolConfig(loaderWith(makeT22Mint(tlvEntry(14, new Uint8Array(64))), makeLegacyMint()), POOL),
+      fetchFluxBeamPoolConfig(
+        loaderWith(makeT22Mint(tlvEntry(14, new Uint8Array(64))), makeLegacyMint()),
+        POOL,
+      ),
     ).rejects.toThrow(/TransferHook/);
   });
 });

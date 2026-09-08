@@ -24,7 +24,8 @@ import { normalizeReward, normalizeRoute, toUniversalAddress } from "../src/rout
 import { TOKEN_BASE_DIRS } from "../src/token/source.js";
 import type { Intent, Route, UniversalAddress } from "../src/routes/types.js";
 
-const evmAddr = (byte: string): UniversalAddress => toUniversalAddress(("0x" + byte.repeat(20)) as Hex);
+const evmAddr = (byte: string): UniversalAddress =>
+  toUniversalAddress(("0x" + byte.repeat(20)) as Hex);
 
 const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
@@ -74,30 +75,49 @@ const explicitOpts: TransferChildOptions = { vaultResolution: { mode: "explicit"
 describe("nest.ts: nestedTransferStatements — text shape", () => {
   it("1-token child: balanceOf, clamp ternary, zero-guard, transfer to the vault", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 500n }] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: TOKEN_A, amount: 500n }],
+      }),
     });
     const stmts = nestedTransferStatements(child, 0, explicitOpts);
 
     expect(stmts[0]).toBe(`const n0_vault = ${BigInt(VAULT)}n;`);
     expect(stmts[1]).toBe(`const n0_bal0 = IERC20.at(${BigInt(TOKEN_A)}n).balanceOf(ctx.self());`);
     expect(stmts[2]).toBe(`const n0_amt0 = n0_bal0 > 500n ? 500n : n0_bal0;`);
-    expect(stmts[3]).toBe(`if (n0_amt0 > 0n) { IERC20.at(${BigInt(TOKEN_A)}n).transfer(n0_vault, n0_amt0); }`);
+    expect(stmts[3]).toBe(
+      `if (n0_amt0 > 0n) { IERC20.at(${BigInt(TOKEN_A)}n).transfer(n0_vault, n0_amt0); }`,
+    );
     expect(stmts).toHaveLength(4);
   });
 
   it("clamp:false drops the ternary and transfers the raw balance", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 500n }] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: TOKEN_A, amount: 500n }],
+      }),
     });
     const stmts = nestedTransferStatements(child, 0, { ...explicitOpts, clamp: false });
 
     expect(stmts.some((s) => s.includes("n0_amt0"))).toBe(false);
-    expect(stmts[stmts.length - 1]).toBe(`if (n0_bal0 > 0n) { IERC20.at(${BigInt(TOKEN_A)}n).transfer(n0_vault, n0_bal0); }`);
+    expect(stmts[stmts.length - 1]).toBe(
+      `if (n0_bal0 > 0n) { IERC20.at(${BigInt(TOKEN_A)}n).transfer(n0_vault, n0_bal0); }`,
+    );
   });
 
   it("requireCap:true inserts the underfunded throw before the clamp", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 500n }] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: TOKEN_A, amount: 500n }],
+      }),
     });
     const stmts = nestedTransferStatements(child, 0, { ...explicitOpts, requireCap: true });
 
@@ -107,7 +127,13 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
 
   it("a native-declaring child gets the native leg; a non-native child does not", () => {
     const nativeChild = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, nativeAmount: 77n, tokens: [] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        nativeAmount: 77n,
+        tokens: [],
+      }),
     });
     const stmts = nestedTransferStatements(nativeChild, 0, explicitOpts);
     expect(stmts).toEqual([
@@ -119,7 +145,12 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     ]);
 
     const tokenOnlyChild = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 1n }] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: TOKEN_A, amount: 1n }],
+      }),
     });
     const stmts2 = nestedTransferStatements(tokenOnlyChild, 0, explicitOpts);
     expect(stmts2.some((s) => s.includes("ctx.selfBalance()"))).toBe(false);
@@ -147,7 +178,13 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
 
   it("native: 'skip' with an all-native, zero-token reward yields no statements (no error)", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, nativeAmount: 5n, tokens: [] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        nativeAmount: 5n,
+        tokens: [],
+      }),
     });
     expect(nestedTransferStatements(child, 0, { ...explicitOpts, native: "skip" })).toEqual([]);
   });
@@ -155,7 +192,12 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
   it("T2: a non-EVM-representable reward token throws (denormalizeToEvm's own named error)", () => {
     const svmToken = toUniversalAddress(("0x" + "22".repeat(32)) as Hex); // 32-byte, nonzero high bytes
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: svmToken, amount: 1n }] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: svmToken, amount: 1n }],
+      }),
     });
     expect(() => nestedTransferStatements(child, 0, explicitOpts)).toThrow(/EVM-representable/i);
   });
@@ -164,7 +206,12 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
 describe("nest.ts: vault-address resolution rungs", () => {
   it("rung A (runtime): the calldata literal equals intentVaultAddressCall's own data, byte-for-byte", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 1n }] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: TOKEN_A, amount: 1n }],
+      }),
     });
     const stmts = nestedTransferStatements(child, 0, {
       vaultResolution: { mode: "runtime", portal: PARENT_PORTAL },
@@ -185,19 +232,32 @@ describe("nest.ts: vault-address resolution rungs", () => {
 
   it("rung B (predicted): the baked address equals predictVaultAddress's own output", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 1n }] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: TOKEN_A, amount: 1n }],
+      }),
     });
     const vaultInitCodeHash = ("0x" + "ab".repeat(32)) as Hex;
     const stmts = nestedTransferStatements(child, 0, {
       vaultResolution: { mode: "predicted", config: { portal: PARENT_PORTAL, vaultInitCodeHash } },
     });
-    const expected = predictVaultAddress(hashIntent(child).intentHash, { portal: PARENT_PORTAL, vaultInitCodeHash });
+    const expected = predictVaultAddress(hashIntent(child).intentHash, {
+      portal: PARENT_PORTAL,
+      vaultInitCodeHash,
+    });
     expect(stmts[0]).toBe(`const n0_vault = ${BigInt(expected)}n;`);
   });
 
   it("rung C (explicit): bakes the given address verbatim", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 1n }] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: TOKEN_A, amount: 1n }],
+      }),
     });
     const stmts = nestedTransferStatements(child, 0, explicitOpts);
     expect(stmts[0]).toBe(`const n0_vault = ${BigInt(VAULT)}n;`);
@@ -207,7 +267,12 @@ describe("nest.ts: vault-address resolution rungs", () => {
 describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
   it("a 1-token, 1-child program compiles", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 500n }] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: TOKEN_A, amount: 500n }],
+      }),
     });
     const { source, baseDirs, imports } = nestedTransferProgram([{ child, opts: explicitOpts }]);
     expect(imports).toEqual([expect.stringContaining("IERC20")]);
@@ -266,7 +331,13 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
 
   it("a native-only, no-token program needs no IERC20 import and still compiles", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, nativeAmount: 9n, tokens: [] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        nativeAmount: 9n,
+        tokens: [],
+      }),
     });
     const { source, imports, baseDirs } = nestedTransferProgram([{ child, opts: explicitOpts }]);
     expect(imports).toEqual([]);
@@ -315,7 +386,13 @@ describe("nest.ts: assertNestingInvariants — via:'transfer' drops invariant 5"
 
   it("an unspecified `via` still defaults to publishAndFund semantics (pure-module default unchanged)", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, nativeAmount: 100n, tokens: [] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        nativeAmount: 100n,
+        tokens: [],
+      }),
     });
     expect(() =>
       assertNestingInvariants({
@@ -328,8 +405,17 @@ describe("nest.ts: assertNestingInvariants — via:'transfer' drops invariant 5"
 
   it("invariants 1/2/4/6 still apply to a transfer child (only 5 is dropped)", () => {
     const lateChild = childIntent({
-      route: normalizeRoute({ salt: ("0x" + "05".repeat(32)) as Hex, deadline: 500n, portal: CHILD_ROUTE_PORTAL }),
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, tokens: [{ token: TOKEN_A, amount: 1n }] }),
+      route: normalizeRoute({
+        salt: ("0x" + "05".repeat(32)) as Hex,
+        deadline: 500n,
+        portal: CHILD_ROUTE_PORTAL,
+      }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        tokens: [{ token: TOKEN_A, amount: 1n }],
+      }),
     });
     expect(() =>
       assertNestingInvariants({

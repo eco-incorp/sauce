@@ -19,24 +19,24 @@
  *      rounds. Pre-flatten this was 10 (the serial per-array walk), so this
  *      assertion is failing-first for the serial regression.
  */
-import { resolve } from 'path';
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
+import { resolve } from "path";
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
 import {
   coalescingAccountLoader,
   fetchMeteoraDlmmConfig,
   fetchRaydiumClmmConfig,
   LB_PAIR_DISCRIMINATOR,
   RAYDIUM_CLMM_POOL_DISCRIMINATOR,
-} from '../../../src/svm/index.js';
-import type { BatchAccountLoader, LoadedAccount } from '../../../src/svm/index.js';
-import { fixtureData, loadFixtures } from '../fixtures.js';
-import type { AccountFixture } from '../fixtures.js';
+} from "../../../src/svm/index.js";
+import type { BatchAccountLoader, LoadedAccount } from "../../../src/svm/index.js";
+import { fixtureData, loadFixtures } from "../fixtures.js";
+import type { AccountFixture } from "../fixtures.js";
 
 /** The pool/pair fixture is the one whose data opens with the account discriminator. */
 function findPool(fixtures: AccountFixture[], discriminator: readonly number[]): Address {
   const hit = fixtures.find((f) => discriminator.every((b, i) => fixtureData(f)[i] === b));
-  if (!hit) throw new Error('no pool fixture matched the account discriminator');
+  if (!hit) throw new Error("no pool fixture matched the account discriminator");
   return address(hit.address);
 }
 
@@ -50,7 +50,9 @@ function roundCountingLoader(fixtures: AccountFixture[]): {
   rounds: () => number;
 } {
   let rounds = 0;
-  const byAddress = new Map(fixtures.map((f) => [f.address, { data: fixtureData(f), owner: f.owner }]));
+  const byAddress = new Map(
+    fixtures.map((f) => [f.address, { data: fixtureData(f), owner: f.owner }]),
+  );
   const loadMany: BatchAccountLoader = async (addresses) => {
     rounds += 1;
     return addresses.map((a): LoadedAccount | null => {
@@ -61,11 +63,11 @@ function roundCountingLoader(fixtures: AccountFixture[]): {
   return { load: coalescingAccountLoader(loadMany), rounds: () => rounds };
 }
 
-describe('raydium-clmm window batch-load', () => {
+describe("raydium-clmm window batch-load", () => {
   let windows: unknown;
   let rounds = 0;
   beforeAll(async () => {
-    const fixtures = loadFixtures(resolve(process.cwd(), 'test/svm/fixtures/raydium-clmm'));
+    const fixtures = loadFixtures(resolve(process.cwd(), "test/svm/fixtures/raydium-clmm"));
     const pool = findPool(fixtures, RAYDIUM_CLMM_POOL_DISCRIMINATOR);
     const counting = roundCountingLoader(fixtures);
     const cfg = await fetchRaydiumClmmConfig(counting.load, pool);
@@ -73,20 +75,20 @@ describe('raydium-clmm window batch-load', () => {
     rounds = counting.rounds();
   });
 
-  it('resolves a byte-identical boundary window in both directions', () => {
+  it("resolves a byte-identical boundary window in both directions", () => {
     expect(windows).toMatchSnapshot();
   });
 
-  it('reads the whole window in coalesced rounds (<= 6 cold-fetch rounds; serial walk was 10)', () => {
+  it("reads the whole window in coalesced rounds (<= 6 cold-fetch rounds; serial walk was 10)", () => {
     expect(rounds).toBeLessThanOrEqual(6);
   });
 });
 
-describe('meteora-dlmm window batch-load', () => {
+describe("meteora-dlmm window batch-load", () => {
   let windows: unknown;
   let rounds = 0;
   beforeAll(async () => {
-    const fixtures = loadFixtures(resolve(process.cwd(), 'test/svm/fixtures/meteora-dlmm'));
+    const fixtures = loadFixtures(resolve(process.cwd(), "test/svm/fixtures/meteora-dlmm"));
     const pair = findPool(fixtures, LB_PAIR_DISCRIMINATOR);
     const counting = roundCountingLoader(fixtures);
     const cfg = await fetchMeteoraDlmmConfig(counting.load, pair);
@@ -94,11 +96,11 @@ describe('meteora-dlmm window batch-load', () => {
     rounds = counting.rounds();
   });
 
-  it('resolves a byte-identical bin window in both directions', () => {
+  it("resolves a byte-identical bin window in both directions", () => {
     expect(windows).toMatchSnapshot();
   });
 
-  it('reads the whole window in coalesced rounds (<= 6 cold-fetch rounds; serial walk was 10)', () => {
+  it("reads the whole window in coalesced rounds (<= 6 cold-fetch rounds; serial walk was 10)", () => {
     expect(rounds).toBeLessThanOrEqual(6);
   });
 });

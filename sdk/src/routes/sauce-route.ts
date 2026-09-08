@@ -190,7 +190,7 @@ export function compileSauceRoute(
   // `IERC20.at(USDC)` (the symbol, not a literal) with no `USDC` define at all. Idempotent with
   // openRoute's own ambient-defines merge (ambient.ts#chainDefines resolves the SAME registry), so
   // this is a no-op when reached via openRoute and a genuine fix for a direct caller.
-  let defines: Record<string, bigint | boolean | number> | undefined =
+  const defines: Record<string, bigint | boolean | number> | undefined =
     tokenMap.size > 0 ? { ...Object.fromEntries(tokenMap), ...options.defines } : options.defines;
 
   // ORDER IS LOAD-BEARING: the token pass (U4 + balance sugar) runs BEFORE the protocol-accessor
@@ -233,7 +233,8 @@ export function compileSauceRoute(
   }
 
   if (options.accessors !== false) {
-    const accessorOpts: ProtocolRewriteOptions = typeof options.accessors === "object" ? options.accessors : {};
+    const accessorOpts: ProtocolRewriteOptions =
+      typeof options.accessors === "object" ? options.accessors : {};
     const rewrittenAccessors = rewriteProtocolAccessors(source, chain, {
       ...accessorOpts,
       existingContracts: options.contracts,
@@ -250,7 +251,14 @@ export function compileSauceRoute(
     }
   }
 
-  const compiled = compileWithRs({ source, target, baseDirs, defines, contracts, ambient: options.ambient });
+  const compiled = compileWithRs({
+    source,
+    target,
+    baseDirs,
+    defines,
+    contracts,
+    ambient: options.ambient,
+  });
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
@@ -267,7 +275,9 @@ export function compileSauceRoute(
           "in `compiled.bytecode[0]`.",
       );
     }
-    const call = buildSauceSvmCall(svmExecutionPinnedToCompile(svmExecution, compiled.bytecode[0]!));
+    const call = buildSauceSvmCall(
+      svmExecutionPinnedToCompile(svmExecution, compiled.bytecode[0]!),
+    );
     return { calls: [call], compiled, source };
   }
 

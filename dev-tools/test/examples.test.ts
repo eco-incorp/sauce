@@ -52,9 +52,9 @@ function test(name: string, fn: () => void) {
     fn();
     console.log(`  ✓ ${name}`);
     passed++;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.log(`  ✕ ${name}`);
-    console.log(`    ${e.message}`);
+    console.log(`    ${(e as Error).message}`);
     failed++;
   }
 }
@@ -63,7 +63,7 @@ function ok(condition: boolean, msg: string) {
   if (!condition) throw new Error(msg);
 }
 
-function eq(actual: any, expected: any, msg?: string) {
+function eq(actual: unknown, expected: unknown, msg?: string) {
   if (actual !== expected) {
     throw new Error(msg || `Expected ${expected}, got ${actual}`);
   }
@@ -84,9 +84,7 @@ for (const file of jsScripts) {
 }
 
 console.log("\nexample scripts compile (sauce/ts)");
-const tsScripts = readdirSync(TS_DIR).filter(
-  (f) => f.endsWith(".ts") && !f.endsWith(".d.ts"),
-);
+const tsScripts = readdirSync(TS_DIR).filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"));
 
 for (const file of tsScripts) {
   test(`sauce/ts/${file}`, () => {

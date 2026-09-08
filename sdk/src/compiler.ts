@@ -9,7 +9,7 @@
  * `createRequire` rather than a static import: the package's `node` condition is a CommonJS build
  * that reads its sibling `.wasm` off disk at load, which an ESM transform does not resolve.
  */
-import { createRequire } from 'node:module';
+import { createRequire } from "node:module";
 
 export type {
   AccountEntry,
@@ -20,8 +20,8 @@ export type {
   ResolveModule,
   ResolvePackage,
   SauceTarget,
-} from 'sauce-compiler';
+} from "sauce-compiler";
 
-const mod = createRequire(import.meta.url)('sauce-compiler') as typeof import('sauce-compiler');
+const mod = createRequire(import.meta.url)("sauce-compiler") as typeof import("sauce-compiler");
 
 export const { compile } = mod;

@@ -9,7 +9,11 @@
  */
 import { bytesToHex, toFunctionSelector } from "viem";
 
-import { buildCctpSplitTransfer, buildPlainTransfer, type CctpTransferParams } from "../src/recipes/cctp-transfer.js";
+import {
+  buildCctpSplitTransfer,
+  buildPlainTransfer,
+  type CctpTransferParams,
+} from "../src/recipes/cctp-transfer.js";
 
 const RECIPIENT = "0x000000000000000000000000000000000000abcd";
 const POT = "0x1111111111111111111111111111111111111111";

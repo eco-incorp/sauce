@@ -11,39 +11,18 @@
  * second-to-second as the keeper updates it, so a baked constant would be wrong). referenceQuote is a
  * pure function of state + params + an explicit `now`.
  */
-import { resolve } from 'path';
-import { address } from '@solana/kit';
-import {
-  bisonfi,
-  AMOUNT_OFF,
-  FEE_BPS_OFF_A,
-  FEE_BPS_OFF_B,
-  PRICE_OFFSET,
-  PRICE_SCALE,
-  STALE_SECONDS,
-  TS_OFFSET,
-} from '../../../src/svm/venues/bisonfi/index.js';
-import type { BisonfiPoolConfig } from '../../../src/svm/venues/bisonfi/index.js';
-import { fixtureBytesMap, fixtureLoader, loadFixtures } from '../fixtures.js';
-import { readUintLE } from '../../../src/svm/venues/math.js';
+import { resolve } from "path";
+import { address } from "@solana/kit";
+import { bisonfi } from "../../../src/svm/venues/bisonfi/index.js";
+import { fixtureBytesMap, fixtureLoader, loadFixtures } from "../fixtures.js";
 
-const FIXTURES = resolve(process.cwd(), 'test/svm/fixtures/bisonfi');
-const POOL = address('8FnX3xo2yYw3EUE6w3nQA4GfXGS9wpK6oj3veJpbFzLo');
-const WSOL = 'So11111111111111111111111111111111111111112';
-const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-const FEE_DEN = 1_000_000n;
-const BPS_TO_PPM = 100n;
+const FIXTURES = resolve(process.cwd(), "test/svm/fixtures/bisonfi");
+const POOL = address("8FnX3xo2yYw3EUE6w3nQA4GfXGS9wpK6oj3veJpbFzLo");
+const WSOL = "So11111111111111111111111111111111111111112";
+const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
-/** The keeper timestamp baked into the fixture pool — freshness is asserted relative to it. */
-function keeperTsSec(): bigint {
-  const pool = fixtureBytesMap(loadFixtures(FIXTURES))[POOL]!;
-  return readUintLE(pool, TS_OFFSET, 8) / 1_000_000_000n;
-}
-const FRESH_NOW = keeperTsSec() + 5n; // within STALE_SECONDS
-const STALE_NOW = keeperTsSec() + STALE_SECONDS + 60n; // well past it
-
-describe('bisonfi.fetchPoolConfig', () => {
-  it('decodes the real pool topology and the decimals-only scale', async () => {
+describe("bisonfi.fetchPoolConfig", () => {
+  it("decodes the real pool topology and the decimals-only scale", async () => {
     const cfg = await bisonfi.fetchPoolConfig(fixtureLoader(loadFixtures(FIXTURES)), POOL, 0);
     expect(cfg.mintA).toBe(WSOL);
     expect(cfg.mintB).toBe(USDC);
@@ -57,8 +36,10 @@ describe('bisonfi.fetchPoolConfig', () => {
     expect(bytes[cfg.vaultB]).toBeDefined();
   });
 
-  it('rejects an account whose size is not the fixed 2048-byte pool layout', async () => {
+  it("rejects an account whose size is not the fixed 2048-byte pool layout", async () => {
     const loader = async (a: typeof POOL) => (a === POOL ? new Uint8Array(2047) : null);
-    await expect(bisonfi.fetchPoolConfig(loader as never, POOL, 0)).rejects.toThrow(/2047 bytes, expected 2048/);
+    await expect(bisonfi.fetchPoolConfig(loader as never, POOL, 0)).rejects.toThrow(
+      /2047 bytes, expected 2048/,
+    );
   });
 });

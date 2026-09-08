@@ -92,13 +92,15 @@
  * Both instructions are Anchor "event CPI" self-invocations under the hood
  * (the trailing `event_authority`/`program` accounts), included verbatim.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
 /** The Earn Pool program — this family's discovered-pool owner. */
-export const HYLO_STABILITY_POOL_PROGRAM_ID = address('HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ');
+export const HYLO_STABILITY_POOL_PROGRAM_ID = address(
+  "HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ",
+);
 // ---------------------------------------------------------------------------
 // Deterministic PDAs — every one of these is a fixed constant of the two
 // immutable program ids above; none require RPC to compute, and this family
@@ -107,12 +109,16 @@ export const HYLO_STABILITY_POOL_PROGRAM_ID = address('HysTabVUfmQBFcmzu1ctRd1Y1
 // settled mainnet UserWithdraw transaction's own account list (see header).
 // ---------------------------------------------------------------------------
 /** PDA(["pool_config"], EARN_PROGRAM) — the single global pool config account. */
-export const HYLO_STABILITY_POOL_CONFIG = address('2jk7miWrsTbt5hUSaCXPkEQPvuUMgbFLpgMzMQw3Z6ar');
+export const HYLO_STABILITY_POOL_CONFIG = address("2jk7miWrsTbt5hUSaCXPkEQPvuUMgbFLpgMzMQw3Z6ar");
 /** PDA(["hyUSD"], CORE_PROGRAM) — the hyUSD mint. Exported: index.ts's FAMILIES.mints() needs it
  *  (this adapter's PoolConfig decode carries no mint fields — both mints are fixed constants). */
-export const HYLO_STABILITY_POOL_STABLECOIN_MINT = address('5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E');
+export const HYLO_STABILITY_POOL_STABLECOIN_MINT = address(
+  "5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E",
+);
 /** PDA(["staked_hyUSD"], EARN_PROGRAM) — the sHYUSD (LP share) mint. Exported for the same reason. */
-export const HYLO_STABILITY_POOL_LP_TOKEN_MINT = address('HnnGv3HrSqjRpgdFmx7vQGjntNEoex1SU4e9Lxcxuihz');
+export const HYLO_STABILITY_POOL_LP_TOKEN_MINT = address(
+  "HnnGv3HrSqjRpgdFmx7vQGjntNEoex1SU4e9Lxcxuihz",
+);
 /** sha256("account:PoolConfig")[0..8]. */
 const POOL_CONFIG_DISCRIMINATOR = [26, 108, 14, 123, 116, 230, 129, 43];
 const POOL_CONFIG_SIZE = 107;
@@ -133,10 +139,10 @@ function readInt8(data: Uint8Array, offset: number): number {
   const raw = data[offset]!;
   return raw >= 128 ? raw - 256 : raw;
 }
-export type HyloStabilityPoolDirection = 'deposit' | 'withdraw';
+export type HyloStabilityPoolDirection = "deposit" | "withdraw";
 
 export interface HyloStabilityPoolConfig extends PoolConfig {
-  venue: 'hylo-stability-pool';
+  venue: "hylo-stability-pool";
   direction: HyloStabilityPoolDirection;
   paused: boolean;
   withdrawalFeeBits: bigint;
@@ -145,14 +151,21 @@ export interface HyloStabilityPoolConfig extends PoolConfig {
   withdrawalLimitBits: bigint;
 }
 
-async function fetchHyloStabilityPoolConfig(load: AccountLoader, pool: Address): Promise<HyloStabilityPoolConfig> {
+async function fetchHyloStabilityPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<HyloStabilityPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`hylo-stability-pool ${pool} account not found`);
   if (data.length !== POOL_CONFIG_SIZE) {
-    throw new Error(`hylo-stability-pool ${pool} data must be ${POOL_CONFIG_SIZE} bytes, got ${data.length}`);
+    throw new Error(
+      `hylo-stability-pool ${pool} data must be ${POOL_CONFIG_SIZE} bytes, got ${data.length}`,
+    );
   }
   if (!hasDiscriminator(data, POOL_CONFIG_DISCRIMINATOR)) {
-    throw new Error(`hylo-stability-pool ${pool} is not an initialized Anchor PoolConfig account (bad discriminator)`);
+    throw new Error(
+      `hylo-stability-pool ${pool} is not an initialized Anchor PoolConfig account (bad discriminator)`,
+    );
   }
 
   const withdrawalFeeBits = readUintLE(data, OFF_WITHDRAWAL_FEE_BITS, 8);
@@ -167,19 +180,25 @@ async function fetchHyloStabilityPoolConfig(load: AccountLoader, pool: Address):
   // balances) in this adapter's math — a governance change to either's scale
   // convention would silently mis-cap, so refuse rather than guess.
   if (withdrawalLimitExp !== -6) {
-    throw new Error(`hylo-stability-pool ${pool} withdrawal_limiter.limit exp must be -6, got ${withdrawalLimitExp}`);
+    throw new Error(
+      `hylo-stability-pool ${pool} withdrawal_limiter.limit exp must be -6, got ${withdrawalLimitExp}`,
+    );
   }
   if (depositLimitExp !== -6) {
-    throw new Error(`hylo-stability-pool ${pool} deposit_limiter.limit exp must be -6, got ${depositLimitExp}`);
+    throw new Error(
+      `hylo-stability-pool ${pool} deposit_limiter.limit exp must be -6, got ${depositLimitExp}`,
+    );
   }
   if (withdrawalFeeExp > 0 || withdrawalFeeExp < -18) {
-    throw new Error(`hylo-stability-pool ${pool} withdrawal_fee exp out of sane range: ${withdrawalFeeExp}`);
+    throw new Error(
+      `hylo-stability-pool ${pool} withdrawal_fee exp out of sane range: ${withdrawalFeeExp}`,
+    );
   }
 
   return {
-    venue: 'hylo-stability-pool',
+    venue: "hylo-stability-pool",
     pool,
-    direction: 'deposit',
+    direction: "deposit",
     paused,
     withdrawalFeeBits,
     withdrawalFeeExp,
@@ -189,9 +208,8 @@ async function fetchHyloStabilityPoolConfig(load: AccountLoader, pool: Address):
 }
 
 export const hyloStabilityPool = {
-  slug: 'hylo-stability-pool' as const,
+  slug: "hylo-stability-pool" as const,
   programId: HYLO_STABILITY_POOL_PROGRAM_ID,
   fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<HyloStabilityPoolConfig> =>
     fetchHyloStabilityPoolConfig(load, pool),
 };
-

@@ -87,20 +87,20 @@
  * leg (`buy_lst`, a structurally different 17-account instruction observed
  * in the same signature sample) — see the module doc above for why.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { findAssociatedTokenPda } from '@solana-program/token';
-import type { AccountLoader, PoolConfig, VenueAccount } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'vault-liquid-unstake';
-const PROGRAM_ID = '2rU1oCHtQ7WJUvy15tKtFvxdYNNSc3id7AzUcjeFSddo';
+const SLUG = "vault-liquid-unstake";
+const PROGRAM_ID = "2rU1oCHtQ7WJUvy15tKtFvxdYNNSc3id7AzUcjeFSddo";
 
 // Fixed, program-wide singletons (there is exactly one production Pool and
 // one shared native-SOL vault — every LstInfo references the same two).
-const POOL_ADDRESS = '9nyw5jxhzuSs88HxKJyDCsWBZMhxj2uNXsFcyHF5KBAb';
-const TOKEN_PROGRAM_ADDRESS = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const POOL_ADDRESS = "9nyw5jxhzuSs88HxKJyDCsWBZMhxj2uNXsFcyHF5KBAb";
+const TOKEN_PROGRAM_ADDRESS = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 // sha256("account:Pool")[0..8] / sha256("account:LstInfo")[0..8] — both
 // independently re-derived from the candidate name and matched against the
 // live getProgramAccounts dump (see module doc, source 1).
@@ -187,11 +187,9 @@ export function vaultLiquidUnstakeQuote(
   return gross - fee;
 }
 
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-
 export const vaultLiquidUnstake = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: address(PROGRAM_ID),
   /**
    * Off-chain, once per pool. `pool` is the LstInfo account address (this
@@ -205,7 +203,9 @@ export const vaultLiquidUnstake = {
     const lstData = await load(pool);
     if (lstData === null) throw new Error(`${SLUG} lstInfo ${pool} not found`);
     if (!discMatches(lstData, LST_INFO_DISCRIMINATOR)) {
-      throw new Error(`${SLUG} lstInfo ${pool} has an unexpected discriminator (not an LstInfo account)`);
+      throw new Error(
+        `${SLUG} lstInfo ${pool} has an unexpected discriminator (not an LstInfo account)`,
+      );
     }
     if (lstData.length !== LST_INFO_LEN) {
       throw new Error(
@@ -216,7 +216,11 @@ export const vaultLiquidUnstake = {
     const stakePool = decodeAddress(lstData, LST_INFO_OFF_STAKE_POOL);
 
     const poolData = await load(address(POOL_ADDRESS));
-    if (poolData === null || !discMatches(poolData, POOL_DISCRIMINATOR) || poolData.length !== POOL_LEN) {
+    if (
+      poolData === null ||
+      !discMatches(poolData, POOL_DISCRIMINATOR) ||
+      poolData.length !== POOL_LEN
+    ) {
       throw new Error(`${SLUG} global Pool account is missing or has an unexpected shape`);
     }
 
@@ -226,7 +230,9 @@ export const vaultLiquidUnstake = {
       spData.length !== STAKE_POOL_LEN ||
       spData[STAKE_POOL_OFF_ACCOUNT_TYPE] !== 1
     ) {
-      throw new Error(`${SLUG} stake pool ${stakePool} (lstInfo ${pool}) is missing or has an unexpected shape`);
+      throw new Error(
+        `${SLUG} stake pool ${stakePool} (lstInfo ${pool}) is missing or has an unexpected shape`,
+      );
     }
 
     // This venue's `sell_lst` CPI is legacy-SPL (Tokenkeg) only (outMint is
@@ -242,11 +248,15 @@ export const vaultLiquidUnstake = {
       const mintData = _mintDatas[_i]!;
       if (mintData === null) continue;
       if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${m} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -266,4 +276,3 @@ export const vaultLiquidUnstake = {
     ];
   },
 };
-

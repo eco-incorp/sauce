@@ -31,15 +31,15 @@
 // Regenerate: `node scripts/gen-route-globals.mjs` (writes the file) or
 // `node scripts/gen-route-globals.mjs --stdout` (prints, used by the jest
 // drift test) or `--check` (exit 1 on drift, for a future CI wire-up).
-import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const SDK_DIR = resolve(SCRIPT_DIR, '..');
-const CANONICAL_PATH = resolve(SDK_DIR, 'src', 'chains', 'canonical.ts');
-const OUT_PATH = resolve(SDK_DIR, 'src', 'routes', 'globals.generated.ts');
+const SDK_DIR = resolve(SCRIPT_DIR, "..");
+const CANONICAL_PATH = resolve(SDK_DIR, "src", "chains", "canonical.ts");
+const OUT_PATH = resolve(SDK_DIR, "src", "routes", "globals.generated.ts");
 
 /** Runtime mirror of `PascalOf`/`pascalOfSlug` (builder.ts) -- duplicated
  * here for the same reason `createChainAccessors` throws on a duplicate
@@ -47,13 +47,13 @@ const OUT_PATH = resolve(SDK_DIR, 'src', 'routes', 'globals.generated.ts');
  * SDK's own copy to have caught it. */
 function pascalOfSlug(slug) {
   return slug
-    .split('-')
+    .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
+    .join("");
 }
 
 function loadCanonicalChains() {
-  const source = readFileSync(CANONICAL_PATH, 'utf8');
+  const source = readFileSync(CANONICAL_PATH, "utf8");
   if (/^\s*import\b/m.test(source) || /\brequire\(/.test(source)) {
     throw new Error(
       `${CANONICAL_PATH} now has an import -- gen-route-globals.mjs's execute-it-directly ` +
@@ -64,7 +64,7 @@ function loadCanonicalChains() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   });
   const mod = { exports: {} };
-  new Function('exports', 'module', outputText)(mod.exports, mod);
+  new Function("exports", "module", outputText)(mod.exports, mod);
   const chains = mod.exports.CANONICAL_CHAINS;
   if (!Array.isArray(chains) || chains.length === 0) {
     throw new Error(`CANONICAL_CHAINS in ${CANONICAL_PATH} is missing or empty.`);
@@ -75,7 +75,7 @@ function loadCanonicalChains() {
 /** The one fixed, non-chain global this generator also emits -- see gen-route-globals.mjs's
  * caller in globals.ts for the matching runtime install (`Token`). Not derived from
  * CANONICAL_CHAINS, but still collision-checked against it below. */
-const TOKEN_GLOBAL_NAME = 'Token';
+const TOKEN_GLOBAL_NAME = "Token";
 
 function render(chains) {
   const seen = new Map();
@@ -84,9 +84,7 @@ function render(chains) {
     const name = pascalOfSlug(c.slug);
     const prior = seen.get(name);
     if (prior !== undefined) {
-      throw new Error(
-        `duplicate chain global '${name}' (from slugs '${prior}' and '${c.slug}')`,
-      );
+      throw new Error(`duplicate chain global '${name}' (from slugs '${prior}' and '${c.slug}')`);
     }
     if (name === TOKEN_GLOBAL_NAME) {
       throw new Error(
@@ -98,7 +96,7 @@ function render(chains) {
     // (`Solana.RaydiumCpSwap`, ...) -- see routes/globals.ts's matching
     // runtime `origin.chain.kind === "svm"` branch. Derived from `c.kind`,
     // not a hardcoded slug, so a second svm chain gets this for free.
-    const svm = c.kind === 'svm' ? ' & SvmVenueAccessors' : '';
+    const svm = c.kind === "svm" ? " & SvmVenueAccessors" : "";
     lines.push(`  /** eco-routes chain global for ${c.name} (chain id ${c.id}). */`);
     lines.push(`  const ${name}: ChainGlobals["${name}"] & ChainContracts${svm};`);
   }
@@ -128,7 +126,7 @@ import type { SvmVenueAccessors } from "../svm/accessors.js";
 import type { TokenApi, TokenFactory } from "../token/api.js";
 
 declare global {
-${lines.join('\n')}
+${lines.join("\n")}
   /** Runtime-resolved origin: \`chain('eth')\`, \`chain(8453)\`. */
   const chain: typeof import("./accessors.js").chain;
   /** Universal token interface — ERC20 on EVM targets, SPL Token on svm. Callable as
@@ -146,12 +144,12 @@ function main() {
   const chains = loadCanonicalChains();
   const text = render(chains);
 
-  if (args.has('--stdout')) {
+  if (args.has("--stdout")) {
     process.stdout.write(text);
     return;
   }
-  if (args.has('--check')) {
-    const current = readFileSync(OUT_PATH, 'utf8');
+  if (args.has("--check")) {
+    const current = readFileSync(OUT_PATH, "utf8");
     if (current !== text) {
       process.stderr.write(
         `${OUT_PATH} is stale -- run \`node scripts/gen-route-globals.mjs\` to regenerate.\n`,

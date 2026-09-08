@@ -16,8 +16,8 @@
  * a pin predates the artifact (older release/beta commits) — the same OPTIONAL
  * posture the generator and V12RuntimeBytecode use.
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   BUFFER_HEADER_BYTES,
   BUFFER_SEED,
@@ -40,31 +40,42 @@ import {
   FINALIZE_BUFFER_DISCRIMINATOR,
   CLOSE_BUFFER_DISCRIMINATOR,
   CLOSE_BUFFER_CHECKED_DISCRIMINATOR,
-} from '../../src/svm/index.js';
+} from "../../src/svm/index.js";
 
 const ABI_PATH = [
-  resolve(process.cwd(), '..', 'compiler', 'node_modules', 'sauce', 'svm', 'abi', 'engine-abi.json'),
-  resolve(process.cwd(), '..', 'node_modules', 'sauce', 'svm', 'abi', 'engine-abi.json'),
+  resolve(
+    process.cwd(),
+    "..",
+    "compiler",
+    "node_modules",
+    "sauce",
+    "svm",
+    "abi",
+    "engine-abi.json",
+  ),
+  resolve(process.cwd(), "..", "node_modules", "sauce", "svm", "abi", "engine-abi.json"),
 ].find(existsSync);
 
-const hex = (b: Uint8Array): string => Buffer.from(b).toString('hex');
+const hex = (b: Uint8Array): string => Buffer.from(b).toString("hex");
 
 const describeIfArtifact = ABI_PATH === undefined ? describe.skip : describe;
 
-describeIfArtifact('SVM engine ABI drift guard', () => {
-  const abi = JSON.parse(readFileSync(ABI_PATH as string, 'utf8'));
+describeIfArtifact("SVM engine ABI drift guard", () => {
+  const abi = JSON.parse(readFileSync(ABI_PATH as string, "utf8"));
 
-  it('the generated ENGINE_ABI mirror equals the pinned artifact byte-for-byte (minus $comment)', () => {
+  it("the generated ENGINE_ABI mirror equals the pinned artifact byte-for-byte (minus $comment)", () => {
     const { $comment: _drop, ...rest } = abi;
     expect(ENGINE_ABI).toEqual(rest);
   });
 
-  it('every artifact top-level key is represented in the generated mirror (no silently-dropped field)', () => {
-    const artifactKeys = Object.keys(abi).filter((k) => k !== '$comment').sort();
+  it("every artifact top-level key is represented in the generated mirror (no silently-dropped field)", () => {
+    const artifactKeys = Object.keys(abi)
+      .filter((k) => k !== "$comment")
+      .sort();
     expect(Object.keys(ENGINE_ABI).sort()).toEqual(artifactKeys);
   });
 
-  it('the derived scalar constants match the artifact', () => {
+  it("the derived scalar constants match the artifact", () => {
     expect(BUFFER_HEADER_BYTES).toBe(abi.bufferHeaderBytes);
     expect(BUFFER_SEED_BYTES).toBe(abi.bufferSeedBytes);
     expect(BUFFER_SEED).toBe(abi.bufferSeedPrefix);
@@ -75,14 +86,14 @@ describeIfArtifact('SVM engine ABI drift guard', () => {
     expect(EXECUTE_FLAG_HAS_SLICE).toBe(abi.executeFlags.hasSlice);
   });
 
-  it('the header offsets used by the SDK match the artifact', () => {
+  it("the header offsets used by the SDK match the artifact", () => {
     expect(BUFFER_OFFSET_AUTHORITY).toBe(abi.headerOffsets.authority);
     expect(BUFFER_OFFSET_LEN).toBe(abi.headerOffsets.len);
     expect(BUFFER_OFFSET_HASH).toBe(abi.headerOffsets.contentSha256);
     expect(BUFFER_OFFSET_SEED).toBe(abi.headerOffsets.seed);
   });
 
-  it('every discriminator matches the artifact (all 8 instructions), keyed by name', () => {
+  it("every discriminator matches the artifact (all 8 instructions), keyed by name", () => {
     const byName: Record<string, Uint8Array> = {
       execute: EXECUTE_DISCRIMINATOR,
       execute_from_account: EXECUTE_FROM_ACCOUNT_DISCRIMINATOR,
@@ -94,7 +105,9 @@ describeIfArtifact('SVM engine ABI drift guard', () => {
       close_buffer_checked: CLOSE_BUFFER_CHECKED_DISCRIMINATOR,
     };
     // Every artifact instruction has a matching exported constant, and vice-versa.
-    const artifactNames = (abi.instructions as { name: string; discriminator: string }[]).map((ix) => ix.name).sort();
+    const artifactNames = (abi.instructions as { name: string; discriminator: string }[])
+      .map((ix) => ix.name)
+      .sort();
     expect(Object.keys(byName).sort()).toEqual(artifactNames);
     for (const ix of abi.instructions as { name: string; discriminator: string }[]) {
       expect(hex(byName[ix.name])).toBe(ix.discriminator);

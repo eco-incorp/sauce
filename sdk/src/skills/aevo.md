@@ -3,17 +3,21 @@
 High-performance options and perpetuals exchange built on a custom OP Stack rollup. Off-chain orderbook with on-chain settlement.
 
 ## Category
+
 options | Chains: Ethereum (deposits)
 
 ## Key Operations
+
 - **depositERC20**: Deposit ERC-20 tokens into Aevo L2 for trading
 
 ## SDK Usage
+
 ```typescript
 import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/aevo";
 ```
 
 ## SauceScript Examples
+
 ```typescript
 // Deposit ERC-20 into Aevo
 import { DepositContractABI as IDeposit } from "./abis";
@@ -25,16 +29,20 @@ function main(depositAddress: Address, token: Address, amount: Uint256): Uint256
 ```
 
 ## Key Addresses
-| Chain | Contract | Address |
-|-------|----------|---------|
+
+| Chain    | Contract        | Address                                      |
+| -------- | --------------- | -------------------------------------------- |
 | Ethereum | depositContract | `0x4082C9647c098a6493Fb499EaE63b5ce3259C574` |
 
 ## ABI Methods
+
 ### DepositContractABI
+
 - `depositERC20(address,uint256)` - Deposit ERC-20 tokens to Aevo L2. Params: token (ERC-20 address), amount (deposit amount). Approve token to depositContract first
 - `depositETH()` - Deposit ETH to Aevo L2. Payable (send ETH as msg.value)
 
 ## Notes
+
 - Custom OP Stack rollup with off-chain orderbook for sub-second matching
 - Supports options and perpetual futures trading
 - Deposits are on Ethereum L1, trading happens on Aevo L2

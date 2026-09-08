@@ -18,7 +18,13 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { chainAmbient, chainDefines } from "./ambient.js";
 import { isSauceClosure, sauceBodyToSource, type SauceBody } from "./closure.js";
-import { encodeRewardEvm, encodeRewardSvm, encodeRouteEvm, encodeRouteSvm, hashIntent } from "./encode.js";
+import {
+  encodeRewardEvm,
+  encodeRewardSvm,
+  encodeRouteEvm,
+  encodeRouteSvm,
+  hashIntent,
+} from "./encode.js";
 import type { IntentHashes } from "./encode.js";
 import { assembleIntent } from "./intent.js";
 import {
@@ -253,9 +259,7 @@ export interface PendingSauceRoute {
 }
 
 function missingField(field: string, where: string): never {
-  throw new Error(
-    `openRoute: '${field}' is required — supply it ${where}`,
-  );
+  throw new Error(`openRoute: '${field}' is required — supply it ${where}`);
 }
 
 function isTokenAmountArray(value: RewardArg): value is readonly TokenAmountInput[] {
@@ -284,7 +288,10 @@ function resolveReward(
 
   const deadline = spec.deadline ?? options?.rewardDeadline ?? options?.deadline;
   if (deadline === undefined) {
-    missingField("deadline", "as `reward.deadline`, `IntentOptions.rewardDeadline`, or `IntentOptions.deadline`");
+    missingField(
+      "deadline",
+      "as `reward.deadline`, `IntentOptions.rewardDeadline`, or `IntentOptions.deadline`",
+    );
   }
   const creator = spec.creator ?? options?.creator;
   if (creator === undefined) {
@@ -314,7 +321,10 @@ function missingSourcePortal(): never {
   );
 }
 
-function resolveTarget(target: Partial<PortalTarget> | undefined, sourcePortal: AddressInput | undefined): PortalTarget {
+function resolveTarget(
+  target: Partial<PortalTarget> | undefined,
+  sourcePortal: AddressInput | undefined,
+): PortalTarget {
   const portal = target?.portal ?? sourcePortal;
   if (portal === undefined) missingSourcePortal();
   return { portal };
@@ -386,7 +396,11 @@ function makeBuiltIntent(
  * forward to, so `Base(sauce, opts)` and `Base.route(sauce, opts)` are behaviorally identical by
  * construction (both call this exact function).
  */
-export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOptions): PendingSauceRoute {
+export function openRoute(
+  chain: ChainRef,
+  sauce: SauceBody,
+  options?: IntentOptions,
+): PendingSauceRoute {
   const destination = requireChain(chain);
 
   if (options === undefined) {
@@ -398,9 +412,13 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
   if (options.portal === undefined) {
     missingField("portal", "as `IntentOptions.portal`");
   }
-  const execution = options.execution ?? (options.pot !== undefined ? { pot: options.pot } : undefined);
+  const execution =
+    options.execution ?? (options.pot !== undefined ? { pot: options.pot } : undefined);
   if (execution === undefined) {
-    missingField("execution", "as `IntentOptions.execution` or the EVM shorthand `IntentOptions.pot`");
+    missingField(
+      "execution",
+      "as `IntentOptions.execution` or the EVM shorthand `IntentOptions.pot`",
+    );
   }
 
   const closure = isSauceClosure(sauce);
@@ -418,7 +436,9 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
   // by default, see `ambient.ts#chainAmbient`/`plugin/index.ts`'s own notes); merged with any
   // caller-supplied `options.compile.ambient` (deduped -- either side may legitimately name the
   // same module).
-  const mergedAmbient = Array.from(new Set([...chainAmbient(destination), ...(options.compile?.ambient ?? [])]));
+  const mergedAmbient = Array.from(
+    new Set([...chainAmbient(destination), ...(options.compile?.ambient ?? [])]),
+  );
   const compileOptions: SauceCompileOptions = {
     ...options.compile,
     defines: mergedDefines,
@@ -432,13 +452,17 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
   } catch (err) {
     // The compiler reports a free identifier as "`X` is not a declared variable", inside a larger
     // rustc-style diagnostic — so match the sentence rather than a message prefix.
-    const undeclared = err instanceof Error ? /`([^`]+)` is not a declared variable/.exec(err.message) : null;
+    const undeclared =
+      err instanceof Error ? /`([^`]+)` is not a declared variable/.exec(err.message) : null;
     if (closure && undeclared !== null) {
       const name = undeclared[1]!;
       throw new Error(
         `openRoute: closure route body references '${name}', which is not defined — a closure ` +
           `captures nothing by construction; supply '${name}' via IntentOptions.defines (or a chain-scoped ` +
           `ambient define) instead.`,
+        // Keep the compiler's own diagnostic reachable: this message names the fix, the cause
+        // carries the full rustc-style report the regex above only matched one sentence of.
+        { cause: err },
       );
     }
     throw err;
@@ -490,7 +514,9 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
     }
   }
 
-  function evmPotOf(exec: SauceEvmExecutionInput | SauceSvmExecutionInput | undefined): AddressInput | undefined {
+  function evmPotOf(
+    exec: SauceEvmExecutionInput | SauceSvmExecutionInput | undefined,
+  ): AddressInput | undefined {
     return exec !== undefined && "pot" in exec ? exec.pot : undefined;
   }
 
@@ -551,7 +577,11 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
         assertNestingInvariants({
           parentChain: destination,
           parentRoute: parentRouteForInvariants,
-          children: nestedEntries.map((e) => ({ intent: e.built.intent, fundedByBody: e.fundedByBody, via: e.via })),
+          children: nestedEntries.map((e) => ({
+            intent: e.built.intent,
+            fundedByBody: e.fundedByBody,
+            via: e.via,
+          })),
         });
 
         // T5: a transfer child opting into `fundNativeFromRoute` re-enables a NATIVE-only coverage
@@ -642,9 +672,12 @@ export function openRoute(chain: ChainRef, sauce: SauceBody, options?: IntentOpt
         const group = nestedEntries.filter((e) => e.position === position);
         const publishCalls = group
           .filter((e) => e.via === "publishAndFund")
-          .flatMap((e) => nestedChildCalls(e.built.intent, { portal: e.portal, allowPartial: e.allowPartial }));
+          .flatMap((e) =>
+            nestedChildCalls(e.built.intent, { portal: e.portal, allowPartial: e.allowPartial }),
+          );
         const transferEntries = group.filter((e) => e.via === "transfer");
-        const transferCalls = transferEntries.length > 0 ? [buildTransferCall(transferEntries)] : [];
+        const transferCalls =
+          transferEntries.length > 0 ? [buildTransferCall(transferEntries)] : [];
         return [...publishCalls, ...transferCalls];
       };
 

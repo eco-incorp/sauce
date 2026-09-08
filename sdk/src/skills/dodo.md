@@ -3,12 +3,15 @@
 Proactive Market Maker (PMM) DEX with capital-efficient liquidity provision. Unlike constant product AMMs, DODO uses oracle-guided pricing to concentrate liquidity near market price. Features single-token LP, customizable price curves, and smart routing across DODO pools.
 
 ## Category
+
 dex | Chains: Ethereum, BSC
 
 ## Key Operations
+
 - **swap**: Swap tokens via DODO V2 Proxy with pair-based routing
 
 ## SDK Usage
+
 ```typescript
 import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/dodo";
 ```
@@ -16,14 +19,33 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 ## SauceScript Examples
 
 ### swap
+
 ```typescript
 import { DODOV2ProxyABI as IDODOProxy } from "./abis";
 
-function main(proxyAddress: Address, fromToken: Address, toToken: Address, fromAmount: Uint256, minReturn: Uint256, dodoPairs: Address[], direction: Uint256): Uint256 {
+function main(
+  proxyAddress: Address,
+  fromToken: Address,
+  toToken: Address,
+  fromAmount: Uint256,
+  minReturn: Uint256,
+  dodoPairs: Address[],
+  direction: Uint256,
+): Uint256 {
   const proxy = IDODOProxy.at(proxyAddress);
-  return proxy.dodoSwapV2TokenToToken(fromToken, toToken, fromAmount, minReturn, dodoPairs, direction, false, 99999999999);
+  return proxy.dodoSwapV2TokenToToken(
+    fromToken,
+    toToken,
+    fromAmount,
+    minReturn,
+    dodoPairs,
+    direction,
+    false,
+    99999999999,
+  );
 }
 ```
+
 - `proxyAddress`: DODO V2 Proxy address for the target chain
 - `fromToken`: Input token address
 - `toToken`: Output token address
@@ -34,17 +56,20 @@ function main(proxyAddress: Address, fromToken: Address, toToken: Address, fromA
 - `isIncentive`: Set to `false` (incentive mining flag, usually disabled)
 
 ## Key Addresses
-| Chain | Contract | Address |
-|-------|----------|---------|
+
+| Chain    | Contract | Address                                      |
+| -------- | -------- | -------------------------------------------- |
 | Ethereum | V2 Proxy | `0xa356867fDCeA8e71AEaf87805808803806231FDc` |
-| BSC | V2 Proxy | `0x8F8Dd7DB1bDA5eD3da8C9dAf3bFA471c12d58486` |
+| BSC      | V2 Proxy | `0x8F8Dd7DB1bDA5eD3da8C9dAf3bFA471c12d58486` |
 
 ## ABI Methods
 
 ### DODOV2ProxyABI
+
 - `dodoSwapV2TokenToToken(address fromToken, address toToken, uint256 fromTokenAmount, uint256 minReturnAmount, address[] dodoPairs, uint256 directions, bool isIncentive, uint256 deadLine) -> uint256 returnAmount` - Execute a token-to-token swap through one or more DODO pools
 
 ## Notes
+
 - PMM (Proactive Market Maker) provides better capital efficiency than constant product by concentrating liquidity near oracle price
 - `dodoPairs` is an array of DODO pool addresses defining the swap route (each pool has a base token and a quote token)
 - `directions` is a bitmask: for each pool in the path, a bit value of `0` means "sell base token" and `1` means "sell quote token". The least significant bit corresponds to the first pool

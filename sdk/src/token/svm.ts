@@ -65,7 +65,9 @@ export function tokenProgramValueExpr(input: SvmTokenProgramInput | undefined): 
 
 export function assertRefIsIdentifier(ref: string, label: string): void {
   if (!IDENTIFIER_RE.test(ref)) {
-    throw new Error(`${label}: svm ref '${ref}' must be a valid identifier — it becomes a main() account parameter`);
+    throw new Error(
+      `${label}: svm ref '${ref}' must be a valid identifier — it becomes a main() account parameter`,
+    );
   }
 }
 
@@ -167,7 +169,11 @@ function amountExpr(amount: bigint | number | "balance", sourceRef: string, labe
  * account, so two ops pinning the same ref to different programs cannot both be satisfied -- the
  * second would silently execute against the first's program. Distinct programs need distinct refs.
  */
-function tokenProgramPin(ref: string, tokenProgram: SvmTokenProgramInput | undefined, state: SvmEmitState): string | undefined {
+function tokenProgramPin(
+  ref: string,
+  tokenProgram: SvmTokenProgramInput | undefined,
+  state: SvmEmitState,
+): string | undefined {
   const value = tokenProgramValueExpr(tokenProgram);
   const pinned = state.pinnedTokenPrograms.get(ref);
   if (pinned === value) return undefined;
@@ -219,7 +225,11 @@ function checkedCallLines(opts: {
   return lines;
 }
 
-export function svmTransferLines(spec: TokenTransferSpec, index: number, state: SvmEmitState): readonly string[] {
+export function svmTransferLines(
+  spec: TokenTransferSpec,
+  index: number,
+  state: SvmEmitState,
+): readonly string[] {
   const refs = spec.svm!;
 
   return checkedCallLines({
@@ -234,7 +244,11 @@ export function svmTransferLines(spec: TokenTransferSpec, index: number, state: 
   });
 }
 
-export function svmApproveLines(spec: TokenApproveSpec, index: number, state: SvmEmitState): readonly string[] {
+export function svmApproveLines(
+  spec: TokenApproveSpec,
+  index: number,
+  state: SvmEmitState,
+): readonly string[] {
   const refs = spec.svm!;
 
   return checkedCallLines({

@@ -5,22 +5,22 @@
  * ATA vault derivation, so the drop needs no vault fixtures; the legacy path
  * (mints classic, vaults present) is unaffected.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { findAssociatedTokenPda } from '@solana-program/token';
-import type { AccountLoader } from '../../../src/svm/index.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
+import type { AccountLoader } from "../../../src/svm/index.js";
 import {
   fetchHadronConfig,
   HADRON_PAIR_ACCOUNT_SIZE,
   HADRON_TOKEN_PROGRAM,
   HADRON_SPL_TOKEN_ACCOUNT_SIZE,
-} from '../../../src/svm/venues/hadron/index.js';
-import { makeT22Mint, makeLegacyMint } from '../fixtures/token-2022/synth.js';
+} from "../../../src/svm/venues/hadron/index.js";
+import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi');
+const POOL = address("CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi");
 // mintA MUST be a HADRON_ASSET_REGISTRY key, mintB its registered quote.
-const MINT_A = address('J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn'); // jitoSOL
-const MINT_B = address('So11111111111111111111111111111111111111112'); // WSOL
+const MINT_A = address("J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"); // jitoSOL
+const MINT_B = address("So11111111111111111111111111111111111111112"); // WSOL
 
 const codec = getAddressCodec();
 function writePubkey(buf: Uint8Array, off: number, addr: Address): void {
@@ -39,8 +39,8 @@ function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
   return async (addr: Address) => map[addr] ?? null;
 }
 
-describe('hadron Token-2022 self-drop', () => {
-  it('REJECTS a pool whose mintA is a Token-2022 mint', async () => {
+describe("hadron Token-2022 self-drop", () => {
+  it("REJECTS a pool whose mintA is a Token-2022 mint", async () => {
     const load = loaderFrom({
       [POOL]: buildPair(),
       [MINT_A]: makeT22Mint(),
@@ -49,9 +49,17 @@ describe('hadron Token-2022 self-drop', () => {
     await expect(fetchHadronConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
-  it('does NOT drop a classic-legacy pool', async () => {
-    const [vaultA] = await findAssociatedTokenPda({ owner: POOL, mint: MINT_A, tokenProgram: HADRON_TOKEN_PROGRAM });
-    const [vaultB] = await findAssociatedTokenPda({ owner: POOL, mint: MINT_B, tokenProgram: HADRON_TOKEN_PROGRAM });
+  it("does NOT drop a classic-legacy pool", async () => {
+    const [vaultA] = await findAssociatedTokenPda({
+      owner: POOL,
+      mint: MINT_A,
+      tokenProgram: HADRON_TOKEN_PROGRAM,
+    });
+    const [vaultB] = await findAssociatedTokenPda({
+      owner: POOL,
+      mint: MINT_B,
+      tokenProgram: HADRON_TOKEN_PROGRAM,
+    });
     const load = loaderFrom({
       [POOL]: buildPair(),
       [MINT_A]: makeLegacyMint(),
@@ -60,7 +68,7 @@ describe('hadron Token-2022 self-drop', () => {
       [vaultB]: new Uint8Array(HADRON_SPL_TOKEN_ACCOUNT_SIZE),
     });
     const cfg = await fetchHadronConfig(load, POOL);
-    expect(cfg.venue).toBe('hadron');
+    expect(cfg.venue).toBe("hadron");
     expect(cfg.mintA).toBe(MINT_A);
     expect(cfg.mintB).toBe(MINT_B);
   });

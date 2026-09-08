@@ -12,31 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The `sauce` npm dep is a private git dependency (eco-incorp/v12). Configure
-      # git to use a PAT so `pnpm install` can clone it. Set ECO_INCORP_TOKEN as a repo
-      # secret (a PAT with `repo` read on eco-incorp/v12).
-      # NOTE: the package.json specifier is HTTPS, but pnpm-lock.yaml may pin the SSH
-      # form (git@github.com:eco-incorp/v12.git) if it was regenerated on a machine
-      # with `url."git@github.com:".insteadOf "https://github.com/"`. The runner has no
-      # SSH key, so we rewrite both the HTTPS and SSH forms to the token-authed HTTPS URL.
-      - name: Configure git auth for private deps
-        env:
-          ECO_INCORP_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
-        run: |
-          if [ -z "${ECO_INCORP_TOKEN:-}" ]; then
-            echo "::error::Missing repo secret ECO_INCORP_TOKEN — required to clone the private eco-incorp/v12 git dep. Add a PAT with read access on eco-incorp/v12 under Settings -> Secrets and variables -> Actions."
-            exit 1
-          fi
-          # Keep this block in lockstep with publish.yml's. They drifted once: publish.yml
-          # had only the https:// rewrite, which is NOT the form pnpm-lock.yaml pins, so
-          # every publish died fetching the private dep while CI stayed green — the publish
-          # path only runs on a tag, so CI's signal never covered it.
-          #
-          # Use --add: insteadOf is multi-valued, so plain `git config` would
-          # overwrite each prior value and only the last rule would survive.
-          git config --global --add url."https://x-access-token:${ECO_INCORP_TOKEN}@github.com/".insteadOf "https://github.com/"
-          git config --global --add url."https://x-access-token:${ECO_INCORP_TOKEN}@github.com/".insteadOf "git@github.com:"
-          git config --global --add url."https://x-access-token:${ECO_INCORP_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+      - uses: ./.github/actions/setup-private-deps
+        with:
+          token: ${{ secrets.ECO_INCORP_TOKEN }}
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1

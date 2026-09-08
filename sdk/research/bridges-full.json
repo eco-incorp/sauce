@@ -9,9 +9,28 @@
     "status": "active",
     "description": "Fast cross-chain bridge using UMA optimistic oracle. Intent-based design with relayers providing upfront capital.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "zkSync Era", "Linea",
-      "Mode", "Blast", "Scroll", "Zora", "Lisk", "World Chain", "AlephZero",
-      "Ink", "Soneium", "Unichain", "Lens", "HyperEVM", "Plasma", "Monad", "MegaETH"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "zkSync Era",
+      "Linea",
+      "Mode",
+      "Blast",
+      "Scroll",
+      "Zora",
+      "Lisk",
+      "World Chain",
+      "AlephZero",
+      "Ink",
+      "Soneium",
+      "Unichain",
+      "Lens",
+      "HyperEVM",
+      "Plasma",
+      "Monad",
+      "MegaETH"
     ],
     "keyFunctions": ["deposit", "fillV3Relay", "speedUpV3Deposit", "executeRelayerRefundLeaf"],
     "contracts": {
@@ -95,9 +114,28 @@
     "status": "active",
     "description": "Omnichain liquidity transport protocol built on LayerZero. Uses unified liquidity pools with delta algorithm for instant guaranteed finality.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Metis", "Linea", "Scroll", "Mantle", "Kava", "Aurora",
-      "Kaia", "Iota", "Taiko", "Sei", "Flare", "Abstract", "Berachain", "Ink"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Metis",
+      "Linea",
+      "Scroll",
+      "Mantle",
+      "Kava",
+      "Aurora",
+      "Kaia",
+      "Iota",
+      "Taiko",
+      "Sei",
+      "Flare",
+      "Abstract",
+      "Berachain",
+      "Ink"
     ],
     "keyFunctions": ["send", "sendCredits", "taxi", "bus", "ride"],
     "contracts": {
@@ -161,9 +199,29 @@
     "status": "active",
     "description": "Omnichain interoperability protocol enabling cross-chain messaging. V2 uses decoupled verification and execution with configurable DVNs (Decentralized Verifier Networks).",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Gnosis", "Celo", "Moonbeam", "Harmony", "Scroll", "Linea", "Mantle",
-      "Kaia", "Sei", "Taiko", "Blast", "zkSync", "Metis", "Canto", "40+ chains total"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Gnosis",
+      "Celo",
+      "Moonbeam",
+      "Harmony",
+      "Scroll",
+      "Linea",
+      "Mantle",
+      "Kaia",
+      "Sei",
+      "Taiko",
+      "Blast",
+      "zkSync",
+      "Metis",
+      "Canto",
+      "40+ chains total"
     ],
     "keyFunctions": ["send", "lzSend", "lzReceive", "lzCompose", "quote"],
     "contracts": {
@@ -236,8 +294,21 @@
     "status": "active",
     "description": "Cross-chain messaging protocol secured by a set of 19 Guardians. Supports token transfers via Portal (lock-and-mint) and arbitrary message passing.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Celo", "Moonbeam", "Solana", "Terra", "Sui", "Aptos", "35+ chains"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Celo",
+      "Moonbeam",
+      "Solana",
+      "Terra",
+      "Sui",
+      "Aptos",
+      "35+ chains"
     ],
     "keyFunctions": ["publishMessage", "transferTokens", "completeTransfer", "parseAndVerifyVM"],
     "contracts": {
@@ -270,7 +341,18 @@
         "TokenBridge": "0xB6F6D86a8f9879A9c87f643768d9efc38c1Da6E7"
       }
     },
-    "supportedTokens": ["ETH", "WETH", "USDC", "USDT", "WBTC", "SOL", "AVAX", "MATIC", "BNB", "many more"]
+    "supportedTokens": [
+      "ETH",
+      "WETH",
+      "USDC",
+      "USDT",
+      "WBTC",
+      "SOL",
+      "AVAX",
+      "MATIC",
+      "BNB",
+      "many more"
+    ]
   },
   {
     "name": "Axelar",
@@ -282,11 +364,31 @@
     "status": "active",
     "description": "Full-stack cross-chain communication protocol with Proof-of-Stake validator set. Supports General Message Passing (GMP) and Interchain Token Service (ITS).",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Moonbeam", "Celo", "Kava", "Filecoin", "Linea", "Scroll", "Mantle",
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Moonbeam",
+      "Celo",
+      "Kava",
+      "Filecoin",
+      "Linea",
+      "Scroll",
+      "Mantle",
       "60+ chains total"
     ],
-    "keyFunctions": ["callContract", "callContractWithToken", "execute", "executeWithToken", "sendToken", "interchainTransfer"],
+    "keyFunctions": [
+      "callContract",
+      "callContractWithToken",
+      "execute",
+      "executeWithToken",
+      "sendToken",
+      "interchainTransfer"
+    ],
     "contracts": {
       "ethereum": {
         "Gateway": "0x4F4495243837681061C4743b74B3eEdf548D56A5",
@@ -327,7 +429,15 @@
         "Create2Deployer": "0x98b2920d53612483f91f12ed7754e51b4a77919e"
       }
     },
-    "supportedTokens": ["axlUSDC", "axlWETH", "axlWBTC", "USDC", "USDT", "WETH", "many wrapped tokens"]
+    "supportedTokens": [
+      "axlUSDC",
+      "axlWETH",
+      "axlWBTC",
+      "USDC",
+      "USDT",
+      "WETH",
+      "many wrapped tokens"
+    ]
   },
   {
     "name": "Hyperlane",
@@ -339,8 +449,21 @@
     "status": "active",
     "description": "Permissionless interoperability protocol. Allows anyone to deploy on any chain. Uses modular security via Interchain Security Modules (ISMs).",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Celo", "Gnosis", "Moonbeam", "Scroll", "Linea", "Blast", "zkSync", "Mantle",
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Celo",
+      "Gnosis",
+      "Moonbeam",
+      "Scroll",
+      "Linea",
+      "Blast",
+      "zkSync",
+      "Mantle",
       "150+ chains total"
     ],
     "keyFunctions": ["dispatch", "process", "handle", "quoteDispatch"],
@@ -381,8 +504,21 @@
     "status": "active",
     "description": "Cross-Chain Interoperability Protocol by Chainlink. Uses decentralized oracle networks with ARM (Anti-fraud Risk Management) network for security.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Wemix", "Kroma", "Gnosis", "Celo", "Metis", "Blast", "Mode", "zkSync",
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Wemix",
+      "Kroma",
+      "Gnosis",
+      "Celo",
+      "Metis",
+      "Blast",
+      "Mode",
+      "zkSync",
       "100+ chains supported"
     ],
     "keyFunctions": ["ccipSend", "ccipReceive", "getFee", "getRouter"],
@@ -421,8 +557,20 @@
     "status": "active",
     "description": "Cross-chain bridge using State Guardian Network (SGN). Supports both pool-based transfers and canonical token bridging via PegBridge.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Gnosis", "Moonbeam", "Metis", "Aurora", "Astar", "40+ chains"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Gnosis",
+      "Moonbeam",
+      "Metis",
+      "Aurora",
+      "Astar",
+      "40+ chains"
     ],
     "keyFunctions": ["send", "relay", "addLiquidity", "removeLiquidity", "mint", "burn"],
     "contracts": {
@@ -535,8 +683,21 @@
     "status": "active",
     "description": "Cross-chain bridge using AMM pools with nUSD/nETH synthetic assets. Also supports CCTP integration for native USDC.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Canto", "Metis", "Aurora", "Harmony", "Moonbeam", "Cronos", "Boba"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Canto",
+      "Metis",
+      "Aurora",
+      "Harmony",
+      "Moonbeam",
+      "Cronos",
+      "Boba"
     ],
     "keyFunctions": ["deposit", "redeem", "depositAndSwap", "redeemAndSwap", "bridge"],
     "contracts": {
@@ -576,9 +737,29 @@
     "status": "active (rebranded to Everclear)",
     "description": "Cross-chain liquidity protocol rebranded to Everclear. Uses intent-based architecture with clearing layer for netting cross-chain settlements.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "BNB Chain", "Gnosis",
-      "Linea", "Metis", "Mode", "Blast", "Scroll", "zkSync", "Mantle", "Avalanche",
-      "Taiko", "Zircuit", "Berachain", "Sonic", "Ink", "Unichain", "Ronin", "Apechain"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "BNB Chain",
+      "Gnosis",
+      "Linea",
+      "Metis",
+      "Mode",
+      "Blast",
+      "Scroll",
+      "zkSync",
+      "Mantle",
+      "Avalanche",
+      "Taiko",
+      "Zircuit",
+      "Berachain",
+      "Sonic",
+      "Ink",
+      "Unichain",
+      "Ronin",
+      "Apechain"
     ],
     "keyFunctions": ["xcall", "execute", "reconcile", "newIntent", "fillIntent"],
     "contracts": {
@@ -652,8 +833,17 @@
     "status": "active",
     "description": "Cross-chain trading protocol with 0-TVL architecture. Uses intent-based DLN where takers fill orders on destination chains.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Linea", "Solana", "Sonic"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Linea",
+      "Solana",
+      "Sonic"
     ],
     "keyFunctions": ["createOrder", "fulfillOrder", "claimUnlock", "cancelOrder"],
     "contracts": {
@@ -675,8 +865,21 @@
     "status": "active",
     "description": "Cross-rollup bridge using maker model. Transfers are EOA-to-EOA with identification codes appended to amounts. Extremely fast for rollup-to-rollup.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "zkSync Era", "Linea",
-      "Scroll", "StarkNet", "BNB Chain", "Mantle", "Taiko", "Blast", "Mode", "Manta",
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "zkSync Era",
+      "Linea",
+      "Scroll",
+      "StarkNet",
+      "BNB Chain",
+      "Mantle",
+      "Taiko",
+      "Blast",
+      "Mode",
+      "Manta",
       "19+ chains"
     ],
     "keyFunctions": ["transfer (with trailing identification code)", "claim"],
@@ -701,8 +904,15 @@
     "status": "active",
     "description": "Cross-chain liquidity layer for stablecoins. Built on StarkEx L2 with multi-chain bridge infrastructure.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "BNB Chain",
-      "zkSync Era", "Linea", "Scroll"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "BNB Chain",
+      "zkSync Era",
+      "Linea",
+      "Scroll"
     ],
     "keyFunctions": ["bridge", "swap"],
     "contracts": {
@@ -726,8 +936,17 @@
     "status": "active",
     "description": "Bridge aggregator that routes through multiple bridges (Stargate, Across, Hop, Celer, etc.) to find optimal routes. Uses modular route system.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Gnosis", "Aurora", "15+ chains"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Gnosis",
+      "Aurora",
+      "15+ chains"
     ],
     "keyFunctions": ["bridge (via routes)", "swap"],
     "contracts": {
@@ -758,8 +977,21 @@
     "status": "active",
     "description": "Cross-chain bridge and DEX aggregator. Uses Diamond proxy pattern to integrate multiple bridges and DEXes in a single contract.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Gnosis", "Moonbeam", "Celo", "zkSync", "Linea", "Scroll", "Mantle",
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Gnosis",
+      "Moonbeam",
+      "Celo",
+      "zkSync",
+      "Linea",
+      "Scroll",
+      "Mantle",
       "25+ EVM mainnets, 40+ networks total"
     ],
     "keyFunctions": ["swapAndStartBridgeTokensVia*", "startBridgeTokensVia*"],
@@ -784,8 +1016,20 @@
     "status": "active",
     "description": "Cross-chain swap and liquidity routing protocol built on Axelar. Routes through DEXes on source and destination chains with Axelar bridging in between.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Moonbeam", "Celo", "Kava", "Filecoin", "Linea", "Scroll",
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Moonbeam",
+      "Celo",
+      "Kava",
+      "Filecoin",
+      "Linea",
+      "Scroll",
       "60+ chains supported via Axelar"
     ],
     "keyFunctions": ["callBridgeCall", "bridgeCall", "fundAndRunMulticall"],
@@ -807,8 +1051,18 @@
     "status": "active",
     "description": "Cross-chain infrastructure with Router Chain as hub. Supports CrossTalk for messaging and Nitro for asset transfers.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Fantom", "Scroll", "Linea", "Mantle", "20+ chains"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Fantom",
+      "Scroll",
+      "Linea",
+      "Mantle",
+      "20+ chains"
     ],
     "keyFunctions": ["iSend", "iReceive", "iAck", "transferTokens"],
     "contracts": {
@@ -825,8 +1079,17 @@
     "status": "active",
     "description": "Cross-chain bridge supporting both Classic (lock-and-mint) and Core (liquidity pool) modes. Uses own AMB, Circle CCTP, or Wormhole for messaging.",
     "supportedChains": [
-      "Ethereum", "Arbitrum", "Optimism", "Base", "Polygon", "Avalanche", "BNB Chain",
-      "Solana", "Tron", "Celo", "Stellar"
+      "Ethereum",
+      "Arbitrum",
+      "Optimism",
+      "Base",
+      "Polygon",
+      "Avalanche",
+      "BNB Chain",
+      "Solana",
+      "Tron",
+      "Celo",
+      "Stellar"
     ],
     "keyFunctions": ["bridge", "swap", "addLiquidity"],
     "contracts": {
@@ -843,7 +1106,9 @@
     "tvlEstimate": "$0 (COMPROMISED/DEPRECATED)",
     "status": "DEPRECATED_COMPROMISED",
     "description": "COMPROMISED - Hacked twice: August 2021 ($611M exploit, funds returned) and July 2023 (private keys compromised, 57 assets on 10 chains affected). DO NOT USE.",
-    "supportedChains": ["Was deployed on Ethereum, BNB, Polygon, Avalanche, Heco, OKX, Metis, and more"],
+    "supportedChains": [
+      "Was deployed on Ethereum, BNB, Polygon, Avalanche, Heco, OKX, Metis, and more"
+    ],
     "keyFunctions": ["lock", "unlock"],
     "contracts": {
       "ethereum": {
@@ -903,7 +1168,17 @@
         "RootChain": "0x86E4Dc95c7FBdBf52e33D563BbDB00823894C287"
       }
     },
-    "supportedTokens": ["ETH", "MATIC", "USDC", "USDT", "DAI", "WBTC", "AAVE", "LINK", "any ERC-20/721/1155"]
+    "supportedTokens": [
+      "ETH",
+      "MATIC",
+      "USDC",
+      "USDT",
+      "DAI",
+      "WBTC",
+      "AAVE",
+      "LINK",
+      "any ERC-20/721/1155"
+    ]
   },
   {
     "name": "Polygon zkEVM Bridge",
@@ -936,7 +1211,12 @@
     "status": "active",
     "description": "Native canonical bridge for Arbitrum One. Uses optimistic fraud proofs with 7-day withdrawal period. Supports ETH and ERC-20 via Gateway Router.",
     "supportedChains": ["Ethereum", "Arbitrum One", "Arbitrum Nova"],
-    "keyFunctions": ["depositEth", "outboundTransfer", "finalizeInboundTransfer", "createRetryableTicket"],
+    "keyFunctions": [
+      "depositEth",
+      "outboundTransfer",
+      "finalizeInboundTransfer",
+      "createRetryableTicket"
+    ],
     "contracts": {
       "ethereum": {
         "L1GatewayRouter": "0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef",
@@ -967,7 +1247,13 @@
     "status": "active",
     "description": "Native canonical bridge for OP Mainnet. Uses Bedrock architecture with L1StandardBridge and CrossDomainMessenger. 7-day withdrawal period.",
     "supportedChains": ["Ethereum", "OP Mainnet"],
-    "keyFunctions": ["depositETH", "depositERC20", "bridgeETH", "bridgeERC20", "finalizeWithdrawalTransaction"],
+    "keyFunctions": [
+      "depositETH",
+      "depositERC20",
+      "bridgeETH",
+      "bridgeERC20",
+      "finalizeWithdrawalTransaction"
+    ],
     "contracts": {
       "ethereum": {
         "L1StandardBridge": "0x99C9fc46f92E8a1c0deC1b1747d010903E884bE1",
@@ -1017,7 +1303,12 @@
     "status": "active",
     "description": "Native canonical bridge for zkSync Era. Uses zero-knowledge proofs for verification. Deposits are fast, withdrawals require proof generation.",
     "supportedChains": ["Ethereum", "zkSync Era"],
-    "keyFunctions": ["deposit", "requestL2Transaction", "finalizeWithdrawal", "l2TransactionBaseCost"],
+    "keyFunctions": [
+      "deposit",
+      "requestL2Transaction",
+      "finalizeWithdrawal",
+      "l2TransactionBaseCost"
+    ],
     "contracts": {
       "ethereum": {
         "DiamondProxy": "0x32400084C286CF3E17e7B677ea9583e60a000324",

@@ -136,43 +136,33 @@
  * sizes — likewise essentially flat. This is Denali's OWN native CPI cost
  * only, not this ladder's own setup-read + interpreter overhead.
  */
-import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'denali';
-export const DENALI_PROGRAM_ID = address('DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "denali";
+export const DENALI_PROGRAM_ID = address("DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4");
 /** Owner of every pool's per-pool oracle PDA — see the file header. */
-export const DENALI_ORACLE_PROGRAM_ID = address('DZNTS5ujuiyx1mazqCPdYPzEyE2VrTPPb6QbqBUftJbY');
+export const DENALI_ORACLE_PROGRAM_ID = address("DZNTS5ujuiyx1mazqCPdYPzEyE2VrTPPb6QbqBUftJbY");
 /**
  * Protocol-wide global config account — constant across every pool
  * (real-chain-confirmed across 5 transactions on 2 different pools). Read-only,
  * not a signer.
  */
-export const DENALI_GLOBAL_CONFIG = address('46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ');
+export const DENALI_GLOBAL_CONFIG = address("46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ");
 
 const POOL_ACCOUNT_SIZE = 517;
 export const OFF_MINT_A = 72;
 export const OFF_MINT_B = 104;
 export const OFF_VAULT_A = 136;
 export const OFF_VAULT_B = 168;
-/** SPL token account amount field offset (standard layout). */
-const AMOUNT_OFF = 64;
-
-/** disc(8) ++ direction(1) ++ amountIn u64 LE (patched) ++ minOut u64 LE(=0) = 25 bytes. */
-const SWAP_DISCRIMINATOR = Uint8Array.from([0x68, 0x68, 0x83, 0x56, 0xa1, 0xbd, 0xb4, 0xd8]);
-
-/** Conservative haircut on the modeled output side — see the file header "Quote curve" note. */
-const OUT_DISCOUNT_NUM = 2n;
-const OUT_DISCOUNT_DEN = 3n;
 
 const codec = getAddressCodec();
 const encoder = getAddressEncoder();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 export interface DenaliPoolConfig extends PoolConfig {
   venue: typeof SLUG;
@@ -187,17 +177,21 @@ export interface DenaliPoolConfig extends PoolConfig {
 }
 
 function denaliConfig(cfg: PoolConfig): DenaliPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as DenaliPoolConfig;
 }
 
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-
-export async function fetchDenaliPoolConfig(load: AccountLoader, pool: Address): Promise<DenaliPoolConfig> {
+export async function fetchDenaliPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<DenaliPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   const mintA = pubkeyAt(data, OFF_MINT_A);
   const mintB = pubkeyAt(data, OFF_MINT_B);
@@ -215,17 +209,21 @@ export async function fetchDenaliPoolConfig(load: AccountLoader, pool: Address):
     const mintData = mintDatas[mi];
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   const [oracle] = await getProgramDerivedAddress({
     programAddress: DENALI_ORACLE_PROGRAM_ID,
-    seeds: ['oracle', encoder.encode(pool)],
+    seeds: ["oracle", encoder.encode(pool)],
   });
   return {
     venue: SLUG,
@@ -242,17 +240,16 @@ export async function fetchDenaliPoolConfig(load: AccountLoader, pool: Address):
 function quoteAccounts(base: PoolConfig): VenueAccount[] {
   const cfg = denaliConfig(base);
   return [
-    { ref: 'vaultA', address: cfg.vaultA },
-    { ref: 'vaultB', address: cfg.vaultB },
+    { ref: "vaultA", address: cfg.vaultA },
+    { ref: "vaultB", address: cfg.vaultB },
   ];
 }
 
 /** Family facade for the recipe orchestrator. */
 export const denali = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: DENALI_PROGRAM_ID,
   fetchPoolConfig: fetchDenaliPoolConfig,
   quoteAccounts,
 };
-

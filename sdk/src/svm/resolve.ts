@@ -1,6 +1,6 @@
-import { AccountRole, isSignerRole } from '@solana/kit';
-import type { Address, TransactionSigner } from '@solana/kit';
-import type { AccountManifest, AccountRole as SlotRole } from 'sauce-compiler';
+import { AccountRole, isSignerRole } from "@solana/kit";
+import type { Address, TransactionSigner } from "@solana/kit";
+import type { AccountManifest, AccountRole as SlotRole } from "sauce-compiler";
 
 /**
  * Maps each declared slot of the compiler's AccountManifest to a concrete
@@ -18,7 +18,7 @@ export interface AccountResolution {
  * bytecode reads MSG_SENDER). A resolution entry under this key is a conflict
  * and throws — rename the plan ref if it must resolve to another address.
  */
-export const PAYER_REF = 'payer';
+export const PAYER_REF = "payer";
 
 export interface ResolveAccountsOptions {
   /**
@@ -47,11 +47,11 @@ export interface ResolvedAccountMeta {
 
 /** The four `AccountRole` values are exactly Solana's own, so each maps straight onto a kit role. */
 function isWritableSlot(role: SlotRole): boolean {
-  return role === 'writable' || role === 'writable_signer';
+  return role === "writable" || role === "writable_signer";
 }
 
 function isSignerSlot(role: SlotRole): boolean {
-  return role === 'readonly_signer' || role === 'writable_signer';
+  return role === "readonly_signer" || role === "writable_signer";
 }
 
 /**
@@ -87,11 +87,11 @@ export function resolveAccounts(
     // A `remaining` marker carries no role: everything after it is the caller's own tail, which only
     // the caller can enumerate. It has to be LAST for that to hold — a slot after it would be
     // dropped from `metas`, shifting the index of every account the caller then appends.
-    if (entry.kind !== 'slot') {
+    if (entry.kind !== "slot") {
       const after = manifest.accounts.slice(index + 1);
 
       if (after.length > 0) {
-        const names = after.map(later => (later.kind === 'slot' ? later.name : later.kind));
+        const names = after.map((later) => (later.kind === "slot" ? later.name : later.kind));
         throw new Error(
           `account manifest: a '${entry.kind}' entry must be last, but index ${index} of ${manifest.accounts.length} is followed by '${names.join("', '")}'`,
         );
@@ -107,7 +107,9 @@ export function resolveAccounts(
 
     if (meta.ref === PAYER_REF) {
       if (resolution[PAYER_REF] !== undefined) {
-        throw new Error(`account ref 'payer' is reserved for the fee payer (rename the ref or remove it from the resolution map)`);
+        throw new Error(
+          `account ref 'payer' is reserved for the fee payer (rename the ref or remove it from the resolution map)`,
+        );
       }
 
       address = payer;
@@ -116,12 +118,12 @@ export function resolveAccounts(
       const entry = resolution[meta.ref];
 
       if (entry !== undefined) {
-        if (typeof entry === 'string') {
+        if (typeof entry === "string") {
           address = entry;
         } else {
           address = entry.address;
 
-          if (typeof entry.signer === 'object') {
+          if (typeof entry.signer === "object") {
             if (entry.signer.address !== entry.address) {
               throw new Error(
                 `account ref '${meta.ref}' address ${entry.address} does not match its TransactionSigner address ${entry.signer.address}`,
@@ -143,17 +145,25 @@ export function resolveAccounts(
     }
 
     const role = meta.writable
-      ? (signer ? AccountRole.WRITABLE_SIGNER : AccountRole.WRITABLE)
-      : (signer ? AccountRole.READONLY_SIGNER : AccountRole.READONLY);
+      ? signer
+        ? AccountRole.WRITABLE_SIGNER
+        : AccountRole.WRITABLE
+      : signer
+        ? AccountRole.READONLY_SIGNER
+        : AccountRole.READONLY;
 
-    metas.push(transactionSigner ? { address, role, signer: transactionSigner } : { address, role });
+    metas.push(
+      transactionSigner ? { address, role, signer: transactionSigner } : { address, role },
+    );
   }
 
   if (unresolved.length > 0) {
-    throw new Error(`unresolved account refs: ${unresolved.join(', ')} (provide addresses in the resolution map)`);
+    throw new Error(
+      `unresolved account refs: ${unresolved.join(", ")} (provide addresses in the resolution map)`,
+    );
   }
 
-  if (appendPayerSigner && !metas.some(meta => isSignerRole(meta.role))) {
+  if (appendPayerSigner && !metas.some((meta) => isSignerRole(meta.role))) {
     metas.push({ address: payer, role: AccountRole.READONLY_SIGNER });
   }
 

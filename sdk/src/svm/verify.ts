@@ -20,17 +20,17 @@
 // recompile check and the pin↔bytecode tie.
 //
 // Unlike `@eco-incorp/sauce-sdk/verify`, this pulls the compiler in to recompile — a node-side check.
-import { createHash } from 'node:crypto';
-import type { Address } from '@solana/kit';
-import { compileWithRs } from '../routes/rs-compile.js';
+import { createHash } from "node:crypto";
+import type { Address } from "@solana/kit";
+import { compileWithRs } from "../routes/rs-compile.js";
 import {
   EXECUTE_AND_CLOSE_DISCRIMINATOR,
   EXECUTE_DISCRIMINATOR,
   EXECUTE_FLAG_HAS_PIN,
   EXECUTE_FLAG_HAS_SLICE,
   EXECUTE_FROM_ACCOUNT_DISCRIMINATOR,
-} from './engine.js';
-import { SVM_MAX_ESCROWS, svmSettleRefs, svmSettleSource } from './recipes/index.js';
+} from "./engine.js";
+import { SVM_MAX_ESCROWS, svmSettleRefs, svmSettleSource } from "./recipes/index.js";
 
 // The intent-level surface (unwrap the Portal envelope + extract from an intent) is re-exported here so
 // the whole partner-facing decode/verify story lives under `@eco-incorp/sauce-sdk/svm/verify`, symmetric
@@ -50,7 +50,7 @@ export {
   type ExtractSvmSettleOptions,
   type ExtractedSvmSettle,
   type SvmSettleTarget,
-} from './intent.js';
+} from "./intent.js";
 
 // ── what a caller expects a settle program to enforce ──
 
@@ -98,7 +98,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 function sha256(bytes: Uint8Array): Uint8Array {
-  return new Uint8Array(createHash('sha256').update(bytes).digest());
+  return new Uint8Array(createHash("sha256").update(bytes).digest());
 }
 
 /** The canonical settle bytecode for `escrowCount` under `expected`, recompiled from the shipped
@@ -108,7 +108,7 @@ function sha256(bytes: Uint8Array): Uint8Array {
 function compileCanonicalSettle(escrowCount: number, expected: SvmSettleExpectation): Uint8Array {
   return compileWithRs({
     source: svmSettleSource(escrowCount),
-    target: 'svm',
+    target: "svm",
     defines: { SETTLE_MIN_OUT: expected.minOut, SETTLE_SPL_COUNT: expected.splCount },
   }).bytecode[0]!;
 }
@@ -130,7 +130,7 @@ export function verifySvmSettleProgram(
   manifest: SettleManifestLike,
   expected: SvmSettleExpectation,
 ): SvmSettleVerification {
-  const slots = manifest.accounts.filter((entry) => entry.kind === 'slot');
+  const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
   const escrowCount = escrowCountFromPlan(slots.length);
   if (escrowCount === null) {
     return {
@@ -144,7 +144,12 @@ export function verifySvmSettleProgram(
   const refs = svmSettleRefs(escrowCount);
   const slotNames = slots.map((slot) => slot.name);
   if (slotNames.length !== refs.length || slotNames.some((name, i) => name !== refs[i])) {
-    return { genuine: false, escrowCount, refs, mismatch: `account manifest slots do not match svmSettleRefs(${escrowCount})` };
+    return {
+      genuine: false,
+      escrowCount,
+      refs,
+      mismatch: `account manifest slots do not match svmSettleRefs(${escrowCount})`,
+    };
   }
 
   if (!bytesEqual(bytecode, compileCanonicalSettle(escrowCount, expected))) {
@@ -177,7 +182,7 @@ export function verifySvmSettleProgram(
 /** The execute payload grammar: `[disc:8][flags:1][pin:32 iff 0x01][slice:8 iff 0x02][args…]`. */
 export interface ParsedExecutePayload {
   /** Which staged execute instruction the discriminator names. */
-  instruction: 'execute_from_account' | 'execute_and_close';
+  instruction: "execute_from_account" | "execute_and_close";
   /** The 32-byte content-hash pin, iff the flags byte set HAS_PIN. */
   pin?: Uint8Array;
   /** The explicit foreign-path bytecode slice, iff the flags byte set HAS_SLICE. */
@@ -194,33 +199,44 @@ export interface ParsedExecutePayload {
  * (instructions.ts).
  */
 export function parseExecutePayload(instructionData: Uint8Array): ParsedExecutePayload {
-  if (!(instructionData instanceof Uint8Array)) throw new Error('instructionData must be a Uint8Array');
-  if (instructionData.length < 8) throw new Error(`instructionData is ${instructionData.length} bytes — too short for an 8-byte discriminator`);
+  if (!(instructionData instanceof Uint8Array))
+    throw new Error("instructionData must be a Uint8Array");
+  if (instructionData.length < 8)
+    throw new Error(
+      `instructionData is ${instructionData.length} bytes — too short for an 8-byte discriminator`,
+    );
 
   const disc = instructionData.subarray(0, 8);
-  let instruction: 'execute_from_account' | 'execute_and_close';
-  if (bytesEqual(disc, EXECUTE_FROM_ACCOUNT_DISCRIMINATOR)) instruction = 'execute_from_account';
-  else if (bytesEqual(disc, EXECUTE_AND_CLOSE_DISCRIMINATOR)) instruction = 'execute_and_close';
+  let instruction: "execute_from_account" | "execute_and_close";
+  if (bytesEqual(disc, EXECUTE_FROM_ACCOUNT_DISCRIMINATOR)) instruction = "execute_from_account";
+  else if (bytesEqual(disc, EXECUTE_AND_CLOSE_DISCRIMINATOR)) instruction = "execute_and_close";
   else if (bytesEqual(disc, EXECUTE_DISCRIMINATOR)) {
-    throw new Error('this is an inline `execute` instruction — its payload is bytecode, not a staged args tail; pass the execute_from_account / execute_and_close data');
+    throw new Error(
+      "this is an inline `execute` instruction — its payload is bytecode, not a staged args tail; pass the execute_from_account / execute_and_close data",
+    );
   } else {
-    throw new Error('instructionData does not begin with a Sauce staged-execute discriminator');
+    throw new Error("instructionData does not begin with a Sauce staged-execute discriminator");
   }
 
-  if (instructionData.length < 9) throw new Error('instructionData is missing the required flags byte');
+  if (instructionData.length < 9)
+    throw new Error("instructionData is missing the required flags byte");
   const flags = instructionData[8]!;
   let offset = 9;
 
   let pin: Uint8Array | undefined;
   if (flags & EXECUTE_FLAG_HAS_PIN) {
-    if (instructionData.length < offset + 32) throw new Error('HAS_PIN flag set but the 32-byte pin runs past the end of instructionData');
+    if (instructionData.length < offset + 32)
+      throw new Error("HAS_PIN flag set but the 32-byte pin runs past the end of instructionData");
     pin = instructionData.subarray(offset, offset + 32);
     offset += 32;
   }
 
   let slice: { offset: number; len: number } | undefined;
   if (flags & EXECUTE_FLAG_HAS_SLICE) {
-    if (instructionData.length < offset + 8) throw new Error('HAS_SLICE flag set but the 8-byte slice runs past the end of instructionData');
+    if (instructionData.length < offset + 8)
+      throw new Error(
+        "HAS_SLICE flag set but the 8-byte slice runs past the end of instructionData",
+      );
     const view = new DataView(instructionData.buffer, instructionData.byteOffset + offset, 8);
     slice = { offset: view.getUint32(0, true), len: view.getUint32(4, true) };
     offset += 8;
@@ -234,9 +250,11 @@ export function parseExecutePayload(instructionData: Uint8Array): ParsedExecuteP
 export type SvmSettleAccountLike = string | { address?: string; pubkey?: string; ref?: string };
 
 function accountAddress(a: SvmSettleAccountLike, i: number): Address {
-  const raw = typeof a === 'string' ? a : (a.address ?? a.pubkey);
-  if (typeof raw !== 'string' || raw.length === 0) {
-    throw new Error(`account ${i} is not an address (expected a base58 string, or an object with .address/.pubkey)`);
+  const raw = typeof a === "string" ? a : (a.address ?? a.pubkey);
+  if (typeof raw !== "string" || raw.length === 0) {
+    throw new Error(
+      `account ${i} is not an address (expected a base58 string, or an object with .address/.pubkey)`,
+    );
   }
   return raw as Address;
 }
@@ -275,7 +293,7 @@ export interface SvmSettleExecutionInput {
 
 export interface DecodedSvmSettleExecution {
   /** Which staged execute instruction the calldata is. */
-  instruction: 'execute_from_account' | 'execute_and_close';
+  instruction: "execute_from_account" | "execute_and_close";
   /** The 32-byte content-hash pin the calldata carried, if any (commits to the staged bytecode). */
   pin?: Uint8Array;
   /** The explicit bytecode slice the calldata carried, if any (foreign path only). */
@@ -324,7 +342,9 @@ export interface DecodedSvmSettleExecution {
  * program is a constant and one `keccak256` settles it. Here they are `defines` folded into the
  * bytecode, which is why this side recompiles.
  */
-export function decodeSvmSettleExecution(input: SvmSettleExecutionInput): DecodedSvmSettleExecution {
+export function decodeSvmSettleExecution(
+  input: SvmSettleExecutionInput,
+): DecodedSvmSettleExecution {
   const { instruction, pin, slice } = parseExecutePayload(input.instructionData);
 
   const shape = classifyAccountList(input.accounts.length);
@@ -343,7 +363,7 @@ export function decodeSvmSettleExecution(input: SvmSettleExecutionInput): Decode
   refs.forEach((ref, i) => {
     accounts[ref] = accountAddress(userAccounts[i]!, i);
     const entry = userAccounts[i];
-    if (typeof entry === 'object' && entry !== null && typeof entry.ref === 'string') {
+    if (typeof entry === "object" && entry !== null && typeof entry.ref === "string") {
       if (entry.ref !== ref) labeledRefsConsistent = false;
     } else if (labeledRefsConsistent !== false) {
       labeledRefsConsistent = null; // at least one entry carried no label → can't confirm
@@ -362,7 +382,8 @@ export function decodeSvmSettleExecution(input: SvmSettleExecutionInput): Decode
   };
 }
 
-export interface SvmSettleExecutionVerifyInput extends SvmSettleExecutionInput, SvmSettleExpectation {
+export interface SvmSettleExecutionVerifyInput
+  extends SvmSettleExecutionInput, SvmSettleExpectation {
   /**
    * OPTIONAL. The compiled settle bytecode this execution runs (from the recipes split response this is
    * base64-decode(`sauces[settleIdx].program.bytecode`); from an eco-solver intent it is
@@ -385,7 +406,7 @@ export interface SvmSettleExecutionVerifyInput extends SvmSettleExecutionInput, 
  *  `ExtractedSvmSettle.target`, whose `program` state a caller must compare against the engine program
  *  id it trusts. `none`: no pin and no bytecode — genuineness cannot be established from structure
  *  alone, so `genuine` is false. */
-export type SvmSettleVerifiedBy = 'bytecode' | 'pin' | 'none';
+export type SvmSettleVerifiedBy = "bytecode" | "pin" | "none";
 
 export interface SvmSettleExecutionVerification extends DecodedSvmSettleExecution {
   /** True iff the execution provably runs the genuine `svmSettleSource(escrowCount)` program. */
@@ -421,42 +442,56 @@ export interface SvmSettleExecutionVerification extends DecodedSvmSettleExecutio
  * enforces the `minOut`/`splCount` passed in — leaving only the resolved account identities for the
  * caller to check. Never throws beyond the shared structural decode; reports failures in `mismatch`.
  */
-export function verifySvmSettleExecution(input: SvmSettleExecutionVerifyInput): SvmSettleExecutionVerification {
+export function verifySvmSettleExecution(
+  input: SvmSettleExecutionVerifyInput,
+): SvmSettleExecutionVerification {
   const decoded = decodeSvmSettleExecution(input);
   const canonical = compileCanonicalSettle(decoded.escrowCount, input);
   const pin = decoded.pin;
 
   const pinMatchesCanonical = pin === undefined ? null : bytesEqual(sha256(canonical), pin);
-  const bytecodeMatchesCanonical = input.bytecode === undefined ? null : bytesEqual(input.bytecode, canonical);
+  const bytecodeMatchesCanonical =
+    input.bytecode === undefined ? null : bytesEqual(input.bytecode, canonical);
   const pinMatchesBytecode =
-    input.bytecode === undefined || pin === undefined ? null : bytesEqual(sha256(input.bytecode), pin);
+    input.bytecode === undefined || pin === undefined
+      ? null
+      : bytesEqual(sha256(input.bytecode), pin);
 
   let genuine: boolean;
   let verifiedBy: SvmSettleVerifiedBy;
   let mismatch: string | undefined;
 
   if (input.bytecode !== undefined) {
-    verifiedBy = 'bytecode';
+    verifiedBy = "bytecode";
     genuine = bytecodeMatchesCanonical === true && pinMatchesBytecode === true;
     mismatch =
       bytecodeMatchesCanonical !== true
         ? `bytecode does not byte-match svmSettleSource(${decoded.escrowCount})`
         : pinMatchesBytecode === false
-          ? 'calldata pin does not equal sha256(bytecode) — the calldata targets different bytecode'
+          ? "calldata pin does not equal sha256(bytecode) — the calldata targets different bytecode"
           : pinMatchesBytecode === null
-            ? 'calldata carries no pin, so it does not commit to the supplied bytecode — the staged bytes verified here need not be the bytes that run'
+            ? "calldata carries no pin, so it does not commit to the supplied bytecode — the staged bytes verified here need not be the bytes that run"
             : undefined;
   } else if (pin !== undefined) {
-    verifiedBy = 'pin';
+    verifiedBy = "pin";
     genuine = pinMatchesCanonical === true;
     mismatch = genuine
       ? undefined
       : `calldata pin does not match sha256(svmSettleSource(${decoded.escrowCount})) — not a genuine settle execution`;
   } else {
-    verifiedBy = 'none';
+    verifiedBy = "none";
     genuine = false;
-    mismatch = 'no calldata pin and no bytecode supplied — a staged settle has no structural signature, so genuineness cannot be proven';
+    mismatch =
+      "no calldata pin and no bytecode supplied — a staged settle has no structural signature, so genuineness cannot be proven";
   }
 
-  return { ...decoded, genuine, verifiedBy, pinMatchesCanonical, pinMatchesBytecode, bytecodeMatchesCanonical, mismatch };
+  return {
+    ...decoded,
+    genuine,
+    verifiedBy,
+    pinMatchesCanonical,
+    pinMatchesBytecode,
+    bytecodeMatchesCanonical,
+    mismatch,
+  };
 }

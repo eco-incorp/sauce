@@ -16,7 +16,7 @@
  *      two actions of the same kind in one program need two distinct names — hence [`Emitter`].
  */
 
-import { keccak256, toBytes } from 'viem';
+import { keccak256, toBytes } from "viem";
 
 /** A SauceScript expression. */
 export type Expr = string;
@@ -65,16 +65,16 @@ export function formatBigint(value: bigint): Expr {
 
 /** A `hex` literal. Bind it before calling anything on it — see this module's header. */
 export function bytesLiteral(bytes: Uint8Array): Expr {
-  return `hex\`${Buffer.from(bytes).toString('hex')}\``;
+  return `hex\`${Buffer.from(bytes).toString("hex")}\``;
 }
 
 /** A tuple literal. Fields are positional; the names are a mnemonic the ABI encoder ignores. */
 export function tupleLiteral(fields: readonly Expr[]): Expr {
-  return `{ ${fields.map((field, i) => `f${i}: ${field}`).join(', ')} }`;
+  return `{ ${fields.map((field, i) => `f${i}: ${field}`).join(", ")} }`;
 }
 
 export function arrayLiteral(elements: readonly Expr[]): Expr {
-  return `[${elements.join(', ')}]`;
+  return `[${elements.join(", ")}]`;
 }
 
 /**
@@ -97,7 +97,7 @@ export function selector(sig: string): Uint8Array {
 }
 
 export function hexToBytes(hex: string): Uint8Array {
-  const body = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const body = hex.startsWith("0x") ? hex.slice(2) : hex;
   const bytes = new Uint8Array(body.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(body.substring(i * 2, i * 2 + 2), 16);
@@ -126,7 +126,7 @@ export function bindConst(emit: Emitter, prefix: string, expr: Expr): Fragment {
  * placeholder splice) uses [`concatCalldata`] over the bound selector directly.
  */
 export function calldata(emit: Emitter, sig: string, args: readonly Expr[]): Fragment {
-  const sel = bindBytes(emit, 'sel', selector(sig));
+  const sel = bindBytes(emit, "sel", selector(sig));
   if (args.length === 0) return sel;
 
   return { stmts: sel.stmts, expr: `${sel.expr}.concat(${encodeArgs(args)})` };
@@ -134,7 +134,7 @@ export function calldata(emit: Emitter, sig: string, args: readonly Expr[]): Fra
 
 /** `sel.concat(part, part, …)` — for calldata assembled from pre-encoded blobs. */
 export function concatCalldata(sel: Expr, parts: readonly Expr[]): Expr {
-  return parts.length === 0 ? sel : `${sel}.concat(${parts.join(', ')})`;
+  return parts.length === 0 ? sel : `${sel}.concat(${parts.join(", ")})`;
 }
 
 /**
@@ -144,7 +144,7 @@ export function concatCalldata(sel: Expr, parts: readonly Expr[]): Expr {
  * embeds, so `abi.decode(evm.call(…), ["Uint256"])[0]` would issue the call twice.
  */
 export function decodeUint256(emit: Emitter, callExpr: Expr): Fragment {
-  const ret = bindConst(emit, 'ret', callExpr);
+  const ret = bindConst(emit, "ret", callExpr);
 
   return { stmts: ret.stmts, expr: `abi.decode(${ret.expr}, ["Uint256"])[0]` };
 }
@@ -155,14 +155,24 @@ export function decodeUint256(emit: Emitter, callExpr: Expr): Fragment {
  * the first line leaves the rest hanging at the outer level.
  */
 export function indent(stmts: readonly Stmt[], depth = 1): string {
-  const pad = '  '.repeat(depth);
+  const pad = "  ".repeat(depth);
 
   return stmts
-    .map((stmt) => stmt.split('\n').map((line) => (line === '' ? line : `${pad}${line}`)).join('\n'))
-    .join('\n');
+    .map((stmt) =>
+      stmt
+        .split("\n")
+        .map((line) => (line === "" ? line : `${pad}${line}`))
+        .join("\n"),
+    )
+    .join("\n");
 }
 
 /** A `function <name>(<params>): <returnType> { … }` declaration. */
-export function fn(name: string, params: readonly string[], returnType: string, body: readonly Stmt[]): string {
-  return `function ${name}(${params.join(', ')}): ${returnType} {\n${indent(body)}\n}`;
+export function fn(
+  name: string,
+  params: readonly string[],
+  returnType: string,
+  body: readonly Stmt[],
+): string {
+  return `function ${name}(${params.join(", ")}): ${returnType} {\n${indent(body)}\n}`;
 }

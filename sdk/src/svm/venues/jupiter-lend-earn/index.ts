@@ -152,19 +152,26 @@
  * measurement + calibration method (real `simulateTransaction` CU: deposit
  * ~56.3-57.5k, redeem ~66.3-67.7k raw CPI cost).
  */
-import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'jupiter-lend-earn';
+const SLUG = "jupiter-lend-earn";
 
-export const JUPITER_LEND_EARN_PROGRAM_ID = address('jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9');
+export const JUPITER_LEND_EARN_PROGRAM_ID = address("jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9");
 /** The Liquidity layer every deposit/redeem CPI delegates real token accounting to. */
-export const JUPITER_LEND_LIQUIDITY_PROGRAM_ID = address('jupeiUmn818Jg1ekPURTpr4mFo29p46vygyykFJ3wZC');
+export const JUPITER_LEND_LIQUIDITY_PROGRAM_ID = address(
+  "jupeiUmn818Jg1ekPURTpr4mFo29p46vygyykFJ3wZC",
+);
 
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 // `Lending` account field offsets (after the 8-byte Anchor discriminator; see module header).
 const OFF_MINT = 8;
 const OFF_F_TOKEN_MINT = 40;
@@ -177,7 +184,7 @@ export const LENDING_ACCOUNT_SIZE = 196;
 const OFF_RESERVE_VAULT = 40;
 
 export interface JupiterLendEarnPoolConfig extends PoolConfig {
-  venue: 'jupiter-lend-earn';
+  venue: "jupiter-lend-earn";
   mint: Address;
   fTokenMint: Address;
   rewardsRateModel: Address;
@@ -187,20 +194,27 @@ export interface JupiterLendEarnPoolConfig extends PoolConfig {
   vault: Address;
   tokenProgram: Address;
   /** Fixed at the framework's single `direction` value the family default resolves to. */
-  direction: 'deposit' | 'redeem';
+  direction: "deposit" | "redeem";
 }
 
-async function fetchJupiterLendEarnConfig(load: AccountLoader, pool: Address): Promise<JupiterLendEarnPoolConfig> {
+async function fetchJupiterLendEarnConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<JupiterLendEarnPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`jupiter-lend-earn Lending ${pool} account not found`);
   if (data.length !== LENDING_ACCOUNT_SIZE) {
-    throw new Error(`jupiter-lend-earn Lending ${pool} has unexpected size ${data.length}, expected ${LENDING_ACCOUNT_SIZE}`);
+    throw new Error(
+      `jupiter-lend-earn Lending ${pool} has unexpected size ${data.length}, expected ${LENDING_ACCOUNT_SIZE}`,
+    );
   }
 
   const decoder = getAddressDecoder();
   const mint = decoder.decode(data.subarray(OFF_MINT, OFF_MINT + 32));
   const fTokenMint = decoder.decode(data.subarray(OFF_F_TOKEN_MINT, OFF_F_TOKEN_MINT + 32));
-  const rewardsRateModel = decoder.decode(data.subarray(OFF_REWARDS_RATE_MODEL, OFF_REWARDS_RATE_MODEL + 32));
+  const rewardsRateModel = decoder.decode(
+    data.subarray(OFF_REWARDS_RATE_MODEL, OFF_REWARDS_RATE_MODEL + 32),
+  );
   const liquidityReserve = decoder.decode(
     data.subarray(OFF_TOKEN_RESERVES_LIQUIDITY, OFF_TOKEN_RESERVES_LIQUIDITY + 32),
   );
@@ -221,16 +235,24 @@ async function fetchJupiterLendEarnConfig(load: AccountLoader, pool: Address): P
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(m, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping market ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping market ${pool} — mint ${m} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping market ${pool} — mint ${m} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping market ${pool} — mint ${m} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
-  const [reserveData, rateModel] = await Promise.all([load(liquidityReserve), deriveRateModel(mint)]);
-  if (reserveData === null) throw new Error(`jupiter-lend-earn TokenReserve ${liquidityReserve} account not found`);
+  const [reserveData, rateModel] = await Promise.all([
+    load(liquidityReserve),
+    deriveRateModel(mint),
+  ]);
+  if (reserveData === null)
+    throw new Error(`jupiter-lend-earn TokenReserve ${liquidityReserve} account not found`);
   const vault = decoder.decode(reserveData.subarray(OFF_RESERVE_VAULT, OFF_RESERVE_VAULT + 32));
 
   return {
@@ -244,7 +266,7 @@ async function fetchJupiterLendEarnConfig(load: AccountLoader, pool: Address): P
     supplyPositionOnLiquidity,
     vault,
     tokenProgram: TOKEN_PROGRAM,
-    direction: 'deposit',
+    direction: "deposit",
   };
 }
 
@@ -252,7 +274,7 @@ async function fetchJupiterLendEarnConfig(load: AccountLoader, pool: Address): P
 async function deriveRateModel(mint: Address): Promise<Address> {
   const [pda] = await getProgramDerivedAddress({
     programAddress: JUPITER_LEND_LIQUIDITY_PROGRAM_ID,
-    seeds: [Buffer.from('rate_model'), Uint8Array.from(getAddressEncoder().encode(mint))],
+    seeds: [Buffer.from("rate_model"), Uint8Array.from(getAddressEncoder().encode(mint))],
   });
   return pda;
 }
@@ -265,9 +287,9 @@ function makeJupiterLendEarn(): {
   return {
     slug: SLUG,
     programId: JUPITER_LEND_EARN_PROGRAM_ID,
-    fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<PoolConfig> => fetchJupiterLendEarnConfig(load, pool),
+    fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<PoolConfig> =>
+      fetchJupiterLendEarnConfig(load, pool),
   };
 }
 
 export const jupiterLendEarn = makeJupiterLendEarn();
-

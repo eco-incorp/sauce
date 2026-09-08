@@ -76,18 +76,30 @@ describe("chainDefines", () => {
 describe("openRoute: ambient defines threading", () => {
   it("Base(() => { return chainId; }, opts) compiles and its bytecode equals the explicit defines map form", () => {
     const viaAmbient = openRoute("ethereum", "return chainId;", evmOptions()).reward(0n);
-    const viaExplicit = openRoute("ethereum", "return chainId;", evmOptions({ defines: { chainId: 1n } })).reward(0n);
+    const viaExplicit = openRoute(
+      "ethereum",
+      "return chainId;",
+      evmOptions({ defines: { chainId: 1n } }),
+    ).reward(0n);
     expect(viaAmbient.compiled.bytecode).toEqual(viaExplicit.compiled.bytecode);
   });
 
   it("caller options.defines OVERRIDE a chain-derived key of the same name", () => {
-    const built = openRoute("ethereum", "return chainId;", evmOptions({ defines: { chainId: 999n } })).reward(0n);
+    const built = openRoute(
+      "ethereum",
+      "return chainId;",
+      evmOptions({ defines: { chainId: 999n } }),
+    ).reward(0n);
     const explicit999 = openRoute("ethereum", "return 999n;", evmOptions()).reward(0n);
     expect(built.compiled.bytecode).toEqual(explicit999.compiled.bytecode);
   });
 
   it("a user `let chainId = 7n;` inside the body shadows the ambient define (proven by a differing program)", () => {
-    const shadowed = openRoute("ethereum", "let chainId = 7n; return chainId;", evmOptions()).reward(0n);
+    const shadowed = openRoute(
+      "ethereum",
+      "let chainId = 7n; return chainId;",
+      evmOptions(),
+    ).reward(0n);
     const unshadowed = openRoute("ethereum", "return chainId;", evmOptions()).reward(0n);
     expect(shadowed.compiled.bytecode).not.toEqual(unshadowed.compiled.bytecode);
     // the shadowed program compiles a local write+read, not the folded ambient literal --

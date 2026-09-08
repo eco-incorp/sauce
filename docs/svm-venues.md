@@ -80,26 +80,26 @@ the constant PDA `["vault_and_lp_mint_auth_seed"]` = `GpMZbSM2GgvTKHJirzeGfMFoaZ
 Discriminator `sha256("account:PoolState")[0..8]` = `f7 ed e3 f5 d7 c3 de 46`. Offsets are byte
 sums over the declared field order (`repr(C, packed)`).
 
-| field | offset | encoding |
-| --- | --- | --- |
-| amm_config | 8 | pubkey (32B) |
-| token_0_vault | 72 | pubkey |
-| token_1_vault | 104 | pubkey |
-| token_0_mint | 168 | pubkey |
-| token_1_mint | 200 | pubkey |
-| token_0_program | 232 | pubkey |
-| token_1_program | 264 | pubkey |
-| observation_key | 296 | pubkey |
-| status | 329 | u8 bitfield (bit 2 = swap disabled) |
-| protocol_fees_token_0 | 341 | u64 LE |
-| protocol_fees_token_1 | 349 | u64 LE |
-| fund_fees_token_0 | 357 | u64 LE |
-| fund_fees_token_1 | 365 | u64 LE |
-| open_time | 373 | u64 LE (unix seconds) |
-| creator_fee_on | 389 | u8 (0 = BothToken, 1 = OnlyToken0, 2 = OnlyToken1) |
-| enable_creator_fee | 390 | u8 bool |
-| creator_fees_token_0 | 397 | u64 LE |
-| creator_fees_token_1 | 405 | u64 LE |
+| field                 | offset | encoding                                           |
+| --------------------- | ------ | -------------------------------------------------- |
+| amm_config            | 8      | pubkey (32B)                                       |
+| token_0_vault         | 72     | pubkey                                             |
+| token_1_vault         | 104    | pubkey                                             |
+| token_0_mint          | 168    | pubkey                                             |
+| token_1_mint          | 200    | pubkey                                             |
+| token_0_program       | 232    | pubkey                                             |
+| token_1_program       | 264    | pubkey                                             |
+| observation_key       | 296    | pubkey                                             |
+| status                | 329    | u8 bitfield (bit 2 = swap disabled)                |
+| protocol_fees_token_0 | 341    | u64 LE                                             |
+| protocol_fees_token_1 | 349    | u64 LE                                             |
+| fund_fees_token_0     | 357    | u64 LE                                             |
+| fund_fees_token_1     | 365    | u64 LE                                             |
+| open_time             | 373    | u64 LE (unix seconds)                              |
+| creator_fee_on        | 389    | u8 (0 = BothToken, 1 = OnlyToken0, 2 = OnlyToken1) |
+| enable_creator_fee    | 390    | u8 bool                                            |
+| creator_fees_token_0  | 397    | u64 LE                                             |
+| creator_fees_token_1  | 405    | u64 LE                                             |
 
 AmmConfig account (236 bytes, discriminator `da f4 21 68 cb cb 2b 6f`): `trade_fee_rate` u64 LE
 @12, `creator_fee_rate` u64 LE @108 — both parts-per-1e6. Vaults are SPL token accounts (classic
@@ -138,21 +138,21 @@ Data (24 bytes): discriminator `sha256("global:swap_base_input")[0..8]` =
 `[143, 190, 90, 218, 196, 30, 51, 222]`, then `amount_in` u64 LE, then `minimum_amount_out` u64 LE
 (always 1 — the recipe's post-swap outAta delta check enforces the real bound).
 
-| # | account | flags |
-| --- | --- | --- |
-| 0 | payer (user owner) | signer |
-| 1 | authority PDA `GpMZ…xFbL` | |
-| 2 | amm_config | |
-| 3 | pool_state | writable |
-| 4 | user input token account | writable |
-| 5 | user output token account | writable |
-| 6 | input vault | writable |
-| 7 | output vault | writable |
-| 8 | input token program | |
-| 9 | output token program | |
-| 10 | input token mint | |
-| 11 | output token mint | |
-| 12 | observation_state | writable |
+| #   | account                   | flags    |
+| --- | ------------------------- | -------- |
+| 0   | payer (user owner)        | signer   |
+| 1   | authority PDA `GpMZ…xFbL` |          |
+| 2   | amm_config                |          |
+| 3   | pool_state                | writable |
+| 4   | user input token account  | writable |
+| 5   | user output token account | writable |
+| 6   | input vault               | writable |
+| 7   | output vault              | writable |
+| 8   | input token program       |          |
+| 9   | output token program      |          |
+| 10  | input token mint          |          |
+| 11  | output token mint         |          |
+| 12  | observation_state         | writable |
 
 ### Pinned worked example
 
@@ -186,20 +186,20 @@ Legacy hybrid AMM, constant-product quoting for its non-orderbook statuses. Prog
 `#[repr(C, packed)]`, **no discriminator** — all offsets absolute from byte 0, all integers
 little-endian.
 
-| field | offset | encoding |
-| --- | --- | --- |
-| status | 0 | u64 LE (AmmStatus) |
-| coin_decimals | 32 | u64 LE |
-| pc_decimals | 40 | u64 LE |
-| fees.swap_fee_numerator | 176 | u64 LE (default 25) |
-| fees.swap_fee_denominator | 184 | u64 LE (default 10000) |
-| state_data.need_take_pnl_coin | 192 | u64 LE |
-| state_data.need_take_pnl_pc | 200 | u64 LE |
-| state_data.pool_open_time | 224 | u64 LE (unix seconds) |
-| coin_vault | 336 | pubkey |
-| pc_vault | 368 | pubkey |
-| coin_mint | 400 | pubkey |
-| pc_mint | 432 | pubkey |
+| field                         | offset | encoding               |
+| ----------------------------- | ------ | ---------------------- |
+| status                        | 0      | u64 LE (AmmStatus)     |
+| coin_decimals                 | 32     | u64 LE                 |
+| pc_decimals                   | 40     | u64 LE                 |
+| fees.swap_fee_numerator       | 176    | u64 LE (default 25)    |
+| fees.swap_fee_denominator     | 184    | u64 LE (default 10000) |
+| state_data.need_take_pnl_coin | 192    | u64 LE                 |
+| state_data.need_take_pnl_pc   | 200    | u64 LE                 |
+| state_data.pool_open_time     | 224    | u64 LE (unix seconds)  |
+| coin_vault                    | 336    | pubkey                 |
+| pc_vault                      | 368    | pubkey                 |
+| coin_mint                     | 400    | pubkey                 |
+| pc_mint                       | 432    | pubkey                 |
 
 Vaults are 165-byte SPL token accounts: mint @0, amount u64 LE @64.
 
@@ -235,16 +235,16 @@ Serum market accounts — the instruction enforces the same non-orderbook restri
 program infers direction from the user token account mints, so the account list is
 direction-independent.
 
-| # | account | flags |
-| --- | --- | --- |
-| 0 | SPL token program | |
-| 1 | amm pool (AmmInfo) | writable |
-| 2 | amm authority `5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1` | |
-| 3 | amm coin vault | writable |
-| 4 | amm pc vault | writable |
-| 5 | user token source | writable |
-| 6 | user token destination | writable |
-| 7 | user source owner | signer |
+| #   | account                                                      | flags    |
+| --- | ------------------------------------------------------------ | -------- |
+| 0   | SPL token program                                            |          |
+| 1   | amm pool (AmmInfo)                                           | writable |
+| 2   | amm authority `5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1` |          |
+| 3   | amm coin vault                                               | writable |
+| 4   | amm pc vault                                                 | writable |
+| 5   | user token source                                            | writable |
+| 6   | user token destination                                       | writable |
+| 7   | user source owner                                            | signer   |
 
 The authority is `create_program_address([b"amm authority", [nonce]], programId)` — one PDA for
 the whole program (`AUTHORITY_AMM`, processor.rs:111), pinned above.
@@ -282,17 +282,17 @@ Discriminator `[241, 154, 109, 4, 17, 177, 109, 188]`. Core fields run through `
 203..211; observed sizes vary — pools shorter than 243 bytes predate `coin_creator`, which then
 reads as `Pubkey::default`.
 
-| field | offset | encoding |
-| --- | --- | --- |
-| creator | 11 | pubkey |
-| base_mint | 43 | pubkey |
-| quote_mint | 75 | pubkey |
-| pool_base_token_account | 139 | pubkey |
-| pool_quote_token_account | 171 | pubkey |
-| lp_supply | 203 | u64 LE |
-| coin_creator | 211 | pubkey (when length ≥ 243) |
-| is_mayhem_mode | 243 | u8 bool (when present) |
-| is_cashback_coin | 244 | u8 bool (when present) |
+| field                    | offset | encoding                   |
+| ------------------------ | ------ | -------------------------- |
+| creator                  | 11     | pubkey                     |
+| base_mint                | 43     | pubkey                     |
+| quote_mint               | 75     | pubkey                     |
+| pool_base_token_account  | 139    | pubkey                     |
+| pool_quote_token_account | 171    | pubkey                     |
+| lp_supply                | 203    | u64 LE                     |
+| coin_creator             | 211    | pubkey (when length ≥ 243) |
+| is_mayhem_mode           | 243    | u8 bool (when present)     |
+| is_cashback_coin         | 244    | u8 bool (when present)     |
 
 GlobalConfig `ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw` (discriminator
 `[149, 8, 156, 202, 160, 252, 176, 217]`): `disable_flags` u8 @56 (bit 3 disables buys, bit 4
@@ -354,31 +354,31 @@ Sell (24 bytes): discriminator `[51, 230, 133, 164, 1, 127, 131, 173]`, `base_am
 
 Ordered accounts (buy; sell drops the two volume accumulators):
 
-| # | account | flags |
-| --- | --- | --- |
-| 0 | pool | writable |
-| 1 | user | writable, signer |
-| 2 | global config | |
-| 3 | base mint | |
-| 4 | quote mint | |
-| 5 | user base token account | writable |
-| 6 | user quote token account | writable |
-| 7 | pool base vault | writable |
-| 8 | pool quote vault | writable |
-| 9 | protocol fee recipient | |
-| 10 | protocol fee recipient quote ATA | writable |
-| 11 | base token program | |
-| 12 | quote token program | |
-| 13 | system program | |
-| 14 | associated token program | |
-| 15 | event authority `GS4CU59F31iL7aR2Q8zVS8DRrcRnXX1yjQ66TqNVQnaR` | |
-| 16 | amm program | |
-| 17 | coin creator vault ATA | writable |
-| 18 | coin creator vault authority | |
-| 19 | global volume accumulator `C2aFPdENg4A2HQsmrd5rTw5TaYBX5Ku887cWjbFKtZpw` | buy only |
-| 20 | user volume accumulator | writable, buy only, caller-resolved |
-| 21 | fee config | |
-| 22 | fee program | |
+| #   | account                                                                  | flags                               |
+| --- | ------------------------------------------------------------------------ | ----------------------------------- |
+| 0   | pool                                                                     | writable                            |
+| 1   | user                                                                     | writable, signer                    |
+| 2   | global config                                                            |                                     |
+| 3   | base mint                                                                |                                     |
+| 4   | quote mint                                                               |                                     |
+| 5   | user base token account                                                  | writable                            |
+| 6   | user quote token account                                                 | writable                            |
+| 7   | pool base vault                                                          | writable                            |
+| 8   | pool quote vault                                                         | writable                            |
+| 9   | protocol fee recipient                                                   |                                     |
+| 10  | protocol fee recipient quote ATA                                         | writable                            |
+| 11  | base token program                                                       |                                     |
+| 12  | quote token program                                                      |                                     |
+| 13  | system program                                                           |                                     |
+| 14  | associated token program                                                 |                                     |
+| 15  | event authority `GS4CU59F31iL7aR2Q8zVS8DRrcRnXX1yjQ66TqNVQnaR`           |                                     |
+| 16  | amm program                                                              |                                     |
+| 17  | coin creator vault ATA                                                   | writable                            |
+| 18  | coin creator vault authority                                             |                                     |
+| 19  | global volume accumulator `C2aFPdENg4A2HQsmrd5rTw5TaYBX5Ku887cWjbFKtZpw` | buy only                            |
+| 20  | user volume accumulator                                                  | writable, buy only, caller-resolved |
+| 21  | fee config                                                               |                                     |
+| 22  | fee program                                                              |                                     |
 
 Remaining accounts, in order: the `['pool-v2', base_mint]` PDA when `coin_creator` is set, then
 **always** the buyback fee recipient + its quote ATA (writable) — omitting the pair fails with
@@ -426,23 +426,23 @@ gated.
 `SwapVersion::pack`: version byte at 0, then the 323-byte SwapV1 body — manual Pack, no
 discriminator, no padding.
 
-| field | offset | encoding |
-| --- | --- | --- |
-| version | 0 | u8 (= 1) |
-| is_initialized | 1 | u8 bool |
-| bump_seed | 2 | u8 |
-| token_program_id | 3 | pubkey |
-| token_a (vault) | 35 | pubkey |
-| token_b (vault) | 67 | pubkey |
-| pool_mint | 99 | pubkey |
-| token_a_mint | 131 | pubkey |
-| token_b_mint | 163 | pubkey |
-| pool_fee_account | 195 | pubkey |
-| trade_fee_numerator | 227 | u64 LE |
-| trade_fee_denominator | 235 | u64 LE |
-| owner_trade_fee_numerator | 243 | u64 LE |
-| owner_trade_fee_denominator | 251 | u64 LE |
-| curve_type | 291 | u8 (= 0, constant product) |
+| field                       | offset | encoding                   |
+| --------------------------- | ------ | -------------------------- |
+| version                     | 0      | u8 (= 1)                   |
+| is_initialized              | 1      | u8 bool                    |
+| bump_seed                   | 2      | u8                         |
+| token_program_id            | 3      | pubkey                     |
+| token_a (vault)             | 35     | pubkey                     |
+| token_b (vault)             | 67     | pubkey                     |
+| pool_mint                   | 99     | pubkey                     |
+| token_a_mint                | 131    | pubkey                     |
+| token_b_mint                | 163    | pubkey                     |
+| pool_fee_account            | 195    | pubkey                     |
+| trade_fee_numerator         | 227    | u64 LE                     |
+| trade_fee_denominator       | 235    | u64 LE                     |
+| owner_trade_fee_numerator   | 243    | u64 LE                     |
+| owner_trade_fee_denominator | 251    | u64 LE                     |
+| curve_type                  | 291    | u8 (= 0, constant product) |
 
 ### Quote (exactIn, A → B)
 
@@ -471,18 +471,18 @@ derivation is wrong. No on-curve rejection: the pool exists on-chain with this b
 Data (17 bytes): tag `0x01`, `amount_in` u64 LE, `minimum_amount_out` u64 LE (1). Accounts
 (instruction.rs list 0–9; the optional host fee account 10 is omitted):
 
-| # | account | flags |
-| --- | --- | --- |
-| 0 | swap (pool state) | |
-| 1 | swap authority | |
-| 2 | user transfer authority | signer |
-| 3 | user source token account | writable |
-| 4 | pool source vault | writable |
-| 5 | pool destination vault | writable |
-| 6 | user destination token account | writable |
-| 7 | pool mint | writable |
-| 8 | pool fee account | writable |
-| 9 | token program | |
+| #   | account                        | flags    |
+| --- | ------------------------------ | -------- |
+| 0   | swap (pool state)              |          |
+| 1   | swap authority                 |          |
+| 2   | user transfer authority        | signer   |
+| 3   | user source token account      | writable |
+| 4   | pool source vault              | writable |
+| 5   | pool destination vault         | writable |
+| 6   | user destination token account | writable |
+| 7   | pool mint                      | writable |
+| 8   | pool fee account               | writable |
+| 9   | token program                  |          |
 
 ### Pinned worked example
 
@@ -518,18 +518,18 @@ manager/swap_manager.rs, util/{swap_tick_sequence,sparse_swap}.rs) and a mainnet
 
 Discriminator `sha256("account:Whirlpool")[0..8]` = `3f 95 d1 0c e1 80 63 09`. All integers LE.
 
-| field | offset | encoding |
-| --- | --- | --- |
-| tick_spacing | 41 | u16 LE |
-| fee_tier_index_seed | 43 | u16 LE (== tick_spacing for static-fee pools) |
-| fee_rate | 45 | u16 LE (hundredths of a bp, denominator 1e6) |
-| protocol_fee_rate | 47 | u16 LE (bps of the fee — never reaches the trader) |
-| liquidity | 49 | u128 LE |
-| sqrt_price | 65 | u128 LE (Q64.64) |
-| tick_current_index | 81 | i32 LE two's-complement |
-| token_mint_a / token_vault_a | 101 / 133 | pubkey |
-| token_mint_b / token_vault_b | 181 / 213 | pubkey |
-| reward_last_updated_timestamp | 261 | u64 LE (swap clock must exceed it) |
+| field                         | offset    | encoding                                           |
+| ----------------------------- | --------- | -------------------------------------------------- |
+| tick_spacing                  | 41        | u16 LE                                             |
+| fee_tier_index_seed           | 43        | u16 LE (== tick_spacing for static-fee pools)      |
+| fee_rate                      | 45        | u16 LE (hundredths of a bp, denominator 1e6)       |
+| protocol_fee_rate             | 47        | u16 LE (bps of the fee — never reaches the trader) |
+| liquidity                     | 49        | u128 LE                                            |
+| sqrt_price                    | 65        | u128 LE (Q64.64)                                   |
+| tick_current_index            | 81        | i32 LE two's-complement                            |
+| token_mint_a / token_vault_a  | 101 / 133 | pubkey                                             |
+| token_mint_b / token_vault_b  | 181 / 213 | pubkey                                             |
+| reward_last_updated_timestamp | 261       | u64 LE (swap clock must exceed it)                 |
 
 ### TickArray account (FixedTickArray, 9988 bytes)
 
@@ -591,22 +591,22 @@ the CPI. Protocol fees split off the fee and never affect the trader.
 ### Swap instruction: `swap` (v1, Tokenkeg-only)
 
 Data (34 bytes): discriminator `sha256("global:swap")[0..8]` =
-`[248, 198, 158, 145, 225, 117, 135, 200]`, `amount` u64 LE (runtime-patched), 
+`[248, 198, 158, 145, 225, 117, 135, 200]`, `amount` u64 LE (runtime-patched),
 `other_amount_threshold` u64 LE = 1, `sqrt_price_limit` u128 LE = 0 (NO_EXPLICIT — the program
 substitutes the global MIN/MAX bound; the capacity clamp keeps the walk inside the window),
 `amount_specified_is_input` = 1, `a_to_b`.
 
-| # | account | flags |
-| --- | --- | --- |
-| 0 | token program (Tokenkeg) | |
-| 1 | token authority (user owner) | signer |
-| 2 | whirlpool | writable |
-| 3 | token_owner_account_a (user in for aToB, out for bToA) | writable |
-| 4 | token_vault_a | writable |
-| 5 | token_owner_account_b (user out for aToB, in for bToA) | writable |
-| 6 | token_vault_b | writable |
-| 7-9 | tick_array_0..2 (window PDAs, nearest first) | writable |
-| 10 | oracle PDA `['oracle', whirlpool]` (uninitialized for static-fee pools) | |
+| #   | account                                                                 | flags    |
+| --- | ----------------------------------------------------------------------- | -------- |
+| 0   | token program (Tokenkeg)                                                |          |
+| 1   | token authority (user owner)                                            | signer   |
+| 2   | whirlpool                                                               | writable |
+| 3   | token_owner_account_a (user in for aToB, out for bToA)                  | writable |
+| 4   | token_vault_a                                                           | writable |
+| 5   | token_owner_account_b (user out for aToB, in for bToA)                  | writable |
+| 6   | token_vault_b                                                           | writable |
+| 7-9 | tick_array_0..2 (window PDAs, nearest first)                            | writable |
+| 10  | oracle PDA `['oracle', whirlpool]` (uninitialized for static-fee pools) |          |
 
 Gates (fetch time): size/discriminator; **adaptive-fee pools** (`fee_tier_index !=
 tick_spacing` — the effective fee depends on Oracle volatility state the fragment does not
@@ -658,15 +658,15 @@ byte array of 80-byte blocks (a 16-byte red-black-tree node overhead + a 64-byte
 or `ClaimedSeat` payload), interleaved as three RB trees (bids, asks, seats) + a free list — the
 "hypertree". Discriminant (u64 LE @0) = `4859840929024028656`. All integers LE.
 
-| field | offset | encoding |
-| --- | --- | --- |
-| discriminant | 0 | u64 LE = 4859840929024028656 |
-| base_mint_decimals | 9 | u8 |
-| quote_mint_decimals | 10 | u8 |
-| base_mint / quote_mint | 16 / 48 | pubkey |
-| base_vault / quote_vault | 80 / 112 | pubkey (PDA `['vault', market, mint]`) |
-| bids_root_index / bids_best_index | 156 / 160 | DataIndex (u32; NIL = u32::MAX) |
-| asks_root_index / asks_best_index | 164 / 168 | DataIndex |
+| field                             | offset    | encoding                               |
+| --------------------------------- | --------- | -------------------------------------- |
+| discriminant                      | 0         | u64 LE = 4859840929024028656           |
+| base_mint_decimals                | 9         | u8                                     |
+| quote_mint_decimals               | 10        | u8                                     |
+| base_mint / quote_mint            | 16 / 48   | pubkey                                 |
+| base_vault / quote_vault          | 80 / 112  | pubkey (PDA `['vault', market, mint]`) |
+| bids_root_index / bids_best_index | 156 / 160 | DataIndex (u32; NIL = u32::MAX)        |
+| asks_root_index / asks_best_index | 164 / 168 | DataIndex                              |
 
 A `DataIndex` is a **byte offset into the dynamic region** (`get_helper` reads `dynamic[idx..]`),
 so a block sits at absolute `256 + DataIndex`.
@@ -716,10 +716,10 @@ base_for_quote(quote, up) = round(1e18 * quote / inner)   // checked_base_for_qu
 ```
 
 - **baseIn** (sell base, matches BIDS, `place_order`): per maker, `traded = min(remaining_base,
-  size)`; a full fill rounds quote **UP** (taker favor), the marginal partial rounds **DOWN**
+size)`; a full fill rounds quote **UP** (taker favor), the marginal partial rounds **DOWN**
   (`round_up = is_bid != did_fully_match`, `is_bid=false`). Output = Σ quote.
 - **quoteIn** (buy base, matches ASKS, `impact_base_atoms`): per maker, `base_limit =
-  floor(1e18 * remaining_quote / price)`; full when `base_limit >= size` (consume `size` base,
+floor(1e18 * remaining_quote / price)`; full when `base_limit >= size` (consume `size` base,
   subtract `floor(price*size/1e18)` quote — round DOWN), else the marginal partial takes
   `base_limit` and stops. Output = Σ base.
 
@@ -735,15 +735,15 @@ temporary seat for the owner (if none), virtually credits `in_atoms`, matches, s
 token transfers, and releases the seat — no pre-existing deposit needed. `out_atoms` (min out) = 1;
 the recipe's terminal outAta delta enforces the real bound.
 
-| # | account | flags |
-| --- | --- | --- |
-| 0 | owner (== payer; the single-account form, market is manifest-owned) | signer, writable |
-| 1 | market | writable |
-| 2 | system program (for the temp-seat / reverse-order expansion) | |
-| 3 | trader_base (base-in: user in; quote-in: user out) | writable |
-| 4 | trader_quote (base-in: user out; quote-in: user in) | writable |
-| 5 / 6 | base_vault / quote_vault | writable |
-| 7 | token program (Tokenkeg) | |
+| #     | account                                                             | flags            |
+| ----- | ------------------------------------------------------------------- | ---------------- |
+| 0     | owner (== payer; the single-account form, market is manifest-owned) | signer, writable |
+| 1     | market                                                              | writable         |
+| 2     | system program (for the temp-seat / reverse-order expansion)        |                  |
+| 3     | trader_base (base-in: user in; quote-in: user out)                  | writable         |
+| 4     | trader_quote (base-in: user out; quote-in: user in)                 | writable         |
+| 5 / 6 | base_vault / quote_vault                                            | writable         |
+| 7     | token program (Tokenkeg)                                            |                  |
 
 Optional accounts 8-12 (base/quote mints for Token-2022, global + global_vault) are omitted for the
 classic-SPL, no-global class. Gates (fetch time): size / discriminant; non-classic-SPL mints (the
@@ -788,20 +788,20 @@ mainnet dump (`sdk/test/svm/fixtures/raydium-clmm/`, SOL/USDC 0.04% ts=1 pool
 Discriminator `sha256("account:PoolState")[0..8]` = `f7 ed e3 f5 d7 c3 de 46` — **shared with
 raydium-cp-swap**; the 1544-byte size and the CAMM program owner discriminate. All integers LE.
 
-| field | offset (abs, +8 disc) | encoding |
-| --- | --- | --- |
-| amm_config | 9 | pubkey |
-| token_mint_0 / token_mint_1 | 73 / 105 | pubkey |
-| token_vault_0 / token_vault_1 | 137 / 169 | pubkey |
-| observation_key | 201 | pubkey |
-| tick_spacing | 235 | u16 LE |
-| liquidity | 237 | u128 LE |
-| sqrt_price_x64 | 253 | u128 LE (Q64.64) |
-| tick_current | 269 | i32 LE |
-| status | 389 | u8 (bit 4 = swap disabled) |
-| fee_on | 390 | u8 (0 = FromInput, 1/2 = Token0/1 only) |
-| open_time | 1080 | u64 LE |
-| dynamic_fee_info | 1096 | 80-byte struct (all-zero = classic) |
+| field                         | offset (abs, +8 disc) | encoding                                |
+| ----------------------------- | --------------------- | --------------------------------------- |
+| amm_config                    | 9                     | pubkey                                  |
+| token_mint_0 / token_mint_1   | 73 / 105              | pubkey                                  |
+| token_vault_0 / token_vault_1 | 137 / 169             | pubkey                                  |
+| observation_key               | 201                   | pubkey                                  |
+| tick_spacing                  | 235                   | u16 LE                                  |
+| liquidity                     | 237                   | u128 LE                                 |
+| sqrt_price_x64                | 253                   | u128 LE (Q64.64)                        |
+| tick_current                  | 269                   | i32 LE                                  |
+| status                        | 389                   | u8 (bit 4 = swap disabled)              |
+| fee_on                        | 390                   | u8 (0 = FromInput, 1/2 = Token0/1 only) |
+| open_time                     | 1080                  | u64 LE                                  |
+| dynamic_fee_info              | 1096                  | 80-byte struct (all-zero = classic)     |
 
 AmmConfig (117 bytes, discriminator `da f4 21 68 cb cb 2b 6f`): `trade_fee_rate` u32 LE @47 (per
 1e6). TickArrayState (10240 bytes, discriminator `c0 9b 55 cd 31 f9 81 2a`): pool_id @8,
@@ -871,22 +871,22 @@ Meteora DLMM / Liquidity Book — the first BIN family, EcoSwapSVM adapter contr
 
 LbPair discriminator `sha256("account:LbPair")[0..8]` = `21 0b 31 62 b5 65 b1 0d`. All integers LE.
 
-| field | offset (abs, +8 disc) | encoding |
-| --- | --- | --- |
-| base_factor / filter_period / decay_period / reduction_factor | 8 / 10 / 12 / 14 | u16 (StaticParameters) |
-| variable_fee_control / max_volatility_accumulator | 16 / 20 | u32 |
-| base_fee_power_factor / function_type / collect_fee_mode | 34 / 35 / 36 | u8 |
-| volatility_accumulator / volatility_reference | 40 / 44 | u32 (VariableParameters) |
-| index_reference | 48 | i32 |
-| last_update_timestamp | 56 | i64 |
-| pair_type / active_id / bin_step / status | 75 / 76 / 80 / 82 | u8 / i32 / u16 / u8 |
-| activation_type | 86 | u8 |
-| token_x_mint / token_y_mint | 88 / 120 | pubkey |
-| reserve_x / reserve_y | 152 / 184 | pubkey |
-| reward_infos[0/1] mint | 264 / 408 | pubkey |
-| oracle | 552 | pubkey |
-| activation_point | 816 | u64 |
-| token_mint_x/y_program_flag | 880 / 881 | u8 (0 = Tokenkeg) |
+| field                                                         | offset (abs, +8 disc) | encoding                 |
+| ------------------------------------------------------------- | --------------------- | ------------------------ |
+| base_factor / filter_period / decay_period / reduction_factor | 8 / 10 / 12 / 14      | u16 (StaticParameters)   |
+| variable_fee_control / max_volatility_accumulator             | 16 / 20               | u32                      |
+| base_fee_power_factor / function_type / collect_fee_mode      | 34 / 35 / 36          | u8                       |
+| volatility_accumulator / volatility_reference                 | 40 / 44               | u32 (VariableParameters) |
+| index_reference                                               | 48                    | i32                      |
+| last_update_timestamp                                         | 56                    | i64                      |
+| pair_type / active_id / bin_step / status                     | 75 / 76 / 80 / 82     | u8 / i32 / u16 / u8      |
+| activation_type                                               | 86                    | u8                       |
+| token_x_mint / token_y_mint                                   | 88 / 120              | pubkey                   |
+| reserve_x / reserve_y                                         | 152 / 184             | pubkey                   |
+| reward_infos[0/1] mint                                        | 264 / 408             | pubkey                   |
+| oracle                                                        | 552                   | pubkey                   |
+| activation_point                                              | 816                   | u64                      |
+| token_mint_x/y_program_flag                                   | 880 / 881             | u8 (0 = Tokenkeg)        |
 
 BinArray (discriminator `5c 8e 5c dc 05 94 46 b5`): index i64 @8, lb_pair @24, bins[70] @56 (144
 bytes each — amount_x u64 @+0, amount_y u64 @+8, price u128 @+16). Bin array PDA `['bin_array',
@@ -969,30 +969,30 @@ reserves.
 8-byte discriminator `sha256('account:Pool')[0..8]` = `f1 9a 6d 04 11 b1 6d bc` + 1104-byte
 zero-copy struct.
 
-| field | offset | encoding |
-| --- | --- | --- |
-| pool_fees.base_fee.cliff_fee_numerator | 8 | u64 LE |
-| pool_fees.base_fee.base_fee_mode | 16 | u8 |
-| pool_fees.base_fee.period_frequency | 24 | u64 LE |
-| pool_fees.dynamic_fee.initialized | 56 | u8 bool |
-| pool_fees.dynamic_fee.variable_fee_control | 68 | u32 LE |
-| pool_fees.dynamic_fee.bin_step | 72 | u16 LE |
-| pool_fees.dynamic_fee.volatility_accumulator | 120 | u128 LE |
-| token_a_mint | 168 | pubkey |
-| token_b_mint | 200 | pubkey |
-| token_a_vault | 232 | pubkey |
-| token_b_vault | 264 | pubkey |
-| liquidity | 360 | u128 LE |
-| sqrt_min_price | 424 | u128 LE |
-| sqrt_max_price | 440 | u128 LE |
-| sqrt_price | 456 | u128 LE |
-| activation_point | 472 | u64 LE |
-| activation_type | 480 | u8 (0 = slot, 1 = unix timestamp) |
-| pool_status | 481 | u8 (0 = enabled) |
-| token_a_flag | 482 | u8 (0 = Tokenkeg, 1 = Token-2022) |
-| token_b_flag | 483 | u8 |
-| collect_fee_mode | 484 | u8 (0 = BothToken, 1 = OnlyB, 2 = compounding) |
-| fee_version selector | 486 | u8 (0 → cap 5e8, else cap 9.9e8) |
+| field                                        | offset | encoding                                       |
+| -------------------------------------------- | ------ | ---------------------------------------------- |
+| pool_fees.base_fee.cliff_fee_numerator       | 8      | u64 LE                                         |
+| pool_fees.base_fee.base_fee_mode             | 16     | u8                                             |
+| pool_fees.base_fee.period_frequency          | 24     | u64 LE                                         |
+| pool_fees.dynamic_fee.initialized            | 56     | u8 bool                                        |
+| pool_fees.dynamic_fee.variable_fee_control   | 68     | u32 LE                                         |
+| pool_fees.dynamic_fee.bin_step               | 72     | u16 LE                                         |
+| pool_fees.dynamic_fee.volatility_accumulator | 120    | u128 LE                                        |
+| token_a_mint                                 | 168    | pubkey                                         |
+| token_b_mint                                 | 200    | pubkey                                         |
+| token_a_vault                                | 232    | pubkey                                         |
+| token_b_vault                                | 264    | pubkey                                         |
+| liquidity                                    | 360    | u128 LE                                        |
+| sqrt_min_price                               | 424    | u128 LE                                        |
+| sqrt_max_price                               | 440    | u128 LE                                        |
+| sqrt_price                                   | 456    | u128 LE                                        |
+| activation_point                             | 472    | u64 LE                                         |
+| activation_type                              | 480    | u8 (0 = slot, 1 = unix timestamp)              |
+| pool_status                                  | 481    | u8 (0 = enabled)                               |
+| token_a_flag                                 | 482    | u8 (0 = Tokenkeg, 1 = Token-2022)              |
+| token_b_flag                                 | 483    | u8                                             |
+| collect_fee_mode                             | 484    | u8 (0 = BothToken, 1 = OnlyB, 2 = compounding) |
+| fee_version selector                         | 486    | u8 (0 → cap 5e8, else cap 9.9e8)               |
 
 ### Quote (exactIn, fee denominator 1e9)
 
@@ -1050,22 +1050,22 @@ non-decreasing, matching the adapter contract every other capacity-aware ladder 
 Data (24 bytes): discriminator `sha256('global:swap')[0..8]` =
 `[248, 198, 158, 145, 225, 117, 135, 200]`, `amount_in` u64 LE, `minimum_amount_out` u64 LE (1).
 
-| # | account | flags |
-| --- | --- | --- |
-| 0 | pool authority `HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC` (PDA `['pool_authority']`) | |
-| 1 | pool | writable |
-| 2 | user input token account | writable |
-| 3 | user output token account | writable |
-| 4 | token_a_vault | writable |
-| 5 | token_b_vault | writable |
-| 6 | token_a_mint | |
-| 7 | token_b_mint | |
-| 8 | user owner | signer |
-| 9 | token_a program | |
-| 10 | token_b program | |
-| 11 | program id (Anchor-optional referral placeholder) | |
-| 12 | event authority `3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet` (PDA `['__event_authority']`) | |
-| 13 | program id | |
+| #   | account                                                                                      | flags    |
+| --- | -------------------------------------------------------------------------------------------- | -------- |
+| 0   | pool authority `HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC` (PDA `['pool_authority']`)     |          |
+| 1   | pool                                                                                         | writable |
+| 2   | user input token account                                                                     | writable |
+| 3   | user output token account                                                                    | writable |
+| 4   | token_a_vault                                                                                | writable |
+| 5   | token_b_vault                                                                                | writable |
+| 6   | token_a_mint                                                                                 |          |
+| 7   | token_b_mint                                                                                 |          |
+| 8   | user owner                                                                                   | signer   |
+| 9   | token_a program                                                                              |          |
+| 10  | token_b program                                                                              |          |
+| 11  | program id (Anchor-optional referral placeholder)                                            |          |
+| 12  | event authority `3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet` (PDA `['__event_authority']`) |          |
+| 13  | program id                                                                                   |          |
 
 ### Pinned worked example
 
@@ -1108,25 +1108,25 @@ against `saber-hq/stable-swap` sources: `stable-swap-client/src/state.rs` (SwapI
 
 ### SwapInfo account (395 bytes, program_pack)
 
-| field | offset | encoding |
-| --- | --- | --- |
-| is_initialized | 0 | u8 bool |
-| is_paused | 1 | u8 bool |
-| nonce | 2 | u8 |
-| initial_amp_factor | 3 | u64 LE |
-| target_amp_factor | 11 | u64 LE |
-| start_ramp_ts | 19 | i64 LE, read unsigned |
-| stop_ramp_ts | 27 | i64 LE, read unsigned |
-| token_a.reserves (vault A) | 107 | pubkey |
-| token_b.reserves (vault B) | 139 | pubkey |
-| token_a.mint | 203 | pubkey |
-| token_b.mint | 235 | pubkey |
-| token_a.admin_fees | 267 | pubkey |
-| token_b.admin_fees | 299 | pubkey |
-| fees.admin_trade_fee_numerator | 331 | u64 LE |
-| fees.admin_trade_fee_denominator | 339 | u64 LE |
-| fees.trade_fee_numerator | 363 | u64 LE |
-| fees.trade_fee_denominator | 371 | u64 LE |
+| field                            | offset | encoding              |
+| -------------------------------- | ------ | --------------------- |
+| is_initialized                   | 0      | u8 bool               |
+| is_paused                        | 1      | u8 bool               |
+| nonce                            | 2      | u8                    |
+| initial_amp_factor               | 3      | u64 LE                |
+| target_amp_factor                | 11     | u64 LE                |
+| start_ramp_ts                    | 19     | i64 LE, read unsigned |
+| stop_ramp_ts                     | 27     | i64 LE, read unsigned |
+| token_a.reserves (vault A)       | 107    | pubkey                |
+| token_b.reserves (vault B)       | 139    | pubkey                |
+| token_a.mint                     | 203    | pubkey                |
+| token_b.mint                     | 235    | pubkey                |
+| token_a.admin_fees               | 267    | pubkey                |
+| token_b.admin_fees               | 299    | pubkey                |
+| fees.admin_trade_fee_numerator   | 331    | u64 LE                |
+| fees.admin_trade_fee_denominator | 339    | u64 LE                |
+| fees.trade_fee_numerator         | 363    | u64 LE                |
+| fees.trade_fee_denominator       | 371    | u64 LE                |
 
 ### Quote (exactIn, A → B)
 
@@ -1168,17 +1168,17 @@ fails on-chain with CalculationFailure and aborts the engine's mulDiv).
 
 Data (17 bytes): tag `0x01`, `amount_in` u64 LE, `minimum_amount_out` u64 LE (1).
 
-| # | account | flags |
-| --- | --- | --- |
-| 0 | swap info (pool) | |
-| 1 | swap authority | |
-| 2 | user transfer authority | signer |
-| 3 | user source token account | writable |
-| 4 | vault A | writable |
-| 5 | vault B | writable |
-| 6 | user destination token account | writable |
-| 7 | admin fee account of the OUTPUT token (admin_fee_b for A→B) | writable |
-| 8 | token program (Tokenkeg — Saber predates Token-2022) | |
+| #   | account                                                     | flags    |
+| --- | ----------------------------------------------------------- | -------- |
+| 0   | swap info (pool)                                            |          |
+| 1   | swap authority                                              |          |
+| 2   | user transfer authority                                     | signer   |
+| 3   | user source token account                                   | writable |
+| 4   | vault A                                                     | writable |
+| 5   | vault B                                                     | writable |
+| 6   | user destination token account                              | writable |
+| 7   | admin fee account of the OUTPUT token (admin_fee_b for A→B) | writable |
+| 8   | token program (Tokenkeg — Saber predates Token-2022)        |          |
 
 ### Pinned worked example
 
@@ -1217,42 +1217,42 @@ locked-profit decay.
 Discriminator `sha256("account:Pool")[0..8]` = `f1 9a 6d 04 11 b1 6d bc`; borsh, no padding;
 content ends at 925 of the over-allocated 1387-byte account.
 
-| field | offset | encoding |
-| --- | --- | --- |
-| token_a_mint | 40 | pubkey |
-| token_b_mint | 72 | pubkey |
-| a_vault | 104 | pubkey |
-| b_vault | 136 | pubkey |
-| a_vault_lp | 168 | pubkey |
-| b_vault_lp | 200 | pubkey |
-| enabled | 233 | u8 bool |
-| protocol_token_a_fee | 234 | pubkey |
-| protocol_token_b_fee | 266 | pubkey |
-| trade_fee_numerator | 330 | u64 LE |
-| trade_fee_denominator | 338 | u64 LE |
-| protocol_trade_fee_numerator | 346 | u64 LE |
-| protocol_trade_fee_denominator | 354 | u64 LE |
-| activation_point | 403 | u64 LE |
-| activation_type | 475 | u8 (0 = slot, 1 = unix timestamp) |
-| curve_type tag | 874 | u8 (1 = Stable) |
-| amp | 875 | u64 LE |
-| token_a_multiplier | 883 | u64 LE |
-| token_b_multiplier | 891 | u64 LE |
-| depeg_type | 916 | u8 (0 = None) |
+| field                          | offset | encoding                          |
+| ------------------------------ | ------ | --------------------------------- |
+| token_a_mint                   | 40     | pubkey                            |
+| token_b_mint                   | 72     | pubkey                            |
+| a_vault                        | 104    | pubkey                            |
+| b_vault                        | 136    | pubkey                            |
+| a_vault_lp                     | 168    | pubkey                            |
+| b_vault_lp                     | 200    | pubkey                            |
+| enabled                        | 233    | u8 bool                           |
+| protocol_token_a_fee           | 234    | pubkey                            |
+| protocol_token_b_fee           | 266    | pubkey                            |
+| trade_fee_numerator            | 330    | u64 LE                            |
+| trade_fee_denominator          | 338    | u64 LE                            |
+| protocol_trade_fee_numerator   | 346    | u64 LE                            |
+| protocol_trade_fee_denominator | 354    | u64 LE                            |
+| activation_point               | 403    | u64 LE                            |
+| activation_type                | 475    | u8 (0 = slot, 1 = unix timestamp) |
+| curve_type tag                 | 874    | u8 (1 = Stable)                   |
+| amp                            | 875    | u64 LE                            |
+| token_a_multiplier             | 883    | u64 LE                            |
+| token_b_multiplier             | 891    | u64 LE                            |
+| depeg_type                     | 916    | u8 (0 = None)                     |
 
 ### Dynamic-vault account (≥ 1227 bytes)
 
 Discriminator `sha256("account:Vault")[0..8]` = `d3 08 e8 2b 02 98 75 77`; borsh (`total_amount`
 at 11 is unaligned).
 
-| field | offset | encoding |
-| --- | --- | --- |
-| total_amount | 11 | u64 LE |
-| token_vault | 19 | pubkey |
-| lp_mint | 115 | pubkey |
-| locked_profit_tracker.last_updated_locked_profit | 1203 | u64 LE |
-| locked_profit_tracker.last_report | 1211 | u64 LE |
-| locked_profit_tracker.locked_profit_degradation | 1219 | u64 LE |
+| field                                            | offset | encoding |
+| ------------------------------------------------ | ------ | -------- |
+| total_amount                                     | 11     | u64 LE   |
+| token_vault                                      | 19     | pubkey   |
+| lp_mint                                          | 115    | pubkey   |
+| locked_profit_tracker.last_updated_locked_profit | 1203   | u64 LE   |
+| locked_profit_tracker.last_report                | 1211   | u64 LE   |
+| locked_profit_tracker.locked_profit_degradation  | 1219   | u64 LE   |
 
 SPL satellites: token account amount u64 LE @64, mint supply u64 LE @36.
 
@@ -1302,23 +1302,23 @@ Data (24 bytes): discriminator `sha256("global:swap")[0..8]` = `f8 c6 9e 91 e1 7
 `in_amount` u64 LE, `minimum_out_amount` u64 LE (1). Same 15-account list for both directions;
 A → B puts inAta on the source side and the A-side protocol fee account at index 11.
 
-| # | account | flags |
-| --- | --- | --- |
-| 0 | pool | writable |
-| 1 | user source token account | writable |
-| 2 | user destination token account | writable |
-| 3 | a_vault | writable |
-| 4 | b_vault | writable |
-| 5 | a token_vault (vault's idle SPL float) | writable |
-| 6 | b token_vault | writable |
-| 7 | a lp_mint | writable |
-| 8 | b lp_mint | writable |
-| 9 | a_vault_lp | writable |
-| 10 | b_vault_lp | writable |
-| 11 | protocol_token_a_fee | writable |
-| 12 | user owner | signer |
-| 13 | vault program `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` | |
-| 14 | token program | |
+| #   | account                                                      | flags    |
+| --- | ------------------------------------------------------------ | -------- |
+| 0   | pool                                                         | writable |
+| 1   | user source token account                                    | writable |
+| 2   | user destination token account                               | writable |
+| 3   | a_vault                                                      | writable |
+| 4   | b_vault                                                      | writable |
+| 5   | a token_vault (vault's idle SPL float)                       | writable |
+| 6   | b token_vault                                                | writable |
+| 7   | a lp_mint                                                    | writable |
+| 8   | b lp_mint                                                    | writable |
+| 9   | a_vault_lp                                                   | writable |
+| 10  | b_vault_lp                                                   | writable |
+| 11  | protocol_token_a_fee                                         | writable |
+| 12  | user owner                                                   | signer   |
+| 13  | vault program `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |          |
+| 14  | token program                                                |          |
 
 ### Pinned worked example
 
@@ -1354,23 +1354,23 @@ IDL + a real mainnet dump of pool `AJ5HfGY32igLgUbDtfNRdrkjTSYkCVKdhmnFFfcZMJ1E`
 Discriminator `3bde0fec62665ae0` (`sha256("account:SSTradingPair")[..8]`), then (offsets absolute,
 LE):
 
-| field | offset | type | role |
-|---|---|---|---|
-| isInitialized | 8 | u8 | gate |
-| xPriceFeedId | 9 | pubkey | oracle account for X (read live) |
-| yPriceFeedId | 41 | pubkey | oracle account for Y |
-| reserveX (vault) | 73 | pubkey | SPL token acct; `amount`@64 read live |
-| reserveY (vault) | 105 | pubkey | " |
-| protocolFeeX / protocolFeeY | 137 / 169 | pubkey | output-side fee vault = swap acct #7 |
-| mintX / mintY | 202 / 234 | pubkey | classic Tokenkeg only |
-| bigK | 274 | u128 | virtual-reserve product (curve depth) — baked hi/lo |
-| targetX | 290 | u64 | oracle-target inventory — baked |
-| multX / multY | 306 / 314 | u64 | STORED oracle-scaled prices (last swap) — the sanity-band anchor |
-| feeMillionth | 322 | u64 | fee, parts per 1e6 (e.g. 150 = 1.5 bps) — baked |
-| rebatePercentage | 330 | u64 | rebalancing-trade fee rebate (OMITTED — conservative) |
-| protocolFeeShareThousandth | 338 | u64 | fee split (irrelevant to the swap OUTPUT) |
-| version | 474 | u8 | |
-| mintSslpX / mintSslpY | 482 / 514 | pubkey | (present → confirms the whole layout, ends at 666) |
+| field                       | offset    | type   | role                                                             |
+| --------------------------- | --------- | ------ | ---------------------------------------------------------------- |
+| isInitialized               | 8         | u8     | gate                                                             |
+| xPriceFeedId                | 9         | pubkey | oracle account for X (read live)                                 |
+| yPriceFeedId                | 41        | pubkey | oracle account for Y                                             |
+| reserveX (vault)            | 73        | pubkey | SPL token acct; `amount`@64 read live                            |
+| reserveY (vault)            | 105       | pubkey | "                                                                |
+| protocolFeeX / protocolFeeY | 137 / 169 | pubkey | output-side fee vault = swap acct #7                             |
+| mintX / mintY               | 202 / 234 | pubkey | classic Tokenkeg only                                            |
+| bigK                        | 274       | u128   | virtual-reserve product (curve depth) — baked hi/lo              |
+| targetX                     | 290       | u64    | oracle-target inventory — baked                                  |
+| multX / multY               | 306 / 314 | u64    | STORED oracle-scaled prices (last swap) — the sanity-band anchor |
+| feeMillionth                | 322       | u64    | fee, parts per 1e6 (e.g. 150 = 1.5 bps) — baked                  |
+| rebatePercentage            | 330       | u64    | rebalancing-trade fee rebate (OMITTED — conservative)            |
+| protocolFeeShareThousandth  | 338       | u64    | fee split (irrelevant to the swap OUTPUT)                        |
+| version                     | 474       | u8     |                                                                  |
+| mintSslpX / mintSslpY       | 482 / 514 | pubkey | (present → confirms the whole layout, ends at 666)               |
 
 ### Oracle feed (the LEVEL, read live)
 
@@ -1480,19 +1480,19 @@ analog of the EVM Metric/Tessera probing discipline; it never lands a swap.
 **Ranked ledger (on-chain-verified, mid-2026 — RE-PULL DefiLlama at commit time; rankings churn
 quarterly).** The decisive discriminant is the Instructions sysvar in a captured swap:
 
-| venue | program | pool size (accts) | swap accts | instr-sysvar | oracle model | tier |
-|---|---|---|---|---|---|---|
-| **Obric V2** | `obriQD1z…` | 666 B (37) | **12, no introspection** | **absent** | separate readable feed (Doves / Pyth-v2 relay / Minimox per pair) | **P-A (BUILT)** |
-| Aquifer | `AQU1FRd7…` | 1056 B (41) | 5, no introspection | absent | separate relay feed (`fastC7g…`, 128 B) | P-A/P-B |
-| HumidiFi | `9H6tua7j…` | 1728 B (92) | 3, no introspection | absent | internal mid pushed into the pool acct | P-B |
-| BisonFi | `BiSoNHVp…` | 2048 B (23) | 3, no introspection | absent | internal push-oracle mid (NOT an on-chain book) | P-B |
-| SolFi (v1) | `SoLFiHG9…` | 2800 B (40) | 3, no introspection | absent | internal mid in the pool acct | P-B |
-| Tessera V | `TessVdML…` | 1264 B (24) | 2, no introspection | absent | internal (Wintermute), opaque | P-B (hard) |
-| ZeroFi | `ZERor4xh…` | 1072 B+38 KB | 14 | **PRESENT (fee tier, NOT a gate)** | separate readable feed (128 B, `W1LDCARDa…`), f64 mid | **P-A (curve open)** — see below |
-| GoonFi V2 | `goonuddt…` | 2048 B+719 KB | 14 | **PRESENT** | internal + introspection gate | P-C |
-| AlphaQ | `ALPHAQme…` | 336/672 B (41) | 14 | **PRESENT** | internal + introspection gate | P-C |
-| SolFi V2 | `SV2EYYJy…` | 1728 B+1 MB | 13 | **PRESENT** | internal + introspection gate | P-C |
-| Lifinity | `2wT8Y…` | — | — | — | oracle + proactive inventory; DEX wound down 2025-12 | P-C / drop |
+| venue        | program     | pool size (accts) | swap accts               | instr-sysvar                       | oracle model                                                      | tier                             |
+| ------------ | ----------- | ----------------- | ------------------------ | ---------------------------------- | ----------------------------------------------------------------- | -------------------------------- |
+| **Obric V2** | `obriQD1z…` | 666 B (37)        | **12, no introspection** | **absent**                         | separate readable feed (Doves / Pyth-v2 relay / Minimox per pair) | **P-A (BUILT)**                  |
+| Aquifer      | `AQU1FRd7…` | 1056 B (41)       | 5, no introspection      | absent                             | separate relay feed (`fastC7g…`, 128 B)                           | P-A/P-B                          |
+| HumidiFi     | `9H6tua7j…` | 1728 B (92)       | 3, no introspection      | absent                             | internal mid pushed into the pool acct                            | P-B                              |
+| BisonFi      | `BiSoNHVp…` | 2048 B (23)       | 3, no introspection      | absent                             | internal push-oracle mid (NOT an on-chain book)                   | P-B                              |
+| SolFi (v1)   | `SoLFiHG9…` | 2800 B (40)       | 3, no introspection      | absent                             | internal mid in the pool acct                                     | P-B                              |
+| Tessera V    | `TessVdML…` | 1264 B (24)       | 2, no introspection      | absent                             | internal (Wintermute), opaque                                     | P-B (hard)                       |
+| ZeroFi       | `ZERor4xh…` | 1072 B+38 KB      | 14                       | **PRESENT (fee tier, NOT a gate)** | separate readable feed (128 B, `W1LDCARDa…`), f64 mid             | **P-A (curve open)** — see below |
+| GoonFi V2    | `goonuddt…` | 2048 B+719 KB     | 14                       | **PRESENT**                        | internal + introspection gate                                     | P-C                              |
+| AlphaQ       | `ALPHAQme…` | 336/672 B (41)    | 14                       | **PRESENT**                        | internal + introspection gate                                     | P-C                              |
+| SolFi V2     | `SV2EYYJy…` | 1728 B+1 MB       | 13                       | **PRESENT**                        | internal + introspection gate                                     | P-C                              |
+| Lifinity     | `2wT8Y…`    | —                 | —                        | —                                  | oracle + proactive inventory; DEX wound down 2025-12              | P-C / drop                       |
 
 - **P-A built now: Obric V2** — all three barriers fall (readable feed, permissionless swap, known
   math), CPI-integrated by third-party routers. The one gap (the closed-source oracle→mult scaling)
@@ -1509,9 +1509,9 @@ quarterly).** The decisive discriminant is the Instructions sysvar in a captured
   sysvar (introspecting); **Tessera V** is P-B but maximally opaque; **Lifinity** wound down. Reach
   them only through `quoteViaSimulation` if the probe returns ACCEPT.
 - **ZeroFi is NOT P-C — the reclassification is measured, see the section below.** Its Instructions
-  sysvar read is a *caller fee tier*, not an accept/reject gate: an unrecognized caller's CPI
+  sysvar read is a _caller fee tier_, not an accept/reject gate: an unrecognized caller's CPI
   succeeds and just pays the worst tier. The static screen's "Instructions sysvar ⇒ hard P-C" rule
-  produced a false negative here; **treat sysvar-presence as P-C-*candidate* and let step 2's
+  produced a false negative here; **treat sysvar-presence as P-C-_candidate_ and let step 2's
   unrecognized-caller simulation decide**, exactly as the probe's own text says for `absent`.
 
 ### ZeroFi (`ZERor4xh…`) — gate opened, quote path executed, curve still OPEN
@@ -1526,7 +1526,7 @@ stored in the pool account at `+0x1910`; mismatch returns `5`. Every synthetic t
 because LiteSVM defaults `last_restart_slot` to 0 while mainnet (and the pool field) hold
 `246464040`. `svm.setLastRestartSlot(<mainnet value>)` opens it — the quote path then runs, ~24.7k CU
 small / ~37k CU large. Nothing about the enclosing transaction is inspected for this check. A real
-adapter must treat a *stale* pool value as a **self-drop**, not a revert: the pool refuses to quote
+adapter must treat a _stale_ pool value as a **self-drop**, not a revert: the pool refuses to quote
 after a cluster restart until the operator refreshes it.
 
 **2. CPI from an unknown program SUCCEEDS.** A throwaway stub program CPI-ing `swap_v4` fills
@@ -1539,7 +1539,7 @@ So **Sauce deterministically gets the worst tier, which is the conservative side
 only improve the realized fill relative to a model built on the default tier.
 
 **3. The quote's causal input set is tiny and fully enumerated** (per-8-byte-word perturbation scans
-with both an integer-sized `+1` and an f64-mantissa-sized `+2^32` delta, at flat *and* impacted
+with both an integer-sized `+1` and an f64-mantissa-sized `+2^32` delta, at flat _and_ impacted
 sizes, in both directions):
 
 - oracle account `+0x30` — **f64 mid**, pass-through exactly 1 (residual < 1 wei over a ±100 bps sweep);
@@ -1559,10 +1559,12 @@ sk   = clamp(sk, -8000, POSCAP)              // floor is on the SUM, not per-ter
 dev  = -(2000 + 2*spr[dir]) + sk             // units of 1e-7; 2000 == the 2 bps default-tier fee
 out  = floor(amountIn * rate * (1e7 + dev) / 1e7)     // rate = mid or 1/mid, exact rational from the f64 bits
 ```
+
 With every parameter zeroed, `out == floor(amountIn * rate)` exactly — **there is no base protocol
 fee**; the whole spread is the oracle's `spr` plus the skews plus the caller tier.
 
 **5. What is NOT closed — do not ship an adapter.** Two independent gaps:
+
 - a **notional-slice impact term** above roughly $300–$500 of notional, visible as a CU ladder
   (24.7k → 27k → 30k → 33k → 37k → 43k) that no readable account word controls. The fields that
   plausibly drive it (the in-side ladder at `+0x88/+0x98/+0x1d8/+0x1e0/+0x208/+0x210/+0x230…+0x288`)

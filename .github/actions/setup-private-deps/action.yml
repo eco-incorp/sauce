@@ -1,0 +1,37 @@
+name: Setup private deps
+description: >
+  Rewrite GitHub URLs to a token-authed HTTPS form so `pnpm install` can clone the private
+  `sauce` git dependency (eco-incorp/v12).
+
+inputs:
+  token:
+    description: PAT with read access on eco-incorp/v12. Pass secrets.ECO_INCORP_TOKEN.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # ONE copy of this block, deliberately. It lived inline in both ci.yml and publish.yml and they
+    # drifted: publish.yml had only the https:// rewrite, which is NOT the form pnpm-lock.yaml pins,
+    # so every publish died fetching the private dep while CI stayed green. The publish path only
+    # runs on a tag, so CI's signal never covered it. A third consumer (lint.yml) is what prompted
+    # extracting it rather than copying it again.
+    - name: Configure git auth for private deps
+      shell: bash
+      env:
+        ECO_INCORP_TOKEN: ${{ inputs.token }}
+      run: |
+        if [ -z "${ECO_INCORP_TOKEN:-}" ]; then
+          echo "::error::Missing repo secret ECO_INCORP_TOKEN — required to clone the private eco-incorp/v12 git dep. Add a PAT with read access on eco-incorp/v12 under Settings -> Secrets and variables -> Actions."
+          exit 1
+        fi
+        # The package.json specifier is HTTPS, but pnpm-lock.yaml may pin the SSH form
+        # (git@github.com:eco-incorp/v12.git) if it was regenerated on a machine with
+        # `url."git@github.com:".insteadOf "https://github.com/"`. The runner has no SSH key, so
+        # rewrite every form to the token-authed HTTPS URL.
+        #
+        # Use --add: insteadOf is multi-valued, so plain `git config` would overwrite each prior
+        # value and only the last rule would survive.
+        git config --global --add url."https://x-access-token:${ECO_INCORP_TOKEN}@github.com/".insteadOf "https://github.com/"
+        git config --global --add url."https://x-access-token:${ECO_INCORP_TOKEN}@github.com/".insteadOf "git@github.com:"
+        git config --global --add url."https://x-access-token:${ECO_INCORP_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"

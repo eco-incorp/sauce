@@ -55,20 +55,20 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
-import { MAX_BIN_ID, MIN_BIN_ID, binArrayIndex, priceFromId } from './bin-math.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
+import { MAX_BIN_ID, MIN_BIN_ID, binArrayIndex, priceFromId } from "./bin-math.js";
 
-const SLUG = 'meteora-dlmm';
+const SLUG = "meteora-dlmm";
 
-export const METEORA_DLMM_PROGRAM_ID = address('LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const METEORA_DLMM_PROGRAM_ID = address("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const LB_PAIR_ACCOUNT_SIZE = 904;
 export const BIN_ARRAY_ACCOUNT_SIZE = 10136;
@@ -147,7 +147,7 @@ export interface DlmmWindow {
 export interface MeteoraDlmmPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** Trade direction: 'xToY' (default) sells token_x for token_y (swap_for_y, price down). */
-  direction: 'xToY' | 'yToX';
+  direction: "xToY" | "yToX";
   tokenXMint: Address;
   tokenYMint: Address;
   reserveX: Address;
@@ -194,7 +194,7 @@ async function deriveBinArrayPda(pair: Address, index: number): Promise<Address>
   const le = new Uint8Array(8);
   new DataView(le.buffer).setBigInt64(0, BigInt(index), true); // bin_array_index.to_le_bytes()
   return memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
-    new TextEncoder().encode('bin_array'),
+    new TextEncoder().encode("bin_array"),
     getAddressEncoded(pair),
     le,
   ]);
@@ -238,11 +238,9 @@ async function resolveWindow(
   swapForY: boolean,
 ): Promise<DlmmWindow> {
   const arrayIndexes = windowArrayIndexes(activeId, swapForY);
-  const binArrays = (await Promise.all(arrayIndexes.map((idx) => deriveBinArrayPda(pair, idx)))) as [
-    Address,
-    Address,
-    Address,
-  ];
+  const binArrays = (await Promise.all(
+    arrayIndexes.map((idx) => deriveBinArrayPda(pair, idx)),
+  )) as [Address, Address, Address];
 
   // Batch the whole bin-array window into ONE coalesced round instead of an
   // outward serial walk: the bin-array PDAs are all derived above (from the
@@ -257,7 +255,7 @@ async function resolveWindow(
   let readable = 0;
   for (let i = 0; i < 3; i++) {
     const settled = loaded[i];
-    if (settled.status === 'rejected') throw settled.reason;
+    if (settled.status === "rejected") throw settled.reason;
     const data = settled.value;
     const valid =
       data !== null &&
@@ -297,11 +295,16 @@ async function resolveWindow(
  * Fetch + gate one DLMM pair (see the header for the gate list) and freeze
  * both directions' bin windows. Read-only against the loader.
  */
-export async function fetchMeteoraDlmmConfig(load: AccountLoader, pair: Address): Promise<MeteoraDlmmPoolConfig> {
+export async function fetchMeteoraDlmmConfig(
+  load: AccountLoader,
+  pair: Address,
+): Promise<MeteoraDlmmPoolConfig> {
   const data = await load(pair);
   if (data === null) throw new Error(`${SLUG}: pair account ${pair} not found`);
   if (data.length !== LB_PAIR_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pair ${pair} has ${data.length} bytes, expected ${LB_PAIR_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pair ${pair} has ${data.length} bytes, expected ${LB_PAIR_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, LB_PAIR_DISCRIMINATOR)) {
     throw new Error(`${SLUG}: pair ${pair} has a foreign discriminator (not an LbPair account)`);
@@ -315,12 +318,20 @@ export async function fetchMeteoraDlmmConfig(load: AccountLoader, pair: Address)
     );
   }
   if (isSupportLimitOrder(data)) {
-    throw new Error(`${SLUG}: pair ${pair} supports limit orders — the limit-order fill layers are unsupported`);
+    throw new Error(
+      `${SLUG}: pair ${pair} supports limit orders — the limit-order fill layers are unsupported`,
+    );
   }
   // Slot-typed activation the in-VM quote cannot read (mirroring damm-v2).
   const pairType = data[OFF_PAIR_TYPE];
-  if ((pairType === 1 || pairType === 2) && data[OFF_ACTIVATION_TYPE] === 0 && readUintLE(data, OFF_ACTIVATION_POINT, 8) !== 0n) {
-    throw new Error(`${SLUG}: pair ${pair} is slot-activated (activation_type 0) — no in-VM slot read`);
+  if (
+    (pairType === 1 || pairType === 2) &&
+    data[OFF_ACTIVATION_TYPE] === 0 &&
+    readUintLE(data, OFF_ACTIVATION_POINT, 8) !== 0n
+  ) {
+    throw new Error(
+      `${SLUG}: pair ${pair} is slot-activated (activation_type 0) — no in-VM slot read`,
+    );
   }
 
   const codec = getAddressCodec();
@@ -340,11 +351,15 @@ export async function fetchMeteoraDlmmConfig(load: AccountLoader, pair: Address)
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pair} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pair} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pair} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pair} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
@@ -353,7 +368,10 @@ export async function fetchMeteoraDlmmConfig(load: AccountLoader, pair: Address)
   const [xToY, yToX, bitmapExtension] = await Promise.all([
     resolveWindow(load, pair, activeId, binStep, true),
     resolveWindow(load, pair, activeId, binStep, false),
-    memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [new TextEncoder().encode('bitmap'), getAddressEncoded(pair)]),
+    memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
+      new TextEncoder().encode("bitmap"),
+      getAddressEncoded(pair),
+    ]),
   ]);
   // The bitmap extension exists only for pairs whose liquidity leaves the
   // default bitmap; probe it so the swap can pass the program-id None sentinel
@@ -363,7 +381,7 @@ export async function fetchMeteoraDlmmConfig(load: AccountLoader, pair: Address)
   return {
     venue: SLUG,
     pool: pair,
-    direction: 'xToY',
+    direction: "xToY",
     tokenXMint,
     tokenYMint,
     reserveX: codec.decode(data.subarray(OFF_RESERVE_X, OFF_RESERVE_X + 32)),

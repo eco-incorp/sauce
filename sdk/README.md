@@ -21,20 +21,20 @@ import {
 
 // Look up a protocol
 const aave = getProtocol("aave-v3");
-console.log(aave.name);        // "Aave V3"
-console.log(aave.category);    // "lending"
-console.log(aave.chains);      // [{ chainId: 1, chainName: "Ethereum", addresses: { ... } }, ...]
+console.log(aave.name); // "Aave V3"
+console.log(aave.category); // "lending"
+console.log(aave.chains); // [{ chainId: 1, chainName: "Ethereum", addresses: { ... } }, ...]
 
 // Query by category
-const dexes = getProtocolsByCategory("dex");         // 26 DEX protocols
-const lending = getProtocolsByCategory("lending");    // 16 lending protocols
+const dexes = getProtocolsByCategory("dex"); // 26 DEX protocols
+const lending = getProtocolsByCategory("lending"); // 16 lending protocols
 
 // Query by chain
-const baseProtocols = getProtocolsByChain(8453);      // All protocols on Base
-const arbProtocols = getProtocolsByChain(42161);       // All protocols on Arbitrum
+const baseProtocols = getProtocolsByChain(8453); // All protocols on Base
+const arbProtocols = getProtocolsByChain(42161); // All protocols on Arbitrum
 
 // List everything
-const all = listProtocols();       // 127 ProtocolInfo objects
+const all = listProtocols(); // 127 ProtocolInfo objects
 const slugs = listProtocolSlugs(); // ["aave-v2", "aave-v3", "across", ...]
 ```
 
@@ -44,7 +44,11 @@ Each protocol is tree-shakeable:
 
 ```typescript
 import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/aave-v3";
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/uniswap-v3";
+import {
+  protocolInfo,
+  deployments,
+  sauceFunctions,
+} from "@eco-incorp/sauce-sdk/protocols/uniswap-v3";
 import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/lido";
 ```
 
@@ -52,23 +56,19 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 
 Every protocol exports:
 
-| Export | Type | Description |
-|--------|------|-------------|
-| `protocolInfo` | `ProtocolInfo` | Name, slug, description, website, GitHub, npm, category, chains, audit status |
-| `deployments` | `ChainDeployment[]` | Verified contract addresses per chain |
-| `sauceFunctions` | `SauceFunction[]` | Compilable SauceScript function templates |
-| ABI constants | `readonly object[]` | ABI fragments for key contract methods |
+| Export           | Type                | Description                                                                   |
+| ---------------- | ------------------- | ----------------------------------------------------------------------------- |
+| `protocolInfo`   | `ProtocolInfo`      | Name, slug, description, website, GitHub, npm, category, chains, audit status |
+| `deployments`    | `ChainDeployment[]` | Verified contract addresses per chain                                         |
+| `sauceFunctions` | `SauceFunction[]`   | Compilable SauceScript function templates                                     |
+| ABI constants    | `readonly object[]` | ABI fragments for key contract methods                                        |
 
 ## Skill Files (AI-Ready Protocol Docs)
 
 The SDK ships markdown skill files for every protocol — designed to be consumed by AI backends for on-the-fly protocol integration.
 
 ```typescript
-import {
-  getProtocolIndex,
-  getProtocolSkill,
-  listSkillSlugs,
-} from "@eco-incorp/sauce-sdk/skills";
+import { getProtocolIndex, getProtocolSkill, listSkillSlugs } from "@eco-incorp/sauce-sdk/skills";
 
 // Master index — all protocols, categories, operations, chain coverage
 const index = getProtocolIndex();
@@ -83,6 +83,7 @@ const slugs = listSkillSlugs(); // 128 slugs
 ```
 
 Each skill file includes:
+
 - Protocol description and category
 - Key operations (swap, supply, borrow, bridge, stake, etc.)
 - SauceScript code examples (copy-paste ready)
@@ -96,8 +97,8 @@ Each skill file includes:
 import { getChain, getAllChainIds, chains } from "@eco-incorp/sauce-sdk/chains";
 
 const base = getChain(8453);
-console.log(base.name);       // "Base"
-console.log(base.rpcUrl);     // "https://mainnet.base.org"
+console.log(base.name); // "Base"
+console.log(base.rpcUrl); // "https://mainnet.base.org"
 console.log(base.explorerUrl); // "https://basescan.org"
 
 const allIds = getAllChainIds(); // [1, 10, 56, 137, 8453, 42161, ...]
@@ -107,21 +108,21 @@ const allIds = getAllChainIds(); // [1, 10, 56, 137, 8453, 42161, ...]
 
 ## Protocol Coverage
 
-| Category | Count | Key Protocols |
-|----------|-------|---------------|
-| DEX | 26 | Uniswap V2/V3/V4, Curve, Balancer, PancakeSwap, SushiSwap, Velodrome, Aerodrome, Camelot, Trader Joe |
-| Lending | 16 | Aave V2/V3, Compound V2/V3, Morpho Blue, Spark, Euler V2, Radiant, Venus, Moonwell |
-| Bridges | 22 | Across, Stargate, LayerZero, Wormhole, Axelar, CCIP, Hyperlane, LI.FI, + 7 native L2 bridges |
-| Liquid Staking | 8 | Lido, Rocket Pool, Coinbase cbETH, Frax Ether, Swell, Stader, Mantle mETH |
-| Restaking | 4 | EigenLayer, ether.fi, Renzo, Kelp, Puffer |
-| Yield | 10 | Pendle, Convex, Yearn V3, Beefy, Arrakis, Gamma, Harvest, Sommelier, Olympus, Tokemak |
-| Derivatives | 13 | GMX V1/V2, Synthetix V3, Gains Network, Vertex, Perpetual Protocol, Premia, Hegic, Opyn, Aevo |
-| Aggregators | 6 | 1inch, ParaSwap, 0x, CoW Swap, OpenOcean, KyberSwap |
-| CDPs/Stablecoins | 10 | MakerDAO, Liquity V1/V2, Ethena, GHO, Frax, crvUSD, Reflexer, Abracadabra, Alchemix |
-| Oracles | 2 | Chainlink, Pyth |
-| Infrastructure | 6 | Permit2, Safe, ENS, Seaport, Gelato, Instadapp |
-| Standards | 2 | ERC-3156 (flash loans), ERC-4626 (tokenized vaults) |
-| Payments | 2 | Sablier, Superfluid |
+| Category         | Count | Key Protocols                                                                                        |
+| ---------------- | ----- | ---------------------------------------------------------------------------------------------------- |
+| DEX              | 26    | Uniswap V2/V3/V4, Curve, Balancer, PancakeSwap, SushiSwap, Velodrome, Aerodrome, Camelot, Trader Joe |
+| Lending          | 16    | Aave V2/V3, Compound V2/V3, Morpho Blue, Spark, Euler V2, Radiant, Venus, Moonwell                   |
+| Bridges          | 22    | Across, Stargate, LayerZero, Wormhole, Axelar, CCIP, Hyperlane, LI.FI, + 7 native L2 bridges         |
+| Liquid Staking   | 8     | Lido, Rocket Pool, Coinbase cbETH, Frax Ether, Swell, Stader, Mantle mETH                            |
+| Restaking        | 4     | EigenLayer, ether.fi, Renzo, Kelp, Puffer                                                            |
+| Yield            | 10    | Pendle, Convex, Yearn V3, Beefy, Arrakis, Gamma, Harvest, Sommelier, Olympus, Tokemak                |
+| Derivatives      | 13    | GMX V1/V2, Synthetix V3, Gains Network, Vertex, Perpetual Protocol, Premia, Hegic, Opyn, Aevo        |
+| Aggregators      | 6     | 1inch, ParaSwap, 0x, CoW Swap, OpenOcean, KyberSwap                                                  |
+| CDPs/Stablecoins | 10    | MakerDAO, Liquity V1/V2, Ethena, GHO, Frax, crvUSD, Reflexer, Abracadabra, Alchemix                  |
+| Oracles          | 2     | Chainlink, Pyth                                                                                      |
+| Infrastructure   | 6     | Permit2, Safe, ENS, Seaport, Gelato, Instadapp                                                       |
+| Standards        | 2     | ERC-3156 (flash loans), ERC-4626 (tokenized vaults)                                                  |
+| Payments         | 2     | Sablier, Superfluid                                                                                  |
 
 **Total: 127 protocols across 31 EVM chains**
 
@@ -142,12 +143,25 @@ function main(poolAddress: Address, asset: Address, amount: Uint256, onBehalfOf:
 ```typescript
 // Example: Uniswap V3 swap
 import { SwapRouterABI as IRouter } from "./abis";
-function main(routerAddress: Address, tokenIn: Address, tokenOut: Address, fee: Uint256, recipient: Address, amountIn: Uint256, amountOutMin: Uint256): Uint256 {
+function main(
+  routerAddress: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  fee: Uint256,
+  recipient: Address,
+  amountIn: Uint256,
+  amountOutMin: Uint256,
+): Uint256 {
   const router = IRouter.at(routerAddress);
   return router.exactInputSingle({
-    tokenIn: tokenIn, tokenOut: tokenOut, fee: fee,
-    recipient: recipient, deadline: 99999999999,
-    amountIn: amountIn, amountOutMinimum: amountOutMin, sqrtPriceLimitX96: 0
+    tokenIn: tokenIn,
+    tokenOut: tokenOut,
+    fee: fee,
+    recipient: recipient,
+    deadline: 99999999999,
+    amountIn: amountIn,
+    amountOutMinimum: amountOutMin,
+    sqrtPriceLimitX96: 0,
   });
 }
 ```

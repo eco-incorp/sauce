@@ -84,7 +84,9 @@ for (const slug of protocolGroups.keys()) {
 
 for (const [familyKey, members] of familyMembersBySlug) {
   if (NAMESPACES.has(familyKey)) {
-    throw new Error(`accessor-index: family alias '${familyKey}' collides with a canonical protocol namespace`);
+    throw new Error(
+      `accessor-index: family alias '${familyKey}' collides with a canonical protocol namespace`,
+    );
   }
   const contractOwners = new Map<string, string[]>();
   for (const slug of members) {

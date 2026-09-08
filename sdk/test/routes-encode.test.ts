@@ -45,8 +45,10 @@ import type { Call, Intent, Reward, Route, UniversalAddress } from "../src/route
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const evmAddr = (byte: string): UniversalAddress => toUniversalAddress(("0x" + byte.repeat(20)) as `0x${string}`);
-const svmAddr = (byte: string): UniversalAddress => toUniversalAddress(("0x" + byte.repeat(32)) as `0x${string}`);
+const evmAddr = (byte: string): UniversalAddress =>
+  toUniversalAddress(("0x" + byte.repeat(20)) as `0x${string}`);
+const svmAddr = (byte: string): UniversalAddress =>
+  toUniversalAddress(("0x" + byte.repeat(32)) as `0x${string}`);
 const salt32 = (byte: string) => ("0x" + byte.repeat(32)) as `0x${string}`;
 
 function baseRoute(overrides: Partial<Route> = {}): Route {
@@ -114,7 +116,10 @@ describe("routes/encode: EVM round-trip", () => {
 
   it("round-trips a near-uint256 amount", () => {
     const huge = 2n ** 256n - 1n;
-    const route = baseRoute({ nativeAmount: huge, tokens: [{ token: evmAddr("33"), amount: huge }] });
+    const route = baseRoute({
+      nativeAmount: huge,
+      tokens: [{ token: evmAddr("33"), amount: huge }],
+    });
     const decoded = decodeRoute(encodeRoute(route, "evm"), "evm");
     expect(decoded).toEqual(route);
   });
@@ -337,7 +342,12 @@ describe("routes/encode: fork by chain kind", () => {
   it("hashIntent uses the SVM encoding for the route and EVM encoding for the reward on a Base->Solana intent", () => {
     const route = svmRoute();
     const reward = baseReward();
-    const intent: Intent = { destination: BigInt(SOLANA_CHAIN_ID), sourceChainId: BigInt(BASE_CHAIN_ID), route, reward };
+    const intent: Intent = {
+      destination: BigInt(SOLANA_CHAIN_ID),
+      sourceChainId: BigInt(BASE_CHAIN_ID),
+      route,
+      reward,
+    };
 
     const hashes = hashIntent(intent);
     expect(hashes.routeHash).toBe(routeHash(route, "svm"));
@@ -361,7 +371,9 @@ describe("routes/encode: end-to-end over multiple assembled intents", () => {
     const route2 = {
       deadline: 222n,
       portal: ("0x" + "33".repeat(32)) as `0x${string}`,
-      calls: [{ target: ("0x" + "44".repeat(32)) as `0x${string}`, data: "0xaa" as const, value: 0n }],
+      calls: [
+        { target: ("0x" + "44".repeat(32)) as `0x${string}`, data: "0xaa" as const, value: 0n },
+      ],
     };
     const r3 = {
       deadline: 333n,

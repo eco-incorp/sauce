@@ -74,7 +74,8 @@ export function makeChainGlobal(chain: CanonicalChain): ChainGlobal {
   const route: ChainRoute = (sauce: SauceBody, options?: IntentOptions): PendingSauceRoute =>
     openRoute(chain, sauce, options);
 
-  const fn = ((sauce: SauceBody, options?: IntentOptions): PendingSauceRoute => route(sauce, options)) as unknown as ChainGlobal;
+  const fn = ((sauce: SauceBody, options?: IntentOptions): PendingSauceRoute =>
+    route(sauce, options)) as unknown as ChainGlobal;
 
   Object.defineProperties(fn, {
     chain: { value: chain, enumerable: true, configurable: false, writable: false },

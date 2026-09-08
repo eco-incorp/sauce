@@ -79,6 +79,9 @@ describe("normalizeReward: the guard is reachable from a public entry point", ()
       deadline: 1893456000n,
       creator: EVM_ADDR,
       prover: EVM_ADDR,
+      // The imprecise literal IS the input under test: it asserts the safe-integer guard
+      // rejects it before anything reads a rounded value.
+      // eslint-disable-next-line no-loss-of-precision
       tokens: [{ token: EVM_ADDR, amount: 999999999999999999 }],
     };
     expect(() => normalizeReward(reward)).toThrow("Expected a safe integer number");

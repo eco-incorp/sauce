@@ -86,18 +86,18 @@
  * defeating the point; rejecting only a NONZERO rate is the correctness-scoped
  * version of the same gate.
  */
-import { address, getAddressDecoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressDecoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-export const HEAVEN_PROGRAM_ID = address('HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o');
+export const HEAVEN_PROGRAM_ID = address("HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o");
 
-const CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const WSOL_MINT = address('So11111111111111111111111111111111111111112');
-const CHAINLINK_SOL_USD_FEED = address('CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt');
+const CLOCK_SYSVAR = address("SysvarC1ock11111111111111111111111111111111");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+const WSOL_MINT = address("So11111111111111111111111111111111111111112");
+const CHAINLINK_SOL_USD_FEED = address("CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt");
 
 const POOL_DISCRIMINATOR = [190, 158, 220, 130, 15, 162, 132, 252];
 
@@ -151,7 +151,8 @@ const SLOT_FEE_GROUP_STRIDE = 262;
 const SLOT_FEE_TYPE_OFFSETS = [0, 1, 2, 3, 4].map((i) => i * SLOT_FEE_GROUP_STRIDE);
 
 const addressDecoder = getAddressDecoder();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => addressDecoder.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  addressDecoder.decode(data.subarray(offset, offset + 32));
 
 async function loadRequired(load: AccountLoader, addr: Address, what: string): Promise<Uint8Array> {
   const data = await load(addr);
@@ -174,7 +175,11 @@ interface HeavenFeeRates {
 }
 
 /** Scans one FeeBrackets group (ascending by market_cap_upper_bound) for the bracket covering `marketCapUsd`. */
-function selectFeeBracket(data: Uint8Array, groupBase: number, marketCapUsd: bigint): { buyBps: bigint; sellBps: bigint } {
+function selectFeeBracket(
+  data: Uint8Array,
+  groupBase: number,
+  marketCapUsd: bigint,
+): { buyBps: bigint; sellBps: bigint } {
   const count = data[groupBase + FEE_BRACKETS_COUNT_OFFSET]!;
   if (count === 0) return { buyBps: 0n, sellBps: 0n };
   let last = { buyBps: 0n, sellBps: 0n };
@@ -191,8 +196,13 @@ function selectFeeBracket(data: Uint8Array, groupBase: number, marketCapUsd: big
   return last;
 }
 
-function resolveFeeRates(data: Uint8Array, mcapFeesBase: number, marketCapUsd: bigint): HeavenFeeRates {
-  const [protocolOff, lpOff, creatorOff, creatorProtocolOff, reflectionOff] = MCAP_FEE_TYPE_OFFSETS.map((o) => mcapFeesBase + o);
+function resolveFeeRates(
+  data: Uint8Array,
+  mcapFeesBase: number,
+  marketCapUsd: bigint,
+): HeavenFeeRates {
+  const [protocolOff, lpOff, creatorOff, creatorProtocolOff, reflectionOff] =
+    MCAP_FEE_TYPE_OFFSETS.map((o) => mcapFeesBase + o);
   const protocol = selectFeeBracket(data, protocolOff!, marketCapUsd);
   const lp = selectFeeBracket(data, lpOff!, marketCapUsd);
   const creator = selectFeeBracket(data, creatorOff!, marketCapUsd);
@@ -213,7 +223,11 @@ function resolveFeeRates(data: Uint8Array, mcapFeesBase: number, marketCapUsd: b
 }
 
 /** True if ANY of the 5 fee types' slot-offset (anti-snipe) window is still active. */
-function anySlotWindowActive(data: Uint8Array, slotFeesBase: number, slotsSinceCreation: bigint): boolean {
+function anySlotWindowActive(
+  data: Uint8Array,
+  slotFeesBase: number,
+  slotsSinceCreation: bigint,
+): boolean {
   if (slotsSinceCreation < 0n) return false; // clock/creation-slot mismatch — do not gate on a nonsensical negative.
   for (const typeOff of SLOT_FEE_TYPE_OFFSETS) {
     const base = slotFeesBase + typeOff;
@@ -240,7 +254,9 @@ function anySlotWindowActive(data: Uint8Array, slotFeesBase: number, slotsSinceC
 function activeTransferFeeBps(mintData: Uint8Array, mint: Address, currentEpoch: bigint): bigint {
   if (mintData.length <= MINT_ACCOUNT_TYPE_OFFSET) return 0n; // classic (82-byte) mint — no extensions possible.
   if (mintData[MINT_ACCOUNT_TYPE_OFFSET] !== 1) {
-    throw new Error(`heaven mint ${mint} token-2022 account type is ${mintData[MINT_ACCOUNT_TYPE_OFFSET]}, expected 1 (mint)`);
+    throw new Error(
+      `heaven mint ${mint} token-2022 account type is ${mintData[MINT_ACCOUNT_TYPE_OFFSET]}, expected 1 (mint)`,
+    );
   }
   let offset = MINT_TLV_START;
   while (offset + 4 <= mintData.length) {
@@ -261,8 +277,8 @@ function activeTransferFeeBps(mintData: Uint8Array, mint: Address, currentEpoch:
 }
 
 export interface HeavenPoolConfig extends PoolConfig {
-  venue: 'heaven';
-  direction: 'buy' | 'sell';
+  venue: "heaven";
+  direction: "buy" | "sell";
   tokenAMint: Address;
   tokenBMint: Address;
   tokenAProgram: Address;
@@ -274,24 +290,35 @@ export interface HeavenPoolConfig extends PoolConfig {
 }
 
 function heavenConfig(cfg: PoolConfig): HeavenPoolConfig {
-  if (cfg.venue !== 'heaven') throw new Error(`heaven ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== "heaven")
+    throw new Error(`heaven ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as HeavenPoolConfig;
 }
 
-async function fetchHeavenPoolConfig(load: AccountLoader, pool: Address): Promise<HeavenPoolConfig> {
-  const data = await loadRequired(load, pool, 'pool');
-  if (data.length !== POOL_SIZE) throw new Error(`heaven pool ${pool} is ${data.length} bytes, expected ${POOL_SIZE}`);
+async function fetchHeavenPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<HeavenPoolConfig> {
+  const data = await loadRequired(load, pool, "pool");
+  if (data.length !== POOL_SIZE)
+    throw new Error(`heaven pool ${pool} is ${data.length} bytes, expected ${POOL_SIZE}`);
   if (!POOL_DISCRIMINATOR.every((b, i) => data[i] === b)) {
-    throw new Error(`heaven pool ${pool} discriminator mismatch (not a LiquidityPoolState account)`);
+    throw new Error(
+      `heaven pool ${pool} discriminator mismatch (not a LiquidityPoolState account)`,
+    );
   }
 
   const poolType = data[OFF_INFO_TYPE]!;
   if (poolType !== 2) {
-    throw new Error(`heaven pool ${pool} has unvalidated pool type ${poolType} (only LiquidityPoolType::Standard(2) is supported)`);
+    throw new Error(
+      `heaven pool ${pool} has unvalidated pool type ${poolType} (only LiquidityPoolType::Standard(2) is supported)`,
+    );
   }
   const taxableSideType = data[OFF_TAXABLE_SIDE_TYPE]!;
   if (taxableSideType !== 0) {
-    throw new Error(`heaven pool ${pool} has unvalidated taxable_side_type ${taxableSideType} (only 0 is supported)`);
+    throw new Error(
+      `heaven pool ${pool} has unvalidated taxable_side_type ${taxableSideType} (only 0 is supported)`,
+    );
   }
 
   const tokenAMint = pubkeyAt(data, OFF_TOKEN_A);
@@ -299,7 +326,9 @@ async function fetchHeavenPoolConfig(load: AccountLoader, pool: Address): Promis
   const tokenBMint = pubkeyAt(data, OFF_TOKEN_B);
   const tokenBProgram = pubkeyAt(data, OFF_TOKEN_B + 33);
   if (tokenBMint !== WSOL_MINT) {
-    throw new Error(`heaven pool ${pool} quotes ${tokenBMint} as token_b, not wrapped SOL — the Chainlink market-cap conversion assumes a SOL-denominated quote side`);
+    throw new Error(
+      `heaven pool ${pool} quotes ${tokenBMint} as token_b, not wrapped SOL — the Chainlink market-cap conversion assumes a SOL-denominated quote side`,
+    );
   }
 
   const tokenAVault = pubkeyAt(data, OFF_TOKEN_A_VAULT);
@@ -308,13 +337,14 @@ async function fetchHeavenPoolConfig(load: AccountLoader, pool: Address): Promis
   const createdAtSlot = readUintLE(data, OFF_CREATED_AT_SLOT, 8);
   const feeMode = data[OFF_FEE_CONFIGURATION_MODE]!; // 0 = Global (ProtocolConfig), 1 = Local (this account)
 
-  const [clockData, protocolConfigData, tokenAMintData, tokenBMintData, chainlinkData] = await Promise.all([
-    loadRequired(load, CLOCK_SYSVAR, 'Clock sysvar'),
-    loadRequired(load, protocolConfigAddr, 'protocol config'),
-    loadRequired(load, tokenAMint, 'token_a mint'),
-    loadRequired(load, tokenBMint, 'token_b mint'),
-    loadRequired(load, CHAINLINK_SOL_USD_FEED, 'chainlink SOL/USD feed'),
-  ]);
+  const [clockData, protocolConfigData, tokenAMintData, tokenBMintData, chainlinkData] =
+    await Promise.all([
+      loadRequired(load, CLOCK_SYSVAR, "Clock sysvar"),
+      loadRequired(load, protocolConfigAddr, "protocol config"),
+      loadRequired(load, tokenAMint, "token_a mint"),
+      loadRequired(load, tokenBMint, "token_b mint"),
+      loadRequired(load, CHAINLINK_SOL_USD_FEED, "chainlink SOL/USD feed"),
+    ]);
 
   const currentSlot = readUintLE(clockData, 0, 8);
   const currentEpoch = readUintLE(clockData, 16, 8); // Clock.epoch — see activeTransferFeeBps's doc.
@@ -322,8 +352,13 @@ async function fetchHeavenPoolConfig(load: AccountLoader, pool: Address): Promis
   // Anti-snipe self-drop (module header): check BOTH the pool-local and protocol-level slot
   // schedules regardless of feeMode — conservative (never worse than checking one), and cheap
   // (both accounts are already loaded above).
-  if (anySlotWindowActive(data, OFF_SLOT_FEES_BASE, slotsSinceCreation) || anySlotWindowActive(protocolConfigData, PROTOCOL_CONFIG_SLOT_FEES_BASE, slotsSinceCreation)) {
-    throw new Error(`heaven pool ${pool} is within its anti-snipe slot-offset window (created_at_slot ${createdAtSlot}, current ${currentSlot}) — fee schedule is not modeled during this window`);
+  if (
+    anySlotWindowActive(data, OFF_SLOT_FEES_BASE, slotsSinceCreation) ||
+    anySlotWindowActive(protocolConfigData, PROTOCOL_CONFIG_SLOT_FEES_BASE, slotsSinceCreation)
+  ) {
+    throw new Error(
+      `heaven pool ${pool} is within its anti-snipe slot-offset window (created_at_slot ${createdAtSlot}, current ${currentSlot}) — fee schedule is not modeled during this window`,
+    );
   }
 
   // Un-routable extension self-drop: a NonTransferable or DefaultAccountState=
@@ -333,17 +368,25 @@ async function fetchHeavenPoolConfig(load: AccountLoader, pool: Address): Promis
   // correctly. Legacy (82-byte) mints and token_b (gated to wrapped SOL) parse
   // to blocking:[], so this is a no-op on the legacy path.
   for (const [mintData, mint, side] of [
-    [tokenAMintData, tokenAMint, 'token_a'],
-    [tokenBMintData, tokenBMint, 'token_b'],
+    [tokenAMintData, tokenAMint, "token_a"],
+    [tokenBMintData, tokenBMint, "token_b"],
   ] as const) {
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`heaven pool ${pool}: ${side} mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `heaven pool ${pool}: ${side} mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
-  const tokenAFeeBps = tokenAProgram === TOKEN_2022_PROGRAM ? activeTransferFeeBps(tokenAMintData, tokenAMint, currentEpoch) : 0n;
-  const tokenBFeeBps = tokenBProgram === TOKEN_2022_PROGRAM ? activeTransferFeeBps(tokenBMintData, tokenBMint, currentEpoch) : 0n;
+  const tokenAFeeBps =
+    tokenAProgram === TOKEN_2022_PROGRAM
+      ? activeTransferFeeBps(tokenAMintData, tokenAMint, currentEpoch)
+      : 0n;
+  const tokenBFeeBps =
+    tokenBProgram === TOKEN_2022_PROGRAM
+      ? activeTransferFeeBps(tokenBMintData, tokenBMint, currentEpoch)
+      : 0n;
   // A ZERO effective-bps Token-2022 mint (e.g. LIGHT's scheduled fee REMOVAL —
   // see activeTransferFeeBps's doc) ROUTES with a quote byte-identical to legacy.
   // Only an ACTIVE (nonzero) fee self-drops.
@@ -355,7 +398,9 @@ async function fetchHeavenPoolConfig(load: AccountLoader, pool: Address): Promis
   // confidence — kept as a self-drop (safe self-limit; a wrong netting would
   // silently mis-quote).
   if (tokenAFeeBps > 0n || tokenBFeeBps > 0n) {
-    throw new Error(`heaven pool ${pool}: an ACTIVE Token-2022 transfer fee is configured (token_a ${tokenAFeeBps} bps, token_b ${tokenBFeeBps} bps) — vault deltas would not match user amounts`);
+    throw new Error(
+      `heaven pool ${pool}: an ACTIVE Token-2022 transfer fee is configured (token_a ${tokenAFeeBps} bps, token_b ${tokenBFeeBps} bps) — vault deltas would not match user amounts`,
+    );
   }
 
   const mintSupply = readUintLE(tokenAMintData, MINT_SUPPLY_OFFSET, 8);
@@ -374,16 +419,19 @@ async function fetchHeavenPoolConfig(load: AccountLoader, pool: Address): Promis
   // by the relative-depth filter regardless. token_b is gated to wrapped SOL above, so its
   // decimals (9) is a protocol constant, not a per-pool value.
   const marketCapUsd =
-    reserveA === 0n ? 0n : (reserveB * mintSupply * chainlinkPrice) / (reserveA * 10n ** BigInt(9 + Number(chainlinkDecimals)));
+    reserveA === 0n
+      ? 0n
+      : (reserveB * mintSupply * chainlinkPrice) /
+        (reserveA * 10n ** BigInt(9 + Number(chainlinkDecimals)));
 
   const mcapFeesBase = feeMode === 1 ? OFF_MCAP_FEES_BASE : PROTOCOL_CONFIG_MCAP_FEES_BASE;
   const mcapFeesSource = feeMode === 1 ? data : protocolConfigData;
   const fees = resolveFeeRates(mcapFeesSource, mcapFeesBase, marketCapUsd);
 
   return {
-    venue: 'heaven',
+    venue: "heaven",
     pool,
-    direction: 'buy',
+    direction: "buy",
     tokenAMint,
     tokenBMint,
     tokenAProgram,
@@ -407,11 +455,11 @@ const CHAINLINK_TRANSMISSION_SIZE = 48;
 function latestChainlinkPrice(data: Uint8Array): bigint {
   const liveLength = readUintLE(data, 148, 4);
   const liveCursor = readUintLE(data, 152, 4);
-  if (liveLength === 0n) throw new Error('heaven chainlink feed has no live transmissions');
+  if (liveLength === 0n) throw new Error("heaven chainlink feed has no live transmissions");
   const idx = (liveCursor + liveLength - 1n) % liveLength;
   const off = CHAINLINK_HEADER_TOTAL + Number(idx) * CHAINLINK_TRANSMISSION_SIZE;
   const answer = readSignedI128LE(data, off + 16);
-  if (answer <= 0n) throw new Error('heaven chainlink feed reports a non-positive SOL/USD price');
+  if (answer <= 0n) throw new Error("heaven chainlink feed reports a non-positive SOL/USD price");
   return answer;
 }
 function readSignedI128LE(data: Uint8Array, offset: number): bigint {
@@ -421,19 +469,25 @@ function readSignedI128LE(data: Uint8Array, offset: number): bigint {
 }
 
 export const heaven = {
-  slug: 'heaven' as const,
+  slug: "heaven" as const,
   programId: HEAVEN_PROGRAM_ID,
-  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<HeavenPoolConfig> => fetchHeavenPoolConfig(load, pool),
+  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<HeavenPoolConfig> =>
+    fetchHeavenPoolConfig(load, pool),
 };
 
 export function heavenMints(base: PoolConfig): { inMint: Address; outMint: Address } {
   const c = heavenConfig(base);
-  return c.direction === 'buy' ? { inMint: c.tokenBMint, outMint: c.tokenAMint } : { inMint: c.tokenAMint, outMint: c.tokenBMint };
+  return c.direction === "buy"
+    ? { inMint: c.tokenBMint, outMint: c.tokenAMint }
+    : { inMint: c.tokenAMint, outMint: c.tokenBMint };
 }
 
-export function heavenApplyDirection(base: PoolConfig, direction: string | undefined): HeavenPoolConfig {
+export function heavenApplyDirection(
+  base: PoolConfig,
+  direction: string | undefined,
+): HeavenPoolConfig {
   const c = heavenConfig(base);
-  if (direction === undefined || direction === 'buy') return c;
-  if (direction === 'sell') return { ...c, direction: 'sell' };
+  if (direction === undefined || direction === "buy") return c;
+  if (direction === "sell") return { ...c, direction: "sell" };
   throw new Error(`heaven direction must be 'buy' or 'sell', got '${direction}'`);
 }

@@ -63,20 +63,20 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
-import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from './tick-math.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
+import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from "./tick-math.js";
 
-const SLUG = 'orca-whirlpool';
+const SLUG = "orca-whirlpool";
 
-export const ORCA_WHIRLPOOL_PROGRAM_ID = address('whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const ORCA_WHIRLPOOL_PROGRAM_ID = address("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const WHIRLPOOL_ACCOUNT_SIZE = 653;
 export const TICK_ARRAY_ACCOUNT_SIZE = 9988;
@@ -154,7 +154,7 @@ export interface WhirlpoolWindow {
 export interface OrcaWhirlpoolPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** Trade direction: 'aToB' (default) sells token A for token B. */
-  direction: 'aToB' | 'bToA';
+  direction: "aToB" | "bToA";
   tokenMintA: Address;
   tokenMintB: Address;
   tokenVaultA: Address;
@@ -187,7 +187,7 @@ function getAddressEncoded(value: Address): Uint8Array {
 
 async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Address> {
   return memoizedGetProgramDerivedAddress(ORCA_WHIRLPOOL_PROGRAM_ID, [
-    new TextEncoder().encode('tick_array'),
+    new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     new TextEncoder().encode(String(startTick)),
   ]);
@@ -202,12 +202,18 @@ const floorDiv = (a: number, b: number): number => Math.floor(a / b);
  * including any outside the initializable range (those PDAs never exist and
  * stay beyond `readable`).
  */
-export function windowStartTicks(tickCurrentIndex: number, tickSpacing: number, aToB: boolean): [number, number, number] {
+export function windowStartTicks(
+  tickCurrentIndex: number,
+  tickSpacing: number,
+  aToB: boolean,
+): [number, number, number] {
   const span = TICK_ARRAY_SIZE * tickSpacing;
   const base = floorDiv(tickCurrentIndex, span) * span;
   if (aToB) return [base, base - span, base - 2 * span];
   const shifted = tickCurrentIndex + tickSpacing >= base + span;
-  return shifted ? [base + span, base + 2 * span, base + 3 * span] : [base, base + span, base + 2 * span];
+  return shifted
+    ? [base + span, base + 2 * span, base + 3 * span]
+    : [base, base + span, base + 2 * span];
 }
 
 /**
@@ -225,11 +231,9 @@ async function resolveWindow(
   aToB: boolean,
 ): Promise<WhirlpoolWindow> {
   const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, aToB);
-  const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start)))) as [
-    Address,
-    Address,
-    Address,
-  ];
+  const tickArrays = (await Promise.all(
+    startTicks.map((start) => deriveTickArrayPda(pool, start)),
+  )) as [Address, Address, Address];
 
   // allSettled (not all) keeps the break-on-first-invalid contract exact: a
   // rejection is re-thrown only if the readable prefix actually reaches it.
@@ -238,7 +242,7 @@ async function resolveWindow(
   let readable = 0;
   for (let i = 0; i < 3; i++) {
     const settled = loaded[i]!;
-    if (settled.status === 'rejected') throw settled.reason;
+    if (settled.status === "rejected") throw settled.reason;
     const data = settled.value;
     const valid =
       data !== null &&
@@ -279,7 +283,7 @@ async function resolveWindow(
     }
   }
 
-  let edge: WhirlpoolWindow['edge'] = null;
+  let edge: WhirlpoolWindow["edge"] = null;
   if (readable > 0 && !maxStopped) {
     const lastStart = startTicks[readable - 1];
     let tick: number;
@@ -299,11 +303,16 @@ async function resolveWindow(
  * Fetch + gate one whirlpool (see the header for the gate list) and freeze
  * both directions' boundary windows. Read-only against the loader.
  */
-export async function fetchOrcaWhirlpoolConfig(load: AccountLoader, pool: Address): Promise<OrcaWhirlpoolPoolConfig> {
+export async function fetchOrcaWhirlpoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<OrcaWhirlpoolPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== WHIRLPOOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected ${WHIRLPOOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected ${WHIRLPOOL_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, WHIRLPOOL_DISCRIMINATOR)) {
     throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a Whirlpool account)`);
@@ -314,7 +323,7 @@ export async function fetchOrcaWhirlpoolConfig(load: AccountLoader, pool: Addres
   if (feeTierIndex !== tickSpacing) {
     throw new Error(
       `${SLUG}: pool ${pool} uses an adaptive fee tier (fee_tier_index ${feeTierIndex} != tick_spacing ${tickSpacing}) — ` +
-        'the effective fee depends on Oracle volatility state the in-VM quote does not read',
+        "the effective fee depends on Oracle volatility state the in-VM quote does not read",
     );
   }
 
@@ -335,11 +344,15 @@ export async function fetchOrcaWhirlpoolConfig(load: AccountLoader, pool: Addres
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
@@ -347,13 +360,16 @@ export async function fetchOrcaWhirlpoolConfig(load: AccountLoader, pool: Addres
   const [aToB, bToA, oracle] = await Promise.all([
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-    memoizedGetProgramDerivedAddress(ORCA_WHIRLPOOL_PROGRAM_ID, [new TextEncoder().encode('oracle'), getAddressEncoded(pool)]),
+    memoizedGetProgramDerivedAddress(ORCA_WHIRLPOOL_PROGRAM_ID, [
+      new TextEncoder().encode("oracle"),
+      getAddressEncoded(pool),
+    ]),
   ]);
 
   return {
     venue: SLUG,
     pool,
-    direction: 'aToB',
+    direction: "aToB",
     tokenMintA,
     tokenMintB,
     tokenVaultA: codec.decode(data.subarray(OFF_VAULT_A, OFF_VAULT_A + 32)),

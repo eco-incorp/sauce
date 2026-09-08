@@ -132,41 +132,49 @@
  * lists/order (same on-chain Anchor Accounts struct); direction only swaps
  * which of `user_stablecoin_ta`/`user_usdc_ta` is the caller's in/out ATA.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SvmVenueAdapter, SwapUser, VenueAccount, VenueSwap } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type {
+  AccountBytesMap,
+  AccountLoader,
+  PoolConfig,
+  SvmVenueAdapter,
+  SwapUser,
+  VenueAccount,
+  VenueSwap,
+} from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'hylo';
-export const HYLO_PROGRAM_ID = address('HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-export const USDC_MINT = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+const SLUG = "hylo";
+export const HYLO_PROGRAM_ID = address("HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+export const USDC_MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 /** PDA(["hyUSD"], HYLO_PROGRAM_ID). */
-export const HYUSD_MINT = address('5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E');
+export const HYUSD_MINT = address("5YMkXAYccHSGnHn9nob9xEvv6Pvka9DZWH7nTbotTu9E");
 /** PDA(["hylo"], HYLO_PROGRAM_ID) — the program's singleton config account. */
-export const HYLO_ACCOUNT = address('9cd2sAfbBvKs4SX9YKo4dcjwP3TgTVQ8dT5koshGcDND');
+export const HYLO_ACCOUNT = address("9cd2sAfbBvKs4SX9YKo4dcjwP3TgTVQ8dT5koshGcDND");
 /** PDA(["usdc_pair"], HYLO_PROGRAM_ID) — the singleton USDC<->hyUSD pair account (this venue's `pool`). */
-export const USDC_PAIR_ACCOUNT = address('CMNPACEDebyvNJDgBxRc5fbScF8kmx52ZPBY4Cu4wuwS');
+export const USDC_PAIR_ACCOUNT = address("CMNPACEDebyvNJDgBxRc5fbScF8kmx52ZPBY4Cu4wuwS");
 /** PDA(["mint_auth", HYUSD_MINT]). */
-const STABLECOIN_AUTH = address('CfuSViqf6wvUKEprLhtuCsSanvfAsMbDmkAW92FP95qe');
+const STABLECOIN_AUTH = address("CfuSViqf6wvUKEprLhtuCsSanvfAsMbDmkAW92FP95qe");
 /** PDA(["usdc_vault_auth", USDC_MINT]). */
-const USDC_VAULT_AUTH = address('FVVUPkXtkiwYz8epMSGMgNwZNVKcyyWfN9iQSJ9z5SX4');
+const USDC_VAULT_AUTH = address("FVVUPkXtkiwYz8epMSGMgNwZNVKcyyWfN9iQSJ9z5SX4");
 /** PDA(["fee_auth", USDC_MINT]). */
-const USDC_FEE_AUTH = address('39ACqviD7R5XyGBcwwV1YVru4uvSmz5Pgt7S9RxPRPkL');
+const USDC_FEE_AUTH = address("39ACqviD7R5XyGBcwwV1YVru4uvSmz5Pgt7S9RxPRPkL");
 /** PDA(["fee_auth", HYUSD_MINT]). */
-const STABLECOIN_FEE_AUTH = address('3HT6dD6APJh89XJs9rkn3BmsvkXE9jPG9dWJmUjWu6TS');
+const STABLECOIN_FEE_AUTH = address("3HT6dD6APJh89XJs9rkn3BmsvkXE9jPG9dWJmUjWu6TS");
 /** ATA(USDC_VAULT_AUTH, USDC_MINT) — the real USDC collateral backing hyUSD minted via this leg. */
-export const USDC_COLLATERAL_VAULT = address('5ykRvDpEXwKEdoE6yfZ45zeuZ62CcRQRUoZoye4tTJd7');
+export const USDC_COLLATERAL_VAULT = address("5ykRvDpEXwKEdoE6yfZ45zeuZ62CcRQRUoZoye4tTJd7");
 /** ATA(USDC_FEE_AUTH, USDC_MINT). */
-const USDC_FEE_VAULT = address('Bz6Xsr7vTo2oSFxjmJVpoC4bVNGVpP5egbdVk4Jeu1JZ');
+const USDC_FEE_VAULT = address("Bz6Xsr7vTo2oSFxjmJVpoC4bVNGVpP5egbdVk4Jeu1JZ");
 /** ATA(STABLECOIN_FEE_AUTH, HYUSD_MINT). */
-const STABLECOIN_FEE_VAULT = address('Hh8N3Fdauxgq1jjcKdzGBR3D8cdkpLZrFEVumL1tYQLp');
+const STABLECOIN_FEE_VAULT = address("Hh8N3Fdauxgq1jjcKdzGBR3D8cdkpLZrFEVumL1tYQLp");
 /** PDA(["__event_authority"], HYLO_PROGRAM_ID) — Anchor's emit_cpi! self-invoke authority. */
-const EVENT_AUTHORITY = address('4VzpNE51Be5vD5Yg8MC3z6TVHq5gGbLJptjv18QbD6WP');
+const EVENT_AUTHORITY = address("4VzpNE51Be5vD5Yg8MC3z6TVHq5gGbLJptjv18QbD6WP");
 /** The live USDC/USD Pyth push-oracle account (pyth-solana-receiver PriceUpdateV2), program-agnostic. */
-export const USDC_USD_PYTH_FEED = address('6HAuqASbHEh4w4REJEUUUCginTLfj1kwCh215ZLtMkrT');
+export const USDC_USD_PYTH_FEED = address("6HAuqASbHEh4w4REJEUUUCginTLfj1kwCh215ZLtMkrT");
 
 /** sha256('global:mint_stablecoin_usdc')[0..8]. */
 const MINT_STABLECOIN_USDC_DISCRIMINATOR = Uint8Array.from([14, 14, 163, 26, 224, 182, 159, 155]);
@@ -235,7 +243,7 @@ function maxRemainingForVault(vaultBalance: bigint, priceUpperN9: bigint): bigin
 export interface HyloPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'aToB': mint (USDC in -> hyUSD out). 'bToA': redeem (hyUSD in -> USDC out). */
-  direction: 'aToB' | 'bToA';
+  direction: "aToB" | "bToA";
   /** 10^(9-|exponent|) — baked from the Pyth feed's exponent at fetch time (see module header MATH). */
   priceScale: bigint;
   /** Prepare-time snapshot — see module header GATES; `gate()` re-derives freshness from these. */
@@ -250,7 +258,8 @@ export interface HyloPoolConfig extends PoolConfig {
 }
 
 function asHyloConfig(cfg: PoolConfig): HyloPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder/adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder/adapter got a '${cfg.venue}' pool config`);
   return cfg as HyloPoolConfig;
 }
 
@@ -278,11 +287,15 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Hylo
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue; // unreadable mint → legacy assumption (keeps existing tests green)
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
   const [hyloData, pairData, pythData, vaultData] = await Promise.all([
@@ -293,20 +306,28 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Hylo
   ]);
   if (hyloData === null) throw new Error(`${SLUG} Hylo config account ${HYLO_ACCOUNT} not found`);
   if (pairData === null) throw new Error(`${SLUG} UsdcPair account ${USDC_PAIR_ACCOUNT} not found`);
-  if (pythData === null) throw new Error(`${SLUG} USDC/USD Pyth feed ${USDC_USD_PYTH_FEED} not found`);
-  if (vaultData === null) throw new Error(`${SLUG} USDC collateral vault ${USDC_COLLATERAL_VAULT} not found`);
+  if (pythData === null)
+    throw new Error(`${SLUG} USDC/USD Pyth feed ${USDC_USD_PYTH_FEED} not found`);
+  if (vaultData === null)
+    throw new Error(`${SLUG} USDC collateral vault ${USDC_COLLATERAL_VAULT} not found`);
 
   if (hyloData.length !== HYLO_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} Hylo account has unexpected size ${hyloData.length} (want ${HYLO_ACCOUNT_SIZE})`);
+    throw new Error(
+      `${SLUG} Hylo account has unexpected size ${hyloData.length} (want ${HYLO_ACCOUNT_SIZE})`,
+    );
   }
   for (let i = 0; i < 8; i++) {
-    if (hyloData[i] !== HYLO_DISCRIMINATOR[i]) throw new Error(`${SLUG} Hylo account has a wrong discriminator`);
+    if (hyloData[i] !== HYLO_DISCRIMINATOR[i])
+      throw new Error(`${SLUG} Hylo account has a wrong discriminator`);
   }
   if (pairData.length !== USDC_PAIR_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} UsdcPair account has unexpected size ${pairData.length} (want ${USDC_PAIR_ACCOUNT_SIZE})`);
+    throw new Error(
+      `${SLUG} UsdcPair account has unexpected size ${pairData.length} (want ${USDC_PAIR_ACCOUNT_SIZE})`,
+    );
   }
   for (let i = 0; i < 8; i++) {
-    if (pairData[i] !== USDC_PAIR_DISCRIMINATOR[i]) throw new Error(`${SLUG} UsdcPair account has a wrong discriminator`);
+    if (pairData[i] !== USDC_PAIR_DISCRIMINATOR[i])
+      throw new Error(`${SLUG} UsdcPair account has a wrong discriminator`);
   }
 
   const exponentBits = Number(readUintLE(pythData, OFF_PYTH_EXPONENT, 4) & 0xffffffffn);
@@ -314,14 +335,16 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Hylo
   // feed, so re-interpret the raw 32-bit pattern as signed.
   const signedExponent = exponentBits >= 0x80000000 ? exponentBits - 0x100000000 : exponentBits;
   if (signedExponent < -9 || signedExponent > -2) {
-    throw new Error(`${SLUG} USDC/USD feed has an unsupported exponent ${signedExponent} (want -9..-2)`);
+    throw new Error(
+      `${SLUG} USDC/USD feed has an unsupported exponent ${signedExponent} (want -9..-2)`,
+    );
   }
   const priceScale = 10n ** BigInt(9 + signedExponent);
 
   return {
     venue: SLUG,
     pool,
-    direction: 'aToB',
+    direction: "aToB",
     priceScale,
     protocolPausedAtFetch: hyloData[OFF_HYLO_PROTOCOL_PAUSED] !== 0,
     pairPausedAtFetch: pairData[OFF_USDC_PAIR_PAUSED] !== 0,
@@ -344,17 +367,28 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<Hylo
  */
 export function hyloGate(cfg: PoolConfig, now: bigint): void {
   const c = asHyloConfig(cfg);
-  if (c.protocolPausedAtFetch) throw new SvmHyloDriftError(`${SLUG}: protocol is paused (snapshot at fetch time)`);
-  if (c.pairPausedAtFetch) throw new SvmHyloDriftError(`${SLUG}: USDC pair is paused (snapshot at fetch time)`);
+  if (c.protocolPausedAtFetch)
+    throw new SvmHyloDriftError(`${SLUG}: protocol is paused (snapshot at fetch time)`);
+  if (c.pairPausedAtFetch)
+    throw new SvmHyloDriftError(`${SLUG}: USDC pair is paused (snapshot at fetch time)`);
   if (c.verificationTagAtFetch !== 1) {
-    throw new SvmHyloDriftError(`${SLUG}: USDC/USD oracle is not fully verified (snapshot at fetch time)`);
+    throw new SvmHyloDriftError(
+      `${SLUG}: USDC/USD oracle is not fully verified (snapshot at fetch time)`,
+    );
   }
-  if (c.priceRawAtFetch <= 0n) throw new SvmHyloDriftError(`${SLUG}: USDC/USD oracle price is non-positive`);
+  if (c.priceRawAtFetch <= 0n)
+    throw new SvmHyloDriftError(`${SLUG}: USDC/USD oracle price is non-positive`);
   if (c.confRawAtFetch * N9_ONE > c.confToleranceBitsAtFetch * c.priceRawAtFetch) {
     throw new SvmHyloDriftError(`${SLUG}: USDC/USD oracle confidence exceeds tolerance`);
   }
-  if (c.publishTimeAtFetch < 0n || c.publishTimeAtFetch > now || c.publishTimeAtFetch + c.intervalSecsAtFetch < now) {
-    throw new SvmHyloDriftError(`${SLUG}: USDC/USD oracle is stale (publish_time outside the interval)`);
+  if (
+    c.publishTimeAtFetch < 0n ||
+    c.publishTimeAtFetch > now ||
+    c.publishTimeAtFetch + c.intervalSecsAtFetch < now
+  ) {
+    throw new SvmHyloDriftError(
+      `${SLUG}: USDC/USD oracle is stale (publish_time outside the interval)`,
+    );
   }
 }
 
@@ -452,7 +486,7 @@ function quoteAccounts(_cfg: PoolConfig): VenueAccount[] {
 function emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
   const c = asHyloConfig(cfg);
   const p = `h${i}`; // local-variable namespace for THIS call site (i-scoped)
-  return [...readLines(c, p), ...arithmeticLines(c, p, p, String(amountIn), `q${i}`)].join('\n');
+  return [...readLines(c, p), ...arithmeticLines(c, p, p, String(amountIn), `q${i}`)].join("\n");
 }
 
 /**
@@ -470,15 +504,15 @@ function readLines(c: HyloPoolConfig, p: string): string[] {
   // params (k = the ref's index in quoteAccounts) — [pair=acc0, pyth=acc1,
   // vault=acc2] — not `accountUint("<ref>", …)`. `accountUint` lowered to
   // CAST_LE, so `.toLe()` is the exact endianness match.
-  const pair = 'acc0';
-  const pyth = 'acc1';
+  const pair = "acc0";
+  const pyth = "acc1";
   const lines = [
     `  const ${p}fee = svm.sload(${pair}, ${OFF_SWAP_FEE_BITS}, 8).toLe();`,
     `  const ${p}price = svm.sload(${pyth}, ${OFF_PYTH_PRICE}, 8).toLe();`,
     `  const ${p}conf = svm.sload(${pyth}, ${OFF_PYTH_CONF}, 8).toLe();`,
   ];
-  if (c.direction === 'bToA') {
-    const vault = 'acc2';
+  if (c.direction === "bToA") {
+    const vault = "acc2";
     lines.push(
       `  const ${p}vsupply = svm.sload(${pair}, ${OFF_VIRTUAL_STABLECOIN_SUPPLY_BITS}, 8).toLe();`,
       `  const ${p}vault = svm.sload(${vault}, ${TOKEN_ACCOUNT_AMOUNT_OFFSET}, 8).toLe();`,
@@ -488,9 +522,15 @@ function readLines(c: HyloPoolConfig, p: string): string[] {
 }
 
 /** Statement lines computing `outVar` from expression `x`, referencing the already-read `p`-prefixed locals. */
-function arithmeticLines(c: HyloPoolConfig, p: string, tmp: string, x: string, outVar: string): string[] {
+function arithmeticLines(
+  c: HyloPoolConfig,
+  p: string,
+  tmp: string,
+  x: string,
+  outVar: string,
+): string[] {
   const scale = c.priceScale.toString();
-  if (c.direction === 'aToB') {
+  if (c.direction === "aToB") {
     return [
       `  let ${outVar} = 0;`,
       `  if (${x} > 0 && ${p}fee < 10000 && ${p}price > ${p}conf) {`,
@@ -499,7 +539,7 @@ function arithmeticLines(c: HyloPoolConfig, p: string, tmp: string, x: string, o
       `    const ${tmp}lowerN9 = (${p}price - ${p}conf) * ${scale};`,
       `    const ${tmp}outN9 = Math.mulDiv(${tmp}remainN9, ${tmp}lowerN9, 1000000000);`,
       `    ${outVar} = ${tmp}outN9 / 1000;`,
-      '  }',
+      "  }",
     ];
   }
   return [
@@ -510,7 +550,7 @@ function arithmeticLines(c: HyloPoolConfig, p: string, tmp: string, x: string, o
     `    const ${tmp}remainN9 = ${tmp}remainN6 * 1000;`,
     `    const ${tmp}outN9 = Math.mulDiv(${tmp}remainN9, 1000000000, ${tmp}upperN9);`,
     `    ${outVar} = ${tmp}outN9 / 1000;`,
-    '  }',
+    "  }",
   ];
 }
 
@@ -524,36 +564,47 @@ function arithmeticLines(c: HyloPoolConfig, p: string, tmp: string, x: string, o
  * slots between the quote read and the CPI's own (writable) use of the same accounts, exactly
  * like perena.ts's `pool` ref.
  */
-function swapAccounts(c: HyloPoolConfig, user: SwapUser, refFn: (role: string) => string): VenueAccount[] {
+function swapAccounts(
+  c: HyloPoolConfig,
+  user: SwapUser,
+  refFn: (role: string) => string,
+): VenueAccount[] {
   const ro = (role: string, addr: Address): VenueAccount => ({ ref: refFn(role), address: addr });
-  const rw = (role: string, addr: Address): VenueAccount => ({ ref: refFn(role), address: addr, writable: true });
-  const userUsdcTa = c.direction === 'aToB' ? user.inAta : user.outAta;
-  const userStablecoinTa = c.direction === 'aToB' ? user.outAta : user.inAta;
+  const rw = (role: string, addr: Address): VenueAccount => ({
+    ref: refFn(role),
+    address: addr,
+    writable: true,
+  });
+  const userUsdcTa = c.direction === "aToB" ? user.inAta : user.outAta;
+  const userStablecoinTa = c.direction === "aToB" ? user.outAta : user.inAta;
   return [
     { ref: user.owner, signer: true },
-    ro('hylo', HYLO_ACCOUNT),
-    rw('pair', USDC_PAIR_ACCOUNT),
-    ro('stablecoinAuth', STABLECOIN_AUTH),
-    ro('usdcVaultAuth', USDC_VAULT_AUTH),
-    ro('usdcFeeAuth', USDC_FEE_AUTH),
-    ro('stablecoinFeeAuth', STABLECOIN_FEE_AUTH),
-    rw('vault', USDC_COLLATERAL_VAULT),
-    rw('usdcFeeVault', USDC_FEE_VAULT),
-    rw('stablecoinFeeVault', STABLECOIN_FEE_VAULT),
+    ro("hylo", HYLO_ACCOUNT),
+    rw("pair", USDC_PAIR_ACCOUNT),
+    ro("stablecoinAuth", STABLECOIN_AUTH),
+    ro("usdcVaultAuth", USDC_VAULT_AUTH),
+    ro("usdcFeeAuth", USDC_FEE_AUTH),
+    ro("stablecoinFeeAuth", STABLECOIN_FEE_AUTH),
+    rw("vault", USDC_COLLATERAL_VAULT),
+    rw("usdcFeeVault", USDC_FEE_VAULT),
+    rw("stablecoinFeeVault", STABLECOIN_FEE_VAULT),
     { ref: userStablecoinTa, writable: true }, // user_stablecoin_ta
     { ref: userUsdcTa, writable: true }, // user_usdc_ta
-    rw('stablecoinMint', HYUSD_MINT),
-    ro('usdcMint', USDC_MINT),
-    ro('pyth', USDC_USD_PYTH_FEED),
-    ro('tokenProgram', TOKEN_PROGRAM),
-    ro('eventAuthority', EVENT_AUTHORITY),
-    ro('program', HYLO_PROGRAM_ID),
+    rw("stablecoinMint", HYUSD_MINT),
+    ro("usdcMint", USDC_MINT),
+    ro("pyth", USDC_USD_PYTH_FEED),
+    ro("tokenProgram", TOKEN_PROGRAM),
+    ro("eventAuthority", EVENT_AUTHORITY),
+    ro("program", HYLO_PROGRAM_ID),
   ];
 }
 
 function buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
   const c = asHyloConfig(cfg);
-  const disc = c.direction === 'aToB' ? MINT_STABLECOIN_USDC_DISCRIMINATOR : REDEEM_STABLECOIN_USDC_DISCRIMINATOR;
+  const disc =
+    c.direction === "aToB"
+      ? MINT_STABLECOIN_USDC_DISCRIMINATOR
+      : REDEEM_STABLECOIN_USDC_DISCRIMINATOR;
   const data = new Uint8Array(8 + 8 + 1);
   data.set(disc, 0);
   new DataView(data.buffer).setBigUint64(8, amountIn, true);
@@ -574,14 +625,14 @@ function buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap
 function referenceQuote(cfg: PoolConfig, state: AccountBytesMap, amountIn: bigint): bigint {
   const c = asHyloConfig(cfg);
   const live = liveStateFrom(state);
-  if (c.direction === 'aToB') return hyloMintOut(live, c.priceScale, amountIn);
+  if (c.direction === "aToB") return hyloMintOut(live, c.priceScale, amountIn);
   const cap = hyloRedeemCapacity(live, c.priceScale);
   return hyloRedeemOut(live, c.priceScale, amountIn > cap ? cap : amountIn);
 }
 
 export const hylo: SvmVenueAdapter = {
   slug: SLUG,
-  kind: 'constant-product',
+  kind: "constant-product",
   programId: HYLO_PROGRAM_ID,
   fetchPoolConfig,
   quoteAccounts,

@@ -39,16 +39,18 @@ const { compile } = createRequire(import.meta.url)("sauce-compiler") as {
 const ENTRY = "main.js";
 
 /** Resolve the entry, plus any import, off disk from `ROOT`. */
-const resolverFor = (source: string) => (path: string): Uint8Array | undefined => {
-  const key = path.replace(/^\.\//, "");
-  if (key === ENTRY) return Buffer.from(source);
-  for (const dir of [ROOT, join(ROOT, "node_modules")]) {
-    const candidate = join(dir, key);
-    if (existsSync(candidate)) return readFileSync(candidate);
-  }
+const resolverFor =
+  (source: string) =>
+  (path: string): Uint8Array | undefined => {
+    const key = path.replace(/^\.\//, "");
+    if (key === ENTRY) return Buffer.from(source);
+    for (const dir of [ROOT, join(ROOT, "node_modules")]) {
+      const candidate = join(dir, key);
+      if (existsSync(candidate)) return readFileSync(candidate);
+    }
 
-  return undefined;
-};
+    return undefined;
+  };
 
 const toDefines = (defines: Record<string, bigint | string>): Array<[string, string]> =>
   Object.entries(defines).map(([k, v]) => [k, v.toString()] as [string, string]);
@@ -65,12 +67,10 @@ const sauceAbi = parseAbi([
 ]);
 
 // Hardhat account #0
-const ACCOUNT0_KEY =
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const ACCOUNT0_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const ACCOUNT0 = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 // Hardhat account #1
-const ACCOUNT1_KEY =
-  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+const ACCOUNT1_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 const ACCOUNT1 = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
 // ── Test harness ──────────────────────────────────────────────
@@ -83,9 +83,9 @@ async function test(name: string, fn: () => Promise<void>) {
     await fn();
     console.log(`  ✓ ${name}`);
     passed++;
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.log(`  ✕ ${name}`);
-    console.log(`    ${e.message}`);
+    console.log(`    ${(e as Error).message}`);
     failed++;
   }
 }
@@ -94,10 +94,7 @@ function eq(actual: bigint | string, expected: bigint | string, msg?: string) {
   const a = BigInt(actual);
   const b = BigInt(expected);
   if (a !== b) {
-    throw new Error(
-      msg ||
-        `Expected ${b} (0x${b.toString(16)}), got ${a} (0x${a.toString(16)})`,
-    );
+    throw new Error(msg || `Expected ${b} (0x${b.toString(16)}), got ${a} (0x${a.toString(16)})`);
   }
 }
 
@@ -134,38 +131,6 @@ type Client = {
   sauceAddress: Hex;
   chain: ReturnType<typeof defineChain>;
 };
-
-/** Send a cook() transaction (mutates state), return the bytes result */
-async function cook(
-  client: Client,
-  scriptPath: string,
-  defines: Record<string, bigint | string>,
-  account = privateKeyToAccount(ACCOUNT0_KEY),
-): Promise<Hex> {
-  const bytecodes = compileScript(scriptPath, defines);
-
-  const hash = await client.walletClient.writeContract({
-    address: client.sauceAddress,
-    abi: sauceAbi,
-    functionName: "cook",
-    args: [bytecodes],
-    chain: client.chain,
-    account,
-  });
-  const receipt = await client.publicClient.waitForTransactionReceipt({ hash });
-  if (receipt.status !== "success")
-    throw new Error(`Transaction reverted: ${hash}`);
-
-  const { result } = await client.publicClient.simulateContract({
-    address: client.sauceAddress,
-    abi: sauceAbi,
-    functionName: "cook",
-    args: [bytecodes],
-    account: account.address,
-    chain: client.chain,
-  });
-  return result;
-}
 
 /** Simulate a cook() call (read-only, no state mutation) */
 async function view(
@@ -252,9 +217,7 @@ async function deployContract(): Promise<Hex> {
   });
 
   // Deploy Router
-  const routerArtifact = JSON.parse(
-    readFileSync(join(ROOT, "artifacts/Router.json"), "utf-8"),
-  );
+  const routerArtifact = JSON.parse(readFileSync(join(ROOT, "artifacts/Router.json"), "utf-8"));
   // @ts-expect-error - viem types require kzg for blob transactions, but we're not using blobs
   const routerHash = await walletClient.deployContract({
     abi: routerArtifact.abi,
@@ -265,8 +228,7 @@ async function deployContract(): Promise<Hex> {
   const routerReceipt = await publicClient.waitForTransactionReceipt({
     hash: routerHash,
   });
-  if (!routerReceipt.contractAddress)
-    throw new Error("Router deployment failed");
+  if (!routerReceipt.contractAddress) throw new Error("Router deployment failed");
 
   // Deploy SauceRouter with Router address
   const sauceRouterArtifact = JSON.parse(
@@ -281,8 +243,7 @@ async function deployContract(): Promise<Hex> {
     chain,
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  if (!receipt.contractAddress)
-    throw new Error("SauceRouter deployment failed");
+  if (!receipt.contractAddress) throw new Error("SauceRouter deployment failed");
   return receipt.contractAddress as Hex;
 }
 
@@ -322,8 +283,7 @@ async function deployBytecode(
     account,
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  if (!receipt.contractAddress)
-    throw new Error("Deploy failed: no contract address");
+  if (!receipt.contractAddress) throw new Error("Deploy failed: no contract address");
   return receipt.contractAddress as Hex;
 }
 
@@ -390,8 +350,7 @@ function buildInitCode(runtime: Hex): Hex {
     0x00, // PUSH1 0
     0xf3, // RETURN
   ]);
-  return ("0x" +
-    Buffer.concat([initPrefix, runtimeBytes]).toString("hex")) as Hex;
+  return ("0x" + Buffer.concat([initPrefix, runtimeBytes]).toString("hex")) as Hex;
 }
 
 /**
@@ -408,11 +367,7 @@ async function deployV12ERC20(
   chain: ReturnType<typeof defineChain>,
 ): Promise<Hex> {
   const sauceBlob = compileV12(scriptPath);
-  const evmBytecode = await compileOnChain(
-    publicClient,
-    compilerAddress,
-    sauceBlob,
-  );
+  const evmBytecode = await compileOnChain(publicClient, compilerAddress, sauceBlob);
   const creationCode = buildInitCode(evmBytecode);
   return deployBytecode(publicClient, walletClient, creationCode, chain);
 }
@@ -465,19 +420,14 @@ async function v12Send(
   const receipt = await client.publicClient.waitForTransactionReceipt({
     hash,
   });
-  if (receipt.status !== "success")
-    throw new Error(`Transaction reverted: ${hash}`);
+  if (receipt.status !== "success") throw new Error(`Transaction reverted: ${hash}`);
 
   if (!simResult.data) throw new Error("Simulation returned no data");
   return BigInt(simResult.data);
 }
 
 /** Encode a standard EVM function call: [selector:4bytes][abi-encoded args] */
-function encodeCall(
-  selector: Hex,
-  types: { type: string }[],
-  values: any[],
-): Hex {
+function encodeCall(selector: Hex, types: { type: string }[], values: unknown[]): Hex {
   if (types.length === 0) return selector;
   const argsHex = encodeAbiParameters(types, values);
   return (selector + argsHex.slice(2)) as Hex;
@@ -566,11 +516,7 @@ async function testV12ERC20(client: V12Client, erc20: Hex, label: string) {
   console.log(`  ${label}: transfer`);
 
   await test(`${label}: transfer 300 from account0 to account1`, async () => {
-    const data = encodeCall(
-      SEL_TRANSFER,
-      [addrType, u256Type],
-      [ACCOUNT1, 300n],
-    );
+    const data = encodeCall(SEL_TRANSFER, [addrType, u256Type], [ACCOUNT1, 300n]);
     eq(await v12Send(client, erc20, data), 1n);
   });
 
@@ -588,20 +534,12 @@ async function testV12ERC20(client: V12Client, erc20: Hex, label: string) {
   console.log(`  ${label}: approve + allowance`);
 
   await test(`${label}: approve account1 for 200`, async () => {
-    const data = encodeCall(
-      SEL_APPROVE,
-      [addrType, u256Type],
-      [ACCOUNT1, 200n],
-    );
+    const data = encodeCall(SEL_APPROVE, [addrType, u256Type], [ACCOUNT1, 200n]);
     eq(await v12Send(client, erc20, data), 1n);
   });
 
   await test(`${label}: allowance(account0, account1) is 200`, async () => {
-    const data = encodeCall(
-      SEL_ALLOWANCE,
-      [addrType, addrType],
-      [ACCOUNT0, ACCOUNT1],
-    );
+    const data = encodeCall(SEL_ALLOWANCE, [addrType, addrType], [ACCOUNT0, ACCOUNT1]);
     eq(await v12Call(client, erc20, data), 200n);
   });
 
@@ -630,11 +568,7 @@ async function testV12ERC20(client: V12Client, erc20: Hex, label: string) {
   });
 
   await test(`${label}: allowance decreased to 100`, async () => {
-    const data = encodeCall(
-      SEL_ALLOWANCE,
-      [addrType, addrType],
-      [ACCOUNT0, ACCOUNT1],
-    );
+    const data = encodeCall(SEL_ALLOWANCE, [addrType, addrType], [ACCOUNT0, ACCOUNT1]);
     eq(await v12Call(client, erc20, data), 100n);
   });
 
@@ -642,16 +576,12 @@ async function testV12ERC20(client: V12Client, erc20: Hex, label: string) {
   console.log(`  ${label}: reverts`);
 
   await test(`${label}: transfer over balance reverts`, async () => {
-    const data = encodeCall(
-      SEL_TRANSFER,
-      [addrType, u256Type],
-      [ACCOUNT1, 999999n],
-    );
+    const data = encodeCall(SEL_TRANSFER, [addrType, u256Type], [ACCOUNT1, 999999n]);
     try {
       await v12Send(client, erc20, data);
       throw new Error("should have reverted");
-    } catch (e: any) {
-      if (e.message === "should have reverted") throw e;
+    } catch (e: unknown) {
+      if ((e as Error).message === "should have reverted") throw e;
     }
   });
 
@@ -664,8 +594,8 @@ async function testV12ERC20(client: V12Client, erc20: Hex, label: string) {
     try {
       await v12Send(client, erc20, data, account1Wallet);
       throw new Error("should have reverted");
-    } catch (e: any) {
-      if (e.message === "should have reverted") throw e;
+    } catch (e: unknown) {
+      if ((e as Error).message === "should have reverted") throw e;
     }
   });
 
@@ -673,8 +603,8 @@ async function testV12ERC20(client: V12Client, erc20: Hex, label: string) {
     try {
       await v12Call(client, erc20, "0xdeadbeef");
       throw new Error("should have reverted");
-    } catch (e: any) {
-      if (e.message === "should have reverted") throw e;
+    } catch (e: unknown) {
+      if ((e as Error).message === "should have reverted") throw e;
     }
   });
 
@@ -686,22 +616,10 @@ async function testV12ERC20(client: V12Client, erc20: Hex, label: string) {
   });
 
   await test(`${label}: balances sum equals totalSupply`, async () => {
-    const b0 = await v12Call(
-      client,
-      erc20,
-      encodeCall(SEL_BALANCE_OF, [addrType], [ACCOUNT0]),
-    );
-    const b1 = await v12Call(
-      client,
-      erc20,
-      encodeCall(SEL_BALANCE_OF, [addrType], [ACCOUNT1]),
-    );
+    const b0 = await v12Call(client, erc20, encodeCall(SEL_BALANCE_OF, [addrType], [ACCOUNT0]));
+    const b1 = await v12Call(client, erc20, encodeCall(SEL_BALANCE_OF, [addrType], [ACCOUNT1]));
     const supply = await v12Call(client, erc20, SEL_TOTAL_SUPPLY);
-    eq(
-      b0 + b1,
-      supply,
-      `balances (${b0} + ${b1} = ${b0 + b1}) != totalSupply (${supply})`,
-    );
+    eq(b0 + b1, supply, `balances (${b0} + ${b1} = ${b0 + b1}) != totalSupply (${supply})`);
   });
 }
 
@@ -719,9 +637,9 @@ async function main() {
     console.log("Deploying SauceRouter...");
     sauceAddress = await deployContract();
     console.log(`SauceRouter deployed at ${sauceAddress}\n`);
-  } catch (e: any) {
+  } catch (e: unknown) {
     stopNode(pid);
-    console.error("Setup failed:", e.message);
+    console.error("Setup failed:", (e as Error).message);
     process.exit(1);
   }
 
@@ -771,15 +689,10 @@ async function main() {
 
     console.log("\nCompiling V12 compiler (hnc)...");
     const v12CompilerBytecode = getV12CompilerBytecode();
-    console.log(
-      `V12 compiler bytecode: ${(v12CompilerBytecode.length - 2) / 2} bytes`,
-    );
+    console.log(`V12 compiler bytecode: ${(v12CompilerBytecode.length - 2) / 2} bytes`);
 
     console.log("Deploying V12 compiler (via hardhat_setCode)...");
-    const v12CompilerAddress = await deployWithSetCode(
-      client.publicClient,
-      v12CompilerBytecode,
-    );
+    const v12CompilerAddress = await deployWithSetCode(client.publicClient, v12CompilerBytecode);
     console.log(`V12 compiler deployed at ${v12CompilerAddress}`);
 
     const v12Client: V12Client = {

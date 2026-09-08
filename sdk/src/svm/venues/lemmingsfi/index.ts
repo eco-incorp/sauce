@@ -145,25 +145,22 @@
  *   7 TOKEN_PROGRAM (readonly)
  *   8 Sysvar1nstructions (readonly)
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
-import { readUintLE } from '../math.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { readUintLE } from "../math.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'lemmingsfi';
-export const LEMMINGSFI_PROGRAM_ID: Address<'BQEJZUB4CzoT6UhRffoCkqCyqQNrCPCSGHcPEmsdbEsX'> = address(
-  'BQEJZUB4CzoT6UhRffoCkqCyqQNrCPCSGHcPEmsdbEsX',
-);
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const SYSVAR_INSTRUCTIONS = address('Sysvar1nstructions1111111111111111111111111');
+const SLUG = "lemmingsfi";
+export const LEMMINGSFI_PROGRAM_ID: Address<"BQEJZUB4CzoT6UhRffoCkqCyqQNrCPCSGHcPEmsdbEsX"> =
+  address("BQEJZUB4CzoT6UhRffoCkqCyqQNrCPCSGHcPEmsdbEsX");
 /**
  * The program's only 76-byte owned account, anywhere — a global singleton
  * both real pools' real swaps pass as account[1]. See file header.
  */
-export const LEMMINGSFI_CONFIG: Address<'6DZQsK3i1YtvyQCsWxZpY1Ski8dmSjqYnjCUPQiMqT1Z'> = address(
-  '6DZQsK3i1YtvyQCsWxZpY1Ski8dmSjqYnjCUPQiMqT1Z',
+export const LEMMINGSFI_CONFIG: Address<"6DZQsK3i1YtvyQCsWxZpY1Ski8dmSjqYnjCUPQiMqT1Z"> = address(
+  "6DZQsK3i1YtvyQCsWxZpY1Ski8dmSjqYnjCUPQiMqT1Z",
 );
 
 const POOL_ACCOUNT_SIZE = 310;
@@ -176,11 +173,7 @@ export const OFF_LAST_UPDATE_TS = 184;
 /** Standard SPL Mint layout: `decimals` is a single byte at offset 44. */
 const MINT_DECIMALS_OFFSET = 44;
 const MINT_ACCOUNT_MIN_SIZE = 45;
-/** Standard SPL token account layout: live `amount` u64 LE at offset 64. */
-const AMOUNT_OFF = 64;
 
-/** `price (mintB per mintA, natural units) = (priceTick + PRICE_TICK_BIAS) / PRICE_TICK_SCALE`. */
-const PRICE_TICK_BIAS = 2n;
 const PRICE_TICK_SCALE = 1000n;
 
 /**
@@ -189,11 +182,6 @@ const PRICE_TICK_SCALE = 1000n;
  * on-chain threshold is not independently recovered.
  */
 export const STALE_AFTER_SECONDS = 60n;
-
-/** `Swap` — the permissionless instruction (see file header); NOT `Swap2`. */
-const SWAP_DISCRIMINATOR = Uint8Array.from([0xf8, 0xc6, 0x9e, 0x91, 0xe1, 0x75, 0x87, 0xc8]);
-/** 9 zero bytes: min_out(8) + one padding byte, never observed non-zero. */
-const SWAP_TAIL = new Uint8Array(9);
 
 function gcd(a: bigint, b: bigint): bigint {
   a = a < 0n ? -a : a;
@@ -217,7 +205,8 @@ function priceScaleFactor(decA: number, decB: number): { kNum: bigint; kDen: big
 }
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 export interface LemmingsFiPoolConfig extends PoolConfig {
   venue: typeof SLUG;
@@ -235,25 +224,31 @@ export interface LemmingsFiPoolConfig extends PoolConfig {
 }
 
 function lemmingsfiConfig(cfg: PoolConfig): LemmingsFiPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as LemmingsFiPoolConfig;
 }
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
 
 function mintDecimalsFrom(mint: Address, data: Uint8Array | null): number {
   if (data === null) throw new Error(`${SLUG} mint ${mint} account not found`);
   if (data.length < MINT_ACCOUNT_MIN_SIZE) {
-    throw new Error(`${SLUG} mint ${mint} account is ${data.length} bytes, too small for an SPL Mint`);
+    throw new Error(
+      `${SLUG} mint ${mint} account is ${data.length} bytes, too small for an SPL Mint`,
+    );
   }
   return data[MINT_DECIMALS_OFFSET];
 }
 
-export async function fetchLemmingsFiPoolConfig(load: AccountLoader, pool: Address): Promise<LemmingsFiPoolConfig> {
+export async function fetchLemmingsFiPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<LemmingsFiPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   const mintA = pubkeyAt(data, OFF_MINT_A);
   const mintB = pubkeyAt(data, OFF_MINT_B);
@@ -269,11 +264,15 @@ export async function fetchLemmingsFiPoolConfig(load: AccountLoader, pool: Addre
   ] as const) {
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
   const decA = mintDecimalsFrom(mintA, mintAData);
@@ -296,16 +295,15 @@ export async function fetchLemmingsFiPoolConfig(load: AccountLoader, pool: Addre
 function quoteAccounts(base: PoolConfig): VenueAccount[] {
   const cfg = lemmingsfiConfig(base);
   return [
-    { ref: 'vaultA', address: cfg.vaultA },
-    { ref: 'vaultB', address: cfg.vaultB },
+    { ref: "vaultA", address: cfg.vaultA },
+    { ref: "vaultB", address: cfg.vaultB },
   ];
 }
 
 export const lemmingsfi = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: LEMMINGSFI_PROGRAM_ID,
   fetchPoolConfig: fetchLemmingsFiPoolConfig,
   quoteAccounts,
 };
-

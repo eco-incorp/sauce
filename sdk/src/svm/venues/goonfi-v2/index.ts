@@ -68,31 +68,31 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'goonfi-v2';
+const SLUG = "goonfi-v2";
 
-export const GOONFI_V2_PROGRAM_ID = address('goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const GOONFI_V2_PROGRAM_ID = address("goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 /** Instructions sysvar — attached read-only per the real captured swaps (a static screen only; see
  *  module doc: this program IS reachable by CPI — the reference tx is Jupiter's own router calling
  *  in at stackHeight 2 — so the sysvar's presence here is not a CPI blocker). */
-const INSTRUCTIONS_SYSVAR = address('Sysvar1nstructions1111111111111111111111111');
+const INSTRUCTIONS_SYSVAR = address("Sysvar1nstructions1111111111111111111111111");
 /** Constant account #13 of every real swap sampled (4/4 pools) — role not decoded, passed through
  *  verbatim since every sampled swap needed it present, readonly. */
-const GOONFI_CONST_ACCOUNT_13 = address('J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv');
+const GOONFI_CONST_ACCOUNT_13 = address("J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv");
 /** The 719,000-byte account every sampled pool's swap attaches read-only (account #9) — owned by
  *  the GoonFi program itself, NOT written by swap (confirmed via the real tx's writable-flags
  *  decode), so it is genuine keeper-maintained state the swap only consults. Its internal layout
  *  is >98% zero-padded and not yet decoded; this adapter does not read it directly (the per-pool
  *  oracle-relay account below carries the live price signal instead). */
-export const GOONFI_GLOBAL_STATE = address('BNrK9LpEn65QA4TyBLVSMdngW3XHj3xLfFPwGdCBv8wV');
+export const GOONFI_GLOBAL_STATE = address("BNrK9LpEn65QA4TyBLVSMdngW3XHj3xLfFPwGdCBv8wV");
 
 /** sha256-style single-byte tag observed on all 4 real captured swaps. */
 export const GOONFI_SWAP_TAG = 1;
@@ -129,7 +129,6 @@ export const OFF_ORACLE_DENOM = 20;
  *  pool with a genuinely different denom self-deactivates instead of silently mispricing. */
 export const GOONFI_ASSUMED_DENOM = 1_000_000n;
 
-const AMOUNT_OFF = 64; // SPL token account amount field.
 const U64_MAX = (1n << 64n) - 1n;
 
 /** The empirically-validated fee schedule (ppm, i.e. parts-per-1e6) — see module doc for the
@@ -148,7 +147,7 @@ export interface GoonfiFeeSchedule {
 export interface GoonfiV2PoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'xToY' (default — mintA in, mintB out) | 'yToX'. */
-  direction: 'xToY' | 'yToX';
+  direction: "xToY" | "yToX";
   mintA: Address;
   mintB: Address;
   decimalsA: number;
@@ -164,7 +163,8 @@ export interface GoonfiV2PoolConfig extends PoolConfig {
 }
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 /** denomAdjusted = ASSUMED_DENOM * 10^decimalsA / 10^decimalsB — the single scale constant the
  *  live-price formula divides (xToY) or multiplies (yToX) by. Shared between fetchPoolConfig
@@ -174,9 +174,10 @@ export function denomAdjustedFor(decimalsA: number, decimalsB: number): bigint {
 }
 
 function goonfiConfig(cfg: PoolConfig): GoonfiV2PoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`goonfi-v2 adapter got a config for venue '${cfg.venue}'`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`goonfi-v2 adapter got a config for venue '${cfg.venue}'`);
   const c = cfg as GoonfiV2PoolConfig;
-  if (c.direction !== 'xToY' && c.direction !== 'yToX') {
+  if (c.direction !== "xToY" && c.direction !== "yToX") {
     throw new Error(`goonfi-v2 direction must be 'xToY' or 'yToX', got '${c.direction}'`);
   }
   return c;
@@ -200,7 +201,7 @@ function readTierArrays(data: Uint8Array, pool: Address): { sizeRawB: bigint[]; 
 
 export const goonfiV2 = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: GOONFI_V2_PROGRAM_ID,
 
   /**
@@ -212,10 +213,14 @@ export const goonfiV2 = {
     const data = await load(pool);
     if (data === null) throw new Error(`goonfi-v2 pool ${pool} account not found`);
     if (data.length !== POOL_ACCOUNT_SIZE) {
-      throw new Error(`goonfi-v2 pool ${pool} account is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+      throw new Error(
+        `goonfi-v2 pool ${pool} account is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+      );
     }
     if (!POOL_DISCRIMINATOR.every((byte, i) => data[i] === byte)) {
-      throw new Error(`goonfi-v2 pool ${pool} discriminator mismatch (unrecognized account layout)`);
+      throw new Error(
+        `goonfi-v2 pool ${pool} discriminator mismatch (unrecognized account layout)`,
+      );
     }
 
     const mintA = pubkeyAt(data, GOONFI_OFF_MINT_A);
@@ -224,8 +229,13 @@ export const goonfiV2 = {
     const vaultB = pubkeyAt(data, GOONFI_OFF_VAULT_B);
     const oracle = pubkeyAt(data, GOONFI_OFF_ORACLE);
 
-    const [mintAData, mintBData, oracleData] = await Promise.all([load(mintA), load(mintB), load(oracle)]);
-    if (mintAData === null || mintBData === null) throw new Error(`goonfi-v2 pool ${pool} mint account(s) not found`);
+    const [mintAData, mintBData, oracleData] = await Promise.all([
+      load(mintA),
+      load(mintB),
+      load(oracle),
+    ]);
+    if (mintAData === null || mintBData === null)
+      throw new Error(`goonfi-v2 pool ${pool} mint account(s) not found`);
     if (mintAData.length < 45 || mintBData.length < 45) {
       throw new Error(`goonfi-v2 pool ${pool} mint account(s) too short to be an SPL mint`);
     }
@@ -239,16 +249,23 @@ export const goonfiV2 = {
       [mintB, mintBData],
     ] as const) {
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
-    if (oracleData === null) throw new Error(`goonfi-v2 pool ${pool} oracle-relay account ${oracle} not found`);
+    if (oracleData === null)
+      throw new Error(`goonfi-v2 pool ${pool} oracle-relay account ${oracle} not found`);
     if (oracleData.length !== ORACLE_ACCOUNT_SIZE) {
-      throw new Error(`goonfi-v2 pool ${pool} oracle-relay account is ${oracleData.length} bytes, expected ${ORACLE_ACCOUNT_SIZE}`);
+      throw new Error(
+        `goonfi-v2 pool ${pool} oracle-relay account is ${oracleData.length} bytes, expected ${ORACLE_ACCOUNT_SIZE}`,
+      );
     }
 
     const decimalsA = mintAData[44]!;
@@ -261,7 +278,8 @@ export const goonfiV2 = {
     // yields thresholds at least as conservative as the live path will.
     const p1 = readUintLE(oracleData, OFF_ORACLE_P1, 8);
     const p2 = readUintLE(oracleData, OFF_ORACLE_P2, 8);
-    if (p1 === 0n && p2 === 0n) throw new Error(`goonfi-v2 pool ${pool} oracle-relay ${oracle} reads a zero price`);
+    if (p1 === 0n && p2 === 0n)
+      throw new Error(`goonfi-v2 pool ${pool} oracle-relay ${oracle} reads a zero price`);
     const snapshotPrice = p1 < p2 || p2 === 0n ? (p1 === 0n ? p2 : p1) : p2;
 
     // See ladder.ts's paramsFor for the live on-chain denom gate this bakes an assumption against.
@@ -273,7 +291,7 @@ export const goonfiV2 = {
     return {
       venue: SLUG,
       pool,
-      direction: 'xToY',
+      direction: "xToY",
       mintA,
       mintB,
       decimalsA,
@@ -305,15 +323,20 @@ export const goonfiV2 = {
   /** v1 swap CPI (amount baked) — the real 14-account `swap` ix (tag 1). */
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
     const c = goonfiConfig(cfg);
-    if (amountIn <= 0n || amountIn > U64_MAX) throw new Error(`goonfi-v2 buildSwap amountIn must be a positive u64, got ${amountIn}`);
-    const yToX = c.direction === 'yToX';
+    if (amountIn <= 0n || amountIn > U64_MAX)
+      throw new Error(`goonfi-v2 buildSwap amountIn must be a positive u64, got ${amountIn}`);
+    const yToX = c.direction === "yToX";
     const data = new Uint8Array(1 + 1 + 8 + 8 + 1);
     data[0] = GOONFI_SWAP_TAG;
     data[1] = yToX ? 1 : 0;
     for (let b = 0; b < 8; b++) data[2 + b] = Number((amountIn >> BigInt(8 * b)) & 0xffn);
     data[10] = 1; // minOut LSB = 1 (the recipe's terminal delta owns the bound); rest already 0
     data[18] = 0;
-    return { programId: GOONFI_V2_PROGRAM_ID, data, accounts: goonfiSwapAccounts(c, user, (ref, addr, w) => fixed(ref, addr, w)) };
+    return {
+      programId: GOONFI_V2_PROGRAM_ID,
+      data,
+      accounts: goonfiSwapAccounts(c, user, (ref, addr, w) => fixed(ref, addr, w)),
+    };
   },
 };
 
@@ -335,24 +358,24 @@ export function goonfiSwapAccounts(
   make: (ref: string, addr: Address, writable?: boolean) => VenueAccount,
   refFor?: (role: string) => string,
 ): VenueAccount[] {
-  const yToX = c.direction === 'yToX';
+  const yToX = c.direction === "yToX";
   const r = refFor ?? ((role: string): string => role);
   const userA = yToX ? user.outAta : user.inAta; // user's mintA-associated ATA
   const userB = yToX ? user.inAta : user.outAta; // user's mintB-associated ATA
   return [
     { ref: user.owner, signer: true, writable: true },
-    make(r('pool'), c.pool, true),
+    make(r("pool"), c.pool, true),
     { ref: userA, writable: true },
     { ref: userB, writable: true },
-    make(r('va'), c.vaultA, true),
-    make(r('vb'), c.vaultB, true),
-    make(r('ma'), c.mintA),
-    make(r('mb'), c.mintB),
-    make(r('oracle'), c.oracle),
-    make(r('global'), GOONFI_GLOBAL_STATE),
+    make(r("va"), c.vaultA, true),
+    make(r("vb"), c.vaultB, true),
+    make(r("ma"), c.mintA),
+    make(r("mb"), c.mintB),
+    make(r("oracle"), c.oracle),
+    make(r("global"), GOONFI_GLOBAL_STATE),
     { ref: INSTRUCTIONS_SYSVAR, address: INSTRUCTIONS_SYSVAR },
-    make(r('tp'), c.tokenProgram),
-    make(r('tp2'), c.tokenProgram),
+    make(r("tp"), c.tokenProgram),
+    make(r("tp2"), c.tokenProgram),
     { ref: GOONFI_CONST_ACCOUNT_13, address: GOONFI_CONST_ACCOUNT_13 },
   ];
 }

@@ -40,6 +40,7 @@ All five phases landed on this branch. Deliberate deviations from the plan below
 ## 0. Ground truth this plan is built on
 
 ### The engine (../sauce, PR #202)
+
 - `svm/` is a Solana program interpreting **the same v12 postfix bytecode** the EVM Huff runtime
   executes — byte-identical opcode table, proven by a 172-vector cross-runtime parity suite
   (`svm/programs/engine/tests/fixtures/parity_vectors.json`, replayed by `src/parity.rs`, drift-
@@ -49,14 +50,14 @@ All five phases landed on this branch. Deliberate deviations from the plan below
   (33,793 B), `"heap"` (65,536 B), `"frames"` (67,585 B) and need one-time `init_*` instructions
   (iterative realloc growth). Discriminator constants are exported from the engine crate.
 - **CALL (0xA2) SVM shape**: pops `[target(32-byte program id, top), calldata (Bytes descriptor),
-  accounts (static ARRAY of u8 account indices)]`, does `invoke()`, pushes returndata Bytes
+accounts (static ARRAY of u8 account indices)]`, does `invoke()`, pushes returndata Bytes
   descriptor. Account indices index the **user accounts** slice (after the 3 PDAs). Per-CPI cap:
   64 accounts. STATIC (0xA3) is an alias. There is **no value operand** (vs EVM's
   `ternary(CALL, target, value, calldata)`).
 - **SLOAD (0x81) SVM shape**: pops `[account_index (top), offset, len]` → pushes Bytes descriptor
   over that slice of the account's data. SSTORE (0xC5) writes analogously (writable account).
   This is the on-chain state-read primitive the quote pattern below is built on.
-- **CATCH limitation (platform law)**: only *pre-flight* CPI failures (unresolvable operands) are
+- **CATCH limitation (platform law)**: only _pre-flight_ CPI failures (unresolvable operands) are
   catchable; once `invoke()` launches, a failing CPI aborts the whole transaction. Programs must
   branch-and-call-the-winner, never try/catch across CPIs.
 - Return data ≤ 1024 bytes (platform cap; engine errors loudly above it).
@@ -67,7 +68,8 @@ All five phases landed on this branch. Deliberate deviations from the plan below
   COINBASE/PREVRANDAO/BASE_FEE/GAS_PRICE/BLOCK_HASH/EXT_CODE_HASH/BLOB_*.
 
 ### Solana constraints (from MCP docs — verify numbers at implementation time)
-- Tx packet: **1232 bytes** total. Bytecode ships *inside* the tx, so program size competes with
+
+- Tx packet: **1232 bytes** total. Bytecode ships _inside_ the tx, so program size competes with
   account count and signatures for the same budget.
 - Legacy tx: ~35 accounts practical. **v0 tx + Address Lookup Tables**: up to 256 unique accounts
   (u8 indices). ALT: ≤256 entries, append-only, signers not lookup-able, single-level; created
@@ -79,11 +81,13 @@ All five phases landed on this branch. Deliberate deviations from the plan below
   ABI_ENCODE ≈ 50k CU — `tests/cu_budget.rs`).
 
 ### The multi-AMM pattern (the motivating use case)
-AMMs have **no quote instructions** — a CPI cannot "get a quote" without swapping (no view
-functions on Solana). Ecosystem practice (Meteora docs verbatim): *"Quote before CPI — quote
-off-chain with the SDK, then pass explicit bounds into your program."* Jupiter quotes off-chain.
 
-**Sauce's edge**: quote on-chain by *reading pool state*, not by CPI. The program:
+AMMs have **no quote instructions** — a CPI cannot "get a quote" without swapping (no view
+functions on Solana). Ecosystem practice (Meteora docs verbatim): _"Quote before CPI — quote
+off-chain with the SDK, then pass explicit bounds into your program."_ Jupiter quotes off-chain.
+
+**Sauce's edge**: quote on-chain by _reading pool state_, not by CPI. The program:
+
 1. attaches N pools' state accounts **read-only** (no write locks),
 2. `SLOAD`s their reserves/price fields and computes quotes in-VM (`MUL_DIV` etc.),
 3. compares and branches (`GT`/`IF`),
@@ -96,6 +100,7 @@ traversal) in bytecode is heavy — v1 targets constant-product pools on-chain; 
 from the off-chain SDK with the sauce program verifying bounds and routing.
 
 ### Prior art in the org (checked — no overlap)
+
 - `../sauce/compiler-rs` (Sammy): from-scratch Rust compiler, EVM+SVM targets, early (M1.x —
   expression lowering). Useful precedents: SVM byte table (PR #197) done before EVM because the
   SVM opcode set is frozen; **MLOAD/MSTORE flagged as a lowering divergence, not a byte
@@ -110,17 +115,18 @@ from the off-chain SDK with the sauce program verifying bounds and routing.
 
 ## 1. Deliverables
 
-| # | Deliverable | Where |
-|---|---|---|
-| D1 | `target: 'evm' \| 'svm'` compile option; SVM-aware v12 emission (CALL/SLOAD/SSTORE shapes, chain-op gating) | `compiler/` |
-| D2 | **Account planner**: compile output carries an ordered account plan + index bindings | `compiler/` |
-| D3 | `sdk/chains` Solana chain defs + `svm` execution module (PDA bootstrap, v0 tx build, ALT mgmt, ATA prep, compute budget, simulate, send) | `sdk/` |
-| D4 | LiteSVM-backed integration harness (SVM twin of the `cast` harness) + parity smoke test reusing the engine's vector fixture | `compiler/integration-test/`, `dev-tools/` |
-| D5 | The 4-AMM quote-and-swap example recipe (devnet-runnable) | `sdk/recipes/` or `actions/` |
+| #   | Deliverable                                                                                                                              | Where                                      |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| D1  | `target: 'evm' \| 'svm'` compile option; SVM-aware v12 emission (CALL/SLOAD/SSTORE shapes, chain-op gating)                              | `compiler/`                                |
+| D2  | **Account planner**: compile output carries an ordered account plan + index bindings                                                     | `compiler/`                                |
+| D3  | `sdk/chains` Solana chain defs + `svm` execution module (PDA bootstrap, v0 tx build, ALT mgmt, ATA prep, compute budget, simulate, send) | `sdk/`                                     |
+| D4  | LiteSVM-backed integration harness (SVM twin of the `cast` harness) + parity smoke test reusing the engine's vector fixture              | `compiler/integration-test/`, `dev-tools/` |
+| D5  | The 4-AMM quote-and-swap example recipe (devnet-runnable)                                                                                | `sdk/recipes/` or `actions/`               |
 
 ## 2. Phase plan
 
 ### Phase A — compiler target plumbing (D1)
+
 1. `CompileOptions.target?: 'evm' | 'svm'` (default `'evm'`), threaded through
    `processor/index.ts` → saucer construction.
 2. **Opcode gating table** (`compiler/src/saucer/svm-profile.ts`): per-opcode
@@ -144,12 +150,13 @@ from the off-chain SDK with the sauce program verifying bounds and routing.
    `../sauce/svm/programs/engine/src/ops/collections.rs` semantics.
 
 ### Phase B — account planner (D2). The genuinely new component.
+
 1. New `compiler/src/planner/` producing, per compile:
    ```ts
    type AccountPlan = {
      metas: { ref: string; pubkey?: string; writable: boolean; signer: boolean }[]; // ordered, post-PDA slice
-     bindings: { bytecodeOffset: number; ref: string }[];  // where each index byte was emitted
-   }
+     bindings: { bytecodeOffset: number; ref: string }[]; // where each index byte was emitted
+   };
    ```
 2. Sources of accounts: `accounts:` lists on calls, `accountData()` refs, plus explicitly
    declared `#account("name", {writable})` pragmas for anything else. Planner dedupes, orders
@@ -163,6 +170,7 @@ from the off-chain SDK with the sauce program verifying bounds and routing.
 5. Tests: dedup, ordering stability, >64-per-CPI rejection, budget math.
 
 ### Phase C — sdk send pipeline (D3)
+
 1. `sdk/chains`: Solana cluster defs (devnet/mainnet, CHAIN_ID constants matching the engine
    feature flags, engine program id per cluster).
 2. New `sdk/core/svm/` (published subpath `/svm`), built on `@solana/kit` (new dependency —
@@ -182,6 +190,7 @@ from the off-chain SDK with the sauce program verifying bounds and routing.
    against LiteSVM (below) — no live cluster in CI.
 
 ### Phase D — test harness + parity smoke (D4)
+
 1. `compiler/integration-test/utils.ts` gains an SVM twin: drive the engine `.so` via LiteSVM.
    Options (decide at implementation): (a) small Rust shim binary in `../sauce/svm` invoked like
    `cast` is today, or (b) `solana-bankrun`/`litesvm` npm bindings if maintained. (a) is zero
@@ -189,12 +198,13 @@ from the off-chain SDK with the sauce program verifying bounds and routing.
 2. **Parity smoke**: compile a curated set of the SDK compiler's own integration programs for
    BOTH targets; run EVM bytes through the existing `cast` path and SVM bytes through LiteSVM;
    assert identical results. (The engine's 172-vector fixture proves engine parity; this proves
-   *this compiler* emits target-correct bytes.)
+   _this compiler_ emits target-correct bytes.)
 3. Engine binary acquisition: `SAUCE_ENGINE_SO` env pointing at
    `../sauce/svm/target/deploy/engine.so` locally; CI builds it from the sauce repo pin or
    downloads an artifact (needs a small workflow decision — flag for review).
 
 ### Phase E — the 4-AMM recipe (D5), proves the whole stack
+
 1. SauceScript program: `accountData()` reads of 2 constant-product pools (devnet: e.g. Raydium
    CP + Orca token-swap clones or Meteora DAMM), quote math via `MUL_DIV`, comparison, single
    `call()` to winner with `minOut` bound baked in.

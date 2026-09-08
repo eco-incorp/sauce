@@ -4,7 +4,8 @@ import { deployments } from "./addresses.js";
 export const protocolInfo: ProtocolInfo = {
   name: "Beefy Finance",
   slug: "beefy",
-  description: "Multi-chain yield optimizer. Auto-compounds rewards from LP tokens and other yield sources across many chains.",
+  description:
+    "Multi-chain yield optimizer. Auto-compounds rewards from LP tokens and other yield sources across many chains.",
   website: "https://beefy.com",
   github: "https://github.com/beefyfinance",
   category: "yield",

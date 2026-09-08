@@ -111,43 +111,28 @@
  * Every one of the 8 reproduces the real program's output to the integer, both the gross/net
  * split (per-component floor) and the curve itself.
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import type {
-  AccountBytesMap,
-  AccountLoader,
-  PoolConfig,
-  SwapUser,
-  VenueAccount,
-} from '../types.js';
+import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-const SLUG = 'runner-rodeo' as const;
+const SLUG = "runner-rodeo" as const;
 
 function address_(s: string): Address {
   return s as unknown as Address;
 }
 
-export const RUNNER_RODEO_PROGRAM_ID = address_('runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA');
-const WSOL = address_('So11111111111111111111111111111111111111112');
-const TOKEN_PROGRAM = address_('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address_('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const ASSOCIATED_TOKEN_PROGRAM = address_('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-const SYSTEM_PROGRAM = address_('11111111111111111111111111111111');
+export const RUNNER_RODEO_PROGRAM_ID = address_("runnrXXdsSRkdueCRYxKDvSWfv6nAnrG5dcM29qj1HA");
+const WSOL = address_("So11111111111111111111111111111111111111112");
+const TOKEN_PROGRAM = address_("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address_("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+const ASSOCIATED_TOKEN_PROGRAM = address_("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /** PDA(["authority"], program) — re-derived + confirmed, see module header. */
-const AUTHORITY = address_('7Eg1rRYr2WqEWTvqkzG1ApuB91WbZ4qzY7V6BfXtjwQR');
-/** PDA(["__event_authority"], program) — Anchor's standard self-CPI event log account. */
-const EVENT_AUTHORITY = address_('KND1vJVGccL2qojg6qidWH4hN7VGgL3sRwUXfVbwQQX');
-/** Protocol-wide fee vaults — NOT derivable from any account this module reads; see SCOPE. */
-const PROTOCOL_FEE_VAULT_A = address_('EBr75ovZ4pPwNrCjbCtfcMwdJdWUKHTAFK2ajbkiT6sp');
-const PROTOCOL_FEE_VAULT_B = address_('79hnLHGGxZQ3M5dpotHJ5AGchEdc962NhiCmBMHNeEm4');
+const AUTHORITY = address_("7Eg1rRYr2WqEWTvqkzG1ApuB91WbZ4qzY7V6BfXtjwQR");
 
 const POOL_STATE_DISCRIMINATOR = [0xd5, 0xd2, 0xe3, 0xbf, 0x30, 0xaa, 0xde, 0x72];
-const SWAP_DISCRIMINATOR = [0xf8, 0xc6, 0x9e, 0x91, 0xe1, 0x75, 0x87, 0xc8];
-
-const BPS = 10_000n;
 
 function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): boolean {
   return data.length >= 8 && discriminator.every((byte, i) => data[i] === byte);
@@ -157,7 +142,9 @@ function pubkeyAt(data: Uint8Array, offset: number): Address {
 }
 async function pda(seeds: (Uint8Array | Address)[], programAddress: Address): Promise<Address> {
   const encoder = getAddressEncoder();
-  const rawSeeds = seeds.map((s) => (typeof s === 'string' ? new Uint8Array(encoder.encode(s as Address)) : s));
+  const rawSeeds = seeds.map((s) =>
+    typeof s === "string" ? new Uint8Array(encoder.encode(s as Address)) : s,
+  );
   const [derived] = await getProgramDerivedAddress({ programAddress, seeds: rawSeeds });
   return derived;
 }
@@ -197,7 +184,9 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
  * cannot harvest back would NOT be neutralized and WOULD corrupt the constant-product math
  * above, which assumes the full requested amount always lands.
  */
-function mintTransferFeeConfig(data: Uint8Array): { bpsActive: boolean; withdrawWithheldAuthority: Address } | null {
+function mintTransferFeeConfig(
+  data: Uint8Array,
+): { bpsActive: boolean; withdrawWithheldAuthority: Address } | null {
   if (data.length <= 166) return null;
   let offset = 166;
   while (offset + 4 <= data.length) {
@@ -228,10 +217,14 @@ function mintTransferFeeConfig(data: Uint8Array): { bpsActive: boolean; withdraw
 function detectTokenProgram(mint: Address, data: Uint8Array): Address {
   if (data.length === 82) return TOKEN_PROGRAM;
   if (data.length < 166) {
-    throw new Error(`runner-rodeo mint ${mint} data is ${data.length} bytes, not a token mint layout`);
+    throw new Error(
+      `runner-rodeo mint ${mint} data is ${data.length} bytes, not a token mint layout`,
+    );
   }
   if (data[165] !== 1) {
-    throw new Error(`runner-rodeo mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
+    throw new Error(
+      `runner-rodeo mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`,
+    );
   }
   return TOKEN_2022_PROGRAM;
 }
@@ -239,7 +232,7 @@ function detectTokenProgram(mint: Address, data: Uint8Array): Address {
 export interface RunnerRodeoPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** exactIn side: 'quoteToBase' (default, buy) | 'baseToQuote' (sell). */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   configAccount: Address;
   baseVault: Address;
   quoteVault: Address;
@@ -252,22 +245,21 @@ export interface RunnerRodeoPoolConfig extends PoolConfig {
   protocolFeeBpsB: bigint;
 }
 
-function asCfg(cfg: PoolConfig): RunnerRodeoPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config for pool ${cfg.pool}`);
-  return cfg as RunnerRodeoPoolConfig;
-}
-
 export const runnerRodeo = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: RUNNER_RODEO_PROGRAM_ID,
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<RunnerRodeoPoolConfig> {
-    const psData = await loadAccount(load, pool, 'pool state');
+    const psData = await loadAccount(load, pool, "pool state");
     if (!hasDiscriminator(psData, POOL_STATE_DISCRIMINATOR)) {
-      throw new Error(`runner-rodeo pool ${pool} discriminator mismatch (not a RunnerRodeo pool-state account)`);
+      throw new Error(
+        `runner-rodeo pool ${pool} discriminator mismatch (not a RunnerRodeo pool-state account)`,
+      );
     }
     if (psData.length < 249) {
-      throw new Error(`runner-rodeo pool ${pool} data is ${psData.length} bytes, expected at least 249`);
+      throw new Error(
+        `runner-rodeo pool ${pool} data is ${psData.length} bytes, expected at least 249`,
+      );
     }
     const configAccount = pubkeyAt(psData, 8);
     const baseVault = pubkeyAt(psData, 72);
@@ -275,15 +267,19 @@ export const runnerRodeo = {
     const baseMint = pubkeyAt(psData, 185);
     const quoteMint = pubkeyAt(psData, 217);
     if (quoteMint !== WSOL) {
-      throw new Error(`runner-rodeo pool ${pool} gate: quote mint ${quoteMint} is not wSOL (only wSOL-quoted pools are supported)`);
+      throw new Error(
+        `runner-rodeo pool ${pool} gate: quote mint ${quoteMint} is not wSOL (only wSOL-quoted pools are supported)`,
+      );
     }
 
     const [cfgData, mintData] = await Promise.all([
-      loadAccount(load, configAccount, 'config'),
-      loadAccount(load, baseMint, 'base mint'),
+      loadAccount(load, configAccount, "config"),
+      loadAccount(load, baseMint, "base mint"),
     ]);
     if (cfgData.length < 79) {
-      throw new Error(`runner-rodeo pool ${pool} config ${configAccount} is ${cfgData.length} bytes, expected at least 79`);
+      throw new Error(
+        `runner-rodeo pool ${pool} config ${configAccount} is ${cfgData.length} bytes, expected at least 79`,
+      );
     }
     const partnerWallet = pubkeyAt(cfgData, 9);
     const creatorFeeBps = readUintLE(cfgData, 73, 2);
@@ -296,7 +292,9 @@ export const runnerRodeo = {
     // PermanentDelegate/Confidential are advisories, not blocking, so a routable T22 mint passes.
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`runner-rodeo pool ${pool} gate: base mint ${baseMint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `runner-rodeo pool ${pool} gate: base mint ${baseMint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
     const feeConfig = mintTransferFeeConfig(mintData);
     // A nonzero mint-level fee is SAFE iff this program's own authority can harvest it back
@@ -310,7 +308,11 @@ export const runnerRodeo = {
     // CANNOT harvest, the withheld-but-unreturned fee corrupts the virtual-reserve curve in a way
     // simple per-leg net(amount, cfg, epoch) does not model (and this facade has no epoch to net
     // against). Rejecting self-limits (safe); keep the no-op (reject) path.
-    if (feeConfig !== null && feeConfig.bpsActive && feeConfig.withdrawWithheldAuthority !== AUTHORITY) {
+    if (
+      feeConfig !== null &&
+      feeConfig.bpsActive &&
+      feeConfig.withdrawWithheldAuthority !== AUTHORITY
+    ) {
       throw new Error(
         `runner-rodeo pool ${pool} gate: base mint ${baseMint} carries an ACTIVE Token-2022 transfer fee ` +
           `whose withdrawWithheldAuthority (${feeConfig.withdrawWithheldAuthority}) is NOT this program's own ` +
@@ -324,7 +326,7 @@ export const runnerRodeo = {
     return {
       venue: SLUG,
       pool,
-      direction: 'quoteToBase',
+      direction: "quoteToBase",
       configAccount,
       baseVault,
       quoteVault,
@@ -338,6 +340,3 @@ export const runnerRodeo = {
     };
   },
 };
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-

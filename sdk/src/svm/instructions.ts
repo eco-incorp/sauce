@@ -1,8 +1,8 @@
-import { createHash } from 'node:crypto';
+import { createHash } from "node:crypto";
 
-import { AccountRole } from '@solana/kit';
-import type { Address, Instruction } from '@solana/kit';
-import { SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
+import { AccountRole } from "@solana/kit";
+import type { Address, Instruction } from "@solana/kit";
+import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system";
 import {
   BUFFER_HEADER_BYTES,
   BUFFER_SEED_BYTES,
@@ -19,12 +19,12 @@ import {
   MAX_BUFFER_CAPACITY,
   PDA_GROWTH_STEP,
   WRITE_BUFFER_DISCRIMINATOR,
-} from './engine.js';
-import type { ResolvedAccountMeta } from './resolve.js';
+} from "./engine.js";
+import type { ResolvedAccountMeta } from "./resolve.js";
 
 function assertSeed(seed: Uint8Array, name: string): void {
   if (!(seed instanceof Uint8Array) || seed.length !== BUFFER_SEED_BYTES) {
-    const got = seed instanceof Uint8Array ? `${seed.length} bytes` : 'a non-Uint8Array';
+    const got = seed instanceof Uint8Array ? `${seed.length} bytes` : "a non-Uint8Array";
     throw new Error(`${name} must be exactly ${BUFFER_SEED_BYTES} bytes, got ${got}`);
   }
 }
@@ -54,7 +54,10 @@ function concatBytes(...parts: (Uint8Array | number[])[]): Uint8Array {
   return out;
 }
 
-function withDiscriminator(discriminator: Uint8Array, ...parts: (Uint8Array | number[])[]): Uint8Array {
+function withDiscriminator(
+  discriminator: Uint8Array,
+  ...parts: (Uint8Array | number[])[]
+): Uint8Array {
   const total = discriminator.length + parts.reduce((n, p) => n + p.length, 0);
   const data = new Uint8Array(total);
   data.set(discriminator, 0);
@@ -82,7 +85,11 @@ export interface ExecuteInstructionInput {
  * carrying this instruction MUST also carry RequestHeapFrame(262144) — see
  * buildHeapFramePrepend.
  */
-export function buildExecuteInstruction({ programId, bytecode, accounts }: ExecuteInstructionInput): Instruction {
+export function buildExecuteInstruction({
+  programId,
+  bytecode,
+  accounts,
+}: ExecuteInstructionInput): Instruction {
   return {
     programAddress: programId,
     accounts: [...accounts],
@@ -118,8 +125,8 @@ function encodeExecutePayload(
     throw new Error(`expectedSha256 must be exactly 32 bytes, got ${expectedSha256.length}`);
   }
   if (slice !== undefined) {
-    assertU32(slice.offset, 'slice offset');
-    assertU32(slice.len, 'slice len');
+    assertU32(slice.offset, "slice offset");
+    assertU32(slice.len, "slice len");
   }
 
   let flags = 0x00;
@@ -179,7 +186,10 @@ export function buildExecuteFromAccountInstruction({
   return {
     programAddress: programId,
     accounts: [{ address: buffer, role: AccountRole.READONLY }, ...accounts],
-    data: withDiscriminator(EXECUTE_FROM_ACCOUNT_DISCRIMINATOR, encodeExecutePayload(expectedSha256, slice, args)),
+    data: withDiscriminator(
+      EXECUTE_FROM_ACCOUNT_DISCRIMINATOR,
+      encodeExecutePayload(expectedSha256, slice, args),
+    ),
   };
 }
 
@@ -217,7 +227,10 @@ export function buildExecuteAndCloseInstruction({
   return {
     programAddress: programId,
     accounts: [{ address: buffer, role: AccountRole.WRITABLE }, ...accounts],
-    data: withDiscriminator(EXECUTE_AND_CLOSE_DISCRIMINATOR, encodeExecutePayload(expectedSha256, undefined, args)),
+    data: withDiscriminator(
+      EXECUTE_AND_CLOSE_DISCRIMINATOR,
+      encodeExecutePayload(expectedSha256, undefined, args),
+    ),
   };
 }
 
@@ -257,7 +270,7 @@ export function buildInitBufferInstructions({
   capacity,
   currentBytes = 0,
 }: InitBufferInstructionsInput): Instruction[] {
-  assertSeed(seed, 'buffer seed');
+  assertSeed(seed, "buffer seed");
 
   if (!Number.isInteger(capacity) || capacity <= 0 || capacity > MAX_BUFFER_CAPACITY) {
     throw new Error(`buffer capacity must be 1-${MAX_BUFFER_CAPACITY} bytes, got ${capacity}`);
@@ -288,7 +301,13 @@ export interface WriteBufferInstructionInput {
   chunk: Uint8Array;
 }
 
-export function buildWriteBufferInstruction({ programId, authority, buffer, offset, chunk }: WriteBufferInstructionInput): Instruction {
+export function buildWriteBufferInstruction({
+  programId,
+  authority,
+  buffer,
+  offset,
+  chunk,
+}: WriteBufferInstructionInput): Instruction {
   return {
     programAddress: programId,
     accounts: [
@@ -305,7 +324,7 @@ export function buildWriteBufferInstruction({ programId, authority, buffer, offs
  * implementation. Sync (node:crypto); the kit client hashes the same bytes via async WebCrypto.
  */
 export function bytecodeSha256(bytecode: Uint8Array): Uint8Array {
-  return createHash('sha256').update(bytecode).digest();
+  return createHash("sha256").update(bytecode).digest();
 }
 
 export interface FinalizeBufferInstructionInput {
@@ -318,8 +337,15 @@ export interface FinalizeBufferInstructionInput {
   sha256: Uint8Array;
 }
 
-export function buildFinalizeBufferInstruction({ programId, authority, buffer, length, sha256 }: FinalizeBufferInstructionInput): Instruction {
-  if (sha256.length !== 32) throw new Error(`sha256 must be exactly 32 bytes, got ${sha256.length}`);
+export function buildFinalizeBufferInstruction({
+  programId,
+  authority,
+  buffer,
+  length,
+  sha256,
+}: FinalizeBufferInstructionInput): Instruction {
+  if (sha256.length !== 32)
+    throw new Error(`sha256 must be exactly 32 bytes, got ${sha256.length}`);
 
   return {
     programAddress: programId,
@@ -338,7 +364,11 @@ export interface CloseBufferInstructionInput {
   buffer: Address;
 }
 
-export function buildCloseBufferInstruction({ programId, authority, buffer }: CloseBufferInstructionInput): Instruction {
+export function buildCloseBufferInstruction({
+  programId,
+  authority,
+  buffer,
+}: CloseBufferInstructionInput): Instruction {
   return {
     programAddress: programId,
     accounts: [
@@ -369,7 +399,8 @@ export function buildCloseBufferCheckedInstruction({
   buffer,
   expectedSha256,
 }: CloseBufferCheckedInstructionInput): Instruction {
-  if (expectedSha256.length !== 32) throw new Error(`expectedSha256 must be exactly 32 bytes, got ${expectedSha256.length}`);
+  if (expectedSha256.length !== 32)
+    throw new Error(`expectedSha256 must be exactly 32 bytes, got ${expectedSha256.length}`);
 
   return {
     programAddress: programId,
@@ -405,9 +436,18 @@ export interface StagingPlan {
 }
 
 /** Mirrors the engine's staging protocol batching (spec §2.5/§6.3). */
-export function buildStagingPlan(bytecodeLength: number, chunkBytes: number = BUFFER_WRITE_CHUNK_BYTES): StagingPlan {
-  if (!Number.isInteger(bytecodeLength) || bytecodeLength <= 0 || bytecodeLength > MAX_BUFFER_CAPACITY) {
-    throw new Error(`bytecode length must be 1-${MAX_BUFFER_CAPACITY} bytes, got ${bytecodeLength}`);
+export function buildStagingPlan(
+  bytecodeLength: number,
+  chunkBytes: number = BUFFER_WRITE_CHUNK_BYTES,
+): StagingPlan {
+  if (
+    !Number.isInteger(bytecodeLength) ||
+    bytecodeLength <= 0 ||
+    bytecodeLength > MAX_BUFFER_CAPACITY
+  ) {
+    throw new Error(
+      `bytecode length must be 1-${MAX_BUFFER_CAPACITY} bytes, got ${bytecodeLength}`,
+    );
   }
 
   if (!Number.isInteger(chunkBytes) || chunkBytes <= 0) {
@@ -425,6 +465,12 @@ export function buildStagingPlan(bytecodeLength: number, chunkBytes: number = BU
     capacity: bytecodeLength,
     initInstructionCount,
     chunks,
-    transactions: { init: 1, writes: chunks.length, finalize: 1, execute: 1, total: 1 + chunks.length + 2 },
+    transactions: {
+      init: 1,
+      writes: chunks.length,
+      finalize: 1,
+      execute: 1,
+      total: 1 + chunks.length + 2,
+    },
   };
 }

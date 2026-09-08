@@ -122,30 +122,32 @@
  * fix (deriving the PDA forward from a candidate mint, never scanning by mint
  * offset) lives in `withPumpfunBondingCurveDiscovery` (the consuming app SVM discovery module).
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-const SLUG = 'pumpfun-bonding-curve' as const;
+const SLUG = "pumpfun-bonding-curve" as const;
 
-export const PUMPFUN_BONDING_CURVE_PROGRAM_ID = address_('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
-const FEE_PROGRAM = address_('pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ');
-const WSOL = address_('So11111111111111111111111111111111111111112');
-const TOKEN_PROGRAM = address_('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address_('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const ASSOCIATED_TOKEN_PROGRAM = address_('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-const SYSTEM_PROGRAM = address_('11111111111111111111111111111111');
+export const PUMPFUN_BONDING_CURVE_PROGRAM_ID = address_(
+  "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+);
+const FEE_PROGRAM = address_("pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ");
+const WSOL = address_("So11111111111111111111111111111111111111112");
+const TOKEN_PROGRAM = address_("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address_("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+const ASSOCIATED_TOKEN_PROGRAM = address_("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const SYSTEM_PROGRAM = address_("11111111111111111111111111111111");
 /** Pubkey::default — a curve with this creator pays no creator fee (matches pumpswap's convention). */
 const DEFAULT_PUBKEY = SYSTEM_PROGRAM;
 /** Fixed program PDAs (hardcoded like pumpswap's GLOBAL_CONFIG/FEE_CONFIG — computed once, verified
  *  against real mainnet state; see the module header). */
-const GLOBAL = address_('4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf');
+const GLOBAL = address_("4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf");
 /** PDA(["fee_config", PUMPFUN_BONDING_CURVE_PROGRAM_ID], FEE_PROGRAM) — the bonding-curve-specific
  *  FeeConfig (a DIFFERENT address than pumpswap's own `5PHirr8joyTMp9JMm6nW7hNDVyEYdkzDqazxPD7RaTjx`,
  *  even though both are namespaced under the same fee program). */
-const FEE_CONFIG = address_('8Wf5TiAheLUqBrKXeYg2JtAFFMWtKdG2BSFgqUcPVwTt');
+const FEE_CONFIG = address_("8Wf5TiAheLUqBrKXeYg2JtAFFMWtKdG2BSFgqUcPVwTt");
 
 const BONDING_CURVE_DISCRIMINATOR = [23, 183, 248, 55, 96, 216, 172, 96];
 const GLOBAL_DISCRIMINATOR = [167, 232, 232, 177, 200, 108, 114, 127];
@@ -161,7 +163,9 @@ function pubkeyAt(data: Uint8Array, offset: number): Address {
 }
 async function pda(seeds: (Uint8Array | Address)[], programAddress: Address): Promise<Address> {
   const encoder = getAddressEncoder();
-  const rawSeeds = seeds.map((s) => (typeof s === 'string' ? new Uint8Array(encoder.encode(s as Address)) : s));
+  const rawSeeds = seeds.map((s) =>
+    typeof s === "string" ? new Uint8Array(encoder.encode(s as Address)) : s,
+  );
   const [derived] = await getProgramDerivedAddress({ programAddress, seeds: rawSeeds });
   return derived;
 }
@@ -181,10 +185,14 @@ const SEED = (s: string): Uint8Array => new TextEncoder().encode(s);
 function detectTokenProgram(mint: Address, data: Uint8Array): Address {
   if (data.length === 82) return TOKEN_PROGRAM;
   if (data.length < 166) {
-    throw new Error(`pumpfun-bonding-curve mint ${mint} data is ${data.length} bytes, not a token mint layout`);
+    throw new Error(
+      `pumpfun-bonding-curve mint ${mint} data is ${data.length} bytes, not a token mint layout`,
+    );
   }
   if (data[165] !== 1) {
-    throw new Error(`pumpfun-bonding-curve mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
+    throw new Error(
+      `pumpfun-bonding-curve mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`,
+    );
   }
   // Un-routable (blocking) extensions self-drop: a NonTransferable or
   // default-frozen mint cannot move through a plain transferChecked. Advisory
@@ -192,7 +200,9 @@ function detectTokenProgram(mint: Address, data: Uint8Array): Address {
   // a zero-fee/advisory-only T22 mint still routes.
   const { blocking } = parseMintExtensions(data);
   if (blocking.length > 0) {
-    throw new Error(`pumpfun-bonding-curve gate: mint ${mint} is un-routable — ${blocking.join('; ')}`);
+    throw new Error(
+      `pumpfun-bonding-curve gate: mint ${mint} is un-routable — ${blocking.join("; ")}`,
+    );
   }
   let offset = 166;
   while (offset + 4 <= data.length) {
@@ -217,13 +227,17 @@ function detectTokenProgram(mint: Address, data: Uint8Array): Address {
 
 /** FeeTier borsh entries: u128 LE threshold + three u64 LE bps (Fees), 40 bytes each, vec at offset 65 —
  *  byte-identical layout to pumpswap's FeeConfig (same shared type, different PDA). */
-function parseFeeTiers(data: Uint8Array): { marketCapThreshold: bigint; protocolFeeBps: bigint; creatorFeeBps: bigint }[] {
+function parseFeeTiers(
+  data: Uint8Array,
+): { marketCapThreshold: bigint; protocolFeeBps: bigint; creatorFeeBps: bigint }[] {
   const count = Number(readUintLE(data, 65, 4));
   const tiers: { marketCapThreshold: bigint; protocolFeeBps: bigint; creatorFeeBps: bigint }[] = [];
   for (let i = 0; i < count; i++) {
     const offset = 69 + i * 40;
     if (offset + 40 > data.length) {
-      throw new Error(`pumpfun-bonding-curve fee config declares ${count} fee tiers but tier ${i} overruns its ${data.length}-byte data`);
+      throw new Error(
+        `pumpfun-bonding-curve fee config declares ${count} fee tiers but tier ${i} overruns its ${data.length}-byte data`,
+      );
     }
     tiers.push({
       marketCapThreshold: readUintLE(data, offset, 16),
@@ -252,7 +266,7 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
 export interface PumpfunBondingCurvePoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** exactIn side: 'quoteToBase' (default, buy_exact_quote_in_v2) | 'baseToQuote' (sell_v2). */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   baseMint: Address;
   baseTokenProgram: Address;
   creator: Address;
@@ -278,23 +292,26 @@ export interface PumpfunBondingCurvePoolConfig extends PoolConfig {
  * / sell_v2 both need the account; sell_v2 additionally needs its ATA at a
  * different fixed position — see buildSwapV2 below).
  */
-export const PUMPFUN_BONDING_CURVE_USER_VOLUME_ACCUMULATOR_REF = 'pumpfun-bonding-curve-user-volume-accumulator';
+export const PUMPFUN_BONDING_CURVE_USER_VOLUME_ACCUMULATOR_REF =
+  "pumpfun-bonding-curve-user-volume-accumulator";
 export const PUMPFUN_BONDING_CURVE_ASSOCIATED_USER_VOLUME_ACCUMULATOR_REF =
-  'pumpfun-bonding-curve-associated-user-volume-accumulator';
+  "pumpfun-bonding-curve-associated-user-volume-accumulator";
 
 /** PDA(["user_volume_accumulator", user], PROGRAM) — resolve at execute time with the real wallet. */
 export async function pumpfunBondingCurveUserVolumeAccumulatorPda(user: Address): Promise<Address> {
-  return pda([SEED('user_volume_accumulator'), user], PUMPFUN_BONDING_CURVE_PROGRAM_ID);
+  return pda([SEED("user_volume_accumulator"), user], PUMPFUN_BONDING_CURVE_PROGRAM_ID);
 }
 /** ATA(userVolumeAccumulator, TOKEN_PROGRAM, wSOL) — resolve at execute time with the real wallet. */
-export async function pumpfunBondingCurveAssociatedUserVolumeAccumulator(user: Address): Promise<Address> {
+export async function pumpfunBondingCurveAssociatedUserVolumeAccumulator(
+  user: Address,
+): Promise<Address> {
   const uva = await pumpfunBondingCurveUserVolumeAccumulatorPda(user);
   return ata(uva, WSOL, TOKEN_PROGRAM);
 }
 
 export const pumpfunBondingCurve = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: PUMPFUN_BONDING_CURVE_PROGRAM_ID,
   /**
    * `pool` is the bonding-curve PDA (owner-verified against
@@ -303,41 +320,59 @@ export const pumpfunBondingCurve = {
    * it) — `the consuming app SVM solver entry`'s FAMILIES entry enforces its presence and throws
    * a named error if a caller omits it.
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address, mint: Address): Promise<PumpfunBondingCurvePoolConfig> {
-    const bcData = await loadAccount(load, pool, 'bonding curve');
+  async fetchPoolConfig(
+    load: AccountLoader,
+    pool: Address,
+    mint: Address,
+  ): Promise<PumpfunBondingCurvePoolConfig> {
+    const bcData = await loadAccount(load, pool, "bonding curve");
     if (!hasDiscriminator(bcData, BONDING_CURVE_DISCRIMINATOR)) {
-      throw new Error(`pumpfun-bonding-curve pool ${pool} discriminator mismatch (not a BondingCurve account)`);
+      throw new Error(
+        `pumpfun-bonding-curve pool ${pool} discriminator mismatch (not a BondingCurve account)`,
+      );
     }
     if (bcData.length < 115) {
-      throw new Error(`pumpfun-bonding-curve pool ${pool} data is ${bcData.length} bytes, expected at least 115`);
+      throw new Error(
+        `pumpfun-bonding-curve pool ${pool} data is ${bcData.length} bytes, expected at least 115`,
+      );
     }
     const complete = bcData[48] !== 0;
     if (complete) {
-      throw new Error(`pumpfun-bonding-curve pool ${pool} has completed (migrated) — trade the pumpswap AMM pool instead`);
+      throw new Error(
+        `pumpfun-bonding-curve pool ${pool} has completed (migrated) — trade the pumpswap AMM pool instead`,
+      );
     }
     const isMayhemMode = bcData[81] !== 0;
     if (isMayhemMode) {
-      throw new Error(`pumpfun-bonding-curve pool ${pool} gate: is_mayhem_mode is set (mayhem fee routing is unverified)`);
+      throw new Error(
+        `pumpfun-bonding-curve pool ${pool} gate: is_mayhem_mode is set (mayhem fee routing is unverified)`,
+      );
     }
     const isCashbackCoin = bcData[82] !== 0;
     if (isCashbackCoin) {
-      throw new Error(`pumpfun-bonding-curve pool ${pool} gate: is_cashback_coin is set (needs an undocumented bonding_curve_v2 remaining account)`);
+      throw new Error(
+        `pumpfun-bonding-curve pool ${pool} gate: is_cashback_coin is set (needs an undocumented bonding_curve_v2 remaining account)`,
+      );
     }
     const quoteMint = pubkeyAt(bcData, 83);
     if (quoteMint !== SYSTEM_PROGRAM) {
-      throw new Error(`pumpfun-bonding-curve pool ${pool} gate: quote_mint ${quoteMint} is not the native-SOL sentinel (an alt-quote-mint curve needs the _v2 arbitrary-quote-mint superset, unsupported here)`);
+      throw new Error(
+        `pumpfun-bonding-curve pool ${pool} gate: quote_mint ${quoteMint} is not the native-SOL sentinel (an alt-quote-mint curve needs the _v2 arbitrary-quote-mint superset, unsupported here)`,
+      );
     }
     const creator = pubkeyAt(bcData, 49);
 
-    const expectedPool = await pda([SEED('bonding-curve'), mint], PUMPFUN_BONDING_CURVE_PROGRAM_ID);
+    const expectedPool = await pda([SEED("bonding-curve"), mint], PUMPFUN_BONDING_CURVE_PROGRAM_ID);
     if (expectedPool !== pool) {
-      throw new Error(`pumpfun-bonding-curve pool ${pool} does not derive from mint ${mint} (expected bonding-curve PDA ${expectedPool})`);
+      throw new Error(
+        `pumpfun-bonding-curve pool ${pool} does not derive from mint ${mint} (expected bonding-curve PDA ${expectedPool})`,
+      );
     }
 
     const [mintData, globalData, feeConfigData] = await Promise.all([
-      loadAccount(load, mint, 'base mint'),
-      loadAccount(load, GLOBAL, 'global'),
-      loadAccount(load, FEE_CONFIG, 'fee config'),
+      loadAccount(load, mint, "base mint"),
+      loadAccount(load, GLOBAL, "global"),
+      loadAccount(load, FEE_CONFIG, "fee config"),
     ]);
     const baseTokenProgram = detectTokenProgram(mint, mintData);
     if (!hasDiscriminator(globalData, GLOBAL_DISCRIMINATOR)) {
@@ -369,7 +404,10 @@ export const pumpfunBondingCurve = {
       // pumpswap's canonical branch, which uses REAL AMM vault balances (a
       // bonding curve has no separate "real" spot price; virtual reserves ARE
       // the invariant).
-      const marketCap = virtualTokenReserves === 0n ? 0n : (virtualQuoteReserves * tokenTotalSupply) / virtualTokenReserves;
+      const marketCap =
+        virtualTokenReserves === 0n
+          ? 0n
+          : (virtualQuoteReserves * tokenTotalSupply) / virtualTokenReserves;
       const tier = pickFeeTier(tiers, marketCap);
       protocolFeeBps = tier.protocolFeeBps;
       creatorFeeBps = tier.creatorFeeBps;
@@ -388,15 +426,15 @@ export const pumpfunBondingCurve = {
       ata(pool, WSOL, TOKEN_PROGRAM),
       ata(feeRecipient, WSOL, TOKEN_PROGRAM),
       ata(buybackFeeRecipient, WSOL, TOKEN_PROGRAM),
-      pda([SEED('creator-vault'), creator], PUMPFUN_BONDING_CURVE_PROGRAM_ID),
-      pda([SEED('sharing-config'), mint], FEE_PROGRAM),
+      pda([SEED("creator-vault"), creator], PUMPFUN_BONDING_CURVE_PROGRAM_ID),
+      pda([SEED("sharing-config"), mint], FEE_PROGRAM),
     ]);
     const associatedCreatorVault = await ata(creatorVault, WSOL, TOKEN_PROGRAM);
 
     return {
       venue: SLUG,
       pool,
-      direction: 'quoteToBase',
+      direction: "quoteToBase",
       baseMint: mint,
       baseTokenProgram,
       creator,
@@ -414,4 +452,3 @@ export const pumpfunBondingCurve = {
     };
   },
 };
-

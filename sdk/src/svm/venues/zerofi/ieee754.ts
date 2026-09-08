@@ -40,11 +40,15 @@ export function ieee754ScaleParams(
 ): { bakedTop: bigint; shiftPre: bigint; num: bigint; den: bigint } {
   const top = rawBits >> 52n;
   if (top === 0n || top >= 0x800n) {
-    throw new Error(`zerofi oracle price bit pattern 0x${rawBits.toString(16)} is subnormal/zero/negative/NaN-range`);
+    throw new Error(
+      `zerofi oracle price bit pattern 0x${rawBits.toString(16)} is subnormal/zero/negative/NaN-range`,
+    );
   }
   const sShiftFull = 1075n - top;
   if (sShiftFull < 0n) {
-    throw new Error(`zerofi oracle price bit pattern 0x${rawBits.toString(16)} implies a value >= 2^53 (unexpected)`);
+    throw new Error(
+      `zerofi oracle price bit pattern 0x${rawBits.toString(16)} implies a value >= 2^53 (unexpected)`,
+    );
   }
   const shiftPre = sShiftFull > 63n ? sShiftFull - 63n : 0n;
   const sShiftRemaining = sShiftFull - shiftPre;

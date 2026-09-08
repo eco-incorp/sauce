@@ -3,33 +3,43 @@
 High-fidelity oracle network providing low-latency price feeds from institutional sources. Uses pull-based model for efficient on-chain price updates.
 
 ## Category
+
 oracle | Chains: Ethereum
 
 ## Key Operations
+
 - **getPrice**: Read price from Pyth oracle by price feed ID
 
 ## SDK Usage
+
 ```typescript
 import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/pyth";
 ```
 
 ## SauceScript Examples
+
 ```typescript
 // Get price by feed ID
 import { PythOracleABI as IPythOracle } from "./abis";
-function main(oracleAddress: Address, priceId: Uint256): { price: Uint256, conf: Uint256, expo: Uint256, publishTime: Uint256 } {
+function main(
+  oracleAddress: Address,
+  priceId: Uint256,
+): { price: Uint256; conf: Uint256; expo: Uint256; publishTime: Uint256 } {
   const oracle = IPythOracle.at(oracleAddress);
   return oracle.getPrice(priceId);
 }
 ```
 
 ## Key Addresses
-| Chain | Contract | Address |
-|-------|----------|---------|
-| Ethereum | oracle | `0x4305FB66699C3B2702D4d05CF36551390A4c69C6` |
+
+| Chain    | Contract | Address                                      |
+| -------- | -------- | -------------------------------------------- |
+| Ethereum | oracle   | `0x4305FB66699C3B2702D4d05CF36551390A4c69C6` |
 
 ## ABI Methods
+
 ### PythOracleABI
+
 - `getPrice(bytes32)` - Get price for a feed ID. Params: id (bytes32 price feed identifier). Returns Price tuple: (price int64, conf uint64, expo int32, publishTime uint256)
   - `price` - Latest price value
   - `conf` - Confidence interval (uncertainty)
@@ -39,6 +49,7 @@ function main(oracleAddress: Address, priceId: Uint256): { price: Uint256, conf:
 - `getUpdateFee(bytes[])` - Get fee required for price update. Params: updateData. Returns feeAmount in wei
 
 ## Notes
+
 - Pull-based oracle: users must call updatePriceFeeds before reading prices
 - Sub-second latency from institutional market data providers
 - Actual price = price * 10^expo (e.g. price=12345, expo=-2 means $123.45)

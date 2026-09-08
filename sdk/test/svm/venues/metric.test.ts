@@ -7,16 +7,15 @@
  * `referenceQuote`, and that the emitted fragment actually compiles as valid SauceScript on the
  * 'svm' target (the CPI-in-emitSetup shape is novel in this tree — see ladder.ts's module doc).
  */
-import { resolve } from 'path';
-import { metric, METRIC_QUOTE_HAIRCUT_PPM } from '../../../src/svm/venues/metric/index.js';
-import type { MetricPoolConfig } from '../../../src/svm/venues/metric/index.js';
+import { resolve } from "path";
+import { metric, METRIC_QUOTE_HAIRCUT_PPM } from "../../../src/svm/venues/metric/index.js";
 
 const HAIRCUT_PPM = METRIC_QUOTE_HAIRCUT_PPM;
-import { fixtureBytesMap, fixtureLoader, loadFixtures } from '../fixtures.js';
-import { address } from '@solana/kit';
+import { fixtureLoader, loadFixtures } from "../fixtures.js";
+import { address } from "@solana/kit";
 
-const FIXTURES = resolve(process.cwd(), 'test/svm/fixtures/metric');
-const POOL = address('G5B2Ws2DKattHTm75AoANWCpbQ48R9n8ZJur42RLYRYF');
+const FIXTURES = resolve(process.cwd(), "test/svm/fixtures/metric");
+const POOL = address("G5B2Ws2DKattHTm75AoANWCpbQ48R9n8ZJur42RLYRYF");
 
 // Real 32-byte oracle CPI return data captured live (bid, then ask — u128 LE halves), against the
 // SAME ground-truth (oracleConfig, priceAccount) pair the fixture's pool resolves to.
@@ -32,18 +31,18 @@ function realOracleQuoteBytes(): Uint8Array {
   return out;
 }
 
-describe('metric.fetchPoolConfig', () => {
-  it('decodes the real pool topology and bakes the supplied oracle quote', async () => {
+describe("metric.fetchPoolConfig", () => {
+  it("decodes the real pool topology and bakes the supplied oracle quote", async () => {
     const fixtures = loadFixtures(FIXTURES);
     const load = fixtureLoader(fixtures);
     const cfg = await metric.fetchPoolConfig(load, POOL, 0, async () => realOracleQuoteBytes());
 
-    expect(cfg.mintA).toBe('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'); // USDC
-    expect(cfg.mintB).toBe('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'); // USDT
+    expect(cfg.mintA).toBe("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
+    expect(cfg.mintB).toBe("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"); // USDT
     expect(cfg.decimalsA).toBe(6);
     expect(cfg.decimalsB).toBe(6);
-    expect(cfg.oracleConfig).toBe('BHqHqvdiW9WQPgYkkxcpHicM5zS8czHn7tLdHs23tGxb');
-    expect(cfg.priceAccount).toBe('BubYekVVTtbTuVsAtptiAZV4rpPQNFyBs3THPSGJgk6a');
+    expect(cfg.oracleConfig).toBe("BHqHqvdiW9WQPgYkkxcpHicM5zS8czHn7tLdHs23tGxb");
+    expect(cfg.priceAccount).toBe("BubYekVVTtbTuVsAtptiAZV4rpPQNFyBs3THPSGJgk6a");
     expect(cfg.bidQ64).toBe(REAL_BID);
     expect(cfg.askQ64).toBe(REAL_ASK);
     expect(cfg.bakedPrice).toBe(REAL_BID); // direction 0 bakes bid
@@ -62,7 +61,7 @@ describe('metric.fetchPoolConfig', () => {
     expect(cfg.scaleNum * ((1n << 64n) / rawG)).toBeLessThan(cfg.scaleDen * (REAL_BID / rawG));
   });
 
-  it('direction 1 bakes the ask and the exact reciprocal scale', async () => {
+  it("direction 1 bakes the ask and the exact reciprocal scale", async () => {
     const fixtures = loadFixtures(FIXTURES);
     const load = fixtureLoader(fixtures);
     const cfg = await metric.fetchPoolConfig(load, POOL, 1, async () => realOracleQuoteBytes());
@@ -75,7 +74,7 @@ describe('metric.fetchPoolConfig', () => {
     expect(cfg.scaleDen).toBe(den / g);
   });
 
-  it('throws (refuse, do not guess) when fetchOracleQuote is not supplied', async () => {
+  it("throws (refuse, do not guess) when fetchOracleQuote is not supplied", async () => {
     const fixtures = loadFixtures(FIXTURES);
     const load = fixtureLoader(fixtures);
     await expect(metric.fetchPoolConfig(load, POOL)).rejects.toThrow(
@@ -83,7 +82,7 @@ describe('metric.fetchPoolConfig', () => {
     );
   });
 
-  it('throws when the oracle quote callback returns the wrong length', async () => {
+  it("throws when the oracle quote callback returns the wrong length", async () => {
     const fixtures = loadFixtures(FIXTURES);
     const load = fixtureLoader(fixtures);
     await expect(
@@ -92,12 +91,12 @@ describe('metric.fetchPoolConfig', () => {
   });
 });
 
-describe('the baked scale is a conservative lower bound (measured over-quote correction)', () => {
+describe("the baked scale is a conservative lower bound (measured over-quote correction)", () => {
   // A paired-differential simulation of the REAL swap on real pools (funded recent trader, sizes
   // spanning 667x pinned to one slot) found the RAW oracle-price prediction over-quotes the realized
   // fill by a size-INDEPENDENT ~3-4 ppm (confirming a flat, no-slippage PMM fill — a bin-walk would
   // address slippage that does not exist). The haircut folds that offset out so predicted <= realized.
-  it('predicts strictly LESS than the raw oracle price would, by ~HAIRCUT_PPM, for both directions', async () => {
+  it("predicts strictly LESS than the raw oracle price would, by ~HAIRCUT_PPM, for both directions", async () => {
     const fixtures = loadFixtures(FIXTURES);
     const load = fixtureLoader(fixtures);
     const x = 2_000_000_000n; // 2000 USDC/USDT atoms — the top of the measured size range

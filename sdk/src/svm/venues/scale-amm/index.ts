@@ -28,11 +28,25 @@
  * account-list LENGTH, feeBeneficiaryCount is part of shapeKey (see below) — pools with a
  * different active-beneficiary count cannot share a compiled slot fragment.
  */
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig, AccountBytesMap } from '../types.js';
-import { ata, computeScaleQuote, CONFIG_SEED, CURVE_CONSTANT_PRODUCT, detectTokenProgram, pda, pubkeyAt, readFeeBeneficiaries, readUintLE, SCALE_AMM_PROGRAM_ID, type FeeBeneficiary, type ScaleCurveState, type ScaleDirection } from '../scale-common.js';
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, AccountBytesMap } from "../types.js";
+import {
+  ata,
+  computeScaleQuote,
+  CONFIG_SEED,
+  CURVE_CONSTANT_PRODUCT,
+  detectTokenProgram,
+  pda,
+  pubkeyAt,
+  readFeeBeneficiaries,
+  readUintLE,
+  SCALE_AMM_PROGRAM_ID,
+  type FeeBeneficiary,
+  type ScaleCurveState,
+  type ScaleDirection,
+} from "../scale-common.js";
 
-const SLUG = 'scale-amm';
+const SLUG = "scale-amm";
 const POOL_SIZE = 326;
 const POOL_DISCRIMINATOR = Uint8Array.of(241, 154, 109, 4, 17, 177, 109, 188);
 const CONFIG_DISCRIMINATOR = Uint8Array.of(160, 78, 128, 0, 248, 83, 230, 160);
@@ -79,7 +93,11 @@ export interface ScaleAmmPoolConfig extends PoolConfig {
   direction: ScaleDirection;
 }
 
-async function loadRequired(load: AccountLoader, addr: Address, label: string): Promise<Uint8Array> {
+async function loadRequired(
+  load: AccountLoader,
+  addr: Address,
+  label: string,
+): Promise<Uint8Array> {
   const data = await load(addr);
   if (data === null) throw new Error(`${SLUG}: ${label} ${addr} not found`);
   return data;
@@ -102,11 +120,11 @@ function amm(cfg: PoolConfig): ScaleAmmPoolConfig {
 
 export const scaleAmm = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: SCALE_AMM_PROGRAM_ID,
 
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<ScaleAmmPoolConfig> {
-    const data = await loadRequired(load, pool, 'pool');
+    const data = await loadRequired(load, pool, "pool");
     if (data.length !== POOL_SIZE) {
       throw new Error(`${SLUG} pool ${pool} data is ${data.length} bytes, expected ${POOL_SIZE}`);
     }
@@ -117,7 +135,9 @@ export const scaleAmm = {
     if (!enabled) throw new Error(`${SLUG} pool ${pool} is disabled`);
     const curve = data[OFFSETS.curve]!;
     if (curve !== CURVE_CONSTANT_PRODUCT) {
-      throw new Error(`${SLUG} pool ${pool} uses curve type ${curve}, only ConstantProduct (0) is supported`);
+      throw new Error(
+        `${SLUG} pool ${pool} uses curve type ${curve}, only ConstantProduct (0) is supported`,
+      );
     }
 
     const owner = pubkeyAt(data, OFFSETS.owner);
@@ -130,14 +150,20 @@ export const scaleAmm = {
     const feeBeneficiaries = readFeeBeneficiaries(data, OFFSETS.feeBeneficiaries);
 
     const configPda = await pda([CONFIG_SEED], SCALE_AMM_PROGRAM_ID);
-    const configData = await loadRequired(load, configPda, 'platform config');
-    if (configData.length < CONFIG_MIN_SIZE || !hasDiscriminator(configData, CONFIG_DISCRIMINATOR)) {
+    const configData = await loadRequired(load, configPda, "platform config");
+    if (
+      configData.length < CONFIG_MIN_SIZE ||
+      !hasDiscriminator(configData, CONFIG_DISCRIMINATOR)
+    ) {
       throw new Error(`${SLUG} platform config ${configPda} has a wrong discriminator or size`);
     }
     const feeBeneficiaryWallet = pubkeyAt(configData, CONFIG_OFFSETS.feeBeneficiary);
     const platformFeeBps = readUintLE(configData, CONFIG_OFFSETS.platformFeeBps, 2);
 
-    const [mintAData, mintBData] = await Promise.all([loadRequired(load, mintA, 'mint_a'), loadRequired(load, mintB, 'mint_b')]);
+    const [mintAData, mintBData] = await Promise.all([
+      loadRequired(load, mintA, "mint_a"),
+      loadRequired(load, mintB, "mint_b"),
+    ]);
     const tokenProgramA = detectTokenProgram(mintA, mintAData);
     const tokenProgramB = detectTokenProgram(mintB, mintBData);
 
@@ -147,7 +173,9 @@ export const scaleAmm = {
       ata(feeBeneficiaryWallet, mintA, tokenProgramA),
     ]);
     const beneficiaryAtas = await Promise.all(
-      feeBeneficiaries.slice(0, feeBeneficiaryCount).map((b) => ata(b.wallet, mintA, tokenProgramA)),
+      feeBeneficiaries
+        .slice(0, feeBeneficiaryCount)
+        .map((b) => ata(b.wallet, mintA, tokenProgramA)),
     );
 
     return {
@@ -169,7 +197,7 @@ export const scaleAmm = {
       beneficiaryAtas,
       tokenProgramA,
       tokenProgramB,
-      direction: 'aToB',
+      direction: "aToB",
     };
   },
 
@@ -179,4 +207,4 @@ export const scaleAmm = {
   },
 };
 
-export type { ScaleDirection } from '../scale-common.js';
+export type { ScaleDirection } from "../scale-common.js";

@@ -71,25 +71,25 @@
  * See ladder.ts for the swap instruction / account list, the quote model +
  * its evidence, and the measured CU.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { findAssociatedTokenPda } from '@solana-program/token';
-import type { AccountLoader, PoolConfig, VenueAccount } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'hadron';
+const SLUG = "hadron";
 
-export const HADRON_PROGRAM_ID = address('HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8');
-export const HADRON_TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-export const HADRON_CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
+export const HADRON_PROGRAM_ID = address("HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8");
+export const HADRON_TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+export const HADRON_CLOCK_SYSVAR = address("SysvarC1ock11111111111111111111111111111111");
 /**
  * Single venue-wide fee-treasury wallet — the fee-destination account for
  * ANY input mint is `findAssociatedTokenPda({owner: HADRON_FEE_AUTHORITY,
  * mint})`, verified exact against 3 different mints' real fee-destination
  * addresses observed in real landed transactions.
  */
-export const HADRON_FEE_AUTHORITY = address('7Ly5vZTDz2ZJGrqTa9gCP2NWjFDvnxSLVQEdmvMcVaVn');
+export const HADRON_FEE_AUTHORITY = address("7Ly5vZTDz2ZJGrqTa9gCP2NWjFDvnxSLVQEdmvMcVaVn");
 
 export const HADRON_PAIR_ACCOUNT_SIZE = 724;
 export const HADRON_OFF_MINT_A = 41;
@@ -129,14 +129,14 @@ interface HadronAssetEntry {
   global: Address;
 }
 
-const JITOSOL = address('J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn');
-const WSOL = address('So11111111111111111111111111111111111111112');
-const USDC = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-const USDT = address('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
-const ORCA_MINT = address('orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE');
+const JITOSOL = address("J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn");
+const WSOL = address("So11111111111111111111111111111111111111112");
+const USDC = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const USDT = address("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB");
+const ORCA_MINT = address("orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE");
 
-const GLOBAL_SOL_FAMILY = address('63sGvdACSA2Kvf4yr7n7SFEJ9V1yAVVyyduPU3br8Lyt');
-const GLOBAL_ORCA = address('6G1G2MiWuy5bsjpMnMTSKKxDm4qTkdShBPaxxQxwzZcX');
+const GLOBAL_SOL_FAMILY = address("63sGvdACSA2Kvf4yr7n7SFEJ9V1yAVVyyduPU3br8Lyt");
+const GLOBAL_ORCA = address("6G1G2MiWuy5bsjpMnMTSKKxDm4qTkdShBPaxxQxwzZcX");
 
 export const HADRON_ASSET_REGISTRY: Partial<Record<Address, HadronAssetEntry>> = {
   // jitoSOL/WSOL — PRIMARY evidence: 8 real simulateTransaction probes,
@@ -144,27 +144,27 @@ export const HADRON_ASSET_REGISTRY: Partial<Record<Address, HadronAssetEntry>> =
   // successful; plus 8 real historical landed transactions.
   [JITOSOL]: {
     mintB: WSOL,
-    assetCfgA: address('BKWdoS5GN6J9YFxANmdfb3rtcYUT8M4Hr6axB7j8pFDy'),
-    growingA: address('ESRUJyvNhxCPSn1nEHYhNXBkkL61J5Veeeq7UTdkPiQe'),
-    metaA: address('FDAzdHWFX9rawHp5o7phRH7BNnpCi24zRefusqC52Fqk'),
+    assetCfgA: address("BKWdoS5GN6J9YFxANmdfb3rtcYUT8M4Hr6axB7j8pFDy"),
+    growingA: address("ESRUJyvNhxCPSn1nEHYhNXBkkL61J5Veeeq7UTdkPiQe"),
+    metaA: address("FDAzdHWFX9rawHp5o7phRH7BNnpCi24zRefusqC52Fqk"),
     global: GLOBAL_SOL_FAMILY,
   },
   // USDC/USDT — corroborating evidence: 1 real historical landed swap
   // (reciprocal-price cross-check within 0.006%).
   [USDC]: {
     mintB: USDT,
-    assetCfgA: address('3GgL9m1MgRmypkky12wCzyCxuhjoWjVNHA94Ut4ve9UT'),
-    growingA: address('2uxsuJWbihusTkcpM8nfAxEpDduBTcXXepGHCrPafc54'),
-    metaA: address('B44mBtfYWxM7RJsTaZi5DF2gqVEQgjRKGrSutnAsFbym'),
+    assetCfgA: address("3GgL9m1MgRmypkky12wCzyCxuhjoWjVNHA94Ut4ve9UT"),
+    growingA: address("2uxsuJWbihusTkcpM8nfAxEpDduBTcXXepGHCrPafc54"),
+    metaA: address("B44mBtfYWxM7RJsTaZi5DF2gqVEQgjRKGrSutnAsFbym"),
     global: GLOBAL_SOL_FAMILY,
   },
   // WSOL/USDC — accounts + price-field mechanism confirmed (same field
   // shape/offset); no dedicated multi-size simulateTransaction probe.
   [WSOL]: {
     mintB: USDC,
-    assetCfgA: address('8xZwN7U2CTWFcmfYAChE53d9S5nLWPGyrSbGJRRaQjFZ'),
-    growingA: address('2RE24ajCYdtQw1YsCzM8RArfFuAazkRVgFMtPHPSfgJg'),
-    metaA: address('2jCfc7sBuKEpSk7jt268oMvZwEQ2tDhrHaWBQJzao1JE'),
+    assetCfgA: address("8xZwN7U2CTWFcmfYAChE53d9S5nLWPGyrSbGJRRaQjFZ"),
+    growingA: address("2RE24ajCYdtQw1YsCzM8RArfFuAazkRVgFMtPHPSfgJg"),
+    metaA: address("2jCfc7sBuKEpSk7jt268oMvZwEQ2tDhrHaWBQJzao1JE"),
     global: GLOBAL_SOL_FAMILY,
   },
   // ORCA/USDC — accounts + price-field mechanism confirmed (same field
@@ -172,20 +172,21 @@ export const HADRON_ASSET_REGISTRY: Partial<Record<Address, HadronAssetEntry>> =
   // other three (see file header) — no dedicated multi-size probe.
   [ORCA_MINT]: {
     mintB: USDC,
-    assetCfgA: address('3xDWGsT3MduCMkmWHx3wCDkvcTZp6RSRHHZ9xqjB79Ai'),
-    growingA: address('2dNY3WaTKfDVT6UUk1aJ7bLEeJp3oEhLt2KFsuq8bBRZ'),
-    metaA: address('DawjQYpFYjB3svWRTeGTk97jDw4orwv447tTtTKJZyUs'),
+    assetCfgA: address("3xDWGsT3MduCMkmWHx3wCDkvcTZp6RSRHHZ9xqjB79Ai"),
+    growingA: address("2dNY3WaTKfDVT6UUk1aJ7bLEeJp3oEhLt2KFsuq8bBRZ"),
+    metaA: address("DawjQYpFYjB3svWRTeGTk97jDw4orwv447tTtTKJZyUs"),
     global: GLOBAL_ORCA,
   },
 };
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 export interface HadronPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'AtoB' (default, mintA in) | 'BtoA'. */
-  direction: 'AtoB' | 'BtoA';
+  direction: "AtoB" | "BtoA";
   mintA: Address;
   mintB: Address;
   vaultA: Address;
@@ -200,15 +201,21 @@ export interface HadronPoolConfig extends PoolConfig {
 }
 
 export function hadronConfig(cfg: PoolConfig): HadronPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as HadronPoolConfig;
 }
 
-export async function fetchHadronConfig(load: AccountLoader, pool: Address): Promise<HadronPoolConfig> {
+export async function fetchHadronConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<HadronPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== HADRON_PAIR_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${HADRON_PAIR_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${HADRON_PAIR_ACCOUNT_SIZE}`,
+    );
   }
   const mintA = pubkeyAt(data, HADRON_OFF_MINT_A);
   const mintB = pubkeyAt(data, HADRON_OFF_MINT_B);
@@ -223,7 +230,7 @@ export async function fetchHadronConfig(load: AccountLoader, pool: Address): Pro
   if (entry.mintB !== mintB) {
     throw new Error(
       `${SLUG} pool ${pool}: mintA ${mintA}'s registered/validated quote mint is ${entry.mintB}, but this pool's mintB is ${mintB} — ` +
-        'the live oracle price field is denominated against the REGISTERED quote only, so an unvalidated pairing self-drops',
+        "the live oracle price field is denominated against the REGISTERED quote only, so an unvalidated pairing self-drops",
     );
   }
 
@@ -239,18 +246,38 @@ export async function fetchHadronConfig(load: AccountLoader, pool: Address): Pro
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
-  const [vaultA] = await findAssociatedTokenPda({ owner: pool, mint: mintA, tokenProgram: HADRON_TOKEN_PROGRAM });
-  const [vaultB] = await findAssociatedTokenPda({ owner: pool, mint: mintB, tokenProgram: HADRON_TOKEN_PROGRAM });
-  const [feeVaultA] = await findAssociatedTokenPda({ owner: HADRON_FEE_AUTHORITY, mint: mintA, tokenProgram: HADRON_TOKEN_PROGRAM });
-  const [feeVaultB] = await findAssociatedTokenPda({ owner: HADRON_FEE_AUTHORITY, mint: mintB, tokenProgram: HADRON_TOKEN_PROGRAM });
+  const [vaultA] = await findAssociatedTokenPda({
+    owner: pool,
+    mint: mintA,
+    tokenProgram: HADRON_TOKEN_PROGRAM,
+  });
+  const [vaultB] = await findAssociatedTokenPda({
+    owner: pool,
+    mint: mintB,
+    tokenProgram: HADRON_TOKEN_PROGRAM,
+  });
+  const [feeVaultA] = await findAssociatedTokenPda({
+    owner: HADRON_FEE_AUTHORITY,
+    mint: mintA,
+    tokenProgram: HADRON_TOKEN_PROGRAM,
+  });
+  const [feeVaultB] = await findAssociatedTokenPda({
+    owner: HADRON_FEE_AUTHORITY,
+    mint: mintB,
+    tokenProgram: HADRON_TOKEN_PROGRAM,
+  });
 
   const vaultAData = await load(vaultA);
   if (vaultAData === null) throw new Error(`${SLUG} pool ${pool}: vaultA ${vaultA} does not exist`);
@@ -270,7 +297,7 @@ export async function fetchHadronConfig(load: AccountLoader, pool: Address): Pro
   return {
     venue: SLUG,
     pool,
-    direction: 'AtoB',
+    direction: "AtoB",
     mintA,
     mintB,
     vaultA,
@@ -288,15 +315,15 @@ export async function fetchHadronConfig(load: AccountLoader, pool: Address): Pro
 function quoteAccounts(base: PoolConfig): VenueAccount[] {
   const cfg = hadronConfig(base);
   return [
-    { ref: 'price', address: cfg.assetCfgA },
-    { ref: 'vaultA', address: cfg.vaultA },
-    { ref: 'vaultB', address: cfg.vaultB },
+    { ref: "price", address: cfg.assetCfgA },
+    { ref: "vaultA", address: cfg.vaultA },
+    { ref: "vaultB", address: cfg.vaultB },
   ];
 }
 
 export const hadron = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: HADRON_PROGRAM_ID,
   fetchPoolConfig: fetchHadronConfig,
   quoteAccounts,

@@ -132,18 +132,22 @@
  * - a direction with NO shipped boundaries and no edge (readable === 0) —
  *   wired via SvmWindowDriftError like orca-whirlpool/meteora-dlmm.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from '../orca-whirlpool/tick-math.js';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  MAX_TICK_INDEX,
+  MIN_TICK_INDEX,
+  whirlpoolSqrtPriceAtTick,
+} from "../orca-whirlpool/tick-math.js";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'crema';
-export const CREMA_PROGRAM_ID = address('CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "crema";
+export const CREMA_PROGRAM_ID = address("CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const CLMMPOOL_ACCOUNT_SIZE = 748;
 /** sha256('account:Clmmpool')[0..8]. */
@@ -207,7 +211,7 @@ export interface CremaWindow {
 
 export interface CremaPoolConfig extends PoolConfig {
   venue: typeof SLUG;
-  direction: 'aToB' | 'bToA';
+  direction: "aToB" | "bToA";
   tokenMintA: Address;
   tokenMintB: Address;
   tokenVaultA: Address;
@@ -234,7 +238,7 @@ function getAddressEncoded(value: Address): Uint8Array {
 }
 async function deriveTickArrayMapPda(pool: Address): Promise<Address> {
   return memoizedGetProgramDerivedAddress(CREMA_PROGRAM_ID, [
-    new TextEncoder().encode('tick_array_map'),
+    new TextEncoder().encode("tick_array_map"),
     getAddressEncoded(pool),
   ]);
 }
@@ -243,7 +247,7 @@ async function deriveTickArrayPda(pool: Address, arrayIndex: number): Promise<Ad
   idxBytes[0] = arrayIndex & 0xff;
   idxBytes[1] = (arrayIndex >> 8) & 0xff;
   return memoizedGetProgramDerivedAddress(CREMA_PROGRAM_ID, [
-    new TextEncoder().encode('tick_array'),
+    new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     idxBytes,
   ]);
@@ -300,13 +304,17 @@ async function resolveWindow(
   // account into the swap ix.
   const arrayIndices: number[] = [];
   let cursor = startArrayIndex;
-  const inRange = (i: number) => (aToB ? i >= TICK_ARRAY_MAP_MIN_BIT_INDEX : i <= TICK_ARRAY_MAP_MAX_BIT_INDEX);
+  const inRange = (i: number) =>
+    aToB ? i >= TICK_ARRAY_MAP_MIN_BIT_INDEX : i <= TICK_ARRAY_MAP_MAX_BIT_INDEX;
   const step = aToB ? -1 : 1;
   while (inRange(cursor) && arrayIndices.length < CREMA_MAX_ARRAYS) {
     if (bitmapBitSet(tickArrayMapData, cursor)) arrayIndices.push(cursor);
     cursor += step;
   }
-  cursor = arrayIndices.length > 0 ? arrayIndices[arrayIndices.length - 1]! + step : startArrayIndex + step;
+  cursor =
+    arrayIndices.length > 0
+      ? arrayIndices[arrayIndices.length - 1]! + step
+      : startArrayIndex + step;
   while (arrayIndices.length < CREMA_MAX_ARRAYS && inRange(cursor)) {
     arrayIndices.push(cursor);
     cursor += step;
@@ -316,10 +324,17 @@ async function resolveWindow(
   // (duplicate PDAs here fail the fetch-validity check identically on both
   // slots, so `readable` still stops correctly; there is nothing further to
   // read either way).
-  while (arrayIndices.length < CREMA_MAX_ARRAYS) arrayIndices.push(arrayIndices[arrayIndices.length - 1] ?? startArrayIndex);
+  while (arrayIndices.length < CREMA_MAX_ARRAYS)
+    arrayIndices.push(arrayIndices[arrayIndices.length - 1] ?? startArrayIndex);
 
-  const tickArrays = (await Promise.all(arrayIndices.map((idx) => deriveTickArrayPda(pool, idx)))) as [Address, Address, Address];
-  const startTicks = arrayIndices.map((idx) => startTickOf(idx, tickSpacing)) as [number, number, number];
+  const tickArrays = (await Promise.all(
+    arrayIndices.map((idx) => deriveTickArrayPda(pool, idx)),
+  )) as [Address, Address, Address];
+  const startTicks = arrayIndices.map((idx) => startTickOf(idx, tickSpacing)) as [
+    number,
+    number,
+    number,
+  ];
 
   // Batch the whole window into ONE coalesced round instead of an outward
   // serial walk: `arrayIndices` (and thus every tick-array PDA above) is fully
@@ -335,7 +350,7 @@ async function resolveWindow(
   let readable = 0;
   for (let i = 0; i < CREMA_MAX_ARRAYS; i++) {
     const settled = loaded[i]!;
-    if (settled.status === 'rejected') throw settled.reason;
+    if (settled.status === "rejected") throw settled.reason;
     const data = settled.value;
     const valid =
       data !== null &&
@@ -388,15 +403,27 @@ async function resolveWindow(
     edge = { tick, sqrtPrice: whirlpoolSqrtPriceAtTick(tick) };
   }
 
-  return { tickArrays, arrayIndices: arrayIndices as [number, number, number], startTicks, boundaries, edge, readable };
+  return {
+    tickArrays,
+    arrayIndices: arrayIndices as [number, number, number],
+    startTicks,
+    boundaries,
+    edge,
+    readable,
+  };
 }
 
 /** Fetch + decode one Clmmpool and freeze both directions' boundary windows. Read-only against the loader. */
-export async function fetchCremaPoolConfig(load: AccountLoader, pool: Address): Promise<CremaPoolConfig> {
+export async function fetchCremaPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<CremaPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== CLMMPOOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected ${CLMMPOOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected ${CLMMPOOL_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, CLMMPOOL_DISCRIMINATOR)) {
     throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a Clmmpool account)`);
@@ -422,11 +449,15 @@ export async function fetchCremaPoolConfig(load: AccountLoader, pool: Address): 
     const mintData = mintDatas[mi];
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
@@ -434,12 +465,17 @@ export async function fetchCremaPoolConfig(load: AccountLoader, pool: Address): 
   const tickCurrentIndex = readI32(data, OFF_TICK_CURRENT);
   const tickArrayMap = await deriveTickArrayMapPda(pool);
   const mapData = await load(tickArrayMap);
-  if (mapData === null) throw new Error(`${SLUG}: tick array map ${tickArrayMap} of pool ${pool} not found`);
+  if (mapData === null)
+    throw new Error(`${SLUG}: tick array map ${tickArrayMap} of pool ${pool} not found`);
   if (mapData.length !== TICK_ARRAY_MAP_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: tick array map ${tickArrayMap} has ${mapData.length} bytes, expected ${TICK_ARRAY_MAP_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: tick array map ${tickArrayMap} has ${mapData.length} bytes, expected ${TICK_ARRAY_MAP_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(mapData, TICK_ARRAY_MAP_DISCRIMINATOR)) {
-    throw new Error(`${SLUG}: tick array map ${tickArrayMap} has a foreign discriminator (not a TickArrayMap account)`);
+    throw new Error(
+      `${SLUG}: tick array map ${tickArrayMap} has a foreign discriminator (not a TickArrayMap account)`,
+    );
   }
 
   const [aToB, bToA] = await Promise.all([
@@ -450,7 +486,7 @@ export async function fetchCremaPoolConfig(load: AccountLoader, pool: Address): 
   return {
     venue: SLUG,
     pool,
-    direction: 'aToB',
+    direction: "aToB",
     tokenMintA,
     tokenMintB,
     tokenVaultA: codec.decode(data.subarray(OFF_VAULT_A, OFF_VAULT_A + 32)) as Address,
@@ -473,4 +509,3 @@ export const crema = {
   tokenProgram: TOKEN_PROGRAM,
   fetchPoolConfig: fetchCremaPoolConfig,
 };
-

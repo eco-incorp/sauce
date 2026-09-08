@@ -5,9 +5,9 @@
 import { toExactBigInt } from "../numeric.js";
 import type { AddressInput, AmountInput } from "../swap/types.js";
 import { depositTemplateFor } from "./templates.js";
-import type { ApprovalPolicy, DepositSpec, DepositTemplate, NormalizedDeposit } from "./types.js";
+import type { ApprovalPolicy, DepositSpec, NormalizedDeposit } from "./types.js";
 
-function toAddressBigint(value: AddressInput, label: string): bigint {
+function toAddressBigint(value: AddressInput, _label: string): bigint {
   if (typeof value === "bigint") return value;
   return BigInt(value);
 }
@@ -87,7 +87,8 @@ export function toDeposit(
   const extra: Record<string, bigint> = {};
   for (const [name, fieldSpec] of Object.entries(template.extras)) {
     const raw = extraInput[name];
-    extra[name] = raw !== undefined ? fieldSpec.normalize(raw, `extra.${name}`) : fieldSpec.defaultValue;
+    extra[name] =
+      raw !== undefined ? fieldSpec.normalize(raw, `extra.${name}`) : fieldSpec.defaultValue;
   }
 
   const approvalPolicy: ApprovalPolicy = spec.approvalPolicy ?? "exact";

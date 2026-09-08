@@ -49,11 +49,25 @@
  * that a real transaction's account COUNT is not proof of a fixed schema without checking
  * every address is what it claims to be.
  */
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { ata, CONFIG_SEED, CURVE_CONSTANT_PRODUCT, detectTokenProgram, pda, POOL_SEED, pubkeyAt, readFeeBeneficiaries, readUintLE, SCALE_AMM_PROGRAM_ID, SCALE_VMM_PROGRAM_ID, type FeeBeneficiary, type ScaleDirection } from '../scale-common.js';
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import {
+  ata,
+  CONFIG_SEED,
+  CURVE_CONSTANT_PRODUCT,
+  detectTokenProgram,
+  pda,
+  POOL_SEED,
+  pubkeyAt,
+  readFeeBeneficiaries,
+  readUintLE,
+  SCALE_AMM_PROGRAM_ID,
+  SCALE_VMM_PROGRAM_ID,
+  type FeeBeneficiary,
+  type ScaleDirection,
+} from "../scale-common.js";
 
-const SLUG = 'scale-vmm';
+const SLUG = "scale-vmm";
 const PAIR_SIZE = 327;
 const PAIR_DISCRIMINATOR = Uint8Array.of(229, 212, 222, 222, 191, 128, 176, 235);
 const CONFIG_DISCRIMINATOR = Uint8Array.of(160, 78, 128, 0, 248, 83, 230, 160);
@@ -103,7 +117,11 @@ export interface ScaleVmmPoolConfig extends PoolConfig {
   direction: ScaleDirection;
 }
 
-async function loadRequired(load: AccountLoader, addr: Address, label: string): Promise<Uint8Array> {
+async function loadRequired(
+  load: AccountLoader,
+  addr: Address,
+  label: string,
+): Promise<Uint8Array> {
   const data = await load(addr);
   if (data === null) throw new Error(`${SLUG}: ${label} ${addr} not found`);
   return data;
@@ -111,11 +129,11 @@ async function loadRequired(load: AccountLoader, addr: Address, label: string): 
 
 export const scaleVmm = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: SCALE_VMM_PROGRAM_ID,
 
   async fetchPoolConfig(load: AccountLoader, pair: Address): Promise<ScaleVmmPoolConfig> {
-    const data = await loadRequired(load, pair, 'pair');
+    const data = await loadRequired(load, pair, "pair");
     if (data.length !== PAIR_SIZE) {
       throw new Error(`${SLUG} pair ${pair} data is ${data.length} bytes, expected ${PAIR_SIZE}`);
     }
@@ -125,11 +143,15 @@ export const scaleVmm = {
     const enabled = data[OFFSETS.enabled] !== 0;
     const graduated = data[OFFSETS.graduated] !== 0;
     if (!enabled || graduated) {
-      throw new Error(`${SLUG} pair ${pair} is ${graduated ? 'graduated' : 'disabled'} (liquidity has migrated off this account)`);
+      throw new Error(
+        `${SLUG} pair ${pair} is ${graduated ? "graduated" : "disabled"} (liquidity has migrated off this account)`,
+      );
     }
     const curve = data[OFFSETS.curve]!;
     if (curve !== CURVE_CONSTANT_PRODUCT) {
-      throw new Error(`${SLUG} pair ${pair} uses curve type ${curve}, only ConstantProduct (0) is supported`);
+      throw new Error(
+        `${SLUG} pair ${pair} uses curve type ${curve}, only ConstantProduct (0) is supported`,
+      );
     }
 
     const mintA = pubkeyAt(data, OFFSETS.mintA);
@@ -141,14 +163,20 @@ export const scaleVmm = {
     const feeBeneficiaries = readFeeBeneficiaries(data, OFFSETS.feeBeneficiaries);
 
     const configPda = await pda([CONFIG_SEED], SCALE_VMM_PROGRAM_ID);
-    const configData = await loadRequired(load, configPda, 'platform config');
-    if (configData.length < CONFIG_MIN_SIZE || !hasDiscriminator(configData, CONFIG_DISCRIMINATOR)) {
+    const configData = await loadRequired(load, configPda, "platform config");
+    if (
+      configData.length < CONFIG_MIN_SIZE ||
+      !hasDiscriminator(configData, CONFIG_DISCRIMINATOR)
+    ) {
       throw new Error(`${SLUG} platform config ${configPda} has a wrong discriminator or size`);
     }
     const feeBeneficiaryWallet = pubkeyAt(configData, CONFIG_OFFSETS.feeBeneficiary);
     const platformFeeBps = readUintLE(configData, CONFIG_OFFSETS.platformFeeBps, 2);
 
-    const [mintAData, mintBData] = await Promise.all([loadRequired(load, mintA, 'mint_a'), loadRequired(load, mintB, 'mint_b')]);
+    const [mintAData, mintBData] = await Promise.all([
+      loadRequired(load, mintA, "mint_a"),
+      loadRequired(load, mintB, "mint_b"),
+    ]);
     const tokenProgramA = detectTokenProgram(mintA, mintAData);
     const tokenProgramB = detectTokenProgram(mintB, mintBData);
 
@@ -164,7 +192,9 @@ export const scaleVmm = {
       pda([CONFIG_SEED], SCALE_AMM_PROGRAM_ID),
     ]);
     const beneficiaryAtas = await Promise.all(
-      feeBeneficiaries.slice(0, feeBeneficiaryCount).map((b) => ata(b.wallet, mintA, tokenProgramA)),
+      feeBeneficiaries
+        .slice(0, feeBeneficiaryCount)
+        .map((b) => ata(b.wallet, mintA, tokenProgramA)),
     );
 
     return {
@@ -189,8 +219,7 @@ export const scaleVmm = {
       ammVaultA,
       ammVaultB,
       ammConfig,
-      direction: 'aToB',
+      direction: "aToB",
     };
   },
 };
-

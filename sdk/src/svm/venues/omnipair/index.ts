@@ -104,16 +104,16 @@
  * pair (`reserve0 === 0 || reserve1 === 0`, mirroring `Pair::is_initialized`);
  * a degenerate `swap_fee_bps >= 10000`.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'omnipair';
-export const OMNIPAIR_PROGRAM_ID = address('omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "omnipair";
+export const OMNIPAIR_PROGRAM_ID = address("omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const PAIR_ACCOUNT_SIZE = 350;
 /** sha256('account:Pair')[0..8]. */
 export const PAIR_DISCRIMINATOR = [0x55, 0x48, 0x31, 0xb0, 0xb6, 0xe4, 0x8d, 0x52];
@@ -130,7 +130,7 @@ const U64_MAX = (1n << 64n) - 1n;
 export interface OmnipairPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'aToB' (default, token0 in / token1 out) | 'bToA'. */
-  direction: 'aToB' | 'bToA';
+  direction: "aToB" | "bToA";
   token0Mint: Address;
   token1Mint: Address;
   rateModel: Address;
@@ -156,11 +156,16 @@ async function derivePda(seeds: Uint8Array[]): Promise<Address> {
 }
 
 /** Fetch + decode one Pair, deriving the fixed accounts the swap CPI needs. Read-only against the loader. */
-export async function fetchOmnipairPoolConfig(load: AccountLoader, pool: Address): Promise<OmnipairPoolConfig> {
+export async function fetchOmnipairPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<OmnipairPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pair account ${pool} not found`);
   if (data.length !== PAIR_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pair ${pool} has ${data.length} bytes, expected ${PAIR_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pair ${pool} has ${data.length} bytes, expected ${PAIR_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, PAIR_DISCRIMINATOR)) {
     throw new Error(`${SLUG}: pair ${pool} has a foreign discriminator (not a Pair account)`);
@@ -171,13 +176,15 @@ export async function fetchOmnipairPoolConfig(load: AccountLoader, pool: Address
   const token1Mint = codec.decode(data.subarray(OFF_TOKEN1, OFF_TOKEN1 + 32)) as Address;
   const rateModel = codec.decode(data.subarray(OFF_RATE_MODEL, OFF_RATE_MODEL + 32)) as Address;
   const swapFeeBps = readUintLE(data, OFF_SWAP_FEE_BPS, 2);
-  if (swapFeeBps >= FEE_D) throw new Error(`${SLUG}: pair ${pool} has a degenerate swap_fee_bps ${swapFeeBps}`);
+  if (swapFeeBps >= FEE_D)
+    throw new Error(`${SLUG}: pair ${pool} has a degenerate swap_fee_bps ${swapFeeBps}`);
 
   const tag = data[OFF_OPTION_TAG];
   const reserveBase: 147 | 149 = tag === 0 ? 147 : 149;
   const reserve0 = readUintLE(data, reserveBase, 8);
   const reserve1 = readUintLE(data, reserveBase + 8, 8);
-  if (reserve0 === 0n || reserve1 === 0n) throw new Error(`${SLUG}: pair ${pool} is not initialized (zero reserve)`);
+  if (reserve0 === 0n || reserve1 === 0n)
+    throw new Error(`${SLUG}: pair ${pool} is not initialized (zero reserve)`);
 
   // The swap path is Tokenkeg-only (Token-2022 transfer-fee/extension mints are
   // out of scope), so detect a Token-2022 or un-routable mint via the shared
@@ -191,25 +198,37 @@ export async function fetchOmnipairPoolConfig(load: AccountLoader, pool: Address
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   const [futarchyAuthority, eventAuthority, reserveVault0, reserveVault1] = await Promise.all([
-    derivePda([new TextEncoder().encode('futarchy_authority')]),
-    derivePda([new TextEncoder().encode('__event_authority')]),
-    derivePda([new TextEncoder().encode('reserve_vault'), getAddressEncoded(pool), getAddressEncoded(token0Mint)]),
-    derivePda([new TextEncoder().encode('reserve_vault'), getAddressEncoded(pool), getAddressEncoded(token1Mint)]),
+    derivePda([new TextEncoder().encode("futarchy_authority")]),
+    derivePda([new TextEncoder().encode("__event_authority")]),
+    derivePda([
+      new TextEncoder().encode("reserve_vault"),
+      getAddressEncoded(pool),
+      getAddressEncoded(token0Mint),
+    ]),
+    derivePda([
+      new TextEncoder().encode("reserve_vault"),
+      getAddressEncoded(pool),
+      getAddressEncoded(token1Mint),
+    ]),
   ]);
 
   return {
     venue: SLUG,
     pool,
-    direction: 'aToB',
+    direction: "aToB",
     token0Mint,
     token1Mint,
     rateModel,
@@ -236,7 +255,12 @@ export const omnipair = {
  * `amountOut(x) <= cashOut` holds (see the module header derivation).
  * `U64_MAX` when `reserveOut <= cashOut` (never binds).
  */
-export function omnipairCapacity(reserveIn: bigint, reserveOut: bigint, cashOut: bigint, feeBps: bigint): bigint {
+export function omnipairCapacity(
+  reserveIn: bigint,
+  reserveOut: bigint,
+  cashOut: bigint,
+  feeBps: bigint,
+): bigint {
   if (reserveOut <= cashOut) return U64_MAX;
   const kq = reserveIn * reserveOut;
   const target = reserveOut - cashOut;
@@ -255,4 +279,3 @@ export function omnipairQuote(x: bigint, ri: bigint, ro: bigint, fb: bigint, ica
   const ni = (cx * (FEE_D - fb)) / FEE_D;
   return (ni * ro) / (ri + ni);
 }
-

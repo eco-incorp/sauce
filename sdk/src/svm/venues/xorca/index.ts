@@ -147,21 +147,21 @@
  * per-rung fee-adjusted CP formula; the venue CPI itself runs once per SLOT,
  * not once per rung).
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-const SLUG = 'xorca';
+const SLUG = "xorca";
 
-export const XORCA_PROGRAM_ID: Address<'StaKE6XNKVVhG8Qu9hDJBqCW3eRe7MDGLz17nJZetLT'> = address(
-  'StaKE6XNKVVhG8Qu9hDJBqCW3eRe7MDGLz17nJZetLT',
+export const XORCA_PROGRAM_ID: Address<"StaKE6XNKVVhG8Qu9hDJBqCW3eRe7MDGLz17nJZetLT"> = address(
+  "StaKE6XNKVVhG8Qu9hDJBqCW3eRe7MDGLz17nJZetLT",
 );
 /** Hardcoded program constants (`cpi/token/mod.rs`) — never stored as pool-account bytes. */
-export const ORCA_MINT_ID: Address<'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE'> = address(
-  'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE',
+export const ORCA_MINT_ID: Address<"orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE"> = address(
+  "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
 );
-export const XORCA_MINT_ID: Address<'xorcaYqbXUNz3474ubUMJAdu2xgPsew3rUCe5ughT3N'> = address(
-  'xorcaYqbXUNz3474ubUMJAdu2xgPsew3rUCe5ughT3N',
+export const XORCA_MINT_ID: Address<"xorcaYqbXUNz3474ubUMJAdu2xgPsew3rUCe5ughT3N"> = address(
+  "xorcaYqbXUNz3474ubUMJAdu2xgPsew3rUCe5ughT3N",
 );
 /**
  * The single global State PDA — seed `["state"]` under `XORCA_PROGRAM_ID`,
@@ -173,11 +173,11 @@ export const XORCA_MINT_ID: Address<'xorcaYqbXUNz3474ubUMJAdu2xgPsew3rUCe5ughT3N
  * here rather than derived at call time because both are permanently fixed
  * (there is exactly one xORCA vault; the mints never change).
  */
-export const XORCA_STATE_PDA: Address<'CSqKhyW1cpdyjheAx5HXx4ibcnYrzpL5JywEMAkZixBK'> = address(
-  'CSqKhyW1cpdyjheAx5HXx4ibcnYrzpL5JywEMAkZixBK',
+export const XORCA_STATE_PDA: Address<"CSqKhyW1cpdyjheAx5HXx4ibcnYrzpL5JywEMAkZixBK"> = address(
+  "CSqKhyW1cpdyjheAx5HXx4ibcnYrzpL5JywEMAkZixBK",
 );
-export const XORCA_VAULT_ATA: Address<'Ce5j11WAsSzM3nkzrw4Kw6v6ic3nbyqpv5eywjYKeKc5'> = address(
-  'Ce5j11WAsSzM3nkzrw4Kw6v6ic3nbyqpv5eywjYKeKc5',
+export const XORCA_VAULT_ATA: Address<"Ce5j11WAsSzM3nkzrw4Kw6v6ic3nbyqpv5eywjYKeKc5"> = address(
+  "Ce5j11WAsSzM3nkzrw4Kw6v6ic3nbyqpv5eywjYKeKc5",
 );
 
 const STATE_LEN = 2048;
@@ -192,7 +192,7 @@ export const MINT_SUPPLY_OFFSET = 36;
 export interface XorcaPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** The only tradable direction — see file header for why Unstake/Withdraw cannot be one. */
-  direction: 'orcaToXorca';
+  direction: "orcaToXorca";
 }
 
 /**
@@ -201,7 +201,10 @@ export interface XorcaPoolConfig extends PoolConfig {
  * upgrade/migration is caught like any other vanished pool — never silently
  * misquoted — rather than trusting the hardcoded address blindly.
  */
-export async function fetchXorcaConfig(load: AccountLoader, pool: Address): Promise<XorcaPoolConfig> {
+export async function fetchXorcaConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<XorcaPoolConfig> {
   if (pool !== XORCA_STATE_PDA) {
     throw new Error(`${SLUG}: pool ${pool} is not the xORCA state singleton ${XORCA_STATE_PDA}`);
   }
@@ -211,8 +214,9 @@ export async function fetchXorcaConfig(load: AccountLoader, pool: Address): Prom
     throw new Error(`${SLUG}: state account ${pool} has length ${raw.length}, want ${STATE_LEN}`);
   }
   if (raw[0] !== STATE_DISCRIMINATOR_STATE) {
-    throw new Error(`${SLUG}: state account ${pool} has discriminator ${raw[0]}, want ${STATE_DISCRIMINATOR_STATE} (State)`);
+    throw new Error(
+      `${SLUG}: state account ${pool} has discriminator ${raw[0]}, want ${STATE_DISCRIMINATOR_STATE} (State)`,
+    );
   }
-  return { venue: SLUG, pool, direction: 'orcaToXorca' };
+  return { venue: SLUG, pool, direction: "orcaToXorca" };
 }
-

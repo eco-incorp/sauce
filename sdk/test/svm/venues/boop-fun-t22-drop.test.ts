@@ -4,13 +4,18 @@
  * The CPI supplies exactly ONE token_program account, so a Token-2022 base mint
  * has no correct program to route its transfer through — legacy-SPL only.
  */
-import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import { boopFun, BOOP_FUN_PROGRAM_ID } from '../../../src/svm/venues/boop-fun/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
+import { boopFun, BOOP_FUN_PROGRAM_ID } from "../../../src/svm/venues/boop-fun/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 /** PDA(["config"], PROGRAM) — the fixed config account the fetch loads. */
-const CONFIG = address('AbgFqRWjGWgUaVrZrLLWU5HDY5dktmAL6zT9aacQW7y1');
+const CONFIG = address("AbgFqRWjGWgUaVrZrLLWU5HDY5dktmAL6zT9aacQW7y1");
 const BONDING_CURVE_DISCRIMINATOR = [23, 183, 248, 55, 96, 216, 172, 96];
 
 const mintBytes = (() => {
@@ -24,7 +29,10 @@ const T22_MINT = getAddressDecoder().decode(mintBytes);
 async function deriveBondingCurve(): Promise<string> {
   const [pda] = await getProgramDerivedAddress({
     programAddress: BOOP_FUN_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('bonding_curve'), new Uint8Array(getAddressEncoder().encode(T22_MINT))],
+    seeds: [
+      new TextEncoder().encode("bonding_curve"),
+      new Uint8Array(getAddressEncoder().encode(T22_MINT)),
+    ],
   });
   return pda;
 }
@@ -47,13 +55,15 @@ function loaderWith(pool: string, mint: Uint8Array | null): AccountLoader {
   }) as unknown as AccountLoader;
 }
 
-describe('boop-fun Token-2022 self-drop', () => {
-  it('drops a pool whose base mint is a Token-2022 mint', async () => {
+describe("boop-fun Token-2022 self-drop", () => {
+  it("drops a pool whose base mint is a Token-2022 mint", async () => {
     const pool = await deriveBondingCurve();
-    await expect(boopFun.fetchPoolConfig(loaderWith(pool, makeT22Mint()), address(pool))).rejects.toThrow(/Token-2022/);
+    await expect(
+      boopFun.fetchPoolConfig(loaderWith(pool, makeT22Mint()), address(pool)),
+    ).rejects.toThrow(/Token-2022/);
   });
 
-  it('drops a pool whose base mint is a Token-2022 mint carrying an extension', async () => {
+  it("drops a pool whose base mint is a Token-2022 mint carrying an extension", async () => {
     const pool = await deriveBondingCurve();
     await expect(
       boopFun.fetchPoolConfig(loaderWith(pool, makeT22Mint(NON_TRANSFERABLE_TLV)), address(pool)),

@@ -15,7 +15,11 @@ function formatOwner(owner: TokenBalanceSpec["owner"]): string {
   return formatAddressField(toAddressBigint(owner, "owner"));
 }
 
-function amountExpr(amount: bigint | number | "balance", tokenLiteral: string, label: string): string {
+function amountExpr(
+  amount: bigint | number | "balance",
+  tokenLiteral: string,
+  label: string,
+): string {
   if (amount === "balance") return `IERC20.at(${tokenLiteral}).balanceOf(ctx.self())`;
   // formatBigint takes a bigint, so a `number` amount CANNOT be stringified into the emitted
   // source without going through toAmountBigint first.

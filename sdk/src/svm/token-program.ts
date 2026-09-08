@@ -29,14 +29,16 @@
  * read the account's owning program (a full `getAccountInfo`, not the
  * data-only AccountLoader).
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader } from './venues/types.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader } from "./venues/types.js";
 
 /** Legacy SPL Token program (classic Tokenkeg). */
-export const TOKEN_PROGRAM_ID: Address = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const TOKEN_PROGRAM_ID: Address = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 /** Token-2022 program (extensions). */
-export const TOKEN_2022_PROGRAM_ID: Address = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+export const TOKEN_2022_PROGRAM_ID: Address = address(
+  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+);
 
 /** A classic SPL mint account is exactly this many bytes. */
 export const SPL_MINT_SIZE = 82;
@@ -93,12 +95,18 @@ export async function resolveTokenProgram(load: AccountLoader, mint: Address): P
  * data-only AccountLoader). Throws if the mint is missing or is owned by
  * neither token program.
  */
-export async function resolveTokenProgramByOwner(mint: Address, ownerOf: OwnerLoader): Promise<Address> {
+export async function resolveTokenProgramByOwner(
+  mint: Address,
+  ownerOf: OwnerLoader,
+): Promise<Address> {
   const owner = await ownerOf(mint);
-  if (owner === null) throw new Error(`token-program: mint ${mint} account not found (owner lookup)`);
+  if (owner === null)
+    throw new Error(`token-program: mint ${mint} account not found (owner lookup)`);
   if (owner === TOKEN_PROGRAM_ID) return TOKEN_PROGRAM_ID;
   if (owner === TOKEN_2022_PROGRAM_ID) return TOKEN_2022_PROGRAM_ID;
-  throw new Error(`token-program: mint ${mint} is owned by ${owner}, neither the legacy nor Token-2022 program`);
+  throw new Error(
+    `token-program: mint ${mint} is owned by ${owner}, neither the legacy nor Token-2022 program`,
+  );
 }
 
 /** True iff the mint data is a Token-2022 mint (>=166 bytes, Mint account-type byte). */
@@ -111,7 +119,9 @@ export function isToken2022Mint(data: Uint8Array): boolean {
  * pool/route read the account once. Returns a resolver function closing over a
  * Map<mintBase58, Address>.
  */
-export function createTokenProgramResolver(load: AccountLoader): (mint: Address) => Promise<Address> {
+export function createTokenProgramResolver(
+  load: AccountLoader,
+): (mint: Address) => Promise<Address> {
   const cache = new Map<string, Address>();
   return async (mint: Address): Promise<Address> => {
     const cached = cache.get(mint);

@@ -39,11 +39,27 @@ function main() {
   USDC.approve(Cctp.TokenMessenger, CCTP_AMOUNT);
   let count = CCTP_AMOUNT / CCTP_CHUNK_SIZE;
   for (let i = 0n; i < count; i++) {
-    Cctp.TokenMessenger.depositForBurn(CCTP_CHUNK_SIZE, CCTP_DEST_DOMAIN, CCTP_RECIPIENT, USDC, 0n, CCTP_MAX_FEE, 0n);
+    Cctp.TokenMessenger.depositForBurn(
+      CCTP_CHUNK_SIZE,
+      CCTP_DEST_DOMAIN,
+      CCTP_RECIPIENT,
+      USDC,
+      0n,
+      CCTP_MAX_FEE,
+      0n,
+    );
   }
   let remainder = CCTP_AMOUNT % CCTP_CHUNK_SIZE;
   if (remainder > 0n) {
-    Cctp.TokenMessenger.depositForBurn(remainder, CCTP_DEST_DOMAIN, CCTP_RECIPIENT, USDC, 0n, CCTP_MAX_FEE, 0n);
+    Cctp.TokenMessenger.depositForBurn(
+      remainder,
+      CCTP_DEST_DOMAIN,
+      CCTP_RECIPIENT,
+      USDC,
+      0n,
+      CCTP_MAX_FEE,
+      0n,
+    );
   }
   return 0n;
 }

@@ -9,12 +9,7 @@ export {
   getProtocolsByChain,
   listProtocolSlugs,
 } from "./protocols/index.js";
-export {
-  getProtocolIndex,
-  getProtocolSkill,
-  listSkillSlugs,
-  SKILLS_DIR,
-} from "./skills/loader.js";
+export { getProtocolIndex, getProtocolSkill, listSkillSlugs, SKILLS_DIR } from "./skills/loader.js";
 export * as routes from "./routes/index.js";
 export * as swap from "./swap/index.js";
 export * as deposit from "./deposit/index.js";

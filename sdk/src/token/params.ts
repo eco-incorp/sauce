@@ -17,7 +17,7 @@ export function isEvmTarget(target: TokenTarget): boolean {
   return target === "evm" || target === "v1" || target === "v12";
 }
 
-export function toAddressBigint(value: AddressInput, label: string): bigint {
+export function toAddressBigint(value: AddressInput, _label: string): bigint {
   if (typeof value === "bigint") return value;
   return BigInt(value);
 }
@@ -62,7 +62,11 @@ export function tokenProgramRef(refs: SvmTokenRefs): string {
  * The amount gate both targets share. An unsafe `number` is as wrong in ERC20 calldata as it is in
  * an SPL instruction, so `toAmountBigint` runs on either target; only the u64 ceiling is SVM's.
  */
-function assertAmountInput(amount: bigint | number | "balance", label: string, target: TokenTarget): void {
+function assertAmountInput(
+  amount: bigint | number | "balance",
+  label: string,
+  target: TokenTarget,
+): void {
   if (amount === "balance") return;
   const exact = toAmountBigint(amount, label);
   if (!isEvmTarget(target)) assertU64Range(exact, label);
@@ -76,8 +80,10 @@ export function validateTransferSpec(spec: TokenTransferSpec, target: TokenTarge
     return;
   }
   const refs = requireSvmRefs(spec, "Token.transfer");
-  if (refs.mint === undefined) throw new Error("Token.transfer: svm.mint is required on target 'svm'");
-  if (refs.dest === undefined) throw new Error("Token.transfer: svm.dest is required on target 'svm'");
+  if (refs.mint === undefined)
+    throw new Error("Token.transfer: svm.mint is required on target 'svm'");
+  if (refs.dest === undefined)
+    throw new Error("Token.transfer: svm.dest is required on target 'svm'");
   assertAmountInput(spec.amount, "Token.transfer amount", target);
 }
 
@@ -89,8 +95,10 @@ export function validateApproveSpec(spec: TokenApproveSpec, target: TokenTarget)
     return;
   }
   const refs = requireSvmRefs(spec, "Token.approve");
-  if (refs.mint === undefined) throw new Error("Token.approve: svm.mint is required on target 'svm'");
-  if (refs.delegate === undefined) throw new Error("Token.approve: svm.delegate is required on target 'svm'");
+  if (refs.mint === undefined)
+    throw new Error("Token.approve: svm.mint is required on target 'svm'");
+  if (refs.delegate === undefined)
+    throw new Error("Token.approve: svm.delegate is required on target 'svm'");
   assertAmountInput(spec.amount, "Token.approve amount", target);
 }
 
@@ -108,7 +116,9 @@ export function validateBalanceSpec(spec: TokenBalanceSpec, target: TokenTarget)
 function instanceRefs(spec: TokenSpec): readonly string[] {
   if (spec.svm === undefined) return [];
   const refs = spec.svm as SvmTokenRefs;
-  return [refs.source, refs.mint, refs.dest, refs.delegate].filter((r): r is string => typeof r === "string");
+  return [refs.source, refs.mint, refs.dest, refs.delegate].filter(
+    (r): r is string => typeof r === "string",
+  );
 }
 
 /**

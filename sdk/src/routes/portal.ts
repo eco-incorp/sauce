@@ -196,7 +196,11 @@ export function publishTx(intent: Intent, target: PortalTarget): PortalTx {
 }
 
 /** `Portal.publishAndFund(destination, routeBytes, reward, allowPartial)`. `value = reward.nativeAmount`. */
-export function publishAndFundTx(intent: Intent, allowPartial: boolean, target: PortalTarget): PortalTx {
+export function publishAndFundTx(
+  intent: Intent,
+  allowPartial: boolean,
+  target: PortalTarget,
+): PortalTx {
   assertEvmSource(intent, "publishAndFundTx");
   return {
     to: portalAddress(target),
@@ -251,7 +255,12 @@ export function approvalTxs(intent: Intent, target: PortalTarget): readonly Port
   }));
 }
 
-function readCall<T>(intent: Intent, target: PortalTarget, functionName: string, decode: (result: Hex) => T): PortalReadCall<T> {
+function readCall<T>(
+  intent: Intent,
+  target: PortalTarget,
+  functionName: string,
+  decode: (result: Hex) => T,
+): PortalReadCall<T> {
   return {
     to: portalAddress(target),
     data: encodeFunctionData({

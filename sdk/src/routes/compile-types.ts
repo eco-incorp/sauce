@@ -15,20 +15,20 @@ export interface AbiParameter {
 }
 
 export interface AbiFunction {
-  type: 'function';
+  type: "function";
   name: string;
   inputs: AbiParameter[];
   outputs?: AbiParameter[];
-  stateMutability?: 'pure' | 'view' | 'nonpayable' | 'payable';
+  stateMutability?: "pure" | "view" | "nonpayable" | "payable";
 }
 
 export type AbiItem =
   | AbiFunction
-  | { type: 'event'; name: string; inputs: AbiParameter[] }
-  | { type: 'error'; name: string; inputs: AbiParameter[] }
-  | { type: 'constructor'; inputs: AbiParameter[] }
-  | { type: 'fallback' }
-  | { type: 'receive' };
+  | { type: "event"; name: string; inputs: AbiParameter[] }
+  | { type: "error"; name: string; inputs: AbiParameter[] }
+  | { type: "constructor"; inputs: AbiParameter[] }
+  | { type: "fallback" }
+  | { type: "receive" };
 
 export type Abi = readonly AbiItem[];
 
@@ -49,7 +49,7 @@ export type ContractsConfig = Record<string, ContractConfig>;
  * `'svm'` (postfix v12 dialect for the Solana engine). The RS compiler collapses `'v1'`/`'v12'`
  * onto its single `'evm'` backend (see `rs-compile.ts#mapTarget`).
  */
-export type CompileTarget = 'v1' | 'v12' | 'svm';
+export type CompileTarget = "v1" | "v12" | "svm";
 
 /**
  * What a route compile yields. `bytecode` is a list of SEGMENTS — `compileSauceRoute` slots

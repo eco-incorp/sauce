@@ -9,19 +9,24 @@
  * for a two-node phoenix cycle on a max-size market. A single whole-walk
  * budget sized on the account's node capacity makes both O(nodes).
  */
-import { resolve } from 'path';
-import { address } from '@solana/kit';
-import { fetchManifestConfig, MARKET_DISCRIMINANT, MARKET_FIXED_SIZE, MANIFEST_MAX_ORDERS } from '../../../src/svm/venues/manifest/index.js';
-import type { ManifestOrder } from '../../../src/svm/venues/manifest/index.js';
+import { resolve } from "path";
+import { address } from "@solana/kit";
+import {
+  fetchManifestConfig,
+  MARKET_DISCRIMINANT,
+  MARKET_FIXED_SIZE,
+  MANIFEST_MAX_ORDERS,
+} from "../../../src/svm/venues/manifest/index.js";
+import type { ManifestOrder } from "../../../src/svm/venues/manifest/index.js";
 import {
   fetchPhoenixConfig,
   MARKET_DISCRIMINANT as PHOENIX_MARKET_DISCRIMINANT,
   BIDS_NODES_BASE,
   PHOENIX_MAX_ORDERS,
-} from '../../../src/svm/venues/phoenix/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { fixtureLoader, loadFixtures } from '../fixtures.js';
-import { makeLegacyMint } from '../fixtures/token-2022/synth.js';
+} from "../../../src/svm/venues/phoenix/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { fixtureLoader, loadFixtures } from "../fixtures.js";
+import { makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
 /** A bounded walk must finish in milliseconds; a per-call guard needs hours. */
 const WALL_CLOCK_BUDGET_MS = 1_000;
@@ -41,8 +46,8 @@ async function elapsedMs(run: () => Promise<unknown>): Promise<number> {
 
 // --- manifest ---------------------------------------------------------------
 
-const MANIFEST_FIXTURES = resolve(process.cwd(), 'test/svm/fixtures/manifest');
-const MANIFEST_MARKET = address('ENhU8LsaR7vDD2G1CsWcsuSGNrih9Cv5WZEk7q9kPapQ');
+const MANIFEST_FIXTURES = resolve(process.cwd(), "test/svm/fixtures/manifest");
+const MANIFEST_MARKET = address("ENhU8LsaR7vDD2G1CsWcsuSGNrih9Cv5WZEk7q9kPapQ");
 
 const MANIFEST_BLOCK_SIZE = 80;
 const MANIFEST_OFF_BIDS_BEST = 160;
@@ -72,14 +77,16 @@ function manifestMarket(blocks: number, extraBytes = 0): Uint8Array {
   return buf;
 }
 
-const manifestLoader = (market: Uint8Array): AccountLoader => async (addr) =>
-  addr === MANIFEST_MARKET ? new Uint8Array(market) : makeLegacyMint();
+const manifestLoader =
+  (market: Uint8Array): AccountLoader =>
+  async (addr) =>
+    addr === MANIFEST_MARKET ? new Uint8Array(market) : makeLegacyMint();
 
 const levels = (orders: readonly ManifestOrder[]): [number, bigint][] =>
   orders.map(({ dataIndex, sequenceNumber }) => [dataIndex, sequenceNumber]);
 
-describe('manifest: cyclic tree pointers exhaust the walk budget', () => {
-  it('fails fast on a 336-byte market whose only block points at itself', async () => {
+describe("manifest: cyclic tree pointers exhaust the walk budget", () => {
+  it("fails fast on a 336-byte market whose only block points at itself", async () => {
     const market = manifestMarket(1);
     // left = right = parent = DataIndex 0 — the block IS its own child.
     writeU32LE(market, MARKET_FIXED_SIZE + MANIFEST_NODE_LEFT, 0);
@@ -95,7 +102,7 @@ describe('manifest: cyclic tree pointers exhaust the walk budget', () => {
     expect(elapsed).toBeLessThan(WALL_CLOCK_BUDGET_MS);
   });
 
-  it('fails fast on a 1 MB market whose two blocks are a right-descent 2-cycle', async () => {
+  it("fails fast on a 1 MB market whose two blocks are a right-descent 2-cycle", async () => {
     // The case a per-call cap misses: each nextLower() returns after two hops,
     // so every one of them burns its own full guard.
     const blocks = Math.floor((1_048_576 - MARKET_FIXED_SIZE) / MANIFEST_BLOCK_SIZE);
@@ -114,7 +121,7 @@ describe('manifest: cyclic tree pointers exhaust the walk budget', () => {
   });
 
   // Verified byte-identical to the pre-budget walk against this same fixture.
-  it('still resolves both windows of the real SOL/USDC market fixture unchanged', async () => {
+  it("still resolves both windows of the real SOL/USDC market fixture unchanged", async () => {
     const load = fixtureLoader(loadFixtures(MANIFEST_FIXTURES));
     const cfg = await fetchManifestConfig(load, MANIFEST_MARKET);
 
@@ -156,7 +163,7 @@ describe('manifest: cyclic tree pointers exhaust the walk budget', () => {
 
 // --- phoenix ----------------------------------------------------------------
 
-const PHOENIX_MARKET = address('4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg');
+const PHOENIX_MARKET = address("4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg");
 
 const PHOENIX_NODE_SIZE = 64;
 const PHOENIX_OFF_BIDS_SIZE = 16;
@@ -188,7 +195,12 @@ const phoenixNode = (over: Partial<PhoenixNode> = {}): PhoenixNode => ({
  * an empty asks tree. `totalBytes` is the account length — the walk budget is
  * sized on it, not on the declared capacity.
  */
-function phoenixMarket(bidsSize: number, bidsRoot: number, bids: readonly PhoenixNode[], totalBytes: number): Uint8Array {
+function phoenixMarket(
+  bidsSize: number,
+  bidsRoot: number,
+  bids: readonly PhoenixNode[],
+  totalBytes: number,
+): Uint8Array {
   const buf = new Uint8Array(totalBytes);
   writeU64LE(buf, 0, PHOENIX_MARKET_DISCRIMINANT);
   writeU64LE(buf, PHOENIX_OFF_BIDS_SIZE, BigInt(bidsSize));
@@ -207,12 +219,19 @@ function phoenixMarket(bidsSize: number, bidsRoot: number, bids: readonly Phoeni
 
 // An unreadable mint falls back to the legacy assumption, so the walk is the
 // only thing under test here.
-const phoenixLoader = (market: Uint8Array): AccountLoader => async (addr) =>
-  addr === PHOENIX_MARKET ? new Uint8Array(market) : null;
+const phoenixLoader =
+  (market: Uint8Array): AccountLoader =>
+  async (addr) =>
+    addr === PHOENIX_MARKET ? new Uint8Array(market) : null;
 
-describe('phoenix: cyclic tree registers exhaust the walk budget', () => {
-  it('fails fast on a single-node market whose left register points at itself', async () => {
-    const market = phoenixMarket(1, 1, [phoenixNode({ left: 1 })], BIDS_NODES_BASE + PHOENIX_NODE_SIZE);
+describe("phoenix: cyclic tree registers exhaust the walk budget", () => {
+  it("fails fast on a single-node market whose left register points at itself", async () => {
+    const market = phoenixMarket(
+      1,
+      1,
+      [phoenixNode({ left: 1 })],
+      BIDS_NODES_BASE + PHOENIX_NODE_SIZE,
+    );
 
     const elapsed = await elapsedMs(() =>
       expect(fetchPhoenixConfig(phoenixLoader(market), PHOENIX_MARKET)).rejects.toThrow(
@@ -222,11 +241,16 @@ describe('phoenix: cyclic tree registers exhaust the walk budget', () => {
     expect(elapsed).toBeLessThan(WALL_CLOCK_BUDGET_MS);
   });
 
-  it('fails fast on a max-size market whose two nodes are a successor 2-cycle', async () => {
+  it("fails fast on a max-size market whose two nodes are a successor 2-cycle", async () => {
     // node 1's successor descends into node 2, whose findMin walks back to
     // node 1: every successor() call returns after two hops and would burn its
     // own full per-call guard.
-    const market = phoenixMarket(26_000, 1, [phoenixNode({ right: 2 }), phoenixNode({ left: 1 })], 1_723_488);
+    const market = phoenixMarket(
+      26_000,
+      1,
+      [phoenixNode({ right: 2 }), phoenixNode({ left: 1 })],
+      1_723_488,
+    );
 
     const elapsed = await elapsedMs(() =>
       expect(fetchPhoenixConfig(phoenixLoader(market), PHOENIX_MARKET)).rejects.toThrow(
@@ -236,7 +260,7 @@ describe('phoenix: cyclic tree registers exhaust the walk budget', () => {
     expect(elapsed).toBeLessThan(WALL_CLOCK_BUDGET_MS);
   });
 
-  it('still resolves a well-formed three-level bid book in walk order', async () => {
+  it("still resolves a well-formed three-level bid book in walk order", async () => {
     const bids = [
       phoenixNode({ parent: 2, sequenceNumber: 101n, numBaseLots: 10n }),
       phoenixNode({ left: 1, right: 3, sequenceNumber: 102n, numBaseLots: 20n }),
@@ -263,7 +287,7 @@ describe('phoenix: cyclic tree registers exhaust the walk budget', () => {
 // factor has to cover; measured at 2.000x capacity for manifest and 3.000x for
 // phoenix (see makeTreeWalkBudget).
 
-type Shape = 'chain' | 'balanced';
+type Shape = "chain" | "balanced";
 
 /** In-order node ids wired as a left-leaning chain (worst case) or a balanced BST. */
 function wireTree(
@@ -272,12 +296,17 @@ function wireTree(
   write: (id: number, left: number, right: number, parent: number) => void,
   nil: number,
 ): void {
-  if (shape === 'chain') {
+  if (shape === "chain") {
     // Descending left spine: the root IS the max, so no right edge is ever
     // descended and every left edge is climbed — manifest's and phoenix's
     // costliest acyclic shape alike.
     ids.forEach((id, index) => {
-      write(id, index + 1 < ids.length ? ids[index + 1]! : nil, nil, index > 0 ? ids[index - 1]! : nil);
+      write(
+        id,
+        index + 1 < ids.length ? ids[index + 1]! : nil,
+        nil,
+        index > 0 ? ids[index - 1]! : nil,
+      );
     });
 
     return;
@@ -296,12 +325,27 @@ function wireTree(
 /** Every block of the account in one of the two book trees, all zero-size. */
 function saturatedManifestMarket(totalBytes: number, shape: Shape): Uint8Array {
   const blocks = Math.floor((totalBytes - MARKET_FIXED_SIZE) / MANIFEST_BLOCK_SIZE);
-  const market = manifestMarket(blocks, totalBytes - MARKET_FIXED_SIZE - blocks * MANIFEST_BLOCK_SIZE);
+  const market = manifestMarket(
+    blocks,
+    totalBytes - MARKET_FIXED_SIZE - blocks * MANIFEST_BLOCK_SIZE,
+  );
   const write = (block: number, left: number, right: number, parent: number): void => {
     const base = MARKET_FIXED_SIZE + block * MANIFEST_BLOCK_SIZE;
-    writeU32LE(market, base + MANIFEST_NODE_LEFT, left === MANIFEST_NIL ? MANIFEST_NIL : left * MANIFEST_BLOCK_SIZE);
-    writeU32LE(market, base + MANIFEST_NODE_RIGHT, right === MANIFEST_NIL ? MANIFEST_NIL : right * MANIFEST_BLOCK_SIZE);
-    writeU32LE(market, base + MANIFEST_NODE_PARENT, parent === MANIFEST_NIL ? MANIFEST_NIL : parent * MANIFEST_BLOCK_SIZE);
+    writeU32LE(
+      market,
+      base + MANIFEST_NODE_LEFT,
+      left === MANIFEST_NIL ? MANIFEST_NIL : left * MANIFEST_BLOCK_SIZE,
+    );
+    writeU32LE(
+      market,
+      base + MANIFEST_NODE_RIGHT,
+      right === MANIFEST_NIL ? MANIFEST_NIL : right * MANIFEST_BLOCK_SIZE,
+    );
+    writeU32LE(
+      market,
+      base + MANIFEST_NODE_PARENT,
+      parent === MANIFEST_NIL ? MANIFEST_NIL : parent * MANIFEST_BLOCK_SIZE,
+    );
   };
   const half = Math.ceil(blocks / 2);
   const bids = Array.from({ length: half }, (_, index) => index);
@@ -309,7 +353,8 @@ function saturatedManifestMarket(totalBytes: number, shape: Shape): Uint8Array {
   wireTree(bids, shape, write, MANIFEST_NIL);
   wireTree(asks, shape, write, MANIFEST_NIL);
   // The walk enters at the side's MAX: the chain's head, the balanced tree's last in-order node.
-  const best = (ids: readonly number[]): number => (shape === 'chain' ? ids[0]! : ids[ids.length - 1]!);
+  const best = (ids: readonly number[]): number =>
+    shape === "chain" ? ids[0]! : ids[ids.length - 1]!;
   writeU32LE(market, MANIFEST_OFF_BIDS_BEST, best(bids) * MANIFEST_BLOCK_SIZE);
   writeU32LE(market, MANIFEST_OFF_ASKS_BEST, best(asks) * MANIFEST_BLOCK_SIZE);
 
@@ -336,29 +381,35 @@ function saturatedPhoenixMarket(nodesPerSide: number, shape: Shape): Uint8Array 
   wireTree(ids, shape, writeInto(BIDS_NODES_BASE), 0);
   wireTree(ids, shape, writeInto(asksNodesBase), 0);
   // Phoenix walks UP from the tree root, so the root is what it is told.
-  const root = shape === 'chain' ? ids[0]! : ids[(ids.length - 1) >> 1]!;
+  const root = shape === "chain" ? ids[0]! : ids[(ids.length - 1) >> 1]!;
   writeU32LE(market, PHOENIX_BIDS_TREE_ROOT, root);
   writeU32LE(market, asksTreeRoot, root);
 
   return market;
 }
 
-describe('a saturated all-zero-size book still fits the walk budget', () => {
-  it.each<Shape>(['chain', 'balanced'])('manifest, every block in the two book trees (%s)', async (shape) => {
-    const market = saturatedManifestMarket(318_528, shape);
-    const cfg = await fetchManifestConfig(manifestLoader(market), MANIFEST_MARKET);
+describe("a saturated all-zero-size book still fits the walk budget", () => {
+  it.each<Shape>(["chain", "balanced"])(
+    "manifest, every block in the two book trees (%s)",
+    async (shape) => {
+      const market = saturatedManifestMarket(318_528, shape);
+      const cfg = await fetchManifestConfig(manifestLoader(market), MANIFEST_MARKET);
 
-    // Every order was skipped, so both windows are empty — the walk still ran
-    // to the end of both trees, which is the cost the budget has to absorb.
-    expect(cfg.windows.baseIn.orders).toEqual([]);
-    expect(cfg.windows.quoteIn.orders).toEqual([]);
-  });
+      // Every order was skipped, so both windows are empty — the walk still ran
+      // to the end of both trees, which is the cost the budget has to absorb.
+      expect(cfg.windows.baseIn.orders).toEqual([]);
+      expect(cfg.windows.quoteIn.orders).toEqual([]);
+    },
+  );
 
-  it.each<Shape>(['chain', 'balanced'])('phoenix, every node in the two book trees (%s)', async (shape) => {
-    const market = saturatedPhoenixMarket(13_457, shape);
-    const cfg = await fetchPhoenixConfig(phoenixLoader(market), PHOENIX_MARKET);
+  it.each<Shape>(["chain", "balanced"])(
+    "phoenix, every node in the two book trees (%s)",
+    async (shape) => {
+      const market = saturatedPhoenixMarket(13_457, shape);
+      const cfg = await fetchPhoenixConfig(phoenixLoader(market), PHOENIX_MARKET);
 
-    expect(cfg.windows.baseIn.orders).toEqual([]);
-    expect(cfg.windows.quoteIn.orders).toEqual([]);
-  });
+      expect(cfg.windows.baseIn.orders).toEqual([]);
+      expect(cfg.windows.quoteIn.orders).toEqual([]);
+    },
+  );
 });

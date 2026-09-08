@@ -11,21 +11,25 @@
  * bounded by maxConcurrentChunks, so a large batch cannot open one request per
  * chunk (10,000 of them at k = 1,000,000).
  */
-import { address, getAddressDecoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { coalescingAccountLoader, type BatchAccountLoader, type LoadedAccount } from '../../src/svm/loader.js';
+import { address, getAddressDecoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  coalescingAccountLoader,
+  type BatchAccountLoader,
+  type LoadedAccount,
+} from "../../src/svm/loader.js";
 
 // Distinct valid base58 addresses, indexed 0..n-1.
 const POOL = [
-  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
-  '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo',
-  'So11111111111111111111111111111111111111112',
-  '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
-  'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+  "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+  "So11111111111111111111111111111111111111112",
+  "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+  "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
 ].map((s) => address(s));
 
-const OWNER = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const OWNER = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 const acct = (byte: number): LoadedAccount => ({ data: new Uint8Array([byte]), owner: OWNER });
 
@@ -42,7 +46,11 @@ function distinctAddresses(count: number): Address[] {
 }
 
 /** A transport that resolves a macrotask later, tracking concurrent calls. */
-function inFlightTracker(): { loadMany: BatchAccountLoader; max: () => number; calls: () => number } {
+function inFlightTracker(): {
+  loadMany: BatchAccountLoader;
+  max: () => number;
+  calls: () => number;
+} {
   let inFlight = 0;
   let max = 0;
   let calls = 0;
@@ -59,8 +67,8 @@ function inFlightTracker(): { loadMany: BatchAccountLoader; max: () => number; c
   return { loadMany, max: () => max, calls: () => calls };
 }
 
-describe('coalescingAccountLoader', () => {
-  it('coalesces same-tick loads into ONE sweep (deduped)', async () => {
+describe("coalescingAccountLoader", () => {
+  it("coalesces same-tick loads into ONE sweep (deduped)", async () => {
     const calls: Address[][] = [];
     const loadMany: BatchAccountLoader = async (addrs) => {
       calls.push([...addrs]);
@@ -76,7 +84,7 @@ describe('coalescingAccountLoader', () => {
     expect([a, b, c].every((r) => r !== null)).toBe(true);
   });
 
-  it('fires every chunk in PARALLEL, not one after another', async () => {
+  it("fires every chunk in PARALLEL, not one after another", async () => {
     let inFlight = 0;
     let maxInFlight = 0;
     const gates: Array<() => void> = [];
@@ -106,7 +114,7 @@ describe('coalescingAccountLoader', () => {
     expect(results.every((r) => r !== null)).toBe(true);
   });
 
-  it('caps in-flight chunks at maxConcurrentChunks (default 16) over a 5,000-address batch', async () => {
+  it("caps in-flight chunks at maxConcurrentChunks (default 16) over a 5,000-address batch", async () => {
     const { loadMany, max, calls } = inFlightTracker();
     const load = coalescingAccountLoader(loadMany); // default chunkSize 100 => 50 chunks
     const addresses = distinctAddresses(5_000);
@@ -119,7 +127,7 @@ describe('coalescingAccountLoader', () => {
     expect(results.every((r) => r !== null)).toBe(true);
   });
 
-  it('serializes chunks at maxConcurrentChunks 1 (the escape hatch)', async () => {
+  it("serializes chunks at maxConcurrentChunks 1 (the escape hatch)", async () => {
     const { loadMany, max, calls } = inFlightTracker();
     const load = coalescingAccountLoader(loadMany, { chunkSize: 1, maxConcurrentChunks: 1 });
 
@@ -130,24 +138,24 @@ describe('coalescingAccountLoader', () => {
     expect(results.every((r) => r !== null)).toBe(true);
   });
 
-  it('rejects a non-positive maxConcurrentChunks', () => {
+  it("rejects a non-positive maxConcurrentChunks", () => {
     const loadMany: BatchAccountLoader = async (addrs) => addrs.map(() => acct(5));
 
     expect(() => coalescingAccountLoader(loadMany, { maxConcurrentChunks: 0 })).toThrow(
-      'coalescingAccountLoader maxConcurrentChunks must be a positive integer, got 0',
+      "coalescingAccountLoader maxConcurrentChunks must be a positive integer, got 0",
     );
   });
 
-  it('isolates a chunk failure to its own waiters', async () => {
+  it("isolates a chunk failure to its own waiters", async () => {
     const loadMany: BatchAccountLoader = async (addrs) => {
-      if (addrs.includes(POOL[0]!)) throw new Error('chunk boom');
+      if (addrs.includes(POOL[0]!)) throw new Error("chunk boom");
       return addrs.map(() => acct(3));
     };
     // chunkSize 1 => each address its own chunk; only POOL[0]'s chunk throws.
     const load = coalescingAccountLoader(loadMany, { chunkSize: 1 });
 
     const settled = await Promise.allSettled([load(POOL[0]!), load(POOL[1]!)]);
-    expect(settled[0]!.status).toBe('rejected'); // failed chunk
-    expect(settled[1]!.status).toBe('fulfilled'); // sibling chunk unaffected
+    expect(settled[0]!.status).toBe("rejected"); // failed chunk
+    expect(settled[1]!.status).toBe("fulfilled"); // sibling chunk unaffected
   });
 });

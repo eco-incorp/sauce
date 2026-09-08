@@ -3,34 +3,41 @@
 OpenSea's decentralized NFT marketplace protocol supporting flexible order types including English and Dutch auctions, collection offers, and trait-based offers.
 
 ## Category
+
 nft-marketplace | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base
 
 ## Key Operations
+
 - **fulfillBasicOrder**: Fulfill a basic NFT buy/sell order
 - **cancel**: Cancel pending orders
 
 ## SDK Usage
+
 ```typescript
 import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/seaport";
 ```
 
 ## SauceScript Examples
+
 ```typescript
 // Note: Seaport orders require off-chain signature creation via seaport-js SDK.
 // On-chain fulfillment uses the signed order parameters.
 ```
 
 ## Key Addresses
-| Chain | Contract | Address |
-|-------|----------|---------|
+
+| Chain    | Contract   | Address                                      |
+| -------- | ---------- | -------------------------------------------- |
 | Ethereum | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` |
 | Arbitrum | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` |
 | Optimism | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` |
-| Polygon | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` |
-| Base | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` |
+| Polygon  | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` |
+| Base     | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` |
 
 ## ABI Methods
+
 ### SeaportABI
+
 - `fulfillBasicOrder(tuple)` - Fulfill a basic order. Payable. Returns fulfilled bool. BasicOrderParameters tuple:
   - `considerationToken` (address) - Token to pay (address(0) for ETH)
   - `considerationIdentifier` (uint256) - Token ID (0 for ERC-20/ETH)
@@ -49,6 +56,7 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk
 - `cancel(tuple[])` - Cancel orders. Params: orders (array of OrderComponents tuples with offerer, zone, zoneHash, salt, conduitKey, counter). Returns cancelled bool
 
 ## Notes
+
 - Same address across all 5 chains
 - Zone-based access control for order restrictions
 - Conduits are approved transfer proxies - conduitKey=bytes32(0) for default

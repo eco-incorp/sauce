@@ -911,11 +911,7 @@
     "npm": "N/A",
     "category": "AMM (Constant Product) V2 + V3",
     "tvl_estimate": "$30M+",
-    "key_functions": [
-      "swapExactTokensForTokens",
-      "addLiquidity",
-      "removeLiquidity"
-    ],
+    "key_functions": ["swapExactTokensForTokens", "addLiquidity", "removeLiquidity"],
     "deployments": [
       {
         "chain": "Fantom",
@@ -1170,12 +1166,7 @@
     "npm": "N/A",
     "category": "Solidly-fork ve(3,3) AMM",
     "tvl_estimate": "$10M+",
-    "key_functions": [
-      "swapExactTokensForTokens",
-      "addLiquidity",
-      "removeLiquidity",
-      "vote"
-    ],
+    "key_functions": ["swapExactTokensForTokens", "addLiquidity", "removeLiquidity", "vote"],
     "deployments": [
       {
         "chain": "Arbitrum",
@@ -1226,11 +1217,7 @@
     "npm": "N/A",
     "category": "AMM (Constant Product)",
     "tvl_estimate": "$5M+",
-    "key_functions": [
-      "swapExactTokensForTokens",
-      "addLiquidity",
-      "removeLiquidity"
-    ],
+    "key_functions": ["swapExactTokensForTokens", "addLiquidity", "removeLiquidity"],
     "deployments": [
       {
         "chain": "zkSync Era",
@@ -1276,12 +1263,7 @@
     "npm": "N/A",
     "category": "Solidly-fork ve(3,3) + Algebra CL",
     "tvl_estimate": "$30M+",
-    "key_functions": [
-      "swapExactTokensForTokens",
-      "addLiquidity",
-      "removeLiquidity",
-      "vote"
-    ],
+    "key_functions": ["swapExactTokensForTokens", "addLiquidity", "removeLiquidity", "vote"],
     "deployments": [
       {
         "chain": "Linea",
@@ -1301,12 +1283,7 @@
     "npm": "N/A",
     "category": "Solidly-fork ve(3,3) AMM",
     "tvl_estimate": "$15M+",
-    "key_functions": [
-      "swapExactTokensForTokens",
-      "addLiquidity",
-      "removeLiquidity",
-      "vote"
-    ],
+    "key_functions": ["swapExactTokensForTokens", "addLiquidity", "removeLiquidity", "vote"],
     "deployments": [
       {
         "chain": "Linea",
@@ -1358,12 +1335,7 @@
     "npm": "N/A",
     "category": "Solidly-fork ve(3,3) + Algebra CL",
     "tvl_estimate": "$15M+",
-    "key_functions": [
-      "swapExactTokensForTokens",
-      "addLiquidity",
-      "removeLiquidity",
-      "vote"
-    ],
+    "key_functions": ["swapExactTokensForTokens", "addLiquidity", "removeLiquidity", "vote"],
     "deployments": [
       {
         "chain": "Blast",
@@ -1508,12 +1480,7 @@
     "npm": "N/A",
     "category": "Solidly-fork ve(3,3) AMM",
     "tvl_estimate": "$10M+",
-    "key_functions": [
-      "swapExactTokensForTokens",
-      "addLiquidity",
-      "removeLiquidity",
-      "vote"
-    ],
+    "key_functions": ["swapExactTokensForTokens", "addLiquidity", "removeLiquidity", "vote"],
     "deployments": [
       {
         "chain": "Fantom",
@@ -1538,11 +1505,7 @@
     "npm": "N/A",
     "category": "AMM (Constant Product, Uniswap V2 fork)",
     "tvl_estimate": "$5M+",
-    "key_functions": [
-      "swapExactTokensForTokens",
-      "addLiquidity",
-      "removeLiquidity"
-    ],
+    "key_functions": ["swapExactTokensForTokens", "addLiquidity", "removeLiquidity"],
     "deployments": [
       {
         "chain": "Metis",

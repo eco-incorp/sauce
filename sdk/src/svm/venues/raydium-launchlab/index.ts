@@ -157,20 +157,20 @@
  * bit-exact against the chain's realized net quote-out (1,544,161,703,
  * 46,064 CU for that CPI) over the POST-buy reserves.
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { parseMintExtensions } from '../../token-extensions.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { parseMintExtensions } from "../../token-extensions.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-const SLUG = 'raydium-launchlab' as const;
+const SLUG = "raydium-launchlab" as const;
 
 function address_(s: string): Address {
   return s as unknown as Address;
 }
 
-export const RAYDIUM_LAUNCHLAB_PROGRAM_ID = address_('LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj');
-const TOKEN_PROGRAM = address_('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address_('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+export const RAYDIUM_LAUNCHLAB_PROGRAM_ID = address_("LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj");
+const TOKEN_PROGRAM = address_("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address_("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const POOL_STATE_DISCRIMINATOR = [247, 237, 227, 245, 215, 195, 222, 70];
 const GLOBAL_CONFIG_DISCRIMINATOR = [149, 8, 156, 202, 160, 252, 176, 217];
 const PLATFORM_CONFIG_DISCRIMINATOR = [160, 78, 128, 0, 248, 83, 230, 160];
@@ -182,7 +182,9 @@ function pubkeyAt(data: Uint8Array, offset: number): Address {
 }
 async function pda(seeds: (Uint8Array | Address)[], programAddress: Address): Promise<Address> {
   const encoder = getAddressEncoder();
-  const rawSeeds = seeds.map((s) => (typeof s === 'string' ? new Uint8Array(encoder.encode(s as Address)) : s));
+  const rawSeeds = seeds.map((s) =>
+    typeof s === "string" ? new Uint8Array(encoder.encode(s as Address)) : s,
+  );
   const [derived] = await getProgramDerivedAddress({ programAddress, seeds: rawSeeds });
   return derived;
 }
@@ -198,16 +200,27 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
  * fetched to reject a TransferFeeConfig extension (type 1) — same convention
  * pumpswap/pumpfun-bonding-curve use for their own base-mint gate.
  */
-async function resolveBaseTokenProgram(load: AccountLoader, mint: Address, flag: number): Promise<Address> {
+async function resolveBaseTokenProgram(
+  load: AccountLoader,
+  mint: Address,
+  flag: number,
+): Promise<Address> {
   if (flag === 0) return TOKEN_PROGRAM;
-  if (flag !== 1) throw new Error(`${SLUG} pool base mint ${mint} has unknown token_program_flag ${flag} (expected 0 or 1)`);
-  const data = await loadAccount(load, mint, 'base mint');
+  if (flag !== 1)
+    throw new Error(
+      `${SLUG} pool base mint ${mint} has unknown token_program_flag ${flag} (expected 0 or 1)`,
+    );
+  const data = await loadAccount(load, mint, "base mint");
   if (data.length === 82) return TOKEN_PROGRAM; // no extension room possible
   if (data.length < 166) {
-    throw new Error(`${SLUG} base mint ${mint} data is ${data.length} bytes, not a token-2022 mint layout`);
+    throw new Error(
+      `${SLUG} base mint ${mint} data is ${data.length} bytes, not a token-2022 mint layout`,
+    );
   }
   if (data[165] !== 1) {
-    throw new Error(`${SLUG} base mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
+    throw new Error(
+      `${SLUG} base mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`,
+    );
   }
   // Un-routable (blocking) extensions self-drop: a NonTransferable or
   // default-frozen base mint cannot move through a plain transferChecked.
@@ -215,7 +228,7 @@ async function resolveBaseTokenProgram(load: AccountLoader, mint: Address, flag:
   // blocking, so a zero-fee/advisory-only T22 base mint still routes.
   const { blocking } = parseMintExtensions(data);
   if (blocking.length > 0) {
-    throw new Error(`${SLUG} gate: base mint ${mint} is un-routable — ${blocking.join('; ')}`);
+    throw new Error(`${SLUG} gate: base mint ${mint} is un-routable — ${blocking.join("; ")}`);
   }
   let offset = 166;
   while (offset + 4 <= data.length) {
@@ -241,7 +254,7 @@ async function resolveBaseTokenProgram(load: AccountLoader, mint: Address, flag:
 export interface RaydiumLaunchlabPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** exactIn side: 'quoteToBase' (default, buy_exact_in) | 'baseToQuote' (sell_exact_in). */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   globalConfig: Address;
   platformConfig: Address;
   baseMint: Address;
@@ -255,19 +268,23 @@ export interface RaydiumLaunchlabPoolConfig extends PoolConfig {
 
 export const raydiumLaunchlab = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: RAYDIUM_LAUNCHLAB_PROGRAM_ID,
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<RaydiumLaunchlabPoolConfig> {
-    const poolData = await loadAccount(load, pool, 'pool');
+    const poolData = await loadAccount(load, pool, "pool");
     if (!hasDiscriminator(poolData, POOL_STATE_DISCRIMINATOR)) {
       throw new Error(`${SLUG} pool ${pool} discriminator mismatch (not a PoolState account)`);
     }
     if (poolData.length < 429) {
-      throw new Error(`${SLUG} pool ${pool} data is ${poolData.length} bytes, expected at least 429`);
+      throw new Error(
+        `${SLUG} pool ${pool} data is ${poolData.length} bytes, expected at least 429`,
+      );
     }
     const status = poolData[17]!;
     if (status !== 0) {
-      throw new Error(`${SLUG} pool ${pool} gate: status is ${status}, not 0 (Fund/actively-fundraising) — already migrated or fully raised`);
+      throw new Error(
+        `${SLUG} pool ${pool} gate: status is ${status}, not 0 (Fund/actively-fundraising) — already migrated or fully raised`,
+      );
     }
     const tokenProgramFlag = poolData[365]!;
     const globalConfig = pubkeyAt(poolData, 141);
@@ -279,8 +296,8 @@ export const raydiumLaunchlab = {
     const creator = pubkeyAt(poolData, 333);
 
     const [globalData, platformData, baseTokenProgram] = await Promise.all([
-      loadAccount(load, globalConfig, 'global config'),
-      loadAccount(load, platformConfig, 'platform config'),
+      loadAccount(load, globalConfig, "global config"),
+      loadAccount(load, platformConfig, "platform config"),
       resolveBaseTokenProgram(load, baseMint, tokenProgramFlag),
     ]);
     if (!hasDiscriminator(globalData, GLOBAL_CONFIG_DISCRIMINATOR)) {
@@ -291,7 +308,9 @@ export const raydiumLaunchlab = {
     }
     const curveType = globalData[16]!;
     if (curveType !== 0) {
-      throw new Error(`${SLUG} pool ${pool} gate: global config ${globalConfig} curve_type is ${curveType} (only Constant=0 is implemented; Fixed=1/Linear=2 are unverified)`);
+      throw new Error(
+        `${SLUG} pool ${pool} gate: global config ${globalConfig} curve_type is ${curveType} (only Constant=0 is implemented; Fixed=1/Linear=2 are unverified)`,
+      );
     }
 
     const [platformVault, creatorVault] = await Promise.all([
@@ -302,7 +321,7 @@ export const raydiumLaunchlab = {
     return {
       venue: SLUG,
       pool,
-      direction: 'quoteToBase',
+      direction: "quoteToBase",
       globalConfig,
       platformConfig,
       baseMint,
@@ -315,4 +334,3 @@ export const raydiumLaunchlab = {
     };
   },
 };
-

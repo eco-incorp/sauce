@@ -73,41 +73,116 @@ export interface TokenRegistryRow {
 export const TOKEN_REGISTRY: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
   // ethereum (1) -- probe-verified 2026-08-11 (getCode + symbol() + decimals(), via sdk/.env's ETH_RPC_URL).
   1: [
-    { symbol: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6, source: "probe:ethereum@2026-08-11" },
-    { symbol: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6, source: "probe:ethereum@2026-08-11" },
-    { symbol: "WETH", address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", decimals: 18, source: "probe:ethereum@2026-08-11" },
+    {
+      symbol: "USDC",
+      address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      decimals: 6,
+      source: "probe:ethereum@2026-08-11",
+    },
+    {
+      symbol: "USDT",
+      address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      decimals: 6,
+      source: "probe:ethereum@2026-08-11",
+    },
+    {
+      symbol: "WETH",
+      address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      decimals: 18,
+      source: "probe:ethereum@2026-08-11",
+    },
   ],
   // optimism (10) -- probe-verified 2026-08-11.
   10: [
-    { symbol: "USDC", address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", decimals: 6, source: "probe:optimism@2026-08-11" },
-    { symbol: "USDT", address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", decimals: 6, source: "probe:optimism@2026-08-11" },
-    { symbol: "WETH", address: "0x4200000000000000000000000000000000000006", decimals: 18, source: "probe:optimism@2026-08-11" },
+    {
+      symbol: "USDC",
+      address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+      decimals: 6,
+      source: "probe:optimism@2026-08-11",
+    },
+    {
+      symbol: "USDT",
+      address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
+      decimals: 6,
+      source: "probe:optimism@2026-08-11",
+    },
+    {
+      symbol: "WETH",
+      address: "0x4200000000000000000000000000000000000006",
+      decimals: 18,
+      source: "probe:optimism@2026-08-11",
+    },
   ],
   // polygon (137) -- probe-verified 2026-08-11. USDT deliberately excluded: the deployed contract's
   // own symbol() returns "USDT0" (Tether-migrated), not "USDT" -- fails the provenance gate's
   // symbol() check, so it does not land under the plain USDT key.
   137: [
-    { symbol: "USDC", address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6, source: "probe:polygon@2026-08-11" },
-    { symbol: "WETH", address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", decimals: 18, source: "probe:polygon@2026-08-11" },
-    { symbol: "WPOL", address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", decimals: 18, source: "probe:polygon@2026-08-11" },
+    {
+      symbol: "USDC",
+      address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+      decimals: 6,
+      source: "probe:polygon@2026-08-11",
+    },
+    {
+      symbol: "WETH",
+      address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+      decimals: 18,
+      source: "probe:polygon@2026-08-11",
+    },
+    {
+      symbol: "WPOL",
+      address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+      decimals: 18,
+      source: "probe:polygon@2026-08-11",
+    },
   ],
   // monad (143) -- probe-verified 2026-08-31 (getCode + symbol() + decimals(), via rpc-mainnet.monadinfra.com).
   // Native Circle USDC (v2.2, per circle.com/multi-chain-usdc/monad) + the wrapped native WMON.
   143: [
-    { symbol: "USDC", address: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603", decimals: 6, source: "probe:monad@2026-08-31" },
-    { symbol: "WMON", address: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A", decimals: 18, source: "probe:monad@2026-08-31" },
+    {
+      symbol: "USDC",
+      address: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+      decimals: 6,
+      source: "probe:monad@2026-08-31",
+    },
+    {
+      symbol: "WMON",
+      address: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+      decimals: 18,
+      source: "probe:monad@2026-08-31",
+    },
   ],
   // base (8453) -- USDC/WETH already pinned in verify/vectors.ts (Tier 0); re-probed 2026-08-11 to
   // confirm the pinned constants still match a live symbol()/decimals() read.
   8453: [
-    { symbol: "USDC", address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6, source: "sdk:verify/vectors.ts" },
-    { symbol: "WETH", address: "0x4200000000000000000000000000000000000006", decimals: 18, source: "sdk:verify/vectors.ts" },
+    {
+      symbol: "USDC",
+      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      decimals: 6,
+      source: "sdk:verify/vectors.ts",
+    },
+    {
+      symbol: "WETH",
+      address: "0x4200000000000000000000000000000000000006",
+      decimals: 18,
+      source: "sdk:verify/vectors.ts",
+    },
   ],
   // arbitrum (42161) -- probe-verified 2026-08-11. USDT deliberately excluded: symbol() returns
   // "USD₮0" (Tether-migrated), not "USDT" -- same provenance-gate rejection as polygon above.
   42161: [
-    { symbol: "USDC", address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", decimals: 6, source: "probe:arbitrum@2026-08-11" },
-    { symbol: "WETH", address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", decimals: 18, source: "probe:arbitrum@2026-08-11" },
+    {
+      symbol: "USDC",
+      address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      decimals: 6,
+      source: "probe:arbitrum@2026-08-11",
+    },
+    {
+      symbol: "WETH",
+      address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+      decimals: 18,
+      source: "probe:arbitrum@2026-08-11",
+    },
   ],
 };
 
@@ -125,7 +200,9 @@ for (const [idStr, rows] of Object.entries(TOKEN_REGISTRY)) {
   const seenAddresses = new Set<string>();
   for (const row of rows) {
     if (!SYMBOL_RE.test(row.symbol)) {
-      throw new Error(`token-registry: chain ${id} row '${row.symbol}' does not match ${SYMBOL_RE}`);
+      throw new Error(
+        `token-registry: chain ${id} row '${row.symbol}' does not match ${SYMBOL_RE}`,
+      );
     }
     for (const method of REWRITABLE_METHODS) {
       if (row.symbol.toUpperCase() === method.toUpperCase()) {
@@ -136,7 +213,9 @@ for (const [idStr, rows] of Object.entries(TOKEN_REGISTRY)) {
       }
     }
     if (!isAddress(row.address, { strict: true }) || getAddress(row.address) !== row.address) {
-      throw new Error(`token-registry: chain ${id} symbol '${row.symbol}' address is not EIP-55 checksummed`);
+      throw new Error(
+        `token-registry: chain ${id} symbol '${row.symbol}' address is not EIP-55 checksummed`,
+      );
     }
     if (seenSymbols.has(row.symbol)) {
       throw new Error(`token-registry: chain ${id} has a duplicate symbol '${row.symbol}'`);

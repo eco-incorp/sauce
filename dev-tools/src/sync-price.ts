@@ -24,9 +24,7 @@ const poolAbi = parseAbi([
   "function fee() view returns (uint24)",
 ]);
 
-const erc20Abi = parseAbi([
-  "function balanceOf(address) view returns (uint256)",
-]);
+const erc20Abi = parseAbi(["function balanceOf(address) view returns (uint256)"]);
 
 const SLOT0_POSITION: Hex = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -66,12 +64,12 @@ export async function findBalanceSlot(
   forkRpc: string,
 ): Promise<number | null> {
   const forkClient = createPublicClient({ transport: http(forkRpc) });
-  const balance = await forkClient.readContract({
+  const balance = (await forkClient.readContract({
     address: token,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: [holder],
-  } as any) as bigint;
+  } as any)) as bigint;
 
   if (balance === 0n) return null;
 
@@ -96,11 +94,7 @@ export async function setBalance(
   forkRpc: string,
 ) {
   const key = balanceKey(holder, balanceSlot);
-  await rpc(forkRpc, "hardhat_setStorageAt", [
-    token,
-    key,
-    pad(numberToHex(amount), { size: 32 }),
-  ]);
+  await rpc(forkRpc, "hardhat_setStorageAt", [token, key, pad(numberToHex(amount), { size: 32 })]);
 }
 
 export interface SyncPriceOptions {
@@ -127,24 +121,48 @@ export async function syncPrice(options: SyncPriceOptions): Promise<SyncPriceRes
   const forkClient = createPublicClient({ transport: http(forkRpc) });
 
   // Read pool info
-  const [token0, token1, fee] = await Promise.all([
+  const [token0, token1, fee] = (await Promise.all([
     forkClient.readContract({ address: poolAddress, abi: poolAbi, functionName: "token0" } as any),
     forkClient.readContract({ address: poolAddress, abi: poolAbi, functionName: "token1" } as any),
     forkClient.readContract({ address: poolAddress, abi: poolAbi, functionName: "fee" } as any),
-  ]) as [Hex, Hex, number];
+  ])) as [Hex, Hex, number];
 
   // Read slot0 and balances from both
-  const [mainnetSlot0, forkSlot0] = await Promise.all([
-    mainnetClient.readContract({ address: poolAddress, abi: poolAbi, functionName: "slot0" } as any),
+  const [_mainnetSlot0, forkSlot0] = (await Promise.all([
+    mainnetClient.readContract({
+      address: poolAddress,
+      abi: poolAbi,
+      functionName: "slot0",
+    } as any),
     forkClient.readContract({ address: poolAddress, abi: poolAbi, functionName: "slot0" } as any),
-  ]) as [any, any];
+  ])) as [any, any];
 
-  const [mainnetBal0, mainnetBal1, forkBal0, forkBal1] = await Promise.all([
-    mainnetClient.readContract({ address: token0, abi: erc20Abi, functionName: "balanceOf", args: [poolAddress] } as any),
-    mainnetClient.readContract({ address: token1, abi: erc20Abi, functionName: "balanceOf", args: [poolAddress] } as any),
-    forkClient.readContract({ address: token0, abi: erc20Abi, functionName: "balanceOf", args: [poolAddress] } as any),
-    forkClient.readContract({ address: token1, abi: erc20Abi, functionName: "balanceOf", args: [poolAddress] } as any),
-  ]) as [bigint, bigint, bigint, bigint];
+  const [mainnetBal0, mainnetBal1, forkBal0, forkBal1] = (await Promise.all([
+    mainnetClient.readContract({
+      address: token0,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [poolAddress],
+    } as any),
+    mainnetClient.readContract({
+      address: token1,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [poolAddress],
+    } as any),
+    forkClient.readContract({
+      address: token0,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [poolAddress],
+    } as any),
+    forkClient.readContract({
+      address: token1,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [poolAddress],
+    } as any),
+  ])) as [bigint, bigint, bigint, bigint];
 
   const before = { sqrtPriceX96: forkSlot0[0] as bigint, balance0: forkBal0, balance1: forkBal1 };
 
@@ -168,16 +186,26 @@ export async function syncPrice(options: SyncPriceOptions): Promise<SyncPriceRes
   }
 
   // Read final state
-  const newSlot0 = await forkClient.readContract({
+  const newSlot0 = (await forkClient.readContract({
     address: poolAddress,
     abi: poolAbi,
     functionName: "slot0",
-  } as any) as any;
+  } as any)) as any;
 
-  const [newBal0, newBal1] = await Promise.all([
-    forkClient.readContract({ address: token0, abi: erc20Abi, functionName: "balanceOf", args: [poolAddress] } as any),
-    forkClient.readContract({ address: token1, abi: erc20Abi, functionName: "balanceOf", args: [poolAddress] } as any),
-  ]) as [bigint, bigint];
+  const [newBal0, newBal1] = (await Promise.all([
+    forkClient.readContract({
+      address: token0,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [poolAddress],
+    } as any),
+    forkClient.readContract({
+      address: token1,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [poolAddress],
+    } as any),
+  ])) as [bigint, bigint];
 
   return {
     token0,

@@ -9,7 +9,7 @@ npm install @eco-incorp/sauce-sdk
 
 > The runtime **engine** (the on-chain interpreter these programs execute on) lives in the separate
 > `eco-incorp/v12` repo. This repo — `eco-incorp/sauce` — is the developer-facing Sauce package that
-> *targets* it.
+> _targets_ it.
 
 **Node only.** The compiler is loaded through `createRequire` (its `node` build is CommonJS reading a
 sibling `.wasm` off disk), and the route path imports `node:fs`/`node:path`, so the Quickstart, the
@@ -26,28 +26,31 @@ The SauceScript compiler comes with it as a dependency. The only optional extra 
 Open a route on a destination chain, and the SDK compiles the program and assembles the intent:
 
 ```ts
-import { routes } from '@eco-incorp/sauce-sdk'
+import { routes } from "@eco-incorp/sauce-sdk";
 
 // Both deadlines are ABSOLUTE unix timestamps, not durations: the chain compares
 // `block.timestamp > route.deadline`. And rewardDeadline must be >= deadline — a solver may fulfil
 // right up to the route deadline, so an earlier reward deadline is already refundable by then.
 // pot, portal, sourcePortal, creator and prover are addresses for YOUR deployment; the package
 // ships no defaults for those. Token addresses it does ship — see the registry note below.
-const now = BigInt(Math.floor(Date.now() / 1000))
+const now = BigInt(Math.floor(Date.now() / 1000));
 
-const built = routes.openRoute('base', 'function main() { return 1n; }', {
-  source: 'ethereum',                  // the SOURCE chain — where the reward is posted
-  pot,                                 // the Pot on the destination chain, which runs the program
-  portal,                              // the DESTINATION Portal — lands in route.portal
-  sourcePortal,                        // the SOURCE Portal — where the intent is published
-  creator, prover,
-  deadline: now + 3600n,
-  rewardDeadline: now + 7200n,
-}).reward([{ token: usdc, amount: 1_000_000n }])
+const built = routes
+  .openRoute("base", "function main() { return 1n; }", {
+    source: "ethereum", // the SOURCE chain — where the reward is posted
+    pot, // the Pot on the destination chain, which runs the program
+    portal, // the DESTINATION Portal — lands in route.portal
+    sourcePortal, // the SOURCE Portal — where the intent is published
+    creator,
+    prover,
+    deadline: now + 3600n,
+    rewardDeadline: now + 7200n,
+  })
+  .reward([{ token: usdc, amount: 1_000_000n }]);
 
-built.compiled.bytecode[0]   // the program
-built.intent                 // the assembled Intent
-built.publishCalldata()      // calldata for sourcePortal — omit sourcePortal above and this throws
+built.compiled.bytecode[0]; // the program
+built.intent; // the assembled Intent
+built.publishCalldata(); // calldata for sourcePortal — omit sourcePortal above and this throws
 ```
 
 Common token addresses are already there: `routes.TOKEN_REGISTRY` carries probe-verified `USDC` and
@@ -86,16 +89,18 @@ and its base dirs together; `swap` and `deposit` return a bare string, with base
 constants:
 
 ```ts
-import { routes, token } from '@eco-incorp/sauce-sdk'
+import { routes, token } from "@eco-incorp/sauce-sdk";
 
 // toSauceScript returns the baseDirs the program's own imports need, alongside the source
-const { source, baseDirs } = token.Token
-  .transfer({ token: usdc, to: recipient, amount: 1_000_000n })
-  .toSauceScript('evm')
+const { source, baseDirs } = token.Token.transfer({
+  token: usdc,
+  to: recipient,
+  amount: 1_000_000n,
+}).toSauceScript("evm");
 
 const built = routes
-  .openRoute('base', source, { ...options, compile: { baseDirs: [...baseDirs] } })
-  .reward(reward)
+  .openRoute("base", source, { ...options, compile: { baseDirs: [...baseDirs] } })
+  .reward(reward);
 ```
 
 The `baseDirs` matter: the emitted program does `import { IERC20 } from "./artifacts/IERC20.json"`,
@@ -109,20 +114,28 @@ that import. Spread them: `toSauceScript`'s array is `readonly`, the option is n
 own constant:
 
 ```ts
-import { routes, swap, deposit } from '@eco-incorp/sauce-sdk'
+import { routes, swap, deposit } from "@eco-incorp/sauce-sdk";
 
-routes.openRoute('base', swap.swapSource(spec),
-  { ...options, compile: { baseDirs: [...swap.SWAP_BASE_DIRS] } }).reward(reward)
+routes
+  .openRoute("base", swap.swapSource(spec), {
+    ...options,
+    compile: { baseDirs: [...swap.SWAP_BASE_DIRS] },
+  })
+  .reward(reward);
 
-routes.openRoute('base', deposit.depositSource(spec),
-  { ...options, compile: { baseDirs: [...deposit.DEPOSIT_BASE_DIRS] } }).reward(reward)
+routes
+  .openRoute("base", deposit.depositSource(spec), {
+    ...options,
+    compile: { baseDirs: [...deposit.DEPOSIT_BASE_DIRS] },
+  })
+  .reward(reward);
 ```
 
 `routes.compileSauceRoute` is the lower level underneath, if you want the compiled call without an
 intent — it returns `{ calls, compiled, source }` and has no `.reward()`.
 
 **On the SVM target this route path does not work.** `toSauceScript('svm')` emits `main` with typed
-account parameters — that parameter list *is* the account manifest, so it cannot be dropped — and a
+account parameters — that parameter list _is_ the account manifest, so it cannot be dropped — and a
 route runs an acorn-based accessor rewrite that rejects annotations. `compile: { accessors: false }` gets past the parse, but a route then still requires
 `execution.buffer` naming an already-staged program buffer, so unless you have staged one, compile
 the source directly instead.
@@ -132,13 +145,13 @@ the source directly instead.
 `/compiler` re-exports the published Rust/wasm SauceScript compiler:
 
 ```ts
-import { compile } from '@eco-incorp/sauce-sdk/compiler'
+import { compile } from "@eco-incorp/sauce-sdk/compiler";
 
 const { bytecode } = compile({
-  target: 'evm',                                  // or 'svm'
-  entry: 'main.js',
-  resolve: (path) => bytesFor(path),              // module BYTES (Uint8Array), or undefined
-})
+  target: "evm", // or 'svm'
+  entry: "main.js",
+  resolve: (path) => bytesFor(path), // module BYTES (Uint8Array), or undefined
+});
 ```
 
 `main` may take parameters. They arrive at run time as 32-byte big-endian words appended after the
@@ -155,10 +168,10 @@ uniformly 32-byte words once one is present.
 Neither call returns an argument layout, so callers build the tail themselves. Mind which
 `CompileResult` you have — there are two, and they are not the same shape:
 
-| | shape | from |
-|---|---|---|
-| the compiler's | `{ bytecode: Uint8Array; manifest? }` | a direct `compile` |
-| the SDK's | `{ bytecode: Uint8Array[]; warnings: string[] }` | `built.compiled`, `compileSauceRoute` |
+|                | shape                                            | from                                  |
+| -------------- | ------------------------------------------------ | ------------------------------------- |
+| the compiler's | `{ bytecode: Uint8Array; manifest? }`            | a direct `compile`                    |
+| the SDK's      | `{ bytecode: Uint8Array[]; warnings: string[] }` | `built.compiled`, `compileSauceRoute` |
 
 The SDK's `bytecode` is a list of SEGMENTS, so `compiled.bytecode[0]` is the first segment, not the
 first byte. On **SVM** an `Account`-typed parameter is not a payload argument at all: it becomes the
@@ -179,11 +192,11 @@ needs an already-staged buffer, so it is the route path rather than a bare compi
 129 protocols and 39 canonical chains ship with the package — 38 EVM plus Solana:
 
 ```ts
-import { listProtocols, getProtocol, requireChain } from '@eco-incorp/sauce-sdk'
+import { listProtocols, getProtocol, requireChain } from "@eco-incorp/sauce-sdk";
 
-listProtocols().length          // 129
-getProtocol('uniswap-v3')       // metadata: category, per-chain deployments, audit status
-                                // (ABIs live on the subpath: '@eco-incorp/sauce-sdk/protocols/uniswap-v3')
+listProtocols().length; // 129
+getProtocol("uniswap-v3"); // metadata: category, per-chain deployments, audit status
+// (ABIs live on the subpath: '@eco-incorp/sauce-sdk/protocols/uniswap-v3')
 ```
 
 `requireChain` and `getChain` read different registries: `CANONICAL_CHAINS` has all 39, while the
@@ -192,25 +205,25 @@ canonical but absent from it, so `getChain(130)` is `undefined` where `requireCh
 resolves.
 
 ```ts
-requireChain('base').id         // 8453 — reads CANONICAL_CHAINS (all 39)
+requireChain("base").id; // 8453 — reads CANONICAL_CHAINS (all 39)
 ```
 
 ## Subpaths
 
-| Subpath | What's there |
-| --- | --- |
-| `.` | routes DSL, `token`/`swap`/`deposit` builders, chain + protocol registries |
-| `/compiler` | the SauceScript compiler |
-| `/actions` | routing-intent lowering (`actionsToSauce`), AMM/bridge action primitives |
-| `/protocols/*` | one protocol's ABIs and metadata, e.g. `/protocols/uniswap-v3` |
-| `/chains`, `/deployments` | canonical chain list; deployed contract addresses |
-| `/recipes` | shipped programs (settle, CCTP split-transfer) and their sources |
-| `/svm`, `/svm/engine`, `/svm/verify` | SVM client, account resolution, engine harness, settle verification |
-| `/svm/engine/web3js` | the same engine against `@solana/web3.js` (optional peer) |
-| `/recipes/settle.sauce.ts`, `/svm/recipes/settle.sauce.ts` | the settle program sources themselves, for partners reproducing bytes |
-| `/evm/engine` | EVM engine helpers |
-| `/verify` | decodes **legacy v1-grammar** settle programs. `viem`-only, browser-safe |
-| `/skills` | AI skill files per protocol |
+| Subpath                                                    | What's there                                                               |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `.`                                                        | routes DSL, `token`/`swap`/`deposit` builders, chain + protocol registries |
+| `/compiler`                                                | the SauceScript compiler                                                   |
+| `/actions`                                                 | routing-intent lowering (`actionsToSauce`), AMM/bridge action primitives   |
+| `/protocols/*`                                             | one protocol's ABIs and metadata, e.g. `/protocols/uniswap-v3`             |
+| `/chains`, `/deployments`                                  | canonical chain list; deployed contract addresses                          |
+| `/recipes`                                                 | shipped programs (settle, CCTP split-transfer) and their sources           |
+| `/svm`, `/svm/engine`, `/svm/verify`                       | SVM client, account resolution, engine harness, settle verification        |
+| `/svm/engine/web3js`                                       | the same engine against `@solana/web3.js` (optional peer)                  |
+| `/recipes/settle.sauce.ts`, `/svm/recipes/settle.sauce.ts` | the settle program sources themselves, for partners reproducing bytes      |
+| `/evm/engine`                                              | EVM engine helpers                                                         |
+| `/verify`                                                  | decodes **legacy v1-grammar** settle programs. `viem`-only, browser-safe   |
+| `/skills`                                                  | AI skill files per protocol                                                |
 
 `/verify` is for programs already on chain: it reads the v1 prologue that the retired TypeScript
 compiler emitted. Programs built by this SDK today are not v1-grammar, so it will refuse them.

@@ -29,7 +29,10 @@ export const SyncSwapRouterABI = [
       {
         name: "amountOut",
         type: "tuple",
-        components: [{ name: "token", type: "address" }, { name: "amount", type: "uint256" }],
+        components: [
+          { name: "token", type: "address" },
+          { name: "amount", type: "uint256" },
+        ],
       },
     ],
   },

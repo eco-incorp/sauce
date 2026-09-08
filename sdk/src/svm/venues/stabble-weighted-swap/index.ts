@@ -20,8 +20,8 @@
  * panic, matching this repo's "a capacity bound is real depth, not an
  * arithmetic accident" convention (see meteora-damm-v1-stable's ladder doc).
  */
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
 import {
   assertStabbleU64AmountIn,
   calcUnwrappedAmount,
@@ -41,7 +41,7 @@ import {
   weightedCalcOutGivenIn,
   weightedCoreQuoteLines,
   type StabbleTokenScale,
-} from '../stabble-common.js';
+} from "../stabble-common.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -50,11 +50,11 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+} from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'stabble-weighted-swap';
+const SLUG = "stabble-weighted-swap";
 
 // Weighted variant field offsets (see ../stabble-common.ts module doc).
 const INVARIANT_OFFSET = 106;
@@ -87,29 +87,46 @@ export interface StabbleWeightedSwapPoolConfig extends PoolConfig {
 }
 
 function asWeightedConfig(cfg: PoolConfig): StabbleWeightedSwapPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`stabble-weighted-swap adapter got a config for venue '${cfg.venue}'`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`stabble-weighted-swap adapter got a config for venue '${cfg.venue}'`);
   return cfg as StabbleWeightedSwapPoolConfig;
 }
 
 export const stabbleWeightedSwap: SvmVenueAdapter = {
   slug: SLUG,
-  kind: 'constant-product', // no discrete window/Newton — a closed-form curve, same bucket as CP families for CU/oracle purposes
+  kind: "constant-product", // no discrete window/Newton — a closed-form curve, same bucket as CP families for CU/oracle purposes
   programId: WEIGHTED_SWAP_PROGRAM_ID,
 
-  async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<StabbleWeightedSwapPoolConfig> {
+  async fetchPoolConfig(
+    load: AccountLoader,
+    pool: Address,
+  ): Promise<StabbleWeightedSwapPoolConfig> {
     const data = await load(pool);
-    const common = decodeStabblePoolCommon(pool, data, SLUG, TOKENS_OFFSET, TOKEN_SIZE, true, POOL_MIN_LENGTH);
+    const common = decodeStabblePoolCommon(
+      pool,
+      data,
+      SLUG,
+      TOKENS_OFFSET,
+      TOKEN_SIZE,
+      true,
+      POOL_MIN_LENGTH,
+    );
     if (common.tokens.length > WEIGHTED_MAX_TOKENS) {
-      throw new Error(`${SLUG} pool ${pool} has ${common.tokens.length} tokens, expected at most ${WEIGHTED_MAX_TOKENS}`);
+      throw new Error(
+        `${SLUG} pool ${pool} has ${common.tokens.length} tokens, expected at most ${WEIGHTED_MAX_TOKENS}`,
+      );
     }
     if (!common.isActive) throw new Error(`${SLUG} pool ${pool} is not active`);
 
     const vaultData = await load(common.vault);
     const vault = decodeStabbleVault(pool, vaultData);
-    if (!vault.isActive) throw new Error(`${SLUG} pool ${pool}'s vault ${common.vault} is not active`);
+    if (!vault.isActive)
+      throw new Error(`${SLUG} pool ${pool}'s vault ${common.vault} is not active`);
     const vaultAuthority = deriveStabbleVaultAuthority(common.vault, vault.authorityBump);
 
-    const [tokenA, tokenB] = common.tokens as Array<(typeof common.tokens)[number] & { weight: bigint }>;
+    const [tokenA, tokenB] = common.tokens as Array<
+      (typeof common.tokens)[number] & { weight: bigint }
+    >;
 
     // This venue's v1 `swap` entry point is legacy-SPL (Tokenkeg) only — no
     // Token-2022/transfer-fee accounting (see the module doc SCOPE). Detect a
@@ -126,11 +143,15 @@ export const stabbleWeightedSwap: SvmVenueAdapter = {
       const mintData = _mintDatas[_i]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -180,7 +201,15 @@ export const stabbleWeightedSwap: SvmVenueAdapter = {
     const xcapExpr = `Math.mulDiv(bal0_${i}, ${WEIGHTED_MAX_IN_RATIO}, 1000000000)`;
     lines.push(`  let wrapped${i} = ${wrappedIn};`);
     lines.push(`  if (wrapped${i} > ${xcapExpr}) { wrapped${i} = ${xcapExpr} }`);
-    const core = weightedCoreQuoteLines(`q${i}_`, `bal0_${i}`, `bal1_${i}`, tokenIn.weight, tokenOut.weight, `wrapped${i}`, `rawOut${i}`);
+    const core = weightedCoreQuoteLines(
+      `q${i}_`,
+      `bal0_${i}`,
+      `bal1_${i}`,
+      tokenIn.weight,
+      tokenOut.weight,
+      `wrapped${i}`,
+      `rawOut${i}`,
+    );
     lines.push(...core.map((l) => `  ${l}`));
     lines.push(`  const netOut${i} = Math.mulDiv(rawOut${i}, 1000000000 - fee${i}, 1000000000);`);
     const unwrapExpr =
@@ -190,7 +219,7 @@ export const stabbleWeightedSwap: SvmVenueAdapter = {
           ? `netOut${i} / ${tokenOut.scalingFactor}`
           : `netOut${i} * ${tokenOut.scalingFactor}`;
     lines.push(`  const q${i} = ${unwrapExpr};`);
-    return lines.join('\n');
+    return lines.join("\n");
   },
 
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
@@ -231,7 +260,8 @@ export const stabbleWeightedSwap: SvmVenueAdapter = {
     assertStabbleU64AmountIn(amountIn, `${SLUG} referenceQuote`);
 
     const poolData = state[c.pool];
-    if (poolData === undefined) throw new Error(`${SLUG} referenceQuote state is missing pool ${c.pool}`);
+    if (poolData === undefined)
+      throw new Error(`${SLUG} referenceQuote state is missing pool ${c.pool}`);
     const [tokenIn, tokenOut] = c.tokens;
     const bal0 = readUintLE(poolData, TOKENS_OFFSET + 4 + BAL_SUB_OFFSET, 8);
     const bal1 = readUintLE(poolData, TOKENS_OFFSET + 4 + TOKEN_SIZE + BAL_SUB_OFFSET, 8);
@@ -240,7 +270,8 @@ export const stabbleWeightedSwap: SvmVenueAdapter = {
     const wrappedIn = calcWrappedAmount(amountIn, tokenIn);
     const cap = mulDown(bal0, WEIGHTED_MAX_IN_RATIO);
     const clamped = wrappedIn > cap ? cap : wrappedIn;
-    const rawOut = weightedCalcOutGivenIn(bal0, tokenIn.weight, bal1, tokenOut.weight, clamped) ?? 0n;
+    const rawOut =
+      weightedCalcOutGivenIn(bal0, tokenIn.weight, bal1, tokenOut.weight, clamped) ?? 0n;
     const netOut = mulDown(rawOut, complement(swapFee));
     return calcUnwrappedAmount(netOut, tokenOut);
   },

@@ -4,7 +4,8 @@ import { deployments } from "./addresses.js";
 export const protocolInfo: ProtocolInfo = {
   name: "Aerodrome",
   slug: "aerodrome",
-  description: "The central trading and liquidity marketplace on Base. Fork of Velodrome with ve(3,3) tokenomics, the largest DEX on Base by TVL.",
+  description:
+    "The central trading and liquidity marketplace on Base. Fork of Velodrome with ve(3,3) tokenomics, the largest DEX on Base by TVL.",
   website: "https://aerodrome.finance",
   github: "https://github.com/aerodrome-finance/contracts",
   category: "dex",

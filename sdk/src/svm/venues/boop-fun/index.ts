@@ -117,35 +117,26 @@
  * base mint has no correct program to route its own transfer through; such a mint is rejected with
  * a named gate error rather than silently mis-targeted.
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'boop-fun' as const;
+const SLUG = "boop-fun" as const;
 
-export const BOOP_FUN_PROGRAM_ID = address_('boop8hVGQGqehUK2iVEMEnMrL5RbjywRzHKBmBE7ry4');
-const WSOL = address_('So11111111111111111111111111111111111111112');
-const SYSTEM_PROGRAM = address_('11111111111111111111111111111111');
-const TOKEN_PROGRAM = address_('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const ASSOCIATED_TOKEN_PROGRAM = address_('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+export const BOOP_FUN_PROGRAM_ID = address_("boop8hVGQGqehUK2iVEMEnMrL5RbjywRzHKBmBE7ry4");
 /** PDA(["config"], PROGRAM) — fixed, deploy-time, verified live. */
-const CONFIG = address_('AbgFqRWjGWgUaVrZrLLWU5HDY5dktmAL6zT9aacQW7y1');
-/** PDA(["vault_authority"], PROGRAM) — fixed, deploy-time, verified live. */
-const VAULT_AUTHORITY = address_('GVVUi6DaocSEAp8ATnXFAPNF5irCWjCvmPCzoaGAf5eJ');
+const CONFIG = address_("AbgFqRWjGWgUaVrZrLLWU5HDY5dktmAL6zT9aacQW7y1");
 
 const BONDING_CURVE_DISCRIMINATOR = [23, 183, 248, 55, 96, 216, 172, 96];
 const CONFIG_DISCRIMINATOR = [155, 12, 170, 224, 30, 250, 204, 130];
-const BUY_TOKEN_DISCRIMINATOR = [138, 127, 14, 91, 38, 87, 115, 105];
-const SELL_TOKEN_DISCRIMINATOR = [109, 61, 40, 187, 230, 176, 135, 174];
 
 /** Legacy pre-migration formula sentinel — out of scope, see the module header. */
 const LEGACY_DAMPING_TERM = 30;
 /** BondingCurveStatus::Trading — the only status this module serves. */
 const STATUS_TRADING = 0;
-const BPS = 10_000n;
 
 function address_(s: string): Address {
   return s as unknown as Address;
@@ -158,7 +149,9 @@ function pubkeyAt(data: Uint8Array, offset: number): Address {
 }
 async function pda(seeds: (Uint8Array | Address)[], programAddress: Address): Promise<Address> {
   const encoder = getAddressEncoder();
-  const rawSeeds = seeds.map((s) => (typeof s === 'string' ? new Uint8Array(encoder.encode(s as Address)) : s));
+  const rawSeeds = seeds.map((s) =>
+    typeof s === "string" ? new Uint8Array(encoder.encode(s as Address)) : s,
+  );
   const [derived] = await getProgramDerivedAddress({ programAddress, seeds: rawSeeds });
   return derived;
 }
@@ -173,7 +166,7 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
 export interface BoopFunPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** exactIn side: 'quoteToBase' (default, buy_token) | 'baseToQuote' (sell_token). */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   mint: Address;
   /** Static per-curve constant (deploy-time, never mutated per trade — see module header). */
   virtualSolReserves: bigint;
@@ -183,52 +176,56 @@ export interface BoopFunPoolConfig extends PoolConfig {
   tradingFeesVault: Address;
 }
 
-function asCfg(cfg: PoolConfig): BoopFunPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config for pool ${cfg.pool}`);
-  return cfg as BoopFunPoolConfig;
-}
-
 export const boopFun = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: BOOP_FUN_PROGRAM_ID,
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<BoopFunPoolConfig> {
-    const bcData = await loadAccount(load, pool, 'bonding curve');
+    const bcData = await loadAccount(load, pool, "bonding curve");
     if (!hasDiscriminator(bcData, BONDING_CURVE_DISCRIMINATOR)) {
       throw new Error(`boop-fun pool ${pool} discriminator mismatch (not a BondingCurve account)`);
     }
     if (bcData.length < 125) {
-      throw new Error(`boop-fun pool ${pool} data is ${bcData.length} bytes, expected at least 125`);
+      throw new Error(
+        `boop-fun pool ${pool} data is ${bcData.length} bytes, expected at least 125`,
+      );
     }
     const mint = pubkeyAt(bcData, 40);
 
     // Integrity check (defense in depth beyond the generic owner-verify every caller already
     // performs): the pool account must be its OWN mint's canonical PDA, not merely SOME
     // program-owned BondingCurve-shaped account handed to us by a bad discovery hint.
-    const expectedPool = await pda([SEED('bonding_curve'), mint], BOOP_FUN_PROGRAM_ID);
+    const expectedPool = await pda([SEED("bonding_curve"), mint], BOOP_FUN_PROGRAM_ID);
     if (expectedPool !== pool) {
-      throw new Error(`boop-fun pool ${pool} does not derive from its own embedded mint ${mint} (expected bonding-curve PDA ${expectedPool})`);
+      throw new Error(
+        `boop-fun pool ${pool} does not derive from its own embedded mint ${mint} (expected bonding-curve PDA ${expectedPool})`,
+      );
     }
 
     const dampingTerm = bcData[120]!;
     if (dampingTerm === LEGACY_DAMPING_TERM) {
-      throw new Error(`boop-fun pool ${pool} gate: damping_term is ${LEGACY_DAMPING_TERM} (the legacy pre-migration curve formula — unsupported, see the module header)`);
+      throw new Error(
+        `boop-fun pool ${pool} gate: damping_term is ${LEGACY_DAMPING_TERM} (the legacy pre-migration curve formula — unsupported, see the module header)`,
+      );
     }
     const status = bcData[124]!;
     if (status !== STATUS_TRADING) {
-      throw new Error(`boop-fun pool ${pool} gate: status is ${status}, not Trading (${STATUS_TRADING}) — curve has graduated or is mid-migration`);
+      throw new Error(
+        `boop-fun pool ${pool} gate: status is ${status}, not Trading (${STATUS_TRADING}) — curve has graduated or is mid-migration`,
+      );
     }
 
     const virtualSolReserves = readUintLE(bcData, 72, 8);
     const swapFeeBasisPoints = BigInt(bcData[121]!);
 
-    const [mintData, configData, bondingCurveVault, bondingCurveSolVault, tradingFeesVault] = await Promise.all([
-      loadAccount(load, mint, 'base mint'),
-      loadAccount(load, CONFIG, 'config'),
-      pda([SEED('bonding_curve_vault'), mint], BOOP_FUN_PROGRAM_ID),
-      pda([SEED('bonding_curve_sol_vault'), mint], BOOP_FUN_PROGRAM_ID),
-      pda([SEED('trading_fees_vault'), mint], BOOP_FUN_PROGRAM_ID),
-    ]);
+    const [mintData, configData, bondingCurveVault, bondingCurveSolVault, tradingFeesVault] =
+      await Promise.all([
+        loadAccount(load, mint, "base mint"),
+        loadAccount(load, CONFIG, "config"),
+        pda([SEED("bonding_curve_vault"), mint], BOOP_FUN_PROGRAM_ID),
+        pda([SEED("bonding_curve_sol_vault"), mint], BOOP_FUN_PROGRAM_ID),
+        pda([SEED("trading_fees_vault"), mint], BOOP_FUN_PROGRAM_ID),
+      ]);
     // The CPI supplies exactly ONE token_program account (no separate base/quote
     // token-program slot), so the base mint's swap is legacy-SPL only: a
     // Token-2022 base mint (or one carrying an un-routable extension) SELF-DROPS
@@ -236,11 +233,15 @@ export const boopFun = {
     // orchestrator catches. A classic 82-byte mint classifies legacy → no throw →
     // config built byte-identically to before.
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`boop-fun: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `boop-fun: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`boop-fun: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `boop-fun: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
     if (!hasDiscriminator(configData, CONFIG_DISCRIMINATOR)) {
       throw new Error(`boop-fun config ${CONFIG} discriminator mismatch`);
@@ -255,7 +256,7 @@ export const boopFun = {
     return {
       venue: SLUG,
       pool,
-      direction: 'quoteToBase',
+      direction: "quoteToBase",
       mint,
       virtualSolReserves,
       swapFeeBasisPoints,
@@ -265,6 +266,3 @@ export const boopFun = {
     };
   },
 };
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-

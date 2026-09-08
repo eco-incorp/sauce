@@ -162,12 +162,12 @@
  * investigation trail (what was ruled out and what remains untested) — this
  * is flagged as a follow-up, not resolved by guessing further.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-const SLUG = 'alphaq';
-export const ALPHAQ_PROGRAM_ID = address('ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA');
+const SLUG = "alphaq";
+export const ALPHAQ_PROGRAM_ID = address("ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA");
 const MARKET_SIZE = 672;
 const OFF_DECIMALS_A = 106;
 const OFF_DECIMALS_B = 107;
@@ -240,14 +240,14 @@ const MAX_PRICE_AGE_SECONDS = 3600n;
  * `fetchAlphaqPoolConfig`.
  */
 const STABLE_MINTS: ReadonlySet<string> = new Set([
-  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
-  'USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB', // USD1 (World Liberty Financial)
-  '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo', // PYUSD (PayPal USD)
-  '2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH', // USDG (Global Dollar / Paxos)
-  'USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA', // USDS (Sky / MakerDAO)
-  '9zNQRsGLjNKwCUU5Gq5LR8beUCPzQMVMqKAi3SSZh54u', // FDUSD (First Digital USD)
-  'JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD', // JUPUSD
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
+  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", // USDT
+  "USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB", // USD1 (World Liberty Financial)
+  "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo", // PYUSD (PayPal USD)
+  "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH", // USDG (Global Dollar / Paxos)
+  "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA", // USDS (Sky / MakerDAO)
+  "9zNQRsGLjNKwCUU5Gq5LR8beUCPzQMVMqKAi3SSZh54u", // FDUSD (First Digital USD)
+  "JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD", // JUPUSD
 ]);
 
 /**
@@ -261,46 +261,46 @@ const STABLE_MINTS: ReadonlySet<string> = new Set([
  * hard-coded ceiling.
  */
 const ALPHAQ_STATS_ACCOUNTS: Readonly<Record<string, Address>> = Object.freeze({
-  'ANDURI-USDC': address('5yGK2j7mWcyrf27FpjEExHQwgjTjEgXfMPZuMopFujr7'),
-  'ANTHRO-USDC': address('7SPyhvsgHGkvpWgeYcYG9mf43MFizNW6EWY8mcqcrB2E'),
-  'ASSFAC-SOL': address('HiJXGmoFH1AH1HWWLwxjtFffKUCzXPcHNQad7d6M86Fz'),
-  'CASH-USDC': address('aXQtJ9cGr1zgLyrppKJ5BR5jv1RMjyYL5Wetd2KZNtB'),
-  'CRCLX-USDC': address('3NLJ35oEQ9mY2etDMvG4vpu6Q4CAkFgdaH7aFWrLnYtB'),
-  'DUMB-SOL': address('3u8ataMk7ZZzCRQSzU8Yd61rYxE2Jh8iaaRtU3TeQsLv'),
-  'DUSD-USDC': address('BLHKPNbpvpADT17eJWL9Ewz9sANt3RhPsijhjPFtbLMd'),
-  'DUSD-USDT': address('85aqCUSm4eMv5EbRErC5VD3wuSFb43H5KJuniyAYjE5P'),
-  'EITHER-SOL': address('4oZAfPeTfXN8qt6kfRgZ4t8AK2zWxRc4Nvd4kRYaijGA'),
-  'FDUSD-USDT': address('9dNuFzNwtUYezvDiCRPaGL4XvBoaxzYrCr4YYV4NvLYN'),
-  'INF-SOL': address('FWXN9o4Tmq3TJrpJ3Q7JCgVAQtq3fBL2yAUSQ893q9bC'),
-  'JITOSO-SOL': address('HZyb7Gv2pWTRYq8XuaeWBePQ8CDNhxigkNohZU2dLPEC'),
-  'JLP-USDC': address('3ffdgFCa3KwCsSh6rzzW3ddArJentdo2k3d7vtHaHwtk'),
-  'JUPSOL-SOL': address('CyNXfwYg6kUDh4ExsHMBpiYuDoxrNxcBgLWqseBMjq9y'),
-  'JUPUSD-USDC': address('FnH8uVCgE8iGz4KQSEpQWdpLxzEENB2n2XHYUhUw13wc'),
-  'JUPUSD-USDT': address('7BPrU6uG6uqmr4weyV7vkrez1mvuT6xgxFchYFxK6SPu'),
-  'KALSHI-USDC': address('HqYrSFRcq7UKWQjM1Hx3wHmqeniLouCe1pKAuCHWGpzh'),
-  'MSOL-SOL': address('CZfrCHhBb9zzhFyM5Weqg53oCBdxkYBPSU5k1wTR9hdu'),
-  'MSTRX-USDC': address('JCicdoVWTFerE4wieNx6RviNrm24ZEzfCqzsXimEiT1v'),
-  'OPENAI-USDC': address('CsZnDXbHjJUb5uGG2WxfD18K5jsht8ao5WPcd7CNUQiJ'),
-  'ORE-SOL': address('AdF6BbUZNvrPKVhkvBDhwaJVQxYPpoHPRR4VPJkxhziY'),
-  'PENGUI-SOL': address('Fby3ZnTJiy2Zkm6EwWSF2uMgzC3mkmm49L9XLS7sCAVh'),
-  'POLYMA-USDC': address('2xDUVdLT156FeyTGv5ux8tTghzDga8XhRJ7VPSca5DcF'),
-  'PYTHIA-USDT': address('8YoW85ZkjmpR79LGovxWs4AZR88fYGanP7pDDhtx64DU'),
-  'PYUSD-USDC': address('9gXvza14Bp6kBDdd5rWowt7NssYy36eSNvV7MzpWzLF3'),
-  'QQQX-USDC': address('FoPAa1uiyPjijVJZeFhozTwfDeCSQbTJq5KGZRuiqKJn'),
-  'SOL-USDC': address('DGgbAS3oHCWNGxhyUv2uMRc1ZXDbkDFsNfD9HyTJdHyd'),
-  'SOL-USDT': address('55aNhhR33vhgcLViZnht4XKiyid1zNYhDzrxHmKQf3iP'),
-  'SPACEX-USDC': address('EScGNZtsiLhKmwwmEyTBiA9JmhMJLYcmYbqcTLLXM9hu'),
-  'SPYX-USDC': address('4TFySy2kRUJZLKtV23xvewp3AfCw2hzqTfU1jvHHz7b7'),
-  'SYRUPU-USDC': address('FGRoxhDzPmY3ggRZqZsBTn6aLcrAePmNwH5GXLE6cok5'),
-  'TSLAX-USDC': address('93YDBumWPaz53GjdMXH4kb64Gyb5sWUqSgTj8dh1dm9b'),
-  'USD1-USDC': address('H18xqLYd5uEenmiFKoXkgrTvyhnLgJMPT8sSvdZPpi3p'),
-  'USD1-USDT': address('F1LYc9NCbRvoUfxJPCamp2g737LQ2PbH8mBd9uFja2qZ'),
-  'USDG-USDC': address('BLtETTx81aLGdXVmqsaRBNFG6sraxK76CE55NPLW8ja4'),
-  'USDS-USDC': address('HjRw8yeBVUCGHMUWZzF83U4x82KwsrVwaeh6CYxtGBsQ'),
-  'USDT-USDC': address('445fd6ffBZqWYsryCgs6wcE8exaLkRsMrefAQ5UHvt8v'),
-  'USX-USDC': address('4ViPChs1hjYCAdfVBwnEcFVLHn8hzbhbunrGwXsoHkEZ'),
-  'WBTC-CBBTC': address('H6khGhf2eYUB4hBaqNf8H1CtK7PZnyN5hYrBjmtKAu27'),
-  'XAUT0-USDT': address('GZC3sCQUFVACFFe9gVjXsmZppp2uvcHP4zz5aGrnNjQh'),
+  "ANDURI-USDC": address("5yGK2j7mWcyrf27FpjEExHQwgjTjEgXfMPZuMopFujr7"),
+  "ANTHRO-USDC": address("7SPyhvsgHGkvpWgeYcYG9mf43MFizNW6EWY8mcqcrB2E"),
+  "ASSFAC-SOL": address("HiJXGmoFH1AH1HWWLwxjtFffKUCzXPcHNQad7d6M86Fz"),
+  "CASH-USDC": address("aXQtJ9cGr1zgLyrppKJ5BR5jv1RMjyYL5Wetd2KZNtB"),
+  "CRCLX-USDC": address("3NLJ35oEQ9mY2etDMvG4vpu6Q4CAkFgdaH7aFWrLnYtB"),
+  "DUMB-SOL": address("3u8ataMk7ZZzCRQSzU8Yd61rYxE2Jh8iaaRtU3TeQsLv"),
+  "DUSD-USDC": address("BLHKPNbpvpADT17eJWL9Ewz9sANt3RhPsijhjPFtbLMd"),
+  "DUSD-USDT": address("85aqCUSm4eMv5EbRErC5VD3wuSFb43H5KJuniyAYjE5P"),
+  "EITHER-SOL": address("4oZAfPeTfXN8qt6kfRgZ4t8AK2zWxRc4Nvd4kRYaijGA"),
+  "FDUSD-USDT": address("9dNuFzNwtUYezvDiCRPaGL4XvBoaxzYrCr4YYV4NvLYN"),
+  "INF-SOL": address("FWXN9o4Tmq3TJrpJ3Q7JCgVAQtq3fBL2yAUSQ893q9bC"),
+  "JITOSO-SOL": address("HZyb7Gv2pWTRYq8XuaeWBePQ8CDNhxigkNohZU2dLPEC"),
+  "JLP-USDC": address("3ffdgFCa3KwCsSh6rzzW3ddArJentdo2k3d7vtHaHwtk"),
+  "JUPSOL-SOL": address("CyNXfwYg6kUDh4ExsHMBpiYuDoxrNxcBgLWqseBMjq9y"),
+  "JUPUSD-USDC": address("FnH8uVCgE8iGz4KQSEpQWdpLxzEENB2n2XHYUhUw13wc"),
+  "JUPUSD-USDT": address("7BPrU6uG6uqmr4weyV7vkrez1mvuT6xgxFchYFxK6SPu"),
+  "KALSHI-USDC": address("HqYrSFRcq7UKWQjM1Hx3wHmqeniLouCe1pKAuCHWGpzh"),
+  "MSOL-SOL": address("CZfrCHhBb9zzhFyM5Weqg53oCBdxkYBPSU5k1wTR9hdu"),
+  "MSTRX-USDC": address("JCicdoVWTFerE4wieNx6RviNrm24ZEzfCqzsXimEiT1v"),
+  "OPENAI-USDC": address("CsZnDXbHjJUb5uGG2WxfD18K5jsht8ao5WPcd7CNUQiJ"),
+  "ORE-SOL": address("AdF6BbUZNvrPKVhkvBDhwaJVQxYPpoHPRR4VPJkxhziY"),
+  "PENGUI-SOL": address("Fby3ZnTJiy2Zkm6EwWSF2uMgzC3mkmm49L9XLS7sCAVh"),
+  "POLYMA-USDC": address("2xDUVdLT156FeyTGv5ux8tTghzDga8XhRJ7VPSca5DcF"),
+  "PYTHIA-USDT": address("8YoW85ZkjmpR79LGovxWs4AZR88fYGanP7pDDhtx64DU"),
+  "PYUSD-USDC": address("9gXvza14Bp6kBDdd5rWowt7NssYy36eSNvV7MzpWzLF3"),
+  "QQQX-USDC": address("FoPAa1uiyPjijVJZeFhozTwfDeCSQbTJq5KGZRuiqKJn"),
+  "SOL-USDC": address("DGgbAS3oHCWNGxhyUv2uMRc1ZXDbkDFsNfD9HyTJdHyd"),
+  "SOL-USDT": address("55aNhhR33vhgcLViZnht4XKiyid1zNYhDzrxHmKQf3iP"),
+  "SPACEX-USDC": address("EScGNZtsiLhKmwwmEyTBiA9JmhMJLYcmYbqcTLLXM9hu"),
+  "SPYX-USDC": address("4TFySy2kRUJZLKtV23xvewp3AfCw2hzqTfU1jvHHz7b7"),
+  "SYRUPU-USDC": address("FGRoxhDzPmY3ggRZqZsBTn6aLcrAePmNwH5GXLE6cok5"),
+  "TSLAX-USDC": address("93YDBumWPaz53GjdMXH4kb64Gyb5sWUqSgTj8dh1dm9b"),
+  "USD1-USDC": address("H18xqLYd5uEenmiFKoXkgrTvyhnLgJMPT8sSvdZPpi3p"),
+  "USD1-USDT": address("F1LYc9NCbRvoUfxJPCamp2g737LQ2PbH8mBd9uFja2qZ"),
+  "USDG-USDC": address("BLtETTx81aLGdXVmqsaRBNFG6sraxK76CE55NPLW8ja4"),
+  "USDS-USDC": address("HjRw8yeBVUCGHMUWZzF83U4x82KwsrVwaeh6CYxtGBsQ"),
+  "USDT-USDC": address("445fd6ffBZqWYsryCgs6wcE8exaLkRsMrefAQ5UHvt8v"),
+  "USX-USDC": address("4ViPChs1hjYCAdfVBwnEcFVLHn8hzbhbunrGwXsoHkEZ"),
+  "WBTC-CBBTC": address("H6khGhf2eYUB4hBaqNf8H1CtK7PZnyN5hYrBjmtKAu27"),
+  "XAUT0-USDT": address("GZC3sCQUFVACFFe9gVjXsmZppp2uvcHP4zz5aGrnNjQh"),
 });
 
 /** Runtime-primed overlay for markets discovered AFTER the table above was captured. */
@@ -311,7 +311,7 @@ const runtimeStatsBySymbol = new Map<string, Address>();
 export interface AlphaqStatsRpc {
   getProgramAccounts(
     program: Address,
-    config: { encoding: 'base64'; filters: { dataSize: bigint }[] },
+    config: { encoding: "base64"; filters: { dataSize: bigint }[] },
   ): { send(): Promise<readonly { pubkey: Address; account: { data: [string, string] } }[]> };
 }
 
@@ -336,10 +336,10 @@ export function primeAlphaqStatsAccounts(rpc: AlphaqStatsRpc): Promise<void> {
   if (primePromise) return primePromise;
   primePromise = (async () => {
     const accounts = await rpc
-      .getProgramAccounts(ALPHAQ_PROGRAM_ID, { encoding: 'base64', filters: [{ dataSize: 336n }] })
+      .getProgramAccounts(ALPHAQ_PROGRAM_ID, { encoding: "base64", filters: [{ dataSize: 336n }] })
       .send();
     for (const acc of accounts) {
-      const data = Uint8Array.from(Buffer.from(acc.account.data[0], 'base64'));
+      const data = Uint8Array.from(Buffer.from(acc.account.data[0], "base64"));
       const symbol = decodeSymbol(data);
       if (symbol.length > 0) runtimeStatsBySymbol.set(symbol, acc.pubkey);
     }
@@ -366,7 +366,7 @@ function resolveAlphaqStatsAccount(symbol: string): Address | undefined {
 function decodeSymbol(data: Uint8Array): string {
   let end = 0;
   while (end < 16 && data[end] !== 0) end++;
-  return Buffer.from(data.slice(0, end)).toString('ascii');
+  return Buffer.from(data.slice(0, end)).toString("ascii");
 }
 
 function readPubkey(data: Uint8Array, offset: number): Address {
@@ -375,11 +375,11 @@ function readPubkey(data: Uint8Array, offset: number): Address {
 
 // Minimal base58 (no external dep pulled in for a 32-byte encode — the same
 // alphabet every other adapter's Address type ultimately round-trips through).
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function bs58EncodeUnchecked(bytes: Uint8Array): string {
   let value = 0n;
   for (const b of bytes) value = (value << 8n) | BigInt(b);
-  let out = '';
+  let out = "";
   while (value > 0n) {
     const rem = value % 58n;
     value /= 58n;
@@ -387,15 +387,15 @@ function bs58EncodeUnchecked(bytes: Uint8Array): string {
   }
   for (const b of bytes) {
     if (b !== 0) break;
-    out = '1' + out;
+    out = "1" + out;
   }
-  return out || '1';
+  return out || "1";
 }
 
 export interface AlphaqPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'AtoB' (default, mintA -> mintB) | 'BtoA'. */
-  direction: 'AtoB' | 'BtoA';
+  direction: "AtoB" | "BtoA";
   symbol: string;
   mintA: Address;
   mintB: Address;
@@ -448,7 +448,9 @@ export async function fetchAlphaqPoolConfig(
   const data = await load(pool);
   if (data === null) throw new Error(`alphaq market ${pool} not found`);
   if (data.length !== MARKET_SIZE) {
-    throw new Error(`alphaq market ${pool} has unexpected size ${data.length} (want ${MARKET_SIZE})`);
+    throw new Error(
+      `alphaq market ${pool} has unexpected size ${data.length} (want ${MARKET_SIZE})`,
+    );
   }
   const symbol = decodeSymbol(data);
   if (symbol.length === 0) throw new Error(`alphaq market ${pool} has a blank symbol`);
@@ -465,13 +467,15 @@ export async function fetchAlphaqPoolConfig(
     // holds for BOTH the stable parity model and the oracle-priced non-stable
     // model (the stats price is a WHOLE-coin rate, usable raw only at equal
     // decimals), so it stays a hard gate for every market.
-    throw new Error(`alphaq market ${pool} ("${symbol}") has mismatched decimals (${decimalsA} vs ${decimalsB}) — not priceable by this model`);
+    throw new Error(
+      `alphaq market ${pool} ("${symbol}") has mismatched decimals (${decimalsA} vs ${decimalsB}) — not priceable by this model`,
+    );
   }
   const statsAccount = resolveAlphaqStatsAccount(symbol);
   if (statsAccount === undefined) {
     throw new Error(
       `alphaq market ${pool} ("${symbol}") has no known stats account — not in the captured table and ` +
-        'not primed via primeAlphaqStatsAccounts()',
+        "not primed via primeAlphaqStatsAccounts()",
     );
   }
   // Read the live oracle spot from the stats account (see OFF_STATS_PRICE). A
@@ -518,7 +522,7 @@ export async function fetchAlphaqPoolConfig(
   return {
     venue: SLUG,
     pool,
-    direction: 'AtoB',
+    direction: "AtoB",
     symbol,
     mintA,
     mintB,
@@ -582,12 +586,12 @@ function alphaqQuote(
   rawB: bigint,
   priceRaw: bigint,
   isStablePair: boolean,
-  direction: 'AtoB' | 'BtoA',
+  direction: "AtoB" | "BtoA",
 ): bigint {
   const base = cpQuote(x, rawA, rawB);
   if (isStablePair) return base; // unchanged parity path — regression-guarded
   if (priceRaw <= 0n) return 0n;
-  return direction === 'AtoB' ? (base * priceRaw) / PRICE_SCALE : (base * PRICE_SCALE) / priceRaw;
+  return direction === "AtoB" ? (base * priceRaw) / PRICE_SCALE : (base * PRICE_SCALE) / priceRaw;
 }
 
 export {

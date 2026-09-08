@@ -54,8 +54,20 @@ export const CONTRACT_LINKS = [
   // deriveContractName(protocolInfo.name, abiExport) already computes;
   // test/descriptors-linkage.test.ts asserts that equality so the two can
   // never drift.
-  { protocol: "uniswap-v2", roleKey: "factory", abiExport: "UniswapV2FactoryABI", contract: "Factory", kind: "singleton" },
-  { protocol: "uniswap-v2", roleKey: "router", abiExport: "UniswapV2RouterABI", contract: "Router", kind: "singleton" },
+  {
+    protocol: "uniswap-v2",
+    roleKey: "factory",
+    abiExport: "UniswapV2FactoryABI",
+    contract: "Factory",
+    kind: "singleton",
+  },
+  {
+    protocol: "uniswap-v2",
+    roleKey: "router",
+    abiExport: "UniswapV2RouterABI",
+    contract: "Router",
+    kind: "singleton",
+  },
 
   // --- uniswap-v3 ---
   // `fee` is vendored as uint32 throughout this protocol's ABIs; the real
@@ -69,7 +81,9 @@ export const CONTRACT_LINKS = [
     contract: "Factory",
     kind: "singleton",
     typeFidelity: "widened",
-    caveats: ["fee is vendored as uint32; the deployed factory uses uint24, so computed selectors do not match the real contract"],
+    caveats: [
+      "fee is vendored as uint32; the deployed factory uses uint24, so computed selectors do not match the real contract",
+    ],
   },
   {
     protocol: "uniswap-v3",
@@ -78,7 +92,9 @@ export const CONTRACT_LINKS = [
     contract: "SwapRouter",
     kind: "singleton",
     typeFidelity: "widened",
-    caveats: ["fee is vendored as uint32; the deployed SwapRouter uses uint24, so computed selectors do not match the real contract"],
+    caveats: [
+      "fee is vendored as uint32; the deployed SwapRouter uses uint24, so computed selectors do not match the real contract",
+    ],
   },
   // Deliberately wrong-and-flagged, not omitted: the address is real (5
   // chains), but SwapRouter02 dropped the `deadline` field this ABI still
@@ -103,7 +119,9 @@ export const CONTRACT_LINKS = [
     contract: "QuoterV2",
     kind: "singleton",
     typeFidelity: "widened",
-    caveats: ["fee is vendored as uint32; the deployed QuoterV2 uses uint24, so computed selectors do not match the real contract"],
+    caveats: [
+      "fee is vendored as uint32; the deployed QuoterV2 uses uint24, so computed selectors do not match the real contract",
+    ],
   },
   {
     protocol: "uniswap-v3",
@@ -123,7 +141,9 @@ export const CONTRACT_LINKS = [
     contract: "PoolManager",
     kind: "singleton",
     typeFidelity: "widened",
-    caveats: ["fee/tickSpacing/tick are vendored as uint32; the deployed PoolManager uses uint24/int24, so computed selectors do not match the real contract"],
+    caveats: [
+      "fee/tickSpacing/tick are vendored as uint32; the deployed PoolManager uses uint24/int24, so computed selectors do not match the real contract",
+    ],
   },
   // Only `execute` is vendored; the Universal Router's real swap surface is
   // expressed through the `commands`/`inputs` byte encoding, not modelled
@@ -134,7 +154,9 @@ export const CONTRACT_LINKS = [
     abiExport: "UniswapV4UniversalRouterABI",
     contract: "UniversalRouter",
     kind: "singleton",
-    caveats: ["vendored ABI covers execute(bytes,bytes[],uint256) only; the Universal Router's swap surface is expressed through the commands/inputs byte encoding, not modelled as separate methods here"],
+    caveats: [
+      "vendored ABI covers execute(bytes,bytes[],uint256) only; the Universal Router's swap surface is expressed through the commands/inputs byte encoding, not modelled as separate methods here",
+    ],
   },
   {
     protocol: "uniswap-v4",
@@ -145,21 +167,69 @@ export const CONTRACT_LINKS = [
   },
 
   // --- sushiswap-v2 ---
-  { protocol: "sushiswap-v2", roleKey: "factory", abiExport: "SushiSwapV2FactoryABI", contract: "Factory", kind: "singleton" },
-  { protocol: "sushiswap-v2", roleKey: "router", abiExport: "SushiSwapV2RouterABI", contract: "Router", kind: "singleton" },
+  {
+    protocol: "sushiswap-v2",
+    roleKey: "factory",
+    abiExport: "SushiSwapV2FactoryABI",
+    contract: "Factory",
+    kind: "singleton",
+  },
+  {
+    protocol: "sushiswap-v2",
+    roleKey: "router",
+    abiExport: "SushiSwapV2RouterABI",
+    contract: "Router",
+    kind: "singleton",
+  },
 
   // --- pancakeswap-v2 ---
-  { protocol: "pancakeswap-v2", roleKey: "factory", abiExport: "PancakeSwapV2FactoryABI", contract: "Factory", kind: "singleton" },
-  { protocol: "pancakeswap-v2", roleKey: "router", abiExport: "PancakeSwapV2RouterABI", contract: "Router", kind: "singleton" },
+  {
+    protocol: "pancakeswap-v2",
+    roleKey: "factory",
+    abiExport: "PancakeSwapV2FactoryABI",
+    contract: "Factory",
+    kind: "singleton",
+  },
+  {
+    protocol: "pancakeswap-v2",
+    roleKey: "router",
+    abiExport: "PancakeSwapV2RouterABI",
+    contract: "Router",
+    kind: "singleton",
+  },
 
   // --- aerodrome ---
-  { protocol: "aerodrome", roleKey: "router", abiExport: "AerodromeRouterABI", contract: "Router", kind: "singleton" },
-  { protocol: "aerodrome", roleKey: "poolFactory", abiExport: "AerodromePoolFactoryABI", contract: "PoolFactory", kind: "singleton" },
+  {
+    protocol: "aerodrome",
+    roleKey: "router",
+    abiExport: "AerodromeRouterABI",
+    contract: "Router",
+    kind: "singleton",
+  },
+  {
+    protocol: "aerodrome",
+    roleKey: "poolFactory",
+    abiExport: "AerodromePoolFactoryABI",
+    contract: "PoolFactory",
+    kind: "singleton",
+  },
 
   // --- cctp (Circle CCTP v2) ---
-  { protocol: "cctp", roleKey: "tokenMessenger", abiExport: "TokenMessengerABI", contract: "TokenMessenger", kind: "singleton" },
+  {
+    protocol: "cctp",
+    roleKey: "tokenMessenger",
+    abiExport: "TokenMessengerABI",
+    contract: "TokenMessenger",
+    kind: "singleton",
+  },
   // --- aave-v3 ---
-  { protocol: "aave-v3", roleKey: "pool", abiExport: "PoolABI", contract: "Pool", kind: "singleton" },
+  {
+    protocol: "aave-v3",
+    roleKey: "pool",
+    abiExport: "PoolABI",
+    contract: "Pool",
+    kind: "singleton",
+  },
   // No ABI vendored for this role at all — a real, known address with no
   // methods, recorded rather than dropped.
   {
@@ -171,19 +241,49 @@ export const CONTRACT_LINKS = [
   },
 
   // --- aave-v2 ---
-  { protocol: "aave-v2", roleKey: "lendingPool", abiExport: "LendingPoolABI", contract: "LendingPool", kind: "singleton" },
+  {
+    protocol: "aave-v2",
+    roleKey: "lendingPool",
+    abiExport: "LendingPoolABI",
+    contract: "LendingPool",
+    kind: "singleton",
+  },
 
   // --- permit2 ---
-  { protocol: "permit2", roleKey: "permit2", abiExport: "Permit2ABI", contract: "Permit2", kind: "singleton" },
+  {
+    protocol: "permit2",
+    roleKey: "permit2",
+    abiExport: "Permit2ABI",
+    contract: "Permit2",
+    kind: "singleton",
+  },
 
   // --- oneinch ---
-  { protocol: "oneinch", roleKey: "aggregationRouterV6", abiExport: "AggregationRouterV6ABI", contract: "AggregationRouterV6", kind: "singleton" },
+  {
+    protocol: "oneinch",
+    roleKey: "aggregationRouterV6",
+    abiExport: "AggregationRouterV6ABI",
+    contract: "AggregationRouterV6",
+    kind: "singleton",
+  },
 
   // --- pendle ---
-  { protocol: "pendle", roleKey: "router", abiExport: "PendleRouterABI", contract: "Router", kind: "singleton" },
+  {
+    protocol: "pendle",
+    roleKey: "router",
+    abiExport: "PendleRouterABI",
+    contract: "Router",
+    kind: "singleton",
+  },
 
   // --- morpho-blue ---
-  { protocol: "morpho-blue", roleKey: "morpho", abiExport: "MorphoABI", contract: "Morpho", kind: "singleton" },
+  {
+    protocol: "morpho-blue",
+    roleKey: "morpho",
+    abiExport: "MorphoABI",
+    contract: "Morpho",
+    kind: "singleton",
+  },
   {
     protocol: "morpho-blue",
     roleKey: "bundler3",
@@ -195,9 +295,27 @@ export const CONTRACT_LINKS = [
   // --- compound-v3 --- one ABI (CometABI) shared by three per-market
   // singleton contracts; each needs an explicit override or all three would
   // derive to the same name ("Comet").
-  { protocol: "compound-v3", roleKey: "cUSDCv3", abiExport: "CometABI", contract: "CometUSDC", kind: "singleton" },
-  { protocol: "compound-v3", roleKey: "cWETHv3", abiExport: "CometABI", contract: "CometWETH", kind: "singleton" },
-  { protocol: "compound-v3", roleKey: "cUSDTv3", abiExport: "CometABI", contract: "CometUSDT", kind: "singleton" },
+  {
+    protocol: "compound-v3",
+    roleKey: "cUSDCv3",
+    abiExport: "CometABI",
+    contract: "CometUSDC",
+    kind: "singleton",
+  },
+  {
+    protocol: "compound-v3",
+    roleKey: "cWETHv3",
+    abiExport: "CometABI",
+    contract: "CometWETH",
+    kind: "singleton",
+  },
+  {
+    protocol: "compound-v3",
+    roleKey: "cUSDTv3",
+    abiExport: "CometABI",
+    contract: "CometUSDT",
+    kind: "singleton",
+  },
 
   // --- erc20 / erc4626 --- kind:"interface": ABI + methods, no fixed address; the caller supplies the instance.
   { protocol: "erc20", abiExport: "ERC20ABI", contract: "ERC20", kind: "interface" },

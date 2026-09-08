@@ -97,21 +97,27 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec, getProgramDerivedAddress, getUtf8Encoder, getAddressEncoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+ */
+import {
+  address,
+  getAddressCodec,
+  getProgramDerivedAddress,
+  getUtf8Encoder,
+  getAddressEncoder,
+} from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'perps-jlp';
+const SLUG = "perps-jlp";
 
-export const PERPS_JLP_PROGRAM_ID = address('PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const PERPS_JLP_PROGRAM_ID = address("PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** The single production JLP pool (name "Pool", 6 custodies as of 2026-07-31). */
-export const JLP_POOL_ADDRESS = address('5BUwFW4nRbftYTDMbgxykoFWqWHPzahFSNAaaaJtVKsq');
+export const JLP_POOL_ADDRESS = address("5BUwFW4nRbftYTDMbgxykoFWqWHPzahFSNAaaaJtVKsq");
 
 /** sha256('account:Custody')[0..8]. */
 const CUSTODY_DISCRIMINATOR = [0x01, 0xb8, 0x30, 0x51, 0x5d, 0x83, 0x3f, 0x91];
@@ -135,12 +141,7 @@ const OFF_IS_STABLE = 105;
 const OFF_ORACLE_ACCOUNT = 106; // Pythnet price account (attached to the CPI, unread for pricing — see ladder.ts doc)
 const OFF_ALLOW_SWAP = 199; // Permissions.allowSwap (first of 7 bools)
 const OFF_TARGET_RATIO_BPS = 206;
-const OFF_ASSETS_OWNED = 222;
-const OFF_ASSETS_LOCKED = 230;
-const OFF_ASSETS_GUARANTEED_USD = 238;
 const OFF_DOVES_ORACLE = 320;
-const OFF_DEBT = 1004; // u128
-const OFF_BORROW_LEND_INTERESTS_ACCRUED = 1020; // u128
 const OFF_EXTERNAL_SWAP_FEE_MULTIPLIER_BPS = 1076;
 
 // Doves `priceFeed` account (program DoVEsk76QybCEHQGzkvYPWLQu9gzNoZZZt3TPiL597e):
@@ -166,7 +167,8 @@ export const DOVES_FEED_SIZE = 91;
 export const DOVES_MAX_AGE_SEC = 3_600n;
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 /**
  * Baked scale for `floor(c1 * c2 * 10^(e1+e2-te))` — the shared shape of
@@ -178,7 +180,11 @@ const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(dat
  * `floor(c1 * c2 * scaleUp / scaleDown)` reproduces the reference's two-way
  * branch with ONE unconditional expression.
  */
-export function bakedDecimalScale(e1: number, e2: number, targetExponent: number): { scaleUp: bigint; scaleDown: bigint } {
+export function bakedDecimalScale(
+  e1: number,
+  e2: number,
+  targetExponent: number,
+): { scaleUp: bigint; scaleDown: bigint } {
   const targetPower = e1 + e2 - targetExponent;
   if (targetPower >= 0) return { scaleUp: 10n ** BigInt(targetPower), scaleDown: 1n };
   return { scaleUp: 1n, scaleDown: 10n ** BigInt(-targetPower) };
@@ -246,7 +252,7 @@ const addrEnc = getAddressEncoder();
 export async function custodyPda(pool: Address, mint: Address): Promise<Address> {
   const [pda] = await getProgramDerivedAddress({
     programAddress: PERPS_JLP_PROGRAM_ID,
-    seeds: [utf8.encode('custody'), addrEnc.encode(pool), addrEnc.encode(mint)],
+    seeds: [utf8.encode("custody"), addrEnc.encode(pool), addrEnc.encode(mint)],
   });
   return pda;
 }
@@ -258,7 +264,10 @@ let cachedEventAuthority: Address | undefined;
 /** `findProgramAddress(["transfer_authority"], PERPS_JLP_PROGRAM_ID)` — cached (program-wide constant). */
 export async function transferAuthorityPda(): Promise<Address> {
   if (cachedTransferAuthority !== undefined) return cachedTransferAuthority;
-  const [pda] = await getProgramDerivedAddress({ programAddress: PERPS_JLP_PROGRAM_ID, seeds: [utf8.encode('transfer_authority')] });
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: PERPS_JLP_PROGRAM_ID,
+    seeds: [utf8.encode("transfer_authority")],
+  });
   cachedTransferAuthority = pda;
   return pda;
 }
@@ -266,7 +275,10 @@ export async function transferAuthorityPda(): Promise<Address> {
 /** `findProgramAddress(["perpetuals"], PERPS_JLP_PROGRAM_ID)` — cached (program-wide constant). */
 export async function perpetualsPda(): Promise<Address> {
   if (cachedPerpetuals !== undefined) return cachedPerpetuals;
-  const [pda] = await getProgramDerivedAddress({ programAddress: PERPS_JLP_PROGRAM_ID, seeds: [utf8.encode('perpetuals')] });
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: PERPS_JLP_PROGRAM_ID,
+    seeds: [utf8.encode("perpetuals")],
+  });
   cachedPerpetuals = pda;
   return pda;
 }
@@ -274,7 +286,10 @@ export async function perpetualsPda(): Promise<Address> {
 /** `findProgramAddress(["__event_authority"], PERPS_JLP_PROGRAM_ID)` — matches the published constant. */
 export async function eventAuthorityPda(): Promise<Address> {
   if (cachedEventAuthority !== undefined) return cachedEventAuthority;
-  const [pda] = await getProgramDerivedAddress({ programAddress: PERPS_JLP_PROGRAM_ID, seeds: [utf8.encode('__event_authority')] });
+  const [pda] = await getProgramDerivedAddress({
+    programAddress: PERPS_JLP_PROGRAM_ID,
+    seeds: [utf8.encode("__event_authority")],
+  });
   cachedEventAuthority = pda;
   return pda;
 }
@@ -293,7 +308,9 @@ interface DecodedCustody {
 
 function decodeCustody(addr: Address, data: Uint8Array): DecodedCustody {
   if (data.length < CUSTODY_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} custody ${addr} is ${data.length} bytes, expected >= ${CUSTODY_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} custody ${addr} is ${data.length} bytes, expected >= ${CUSTODY_ACCOUNT_SIZE}`,
+    );
   }
   if (!CUSTODY_DISCRIMINATOR.every((b, i) => data[i] === b)) {
     throw new Error(`${SLUG} custody ${addr} is not a Custody account (discriminator mismatch)`);
@@ -403,17 +420,29 @@ export async function fetchPerpsJlpConfig(
   const custodyOut = await custodyPda(JLP_POOL_ADDRESS, mintOut);
   const [poolData, custodyOutData] = await Promise.all([load(JLP_POOL_ADDRESS), load(custodyOut)]);
   if (poolData === null) throw new Error(`${SLUG}: pool ${JLP_POOL_ADDRESS} account not found`);
-  if (custodyOutData === null) throw new Error(`${SLUG}: custody ${custodyOut} (mint ${mintOut}) not found — mint not in the JLP basket`);
+  if (custodyOutData === null)
+    throw new Error(
+      `${SLUG}: custody ${custodyOut} (mint ${mintOut}) not found — mint not in the JLP basket`,
+    );
 
   const pool = decodePool(JLP_POOL_ADDRESS, poolData);
   if (!pool.custodies.includes(custodyIn) || !pool.custodies.includes(custodyOut)) {
-    throw new Error(`${SLUG}: derived custody not present in pool ${JLP_POOL_ADDRESS}'s custodies vec`);
+    throw new Error(
+      `${SLUG}: derived custody not present in pool ${JLP_POOL_ADDRESS}'s custodies vec`,
+    );
   }
 
   const dOut = decodeCustody(custodyOut, custodyOutData);
-  if (dOut.mint !== mintOut) throw new Error(`${SLUG}: custody ${custodyOut} mint ${dOut.mint} != requested ${mintOut}`);
-  if (!dIn.allowSwap) throw new Error(`${SLUG}: custody ${custodyIn} has swap disabled (Permissions.allowSwap == false)`);
-  if (!dOut.allowSwap) throw new Error(`${SLUG}: custody ${custodyOut} has swap disabled (Permissions.allowSwap == false)`);
+  if (dOut.mint !== mintOut)
+    throw new Error(`${SLUG}: custody ${custodyOut} mint ${dOut.mint} != requested ${mintOut}`);
+  if (!dIn.allowSwap)
+    throw new Error(
+      `${SLUG}: custody ${custodyIn} has swap disabled (Permissions.allowSwap == false)`,
+    );
+  if (!dOut.allowSwap)
+    throw new Error(
+      `${SLUG}: custody ${custodyOut} has swap disabled (Permissions.allowSwap == false)`,
+    );
 
   // Tokenkeg-only (a Token-2022 transfer-fee/extension mint would desync wire
   // amounts — same restriction obric-v2/quantum apply to their own venues), so
@@ -428,16 +457,24 @@ export async function fetchPerpsJlpConfig(
   ] as const) {
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pair ${dIn.mint}/${mintOut} — mint ${mint} is Token-2022 (swap2 is legacy-SPL only here)`);
+      throw new Error(
+        `${SLUG}: dropping pair ${dIn.mint}/${mintOut} — mint ${mint} is Token-2022 (swap2 is legacy-SPL only here)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pair ${dIn.mint}/${mintOut} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pair ${dIn.mint}/${mintOut} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
-  const [dovesInData, dovesOutData] = await Promise.all([load(dIn.dovesOracle), load(dOut.dovesOracle)]);
-  if (dovesInData === null || dovesOutData === null) throw new Error(`${SLUG}: Doves price feed account(s) not found`);
+  const [dovesInData, dovesOutData] = await Promise.all([
+    load(dIn.dovesOracle),
+    load(dOut.dovesOracle),
+  ]);
+  if (dovesInData === null || dovesOutData === null)
+    throw new Error(`${SLUG}: Doves price feed account(s) not found`);
   if (dovesInData.length < DOVES_FEED_SIZE || dovesOutData.length < DOVES_FEED_SIZE) {
     throw new Error(`${SLUG}: Doves price feed account(s) undersized`);
   }
@@ -448,7 +485,9 @@ export async function fetchPerpsJlpConfig(
   const tsIn = readUintLE(dovesInData, DOVES_TIMESTAMP_OFFSET, 8);
   const tsOut = readUintLE(dovesOutData, DOVES_TIMESTAMP_OFFSET, 8);
   if (now - tsIn > DOVES_MAX_AGE_SEC || now - tsOut > DOVES_MAX_AGE_SEC) {
-    throw new Error(`${SLUG}: a Doves feed is stale (age > ${DOVES_MAX_AGE_SEC}s) for pair ${dIn.mint}/${mintOut}`);
+    throw new Error(
+      `${SLUG}: a Doves feed is stale (age > ${DOVES_MAX_AGE_SEC}s) for pair ${dIn.mint}/${mintOut}`,
+    );
   }
 
   const swapExponent = expoIn + ORACLE_EXPONENT_SCALE - expoOut;
@@ -461,8 +500,10 @@ export async function fetchPerpsJlpConfig(
   const taxFeeBps = isStableSwap ? pool.stableSwapTaxBps : pool.taxBps;
   const multiplier = isStableSwap ? pool.stableSwapMultiplier : pool.swapMultiplier;
 
-  const extIn = dIn.externalSwapFeeMultiplierBps === 0n ? 10_000n : dIn.externalSwapFeeMultiplierBps;
-  const extOut = dOut.externalSwapFeeMultiplierBps === 0n ? 10_000n : dOut.externalSwapFeeMultiplierBps;
+  const extIn =
+    dIn.externalSwapFeeMultiplierBps === 0n ? 10_000n : dIn.externalSwapFeeMultiplierBps;
+  const extOut =
+    dOut.externalSwapFeeMultiplierBps === 0n ? 10_000n : dOut.externalSwapFeeMultiplierBps;
   const externalMultiplierBps = extIn > extOut ? extIn : extOut;
 
   return {

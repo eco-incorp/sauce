@@ -1,4 +1,4 @@
-import type { Hex, Address } from "viem";
+import type { Address } from "viem";
 
 /** Chain ID to deployment addresses mapping */
 export interface ChainDeployment {

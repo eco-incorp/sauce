@@ -10,20 +10,20 @@ payload is `[program | args]`, with no `cook` selector to prefix.
 ## Usage
 
 ```typescript
-import { actionsToSauce } from '@eco-incorp/sauce-actions';
-import type { RoutingAction } from '@eco-incorp/sauce-actions';
+import { actionsToSauce } from "@eco-incorp/sauce-actions";
+import type { RoutingAction } from "@eco-incorp/sauce-actions";
 
 const actions: RoutingAction[] = [
   {
-    type: 'uniswapV3ExactInput',
+    type: "uniswapV3ExactInput",
     chainId: 1,
-    router: '0x...',
-    tokenIn: '0x...',
-    tokenOut: '0x...',
+    router: "0x...",
+    tokenIn: "0x...",
+    tokenOut: "0x...",
     fee: 3000,
-    amountIn: '1000000000000000000',
-    amountOutMin: '900000000',
-    recipient: '0x...',
+    amountIn: "1000000000000000000",
+    amountOutMin: "900000000",
+    recipient: "0x...",
     deadline: Math.floor(Date.now() / 1000) + 3600,
   },
 ];
@@ -46,7 +46,7 @@ Every generator has a `…Source` twin that stops one step short of the compiler
 want for diffing, review, or debugging a revert:
 
 ```typescript
-import { actionsToSauceSource, megasSwapToSauceSource } from '@eco-incorp/sauce-actions';
+import { actionsToSauceSource, megasSwapToSauceSource } from "@eco-incorp/sauce-actions";
 
 console.log(actionsToSauceSource(actions));
 ```

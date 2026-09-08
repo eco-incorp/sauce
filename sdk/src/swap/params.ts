@@ -19,7 +19,9 @@ import {
 } from "./types.js";
 
 const DISPATCHABLE_POOL_TYPES: ReadonlySet<number> = new Set(Object.values(SwapPoolType));
-const UNDISPATCHABLE_POOL_TYPES: ReadonlySet<number> = new Set(Object.values(UndispatchablePoolType));
+const UNDISPATCHABLE_POOL_TYPES: ReadonlySet<number> = new Set(
+  Object.values(UndispatchablePoolType),
+);
 
 /** UniV2's pair-fee ceiling — `Router.sol#_swapV2` reverts at/above this (ppm; 1_000_000 = 100%). */
 const MAX_UNIV2_FEE_PPM = 1_000_000n;
@@ -31,7 +33,7 @@ function toBigIntStrict(value: AmountInput, label: string): bigint {
   return BigInt(value);
 }
 
-function toAddressBigint(value: AddressInput, label: string): bigint {
+function toAddressBigint(value: AddressInput, _label: string): bigint {
   if (typeof value === "bigint") return value;
   return BigInt(value);
 }
@@ -44,11 +46,15 @@ function normalizePoolKey(poolType: SwapPoolType, input: PoolKeyInput | undefine
       );
     }
     return {
-      currency0: input.currency0 !== undefined ? toAddressBigint(input.currency0, "poolKey.currency0") : 0n,
-      currency1: input.currency1 !== undefined ? toAddressBigint(input.currency1, "poolKey.currency1") : 0n,
+      currency0:
+        input.currency0 !== undefined ? toAddressBigint(input.currency0, "poolKey.currency0") : 0n,
+      currency1:
+        input.currency1 !== undefined ? toAddressBigint(input.currency1, "poolKey.currency1") : 0n,
       fee: input.fee !== undefined ? toBigIntStrict(input.fee, "poolKey.fee") : 0n,
       tickSpacing:
-        input.tickSpacing !== undefined ? toBigIntStrict(input.tickSpacing, "poolKey.tickSpacing") : 0n,
+        input.tickSpacing !== undefined
+          ? toBigIntStrict(input.tickSpacing, "poolKey.tickSpacing")
+          : 0n,
       hooks: input.hooks !== undefined ? toAddressBigint(input.hooks, "poolKey.hooks") : 0n,
     };
   }
@@ -81,7 +87,9 @@ function normalizePoolKey(poolType: SwapPoolType, input: PoolKeyInput | undefine
  */
 export function amountSpecifiedFor(poolType: SwapPoolType, amountIn: bigint): bigint {
   if (amountIn < 0n) {
-    throw new Error(`amountSpecifiedFor: amountIn must be a positive exact-input amount, got ${amountIn}`);
+    throw new Error(
+      `amountSpecifiedFor: amountIn must be a positive exact-input amount, got ${amountIn}`,
+    );
   }
   if (poolType === SwapPoolType.UniV4) {
     return amountIn === 0n ? 0n : 2n ** 256n - amountIn;
@@ -133,7 +141,9 @@ export function toSwapParams(spec: SwapSpec): SwapParams {
     );
   }
   if (!DISPATCHABLE_POOL_TYPES.has(poolType)) {
-    throw new Error(`toSwapParams: unknown poolType ${poolType} (expected one of SwapPoolType's 0..8)`);
+    throw new Error(
+      `toSwapParams: unknown poolType ${poolType} (expected one of SwapPoolType's 0..8)`,
+    );
   }
 
   const payerOverridden = spec.payer !== undefined;
@@ -151,7 +161,9 @@ export function toSwapParams(spec: SwapSpec): SwapParams {
         ? toBigIntStrict(spec.sqrtPriceLimitX96, "sqrtPriceLimitX96")
         : 0n,
     payer: payerOverridden ? toAddressBigint(spec.payer as AddressInput, "payer") : "self",
-    recipient: recipientOverridden ? toAddressBigint(spec.recipient as AddressInput, "recipient") : "self",
+    recipient: recipientOverridden
+      ? toAddressBigint(spec.recipient as AddressInput, "recipient")
+      : "self",
     callback: normalizeCallback(poolType, spec.callback, payerOverridden, recipientOverridden),
   };
 

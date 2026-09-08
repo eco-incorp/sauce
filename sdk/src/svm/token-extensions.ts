@@ -36,10 +36,10 @@
  *   older_transfer_fee  otherwise
  * The recipient receives amount - fee.
  */
-import { getAddressDecoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from './venues/math.js';
-import { T22_TLV_START, isToken2022Mint } from './token-program.js';
+import { getAddressDecoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "./venues/math.js";
+import { T22_TLV_START, isToken2022Mint } from "./token-program.js";
 
 /** Basis-points denominator (spl-token-2022 ONE_IN_BASIS_POINTS). */
 export const ONE_IN_BASIS_POINTS = 10_000n;
@@ -142,7 +142,11 @@ function parseTransferFeeConfig(data: Uint8Array, value: number): TransferFeeCon
 }
 
 /** Parse a TransferHook value: authority (32) + program_id (32). Nil program → undefined. */
-function parseTransferHook(data: Uint8Array, value: number, length: number): TransferHookInfo | undefined {
+function parseTransferHook(
+  data: Uint8Array,
+  value: number,
+  length: number,
+): TransferHookInfo | undefined {
   if (length < 64) return undefined;
   if (isAllZero(data, value + 32, 32)) return undefined; // OptionalNonZeroPubkey::None
   return { programId: addressDecoder.decode(data.subarray(value + 32, value + 64)) };
@@ -178,29 +182,31 @@ export function parseMintExtensions(mintData: Uint8Array): MintExtensions {
         break;
       }
       case EXT_NON_TRANSFERABLE:
-        result.blocking.push('NonTransferable (cannot be transferred at all)');
+        result.blocking.push("NonTransferable (cannot be transferred at all)");
         break;
       case EXT_DEFAULT_ACCOUNT_STATE:
         if (length >= 1 && mintData[value] === ACCOUNT_STATE_FROZEN) {
           // A freshly created recipient ATA starts frozen and cannot receive
           // until the freeze authority thaws it — un-routable for a plain swap.
-          result.blocking.push('DefaultAccountState=frozen (new accounts start frozen)');
+          result.blocking.push("DefaultAccountState=frozen (new accounts start frozen)");
         }
         break;
       case EXT_PERMANENT_DELEGATE:
         // NOT blocking: a clawback/compliance authority, not a transfer gate.
         // PYUSD/USDG both carry it and trade normally everywhere.
-        result.advisories.push('PermanentDelegate (a delegate authority can move/burn balances)');
+        result.advisories.push("PermanentDelegate (a delegate authority can move/burn balances)");
         break;
       case EXT_CONFIDENTIAL_TRANSFER_MINT:
         // NOT blocking: confidential transfers are OPT-IN per account; plain
         // transferChecked still works. PYUSD/USDG both carry it.
-        result.advisories.push('ConfidentialTransferMint (confidential transfers are opt-in; plain transfers still work)');
+        result.advisories.push(
+          "ConfidentialTransferMint (confidential transfers are opt-in; plain transfers still work)",
+        );
         break;
       case EXT_MEMO_TRANSFER:
         // Account-level extension — cannot appear on a mint; recognized only
         // defensively. Surfaced as advisory, never a mint-level block.
-        result.advisories.push('MemoTransfer (account-level; not expected on a mint)');
+        result.advisories.push("MemoTransfer (account-level; not expected on a mint)");
         break;
       default:
         break; // any other extension is routing-neutral

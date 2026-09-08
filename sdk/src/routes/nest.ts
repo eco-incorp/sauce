@@ -51,7 +51,9 @@ function toCallInput(tx: PortalTx): CallInput {
  */
 export function nestedChildCalls(child: Intent, opts: NestedChildOptions): readonly CallInput[] {
   const target = { portal: opts.portal };
-  return [...approvalTxs(child, target), publishAndFundTx(child, opts.allowPartial, target)].map(toCallInput);
+  return [...approvalTxs(child, target), publishAndFundTx(child, opts.allowPartial, target)].map(
+    toCallInput,
+  );
 }
 
 /**
@@ -333,7 +335,11 @@ export function nestedTransferStatements(
     return [];
   }
 
-  const { varName: vaultVar, statement: vaultStmt } = vaultAddressStatement(child, index, opts.vaultResolution);
+  const { varName: vaultVar, statement: vaultStmt } = vaultAddressStatement(
+    child,
+    index,
+    opts.vaultResolution,
+  );
   const stmts: string[] = [vaultStmt];
 
   child.reward.tokens.forEach((t, i) => {
@@ -349,7 +355,9 @@ export function nestedTransferStatements(
     if (clamp) {
       stmts.push(`const ${amtVar} = ${balVar} > ${capLit} ? ${capLit} : ${balVar};`);
     }
-    stmts.push(`if (${amtExpr} > 0n) { IERC20.at(${tokenLit}).transfer(${vaultVar}, ${amtExpr}); }`);
+    stmts.push(
+      `if (${amtExpr} > 0n) { IERC20.at(${tokenLit}).transfer(${vaultVar}, ${amtExpr}); }`,
+    );
   });
 
   if (willTransferNative) {
@@ -389,9 +397,11 @@ export interface TransferNestEntry {
  * caller with its own `baseDirs`/compile options can merge them rather than re-deriving what this
  * program needs.
  */
-export function nestedTransferProgram(
-  entries: readonly TransferNestEntry[],
-): { readonly source: string; readonly imports: readonly string[]; readonly baseDirs: readonly string[] } {
+export function nestedTransferProgram(entries: readonly TransferNestEntry[]): {
+  readonly source: string;
+  readonly imports: readonly string[];
+  readonly baseDirs: readonly string[];
+} {
   const statements = entries.flatMap((e, i) => nestedTransferStatements(e.child, i, e.opts));
   const needsErc20 = entries.some((e) => e.child.reward.tokens.length > 0);
   const imports = needsErc20 ? [ERC20_IMPORT_LINE] : [];

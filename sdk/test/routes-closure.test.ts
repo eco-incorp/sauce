@@ -52,7 +52,9 @@ describe("sauceBodyToSource: concise body", () => {
 describe("sauceBodyToSource: naive-slicing hazards", () => {
   it("a '=>' inside a string literal does not confuse extraction", () => {
     const closure = () => {
-      const s = "a => b";
+      // Unused as a VALUE on purpose — its presence in the closure's SOURCE TEXT is the whole
+      // subject of this test, so `_` is what marks it deliberate rather than dead.
+      const _s = "a => b";
       return 1n;
     };
     const extracted = sauceBodyToSource(closure);
@@ -84,7 +86,6 @@ describe("sauceBodyToSource: naive-slicing hazards", () => {
 
 describe("sauceBodyToSource: fail-closed", () => {
   it("throws for an async closure", () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const closure = async () => 1n;
     expect(() => sauceBodyToSource(closure as unknown as () => unknown)).toThrow(/async/i);
   });
@@ -144,7 +145,9 @@ describe("openRoute: closure bodies end to end", () => {
       },
       evmOptions(),
     ).reward(0n);
-    const viaString = openRoute("ethereum", "function main(){ return 1n; }", evmOptions()).reward(0n);
+    const viaString = openRoute("ethereum", "function main(){ return 1n; }", evmOptions()).reward(
+      0n,
+    );
     expect(viaClosure.intent).toEqual(viaString.intent);
   });
 

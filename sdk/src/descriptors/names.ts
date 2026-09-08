@@ -28,16 +28,23 @@ export type ContractNameOf<P extends ProtocolSlug> = LinkOf<P>["contract"];
 type StripV<S extends string> = S extends `${infer H}-v${string}` ? H : never;
 
 /** The PascalCase family alias a protocol slug belongs to, or `never` if it has none. */
-export type FamilyOf<P extends ProtocolSlug> = StripV<P> extends never ? never : PascalOf<StripV<P>>;
+export type FamilyOf<P extends ProtocolSlug> =
+  StripV<P> extends never ? never : PascalOf<StripV<P>>;
 
 /** Every family alias key actually present in the starter set, e.g. "Uniswap" | "Aave" | "Compound" | ... */
 export type FamilyKey = { [P in ProtocolSlug]: FamilyOf<P> }[ProtocolSlug];
 
-type MembersOf<F extends FamilyKey> = { [P in ProtocolSlug]: FamilyOf<P> extends F ? P : never }[ProtocolSlug];
+type MembersOf<F extends FamilyKey> = {
+  [P in ProtocolSlug]: FamilyOf<P> extends F ? P : never;
+}[ProtocolSlug];
 
 type FamilyLinksOf<F extends FamilyKey> = Extract<Links, { protocol: MembersOf<F> }>;
 
-type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (k: infer I) => void ? I : never;
+type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
+  k: infer I,
+) => void
+  ? I
+  : never;
 
 /** True iff `T` is a union of 2+ members (as opposed to a single literal). */
 type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true;
@@ -51,5 +58,9 @@ type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true;
  * enumerating known-bad names.
  */
 export type FamilyContracts<F extends FamilyKey> = {
-  [N in FamilyLinksOf<F>["contract"]]: IsUnion<Extract<FamilyLinksOf<F>, { contract: N }>["protocol"]> extends true ? never : N;
+  [N in FamilyLinksOf<F>["contract"]]: IsUnion<
+    Extract<FamilyLinksOf<F>, { contract: N }>["protocol"]
+  > extends true
+    ? never
+    : N;
 }[FamilyLinksOf<F>["contract"]];

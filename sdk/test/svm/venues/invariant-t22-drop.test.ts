@@ -3,17 +3,21 @@
  * must drop (fetchPoolConfig throws) rather than silently assuming legacy SPL.
  * The legacy path stays byte-identical (an 82-byte classic mint does not drop).
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { fetchInvariantPoolConfig, POOL_ACCOUNT_SIZE, POOL_DISCRIMINATOR } from '../../../src/svm/venues/invariant/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  fetchInvariantPoolConfig,
+  POOL_ACCOUNT_SIZE,
+  POOL_DISCRIMINATOR,
+} from "../../../src/svm/venues/invariant/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const codec = getAddressCodec();
 const OFF_TOKEN_X = 8;
 const OFF_TOKEN_Y = 40;
 
-const POOL = address('So11111111111111111111111111111111111111112');
+const POOL = address("So11111111111111111111111111111111111111112");
 
 /** Distinct valid addresses derived from a fill byte. */
 function addrFromByte(b: number): Address {
@@ -37,11 +41,11 @@ function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
   };
 }
 
-describe('invariant Token-2022 self-drop', () => {
+describe("invariant Token-2022 self-drop", () => {
   const tokenX = addrFromByte(7);
   const tokenY = addrFromByte(9);
 
-  it('drops a pool whose tokenX mint is a Token-2022 mint', async () => {
+  it("drops a pool whose tokenX mint is a Token-2022 mint", async () => {
     const load = loaderOf([
       [POOL, buildPool(tokenX, tokenY)],
       [tokenX, makeT22Mint()],
@@ -49,7 +53,7 @@ describe('invariant Token-2022 self-drop', () => {
     await expect(fetchInvariantPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
-  it('drops a pool whose mint carries an un-routable extension (NonTransferable)', async () => {
+  it("drops a pool whose mint carries an un-routable extension (NonTransferable)", async () => {
     const load = loaderOf([
       [POOL, buildPool(tokenX, tokenY)],
       [tokenX, makeT22Mint(NON_TRANSFERABLE_TLV)],
@@ -57,7 +61,7 @@ describe('invariant Token-2022 self-drop', () => {
     await expect(fetchInvariantPoolConfig(load, POOL)).rejects.toThrow(/Token-2022|un-routable/);
   });
 
-  it('does NOT drop for a classic 82-byte legacy mint (proceeds past the guard)', async () => {
+  it("does NOT drop for a classic 82-byte legacy mint (proceeds past the guard)", async () => {
     // Both mints legacy — the drop guard passes; the fetch proceeds and fails
     // later on the missing tickmap, proving the guard itself did not fire.
     const load = loaderOf([
@@ -65,6 +69,8 @@ describe('invariant Token-2022 self-drop', () => {
       [tokenX, makeLegacyMint()],
       [tokenY, makeLegacyMint()],
     ]);
-    await expect(fetchInvariantPoolConfig(load, POOL)).rejects.not.toThrow(/Token-2022|un-routable/);
+    await expect(fetchInvariantPoolConfig(load, POOL)).rejects.not.toThrow(
+      /Token-2022|un-routable/,
+    );
   });
 });

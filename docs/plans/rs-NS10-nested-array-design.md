@@ -6,7 +6,7 @@ Confirmed — `.length` on any `Ty::Array{..}` (line 462) lowers to `Expr::Lengt
 
 ## TL;DR verdict
 
-**NS-10 is BOUNDED — smaller than NS-8, not larger.** It reuses NS-8's exact offset-table skeleton (`git show fc4cde882`), the *only* new content being that each element's materialization is an inner `ArrayOfLength + Loop + SetIndex(scalar)` fill — which is byte-for-byte the *fixed-stride array arm that already exists in the same function* (`assembly.rs:2422-2461`), reused one level in. The read side (`arr[i]` → inner descriptor → `row[k]` runtime/literal → `row.length` → `arr.length`) **already lowers correctly with zero changes**. No new IR node, no codegen change, no `targets.rs` change, no `ArgShape` variant, no `to_ty` arm. Effort: **M (small side of medium)**.
+**NS-10 is BOUNDED — smaller than NS-8, not larger.** It reuses NS-8's exact offset-table skeleton (`git show fc4cde882`), the _only_ new content being that each element's materialization is an inner `ArrayOfLength + Loop + SetIndex(scalar)` fill — which is byte-for-byte the _fixed-stride array arm that already exists in the same function_ (`assembly.rs:2422-2461`), reused one level in. The read side (`arr[i]` → inner descriptor → `row[k]` runtime/literal → `row.length` → `arr.length`) **already lowers correctly with zero changes**. No new IR node, no codegen change, no `targets.rs` change, no `ArgShape` variant, no `to_ty` arm. Effort: **M (small side of medium)**.
 
 The only real work is one new match arm in `entry_collection_decode` and one three-line widening of `require_decodable_entry_param`'s `Array` arm, plus a conformance test.
 
@@ -49,7 +49,7 @@ Ty::Array { element, .. } => {
 }
 ```
 
-Widen with **one more narrow escape hatch** — an inner array whose *own* element is fixed-stride:
+Widen with **one more narrow escape hatch** — an inner array whose _own_ element is fixed-stride:
 
 ```rust
 Ty::Array { element, .. } => {
@@ -120,15 +120,17 @@ These are the identical IR nodes the recipe's own `new Array(n)`/`arr[i]`/`.leng
 **Effort: M** (~120-180 new lines in `assembly.rs` — one decode arm reusing NS-8 helpers + a nested fill loop — plus a conformance test; NS-8 was 346 lines and NS-10 is strictly less new machinery).
 
 **Red→green unit tests** (in `assembly.rs` `#[cfg(test)]`, mirroring NS-8's):
+
 1. Repurpose `an_array_of_arrays_is_still_not_yet_decodable` (`:3002-3018`) → `array_of_arrays_entry_params_are_now_admitted`: `require_decodable_entry_param(Array{Array{Scalar}})` was `Err(EntryParamShape)`, now `Ok`. Assert `Array{Array{Bytes}}` and `Array{Array{Array{Scalar}}}` still `Err(EntryParamShape)` (escape hatch stays narrow).
 2. `an_array_of_arrays_param_compiles_and_decodes_via_a_nested_offset_table` (analogue of `:3020-3069`): compile `function main(routing: Tuple): Uint256 { return routing[0n][0n]; }` with hint `ArrayOf(ArrayOf(Scalar))`; assert the prologue contains **two** `ArrayOfLength` (outer tag `Array`, inner tag `Scalar`) and a **nested** `Loop` whose inner `SetIndex` value is a scalar `read_word` (`BytesToScalar`), and the outer `SetIndex{element_is_dynamic:true}` value is `Expr::Local` (the inner descriptor).
 3. Negative control (analogue of `:3071+`): `ArrayOf(ScalarTuple(n))` still takes the original single-loop fixed-stride arm (one `ArrayOfLength`, no nested loop) — disjoint match arms, structurally guaranteed.
 4. Read-path unit test: `main(routing: Tuple){ return routing[i][1n+5n*L] + routing[i].length + routing.length; }` lowers without error (proves the runtime inner index + both `.length`s type-check).
 
 **Real-engine conformance vector** (new `crates/sauce-cli/tests/array_of_arrays_conformance.rs`, wired into the Makefile `EVM_INTEGRATION_TESTS` list exactly as NS-8 did): `main(x: Array<Array<Scalar>>)` reading back, byte-exact against the pinned v12 Huff runtime via hnc+revm:
+
 - **Unequal inner lengths** (e.g. rows of 1 / 5 / 3 scalars) — equal lengths cannot distinguish a correct offset-table decode from a fixed-stride misread (NS-8's own lesson, commit body). Assert `x[0][0]`, `x[2][2]`, `x[1][4]` by both constant and runtime index; assert `x[i].length` per row and `x.length`.
 - Encode the input with a real ABI encoder for `uint256[][]` so the offset-table framing is exercised against off-the-shelf output.
-- **Guard reverts** on the real engine: an offset-table `count` over the cap, a truncated payload (missing offset table), and a truncated *inner* payload (inner `off_i`/`len_i` points past the input) all revert — the per-element inner guard is new to NS-10 and must be proven live.
+- **Guard reverts** on the real engine: an offset-table `count` over the cap, a truncated payload (missing offset table), and a truncated _inner_ payload (inner `off_i`/`len_i` points past the input) all revert — the per-element inner guard is new to NS-10 and must be proven live.
 
 ---
 
@@ -139,9 +141,10 @@ These are the identical IR nodes the recipe's own `new Array(n)`/`arr[i]`/`.leng
 One honest scoping caveat, unrelated to NS-10's tractability: the full-recipe acceptance probe (`ecoswap_full.rs`, commit `3d454f996`) currently `#[ignore]`s on a **different** boundary — `eulerNeedsLive`/`eulerQuoteClosedForm` (`ecoswap.sauce.ts:564,578`) take a bare infer-wildcard `Tuple` as **non-entry helper** parameters, which `param_ty` only shape-resolves for `main`'s own params (`assembly.rs:974-992`; probe doc `ecoswap_full.rs:143-160`). That's a separate feature (call-site shape propagation to helpers), not NS-10. NS-10 unblocks the `routing` entry param; the helper-generic gap remains its own item.
 
 **Sonnet build sketch (ordered, each commit green):**
+
 1. `require_decodable_entry_param` `Array` arm: add the `matches!(&**element, Ty::Array{element: inner,..} if element_words(inner).is_some())` hatch (`assembly.rs:2010-2012`). Flip test #1 red→green. Commit.
 2. `entry_collection_decode`: add the nested-offset-table arm before `Ty::Array{..} => {}` (`assembly.rs:2349`), cloning NS-8's arm (`:2206-2348`) and swapping the per-element `Slice` `SetIndex` for `ArrayOfLength(Scalar)` + nested fill `Loop` + `SetIndex(Local(innerLocal), dynamic)`; inner extent guard uses `inner_len*32`. Land unit tests #2/#3/#4. Commit.
 3. Conformance vector `array_of_arrays_conformance.rs` (unequal lengths, runtime + const reads, `.length` both levels, three guard reverts); add to Makefile `EVM_INTEGRATION_TESTS`. Commit.
 4. Flip the `ecoswap_full` probe's routing note if it becomes the surfacing error (it will still `#[ignore]` on the euler helper gap — leave that pin, update only NS-10-attributable text).
 
-Watch-items for the builder: keep the escape hatch narrow (inner element must be `element_words(inner).is_some()` — do **not** admit `Array<Array<Bytes>>` or triple nesting); re-`ArrayOfLength` the inner local *inside* the outer loop (fresh region per row); `off_i` is relative to `tableStart` (= `base+32`), `dataPos` is absolute; inner cap and inner data-present guard are per-element (each row's extent is runtime, unlike the fixed-stride arm's single up-front bound).
+Watch-items for the builder: keep the escape hatch narrow (inner element must be `element_words(inner).is_some()` — do **not** admit `Array<Array<Bytes>>` or triple nesting); re-`ArrayOfLength` the inner local _inside_ the outer loop (fresh region per row); `off_i` is relative to `tableStart` (= `base+32`), `dataPos` is absolute; inner cap and inner data-present guard are per-element (each row's extent is runtime, unlike the fixed-stride arm's single up-front bound).

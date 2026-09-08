@@ -58,24 +58,34 @@
  * live 2026-07-31: 4 of the 129 pools carry a nonzero `dynamic_fee_info` and
  * are dropped by this gate; the rest are classic.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { AMM_CONFIG_DISCRIMINATOR, RAYDIUM_CLMM_MAX_BOUNDARIES, POOL_DISCRIMINATOR, TICK_ARRAY_DISCRIMINATOR, windowStartTicks } from '../raydium-clmm/index.js';
-import { MAX_TICK, MIN_TICK } from '../raydium-clmm/tick-math.js';
-import { raydiumSqrtPriceAtTick } from '../raydium-clmm/tick-math.js';
-import type { AccountLoader } from '../types.js';
-import type { RaydiumClmmBoundary, RaydiumClmmPoolConfig, RaydiumClmmWindow } from '../raydium-clmm/index.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  AMM_CONFIG_DISCRIMINATOR,
+  RAYDIUM_CLMM_MAX_BOUNDARIES,
+  POOL_DISCRIMINATOR,
+  TICK_ARRAY_DISCRIMINATOR,
+  windowStartTicks,
+} from "../raydium-clmm/index.js";
+import { MAX_TICK, MIN_TICK } from "../raydium-clmm/tick-math.js";
+import { raydiumSqrtPriceAtTick } from "../raydium-clmm/tick-math.js";
+import type { AccountLoader } from "../types.js";
+import type {
+  RaydiumClmmBoundary,
+  RaydiumClmmPoolConfig,
+  RaydiumClmmWindow,
+} from "../raydium-clmm/index.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 
-const SLUG = 'byreal' as const;
+const SLUG = "byreal" as const;
 
 /** Byreal's deployed program — a different program id than raydium-clmm's CAMMC... deployment. */
-export const BYREAL_PROGRAM_ID = address('REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const MEMO_PROGRAM = address('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+export const BYREAL_PROGRAM_ID = address("REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+const MEMO_PROGRAM = address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
 // PoolState / AmmConfig / TickArrayState layout — byte-identical to
 // raydium-clmm (see the header; confirmed against real Byreal mainnet state).
@@ -107,7 +117,7 @@ const OFF_TICK_PART_FILLED_ORDERS = 132;
 /** Swap-disabled status bit (PoolStatusBitIndex::Swap = 4). */
 const STATUS_SWAP_BIT = 4;
 
-export interface ByrealPoolConfig extends Omit<RaydiumClmmPoolConfig, 'venue'> {
+export interface ByrealPoolConfig extends Omit<RaydiumClmmPoolConfig, "venue"> {
   venue: typeof SLUG;
 }
 
@@ -132,7 +142,7 @@ async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Add
   const be = new Uint8Array(4);
   new DataView(be.buffer).setInt32(0, startTick, false);
   return memoizedGetProgramDerivedAddress(BYREAL_PROGRAM_ID, [
-    new TextEncoder().encode('tick_array'),
+    new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     be,
   ]);
@@ -157,11 +167,9 @@ async function resolveWindow(
   zeroForOne: boolean,
 ): Promise<RaydiumClmmWindow> {
   const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, zeroForOne);
-  const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start)))) as [
-    Address,
-    Address,
-    Address,
-  ];
+  const tickArrays = (await Promise.all(
+    startTicks.map((start) => deriveTickArrayPda(pool, start)),
+  )) as [Address, Address, Address];
   // allSettled (not all) keeps the break-on-first-invalid contract exact: a
   // rejection is re-thrown only if the readable prefix actually reaches it.
   const loaded = await Promise.allSettled(tickArrays.map((a) => load(a)));
@@ -169,7 +177,7 @@ async function resolveWindow(
   let readable = 0;
   for (let i = 0; i < 3; i++) {
     const settled = loaded[i]!;
-    if (settled.status === 'rejected') throw settled.reason;
+    if (settled.status === "rejected") throw settled.reason;
     const data = settled.value;
     const valid =
       data !== null &&
@@ -200,7 +208,7 @@ async function resolveWindow(
         // ladder does not model order matching (conservative drop — see raydium-clmm).
         throw new Error(
           `${SLUG}: pool ${pool} has active limit orders at tick ${start + offset * tickSpacing} ` +
-            '— the ladder does not model limit-order matching',
+            "— the ladder does not model limit-order matching",
         );
       }
       if (tickInitialized(data, offset)) {
@@ -215,7 +223,7 @@ async function resolveWindow(
     }
   }
 
-  let edge: RaydiumClmmWindow['edge'] = null;
+  let edge: RaydiumClmmWindow["edge"] = null;
   if (readable > 0 && !maxStopped) {
     const lastStart = startTicks[readable - 1]!;
     let tick: number;
@@ -237,11 +245,16 @@ async function resolveWindow(
  * why (PDA derivation must use BYREAL_PROGRAM_ID, not raydium-clmm's).
  * Read-only against the loader.
  */
-export async function fetchByrealPoolConfig(load: AccountLoader, pool: Address): Promise<ByrealPoolConfig> {
+export async function fetchByrealPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<ByrealPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, POOL_DISCRIMINATOR)) {
     throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a PoolState account)`);
@@ -260,15 +273,19 @@ export async function fetchByrealPoolConfig(load: AccountLoader, pool: Address):
     if (data[OFF_DYNAMIC_FEE_INFO + i] !== 0) {
       throw new Error(
         `${SLUG}: pool ${pool} has a dynamic fee configured — its swap walks tick-spacing-bounded steps with a ` +
-          'per-step volatility fee the in-VM quote does not model',
+          "per-step volatility fee the in-VM quote does not model",
       );
     }
   }
 
   const codec = getAddressCodec();
   const ammConfig = codec.decode(data.subarray(OFF_AMM_CONFIG, OFF_AMM_CONFIG + 32)) as Address;
-  const tokenMint0 = codec.decode(data.subarray(OFF_TOKEN_MINT_0, OFF_TOKEN_MINT_0 + 32)) as Address;
-  const tokenMint1 = codec.decode(data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32)) as Address;
+  const tokenMint0 = codec.decode(
+    data.subarray(OFF_TOKEN_MINT_0, OFF_TOKEN_MINT_0 + 32),
+  ) as Address;
+  const tokenMint1 = codec.decode(
+    data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32),
+  ) as Address;
   // The on-chain swap ix here is legacy-SPL only, so a Token-2022 mint (or one
   // carrying an un-routable extension) SELF-DROPS this pool. The thrown error is
   // the graceful-drop signal — the SvmRoute orchestrator catches a
@@ -282,18 +299,28 @@ export async function fetchByrealPoolConfig(load: AccountLoader, pool: Address):
     const mintData = mintDatas[mi];
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   const cfgData = await load(ammConfig);
-  if (cfgData === null) throw new Error(`${SLUG}: AmmConfig ${ammConfig} of pool ${pool} not found`);
-  if (cfgData.length !== AMM_CONFIG_ACCOUNT_SIZE || !hasDiscriminator(cfgData, AMM_CONFIG_DISCRIMINATOR)) {
-    throw new Error(`${SLUG}: AmmConfig ${ammConfig} of pool ${pool} has an unexpected size/discriminator`);
+  if (cfgData === null)
+    throw new Error(`${SLUG}: AmmConfig ${ammConfig} of pool ${pool} not found`);
+  if (
+    cfgData.length !== AMM_CONFIG_ACCOUNT_SIZE ||
+    !hasDiscriminator(cfgData, AMM_CONFIG_DISCRIMINATOR)
+  ) {
+    throw new Error(
+      `${SLUG}: AmmConfig ${ammConfig} of pool ${pool} has an unexpected size/discriminator`,
+    );
   }
 
   const tickSpacing = Number(readUintLE(data, OFF_TICK_SPACING, 2));
@@ -303,7 +330,7 @@ export async function fetchByrealPoolConfig(load: AccountLoader, pool: Address):
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
     memoizedGetProgramDerivedAddress(BYREAL_PROGRAM_ID, [
-      new TextEncoder().encode('pool_tick_array_bitmap_extension'),
+      new TextEncoder().encode("pool_tick_array_bitmap_extension"),
       getAddressEncoded(pool),
     ]),
   ]);
@@ -311,20 +338,22 @@ export async function fetchByrealPoolConfig(load: AccountLoader, pool: Address):
   return {
     venue: SLUG,
     pool,
-    direction: '0to1',
+    direction: "0to1",
     ammConfig,
     tokenMint0,
     tokenMint1,
     tokenVault0: codec.decode(data.subarray(OFF_TOKEN_VAULT_0, OFF_TOKEN_VAULT_0 + 32)) as Address,
     tokenVault1: codec.decode(data.subarray(OFF_TOKEN_VAULT_1, OFF_TOKEN_VAULT_1 + 32)) as Address,
-    observation: codec.decode(data.subarray(OFF_OBSERVATION_KEY, OFF_OBSERVATION_KEY + 32)) as Address,
+    observation: codec.decode(
+      data.subarray(OFF_OBSERVATION_KEY, OFF_OBSERVATION_KEY + 32),
+    ) as Address,
     bitmapExtension,
     tickSpacing,
     tradeFeeRate: Number(readUintLE(cfgData, OFF_CFG_TRADE_FEE_RATE, 4)),
     liquidity: readUintLE(data, OFF_LIQUIDITY, 16),
     sqrtPrice: readUintLE(data, OFF_SQRT_PRICE, 16),
     tickCurrentIndex,
-    windows: { '0to1': zeroForOne, '1to0': oneForZero },
+    windows: { "0to1": zeroForOne, "1to0": oneForZero },
   };
 }
 
@@ -337,4 +366,3 @@ export const byreal = {
   memoProgram: MEMO_PROGRAM,
   fetchPoolConfig: fetchByrealPoolConfig,
 };
-

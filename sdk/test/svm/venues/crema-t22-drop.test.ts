@@ -3,12 +3,14 @@
  * (or one carrying a blocking extension) must REJECT at fetchPoolConfig. The
  * swap ix's token_program account is a single fixed program (Tokenkeg only).
  */
-import { getAddressDecoder } from '@solana/kit';
-import { crema, CLMMPOOL_DISCRIMINATOR } from '../../../src/svm/venues/crema/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { getAddressDecoder } from "@solana/kit";
+import { crema, CLMMPOOL_DISCRIMINATOR } from "../../../src/svm/venues/crema/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
-const POOL = getAddressDecoder().decode(Uint8Array.from({ length: 32 }, (_, i) => ((i * 3) % 250) + 1));
+const POOL = getAddressDecoder().decode(
+  Uint8Array.from({ length: 32 }, (_, i) => ((i * 3) % 250) + 1),
+);
 
 const OFF_MINT_A = 40;
 const CLMMPOOL_ACCOUNT_SIZE = 748;
@@ -37,16 +39,20 @@ function loaderWith(mint: Uint8Array | null): AccountLoader {
   }) as unknown as AccountLoader;
 }
 
-describe('crema Token-2022 self-drop', () => {
-  it('drops a pool whose mint is a Token-2022 mint', async () => {
-    await expect(crema.fetchPoolConfig(loaderWith(makeT22Mint()), POOL)).rejects.toThrow(/Token-2022/);
+describe("crema Token-2022 self-drop", () => {
+  it("drops a pool whose mint is a Token-2022 mint", async () => {
+    await expect(crema.fetchPoolConfig(loaderWith(makeT22Mint()), POOL)).rejects.toThrow(
+      /Token-2022/,
+    );
   });
 
-  it('drops a pool whose mint is a Token-2022 mint carrying an extension', async () => {
-    await expect(crema.fetchPoolConfig(loaderWith(makeT22Mint(NON_TRANSFERABLE_TLV)), POOL)).rejects.toThrow(/Token-2022/);
+  it("drops a pool whose mint is a Token-2022 mint carrying an extension", async () => {
+    await expect(
+      crema.fetchPoolConfig(loaderWith(makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
+    ).rejects.toThrow(/Token-2022/);
   });
 
-  it('does NOT drop for an unreadable mint (falls back to the legacy assumption)', async () => {
+  it("does NOT drop for an unreadable mint (falls back to the legacy assumption)", async () => {
     // A null mint -> `continue` -> no Token-2022 drop. The fetch then either
     // resolves or fails for an unrelated reason, but NEVER with a T22 message.
     await crema.fetchPoolConfig(loaderWith(null), POOL).catch((e: unknown) => {

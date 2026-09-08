@@ -113,20 +113,20 @@
  * `pumpfun-bonding-curve` disclosed) — `test/fast/svm-realcpi-coverage.test.ts`
  * names it in KNOWN_GAPS pending an available build.
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'moonit' as const;
+const SLUG = "moonit" as const;
 
-export const MOONIT_PROGRAM_ID = address_('MoonCVVNZFSYkqNXP6bxHLPL6QQJiMagDL3qcqUQTrG');
-const TOKEN_PROGRAM = address_('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const ASSOCIATED_TOKEN_PROGRAM = address_('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+export const MOONIT_PROGRAM_ID = address_("MoonCVVNZFSYkqNXP6bxHLPL6QQJiMagDL3qcqUQTrG");
+const TOKEN_PROGRAM = address_("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ASSOCIATED_TOKEN_PROGRAM = address_("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 /** PDA(["config_account"], MOONIT_PROGRAM_ID) — a singleton, verified live 2026-07-31. */
-const CONFIG_ACCOUNT = address_('36Eru7v11oU5Pfrojyn5oY3nETA1a1iqsw2WUu6afkM9');
+const CONFIG_ACCOUNT = address_("36Eru7v11oU5Pfrojyn5oY3nETA1a1iqsw2WUu6afkM9");
 
 const CURVE_DISCRIMINATOR = [8, 91, 83, 28, 132, 216, 248, 22];
 const CONFIG_DISCRIMINATOR = [189, 255, 97, 70, 186, 189, 24, 102];
@@ -156,7 +156,10 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
 async function ata(owner: Address, mint: Address, tokenProgram: Address): Promise<Address> {
   const encoder = getAddressEncoder();
   const seeds = [owner, tokenProgram, mint].map((a) => new Uint8Array(encoder.encode(a)));
-  const [derived] = await getProgramDerivedAddress({ programAddress: ASSOCIATED_TOKEN_PROGRAM, seeds });
+  const [derived] = await getProgramDerivedAddress({
+    programAddress: ASSOCIATED_TOKEN_PROGRAM,
+    seeds,
+  });
   return derived;
 }
 /** floor(a*b/c), non-negative — the TS mirror of the emitted Math.mulDiv. */
@@ -183,7 +186,7 @@ function isqrt(value: bigint): bigint {
 export interface MoonitPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** exactIn side: 'quoteToBase' (default, buy: SOL in, tokens out) | 'baseToQuote' (sell). */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   mint: Address;
   curveTokenAccount: Address;
   dexFee: Address;
@@ -199,7 +202,12 @@ export interface MoonitPoolConfig extends PoolConfig {
 }
 
 /** Derive coefA/coefB's fixed-point bakes from the CurveAccount's static fields (exact bigint, no rounding until the single final step). */
-function bakeCoefficients(totalSupplyRaw: bigint, coefBRaw: bigint, marketcapThresholdRaw: bigint, decimals: bigint): { awHi: bigint; awLo: bigint; bwFixed: bigint; tdScale: bigint } {
+function bakeCoefficients(
+  totalSupplyRaw: bigint,
+  coefBRaw: bigint,
+  marketcapThresholdRaw: bigint,
+  decimals: bigint,
+): { awHi: bigint; awLo: bigint; bwFixed: bigint; tdScale: bigint } {
   const tdScale = 10n ** decimals;
   const cdScale = 1_000_000_000n; // Sol, the only supported collateral currency
   const mcdScale = 1_000_000_000n; // Sol, the only supported marketcap currency
@@ -211,11 +219,15 @@ function bakeCoefficients(totalSupplyRaw: bigint, coefBRaw: bigint, marketcapThr
   const awNumFull = awNum * x55d;
   const awDenFull = mcdScale * cdScale * x55n * x55n;
   if (awNumFull <= 0n) {
-    throw new Error(`moonit curve gate: derived coefA is non-positive (marketcap_threshold too low for coefB/total_supply) — degenerate curve`);
+    throw new Error(
+      `moonit curve gate: derived coefA is non-positive (marketcap_threshold too low for coefB/total_supply) — degenerate curve`,
+    );
   }
   const awFixed = roundRatio(awNumFull * SCALE_A, awDenFull);
   if (awFixed > U128_MAX) {
-    throw new Error(`moonit curve gate: coefA fixed-point bake overflows 128 bits (extreme total_supply/marketcap_threshold combination)`);
+    throw new Error(
+      `moonit curve gate: coefA fixed-point bake overflows 128 bits (extreme total_supply/marketcap_threshold combination)`,
+    );
   }
   const bwFixed = roundRatio(coefBRaw * SCALE_B, cdScale);
   return { awHi: awFixed >> 64n, awLo: awFixed & MASK64, bwFixed, tdScale };
@@ -225,12 +237,14 @@ export const moonit = {
   slug: SLUG,
   programId: MOONIT_PROGRAM_ID,
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<MoonitPoolConfig> {
-    const curveData = await loadAccount(load, pool, 'curve account');
+    const curveData = await loadAccount(load, pool, "curve account");
     if (!hasDiscriminator(curveData, CURVE_DISCRIMINATOR)) {
       throw new Error(`moonit pool ${pool} discriminator mismatch (not a CurveAccount)`);
     }
     if (curveData.length < 84) {
-      throw new Error(`moonit pool ${pool} data is ${curveData.length} bytes, expected at least 84`);
+      throw new Error(
+        `moonit pool ${pool} data is ${curveData.length} bytes, expected at least 84`,
+      );
     }
     const totalSupply = readUintLE(curveData, 8, 8);
     const mint = pubkeyAt(curveData, 24);
@@ -245,11 +259,15 @@ export const moonit = {
       const swapMintData = await load(swapMint);
       if (swapMintData === null) continue;
       if (classifyMintProgram(swapMint, swapMintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${swapMint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${swapMint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(swapMintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${swapMint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${swapMint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -261,15 +279,24 @@ export const moonit = {
     const coefBRaw = readUintLE(curveData, 76, 4);
 
     if (curveType !== CURVE_TYPE_LINEAR_V1) {
-      throw new Error(`moonit pool ${pool} gate: curve_type ${curveType} is not LinearV1 (0) — only LinearV1 is implemented`);
+      throw new Error(
+        `moonit pool ${pool} gate: curve_type ${curveType} is not LinearV1 (0) — only LinearV1 is implemented`,
+      );
     }
     if (collateralCurrency !== CURRENCY_SOL || marketcapCurrency !== CURRENCY_SOL) {
-      throw new Error(`moonit pool ${pool} gate: unsupported currency (collateral=${collateralCurrency}, marketcap=${marketcapCurrency}) — only Sol (0) is implemented`);
+      throw new Error(
+        `moonit pool ${pool} gate: unsupported currency (collateral=${collateralCurrency}, marketcap=${marketcapCurrency}) — only Sol (0) is implemented`,
+      );
     }
 
-    const { awHi, awLo, bwFixed, tdScale } = bakeCoefficients(totalSupply, coefBRaw, marketcapThreshold, decimals);
+    const { awHi, awLo, bwFixed, tdScale } = bakeCoefficients(
+      totalSupply,
+      coefBRaw,
+      marketcapThreshold,
+      decimals,
+    );
 
-    const configData = await loadAccount(load, CONFIG_ACCOUNT, 'config account');
+    const configData = await loadAccount(load, CONFIG_ACCOUNT, "config account");
     if (!hasDiscriminator(configData, CONFIG_DISCRIMINATOR)) {
       throw new Error(`moonit config account ${CONFIG_ACCOUNT} discriminator mismatch`);
     }
@@ -282,7 +309,7 @@ export const moonit = {
     return {
       venue: SLUG,
       pool,
-      direction: 'quoteToBase',
+      direction: "quoteToBase",
       mint,
       curveTokenAccount,
       dexFee,
@@ -297,7 +324,15 @@ export const moonit = {
 };
 
 /** BUY: exact gross collateral `y` in (fee taken off the input) -> tokens out, capped at the curve's live inventory. */
-function referenceBuy(y: bigint, m: bigint, aw: bigint, bw: bigint, td: bigint, feeBps: bigint, curveAmount: bigint): bigint {
+function referenceBuy(
+  y: bigint,
+  m: bigint,
+  aw: bigint,
+  bw: bigint,
+  td: bigint,
+  feeBps: bigint,
+  curveAmount: bigint,
+): bigint {
   if (y === 0n) return 0n;
   const fee = mulDiv(y, feeBps, 10000n);
   const net = y - fee;
@@ -316,7 +351,14 @@ function referenceBuy(y: bigint, m: bigint, aw: bigint, bw: bigint, td: bigint, 
 }
 
 /** SELL: exact tokens `x` in (fee taken off the output) -> collateral out. Saturates at the live sold position (never over-sells). */
-function referenceSell(x: bigint, m: bigint, aw: bigint, bw: bigint, td: bigint, feeBps: bigint): bigint {
+function referenceSell(
+  x: bigint,
+  m: bigint,
+  aw: bigint,
+  bw: bigint,
+  td: bigint,
+  feeBps: bigint,
+): bigint {
   if (x === 0n) return 0n;
   const xx = x > m ? m : x;
   const twoMN = 2n * m - xx;
@@ -331,4 +373,9 @@ function referenceSell(x: bigint, m: bigint, aw: bigint, bw: bigint, td: bigint,
   return gross - fee;
 }
 
-export { referenceBuy as _referenceBuyForTest, referenceSell as _referenceSellForTest, bakeCoefficients as _bakeCoefficientsForTest, isqrt as _isqrtForTest };
+export {
+  referenceBuy as _referenceBuyForTest,
+  referenceSell as _referenceSellForTest,
+  bakeCoefficients as _bakeCoefficientsForTest,
+  isqrt as _isqrtForTest,
+};

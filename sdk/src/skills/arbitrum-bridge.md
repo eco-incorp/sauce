@@ -3,20 +3,31 @@
 Official Arbitrum L1-L2 gateway bridge. Routes tokens through the canonical Arbitrum rollup bridge with 7-day withdrawal finality.
 
 ## Category
+
 native L2 bridge | Direction: L1 to L2 (Ethereum to Arbitrum) | Chains: Ethereum (1), Arbitrum (42161)
 
 ## SauceScript Functions
 
 ### depositToL2
+
 Deposit ERC-20 tokens from Ethereum L1 to Arbitrum L2 via the Gateway Router.
+
 ```typescript
 import { ArbitrumL1GatewayRouterABI as IL1GatewayRouter } from "./abis";
 
-function main(routerAddress: Address, token: Address, recipient: Address, amount: Uint256, maxGas: Uint256, gasPriceBid: Uint256): bytes {
+function main(
+  routerAddress: Address,
+  token: Address,
+  recipient: Address,
+  amount: Uint256,
+  maxGas: Uint256,
+  gasPriceBid: Uint256,
+): bytes {
   const router = IL1GatewayRouter.at(routerAddress);
   return router.outboundTransfer(token, recipient, amount, maxGas, gasPriceBid, 0x00);
 }
 ```
+
 - `token`: L1 ERC-20 token address to bridge
 - `recipient`: Address to receive tokens on Arbitrum L2
 - `amount`: Amount of tokens to deposit
@@ -28,18 +39,20 @@ function main(routerAddress: Address, token: Address, recipient: Address, amount
 
 ## Deployed Addresses
 
-| Chain | Contract | Address |
-|-------|----------|---------|
+| Chain    | Contract        | Address                                      |
+| -------- | --------------- | -------------------------------------------- |
 | Ethereum | l1GatewayRouter | `0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef` |
 | Arbitrum | l2GatewayRouter | `0x5288c571Fd7aD117beA99bF60FE0846C4E84F933` |
 
 ## ABI Reference
 
 ### ArbitrumL1GatewayRouterABI
+
 - `outboundTransfer(address _token, address _to, uint256 _amount, uint256 _maxGas, uint256 _gasPriceBid, bytes _data) returns (bytes)` [payable] - Deposit tokens from L1 to L2. Routes to the correct gateway automatically based on the token
 - `getGateway(address _token) returns (address)` - Look up the gateway contract for a specific token (view). Approve tokens to this address, not the router
 
 ## Notes
+
 - **L1 to L2 only** via this contract. For L2 to L1 withdrawals, use `ArbSys.sendTxToL1()` on Arbitrum (takes 7 days)
 - The router auto-routes tokens to the correct gateway (standard, custom, or WETH gateway)
 - **Approval target**: approve tokens to the gateway returned by `getGateway(token)`, NOT to the router itself

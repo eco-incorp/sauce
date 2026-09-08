@@ -79,17 +79,16 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
+ */
 import {
   address,
   getAddressCodec,
-  getAddressDecoder,
   getAddressEncoder,
   getProgramDerivedAddress,
   getUtf8Encoder,
-} from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
+} from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
 import type {
   AccountLoader,
   PoolConfig,
@@ -97,15 +96,15 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+} from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'huma';
+const SLUG = "huma";
 
-export const HUMA_PROGRAM_ID = address('HumaXepHnjaRCpjYTokxY4UtaJcmx41prQ8cxGmFC5fn');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const ASSOCIATED_TOKEN_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+export const HUMA_PROGRAM_ID = address("HumaXepHnjaRCpjYTokxY4UtaJcmx41prQ8cxGmFC5fn");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ASSOCIATED_TOKEN_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 // Anchor discriminators: sha256(`global:<ix_name>`)[0..8] — taken verbatim
 // from the published IDL, not recomputed (no local sha256 dependency here).
@@ -115,7 +114,7 @@ const INSTANT_WITHDRAW_DISCRIMINATOR = Uint8Array.from([171, 49, 145, 176, 48, 1
 // deposit()'s pass-through commitment args — this adapter never opts into a
 // Huma commitment period (matches the official SDK client's NO_COMMIT
 // default, `DepositCommitment.NO_COMMITMENT`).
-const DEPOSIT_COMMITMENT = 'NO_COMMITMENT';
+const DEPOSIT_COMMITMENT = "NO_COMMITMENT";
 const DEPOSIT_COMMITMENT_AUTO_RENEWAL = false;
 
 // instant_withdraw()'s own slippage guard is venue-level, like every other
@@ -137,9 +136,13 @@ const U64_MAX = (1n << 64n) - 1n;
 // PoolConfig, never separately hardcoded.
 export const HUMA_CURATED_MODE_CONFIGS: Readonly<Record<string, Address>> = {
   // Classic mode ("PST"), Huma 2.0 Genesis pool (USDC).
-  '3FhoMDyKzQqxtGxnz9DfysfoGQKvgDnSFjoDGgguDCQN': address('28hFhD21Nka3stL27a8zZ4nRLgaDVxRYwJgeEVgeakzS'),
+  "3FhoMDyKzQqxtGxnz9DfysfoGQKvgDnSFjoDGgguDCQN": address(
+    "28hFhD21Nka3stL27a8zZ4nRLgaDVxRYwJgeEVgeakzS",
+  ),
   // Maxi mode ("mPST"), same Genesis pool.
-  AcHvC47rpoMAY22CbHRpp7vsAskRyhyZGYQCqdm4BWcH: address('28hFhD21Nka3stL27a8zZ4nRLgaDVxRYwJgeEVgeakzS'),
+  AcHvC47rpoMAY22CbHRpp7vsAskRyhyZGYQCqdm4BWcH: address(
+    "28hFhD21Nka3stL27a8zZ4nRLgaDVxRYwJgeEVgeakzS",
+  ),
 };
 
 export interface HumaFeeTier {
@@ -151,7 +154,7 @@ export interface HumaFeeTier {
 export interface HumaPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'deposit' (underlying -> mode share) | 'withdraw' (mode share -> underlying). */
-  direction: 'deposit' | 'withdraw';
+  direction: "deposit" | "withdraw";
   /** = cfg.pool: the ModeConfig account address (uniquely identifies this tradeable instrument). */
   modeConfig: Address;
   poolConfigAccount: Address;
@@ -189,10 +192,16 @@ function asConfig(cfg: PoolConfig): HumaPoolConfig {
 
 const poolRef = (cfg: HumaPoolConfig): string => `${SLUG}:${cfg.modeConfig}`;
 
-async function derivePda(programAddress: Address, seeds: readonly (Uint8Array | Address)[]): Promise<Address> {
+async function derivePda(
+  programAddress: Address,
+  seeds: readonly (Uint8Array | Address)[],
+): Promise<Address> {
   const encoder = getAddressEncoder();
-  const rawSeeds = seeds.map((s) => (typeof s === 'string' ? encoder.encode(s as Address) : s));
-  const [derived] = await getProgramDerivedAddress({ programAddress, seeds: rawSeeds as Uint8Array[] });
+  const rawSeeds = seeds.map((s) => (typeof s === "string" ? encoder.encode(s as Address) : s));
+  const [derived] = await getProgramDerivedAddress({
+    programAddress,
+    seeds: rawSeeds as Uint8Array[],
+  });
   return derived;
 }
 
@@ -212,7 +221,7 @@ const utf8 = getUtf8Encoder();
 export async function humaLenderStatePda(modeConfig: Address, lender: Address): Promise<Address> {
   const encoder = getAddressEncoder();
   return derivePda(HUMA_PROGRAM_ID, [
-    utf8.encode('lender_state') as Uint8Array,
+    utf8.encode("lender_state") as Uint8Array,
     encoder.encode(modeConfig) as Uint8Array,
     encoder.encode(lender) as Uint8Array,
   ]);
@@ -221,7 +230,8 @@ export async function humaLenderStatePda(modeConfig: Address, lender: Address): 
 // ── byte decoding (dynamic Vec/String layouts — see the module doc for the offset derivation) ──
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 const MODE_STATE_SIZE = 216; // assets(16)+losses(16)+cumulative_yields(16)+assets_refreshed_at(8)+padding(160)
 const REDEMPTION_SIZE = 376; // next_request_id(16)+last_request_id(16)+2*RedemptionGating(104)+padding(136)
@@ -255,7 +265,9 @@ function decodePoolState(data: Uint8Array, modeConfig: Address): DecodedPoolStat
     }
   }
   if (modeIndex === -1) {
-    throw new Error(`${SLUG} PoolState does not list mode_config ${modeConfig} in mode_config_keys`);
+    throw new Error(
+      `${SLUG} PoolState does not list mode_config ${modeConfig} in mode_config_keys`,
+    );
   }
 
   const afterModeConfigKeys = modeConfigKeysFirstOffset + modeCount * 32;
@@ -309,9 +321,19 @@ function decodePoolConfig(data: Uint8Array): DecodedPoolConfig {
 
   const liquiditySourceOffset = feeConfigsFirstOffset + feeCount * FEE_CONFIG_SIZE;
   const liquiditySourceTag = data[liquiditySourceOffset];
-  const liquiditySource = liquiditySourceTag === 1 ? pubkeyAt(data, liquiditySourceOffset + 1) : null;
+  const liquiditySource =
+    liquiditySourceTag === 1 ? pubkeyAt(data, liquiditySourceOffset + 1) : null;
 
-  return { humaConfig, poolOwnerTreasury, underlyingMint, liquidityCap, minDepositAmount, reserveLimit, feeTiers, liquiditySource };
+  return {
+    humaConfig,
+    poolOwnerTreasury,
+    underlyingMint,
+    liquidityCap,
+    minDepositAmount,
+    reserveLimit,
+    feeTiers,
+    liquiditySource,
+  };
 }
 
 /** The tier fee (bps) applying at a given liquid-asset-ratio (bps): the first (smallest threshold) tier the ratio is strictly below; 0 if none match. */
@@ -324,28 +346,38 @@ export function humaFeeBpsFor(liquidRatioBps: bigint, feeTiers: readonly HumaFee
 
 export const huma: SvmVenueAdapter = {
   slug: SLUG,
-  kind: 'constant-product', // no curve concept fits better; gates only rung defaults/helper inclusion (see types.ts).
+  kind: "constant-product", // no curve concept fits better; gates only rung defaults/helper inclusion (see types.ts).
   programId: HUMA_PROGRAM_ID,
 
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<HumaPoolConfig> {
     const modeConfig = pool;
     const poolConfigAccount = HUMA_CURATED_MODE_CONFIGS[modeConfig as string];
     if (poolConfigAccount === undefined) {
-      throw new Error(`${SLUG} unknown mode_config ${modeConfig} — not in the curated instrument table`);
+      throw new Error(
+        `${SLUG} unknown mode_config ${modeConfig} — not in the curated instrument table`,
+      );
     }
 
     const poolConfigData = await load(poolConfigAccount);
-    if (poolConfigData === null) throw new Error(`${SLUG} pool_config account ${poolConfigAccount} not found`);
+    if (poolConfigData === null)
+      throw new Error(`${SLUG} pool_config account ${poolConfigAccount} not found`);
     const decodedConfig = decodePoolConfig(poolConfigData);
 
-    const poolState = await derivePda(HUMA_PROGRAM_ID, [utf8.encode('pool_state') as Uint8Array, getAddressEncoder().encode(poolConfigAccount) as Uint8Array]);
+    const poolState = await derivePda(HUMA_PROGRAM_ID, [
+      utf8.encode("pool_state") as Uint8Array,
+      getAddressEncoder().encode(poolConfigAccount) as Uint8Array,
+    ]);
     const poolStateData = await load(poolState);
-    if (poolStateData === null) throw new Error(`${SLUG} pool_state account ${poolState} not found`);
+    if (poolStateData === null)
+      throw new Error(`${SLUG} pool_state account ${poolState} not found`);
     const decodedState = decodePoolState(poolStateData, modeConfig);
 
-    const poolAuthority = await derivePda(HUMA_PROGRAM_ID, [utf8.encode('pool_authority') as Uint8Array, getAddressEncoder().encode(poolConfigAccount) as Uint8Array]);
+    const poolAuthority = await derivePda(HUMA_PROGRAM_ID, [
+      utf8.encode("pool_authority") as Uint8Array,
+      getAddressEncoder().encode(poolConfigAccount) as Uint8Array,
+    ]);
     const modeMint = await derivePda(HUMA_PROGRAM_ID, [
-      utf8.encode('mode_mint') as Uint8Array,
+      utf8.encode("mode_mint") as Uint8Array,
       getAddressEncoder().encode(poolConfigAccount) as Uint8Array,
       getAddressEncoder().encode(modeConfig) as Uint8Array,
     ]);
@@ -364,35 +396,48 @@ export const huma: SvmVenueAdapter = {
       [decodedConfig.underlyingMint, null],
       [modeMint, modeMintData],
     ] as const;
-    const _mintDatas = await Promise.all(_mintEntries.map(([mint, preloaded]) => preloaded ?? load(mint)));
+    const _mintDatas = await Promise.all(
+      _mintEntries.map(([mint, preloaded]) => preloaded ?? load(mint)),
+    );
     for (let _i = 0; _i < _mintEntries.length; _i++) {
       const mint = _mintEntries[_i]![0];
       const mintData = _mintDatas[_i]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${modeConfig} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${modeConfig} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${modeConfig} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${modeConfig} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
     const poolUnderlyingToken = await findAta(poolAuthority, decodedConfig.underlyingMint);
     const poolUnderlyingTokenData = await load(poolUnderlyingToken);
-    if (poolUnderlyingTokenData === null) throw new Error(`${SLUG} pool_underlying_token account ${poolUnderlyingToken} not found`);
+    if (poolUnderlyingTokenData === null)
+      throw new Error(`${SLUG} pool_underlying_token account ${poolUnderlyingToken} not found`);
 
-    const poolOwnerTreasuryUnderlyingToken = await findAta(decodedConfig.poolOwnerTreasury, decodedConfig.underlyingMint);
+    const poolOwnerTreasuryUnderlyingToken = await findAta(
+      decodedConfig.poolOwnerTreasury,
+      decodedConfig.underlyingMint,
+    );
 
     const liquidityDeploymentState =
       decodedConfig.liquiditySource !== null
-        ? await derivePda(HUMA_PROGRAM_ID, [utf8.encode('deployment_state') as Uint8Array, getAddressEncoder().encode(decodedConfig.liquiditySource) as Uint8Array])
+        ? await derivePda(HUMA_PROGRAM_ID, [
+            utf8.encode("deployment_state") as Uint8Array,
+            getAddressEncoder().encode(decodedConfig.liquiditySource) as Uint8Array,
+          ])
         : null;
 
     return {
       venue: SLUG,
       pool: modeConfig,
-      direction: 'deposit',
+      direction: "deposit",
       modeConfig,
       poolConfigAccount,
       poolState,
@@ -432,15 +477,15 @@ export const huma: SvmVenueAdapter = {
     // params (k = the ref's index in quoteAccounts) — [pool-state=acc0,
     // mode-mint=acc1, pool-underlying=acc2] — not `accountUint("<ref>", …)`.
     // `accountUint` lowered to CAST_LE, so `.toLe()` is the exact endianness match.
-    const poolState = 'acc0';
-    const modeMint = 'acc1';
-    const poolUnderlying = 'acc2';
+    const poolState = "acc0";
+    const modeMint = "acc1";
+    const poolUnderlying = "acc2";
 
     // NO ternaries: the compiler requires a ternary to be the WHOLE (unnested)
     // right-hand side of an assignment, so every branch here is a plain
     // top-level `if (cond) { assign }` — the same idiom every other stateful
     // adapter in this repo uses (see e.g. goonfi-v2/ladder.ts's emitSetup).
-    if (c.direction === 'deposit') {
+    if (c.direction === "deposit") {
       return [
         `const humaAssets${i} = svm.sload(${poolState}, ${c.modeAssetsOffset}, 16).toLe();`,
         `const humaSupply${i} = svm.sload(${modeMint}, 36, 8).toLe();`,
@@ -457,7 +502,7 @@ export const huma: SvmVenueAdapter = {
         `    }`,
         `  }`,
         `}`,
-      ].join('\n');
+      ].join("\n");
     }
 
     return [
@@ -478,7 +523,7 @@ export const huma: SvmVenueAdapter = {
       `  q${i} = humaGross${i} - humaGross${i} * humaFee${i} / 10000;`,
       `  if (q${i} > ${c.reserveLimit}) { q${i} = ${c.reserveLimit} }`,
       `}`,
-    ].join('\n');
+    ].join("\n");
   },
 
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
@@ -486,7 +531,7 @@ export const huma: SvmVenueAdapter = {
     if (amountIn <= 0n) throw new Error(`${SLUG} amountIn must be positive, got ${amountIn}`);
     if (amountIn > U64_MAX) throw new Error(`${SLUG} amountIn must fit u64, got ${amountIn}`);
 
-    if (c.direction === 'deposit') {
+    if (c.direction === "deposit") {
       const data = encodeDepositData(amountIn);
       return { programId: HUMA_PROGRAM_ID, data, accounts: depositAccounts(c, user) };
     }
@@ -501,16 +546,24 @@ export const huma: SvmVenueAdapter = {
     const poolState = state[c.poolState];
     const modeMintData = state[c.modeMint];
     const poolUnderlyingData = state[c.poolUnderlyingToken];
-    if (poolState === undefined) throw new Error(`${SLUG} referenceQuote state is missing pool_state ${c.poolState}`);
-    if (modeMintData === undefined) throw new Error(`${SLUG} referenceQuote state is missing mode_mint ${c.modeMint}`);
-    if (poolUnderlyingData === undefined) throw new Error(`${SLUG} referenceQuote state is missing pool_underlying_token ${c.poolUnderlyingToken}`);
+    if (poolState === undefined)
+      throw new Error(`${SLUG} referenceQuote state is missing pool_state ${c.poolState}`);
+    if (modeMintData === undefined)
+      throw new Error(`${SLUG} referenceQuote state is missing mode_mint ${c.modeMint}`);
+    if (poolUnderlyingData === undefined)
+      throw new Error(
+        `${SLUG} referenceQuote state is missing pool_underlying_token ${c.poolUnderlyingToken}`,
+      );
 
-    if (poolState[9] !== 1) throw new Error(`${SLUG} pool ${c.poolConfigAccount} is not On (status byte ${poolState[9]})`);
+    if (poolState[9] !== 1)
+      throw new Error(
+        `${SLUG} pool ${c.poolConfigAccount} is not On (status byte ${poolState[9]})`,
+      );
 
     const modeAssets = readUintLE(poolState, c.modeAssetsOffset, 16);
     const modeSupply = readUintLE(modeMintData, 36, 8);
 
-    if (c.direction === 'deposit') {
+    if (c.direction === "deposit") {
       const room = c.liquidityCap > modeAssets ? c.liquidityCap - modeAssets : 0n;
       const effIn = amountIn < room ? amountIn : room;
       if (effIn < c.minDepositAmount) return 0n;
@@ -606,13 +659,23 @@ function instantWithdrawAccounts(c: HumaPoolConfig, user: SwapUser): VenueAccoun
     { ref: `${poolRef(c)}:pool-authority`, address: c.poolAuthority, writable: true },
     { ref: `${poolRef(c)}:pool-underlying`, address: c.poolUnderlyingToken, writable: true },
     { ref: user.outAta, writable: true },
-    { ref: `${poolRef(c)}:treasury-underlying`, address: c.poolOwnerTreasuryUnderlyingToken, writable: true },
+    {
+      ref: `${poolRef(c)}:treasury-underlying`,
+      address: c.poolOwnerTreasuryUnderlyingToken,
+      writable: true,
+    },
     { ref: user.inAta, writable: true },
     { ref: `${poolRef(c)}:underlying-token-program`, address: TOKEN_PROGRAM },
     { ref: `${poolRef(c)}:mode-token-program`, address: TOKEN_PROGRAM },
   ];
 }
 
-export { depositAccounts as humaDepositAccounts, instantWithdrawAccounts as humaInstantWithdrawAccounts };
-export { encodeDepositData as humaEncodeDepositData, encodeInstantWithdrawData as humaEncodeInstantWithdrawData };
+export {
+  depositAccounts as humaDepositAccounts,
+  instantWithdrawAccounts as humaInstantWithdrawAccounts,
+};
+export {
+  encodeDepositData as humaEncodeDepositData,
+  encodeInstantWithdrawData as humaEncodeInstantWithdrawData,
+};
 export { MODE_STATE_SIZE as HUMA_MODE_STATE_SIZE };

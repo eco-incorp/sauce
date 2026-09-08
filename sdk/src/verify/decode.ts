@@ -66,7 +66,8 @@ import { keccak256, type Hex } from "viem";
 import { SETTLE_WIRE } from "./wire.js";
 
 /** Canonical `args` length for `count` tokens: the three head words, the count word, the elements. */
-const argsLengthFor = (count: bigint): bigint => BigInt(SETTLE_WIRE.HEAD_BYTES + SETTLE_WIRE.WORD_BYTES) + BigInt(SETTLE_WIRE.WORD_BYTES) * count;
+const argsLengthFor = (count: bigint): bigint =>
+  BigInt(SETTLE_WIRE.HEAD_BYTES + SETTLE_WIRE.WORD_BYTES) + BigInt(SETTLE_WIRE.WORD_BYTES) * count;
 
 /** The low 20 bytes of a word — an address's own bits. A value ABOVE this has dirty upper bytes and
  *  is not a clean address; `dirtyWord` (§ below) reports those upper bytes themselves. */
@@ -160,7 +161,8 @@ function hexToBytesLocal(hex: string): Uint8Array | null {
 function wordAt(args: Uint8Array, slot: number): bigint {
   const start = slot * SETTLE_WIRE.WORD_BYTES;
   let value = 0n;
-  for (let i = start; i < start + SETTLE_WIRE.WORD_BYTES; i++) value = (value << 8n) | BigInt(args[i]!);
+  for (let i = start; i < start + SETTLE_WIRE.WORD_BYTES; i++)
+    value = (value << 8n) | BigInt(args[i]!);
   return value;
 }
 
@@ -197,7 +199,10 @@ export interface SettleParse {
 /** Best-effort single left-to-right pass — never throws. This is the shared engine both
  *  `decodeSettleProgram` (throws on `parse.fatal`) and `bestEffortDecode` (keeps whatever DID
  *  parse even when a later stage failed) run on top of. */
-export function parseSettleProgram(payload: Hex, programBytes: number = SETTLE_WIRE.PROGRAM_BYTES): SettleParse {
+export function parseSettleProgram(
+  payload: Hex,
+  programBytes: number = SETTLE_WIRE.PROGRAM_BYTES,
+): SettleParse {
   const decodedHex = hexToBytesLocal(payload);
   const bytes = decodedHex ?? new Uint8Array(0);
   const result: SettleParse = {
@@ -281,24 +286,33 @@ export function parseSettleProgram(payload: Hex, programBytes: number = SETTLE_W
   }
 
   const count = Number(result.tokenCount);
-  for (let i = 0; i < count; i++) result.tokenWords.push(wordAt(args, SETTLE_WIRE.HEAD_SLOTS + 1 + i));
+  for (let i = 0; i < count; i++)
+    result.tokenWords.push(wordAt(args, SETTLE_WIRE.HEAD_SLOTS + 1 + i));
 
   if (count === 0) {
-    result.fatal = result.fatal ?? { code: "TOKENS_EMPTY", message: "token count is 0 — a settle sweeps at least its floor token" };
+    result.fatal = result.fatal ?? {
+      code: "TOKENS_EMPTY",
+      message: "token count is 0 — a settle sweeps at least its floor token",
+    };
   }
 
   // Within the dirty check only: the recipient word precedes the array, so its complaint wins over a
   // token's. This says nothing about ordering ACROSS codes -- `fatal` is first-wins by check position,
   // not by byte position, and ARGS_OVERLONG and TOKENS_EMPTY are both recorded above. Trailing slack
   // plus a dirty recipient reports ARGS_OVERLONG.
-  const dirtyToken = result.tokenWords.map((word, i) => dirtyWord(word, `tokens[${i}]`)).find((message) => message !== null);
+  const dirtyToken = result.tokenWords
+    .map((word, i) => dirtyWord(word, `tokens[${i}]`))
+    .find((message) => message !== null);
   const dirty = dirtyWord(recipientWord, "recipient") ?? dirtyToken ?? null;
   if (dirty !== null) {
     result.fatal = result.fatal ?? { code: "DIRTY_ADDRESS_WORD", message: dirty };
   }
 
   if (!result.recipientNonZero) {
-    result.fatal = result.fatal ?? { code: "ZERO_RECIPIENT", message: "recipient word decodes to the zero address" };
+    result.fatal = result.fatal ?? {
+      code: "ZERO_RECIPIENT",
+      message: "recipient word decodes to the zero address",
+    };
   }
   return result;
 }
@@ -324,7 +338,14 @@ function render(payload: unknown): string {
 
 function parseToDecoded(parse: SettleParse): DecodedSettleProgram | null {
   const { program, programHash, args, minOut, recipient, tokenWords } = parse;
-  if (program === null || programHash === null || args === null || minOut === null || recipient === null || tokenWords.length === 0) {
+  if (
+    program === null ||
+    programHash === null ||
+    args === null ||
+    minOut === null ||
+    recipient === null ||
+    tokenWords.length === 0
+  ) {
     return null;
   }
   const tokens = tokenWords.map((w) => toAddress(w & ADDRESS_MASK));
@@ -363,7 +384,8 @@ export function bestEffortDecode(parse: SettleParse): DecodedSettleProgram | nul
   // a caller-built `SettleParse` (the type is exported and is this function's only parameter) and the
   // decline would silently stop firing -- reporting tokens read at offset 96 for a payload the engine
   // reads elsewhere, the exact wrong answer this exists to refuse.
-  if (parse.tokensOffset !== null && parse.tokensOffset !== BigInt(SETTLE_WIRE.HEAD_BYTES)) return null;
+  if (parse.tokensOffset !== null && parse.tokensOffset !== BigInt(SETTLE_WIRE.HEAD_BYTES))
+    return null;
   if (parse.recipientWord !== null && parse.recipientWord !== (parse.recipient ?? 0n)) return null;
 
   return parseToDecoded(parse);
@@ -379,7 +401,10 @@ export function bestEffortDecode(parse: SettleParse): DecodedSettleProgram | nul
  * It does NOT prove those 391 bytes are the settle program you audited — any 391-byte prefix
  * passes. Use `validateSettleProgram` when that matters, which is nearly always.
  */
-export function decodeSettleProgram(payload: Hex, programBytes: number = SETTLE_WIRE.PROGRAM_BYTES): DecodedSettleProgram {
+export function decodeSettleProgram(
+  payload: Hex,
+  programBytes: number = SETTLE_WIRE.PROGRAM_BYTES,
+): DecodedSettleProgram {
   const parse = parseSettleProgram(payload, programBytes);
   if (parse.fatal) {
     throw new SettleDecodeError(parse.fatal.code, `decodeSettleProgram: ${parse.fatal.message}`);
@@ -417,7 +442,9 @@ export function decodeSettleProgram(payload: Hex, programBytes: number = SETTLE_
  */
 export function validateSettleProgram(
   payload: Hex,
-  accepted: readonly (Hex | ProgramPin)[] = [{ hash: SETTLE_WIRE.PROGRAM_HASH as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES }],
+  accepted: readonly (Hex | ProgramPin)[] = [
+    { hash: SETTLE_WIRE.PROGRAM_HASH as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES },
+  ],
 ): DecodedSettleProgram {
   // Compared case-insensitively: `programHash` is always viem's lowercase keccak, so a historical pin
   // supplied in any other spelling would silently fail to match and orphan exactly the payloads this
@@ -452,17 +479,22 @@ export function validateSettleProgram(
       continue;
     }
     if (candidate.programHash.toLowerCase() === pin.hash) return candidate;
-    hashMismatch = hashMismatch ?? new SettleDecodeError(
-      "PROGRAM_HASH",
-      `validateSettleProgram: program hashes to ${candidate.programHash}, not the pinned ${pin.hash}`,
-    );
+    hashMismatch =
+      hashMismatch ??
+      new SettleDecodeError(
+        "PROGRAM_HASH",
+        `validateSettleProgram: program hashes to ${candidate.programHash}, not the pinned ${pin.hash}`,
+      );
   }
   if (hashMismatch !== null) throw hashMismatch;
   if (parseError !== null) throw parseError;
 
   // Only reachable for an empty pin list, which accepts nothing and would otherwise return a
   // successful decode of a program no caller vouched for.
-  throw new SettleDecodeError("PROGRAM_HASH", "validateSettleProgram: no accepted program pins were supplied");
+  throw new SettleDecodeError(
+    "PROGRAM_HASH",
+    "validateSettleProgram: no accepted program pins were supplied",
+  );
 }
 
 /** `BigInt` is the wrong gate for a caller-supplied address: `BigInt("")` is `0n` rather than a throw,
@@ -472,7 +504,9 @@ export function validateSettleProgram(
 function coerceAddressValue(value: bigint | `0x${string}`, label: string): bigint {
   if (typeof value === "bigint") return value;
   if (typeof value !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(value)) {
-    throw new RangeError(`encodeSettleProgram: ${label} is not a 0x-prefixed hex address: ${String(value)}`);
+    throw new RangeError(
+      `encodeSettleProgram: ${label} is not a 0x-prefixed hex address: ${String(value)}`,
+    );
   }
 
   return BigInt(value);
@@ -499,8 +533,14 @@ function coerceAddressValue(value: bigint | `0x${string}`, label: string): bigin
  * shipped alongside the claim they support. `SETTLE_WIRE.PROGRAM_HASH` is what to check them
  * against once you have them.
  */
-export function encodeSettleProgram(tokens: readonly (bigint | `0x${string}`)[], minOut: bigint, recipient: bigint | `0x${string}`, programHex: Hex): Hex {
-  if (tokens.length === 0) throw new RangeError("encodeSettleProgram: tokens must have at least one entry");
+export function encodeSettleProgram(
+  tokens: readonly (bigint | `0x${string}`)[],
+  minOut: bigint,
+  recipient: bigint | `0x${string}`,
+  programHex: Hex,
+): Hex {
+  if (tokens.length === 0)
+    throw new RangeError("encodeSettleProgram: tokens must have at least one entry");
   const tokenValues = tokens.map((token, i) => coerceAddressValue(token, `tokens[${i}]`));
   const recipientValue = coerceAddressValue(recipient, "recipient");
   if (recipientValue === 0n) throw new RangeError("encodeSettleProgram: recipient must be nonzero");
@@ -510,20 +550,27 @@ export function encodeSettleProgram(tokens: readonly (bigint | `0x${string}`)[],
   // address(0), defeating the nonzero check above; a negative token would sweep it.
   for (const [i, value] of tokenValues.entries()) {
     if (value < 0n || value > ADDRESS_MASK) {
-      throw new RangeError(`encodeSettleProgram: tokens[${i}] does not fit in ${SETTLE_WIRE.ADDRESS_BYTES} bytes`);
+      throw new RangeError(
+        `encodeSettleProgram: tokens[${i}] does not fit in ${SETTLE_WIRE.ADDRESS_BYTES} bytes`,
+      );
     }
   }
   if (recipientValue < 0n || recipientValue > ADDRESS_MASK) {
-    throw new RangeError(`encodeSettleProgram: recipient does not fit in ${SETTLE_WIRE.ADDRESS_BYTES} bytes`);
+    throw new RangeError(
+      `encodeSettleProgram: recipient does not fit in ${SETTLE_WIRE.ADDRESS_BYTES} bytes`,
+    );
   }
   // Guarded like the addresses above, and for the same reason: a runtime caller bypassing the type
   // system (minOut deserialized from JSON as a number) would otherwise reach the word-write loop and
   // raise TypeError from a BigInt mix, where every rejection here is a RangeError callers catch.
-  if (typeof minOut !== "bigint") throw new RangeError(`encodeSettleProgram: minOut must be a bigint, got ${typeof minOut}`);
-  if (minOut < 0n || minOut >= 1n << 256n) throw new RangeError(`encodeSettleProgram: minOut ${minOut} is out of uint256 range`);
+  if (typeof minOut !== "bigint")
+    throw new RangeError(`encodeSettleProgram: minOut must be a bigint, got ${typeof minOut}`);
+  if (minOut < 0n || minOut >= 1n << 256n)
+    throw new RangeError(`encodeSettleProgram: minOut ${minOut} is out of uint256 range`);
 
   const programBytes = hexToBytesLocal(programHex);
-  if (programBytes === null) throw new RangeError(`encodeSettleProgram: programHex is not valid hex: ${programHex}`);
+  if (programBytes === null)
+    throw new RangeError(`encodeSettleProgram: programHex is not valid hex: ${programHex}`);
   // Deliberately NOT compared against `SETTLE_WIRE.PROGRAM_BYTES`. `programHex` is the program the
   // caller compiled, and §5 offers this as the equivalent of `validateSettleProgram` — which now
   // accepts historical pins of other lengths. Pinning the current constant here would make the two
@@ -532,7 +579,13 @@ export function encodeSettleProgram(tokens: readonly (bigint | `0x${string}`)[],
     throw new RangeError("encodeSettleProgram: programHex is empty");
   }
 
-  const words = [BigInt(SETTLE_WIRE.HEAD_BYTES), minOut, recipientValue, BigInt(tokenValues.length), ...tokenValues];
+  const words = [
+    BigInt(SETTLE_WIRE.HEAD_BYTES),
+    minOut,
+    recipientValue,
+    BigInt(tokenValues.length),
+    ...tokenValues,
+  ];
   const out = new Uint8Array(programBytes.length + words.length * SETTLE_WIRE.WORD_BYTES);
   out.set(programBytes, 0);
   words.forEach((value, slot) => {

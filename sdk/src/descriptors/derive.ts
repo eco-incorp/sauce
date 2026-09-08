@@ -1,8 +1,20 @@
-import { getAddress, toFunctionSelector, toFunctionSignature, type Abi, type AbiFunction, type Address } from "viem";
+import {
+  getAddress,
+  toFunctionSelector,
+  toFunctionSignature,
+  type Abi,
+  type AbiFunction,
+  type Address,
+} from "viem";
 import type { ChainDeployment, ProtocolInfo } from "../core/types.js";
 import { requireChain, type ChainSlug } from "../chains/canonical.js";
 import type { ContractLink } from "./links.js";
-import type { ContractCoverage, ContractDescriptor, DescriptorMethod, StateMutability } from "./types.js";
+import type {
+  ContractCoverage,
+  ContractDescriptor,
+  DescriptorMethod,
+  StateMutability,
+} from "./types.js";
 
 /**
  * Default contract-name derivation: `abiExport` minus its trailing "ABI"
@@ -14,7 +26,10 @@ import type { ContractCoverage, ContractDescriptor, DescriptorMethod, StateMutab
 export function deriveContractName(protocolName: string, abiExport: string): string {
   const withoutSuffix = abiExport.endsWith("ABI") ? abiExport.slice(0, -3) : abiExport;
   const prefix = protocolName.replace(/[^a-zA-Z0-9]/g, "");
-  if (withoutSuffix.toLowerCase().startsWith(prefix.toLowerCase()) && withoutSuffix.length > prefix.length) {
+  if (
+    withoutSuffix.toLowerCase().startsWith(prefix.toLowerCase()) &&
+    withoutSuffix.length > prefix.length
+  ) {
     return withoutSuffix.slice(prefix.length);
   }
   return withoutSuffix;
@@ -46,7 +61,10 @@ export function buildMethods(abi: Abi): DescriptorMethod[] {
 }
 
 /** role key -> sparse, EIP-55-checksummed per-chain address map. `undefined` roleKey (kind:"interface") -> {}. */
-export function buildPerChainAddress(chains: readonly ChainDeployment[], roleKey: string | undefined): Record<number, Address> {
+export function buildPerChainAddress(
+  chains: readonly ChainDeployment[],
+  roleKey: string | undefined,
+): Record<number, Address> {
   const out: Record<number, Address> = {};
   if (roleKey === undefined) return out;
   for (const deployment of chains) {
@@ -65,7 +83,10 @@ export function deriveChainSlugs(perChainAddress: Readonly<Record<number, Addres
     .map((id) => requireChain(id).slug as ChainSlug);
 }
 
-export function buildCoverage(methods: readonly DescriptorMethod[], link: ContractLink): ContractCoverage {
+export function buildCoverage(
+  methods: readonly DescriptorMethod[],
+  link: ContractLink,
+): ContractCoverage {
   return {
     abiSource: "sdk-registry",
     completeness: "partial",
@@ -76,11 +97,19 @@ export function buildCoverage(methods: readonly DescriptorMethod[], link: Contra
 }
 
 /** Assembles one full ContractDescriptor from a link entry plus the protocol's already-resolved data. */
-export function buildDescriptor(link: ContractLink, protocolInfo: ProtocolInfo, abi: Abi | undefined): ContractDescriptor {
+export function buildDescriptor(
+  link: ContractLink,
+  protocolInfo: ProtocolInfo,
+  abi: Abi | undefined,
+): ContractDescriptor {
   const resolvedAbi: Abi = abi ?? [];
   const methods = buildMethods(resolvedAbi);
   const perChainAddress = buildPerChainAddress(protocolInfo.chains, link.roleKey);
-  const contract = link.contract ?? (link.abiExport !== undefined ? deriveContractName(protocolInfo.name, link.abiExport) : "Unknown");
+  const contract =
+    link.contract ??
+    (link.abiExport !== undefined
+      ? deriveContractName(protocolInfo.name, link.abiExport)
+      : "Unknown");
 
   return {
     protocol: link.protocol,

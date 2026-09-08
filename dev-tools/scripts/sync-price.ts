@@ -47,7 +47,9 @@ async function main() {
   console.log(`Token0: ${result.token0}`);
   console.log(`Token1: ${result.token1}`);
   console.log(`Fee: ${result.fee} (${result.fee / 10000}%)`);
-  console.log(`\nPrice (t1/t0): ${formatSqrtPrice(result.before.sqrtPriceX96)} → ${formatSqrtPrice(result.after.sqrtPriceX96)}`);
+  console.log(
+    `\nPrice (t1/t0): ${formatSqrtPrice(result.before.sqrtPriceX96)} → ${formatSqrtPrice(result.after.sqrtPriceX96)}`,
+  );
   console.log(`Token0 balance: ${result.before.balance0} → ${result.after.balance0}`);
   console.log(`Token1 balance: ${result.before.balance1} → ${result.after.balance1}`);
   console.log("\nDone!");

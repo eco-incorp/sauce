@@ -5,22 +5,22 @@
  * bytes are a minimal synthesized 605-byte pool account with the mints at
  * their real offsets.
  */
-import { address, getAddressEncoder } from '@solana/kit';
+import { address, getAddressEncoder } from "@solana/kit";
 import {
   fetchWhalestreetPoolConfig,
   WHALESTREET_OFF_MINT_A,
   WHALESTREET_OFF_MINT_B,
   WHALESTREET_OFF_VAULT_A,
   WHALESTREET_OFF_VAULT_B,
-} from '../../../src/svm/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+} from "../../../src/svm/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('Hhugr5Bw2NpmM4zKgDcQpypnVG7UPjcFFtHeaTbz764h');
-const MINT_A = address('So11111111111111111111111111111111111111112'); // wSOL
-const MINT_B = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'); // USDC
-const VAULT_A = address('5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV');
-const VAULT_B = address('9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx');
+const POOL = address("Hhugr5Bw2NpmM4zKgDcQpypnVG7UPjcFFtHeaTbz764h");
+const MINT_A = address("So11111111111111111111111111111111111111112"); // wSOL
+const MINT_B = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
+const VAULT_A = address("5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV");
+const VAULT_B = address("9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx");
 
 /** A minimal 605-byte WhaleStreet pool with mints/vaults at their real offsets. */
 function poolBytes(): Uint8Array {
@@ -42,20 +42,23 @@ function loader(target: string, mintData: Uint8Array): AccountLoader {
   };
 }
 
-describe('whalestreet Token-2022 self-drop', () => {
-  test('legacy mints (unvendored) decode — legacy path unchanged', async () => {
-    const base: AccountLoader = async (addr) => (String(addr) === String(POOL) ? poolBytes() : null);
+describe("whalestreet Token-2022 self-drop", () => {
+  test("legacy mints (unvendored) decode — legacy path unchanged", async () => {
+    const base: AccountLoader = async (addr) =>
+      String(addr) === String(POOL) ? poolBytes() : null;
     const cfg = await fetchWhalestreetPoolConfig(base, POOL);
-    expect(cfg.venue).toBe('whalestreet');
+    expect(cfg.venue).toBe("whalestreet");
     expect(cfg.mintA).toBe(MINT_A);
     expect(cfg.mintB).toBe(MINT_B);
   });
 
-  test('a Token-2022 mintA self-drops', async () => {
-    await expect(fetchWhalestreetPoolConfig(loader(String(MINT_A), makeT22Mint()), POOL)).rejects.toThrow(/dropping pool/);
+  test("a Token-2022 mintA self-drops", async () => {
+    await expect(
+      fetchWhalestreetPoolConfig(loader(String(MINT_A), makeT22Mint()), POOL),
+    ).rejects.toThrow(/dropping pool/);
   });
 
-  test('a NonTransferable mintB self-drops as un-routable', async () => {
+  test("a NonTransferable mintB self-drops as un-routable", async () => {
     await expect(
       fetchWhalestreetPoolConfig(loader(String(MINT_B), makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
     ).rejects.toThrow(/dropping pool/);

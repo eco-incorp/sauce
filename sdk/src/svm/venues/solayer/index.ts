@@ -134,17 +134,17 @@
  * this family, so this adapter gates on that (Tokenkeg-only, like most of
  * this recipe's other venues) rather than modeling transfer-fee extensions.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'solayer';
-export const SOLAYER_PROGRAM_ID = address('endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT');
-export const SOLAYER_SSOL_MINT = address('sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "solayer";
+export const SOLAYER_PROGRAM_ID = address("endoLNCKTqDn8gSVnN2hDdpgACUPWHZTwoYnnMybpAT");
+export const SOLAYER_SSOL_MINT = address("sSo14endRuUbvQaJS3dq36Q829a3A6BEfoeeRGJywEh");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const ENDO_AVS_ACCOUNT_SIZE = 443;
 /** sha256('account:EndoAVS')[0..8] — verified identical across all 20 live pool accounts. */
@@ -161,7 +161,7 @@ const OFF_VAULT = 105;
 const OFF_NAME_LEN = 137;
 const OFF_NAME = 141;
 const SPL_TOKEN_ACCOUNT_SIZE = 165;
-export type SolayerDirection = 'delegate' | 'undelegate';
+export type SolayerDirection = "delegate" | "undelegate";
 
 export interface SolayerPoolConfig extends PoolConfig {
   venue: typeof SLUG;
@@ -178,11 +178,16 @@ function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): b
 }
 
 /** Off-chain, once per pool: decode the EndoAVS account and gate its two mints. Read-only against the loader. */
-export async function fetchSolayerPoolConfig(load: AccountLoader, pool: Address): Promise<SolayerPoolConfig> {
+export async function fetchSolayerPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<SolayerPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool account ${pool} not found`);
   if (data.length !== ENDO_AVS_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} data must be ${ENDO_AVS_ACCOUNT_SIZE} bytes (EndoAVS), got ${data.length}`);
+    throw new Error(
+      `${SLUG} pool ${pool} data must be ${ENDO_AVS_ACCOUNT_SIZE} bytes (EndoAVS), got ${data.length}`,
+    );
   }
   if (!hasDiscriminator(data, ENDO_AVS_DISCRIMINATOR)) {
     throw new Error(`${SLUG} pool ${pool} has a foreign discriminator (not an EndoAVS account)`);
@@ -190,7 +195,9 @@ export async function fetchSolayerPoolConfig(load: AccountLoader, pool: Address)
 
   const codec = getAddressCodec();
   const authority = codec.decode(data.subarray(OFF_AUTHORITY, OFF_AUTHORITY + 32)) as Address;
-  const receiptMint = codec.decode(data.subarray(OFF_RECEIPT_MINT, OFF_RECEIPT_MINT + 32)) as Address;
+  const receiptMint = codec.decode(
+    data.subarray(OFF_RECEIPT_MINT, OFF_RECEIPT_MINT + 32),
+  ) as Address;
   const lstMint = codec.decode(data.subarray(OFF_LST_MINT, OFF_LST_MINT + 32)) as Address;
   const vault = codec.decode(data.subarray(OFF_VAULT, OFF_VAULT + 32)) as Address;
   const nameLen = Number(readUintLE(data, OFF_NAME_LEN, 4));
@@ -213,25 +220,33 @@ export async function fetchSolayerPoolConfig(load: AccountLoader, pool: Address)
   ] as const) {
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   const vaultData = await load(vault);
   if (vaultData === null) throw new Error(`${SLUG} pool ${pool} vault ${vault} not found`);
   if (vaultData.length !== SPL_TOKEN_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} vault ${vault} must be a ${SPL_TOKEN_ACCOUNT_SIZE}-byte SPL token account, got ${vaultData.length} bytes`);
+    throw new Error(
+      `${SLUG} pool ${pool} vault ${vault} must be a ${SPL_TOKEN_ACCOUNT_SIZE}-byte SPL token account, got ${vaultData.length} bytes`,
+    );
   }
   const vaultMint = codec.decode(vaultData.subarray(0, 32));
   if (vaultMint !== lstMint) {
-    throw new Error(`${SLUG} pool ${pool} vault ${vault} mint ${vaultMint} does not match the pool's lst mint ${lstMint}`);
+    throw new Error(
+      `${SLUG} pool ${pool} vault ${vault} mint ${vaultMint} does not match the pool's lst mint ${lstMint}`,
+    );
   }
 
-  return { venue: SLUG, pool, direction: 'delegate', authority, receiptMint, lstMint, vault, name };
+  return { venue: SLUG, pool, direction: "delegate", authority, receiptMint, lstMint, vault, name };
 }
 
 /** Family facade for the recipe orchestrator. */
@@ -241,4 +256,3 @@ export const solayer = {
   tokenProgram: TOKEN_PROGRAM,
   fetchPoolConfig: fetchSolayerPoolConfig,
 };
-

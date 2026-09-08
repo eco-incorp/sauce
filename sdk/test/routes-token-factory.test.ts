@@ -46,8 +46,12 @@ describe("rewriteTokenFactory (unit)", () => {
   });
 
   it("fires on ANY argument shape — a variable or an ambient symbol, not just a literal", () => {
-    expect(rewriteTokenFactory("Token(USDC).approve(a, b);").source).toBe("IERC20.at(USDC).approve(a, b);");
-    expect(rewriteTokenFactory("Token(addr).transfer(a, b);").source).toBe("IERC20.at(addr).transfer(a, b);");
+    expect(rewriteTokenFactory("Token(USDC).approve(a, b);").source).toBe(
+      "IERC20.at(USDC).approve(a, b);",
+    );
+    expect(rewriteTokenFactory("Token(addr).transfer(a, b);").source).toBe(
+      "IERC20.at(addr).transfer(a, b);",
+    );
   });
 
   it("rewrites every site", () => {
@@ -107,21 +111,39 @@ describe("rewriteTokenFactory (unit)", () => {
 
 describe("Token(addr) through openRoute", () => {
   it("Token(addr).approve(spender, amt) compiles and contains the ERC20 approve selector", () => {
-    const built = openRoute("base", `Token(${USDC}).approve(${BigInt(SPENDER)}n, 5n);`, evmOptions()).reward(0n);
+    const built = openRoute(
+      "base",
+      `Token(${USDC}).approve(${BigInt(SPENDER)}n, 5n);`,
+      evmOptions(),
+    ).reward(0n);
     const code = hex(built.compiled.bytecode[0]!);
     expect(code.length).toBeGreaterThan(0);
     expect(code.includes(APPROVE_SELECTOR)).toBe(true);
   });
 
   it("the binding form `let t = Token(addr); t.approve(...)` compiles the same bytes as the direct chain", () => {
-    const direct = openRoute("base", `Token(${USDC}).approve(${BigInt(SPENDER)}n, 5n);`, evmOptions()).reward(0n);
-    const bound = openRoute("base", `let t = Token(${USDC});\nt.approve(${BigInt(SPENDER)}n, 5n);`, evmOptions()).reward(0n);
-    expect(Array.from(bound.compiled.bytecode[0]!)).toEqual(Array.from(direct.compiled.bytecode[0]!));
+    const direct = openRoute(
+      "base",
+      `Token(${USDC}).approve(${BigInt(SPENDER)}n, 5n);`,
+      evmOptions(),
+    ).reward(0n);
+    const bound = openRoute(
+      "base",
+      `let t = Token(${USDC});\nt.approve(${BigInt(SPENDER)}n, 5n);`,
+      evmOptions(),
+    ).reward(0n);
+    expect(Array.from(bound.compiled.bytecode[0]!)).toEqual(
+      Array.from(direct.compiled.bytecode[0]!),
+    );
   });
 
   it("Token(USDC) resolves its argument through the ambient chain define", () => {
     // `USDC` here is not a literal — it is the chain-scoped ambient define, resolved underneath.
-    const built = openRoute("base", `Token(USDC).transfer(${BigInt(SPENDER)}n, 5n);`, evmOptions()).reward(0n);
+    const built = openRoute(
+      "base",
+      `Token(USDC).transfer(${BigInt(SPENDER)}n, 5n);`,
+      evmOptions(),
+    ).reward(0n);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 

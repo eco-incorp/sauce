@@ -39,11 +39,9 @@ export function toUniversalAddress(input: AddressInput): UniversalAddress {
     return input.toLowerCase() as UniversalAddress;
   }
   if (byteLength === 20) {
-    return (("0x" + "00".repeat(12) + body).toLowerCase()) as UniversalAddress;
+    return ("0x" + "00".repeat(12) + body).toLowerCase() as UniversalAddress;
   }
-  throw new Error(
-    `Invalid address: expected 20 or 32 bytes, got ${byteLength} bytes ('${input}')`,
-  );
+  throw new Error(`Invalid address: expected 20 or 32 bytes, got ${byteLength} bytes ('${input}')`);
 }
 
 /**

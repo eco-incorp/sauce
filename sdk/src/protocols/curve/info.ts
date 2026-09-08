@@ -4,7 +4,8 @@ import { deployments } from "./addresses.js";
 export const protocolInfo: ProtocolInfo = {
   name: "Curve Finance",
   slug: "curve",
-  description: "StableSwap AMM optimized for low-slippage swaps between pegged assets (stablecoins, wrapped tokens).",
+  description:
+    "StableSwap AMM optimized for low-slippage swaps between pegged assets (stablecoins, wrapped tokens).",
   website: "https://curve.fi",
   github: "https://github.com/curvefi",
   category: "dex",

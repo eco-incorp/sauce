@@ -33,22 +33,22 @@
  * Byte offsets verified against the obric_solana IDL (SSTradingPair) and a
  * real mainnet dump of pool AJ5HfGY32igLgUbDtfNRdrkjTSYkCVKdhmnFFfcZMJ1E.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import { INSTRUCTIONS_SYSVAR } from '../../cpi-probe.js';
-import type { CpiTier } from '../../cpi-probe.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import { INSTRUCTIONS_SYSVAR } from "../../cpi-probe.js";
+import type { CpiTier } from "../../cpi-probe.js";
 
-const SLUG = 'obric-v2';
+const SLUG = "obric-v2";
 
-export const OBRIC_V2_PROGRAM_ID = address('obriQD1zbpyLz95G5n7nJe6a4DPjpFwa5XYPoNm113y');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const OBRIC_V2_PROGRAM_ID = address("obriQD1zbpyLz95G5n7nJe6a4DPjpFwa5XYPoNm113y");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** The Pyth-v2-format relay program Obric migrated onto (documented layout). */
-export const PYTH_V2_RELAY_OWNER = 'Feed29BgSBmKrK5jQsLR4VcwJpJr1eHfg5sX4TQbLGrV';
+export const PYTH_V2_RELAY_OWNER = "Feed29BgSBmKrK5jQsLR4VcwJpJr1eHfg5sX4TQbLGrV";
 /** Pyth-v2 magic at feed[0..4] LE (0xa1b2c3d4). */
 const PYTH_V2_MAGIC = 0xa1b2c3d4n;
 /** Pyth-v2 feed field offsets. */
@@ -89,7 +89,7 @@ export const OBRIC_DEFAULT_BAND_BPS = 2500n;
 export interface ObricV2PoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'xToY' (default — mintX in, mintY out) | 'yToX'. */
-  direction: 'xToY' | 'yToX';
+  direction: "xToY" | "yToX";
   mintX: Address;
   mintY: Address;
   /** Vault token accounts (amount@64 read live for the reserves). */
@@ -124,12 +124,18 @@ export interface ObricV2PoolConfig extends PoolConfig {
 }
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 /** decimalMult per the SDK's updateTradingPairPrice (normalizes the price ratio to token units). */
-function decimalMults(xDecimals: number, yDecimals: number): { decMultX: bigint; decMultY: bigint } {
-  if (xDecimals > yDecimals) return { decMultX: 1n, decMultY: 10n ** BigInt(xDecimals - yDecimals) };
-  if (yDecimals > xDecimals) return { decMultX: 10n ** BigInt(yDecimals - xDecimals), decMultY: 1n };
+function decimalMults(
+  xDecimals: number,
+  yDecimals: number,
+): { decMultX: bigint; decMultY: bigint } {
+  if (xDecimals > yDecimals)
+    return { decMultX: 1n, decMultY: 10n ** BigInt(xDecimals - yDecimals) };
+  if (yDecimals > xDecimals)
+    return { decMultX: 10n ** BigInt(yDecimals - xDecimals), decMultY: 1n };
   return { decMultX: 1n, decMultY: 1n };
 }
 
@@ -183,15 +189,21 @@ interface DecodedPool {
 /** Decode + shape-gate the SSTradingPair account (named errors). */
 function decodePool(pool: string, data: Uint8Array): DecodedPool {
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`obric-v2 pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `obric-v2 pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   if (!POOL_DISCRIMINATOR.every((byte, i) => data[i] === byte)) {
-    throw new Error(`obric-v2 pool ${pool} is not an SSTradingPair account (discriminator mismatch)`);
+    throw new Error(
+      `obric-v2 pool ${pool} is not an SSTradingPair account (discriminator mismatch)`,
+    );
   }
   if (data[OFF_INITIALIZED] !== 1) throw new Error(`obric-v2 pool ${pool} is not initialized`);
   const bigK = readUintLE(data, OFF_BIG_K, 16);
   if (bigK === 0n) {
-    throw new Error(`obric-v2 pool ${pool} has bigK=0 (drained / never seeded) — no curve to quote`);
+    throw new Error(
+      `obric-v2 pool ${pool} has bigK=0 (drained / never seeded) — no curve to quote`,
+    );
   }
   return {
     feedX: pubkeyAt(data, OFF_X_FEED),
@@ -213,7 +225,7 @@ function decodePool(pool: string, data: Uint8Array): DecodedPool {
 function obricConfig(cfg: PoolConfig): ObricV2PoolConfig {
   if (cfg.venue !== SLUG) throw new Error(`obric-v2 adapter got a config for venue '${cfg.venue}'`);
   const c = cfg as ObricV2PoolConfig;
-  if (c.direction !== 'xToY' && c.direction !== 'yToX') {
+  if (c.direction !== "xToY" && c.direction !== "yToX") {
     throw new Error(`obric-v2 direction must be 'xToY' or 'yToX', got '${c.direction}'`);
   }
   return c;
@@ -221,7 +233,7 @@ function obricConfig(cfg: PoolConfig): ObricV2PoolConfig {
 
 export const obricV2 = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: OBRIC_V2_PROGRAM_ID,
 
   /**
@@ -256,7 +268,10 @@ export const obricV2 = {
     // Mint owner = token program; the recipe is Tokenkeg-only (a token-2022
     // mint / transfer-fee extension would desync wire amounts from the curve).
     const dec = (mint: Address, mintData: Uint8Array): number => {
-      if (mintData.length < 45) throw new Error(`obric-v2 pool ${pool} mint ${mint} is ${mintData.length} bytes, not an SPL mint`);
+      if (mintData.length < 45)
+        throw new Error(
+          `obric-v2 pool ${pool} mint ${mint} is ${mintData.length} bytes, not an SPL mint`,
+        );
       return mintData[44];
     };
     const xDecimals = dec(d.mintX, mintXData);
@@ -274,11 +289,15 @@ export const obricV2 = {
     ] as const) {
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -298,7 +317,7 @@ export const obricV2 = {
     return {
       venue: SLUG,
       pool,
-      direction: 'xToY',
+      direction: "xToY",
       mintX: d.mintX,
       mintY: d.mintY,
       reserveXVault: d.reserveXVault,
@@ -320,7 +339,7 @@ export const obricV2 = {
       bandBps: OBRIC_DEFAULT_BAND_BPS,
       storedMultX: d.storedMultX,
       storedMultY: d.storedMultY,
-      cpiTier: 'P-A',
+      cpiTier: "P-A",
     };
   },
 
@@ -338,14 +357,19 @@ export const obricV2 = {
   /** v1 swap CPI (amount baked) — the unified `swap` ix. */
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
     const c = obricConfig(cfg);
-    if (amountIn <= 0n || amountIn > U64_MAX) throw new Error(`obric-v2 buildSwap amountIn must be a positive u64, got ${amountIn}`);
-    const xToY = c.direction === 'xToY';
+    if (amountIn <= 0n || amountIn > U64_MAX)
+      throw new Error(`obric-v2 buildSwap amountIn must be a positive u64, got ${amountIn}`);
+    const xToY = c.direction === "xToY";
     const data = new Uint8Array(8 + 1 + 8 + 8);
     data.set(OBRIC_SWAP_DISCRIMINATOR, 0);
     data[8] = xToY ? 1 : 0; // isXToY
     for (let b = 0; b < 8; b++) data[9 + b] = Number((amountIn >> BigInt(8 * b)) & 0xffn);
     data[17] = 1; // minOutputAmt = 1 (the recipe's terminal delta owns the bound)
-    return { programId: OBRIC_V2_PROGRAM_ID, data, accounts: swapAccounts(c, user, (ref, addr, w) => fixed(ref, addr, w)) };
+    return {
+      programId: OBRIC_V2_PROGRAM_ID,
+      data,
+      accounts: swapAccounts(c, user, (ref, addr, w) => fixed(ref, addr, w)),
+    };
   },
 };
 
@@ -359,23 +383,23 @@ export function swapAccounts(
   make: (ref: string, addr: Address, writable?: boolean) => VenueAccount,
   refFor?: (role: string) => string,
 ): VenueAccount[] {
-  const xToY = c.direction === 'xToY';
+  const xToY = c.direction === "xToY";
   const r = refFor ?? ((role: string): string => role);
   const userX = xToY ? user.inAta : user.outAta; // userTokenAccountX
   const userY = xToY ? user.outAta : user.inAta; // userTokenAccountY
   const protoFee = xToY ? c.protocolFeeY : c.protocolFeeX; // output-side protocol fee vault
   return [
-    make(r('pool'), c.pool, true),
-    make(r('mx'), c.mintX),
-    make(r('my'), c.mintY),
-    make(r('vx'), c.reserveXVault, true),
-    make(r('vy'), c.reserveYVault, true),
+    make(r("pool"), c.pool, true),
+    make(r("mx"), c.mintX),
+    make(r("my"), c.mintY),
+    make(r("vx"), c.reserveXVault, true),
+    make(r("vy"), c.reserveYVault, true),
     { ref: userX, writable: true },
     { ref: userY, writable: true },
-    make(r('pf'), protoFee, true),
-    make(r('fx'), c.feedX),
-    make(r('fy'), c.feedY),
+    make(r("pf"), protoFee, true),
+    make(r("fx"), c.feedX),
+    make(r("fy"), c.feedY),
     { ref: user.owner, signer: true },
-    make(r('tp'), c.tokenProgram),
+    make(r("tp"), c.tokenProgram),
   ];
 }

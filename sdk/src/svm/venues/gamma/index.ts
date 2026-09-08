@@ -99,16 +99,16 @@
  * mismatches; a Token-2022 transfer-fee extension on either mint (wire
  * amounts would diverge from the quote, same gate raydium-cp-swap uses).
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { getEpochFee, parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { getEpochFee, parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'gamma';
-export const GAMMA_PROGRAM_ID = address('GAMMA7meSFWaBXF25oSUgmGRwaW6sCMFLmBNiMSdbHVT');
-const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
-const CLOCK_SYSVAR = address('SysvarC1ock11111111111111111111111111111111');
+const SLUG = "gamma";
+export const GAMMA_PROGRAM_ID = address("GAMMA7meSFWaBXF25oSUgmGRwaW6sCMFLmBNiMSdbHVT");
+const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+const CLOCK_SYSVAR = address("SysvarC1ock11111111111111111111111111111111");
 
 // sha256("account:PoolState")[0..8] / sha256("account:AmmConfig")[0..8] — byte-identical to
 // raydium-cp-swap's (same Anchor account type names on the shared struct prefix).
@@ -156,14 +156,20 @@ export interface GammaPoolConfig extends PoolConfig {
 }
 
 /** Fetch + decode one GAMMA pool (mirrors raydium-cp-swap's fetchPoolConfig gates). Read-only against the loader. */
-export async function fetchGammaPoolConfig(load: AccountLoader, pool: Address): Promise<GammaPoolConfig> {
+export async function fetchGammaPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<GammaPoolConfig> {
   const codec = getAddressCodec();
-  const pubkey = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32)) as Address;
+  const pubkey = (data: Uint8Array, offset: number): Address =>
+    codec.decode(data.subarray(offset, offset + 32)) as Address;
 
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} not found`);
   if (data.length !== POOL_STATE_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} data is ${data.length} bytes, expected ${POOL_STATE_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} data is ${data.length} bytes, expected ${POOL_STATE_SIZE}`,
+    );
   }
   for (let i = 0; i < 8; i++) {
     if (data[i] !== POOL_STATE_DISCRIMINATOR[i]) {
@@ -185,11 +191,15 @@ export async function fetchGammaPoolConfig(load: AccountLoader, pool: Address): 
   const configData = await load(ammConfig);
   if (configData === null) throw new Error(`${SLUG} amm config ${ammConfig} not found`);
   if (configData.length !== AMM_CONFIG_SIZE) {
-    throw new Error(`${SLUG} amm config ${ammConfig} data is ${configData.length} bytes, expected ${AMM_CONFIG_SIZE}`);
+    throw new Error(
+      `${SLUG} amm config ${ammConfig} data is ${configData.length} bytes, expected ${AMM_CONFIG_SIZE}`,
+    );
   }
   for (let i = 0; i < 8; i++) {
     if (configData[i] !== AMM_CONFIG_DISCRIMINATOR[i]) {
-      throw new Error(`${SLUG} amm config ${ammConfig} has a wrong discriminator (not an AmmConfig account)`);
+      throw new Error(
+        `${SLUG} amm config ${ammConfig} has a wrong discriminator (not an AmmConfig account)`,
+      );
     }
   }
 
@@ -220,7 +230,9 @@ export async function fetchGammaPoolConfig(load: AccountLoader, pool: Address): 
     const vaultData = vaultDatas[vi];
     if (vaultData === null) throw new Error(`${SLUG} vault ${vault} not found`);
     if (vaultData.length < VAULT_AMOUNT_OFFSET + 8) {
-      throw new Error(`${SLUG} vault ${vault} data is ${vaultData.length} bytes, expected an SPL token account`);
+      throw new Error(
+        `${SLUG} vault ${vault} data is ${vaultData.length} bytes, expected an SPL token account`,
+      );
     }
     const vaultMint = pubkey(vaultData, VAULT_MINT_OFFSET);
     if (vaultMint !== mint) {
@@ -250,29 +262,35 @@ export async function fetchGammaPoolConfig(load: AccountLoader, pool: Address): 
   // old presence-based reject to an effective-bps>0 reject is what lets it.
   let epoch: bigint | null = null;
   for (const [program, mint, side] of [
-    [cfg.token0Program, cfg.token0Mint, 'token_0'],
-    [cfg.token1Program, cfg.token1Mint, 'token_1'],
+    [cfg.token0Program, cfg.token0Mint, "token_0"],
+    [cfg.token1Program, cfg.token1Mint, "token_1"],
   ] as const) {
     if (program !== TOKEN_2022_PROGRAM) continue;
     const mintData = await load(mint);
     if (mintData === null) {
-      throw new Error(`${SLUG} ${side} mint ${mint} is token-2022 but could not be loaded to check extensions`);
+      throw new Error(
+        `${SLUG} ${side} mint ${mint} is token-2022 but could not be loaded to check extensions`,
+      );
     }
     const { blocking, transferFee } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG} ${side} mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(`${SLUG} ${side} mint ${mint} is un-routable: ${blocking.join("; ")}`);
     }
     if (transferFee !== undefined) {
       if (epoch === null) {
         const clockData = await load(CLOCK_SYSVAR);
         if (clockData === null) {
-          throw new Error(`${SLUG} could not read the Clock sysvar to resolve ${side} mint ${mint}'s active transfer-fee tier`);
+          throw new Error(
+            `${SLUG} could not read the Clock sysvar to resolve ${side} mint ${mint}'s active transfer-fee tier`,
+          );
         }
         epoch = readUintLE(clockData, 16, 8);
       }
       const bps = getEpochFee(transferFee, epoch).transferFeeBasisPoints;
       if (bps > 0) {
-        throw new Error(`${SLUG} ${side} mint ${mint} has an ACTIVE ${bps}bps token-2022 transfer fee (wire amounts diverge from the quote)`);
+        throw new Error(
+          `${SLUG} ${side} mint ${mint} has an ACTIVE ${bps}bps token-2022 transfer fee (wire amounts diverge from the quote)`,
+        );
       }
     }
   }
@@ -286,4 +304,3 @@ export const gamma = {
   programId: GAMMA_PROGRAM_ID,
   fetchPoolConfig: fetchGammaPoolConfig,
 };
-

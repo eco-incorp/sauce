@@ -17,7 +17,7 @@ we bring WASM the same way we already bring engine artifacts.
   `@eco-incorp/sauce-compiler-wasm@0.1.0`, pulled from **GitHub Packages** (`npm.pkg.github.com`). Its CI is
   **red** on a GitHub-Packages auth scope (`ECO_INCORP_TOKEN` lacks `read:packages`). That auth problem is
   exactly what this directive sidesteps.
-- **`main` ships NO prebuilt WASM.** The `sauce-wasm` crate on main is Rust *source* only; its `.gitignore`
+- **`main` ships NO prebuilt WASM.** The `sauce-wasm` crate on main is Rust _source_ only; its `.gitignore`
   excludes `/pkg` and `/target`. The WASM is produced by `wasm-pack build --target nodejs`, which needs a
   **Rust 1.97.1 + `wasm32-unknown-unknown` + `wasm-pack` + Node** toolchain — heavier than this repo's
   Foundry-only CI.
@@ -60,17 +60,19 @@ we bring WASM the same way we already bring engine artifacts.
   publish doesn't leak to GH Packages.
 
 **How the harness consumes it** (`sdk/test/std/token/harness.ts`):
+
 ```ts
-const { compile } = createRequire(import.meta.url)('@eco-incorp/sauce-compiler-wasm') as {
+const { compile } = createRequire(import.meta.url)("@eco-incorp/sauce-compiler-wasm") as {
   compile: (options: WasmCompileOptions) => Artifact;
 };
 ```
+
 `compile({ target, entry?, resolve, resolvePackage? }) → { bytecode: Uint8Array, manifest? }`. The package is
 `--target nodejs` (CommonJS + a sibling `.wasm` read via `fs`); `createRequire` hands it to Node's CJS loader,
 which is the only loader that resolves the `.wasm` sibling.
 
 **Its blocker (from the PR body):** CI `pnpm install` gets `ERR_PNPM_FETCH_403 Forbidden` fetching the wasm
-package. The git `insteadOf` rewrite covers the private *git* dep only; the npm registry is a separate auth
+package. The git `insteadOf` rewrite covers the private _git_ dep only; the npm registry is a separate auth
 protocol, so `ECO_INCORP_TOKEN` needs `read:packages` added (and possibly per-repo package read grant). **This
 GH-Packages auth requirement is precisely what the directive removes** by sourcing WASM from a git dep instead.
 
@@ -82,7 +84,7 @@ the package `files` list — the whole PR is validation-only, nothing ships to c
 - Crate `compiler/crates/sauce-wasm` — a thin `cdylib` + `wasm-bindgen` layer over `sauce_core::compile`
   (`crate-type = ["cdylib"]`, deps: `sauce-core`, `wasm-bindgen`, `js-sys`, `serde-wasm-bindgen`,
   `error-stack`, `thiserror`). `src/lib.rs` exports a single `#[wasm_bindgen] pub fn compile(options) ->
-  Result<JsValue, JsError>`; a compile/resolve error throws a JS `Error` with the rustc-style diagnostic;
+Result<JsValue, JsError>`; a compile/resolve error throws a JS `Error` with the rustc-style diagnostic;
   `manifest` is present on the SVM target only.
 - **Build** (`compiler/Makefile`):
   ```
@@ -91,7 +93,7 @@ the package `files` list — the whole PR is validation-only, nothing ships to c
   smoke: pkg → node crates/sauce-wasm/test/smoke.mjs
   ```
   `postbuild.mjs` merges `package.template.json` (`{"name":"@eco-incorp/sauce-compiler-wasm",
-  "publishConfig":{"registry":"https://npm.pkg.github.com"}}`) onto the wasm-pack-generated
+"publishConfig":{"registry":"https://npm.pkg.github.com"}}`) onto the wasm-pack-generated
   `pkg/package.json` and stamps `WASM_PKG_VERSION` when set.
 - **Toolchain** (`compiler/rust-toolchain.toml`): `channel = "1.97.1"`, `components = ["clippy"]`,
   `targets = ["wasm32-unknown-unknown"]`. Plus `wasm-pack` (`cargo install wasm-pack`) and Node.
@@ -103,12 +105,12 @@ the package `files` list — the whole PR is validation-only, nothing ships to c
 `gh api repos/eco-incorp/sauce/git/trees/main?recursive=1` → 397 paths, not truncated:
 
 - **No root `package.json`.** Root = `.github .gitignore .gitmodules .releaserc.js LICENSE.md README.md
-  compiler docs v12-evm v12-svm`. (release/beta also has no root package.json — 404 — yet installs fine; see §4.)
+compiler docs v12-evm v12-svm`. (release/beta also has no root package.json — 404 — yet installs fine; see §4.)
 - **No prebuilt WASM.** No `.wasm`, no `pkg/` anywhere in the tree. `compiler/crates/sauce-wasm/.gitignore` =
   `/pkg` and `/target`. Only source ships: `src/lib.rs`, `Cargo.toml`, `package.template.json`,
   `scripts/postbuild.mjs`, `test/smoke.mjs`, `README.md`.
 - **Different layout from release/beta.** main has `compiler/` (Rust), `v12-evm/`, `v12-svm/` — no `engine/`,
-  no `engine-v12/`, no `deployments/`. So `sauce-next` cannot feed the *engine* sync scripts (those read
+  no `engine-v12/`, no `deployments/`. So `sauce-next` cannot feed the _engine_ sync scripts (those read
   `engine/out/...`, `engine-v12/...`, `deployments/v12.json`, which exist only on release/beta). `sauce-next`
   is a WASM source ONLY; `sauce` stays the engine-artifact source.
 
@@ -158,18 +160,21 @@ committed binary refreshed by hand on repin (`engine.so`, `V12RuntimeBytecode.js
 
 `compiler/package.json` (mirrors `sauce` exactly — reuses the existing `SAUCE_CANDIDATES` resolution shape;
 `sdk/` is equally valid but compiler keeps both git deps together):
+
 ```diff
    "devDependencies": {
 +    "sauce-next": "github:eco-incorp/sauce#main",
      "sauce": "github:eco-incorp/sauce#release/beta",
      ...
 ```
+
 Install cost: a ~397-file source checkout into the pnpm store, no build, SSH auth (already works). It does
 **not** feed any engine sync script (main has no `engine/`).
 
 ### (b) Vendored, committed WASM location
 
 New committed dir holding the wasm-pack `--target nodejs` output, e.g. `sdk/vendor/sauce-compiler-wasm/`:
+
 ```
 sdk/vendor/sauce-compiler-wasm/
   package.json            # name "@eco-incorp/sauce-compiler-wasm", main "sauce_wasm.js"
@@ -178,13 +183,15 @@ sdk/vendor/sauce-compiler-wasm/
   sauce_wasm.d.ts
   sauce_wasm_bg.wasm.d.ts
 ```
+
 Size unknown until first build; a Rust compiler compiled to wasm is typically ~0.5–2 MB. Flag if it's large.
 
 ### (c) `sync-wasm` script (mirrors `sync-engine-artifacts` + `generateV12Runtime`)
 
 New `sdk/scripts/sync-wasm.mjs`:
+
 - Resolve `sauce-next` via a candidate list `[REPO/compiler/node_modules/sauce-next,
-  REPO/node_modules/sauce-next]` (same rule as the engine sync).
+REPO/node_modules/sauce-next]` (same rule as the engine sync).
 - If Rust 1.97.1 + `wasm32-unknown-unknown` + `wasm-pack` + Node are on PATH: run
   `wasm-pack build crates/sauce-wasm --target nodejs --out-dir pkg` (cwd = `<sauce-next>/compiler`), then
   `node crates/sauce-wasm/scripts/postbuild.mjs`, and copy `pkg/*` over `sdk/vendor/sauce-compiler-wasm/`.
@@ -198,16 +205,19 @@ New `sdk/scripts/sync-wasm.mjs`:
 Add a `file:` self-alias so Sammy's specifier resolves to the vendored dir with **no consumer-code change**:
 
 `sdk/package.json`:
+
 ```diff
    "devDependencies": {
 -    "@eco-incorp/sauce-compiler-wasm": "0.1.0",
 +    "@eco-incorp/sauce-compiler-wasm": "file:./vendor/sauce-compiler-wasm",
      ...
 ```
+
 `createRequire(import.meta.url)('@eco-incorp/sauce-compiler-wasm')` in `harness.ts` then resolves to the
 committed vendored `pkg/`, which loads its `.wasm` sibling via `fs` exactly as before.
 
 **Deletions this enables** (undo Sammy's GH-Packages wiring):
+
 - root `.npmrc` (`@eco-incorp:registry=...`) — no longer needed for resolution.
 - both workflows' "Configure GitHub Packages auth for @eco-incorp" steps — no `read:packages` needed.
 - `ECO_INCORP_TOKEN` gets no new scope; the git `insteadOf` rewrite already covers `sauce` + `sauce-next`.
@@ -217,6 +227,7 @@ committed vendored `pkg/`, which loads its `.wasm` sibling via `fs` exactly as b
 ### (e) CI drift-check story
 
 Matches `engine.so` / `V12RuntimeBytecode.json`, NOT the forge artifacts:
+
 - CI stays **Foundry-only**; it does **not** build or drift-check the WASM (no Rust/wasm-pack). `sync-wasm`
   run in CI would skip (toolchain absent) → no drift on the committed vendored binary.
 - Discipline is the documented repin ritual (below), same as the other two hand-refreshed binaries.
@@ -231,7 +242,7 @@ Matches `engine.so` / `V12RuntimeBytecode.json`, NOT the forge artifacts:
 > **Refresh the vendored WASM whenever `sauce-next` is repinned.** From a checkout of the pinned `sauce-next`
 > (main) commit, with Rust 1.97.1 (`rustup target add wasm32-unknown-unknown`), `wasm-pack`, and Node on PATH:
 > `cd compiler && wasm-pack build crates/sauce-wasm --target nodejs --out-dir pkg && node
-> crates/sauce-wasm/scripts/postbuild.mjs`, then copy `pkg/*` over `sdk/vendor/sauce-compiler-wasm/` and
+crates/sauce-wasm/scripts/postbuild.mjs`, then copy `pkg/*` over `sdk/vendor/sauce-compiler-wasm/` and
 > commit. `pnpm --filter './sdk' sync-wasm` automates the copy when the toolchain is present. Nothing in this
 > repo re-derives it, so a repin without a refresh silently keeps a stale compiler.
 
@@ -264,8 +275,7 @@ decided (it would bloat the tarball by the wasm size).
 
 3. **Private-repo auth.** `sauce-next#main` reuses the existing SSH/`insteadOf` git auth that `sauce` already
    uses — **verified** the installed `sauce` dep resolves over `git@github.com:` with no npm token. This is the
-   directive's whole win: it drops the GH-Packages `read:packages` requirement that has PR #123's CI stuck at
-   403. (One nit: the user's local `~/.npmrc` maps `@eco:` — not `@eco-incorp:` — to GH Packages; irrelevant
+   directive's whole win: it drops the GH-Packages `read:packages` requirement that has PR #123's CI stuck at 403. (One nit: the user's local `~/.npmrc` maps `@eco:` — not `@eco-incorp:` — to GH Packages; irrelevant
    once we stop resolving the wasm from a registry, but noted since it wouldn't have authed Sammy's dep anyway.)
 
 4. **Committed binary size / drift-by-hand.** The `.wasm` is committed (like `engine.so`); measure it on first

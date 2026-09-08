@@ -23,19 +23,19 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, SwapUser, VenueAccount } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'solfi-v2';
+const SLUG = "solfi-v2";
 
-export const SOLFI_V2_PROGRAM_ID = address('SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const INSTRUCTIONS_SYSVAR = address('Sysvar1nstructions1111111111111111111111111');
+export const SOLFI_V2_PROGRAM_ID = address("SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const INSTRUCTIONS_SYSVAR = address("Sysvar1nstructions1111111111111111111111111");
 
 const POOL_ACCOUNT_SIZE = 1728;
 const ORACLE_ACCOUNT_SIZE = 168;
@@ -129,9 +129,9 @@ export const ORACLE_KEY_WORDS: Record<number, bigint> = {
  * [0, 12000]).
  */
 export const POOL_K: Record<string, bigint> = {
-  '65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc': 1932n, // wSOL/USDC, registry FmxXDSR9...
-  'FkEB6uvyzuoaGpgs4yRtFtxC4WJxhejNFbUkj5R6wR32': 0n, // USDT/USDC, registry QoFvFhDZ...
-  '2Q6S8p9iZNzMvpTemiC56HqCJ3F3szNoyRkvqEKfCanY': 5832n, // registry QoFvFhDZ...
+  "65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc": 1932n, // wSOL/USDC, registry FmxXDSR9...
+  FkEB6uvyzuoaGpgs4yRtFtxC4WJxhejNFbUkj5R6wR32: 0n, // USDT/USDC, registry QoFvFhDZ...
+  "2Q6S8p9iZNzMvpTemiC56HqCJ3F3szNoyRkvqEKfCanY": 5832n, // registry QoFvFhDZ...
 };
 
 export interface SolfiV2PoolConfig extends PoolConfig {
@@ -153,18 +153,20 @@ export interface SolfiV2PoolConfig extends PoolConfig {
 }
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 function solfiConfig(cfg: PoolConfig): SolfiV2PoolConfig {
   if (cfg.venue !== SLUG) throw new Error(`solfi-v2 adapter got a config for venue '${cfg.venue}'`);
   const c = cfg as SolfiV2PoolConfig;
-  if (c.direction !== 0 && c.direction !== 1) throw new Error(`solfi-v2 direction must be 0 or 1, got '${c.direction}'`);
+  if (c.direction !== 0 && c.direction !== 1)
+    throw new Error(`solfi-v2 direction must be 0 or 1, got '${c.direction}'`);
   return c;
 }
 
 export const solfiV2 = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: SOLFI_V2_PROGRAM_ID,
 
   /**
@@ -175,11 +177,17 @@ export const solfiV2 = {
    * mint/oracle/registry account. direction is caller-supplied (0 or 1); both
    * directions share one pool account.
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address, direction: 0 | 1 = 0): Promise<SolfiV2PoolConfig> {
+  async fetchPoolConfig(
+    load: AccountLoader,
+    pool: Address,
+    direction: 0 | 1 = 0,
+  ): Promise<SolfiV2PoolConfig> {
     const data = await load(pool);
     if (data === null) throw new Error(`solfi-v2 pool ${pool} account not found`);
     if (data.length !== POOL_ACCOUNT_SIZE) {
-      throw new Error(`solfi-v2 pool ${pool} account is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+      throw new Error(
+        `solfi-v2 pool ${pool} account is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+      );
     }
     const oracle = pubkeyAt(data, OFF_ORACLE);
     const mintA = pubkeyAt(data, OFF_MINT_A);
@@ -200,11 +208,15 @@ export const solfiV2 = {
       const mintData = _mintDatas[_i]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`solfi-v2: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `solfi-v2: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`solfi-v2: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `solfi-v2: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -216,14 +228,20 @@ export const solfiV2 = {
     }
 
     const oracleData = await load(oracle);
-    if (oracleData === null) throw new Error(`solfi-v2 pool ${pool} oracle ${oracle} account not found`);
+    if (oracleData === null)
+      throw new Error(`solfi-v2 pool ${pool} oracle ${oracle} account not found`);
     if (oracleData.length !== ORACLE_ACCOUNT_SIZE) {
-      throw new Error(`solfi-v2 pool ${pool} oracle ${oracle} is ${oracleData.length} bytes, expected ${ORACLE_ACCOUNT_SIZE}`);
+      throw new Error(
+        `solfi-v2 pool ${pool} oracle ${oracle} is ${oracleData.length} bytes, expected ${ORACLE_ACCOUNT_SIZE}`,
+      );
     }
     const registryData = await load(registry);
-    if (registryData === null) throw new Error(`solfi-v2 pool ${pool} registry ${registry} account not found`);
+    if (registryData === null)
+      throw new Error(`solfi-v2 pool ${pool} registry ${registry} account not found`);
     if (registryData.length !== REGISTRY_ACCOUNT_SIZE) {
-      throw new Error(`solfi-v2 pool ${pool} registry ${registry} is ${registryData.length} bytes, expected ${REGISTRY_ACCOUNT_SIZE}`);
+      throw new Error(
+        `solfi-v2 pool ${pool} registry ${registry} is ${registryData.length} bytes, expected ${REGISTRY_ACCOUNT_SIZE}`,
+      );
     }
 
     return {
@@ -255,7 +273,8 @@ export const solfiV2 = {
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint) {
     const c = solfiConfig(cfg);
     const U64_MAX = (1n << 64n) - 1n;
-    if (amountIn <= 0n || amountIn > U64_MAX) throw new Error(`solfi-v2 buildSwap amountIn must be a positive u64, got ${amountIn}`);
+    if (amountIn <= 0n || amountIn > U64_MAX)
+      throw new Error(`solfi-v2 buildSwap amountIn must be a positive u64, got ${amountIn}`);
     const data = new Uint8Array(18);
     data[0] = 0x07;
     for (let b = 0; b < 8; b++) data[1 + b] = Number((amountIn >> BigInt(8 * b)) & 0xffn);
@@ -292,17 +311,17 @@ export function solfiSwapAccounts(
   const userB = aIsIn ? user.outAta : user.inAta;
   return [
     { ref: user.owner, signer: true, writable: true },
-    make(r('pool'), c.pool, true),
-    make(r('oracle'), c.oracle),
-    make(r('registry'), c.registry, true),
-    make(r('va'), c.vaultA, true),
-    make(r('vb'), c.vaultB, true),
+    make(r("pool"), c.pool, true),
+    make(r("oracle"), c.oracle),
+    make(r("registry"), c.registry, true),
+    make(r("va"), c.vaultA, true),
+    make(r("vb"), c.vaultB, true),
     { ref: userA, writable: true },
     { ref: userB, writable: true },
-    make(r('ma'), c.mintA),
-    make(r('mb'), c.mintB),
-    make(r('tp'), c.tokenProgram),
-    make(r('tp2'), c.tokenProgram),
+    make(r("ma"), c.mintA),
+    make(r("mb"), c.mintB),
+    make(r("tp"), c.tokenProgram),
+    make(r("tp2"), c.tokenProgram),
     { ref: INSTRUCTIONS_SYSVAR },
   ];
 }

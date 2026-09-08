@@ -37,8 +37,8 @@
  * shape) under DISTINCT program ids can never collide: the program id is
  * part of the key by construction, not by caller discipline.
  */
-import { getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
+import { getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
 
 export interface PdaMemoStats {
   hits: number;
@@ -61,10 +61,10 @@ const memo = new Map<string, Address>();
 let hits = 0;
 let misses = 0;
 
-const HEX_TABLE = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+const HEX_TABLE = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
 
 function toHex(bytes: Uint8Array): string {
-  let out = '';
+  let out = "";
   for (let i = 0; i < bytes.length; i++) out += HEX_TABLE[bytes[i]];
   return out;
 }
@@ -83,7 +83,7 @@ function toHex(bytes: Uint8Array): string {
 function memoKey(programAddress: Address, seeds: readonly Uint8Array[]): string {
   let key = programAddress as string;
   for (const seed of seeds) {
-    key += '|';
+    key += "|";
     key += toHex(seed);
   }
   return key;
@@ -117,7 +117,10 @@ export async function memoizedGetProgramDerivedAddress(
     return cached;
   }
   misses += 1;
-  const [derived] = await getProgramDerivedAddress({ programAddress, seeds: seeds as Uint8Array[] });
+  const [derived] = await getProgramDerivedAddress({
+    programAddress,
+    seeds: seeds as Uint8Array[],
+  });
   if (memo.size >= maxEntries) {
     const oldest = memo.keys().next().value;
     if (oldest !== undefined) memo.delete(oldest);

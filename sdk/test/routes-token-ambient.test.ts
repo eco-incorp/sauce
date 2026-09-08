@@ -68,8 +68,14 @@ describe("@sauce/token as the default ambient module", () => {
   it("explicitly opting @sauce/token in via compile.ambient is idempotent with the default", () => {
     const body = `approve(USDC, ${BigInt(SPENDER)}n, 5n); return 0n;`;
     const viaDefault = openRoute("base", body, evmOptions()).reward(0n);
-    const viaExplicit = openRoute("base", body, evmOptions({ compile: { ambient: ["@sauce/token"] } })).reward(0n);
-    expect(Array.from(viaDefault.compiled.bytecode[0]!)).toEqual(Array.from(viaExplicit.compiled.bytecode[0]!));
+    const viaExplicit = openRoute(
+      "base",
+      body,
+      evmOptions({ compile: { ambient: ["@sauce/token"] } }),
+    ).reward(0n);
+    expect(Array.from(viaDefault.compiled.bytecode[0]!)).toEqual(
+      Array.from(viaExplicit.compiled.bytecode[0]!),
+    );
   });
 
   // --- the SVM arm ---
@@ -90,9 +96,13 @@ describe("@sauce/token as the default ambient module", () => {
     // No annotation, so this reaches the compiler and fails there — on the call, not on the import.
     // `failed to import module "@sauce/token"` is what an unresolvable ambient specifier raises, and
     // it is what this asserts does NOT happen: the SVM arm was found and read.
-    let message = "";
+    let message: string;
     try {
-      openRoute("solana", `function main(account) { return balanceOf(${BigInt(MINT)}n, account); }`, svmOptions()).reward(0n);
+      openRoute(
+        "solana",
+        `function main(account) { return balanceOf(${BigInt(MINT)}n, account); }`,
+        svmOptions(),
+      ).reward(0n);
       throw new Error("expected the malformed call to fail the compile");
     } catch (error) {
       message = (error as Error).message;

@@ -88,17 +88,17 @@
  * bound the walk) self-drops via `SvmWindowDriftError`, matching
  * orca-whirlpool/raydium-clmm/meteora-dlmm's own "nothing to walk" gate.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'invariant';
-export const INVARIANT_PROGRAM_ID = address('HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "invariant";
+export const INVARIANT_PROGRAM_ID = address("HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const POOL_ACCOUNT_SIZE = 400;
 /** sha256('account:Pool')[0..8]. */
 export const POOL_DISCRIMINATOR = [0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc];
@@ -171,7 +171,12 @@ export function invariantSqrtPriceAtTick(tickIndex: number): bigint {
 // ── get_delta_x / get_delta_y / get_next_sqrt_price_{x_up,y_down} (math.rs) ──
 // Verified bit-exact against 32 Rust unit-test vectors AND a real-CPI quadrilateral (see header).
 
-export function invariantDeltaX(sqrtA: bigint, sqrtB: bigint, liquidity: bigint, up: boolean): bigint {
+export function invariantDeltaX(
+  sqrtA: bigint,
+  sqrtB: bigint,
+  liquidity: bigint,
+  up: boolean,
+): bigint {
   const deltaPrice = sqrtA > sqrtB ? sqrtA - sqrtB : sqrtB - sqrtA;
   const nominator = (deltaPrice * liquidity) / LIQ_ONE; // big_mul_to_value (floor), always non-up
   if (up) {
@@ -182,7 +187,12 @@ export function invariantDeltaX(sqrtA: bigint, sqrtB: bigint, liquidity: bigint,
   return (nominator * PRICE_ONE) / denom / PRICE_ONE;
 }
 
-export function invariantDeltaY(sqrtA: bigint, sqrtB: bigint, liquidity: bigint, up: boolean): bigint {
+export function invariantDeltaY(
+  sqrtA: bigint,
+  sqrtB: bigint,
+  liquidity: bigint,
+  up: boolean,
+): bigint {
   const deltaPrice = sqrtA > sqrtB ? sqrtA - sqrtB : sqrtB - sqrtA;
   if (up) return ceilDiv(ceilDiv(deltaPrice * liquidity, LIQ_ONE), PRICE_ONE);
   return (deltaPrice * liquidity) / LIQ_ONE / PRICE_ONE;
@@ -217,12 +227,25 @@ export interface InvariantSwapStep {
  * quotes by-amount-out). `xToY` is derived exactly like the Rust source
  * (`current_price_sqrt >= target_price_sqrt`).
  */
-export function invariantComputeSwapStepIn(currentSqrt: bigint, targetSqrt: bigint, liquidity: bigint, amount: bigint, fee: bigint): InvariantSwapStep {
+export function invariantComputeSwapStepIn(
+  currentSqrt: bigint,
+  targetSqrt: bigint,
+  liquidity: bigint,
+  amount: bigint,
+  fee: bigint,
+): InvariantSwapStep {
   if (liquidity === 0n) return { nextSqrt: targetSqrt, amountIn: 0n, amountOut: 0n, feeAmount: 0n };
   const xToY = currentSqrt >= targetSqrt;
   const amountAfterFee = (amount * (FEE_ONE - fee)) / FEE_ONE;
-  const fx = xToY ? invariantDeltaX(targetSqrt, currentSqrt, liquidity, true) : invariantDeltaY(currentSqrt, targetSqrt, liquidity, true);
-  const nextSqrt = amountAfterFee >= fx ? targetSqrt : xToY ? invariantNextSqrtXUp(currentSqrt, liquidity, amountAfterFee) : invariantNextSqrtYDown(currentSqrt, liquidity, amountAfterFee);
+  const fx = xToY
+    ? invariantDeltaX(targetSqrt, currentSqrt, liquidity, true)
+    : invariantDeltaY(currentSqrt, targetSqrt, liquidity, true);
+  const nextSqrt =
+    amountAfterFee >= fx
+      ? targetSqrt
+      : xToY
+        ? invariantNextSqrtXUp(currentSqrt, liquidity, amountAfterFee)
+        : invariantNextSqrtYDown(currentSqrt, liquidity, amountAfterFee);
   const notMax = targetSqrt !== nextSqrt;
   let amountIn: bigint;
   let amountOut: bigint;
@@ -241,7 +264,8 @@ export function invariantComputeSwapStepIn(currentSqrt: bigint, targetSqrt: bigi
 // never re-scans the tickmap; boundary prices/refs are baked at prepare time. ──
 
 function tickToPosition(tick: number, tickSpacing: number): [number, number] {
-  if (tick % tickSpacing !== 0) throw new Error(`invariant: tick ${tick} not divisible by spacing ${tickSpacing}`);
+  if (tick % tickSpacing !== 0)
+    throw new Error(`invariant: tick ${tick} not divisible by spacing ${tickSpacing}`);
   const bitmapIndex = Math.trunc(tick / tickSpacing) + TICK_LIMIT;
   const byte = Math.trunc(bitmapIndex / 8);
   const bit = ((bitmapIndex % 8) + 8) % 8;
@@ -254,7 +278,11 @@ function getSearchLimit(tick: number, tickSpacing: number, up: boolean): number 
   if (up) {
     limit = Math.min(TICK_LIMIT - 1, index + TICK_SEARCH_RANGE, Math.trunc(MAX_TICK / tickSpacing));
   } else {
-    limit = Math.max(-TICK_LIMIT + 1, index - TICK_SEARCH_RANGE, -Math.trunc(MAX_TICK / tickSpacing));
+    limit = Math.max(
+      -TICK_LIMIT + 1,
+      index - TICK_SEARCH_RANGE,
+      -Math.trunc(MAX_TICK / tickSpacing),
+    );
   }
   return limit * tickSpacing;
 }
@@ -309,7 +337,7 @@ async function deriveTickPda(pool: Address, tickIndex: number): Promise<Address>
   const indexBytes = new Uint8Array(4);
   new DataView(indexBytes.buffer).setInt32(0, tickIndex, true);
   return memoizedGetProgramDerivedAddress(INVARIANT_PROGRAM_ID, [
-    new TextEncoder().encode('tickv1'),
+    new TextEncoder().encode("tickv1"),
     poolBytes,
     indexBytes,
   ]);
@@ -331,7 +359,7 @@ export interface InvariantWindow {
 
 export interface InvariantPoolConfig extends PoolConfig {
   venue: typeof SLUG;
-  direction: 'xToY' | 'yToX';
+  direction: "xToY" | "yToX";
   tokenXMint: Address;
   tokenYMint: Address;
   tokenXReserve: Address;
@@ -364,7 +392,9 @@ async function resolveWindowFromBitmap(
   const foundTicks: number[] = [];
   let cursor = currentTick;
   for (let i = 0; i < INVARIANT_MAX_BOUNDARIES; i++) {
-    const found = xToY ? prevInitialized(bitmap, cursor, tickSpacing) : nextInitialized(bitmap, cursor, tickSpacing);
+    const found = xToY
+      ? prevInitialized(bitmap, cursor, tickSpacing)
+      : nextInitialized(bitmap, cursor, tickSpacing);
     if (found === null) break;
     foundTicks.push(found);
     cursor = xToY ? found - tickSpacing : found + tickSpacing; // don't check the current tick again
@@ -379,27 +409,47 @@ async function resolveWindowFromBitmap(
   const loaded = await Promise.allSettled(tickAddresses.map((addr) => load(addr)));
   for (let i = 0; i < foundTicks.length; i++) {
     const settled = loaded[i]!;
-    if (settled.status === 'rejected') throw settled.reason;
+    if (settled.status === "rejected") throw settled.reason;
     const data = settled.value;
-    if (data === null || data.length !== TICK_ACCOUNT_SIZE || !hasDiscriminator(data, TICK_DISCRIMINATOR)) break;
+    if (
+      data === null ||
+      data.length !== TICK_ACCOUNT_SIZE ||
+      !hasDiscriminator(data, TICK_DISCRIMINATOR)
+    )
+      break;
     const tick = foundTicks[i]!;
-    boundaries.push({ tick, sqrtPrice: invariantSqrtPriceAtTick(tick), address: tickAddresses[i]! });
+    boundaries.push({
+      tick,
+      sqrtPrice: invariantSqrtPriceAtTick(tick),
+      address: tickAddresses[i]!,
+    });
   }
   return { boundaries };
 }
 
 /** Fetch + decode one Invariant Pool and freeze both directions' boundary windows. Read-only against the loader. */
-export async function fetchInvariantPoolConfig(load: AccountLoader, pool: Address): Promise<InvariantPoolConfig> {
+export async function fetchInvariantPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<InvariantPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
-  if (data.length !== POOL_ACCOUNT_SIZE) throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
-  if (!hasDiscriminator(data, POOL_DISCRIMINATOR)) throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a Pool account)`);
+  if (data.length !== POOL_ACCOUNT_SIZE)
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
+  if (!hasDiscriminator(data, POOL_DISCRIMINATOR))
+    throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a Pool account)`);
 
   const codec = getAddressCodec();
   const tokenXMint = codec.decode(data.subarray(OFF_TOKEN_X, OFF_TOKEN_X + 32)) as Address;
   const tokenYMint = codec.decode(data.subarray(OFF_TOKEN_Y, OFF_TOKEN_Y + 32)) as Address;
-  const tokenXReserve = codec.decode(data.subarray(OFF_TOKEN_X_RESERVE, OFF_TOKEN_X_RESERVE + 32)) as Address;
-  const tokenYReserve = codec.decode(data.subarray(OFF_TOKEN_Y_RESERVE, OFF_TOKEN_Y_RESERVE + 32)) as Address;
+  const tokenXReserve = codec.decode(
+    data.subarray(OFF_TOKEN_X_RESERVE, OFF_TOKEN_X_RESERVE + 32),
+  ) as Address;
+  const tokenYReserve = codec.decode(
+    data.subarray(OFF_TOKEN_Y_RESERVE, OFF_TOKEN_Y_RESERVE + 32),
+  ) as Address;
   const tickmap = codec.decode(data.subarray(OFF_TICKMAP, OFF_TICKMAP + 32)) as Address;
 
   // The swap ix here is classic `token::transfer` (Tokenkeg-only, no mint
@@ -414,11 +464,15 @@ export async function fetchInvariantPoolConfig(load: AccountLoader, pool: Addres
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
@@ -429,7 +483,8 @@ export async function fetchInvariantPoolConfig(load: AccountLoader, pool: Addres
   })();
 
   const tickmapData = await load(tickmap);
-  if (tickmapData === null) throw new Error(`${SLUG}: tickmap ${tickmap} of pool ${pool} not found`);
+  if (tickmapData === null)
+    throw new Error(`${SLUG}: tickmap ${tickmap} of pool ${pool} not found`);
   const bitmap = tickmapData.subarray(8);
 
   const [xToY, yToX] = await Promise.all([
@@ -440,7 +495,7 @@ export async function fetchInvariantPoolConfig(load: AccountLoader, pool: Addres
   return {
     venue: SLUG,
     pool,
-    direction: 'xToY',
+    direction: "xToY",
     tokenXMint,
     tokenYMint,
     tokenXReserve,
@@ -457,4 +512,3 @@ export const invariant = {
   tokenProgram: TOKEN_PROGRAM,
   fetchPoolConfig: fetchInvariantPoolConfig,
 };
-

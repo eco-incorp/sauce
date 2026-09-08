@@ -157,31 +157,18 @@
  * bisonfi): 113,624-119,290 CU across 8 samples spanning ~0.001 to ~1 SOL
  * notional, both directions.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { getAddressCodec } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type {
-  AccountBytesMap,
-  AccountLoader,
-  PoolConfig,
-  SwapUser,
-  VenueAccount,
-} from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { getAddressCodec } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'taurusfi';
-export const TAURUSFI_PROGRAM_ID: Address<'9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc'> = address(
-  '9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc',
+const SLUG = "taurusfi";
+export const TAURUSFI_PROGRAM_ID: Address<"9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc"> = address(
+  "9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc",
 );
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const SYSVAR_INSTRUCTIONS = address('Sysvar1nstructions1111111111111111111111111');
-
-/** disc(1) ++ amountIn u64 LE (patched) ++ tail(2) = 11 bytes. Byte 0. */
-const SWAP_DISCRIMINATOR = 0x08;
-/** Bytes 9-10 of the instruction — fixed across every real sample gathered (both directions, 5 sizes). */
-const TAIL_BYTES: readonly number[] = [0x00, 0x01];
 
 /** Standard SPL token account field offsets (mint@0, amount@64) — the vaults are plain SPL accounts. */
 const VAULT_MINT_OFFSET = 0;
@@ -195,12 +182,9 @@ const F64_BIAS_PLUS_MANTISSA_BITS = 1075n; // 1023 + 52
 /** Fixed-point scale for the decoded price (10^9 — ~9-10 significant decimal digits of headroom). */
 export const TAURUSFI_PRICE_SCALE = 1_000_000_000n;
 
-/** Conservative haircut on the output-side virtual reserve — see file header "Quote curve". */
-const OUT_DISCOUNT_NUM = 99n;
-const OUT_DISCOUNT_DEN = 100n;
-
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 /**
  * Decodes a raw f64 bit pattern (as read off-chain OR the exact on-chain
@@ -251,23 +235,23 @@ export const TAURUSFI_POOL_REGISTRY: Record<string, TaurusFiRegistryEntry> = {
   // SOL / USDC (native, EPjF...) — the only market observed live-priced and
   // live-traded during integration.
   EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP: {
-    vault0: address('BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H'),
-    vault1: address('7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK'),
-    mint0: address('So11111111111111111111111111111111111111112'),
-    mint1: address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+    vault0: address("BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H"),
+    vault1: address("7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK"),
+    mint0: address("So11111111111111111111111111111111111111112"),
+    mint1: address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
     decimals0: 9,
     decimals1: 6,
-    vaultAuthority: address('544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX'),
-    globalConfig: address('ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9'),
-    globalAuthority: address('Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo'),
-    priceAccount: address('EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP'),
+    vaultAuthority: address("544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX"),
+    globalConfig: address("ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9"),
+    globalAuthority: address("Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo"),
+    priceAccount: address("EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP"),
   },
 };
 
 export interface TaurusFiPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** '0to1' (default) sells mint0 for mint1; '1to0' sells mint1 for mint0. */
-  direction: '0to1' | '1to0';
+  direction: "0to1" | "1to0";
   vault0: Address;
   vault1: Address;
   mint0: Address;
@@ -282,29 +266,29 @@ export interface TaurusFiPoolConfig extends PoolConfig {
   priceScaled: bigint;
 }
 
-function taurusFiConfig(cfg: PoolConfig): TaurusFiPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
-  return cfg as TaurusFiPoolConfig;
-}
-
 /**
  * Registry lookup + live decode: reads the market's price account (for the
  * gate) and both vaults (mint-integrity check, mirroring gamma's/bisonfi's
  * own vault verification) — nothing else is decodable off this venue's pool
  * state (no plaintext pool-identity account exists at all; see file header).
  */
-export async function fetchTaurusFiConfig(load: AccountLoader, pool: Address): Promise<TaurusFiPoolConfig> {
+export async function fetchTaurusFiConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<TaurusFiPoolConfig> {
   const entry = TAURUSFI_POOL_REGISTRY[pool as unknown as string];
   if (entry === undefined) {
     throw new Error(
       `${SLUG}: pool ${pool} is not in TAURUSFI_POOL_REGISTRY — this venue has no plaintext pool-identity ` +
-        'account to decode a new market from; see sdk/src/svm/venues/taurusfi/index.ts for how to add one',
+        "account to decode a new market from; see sdk/src/svm/venues/taurusfi/index.ts for how to add one",
     );
   }
   const priceData = await load(entry.priceAccount);
   if (priceData === null) throw new Error(`${SLUG}: price account ${entry.priceAccount} not found`);
   if (priceData.length < 8) {
-    throw new Error(`${SLUG}: price account ${entry.priceAccount} is ${priceData.length} bytes, expected >= 8`);
+    throw new Error(
+      `${SLUG}: price account ${entry.priceAccount} is ${priceData.length} bytes, expected >= 8`,
+    );
   }
   const priceScaled = decodeTaurusFiPriceScaled(readUintLE(priceData, 0, 8));
 
@@ -318,10 +302,13 @@ export async function fetchTaurusFiConfig(load: AccountLoader, pool: Address): P
     const vaultData = _vaultDatas[_i]!;
     if (vaultData === null) throw new Error(`${SLUG}: vault ${vault} not found`);
     if (vaultData.length < VAULT_AMOUNT_OFFSET + 8) {
-      throw new Error(`${SLUG}: vault ${vault} is ${vaultData.length} bytes, expected an SPL token account`);
+      throw new Error(
+        `${SLUG}: vault ${vault} is ${vaultData.length} bytes, expected an SPL token account`,
+      );
     }
     const vaultMint = pubkeyAt(vaultData, VAULT_MINT_OFFSET);
-    if (vaultMint !== mint) throw new Error(`${SLUG}: vault ${vault} holds mint ${vaultMint}, expected ${mint}`);
+    if (vaultMint !== mint)
+      throw new Error(`${SLUG}: vault ${vault} holds mint ${vaultMint}, expected ${mint}`);
   }
 
   // This venue's swap CPI is legacy-SPL (Tokenkeg) only. Detect a Token-2022
@@ -336,15 +323,19 @@ export async function fetchTaurusFiConfig(load: AccountLoader, pool: Address): P
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
-  return { venue: SLUG, pool, direction: '0to1', priceScaled, ...entry };
+  return { venue: SLUG, pool, direction: "0to1", priceScaled, ...entry };
 }
 
 /** Family facade for the recipe orchestrator (ladder-only, like raydium-amm-v4/raydium-cp-swap). */
@@ -353,13 +344,3 @@ export const taurusfi = {
   programId: TAURUSFI_PROGRAM_ID,
   fetchPoolConfig: fetchTaurusFiConfig,
 };
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-
-/** decimals1 >= decimals0 ? [10^(decimals1-decimals0), 1] : [1, 10^(decimals0-decimals1)]. */
-function decimalScale(cfg: TaurusFiPoolConfig): { num: bigint; den: bigint } {
-  return cfg.decimals1 >= cfg.decimals0
-    ? { num: 10n ** BigInt(cfg.decimals1 - cfg.decimals0), den: 1n }
-    : { num: 1n, den: 10n ** BigInt(cfg.decimals0 - cfg.decimals1) };
-}
-

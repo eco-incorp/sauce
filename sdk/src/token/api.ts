@@ -8,8 +8,21 @@ import { encodeFunctionData, type Hex } from "viem";
 
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { ata } from "../svm/venues/scale-common.js";
-import { toAddressBigint, toAmountBigint, validateApproveSpec, validateBalanceSpec, validateTransferSpec } from "./params.js";
-import { tokenAccountRefs, tokenExpression, TOKEN_BASE_DIRS, tokenCallStatement, tokenImportLines, tokenSource } from "./source.js";
+import {
+  toAddressBigint,
+  toAmountBigint,
+  validateApproveSpec,
+  validateBalanceSpec,
+  validateTransferSpec,
+} from "./params.js";
+import {
+  tokenAccountRefs,
+  tokenExpression,
+  TOKEN_BASE_DIRS,
+  tokenCallStatement,
+  tokenImportLines,
+  tokenSource,
+} from "./source.js";
 import { TOKEN_PROGRAM_BIGINT, TOKEN_2022_PROGRAM_BIGINT } from "./svm.js";
 import {
   MINT_DECIMALS_OFFSET,
@@ -57,7 +70,9 @@ function makeTokenCall(spec: TokenSpec): TokenCall {
       const imports = tokenImportLines([spec], target);
       const src = tokenSource(spec, target);
       const isBalance = spec.op === "balanceOf";
-      const statement = isBalance ? `${tokenExpression(spec, target)};` : tokenCallStatement(spec, target);
+      const statement = isBalance
+        ? `${tokenExpression(spec, target)};`
+        : tokenCallStatement(spec, target);
       return {
         imports,
         statement,
@@ -68,23 +83,33 @@ function makeTokenCall(spec: TokenSpec): TokenCall {
     },
     toCall: () => {
       if (spec.svm !== undefined) {
-        throw new Error(`TokenCall.toCall: Token.${spec.op} is an SVM spec — use accountRefs()/toSauceScript('svm') instead`);
+        throw new Error(
+          `TokenCall.toCall: Token.${spec.op} is an SVM spec — use accountRefs()/toSauceScript('svm') instead`,
+        );
       }
       if (spec.op === "balanceOf") {
         validateBalanceSpec(spec, "evm");
         if (spec.owner === "self") {
-          throw new Error("TokenCall.toCall: Token.balanceOf('self') has no fixed calldata — compile it instead");
+          throw new Error(
+            "TokenCall.toCall: Token.balanceOf('self') has no fixed calldata — compile it instead",
+          );
         }
         return {
           target: hexAddress(spec.token, "token"),
-          data: encodeFunctionData({ abi: ERC20ABI, functionName: "balanceOf", args: [hexAddress(spec.owner, "owner")] }),
+          data: encodeFunctionData({
+            abi: ERC20ABI,
+            functionName: "balanceOf",
+            args: [hexAddress(spec.owner, "owner")],
+          }),
           value: 0n,
         };
       }
       if (spec.op === "transfer") validateTransferSpec(spec, "evm");
       else validateApproveSpec(spec, "evm");
       if (spec.amount === "balance") {
-        throw new Error(`TokenCall.toCall: Token.${spec.op} with amount: "balance" has no fixed calldata — compile it instead`);
+        throw new Error(
+          `TokenCall.toCall: Token.${spec.op} with amount: "balance" has no fixed calldata — compile it instead`,
+        );
       }
       if (spec.op === "transfer") {
         return {
@@ -102,7 +127,10 @@ function makeTokenCall(spec: TokenSpec): TokenCall {
         data: encodeFunctionData({
           abi: ERC20ABI,
           functionName: "approve",
-          args: [hexAddress(spec.spender, "spender"), toAmountBigint(spec.amount, "Token.approve amount")],
+          args: [
+            hexAddress(spec.spender, "spender"),
+            toAmountBigint(spec.amount, "Token.approve amount"),
+          ],
         }),
         value: 0n,
       };
@@ -120,7 +148,6 @@ function hexAddress(value: TokenTransferSpec["token"], label: string): `0x${stri
   const big = toAddressBigint(value, label);
   return `0x${big.toString(16).padStart(40, "0")}`;
 }
-
 
 /**
  * What `Token(<addr>)` yields **inside a route body** — the wrapper form, not the runtime API.
@@ -174,7 +201,8 @@ export const Token: TokenApi = Object.freeze({
   transfer: (spec: TokenTransferSpec): TokenCall => makeTokenCall({ op: "transfer", ...spec }),
   approve: (spec: TokenApproveSpec): TokenCall => makeTokenCall({ op: "approve", ...spec }),
   balanceOf: (spec: TokenBalanceSpec): TokenCall => makeTokenCall({ op: "balanceOf", ...spec }),
-  program: (specs: readonly TokenSpec[], opts: { target: TokenTarget }): string => tokenSource(specs, opts.target),
+  program: (specs: readonly TokenSpec[], opts: { target: TokenTarget }): string =>
+    tokenSource(specs, opts.target),
   ata,
   TOKEN_PROGRAM: TOKEN_PROGRAM_BIGINT,
   TOKEN_2022_PROGRAM: TOKEN_2022_PROGRAM_BIGINT,

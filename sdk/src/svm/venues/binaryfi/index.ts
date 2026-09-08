@@ -146,20 +146,18 @@
  * this file family: it reads the REAL, un-haircut vault balances, since
  * that gate cares about "is there any inventory here", not price.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
-import { BINARYFI_ASSET_FLOOR_RATES } from './asset-configs.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { BINARYFI_ASSET_FLOOR_RATES } from "./asset-configs.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'binaryfi';
+const SLUG = "binaryfi";
 
-export const BINARYFI_PROGRAM_ID = address('B72M6nyCLFgWiJtAN4naUTminMiTmyGcEqQHXwVeRdht');
+export const BINARYFI_PROGRAM_ID = address("B72M6nyCLFgWiJtAN4naUTminMiTmyGcEqQHXwVeRdht");
 /** Single global config account, shared by every market (see file header). */
-export const BINARYFI_CONFIG = address('AR7uY4Uzn8Zhzvb1XiqfoejuVYgimFAVTwnFBqTnGznS');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const SYSVAR_INSTRUCTIONS = address('Sysvar1nstructions1111111111111111111111111');
+export const BINARYFI_CONFIG = address("AR7uY4Uzn8Zhzvb1XiqfoejuVYgimFAVTwnFBqTnGznS");
 
 // Market account (666 bytes, owned by the program): tag(8)=f7ede3f5d7c3de46,
 // initFlag(1)@8, vaultAuthorityBump(1)@9, vaultAuthority(32)@10,
@@ -168,19 +166,14 @@ const SYSVAR_INSTRUCTIONS = address('Sysvar1nstructions1111111111111111111111111
 // Validated against 4 real mainnet market accounts (2 of them cross-checked
 // against their vault token accounts' own on-chain `owner` field).
 const MARKET_ACCOUNT_SIZE = 666;
-const MARKET_DISCRIMINATOR_HEX = 'f7ede3f5d7c3de46';
+const MARKET_DISCRIMINATOR_HEX = "f7ede3f5d7c3de46";
 const OFF_VAULT_AUTHORITY = 10;
 const OFF_ASSET_MINT = 42;
 const OFF_QUOTE_MINT = 74;
 const OFF_ASSET_VAULT = 106;
 const OFF_QUOTE_VAULT = 138;
 
-/** A standard (Tokenkeg) SPL token account's `amount` field offset. */
-const VAULT_AMOUNT_OFFSET = 64;
 const SPL_TOKEN_ACCOUNT_SIZE = 165;
-
-/** Measurement-only ppm denominator — see `continuousFees` below. */
-const FEE_PPM_DENOM = 1_000_000n;
 
 export interface BinaryFiPoolConfig extends PoolConfig {
   venue: typeof SLUG;
@@ -194,17 +187,11 @@ export interface BinaryFiPoolConfig extends PoolConfig {
   floorRateDen: bigint;
 }
 
-function readUintLE(bytes: Uint8Array, offset: number, len: number): bigint {
-  let v = 0n;
-  for (let i = len - 1; i >= 0; i--) v = (v << 8n) | BigInt(bytes[offset + i]!);
-  return v;
-}
-
-const B58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function b58encode(bytes: Uint8Array): string {
   let n = 0n;
   for (const b of bytes) n = (n << 8n) | BigInt(b);
-  let s = '';
+  let s = "";
   while (n > 0n) {
     const r = Number(n % 58n);
     n /= 58n;
@@ -223,15 +210,14 @@ function b58Address(bytes: Uint8Array, offset: number): Address {
 }
 
 function binaryfiConfig(cfg: PoolConfig): BinaryFiPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as BinaryFiPoolConfig;
 }
 
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-
 export const binaryfi = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: BINARYFI_PROGRAM_ID,
 
   /**
@@ -247,11 +233,15 @@ export const binaryfi = {
     const data = await load(pool);
     if (data === null) throw new Error(`binaryfi market ${pool} does not exist`);
     if (data.length !== MARKET_ACCOUNT_SIZE) {
-      throw new Error(`binaryfi market ${pool} has unexpected size ${data.length} (want ${MARKET_ACCOUNT_SIZE})`);
+      throw new Error(
+        `binaryfi market ${pool} has unexpected size ${data.length} (want ${MARKET_ACCOUNT_SIZE})`,
+      );
     }
-    const discHex = Buffer.from(data.subarray(0, 8)).toString('hex');
+    const discHex = Buffer.from(data.subarray(0, 8)).toString("hex");
     if (discHex !== MARKET_DISCRIMINATOR_HEX) {
-      throw new Error(`binaryfi market ${pool} has unexpected discriminator ${discHex} (want ${MARKET_DISCRIMINATOR_HEX})`);
+      throw new Error(
+        `binaryfi market ${pool} has unexpected discriminator ${discHex} (want ${MARKET_DISCRIMINATOR_HEX})`,
+      );
     }
 
     const vaultAuthority = b58Address(data, OFF_VAULT_AUTHORITY);
@@ -273,11 +263,15 @@ export const binaryfi = {
       const mintData = mintDatas[mi];
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`binaryfi: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `binaryfi: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`binaryfi: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `binaryfi: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -289,14 +283,15 @@ export const binaryfi = {
     }
 
     const vaultEntries = [
-      ['asset', assetVault],
-      ['quote', quoteVault],
+      ["asset", assetVault],
+      ["quote", quoteVault],
     ] as const;
     const vaultDatas = await Promise.all(vaultEntries.map(([, vault]) => load(vault)));
     for (let vi = 0; vi < vaultEntries.length; vi++) {
       const [role, vault] = vaultEntries[vi]!;
       const vaultBytes = vaultDatas[vi];
-      if (vaultBytes === null) throw new Error(`binaryfi market ${pool}: ${role}Vault ${vault} does not exist`);
+      if (vaultBytes === null)
+        throw new Error(`binaryfi market ${pool}: ${role}Vault ${vault} does not exist`);
       if (vaultBytes.length !== SPL_TOKEN_ACCOUNT_SIZE) {
         throw new Error(
           `binaryfi market ${pool}: ${role}Vault ${vault} has unexpected size ${vaultBytes.length} (want ${SPL_TOKEN_ACCOUNT_SIZE} — token-2022 vaults are not supported)`,
@@ -325,4 +320,3 @@ export const binaryfi = {
     ];
   },
 };
-

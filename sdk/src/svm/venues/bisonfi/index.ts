@@ -110,15 +110,15 @@
  * flat-ceiling convention `zerofi`/`denali` use) rather than claiming an
  * unbounded linear quote.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig, VenueAccount } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'bisonfi';
-export const BISONFI_PROGRAM_ID = address('BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi');
-export const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const SLUG = "bisonfi";
+export const BISONFI_PROGRAM_ID = address("BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi");
+export const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const POOL_ACCOUNT_SIZE = 2048;
 export const OFF_VAULT_A = 120;
@@ -155,7 +155,8 @@ export const SWAP_DISCRIMINATOR = 0x07;
 export const TAIL_FLAG = 0x04;
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 export interface BisonfiPoolConfig extends PoolConfig {
   venue: typeof SLUG;
@@ -182,11 +183,17 @@ export function bisonfiConfig(cfg: PoolConfig): BisonfiPoolConfig {
 /** SPL Mint `decimals` byte offset. */
 const MINT_DECIMALS_OFFSET = 44;
 
-async function fetchPoolConfig(load: AccountLoader, pool: Address, direction: 0 | 1 = 0): Promise<BisonfiPoolConfig> {
+async function fetchPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+  direction: 0 | 1 = 0,
+): Promise<BisonfiPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG} pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   const mintA = pubkeyAt(data, OFF_MINT_A);
   const mintB = pubkeyAt(data, OFF_MINT_B);
@@ -207,11 +214,15 @@ async function fetchPoolConfig(load: AccountLoader, pool: Address, direction: 0 
     [mintB, mintBData],
   ] as const) {
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
   const decimalsA = mintAData[MINT_DECIMALS_OFFSET];
@@ -244,7 +255,7 @@ function quoteAccounts(base: PoolConfig): VenueAccount[] {
 /** Family facade for the consuming app's orchestrator. */
 export const bisonfi = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: BISONFI_PROGRAM_ID,
   fetchPoolConfig,
   quoteAccounts,

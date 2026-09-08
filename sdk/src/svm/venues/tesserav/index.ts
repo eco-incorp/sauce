@@ -73,19 +73,19 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { findAssociatedTokenPda } from '@solana-program/token';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'tesserav';
+const SLUG = "tesserav";
 
-export const TESSERAV_PROGRAM_ID = address('TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH');
-export const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const TESSERAV_PROGRAM_ID = address("TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH");
+export const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 // The Instructions sysvar constant is shared via ../../cpi-probe.js (already
 // barreled at the top svm/index.ts level) — NOT re-declared/re-exported here,
 // to avoid a duplicate-export collision at the package barrel (see ladder.ts).
@@ -110,15 +110,13 @@ export const BA_OFF_PRICE = 8;
 export const TESSERAV_LEVEL_SLOTS = 10;
 export const PRICE_PPM_DEN = 1_000_000n;
 
-const VAULT_AMOUNT_OFFSET = 64;
-
 /** Minimum pool account size this adapter reads from (level 9's last byte + 1). */
 export const TESSERAV_MIN_POOL_SIZE = OFF_LADDER_BA + TESSERAV_LEVEL_SLOTS * BA_STRIDE;
 
 export interface TesseraVPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'aToB' sells mintA for mintB (ix direction byte 1); 'bToA' is the reverse (byte 0). */
-  direction: 'aToB' | 'bToA';
+  direction: "aToB" | "bToA";
   mintA: Address;
   mintB: Address;
   /**
@@ -144,7 +142,7 @@ export interface TesseraVPoolConfig extends PoolConfig {
  * traces (SOL/USDC sig 3p2JFpLN…, cbBTC/USDC sig 4KZPEcyC…, BONK/USDC sig
  * 3JZMZyMy…), all giving account[0] = 8ekCy2….
  */
-export const TESSERAV_GLOBAL_AUTH = address('8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF');
+export const TESSERAV_GLOBAL_AUTH = address("8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF");
 
 /**
  * Committed global-per-mint vault cache. Each TesseraV vault is a plain
@@ -160,11 +158,17 @@ export const TESSERAV_GLOBAL_AUTH = address('8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK
  */
 export const TESSERAV_KNOWN_VAULTS: Readonly<Record<string, Address>> = Object.freeze({
   // wSOL — verified as swap account[3] of the SOL/USDC pool (sig 3p2JFpLN…)
-  So11111111111111111111111111111111111111112: address('5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV'),
+  So11111111111111111111111111111111111111112: address(
+    "5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV",
+  ),
   // USDC — the single global USDC vault (swap account[4] of both SOL/USDC and cbBTC/USDC)
-  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: address('9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx'),
+  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: address(
+    "9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx",
+  ),
   // cbBTC — verified as swap account[3] of the cbBTC/USDC pool (sig 4KZPEcyC…)
-  cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij: address('37hggNyT4Ec8GEcxMLrWrZyrMSSFMSiFT6VBayRYceZH'),
+  cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij: address(
+    "37hggNyT4Ec8GEcxMLrWrZyrMSSFMSiFT6VBayRYceZH",
+  ),
 });
 
 /**
@@ -210,7 +214,8 @@ export async function pickTesseraVVault(
   // when every candidate's balance is known (the real vault dwarfs any dust),
   // otherwise self-drop rather than route funds to the wrong account.
   if (nonAta.every((account) => account.amount !== undefined)) {
-    return nonAta.reduce((best, account) => (account.amount! > best.amount! ? account : best)).address;
+    return nonAta.reduce((best, account) => (account.amount! > best.amount! ? account : best))
+      .address;
   }
   return null;
 }
@@ -220,7 +225,11 @@ export async function pickTesseraVVault(
  * optional owner-scoped resolver, else a graceful self-drop. Always under
  * TESSERAV_GLOBAL_AUTH — vaults are global per mint, never per pool.
  */
-async function resolveTesseraVVault(mint: Address, resolveVault: TesseraVVaultResolver | undefined, pool: Address): Promise<Address> {
+async function resolveTesseraVVault(
+  mint: Address,
+  resolveVault: TesseraVVaultResolver | undefined,
+  pool: Address,
+): Promise<Address> {
   const cached = TESSERAV_KNOWN_VAULTS[mint];
   if (cached) return cached;
   if (resolveVault) {
@@ -238,16 +247,17 @@ async function resolveTesseraVVault(mint: Address, resolveVault: TesseraVVaultRe
 }
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 /** Level-0 price (ppm of 1e6) for a direction — non-increasing across slots, this adapter ships slot 0 only. */
-export function level0PriceOffset(direction: 'aToB' | 'bToA'): number {
-  return direction === 'aToB' ? OFF_LADDER_AB + AB_OFF_PRICE : OFF_LADDER_BA + BA_OFF_PRICE;
+export function level0PriceOffset(direction: "aToB" | "bToA"): number {
+  return direction === "aToB" ? OFF_LADDER_AB + AB_OFF_PRICE : OFF_LADDER_BA + BA_OFF_PRICE;
 }
 
 /** Level-0 capacity, in OUTPUT-token raw units, for a direction. */
-export function level0CumOffset(direction: 'aToB' | 'bToA'): number {
-  return direction === 'aToB' ? OFF_LADDER_AB + AB_OFF_CUM : OFF_LADDER_BA + BA_OFF_CUM;
+export function level0CumOffset(direction: "aToB" | "bToA"): number {
+  return direction === "aToB" ? OFF_LADDER_AB + AB_OFF_CUM : OFF_LADDER_BA + BA_OFF_CUM;
 }
 
 /**
@@ -259,24 +269,29 @@ export function level0CumOffset(direction: 'aToB' | 'bToA'): number {
 export async function fetchTesseraVConfig(
   load: AccountLoader,
   pool: Address,
-  direction: 'aToB' | 'bToA',
+  direction: "aToB" | "bToA",
   resolveVault?: TesseraVVaultResolver,
 ): Promise<TesseraVPoolConfig> {
-  if (direction === 'bToA') {
+  if (direction === "bToA") {
     // See ladder.ts's header: the reverse swap-CPI account order was never
     // independently verified, and a launched-then-failing CPI aborts the
     // WHOLE cook on SVM (no execution-time catch/re-route here) — so this
     // stays a hard gate, not a self-drop, until a second live replay confirms
     // the shape.
-    throw new Error(`${SLUG}: 'bToA' is unverified (see ladder.ts) and is not wired for production use yet`);
+    throw new Error(
+      `${SLUG}: 'bToA' is unverified (see ladder.ts) and is not wired for production use yet`,
+    );
   }
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length < TESSERAV_MIN_POOL_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected at least ${TESSERAV_MIN_POOL_SIZE}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected at least ${TESSERAV_MIN_POOL_SIZE}`,
+    );
   }
   const mid = readUintLE(data, OFF_MID, 8);
-  if (mid === 0n) throw new Error(`${SLUG}: pool ${pool} has an unprimed mid price (never quoted by the maker)`);
+  if (mid === 0n)
+    throw new Error(`${SLUG}: pool ${pool} has an unprimed mid price (never quoted by the maker)`);
   const price0 = readUintLE(data, level0PriceOffset(direction), 8);
   const cum0 = readUintLE(data, level0CumOffset(direction), 8);
   if (price0 === 0n || cum0 === 0n) {
@@ -297,11 +312,15 @@ export async function fetchTesseraVConfig(
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 

@@ -17,12 +17,20 @@ import {
   publishAndFundTx,
   publishTx,
 } from "../src/routes/portal.js";
-import { decodeRewardEvm, encodeRoute, encodeRouteSvm, EVM_REWARD_PARAM, hashIntent } from "../src/routes/encode.js";
+import {
+  decodeRewardEvm,
+  encodeRoute,
+  encodeRouteSvm,
+  EVM_REWARD_PARAM,
+  hashIntent,
+} from "../src/routes/encode.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import type { Intent, Reward, Route, UniversalAddress } from "../src/routes/types.js";
 
-const evmAddr = (byte: string): UniversalAddress => toUniversalAddress(("0x" + byte.repeat(20)) as Hex);
-const svmAddr = (byte: string): UniversalAddress => toUniversalAddress(("0x" + byte.repeat(32)) as Hex);
+const evmAddr = (byte: string): UniversalAddress =>
+  toUniversalAddress(("0x" + byte.repeat(20)) as Hex);
+const svmAddr = (byte: string): UniversalAddress =>
+  toUniversalAddress(("0x" + byte.repeat(32)) as Hex);
 const salt32 = (byte: string) => ("0x" + byte.repeat(32)) as Hex;
 
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
@@ -152,11 +160,21 @@ describe("portal.ts: approvalTxs", () => {
     expect(txs[1]!.to.toLowerCase()).toBe(("0x" + "88".repeat(20)).toLowerCase());
     for (const tx of txs) expect(tx.value).toBe(0n);
 
-    const decoded0 = decodeFunctionData({ abi: [
-      { type: "function", name: "approve", stateMutability: "nonpayable",
-        inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }],
-        outputs: [{ type: "bool" }] },
-    ] as const, data: txs[0]!.data });
+    const decoded0 = decodeFunctionData({
+      abi: [
+        {
+          type: "function",
+          name: "approve",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "spender", type: "address" },
+            { name: "amount", type: "uint256" },
+          ],
+          outputs: [{ type: "bool" }],
+        },
+      ] as const,
+      data: txs[0]!.data,
+    });
     const [spender0, amount0] = decoded0.args as readonly [Hex, bigint];
     expect(spender0.toLowerCase()).toBe(PORTAL.toLowerCase());
     expect(spender0.toLowerCase()).not.toBe(("0x" + "77".repeat(20)).toLowerCase()); // not the vault/token itself
@@ -239,11 +257,21 @@ describe("portal.ts: approvalTxs", () => {
 
 /** Decodes an ERC20 `approve` calldata into `[lowercased spender, amount]`. */
 function decodeApprove(data: Hex): readonly [string, bigint] {
-  const decoded = decodeFunctionData({ abi: [
-    { type: "function", name: "approve", stateMutability: "nonpayable",
-      inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }],
-      outputs: [{ type: "bool" }] },
-  ] as const, data });
+  const decoded = decodeFunctionData({
+    abi: [
+      {
+        type: "function",
+        name: "approve",
+        stateMutability: "nonpayable",
+        inputs: [
+          { name: "spender", type: "address" },
+          { name: "amount", type: "uint256" },
+        ],
+        outputs: [{ type: "bool" }],
+      },
+    ] as const,
+    data,
+  });
   const [spender, amount] = decoded.args as readonly [Hex, bigint];
 
   return [spender.toLowerCase(), amount];

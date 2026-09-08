@@ -29,12 +29,20 @@ const SVM_APPROVE: TokenSpec = {
 const SVM_BALANCE: TokenSpec = { op: "balanceOf", svm: { source: "source" } };
 
 /** `main`'s declared slots, as `[name, writable, signer]` — the account manifest's whole content. */
-const slots = (manifest: { accounts: readonly unknown[] } | undefined): [string, boolean, boolean][] =>
+const slots = (
+  manifest: { accounts: readonly unknown[] } | undefined,
+): [string, boolean, boolean][] =>
   (manifest?.accounts ?? []).flatMap((entry) => {
     const slot = entry as { kind: string; name: string; requires: string };
     if (slot.kind !== "slot") return [];
 
-    return [[slot.name, slot.requires.startsWith("writable"), slot.requires.endsWith("signer")] as [string, boolean, boolean]];
+    return [
+      [slot.name, slot.requires.startsWith("writable"), slot.requires.endsWith("signer")] as [
+        string,
+        boolean,
+        boolean,
+      ],
+    ];
   });
 
 describe("Token: compiles on an EVM target", () => {
@@ -46,16 +54,26 @@ describe("Token: compiles on an EVM target", () => {
       ],
       "evm",
     );
-    expect(compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS }).bytecode.length).toBeGreaterThan(0);
+    expect(
+      compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS }).bytecode.length,
+    ).toBeGreaterThan(0);
   });
 
   it("approve", () => {
-    const src = tokenSource({ op: "approve", token: TOKEN_ADDR, spender: SPENDER, amount: 5n }, "evm");
-    expect(compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS }).bytecode.length).toBeGreaterThan(0);
+    const src = tokenSource(
+      { op: "approve", token: TOKEN_ADDR, spender: SPENDER, amount: 5n },
+      "evm",
+    );
+    expect(
+      compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS }).bytecode.length,
+    ).toBeGreaterThan(0);
   });
 
   it("an EVM program declares no account manifest", () => {
-    const src = tokenSource({ op: "approve", token: TOKEN_ADDR, spender: SPENDER, amount: 5n }, "evm");
+    const src = tokenSource(
+      { op: "approve", token: TOKEN_ADDR, spender: SPENDER, amount: 5n },
+      "evm",
+    );
     expect(compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS }).manifest).toBeUndefined();
   });
 });
@@ -68,11 +86,15 @@ describe("Token: compiles on target 'svm'", () => {
   });
 
   it("approve", () => {
-    expect(compileSource(tokenSource(SVM_APPROVE, "svm"), "svm").bytecode.length).toBeGreaterThan(0);
+    expect(compileSource(tokenSource(SVM_APPROVE, "svm"), "svm").bytecode.length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("balanceOf", () => {
-    expect(compileSource(tokenSource(SVM_BALANCE, "svm"), "svm").bytecode.length).toBeGreaterThan(0);
+    expect(compileSource(tokenSource(SVM_BALANCE, "svm"), "svm").bytecode.length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("★ manifest order matches Token.transfer(...).accountRefs() exactly, roles included", () => {
@@ -85,7 +107,10 @@ describe("Token: compiles on target 'svm'", () => {
       ["owner", false, true],
     ]);
     expect(slots(manifest).map(([name]) => name)).toEqual(
-      Token.transfer({ amount: 5n, svm: { source: "source", mint: "mint", dest: "dest" } }).accountRefs(),
+      Token.transfer({
+        amount: 5n,
+        svm: { source: "source", mint: "mint", dest: "dest" },
+      }).accountRefs(),
     );
   });
 

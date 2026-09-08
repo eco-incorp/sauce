@@ -4,7 +4,8 @@ import { deployments } from "./addresses.js";
 export const protocolInfo: ProtocolInfo = {
   name: "Frax Finance",
   slug: "frax",
-  description: "Fractional-algorithmic stablecoin protocol with FRAX stablecoin, sFRAX staking, and FXS governance.",
+  description:
+    "Fractional-algorithmic stablecoin protocol with FRAX stablecoin, sFRAX staking, and FXS governance.",
   website: "https://frax.finance",
   github: "https://github.com/FraxFinance",
   category: "cdp",

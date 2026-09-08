@@ -78,18 +78,18 @@
  * scope, unverified against this adapter, matching every other Tokenkeg-only adapter's own scope
  * note).
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'metric';
-export const METRIC_PROGRAM_ID = address('Bvs46DPFxiFE6YHxLDLD6QAUcmy51FyRVPZJusPxLk3j');
-export const METRIC_ORACLE_PROGRAM_ID = address('CvGnk4HouriGypBTZhYc76esyN5kWBepWueYVeSpR1L1');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const SYSTEM_PROGRAM = address('11111111111111111111111111111111');
+const SLUG = "metric";
+export const METRIC_PROGRAM_ID = address("Bvs46DPFxiFE6YHxLDLD6QAUcmy51FyRVPZJusPxLk3j");
+export const METRIC_ORACLE_PROGRAM_ID = address("CvGnk4HouriGypBTZhYc76esyN5kWBepWueYVeSpR1L1");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const SYSTEM_PROGRAM = address("11111111111111111111111111111111");
 
 // Pool account layout (see module doc — ground-truthed against a live pool).
 export const OFF_MINT_A = 74;
@@ -144,7 +144,8 @@ export const METRIC_QUOTE_HAIRCUT_PPM = 50n;
 const MINT_DECIMALS_OFFSET = 44;
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 export interface MetricPoolConfig extends PoolConfig {
   venue: typeof SLUG;
@@ -233,7 +234,7 @@ export function metricScaleParams(
 
 export const metric = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: METRIC_PROGRAM_ID,
 
   /**
@@ -249,12 +250,18 @@ export const metric = {
     load: AccountLoader,
     pool: Address,
     direction: 0 | 1 = 0,
-    fetchOracleQuote?: (oracleProgram: Address, oracleConfig: Address, priceAccount: Address) => Promise<Uint8Array>,
+    fetchOracleQuote?: (
+      oracleProgram: Address,
+      oracleConfig: Address,
+      priceAccount: Address,
+    ) => Promise<Uint8Array>,
   ): Promise<MetricPoolConfig> {
     const data = await load(pool);
     if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
     if (data.length < POOL_MIN_LENGTH) {
-      throw new Error(`${SLUG} pool ${pool} account is ${data.length} bytes, too short for the fixed layout (need >= ${POOL_MIN_LENGTH})`);
+      throw new Error(
+        `${SLUG} pool ${pool} account is ${data.length} bytes, too short for the fixed layout (need >= ${POOL_MIN_LENGTH})`,
+      );
     }
 
     const mintA = pubkeyAt(data, OFF_MINT_A);
@@ -264,7 +271,8 @@ export const metric = {
     const oracleConfig = pubkeyAt(data, OFF_ORACLE_CONFIG);
 
     const oracleConfigData = await load(oracleConfig);
-    if (oracleConfigData === null) throw new Error(`${SLUG} pool ${pool} oracleConfig ${oracleConfig} account not found`);
+    if (oracleConfigData === null)
+      throw new Error(`${SLUG} pool ${pool} oracleConfig ${oracleConfig} account not found`);
     if (oracleConfigData.length < ORACLE_CONFIG_MIN_LENGTH) {
       throw new Error(
         `${SLUG} pool ${pool} oracleConfig ${oracleConfig} is ${oracleConfigData.length} bytes, too short to hold the price account pubkey at offset ${PRICE_ACCOUNT_OFFSET_IN_ORACLE_CONFIG}`,
@@ -276,7 +284,10 @@ export const metric = {
     if (mintAData === null || mintBData === null) {
       throw new Error(`${SLUG} pool ${pool} mint account(s) not found`);
     }
-    if (mintAData.length < MINT_DECIMALS_OFFSET + 1 || mintBData.length < MINT_DECIMALS_OFFSET + 1) {
+    if (
+      mintAData.length < MINT_DECIMALS_OFFSET + 1 ||
+      mintBData.length < MINT_DECIMALS_OFFSET + 1
+    ) {
       throw new Error(`${SLUG} pool ${pool} mint account(s) too short to be an SPL mint`);
     }
     const decimalsA = mintAData[MINT_DECIMALS_OFFSET];
@@ -294,11 +305,15 @@ export const metric = {
     ] as const) {
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -311,7 +326,9 @@ export const metric = {
     }
     const quoteBytes = await fetchOracleQuote(METRIC_ORACLE_PROGRAM_ID, oracleConfig, priceAccount);
     if (quoteBytes.length !== 32) {
-      throw new Error(`${SLUG} pool ${pool} oracle CPI returned ${quoteBytes.length} bytes, expected 32 (bid:u128 LE ++ ask:u128 LE)`);
+      throw new Error(
+        `${SLUG} pool ${pool} oracle CPI returned ${quoteBytes.length} bytes, expected 32 (bid:u128 LE ++ ask:u128 LE)`,
+      );
     }
     const bidQ64 = readUintLE(quoteBytes, 0, 16);
     const askQ64 = readUintLE(quoteBytes, 16, 16);
@@ -397,19 +414,19 @@ export function metricSwapAccounts(
   const userAtaB = c.direction === 0 ? user.outAta : user.inAta;
   return [
     { ref: user.owner, signer: true },
-    make(r('pool'), c.pool, true),
-    make(r('ma'), c.mintA),
-    make(r('mb'), c.mintB),
-    make(r('va'), c.vaultA, true),
-    make(r('vb'), c.vaultB, true),
+    make(r("pool"), c.pool, true),
+    make(r("ma"), c.mintA),
+    make(r("mb"), c.mintB),
+    make(r("va"), c.vaultA, true),
+    make(r("vb"), c.vaultB, true),
     { ref: userAtaA, writable: true },
     { ref: userAtaB, writable: true },
-    make(r('tpa'), c.tokenProgramA),
-    make(r('tpb'), c.tokenProgramB),
-    make(r('sys'), SYSTEM_PROGRAM),
-    make(r('self'), METRIC_PROGRAM_ID),
-    make(r('oracleProg'), METRIC_ORACLE_PROGRAM_ID),
-    make(r('oracleConfig'), c.oracleConfig, true),
-    make(r('price'), c.priceAccount, true),
+    make(r("tpa"), c.tokenProgramA),
+    make(r("tpb"), c.tokenProgramB),
+    make(r("sys"), SYSTEM_PROGRAM),
+    make(r("self"), METRIC_PROGRAM_ID),
+    make(r("oracleProg"), METRIC_ORACLE_PROGRAM_ID),
+    make(r("oracleConfig"), c.oracleConfig, true),
+    make(r("price"), c.priceAccount, true),
   ];
 }

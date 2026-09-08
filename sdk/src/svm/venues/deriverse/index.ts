@@ -66,17 +66,17 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+ */
+import { getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'deriverse';
+const SLUG = "deriverse";
 
-export const DERIVERSE_PROGRAM_ID = 'DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD' as Address;
-const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
+export const DERIVERSE_PROGRAM_ID = "DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD" as Address;
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address;
 
 /**
  * `find_program_address([b"ndxnt"], programId)` — ONE PDA for the whole
@@ -84,7 +84,7 @@ const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
  * pool. Hardcoded (verified against mainnet via an offline PDA derivation,
  * not read from any account) exactly like raydium-amm-v4's `AMM_AUTHORITY`.
  */
-export const DERIVERSE_AUTH = '5QLXhNtkVUEtCyzZ6C1iAavT2x6c6t6LdJcSwVnqWEii' as Address;
+export const DERIVERSE_AUTH = "5QLXhNtkVUEtCyzZ6C1iAavT2x6c6t6LdJcSwVnqWEii" as Address;
 
 const VERSION = 1;
 // account_type tags (drv-smart-contract-common state/types.rs).
@@ -127,8 +127,6 @@ const OFF_DISCRIMINATOR_VERSION = 4; // u32
 const OFF_INSTR_ID = 8; // u32
 const OFF_ASSET_TOKEN_ID = 12; // u32
 const OFF_CRNCY_TOKEN_ID = 16; // u32
-const OFF_ASSET_TOKEN_DECS_COUNT = 20; // u32
-const OFF_CRNCY_TOKEN_DECS_COUNT = 24; // u32
 export const OFF_MASK = 28; // u32
 export const OFF_LAST_PX = 32; // i64
 export const OFF_ASSET_TOKENS = 144; // i64
@@ -197,9 +195,15 @@ function readInt64LE(data: Uint8Array, offset: number): bigint {
  * stays 0 is the unsafe one). This is the ONLY fee derivation this adapter
  * does off-chain; the ladder never reads day_volatility/fixed_fee_rate live.
  */
-export function conservativeFeePpm(mask: number, dayVolatility: number, spotFeeRate: number, fixedFeeRate: number): bigint {
+export function conservativeFeePpm(
+  mask: number,
+  dayVolatility: number,
+  spotFeeRate: number,
+  fixedFeeRate: number,
+): bigint {
   if ((mask & MASK_ZERO_FEES) !== 0) return 0n;
-  const raw = (mask & MASK_FIXED_FEES) !== 0 ? fixedFeeRate : dayVolatility * spotFeeRate * FEE_RATE_STEP;
+  const raw =
+    (mask & MASK_FIXED_FEES) !== 0 ? fixedFeeRate : dayVolatility * spotFeeRate * FEE_RATE_STEP;
   if (!Number.isFinite(raw) || raw < 0) return 20n; // defensive floor on a garbage read
   const ppm = Math.ceil(raw * 1_000_000) * 2 + 20;
   return BigInt(ppm);
@@ -208,7 +212,7 @@ export function conservativeFeePpm(mask: number, dayVolatility: number, spotFeeR
 export interface DeriversePoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'sell' (default, asset in / crncy out — input_crncy=0) | 'buy' (crncy in / asset out — input_crncy=1). */
-  side: 'buy' | 'sell';
+  side: "buy" | "sell";
   instrId: number;
   assetTokenId: number;
   crncyTokenId: number;
@@ -232,13 +236,14 @@ export interface DeriversePoolConfig extends PoolConfig {
 function deriverseConfig(cfg: PoolConfig): DeriversePoolConfig {
   if (cfg.venue !== SLUG) throw new Error(`${SLUG} adapter got a config for venue '${cfg.venue}'`);
   const c = cfg as DeriversePoolConfig;
-  if (c.side !== 'buy' && c.side !== 'sell') throw new Error(`${SLUG} side must be 'buy' or 'sell', got '${c.side}'`);
+  if (c.side !== "buy" && c.side !== "sell")
+    throw new Error(`${SLUG} side must be 'buy' or 'sell', got '${c.side}'`);
   return c;
 }
 
 export const deriverse = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: DERIVERSE_PROGRAM_ID,
 
   /**
@@ -255,19 +260,26 @@ export const deriverse = {
     const data = await load(pool);
     if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
     if (data.length < INSTR_ACCOUNT_HEADER_MIN_SIZE) {
-      throw new Error(`${SLUG} pool ${pool} account is ${data.length} bytes, expected at least ${INSTR_ACCOUNT_HEADER_MIN_SIZE} (InstrAccountHeader)`);
+      throw new Error(
+        `${SLUG} pool ${pool} account is ${data.length} bytes, expected at least ${INSTR_ACCOUNT_HEADER_MIN_SIZE} (InstrAccountHeader)`,
+      );
     }
     const tag = readUint32LE(data, OFF_DISCRIMINATOR_TAG);
     const version = readUint32LE(data, OFF_DISCRIMINATOR_VERSION);
     if (tag !== TAG_INSTR) {
-      throw new Error(`${SLUG} pool ${pool} is not an Instrument account (discriminator tag ${tag}, expected ${TAG_INSTR})`);
+      throw new Error(
+        `${SLUG} pool ${pool} is not an Instrument account (discriminator tag ${tag}, expected ${TAG_INSTR})`,
+      );
     }
     if (version !== VERSION) {
-      throw new Error(`${SLUG} pool ${pool} is schema version ${version}, this adapter only decodes version ${VERSION}`);
+      throw new Error(
+        `${SLUG} pool ${pool} is schema version ${version}, this adapter only decodes version ${VERSION}`,
+      );
     }
 
     const decFactor = readInt64LE(data, OFF_DEC_FACTOR);
-    if (decFactor <= 0n) throw new Error(`${SLUG} pool ${pool} has a non-positive dec_factor (${decFactor})`);
+    if (decFactor <= 0n)
+      throw new Error(`${SLUG} pool ${pool} has a non-positive dec_factor (${decFactor})`);
 
     const instrId = readUint32LE(data, OFF_INSTR_ID);
     const assetTokenId = readUint32LE(data, OFF_ASSET_TOKEN_ID);
@@ -298,11 +310,15 @@ export const deriverse = {
       const mintData = mintDatas[mi];
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -313,7 +329,16 @@ export const deriverse = {
     // (using the TokenState PDA directly as the vault) would attach the
     // wrong account to the Swap CPI — verified against real mainnet TokenState
     // dumps (wSOL/USDC/USDT), where the PDA and program_address differ.
-    const [assetTokenStateAddr, crncyTokenStateAddr, asksTree, askOrders, bidsTree, bidOrders, lines, clientInfos] = await Promise.all([
+    const [
+      assetTokenStateAddr,
+      crncyTokenStateAddr,
+      asksTree,
+      askOrders,
+      bidsTree,
+      bidOrders,
+      lines,
+      clientInfos,
+    ] = await Promise.all([
       spotAccForMint(assetMint),
       spotAccForMint(crncyMint),
       spotAcc(TAG_SPOT_ASKS_TREE, assetTokenId, crncyTokenId),
@@ -323,22 +348,41 @@ export const deriverse = {
       spotAcc(TAG_SPOT_LINES, assetTokenId, crncyTokenId),
       spotAcc(TAG_SPOT_CLIENT_INFOS, assetTokenId, crncyTokenId),
     ]);
-    const [assetTokenStateData, crncyTokenStateData] = await Promise.all([load(assetTokenStateAddr), load(crncyTokenStateAddr)]);
-    if (assetTokenStateData === null) throw new Error(`${SLUG} pool ${pool} asset TokenState ${assetTokenStateAddr} not found`);
-    if (crncyTokenStateData === null) throw new Error(`${SLUG} pool ${pool} crncy TokenState ${crncyTokenStateAddr} not found`);
+    const [assetTokenStateData, crncyTokenStateData] = await Promise.all([
+      load(assetTokenStateAddr),
+      load(crncyTokenStateAddr),
+    ]);
+    if (assetTokenStateData === null)
+      throw new Error(`${SLUG} pool ${pool} asset TokenState ${assetTokenStateAddr} not found`);
+    if (crncyTokenStateData === null)
+      throw new Error(`${SLUG} pool ${pool} crncy TokenState ${crncyTokenStateAddr} not found`);
     if (assetTokenStateData.length < TOKEN_STATE_SIZE) {
-      throw new Error(`${SLUG} pool ${pool} asset TokenState ${assetTokenStateAddr} is ${assetTokenStateData.length} bytes, expected at least ${TOKEN_STATE_SIZE}`);
+      throw new Error(
+        `${SLUG} pool ${pool} asset TokenState ${assetTokenStateAddr} is ${assetTokenStateData.length} bytes, expected at least ${TOKEN_STATE_SIZE}`,
+      );
     }
     if (crncyTokenStateData.length < TOKEN_STATE_SIZE) {
-      throw new Error(`${SLUG} pool ${pool} crncy TokenState ${crncyTokenStateAddr} is ${crncyTokenStateData.length} bytes, expected at least ${TOKEN_STATE_SIZE}`);
+      throw new Error(
+        `${SLUG} pool ${pool} crncy TokenState ${crncyTokenStateAddr} is ${crncyTokenStateData.length} bytes, expected at least ${TOKEN_STATE_SIZE}`,
+      );
     }
-    const assetVault = codec.decode(assetTokenStateData.subarray(OFF_TOKEN_STATE_PROGRAM_ADDRESS, OFF_TOKEN_STATE_PROGRAM_ADDRESS + 32));
-    const crncyVault = codec.decode(crncyTokenStateData.subarray(OFF_TOKEN_STATE_PROGRAM_ADDRESS, OFF_TOKEN_STATE_PROGRAM_ADDRESS + 32));
+    const assetVault = codec.decode(
+      assetTokenStateData.subarray(
+        OFF_TOKEN_STATE_PROGRAM_ADDRESS,
+        OFF_TOKEN_STATE_PROGRAM_ADDRESS + 32,
+      ),
+    );
+    const crncyVault = codec.decode(
+      crncyTokenStateData.subarray(
+        OFF_TOKEN_STATE_PROGRAM_ADDRESS,
+        OFF_TOKEN_STATE_PROGRAM_ADDRESS + 32,
+      ),
+    );
 
     return {
       venue: SLUG,
       pool,
-      side: 'sell',
+      side: "sell",
       instrId,
       assetTokenId,
       crncyTokenId,
@@ -367,17 +411,22 @@ export const deriverse = {
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
     const c = deriverseConfig(cfg);
     const U64_MAX = (1n << 64n) - 1n;
-    if (amountIn <= 0n || amountIn > U64_MAX) throw new Error(`${SLUG} buildSwap amountIn must be a positive u64, got ${amountIn}`);
+    if (amountIn <= 0n || amountIn > U64_MAX)
+      throw new Error(`${SLUG} buildSwap amountIn must be a positive u64, got ${amountIn}`);
     const data = new Uint8Array(32);
     const dv = new DataView(data.buffer);
     data[0] = 26; // SwapInstruction::INSTRUCTION_NUMBER
-    data[1] = c.side === 'buy' ? 1 : 0; // input_crncy
+    data[1] = c.side === "buy" ? 1 : 0; // input_crncy
     // bytes 2..4 padding_u16 = 0
     dv.setUint32(4, c.instrId, true);
     dv.setBigInt64(8, 0n, true); // price = 0 (no caller-supplied limit; the program applies its own last_px-derived breaker)
     dv.setBigInt64(16, amountIn, true); // amount
     dv.setBigInt64(24, 1n, true); // min_amount_out = 1 (the recipe's terminal delta owns the real bound)
-    return { programId: DERIVERSE_PROGRAM_ID, data, accounts: deriverseSwapAccounts(c, user, (ref, addr, w) => fixed(ref, addr, w)) };
+    return {
+      programId: DERIVERSE_PROGRAM_ID,
+      data,
+      accounts: deriverseSwapAccounts(c, user, (ref, addr, w) => fixed(ref, addr, w)),
+    };
   },
 };
 
@@ -388,7 +437,10 @@ async function spotAccForMint(mint: Address): Promise<Address> {
   seed.set(mintBytes.subarray(0, 28), 0);
   new DataView(seed.buffer).setUint32(28, VERSION, true);
   const authBytes = getAddressEncoder().encode(DERIVERSE_AUTH);
-  const [acc] = await getProgramDerivedAddress({ programAddress: DERIVERSE_PROGRAM_ID, seeds: [seed, authBytes] });
+  const [acc] = await getProgramDerivedAddress({
+    programAddress: DERIVERSE_PROGRAM_ID,
+    seeds: [seed, authBytes],
+  });
   return acc;
 }
 
@@ -411,24 +463,24 @@ export function deriverseSwapAccounts(
   refFor?: (role: string) => string,
 ): VenueAccount[] {
   const r = refFor ?? ((role: string): string => role);
-  const buy = c.side === 'buy';
+  const buy = c.side === "buy";
   const userAsset = buy ? user.outAta : user.inAta;
   const userCrncy = buy ? user.inAta : user.outAta;
   return [
     { ref: user.owner, signer: true, writable: true },
-    make(r('am'), c.assetMint),
-    make(r('cm'), c.crncyMint),
-    make(r('av'), c.assetVault, true),
-    make(r('cv'), c.crncyVault, true),
-    make(r('instr'), c.pool, true),
+    make(r("am"), c.assetMint),
+    make(r("cm"), c.crncyMint),
+    make(r("av"), c.assetVault, true),
+    make(r("cv"), c.crncyVault, true),
+    make(r("instr"), c.pool, true),
     ...(buy
-      ? [make(r('askt'), c.asksTree, true), make(r('asko'), c.askOrders, true)]
-      : [make(r('bidt'), c.bidsTree, true), make(r('bido'), c.bidOrders, true)]),
-    make(r('lines'), c.lines, true),
-    make(r('maps'), c.mapsAddress, true),
-    make(r('ci'), c.clientInfos, true),
+      ? [make(r("askt"), c.asksTree, true), make(r("asko"), c.askOrders, true)]
+      : [make(r("bidt"), c.bidsTree, true), make(r("bido"), c.bidOrders, true)]),
+    make(r("lines"), c.lines, true),
+    make(r("maps"), c.mapsAddress, true),
+    make(r("ci"), c.clientInfos, true),
     { ref: userAsset, writable: true },
     { ref: userCrncy, writable: true },
-    make(r('tp'), c.tokenProgram),
+    make(r("tp"), c.tokenProgram),
   ];
 }

@@ -5,12 +5,12 @@
  * TypeScript source files, since the compiler resolves a contract import as JSON.
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { createRequire } from 'node:module';
-import { join } from 'path';
-import { ensureVoidMain } from '../src/routes/rs-compile.js';
-import { keccak256, toBytes, toHex } from 'viem';
-import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-compiler';
+import { existsSync, readFileSync } from "fs";
+import { createRequire } from "node:module";
+import { join } from "path";
+import { ensureVoidMain } from "../src/routes/rs-compile.js";
+import { keccak256, toBytes, toHex } from "viem";
+import type { CompileResult as RustCompileResult, SauceTarget } from "sauce-compiler";
 
 // The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, depended on under the alias
 // `sauce-compiler` (`"sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0"`) because the in-repo
@@ -19,7 +19,7 @@ import type { CompileResult as RustCompileResult, SauceTarget } from 'sauce-comp
 // Required via `createRequire` for the same reason `test/std/token/harness.ts` does: the package's
 // `node` condition is a CommonJS build that reads its sibling `.wasm` off disk at load, and jest's
 // ESM transform does not resolve that sibling.
-const { compile: compileRust } = createRequire(import.meta.url)('sauce-compiler') as {
+const { compile: compileRust } = createRequire(import.meta.url)("sauce-compiler") as {
   compile: (options: {
     target: SauceTarget;
     entry?: string;
@@ -32,7 +32,7 @@ const { compile: compileRust } = createRequire(import.meta.url)('sauce-compiler'
 /** The option surface the real-compile suites already call with. */
 export interface CompileProgramOptions extends CompileSourceOptions {
   /** The compiler's two backends. Defaults to `'evm'`. */
-  target?: 'evm' | 'svm';
+  target?: "evm" | "svm";
   /** Contract bindings holding a PARSED ABI, as `protocol-rewrite.ts` synthesizes them. */
   contracts?: Readonly<Record<string, { abi: unknown }>>;
 }
@@ -46,11 +46,11 @@ export interface CompileProgramOptions extends CompileSourceOptions {
  */
 export function compileProgram(
   source: string,
-  { target = 'evm', baseDirs, contracts, defines }: CompileProgramOptions = {},
+  { target = "evm", baseDirs, contracts, defines }: CompileProgramOptions = {},
 ): { bytecode: Uint8Array[]; warnings: string[] } {
-  const entry = 'main.js';
+  const entry = "main.js";
   const resolve = (path: string): Uint8Array | undefined => {
-    const key = path.replace(/^\.\//, '');
+    const key = path.replace(/^\.\//, "");
     if (key === entry) return Buffer.from(ensureVoidMain(source));
     for (const dir of baseDirs ?? []) {
       const full = join(dir, key);
@@ -60,13 +60,17 @@ export function compileProgram(
     return undefined;
   };
 
-  const inline = Object.entries(contracts ?? {}).map(([name, cfg]) => [name, JSON.stringify(cfg.abi)] as [string, string]);
+  const inline = Object.entries(contracts ?? {}).map(
+    ([name, cfg]) => [name, JSON.stringify(cfg.abi)] as [string, string],
+  );
   const { bytecode } = compileRust({
-    target: target === 'svm' ? 'svm' : 'evm',
+    target: target === "svm" ? "svm" : "evm",
     entry,
     resolve,
     ...(inline.length > 0 ? { inlineContracts: inline } : {}),
-    ...(defines ? { defines: Object.entries(defines).map(([k, v]) => [k, v.toString()] as [string, string]) } : {}),
+    ...(defines
+      ? { defines: Object.entries(defines).map(([k, v]) => [k, v.toString()] as [string, string]) }
+      : {}),
   });
 
   return { bytecode: [bytecode], warnings: [] };
@@ -89,9 +93,9 @@ export function compileSource(
   target: SauceTarget,
   { baseDirs = [], defines }: CompileSourceOptions = {},
 ): RustCompileResult {
-  const entry = 'main.js';
+  const entry = "main.js";
   const resolve = (path: string): Uint8Array | undefined => {
-    const key = path.replace(/^\.\//, '');
+    const key = path.replace(/^\.\//, "");
     if (key === entry) return Buffer.from(ensureVoidMain(source));
     for (const dir of baseDirs) {
       const full = join(dir, key);
@@ -105,10 +109,11 @@ export function compileSource(
     target,
     entry,
     resolve,
-    ...(defines ? { defines: Object.entries(defines).map(([k, v]) => [k, v.toString()] as [string, string]) } : {}),
+    ...(defines
+      ? { defines: Object.entries(defines).map(([k, v]) => [k, v.toString()] as [string, string]) }
+      : {}),
   });
 }
-
 
 /**
  * Parsed import: `import { ExportName as LocalName } from "./abis"`
@@ -131,7 +136,7 @@ function parseImports(source: string): ParsedImport[] {
     const specifiers = match[1];
     const importSource = match[2];
     // Parse each specifier: "Foo as Bar" or just "Foo"
-    for (const spec of specifiers.split(',')) {
+    for (const spec of specifiers.split(",")) {
       const trimmed = spec.trim();
       if (!trimmed) continue;
       const asMatch = trimmed.match(/^(\w+)\s+as\s+(\w+)$/);
@@ -154,15 +159,15 @@ function extractExportsFromTs(tsSource: string): Record<string, unknown> {
   // Strip TypeScript-specific syntax
   let js = tsSource;
   // Remove `import type ...` lines
-  js = js.replace(/^\s*import\s+type\s+[^;]*;?\s*$/gm, '');
+  js = js.replace(/^\s*import\s+type\s+[^;]*;?\s*$/gm, "");
   // Remove `satisfies TypeName`
-  js = js.replace(/\s+satisfies\s+[A-Za-z_$][\w$]*(?:<[^>]*>)?/g, '');
+  js = js.replace(/\s+satisfies\s+[A-Za-z_$][\w$]*(?:<[^>]*>)?/g, "");
   // Remove `as const`
-  js = js.replace(/\s+as\s+const\b/g, '');
+  js = js.replace(/\s+as\s+const\b/g, "");
   // Remove type annotations on declarations: `const x: Type = ...`
   js = js.replace(
-    /((?:const|let|var)\s+\w+)\s*:\s*(?:readonly\s+)?[A-Za-z_$][\w$.<>|&\[\]\s]*(?:\[\])?\s*(?==)/g,
-    '$1 ',
+    /((?:const|let|var)\s+\w+)\s*:\s*(?:readonly\s+)?[A-Za-z_$][\w$.<>|&[\]\s]*(?:\[\])?\s*(?==)/g,
+    "$1 ",
   );
 
   // Extract all `export const NAME = VALUE;` patterns
@@ -193,7 +198,7 @@ function extractExportsFromTs(tsSource: string): Record<string, unknown> {
  * Handles nested arrays/objects with bracket counting.
  */
 function extractBalancedValue(source: string, startIdx: number): string | null {
-  let depth = 0;
+  let depth: number;
   let inString: string | null = null;
   let i = startIdx;
 
@@ -203,17 +208,20 @@ function extractBalancedValue(source: string, startIdx: number): string | null {
   const valueStart = i;
   const openChar = source[i];
 
-  if (openChar === '[' || openChar === '{') {
-    const closeChar = openChar === '[' ? ']' : '}';
+  if (openChar === "[" || openChar === "{") {
+    const closeChar = openChar === "[" ? "]" : "}";
     depth = 1;
     i++;
     while (i < source.length && depth > 0) {
       const ch = source[i];
       if (inString) {
-        if (ch === '\\') { i += 2; continue; }
+        if (ch === "\\") {
+          i += 2;
+          continue;
+        }
         if (ch === inString) inString = null;
       } else {
-        if (ch === '"' || ch === "'" || ch === '`') inString = ch;
+        if (ch === '"' || ch === "'" || ch === "`") inString = ch;
         else if (ch === openChar) depth++;
         else if (ch === closeChar) depth--;
       }
@@ -224,7 +232,7 @@ function extractBalancedValue(source: string, startIdx: number): string | null {
   }
 
   // Simple value — read until semicolon or newline
-  while (i < source.length && source[i] !== ';' && source[i] !== '\n') i++;
+  while (i < source.length && source[i] !== ";" && source[i] !== "\n") i++;
   return source.slice(valueStart, i).trim();
 }
 
@@ -232,8 +240,8 @@ function extractBalancedValue(source: string, startIdx: number): string | null {
  * Load ABI exports from a protocol's abis.ts file.
  */
 function loadProtocolAbis(protocolDir: string): Record<string, unknown> {
-  const abisPath = join(protocolDir, 'abis.ts');
-  const tsSource = readFileSync(abisPath, 'utf-8');
+  const abisPath = join(protocolDir, "abis.ts");
+  const tsSource = readFileSync(abisPath, "utf-8");
   return extractExportsFromTs(tsSource);
 }
 
@@ -248,7 +256,7 @@ function loadProtocolAbis(protocolDir: string): Record<string, unknown> {
 export function compileSauceFunctionRust(
   sauceScript: string,
   protocolDir: string,
-  target: SauceTarget = 'evm',
+  target: SauceTarget = "evm",
 ): RustCompileResult {
   const [contractImport] = parseImports(sauceScript);
   const abi = contractImport
@@ -256,16 +264,18 @@ export function compileSauceFunctionRust(
     : undefined;
 
   if (contractImport && !abi) {
-    throw new Error(`ABI export "${contractImport.exportName}" not found in ${protocolDir}/abis.ts`);
+    throw new Error(
+      `ABI export "${contractImport.exportName}" not found in ${protocolDir}/abis.ts`,
+    );
   }
 
-  const entry = 'main.js';
+  const entry = "main.js";
   // A miss is `undefined` — the "nothing at this path" signal — never a throw, which would mean
   // "present but unreadable" and would stop the compiler falling back.
   const resolve = (path: string): Uint8Array | undefined => {
-    const key = path.startsWith('./') ? path.slice(2) : path;
+    const key = path.startsWith("./") ? path.slice(2) : path;
     if (key === entry) return Buffer.from(sauceScript);
-    if (contractImport && key === contractImport.source.replace(/^\.\//, '')) {
+    if (contractImport && key === contractImport.source.replace(/^\.\//, "")) {
       return Buffer.from(JSON.stringify(abi));
     }
 

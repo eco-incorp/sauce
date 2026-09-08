@@ -10,11 +10,7 @@
  */
 import { canonicalChains, requireChain } from "../src/chains/canonical.js";
 import { chainAccessors, pascalOfSlug } from "../src/routes/index.js";
-import {
-  installRouteGlobals,
-  uninstallRouteGlobals,
-  routeGlobals,
-} from "../src/routes/globals.js";
+import { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "../src/routes/globals.js";
 import type { IntentOptions } from "../src/routes/index.js";
 
 /** Every chain global, plus the two non-chain globals this module installs by default: `chain`
@@ -64,7 +60,11 @@ describe("routes globals: installed by default on import", () => {
   });
 
   it("E2.3: the installed global carries BOTH the eco-routes DSL and the native contract accessor tree", () => {
-    const base = g.Base as { route: unknown; UniswapV4: { UniversalRouter: unknown }; Uniswap: { UniversalRouter: unknown } };
+    const base = g.Base as {
+      route: unknown;
+      UniswapV4: { UniversalRouter: unknown };
+      Uniswap: { UniversalRouter: unknown };
+    };
     expect(typeof base.route).toBe("function");
     expect(base.UniswapV4.UniversalRouter).toBeDefined();
     // Family alias forwards to the SAME underlying accessor as the canonical namespace.
@@ -96,7 +96,9 @@ describe("routes globals: installed by default on import", () => {
       route: (sauce: string, o: IntentOptions) => { reward: (r: number | bigint) => unknown };
     };
     const viaCall = (g.Base as OriginLike)("return 1n;", opts).reward(0n) as { intent: unknown };
-    const viaRoute = (g.Base as OriginLike).route("return 1n;", opts).reward(0n) as { intent: unknown };
+    const viaRoute = (g.Base as OriginLike).route("return 1n;", opts).reward(0n) as {
+      intent: unknown;
+    };
     const viaNamedImport = chainAccessors.Base("return 1n;", opts).reward(0n);
     expect(viaCall.intent).toEqual(viaNamedImport.intent);
     expect(viaRoute.intent).toEqual(viaNamedImport.intent);
@@ -113,9 +115,15 @@ describe("routes globals: installed by default on import", () => {
 
   // E-token: adding the Token global must not regress E3.5 (Base.route) or E2.3 (Base.Uniswap).
   it("REGRESSION (E3.5/E2.3): Base.route(...) and Base.Uniswap.UniversalRouter still resolve via the bare global", () => {
-    const pending = (g.Base as { route: (s: string, o: IntentOptions) => unknown }).route("return 1n;", evmOptions());
+    const pending = (g.Base as { route: (s: string, o: IntentOptions) => unknown }).route(
+      "return 1n;",
+      evmOptions(),
+    );
     expect(pending).toBeDefined();
-    const base = g.Base as { UniswapV4: { UniversalRouter: unknown }; Uniswap: { UniversalRouter: unknown } };
+    const base = g.Base as {
+      UniswapV4: { UniversalRouter: unknown };
+      Uniswap: { UniversalRouter: unknown };
+    };
     expect(base.UniswapV4.UniversalRouter).toBeDefined();
     expect(base.Uniswap.UniversalRouter).toBe(base.UniswapV4.UniversalRouter);
   });
@@ -135,7 +143,11 @@ describe("routes globals: the universal Token global", () => {
       approve: (s: unknown) => { source: (t: string) => string };
       balanceOf: (s: unknown) => { source: (t: string) => string };
     };
-    const t = token.transfer({ token: "0x1111111111111111111111111111111111111111", to: "0x2222222222222222222222222222222222222222", amount: 1n });
+    const t = token.transfer({
+      token: "0x1111111111111111111111111111111111111111",
+      to: "0x2222222222222222222222222222222222222222",
+      amount: 1n,
+    });
     expect(t.source("evm")).toContain("IERC20");
   });
 
@@ -190,7 +202,11 @@ describe("routes globals: installRouteGlobals / uninstallRouteGlobals", () => {
 
   it("`in` semantics: an inherited/getter-only property on the target still counts as taken", () => {
     uninstallRouteGlobals();
-    const proto = { get Base() { return "inherited"; } };
+    const proto = {
+      get Base() {
+        return "inherited";
+      },
+    };
     const target = Object.create(proto) as Record<string, unknown>;
 
     const report = installRouteGlobals({ target });

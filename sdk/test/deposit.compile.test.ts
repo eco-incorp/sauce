@@ -53,7 +53,13 @@ describe("deposit adapter compiles for every registered template", () => {
 describe("amount 'balance' variants compile", () => {
   it("an ERC20 template (aave-v3:supply)", () => {
     const { bytecode } = compile(
-      depositSource({ protocol: "aave-v3", action: "supply", target: TARGET, token: TOKEN, amount: "balance" }),
+      depositSource({
+        protocol: "aave-v3",
+        action: "supply",
+        target: TARGET,
+        token: TOKEN,
+        amount: "balance",
+      }),
       { baseDirs: [...DEPOSIT_BASE_DIRS] },
     );
     expect(bytecode[0]!.length).toBeGreaterThan(0);
@@ -89,7 +95,9 @@ describe("two deposits of the SAME kind in one main()", () => {
   const twice = (spec: DepositSourceSpec): DepositSourceSpec[] => [spec, spec];
 
   it("weth:wrap twice declares two distinct selector consts", () => {
-    const src = depositSource(twice({ protocol: "weth", action: "wrap", target: TARGET, amount: 1_000n }));
+    const src = depositSource(
+      twice({ protocol: "weth", action: "wrap", target: TARGET, amount: 1_000n }),
+    );
 
     expect(src).toContain("const dWrap0 = ");
     expect(src).toContain("const dWrap1 = ");
@@ -99,13 +107,17 @@ describe("two deposits of the SAME kind in one main()", () => {
   });
 
   it("weth:unwrap twice compiles", () => {
-    const src = depositSource(twice({ protocol: "weth", action: "unwrap", target: TARGET, amount: 1_000n }));
+    const src = depositSource(
+      twice({ protocol: "weth", action: "unwrap", target: TARGET, amount: 1_000n }),
+    );
     const { bytecode } = compile(src, { baseDirs: [...DEPOSIT_BASE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
   it("lido:stake twice compiles", () => {
-    const src = depositSource(twice({ protocol: "lido", action: "stake", target: TARGET, amount: 1_000n }));
+    const src = depositSource(
+      twice({ protocol: "lido", action: "stake", target: TARGET, amount: 1_000n }),
+    );
     const { bytecode } = compile(src, { baseDirs: [...DEPOSIT_BASE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });

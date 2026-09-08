@@ -10,10 +10,10 @@
  * Quote direction is token A → token B, matching the pinned worked example
  * (SOL in → USDC out on the EGZ7ti... fixture pool).
  */
-import { createHash } from 'node:crypto';
-import { getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE, ceilDiv } from '../math.js';
+import { createHash } from "node:crypto";
+import { getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE, ceilDiv } from "../math.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -22,12 +22,12 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
+} from "../types.js";
 
-const SLUG = 'orca-legacy-token-swap';
+const SLUG = "orca-legacy-token-swap";
 
 /** Orca v2 fork of spl-token-swap, mainnet (v1 DjVE6... is deprecated and out of scope). */
-const PROGRAM_ID = '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP' as Address;
+const PROGRAM_ID = "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP" as Address;
 
 // SwapVersion::pack writes version at byte 0 and the 323-byte SwapV1 body at
 // bytes 1..: 1 + 323 = 324, no discriminator, no padding.
@@ -94,11 +94,11 @@ function netAmountIn(cfg: OrcaLegacyPoolConfig, amountIn: bigint): bigint {
 function deriveSwapAuthority(pool: Address, bumpSeed: number): Address {
   const codec = getAddressCodec();
   return codec.decode(
-    createHash('sha256')
+    createHash("sha256")
       .update(new Uint8Array(codec.encode(pool)))
       .update(Uint8Array.of(bumpSeed))
       .update(new Uint8Array(codec.encode(PROGRAM_ID)))
-      .update('ProgramDerivedAddress')
+      .update("ProgramDerivedAddress")
       .digest(),
   );
 }
@@ -107,21 +107,26 @@ const poolRef = (cfg: OrcaLegacyPoolConfig, role: string): string => `${SLUG}:${
 
 export const orcaLegacyTokenSwap = {
   slug: SLUG,
-  kind: 'constant-product',
+  kind: "constant-product",
   programId: PROGRAM_ID,
 
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<OrcaLegacyPoolConfig> {
     const data = await load(pool);
     if (data === null) throw new Error(`${SLUG} pool ${pool} account not found`);
     if (data.length !== POOL_SIZE) {
-      throw new Error(`${SLUG} pool ${pool} data must be ${POOL_SIZE} bytes (SwapVersion::SwapV1), got ${data.length}`);
+      throw new Error(
+        `${SLUG} pool ${pool} data must be ${POOL_SIZE} bytes (SwapVersion::SwapV1), got ${data.length}`,
+      );
     }
-    if (data[0] !== 1) throw new Error(`${SLUG} pool ${pool} version must be 1 (SwapV1), got ${data[0]}`);
+    if (data[0] !== 1)
+      throw new Error(`${SLUG} pool ${pool} version must be 1 (SwapV1), got ${data[0]}`);
     if (data[1] !== 1) throw new Error(`${SLUG} pool ${pool} is not initialized`);
     // Orca's fork also ran stable pools (nonzero curve_type, amp in the
     // calculator blob) — this adapter grounds only the constant-product curve.
     if (data[291] !== 0) {
-      throw new Error(`${SLUG} pool ${pool} curve_type must be 0 (constant product), got ${data[291]}`);
+      throw new Error(
+        `${SLUG} pool ${pool} curve_type must be 0 (constant product), got ${data[291]}`,
+      );
     }
 
     const codec = getAddressCodec();
@@ -133,11 +138,13 @@ export const orcaLegacyTokenSwap = {
     const ownerTradeFeeNumerator = u64(243);
     const ownerTradeFeeDenominator = u64(251);
     for (const [name, numerator, denominator] of [
-      ['trade', tradeFeeNumerator, tradeFeeDenominator],
-      ['owner trade', ownerTradeFeeNumerator, ownerTradeFeeDenominator],
+      ["trade", tradeFeeNumerator, tradeFeeDenominator],
+      ["owner trade", ownerTradeFeeNumerator, ownerTradeFeeDenominator],
     ] as const) {
       if (numerator !== 0n && denominator === 0n) {
-        throw new Error(`${SLUG} pool ${pool} ${name} fee denominator is 0 with nonzero numerator ${numerator}`);
+        throw new Error(
+          `${SLUG} pool ${pool} ${name} fee denominator is 0 with nonzero numerator ${numerator}`,
+        );
       }
     }
 
@@ -180,8 +187,8 @@ export const orcaLegacyTokenSwap = {
     // in the vaults as tokens. Fee rates are immutable SwapV1 fields, baked
     // from cfg — the quote reads only the two vault amounts.
     return [
-      { ref: poolRef(cfg, 'vault-in'), address: cfg.vaultIn },
-      { ref: poolRef(cfg, 'vault-out'), address: cfg.vaultOut },
+      { ref: poolRef(cfg, "vault-in"), address: cfg.vaultIn },
+      { ref: poolRef(cfg, "vault-out"), address: cfg.vaultOut },
     ];
   },
 
@@ -199,7 +206,7 @@ export const orcaLegacyTokenSwap = {
       `const rIn${i} = svm.sload(acc0, 64, 8).toLe();`,
       `const rOut${i} = svm.sload(acc1, 64, 8).toLe();`,
       `const q${i} = rOut${i} - (rIn${i} * rOut${i} + rIn${i} + ${netIn - 1n}) / (rIn${i} + ${netIn});`,
-    ].join('\n');
+    ].join("\n");
   },
 
   buildSwap(cfg: OrcaLegacyPoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
@@ -220,21 +227,26 @@ export const orcaLegacyTokenSwap = {
       // instruction.rs Swap account list 0-9; the optional host fee account
       // (10) is omitted.
       accounts: [
-        { ref: poolRef(cfg, 'pool'), address: cfg.pool },
-        { ref: poolRef(cfg, 'authority'), address: cfg.swapAuthority },
+        { ref: poolRef(cfg, "pool"), address: cfg.pool },
+        { ref: poolRef(cfg, "authority"), address: cfg.swapAuthority },
         { ref: user.owner, signer: true },
         { ref: user.inAta, writable: true },
-        { ref: poolRef(cfg, 'vault-in'), address: cfg.vaultIn, writable: true },
-        { ref: poolRef(cfg, 'vault-out'), address: cfg.vaultOut, writable: true },
+        { ref: poolRef(cfg, "vault-in"), address: cfg.vaultIn, writable: true },
+        { ref: poolRef(cfg, "vault-out"), address: cfg.vaultOut, writable: true },
         { ref: user.outAta, writable: true },
-        { ref: poolRef(cfg, 'pool-mint'), address: cfg.poolMint, writable: true },
-        { ref: poolRef(cfg, 'fee-account'), address: cfg.poolFeeAccount, writable: true },
-        { ref: poolRef(cfg, 'token-program'), address: cfg.tokenProgram },
+        { ref: poolRef(cfg, "pool-mint"), address: cfg.poolMint, writable: true },
+        { ref: poolRef(cfg, "fee-account"), address: cfg.poolFeeAccount, writable: true },
+        { ref: poolRef(cfg, "token-program"), address: cfg.tokenProgram },
       ],
     };
   },
 
-  referenceQuote(cfg: OrcaLegacyPoolConfig, state: AccountBytesMap, amountIn: bigint, _now: bigint): bigint {
+  referenceQuote(
+    cfg: OrcaLegacyPoolConfig,
+    state: AccountBytesMap,
+    amountIn: bigint,
+    _now: bigint,
+  ): bigint {
     const vaults: Uint8Array[] = [];
     for (const vault of [cfg.vaultIn, cfg.vaultOut]) {
       const data = state[vault];

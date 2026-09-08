@@ -100,7 +100,9 @@ export interface SwapSourceOptions {
  * seam) can union these with the deposit side's own import lines instead of duplicating this rule;
  * `swapSource` itself just calls this, so its own output is unaffected byte-for-byte.
  */
-export function swapImportLines(specs: SwapSourceSpec | readonly SwapSourceSpec[]): readonly string[] {
+export function swapImportLines(
+  specs: SwapSourceSpec | readonly SwapSourceSpec[],
+): readonly string[] {
   const list = Array.isArray(specs) ? specs : [specs as SwapSourceSpec];
   const needsBalanceImport = list.some((s) => s.amountIn === "balance");
   return [

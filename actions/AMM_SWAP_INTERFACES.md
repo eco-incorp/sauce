@@ -28,7 +28,7 @@ A comprehensive reference of all unique AMM protocols and their Solidity swap in
 11. [Fluid DEX (Instadapp)](#11-fluid-dex-instadapp)
     - [DEX T1 Pool Swaps](#fluid-dex-t1-pool-swaps)
     - [DEX Lite (Singleton)](#fluid-dex-lite-singleton)
-11. [Fluid DEX (Instadapp)](#11-fluid-dex-instadapp)
+12. [Fluid DEX (Instadapp)](#11-fluid-dex-instadapp)
     - [DEX T1 Pool Swaps](#fluid-dex-t1-pool-swaps)
     - [DEX Lite (Singleton)](#fluid-dex-lite-singleton)
 
@@ -216,28 +216,28 @@ function execute(
 
 #### Swap Command IDs
 
-| Command | Value | Input Encoding |
-|---------|-------|----------------|
-| `V3_SWAP_EXACT_IN` | `0x00` | `abi.encode(address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser)` |
-| `V3_SWAP_EXACT_OUT` | `0x01` | `abi.encode(address recipient, uint256 amountOut, uint256 amountInMax, bytes path, bool payerIsUser)` |
-| `V2_SWAP_EXACT_IN` | `0x08` | `abi.encode(address recipient, uint256 amountIn, uint256 amountOutMin, address[] path, bool payerIsUser)` |
+| Command             | Value  | Input Encoding                                                                                            |
+| ------------------- | ------ | --------------------------------------------------------------------------------------------------------- |
+| `V3_SWAP_EXACT_IN`  | `0x00` | `abi.encode(address recipient, uint256 amountIn, uint256 amountOutMin, bytes path, bool payerIsUser)`     |
+| `V3_SWAP_EXACT_OUT` | `0x01` | `abi.encode(address recipient, uint256 amountOut, uint256 amountInMax, bytes path, bool payerIsUser)`     |
+| `V2_SWAP_EXACT_IN`  | `0x08` | `abi.encode(address recipient, uint256 amountIn, uint256 amountOutMin, address[] path, bool payerIsUser)` |
 | `V2_SWAP_EXACT_OUT` | `0x09` | `abi.encode(address recipient, uint256 amountOut, uint256 amountInMax, address[] path, bool payerIsUser)` |
-| `V4_SWAP` | `0x10` | `abi.encode(bytes actions, bytes[] params)` |
+| `V4_SWAP`           | `0x10` | `abi.encode(bytes actions, bytes[] params)`                                                               |
 
 - **payerIsUser**: `true` = tokens pulled from `msg.sender` via Permit2; `false` = tokens taken from router balance (for chaining commands like `WRAP_ETH`)
 
 #### V4_SWAP Sub-Actions
 
-| Action | Value | Params |
-|--------|-------|--------|
-| `SWAP_EXACT_IN_SINGLE` | `0x06` | `ExactInputSingleParams` |
-| `SWAP_EXACT_IN` | `0x07` | `ExactInputParams` |
-| `SWAP_EXACT_OUT_SINGLE` | `0x08` | `ExactOutputSingleParams` |
-| `SWAP_EXACT_OUT` | `0x09` | `ExactOutputParams` |
-| `SETTLE_ALL` | `0x0c` | `abi.encode(Currency currency, uint256 maxAmount)` |
-| `SETTLE` | `0x0b` | `abi.encode(Currency currency, uint256 amount, bool payerIsUser)` |
-| `TAKE_ALL` | `0x0f` | `abi.encode(Currency currency, uint256 minAmount)` |
-| `TAKE` | `0x0e` | `abi.encode(Currency currency, address recipient, uint256 amount)` |
+| Action                  | Value  | Params                                                             |
+| ----------------------- | ------ | ------------------------------------------------------------------ |
+| `SWAP_EXACT_IN_SINGLE`  | `0x06` | `ExactInputSingleParams`                                           |
+| `SWAP_EXACT_IN`         | `0x07` | `ExactInputParams`                                                 |
+| `SWAP_EXACT_OUT_SINGLE` | `0x08` | `ExactOutputSingleParams`                                          |
+| `SWAP_EXACT_OUT`        | `0x09` | `ExactOutputParams`                                                |
+| `SETTLE_ALL`            | `0x0c` | `abi.encode(Currency currency, uint256 maxAmount)`                 |
+| `SETTLE`                | `0x0b` | `abi.encode(Currency currency, uint256 amount, bool payerIsUser)`  |
+| `TAKE_ALL`              | `0x0f` | `abi.encode(Currency currency, uint256 minAmount)`                 |
+| `TAKE`                  | `0x0e` | `abi.encode(Currency currency, address recipient, uint256 amount)` |
 
 #### V4 Structs
 
@@ -313,12 +313,12 @@ inputs[0] = abi.encode(actions, params);
 
 #### Utility Commands
 
-| Command | Value | Input Encoding |
-|---------|-------|----------------|
-| `WRAP_ETH` | `0x0b` | `abi.encode(address recipient, uint256 amountMin)` |
-| `UNWRAP_WETH` | `0x0c` | `abi.encode(address recipient, uint256 amountMin)` |
-| `PERMIT2_TRANSFER_FROM` | `0x02` | `abi.encode(address token, address recipient, uint160 amount)` |
-| `SWEEP` | `0x04` | `abi.encode(address token, address recipient, uint256 amountMin)` |
+| Command                 | Value  | Input Encoding                                                    |
+| ----------------------- | ------ | ----------------------------------------------------------------- |
+| `WRAP_ETH`              | `0x0b` | `abi.encode(address recipient, uint256 amountMin)`                |
+| `UNWRAP_WETH`           | `0x0c` | `abi.encode(address recipient, uint256 amountMin)`                |
+| `PERMIT2_TRANSFER_FROM` | `0x02` | `abi.encode(address token, address recipient, uint160 amount)`    |
+| `SWEEP`                 | `0x04` | `abi.encode(address token, address recipient, uint256 amountMin)` |
 
 ---
 
@@ -369,14 +369,14 @@ function exchange(uint256 i, uint256 j, uint256 dx, uint256 min_dy, bool use_eth
 function exchange(uint256 i, uint256 j, uint256 dx, uint256 min_dy, bool use_eth, address receiver) external payable returns (uint256);
 ```
 
-| Parameter | Description |
-|-----------|-------------|
-| `i` | Index of the input coin |
-| `j` | Index of the output coin |
-| `dx` | Amount of coin `i` to sell |
-| `min_dy` | Minimum amount of coin `j` to receive |
-| `use_eth` | If `true`, use native ETH instead of WETH (default: `false`) |
-| `receiver` | Address that receives output tokens (default: `msg.sender`) |
+| Parameter  | Description                                                  |
+| ---------- | ------------------------------------------------------------ |
+| `i`        | Index of the input coin                                      |
+| `j`        | Index of the output coin                                     |
+| `dx`       | Amount of coin `i` to sell                                   |
+| `min_dy`   | Minimum amount of coin `j` to receive                        |
+| `use_eth`  | If `true`, use native ETH instead of WETH (default: `false`) |
+| `receiver` | Address that receives output tokens (default: `msg.sender`)  |
 
 #### exchange_underlying
 
@@ -408,15 +408,15 @@ function exchange_multiple(
 
 **swap_type values:**
 
-| Value | Meaning |
-|-------|---------|
-| 1 | StableSwap `exchange` |
-| 2 | StableSwap `exchange_underlying` |
-| 3 | CryptoSwap `exchange` |
-| 4 | CryptoSwap `exchange_underlying` |
-| 5 | Factory metapool `exchange_underlying` |
-| 6 | Factory crypto-meta `exchange_underlying` |
-| 15 | WETH ↔ ETH |
+| Value | Meaning                                   |
+| ----- | ----------------------------------------- |
+| 1     | StableSwap `exchange`                     |
+| 2     | StableSwap `exchange_underlying`          |
+| 3     | CryptoSwap `exchange`                     |
+| 4     | CryptoSwap `exchange_underlying`          |
+| 5     | Factory metapool `exchange_underlying`    |
+| 6     | Factory crypto-meta `exchange_underlying` |
+| 15    | WETH ↔ ETH                                |
 
 ---
 
@@ -439,16 +439,16 @@ function exchange(
 
 **swap_type values (RouterNG):**
 
-| Value | Meaning |
-|-------|---------|
-| 1 | StableSwap `exchange` |
-| 2 | StableSwap `exchange_underlying` |
-| 3 | Underlying exchange via zap |
-| 4 | Coin → LP token (`add_liquidity`) |
-| 5 | Lending underlying → LP token |
-| 6 | LP token → coin (`remove_liquidity_one_coin`) |
-| 7 | LP token → lending underlying |
-| 8 | ETH ↔ WETH, ETH → stETH, stETH ↔ wstETH, etc. |
+| Value | Meaning                                       |
+| ----- | --------------------------------------------- |
+| 1     | StableSwap `exchange`                         |
+| 2     | StableSwap `exchange_underlying`              |
+| 3     | Underlying exchange via zap                   |
+| 4     | Coin → LP token (`add_liquidity`)             |
+| 5     | Lending underlying → LP token                 |
+| 6     | LP token → coin (`remove_liquidity_one_coin`) |
+| 7     | LP token → lending underlying                 |
+| 8     | ETH ↔ WETH, ETH → stETH, stETH ↔ wstETH, etc. |
 
 **pool_type values:** 1 = StableSwap, 2 = CryptoSwap (2-coin), 3 = Tricrypto
 
@@ -937,6 +937,7 @@ Same as `sell` but callable by a relayer on behalf of the user.
 Fluid DEX (formerly Instadapp Fluid) is a "DEX-on-lending" protocol where swap liquidity comes from both **Smart Collateral** (supplied assets) and **Smart Debt** (borrowed assets) on top of the Fluid Liquidity Layer. This architecture generates significantly more trading liquidity per dollar of TVL than traditional DEXes.
 
 **Key mechanics:**
+
 - Uses `x * y = k` constant product formula with **imaginary reserves** (virtual liquidity amplification)
 - Each pool has two liquidity sources: **collateral reserves** (from suppliers) and **debt reserves** (from borrowers)
 - Swaps cost approximately 90k-145k gas
@@ -945,27 +946,28 @@ Fluid DEX (formerly Instadapp Fluid) is a "DEX-on-lending" protocol where swap l
 - Native ETH is supported via `payable` functions (send ETH as `msg.value`)
 
 **Architecture:** Fluid has two DEX systems on Ethereum mainnet:
+
 1. **DEX T1** -- individual pool contracts deployed by the DexFactory (one contract per token pair)
 2. **DEX Lite** -- a singleton contract handling multiple pools, identified by `DexKey` structs
 
 ### Core Contract Addresses (Ethereum Mainnet)
 
-| Contract | Address | Description |
-|----------|---------|-------------|
-| Liquidity Layer | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` | Core liquidity singleton |
-| DexFactory | `0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085` | Deploys DEX T1 pool contracts |
-| DexResolver | `0x11D80CfF056Cef4F9E6d23da8672fE9873e5cC07` | Read-only resolver for T1 pool data |
-| DexReservesResolver | `0x05Bd8269A20C472b148246De20E6852091BF16Ff` | Reserves/pricing data for T1 pools |
-| FluidDexLite | `0xBbcb91440523216e2b87052A99F69c604A7b6e00` | DEX Lite singleton contract |
-| FluidDexLiteResolver | `0x12a47cEB96A952E8D4A6eA9FE3b40b79bbaeb4e9` | Read-only resolver for Lite pools |
-| Deployer Factory | `0x4EC7b668BAF70d4A4b0FC7941a7708A07b6d45Be` | Protocol deployer factory |
+| Contract             | Address                                      | Description                         |
+| -------------------- | -------------------------------------------- | ----------------------------------- |
+| Liquidity Layer      | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` | Core liquidity singleton            |
+| DexFactory           | `0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085` | Deploys DEX T1 pool contracts       |
+| DexResolver          | `0x11D80CfF056Cef4F9E6d23da8672fE9873e5cC07` | Read-only resolver for T1 pool data |
+| DexReservesResolver  | `0x05Bd8269A20C472b148246De20E6852091BF16Ff` | Reserves/pricing data for T1 pools  |
+| FluidDexLite         | `0xBbcb91440523216e2b87052A99F69c604A7b6e00` | DEX Lite singleton contract         |
+| FluidDexLiteResolver | `0x12a47cEB96A952E8D4A6eA9FE3b40b79bbaeb4e9` | Read-only resolver for Lite pools   |
+| Deployer Factory     | `0x4EC7b668BAF70d4A4b0FC7941a7708A07b6d45Be` | Protocol deployer factory           |
 
 ### Example DEX T1 Pool Addresses (Ethereum Mainnet)
 
-| Pool | Address |
-|------|---------|
+| Pool           | Address                                      |
+| -------------- | -------------------------------------------- |
 | Dex wstETH-ETH | `0x0B1a513ee24972DAEf112bC777a5610d4325C9e7` |
-| Dex USDC-ETH | `0x836951EB21F3Df98273517B7249dCEFF270d34bf` |
+| Dex USDC-ETH   | `0x836951EB21F3Df98273517B7249dCEFF270d34bf` |
 
 Pool addresses are deterministically computed from the DexFactory. Call `DexFactory.totalDexes()` for the count and `DexFactory.getDexAddress(uint256 dexId_)` to look up individual pool addresses.
 

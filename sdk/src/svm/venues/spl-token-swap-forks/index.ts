@@ -50,10 +50,17 @@
  * as `orca-legacy-token-swap` — `fetchPoolConfig` throws on any nonzero
  * `curve_type` rather than silently mis-pricing a stable pool with CP math.
  */
-import { createHash } from 'node:crypto';
-import { getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
+import { createHash } from "node:crypto";
+import { getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type {
+  AccountBytesMap,
+  AccountLoader,
+  PoolConfig,
+  SwapUser,
+  VenueAccount,
+  VenueSwap,
+} from "../types.js";
 
 // SwapVersion::pack writes version at byte 0 and the 323-byte SwapV1 body at
 // bytes 1..: 1 + 323 = 324, no discriminator, no padding — identical across
@@ -138,26 +145,32 @@ function netAmountIn(slug: string, cfg: SplTokenSwapForkPoolConfig, amountIn: bi
 function deriveSwapAuthority(programId: Address, pool: Address, bumpSeed: number): Address {
   const codec = getAddressCodec();
   return codec.decode(
-    createHash('sha256')
+    createHash("sha256")
       .update(new Uint8Array(codec.encode(pool)))
       .update(Uint8Array.of(bumpSeed))
       .update(new Uint8Array(codec.encode(programId)))
-      .update('ProgramDerivedAddress')
+      .update("ProgramDerivedAddress")
       .digest(),
   );
 }
 
-const poolRef = (slug: string, cfg: SplTokenSwapForkPoolConfig, role: string): string => `${slug}:${cfg.pool}:${role}`;
+const poolRef = (slug: string, cfg: SplTokenSwapForkPoolConfig, role: string): string =>
+  `${slug}:${cfg.pool}:${role}`;
 
 export interface SplTokenSwapForkAdapter {
   slug: string;
-  kind: 'constant-product';
+  kind: "constant-product";
   programId: Address;
   fetchPoolConfig(load: AccountLoader, pool: Address): Promise<SplTokenSwapForkPoolConfig>;
   quoteAccounts(cfg: SplTokenSwapForkPoolConfig): VenueAccount[];
   emitQuote(cfg: SplTokenSwapForkPoolConfig, i: number, amountIn: bigint): string;
   buildSwap(cfg: SplTokenSwapForkPoolConfig, user: SwapUser, amountIn: bigint): VenueSwap;
-  referenceQuote(cfg: SplTokenSwapForkPoolConfig, state: AccountBytesMap, amountIn: bigint, _now: bigint): bigint;
+  referenceQuote(
+    cfg: SplTokenSwapForkPoolConfig,
+    state: AccountBytesMap,
+    amountIn: bigint,
+    _now: bigint,
+  ): bigint;
 }
 
 /**
@@ -179,26 +192,37 @@ export interface SplTokenSwapForkAdapter {
  * instantiations below for the two currently gated forks and exactly what
  * each is waiting on.
  */
-export function makeSplTokenSwapForkAdapter(slug: string, programId: Address, unresolvedGate?: string): SplTokenSwapForkAdapter {
+export function makeSplTokenSwapForkAdapter(
+  slug: string,
+  programId: Address,
+  unresolvedGate?: string,
+): SplTokenSwapForkAdapter {
   return {
     slug,
-    kind: 'constant-product',
+    kind: "constant-product",
     programId,
     async fetchPoolConfig(load, pool) {
       if (unresolvedGate !== undefined) {
-        throw new Error(`${slug} pool ${pool}: family gated pending resolution — ${unresolvedGate}`);
+        throw new Error(
+          `${slug} pool ${pool}: family gated pending resolution — ${unresolvedGate}`,
+        );
       }
       const data = await load(pool);
       if (data === null) throw new Error(`${slug} pool ${pool} account not found`);
       if (data.length !== POOL_SIZE) {
-        throw new Error(`${slug} pool ${pool} data must be ${POOL_SIZE} bytes (SwapVersion::SwapV1), got ${data.length}`);
+        throw new Error(
+          `${slug} pool ${pool} data must be ${POOL_SIZE} bytes (SwapVersion::SwapV1), got ${data.length}`,
+        );
       }
-      if (data[0] !== 1) throw new Error(`${slug} pool ${pool} version must be 1 (SwapV1), got ${data[0]}`);
+      if (data[0] !== 1)
+        throw new Error(`${slug} pool ${pool} version must be 1 (SwapV1), got ${data[0]}`);
       if (data[1] !== 1) throw new Error(`${slug} pool ${pool} is not initialized`);
       // The stable curve (curve_type != 0, amp in the calculator blob) is out
       // of scope — see module header.
       if (data[291] !== 0) {
-        throw new Error(`${slug} pool ${pool} curve_type must be 0 (constant product), got ${data[291]}`);
+        throw new Error(
+          `${slug} pool ${pool} curve_type must be 0 (constant product), got ${data[291]}`,
+        );
       }
       const codec = getAddressCodec();
       const pubkey = (offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
@@ -208,11 +232,13 @@ export function makeSplTokenSwapForkAdapter(slug: string, programId: Address, un
       const ownerTradeFeeNumerator = u64(243);
       const ownerTradeFeeDenominator = u64(251);
       for (const [name, numerator, denominator] of [
-        ['trade', tradeFeeNumerator, tradeFeeDenominator],
-        ['owner trade', ownerTradeFeeNumerator, ownerTradeFeeDenominator],
+        ["trade", tradeFeeNumerator, tradeFeeDenominator],
+        ["owner trade", ownerTradeFeeNumerator, ownerTradeFeeDenominator],
       ] as const) {
         if (numerator !== 0n && denominator === 0n) {
-          throw new Error(`${slug} pool ${pool} ${name} fee denominator is 0 with nonzero numerator ${numerator}`);
+          throw new Error(
+            `${slug} pool ${pool} ${name} fee denominator is 0 with nonzero numerator ${numerator}`,
+          );
         }
       }
       const bumpSeed = data[2];
@@ -242,8 +268,8 @@ export function makeSplTokenSwapForkAdapter(slug: string, programId: Address, un
     },
     quoteAccounts(cfg) {
       return [
-        { ref: poolRef(slug, cfg, 'vault-in'), address: cfg.vaultIn },
-        { ref: poolRef(slug, cfg, 'vault-out'), address: cfg.vaultOut },
+        { ref: poolRef(slug, cfg, "vault-in"), address: cfg.vaultIn },
+        { ref: poolRef(slug, cfg, "vault-out"), address: cfg.vaultOut },
       ];
     },
     emitQuote(cfg, i, amountIn) {
@@ -255,7 +281,7 @@ export function makeSplTokenSwapForkAdapter(slug: string, programId: Address, un
         `const rIn${i} = svm.sload(acc0, 64, 8).toLe();`,
         `const rOut${i} = svm.sload(acc1, 64, 8).toLe();`,
         `const q${i} = rOut${i} - (rIn${i} * rOut${i} + rIn${i} + ${netIn - 1n}) / (rIn${i} + ${netIn});`,
-      ].join('\n');
+      ].join("\n");
     },
     buildSwap(cfg, user, amountIn) {
       if (amountIn <= 0n || amountIn >= 1n << 64n) {
@@ -269,16 +295,16 @@ export function makeSplTokenSwapForkAdapter(slug: string, programId: Address, un
         programId,
         data,
         accounts: [
-          { ref: poolRef(slug, cfg, 'pool'), address: cfg.pool },
-          { ref: poolRef(slug, cfg, 'authority'), address: cfg.swapAuthority },
+          { ref: poolRef(slug, cfg, "pool"), address: cfg.pool },
+          { ref: poolRef(slug, cfg, "authority"), address: cfg.swapAuthority },
           { ref: user.owner, signer: true },
           { ref: user.inAta, writable: true },
-          { ref: poolRef(slug, cfg, 'vault-in'), address: cfg.vaultIn, writable: true },
-          { ref: poolRef(slug, cfg, 'vault-out'), address: cfg.vaultOut, writable: true },
+          { ref: poolRef(slug, cfg, "vault-in"), address: cfg.vaultIn, writable: true },
+          { ref: poolRef(slug, cfg, "vault-out"), address: cfg.vaultOut, writable: true },
           { ref: user.outAta, writable: true },
-          { ref: poolRef(slug, cfg, 'pool-mint'), address: cfg.poolMint, writable: true },
-          { ref: poolRef(slug, cfg, 'fee-account'), address: cfg.poolFeeAccount, writable: true },
-          { ref: poolRef(slug, cfg, 'token-program'), address: cfg.tokenProgram },
+          { ref: poolRef(slug, cfg, "pool-mint"), address: cfg.poolMint, writable: true },
+          { ref: poolRef(slug, cfg, "fee-account"), address: cfg.poolFeeAccount, writable: true },
+          { ref: poolRef(slug, cfg, "token-program"), address: cfg.tokenProgram },
         ],
       };
     },
@@ -304,8 +330,8 @@ export function makeSplTokenSwapForkAdapter(slug: string, programId: Address, un
 }
 
 /** Token Swap — the original solana-labs/solana-program-library deployment. */
-export const TOKEN_SWAP_V1_PROGRAM_ID = 'SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8' as Address;
-export const tokenSwapV1 = makeSplTokenSwapForkAdapter('token-swap-v1', TOKEN_SWAP_V1_PROGRAM_ID);
+export const TOKEN_SWAP_V1_PROGRAM_ID = "SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8" as Address;
+export const tokenSwapV1 = makeSplTokenSwapForkAdapter("token-swap-v1", TOKEN_SWAP_V1_PROGRAM_ID);
 
 /**
  * DexLab — GATED (see `unresolvedGate` above): a real-CPI probe against the
@@ -321,11 +347,11 @@ export const tokenSwapV1 = makeSplTokenSwapForkAdapter('token-swap-v1', TOKEN_SW
  * dexlab cook in production, and DexLab is otherwise the single
  * deepest-liquidity fork of the six (2,097 live constant-product pools).
  */
-export const DEXLAB_PROGRAM_ID = 'DSwpgjMvXhtGn6BsbqmacdBZyfLj6jSWf3HJpdJtmg6N' as Address;
+export const DEXLAB_PROGRAM_ID = "DSwpgjMvXhtGn6BsbqmacdBZyfLj6jSWf3HJpdJtmg6N" as Address;
 export const dexlab = makeSplTokenSwapForkAdapter(
-  'dexlab',
+  "dexlab",
   DEXLAB_PROGRAM_ID,
-  'Swap instruction needs >11 accounts on the real deployed binary (confirmed via real-CPI probe); exact extra account(s) not yet identified',
+  "Swap instruction needs >11 accounts on the real deployed binary (confirmed via real-CPI probe); exact extra account(s) not yet identified",
 );
 
 /**
@@ -363,8 +389,8 @@ export const dexlab = makeSplTokenSwapForkAdapter(
  * cloned from) — see the consuming app realcpi e2e test's `saros`
  * describeWith block in sauce-recipes.
  */
-export const SAROS_PROGRAM_ID = 'SSwapUtytfBdBn1b9NUGG6foMVPtcWgpRU32HToDUZr' as Address;
-export const saros = makeSplTokenSwapForkAdapter('saros', SAROS_PROGRAM_ID);
+export const SAROS_PROGRAM_ID = "SSwapUtytfBdBn1b9NUGG6foMVPtcWgpRU32HToDUZr" as Address;
+export const saros = makeSplTokenSwapForkAdapter("saros", SAROS_PROGRAM_ID);
 
 /**
  * Orca V1 — the ORIGINAL Orca token-swap deployment, a DIFFERENT program from
@@ -373,13 +399,13 @@ export const saros = makeSplTokenSwapForkAdapter('saros', SAROS_PROGRAM_ID);
  * (routePlan ammKey `6fTRDD7sYxCN7oyoSQaN1AWC3P2m8A6gVZzGrpej9DvL`, owner
  * `DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1`).
  */
-export const ORCA_V1_PROGRAM_ID = 'DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1' as Address;
-export const orcaV1 = makeSplTokenSwapForkAdapter('orca-v1', ORCA_V1_PROGRAM_ID);
+export const ORCA_V1_PROGRAM_ID = "DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1" as Address;
+export const orcaV1 = makeSplTokenSwapForkAdapter("orca-v1", ORCA_V1_PROGRAM_ID);
 
 /** Penguin. */
-export const PENGUIN_PROGRAM_ID = 'PSwapMdSai8tjrEXcxFeQth87xC4rRsa4VA5mhGhXkP' as Address;
-export const penguin = makeSplTokenSwapForkAdapter('penguin', PENGUIN_PROGRAM_ID);
+export const PENGUIN_PROGRAM_ID = "PSwapMdSai8tjrEXcxFeQth87xC4rRsa4VA5mhGhXkP" as Address;
+export const penguin = makeSplTokenSwapForkAdapter("penguin", PENGUIN_PROGRAM_ID);
 
 /** StepN (Dooar). */
-export const STEPN_PROGRAM_ID = 'Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j' as Address;
-export const stepn = makeSplTokenSwapForkAdapter('stepn', STEPN_PROGRAM_ID);
+export const STEPN_PROGRAM_ID = "Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j" as Address;
+export const stepn = makeSplTokenSwapForkAdapter("stepn", STEPN_PROGRAM_ID);

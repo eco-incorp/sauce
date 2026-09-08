@@ -70,22 +70,30 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { ceilDiv, readUintLE } from '../math.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SvmVenueAdapter, SwapUser, VenueAccount, VenueSwap } from '../types.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { ceilDiv, readUintLE } from "../math.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import type {
+  AccountBytesMap,
+  AccountLoader,
+  PoolConfig,
+  SvmVenueAdapter,
+  SwapUser,
+  VenueAccount,
+  VenueSwap,
+} from "../types.js";
 
-const SLUG = 'meteora-dbc';
+const SLUG = "meteora-dbc";
 
-export const METEORA_DBC_PROGRAM_ID = address('dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN');
+export const METEORA_DBC_PROGRAM_ID = address("dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN");
 /** Constant PDA ['pool_authority'] — owner-authority of both vaults (verified against the official SDK's hardcoded constant). */
-export const METEORA_DBC_POOL_AUTHORITY = address('FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM');
+export const METEORA_DBC_POOL_AUTHORITY = address("FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM");
 /** Constant PDA ['__event_authority'] (Anchor `#[event_cpi]`). */
-export const METEORA_DBC_EVENT_AUTHORITY = address('8Ks12pbrD6PXxfty1hVQiE9sc289zgU1zHkvXhrSdriF');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+export const METEORA_DBC_EVENT_AUTHORITY = address("8Ks12pbrD6PXxfty1hVQiE9sc289zgU1zHkvXhrSdriF");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 const POOL_ACCOUNT_SIZE = 424;
 const CONFIG_ACCOUNT_SIZE = 1048;
@@ -146,7 +154,7 @@ export interface MeteoraDbcPoolConfig extends PoolConfig {
    * the quote mint, e.g. wSOL) | 'baseToQuote' (selling). Matches pumpswap's
    * naming for the same base/quote bonding-curve role split.
    */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   config: Address;
   baseMint: Address;
   quoteMint: Address;
@@ -199,14 +207,19 @@ interface DecodedConfig {
 }
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 function decodePool(pool: string, data: Uint8Array): DecodedPool {
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`meteora-dbc pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `meteora-dbc pool ${pool} account data is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   if (!POOL_DISCRIMINATOR.every((byte, i) => data[i] === byte)) {
-    throw new Error(`meteora-dbc pool ${pool} is not a VirtualPool account (discriminator mismatch)`);
+    throw new Error(
+      `meteora-dbc pool ${pool} is not a VirtualPool account (discriminator mismatch)`,
+    );
   }
   return {
     config: pubkeyAt(data, OFF_CONFIG_PTR),
@@ -224,10 +237,14 @@ function decodePool(pool: string, data: Uint8Array): DecodedPool {
 
 function decodeConfig(configAddr: string, data: Uint8Array): DecodedConfig {
   if (data.length !== CONFIG_ACCOUNT_SIZE) {
-    throw new Error(`meteora-dbc config ${configAddr} account data is ${data.length} bytes, expected ${CONFIG_ACCOUNT_SIZE}`);
+    throw new Error(
+      `meteora-dbc config ${configAddr} account data is ${data.length} bytes, expected ${CONFIG_ACCOUNT_SIZE}`,
+    );
   }
   if (!CONFIG_DISCRIMINATOR.every((byte, i) => data[i] === byte)) {
-    throw new Error(`meteora-dbc config ${configAddr} is not a PoolConfig account (discriminator mismatch)`);
+    throw new Error(
+      `meteora-dbc config ${configAddr} is not a PoolConfig account (discriminator mismatch)`,
+    );
   }
   const curve: MeteoraDbcCurvePoint[] = [];
   for (let i = 0; i < MAX_CURVE_POINTS; i++) {
@@ -269,7 +286,9 @@ function activeSegment(curve: readonly MeteoraDbcCurvePoint[], sqrtPrice: bigint
 function tokenProgramFor(pool: string, side: string, flag: number): Address {
   if (flag === 0) return TOKEN_PROGRAM;
   if (flag === 1) return TOKEN_2022_PROGRAM;
-  throw new Error(`meteora-dbc pool ${pool} ${side} token flag=${flag} is not a known token program flag`);
+  throw new Error(
+    `meteora-dbc pool ${pool} ${side} token flag=${flag} is not a known token program flag`,
+  );
 }
 
 /**
@@ -280,14 +299,23 @@ function tokenProgramFor(pool: string, side: string, flag: number): Address {
  * genuinely cannot move through a plain transferChecked, so it self-drops. A
  * TransferFeeConfig mint is dropped (see the TODO) rather than netted.
  */
-async function assertRoutableMint(load: AccountLoader, pool: string, side: string, mint: Address): Promise<void> {
+async function assertRoutableMint(
+  load: AccountLoader,
+  pool: string,
+  side: string,
+  mint: Address,
+): Promise<void> {
   const data = await load(mint);
   if (data === null) {
-    throw new Error(`meteora-dbc pool ${pool} ${side} mint ${mint} not found (required to inspect token-2022 extensions)`);
+    throw new Error(
+      `meteora-dbc pool ${pool} ${side} mint ${mint} not found (required to inspect token-2022 extensions)`,
+    );
   }
   const ext = parseMintExtensions(data);
   if (ext.blocking.length > 0) {
-    throw new Error(`meteora-dbc pool ${pool} ${side} mint ${mint} is un-routable: ${ext.blocking.join('; ')}`);
+    throw new Error(
+      `meteora-dbc pool ${pool} ${side} mint ${mint} is un-routable: ${ext.blocking.join("; ")}`,
+    );
   }
   // TODO(t22-fee-netting): a fee-bearing mint is REJECTED, not netted. Netting
   // must be applied IDENTICALLY in referenceQuote AND the in-VM emitQuote
@@ -295,15 +323,20 @@ async function assertRoutableMint(load: AccountLoader, pool: string, side: strin
   // epoch-scheduled, max_fee-capped spl-token-2022 fee curve — a materially
   // larger change deferred here. Dropping self-limits (safe), never over-quotes.
   if (ext.transferFee) {
-    throw new Error(`meteora-dbc pool ${pool} ${side} mint ${mint} has a token-2022 transfer-fee extension`);
+    throw new Error(
+      `meteora-dbc pool ${pool} ${side} mint ${mint} has a token-2022 transfer-fee extension`,
+    );
   }
 }
 
 function dbcConfig(cfg: PoolConfig): MeteoraDbcPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`meteora-dbc adapter got a config for venue '${cfg.venue}'`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`meteora-dbc adapter got a config for venue '${cfg.venue}'`);
   const c = cfg as MeteoraDbcPoolConfig;
-  if (c.direction !== 'quoteToBase' && c.direction !== 'baseToQuote') {
-    throw new Error(`meteora-dbc direction must be 'quoteToBase' or 'baseToQuote', got '${c.direction}'`);
+  if (c.direction !== "quoteToBase" && c.direction !== "baseToQuote") {
+    throw new Error(
+      `meteora-dbc direction must be 'quoteToBase' or 'baseToQuote', got '${c.direction}'`,
+    );
   }
   return c;
 }
@@ -316,7 +349,7 @@ function checkAmountIn(construct: string, amountIn: bigint): void {
 
 export const meteoraDbc = {
   slug: SLUG,
-  kind: 'sqrt-price' as const,
+  kind: "sqrt-price" as const,
   programId: METEORA_DBC_PROGRAM_ID,
 
   /**
@@ -329,15 +362,20 @@ export const meteoraDbc = {
     const p = decodePool(pool, poolData);
 
     if (p.isMigrated !== 0) {
-      throw new Error(`meteora-dbc pool ${pool} is already migrated (is_migrated=${p.isMigrated}) — trade the migrated venue instead`);
+      throw new Error(
+        `meteora-dbc pool ${pool} is already migrated (is_migrated=${p.isMigrated}) — trade the migrated venue instead`,
+      );
     }
 
     const configData = await load(p.config);
-    if (configData === null) throw new Error(`meteora-dbc pool ${pool} config ${p.config} account not found`);
+    if (configData === null)
+      throw new Error(`meteora-dbc pool ${pool} config ${p.config} account not found`);
     const c = decodeConfig(p.config, configData);
 
     if (c.baseFeeMode >= 2) {
-      throw new Error(`meteora-dbc pool ${pool} base_fee_mode=${c.baseFeeMode} (rate-limiter) is amount-dependent and not supported`);
+      throw new Error(
+        `meteora-dbc pool ${pool} base_fee_mode=${c.baseFeeMode} (rate-limiter) is amount-dependent and not supported`,
+      );
     }
     if (c.periodFrequency !== 0n && c.activationType === 0) {
       throw new Error(
@@ -348,26 +386,32 @@ export const meteoraDbc = {
       throw new Error(`meteora-dbc pool ${pool} has no curve points configured`);
     }
     if (p.quoteReserve >= c.migrationQuoteThreshold) {
-      throw new Error(`meteora-dbc pool ${pool} curve is already complete (quote_reserve ${p.quoteReserve} >= threshold ${c.migrationQuoteThreshold})`);
+      throw new Error(
+        `meteora-dbc pool ${pool} curve is already complete (quote_reserve ${p.quoteReserve} >= threshold ${c.migrationQuoteThreshold})`,
+      );
     }
     if (p.sqrtPrice >= c.migrationSqrtPrice) {
-      throw new Error(`meteora-dbc pool ${pool} live sqrt_price is already at/past migration_sqrt_price — nothing left to buy`);
+      throw new Error(
+        `meteora-dbc pool ${pool} live sqrt_price is already at/past migration_sqrt_price — nothing left to buy`,
+      );
     }
 
     const segIdx = activeSegment(c.curve, p.sqrtPrice);
     if (segIdx < 0) {
-      throw new Error(`meteora-dbc pool ${pool} live sqrt_price ${p.sqrtPrice} is past every configured curve point`);
+      throw new Error(
+        `meteora-dbc pool ${pool} live sqrt_price ${p.sqrtPrice} is past every configured curve point`,
+      );
     }
 
-    const tokenBaseProgram = tokenProgramFor(pool, 'base', c.tokenType);
-    const tokenQuoteProgram = tokenProgramFor(pool, 'quote', c.quoteTokenFlag);
-    if (c.tokenType === 1) await assertRoutableMint(load, pool, 'base', p.baseMint);
-    if (c.quoteTokenFlag === 1) await assertRoutableMint(load, pool, 'quote', c.quoteMint);
+    const tokenBaseProgram = tokenProgramFor(pool, "base", c.tokenType);
+    const tokenQuoteProgram = tokenProgramFor(pool, "quote", c.quoteTokenFlag);
+    if (c.tokenType === 1) await assertRoutableMint(load, pool, "base", p.baseMint);
+    if (c.quoteTokenFlag === 1) await assertRoutableMint(load, pool, "quote", c.quoteMint);
 
     return {
       venue: SLUG,
       pool,
-      direction: 'quoteToBase',
+      direction: "quoteToBase",
       config: p.config,
       baseMint: p.baseMint,
       quoteMint: c.quoteMint,
@@ -391,8 +435,9 @@ export const meteoraDbc = {
   /** v1 (amount-baked) quote fragment — the closed-form single-segment CP math (see ladder.ts for the parametric/live-read version this mirrors). */
   emitQuote(cfg: PoolConfig, i: number, amountIn: bigint): string {
     const c = dbcConfig(cfg);
-    if (!Number.isInteger(i) || i < 0) throw new Error(`meteora-dbc emitQuote index must be a non-negative integer, got ${i}`);
-    checkAmountIn('meteora-dbc emitQuote', amountIn);
+    if (!Number.isInteger(i) || i < 0)
+      throw new Error(`meteora-dbc emitQuote index must be a non-negative integer, got ${i}`);
+    checkAmountIn("meteora-dbc emitQuote", amountIn);
     // Account model (RS/svm target): quoteAccounts() attaches [pool, config], so
     // the pool binds to main()'s acc0 and the config to acc1; every read is
     // svm.sload(acc<k>, off, w).toLe() (accountUint lowered to CAST_LE — .toLe()
@@ -400,7 +445,8 @@ export const meteoraDbc = {
     const poolU = (off: number, w: number): string => `svm.sload(acc0, ${off}, ${w}).toLe()`;
     const cfgU = (off: number, w: number): string => `svm.sload(acc1, ${off}, ${w}).toLe()`;
     const upperOff = OFF_CURVE + CURVE_POINT_SIZE * c.segIdx;
-    const lowerOff = c.segIdx === 0 ? OFF_SQRT_START_PRICE : OFF_CURVE + CURVE_POINT_SIZE * (c.segIdx - 1);
+    const lowerOff =
+      c.segIdx === 0 ? OFF_SQRT_START_PRICE : OFF_CURVE + CURVE_POINT_SIZE * (c.segIdx - 1);
     const lines: string[] = [
       `const s${i}sp = ${poolU(OFF_SQRT_PRICE, 16)};`,
       `const s${i}cliff = ${cfgU(OFF_CLIFF_FEE_NUMERATOR, 8)};`,
@@ -414,17 +460,17 @@ export const meteoraDbc = {
       `  if (s${i}per > s${i}np) { s${i}per = s${i}np }`,
       `  const s${i}red = ${cfgU(OFF_REDUCTION_FACTOR, 8)};`,
       `  s${i}f = s${i}cliff - s${i}red * s${i}per;`,
-      '}',
+      "}",
       `if (${cfgU(OFF_DYN_INITIALIZED, 1)} === 1) {`,
       `  const s${i}va = ${poolU(OFF_VOL_ACCUMULATOR, 16)};`,
       `  const s${i}bs = ${cfgU(OFF_DYN_BIN_STEP, 2)};`,
       `  const s${i}vfc = ${cfgU(OFF_DYN_VARIABLE_FEE_CONTROL, 4)};`,
       `  const s${i}vv = s${i}va * s${i}bs;`,
       `  s${i}f = s${i}f + (s${i}vv * s${i}vv * s${i}vfc + 99999999999) / 100000000000;`,
-      '}',
+      "}",
       `if (s${i}f > ${METEORA_DBC_MAX_FEE_NUMERATOR}) { s${i}f = ${METEORA_DBC_MAX_FEE_NUMERATOR} }`,
     ];
-    if (c.direction === 'quoteToBase') {
+    if (c.direction === "quoteToBase") {
       lines.push(
         `const s${i}up0 = ${cfgU(upperOff, 16)};`,
         `const s${i}mig = ${cfgU(OFF_MIGRATION_SQRT_PRICE, 16)};`,
@@ -459,19 +505,20 @@ export const meteoraDbc = {
         `let q${i} = s${i}g - (s${i}g * s${i}f + 999999999) / 1000000000;`,
       );
     }
-    return lines.join('\n');
+    return lines.join("\n");
   },
 
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
     const c = dbcConfig(cfg);
-    checkAmountIn('meteora-dbc buildSwap', amountIn);
+    checkAmountIn("meteora-dbc buildSwap", amountIn);
     // disc(8) ++ amount_in u64 LE ++ minimum_amount_out u64 LE (= 1; the
     // recipe's post-swap outAta delta check enforces the real bound).
     const data = new Uint8Array(24);
     data.set(METEORA_DBC_SWAP_DISCRIMINATOR, 0);
     for (let b = 0; b < 8; b++) data[8 + b] = Number((amountIn >> BigInt(8 * b)) & 0xffn);
     data[16] = 1;
-    const fixed = (addr: Address, writable = false): VenueAccount => (writable ? { ref: addr, address: addr, writable: true } : { ref: addr, address: addr });
+    const fixed = (addr: Address, writable = false): VenueAccount =>
+      writable ? { ref: addr, address: addr, writable: true } : { ref: addr, address: addr };
     return {
       programId: METEORA_DBC_PROGRAM_ID,
       data,
@@ -502,8 +549,9 @@ export const meteoraDbc = {
     const poolData = state[c.pool];
     const configData = state[c.config];
     if (poolData === undefined) throw new Error(`meteora-dbc pool ${c.pool} missing from state`);
-    if (configData === undefined) throw new Error(`meteora-dbc config ${c.config} missing from state`);
-    checkAmountIn('meteora-dbc referenceQuote', amountIn);
+    if (configData === undefined)
+      throw new Error(`meteora-dbc config ${c.config} missing from state`);
+    checkAmountIn("meteora-dbc referenceQuote", amountIn);
     const p = decodePool(c.pool, poolData);
     const cfgD = decodeConfig(c.config, configData);
     const q = quoteSingleSegment(c, p, cfgD, amountIn, now);
@@ -576,7 +624,7 @@ export function quoteSingleSegment(
   const liquidity = seg.liquidity;
   const inactive = notYetActive(c.periodFrequency, p.activationPoint, now);
 
-  if (cfg.direction === 'quoteToBase') {
+  if (cfg.direction === "quoteToBase") {
     const upperBoundRaw = seg.sqrtPrice;
     const upperBound = c.migrationSqrtPrice < upperBoundRaw ? c.migrationSqrtPrice : upperBoundRaw;
     let capacity = 0n;
@@ -586,19 +634,24 @@ export function quoteSingleSegment(
     const feesOnInput = c.collectFeeMode === 0; // QuoteToken
     let din = x;
     if (feesOnInput) din = x - ceilDiv(x * feeNumerator, METEORA_DBC_FEE_DENOMINATOR);
-    if (liquidity === 0n || din === 0n) return { output: 0n, saturated: amountIn > capacity, feeNumerator };
+    if (liquidity === 0n || din === 0n)
+      return { output: 0n, saturated: amountIn > capacity, feeNumerator };
     const nextSqrtPrice = p.sqrtPrice + (din << 128n) / liquidity;
     const grossOut = (liquidity * (nextSqrtPrice - p.sqrtPrice)) / (p.sqrtPrice * nextSqrtPrice);
-    const output = feesOnInput ? grossOut : grossOut - ceilDiv(grossOut * feeNumerator, METEORA_DBC_FEE_DENOMINATOR);
+    const output = feesOnInput
+      ? grossOut
+      : grossOut - ceilDiv(grossOut * feeNumerator, METEORA_DBC_FEE_DENOMINATOR);
     return { output, saturated: amountIn > capacity, feeNumerator };
   }
 
   const lowerBound = cfg.segIdx === 0 ? c.sqrtStartPrice : c.curve[cfg.segIdx - 1]!.sqrtPrice;
   let capacity = 0n;
-  if (p.sqrtPrice > lowerBound) capacity = ceilDiv(liquidity * (p.sqrtPrice - lowerBound), lowerBound * p.sqrtPrice);
+  if (p.sqrtPrice > lowerBound)
+    capacity = ceilDiv(liquidity * (p.sqrtPrice - lowerBound), lowerBound * p.sqrtPrice);
   if (inactive) capacity = 0n;
   const x = amountIn > capacity ? capacity : amountIn;
-  if (liquidity === 0n || x === 0n) return { output: 0n, saturated: amountIn > capacity, feeNumerator };
+  if (liquidity === 0n || x === 0n)
+    return { output: 0n, saturated: amountIn > capacity, feeNumerator };
   const den = liquidity + x * p.sqrtPrice;
   const nextSqrtPrice = ceilDiv(liquidity * p.sqrtPrice, den);
   const grossOut = (liquidity * (p.sqrtPrice - nextSqrtPrice)) >> 128n;
@@ -607,12 +660,17 @@ export function quoteSingleSegment(
 }
 
 /** Closed-form capacity (max productive amountIn) for the active segment, in the given direction — exported for the ladder's referenceCapacities and for tests. */
-export function dbcCapacity(cfg: MeteoraDbcPoolConfig, p: DecodedPool, c: DecodedConfig, now: bigint): bigint {
+export function dbcCapacity(
+  cfg: MeteoraDbcPoolConfig,
+  p: DecodedPool,
+  c: DecodedConfig,
+  now: bigint,
+): bigint {
   const seg = c.curve[cfg.segIdx];
   if (seg === undefined) return 0n;
   const inactive = notYetActive(c.periodFrequency, p.activationPoint, now);
   if (inactive) return 0n;
-  if (cfg.direction === 'quoteToBase') {
+  if (cfg.direction === "quoteToBase") {
     const upperBound = c.migrationSqrtPrice < seg.sqrtPrice ? c.migrationSqrtPrice : seg.sqrtPrice;
     if (upperBound <= p.sqrtPrice) return 0n;
     return ceilDiv(seg.liquidity * (upperBound - p.sqrtPrice), Q128);
@@ -623,7 +681,11 @@ export function dbcCapacity(cfg: MeteoraDbcPoolConfig, p: DecodedPool, c: Decode
 }
 
 /** Internal decode, re-exported for the ladder module (same package, no public API surface change). */
-export { decodePool as __decodeMeteoraDbcPool, decodeConfig as __decodeMeteoraDbcConfig, activeSegment as __meteoraDbcActiveSegment };
+export {
+  decodePool as __decodeMeteoraDbcPool,
+  decodeConfig as __decodeMeteoraDbcConfig,
+  activeSegment as __meteoraDbcActiveSegment,
+};
 export {
   OFF_SQRT_PRICE as METEORA_DBC_OFF_SQRT_PRICE,
   OFF_ACTIVATION_POINT as METEORA_DBC_OFF_ACTIVATION_POINT,

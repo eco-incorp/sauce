@@ -27,7 +27,8 @@ export function walk(node: unknown, visit: (n: AstNode) => void): void {
     visit(rec as unknown as AstNode);
   }
   for (const key of Object.keys(rec)) {
-    if (key === "type" || key === "start" || key === "end" || key === "loc" || key === "range") continue;
+    if (key === "type" || key === "start" || key === "end" || key === "loc" || key === "range")
+      continue;
     walk(rec[key], visit);
   }
 }
@@ -43,14 +44,17 @@ function collectPatternNames(pattern: unknown, names: Set<string>): void {
       names.add((node as unknown as { name: string }).name);
       return;
     case "ObjectPattern":
-      for (const property of ((node as { properties?: AstNode[] }).properties ?? [])) {
+      for (const property of (node as { properties?: AstNode[] }).properties ?? []) {
         // A `Property`'s VALUE is the binding (`{ a: Token }` binds `Token`, not `a`); a
         // `RestElement`'s argument is.
-        collectPatternNames((property as { value?: unknown }).value ?? (property as { argument?: unknown }).argument, names);
+        collectPatternNames(
+          (property as { value?: unknown }).value ?? (property as { argument?: unknown }).argument,
+          names,
+        );
       }
       return;
     case "ArrayPattern":
-      for (const element of ((node as { elements?: AstNode[] }).elements ?? [])) {
+      for (const element of (node as { elements?: AstNode[] }).elements ?? []) {
         collectPatternNames(element, names);
       }
       return;
@@ -86,7 +90,7 @@ export function collectDeclaredNames(program: AstNode): ReadonlySet<string> {
       case "ArrowFunctionExpression":
         // The function's own name binds too (`function Token(...)`), and an arrow has none.
         collectPatternNames((n as { id?: unknown }).id, names);
-        for (const param of ((n as { params?: AstNode[] }).params ?? [])) {
+        for (const param of (n as { params?: AstNode[] }).params ?? []) {
           collectPatternNames(param, names);
         }
         return;

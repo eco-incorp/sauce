@@ -36,12 +36,16 @@
  *   cd <sauce>/v12-svm && make build
  *   SAUCE_RUST_ENGINE_SO=<sauce>/v12-svm/target/deploy/engine.so pnpm --filter './sdk' test
  */
-import { AccountRole, getAddressCodec, lamports } from '@solana/kit';
-import type { Address, Instruction } from '@solana/kit';
-import { buildComputeBudgetPrepend, buildExecuteInstruction, buildHeapFramePrepend } from '../../../src/svm/index.js';
-import type { ResolvedAccountMeta } from '../../../src/svm/index.js';
-import { compileStdToken } from './harness.js';
-import type { AccountManifest } from './harness.js';
+import { AccountRole, getAddressCodec, lamports } from "@solana/kit";
+import type { Address, Instruction } from "@solana/kit";
+import {
+  buildComputeBudgetPrepend,
+  buildExecuteInstruction,
+  buildHeapFramePrepend,
+} from "../../../src/svm/index.js";
+import type { ResolvedAccountMeta } from "../../../src/svm/index.js";
+import { compileStdToken } from "./harness.js";
+import type { AccountManifest } from "./harness.js";
 import {
   TOKEN_PROGRAM,
   expectOk,
@@ -52,8 +56,8 @@ import {
   tokenAccountData,
   tokenAmount,
   toBigInt,
-} from '../../svm/engine-harness.js';
-import type { EngineHarness } from '../../svm/engine-harness.js';
+} from "../../svm/engine-harness.js";
+import type { EngineHarness } from "../../svm/engine-harness.js";
 
 /** Multi-byte so a wrong decode cannot pass by coincidence, and `u64` because an SPL amount is one. */
 const TOKEN_BALANCE = 0x0000_00ab_cdef_1234n;
@@ -75,16 +79,16 @@ const describeStdToken = RUST_ENGINE_SO ? describe : describe.skip;
 // CI supplies the engine (see .github/workflows/ci.yml) — so in CI, an absent one is a failure.
 if (!RUST_ENGINE_SO && process.env.CI) {
   throw new Error(
-    'SAUCE_RUST_ENGINE_SO is unset in CI. This suite must never skip here — see the ' +
+    "SAUCE_RUST_ENGINE_SO is unset in CI. This suite must never skip here — see the " +
       '"Fetch the v12 engines" step in .github/workflows/ci.yml.',
   );
 }
 
-
 const codec = getAddressCodec();
 
 /** A pubkey as the SauceScript big-endian bigint literal the library compares `svm.sload(…).toBe()` against. */
-const literal = (address: Address): string => `0x${Buffer.from(codec.encode(address)).toString('hex')}n`;
+const literal = (address: Address): string =>
+  `0x${Buffer.from(codec.encode(address)).toString("hex")}n`;
 
 const missing = (what: string): never => {
   throw new Error(`the SVM manifest ${what}`);
@@ -101,10 +105,15 @@ const missing = (what: string): never => {
  * with. `remaining` marks where a caller's own variable-length accounts begin; no fixture here uses
  * one, so it is an explicit failure rather than a silently dropped entry.
  */
-const attach = (manifest: AccountManifest | undefined, slots: Record<string, ResolvedAccountMeta>): ResolvedAccountMeta[] =>
-  (manifest ?? missing('is absent — the svm target must emit one')).accounts.map((entry) =>
-    entry.kind === 'remaining'
-      ? missing(`asks for a remaining-accounts tail at ${entry.from}, which this suite does not attach`)
+const attach = (
+  manifest: AccountManifest | undefined,
+  slots: Record<string, ResolvedAccountMeta>,
+): ResolvedAccountMeta[] =>
+  (manifest ?? missing("is absent — the svm target must emit one")).accounts.map((entry) =>
+    entry.kind === "remaining"
+      ? missing(
+          `asks for a remaining-accounts tail at ${entry.from}, which this suite does not attach`,
+        )
       : (slots[entry.name] ?? missing(`names a slot the test did not resolve: ${entry.name}`)),
   );
 
@@ -114,18 +123,28 @@ const instructionsFor = (
   entry: string,
   slots: Record<string, ResolvedAccountMeta>,
 ): Instruction[] => {
-  const { bytecode, manifest } = compileStdToken(entry, 'svm');
+  const { bytecode, manifest } = compileStdToken(entry, "svm");
 
   return [
     ...buildComputeBudgetPrepend({ unitLimit: COMPUTE_UNITS }),
     buildHeapFramePrepend(),
-    buildExecuteInstruction({ programId: harness.programId, bytecode, accounts: attach(manifest, slots) }),
+    buildExecuteInstruction({
+      programId: harness.programId,
+      bytecode,
+      accounts: attach(manifest, slots),
+    }),
   ];
 };
 
 /** Run `entry` and return the engine's output, failing the test if the transaction did not succeed. */
-const run = (harness: EngineHarness, entry: string, slots: Record<string, ResolvedAccountMeta>): Promise<Uint8Array> =>
-  sendInstructions(harness, instructionsFor(harness, entry, slots)).then((result) => expectOk(result).returnData);
+const run = (
+  harness: EngineHarness,
+  entry: string,
+  slots: Record<string, ResolvedAccountMeta>,
+): Promise<Uint8Array> =>
+  sendInstructions(harness, instructionsFor(harness, entry, slots)).then(
+    (result) => expectOk(result).returnData,
+  );
 
 /**
  * A real 82-byte SPL `Mint`: `mint_authority` COption::None @0, `supply` u64 LE @36, `decimals` @44,
@@ -133,7 +152,12 @@ const run = (harness: EngineHarness, entry: string, slots: Record<string, Resolv
  * read by byte range. (The harness's own `setMint` leaves `supply` at zero, which cannot distinguish
  * a correct read from a read of nothing.)
  */
-const setSplMint = (harness: EngineHarness, address: Address, supply: bigint, decimals: bigint): Address => {
+const setSplMint = (
+  harness: EngineHarness,
+  address: Address,
+  supply: bigint,
+  decimals: bigint,
+): Address => {
   const data = new Uint8Array(82);
   const view = new DataView(data.buffer);
   view.setBigUint64(36, supply, true);
@@ -179,16 +203,22 @@ const setDelegatedTokenAccount = (
   return address;
 };
 
-describeStdToken('@sauce/token e2e: the SVM arm against real SPL accounts', () => {
+describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () => {
   let harness: EngineHarness;
 
   beforeAll(async () => {
     harness = await startEngine(1_700_000_000n, RUST_ENGINE_SO);
   });
 
-  it('balanceOf reads the amount off a real SPL token account', async () => {
+  it("balanceOf reads the amount off a real SPL token account", async () => {
     const mint = randomAddress();
-    const account = setTokenAccount(harness, randomAddress(), mint, harness.payer.address, TOKEN_BALANCE);
+    const account = setTokenAccount(
+      harness,
+      randomAddress(),
+      mint,
+      harness.payer.address,
+      TOKEN_BALANCE,
+    );
 
     const entry = `import { balanceOf } from "@sauce/token"; function main(account: Account): Uint256 { return balanceOf(${literal(mint)}, account); }`;
     const returnData = await run(harness, entry, {
@@ -200,10 +230,16 @@ describeStdToken('@sauce/token e2e: the SVM arm against real SPL accounts', () =
     expect(toBigInt(returnData)).toBe(TOKEN_BALANCE);
   });
 
-  it('balanceOf reverts when the attached account is of another mint', async () => {
+  it("balanceOf reverts when the attached account is of another mint", async () => {
     // The `require(svm.sload(account, 0n, 32n).toBe() == token)` guard: a caller cannot pass an
     // account of the wrong mint and have it read as the named asset.
-    const account = setTokenAccount(harness, randomAddress(), randomAddress(), harness.payer.address, TOKEN_BALANCE);
+    const account = setTokenAccount(
+      harness,
+      randomAddress(),
+      randomAddress(),
+      harness.payer.address,
+      TOKEN_BALANCE,
+    );
 
     const entry = `import { balanceOf } from "@sauce/token"; function main(account: Account): Uint256 { return balanceOf(${literal(randomAddress())}, account); }`;
     const slots = { account: { address: account, role: AccountRole.READONLY } };
@@ -213,7 +249,7 @@ describeStdToken('@sauce/token e2e: the SVM arm against real SPL accounts', () =
     expect(ok).toBe(false);
   });
 
-  it('totalSupply and decimals read a real SPL mint', async () => {
+  it("totalSupply and decimals read a real SPL mint", async () => {
     const mint = setSplMint(harness, randomAddress(), TOTAL_SUPPLY, DECIMALS);
     const slots = { token: { address: mint, role: AccountRole.READONLY } };
 
@@ -232,7 +268,7 @@ describeStdToken('@sauce/token e2e: the SVM arm against real SPL accounts', () =
     expect(toBigInt(decimals)).toBe(DECIMALS);
   });
 
-  it('allowance returns the delegated amount only for the matching delegate', async () => {
+  it("allowance returns the delegated amount only for the matching delegate", async () => {
     const mint = randomAddress();
     const delegate = randomAddress();
     const account = setDelegatedTokenAccount(
@@ -260,9 +296,15 @@ describeStdToken('@sauce/token e2e: the SVM arm against real SPL accounts', () =
     expect(toBigInt(other)).toBe(0n);
   });
 
-  it('transfer moves the balance through a real SPL Token CPI', async () => {
+  it("transfer moves the balance through a real SPL Token CPI", async () => {
     const mint = randomAddress();
-    const source = setTokenAccount(harness, randomAddress(), mint, harness.payer.address, TOKEN_BALANCE);
+    const source = setTokenAccount(
+      harness,
+      randomAddress(),
+      mint,
+      harness.payer.address,
+      TOKEN_BALANCE,
+    );
     const dest = setTokenAccount(harness, randomAddress(), mint, harness.payer.address, 0n);
 
     // The authority is the payer, which already signs the transaction. `tokenProgram` is the CPI
@@ -280,10 +322,16 @@ describeStdToken('@sauce/token e2e: the SVM arm against real SPL accounts', () =
     expect(tokenAmount(harness, dest)).toBe(TRANSFERRED);
   });
 
-  it('approve sets a delegate the library then reads back through allowance', async () => {
+  it("approve sets a delegate the library then reads back through allowance", async () => {
     const mint = randomAddress();
     const delegate = randomAddress();
-    const source = setTokenAccount(harness, randomAddress(), mint, harness.payer.address, TOKEN_BALANCE);
+    const source = setTokenAccount(
+      harness,
+      randomAddress(),
+      mint,
+      harness.payer.address,
+      TOKEN_BALANCE,
+    );
     // The delegate account must exist for the SPL `Approve` processor to accept it as an account.
     setTokenAccount(harness, delegate, mint, harness.payer.address, 0n);
 

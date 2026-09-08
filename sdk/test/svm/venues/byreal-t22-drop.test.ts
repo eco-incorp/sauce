@@ -4,13 +4,15 @@
  * graceful-drop signal the SvmRoute orchestrator catches. The on-chain swap ix
  * is legacy-SPL only for now.
  */
-import { getAddressDecoder } from '@solana/kit';
-import { byreal } from '../../../src/svm/venues/byreal/index.js';
-import { POOL_DISCRIMINATOR } from '../../../src/svm/venues/raydium-clmm/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { getAddressDecoder } from "@solana/kit";
+import { byreal } from "../../../src/svm/venues/byreal/index.js";
+import { POOL_DISCRIMINATOR } from "../../../src/svm/venues/raydium-clmm/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
-const POOL = getAddressDecoder().decode(Uint8Array.from({ length: 32 }, (_, i) => ((i * 3) % 250) + 1));
+const POOL = getAddressDecoder().decode(
+  Uint8Array.from({ length: 32 }, (_, i) => ((i * 3) % 250) + 1),
+);
 
 const OFF_TOKEN_MINT_0 = 73;
 
@@ -38,16 +40,20 @@ function loaderWith(mint: Uint8Array | null): AccountLoader {
   }) as unknown as AccountLoader;
 }
 
-describe('byreal Token-2022 self-drop', () => {
-  it('drops a pool whose mint is a Token-2022 mint', async () => {
-    await expect(byreal.fetchPoolConfig(loaderWith(makeT22Mint()), POOL)).rejects.toThrow(/Token-2022/);
+describe("byreal Token-2022 self-drop", () => {
+  it("drops a pool whose mint is a Token-2022 mint", async () => {
+    await expect(byreal.fetchPoolConfig(loaderWith(makeT22Mint()), POOL)).rejects.toThrow(
+      /Token-2022/,
+    );
   });
 
-  it('drops a pool whose mint is a Token-2022 mint carrying an extension', async () => {
-    await expect(byreal.fetchPoolConfig(loaderWith(makeT22Mint(NON_TRANSFERABLE_TLV)), POOL)).rejects.toThrow(/Token-2022/);
+  it("drops a pool whose mint is a Token-2022 mint carrying an extension", async () => {
+    await expect(
+      byreal.fetchPoolConfig(loaderWith(makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
+    ).rejects.toThrow(/Token-2022/);
   });
 
-  it('does NOT drop for an unreadable mint (falls back to the legacy assumption)', async () => {
+  it("does NOT drop for an unreadable mint (falls back to the legacy assumption)", async () => {
     // A null mint -> `continue` -> no Token-2022 drop. The fetch then either
     // resolves or fails for an unrelated reason, but NEVER with a T22 message.
     await byreal.fetchPoolConfig(loaderWith(null), POOL).catch((e: unknown) => {

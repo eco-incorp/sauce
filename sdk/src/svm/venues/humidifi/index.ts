@@ -106,15 +106,15 @@
  * structurally identical to this family's fragment) instead of reusing a
  * placeholder, per the standing "existing pins omit the venue CPI" gap.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-const SLUG = 'humidifi';
+const SLUG = "humidifi";
 
 /** The swap-settlement program (NOT the `AubCGUt9...` route/setup program). */
-export const HUMIDIFI_PROGRAM_ID: Address<'9H6tua7jkLhdm3w8BvgpTn5LZNU7g4ZynDmCiNN3q6Rp'> = address(
-  '9H6tua7jkLhdm3w8BvgpTn5LZNU7g4ZynDmCiNN3q6Rp',
+export const HUMIDIFI_PROGRAM_ID: Address<"9H6tua7jkLhdm3w8BvgpTn5LZNU7g4ZynDmCiNN3q6Rp"> = address(
+  "9H6tua7jkLhdm3w8BvgpTn5LZNU7g4ZynDmCiNN3q6Rp",
 );
 
 // ── obfuscation scheme (verified against >20 live mainnet transactions) ──
@@ -176,37 +176,37 @@ export interface HumidiFiRegistryEntry {
  */
 export const HUMIDIFI_POOL_REGISTRY: Record<string, HumidiFiRegistryEntry> = {
   // SOL / USDC (native, EPjF...) — the top pair by sampled tx frequency.
-  '8sKQHfjNhvmAw94PhfvfMcytmqW6jmxvwieYyzXCCPu': {
-    baseVault: address('H292B1VbSvD6GuUmSvUvfQstg1Acfzog796uQ7d1ccCw'),
-    quoteVault: address('A3C9xwv4Hfx92M5HQpxUiibSqCa5pYhD2kTwnU5fEPq'),
-    baseMint: address('So11111111111111111111111111111111111111112'),
-    quoteMint: address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+  "8sKQHfjNhvmAw94PhfvfMcytmqW6jmxvwieYyzXCCPu": {
+    baseVault: address("H292B1VbSvD6GuUmSvUvfQstg1Acfzog796uQ7d1ccCw"),
+    quoteVault: address("A3C9xwv4Hfx92M5HQpxUiibSqCa5pYhD2kTwnU5fEPq"),
+    baseMint: address("So11111111111111111111111111111111111111112"),
+    quoteMint: address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
     baseDecimals: 9,
     quoteDecimals: 6,
   },
   // SOL / USDC (Wormhole, Es9v...) — heavily sampled (21 real trades, see file header item 6).
-  '3QYYvFWgSuGK8bbxMSAYkCqE8QfSuFtByagnZAuekia2': {
-    baseVault: address('AzzKL5BpnX9UXfJRyiGbAwyFvw93vwCTBvW56tJebsqd'),
-    quoteVault: address('EmyNiSYtMYZsBCVYpzLwNduQFqCpDGR8qM1h2CoLpWnM'),
-    baseMint: address('So11111111111111111111111111111111111111112'),
-    quoteMint: address('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'),
+  "3QYYvFWgSuGK8bbxMSAYkCqE8QfSuFtByagnZAuekia2": {
+    baseVault: address("AzzKL5BpnX9UXfJRyiGbAwyFvw93vwCTBvW56tJebsqd"),
+    quoteVault: address("EmyNiSYtMYZsBCVYpzLwNduQFqCpDGR8qM1h2CoLpWnM"),
+    baseMint: address("So11111111111111111111111111111111111111112"),
+    quoteMint: address("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"),
     baseDecimals: 9,
     quoteDecimals: 6,
   },
   // A memecoin / USDC pair, sampled to confirm the pricing model generalizes off SOL pairs.
-  'H3TyE2Q3rDrvRXD8PzHYE7BS2hafGuybje4qXCtyWqMH': {
-    baseVault: address('49pft8q7cyugVDWnJCXjMHJdb5Uji198k5MognVvA48n'),
-    quoteVault: address('EKFwmKoPA9o3HpoL8AnQd8uNBxtJbaPv4w4tbxNn6iei'),
-    baseMint: address('98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g'),
-    quoteMint: address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+  H3TyE2Q3rDrvRXD8PzHYE7BS2hafGuybje4qXCtyWqMH: {
+    baseVault: address("49pft8q7cyugVDWnJCXjMHJdb5Uji198k5MognVvA48n"),
+    quoteVault: address("EKFwmKoPA9o3HpoL8AnQd8uNBxtJbaPv4w4tbxNn6iei"),
+    baseMint: address("98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g"),
+    quoteMint: address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
     baseDecimals: 9,
     quoteDecimals: 6,
   },
-  'ELp3rjbAncW8FLAPvmWS6vjG4FXFLDo1HiKh4PhQBgvx': {
-    baseVault: address('4uGxv6uabyEmHzhi7LBWGzqSwGEE98VzYL2NahRqbfCP'),
-    quoteVault: address('2XCEJJf3hnuMeot5dJST9yaj92i1wCLB2c67eH7WYzvR'),
-    baseMint: address('Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk'),
-    quoteMint: address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+  ELp3rjbAncW8FLAPvmWS6vjG4FXFLDo1HiKh4PhQBgvx: {
+    baseVault: address("4uGxv6uabyEmHzhi7LBWGzqSwGEE98VzYL2NahRqbfCP"),
+    quoteVault: address("2XCEJJf3hnuMeot5dJST9yaj92i1wCLB2c67eH7WYzvR"),
+    baseMint: address("Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk"),
+    quoteMint: address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
     baseDecimals: 6,
     quoteDecimals: 6,
   },
@@ -215,7 +215,7 @@ export const HUMIDIFI_POOL_REGISTRY: Record<string, HumidiFiRegistryEntry> = {
 export interface HumidiFiPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'baseToQuote' (default, flag byte 0) sells the registry's baseMint; 'quoteToBase' (flag byte 1) sells quoteMint. */
-  direction: 'baseToQuote' | 'quoteToBase';
+  direction: "baseToQuote" | "quoteToBase";
   baseVault: Address;
   quoteVault: Address;
   baseMint: Address;
@@ -231,18 +231,22 @@ export interface HumidiFiPoolConfig extends PoolConfig {
  * whose account has since closed/reallocated (a stale registry entry) is
  * dropped like any other vanished pool, never silently misquoted.
  */
-export async function fetchHumidifiConfig(load: AccountLoader, pool: Address): Promise<HumidiFiPoolConfig> {
+export async function fetchHumidifiConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<HumidiFiPoolConfig> {
   const entry = HUMIDIFI_POOL_REGISTRY[pool as unknown as string];
   if (entry === undefined) {
     throw new Error(
       `${SLUG}: pool ${pool} is not in HUMIDIFI_POOL_REGISTRY — this venue's pool state has no ` +
-        'decodable plaintext layout (verified by exhaustive offset scan), so unregistered pools ' +
-        'cannot be resolved at all; see the consuming app humidifi venue module for how to add one',
+        "decodable plaintext layout (verified by exhaustive offset scan), so unregistered pools " +
+        "cannot be resolved at all; see the consuming app humidifi venue module for how to add one",
     );
   }
   const raw = await load(pool);
-  if (raw === null) throw new Error(`${SLUG}: pool ${pool} account not found (registry entry stale?)`);
-  return { venue: SLUG, pool, direction: 'baseToQuote', ...entry };
+  if (raw === null)
+    throw new Error(`${SLUG}: pool ${pool} account not found (registry entry stale?)`);
+  return { venue: SLUG, pool, direction: "baseToQuote", ...entry };
 }
 
 /**

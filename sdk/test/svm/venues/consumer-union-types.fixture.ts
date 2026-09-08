@@ -114,7 +114,7 @@ import type {
   WhirlpoolWindow,
   WoofiPoolConfig,
   XorcaPoolConfig,
-} from '../../../src/svm/index.js';
+} from "../../../src/svm/index.js";
 
 export type ConsumerUnionTypes = [
   AccountBytesMap,

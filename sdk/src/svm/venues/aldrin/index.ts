@@ -101,13 +101,13 @@
  * `aldrin-v2` cells assert this bound explicitly (`runQuad`'s `inputSlack`
  * parameter) rather than exact-debit equality, unlike every other family.
  */
-import { address, getAddressDecoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { address, getAddressDecoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-export const ALDRIN_V1_PROGRAM_ID = address('AMM55ShdkoGRB5jVYPjWziwk8m5MpwyDgsMWHaMSQWH6');
-export const ALDRIN_V2_PROGRAM_ID = address('CURVGoZn8zycx6FXwwevgBTB2gVvdbGTEpvMJDbgs2t4');
+export const ALDRIN_V1_PROGRAM_ID = address("AMM55ShdkoGRB5jVYPjWziwk8m5MpwyDgsMWHaMSQWH6");
+export const ALDRIN_V2_PROGRAM_ID = address("CURVGoZn8zycx6FXwwevgBTB2gVvdbGTEpvMJDbgs2t4");
 /** sha256("account:Pool")[0..8] — shared with this repo's pumpswap adapter; see module header. */
 const POOL_DISCRIMINATOR = [0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc];
 const POOL_V1_SIZE = 441;
@@ -133,10 +133,10 @@ function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): b
   return data.length >= discriminator.length && discriminator.every((byte, i) => data[i] === byte);
 }
 
-export type AldrinDirection = 'baseToQuote' | 'quoteToBase';
+export type AldrinDirection = "baseToQuote" | "quoteToBase";
 
 export interface AldrinPoolConfig extends PoolConfig {
-  venue: 'aldrin' | 'aldrin-v2';
+  venue: "aldrin" | "aldrin-v2";
   version: 1 | 2;
   poolMint: Address;
   baseTokenVault: Address;
@@ -154,8 +154,12 @@ export interface AldrinPoolConfig extends PoolConfig {
   direction: AldrinDirection;
 }
 
-async function fetchAldrinPoolConfig(load: AccountLoader, pool: Address, version: 1 | 2): Promise<AldrinPoolConfig> {
-  const slug = version === 1 ? 'aldrin' : 'aldrin-v2';
+async function fetchAldrinPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+  version: 1 | 2,
+): Promise<AldrinPoolConfig> {
+  const slug = version === 1 ? "aldrin" : "aldrin-v2";
   const data = await load(pool);
   if (data === null) throw new Error(`${slug} pool ${pool} account not found`);
   const expectedSize = version === 1 ? POOL_V1_SIZE : POOL_V2_SIZE;
@@ -163,7 +167,9 @@ async function fetchAldrinPoolConfig(load: AccountLoader, pool: Address, version
     throw new Error(`${slug} pool ${pool} data must be ${expectedSize} bytes, got ${data.length}`);
   }
   if (!hasDiscriminator(data, POOL_DISCRIMINATOR)) {
-    throw new Error(`${slug} pool ${pool} is not an initialized Aldrin Pool account (bad Anchor discriminator)`);
+    throw new Error(
+      `${slug} pool ${pool} is not an initialized Aldrin Pool account (bad Anchor discriminator)`,
+    );
   }
   if (version === 2) {
     const curveType = data[OFF_CURVE_TYPE];
@@ -183,11 +189,13 @@ async function fetchAldrinPoolConfig(load: AccountLoader, pool: Address, version
   const ownerTradeFeeNumerator = u64(OFF_OWNER_FEE_NUMERATOR);
   const ownerTradeFeeDenominator = u64(OFF_OWNER_FEE_DENOMINATOR);
   for (const [name, numerator, denominator] of [
-    ['trade', tradeFeeNumerator, tradeFeeDenominator],
-    ['owner trade', ownerTradeFeeNumerator, ownerTradeFeeDenominator],
+    ["trade", tradeFeeNumerator, tradeFeeDenominator],
+    ["owner trade", ownerTradeFeeNumerator, ownerTradeFeeDenominator],
   ] as const) {
     if (numerator !== 0n && denominator === 0n) {
-      throw new Error(`${slug} pool ${pool} ${name} fee denominator is 0 with nonzero numerator ${numerator}`);
+      throw new Error(
+        `${slug} pool ${pool} ${name} fee denominator is 0 with nonzero numerator ${numerator}`,
+      );
     }
   }
 
@@ -207,19 +215,20 @@ async function fetchAldrinPoolConfig(load: AccountLoader, pool: Address, version
     ownerTradeFeeNumerator,
     ownerTradeFeeDenominator,
     curve: version === 2 ? pubkeyAt(OFF_CURVE) : undefined,
-    direction: 'baseToQuote',
+    direction: "baseToQuote",
   };
 }
 
 export const aldrin = {
-  slug: 'aldrin' as const,
+  slug: "aldrin" as const,
   programId: ALDRIN_V1_PROGRAM_ID,
-  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<AldrinPoolConfig> => fetchAldrinPoolConfig(load, pool, 1),
+  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<AldrinPoolConfig> =>
+    fetchAldrinPoolConfig(load, pool, 1),
 };
 
 export const aldrinV2 = {
-  slug: 'aldrin-v2' as const,
+  slug: "aldrin-v2" as const,
   programId: ALDRIN_V2_PROGRAM_ID,
-  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<AldrinPoolConfig> => fetchAldrinPoolConfig(load, pool, 2),
+  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<AldrinPoolConfig> =>
+    fetchAldrinPoolConfig(load, pool, 2),
 };
-

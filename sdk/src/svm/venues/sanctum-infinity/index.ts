@@ -109,34 +109,34 @@
  * note) — this adapter adds no new packet-budget mechanism, it just
  * consumes more of the existing one per slot than most families.
  */
-import { createHash } from 'node:crypto';
-import { address, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig, VenueAccount } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { createHash } from "node:crypto";
+import { address, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 import {
   SANCTUM_INFINITY_REGISTRY,
   WSOL_MINT,
   type SanctumInfinityCalcFamily,
-} from './registry.js';
+} from "./registry.js";
 
-const SLUG = 'sanctum-infinity';
+const SLUG = "sanctum-infinity";
 
 /** The S-controller ("INF") program — `SVM_VENUE_PROGRAM_IDS['sanctum-infinity']`. */
-export const SANCTUM_INFINITY_PROGRAM_ID = address('5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx');
+export const SANCTUM_INFINITY_PROGRAM_ID = address("5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx");
 
 // ── fixed PDAs (all derived offline; cross-checked 2026-07-31 against the
 // literal snapshot test in `controller/core/src/pda.rs` — see the module
 // doc for the derivation trail) ───────────────────────────────────────────
-export const POOL_STATE_ID = address('AYhux5gJzCoeoc1PoJ1VxwPDe22RwcvpHviLDD1oCGvW');
-export const LST_STATE_LIST_ID = address('Gb7m4daakbVbrFLR33FKMDVMHAprRZ66CSYt4bpFwUgS');
+export const POOL_STATE_ID = address("AYhux5gJzCoeoc1PoJ1VxwPDe22RwcvpHviLDD1oCGvW");
+export const LST_STATE_LIST_ID = address("Gb7m4daakbVbrFLR33FKMDVMHAprRZ66CSYt4bpFwUgS");
 /** The FlatSlab pricing program (== the live pool's `pricingProgram`, verified 2026-07-31). */
-export const FLAT_SLAB_PROGRAM_ID = address('s1b6NRXj6ygNu1QMKXh2H9LUR2aPApAAm1UQ2DjdhNV');
+export const FLAT_SLAB_PROGRAM_ID = address("s1b6NRXj6ygNu1QMKXh2H9LUR2aPApAAm1UQ2DjdhNV");
 /** FlatSlab's one global fee-schedule account (PDA seed `b"slab"`). */
-export const SLAB_ID = address('4T9YzXnmQFMyYi2nrxyXjhtUANavmCkxGCsU3GKaNjwT');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const SLAB_ID = address("4T9YzXnmQFMyYi2nrxyXjhtUANavmCkxGCsU3GKaNjwT");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** Per-calculator-family constants (`sol-val-calc/{spl,generic}/core/src/keys.rs`). */
 interface CalcConstants {
@@ -148,26 +148,26 @@ interface CalcConstants {
 }
 const CALC_CONSTANTS: Record<SanctumInfinityCalcFamily, CalcConstants> = {
   spl: {
-    calcProgram: address('sp1V4h2gWorkGhVcazBc22Hfo2f5sd7jcjT4EDPrWFF'),
-    poolProgram: address('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy'),
-    poolProgramData: address('EmiU8AQkB2sswTxVB6aCmsAJftoowZGGDXuytm6X65R3'),
-    calcState: address('7orJ4kDhn1Ewp54j29tBzUWDFGhyimhYi7sxybZcphHd'),
+    calcProgram: address("sp1V4h2gWorkGhVcazBc22Hfo2f5sd7jcjT4EDPrWFF"),
+    poolProgram: address("SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy"),
+    poolProgramData: address("EmiU8AQkB2sswTxVB6aCmsAJftoowZGGDXuytm6X65R3"),
+    calcState: address("7orJ4kDhn1Ewp54j29tBzUWDFGhyimhYi7sxybZcphHd"),
   },
   sanctumSpl: {
-    calcProgram: address('sspUE1vrh7xRoXxGsg7vR1zde2WdGtJRbyK9uRumBDy'),
-    poolProgram: address('SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY'),
-    poolProgramData: address('Cn5fegqLh8Fmvffisr4Wk3LmuaUgMMzTFfEuidpZFsvV'),
-    calcState: address('84C2M1NcmqFiP37qHKzuz8ydyyjCrzNqY77GhvHtCpyf'),
+    calcProgram: address("sspUE1vrh7xRoXxGsg7vR1zde2WdGtJRbyK9uRumBDy"),
+    poolProgram: address("SP12tWFxD9oJsVWNavTTBZvMbA6gkAmxtVgxdqvyvhY"),
+    poolProgramData: address("Cn5fegqLh8Fmvffisr4Wk3LmuaUgMMzTFfEuidpZFsvV"),
+    calcState: address("84C2M1NcmqFiP37qHKzuz8ydyyjCrzNqY77GhvHtCpyf"),
   },
   sanctumSplMulti: {
-    calcProgram: address('ssmbu3KZxgonUtjEMCKspZzxvUQCxAFnyh1rcHUeEDo'),
-    poolProgram: address('SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn'),
-    poolProgramData: address('HxBTMuB7cFBPVWVJjTi9iBF8MPd7mfY1QnrrWfLAySFd'),
-    calcState: address('Ehcuy2BzuY9BscqcH2K43tDKqoi6xQHxChtVjzrMfvU8'),
+    calcProgram: address("ssmbu3KZxgonUtjEMCKspZzxvUQCxAFnyh1rcHUeEDo"),
+    poolProgram: address("SPMBzsVUuoHA4Jm6KunbsotaahvVikZs1JyTW6iJvbn"),
+    poolProgramData: address("HxBTMuB7cFBPVWVJjTi9iBF8MPd7mfY1QnrrWfLAySFd"),
+    calcState: address("Ehcuy2BzuY9BscqcH2K43tDKqoi6xQHxChtVjzrMfvU8"),
   },
 };
 /** The wSOL calculator: no state/pool_prog/pool_progdata — pure identity math, zero suf accounts. */
-export const WSOL_CALC_PROGRAM_ID = address('wsoGmxQLSvwWpuaidCApxN5kEowLe2HLQLJhCQnj4bE');
+export const WSOL_CALC_PROGRAM_ID = address("wsoGmxQLSvwWpuaidCApxN5kEowLe2HLQLJhCQnj4bE");
 
 // ── LstState (80 bytes; identical layout in both the archived and inf-1.5 repos) ──
 const LST_STATE_SIZE = 80;
@@ -254,17 +254,17 @@ const PAIR_BY_KEY = new Map<string, { inMint: Address; outMint: Address }>();
 
 /** Mint (or re-mint, idempotently) the synthetic discovery key for a directed pair. */
 export function sanctumInfinityPoolKey(inMint: Address, outMint: Address): Address {
-  const digest = createHash('sha256').update(`${inMint}\0${outMint}`).digest();
+  const digest = createHash("sha256").update(`${inMint}\0${outMint}`).digest();
   const key = address(base58Encode(digest));
   PAIR_BY_KEY.set(key as string, { inMint, outMint });
   return key;
 }
 
-const B58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58Encode(bytes: Uint8Array): string {
   let n = 0n;
   for (const b of bytes) n = (n << 8n) | BigInt(b);
-  let s = '';
+  let s = "";
   while (n > 0n) {
     const r = Number(n % 58n);
     n /= 58n;
@@ -278,7 +278,7 @@ function base58Encode(bytes: Uint8Array): string {
   return B58_ALPHABET[0].repeat(pad) + s;
 }
 
-const ASSOCIATED_TOKEN_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+const ASSOCIATED_TOKEN_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 const ADDRESS_ENCODER = getAddressEncoder();
 
 /**
@@ -290,7 +290,11 @@ const ADDRESS_ENCODER = getAddressEncoder();
 async function findAta(wallet: Address, mint: Address): Promise<Address> {
   const [pda] = await getProgramDerivedAddress({
     programAddress: ASSOCIATED_TOKEN_PROGRAM,
-    seeds: [ADDRESS_ENCODER.encode(wallet), ADDRESS_ENCODER.encode(TOKEN_PROGRAM), ADDRESS_ENCODER.encode(mint)],
+    seeds: [
+      ADDRESS_ENCODER.encode(wallet),
+      ADDRESS_ENCODER.encode(TOKEN_PROGRAM),
+      ADDRESS_ENCODER.encode(mint),
+    ],
   });
   return pda;
 }
@@ -332,7 +336,9 @@ async function resolveInfinityLeg(
 
   if (mint === WSOL_MINT) {
     if (solValueCalculator !== WSOL_CALC_PROGRAM_ID) {
-      throw new Error(`${SLUG}: wSOL LstState.sol_value_calculator mismatch (got ${solValueCalculator})`);
+      throw new Error(
+        `${SLUG}: wSOL LstState.sol_value_calculator mismatch (got ${solValueCalculator})`,
+      );
     }
     return {
       mint,
@@ -348,7 +354,8 @@ async function resolveInfinityLeg(
   }
 
   const reg = SANCTUM_INFINITY_REGISTRY.get(mint as unknown as string);
-  if (reg === undefined) throw new Error(`${SLUG}: mint ${mint} has no vendored stake-pool registry entry`);
+  if (reg === undefined)
+    throw new Error(`${SLUG}: mint ${mint} has no vendored stake-pool registry entry`);
   const constants = CALC_CONSTANTS[reg.family];
   if (constants.calcProgram !== solValueCalculator) {
     throw new Error(
@@ -357,9 +364,12 @@ async function resolveInfinityLeg(
   }
 
   const stakePoolData = await load(reg.stakePool);
-  if (stakePoolData === null) throw new Error(`${SLUG}: stake pool ${reg.stakePool} does not exist`);
+  if (stakePoolData === null)
+    throw new Error(`${SLUG}: stake pool ${reg.stakePool} does not exist`);
   if (stakePoolData[0] !== SPL_ACCOUNT_TYPE_STAKE_POOL) {
-    throw new Error(`${SLUG}: stake pool ${reg.stakePool} has unexpected account_type ${stakePoolData[0]}`);
+    throw new Error(
+      `${SLUG}: stake pool ${reg.stakePool} has unexpected account_type ${stakePoolData[0]}`,
+    );
   }
   const { numerator: feeNum, denominator: feeDenom } = readStakeWithdrawalFee(stakePoolData);
 
@@ -382,14 +392,21 @@ function readAddress(data: Uint8Array, off: number): Address {
 }
 
 /** Reads FlatSlab's `slab` account (32-byte admin header + mint-sorted 40-byte entries) for one mint. */
-function readSlabFees(slab: Uint8Array, mint: Address): { inpFeeNanos: bigint; outFeeNanos: bigint } {
+function readSlabFees(
+  slab: Uint8Array,
+  mint: Address,
+): { inpFeeNanos: bigint; outFeeNanos: bigint } {
   const count = (slab.length - 32) / 40;
   for (let i = 0; i < count; i++) {
     const off = 32 + i * 40;
     if (readAddress(slab, off) === mint) {
       return {
-        inpFeeNanos: BigInt(new DataView(slab.buffer, slab.byteOffset + off + 32, 4).getInt32(0, true)),
-        outFeeNanos: BigInt(new DataView(slab.buffer, slab.byteOffset + off + 36, 4).getInt32(0, true)),
+        inpFeeNanos: BigInt(
+          new DataView(slab.buffer, slab.byteOffset + off + 32, 4).getInt32(0, true),
+        ),
+        outFeeNanos: BigInt(
+          new DataView(slab.buffer, slab.byteOffset + off + 36, 4).getInt32(0, true),
+        ),
       };
     }
   }
@@ -397,13 +414,14 @@ function readSlabFees(slab: Uint8Array, mint: Address): { inpFeeNanos: bigint; o
 }
 
 function infinityConfig(cfg: PoolConfig): SanctumInfinityPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as SanctumInfinityPoolConfig;
 }
 
 export const sanctumInfinity = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: SANCTUM_INFINITY_PROGRAM_ID,
 
   /**
@@ -418,7 +436,8 @@ export const sanctumInfinity = {
    */
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<SanctumInfinityPoolConfig> {
     const pair = PAIR_BY_KEY.get(pool as unknown as string);
-    if (pair === undefined) throw new Error(`${SLUG}: unknown discovery key ${pool} (not minted this process)`);
+    if (pair === undefined)
+      throw new Error(`${SLUG}: unknown discovery key ${pool} (not minted this process)`);
     if (pair.inMint === pair.outMint) throw new Error(`${SLUG}: in/out mint are identical`);
 
     // The swap CPI is legacy-SPL (Tokenkeg) only for now, so SELF-DROP the pair
@@ -433,11 +452,15 @@ export const sanctumInfinity = {
       const mintData = mintDatas[mi]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pair — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pair — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pair — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pair — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -446,7 +469,8 @@ export const sanctumInfinity = {
       load(LST_STATE_LIST_ID),
       load(SLAB_ID),
     ]);
-    if (poolStateData === null) throw new Error(`${SLUG}: pool_state ${POOL_STATE_ID} does not exist`);
+    if (poolStateData === null)
+      throw new Error(`${SLUG}: pool_state ${POOL_STATE_ID} does not exist`);
     if (poolStateData[13] !== 0) throw new Error(`${SLUG}: pool is disabled`);
     if (poolStateData[14] !== 0) throw new Error(`${SLUG}: pool is rebalancing`);
     if (lstStateList === null) throw new Error(`${SLUG}: lst_state_list does not exist`);
@@ -456,15 +480,18 @@ export const sanctumInfinity = {
       resolveInfinityLeg(load, pair.inMint, lstStateList),
       resolveInfinityLeg(load, pair.outMint, lstStateList),
     ]);
-    if (inLeg.isInputDisabled) throw new Error(`${SLUG}: input LST ${pair.inMint} has input disabled`);
+    if (inLeg.isInputDisabled)
+      throw new Error(`${SLUG}: input LST ${pair.inMint} has input disabled`);
 
     const inFees = readSlabFees(slab, pair.inMint);
     const outFees = readSlabFees(slab, pair.outMint);
     inLeg.inpFeeNanos = inFees.inpFeeNanos;
     outLeg.outFeeNanos = outFees.outFeeNanos;
     const feeNanosSum = inFees.inpFeeNanos + outFees.outFeeNanos;
-    if (feeNanosSum < 0n) throw new Error(`${SLUG}: ${pair.inMint}->${pair.outMint} is net-negative-fee (disallowed)`);
-    if (feeNanosSum > 1_000_000_000n) throw new Error(`${SLUG}: ${pair.inMint}->${pair.outMint} fee exceeds 100%`);
+    if (feeNanosSum < 0n)
+      throw new Error(`${SLUG}: ${pair.inMint}->${pair.outMint} is net-negative-fee (disallowed)`);
+    if (feeNanosSum > 1_000_000_000n)
+      throw new Error(`${SLUG}: ${pair.inMint}->${pair.outMint} fee exceeds 100%`);
 
     return { venue: SLUG, pool, in: inLeg, out: outLeg };
   },
@@ -476,15 +503,15 @@ export const sanctumInfinity = {
       { ref: `${cfg.pool}:inPoolReserves`, address: cfg.in.poolReserves },
       { ref: `${cfg.pool}:outPoolReserves`, address: cfg.out.poolReserves },
     ];
-    if (cfg.in.stakePool !== undefined) accs.push({ ref: `${cfg.pool}:inStakePool`, address: cfg.in.stakePool });
-    if (cfg.out.stakePool !== undefined) accs.push({ ref: `${cfg.pool}:outStakePool`, address: cfg.out.stakePool });
+    if (cfg.in.stakePool !== undefined)
+      accs.push({ ref: `${cfg.pool}:inStakePool`, address: cfg.in.stakePool });
+    if (cfg.out.stakePool !== undefined)
+      accs.push({ ref: `${cfg.pool}:outStakePool`, address: cfg.out.stakePool });
     return accs;
   },
 };
 
 // ── ladder ────────────────────────────────────────────────────────────────
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
 
 /** Test/tooling seam: clear the discovery-key registry between fixtures. */
 export function __resetSanctumInfinityKeysForTest(): void {
@@ -492,6 +519,8 @@ export function __resetSanctumInfinityKeysForTest(): void {
 }
 
 /** Test/tooling seam: look up a previously-minted discovery key (mirrors what `fetchPoolConfig` does). */
-export function sanctumInfinityLookupPair(pool: Address): { inMint: Address; outMint: Address } | undefined {
+export function sanctumInfinityLookupPair(
+  pool: Address,
+): { inMint: Address; outMint: Address } | undefined {
   return PAIR_BY_KEY.get(pool as unknown as string);
 }

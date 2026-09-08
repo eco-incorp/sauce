@@ -23,9 +23,8 @@
  * transfer-fee extension) is rejected at fetch time rather than silently
  * mis-quoted.
  */
-import { getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
 import {
   assertStabbleU64AmountIn,
   calcRoundedAmount,
@@ -47,7 +46,7 @@ import {
   stableGetAmplification,
   stableQuoteHelperSource,
   type StabbleTokenScale,
-} from '../stabble-common.js';
+} from "../stabble-common.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -56,11 +55,11 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+} from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'stabble-stable-swap';
+const SLUG = "stabble-stable-swap";
 
 // Stable variant field offsets (see ../stabble-common.ts module doc).
 const AMP_INITIAL_OFFSET = 106;
@@ -98,27 +97,38 @@ export interface StabbleStableSwapPoolConfig extends PoolConfig {
 }
 
 function asStableConfig(cfg: PoolConfig): StabbleStableSwapPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`stabble-stable-swap adapter got a config for venue '${cfg.venue}'`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`stabble-stable-swap adapter got a config for venue '${cfg.venue}'`);
   return cfg as StabbleStableSwapPoolConfig;
 }
 
 export const stabbleStableSwap: SvmVenueAdapter = {
   slug: SLUG,
-  kind: 'stable',
+  kind: "stable",
   programId: STABLE_SWAP_PROGRAM_ID,
 
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<StabbleStableSwapPoolConfig> {
     const data = await load(pool);
-    const common = decodeStabblePoolCommon(pool, data, SLUG, TOKENS_OFFSET, TOKEN_SIZE, false, POOL_MIN_LENGTH);
+    const common = decodeStabblePoolCommon(
+      pool,
+      data,
+      SLUG,
+      TOKENS_OFFSET,
+      TOKEN_SIZE,
+      false,
+      POOL_MIN_LENGTH,
+    );
     if (common.tokens.length > STABLE_MAX_TOKENS) {
-      throw new Error(`${SLUG} pool ${pool} has ${common.tokens.length} tokens, expected at most ${STABLE_MAX_TOKENS}`);
+      throw new Error(
+        `${SLUG} pool ${pool} has ${common.tokens.length} tokens, expected at most ${STABLE_MAX_TOKENS}`,
+      );
     }
     if (!common.isActive) throw new Error(`${SLUG} pool ${pool} is not active`);
 
-    const codec = getAddressCodec();
     const vaultData = await load(common.vault);
     const vault = decodeStabbleVault(pool, vaultData);
-    if (!vault.isActive) throw new Error(`${SLUG} pool ${pool}'s vault ${common.vault} is not active`);
+    if (!vault.isActive)
+      throw new Error(`${SLUG} pool ${pool}'s vault ${common.vault} is not active`);
     const vaultAuthority = deriveStabbleVaultAuthority(common.vault, vault.authorityBump);
 
     // Only the first two tokens are wired for quoting/swapping (see module doc).
@@ -138,11 +148,15 @@ export const stabbleStableSwap: SvmVenueAdapter = {
       const mintData = _mintDatas[_i]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
     const vaultTokenA = await findStabbleAta(vaultAuthority, tokenA.mint);
@@ -205,11 +219,15 @@ export const stabbleStableSwap: SvmVenueAdapter = {
       const interp = targetUp
         ? `${c.ampInitialFactor * 1000} + Math.mulDiv(${(hi - lo) * 1000}, ((ctx.timestamp() - ${c.rampStartTs}) / 60) * 60, ${range})`
         : `${c.ampInitialFactor * 1000} - Math.mulDiv(${(hi - lo) * 1000}, ((ctx.timestamp() - ${c.rampStartTs}) / 60) * 60, ${range})`;
-      lines.push(`  if (ctx.timestamp() <= ${c.rampStartTs}) { amp${i} = ${c.ampInitialFactor * 1000} }`);
+      lines.push(
+        `  if (ctx.timestamp() <= ${c.rampStartTs}) { amp${i} = ${c.ampInitialFactor * 1000} }`,
+      );
       lines.push(`  else if (ctx.timestamp() < ${c.rampStopTs}) { amp${i} = ${interp} }`);
     }
     lines.push(`  const bal0_${i} = svm.sload(acc0, ${TOKENS_OFFSET + 4 + 42}, 8).toLe();`);
-    lines.push(`  const bal1_${i} = svm.sload(acc0, ${TOKENS_OFFSET + 4 + TOKEN_SIZE + 42}, 8).toLe();`);
+    lines.push(
+      `  const bal1_${i} = svm.sload(acc0, ${TOKENS_OFFSET + 4 + TOKEN_SIZE + 42}, 8).toLe();`,
+    );
     // The N-token Newton helper CANNOT be declared inline any more: the RS
     // compiler forbids a nested function inside main(). Like saber-stableswap's
     // stableD/stableY, it is a TOP-LEVEL function the caller declares from
@@ -229,7 +247,7 @@ export const stabbleStableSwap: SvmVenueAdapter = {
           ? `netOut${i} / ${tokenOut.scalingFactor}`
           : `netOut${i} * ${tokenOut.scalingFactor}`;
     lines.push(`  const q${i} = ${unwrapExpr};`);
-    return lines.join('\n');
+    return lines.join("\n");
   },
 
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
@@ -271,12 +289,19 @@ export const stabbleStableSwap: SvmVenueAdapter = {
     assertStabbleU64AmountIn(amountIn, `${SLUG} referenceQuote`);
 
     const poolData = state[c.pool];
-    if (poolData === undefined) throw new Error(`${SLUG} referenceQuote state is missing pool ${c.pool}`);
+    if (poolData === undefined)
+      throw new Error(`${SLUG} referenceQuote state is missing pool ${c.pool}`);
     const [tokenIn, tokenOut] = c.tokens;
     const bal0 = readUintLE(poolData, TOKENS_OFFSET + 4 + 42, 8);
     const bal1 = readUintLE(poolData, TOKENS_OFFSET + 4 + TOKEN_SIZE + 42, 8);
     const swapFee = readUintLE(poolData, SWAP_FEE_OFFSET, 8);
-    const amp = stableGetAmplification(c.ampInitialFactor, c.ampTargetFactor, c.rampStartTs, c.rampStopTs, now);
+    const amp = stableGetAmplification(
+      c.ampInitialFactor,
+      c.ampTargetFactor,
+      c.rampStartTs,
+      c.rampStopTs,
+      now,
+    );
 
     const balances = [bal0, bal1];
     const invariant = stableCalcInvariantN(amp, balances);

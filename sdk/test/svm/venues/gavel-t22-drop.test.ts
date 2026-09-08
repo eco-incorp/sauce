@@ -4,17 +4,21 @@
  * fetchGavelConfig REJECT (the graceful self-drop signal), while the classic
  * legacy path is unaffected (an unreadable mint falls back to legacy).
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { fetchGavelConfig, GAVEL_POOL_SIZE, GAVEL_POOL_DISCRIMINANT } from '../../../src/svm/venues/gavel/index.js';
-import { makeT22Mint, makeLegacyMint } from '../fixtures/token-2022/synth.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import {
+  fetchGavelConfig,
+  GAVEL_POOL_SIZE,
+  GAVEL_POOL_DISCRIMINANT,
+} from "../../../src/svm/venues/gavel/index.js";
+import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi');
-const BASE_MINT = address('J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn');
-const QUOTE_MINT = address('So11111111111111111111111111111111111111112');
-const BASE_VAULT = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-const QUOTE_VAULT = address('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
+const POOL = address("CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi");
+const BASE_MINT = address("J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn");
+const QUOTE_MINT = address("So11111111111111111111111111111111111111112");
+const BASE_VAULT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const QUOTE_VAULT = address("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB");
 
 const codec = getAddressCodec();
 
@@ -50,8 +54,8 @@ function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
   return async (addr: Address) => map[addr] ?? null;
 }
 
-describe('gavel Token-2022 self-drop', () => {
-  it('REJECTS a pool whose baseMint is a Token-2022 mint', async () => {
+describe("gavel Token-2022 self-drop", () => {
+  it("REJECTS a pool whose baseMint is a Token-2022 mint", async () => {
     const load = loaderFrom({
       [POOL]: buildPool(),
       [BASE_MINT]: makeT22Mint(),
@@ -60,21 +64,21 @@ describe('gavel Token-2022 self-drop', () => {
     await expect(fetchGavelConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
-  it('does NOT drop a classic-legacy pool (byte-identical legacy path)', async () => {
+  it("does NOT drop a classic-legacy pool (byte-identical legacy path)", async () => {
     const load = loaderFrom({
       [POOL]: buildPool(),
       [BASE_MINT]: makeLegacyMint(),
       [QUOTE_MINT]: makeLegacyMint(),
     });
     const cfg = await fetchGavelConfig(load, POOL);
-    expect(cfg.venue).toBe('gavel');
+    expect(cfg.venue).toBe("gavel");
     expect(cfg.baseMint).toBe(BASE_MINT);
     expect(cfg.quoteMint).toBe(QUOTE_MINT);
   });
 
-  it('does NOT drop when a mint account is unreadable (falls back to legacy)', async () => {
+  it("does NOT drop when a mint account is unreadable (falls back to legacy)", async () => {
     const load = loaderFrom({ [POOL]: buildPool() }); // no mint accounts vendored
     const cfg = await fetchGavelConfig(load, POOL);
-    expect(cfg.venue).toBe('gavel');
+    expect(cfg.venue).toBe("gavel");
   });
 });

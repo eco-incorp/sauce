@@ -3,20 +3,32 @@
 Official zkSync Era bridge via DiamondProxy. Deposits ETH and executes L2 transactions from Ethereum with ZK proof-based finality.
 
 ## Category
+
 native L2 bridge | Direction: L1 to L2 (Ethereum to zkSync Era) | Chains: Ethereum (1), zkSync Era (324)
 
 ## SauceScript Functions
 
 ### depositETH
+
 Deposit ETH from Ethereum L1 to zkSync Era L2.
+
 ```typescript
 import { ZkSyncDiamondProxyABI as IDiamondProxy } from "./abis";
 
 function main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint256): Uint256 {
   const proxy = IDiamondProxy.at(diamondProxyAddress);
-  return proxy.requestL2Transaction(recipient, ctx.msgValue(), 0x00, l2GasLimit, 800, [], ctx.msgSender());
+  return proxy.requestL2Transaction(
+    recipient,
+    ctx.msgValue(),
+    0x00,
+    l2GasLimit,
+    800,
+    [],
+    ctx.msgSender(),
+  );
 }
 ```
+
 - `recipient`: Address to receive ETH on zkSync L2 (also the contract to call if `_calldata` is provided)
 - `_l2Value`: Amount of ETH to send to the recipient on L2 (use `msg.value`)
 - `_calldata`: Optional calldata to execute on L2. `0x00` for simple ETH deposits
@@ -28,18 +40,20 @@ function main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint
 
 ## Deployed Addresses
 
-| Chain | Contract | Address |
-|-------|----------|---------|
+| Chain    | Contract     | Address                                      |
+| -------- | ------------ | -------------------------------------------- |
 | Ethereum | diamondProxy | `0x32400084C286CF3E17e7B677ea9583e60a000324` |
-| zkSync | l2Bridge | `0x11f943b2c77b743AB90f4A0Ae7d5A4e7FCA3E102` |
+| zkSync   | l2Bridge     | `0x11f943b2c77b743AB90f4A0Ae7d5A4e7FCA3E102` |
 
 ## ABI Reference
 
 ### ZkSyncDiamondProxyABI
+
 - `requestL2Transaction(address _contractL2, uint256 _l2Value, bytes _calldata, uint256 _l2GasLimit, uint256 _l2GasPerPubdataByteLimit, bytes[] _factoryDeps, address _refundRecipient) returns (uint256 canonicalTxHash)` [payable] - Request an L2 transaction from L1. Used for ETH deposits, contract calls, and contract deployments
 - `l2TransactionBaseCost(uint256 _gasPrice, uint256 _l2GasLimit, uint256 _l2GasPerPubdataByteLimit) returns (uint256)` - Estimate the base cost of an L2 transaction (view). Use to calculate required msg.value
 
 ## Notes
+
 - **L1 to L2** via DiamondProxy. For L2 to L1 withdrawals, use the L2 withdraw mechanism on zkSync Era
 - `requestL2Transaction` is a general-purpose L1-to-L2 transaction request -- handles ETH deposits, contract calls, and even contract deployments (via `_factoryDeps`)
 - `msg.value` must cover: `_l2Value + l2TransactionBaseCost(gasPrice, _l2GasLimit, _l2GasPerPubdataByteLimit)`

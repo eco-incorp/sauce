@@ -7,14 +7,19 @@
  * (no account read), so only the pool + a T22 mint are needed to exercise the
  * drop.
  */
-import { address, getAddressEncoder } from '@solana/kit';
-import { fetchPoolConfig, OFF_MINT_A, OFF_MINT_B, POOL_ACCOUNT_SIZE } from '../../../src/svm/venues/riptide/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeLegacyMint, makeT22Mint } from '../fixtures/token-2022/synth.js';
+import { address, getAddressEncoder } from "@solana/kit";
+import {
+  fetchPoolConfig,
+  OFF_MINT_A,
+  OFF_MINT_B,
+  POOL_ACCOUNT_SIZE,
+} from "../../../src/svm/venues/riptide/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeLegacyMint, makeT22Mint } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci');
-const MINT_A = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'); // USDC
-const MINT_B = address('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'); // USDT
+const POOL = address("6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci");
+const MINT_A = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
+const MINT_B = address("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"); // USDT
 const enc = getAddressEncoder();
 
 function synthPool(): Uint8Array {
@@ -33,20 +38,26 @@ function loader(mintOverrides: Record<string, Uint8Array>): AccountLoader {
   };
 }
 
-describe('riptide Token-2022 self-drop', () => {
-  it('legacy path is unchanged (mints unvendored → legacy assumption)', async () => {
+describe("riptide Token-2022 self-drop", () => {
+  it("legacy path is unchanged (mints unvendored → legacy assumption)", async () => {
     await expect(fetchPoolConfig(loader({}), POOL)).resolves.toBeDefined();
   });
 
-  it('a vendored legacy (82-byte) mint keeps the pool routable', async () => {
-    await expect(fetchPoolConfig(loader({ [MINT_A]: makeLegacyMint(), [MINT_B]: makeLegacyMint() }), POOL)).resolves.toBeDefined();
+  it("a vendored legacy (82-byte) mint keeps the pool routable", async () => {
+    await expect(
+      fetchPoolConfig(loader({ [MINT_A]: makeLegacyMint(), [MINT_B]: makeLegacyMint() }), POOL),
+    ).resolves.toBeDefined();
   });
 
-  it('drops when mintA is a Token-2022 mint', async () => {
-    await expect(fetchPoolConfig(loader({ [MINT_A]: makeT22Mint() }), POOL)).rejects.toThrow(/Token-2022/);
+  it("drops when mintA is a Token-2022 mint", async () => {
+    await expect(fetchPoolConfig(loader({ [MINT_A]: makeT22Mint() }), POOL)).rejects.toThrow(
+      /Token-2022/,
+    );
   });
 
-  it('drops when mintB is a Token-2022 mint', async () => {
-    await expect(fetchPoolConfig(loader({ [MINT_B]: makeT22Mint() }), POOL)).rejects.toThrow(/Token-2022/);
+  it("drops when mintB is a Token-2022 mint", async () => {
+    await expect(fetchPoolConfig(loader({ [MINT_B]: makeT22Mint() }), POOL)).rejects.toThrow(
+      /Token-2022/,
+    );
   });
 });

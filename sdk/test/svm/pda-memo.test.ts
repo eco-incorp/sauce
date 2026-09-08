@@ -21,9 +21,9 @@
  *      fetchPoolConfig call regardless of memo hits; this module never
  *      caches account bytes, only the pure address computation.
  */
-import { resolve } from 'path';
-import { address, getAddressCodec, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
+import { resolve } from "path";
+import { address, getAddressCodec, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
 import {
   __pdaMemoSize,
   __pdaMemoStats,
@@ -32,31 +32,56 @@ import {
   DEFAULT_PDA_MEMO_MAX_ENTRIES,
   getPdaMemoMaxEntries,
   memoizedGetProgramDerivedAddress,
-} from '../../src/svm/venues/pda-memo.js';
-import { raydiumClmm, RAYDIUM_CLMM_PROGRAM_ID, windowStartTicks as raydiumWindowStartTicks } from '../../src/svm/venues/raydium-clmm/index.js';
-import { pancakeswapClmm, PANCAKESWAP_CLMM_PROGRAM_ID } from '../../src/svm/venues/pancakeswap-clmm/index.js';
-import { orcaWhirlpool, ORCA_WHIRLPOOL_PROGRAM_ID, windowStartTicks as orcaWindowStartTicks } from '../../src/svm/venues/orca-whirlpool/index.js';
-import { meteoraDlmm, METEORA_DLMM_PROGRAM_ID, windowArrayIndexes as meteoraWindowArrayIndexes } from '../../src/svm/venues/meteora-dlmm/index.js';
-import { sarosDlmm, SAROS_DLMM_PROGRAM_ID, pairArrayIndexes as sarosPairArrayIndexes } from '../../src/svm/venues/saros-dlmm/index.js';
-import type { AccountLoader } from '../../src/svm/index.js';
-import { fixtureLoader, loadFixtures } from './fixtures.js';
+} from "../../src/svm/venues/pda-memo.js";
+import {
+  raydiumClmm,
+  RAYDIUM_CLMM_PROGRAM_ID,
+  windowStartTicks as raydiumWindowStartTicks,
+} from "../../src/svm/venues/raydium-clmm/index.js";
+import {
+  pancakeswapClmm,
+  PANCAKESWAP_CLMM_PROGRAM_ID,
+} from "../../src/svm/venues/pancakeswap-clmm/index.js";
+import {
+  orcaWhirlpool,
+  ORCA_WHIRLPOOL_PROGRAM_ID,
+  windowStartTicks as orcaWindowStartTicks,
+} from "../../src/svm/venues/orca-whirlpool/index.js";
+import {
+  meteoraDlmm,
+  METEORA_DLMM_PROGRAM_ID,
+  windowArrayIndexes as meteoraWindowArrayIndexes,
+} from "../../src/svm/venues/meteora-dlmm/index.js";
+import {
+  sarosDlmm,
+  SAROS_DLMM_PROGRAM_ID,
+  pairArrayIndexes as sarosPairArrayIndexes,
+} from "../../src/svm/venues/saros-dlmm/index.js";
+import type { AccountLoader } from "../../src/svm/index.js";
+import { fixtureLoader, loadFixtures } from "./fixtures.js";
 
-const RAYDIUM_FIXTURES = resolve(process.cwd(), 'test/svm/fixtures/raydium-clmm');
-const RAYDIUM_POOL = address('3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv');
-const ORCA_FIXTURES = resolve(process.cwd(), 'test/svm/fixtures/orca-whirlpool');
-const ORCA_POOL = address('Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE');
-const METEORA_FIXTURES = resolve(process.cwd(), 'test/svm/fixtures/meteora-dlmm');
-const METEORA_PAIR = address('5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6');
-const SAROS_FIXTURES = resolve(process.cwd(), 'test/svm/fixtures/saros-dlmm');
-const SAROS_PAIR = address('DHXKB9fSff4LjubMFieKxaBrvNY6AzXVwaRLk5N2vs87');
+const RAYDIUM_FIXTURES = resolve(process.cwd(), "test/svm/fixtures/raydium-clmm");
+const RAYDIUM_POOL = address("3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv");
+const ORCA_FIXTURES = resolve(process.cwd(), "test/svm/fixtures/orca-whirlpool");
+const ORCA_POOL = address("Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE");
+const METEORA_FIXTURES = resolve(process.cwd(), "test/svm/fixtures/meteora-dlmm");
+const METEORA_PAIR = address("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6");
+const SAROS_FIXTURES = resolve(process.cwd(), "test/svm/fixtures/saros-dlmm");
+const SAROS_PAIR = address("DHXKB9fSff4LjubMFieKxaBrvNY6AzXVwaRLk5N2vs87");
 
 function addressBytes(value: Address): Uint8Array {
   return new Uint8Array(getAddressCodec().encode(value));
 }
 
 /** The un-memoized primitive every venue's local deriver used to call directly. */
-async function directPda(programAddress: Address, seeds: readonly (Uint8Array | string)[]): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({ programAddress, seeds: seeds as (Uint8Array | string)[] });
+async function directPda(
+  programAddress: Address,
+  seeds: readonly (Uint8Array | string)[],
+): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    programAddress,
+    seeds: seeds as (Uint8Array | string)[],
+  });
   return pda;
 }
 
@@ -64,9 +89,9 @@ beforeEach(() => {
   __resetPdaMemoForTest();
 });
 
-describe('PDA-derivation memo', () => {
-  describe('memo hit: a warm repeat costs zero fresh derivations', () => {
-    it('raydium-clmm: second fetchPoolConfig call is all hits', async () => {
+describe("PDA-derivation memo", () => {
+  describe("memo hit: a warm repeat costs zero fresh derivations", () => {
+    it("raydium-clmm: second fetchPoolConfig call is all hits", async () => {
       const load = fixtureLoader(loadFixtures(RAYDIUM_FIXTURES));
 
       await raydiumClmm.fetchPoolConfig(load, RAYDIUM_POOL);
@@ -80,7 +105,7 @@ describe('PDA-derivation memo', () => {
       expect(afterSecond.hits).toBe(afterFirst.misses); // every derivation of the repeat was a memo hit
     });
 
-    it('is shared across families: orca-whirlpool also warms to all-hits on a repeat', async () => {
+    it("is shared across families: orca-whirlpool also warms to all-hits on a repeat", async () => {
       const load = fixtureLoader(loadFixtures(ORCA_FIXTURES));
 
       await orcaWhirlpool.fetchPoolConfig(load, ORCA_POOL);
@@ -94,8 +119,8 @@ describe('PDA-derivation memo', () => {
     });
   });
 
-  describe('address correctness: memoized == direct un-memoized derive', () => {
-    it('raydium-clmm tick-array PDAs (BE i32 seed shape)', async () => {
+  describe("address correctness: memoized == direct un-memoized derive", () => {
+    it("raydium-clmm tick-array PDAs (BE i32 seed shape)", async () => {
       const load = fixtureLoader(loadFixtures(RAYDIUM_FIXTURES));
       const config = await raydiumClmm.fetchPoolConfig(load, RAYDIUM_POOL);
       const starts = raydiumWindowStartTicks(config.tickCurrentIndex, config.tickSpacing, true);
@@ -103,19 +128,23 @@ describe('PDA-derivation memo', () => {
       for (let i = 0; i < starts.length; i++) {
         const be = new Uint8Array(4);
         new DataView(be.buffer).setInt32(0, starts[i], false);
-        const expected = await directPda(RAYDIUM_CLMM_PROGRAM_ID, [new TextEncoder().encode('tick_array'), addressBytes(RAYDIUM_POOL), be]);
-        expect(config.windows['0to1'].tickArrays[i]).toBe(expected);
+        const expected = await directPda(RAYDIUM_CLMM_PROGRAM_ID, [
+          new TextEncoder().encode("tick_array"),
+          addressBytes(RAYDIUM_POOL),
+          be,
+        ]);
+        expect(config.windows["0to1"].tickArrays[i]).toBe(expected);
       }
     });
 
-    it('orca-whirlpool tick-array PDAs (ASCII seed shape)', async () => {
+    it("orca-whirlpool tick-array PDAs (ASCII seed shape)", async () => {
       const load = fixtureLoader(loadFixtures(ORCA_FIXTURES));
       const config = await orcaWhirlpool.fetchPoolConfig(load, ORCA_POOL);
       const starts = orcaWindowStartTicks(config.tickCurrentIndex, config.tickSpacing, true);
 
       for (let i = 0; i < starts.length; i++) {
         const expected = await directPda(ORCA_WHIRLPOOL_PROGRAM_ID, [
-          new TextEncoder().encode('tick_array'),
+          new TextEncoder().encode("tick_array"),
           addressBytes(ORCA_POOL),
           new TextEncoder().encode(String(starts[i])),
         ]);
@@ -123,7 +152,7 @@ describe('PDA-derivation memo', () => {
       }
     });
 
-    it('meteora-dlmm bin-array PDAs (LE i64 seed shape)', async () => {
+    it("meteora-dlmm bin-array PDAs (LE i64 seed shape)", async () => {
       const load = fixtureLoader(loadFixtures(METEORA_FIXTURES));
       const config = await meteoraDlmm.fetchPoolConfig(load, METEORA_PAIR);
       const indexes = meteoraWindowArrayIndexes(config.activeId, true);
@@ -131,12 +160,16 @@ describe('PDA-derivation memo', () => {
       for (let i = 0; i < indexes.length; i++) {
         const le = new Uint8Array(8);
         new DataView(le.buffer).setBigInt64(0, BigInt(indexes[i]), true);
-        const expected = await directPda(METEORA_DLMM_PROGRAM_ID, [new TextEncoder().encode('bin_array'), addressBytes(METEORA_PAIR), le]);
+        const expected = await directPda(METEORA_DLMM_PROGRAM_ID, [
+          new TextEncoder().encode("bin_array"),
+          addressBytes(METEORA_PAIR),
+          le,
+        ]);
         expect(config.windows.xToY.binArrays[i]).toBe(expected);
       }
     });
 
-    it('saros-dlmm bin-array PDAs (LE u32 seed shape)', async () => {
+    it("saros-dlmm bin-array PDAs (LE u32 seed shape)", async () => {
       const load = fixtureLoader(loadFixtures(SAROS_FIXTURES));
       const config = await sarosDlmm.fetchPoolConfig(load, SAROS_PAIR);
       const [lowerIndex, upperIndex] = sarosPairArrayIndexes(config.activeId);
@@ -148,13 +181,21 @@ describe('PDA-derivation memo', () => {
       ] as const) {
         const le = new Uint8Array(4);
         new DataView(le.buffer).setUint32(0, index, true);
-        const expected = await directPda(SAROS_DLMM_PROGRAM_ID, [new TextEncoder().encode('bin_array'), addressBytes(SAROS_PAIR), le]);
+        const expected = await directPda(SAROS_DLMM_PROGRAM_ID, [
+          new TextEncoder().encode("bin_array"),
+          addressBytes(SAROS_PAIR),
+          le,
+        ]);
         expect(actual).toBe(expected);
       }
     });
 
-    it('no cross-family collision: identical seed bytes under two distinct program ids derive DIFFERENT PDAs', async () => {
-      const seeds = [new TextEncoder().encode('tick_array'), addressBytes(RAYDIUM_POOL), new Uint8Array(4)] as const;
+    it("no cross-family collision: identical seed bytes under two distinct program ids derive DIFFERENT PDAs", async () => {
+      const seeds = [
+        new TextEncoder().encode("tick_array"),
+        addressBytes(RAYDIUM_POOL),
+        new Uint8Array(4),
+      ] as const;
 
       const raydiumPda = await memoizedGetProgramDerivedAddress(RAYDIUM_CLMM_PROGRAM_ID, seeds);
       const pancakePda = await memoizedGetProgramDerivedAddress(PANCAKESWAP_CLMM_PROGRAM_ID, seeds);
@@ -164,7 +205,7 @@ describe('PDA-derivation memo', () => {
       expect(pancakePda).toBe(await directPda(PANCAKESWAP_CLMM_PROGRAM_ID, seeds));
     });
 
-    it('pancakeswap-clmm (raydium-clmm-shaped fork) wired through fetchPoolConfig never aliases raydium-clmm\'s own derivation', async () => {
+    it("pancakeswap-clmm (raydium-clmm-shaped fork) wired through fetchPoolConfig never aliases raydium-clmm's own derivation", async () => {
       // pancakeswap-clmm has no fixture of its own; its PoolState layout is
       // byte-identical to raydium-clmm's (a verbatim Anchor fork), so this
       // reads the SAME real account bytes through BOTH families' fetchPoolConfig
@@ -177,14 +218,16 @@ describe('PDA-derivation memo', () => {
 
       expect(pancakeConfig.tickCurrentIndex).toBe(raydiumConfig.tickCurrentIndex);
       expect(pancakeConfig.tickSpacing).toBe(raydiumConfig.tickSpacing);
-      for (let i = 0; i < raydiumConfig.windows['0to1'].tickArrays.length; i++) {
-        expect(pancakeConfig.windows['0to1'].tickArrays[i]).not.toBe(raydiumConfig.windows['0to1'].tickArrays[i]);
+      for (let i = 0; i < raydiumConfig.windows["0to1"].tickArrays.length; i++) {
+        expect(pancakeConfig.windows["0to1"].tickArrays[i]).not.toBe(
+          raydiumConfig.windows["0to1"].tickArrays[i],
+        );
       }
     });
   });
 
-  describe('window shift -> fresh miss, correct new address', () => {
-    it('raydium-clmm: a live tick shifted well outside the shipped window re-derives a genuinely new PDA', async () => {
+  describe("window shift -> fresh miss, correct new address", () => {
+    it("raydium-clmm: a live tick shifted well outside the shipped window re-derives a genuinely new PDA", async () => {
       const load = fixtureLoader(loadFixtures(RAYDIUM_FIXTURES));
       const config = await raydiumClmm.fetchPoolConfig(load, RAYDIUM_POOL);
       const before = __pdaMemoStats();
@@ -196,25 +239,33 @@ describe('PDA-derivation memo', () => {
       // MUST see it as a fresh key.
       const span = 60 * config.tickSpacing;
       const shiftedTick = config.tickCurrentIndex + 5 * span;
-      const originalStarts = raydiumWindowStartTicks(config.tickCurrentIndex, config.tickSpacing, true);
+      const originalStarts = raydiumWindowStartTicks(
+        config.tickCurrentIndex,
+        config.tickSpacing,
+        true,
+      );
       const shiftedStarts = raydiumWindowStartTicks(shiftedTick, config.tickSpacing, true);
       expect(shiftedStarts).not.toEqual(originalStarts);
 
       const be = new Uint8Array(4);
       new DataView(be.buffer).setInt32(0, shiftedStarts[0], false);
-      const seeds = [new TextEncoder().encode('tick_array'), addressBytes(RAYDIUM_POOL), be] as const;
+      const seeds = [
+        new TextEncoder().encode("tick_array"),
+        addressBytes(RAYDIUM_POOL),
+        be,
+      ] as const;
 
       const shiftedPda = await memoizedGetProgramDerivedAddress(RAYDIUM_CLMM_PROGRAM_ID, seeds);
       const after = __pdaMemoStats();
 
       expect(after.misses).toBe(before.misses + 1); // a genuinely new key -> exactly one fresh miss
-      expect(shiftedPda).not.toBe(config.windows['0to1'].tickArrays[0]);
+      expect(shiftedPda).not.toBe(config.windows["0to1"].tickArrays[0]);
       expect(shiftedPda).toBe(await directPda(RAYDIUM_CLMM_PROGRAM_ID, seeds));
     });
   });
 
-  describe('no state cached: the AccountLoader still runs on every call', () => {
-    it('raydium-clmm: an all-memo-hit second fetchPoolConfig still re-reads every account', async () => {
+  describe("no state cached: the AccountLoader still runs on every call", () => {
+    it("raydium-clmm: an all-memo-hit second fetchPoolConfig still re-reads every account", async () => {
       const fixtures = loadFixtures(RAYDIUM_FIXTURES);
       const base = fixtureLoader(fixtures);
       let calls = 0;
@@ -234,12 +285,12 @@ describe('PDA-derivation memo', () => {
     });
   });
 
-  describe('LRU: bounded size, evicts least-recently-used, keeps recency on hit', () => {
+  describe("LRU: bounded size, evicts least-recently-used, keeps recency on hit", () => {
     // A distinct single-byte seed per index → a distinct memo key per call.
     const PROGRAM = RAYDIUM_CLMM_PROGRAM_ID;
     const seedFor = (i: number): readonly Uint8Array[] => [new Uint8Array([i])];
 
-    it('never exceeds the cap and evicts the oldest entry on overflow', async () => {
+    it("never exceeds the cap and evicts the oldest entry on overflow", async () => {
       configurePdaMemo({ maxEntries: 3 });
 
       await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(0)); // [0]
@@ -260,7 +311,7 @@ describe('PDA-derivation memo', () => {
       expect(__pdaMemoSize()).toBe(3);
     });
 
-    it('a hit refreshes recency, so a since-touched entry survives the next eviction', async () => {
+    it("a hit refreshes recency, so a since-touched entry survives the next eviction", async () => {
       configurePdaMemo({ maxEntries: 2 });
 
       await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(10)); // [10]
@@ -278,11 +329,11 @@ describe('PDA-derivation memo', () => {
     });
   });
 
-  describe('configurePdaMemo: consumer-tunable cap', () => {
+  describe("configurePdaMemo: consumer-tunable cap", () => {
     const PROGRAM = RAYDIUM_CLMM_PROGRAM_ID;
     const seedFor = (i: number): readonly Uint8Array[] => [new Uint8Array([i])];
 
-    it('defaults to DEFAULT_PDA_MEMO_MAX_ENTRIES (100k) and reflects a raised cap', () => {
+    it("defaults to DEFAULT_PDA_MEMO_MAX_ENTRIES (100k) and reflects a raised cap", () => {
       expect(DEFAULT_PDA_MEMO_MAX_ENTRIES).toBe(100_000);
       expect(getPdaMemoMaxEntries()).toBe(DEFAULT_PDA_MEMO_MAX_ENTRIES);
 
@@ -290,7 +341,7 @@ describe('PDA-derivation memo', () => {
       expect(getPdaMemoMaxEntries()).toBe(500_000);
     });
 
-    it('a raised cap retains entries that the default-small cap would have evicted', async () => {
+    it("a raised cap retains entries that the default-small cap would have evicted", async () => {
       configurePdaMemo({ maxEntries: 5 }); // simulate a raised cap relative to the working set
       for (let i = 0; i < 5; i++) await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(i));
       expect(__pdaMemoSize()).toBe(5);
@@ -302,7 +353,7 @@ describe('PDA-derivation memo', () => {
       expect(__pdaMemoStats().misses).toBe(before.misses); // zero fresh derivations
     });
 
-    it('lowering the cap below the current population evicts the oldest eagerly', async () => {
+    it("lowering the cap below the current population evicts the oldest eagerly", async () => {
       configurePdaMemo({ maxEntries: 10 });
       for (let i = 0; i < 6; i++) await memoizedGetProgramDerivedAddress(PROGRAM, seedFor(i)); // [0..5]
       expect(__pdaMemoSize()).toBe(6);
@@ -317,7 +368,7 @@ describe('PDA-derivation memo', () => {
       expect(__pdaMemoStats().misses).toBe(before.misses + 1);
     });
 
-    it('rejects a non-positive or non-integer cap', () => {
+    it("rejects a non-positive or non-integer cap", () => {
       expect(() => configurePdaMemo({ maxEntries: 0 })).toThrow(/positive integer/);
       expect(() => configurePdaMemo({ maxEntries: -1 })).toThrow(/positive integer/);
       expect(() => configurePdaMemo({ maxEntries: 1.5 })).toThrow(/positive integer/);

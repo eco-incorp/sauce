@@ -195,29 +195,29 @@
  * mid-transaction), so it starts and ends at zero every trade; this
  * adapter attaches it but never reads its balance.
  */
-import { createHash } from 'node:crypto';
-import { address, getAddressCodec, getBase58Decoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { createHash } from "node:crypto";
+import { address, getAddressCodec, getBase58Decoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-const SLUG = 'mswap';
+const SLUG = "mswap";
 
 /** m0-foundation's ext_swap router — `SVM_VENUE_PROGRAM_IDS['mswap']`. */
-export const MSWAP_PROGRAM_ID = address('MSwapi3WhNKMUGm9YrxGhypgUEt7wYQH3ZgG32XoWzH');
+export const MSWAP_PROGRAM_ID = address("MSwapi3WhNKMUGm9YrxGhypgUEt7wYQH3ZgG32XoWzH");
 /** `ext_swap`'s own global (PDA seed `b"global"` under `MSWAP_PROGRAM_ID`, bump 253 — derived offline, cross-checked live 2026-07-31). */
-export const SWAP_GLOBAL_ID = address('6U4ZZZkftbuHxjRDHUfh83M9zG66aAAXDV3xTRX7yePr');
+export const SWAP_GLOBAL_ID = address("6U4ZZZkftbuHxjRDHUfh83M9zG66aAAXDV3xTRX7yePr");
 /** The one `$M` mint every whitelisted extension wraps/unwraps against. */
-export const M_MINT = address('mzerojk9tg56ebsrEAhfkyc9VgKjTW2zDqp6C5mhjzH');
+export const M_MINT = address("mzerojk9tg56ebsrEAhfkyc9VgKjTW2zDqp6C5mhjzH");
 /** `$M` is always Token2022 (`m_ext`'s `Wrap`/`Unwrap` hard-type `m_token_program: Program<Token2022>`). */
-export const M_TOKEN_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+export const M_TOKEN_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 /** `SwapGlobal`'s own ATA of `$M` (owner = `SWAP_GLOBAL_ID`) — the transient per-trade holding account (see module doc). */
-export const SWAP_M_ACCOUNT = address('7dM9YCAbN9XGixnaP7wnyQDVZH6BVy6HPFeZr1SWVNka');
+export const SWAP_M_ACCOUNT = address("7dM9YCAbN9XGixnaP7wnyQDVZH6BVy6HPFeZr1SWVNka");
 
 const SWAP_GLOBAL_DISCRIMINATOR = [0x0f, 0xb8, 0x93, 0x81, 0xb7, 0xdb, 0xdf, 0xa3];
-const M_EXT_GLOBAL_SEED = new TextEncoder().encode('global');
-const M_VAULT_SEED = new TextEncoder().encode('m_vault');
-const MINT_AUTHORITY_SEED = new TextEncoder().encode('mint_authority');
+const M_EXT_GLOBAL_SEED = new TextEncoder().encode("global");
+const M_VAULT_SEED = new TextEncoder().encode("m_vault");
+const MINT_AUTHORITY_SEED = new TextEncoder().encode("mint_authority");
 
 /** `ExtGlobalV2.yield_config.yield_variant` discriminant byte (`m_ext`'s `YieldVariant` enum). */
 const YIELD_VARIANT_NO_YIELD = 0;
@@ -239,7 +239,7 @@ const PAIR_BY_KEY = new Map<string, { inMint: Address; outMint: Address }>();
 
 /** Mint synthetic per-directed-pair discovery key (mirrors `sanctumInfinityPoolKey`). */
 export function mswapPoolKey(inMint: Address, outMint: Address): Address {
-  const digest = createHash('sha256').update(`${inMint}\0${outMint}`).digest();
+  const digest = createHash("sha256").update(`${inMint}\0${outMint}`).digest();
   const key = address(b58.decode(digest));
   PAIR_BY_KEY.set(key as string, { inMint, outMint });
   return key;
@@ -263,7 +263,11 @@ function decodeSwapGlobal(data: Uint8Array): { extensions: WhitelistedExtensionE
   off += 4;
   const extensions: WhitelistedExtensionEntry[] = [];
   for (let i = 0; i < extLen; i++) {
-    extensions.push({ programId: readAddress(data, off), mint: readAddress(data, off + 32), tokenProgram: readAddress(data, off + 64) });
+    extensions.push({
+      programId: readAddress(data, off),
+      mint: readAddress(data, off + 32),
+      tokenProgram: readAddress(data, off + 64),
+    });
     off += 96;
   }
   return { extensions };
@@ -322,16 +326,32 @@ export interface MSwapPoolConfig extends PoolConfig {
 }
 
 async function derivePdas(extProgramId: Address, mMint: Address, mTokenProgram: Address) {
-  const [global] = await getProgramDerivedAddress({ programAddress: extProgramId, seeds: [M_EXT_GLOBAL_SEED] });
-  const [mVaultAuth] = await getProgramDerivedAddress({ programAddress: extProgramId, seeds: [M_VAULT_SEED] });
-  const [mintAuthority] = await getProgramDerivedAddress({ programAddress: extProgramId, seeds: [MINT_AUTHORITY_SEED] });
+  const [global] = await getProgramDerivedAddress({
+    programAddress: extProgramId,
+    seeds: [M_EXT_GLOBAL_SEED],
+  });
+  const [mVaultAuth] = await getProgramDerivedAddress({
+    programAddress: extProgramId,
+    seeds: [M_VAULT_SEED],
+  });
+  const [mintAuthority] = await getProgramDerivedAddress({
+    programAddress: extProgramId,
+    seeds: [MINT_AUTHORITY_SEED],
+  });
   const [mVault] = await findAta(mVaultAuth, mMint, mTokenProgram);
   return { global, mVaultAuth, mintAuthority, mVault };
 }
 
-const ATA_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-async function findAta(owner: Address, mint: Address, tokenProgram: Address): Promise<readonly [Address, number]> {
-  return getProgramDerivedAddress({ programAddress: ATA_PROGRAM, seeds: [codec.encode(owner), codec.encode(tokenProgram), codec.encode(mint)] });
+const ATA_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+async function findAta(
+  owner: Address,
+  mint: Address,
+  tokenProgram: Address,
+): Promise<readonly [Address, number]> {
+  return getProgramDerivedAddress({
+    programAddress: ATA_PROGRAM,
+    seeds: [codec.encode(owner), codec.encode(tokenProgram), codec.encode(mint)],
+  });
 }
 
 /**
@@ -343,9 +363,13 @@ async function findAta(owner: Address, mint: Address, tokenProgram: Address): Pr
  * `SWAP_GLOBAL_ID` from its own `wrap_authorities` — all LIVE checks, never
  * a hardcoded mint exclusion.
  */
-export async function fetchMSwapPoolConfig(load: AccountLoader, pool: Address): Promise<MSwapPoolConfig> {
+export async function fetchMSwapPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<MSwapPoolConfig> {
   const pair = PAIR_BY_KEY.get(pool as unknown as string);
-  if (pair === undefined) throw new Error(`${SLUG}: unknown discovery key ${pool} (not minted this process)`);
+  if (pair === undefined)
+    throw new Error(`${SLUG}: unknown discovery key ${pool} (not minted this process)`);
   if (pair.inMint === pair.outMint) throw new Error(`${SLUG}: in/out mint are identical`);
 
   const swapGlobalData = await load(SWAP_GLOBAL_ID);
@@ -354,29 +378,40 @@ export async function fetchMSwapPoolConfig(load: AccountLoader, pool: Address): 
 
   const fromEntry = extensions.find((e) => e.mint === pair.inMint);
   const toEntry = extensions.find((e) => e.mint === pair.outMint);
-  if (fromEntry === undefined) throw new Error(`${SLUG}: mint ${pair.inMint} is not a whitelisted extension`);
-  if (toEntry === undefined) throw new Error(`${SLUG}: mint ${pair.outMint} is not a whitelisted extension`);
+  if (fromEntry === undefined)
+    throw new Error(`${SLUG}: mint ${pair.inMint} is not a whitelisted extension`);
+  if (toEntry === undefined)
+    throw new Error(`${SLUG}: mint ${pair.outMint} is not a whitelisted extension`);
 
   const [fromPdas, toPdas] = await Promise.all([
     derivePdas(fromEntry.programId, M_MINT, M_TOKEN_PROGRAM),
     derivePdas(toEntry.programId, M_MINT, M_TOKEN_PROGRAM),
   ]);
 
-  const [fromGlobalData, toGlobalData] = await Promise.all([load(fromPdas.global), load(toPdas.global)]);
-  if (fromGlobalData === null) throw new Error(`${SLUG}: from-leg ExtGlobalV2 ${fromPdas.global} not found`);
-  if (toGlobalData === null) throw new Error(`${SLUG}: to-leg ExtGlobalV2 ${toPdas.global} not found`);
+  const [fromGlobalData, toGlobalData] = await Promise.all([
+    load(fromPdas.global),
+    load(toPdas.global),
+  ]);
+  if (fromGlobalData === null)
+    throw new Error(`${SLUG}: from-leg ExtGlobalV2 ${fromPdas.global} not found`);
+  if (toGlobalData === null)
+    throw new Error(`${SLUG}: to-leg ExtGlobalV2 ${toPdas.global} not found`);
   const fromGlobal = decodeExtGlobal(fromGlobalData);
   const toGlobal = decodeExtGlobal(toGlobalData);
 
   for (const [leg, g] of [
-    ['from', fromGlobal],
-    ['to', toGlobal],
+    ["from", fromGlobal],
+    ["to", toGlobal],
   ] as const) {
     if (g.yieldVariant === YIELD_VARIANT_SCALED_UI) {
-      throw new Error(`${SLUG}: ${leg} leg is a ScaledUi extension — needs a live f64 index this recipe's integer-only interpreter cannot reproduce exactly (see module doc)`);
+      throw new Error(
+        `${SLUG}: ${leg} leg is a ScaledUi extension — needs a live f64 index this recipe's integer-only interpreter cannot reproduce exactly (see module doc)`,
+      );
     }
     if (!g.wrapAuthorities.some((a) => a === SWAP_GLOBAL_ID)) {
-      throw new Error(`${SLUG}: ${leg} leg has not whitelisted ${SWAP_GLOBAL_ID} as a wrap authority — this recipe supplies no other signer`);
+      throw new Error(
+        `${SLUG}: ${leg} leg has not whitelisted ${SWAP_GLOBAL_ID} as a wrap authority — this recipe supplies no other signer`,
+      );
     }
   }
 
@@ -406,4 +441,3 @@ export const mswap = {
   programId: MSWAP_PROGRAM_ID,
   fetchPoolConfig: fetchMSwapPoolConfig,
 };
-

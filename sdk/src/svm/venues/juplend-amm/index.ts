@@ -111,17 +111,22 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
-import { JUPITER_LEND_LIQUIDITY_PROGRAM_ID } from '../jupiter-lend-earn/index.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+ */
+import {
+  address,
+  getAddressDecoder,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { JUPITER_LEND_LIQUIDITY_PROGRAM_ID } from "../jupiter-lend-earn/index.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'juplend-amm';
+const SLUG = "juplend-amm";
 
-export const JUPLEND_AMM_PROGRAM_ID = address('jupZ4m2GqUCJ5iueMfzQf8khFfH31d4XAQt3RzCT9Vd');
+export const JUPLEND_AMM_PROGRAM_ID = address("jupZ4m2GqUCJ5iueMfzQf8khFfH31d4XAQt3RzCT9Vd");
 // Same on-chain program as jupiter-lend-earn's `JUPITER_LEND_LIQUIDITY_PROGRAM_ID`
 // ('jupeiUmn818Jg1ekPURTpr4mFo29p46vygyykFJ3wZC') — JupLend AMM and Jupiter Lend
 // Earn are two adapters over the same underlying Jupiter Lend liquidity program.
@@ -129,10 +134,10 @@ export const JUPLEND_AMM_PROGRAM_ID = address('jupZ4m2GqUCJ5iueMfzQf8khFfH31d4XA
 // sourced from the one place the address is declared to avoid two independent
 // literals drifting apart.
 export const JUPLEND_LIQUIDITY_PROGRAM_ID = JUPITER_LEND_LIQUIDITY_PROGRAM_ID;
-export const JUPLEND_ORACLE_PROGRAM_ID = address('jupnw4B6Eqs7ft6rxpzYLJZYSnrpRgPcr589n5Kv4oc');
+export const JUPLEND_ORACLE_PROGRAM_ID = address("jupnw4B6Eqs7ft6rxpzYLJZYSnrpRgPcr589n5Kv4oc");
 
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 /** sha256('account:Dex')[0..8] — verified live against 8 real mainnet accounts. */
 const DEX_DISCRIMINATOR = [236, 30, 181, 80, 209, 217, 25, 163];
@@ -186,7 +191,7 @@ export interface JuplendAmmPoolConfig extends PoolConfig {
   /** `["liquidity"]` — one global singleton. */
   liquidity: Address;
   /** Whichever of supply/borrow position this Dex uses (see class doc). */
-  positionKind: 'supply' | 'borrow';
+  positionKind: "supply" | "borrow";
   /** `["user_{supply,borrow}_position", mint, dex]` PDAs for BOTH mints. */
   position0: Address;
   position1: Address;
@@ -196,7 +201,8 @@ export interface JuplendAmmPoolConfig extends PoolConfig {
 
 const codec = getAddressDecoder();
 const encoder = getAddressEncoder();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 async function pda(seeds: (string | Uint8Array)[], programAddress: Address): Promise<Address> {
   const [derived] = await getProgramDerivedAddress({ programAddress, seeds });
@@ -216,14 +222,18 @@ async function pda(seeds: (string | Uint8Array)[], programAddress: Address): Pro
 function detectTokenProgram(mint: Address, data: Uint8Array): Address {
   if (data.length === 82) return TOKEN_PROGRAM;
   if (data.length < 166) {
-    throw new Error(`juplend-amm mint ${mint} data is ${data.length} bytes, not a token mint layout`);
+    throw new Error(
+      `juplend-amm mint ${mint} data is ${data.length} bytes, not a token mint layout`,
+    );
   }
   if (data[165] !== 1) {
-    throw new Error(`juplend-amm mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
+    throw new Error(
+      `juplend-amm mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`,
+    );
   }
   const ext = parseMintExtensions(data);
   if (ext.blocking.length > 0) {
-    throw new Error(`juplend-amm gate: mint ${mint} is un-routable (${ext.blocking.join('; ')})`);
+    throw new Error(`juplend-amm gate: mint ${mint} is un-routable (${ext.blocking.join("; ")})`);
   }
   // TODO(t22-fee-netting): a TransferFeeConfig mint is DROPPED, not netted.
   // This adapter's quote/ladder was relocated to the recipes package (see the
@@ -239,13 +249,14 @@ function detectTokenProgram(mint: Address, data: Uint8Array): Address {
 }
 
 function juplendAmmConfig(cfg: PoolConfig): JuplendAmmPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`juplend-amm adapter got a config for venue '${cfg.venue}'`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`juplend-amm adapter got a config for venue '${cfg.venue}'`);
   return cfg as JuplendAmmPoolConfig;
 }
 
 export const juplendAmm = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: JUPLEND_AMM_PROGRAM_ID,
 
   /**
@@ -256,11 +267,17 @@ export const juplendAmm = {
    * enabled (the real program's own swap can never succeed in that state —
    * `_swapIn`'s routing-amount branch has no route, `DexNoSwapRoute`).
    */
-  async fetchPoolConfig(load: AccountLoader, pool: Address, swap0to1 = true): Promise<JuplendAmmPoolConfig> {
+  async fetchPoolConfig(
+    load: AccountLoader,
+    pool: Address,
+    swap0to1 = true,
+  ): Promise<JuplendAmmPoolConfig> {
     const data = await load(pool);
     if (data === null) throw new Error(`juplend-amm pool ${pool} account not found`);
     if (data.length !== DEX_ACCOUNT_SIZE) {
-      throw new Error(`juplend-amm pool ${pool} account is ${data.length} bytes, expected ${DEX_ACCOUNT_SIZE}`);
+      throw new Error(
+        `juplend-amm pool ${pool} account is ${data.length} bytes, expected ${DEX_ACCOUNT_SIZE}`,
+      );
     }
     if (!DEX_DISCRIMINATOR.every((byte, i) => data[i] === byte)) {
       throw new Error(`juplend-amm pool ${pool} is not a Dex account (discriminator mismatch)`);
@@ -276,49 +293,68 @@ export const juplendAmm = {
     const smartCollateral = data[OFF_SMART_COLLATERAL_ENABLED] !== 0;
     const smartDebt = data[OFF_SMART_DEBT_ENABLED] !== 0;
     if (!smartCollateral && !smartDebt) {
-      throw new Error(`juplend-amm pool ${pool} has neither smart_collateral nor smart_debt enabled (no swap route)`);
+      throw new Error(
+        `juplend-amm pool ${pool} has neither smart_collateral nor smart_debt enabled (no swap route)`,
+      );
     }
-    const positionKind: 'supply' | 'borrow' = smartCollateral ? 'supply' : 'borrow';
+    const positionKind: "supply" | "borrow" = smartCollateral ? "supply" : "borrow";
 
     const token0 = pubkeyAt(data, OFF_TOKEN_0);
     const token1 = pubkeyAt(data, OFF_TOKEN_1);
     const feePpm = readUintLE(data, OFF_FEE, 4);
 
     const [mint0Data, mint1Data] = await Promise.all([load(token0), load(token1)]);
-    if (mint0Data === null || mint1Data === null) throw new Error(`juplend-amm pool ${pool} mint account(s) not found`);
+    if (mint0Data === null || mint1Data === null)
+      throw new Error(`juplend-amm pool ${pool} mint account(s) not found`);
     const tokenProgram0 = detectTokenProgram(token0, mint0Data);
     const tokenProgram1 = detectTokenProgram(token1, mint1Data);
 
     const [tokenReserve0, tokenReserve1, rateModel0, rateModel1, liquidity] = await Promise.all([
-      pda(['reserve', new Uint8Array(encoder.encode(token0))], JUPLEND_LIQUIDITY_PROGRAM_ID),
-      pda(['reserve', new Uint8Array(encoder.encode(token1))], JUPLEND_LIQUIDITY_PROGRAM_ID),
-      pda(['rate_model', new Uint8Array(encoder.encode(token0))], JUPLEND_LIQUIDITY_PROGRAM_ID),
-      pda(['rate_model', new Uint8Array(encoder.encode(token1))], JUPLEND_LIQUIDITY_PROGRAM_ID),
-      pda(['liquidity'], JUPLEND_LIQUIDITY_PROGRAM_ID),
+      pda(["reserve", new Uint8Array(encoder.encode(token0))], JUPLEND_LIQUIDITY_PROGRAM_ID),
+      pda(["reserve", new Uint8Array(encoder.encode(token1))], JUPLEND_LIQUIDITY_PROGRAM_ID),
+      pda(["rate_model", new Uint8Array(encoder.encode(token0))], JUPLEND_LIQUIDITY_PROGRAM_ID),
+      pda(["rate_model", new Uint8Array(encoder.encode(token1))], JUPLEND_LIQUIDITY_PROGRAM_ID),
+      pda(["liquidity"], JUPLEND_LIQUIDITY_PROGRAM_ID),
     ]);
 
-    const [reserve0Data, reserve1Data] = await Promise.all([load(tokenReserve0), load(tokenReserve1)]);
+    const [reserve0Data, reserve1Data] = await Promise.all([
+      load(tokenReserve0),
+      load(tokenReserve1),
+    ]);
     if (reserve0Data === null || reserve1Data === null) {
       throw new Error(`juplend-amm pool ${pool} TokenReserve account(s) not found`);
     }
     const vault0 = pubkeyAt(reserve0Data, 40);
     const vault1 = pubkeyAt(reserve1Data, 40);
 
-    const seedName = positionKind === 'supply' ? 'user_supply_position' : 'user_borrow_position';
+    const seedName = positionKind === "supply" ? "user_supply_position" : "user_borrow_position";
     const [position0, position1] = await Promise.all([
-      pda([seedName, new Uint8Array(encoder.encode(token0)), new Uint8Array(encoder.encode(pool))], JUPLEND_LIQUIDITY_PROGRAM_ID),
-      pda([seedName, new Uint8Array(encoder.encode(token1)), new Uint8Array(encoder.encode(pool))], JUPLEND_LIQUIDITY_PROGRAM_ID),
+      pda(
+        [seedName, new Uint8Array(encoder.encode(token0)), new Uint8Array(encoder.encode(pool))],
+        JUPLEND_LIQUIDITY_PROGRAM_ID,
+      ),
+      pda(
+        [seedName, new Uint8Array(encoder.encode(token1)), new Uint8Array(encoder.encode(pool))],
+        JUPLEND_LIQUIDITY_PROGRAM_ID,
+      ),
     ]);
     const [pos0Data, pos1Data] = await Promise.all([load(position0), load(position1)]);
-    const expectedDisc = positionKind === 'supply' ? USER_SUPPLY_POSITION_DISCRIMINATOR : USER_BORROW_POSITION_DISCRIMINATOR;
-    const expectedSize = positionKind === 'supply' ? USER_SUPPLY_POSITION_SIZE : USER_BORROW_POSITION_SIZE;
+    const expectedDisc =
+      positionKind === "supply"
+        ? USER_SUPPLY_POSITION_DISCRIMINATOR
+        : USER_BORROW_POSITION_DISCRIMINATOR;
+    const expectedSize =
+      positionKind === "supply" ? USER_SUPPLY_POSITION_SIZE : USER_BORROW_POSITION_SIZE;
     for (const [ref, posData] of [
-      ['position0', pos0Data],
-      ['position1', pos1Data],
+      ["position0", pos0Data],
+      ["position1", pos1Data],
     ] as const) {
-      if (posData === null) throw new Error(`juplend-amm pool ${pool} ${positionKind} ${ref} account not found`);
+      if (posData === null)
+        throw new Error(`juplend-amm pool ${pool} ${positionKind} ${ref} account not found`);
       if (posData.length !== expectedSize) {
-        throw new Error(`juplend-amm pool ${pool} ${positionKind} ${ref} is ${posData.length} bytes, expected ${expectedSize}`);
+        throw new Error(
+          `juplend-amm pool ${pool} ${positionKind} ${ref} is ${posData.length} bytes, expected ${expectedSize}`,
+        );
       }
       if (!expectedDisc.every((byte, i) => posData[i] === byte)) {
         throw new Error(`juplend-amm pool ${pool} ${positionKind} ${ref} discriminator mismatch`);
@@ -368,7 +404,8 @@ export const juplendAmm = {
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
     const c = juplendAmmConfig(cfg);
     const U64_MAX = (1n << 64n) - 1n;
-    if (amountIn <= 0n || amountIn > U64_MAX) throw new Error(`juplend-amm buildSwap amountIn must be a positive u64, got ${amountIn}`);
+    if (amountIn <= 0n || amountIn > U64_MAX)
+      throw new Error(`juplend-amm buildSwap amountIn must be a positive u64, got ${amountIn}`);
     const data = new Uint8Array(8 + 1 + 8 + 8);
     data.set([141, 172, 10, 208, 69, 9, 56, 154], 0); // sha256('global:swap_in')[0..8]
     data[8] = c.swap0to1 ? 1 : 0;
@@ -380,7 +417,11 @@ export const juplendAmm = {
     data[17] = 1; // amount_out_min = 1
     const make = (r: string, addr: Address, writable?: boolean): VenueAccount =>
       writable ? { ref: r, address: addr, writable: true } : { ref: r, address: addr };
-    return { programId: JUPLEND_AMM_PROGRAM_ID, data, accounts: juplendAmmSwapAccounts(c, user, make) };
+    return {
+      programId: JUPLEND_AMM_PROGRAM_ID,
+      data,
+      accounts: juplendAmmSwapAccounts(c, user, make),
+    };
   },
 };
 
@@ -404,34 +445,34 @@ export function juplendAmmSwapAccounts(
   const none = (role: string): VenueAccount => make(r(role), JUPLEND_AMM_PROGRAM_ID);
   const userToken0 = c.swap0to1 ? user.inAta : user.outAta;
   const userToken1 = c.swap0to1 ? user.outAta : user.inAta;
-  const supplyPos0 = c.positionKind === 'supply' ? make(r('sp0'), c.position0, true) : none('sp0');
-  const supplyPos1 = c.positionKind === 'supply' ? make(r('sp1'), c.position1, true) : none('sp1');
-  const borrowPos0 = c.positionKind === 'borrow' ? make(r('bp0'), c.position0, true) : none('bp0');
-  const borrowPos1 = c.positionKind === 'borrow' ? make(r('bp1'), c.position1, true) : none('bp1');
+  const supplyPos0 = c.positionKind === "supply" ? make(r("sp0"), c.position0, true) : none("sp0");
+  const supplyPos1 = c.positionKind === "supply" ? make(r("sp1"), c.position1, true) : none("sp1");
+  const borrowPos0 = c.positionKind === "borrow" ? make(r("bp0"), c.position0, true) : none("bp0");
+  const borrowPos1 = c.positionKind === "borrow" ? make(r("bp1"), c.position1, true) : none("bp1");
   return [
     { ref: user.owner, writable: true, signer: true }, // signer
-    make(r('dex'), c.pool, true),
+    make(r("dex"), c.pool, true),
     { ref: userToken0, writable: true },
     { ref: userToken1, writable: true },
     { ref: user.owner }, // recipient
     { ref: userToken0, writable: true }, // recipient_token_0_account
     { ref: userToken1, writable: true }, // recipient_token_1_account
-    make(r('t0'), c.token0),
-    make(r('t1'), c.token1),
-    make(r('tr0'), c.tokenReserve0, true),
-    make(r('tr1'), c.tokenReserve1, true),
-    make(r('rm0'), c.rateModel0),
-    make(r('rm1'), c.rateModel1),
-    make(r('v0'), c.vault0, true),
-    make(r('v1'), c.vault1, true),
+    make(r("t0"), c.token0),
+    make(r("t1"), c.token1),
+    make(r("tr0"), c.tokenReserve0, true),
+    make(r("tr1"), c.tokenReserve1, true),
+    make(r("rm0"), c.rateModel0),
+    make(r("rm1"), c.rateModel1),
+    make(r("v0"), c.vault0, true),
+    make(r("v1"), c.vault1, true),
     supplyPos0,
     supplyPos1,
     borrowPos0,
     borrowPos1,
-    make(r('liq'), c.liquidity),
-    make(r('liqp'), JUPLEND_LIQUIDITY_PROGRAM_ID),
-    make(r('tp0'), c.tokenProgram0),
-    make(r('tp1'), c.tokenProgram1),
-    make(r('orc'), JUPLEND_ORACLE_PROGRAM_ID),
+    make(r("liq"), c.liquidity),
+    make(r("liqp"), JUPLEND_LIQUIDITY_PROGRAM_ID),
+    make(r("tp0"), c.tokenProgram0),
+    make(r("tp1"), c.tokenProgram1),
+    make(r("orc"), JUPLEND_ORACLE_PROGRAM_ID),
   ];
 }

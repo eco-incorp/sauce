@@ -1,4 +1,4 @@
-import { isSignerRole } from '@solana/kit';
+import { isSignerRole } from "@solana/kit";
 import type {
   Address,
   AddressesByLookupTableAddress,
@@ -8,16 +8,16 @@ import type {
   Instruction,
   Rpc,
   TransactionSigner,
-} from '@solana/kit';
+} from "@solana/kit";
 import {
   fetchAddressLookupTable,
   findAddressLookupTablePda,
   getCreateLookupTableInstructionAsync,
   getExtendLookupTableInstruction,
-} from '@solana-program/address-lookup-table';
-import type { ResolvedAccountMeta } from './resolve.js';
-import { buildExecuteTransaction } from './transaction.js';
-import type { SignedExecuteTransaction } from './transaction.js';
+} from "@solana-program/address-lookup-table";
+import type { ResolvedAccountMeta } from "./resolve.js";
+import { buildExecuteTransaction } from "./transaction.js";
+import type { SignedExecuteTransaction } from "./transaction.js";
 
 /**
  * Max addresses per extend instruction — keeps each extend transaction inside
@@ -39,7 +39,9 @@ export const LOOKUP_TABLE_MAX_ADDRESSES = 256;
 
 /** Extend chunk size for a (payer, authority) pair — 30 same-key, 27 when a distinct authority costs a second signature. */
 function extendChunkSize(payer: Address, authority: Address): number {
-  return payer === authority ? MAX_ADDRESSES_PER_EXTEND : MAX_ADDRESSES_PER_EXTEND_DISTINCT_AUTHORITY;
+  return payer === authority
+    ? MAX_ADDRESSES_PER_EXTEND
+    : MAX_ADDRESSES_PER_EXTEND_DISTINCT_AUTHORITY;
 }
 
 /**
@@ -90,7 +92,7 @@ export async function createAltWithAddresses({
   authority,
   addresses,
   sendAndConfirm,
-  commitment = 'confirmed',
+  commitment = "confirmed",
 }: CreateAltInput): Promise<{ lookupTableAddress: Address; lastExtendedSlot: bigint }> {
   if (addresses.length > LOOKUP_TABLE_MAX_ADDRESSES) {
     throw new Error(
@@ -98,7 +100,7 @@ export async function createAltWithAddresses({
     );
   }
 
-  const recentSlot = await rpc.getSlot({ commitment: 'finalized' }).send();
+  const recentSlot = await rpc.getSlot({ commitment: "finalized" }).send();
   const [createInstruction, [lookupTableAddress]] = await Promise.all([
     getCreateLookupTableInstructionAsync({ authority: authority.address, payer, recentSlot }),
     findAddressLookupTablePda({ authority: authority.address, recentSlot }),
@@ -166,7 +168,7 @@ export async function extendAlt({
   lookupTableAddress,
   addresses,
   sendAndConfirm,
-  commitment = 'confirmed',
+  commitment = "confirmed",
 }: ExtendAltInput): Promise<{ lastExtendedSlot: bigint }> {
   if (addresses.length > LOOKUP_TABLE_MAX_ADDRESSES) {
     throw new Error(
@@ -208,7 +210,7 @@ export async function waitForAltActive(
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {
-    const slot = await rpc.getSlot({ commitment: 'confirmed' }).send();
+    const slot = await rpc.getSlot({ commitment: "confirmed" }).send();
 
     if (slot > lastExtendedSlot) return;
 
@@ -218,7 +220,7 @@ export async function waitForAltActive(
       );
     }
 
-    await new Promise(resolve => setTimeout(resolve, pollMs));
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
 }
 

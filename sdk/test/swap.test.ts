@@ -26,7 +26,6 @@ const POOL = "0x1111111111111111111111111111111111111111" as const;
 const TOKEN_IN = "0x2222222222222222222222222222222222222222" as const;
 const TOKEN_OUT = "0x3333333333333333333333333333333333333333" as const;
 const OTHER = "0x4444444444444444444444444444444444444444" as const;
-const HOOKS = "0x5555555555555555555555555555555555555555" as const;
 
 function spec(overrides: Partial<SwapSpec> = {}): SwapSpec {
   return {
@@ -94,12 +93,12 @@ describe("ABI drift pin — SWAP_PARAMS_FIELDS / POOL_KEY_FIELDS against the ven
 
 describe("toSwapParams — guards", () => {
   it("poolType 9/10 throws naming the Infinity follow-up", () => {
-    expect(() => toSwapParams(spec({ poolType: UndispatchablePoolType.PancakeInfinityCL as never }))).toThrow(
-      /not dispatchable/,
-    );
-    expect(() => toSwapParams(spec({ poolType: UndispatchablePoolType.PancakeInfinityBin as never }))).toThrow(
-      /not dispatchable/,
-    );
+    expect(() =>
+      toSwapParams(spec({ poolType: UndispatchablePoolType.PancakeInfinityCL as never })),
+    ).toThrow(/not dispatchable/);
+    expect(() =>
+      toSwapParams(spec({ poolType: UndispatchablePoolType.PancakeInfinityBin as never })),
+    ).toThrow(/not dispatchable/);
   });
 
   it("an out-of-range poolType throws", () => {
@@ -107,9 +106,9 @@ describe("toSwapParams — guards", () => {
   });
 
   it("a non-empty callback on a non-callback-driven pool type throws (mirrors Router.sol:279)", () => {
-    expect(() =>
-      toSwapParams(spec({ poolType: SwapPoolType.UniV2, callback: "0xaa" })),
-    ).toThrow(/callback-driven/);
+    expect(() => toSwapParams(spec({ poolType: SwapPoolType.UniV2, callback: "0xaa" }))).toThrow(
+      /callback-driven/,
+    );
   });
 
   it("a non-empty callback with an overridden payer or recipient throws", () => {
@@ -127,7 +126,9 @@ describe("toSwapParams — guards", () => {
   });
 
   it("UniV4 without poolKey throws", () => {
-    expect(() => toSwapParams(spec({ poolType: SwapPoolType.UniV4 }))).toThrow(/poolKey is required/);
+    expect(() => toSwapParams(spec({ poolType: SwapPoolType.UniV4 }))).toThrow(
+      /poolKey is required/,
+    );
   });
 
   it("UniV2 poolKey.fee >= 1_000_000 throws", () => {

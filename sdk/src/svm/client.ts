@@ -1,9 +1,26 @@
-import { createSolanaRpc, createSolanaRpcSubscriptions, sendAndConfirmTransactionFactory } from '@solana/kit';
-import type { Address, AddressesByLookupTableAddress, Commitment, Instruction, Signature, TransactionSigner } from '@solana/kit';
-import type { AccountManifest } from 'sauce-compiler';
-import type { ArgsLayout, ArgValue } from './layout.js';
-import { LOOKUP_TABLE_MAX_ADDRESSES, createAltWithAddresses, extendAlt, fetchAlt, waitForAltActive } from './alt.js';
-import { encodePayloadArgs } from './args.js';
+import {
+  createSolanaRpc,
+  createSolanaRpcSubscriptions,
+  sendAndConfirmTransactionFactory,
+} from "@solana/kit";
+import type {
+  Address,
+  AddressesByLookupTableAddress,
+  Commitment,
+  Instruction,
+  Signature,
+  TransactionSigner,
+} from "@solana/kit";
+import type { AccountManifest } from "sauce-compiler";
+import type { ArgsLayout, ArgValue } from "./layout.js";
+import {
+  LOOKUP_TABLE_MAX_ADDRESSES,
+  createAltWithAddresses,
+  extendAlt,
+  fetchAlt,
+  waitForAltActive,
+} from "./alt.js";
+import { encodePayloadArgs } from "./args.js";
 import {
   buildCloseBufferInstruction,
   buildExecuteFromAccountInstruction,
@@ -12,15 +29,15 @@ import {
   buildInitBufferInstructions,
   buildStagingPlan,
   buildWriteBufferInstruction,
-} from './instructions.js';
-import { deriveBufferPda } from './pda.js';
-import { buildComputeBudgetPrepend, buildHeapFramePrepend } from './prepends.js';
-import { resolveAccounts } from './resolve.js';
-import type { AccountResolution } from './resolve.js';
-import { recommendedComputeUnitLimit, sendExecute, simulateExecute } from './send.js';
-import type { SendExecuteResult, SimulateExecuteResult } from './send.js';
-import { buildExecuteTransaction } from './transaction.js';
-import type { SignedExecuteTransaction } from './transaction.js';
+} from "./instructions.js";
+import { deriveBufferPda } from "./pda.js";
+import { buildComputeBudgetPrepend, buildHeapFramePrepend } from "./prepends.js";
+import { resolveAccounts } from "./resolve.js";
+import type { AccountResolution } from "./resolve.js";
+import { recommendedComputeUnitLimit, sendExecute, simulateExecute } from "./send.js";
+import type { SendExecuteResult, SimulateExecuteResult } from "./send.js";
+import { buildExecuteTransaction } from "./transaction.js";
+import type { SignedExecuteTransaction } from "./transaction.js";
 
 export interface SauceSvmClientConfig {
   rpcUrl: string;
@@ -43,7 +60,7 @@ export interface SimulateOpts {
 
 export interface ExecuteOpts extends SimulateOpts {
   /** 'auto' simulates first and applies recommendedComputeUnitLimit (x1.2, capped 1.4M). */
-  computeUnitLimit?: number | 'auto';
+  computeUnitLimit?: number | "auto";
 }
 
 /** A buffer staged by this client — carries the SDK-computed content hash (the execute pin). */
@@ -77,7 +94,7 @@ export interface SimulateStagedOpts extends SimulateOpts {
 }
 
 export interface ExecuteStagedOpts extends SimulateStagedOpts {
-  computeUnitLimit?: number | 'auto';
+  computeUnitLimit?: number | "auto";
 }
 
 /** An address lookup table this client created/extended, ready to compress a v0 transaction against. */
@@ -109,9 +126,22 @@ export interface SauceSvmClient {
    * would take the table past LOOKUP_TABLE_MAX_ADDRESSES throws before any
    * transaction is sent — a partially-extended table cannot be un-funded.
    */
-  ensureLookupTable(addresses: readonly Address[], opts?: EnsureLookupTableOpts): Promise<EnsuredLookupTable>;
-  simulate(bytecode: Uint8Array, manifest: AccountManifest, resolution: AccountResolution, opts?: SimulateOpts): Promise<SimulateExecuteResult>;
-  execute(bytecode: Uint8Array, manifest: AccountManifest, resolution: AccountResolution, opts?: ExecuteOpts): Promise<SendExecuteResult>;
+  ensureLookupTable(
+    addresses: readonly Address[],
+    opts?: EnsureLookupTableOpts,
+  ): Promise<EnsuredLookupTable>;
+  simulate(
+    bytecode: Uint8Array,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts?: SimulateOpts,
+  ): Promise<SimulateExecuteResult>;
+  execute(
+    bytecode: Uint8Array,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts?: ExecuteOpts,
+  ): Promise<SendExecuteResult>;
   /**
    * Stages bytecode into the buffer at 32-byte `seed` (init → chunked writes → a
    * dedicated finalize sent only after every write confirmed, each tx on a fresh
@@ -125,7 +155,12 @@ export interface SauceSvmClient {
   stageBuffer(seed: Uint8Array, bytecode: Uint8Array): Promise<StagedBuffer>;
   /** Closes the buffer at 32-byte `seed`, refunding its rent to the payer (the recompile path). */
   closeBuffer(seed: Uint8Array): Promise<SendExecuteResult>;
-  simulateStaged(buffer: Address | StagedBuffer, manifest: AccountManifest, resolution: AccountResolution, opts?: SimulateStagedOpts): Promise<SimulateExecuteResult>;
+  simulateStaged(
+    buffer: Address | StagedBuffer,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts?: SimulateStagedOpts,
+  ): Promise<SimulateExecuteResult>;
   /**
    * Executes a finalized buffer, hash-pinned, in ONE instruction. With `args`,
    * the per-execution values are encoded into the instruction payload
@@ -133,23 +168,35 @@ export interface SauceSvmClient {
    * reads them through its CALLDATA prologue, so one staged buffer serves
    * every argument set without restaging.
    */
-  executeStaged(buffer: Address | StagedBuffer, manifest: AccountManifest, resolution: AccountResolution, opts?: ExecuteStagedOpts): Promise<SendExecuteResult>;
+  executeStaged(
+    buffer: Address | StagedBuffer,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts?: ExecuteStagedOpts,
+  ): Promise<SendExecuteResult>;
 }
 
-export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: SauceSvmClientConfig): Promise<SauceSvmClient> {
+export async function createSauceSvmClient({
+  rpcUrl,
+  wsUrl,
+  programId,
+  payer,
+}: SauceSvmClientConfig): Promise<SauceSvmClient> {
   const rpc = createSolanaRpc(rpcUrl);
-  const rpcSubscriptions = createSolanaRpcSubscriptions(wsUrl ?? rpcUrl.replace(/^http/, 'ws'));
+  const rpcSubscriptions = createSolanaRpcSubscriptions(wsUrl ?? rpcUrl.replace(/^http/, "ws"));
   /** Content hashes of buffers staged by THIS client — the automatic execute pins. */
   const stagedHashes = new Map<Address, Uint8Array>();
 
   async function currentDataSize(account: Address): Promise<number> {
-    const { value } = await rpc.getAccountInfo(account, { encoding: 'base64' }).send();
+    const { value } = await rpc.getAccountInfo(account, { encoding: "base64" }).send();
 
     return value === null ? 0 : Number(value.space);
   }
 
   /** Sends staging/lifecycle instructions — NO heap frame (they never touch interpreter memory). */
-  async function sendInstructions(instructions: readonly Instruction[]): Promise<SendExecuteResult> {
+  async function sendInstructions(
+    instructions: readonly Instruction[],
+  ): Promise<SendExecuteResult> {
     const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
     const transaction = await buildExecuteTransaction({ payer, instructions, latestBlockhash });
 
@@ -183,7 +230,9 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
     prepends: readonly Instruction[],
     opts: SimulateOpts,
   ): Promise<SignedExecuteTransaction> {
-    const accounts = resolveAccounts(manifest, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
+    const accounts = resolveAccounts(manifest, resolution, payer.address, {
+      appendPayerSigner: opts.appendPayerSigner,
+    });
     const executeInstruction = buildExecuteInstruction({ programId, bytecode, accounts });
 
     return signExecuteTransaction(executeInstruction, prepends, opts.lookupTables);
@@ -195,7 +244,13 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
     resolution: AccountResolution,
     opts: SimulateOpts = {},
   ): Promise<SimulateExecuteResult> {
-    const transaction = await buildTransaction(bytecode, manifest, resolution, opts.prepends ?? [], opts);
+    const transaction = await buildTransaction(
+      bytecode,
+      manifest,
+      resolution,
+      opts.prepends ?? [],
+      opts,
+    );
 
     return simulateExecute(rpc, transaction);
   }
@@ -219,11 +274,25 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
     prepends: readonly Instruction[],
     opts: SimulateStagedOpts,
   ): Promise<SignedExecuteTransaction> {
-    const address = typeof buffer === 'string' ? buffer : buffer.address;
-    const expectedSha256 = stagedPin(address, opts.expectedSha256 ?? (typeof buffer === 'string' ? undefined : buffer.sha256));
-    const accounts = resolveAccounts(manifest, resolution, payer.address, { appendPayerSigner: opts.appendPayerSigner });
-    const args = opts.args && opts.args.layout.slots.length > 0 ? encodePayloadArgs(opts.args.layout, opts.args.values) : undefined;
-    const executeInstruction = buildExecuteFromAccountInstruction({ programId, buffer: address, accounts, expectedSha256, args });
+    const address = typeof buffer === "string" ? buffer : buffer.address;
+    const expectedSha256 = stagedPin(
+      address,
+      opts.expectedSha256 ?? (typeof buffer === "string" ? undefined : buffer.sha256),
+    );
+    const accounts = resolveAccounts(manifest, resolution, payer.address, {
+      appendPayerSigner: opts.appendPayerSigner,
+    });
+    const args =
+      opts.args && opts.args.layout.slots.length > 0
+        ? encodePayloadArgs(opts.args.layout, opts.args.values)
+        : undefined;
+    const executeInstruction = buildExecuteFromAccountInstruction({
+      programId,
+      buffer: address,
+      accounts,
+      expectedSha256,
+      args,
+    });
 
     return signExecuteTransaction(executeInstruction, prepends, opts.lookupTables);
   }
@@ -234,7 +303,13 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
     resolution: AccountResolution,
     opts: SimulateStagedOpts = {},
   ): Promise<SimulateExecuteResult> {
-    const transaction = await buildStagedTransaction(buffer, manifest, resolution, opts.prepends ?? [], opts);
+    const transaction = await buildStagedTransaction(
+      buffer,
+      manifest,
+      resolution,
+      opts.prepends ?? [],
+      opts,
+    );
 
     return simulateExecute(rpc, transaction);
   }
@@ -245,11 +320,13 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
   ): Promise<Instruction[]> {
     let unitLimit: number | undefined;
 
-    if (opts.computeUnitLimit === 'auto') {
+    if (opts.computeUnitLimit === "auto") {
       const sim = await simulateRun();
 
       if (!sim.ok || sim.unitsConsumed === undefined) {
-        throw new Error(`compute unit auto-limit simulation failed: ${JSON.stringify(sim.err) ?? 'no units consumed'}`);
+        throw new Error(
+          `compute unit auto-limit simulation failed: ${JSON.stringify(sim.err) ?? "no units consumed"}`,
+        );
       }
 
       unitLimit = recommendedComputeUnitLimit(sim.unitsConsumed);
@@ -265,11 +342,16 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
 
   const sendAndConfirmAlt = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
 
-  async function ensureLookupTable(addresses: readonly Address[], opts: EnsureLookupTableOpts = {}): Promise<EnsuredLookupTable> {
+  async function ensureLookupTable(
+    addresses: readonly Address[],
+    opts: EnsureLookupTableOpts = {},
+  ): Promise<EnsuredLookupTable> {
     if (addresses.length === 0) {
-      throw new Error('ensureLookupTable needs at least one address (a lookup table cannot be empty)');
+      throw new Error(
+        "ensureLookupTable needs at least one address (a lookup table cannot be empty)",
+      );
     }
-    const commitment = opts.commitment ?? 'confirmed';
+    const commitment = opts.commitment ?? "confirmed";
     const deduped = [...new Set(addresses)];
 
     if (opts.existing !== undefined) {
@@ -293,7 +375,10 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
         });
         await waitForAltActive(rpc, lastExtendedSlot);
       }
-      return { lookupTableAddress: opts.existing, lookupTables: await fetchAlt(rpc, opts.existing) };
+      return {
+        lookupTableAddress: opts.existing,
+        lookupTables: await fetchAlt(rpc, opts.existing),
+      };
     }
 
     const { lookupTableAddress, lastExtendedSlot } = await createAltWithAddresses({
@@ -338,7 +423,9 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
       const { address } = await deriveBufferPda(programId, payer.address, seed);
       // Copy into a fresh ArrayBuffer-backed view (subtle.digest rejects
       // SharedArrayBuffer-backed views at the type level).
-      const sha256 = new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytecode)));
+      const sha256 = new Uint8Array(
+        await crypto.subtle.digest("SHA-256", new Uint8Array(bytecode)),
+      );
       const currentBytes = await currentDataSize(address);
       const signatures: Signature[] = [];
 
@@ -393,7 +480,9 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
       const { address } = await deriveBufferPda(programId, payer.address, seed);
       stagedHashes.delete(address);
 
-      return sendInstructions([buildCloseBufferInstruction({ programId, authority: payer.address, buffer: address })]);
+      return sendInstructions([
+        buildCloseBufferInstruction({ programId, authority: payer.address, buffer: address }),
+      ]);
     },
 
     simulateStaged,
@@ -415,7 +504,13 @@ export async function createSauceSvmClient({ rpcUrl, wsUrl, programId, payer }: 
           }),
         opts,
       );
-      const transaction = await buildStagedTransaction(buffer, manifest, resolution, prepends, opts);
+      const transaction = await buildStagedTransaction(
+        buffer,
+        manifest,
+        resolution,
+        prepends,
+        opts,
+      );
 
       return sendExecute({ rpc, rpcSubscriptions, transaction });
     },

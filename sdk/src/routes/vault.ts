@@ -32,7 +32,14 @@
  * which contradicts the real, zero-arg `Vault` constructor and the `Clones`/minimal-proxy scheme
  * `_getVault` actually uses. The Solidity above is the only ground truth this file follows.
  */
-import { encodeAbiParameters, encodePacked, getAddress, hexToBytes, keccak256, type Hex } from "viem";
+import {
+  encodeAbiParameters,
+  encodePacked,
+  getAddress,
+  hexToBytes,
+  keccak256,
+  type Hex,
+} from "viem";
 
 import { denormalizeToEvm } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
@@ -71,7 +78,9 @@ function assertByte1(value: Hex, label: string): void {
 export function predictVaultAddress(intentHash: Hex, config: VaultConfig): Hex {
   assertBytes32(intentHash, "intentHash");
   if (config.vaultInitCodeHash === undefined || config.vaultInitCodeHash === null) {
-    throw new Error("predictVaultAddress: config.vaultInitCodeHash is required (no baked default — see vault.ts's module doc)");
+    throw new Error(
+      "predictVaultAddress: config.vaultInitCodeHash is required (no baked default — see vault.ts's module doc)",
+    );
   }
   assertBytes32(config.vaultInitCodeHash, "vaultInitCodeHash");
   const prefix = config.prefix ?? "0xff";

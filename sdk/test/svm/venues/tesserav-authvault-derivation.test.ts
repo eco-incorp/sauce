@@ -17,30 +17,34 @@
  * and cbBTC/USDC (sig 4KZPEcyC…): vaultA(cbBTC)=37hggN…, vaultB(USDC)=9t4P5w…
  * (the SAME USDC vault — vaults are global per mint, not per pool).
  */
-import { resolve } from 'path';
-import { address, getAddressCodec, getAddressEncoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { findAssociatedTokenPda } from '@solana-program/token';
+import { resolve } from "path";
+import { address, getAddressCodec, getAddressEncoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
 import {
   fetchTesseraVConfig,
   pickTesseraVVault,
   TESSERAV_GLOBAL_AUTH,
   TESSERAV_KNOWN_VAULTS,
   TOKEN_PROGRAM,
-} from '../../../src/svm/index.js';
-import type { AccountLoader, TesseraVOwnedTokenAccount, TesseraVVaultResolver } from '../../../src/svm/index.js';
-import { fixtureLoader, loadFixtures } from '../fixtures.js';
+} from "../../../src/svm/index.js";
+import type {
+  AccountLoader,
+  TesseraVOwnedTokenAccount,
+  TesseraVVaultResolver,
+} from "../../../src/svm/index.js";
+import { fixtureLoader, loadFixtures } from "../fixtures.js";
 
-const FIXTURES = resolve(process.cwd(), 'test/svm/fixtures/tesserav');
-const SOL_USDC_POOL = address('FLckHLGMJy5gEoXWwcE68Nprde1D4araK4TGLw4pQq2n');
+const FIXTURES = resolve(process.cwd(), "test/svm/fixtures/tesserav");
+const SOL_USDC_POOL = address("FLckHLGMJy5gEoXWwcE68Nprde1D4araK4TGLw4pQq2n");
 
 // The verified ground truth — the exact literals the adapter used to hardcode.
-const WSOL = 'So11111111111111111111111111111111111111112';
-const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-const CBBTC = 'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij';
-const VAULT_WSOL = '5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV';
-const VAULT_USDC = '9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx';
-const VAULT_CBBTC = '37hggNyT4Ec8GEcxMLrWrZyrMSSFMSiFT6VBayRYceZH';
+const WSOL = "So11111111111111111111111111111111111111112";
+const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const CBBTC = "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij";
+const VAULT_WSOL = "5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV";
+const VAULT_USDC = "9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx";
+const VAULT_CBBTC = "37hggNyT4Ec8GEcxMLrWrZyrMSSFMSiFT6VBayRYceZH";
 
 const codec = getAddressCodec();
 const enc = getAddressEncoder();
@@ -73,22 +77,28 @@ function synthTokenAccount(mint: Address, owner: Address, amount: bigint): Uint8
   return data;
 }
 
-describe('tesserav general auth/vault derivation', () => {
-  test('TESSERAV_GLOBAL_AUTH === the old hardcoded auth literal, exactly', () => {
-    expect(String(TESSERAV_GLOBAL_AUTH)).toBe('8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF');
+describe("tesserav general auth/vault derivation", () => {
+  test("TESSERAV_GLOBAL_AUTH === the old hardcoded auth literal, exactly", () => {
+    expect(String(TESSERAV_GLOBAL_AUTH)).toBe("8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF");
   });
 
-  test('the general derivation (pickTesseraVVault, exclude-ATA) reproduces the SOL/USDC vaults EXACTLY', async () => {
+  test("the general derivation (pickTesseraVVault, exclude-ATA) reproduces the SOL/USDC vaults EXACTLY", async () => {
     const auth = TESSERAV_GLOBAL_AUTH;
 
     // wSOL side: the real getTokenAccountsByOwner(auth, wSOL) returned ONE
     // account (the vault; no ATA exists). Exclude-ATA leaves it as the winner.
-    const wsolVault = await pickTesseraVVault(auth, address(WSOL), [{ address: address(VAULT_WSOL) }]);
+    const wsolVault = await pickTesseraVVault(auth, address(WSOL), [
+      { address: address(VAULT_WSOL) },
+    ]);
     expect(wsolVault).toBe(VAULT_WSOL);
 
     // USDC side: the real result was {vault 9t4P5w (non-ATA), ATA (dust 50000)}.
     // Build the ATA exactly as the picker does, so the exclusion is the real one.
-    const [usdcAta] = await findAssociatedTokenPda({ owner: auth, mint: address(USDC), tokenProgram: TOKEN_PROGRAM });
+    const [usdcAta] = await findAssociatedTokenPda({
+      owner: auth,
+      mint: address(USDC),
+      tokenProgram: TOKEN_PROGRAM,
+    });
     expect(String(usdcAta)).not.toBe(VAULT_USDC); // the exclusion is non-trivial
     const usdcVault = await pickTesseraVVault(auth, address(USDC), [
       { address: address(VAULT_USDC), amount: 4_060_000_000_000n },
@@ -99,7 +109,7 @@ describe('tesserav general auth/vault derivation', () => {
 
   // pickTesseraVVault's >1-non-ATA branch is the subtlest funds-routing logic: after excluding the
   // canonical ATA, MORE than one auth-owned account remains for the mint. These pin both sub-cases.
-  test('pickTesseraVVault with >1 non-ATA account, balances known, picks the LARGEST (real vault over a dust decoy)', async () => {
+  test("pickTesseraVVault with >1 non-ATA account, balances known, picks the LARGEST (real vault over a dust decoy)", async () => {
     const auth = TESSERAV_GLOBAL_AUTH;
     const mint = address(USDC);
     const [ata] = await findAssociatedTokenPda({ owner: auth, mint, tokenProgram: TOKEN_PROGRAM });
@@ -116,7 +126,7 @@ describe('tesserav general auth/vault derivation', () => {
     expect(String(picked)).not.toBe(String(ata));
   });
 
-  test('pickTesseraVVault with >1 non-ATA account and an UNKNOWN balance self-drops (null) — never guesses', async () => {
+  test("pickTesseraVVault with >1 non-ATA account and an UNKNOWN balance self-drops (null) — never guesses", async () => {
     const auth = TESSERAV_GLOBAL_AUTH;
     const mint = address(USDC);
     const [ata] = await findAssociatedTokenPda({ owner: auth, mint, tokenProgram: TOKEN_PROGRAM });
@@ -130,7 +140,7 @@ describe('tesserav general auth/vault derivation', () => {
     expect(picked).toBeNull();
   });
 
-  test('pickTesseraVVault with ZERO non-ATA accounts self-drops (null) — the global vault does not exist yet', async () => {
+  test("pickTesseraVVault with ZERO non-ATA accounts self-drops (null) — the global vault does not exist yet", async () => {
     const auth = TESSERAV_GLOBAL_AUTH;
     const mint = address(USDC);
     const [ata] = await findAssociatedTokenPda({ owner: auth, mint, tokenProgram: TOKEN_PROGRAM });
@@ -138,34 +148,39 @@ describe('tesserav general auth/vault derivation', () => {
     expect(await pickTesseraVVault(auth, mint, [])).toBeNull(); // nothing owned
   });
 
-  test('the committed cache reproduces the SOL/USDC + cbBTC vaults EXACTLY (RPC-free fast path)', () => {
+  test("the committed cache reproduces the SOL/USDC + cbBTC vaults EXACTLY (RPC-free fast path)", () => {
     expect(String(TESSERAV_KNOWN_VAULTS[WSOL])).toBe(VAULT_WSOL);
     expect(String(TESSERAV_KNOWN_VAULTS[USDC])).toBe(VAULT_USDC);
     expect(String(TESSERAV_KNOWN_VAULTS[CBBTC])).toBe(VAULT_CBBTC);
   });
 
-  test('fetchTesseraVConfig on the REAL SOL/USDC pool yields the exact old hardcoded trio (existing serving unchanged, no resolver)', async () => {
-    const cfg = await fetchTesseraVConfig(fixtureLoader(loadFixtures(FIXTURES)), SOL_USDC_POOL, 'aToB');
-    expect(String(cfg.auth)).toBe('8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF');
+  test("fetchTesseraVConfig on the REAL SOL/USDC pool yields the exact old hardcoded trio (existing serving unchanged, no resolver)", async () => {
+    const cfg = await fetchTesseraVConfig(
+      fixtureLoader(loadFixtures(FIXTURES)),
+      SOL_USDC_POOL,
+      "aToB",
+    );
+    expect(String(cfg.auth)).toBe("8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF");
     expect(String(cfg.vaultA)).toBe(VAULT_WSOL);
     expect(String(cfg.vaultB)).toBe(VAULT_USDC);
     expect(cfg.mintA).toBe(WSOL);
     expect(cfg.mintB).toBe(USDC);
   });
 
-  test('the cbBTC/USDC pool now DERIVES a valid trio instead of throwing (cache path, no resolver)', async () => {
-    const pool = address('9NkuAWB4LgCVFV77omEkJEjXqgV5PGupwMTu3B3pBRhc');
-    const load: AccountLoader = async (addr) => (String(addr) === String(pool) ? synthPool(address(CBBTC), address(USDC)) : null);
-    const cfg = await fetchTesseraVConfig(load, pool, 'aToB');
+  test("the cbBTC/USDC pool now DERIVES a valid trio instead of throwing (cache path, no resolver)", async () => {
+    const pool = address("9NkuAWB4LgCVFV77omEkJEjXqgV5PGupwMTu3B3pBRhc");
+    const load: AccountLoader = async (addr) =>
+      String(addr) === String(pool) ? synthPool(address(CBBTC), address(USDC)) : null;
+    const cfg = await fetchTesseraVConfig(load, pool, "aToB");
     expect(cfg.mintA).toBe(CBBTC);
     expect(cfg.mintB).toBe(USDC);
-    expect(String(cfg.auth)).toBe('8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF');
+    expect(String(cfg.auth)).toBe("8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF");
     // Ground-truth cbBTC/USDC trio from sig 4KZPEcyC… — the SAME USDC vault.
     expect(String(cfg.vaultA)).toBe(VAULT_CBBTC);
     expect(String(cfg.vaultB)).toBe(VAULT_USDC);
   });
 
-  test('a novel (uncached) mint resolves its vault via the getTokenAccountsByOwner resolver, self-consistently', async () => {
+  test("a novel (uncached) mint resolves its vault via the getTokenAccountsByOwner resolver, self-consistently", async () => {
     const novelMint = fabricatedAddress(0x11);
     const novelVault = fabricatedAddress(0x22);
     const pool = fabricatedAddress(0x33);
@@ -173,9 +188,13 @@ describe('tesserav general auth/vault derivation', () => {
     // Simulated on-chain state: the vault genuinely holds mintX under auth.
     const vaultData = synthTokenAccount(novelMint, TESSERAV_GLOBAL_AUTH, 9_000n);
 
-    const [novelAta] = await findAssociatedTokenPda({ owner: TESSERAV_GLOBAL_AUTH, mint: novelMint, tokenProgram: TOKEN_PROGRAM });
+    const [novelAta] = await findAssociatedTokenPda({
+      owner: TESSERAV_GLOBAL_AUTH,
+      mint: novelMint,
+      tokenProgram: TOKEN_PROGRAM,
+    });
     const resolveVault: TesseraVVaultResolver = async (owner, mint) => {
-      expect(String(owner)).toBe('8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF');
+      expect(String(owner)).toBe("8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF");
       if (String(mint) !== String(novelMint)) return null;
       // getTokenAccountsByOwner(auth, novelMint) → {vault, ATA(dust)}
       const owned: TesseraVOwnedTokenAccount[] = [
@@ -185,10 +204,11 @@ describe('tesserav general auth/vault derivation', () => {
       return pickTesseraVVault(owner, mint, owned);
     };
 
-    const load: AccountLoader = async (addr) => (String(addr) === String(pool) ? synthPool(novelMint, address(USDC)) : null);
-    const cfg = await fetchTesseraVConfig(load, pool, 'aToB', resolveVault);
+    const load: AccountLoader = async (addr) =>
+      String(addr) === String(pool) ? synthPool(novelMint, address(USDC)) : null;
+    const cfg = await fetchTesseraVConfig(load, pool, "aToB", resolveVault);
 
-    expect(String(cfg.auth)).toBe('8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF');
+    expect(String(cfg.auth)).toBe("8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF");
     expect(cfg.vaultA).toBe(novelVault); // from the resolver
     expect(String(cfg.vaultB)).toBe(VAULT_USDC); // USDC from the committed cache
 
@@ -200,15 +220,19 @@ describe('tesserav general auth/vault derivation', () => {
   test('an uncached mint with NO resolver self-drops the pool (graceful "dropping pool"), never throws a hard mapping error', async () => {
     const novelMint = fabricatedAddress(0x44);
     const pool = fabricatedAddress(0x55);
-    const load: AccountLoader = async (addr) => (String(addr) === String(pool) ? synthPool(novelMint, address(USDC)) : null);
-    await expect(fetchTesseraVConfig(load, pool, 'aToB')).rejects.toThrow(/dropping pool/);
+    const load: AccountLoader = async (addr) =>
+      String(addr) === String(pool) ? synthPool(novelMint, address(USDC)) : null;
+    await expect(fetchTesseraVConfig(load, pool, "aToB")).rejects.toThrow(/dropping pool/);
   });
 
-  test('a resolver that finds no vault (null) self-drops the pool gracefully', async () => {
+  test("a resolver that finds no vault (null) self-drops the pool gracefully", async () => {
     const novelMint = fabricatedAddress(0x66);
     const pool = fabricatedAddress(0x77);
     const resolveVault: TesseraVVaultResolver = async () => null;
-    const load: AccountLoader = async (addr) => (String(addr) === String(pool) ? synthPool(novelMint, address(USDC)) : null);
-    await expect(fetchTesseraVConfig(load, pool, 'aToB', resolveVault)).rejects.toThrow(/dropping pool/);
+    const load: AccountLoader = async (addr) =>
+      String(addr) === String(pool) ? synthPool(novelMint, address(USDC)) : null;
+    await expect(fetchTesseraVConfig(load, pool, "aToB", resolveVault)).rejects.toThrow(
+      /dropping pool/,
+    );
   });
 });

@@ -78,8 +78,7 @@ export interface DepositSpec {
  *   `withdraw`'s documented `type(uint256).max` withdraw-all sentinel); rejected everywhere else.
  */
 export type DepositSourceSpec =
-  | DepositSpec
-  | (Omit<DepositSpec, "amount"> & { amount: "balance" | "delta" | "max" });
+  DepositSpec | (Omit<DepositSpec, "amount"> & { amount: "balance" | "delta" | "max" });
 
 /**
  * A {@link DepositSpec}, fully normalized — bigint scalars (+ the `"self"` sentinel for a defaulted

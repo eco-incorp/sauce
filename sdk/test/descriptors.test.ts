@@ -70,7 +70,9 @@ describe("descriptors: chain-ref equivalence", () => {
   it("chainById(8453) as a ChainRef resolves the same descriptor", () => {
     const canonical = chainById(8453)!;
     const resolved = describeContract(canonical, "uniswap-v4", "UniversalRouter");
-    expect(resolved?.address).toBe(describeContract(8453, "uniswap-v4", "UniversalRouter")?.address);
+    expect(resolved?.address).toBe(
+      describeContract(8453, "uniswap-v4", "UniversalRouter")?.address,
+    );
   });
 });
 
@@ -86,15 +88,21 @@ describe("descriptors: contract-name normalization", () => {
 
   it("an unknown contract returns undefined and requireContract throws listing the known set", () => {
     expect(getDescriptor("uniswap-v4", "NopeContract")).toBeUndefined();
-    expect(() => requireContract("base", "uniswap-v4", "NopeContract")).toThrow(/Unknown contract 'NopeContract' in protocol 'uniswap-v4' \(known: /);
+    expect(() => requireContract("base", "uniswap-v4", "NopeContract")).toThrow(
+      /Unknown contract 'NopeContract' in protocol 'uniswap-v4' \(known: /,
+    );
   });
 
   it("an unknown protocol throws listing the known protocol set", () => {
-    expect(() => requireContract("base", "not-a-real-protocol", "X")).toThrow(/Unknown protocol 'not-a-real-protocol'/);
+    expect(() => requireContract("base", "not-a-real-protocol", "X")).toThrow(
+      /Unknown protocol 'not-a-real-protocol'/,
+    );
   });
 
   it("a known contract not deployed on a given chain throws naming the available chains", () => {
-    expect(() => requireContract("ethereum", "aerodrome", "Router")).toThrow(/not deployed on 'ethereum' \(available: base\)/);
+    expect(() => requireContract("ethereum", "aerodrome", "Router")).toThrow(
+      /not deployed on 'ethereum' \(available: base\)/,
+    );
   });
 });
 
@@ -184,7 +192,9 @@ describe("descriptors: reverse index", () => {
 describe("descriptors: registry totals + purity", () => {
   it("pins the current starter-set shape as a tripwire against silent link-table drift", () => {
     const protocolSlugs = new Set(DESCRIPTORS.map((d) => d.protocol));
-    const abiExports = new Set(DESCRIPTORS.map((d) => d.abiExport).filter((x): x is string => x !== undefined));
+    const abiExports = new Set(
+      DESCRIPTORS.map((d) => d.abiExport).filter((x): x is string => x !== undefined),
+    );
     expect(protocolSlugs.size).toBe(16);
     expect(abiExports.size).toBe(25);
     expect(DESCRIPTORS.length).toBe(30);

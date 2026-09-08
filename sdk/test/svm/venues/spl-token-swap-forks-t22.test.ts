@@ -8,19 +8,23 @@
  * byte-identical, and buildSwap forwards the resolved program verbatim. The quote
  * math depends only on vault reserves + fees, so the two quote identically.
  */
-import { getAddressDecoder, getAddressEncoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { makeSplTokenSwapForkAdapter, TOKEN_SWAP_V1_PROGRAM_ID } from '../../../src/svm/venues/spl-token-swap-forks/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
+import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  makeSplTokenSwapForkAdapter,
+  TOKEN_SWAP_V1_PROGRAM_ID,
+} from "../../../src/svm/venues/spl-token-swap-forks/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
 
 const dec = getAddressDecoder();
 const aenc = getAddressEncoder();
 const addr = (s: string): Address => s as unknown as Address;
 const addrFromByte = (b: number): Address => dec.decode(new Uint8Array(32).fill(b));
-const putAddr = (data: Uint8Array, offset: number, a: Address): void => data.set(new Uint8Array(aenc.encode(a)), offset);
+const putAddr = (data: Uint8Array, offset: number, a: Address): void =>
+  data.set(new Uint8Array(aenc.encode(a)), offset);
 
-const TOKEN_PROGRAM = addr('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = addr('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+const TOKEN_PROGRAM = addr("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = addr("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 const POOL = addrFromByte(1);
 const VAULT_IN = addrFromByte(4);
@@ -65,24 +69,24 @@ function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
   };
 }
 
-const adapter = makeSplTokenSwapForkAdapter('token-swap-v1', TOKEN_SWAP_V1_PROGRAM_ID);
+const adapter = makeSplTokenSwapForkAdapter("token-swap-v1", TOKEN_SWAP_V1_PROGRAM_ID);
 const state = { [VAULT_IN as string]: vault(RESERVE), [VAULT_OUT as string]: vault(RESERVE) };
 
-describe('spl-token-swap-forks Token-2022 handling', () => {
-  it('decodes a legacy pool and threads the legacy token program (baseline)', async () => {
+describe("spl-token-swap-forks Token-2022 handling", () => {
+  it("decodes a legacy pool and threads the legacy token program (baseline)", async () => {
     const cfg = await adapter.fetchPoolConfig(loaderOf([[POOL, pool(TOKEN_PROGRAM)]]), POOL);
     expect(cfg.tokenProgram).toBe(TOKEN_PROGRAM);
     expect(adapter.referenceQuote(cfg, state, 1_000_000n, 0n)).toBeGreaterThan(0n);
   });
 
-  it('ROUTES a Token-2022 pool (not dropped) and threads T22 through decode + buildSwap', async () => {
+  it("ROUTES a Token-2022 pool (not dropped) and threads T22 through decode + buildSwap", async () => {
     const legacyCfg = await adapter.fetchPoolConfig(loaderOf([[POOL, pool(TOKEN_PROGRAM)]]), POOL);
     const legacyQuote = adapter.referenceQuote(legacyCfg, state, 1_000_000n, 0n);
 
     const cfg = await adapter.fetchPoolConfig(loaderOf([[POOL, pool(TOKEN_2022_PROGRAM)]]), POOL);
     expect(cfg.tokenProgram).toBe(TOKEN_2022_PROGRAM);
     // The swap-ix account list forwards the resolved (T22) program, not legacy.
-    const swap = adapter.buildSwap(cfg, { owner: 'owner', inAta: 'in', outAta: 'out' }, 1_000_000n);
+    const swap = adapter.buildSwap(cfg, { owner: "owner", inAta: "in", outAta: "out" }, 1_000_000n);
     const tokenProgAccount = swap.accounts[swap.accounts.length - 1];
     expect(tokenProgAccount.address).toBe(TOKEN_2022_PROGRAM);
     // A T22 pool with the same reserves/fees quotes identically to the legacy one.

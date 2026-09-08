@@ -5,13 +5,13 @@
  * defensively and GRACEFULLY SELF-DROPS. No checked-in fixture for this venue,
  * so the pool bytes are a minimal synthesized VirtualsPool account.
  */
-import { address, getAddressEncoder } from '@solana/kit';
-import { virtuals } from '../../../src/svm/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { address, getAddressEncoder } from "@solana/kit";
+import { virtuals } from "../../../src/svm/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('135Q44ShcCmWzaHZDJY25GejVQ4xwcgX9MzAEqE1eaFY');
-const BASE_MINT = address('CYShT7m7JGrbfMu6XAmt2XDz4zjsV8i9LnHisihjvirt');
+const POOL = address("135Q44ShcCmWzaHZDJY25GejVQ4xwcgX9MzAEqE1eaFY");
+const BASE_MINT = address("CYShT7m7JGrbfMu6XAmt2XDz4zjsV8i9LnHisihjvirt");
 // sha256("account:VirtualsPool")[0..8].
 const DISC = [71, 118, 5, 203, 5, 98, 135, 116];
 
@@ -33,18 +33,20 @@ function loader(mintData: Uint8Array | null): AccountLoader {
   };
 }
 
-describe('virtuals Token-2022 self-drop', () => {
-  test('legacy base mint (unvendored) decodes — legacy path unchanged', async () => {
+describe("virtuals Token-2022 self-drop", () => {
+  test("legacy base mint (unvendored) decodes — legacy path unchanged", async () => {
     const cfg = await virtuals.fetchPoolConfig(loader(null), POOL);
-    expect(cfg.venue).toBe('virtuals');
+    expect(cfg.venue).toBe("virtuals");
     expect(cfg.baseMint).toBe(BASE_MINT);
   });
 
-  test('a Token-2022 base mint self-drops', async () => {
-    await expect(virtuals.fetchPoolConfig(loader(makeT22Mint()), POOL)).rejects.toThrow(/dropping pool/);
+  test("a Token-2022 base mint self-drops", async () => {
+    await expect(virtuals.fetchPoolConfig(loader(makeT22Mint()), POOL)).rejects.toThrow(
+      /dropping pool/,
+    );
   });
 
-  test('a NonTransferable base mint self-drops as un-routable', async () => {
+  test("a NonTransferable base mint self-drops as un-routable", async () => {
     await expect(
       virtuals.fetchPoolConfig(loader(makeT22Mint(NON_TRANSFERABLE_TLV)), POOL),
     ).rejects.toThrow(/dropping pool/);

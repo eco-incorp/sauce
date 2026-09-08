@@ -10,7 +10,7 @@
  * see [`Shape`]. Everything else about a quote (target, selector, arguments, amount offsets) is
  * byte-for-byte what it was.
  */
-import { keccak256, toBytes, encodeAbiParameters, decodeAbiParameters, getAddress } from 'viem';
+import { keccak256, toBytes, encodeAbiParameters, decodeAbiParameters, getAddress } from "viem";
 
 import {
   bindBytes,
@@ -22,7 +22,7 @@ import {
   type Expr,
   type Fragment,
   type Stmt,
-} from './emit.js';
+} from "./emit.js";
 
 import type {
   SwapAction,
@@ -44,7 +44,7 @@ import type {
   IntegralSwapAction,
   FluidDexT1SwapAction,
   FluidDexLiteSwapAction,
-} from './types.js';
+} from "./types.js";
 
 type Address = `0x${string}`;
 type Hex = `0x${string}`;
@@ -118,10 +118,9 @@ function concatHex(a: Hex, b: Hex): Hex {
   return (a + b.slice(2)) as Hex;
 }
 
-const decodeUint256 = (data: Hex): bigint =>
-  decodeAbiParameters([{ type: 'uint256' }], data)[0];
+const decodeUint256 = (data: Hex): bigint => decodeAbiParameters([{ type: "uint256" }], data)[0];
 
-const ZERO_ADDR = '0x0000000000000000000000000000000000000000' as Address;
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as Address;
 
 // ---------------------------------------------------------------------------
 // On-chain extraction — every helper yields a Fragment whose expr is a uint256
@@ -135,19 +134,19 @@ const ZERO_ADDR = '0x0000000000000000000000000000000000000000' as Address;
 type Shape = readonly string[];
 
 /** Return data is a single uint256. */
-const OUT_UINT256: Shape = ['Uint256'];
+const OUT_UINT256: Shape = ["Uint256"];
 /** Return data is a single dynamic uint256[] (or int256[] read as its two's-complement words). */
-const OUT_UINT256_ARRAY: Shape = ['Uint256[]'];
+const OUT_UINT256_ARRAY: Shape = ["Uint256[]"];
 /** Ambient's `(int128 baseFlow, int128 quoteFlow, uint128 finalPrice)` — three static words. */
-const AMBIENT_OUTPUT: Shape = ['Uint256', 'Uint256', 'Uint256'];
+const AMBIENT_OUTPUT: Shape = ["Uint256", "Uint256", "Uint256"];
 
 /** `count` static 32-byte fields. */
 function words(count: number): Shape {
-  return Array<string>(count).fill('Uint256');
+  return Array<string>(count).fill("Uint256");
 }
 
 function shapeLiteral(shape: Shape): string {
-  return `[${shape.map((s) => `"${s}"`).join(', ')}]`;
+  return `[${shape.map((s) => `"${s}"`).join(", ")}]`;
 }
 
 /**
@@ -169,12 +168,12 @@ function shapeLiteral(shape: Shape): string {
  *   writes and produce an unparseable revert; the pool's own revert at the
  *   end of the simulation rolls back all writes, so CALL is safe here.
  */
-type QuoterMode = 'static' | 'call';
+type QuoterMode = "static" | "call";
 
 function invoke(mode: QuoterMode, to: Address, cd: Expr): Expr {
   const target = formatBigint(BigInt(to));
 
-  return mode === 'static' ? `evm.static(${target}, ${cd})` : `evm.call(${target}, 0n, ${cd})`;
+  return mode === "static" ? `evm.static(${target}, ${cd})` : `evm.call(${target}, 0n, ${cd})`;
 }
 
 /**
@@ -184,9 +183,15 @@ function invoke(mode: QuoterMode, to: Address, cd: Expr): Expr {
  * re-evaluates the object it embeds, so an extractor reading two fields off an unbound
  * `abi.decode(evm.call(…), …)` would issue the quoter call twice.
  */
-function decodeCall(emit: Emitter, mode: QuoterMode, to: Address, cd: Fragment, shape: Shape): Fragment {
-  const ret = bindConst(emit, 'qret', invoke(mode, to, cd.expr));
-  const dec = bindConst(emit, 'qdec', `abi.decode(${ret.expr}, ${shapeLiteral(shape)})`);
+function decodeCall(
+  emit: Emitter,
+  mode: QuoterMode,
+  to: Address,
+  cd: Fragment,
+  shape: Shape,
+): Fragment {
+  const ret = bindConst(emit, "qret", invoke(mode, to, cd.expr));
+  const dec = bindConst(emit, "qdec", `abi.decode(${ret.expr}, ${shapeLiteral(shape)})`);
 
   return { stmts: [...cd.stmts, ...ret.stmts, ...dec.stmts], expr: dec.expr };
 }
@@ -195,7 +200,10 @@ function decodeCall(emit: Emitter, mode: QuoterMode, to: Address, cd: Fragment, 
 type Extract = (emit: Emitter, decoded: Fragment) => Fragment;
 
 /** Most quotes: the first field is the uint256 amount. */
-const firstWord: Extract = (_emit, decoded) => ({ stmts: decoded.stmts, expr: `${decoded.expr}[0]` });
+const firstWord: Extract = (_emit, decoded) => ({
+  stmts: decoded.stmts,
+  expr: `${decoded.expr}[0]`,
+});
 
 /** Field `index` of a tuple of static words. */
 function nthWord(index: number): Extract {
@@ -204,7 +212,7 @@ function nthWord(index: number): Extract {
 
 /** Return is uint256[] (e.g. V2 getAmountsOut) — take the last element. */
 const arrayLast: Extract = (emit, decoded) => {
-  const arr = bindConst(emit, 'qarr', `${decoded.expr}[0]`);
+  const arr = bindConst(emit, "qarr", `${decoded.expr}[0]`);
 
   return { stmts: [...decoded.stmts, ...arr.stmts], expr: `${arr.expr}[${arr.expr}.length - 1n]` };
 };
@@ -217,7 +225,7 @@ const arrayLast: Extract = (emit, decoded) => {
  */
 function int256ArrayAbs(index: number): Extract {
   return (emit, decoded) => {
-    const arr = bindConst(emit, 'qarr', `${decoded.expr}[0]`);
+    const arr = bindConst(emit, "qarr", `${decoded.expr}[0]`);
 
     return { stmts: [...decoded.stmts, ...arr.stmts], expr: `-${arr.expr}[${index}n]` };
   };
@@ -230,11 +238,11 @@ function int256ArrayAbs(index: number): Extract {
  *   result  = -(sign(base)*base + sign(quote)*quote)
  */
 const ambientFlow: Extract = (emit, decoded) => {
-  const base = bindConst(emit, 'qbase', `${decoded.expr}[0]`);
-  const quote = bindConst(emit, 'qquote', `${decoded.expr}[1]`);
+  const base = bindConst(emit, "qbase", `${decoded.expr}[0]`);
+  const quote = bindConst(emit, "qquote", `${decoded.expr}[1]`);
   const sum = bindConst(
     emit,
-    'qsum',
+    "qsum",
     `(${base.expr} >> 255n) * ${base.expr} + (${quote.expr} >> 255n) * ${quote.expr}`,
   );
 
@@ -245,9 +253,15 @@ const ambientFlow: Extract = (emit, decoded) => {
 };
 
 /** A whole pre-computed quote call, as an on-chain fragment. */
-function staticQuote(mode: QuoterMode, to: Address, data: Hex, shape: Shape, extract: Extract): (emit: Emitter) => Fragment {
+function staticQuote(
+  mode: QuoterMode,
+  to: Address,
+  data: Hex,
+  shape: Shape,
+  extract: Extract,
+): (emit: Emitter) => Fragment {
   return (emit) => {
-    const cd = bindBytes(emit, 'qcd', hexToBytes(data));
+    const cd = bindBytes(emit, "qcd", hexToBytes(data));
 
     return extract(emit, decodeCall(emit, mode, to, cd, shape));
   };
@@ -264,7 +278,12 @@ function asUint256ArrayLast(mode: QuoterMode, to: Address, data: Hex): (emit: Em
 }
 
 /** Return is int256[]; the entry at `index` is negative — recover its magnitude. */
-function asInt256ArrayAbs(mode: QuoterMode, to: Address, data: Hex, index: number): (emit: Emitter) => Fragment {
+function asInt256ArrayAbs(
+  mode: QuoterMode,
+  to: Address,
+  data: Hex,
+  index: number,
+): (emit: Emitter) => Fragment {
   return staticQuote(mode, to, data, OUT_UINT256_ARRAY, int256ArrayAbs(index));
 }
 
@@ -272,7 +291,13 @@ function asInt256ArrayAbs(mode: QuoterMode, to: Address, data: Hex, index: numbe
  * Return is a tuple of `count` static 32-byte fields (all uint256 or sign-
  * extended int/uint with width ≤ 256). Pick the field at `index`.
  */
-function asTupleFieldUint256(mode: QuoterMode, to: Address, data: Hex, count: number, index: number): (emit: Emitter) => Fragment {
+function asTupleFieldUint256(
+  mode: QuoterMode,
+  to: Address,
+  data: Hex,
+  count: number,
+  index: number,
+): (emit: Emitter) => Fragment {
   if (index === 0) return asUint256(mode, to, data);
 
   return staticQuote(mode, to, data, words(count), nthWord(index));
@@ -306,15 +331,15 @@ function makeDynamic(
   const suffixBytes = bytes.slice(amountOffset + 32);
 
   return (emit, amountExpr) => {
-    const prefix = bindBytes(emit, 'qpre', prefixBytes);
+    const prefix = bindBytes(emit, "qpre", prefixBytes);
     const stmts: Stmt[] = [...prefix.stmts];
     const parts: Expr[] = [encodeArgs([amountExpr])];
     if (suffixBytes.length > 0) {
-      const suffix = bindBytes(emit, 'qsuf', suffixBytes);
+      const suffix = bindBytes(emit, "qsuf", suffixBytes);
       stmts.push(...suffix.stmts);
       parts.push(suffix.expr);
     }
-    const cd: Fragment = { stmts, expr: `${prefix.expr}.concat(${parts.join(', ')})` };
+    const cd: Fragment = { stmts, expr: `${prefix.expr}.concat(${parts.join(", ")})` };
 
     return extract(emit, decodeCall(emit, mode, to, cd, shape));
   };
@@ -345,32 +370,60 @@ export function actionToQuote(
 ): QuoteCall {
   switch (action.type) {
     // --- On the same contract as the action ---
-    case 'curveSwap':              return quoteCurve(action, amountIn);
-    case 'curveRouterNGSwap':      return quoteCurveRouterNG(action, amountIn);
-    case 'uniswapV2Swap':          return quoteV2Router(action.router, action.path, amountIn);
-    case 'fraxswapSwap':           return quoteV2Router(action.router, action.path, amountIn);
-    case 'balancerV2Swap':         return quoteBalV2Single(action, amountIn);
-    case 'balancerV2BatchSwap':    return quoteBalV2Batch(action);
-    case 'balancerV3Swap':         return quoteBalV3(action, amountIn);
-    case 'carbonSwap':             return quoteCarbon(action);
-    case 'clipperSwap':            return quoteClipper(action, amountIn);
-    case 'dodoSwap':               return quoteDODO(action, amountIn);
+    case "curveSwap":
+      return quoteCurve(action, amountIn);
+    case "curveRouterNGSwap":
+      return quoteCurveRouterNG(action, amountIn);
+    case "uniswapV2Swap":
+      return quoteV2Router(action.router, action.path, amountIn);
+    case "fraxswapSwap":
+      return quoteV2Router(action.router, action.path, amountIn);
+    case "balancerV2Swap":
+      return quoteBalV2Single(action, amountIn);
+    case "balancerV2BatchSwap":
+      return quoteBalV2Batch(action);
+    case "balancerV3Swap":
+      return quoteBalV3(action, amountIn);
+    case "carbonSwap":
+      return quoteCarbon(action);
+    case "clipperSwap":
+      return quoteClipper(action, amountIn);
+    case "dodoSwap":
+      return quoteDODO(action, amountIn);
 
     // --- Separate quoter / resolver contract ---
-    case 'uniswapV3ExactInput':         return quoteUniV3Single(action, amountIn, requireOpt(opts.quoterV3, 'quoterV3'));
-    case 'uniswapV3ExactInputMultiHop': return quoteUniV3Multi(action, amountIn, requireOpt(opts.quoterV3, 'quoterV3'));
-    case 'uniswapV4ExactInput':         return quoteUniV4Single(action, amountIn, requireOpt(opts.quoterV4, 'quoterV4'));
-    case 'uniswapV4ExactInputMultiHop': return quoteUniV4Multi(action, amountIn, requireOpt(opts.quoterV4, 'quoterV4'));
-    case 'maverickSwap':                return quoteMaverick(action, amountIn, requireOpt(opts.quoterMaverick, 'quoterMaverick'));
-    case 'maverickMultiHopSwap':        return quoteMaverickMulti(action, amountIn, requireOpt(opts.quoterMaverick, 'quoterMaverick'));
-    case 'ambientSwap':                 return quoteAmbient(action, amountIn, requireOpt(opts.impact, 'impact'));
-    case 'integralSwap':                return quoteIntegral(action, amountIn, requireOpt(opts.relayer, 'relayer'));
-    case 'fluidDexT1Swap':              return quoteFluidT1(action, amountIn, requireOpt(opts.fluidResolver, 'fluidResolver'));
-    case 'fluidDexLiteSwap':            return quoteFluidLite(action, amountIn, requireOpt(opts.fluidLiteResolver, 'fluidLiteResolver'));
+    case "uniswapV3ExactInput":
+      return quoteUniV3Single(action, amountIn, requireOpt(opts.quoterV3, "quoterV3"));
+    case "uniswapV3ExactInputMultiHop":
+      return quoteUniV3Multi(action, amountIn, requireOpt(opts.quoterV3, "quoterV3"));
+    case "uniswapV4ExactInput":
+      return quoteUniV4Single(action, amountIn, requireOpt(opts.quoterV4, "quoterV4"));
+    case "uniswapV4ExactInputMultiHop":
+      return quoteUniV4Multi(action, amountIn, requireOpt(opts.quoterV4, "quoterV4"));
+    case "maverickSwap":
+      return quoteMaverick(action, amountIn, requireOpt(opts.quoterMaverick, "quoterMaverick"));
+    case "maverickMultiHopSwap":
+      return quoteMaverickMulti(
+        action,
+        amountIn,
+        requireOpt(opts.quoterMaverick, "quoterMaverick"),
+      );
+    case "ambientSwap":
+      return quoteAmbient(action, amountIn, requireOpt(opts.impact, "impact"));
+    case "integralSwap":
+      return quoteIntegral(action, amountIn, requireOpt(opts.relayer, "relayer"));
+    case "fluidDexT1Swap":
+      return quoteFluidT1(action, amountIn, requireOpt(opts.fluidResolver, "fluidResolver"));
+    case "fluidDexLiteSwap":
+      return quoteFluidLite(
+        action,
+        amountIn,
+        requireOpt(opts.fluidLiteResolver, "fluidLiteResolver"),
+      );
 
     default: {
       const _: never = action;
-      throw new Error(`Unknown action type: ${(_ as any).type}`);
+      throw new Error(`Unknown action type: ${(_ as { type: string }).type}`);
     }
   }
 }
@@ -383,16 +436,19 @@ export function actionToQuote(
 function quoteCurve(action: CurveSwapAction, amountIn: bigint): QuoteCall {
   const to = action.pool;
   const data = concatHex(
-    sel('get_dy(int128,int128,uint256)'),
+    sel("get_dy(int128,int128,uint256)"),
     encodeAbiParameters(
-      [{ type: 'int128' }, { type: 'int128' }, { type: 'uint256' }],
+      [{ type: "int128" }, { type: "int128" }, { type: "uint256" }],
       [BigInt(action.i), BigInt(action.j), amountIn],
     ),
   );
   return {
-    to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
+    to,
+    data,
+    decode: decodeUint256,
+    toSauce: asUint256("static", to, data),
     // selector(4) + int128 i(32) + int128 j(32) = 68
-    toSauceDynamic: makeDynamic('static', to, data, 68, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("static", to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -407,26 +463,24 @@ function quoteCurveRouterNG(action: CurveRouterNGSwapAction, amountIn: bigint): 
 
   const to = action.router;
   const data = concatHex(
-    sel('get_dy(address[11],uint256[5][5],uint256,address[5])'),
+    sel("get_dy(address[11],uint256[5][5],uint256,address[5])"),
     encodeAbiParameters(
       [
-        { type: 'address[11]' },
-        { type: 'uint256[5][5]' },
-        { type: 'uint256' },
-        { type: 'address[5]' },
+        { type: "address[11]" },
+        { type: "uint256[5][5]" },
+        { type: "uint256" },
+        { type: "address[5]" },
       ],
-      [
-        route as any,
-        swapParams.map(r => r.map(v => BigInt(v))) as any,
-        amountIn,
-        pools as any,
-      ],
+      [route as any, swapParams.map((r) => r.map((v) => BigInt(v))) as any, amountIn, pools as any],
     ),
   );
   return {
-    to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
+    to,
+    data,
+    decode: decodeUint256,
+    toSauce: asUint256("static", to, data),
     // selector(4) + address[11] (11*32) + uint256[5][5] (25*32) = 1156
-    toSauceDynamic: makeDynamic('static', to, data, 1156, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("static", to, data, 1156, OUT_UINT256, firstWord),
   };
 }
 
@@ -434,50 +488,47 @@ function quoteCurveRouterNG(action: CurveRouterNGSwapAction, amountIn: bigint): 
 function quoteV2Router(router: Address, path: Address[], amountIn: bigint): QuoteCall {
   const to = router;
   const data = concatHex(
-    sel('getAmountsOut(uint256,address[])'),
-    encodeAbiParameters(
-      [{ type: 'uint256' }, { type: 'address[]' }],
-      [amountIn, path],
-    ),
+    sel("getAmountsOut(uint256,address[])"),
+    encodeAbiParameters([{ type: "uint256" }, { type: "address[]" }], [amountIn, path]),
   );
   return {
     to,
     data,
     decode: (result: Hex) => {
-      const [amounts] = decodeAbiParameters([{ type: 'uint256[]' }], result);
+      const [amounts] = decodeAbiParameters([{ type: "uint256[]" }], result);
       return amounts[amounts.length - 1];
     },
-    toSauce: asUint256ArrayLast('static', to, data),
+    toSauce: asUint256ArrayLast("static", to, data),
     // selector(4), then amountIn is the first head slot.
-    toSauceDynamic: makeDynamic('static', to, data, 4, OUT_UINT256_ARRAY, arrayLast),
+    toSauceDynamic: makeDynamic("static", to, data, 4, OUT_UINT256_ARRAY, arrayLast),
   };
 }
 
 // --- BalancerV2 via queryBatchSwap ---
 
 const BATCH_SWAP_STEP_ABI = {
-  type: 'tuple[]' as const,
+  type: "tuple[]" as const,
   components: [
-    { type: 'bytes32' as const, name: 'poolId' },
-    { type: 'uint256' as const, name: 'assetInIndex' },
-    { type: 'uint256' as const, name: 'assetOutIndex' },
-    { type: 'uint256' as const, name: 'amount' },
-    { type: 'bytes' as const, name: 'userData' },
+    { type: "bytes32" as const, name: "poolId" },
+    { type: "uint256" as const, name: "assetInIndex" },
+    { type: "uint256" as const, name: "assetOutIndex" },
+    { type: "uint256" as const, name: "amount" },
+    { type: "bytes" as const, name: "userData" },
   ],
 };
 
 const FUND_MGMT_ABI = {
-  type: 'tuple' as const,
+  type: "tuple" as const,
   components: [
-    { type: 'address' as const, name: 'sender' },
-    { type: 'bool' as const, name: 'fromInternalBalance' },
-    { type: 'address' as const, name: 'recipient' },
-    { type: 'bool' as const, name: 'toInternalBalance' },
+    { type: "address" as const, name: "sender" },
+    { type: "bool" as const, name: "fromInternalBalance" },
+    { type: "address" as const, name: "recipient" },
+    { type: "bool" as const, name: "toInternalBalance" },
   ],
 };
 
 const QUERY_BATCH_SWAP_SEL = sel(
-  'queryBatchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool))',
+  "queryBatchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool))",
 );
 
 function buildQueryBatchSwap(
@@ -489,15 +540,15 @@ function buildQueryBatchSwap(
   const data = concatHex(
     QUERY_BATCH_SWAP_SEL,
     encodeAbiParameters(
-      [{ type: 'uint8' }, BATCH_SWAP_STEP_ABI, { type: 'address[]' }, FUND_MGMT_ABI],
+      [{ type: "uint8" }, BATCH_SWAP_STEP_ABI, { type: "address[]" }, FUND_MGMT_ABI],
       [
         0, // GIVEN_IN
-        steps.map(s => ({
+        steps.map((s) => ({
           poolId: s.poolId,
           assetInIndex: s.assetInIndex,
           assetOutIndex: s.assetOutIndex,
           amount: s.amount,
-          userData: '0x' as Hex,
+          userData: "0x" as Hex,
         })),
         assets,
         {
@@ -514,11 +565,11 @@ function buildQueryBatchSwap(
     to: vault,
     data,
     decode: (result: Hex) => {
-      const [deltas] = decodeAbiParameters([{ type: 'int256[]' }], result);
+      const [deltas] = decodeAbiParameters([{ type: "int256[]" }], result);
       const out = deltas[outAssetIndex];
       return out < 0n ? -out : out;
     },
-    toSauce: asInt256ArrayAbs('static', vault, data, outAssetIndex),
+    toSauce: asInt256ArrayAbs("static", vault, data, outAssetIndex),
   };
 }
 
@@ -540,7 +591,14 @@ function quoteBalV2Single(action: BalancerV2SwapAction, amountIn: bigint): Quote
   // the magnitude — plain `0 - x` would trip Solidity's checked-sub panic.
   return {
     ...base,
-    toSauceDynamic: makeDynamic('static', base.to, base.data, AMOUNT_OFFSET, OUT_UINT256_ARRAY, int256ArrayAbs(1)),
+    toSauceDynamic: makeDynamic(
+      "static",
+      base.to,
+      base.data,
+      AMOUNT_OFFSET,
+      OUT_UINT256_ARRAY,
+      int256ArrayAbs(1),
+    ),
   };
 }
 
@@ -549,7 +607,7 @@ function quoteBalV2Batch(action: BalancerV2BatchSwapAction): QuoteCall {
   const lastStep = action.steps[action.steps.length - 1];
   return buildQueryBatchSwap(
     action.vault,
-    action.steps.map(s => ({
+    action.steps.map((s) => ({
       poolId: s.poolId,
       assetInIndex: BigInt(s.assetInIndex),
       assetOutIndex: BigInt(s.assetOutIndex),
@@ -564,22 +622,25 @@ function quoteBalV2Batch(action: BalancerV2BatchSwapAction): QuoteCall {
 function quoteBalV3(action: BalancerV3SwapAction, amountIn: bigint): QuoteCall {
   const to = action.router;
   const data = concatHex(
-    sel('querySwapSingleTokenExactIn(address,address,address,uint256,bytes)'),
+    sel("querySwapSingleTokenExactIn(address,address,address,uint256,bytes)"),
     encodeAbiParameters(
       [
-        { type: 'address' },
-        { type: 'address' },
-        { type: 'address' },
-        { type: 'uint256' },
-        { type: 'bytes' },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "bytes" },
       ],
-      [action.pool, action.tokenIn, action.tokenOut, amountIn, '0x'],
+      [action.pool, action.tokenIn, action.tokenOut, amountIn, "0x"],
     ),
   );
   return {
-    to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
+    to,
+    data,
+    decode: decodeUint256,
+    toSauce: asUint256("static", to, data),
     // selector(4) + pool(32) + tokenIn(32) + tokenOut(32) = 100
-    toSauceDynamic: makeDynamic('static', to, data, 100, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("static", to, data, 100, OUT_UINT256, firstWord),
   };
 }
 
@@ -590,46 +651,49 @@ function quoteBalV3(action: BalancerV3SwapAction, amountIn: bigint): QuoteCall {
 function quoteCarbon(action: CarbonSwapAction): QuoteCall {
   const to = action.controller;
   const data = concatHex(
-    sel('calculateTradeTargetAmount(address,address,(uint256,uint128)[])'),
+    sel("calculateTradeTargetAmount(address,address,(uint256,uint128)[])"),
     encodeAbiParameters(
       [
-        { type: 'address' },
-        { type: 'address' },
+        { type: "address" },
+        { type: "address" },
         {
-          type: 'tuple[]',
+          type: "tuple[]",
           components: [
-            { type: 'uint256', name: 'strategyId' },
-            { type: 'uint128', name: 'amount' },
+            { type: "uint256", name: "strategyId" },
+            { type: "uint128", name: "amount" },
           ],
         },
       ],
       [
         action.sourceToken,
         action.targetToken,
-        action.tradeActions.map(ta => ({
+        action.tradeActions.map((ta) => ({
           strategyId: BigInt(ta.strategyId),
           amount: BigInt(ta.amount),
         })),
       ],
     ),
   );
-  return { to, data, decode: decodeUint256, toSauce: asUint256('static', to, data) };
+  return { to, data, decode: decodeUint256, toSauce: asUint256("static", to, data) };
 }
 
 /** Clipper — `getSellQuote` (view). On-chain FMM estimate; actual execution uses signed off-chain quotes. */
 function quoteClipper(action: ClipperSwapAction, amountIn: bigint): QuoteCall {
   const to = action.exchange;
   const data = concatHex(
-    sel('getSellQuote(address,address,uint256)'),
+    sel("getSellQuote(address,address,uint256)"),
     encodeAbiParameters(
-      [{ type: 'address' }, { type: 'address' }, { type: 'uint256' }],
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
       [action.inputToken, action.outputToken, amountIn],
     ),
   );
   return {
-    to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
+    to,
+    data,
+    decode: decodeUint256,
+    toSauce: asUint256("static", to, data),
     // selector(4) + tokenIn(32) + tokenOut(32) = 68
-    toSauceDynamic: makeDynamic('static', to, data, 68, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("static", to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -644,16 +708,13 @@ function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
   const pool = getAddress(action.dodoPairs[0]);
   const sellingBase = (action.directions & 1) === 0;
   const fnSel = sellingBase
-    ? sel('querySellBase(address,uint256)')
-    : sel('querySellQuote(address,uint256)');
+    ? sel("querySellBase(address,uint256)")
+    : sel("querySellQuote(address,uint256)");
 
   const to = pool;
   const data = concatHex(
     fnSel,
-    encodeAbiParameters(
-      [{ type: 'address' }, { type: 'uint256' }],
-      [ZERO_ADDR, amountIn],
-    ),
+    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [ZERO_ADDR, amountIn]),
   );
   return {
     to,
@@ -661,14 +722,14 @@ function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
     decode: (result: Hex) => {
       // Returns (uint256 receiveAmount, uint256 mtFee)
       const [receiveAmount] = decodeAbiParameters(
-        [{ type: 'uint256' }, { type: 'uint256' }],
+        [{ type: "uint256" }, { type: "uint256" }],
         result,
       );
       return receiveAmount;
     },
-    toSauce: asUint256('static', to, data),
+    toSauce: asUint256("static", to, data),
     // selector(4) + sender/zero(32) = 36
-    toSauceDynamic: makeDynamic('static', to, data, 36, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("static", to, data, 36, OUT_UINT256, firstWord),
   };
 }
 
@@ -677,28 +738,36 @@ function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
 // ---------------------------------------------------------------------------
 
 /** UniswapV3 single-pool — QuoterV2 `quoteExactInputSingle` (revert-sim). */
-function quoteUniV3Single(action: UniswapV3ExactInputAction, amountIn: bigint, quoter: Address): QuoteCall {
+function quoteUniV3Single(
+  action: UniswapV3ExactInputAction,
+  amountIn: bigint,
+  quoter: Address,
+): QuoteCall {
   const to = quoter;
   const data = concatHex(
-    sel('quoteExactInputSingle((address,address,uint256,uint24,uint160))'),
+    sel("quoteExactInputSingle((address,address,uint256,uint24,uint160))"),
     encodeAbiParameters(
-      [{
-        type: 'tuple',
-        components: [
-          { type: 'address', name: 'tokenIn' },
-          { type: 'address', name: 'tokenOut' },
-          { type: 'uint256', name: 'amountIn' },
-          { type: 'uint24', name: 'fee' },
-          { type: 'uint160', name: 'sqrtPriceLimitX96' },
-        ],
-      }],
-      [{
-        tokenIn: action.tokenIn,
-        tokenOut: action.tokenOut,
-        amountIn,
-        fee: action.fee,
-        sqrtPriceLimitX96: 0n,
-      }],
+      [
+        {
+          type: "tuple",
+          components: [
+            { type: "address", name: "tokenIn" },
+            { type: "address", name: "tokenOut" },
+            { type: "uint256", name: "amountIn" },
+            { type: "uint24", name: "fee" },
+            { type: "uint160", name: "sqrtPriceLimitX96" },
+          ],
+        },
+      ],
+      [
+        {
+          tokenIn: action.tokenIn,
+          tokenOut: action.tokenOut,
+          amountIn,
+          fee: action.fee,
+          sqrtPriceLimitX96: 0n,
+        },
+      ],
     ),
   );
   return {
@@ -707,26 +776,27 @@ function quoteUniV3Single(action: UniswapV3ExactInputAction, amountIn: bigint, q
     decode: (result: Hex) => {
       // (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
       const [amountOut] = decodeAbiParameters(
-        [{ type: 'uint256' }, { type: 'uint160' }, { type: 'uint32' }, { type: 'uint256' }],
+        [{ type: "uint256" }, { type: "uint160" }, { type: "uint32" }, { type: "uint256" }],
         result,
       );
       return amountOut;
     },
-    toSauce: asUint256('call', to, data),
+    toSauce: asUint256("call", to, data),
     // Struct args: selector(4) + tokenIn(32) + tokenOut(32) = 68
-    toSauceDynamic: makeDynamic('call', to, data, 68, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("call", to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
 /** UniswapV3 multi-hop — QuoterV2 `quoteExactInput` (revert-sim). */
-function quoteUniV3Multi(action: UniswapV3ExactInputMultiHopAction, amountIn: bigint, quoter: Address): QuoteCall {
+function quoteUniV3Multi(
+  action: UniswapV3ExactInputMultiHopAction,
+  amountIn: bigint,
+  quoter: Address,
+): QuoteCall {
   const to = quoter;
   const data = concatHex(
-    sel('quoteExactInput(bytes,uint256)'),
-    encodeAbiParameters(
-      [{ type: 'bytes' }, { type: 'uint256' }],
-      [action.path, amountIn],
-    ),
+    sel("quoteExactInput(bytes,uint256)"),
+    encodeAbiParameters([{ type: "bytes" }, { type: "uint256" }], [action.path, amountIn]),
   );
   return {
     to,
@@ -734,14 +804,14 @@ function quoteUniV3Multi(action: UniswapV3ExactInputMultiHopAction, amountIn: bi
     decode: (result: Hex) => {
       // (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)
       const [amountOut] = decodeAbiParameters(
-        [{ type: 'uint256' }, { type: 'uint160[]' }, { type: 'uint32[]' }, { type: 'uint256' }],
+        [{ type: "uint256" }, { type: "uint160[]" }, { type: "uint32[]" }, { type: "uint256" }],
         result,
       );
       return amountOut;
     },
-    toSauce: asUint256('call', to, data),
+    toSauce: asUint256("call", to, data),
     // selector(4) + path_offset_pointer(32) = 36 (amount is the 2nd head slot; path tail follows)
-    toSauceDynamic: makeDynamic('call', to, data, 36, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("call", to, data, 36, OUT_UINT256, firstWord),
   };
 }
 
@@ -751,46 +821,59 @@ function quoteUniV3Multi(action: UniswapV3ExactInputMultiHopAction, amountIn: bi
  * QuoteExactSingleParams: { PoolKey poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData }
  * PoolKey: { Currency currency0, Currency currency1, uint24 fee, int24 tickSpacing, address hooks }
  */
-function quoteUniV4Single(action: UniswapV4ExactInputAction, amountIn: bigint, quoter: Address): QuoteCall {
+function quoteUniV4Single(
+  action: UniswapV4ExactInputAction,
+  amountIn: bigint,
+  quoter: Address,
+): QuoteCall {
   const to = quoter;
   const data = concatHex(
-    sel('quoteExactInputSingle((((address,address,uint24,int24,address),bool,uint128,bytes)))'),
+    sel("quoteExactInputSingle((((address,address,uint24,int24,address),bool,uint128,bytes)))"),
     encodeAbiParameters(
-      [{
-        type: 'tuple',
-        components: [{
-          type: 'tuple',
-          name: 'poolKey',
+      [
+        {
+          type: "tuple",
           components: [
-            { type: 'address', name: 'currency0' },
-            { type: 'address', name: 'currency1' },
-            { type: 'uint24', name: 'fee' },
-            { type: 'int24', name: 'tickSpacing' },
-            { type: 'address', name: 'hooks' },
+            {
+              type: "tuple",
+              name: "poolKey",
+              components: [
+                { type: "address", name: "currency0" },
+                { type: "address", name: "currency1" },
+                { type: "uint24", name: "fee" },
+                { type: "int24", name: "tickSpacing" },
+                { type: "address", name: "hooks" },
+              ],
+            },
+            {
+              type: "bool",
+              name: "zeroForOne",
+            },
+            {
+              type: "uint128",
+              name: "exactAmount",
+            },
+            {
+              type: "bytes",
+              name: "hookData",
+            },
           ],
-        }, {
-          type: 'bool',
-          name: 'zeroForOne',
-        }, {
-          type: 'uint128',
-          name: 'exactAmount',
-        }, {
-          type: 'bytes',
-          name: 'hookData',
-        }],
-      }],
-      [{
-        poolKey: {
-          currency0: action.poolKey.currency0,
-          currency1: action.poolKey.currency1,
-          fee: action.poolKey.fee,
-          tickSpacing: action.poolKey.tickSpacing,
-          hooks: action.poolKey.hooks,
         },
-        zeroForOne: action.zeroForOne,
-        exactAmount: amountIn,
-        hookData: '0x' as Hex,
-      }],
+      ],
+      [
+        {
+          poolKey: {
+            currency0: action.poolKey.currency0,
+            currency1: action.poolKey.currency1,
+            fee: action.poolKey.fee,
+            tickSpacing: action.poolKey.tickSpacing,
+            hooks: action.poolKey.hooks,
+          },
+          zeroForOne: action.zeroForOne,
+          exactAmount: amountIn,
+          hookData: "0x" as Hex,
+        },
+      ],
     ),
   );
   return {
@@ -798,13 +881,10 @@ function quoteUniV4Single(action: UniswapV4ExactInputAction, amountIn: bigint, q
     data,
     decode: (result: Hex) => {
       // (uint256 amountOut, uint256 gasEstimate)
-      const [amountOut] = decodeAbiParameters(
-        [{ type: 'uint256' }, { type: 'uint256' }],
-        result,
-      );
+      const [amountOut] = decodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], result);
       return amountOut;
     },
-    toSauce: asUint256('call', to, data),
+    toSauce: asUint256("call", to, data),
   };
 }
 
@@ -814,42 +894,54 @@ function quoteUniV4Single(action: UniswapV4ExactInputAction, amountIn: bigint, q
  * QuoteExactParams: { Currency exactCurrency, PathKey[] path, uint128 exactAmount }
  * PathKey: { address intermediateCurrency, uint24 fee, int24 tickSpacing, address hooks, bytes hookData }
  */
-function quoteUniV4Multi(action: UniswapV4ExactInputMultiHopAction, amountIn: bigint, quoter: Address): QuoteCall {
+function quoteUniV4Multi(
+  action: UniswapV4ExactInputMultiHopAction,
+  amountIn: bigint,
+  quoter: Address,
+): QuoteCall {
   const to = quoter;
   const data = concatHex(
-    sel('quoteExactInput(((address,(address,uint24,int24,address,bytes)[],uint128)))'),
+    sel("quoteExactInput(((address,(address,uint24,int24,address,bytes)[],uint128)))"),
     encodeAbiParameters(
-      [{
-        type: 'tuple',
-        components: [{
-          type: 'address',
-          name: 'exactCurrency',
-        }, {
-          type: 'tuple[]',
-          name: 'path',
+      [
+        {
+          type: "tuple",
           components: [
-            { type: 'address', name: 'intermediateCurrency' },
-            { type: 'uint24', name: 'fee' },
-            { type: 'int24', name: 'tickSpacing' },
-            { type: 'address', name: 'hooks' },
-            { type: 'bytes', name: 'hookData' },
+            {
+              type: "address",
+              name: "exactCurrency",
+            },
+            {
+              type: "tuple[]",
+              name: "path",
+              components: [
+                { type: "address", name: "intermediateCurrency" },
+                { type: "uint24", name: "fee" },
+                { type: "int24", name: "tickSpacing" },
+                { type: "address", name: "hooks" },
+                { type: "bytes", name: "hookData" },
+              ],
+            },
+            {
+              type: "uint128",
+              name: "exactAmount",
+            },
           ],
-        }, {
-          type: 'uint128',
-          name: 'exactAmount',
-        }],
-      }],
-      [{
-        exactCurrency: action.currencyIn,
-        path: action.path.map(step => ({
-          intermediateCurrency: step.intermediateCurrency,
-          fee: step.fee,
-          tickSpacing: step.tickSpacing,
-          hooks: step.hooks,
-          hookData: '0x' as Hex,
-        })),
-        exactAmount: amountIn,
-      }],
+        },
+      ],
+      [
+        {
+          exactCurrency: action.currencyIn,
+          path: action.path.map((step) => ({
+            intermediateCurrency: step.intermediateCurrency,
+            fee: step.fee,
+            tickSpacing: step.tickSpacing,
+            hooks: step.hooks,
+            hookData: "0x" as Hex,
+          })),
+          exactAmount: amountIn,
+        },
+      ],
     ),
   );
   return {
@@ -857,13 +949,10 @@ function quoteUniV4Multi(action: UniswapV4ExactInputMultiHopAction, amountIn: bi
     data,
     decode: (result: Hex) => {
       // (uint256 amountOut, uint256 gasEstimate)
-      const [amountOut] = decodeAbiParameters(
-        [{ type: 'uint256' }, { type: 'uint256' }],
-        result,
-      );
+      const [amountOut] = decodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], result);
       return amountOut;
     },
-    toSauce: asUint256('call', to, data),
+    toSauce: asUint256("call", to, data),
   };
 }
 
@@ -876,14 +965,14 @@ function quoteUniV4Multi(action: UniswapV4ExactInputMultiHopAction, amountIn: bi
 function quoteMaverick(action: MaverickSwapAction, amountIn: bigint, quoter: Address): QuoteCall {
   const to = quoter;
   const data = concatHex(
-    sel('calculateSwap(address,uint128,bool,bool,int32)'),
+    sel("calculateSwap(address,uint128,bool,bool,int32)"),
     encodeAbiParameters(
       [
-        { type: 'address' },
-        { type: 'uint128' },
-        { type: 'bool' },
-        { type: 'bool' },
-        { type: 'int32' },
+        { type: "address" },
+        { type: "uint128" },
+        { type: "bool" },
+        { type: "bool" },
+        { type: "int32" },
       ],
       [action.pool, amountIn, action.tokenAIn, false, 0],
     ),
@@ -894,29 +983,28 @@ function quoteMaverick(action: MaverickSwapAction, amountIn: bigint, quoter: Add
     decode: (result: Hex) => {
       // (uint256 amountIn, uint256 amountOut, uint256 gasEstimate)
       const [, amountOut] = decodeAbiParameters(
-        [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
+        [{ type: "uint256" }, { type: "uint256" }, { type: "uint256" }],
         result,
       );
       return amountOut;
     },
-    toSauce: asTupleFieldUint256('call', to, data, 3, 1),
+    toSauce: asTupleFieldUint256("call", to, data, 3, 1),
     // selector(4) + pool(32) = 36; output = (uint256, uint256, uint256), take index 1.
-    toSauceDynamic: makeDynamic(
-      'call',
-      to, data, 36,
-      words(3),
-      nthWord(1),
-    ),
+    toSauceDynamic: makeDynamic("call", to, data, 36, words(3), nthWord(1)),
   };
 }
 
 /** Maverick V2 multi-hop — MaverickV2Quoter `calculateMultiHopSwap` (revert-sim). */
-function quoteMaverickMulti(action: MaverickMultiHopSwapAction, amountIn: bigint, quoter: Address): QuoteCall {
+function quoteMaverickMulti(
+  action: MaverickMultiHopSwapAction,
+  amountIn: bigint,
+  quoter: Address,
+): QuoteCall {
   const to = quoter;
   const data = concatHex(
-    sel('calculateMultiHopSwap(bytes,uint256,bool)'),
+    sel("calculateMultiHopSwap(bytes,uint256,bool)"),
     encodeAbiParameters(
-      [{ type: 'bytes' }, { type: 'uint256' }, { type: 'bool' }],
+      [{ type: "bytes" }, { type: "uint256" }, { type: "bool" }],
       [action.path, amountIn, false],
     ),
   );
@@ -926,14 +1014,14 @@ function quoteMaverickMulti(action: MaverickMultiHopSwapAction, amountIn: bigint
     decode: (result: Hex) => {
       // (uint256 returnAmount, uint256 gasEstimate)
       const [returnAmount] = decodeAbiParameters(
-        [{ type: 'uint256' }, { type: 'uint256' }],
+        [{ type: "uint256" }, { type: "uint256" }],
         result,
       );
       return returnAmount;
     },
-    toSauce: asUint256('call', to, data),
+    toSauce: asUint256("call", to, data),
     // selector(4) + path_offset_pointer(32) = 36 (2nd head slot is amount)
-    toSauceDynamic: makeDynamic('call', to, data, 36, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("call", to, data, 36, OUT_UINT256, firstWord),
   };
 }
 
@@ -946,17 +1034,17 @@ function quoteMaverickMulti(action: MaverickMultiHopSwapAction, amountIn: bigint
 function quoteAmbient(action: AmbientSwapAction, amountIn: bigint, impact: Address): QuoteCall {
   const to = impact;
   const data = concatHex(
-    sel('calcImpact(address,address,uint256,bool,bool,uint128,uint16,uint128)'),
+    sel("calcImpact(address,address,uint256,bool,bool,uint128,uint16,uint128)"),
     encodeAbiParameters(
       [
-        { type: 'address' },
-        { type: 'address' },
-        { type: 'uint256' },
-        { type: 'bool' },
-        { type: 'bool' },
-        { type: 'uint128' },
-        { type: 'uint16' },
-        { type: 'uint128' },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "bool" },
+        { type: "bool" },
+        { type: "uint128" },
+        { type: "uint16" },
+        { type: "uint128" },
       ],
       [
         action.base,
@@ -978,16 +1066,16 @@ function quoteAmbient(action: AmbientSwapAction, amountIn: bigint, impact: Addre
       // Negative flow = tokens leaving pool to user (output).
       // Pick whichever flow is negative as the output amount.
       const [baseFlow, quoteFlow] = decodeAbiParameters(
-        [{ type: 'int128' }, { type: 'int128' }, { type: 'uint128' }],
+        [{ type: "int128" }, { type: "int128" }, { type: "uint128" }],
         result,
       );
       if (baseFlow < 0n) return -baseFlow;
       if (quoteFlow < 0n) return -quoteFlow;
       return 0n;
     },
-    toSauce: asAmbientFlow('static', to, data),
+    toSauce: asAmbientFlow("static", to, data),
     // selector(4) + base(32) + quote(32) + poolIdx(32) + isBuy(32) + inBaseQty(32) = 164
-    toSauceDynamic: makeDynamic('static', to, data, 164, AMBIENT_OUTPUT, ambientFlow),
+    toSauceDynamic: makeDynamic("static", to, data, 164, AMBIENT_OUTPUT, ambientFlow),
   };
 }
 
@@ -995,16 +1083,19 @@ function quoteAmbient(action: AmbientSwapAction, amountIn: bigint, impact: Addre
 function quoteIntegral(action: IntegralSwapAction, amountIn: bigint, relayer: Address): QuoteCall {
   const to = relayer;
   const data = concatHex(
-    sel('quoteSell(address,address,uint256)'),
+    sel("quoteSell(address,address,uint256)"),
     encodeAbiParameters(
-      [{ type: 'address' }, { type: 'address' }, { type: 'uint256' }],
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
       [action.tokenIn, action.tokenOut, amountIn],
     ),
   );
   return {
-    to, data, decode: decodeUint256, toSauce: asUint256('static', to, data),
+    to,
+    data,
+    decode: decodeUint256,
+    toSauce: asUint256("static", to, data),
     // selector(4) + tokenIn(32) + tokenOut(32) = 68
-    toSauceDynamic: makeDynamic('static', to, data, 68, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("static", to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -1014,19 +1105,26 @@ function quoteIntegral(action: IntegralSwapAction, amountIn: bigint, relayer: Ad
  * estimateSwapIn(address dex_, bool swap0to1_, uint256 amountIn_, uint256 amountOutMin_)
  *   → uint256 amountOut_
  */
-function quoteFluidT1(action: FluidDexT1SwapAction, amountIn: bigint, resolver: Address): QuoteCall {
+function quoteFluidT1(
+  action: FluidDexT1SwapAction,
+  amountIn: bigint,
+  resolver: Address,
+): QuoteCall {
   const to = resolver;
   const data = concatHex(
-    sel('estimateSwapIn(address,bool,uint256,uint256)'),
+    sel("estimateSwapIn(address,bool,uint256,uint256)"),
     encodeAbiParameters(
-      [{ type: 'address' }, { type: 'bool' }, { type: 'uint256' }, { type: 'uint256' }],
+      [{ type: "address" }, { type: "bool" }, { type: "uint256" }, { type: "uint256" }],
       [action.pool, action.swap0to1, amountIn, 0n],
     ),
   );
   return {
-    to, data, decode: decodeUint256, toSauce: asUint256('call', to, data),
+    to,
+    data,
+    decode: decodeUint256,
+    toSauce: asUint256("call", to, data),
     // selector(4) + dex(32) + swap0to1(32) = 68
-    toSauceDynamic: makeDynamic('call', to, data, 68, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("call", to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -1038,22 +1136,26 @@ function quoteFluidT1(action: FluidDexT1SwapAction, amountIn: bigint, resolver: 
  * DexKey = (address token0, address token1, bytes32 salt)
  * Positive amountSpecified = exact input.
  */
-function quoteFluidLite(action: FluidDexLiteSwapAction, amountIn: bigint, resolver: Address): QuoteCall {
+function quoteFluidLite(
+  action: FluidDexLiteSwapAction,
+  amountIn: bigint,
+  resolver: Address,
+): QuoteCall {
   const to = resolver;
   const data = concatHex(
-    sel('estimateSwapSingle((address,address,bytes32),bool,int256)'),
+    sel("estimateSwapSingle((address,address,bytes32),bool,int256)"),
     encodeAbiParameters(
       [
         {
-          type: 'tuple',
+          type: "tuple",
           components: [
-            { type: 'address', name: 'token0' },
-            { type: 'address', name: 'token1' },
-            { type: 'bytes32', name: 'salt' },
+            { type: "address", name: "token0" },
+            { type: "address", name: "token1" },
+            { type: "bytes32", name: "salt" },
           ],
         },
-        { type: 'bool' },
-        { type: 'int256' },
+        { type: "bool" },
+        { type: "int256" },
       ],
       [
         { token0: action.token0, token1: action.token1, salt: action.salt },
@@ -1063,8 +1165,11 @@ function quoteFluidLite(action: FluidDexLiteSwapAction, amountIn: bigint, resolv
     ),
   );
   return {
-    to, data, decode: decodeUint256, toSauce: asUint256('call', to, data),
+    to,
+    data,
+    decode: decodeUint256,
+    toSauce: asUint256("call", to, data),
     // selector(4) + DexKey(3*32) + bool(32) = 132
-    toSauceDynamic: makeDynamic('call', to, data, 132, OUT_UINT256, firstWord),
+    toSauceDynamic: makeDynamic("call", to, data, 132, OUT_UINT256, firstWord),
   };
 }

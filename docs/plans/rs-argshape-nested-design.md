@@ -6,12 +6,12 @@ I have everything needed. Here is the design.
 
 ## 0. TL;DR
 
-The diagnosis in fire#20 is **correct and confirmed from source**. `Ty::Tuple` already carries field *names* and the entire read-side (named `.field` resolution, nested `Expr::Field`) already works. The gap is exactly two-fold:
+The diagnosis in fire#20 is **correct and confirmed from source**. `Ty::Tuple` already carries field _names_ and the entire read-side (named `.field` resolution, nested `Expr::Field`) already works. The gap is exactly two-fold:
 
-1. **`ArgShape`** (the public, caller-supplied descriptor) has no variant that can express a *named* or *nested* tuple — only flat, empty-named `ScalarTuple(n)`. So `cfg`'s real shape can't be supplied, and `cfg.tokenIn` / `cfg.chain.rfqRouter` have no names to resolve against. → **Fix is small (S).**
-2. **The entry decode** (`entry_collection_decode` + `element_words`) only handles a *flat* scalar tuple; a nested-tuple field is rejected by `require_decodable_entry_param` and would be mis-read (1 word per field) even if admitted. → **Fix is medium (M).**
+1. **`ArgShape`** (the public, caller-supplied descriptor) has no variant that can express a _named_ or _nested_ tuple — only flat, empty-named `ScalarTuple(n)`. So `cfg`'s real shape can't be supplied, and `cfg.tokenIn` / `cfg.chain.rfqRouter` have no names to resolve against. → **Fix is small (S).**
+2. **The entry decode** (`entry_collection_decode` + `element_words`) only handles a _flat_ scalar tuple; a nested-tuple field is rejected by `require_decodable_entry_param` and would be mis-read (1 word per field) even if admitted. → **Fix is medium (M).**
 
-And a **separate, independent third blocker** exists that the capstone couldn't reach: `rfqSigs: Tuple` is a **`bytes[]`** (array of *dynamically-sized* elements), which the RS entry decode explicitly does *not* implement yet (`Error::EntryParamShape` "not yet"). This is unrelated to nesting and is **L**. It will block the full recipe *right after* `cfg` is fixed — flag it for the acceptance probe.
+And a **separate, independent third blocker** exists that the capstone couldn't reach: `rfqSigs: Tuple` is a **`bytes[]`** (array of _dynamically-sized_ elements), which the RS entry decode explicitly does _not_ implement yet (`Error::EntryParamShape` "not yet"). This is unrelated to nesting and is **L**. It will block the full recipe _right after_ `cfg` is fixed — flag it for the acceptance probe.
 
 ---
 
@@ -24,7 +24,7 @@ And a **separate, independent third blocker** exists that the capstone couldn't 
 - A nested tuple field is dynamic (`Ty::is_dynamic`, `lower/mod.rs:1095-1097`), so `cfg.chain` lowers to `Expr::Field{…, is_dynamic:true}` (a Tuple descriptor) and `cfg.chain.fluidResolver` is `Field(Field(cfg, chain_pos), fluid_pos)` — a plain composition that already works.
 - Codegen for a nested `Expr::Tuple` already exists and is exercised: `object_literal` builds `Expr::Tuple(items)` where each item is `self.expr(&property.value)`, so a nested object-literal value yields a nested `Expr::Tuple` (`lower/expression.rs:188-226`). The EVM leaf cap that guards it is `MAX_EVM_STATIC_TUPLE_LEAVES = 2047` (`targets.rs:65`); `cfg` has **21 leaves** (14 top-level scalars + 7 under `chain`), far under it.
 
-So nothing on the type/read/codegen side needs changing. The read side is *waiting* for a nested named `Ty::Tuple` to be handed to it.
+So nothing on the type/read/codegen side needs changing. The read side is _waiting_ for a nested named `Ty::Tuple` to be handed to it.
 
 ### `ArgShape` is the wall
 
@@ -55,23 +55,23 @@ A named tuple, one level of nesting, every leaf a scalar (`Uint256`/`Address` ar
 
 **Top-level (15 fields):**
 
-| pos | name | leaf |
-|----|------|------|
-| 0 | `tokenIn` | Scalar |
-| 1 | `tokenOut` | Scalar |
-| 2 | `amountIn` | Scalar |
-| 3 | `recipient` | Scalar |
-| 4 | `quotedAmount` | Scalar |
-| 5 | `treasury` | Scalar |
-| 6 | `priceLimit` | Scalar |
-| 7 | `avgPriceLimit` | Scalar |
-| 8 | `directCount` | Scalar |
-| 9 | `minOut` | Scalar |
-| 10 | `directQlvCount` | Scalar |
-| 11 | `rungBudget` | Scalar |
-| 12 | `zeroForOne` | Scalar |
-| 13 | `electBudgetBps` | Scalar |
-| 14 | `chain` | **nested tuple (7 scalars)** |
+| pos | name             | leaf                         |
+| --- | ---------------- | ---------------------------- |
+| 0   | `tokenIn`        | Scalar                       |
+| 1   | `tokenOut`       | Scalar                       |
+| 2   | `amountIn`       | Scalar                       |
+| 3   | `recipient`      | Scalar                       |
+| 4   | `quotedAmount`   | Scalar                       |
+| 5   | `treasury`       | Scalar                       |
+| 6   | `priceLimit`     | Scalar                       |
+| 7   | `avgPriceLimit`  | Scalar                       |
+| 8   | `directCount`    | Scalar                       |
+| 9   | `minOut`         | Scalar                       |
+| 10  | `directQlvCount` | Scalar                       |
+| 11  | `rungBudget`     | Scalar                       |
+| 12  | `zeroForOne`     | Scalar                       |
+| 13  | `electBudgetBps` | Scalar                       |
+| 14  | `chain`          | **nested tuple (7 scalars)** |
 
 **`cfg.chain` (7 fields, all Scalar):** `fluidResolver`, `mentoBroker`, `rfqRouter`, `balancerV3Router`, `balancerV3Vault`, `balancerV2Vault`, `infinityVault`.
 
@@ -186,25 +186,26 @@ Each nested field becomes an `Expr::Tuple` — the exact same construct `object_
 
 1. **`to_ty` unit** (options.rs tests): `Struct(vec![("a",Scalar),("chain",Struct(vec![("b",Scalar)]))]).to_ty()` == `Ty::Tuple(vec![("a",Scalar(Number)),("chain",Tuple(vec![("b",Scalar(Number))]))])`. Red before the variant exists (won't compile); green after.
 2. **Red→green compile**: `main(cfg: Tuple){ return cfg.tokenIn; }` with `entry_arg_types = [Some(Struct([...,("chain",Struct([("rfqRouter",Scalar),...]))]))]`, then `return cfg.chain.rfqRouter;`. Before: fails at `to_ty` (can't express) / `EntryParamShape` (decode rejects nesting). After: compiles; assert the lowered prologue builds a nested `Expr::Tuple` for `chain` and that `cfg.chain.rfqRouter` is `Field(Field(local, 14), 2)`.
-3. **Offset correctness** (guards the §4b stride fix): a struct with scalars *before and after* the nested tuple — `Struct([("x",Scalar),("chain",Struct([("a",Scalar),("b",Scalar)])),("y",Scalar)])` — assert `x`→word 0, `chain.a`→word 1, `chain.b`→word 2, `y`→word 3 (a flat 1-word-per-field decode would put `y` at word 2). Ideally an execution vector (EVM v12) reading `y` and `chain.b` with distinct sentinel words.
+3. **Offset correctness** (guards the §4b stride fix): a struct with scalars _before and after_ the nested tuple — `Struct([("x",Scalar),("chain",Struct([("a",Scalar),("b",Scalar)])),("y",Scalar)])` — assert `x`→word 0, `chain.a`→word 1, `chain.b`→word 2, `y`→word 3 (a flat 1-word-per-field decode would put `y` at word 2). Ideally an execution vector (EVM v12) reading `y` and `chain.b` with distinct sentinel words.
 4. **`require_length` uses leaf count**: assert the Tuple arm's guard demands `base + 21*32` for the `cfg` shape, not `15*32`.
 5. **Nested-account still rejected**: `Struct([("chain",Struct([("acct",<Account>)]))])` → `AccountInEntryParam` (permanent), not `EntryParamShape`.
 6. **Negative-control byte-identity**: an existing `ArrayOf(ScalarTuple(n))` param compiles to byte-identical bytecode (the flat path is untouched).
 
 ---
 
-## 6. Is nested-`ArgShape` the *actual* next full-recipe blocker?
+## 6. Is nested-`ArgShape` the _actual_ next full-recipe blocker?
 
 **It is the next blocker, but it is not the last.** The recipe's `main` has **8 params** (recipe `:1215-1222`): `cfg, pools, netCache, routing, segs, qlv, rfqs, rfqSigs`. Feature census (destructuring ✅ done, `.catch` ✅ done; `0` arrow-const inline fns, `0` for-of, `0` switch, `29` plain `function` decls, `112` `.catch(`):
 
 - `pools, netCache, routing, segs, qlv, rfqs` → `ArrayOf(ScalarTuple(n))` — **flat, already supported**. Verified positional-scalar indexing (`pools[i][6]`, `routing[i][0]`, `netCache[cur]`→scalar reads).
 - `cfg` → **this design** (named + nested).
-- **`rfqSigs` → `bytes[]` — a distinct, still-open decode blocker.** Confirmed: `const rsig: bytes = rfqSigs[rfr];` (recipe `:6673`; also `:1221`). Its `ArgShape` is `ArrayOf(Bytes)` → `to_ty` = `Ty::Array{element: Ty::Bytes}` → `element_words(Bytes) = None` → `require_decodable_entry_param` rejects with `Error::EntryParamShape` "not yet" (`assembly.rs:1999`, doc at `mod.rs:164-175`, `assembly.rs:1949-1952`). **This is *not* fixed by the nesting work** — it needs the ABI-style **offset-table decode** for dynamically-sized array elements (each element's head word = a byte offset to its `bytes` data; one extra indirection per element), which the code comments explicitly describe as the unimplemented answer. **Effort L, independent PR.**
+- **`rfqSigs` → `bytes[]` — a distinct, still-open decode blocker.** Confirmed: `const rsig: bytes = rfqSigs[rfr];` (recipe `:6673`; also `:1221`). Its `ArgShape` is `ArrayOf(Bytes)` → `to_ty` = `Ty::Array{element: Ty::Bytes}` → `element_words(Bytes) = None` → `require_decodable_entry_param` rejects with `Error::EntryParamShape` "not yet" (`assembly.rs:1999`, doc at `mod.rs:164-175`, `assembly.rs:1949-1952`). **This is _not_ fixed by the nesting work** — it needs the ABI-style **offset-table decode** for dynamically-sized array elements (each element's head word = a byte offset to its `bytes` data; one extra indirection per element), which the code comments explicitly describe as the unimplemented answer. **Effort L, independent PR.**
 
-  Important: `rfqSigs` is decoded by the prologue **even when `HAS_RFQ` is off**. `HAS_RFQ` (recipe `:1002`) treeshakes the *reads* (byte-neutral), but `main`'s arity is fixed and `entry_prologue` decodes *every* parameter (`assembly.rs:1876-1877`), so `require_decodable_entry_param` runs on `rfqSigs` regardless. → **The full recipe cannot compile on RS until both `cfg` (nesting) AND `rfqSigs` (`bytes[]`) land.** The acceptance probe should expect `cfg` green to immediately surface an `EntryParamShape` on `rfqSigs`.
+  Important: `rfqSigs` is decoded by the prologue **even when `HAS_RFQ` is off**. `HAS_RFQ` (recipe `:1002`) treeshakes the _reads_ (byte-neutral), but `main`'s arity is fixed and `entry_prologue` decodes _every_ parameter (`assembly.rs:1876-1877`), so `require_decodable_entry_param` runs on `rfqSigs` regardless. → **The full recipe cannot compile on RS until both `cfg` (nesting) AND `rfqSigs` (`bytes[]`) land.** The acceptance probe should expect `cfg` green to immediately surface an `EntryParamShape` on `rfqSigs`.
 
 **Other things the full-recipe probe should watch (lower risk, not confirmed blockers here — out of scope for this read-only pass):**
-- **v12 SDUP/arg-prologue window.** RS's EVM target *is* the v12 Huff runtime. The recipe deliberately packed `cfg` into one arg "so main() stays at 6 params and the v12 arg-prologue SDUP window stays small" (recipe `:112-114`) — but the real signature is 8 params. Whether RS's arg-prologue has the same SDUP-depth ceiling the TS v12 backend hit is unverified; watch for a prologue/stack-depth error once decode is unblocked.
+
+- **v12 SDUP/arg-prologue window.** RS's EVM target _is_ the v12 Huff runtime. The recipe deliberately packed `cfg` into one arg "so main() stays at 6 params and the v12 arg-prologue SDUP window stays small" (recipe `:112-114`) — but the real signature is 8 params. Whether RS's arg-prologue has the same SDUP-depth ceiling the TS v12 backend hit is unverified; watch for a prologue/stack-depth error once decode is unblocked.
 - **Helper→helper calls** (29 `function` decls). RS resolves inter-function calls in `assembly` (`assign_global_ids`/`module_tables`) with no declaration-order restriction, so this should be fine (unlike the TS v1 backend), but it's the next-largest untested surface.
 - **Body size / treeshake with `defines`** (`HAS_RFQ`, `HAS_V2`, `HAS_KYBER`, `QUOTE_GAS`, …) — standard `optimize`+`defines` path (`options.rs:46-57`); large but not novel.
 

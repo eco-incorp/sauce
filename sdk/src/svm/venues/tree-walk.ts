@@ -45,7 +45,9 @@ export function makeTreeWalkBudget(slug: string, nodeCapacity: number): SpendHop
 
   return () => {
     if (remaining === 0) {
-      throw new Error(`${slug}: order-book tree walk exceeded ${hops} pointer hops — the account's tree is cyclic or corrupt`);
+      throw new Error(
+        `${slug}: order-book tree walk exceeded ${hops} pointer hops — the account's tree is cyclic or corrupt`,
+      );
     }
     remaining--;
   };

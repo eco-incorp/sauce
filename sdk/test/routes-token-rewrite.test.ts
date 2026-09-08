@@ -40,7 +40,10 @@ describe("rewriteTokenMembers", () => {
       `function main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`;
     const withDefine = `import { IERC20 } from "./artifacts/IERC20.json";\n${rewritten}`;
 
-    const a = compile(withDefine, { baseDirs: [...TOKEN_BASE_DIRS], defines: { USDC: BigInt(USDC) } });
+    const a = compile(withDefine, {
+      baseDirs: [...TOKEN_BASE_DIRS],
+      defines: { USDC: BigInt(USDC) },
+    });
     const b = compile(handWritten, { baseDirs: [...TOKEN_BASE_DIRS] });
     expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
   });
@@ -76,37 +79,34 @@ describe("rewriteTokenMembers", () => {
     const source = `function main() { USDC.transfer(${TO}, 5n); USDC.approve(${TO}, 5n); }`;
     const { source: out } = rewriteTokenMembers(source, new Set(["USDC"]));
     const withImport = `import { IERC20 } from "./artifacts/IERC20.json";\n${out}`;
-    const count = (withImport.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []).length;
+    const count = (
+      withImport.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []
+    ).length;
     expect(count).toBe(1);
   });
 });
 
 describe("openRoute: token member rewrite end to end", () => {
   it("compiles USDC.transfer(...) with options.tokenDefines and produces one cook() call", () => {
-    const built = openRoute(
-      "ethereum",
-      `USDC.transfer(${TO}, 5n);`,
-      { ...evmOptions(), tokenDefines: { USDC } },
-    ).reward(0n);
+    const built = openRoute("ethereum", `USDC.transfer(${TO}, 5n);`, {
+      ...evmOptions(),
+      tokenDefines: { USDC },
+    }).reward(0n);
     expect(built.intent.route.calls).toHaveLength(1);
   });
 
   it("an svm destination throws the named error", () => {
     expect(() =>
-      openRoute(
-        "solana",
-        `USDC.transfer(${TO}, 5n);`,
-        {
-          execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-          deadline: 2000n,
-          portal: PORTAL,
-          source: "base",
-          creator: "0x3333333333333333333333333333333333333333",
-          prover: "0x4444444444444444444444444444444444444444",
-          rewardDeadline: 1000n,
-          tokenDefines: { USDC },
-        },
-      ),
+      openRoute("solana", `USDC.transfer(${TO}, 5n);`, {
+        execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        deadline: 2000n,
+        portal: PORTAL,
+        source: "base",
+        creator: "0x3333333333333333333333333333333333333333",
+        prover: "0x4444444444444444444444444444444444444444",
+        rewardDeadline: 1000n,
+        tokenDefines: { USDC },
+      }),
     ).toThrow(/svm/i);
   });
 });
@@ -133,7 +133,12 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
 
   it("options.tokens still OVERRIDES the registry default, per-key", () => {
     const OTHER = "0x5555555555555555555555555555555555555555" as const;
-    const compiled = compileSauceRoute("base", `USDC.transfer(${TO}, 5n);`, { pot: POT }, { tokens: { USDC: OTHER } });
+    const compiled = compileSauceRoute(
+      "base",
+      `USDC.transfer(${TO}, 5n);`,
+      { pot: POT },
+      { tokens: { USDC: OTHER } },
+    );
     const overridden = compile(
       `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main() { IERC20.at(${OTHER}n).transfer(${TO}, 5n); }`,
       { baseDirs: [...TOKEN_BASE_DIRS] },
@@ -144,7 +149,9 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
       `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`,
       { baseDirs: [...TOKEN_BASE_DIRS] },
     );
-    expect(Array.from(compiled.compiled.bytecode[0]!)).not.toEqual(Array.from(registryDefault.bytecode[0]!));
+    expect(Array.from(compiled.compiled.bytecode[0]!)).not.toEqual(
+      Array.from(registryDefault.bytecode[0]!),
+    );
   });
 
   it("an unregistered chain (no registry rows, no tokenDefines) leaves a bare USDC untouched -- the base compiler's own error", () => {
@@ -176,7 +183,9 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     const source = `function main() { return ${holder}.USDC; }`;
     const { source: out, balanceSites } = rewriteTokenMembers(source, tokens);
     expect(balanceSites).toBe(1);
-    expect(out).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(${BigInt(holder).toString()}n)`);
+    expect(out).toContain(
+      `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(${BigInt(holder).toString()}n)`,
+    );
   });
 
   it("an n-suffixed hex-address-literal holder is accepted identically", () => {
@@ -207,9 +216,12 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     expect(sugar.rewrote).toBe(true);
     expect(u4.rewrote).toBe(true);
 
-    const sugarCompiled = compile(`import { IERC20 } from "./artifacts/IERC20.json";\n${sugar.source}`, {
-      baseDirs: [...TOKEN_BASE_DIRS],
-    });
+    const sugarCompiled = compile(
+      `import { IERC20 } from "./artifacts/IERC20.json";\n${sugar.source}`,
+      {
+        baseDirs: [...TOKEN_BASE_DIRS],
+      },
+    );
     const u4Compiled = compile(`import { IERC20 } from "./artifacts/IERC20.json";\n${u4.source}`, {
       baseDirs: [...TOKEN_BASE_DIRS],
       defines: { USDC: BigInt(USDC) },
@@ -219,7 +231,9 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
 
   it("THE DECISIVE STEP (a): self.USDC for a real chain rewrites to IERC20.at(<real Base USDC>n).balanceOf(ctx.self()) and compiles", () => {
     const compiled = compileSauceRoute("base", `return self.USDC;`, { pot: POT });
-    expect(compiled.source).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`);
+    expect(compiled.source).toContain(
+      `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`,
+    );
     expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -322,8 +336,12 @@ describe("composition: token pass + protocol-accessor pass in ONE compile", () =
       { pot: POT },
     );
     expect(compiled.source).toContain("IUniswapV4_UniversalRouter.at(");
-    expect(compiled.source).toContain(`IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`);
-    const count = (compiled.source.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []).length;
+    expect(compiled.source).toContain(
+      `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`,
+    );
+    const count = (
+      compiled.source.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []
+    ).length;
     expect(count).toBe(1);
     expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
@@ -347,11 +365,10 @@ describe("svm: the token/balance-sugar pass never rewrites for an svm destinatio
 
   it("with accessors default ON, the pre-existing self-sugar rewrite fires and the existing svm guard throws -- a safe, named failure, never a silent drop", () => {
     expect(() =>
-      compileSauceRoute(
-        "solana",
-        `return self.USDC;`,
-        { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-      ),
+      compileSauceRoute("solana", `return self.USDC;`, {
+        buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        accounts: [],
+      }),
     ).toThrow(/svm/i);
   });
 

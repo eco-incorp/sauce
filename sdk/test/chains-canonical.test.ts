@@ -54,7 +54,9 @@ describe("canonical chain registry: structural invariants", () => {
       for (const k of keys) {
         const owner = seen.get(k);
         if (owner !== undefined && owner !== c.slug) {
-          throw new Error(`alias collision: normalized key '${k}' claimed by both '${owner}' and '${c.slug}'`);
+          throw new Error(
+            `alias collision: normalized key '${k}' claimed by both '${owner}' and '${c.slug}'`,
+          );
         }
         seen.set(k, c.slug);
       }
@@ -193,7 +195,11 @@ describe("canonical chain registry: non-regression of existing exports", () => {
   it("getAllChainIds is unaffected and matches `chains` keys", () => {
     const ids = getAllChainIds();
     expect(ids.length).toBe(33);
-    expect(ids.sort((a, b) => a - b)).toEqual(Object.keys(chains).map(Number).sort((a, b) => a - b));
+    expect(ids.sort((a, b) => a - b)).toEqual(
+      Object.keys(chains)
+        .map(Number)
+        .sort((a, b) => a - b),
+    );
   });
 
   it("getChain still returns the same data for a known chain", () => {

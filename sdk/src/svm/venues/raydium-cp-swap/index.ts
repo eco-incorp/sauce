@@ -14,10 +14,10 @@
  * < 2^128 — far below both the engine's 256-bit wrap point and Number/bigint
  * precision concerns, matching the program's own u128 curve math.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { ceilDiv, readUintLE } from '../math.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { ceilDiv, readUintLE } from "../math.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -26,13 +26,13 @@ import type {
   SwapUser,
   VenueAccount,
   VenueSwap,
-} from '../types.js';
+} from "../types.js";
 
-const SLUG = 'raydium-cp-swap';
-const PROGRAM_ID = 'CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C';
+const SLUG = "raydium-cp-swap";
+const PROGRAM_ID = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C";
 /** PDA ["vault_and_lp_mint_auth_seed"] — vault and lp-mint authority. */
-const AUTHORITY = 'GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL';
-const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+const AUTHORITY = "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL";
+const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 
 // sha256("account:PoolState")[0..8] / sha256("account:AmmConfig")[0..8].
 const POOL_STATE_DISCRIMINATOR = [0xf7, 0xed, 0xe3, 0xf5, 0xd7, 0xc3, 0xde, 0x46];
@@ -102,7 +102,8 @@ export interface RaydiumCpSwapPoolConfig extends PoolConfig {
 }
 
 function cpConfig(cfg: PoolConfig): RaydiumCpSwapPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`raydium-cp-swap adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`raydium-cp-swap adapter got a '${cfg.venue}' pool config`);
   return cfg as RaydiumCpSwapPoolConfig;
 }
 
@@ -169,43 +170,56 @@ function creatorFeeOnInput(cfg: RaydiumCpSwapPoolConfig): boolean {
 
 export const raydiumCpSwap = {
   slug: SLUG,
-  kind: 'constant-product',
+  kind: "constant-product",
   programId: address(PROGRAM_ID),
 
   async fetchPoolConfig(load: AccountLoader, pool: Address): Promise<RaydiumCpSwapPoolConfig> {
     const codec = getAddressCodec();
-    const pubkey = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+    const pubkey = (data: Uint8Array, offset: number): Address =>
+      codec.decode(data.subarray(offset, offset + 32));
 
     const data = await load(pool);
     if (data === null) throw new Error(`raydium-cp-swap pool ${pool} not found`);
     if (data.length !== POOL_STATE_SIZE) {
-      throw new Error(`raydium-cp-swap pool ${pool} data is ${data.length} bytes, expected ${POOL_STATE_SIZE}`);
+      throw new Error(
+        `raydium-cp-swap pool ${pool} data is ${data.length} bytes, expected ${POOL_STATE_SIZE}`,
+      );
     }
     for (let i = 0; i < 8; i++) {
       if (data[i] !== POOL_STATE_DISCRIMINATOR[i]) {
-        throw new Error(`raydium-cp-swap pool ${pool} has a wrong discriminator (not a PoolState account)`);
+        throw new Error(
+          `raydium-cp-swap pool ${pool} has a wrong discriminator (not a PoolState account)`,
+        );
       }
     }
 
     const status = Number(readUintLE(data, POOL_OFFSETS.status, 1));
     if ((status & 4) !== 0) {
-      throw new Error(`raydium-cp-swap pool ${pool} swap is disabled (status ${status} has bit 2 set)`);
+      throw new Error(
+        `raydium-cp-swap pool ${pool} swap is disabled (status ${status} has bit 2 set)`,
+      );
     }
     const openTime = readUintLE(data, POOL_OFFSETS.openTime, 8);
     const now = BigInt(Math.floor(Date.now() / 1000));
     if (now < openTime) {
-      throw new Error(`raydium-cp-swap pool ${pool} is not open yet (open_time ${openTime}, now ${now})`);
+      throw new Error(
+        `raydium-cp-swap pool ${pool} is not open yet (open_time ${openTime}, now ${now})`,
+      );
     }
 
     const ammConfig = pubkey(data, POOL_OFFSETS.ammConfig);
     const configData = await load(ammConfig);
     if (configData === null) throw new Error(`raydium-cp-swap amm config ${ammConfig} not found`);
     if (configData.length !== AMM_CONFIG_SIZE) {
-      throw new Error(`raydium-cp-swap amm config ${ammConfig} data is ${configData.length} bytes, expected ${AMM_CONFIG_SIZE}`);
+      throw new Error(
+        `raydium-cp-swap amm config ${ammConfig} data is ${configData.length} bytes, expected ${AMM_CONFIG_SIZE}`,
+      );
     }
     for (let i = 0; i < 8; i++) {
       if (configData[i] !== AMM_CONFIG_DISCRIMINATOR[i]) {
-        throw new Error(`raydium-cp-swap amm config ${ammConfig} has a wrong discriminator (not an AmmConfig account)`);
+        throw new Error(
+          `raydium-cp-swap amm config ${ammConfig} has a wrong discriminator (not an AmmConfig account)`,
+        );
       }
     }
 
@@ -240,7 +254,9 @@ export const raydiumCpSwap = {
       const vaultData = vaultDatas[vi]!;
       if (vaultData === null) throw new Error(`raydium-cp-swap vault ${vault} not found`);
       if (vaultData.length < VAULT_AMOUNT_OFFSET + 8) {
-        throw new Error(`raydium-cp-swap vault ${vault} data is ${vaultData.length} bytes, expected an SPL token account`);
+        throw new Error(
+          `raydium-cp-swap vault ${vault} data is ${vaultData.length} bytes, expected an SPL token account`,
+        );
       }
       const vaultMint = pubkey(vaultData, VAULT_MINT_OFFSET);
       if (vaultMint !== mint) {
@@ -251,20 +267,24 @@ export const raydiumCpSwap = {
     // Token-2022 transfer-fee gate: a transfer-fee extension on either mint
     // changes wire amounts on that leg, so the classic quote formula is wrong.
     const t22Entries = [
-      [cfg.token0Program, cfg.token0Mint, 'token_0'],
-      [cfg.token1Program, cfg.token1Mint, 'token_1'],
+      [cfg.token0Program, cfg.token0Mint, "token_0"],
+      [cfg.token1Program, cfg.token1Mint, "token_1"],
     ] as const;
     // Only Token-2022 mints are actually read; a legacy (Tokenkeg) leg issues no
     // load, so pre-loading never adds an RPC — it only coalesces the two-T22 case.
     const t22MintDatas = await Promise.all(
-      t22Entries.map(([program, mint]) => (program === TOKEN_2022_PROGRAM ? load(mint) : Promise.resolve(null))),
+      t22Entries.map(([program, mint]) =>
+        program === TOKEN_2022_PROGRAM ? load(mint) : Promise.resolve(null),
+      ),
     );
     for (let ti = 0; ti < t22Entries.length; ti++) {
       const [program, mint, side] = t22Entries[ti]!;
       if (program !== TOKEN_2022_PROGRAM) continue;
       const mintData = t22MintDatas[ti]!;
       if (mintData === null) {
-        throw new Error(`raydium-cp-swap ${side} mint ${mint} is token-2022 but could not be loaded to check transfer-fee extensions`);
+        throw new Error(
+          `raydium-cp-swap ${side} mint ${mint} is token-2022 but could not be loaded to check transfer-fee extensions`,
+        );
       }
       // Un-routable (blocking) extensions self-drop: a NonTransferable or
       // default-frozen mint cannot move through a plain transferChecked.
@@ -272,7 +292,9 @@ export const raydiumCpSwap = {
       // blocking, so a zero-fee/advisory-only T22 mint still routes.
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`raydium-cp-swap ${side} mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `raydium-cp-swap ${side} mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
       if (hasTransferFeeExtension(mintData)) {
         // TODO(t22-fee-netting): raydium-cp-swap's program deducts the input
@@ -285,7 +307,9 @@ export const raydiumCpSwap = {
         // to pick the active fee schedule — out of scope for this pass. Keep
         // the safe self-limiting rejection rather than risk a favourable
         // mis-quote.
-        throw new Error(`raydium-cp-swap ${side} mint ${mint} has a token-2022 transfer-fee extension (wire amounts diverge from the quote)`);
+        throw new Error(
+          `raydium-cp-swap ${side} mint ${mint} has a token-2022 transfer-fee extension (wire amounts diverge from the quote)`,
+        );
       }
     }
 
@@ -329,9 +353,10 @@ export const raydiumCpSwap = {
     // constants, so the fee-side branch is resolved at generation time.
     const tradeRate = `svm.sload(${config}, ${CONFIG_OFFSETS.tradeFeeRate}, 8).toLe()`;
     const creatorRate = `svm.sload(${config}, ${CONFIG_OFFSETS.creatorFeeRate}, 8).toLe()`;
-    const ceil = (product: string) => `(${product} + ${FEE_RATE_DENOMINATOR - 1n}) / ${FEE_RATE_DENOMINATOR}`;
+    const ceil = (product: string) =>
+      `(${product} + ${FEE_RATE_DENOMINATOR - 1n}) / ${FEE_RATE_DENOMINATOR}`;
 
-    const lines = [reserve(input, 'rin'), reserve(output, 'rout')];
+    const lines = [reserve(input, "rin"), reserve(output, "rout")];
     if (creatorFeeOnInput(cfg)) {
       // total_fee = ceil(amount_in * (trade_fee_rate + creator_fee_rate_eff) / 1e6), then x*y curve.
       const rate = cfg.enableCreatorFee ? `(${tradeRate} + ${creatorRate})` : tradeRate;
@@ -346,10 +371,10 @@ export const raydiumCpSwap = {
         `  const fee${i} = ${ceil(`${amountIn} * ${tradeRate}`)};`,
         `  const net${i} = ${amountIn} - fee${i};`,
         `  const os${i} = Math.mulDiv(net${i}, rout${i}, rin${i} + net${i});`,
-        `  const q${i} = os${i} - ${cfg.enableCreatorFee ? `(${ceil(`os${i} * ${creatorRate}`)})` : '0'};`,
+        `  const q${i} = os${i} - ${cfg.enableCreatorFee ? `(${ceil(`os${i} * ${creatorRate}`)})` : "0"};`,
       );
     }
-    return lines.join('\n');
+    return lines.join("\n");
   },
 
   buildSwap(base: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
@@ -360,7 +385,11 @@ export const raydiumCpSwap = {
     // swap_base_input: disc(8) + amount_in u64 LE + minimum_amount_out u64 LE.
     // min_out is 1 — the recipe's post-swap outAta delta check enforces the
     // real bound (and 1 keeps the no-explicit-zero-output-check quirk closed).
-    const data = Uint8Array.from([...SWAP_BASE_INPUT_DISCRIMINATOR, ...u64le(amountIn), ...u64le(1n)]);
+    const data = Uint8Array.from([
+      ...SWAP_BASE_INPUT_DISCRIMINATOR,
+      ...u64le(amountIn),
+      ...u64le(1n),
+    ]);
 
     const fixed = (address: Address, writable?: boolean): VenueAccount =>
       writable ? { ref: address, address, writable: true } : { ref: address, address };
@@ -391,7 +420,8 @@ export const raydiumCpSwap = {
 
     const bytes = (address: Address): Uint8Array => {
       const data = state[address];
-      if (data === undefined) throw new Error(`raydium-cp-swap referenceQuote is missing account ${address}`);
+      if (data === undefined)
+        throw new Error(`raydium-cp-swap referenceQuote is missing account ${address}`);
       return data;
     };
     const pool = bytes(cfg.pool);
@@ -401,31 +431,53 @@ export const raydiumCpSwap = {
     // state snapshot, not from the (possibly older) fetched config.
     const status = Number(readUintLE(pool, POOL_OFFSETS.status, 1));
     if ((status & 4) !== 0) {
-      throw new Error(`raydium-cp-swap pool ${cfg.pool} swap is disabled (status ${status} has bit 2 set)`);
+      throw new Error(
+        `raydium-cp-swap pool ${cfg.pool} swap is disabled (status ${status} has bit 2 set)`,
+      );
     }
     const openTime = readUintLE(pool, POOL_OFFSETS.openTime, 8);
     if (now < openTime) {
-      throw new Error(`raydium-cp-swap pool ${cfg.pool} is not open yet (open_time ${openTime}, now ${now})`);
+      throw new Error(
+        `raydium-cp-swap pool ${cfg.pool} is not open yet (open_time ${openTime}, now ${now})`,
+      );
     }
 
     // reserve_side = vault.amount - protocol_fees - fund_fees - creator_fees;
     // the program errors when a vault holds less than its accrued fees.
-    const reserve = (vault: Address, protocolFees: number, fundFees: number, creatorFees: number): bigint => {
+    const reserve = (
+      vault: Address,
+      protocolFees: number,
+      fundFees: number,
+      creatorFees: number,
+    ): bigint => {
       const value =
         readUintLE(bytes(vault), VAULT_AMOUNT_OFFSET, 8) -
         readUintLE(pool, protocolFees, 8) -
         readUintLE(pool, fundFees, 8) -
         readUintLE(pool, creatorFees, 8);
-      if (value < 0n) throw new Error(`raydium-cp-swap vault ${vault} balance is below its accrued fees`);
+      if (value < 0n)
+        throw new Error(`raydium-cp-swap vault ${vault} balance is below its accrued fees`);
       return value;
     };
-    const r0 = reserve(cfg.token0Vault, POOL_OFFSETS.protocolFeesToken0, POOL_OFFSETS.fundFeesToken0, POOL_OFFSETS.creatorFeesToken0);
-    const r1 = reserve(cfg.token1Vault, POOL_OFFSETS.protocolFeesToken1, POOL_OFFSETS.fundFeesToken1, POOL_OFFSETS.creatorFeesToken1);
+    const r0 = reserve(
+      cfg.token0Vault,
+      POOL_OFFSETS.protocolFeesToken0,
+      POOL_OFFSETS.fundFeesToken0,
+      POOL_OFFSETS.creatorFeesToken0,
+    );
+    const r1 = reserve(
+      cfg.token1Vault,
+      POOL_OFFSETS.protocolFeesToken1,
+      POOL_OFFSETS.fundFeesToken1,
+      POOL_OFFSETS.creatorFeesToken1,
+    );
     const [reserveIn, reserveOut] = cfg.inputIsToken0 ? [r0, r1] : [r1, r0];
 
     const tradeFeeRate = readUintLE(config, CONFIG_OFFSETS.tradeFeeRate, 8);
     const enableCreatorFee = readUintLE(pool, POOL_OFFSETS.enableCreatorFee, 1) !== 0n;
-    const creatorFeeRate = enableCreatorFee ? readUintLE(config, CONFIG_OFFSETS.creatorFeeRate, 8) : 0n;
+    const creatorFeeRate = enableCreatorFee
+      ? readUintLE(config, CONFIG_OFFSETS.creatorFeeRate, 8)
+      : 0n;
     const creatorFeeOn = Number(readUintLE(pool, POOL_OFFSETS.creatorFeeOn, 1));
     const feeOnInput =
       creatorFeeOn === 0 ||

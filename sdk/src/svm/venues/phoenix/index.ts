@@ -203,18 +203,18 @@
  * instruction bytes — `the consuming app SVM solver entry` sets it only for `phoenix`
  * slots.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountBytesMap, AccountLoader, PoolConfig } from '../types.js';
-import { makeTreeWalkBudget } from '../tree-walk.js';
-import type { SpendHop } from '../tree-walk.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountBytesMap, AccountLoader, PoolConfig } from "../types.js";
+import { makeTreeWalkBudget } from "../tree-walk.js";
+import type { SpendHop } from "../tree-walk.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'phoenix';
+const SLUG = "phoenix";
 
-export const PHOENIX_PROGRAM_ID = address('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const PHOENIX_PROGRAM_ID = address("PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** MarketHeader — accounts.rs. Fixed 576-byte header preceding the FIFOMarket body. */
 const HEADER_SIZE = 576;
@@ -281,7 +281,7 @@ export interface PhoenixWindow {
 export interface PhoenixPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'baseIn' (default) sells base for quote (matches BIDS); 'quoteIn' buys base with quote (matches ASKS). */
-  direction: 'baseIn' | 'quoteIn';
+  direction: "baseIn" | "quoteIn";
   baseMint: Address;
   quoteMint: Address;
   baseVault: Address;
@@ -304,12 +304,12 @@ export interface PhoenixPoolConfig extends PoolConfig {
 
 /** The direction's window (the ladder adapter and the orchestrator gate read through this). */
 export function phoenixWindowFor(cfg: PhoenixPoolConfig): PhoenixWindow {
-  return cfg.direction === 'baseIn' ? cfg.windows.baseIn : cfg.windows.quoteIn;
+  return cfg.direction === "baseIn" ? cfg.windows.baseIn : cfg.windows.quoteIn;
 }
 
 /** nodesBase for the direction's book side ('baseIn' matches bids, 'quoteIn' matches asks). */
 function nodesBaseFor(cfg: PhoenixPoolConfig): number {
-  return cfg.direction === 'baseIn' ? BIDS_NODES_BASE : cfg.asksNodesBase;
+  return cfg.direction === "baseIn" ? BIDS_NODES_BASE : cfg.asksNodesBase;
 }
 
 function readU64(data: Uint8Array, offset: number): bigint {
@@ -318,7 +318,9 @@ function readU64(data: Uint8Array, offset: number): bigint {
   return v;
 }
 function readU32(data: Uint8Array, offset: number): number {
-  return data[offset]! | (data[offset + 1]! << 8) | (data[offset + 2]! << 16) | (data[offset + 3]! << 24);
+  return (
+    data[offset]! | (data[offset + 1]! << 8) | (data[offset + 2]! << 16) | (data[offset + 3]! << 24)
+  );
 }
 
 function hasDiscriminant(data: Uint8Array): boolean {
@@ -335,9 +337,12 @@ function hasDiscriminant(data: Uint8Array): boolean {
 function nodeAbs(nodesBase: number, nodeIndex: number): number {
   return nodesBase + (nodeIndex - 1) * NODE_SIZE;
 }
-const regLeft = (data: Uint8Array, nodesBase: number, i: number): number => readU32(data, nodeAbs(nodesBase, i) + 0);
-const regRight = (data: Uint8Array, nodesBase: number, i: number): number => readU32(data, nodeAbs(nodesBase, i) + 4);
-const regParent = (data: Uint8Array, nodesBase: number, i: number): number => readU32(data, nodeAbs(nodesBase, i) + 8);
+const regLeft = (data: Uint8Array, nodesBase: number, i: number): number =>
+  readU32(data, nodeAbs(nodesBase, i) + 0);
+const regRight = (data: Uint8Array, nodesBase: number, i: number): number =>
+  readU32(data, nodeAbs(nodesBase, i) + 4);
+const regParent = (data: Uint8Array, nodesBase: number, i: number): number =>
+  readU32(data, nodeAbs(nodesBase, i) + 8);
 
 function findMin(data: Uint8Array, nodesBase: number, idx: number, spendHop: SpendHop): number {
   let cur = idx;
@@ -372,7 +377,12 @@ function successor(data: Uint8Array, nodesBase: number, idx: number, spendHop: S
  * `spendHop` is the whole-walk iteration budget — a market whose tree
  * registers cycle exhausts it and throws rather than spinning.
  */
-function resolveWindow(data: Uint8Array, root: number, nodesBase: number, spendHop: SpendHop): PhoenixWindow {
+function resolveWindow(
+  data: Uint8Array,
+  root: number,
+  nodesBase: number,
+  spendHop: SpendHop,
+): PhoenixWindow {
   const orders: PhoenixOrder[] = [];
   if (root === 0) return { orders };
   let cur = findMin(data, nodesBase, root, spendHop);
@@ -397,20 +407,29 @@ function resolveWindow(data: Uint8Array, root: number, nodesBase: number, spendH
  * mirroring manifest's identical gate) and freeze both directions' top-of-book
  * order windows. Read-only against the loader.
  */
-export async function fetchPhoenixConfig(load: AccountLoader, pool: Address): Promise<PhoenixPoolConfig> {
+export async function fetchPhoenixConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<PhoenixPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: market ${pool} not found`);
   if (data.length < HEADER_SIZE + 256 + 48) {
-    throw new Error(`${SLUG}: market ${pool} has ${data.length} bytes, too small for a MarketHeader + FIFOMarket body`);
+    throw new Error(
+      `${SLUG}: market ${pool} has ${data.length} bytes, too small for a MarketHeader + FIFOMarket body`,
+    );
   }
   if (!hasDiscriminant(data)) {
-    throw new Error(`${SLUG}: market ${pool} has a foreign discriminant (not a Phoenix MarketHeader account)`);
+    throw new Error(
+      `${SLUG}: market ${pool} has a foreign discriminant (not a Phoenix MarketHeader account)`,
+    );
   }
 
   const bidsSize = readU64(data, OFF_BIDS_SIZE);
   const asksSize = readU64(data, OFF_ASKS_SIZE);
   if (bidsSize <= 0n || asksSize <= 0n) {
-    throw new Error(`${SLUG}: market ${pool} has non-positive book capacity (bids ${bidsSize}, asks ${asksSize})`);
+    throw new Error(
+      `${SLUG}: market ${pool} has non-positive book capacity (bids ${bidsSize}, asks ${asksSize})`,
+    );
   }
   const bidsTreeSize = 32 + Number(bidsSize) * NODE_SIZE;
   const asksTreeRoot = BIDS_TREE_ROOT + bidsTreeSize;
@@ -434,11 +453,15 @@ export async function fetchPhoenixConfig(load: AccountLoader, pool: Address): Pr
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
@@ -447,12 +470,15 @@ export async function fetchPhoenixConfig(load: AccountLoader, pool: Address): Pr
   // ONE budget for both sides, sized on how many nodes the account can PHYSICALLY
   // hold — never on the declared bids_size/asks_size, which a corrupt account
   // sets freely.
-  const spendHop = makeTreeWalkBudget(SLUG, Math.floor((data.length - BIDS_NODES_BASE) / NODE_SIZE));
+  const spendHop = makeTreeWalkBudget(
+    SLUG,
+    Math.floor((data.length - BIDS_NODES_BASE) / NODE_SIZE),
+  );
 
   return {
     venue: SLUG,
     pool,
-    direction: 'baseIn',
+    direction: "baseIn",
     baseMint,
     quoteMint,
     baseVault: decodeAddress(data, OFF_BASE_VAULT),
@@ -480,11 +506,11 @@ function decodeAddress(data: Uint8Array, offset: number): Address {
   return b58EncodeAddress(data.subarray(offset, offset + 32));
 }
 
-const B58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function b58EncodeAddress(bytes: Uint8Array): Address {
   let num = 0n;
   for (const b of bytes) num = (num << 8n) | BigInt(b);
-  let out = '';
+  let out = "";
   while (num > 0n) {
     const rem = num % 58n;
     num /= 58n;
@@ -495,7 +521,7 @@ function b58EncodeAddress(bytes: Uint8Array): Address {
     if (b !== 0) break;
     leadingZeros++;
   }
-  return address('1'.repeat(leadingZeros) + out);
+  return address("1".repeat(leadingZeros) + out);
 }
 
 /** Family facade for the recipe orchestrator (ladder-only — no v1 adapter). */
@@ -519,7 +545,8 @@ interface PhoenixLevel {
 }
 
 function phoenixConfig(cfg: PoolConfig): PhoenixPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as PhoenixPoolConfig;
 }
 
@@ -533,14 +560,22 @@ function readLevels(
     const base = nodeAbs(nodesBase, order.nodeIndex);
     const seqLive = readU64(market, base + NODE_OFF_SEQ);
     if (seqLive !== order.orderSequenceNumber) break; // identity mismatch — stop the walk
-    levels.push({ price: readU64(market, base + NODE_OFF_PRICE), size: readU64(market, base + NODE_OFF_SIZE) });
+    levels.push({
+      price: readU64(market, base + NODE_OFF_PRICE),
+      size: readU64(market, base + NODE_OFF_SIZE),
+    });
   }
   return levels;
 }
 
-function effectiveLevels(cfg: PhoenixPoolConfig, state: AccountBytesMap, params: readonly bigint[]): PhoenixLevel[] {
+function effectiveLevels(
+  cfg: PhoenixPoolConfig,
+  state: AccountBytesMap,
+  params: readonly bigint[],
+): PhoenixLevel[] {
   const market = state[cfg.pool];
-  if (market === undefined) throw new Error(`${SLUG} ladder reference is missing account ${cfg.pool}`);
+  if (market === undefined)
+    throw new Error(`${SLUG} ladder reference is missing account ${cfg.pool}`);
   const nb = Number(params[0] ?? 0n);
   const orders: PhoenixOrder[] = [];
   for (let k = 0; k < nb && k < PHOENIX_MAX_ORDERS; k++) {
@@ -572,10 +607,11 @@ export function referenceQuote(
 ): (x: bigint) => bigint {
   const cfg = phoenixConfig(base);
   const market = state[cfg.pool];
-  if (market === undefined) throw new Error(`${SLUG} ladder reference is missing account ${cfg.pool}`);
+  if (market === undefined)
+    throw new Error(`${SLUG} ladder reference is missing account ${cfg.pool}`);
   const feeBps = readU64(market, OFF_TAKER_FEE_BPS);
   const levels = effectiveLevels(cfg, state, params);
-  const baseIn = cfg.direction === 'baseIn';
+  const baseIn = cfg.direction === "baseIn";
   const blpbu = cfg.baseLotsPerBaseUnit;
   const T = cfg.tickSizeInQuoteLotsPerBaseUnit;
 
@@ -621,10 +657,11 @@ export function referenceCapacities(
 ): (grid: readonly bigint[]) => bigint[] {
   const cfg = phoenixConfig(base);
   const market = state[cfg.pool];
-  if (market === undefined) throw new Error(`${SLUG} ladder reference is missing account ${cfg.pool}`);
+  if (market === undefined)
+    throw new Error(`${SLUG} ladder reference is missing account ${cfg.pool}`);
   const feeBps = readU64(market, OFF_TAKER_FEE_BPS);
   const levels = effectiveLevels(cfg, state, params);
-  const baseIn = cfg.direction === 'baseIn';
+  const baseIn = cfg.direction === "baseIn";
   const blpbu = cfg.baseLotsPerBaseUnit;
   const T = cfg.tickSizeInQuoteLotsPerBaseUnit;
 
@@ -660,11 +697,14 @@ export function referenceCapacities(
 }
 
 /** Depth for the relative filter: the shipped top-of-book aggregate (atoms). */
-export function depthReserves(base: PoolConfig, state: AccountBytesMap): { reserveIn: bigint; reserveOut: bigint } {
+export function depthReserves(
+  base: PoolConfig,
+  state: AccountBytesMap,
+): { reserveIn: bigint; reserveOut: bigint } {
   const cfg = phoenixConfig(base);
   const market = state[cfg.pool];
   if (market === undefined) throw new Error(`${SLUG} ladder depth is missing account ${cfg.pool}`);
-  const baseIn = cfg.direction === 'baseIn';
+  const baseIn = cfg.direction === "baseIn";
   const levels = readLevels(market, phoenixWindowFor(cfg).orders, nodesBaseFor(cfg));
   const T = cfg.tickSizeInQuoteLotsPerBaseUnit;
   let reserveInLots = 0n;
@@ -683,4 +723,3 @@ export function depthReserves(base: PoolConfig, state: AccountBytesMap): { reser
     ? { reserveIn: reserveInLots * cfg.baseLotSize, reserveOut: reserveOutLots * cfg.quoteLotSize }
     : { reserveIn: reserveInLots * cfg.quoteLotSize, reserveOut: reserveOutLots * cfg.baseLotSize };
 }
-

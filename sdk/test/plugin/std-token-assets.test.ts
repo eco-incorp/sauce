@@ -39,6 +39,8 @@ describe("@sauce/token: the published dist/std/token payload", () => {
   it("carries both engine arms and the ABI — the module is unusable on one target without them", () => {
     // Spelled out as well as compared, so deleting a source file (which the equality above would
     // happily accept, both sides shrinking together) still fails here.
-    expect(listing("dist")).toEqual(expect.arrayContaining(["erc20.abi.json", "package.json", "token.evm.js", "token.svm.js"]));
+    expect(listing("dist")).toEqual(
+      expect.arrayContaining(["erc20.abi.json", "package.json", "token.evm.js", "token.svm.js"]),
+    );
   });
 });

@@ -6,6 +6,7 @@ The core NEW compiler feature of the plugin epic. Companion: `ambient-import-cha
 so it dispatches without re-investigation.
 
 ## What ambient means (settled)
+
 "Ambient" = the same resolution + registration a normal `import { x } from "./mod"` does, but seeded
 from an **option list** instead of `ImportDeclaration` nodes, and **broadcast into every module's
 resolution tables** so an un-imported program body can name the exports. An OPTION, not new syntax
@@ -14,6 +15,7 @@ grammar). Trigger: `CompileOptions.ambient: Vec<String>` (specifiers, each resol
 bare/relative import is), surfaced on wasm next to `contracts`/`defines`.
 
 ## Facts confirmed against the RS code (crates/sauce-core/src/lower/assembly.rs)
+
 - **Imported consts ARE already cross-module.** `import { FEE }` draws an exported module-scope const:
   "an import binds one namespace: exported functions then exported bindings" (`:1459-1460`);
   `module_values` fills `values.exported` for an exported const/binding (`:1179-1200`); test
@@ -32,6 +34,7 @@ bare/relative import is), surfaced on wasm next to `contracts`/`defines`.
   (`:550`) maps a bare specifier. Ambient specifiers must be added as EXTRA graph roots.
 
 ## Mechanism — two broadcasts + graph roots
+
 1. **Ambient specifiers → extra module-graph roots.** In `program()`/`load_graph`, after seeding from
    the entry's `ImportDeclaration`s, ALSO seed from `ambient` specifiers (resolve each via the same
    `resolve_package`/`resolve` path, dedup against already-loaded modules by resolved path). Each
@@ -53,11 +56,13 @@ bare/relative import is), surfaced on wasm next to `contracts`/`defines`.
    (`DuplicateFunction`-style, since neither is "the user's").
 
 ## Precedence summary (decided)
+
 `function-local / param` > `user module-scope const|let` / `user declared|imported function` >
 **ambient const|function** > (`defines` remain override-the-source, unchanged — a caller flag, not a
 library symbol). Ambient never overrides user code; user code never needs to know ambient exists.
 
 ## Surfaces to touch
+
 - `options.rs`: `#[builder(default)] pub ambient: Vec<String>` + doc.
 - `lower/assembly.rs`: thread `ambient: &[String]` into `program()`; extend `load_graph` roots; add
   `inject_ambient_consts` (own-table, insert-if-absent) + ambient-function scope injection; reject
@@ -67,6 +72,7 @@ library symbol). Ambient never overrides user code; user code never needs to kno
   marshaller (a plain `Array<string>`, simpler than `optional_contracts`) + builder call.
 
 ## Tests (TDD, borrow the import-side patterns)
+
 - An ambient module's exported FN + CONST resolve in a program with **NO import line** (the headline).
 - Shadowing: a user function-local/param and a user top-level fn/const of the same name WIN over
   ambient (compiles to the user's meaning, ambient ignored).
@@ -76,10 +82,12 @@ library symbol). Ambient never overrides user code; user code never needs to kno
 - Parity seed for PR-4: keep the fixture SauceScript identical to what the TS side will compile in P4.
 
 ## Gate
+
 `cargo build --workspace` · `cargo clippy --workspace --all-targets -- -D warnings` ·
 `~/.cargo/bin/cargo +nightly fmt --all` + diff-check · `cargo test -p sauce-core` · `-p sauce-wasm`.
 No push, no PR, no AI attribution. Report SHA + per-command results.
 
 ## Out of scope (deferred, per the epic)
+
 `Ty::Named`/namespace registry (Rank-2); chain-scoping (that's SDK PR-7, Option B, on top of this);
 value-method sugar. P3 is purely the resolver-driven ambient broadcast.

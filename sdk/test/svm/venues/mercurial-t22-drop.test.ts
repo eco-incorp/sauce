@@ -3,12 +3,15 @@
  * Token-2022 (or un-routable) mint must drop; a classic legacy pool (vault
  * owners matching the derived authority) still decodes normally.
  */
-import { createHash } from 'node:crypto';
-import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { fetchMercurialPoolConfig, MERCURIAL_PROGRAM_ID } from '../../../src/svm/venues/mercurial/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { createHash } from "node:crypto";
+import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  fetchMercurialPoolConfig,
+  MERCURIAL_PROGRAM_ID,
+} from "../../../src/svm/venues/mercurial/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const enc = getAddressEncoder();
 const dec = getAddressDecoder();
@@ -20,9 +23,9 @@ const OFF_TOKENS_LEN = 27;
 const OFF_VAULT_A = 71;
 const OFF_VAULT_B = 103;
 
-const POOL = address('So11111111111111111111111111111111111111112');
-const VAULT_A = address('SysvarC1ock11111111111111111111111111111111');
-const VAULT_B = address('SysvarRent111111111111111111111111111111111');
+const POOL = address("So11111111111111111111111111111111111111112");
+const VAULT_A = address("SysvarC1ock11111111111111111111111111111111");
+const VAULT_B = address("SysvarRent111111111111111111111111111111111");
 
 function addrFromByte(b: number): Address {
   return dec.decode(new Uint8Array(32).fill(b));
@@ -30,11 +33,11 @@ function addrFromByte(b: number): Address {
 
 /** Same off-curve PDA scheme as the adapter's deriveMercurialAuthority. */
 function deriveAuthority(pool: Address, nonce: number): Address {
-  const digest = createHash('sha256')
+  const digest = createHash("sha256")
     .update(enc.encode(pool) as Uint8Array)
     .update(Uint8Array.of(nonce))
     .update(enc.encode(MERCURIAL_PROGRAM_ID) as Uint8Array)
-    .update('ProgramDerivedAddress')
+    .update("ProgramDerivedAddress")
     .digest();
   return dec.decode(digest);
 }
@@ -44,7 +47,7 @@ function findOffCurveNonce(pool: Address): { nonce: number; authority: Address }
     const authority = deriveAuthority(pool, nonce);
     if (isOffCurveAddress(authority)) return { nonce, authority };
   }
-  throw new Error('no off-curve nonce found');
+  throw new Error("no off-curve nonce found");
 }
 
 function buildPool(nonce: number): Uint8Array {
@@ -73,12 +76,12 @@ function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
   };
 }
 
-describe('mercurial Token-2022 self-drop', () => {
+describe("mercurial Token-2022 self-drop", () => {
   const { nonce, authority } = findOffCurveNonce(POOL);
   const mintA = addrFromByte(11);
   const mintB = addrFromByte(13);
 
-  it('drops a pool whose vault-A mint is a Token-2022 mint', async () => {
+  it("drops a pool whose vault-A mint is a Token-2022 mint", async () => {
     const load = loaderOf([
       [POOL, buildPool(nonce)],
       [VAULT_A, buildVault(mintA, authority)],
@@ -89,7 +92,7 @@ describe('mercurial Token-2022 self-drop', () => {
     await expect(fetchMercurialPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
-  it('drops a pool whose vault-A mint carries an un-routable extension', async () => {
+  it("drops a pool whose vault-A mint carries an un-routable extension", async () => {
     const load = loaderOf([
       [POOL, buildPool(nonce)],
       [VAULT_A, buildVault(mintA, authority)],
@@ -100,7 +103,7 @@ describe('mercurial Token-2022 self-drop', () => {
     await expect(fetchMercurialPoolConfig(load, POOL)).rejects.toThrow(/Token-2022|un-routable/);
   });
 
-  it('decodes a classic legacy pool unchanged', async () => {
+  it("decodes a classic legacy pool unchanged", async () => {
     const load = loaderOf([
       [POOL, buildPool(nonce)],
       [VAULT_A, buildVault(mintA, authority)],
@@ -109,7 +112,7 @@ describe('mercurial Token-2022 self-drop', () => {
       [mintB, makeLegacyMint()],
     ]);
     const cfg = await fetchMercurialPoolConfig(load, POOL);
-    expect(cfg.venue).toBe('mercurial');
+    expect(cfg.venue).toBe("mercurial");
     expect(cfg.mintA).toBe(mintA);
     expect(cfg.mintB).toBe(mintB);
     expect(cfg.authority).toBe(authority);

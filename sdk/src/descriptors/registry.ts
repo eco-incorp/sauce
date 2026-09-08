@@ -29,21 +29,34 @@ import type { ChainSlug } from "../chains/canonical.js";
  * descriptor layer reaches into a protocol's own module directly.
  */
 const ABI_EXPORTS: Readonly<Record<string, Readonly<Record<string, Abi>>>> = {
-  "uniswap-v2": { UniswapV2FactoryABI: uniswapV2.UniswapV2FactoryABI as unknown as Abi, UniswapV2RouterABI: uniswapV2.UniswapV2RouterABI as unknown as Abi },
+  "uniswap-v2": {
+    UniswapV2FactoryABI: uniswapV2.UniswapV2FactoryABI as unknown as Abi,
+    UniswapV2RouterABI: uniswapV2.UniswapV2RouterABI as unknown as Abi,
+  },
   "uniswap-v3": {
     UniswapV3FactoryABI: uniswapV3.UniswapV3FactoryABI as unknown as Abi,
     UniswapV3SwapRouterABI: uniswapV3.UniswapV3SwapRouterABI as unknown as Abi,
     UniswapV3QuoterV2ABI: uniswapV3.UniswapV3QuoterV2ABI as unknown as Abi,
-    UniswapV3NonfungiblePositionManagerABI: uniswapV3.UniswapV3NonfungiblePositionManagerABI as unknown as Abi,
+    UniswapV3NonfungiblePositionManagerABI:
+      uniswapV3.UniswapV3NonfungiblePositionManagerABI as unknown as Abi,
   },
   "uniswap-v4": {
     UniswapV4PoolManagerABI: uniswapV4.UniswapV4PoolManagerABI as unknown as Abi,
     UniswapV4UniversalRouterABI: uniswapV4.UniswapV4UniversalRouterABI as unknown as Abi,
     UniswapV4PositionManagerABI: uniswapV4.UniswapV4PositionManagerABI as unknown as Abi,
   },
-  "sushiswap-v2": { SushiSwapV2FactoryABI: sushiswapV2.SushiSwapV2FactoryABI as unknown as Abi, SushiSwapV2RouterABI: sushiswapV2.SushiSwapV2RouterABI as unknown as Abi },
-  "pancakeswap-v2": { PancakeSwapV2FactoryABI: pancakeswapV2.PancakeSwapV2FactoryABI as unknown as Abi, PancakeSwapV2RouterABI: pancakeswapV2.PancakeSwapV2RouterABI as unknown as Abi },
-  aerodrome: { AerodromeRouterABI: aerodrome.AerodromeRouterABI as unknown as Abi, AerodromePoolFactoryABI: aerodrome.AerodromePoolFactoryABI as unknown as Abi },
+  "sushiswap-v2": {
+    SushiSwapV2FactoryABI: sushiswapV2.SushiSwapV2FactoryABI as unknown as Abi,
+    SushiSwapV2RouterABI: sushiswapV2.SushiSwapV2RouterABI as unknown as Abi,
+  },
+  "pancakeswap-v2": {
+    PancakeSwapV2FactoryABI: pancakeswapV2.PancakeSwapV2FactoryABI as unknown as Abi,
+    PancakeSwapV2RouterABI: pancakeswapV2.PancakeSwapV2RouterABI as unknown as Abi,
+  },
+  aerodrome: {
+    AerodromeRouterABI: aerodrome.AerodromeRouterABI as unknown as Abi,
+    AerodromePoolFactoryABI: aerodrome.AerodromePoolFactoryABI as unknown as Abi,
+  },
   "aave-v3": { PoolABI: aaveV3.PoolABI as unknown as Abi },
   "aave-v2": { LendingPoolABI: aaveV2.LendingPoolABI as unknown as Abi },
   permit2: { Permit2ABI: permit2.Permit2ABI as unknown as Abi },
@@ -63,7 +76,9 @@ function resolveAbi(protocol: string, abiExport: string | undefined): Abi | unde
   if (abiExport === undefined) return undefined;
   const abi = ABI_EXPORTS[protocol]?.[abiExport];
   if (abi === undefined) {
-    throw new Error(`descriptors registry: unknown ABI export '${abiExport}' for protocol '${protocol}' — check links.ts against ${protocol}/abis.ts`);
+    throw new Error(
+      `descriptors registry: unknown ABI export '${abiExport}' for protocol '${protocol}' — check links.ts against ${protocol}/abis.ts`,
+    );
   }
   return abi;
 }
@@ -73,7 +88,9 @@ function buildAllDescriptors(): ContractDescriptor[] {
   for (const link of CONTRACT_LINKS as readonly ContractLink[]) {
     const protocolInfo = getProtocol(link.protocol);
     if (protocolInfo === undefined) {
-      throw new Error(`descriptors registry: unknown protocol '${link.protocol}' in CONTRACT_LINKS — check links.ts against protocols/index.ts`);
+      throw new Error(
+        `descriptors registry: unknown protocol '${link.protocol}' in CONTRACT_LINKS — check links.ts against protocols/index.ts`,
+      );
     }
     const abi = resolveAbi(link.protocol, link.abiExport);
     out.push(buildDescriptor(link, protocolInfo, abi));
@@ -85,7 +102,10 @@ function buildAllDescriptors(): ContractDescriptor[] {
 export const DESCRIPTORS: readonly ContractDescriptor[] = Object.freeze(buildAllDescriptors());
 
 function normalizeKey(input: string): string {
-  return input.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 /** protocol slug (normalized) -> its descriptors, in DESCRIPTORS order. */
@@ -101,7 +121,10 @@ export const byProtocol: ReadonlyMap<string, readonly ContractDescriptor[]> = ((
 })();
 
 /** protocol slug (normalized) -> contract name (normalized) -> descriptor. */
-export const byProtocolAndContract: ReadonlyMap<string, ReadonlyMap<string, ContractDescriptor>> = (() => {
+export const byProtocolAndContract: ReadonlyMap<
+  string,
+  ReadonlyMap<string, ContractDescriptor>
+> = (() => {
   const map = new Map<string, Map<string, ContractDescriptor>>();
   for (const d of DESCRIPTORS) {
     const pKey = normalizeKey(d.protocol);

@@ -105,7 +105,11 @@ describe(".nest(): via:'publishAndFund' reproduces the byte-identical landed out
       .nest(childForTransfer, { via: "transfer", vault: VAULT_A })
       .reward(0n);
 
-    const publishBuilt = openRoute("base", "return 1n;", evmOptions({ tokens: [{ token: TOKEN, amount: 500n }] }))
+    const publishBuilt = openRoute(
+      "base",
+      "return 1n;",
+      evmOptions({ tokens: [{ token: TOKEN, amount: 500n }] }),
+    )
       .nest(childForPublish, { via: "publishAndFund" })
       .reward(0n);
 
@@ -185,7 +189,11 @@ describe(".nest(): child stays static", () => {
     // grandchild's source must be the CHILD's destination (arbitrum); child's source must be the
     // HEAD's destination (base) — mirrors routes-nest-dsl.test.ts's own depth-2 cascade shape.
     const grandchild = childWithReward("optimism", "arbitrum");
-    const child = openRoute("arbitrum", "return 2n;", evmOptions({ deadline: 2000n, rewardDeadline: 2000n }))
+    const child = openRoute(
+      "arbitrum",
+      "return 2n;",
+      evmOptions({ deadline: 2000n, rewardDeadline: 2000n }),
+    )
       .nest(grandchild, { vault: VAULT_B })
       .reward({ tokens: [{ token: TOKEN, amount: 500n }] });
     const head = openRoute("base", "return 1n;", evmOptions())
@@ -201,19 +209,15 @@ describe(".nest(): T3 — via:'transfer' requires an EVM Pot execution", () => {
     // the SVM-destination route's child must source from "solana" (its parent's destination).
     const svmChild = childWithReward("arbitrum", "solana");
     expect(() =>
-      openRoute(
-        "solana",
-        "return 1n;",
-        {
-          execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-          deadline: 2000n,
-          portal: PORTAL,
-          source: "base",
-          creator: CREATOR,
-          prover: PROVER,
-          rewardDeadline: 2000n,
-        },
-      ).nest(svmChild, { vault: VAULT_A }),
+      openRoute("solana", "return 1n;", {
+        execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        deadline: 2000n,
+        portal: PORTAL,
+        source: "base",
+        creator: CREATOR,
+        prover: PROVER,
+        rewardDeadline: 2000n,
+      }).nest(svmChild, { vault: VAULT_A }),
     ).toThrow(/EVM Pot/i);
   });
 });
@@ -222,21 +226,30 @@ describe(".nest(): mode-mismatched options throw", () => {
   it("a transfer-only option under via:'publishAndFund' throws a named error", () => {
     const child = childWithReward("arbitrum");
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(child, { via: "publishAndFund", vault: VAULT_A }),
+      openRoute("base", "return 1n;", evmOptions()).nest(child, {
+        via: "publishAndFund",
+        vault: VAULT_A,
+      }),
     ).toThrow(/only valid with via: "transfer"/);
   });
 
   it("a publishAndFund-only option under via:'transfer' (default) throws a named error", () => {
     const child = childWithReward("arbitrum");
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(child, { allowPartial: true, vault: VAULT_A }),
+      openRoute("base", "return 1n;", evmOptions()).nest(child, {
+        allowPartial: true,
+        vault: VAULT_A,
+      }),
     ).toThrow(/only valid with via: "publishAndFund"/);
   });
 });
 
 describe(".nest(): fundNativeFromRoute", () => {
   it("sets the transfer cook's value and enforces T5 (native coverage)", () => {
-    const nativeChild = openRoute("arbitrum", "return 1n;", evmOptions()).reward({ nativeAmount: 50n, deadline: 2000n });
+    const nativeChild = openRoute("arbitrum", "return 1n;", evmOptions()).reward({
+      nativeAmount: 50n,
+      deadline: 2000n,
+    });
 
     // T5 passes: parent route.nativeAmount (50) covers the opted-in child's nativeAmount (50).
     const built = openRoute("base", "return 1n;", evmOptions({ nativeAmount: 50n }))
@@ -247,7 +260,10 @@ describe(".nest(): fundNativeFromRoute", () => {
     expect(transferCall.value).toBe(50n);
 
     // T5 fails: parent only declares 10, child wants 50.
-    const underfundedChild = openRoute("arbitrum", "return 1n;", evmOptions()).reward({ nativeAmount: 50n, deadline: 2000n });
+    const underfundedChild = openRoute("arbitrum", "return 1n;", evmOptions()).reward({
+      nativeAmount: 50n,
+      deadline: 2000n,
+    });
     expect(() =>
       openRoute("base", "return 1n;", evmOptions({ nativeAmount: 10n }))
         .nest(underfundedChild, { vault: VAULT_A, fundNativeFromRoute: true })

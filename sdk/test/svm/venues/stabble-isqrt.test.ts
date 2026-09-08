@@ -25,7 +25,11 @@
  * (isqrtCeil, sqrtInternalCeil, weightedPowUp, weightedCalcOutGivenIn), so
  * this is treated as a math-primitive change, not a perf tweak.
  */
-import { isqrtFloor, weightedCalcOutGivenIn, STABBLE_ONE } from '../../../src/svm/venues/stabble-common.js';
+import {
+  isqrtFloor,
+  weightedCalcOutGivenIn,
+  STABBLE_ONE,
+} from "../../../src/svm/venues/stabble-common.js";
 
 // ---- the OLD (pre-fix) implementation, inlined verbatim as the trusted
 // reference every new-seed result is checked against. Do NOT "clean this
@@ -142,22 +146,32 @@ const MAINNET_WEIGHT_PAIRS: Array<{ weightIn: bigint; weightOut: bigint }> = [
   { weightIn: 600_000_000n, weightOut: 400_000_000n }, // 60/40
   { weightIn: 200_000_000n, weightOut: 800_000_000n }, // 80/20, minority side in
 ];
-const REALISTIC_BASES: bigint[] = [999_000_000n, 950_000_000n, 700_000_000n, 500_000_000n, 300_000_000n, 100_000_000n, 10_000_000n];
+const REALISTIC_BASES: bigint[] = [
+  999_000_000n,
+  950_000_000n,
+  700_000_000n,
+  500_000_000n,
+  300_000_000n,
+  100_000_000n,
+  10_000_000n,
+];
 
-const REAL_WEIGHTEDPOWUP_OPERANDS: bigint[] = MAINNET_WEIGHT_PAIRS.flatMap(({ weightIn, weightOut }) => {
-  const exponent = (weightIn * STABBLE_ONE) / weightOut; // mirrors divDown(weightIn, weightOut)
-  return REALISTIC_BASES.flatMap((base) => fractionalSqrtOperands(base, exponent));
-});
+const REAL_WEIGHTEDPOWUP_OPERANDS: bigint[] = MAINNET_WEIGHT_PAIRS.flatMap(
+  ({ weightIn, weightOut }) => {
+    const exponent = (weightIn * STABBLE_ONE) / weightOut; // mirrors divDown(weightIn, weightOut)
+    return REALISTIC_BASES.flatMap((base) => fractionalSqrtOperands(base, exponent));
+  },
+);
 
-describe('stabble-common isqrtFloor — Newton seed fix', () => {
-  describe('byte-identity: new seed produces the IDENTICAL floor(sqrt(n)) as the old seed, for every n', () => {
-    it('every n in [0, 10000]', () => {
+describe("stabble-common isqrtFloor — Newton seed fix", () => {
+  describe("byte-identity: new seed produces the IDENTICAL floor(sqrt(n)) as the old seed, for every n", () => {
+    it("every n in [0, 10000]", () => {
       for (let i = 0n; i <= 10000n; i++) {
         expect(isqrtFloor(i)).toBe(isqrtFloorOld(i));
       }
     });
 
-    it('power-of-2 and 2^k±1 boundaries up to ~200 bits', () => {
+    it("power-of-2 and 2^k±1 boundaries up to ~200 bits", () => {
       for (let k = 0; k <= 200; k++) {
         const p = 1n << BigInt(k);
         for (const n of [p - 1n, p, p + 1n]) {
@@ -167,8 +181,8 @@ describe('stabble-common isqrtFloor — Newton seed fix', () => {
       }
     });
 
-    it('random 64/96/128/160-bit operands', () => {
-      const rng = mulberry32(0xC0FFEE);
+    it("random 64/96/128/160-bit operands", () => {
+      const rng = mulberry32(0xc0ffee);
       for (const bits of [64, 96, 128, 160]) {
         for (let i = 0; i < 200; i++) {
           const n = randomBigIntOfBitLength(bits, rng);
@@ -177,14 +191,14 @@ describe('stabble-common isqrtFloor — Newton seed fix', () => {
       }
     });
 
-    it('the ISCALE-inflated operands a real weightedPowUp(base, exponent) call actually produces', () => {
+    it("the ISCALE-inflated operands a real weightedPowUp(base, exponent) call actually produces", () => {
       expect(REAL_WEIGHTEDPOWUP_OPERANDS.length).toBeGreaterThan(0);
       for (const n of REAL_WEIGHTEDPOWUP_OPERANDS) {
         expect(isqrtFloor(n)).toBe(isqrtFloorOld(n));
       }
     });
 
-    it('sanity: those real operands actually land in the ~110-130-bit range the fix targets', () => {
+    it("sanity: those real operands actually land in the ~110-130-bit range the fix targets", () => {
       const bitLengths = REAL_WEIGHTEDPOWUP_OPERANDS.map((n) => n.toString(2).length);
       const min = Math.min(...bitLengths);
       const max = Math.max(...bitLengths);
@@ -192,7 +206,7 @@ describe('stabble-common isqrtFloor — Newton seed fix', () => {
       expect(max).toBeLessThanOrEqual(140);
     });
 
-    it('end-to-end: weightedCalcOutGivenIn (which routes through weightedPowUp -> sqrtInternalCeil -> isqrtFloor on its general path) is internally consistent for a realistic 70/30 pool trade', () => {
+    it("end-to-end: weightedCalcOutGivenIn (which routes through weightedPowUp -> sqrtInternalCeil -> isqrtFloor on its general path) is internally consistent for a realistic 70/30 pool trade", () => {
       // A 70/30 pool, balances at 9-decimal-scaled realistic magnitudes,
       // a 12% trade — exercises the exact call chain the fix sits under,
       // with no reference to swap out (isqrtFloor's own identity proof
@@ -201,27 +215,33 @@ describe('stabble-common isqrtFloor — Newton seed fix', () => {
       const balanceIn = 5_000_000_000_000n;
       const balanceOut = 8_000_000_000_000n;
       const amountIn = 600_000_000_000n;
-      const out = weightedCalcOutGivenIn(balanceIn, 700_000_000n, balanceOut, 300_000_000n, amountIn);
+      const out = weightedCalcOutGivenIn(
+        balanceIn,
+        700_000_000n,
+        balanceOut,
+        300_000_000n,
+        amountIn,
+      );
       expect(out).not.toBeNull();
       expect(out! > 0n).toBe(true);
       expect(out! < balanceOut).toBe(true);
     });
   });
 
-  describe('seed-bound invariant: the new seed is always >= floor(sqrt(n))', () => {
+  describe("seed-bound invariant: the new seed is always >= floor(sqrt(n))", () => {
     function seedFor(n: bigint): bigint {
       if (n < 2n) return n;
       const bits = n.toString(2).length;
       return 1n << BigInt((bits + 1) >> 1);
     }
 
-    it('holds for every n in [0, 10000]', () => {
+    it("holds for every n in [0, 10000]", () => {
       for (let i = 0n; i <= 10000n; i++) {
         expect(seedFor(i) >= isqrtFloorOld(i)).toBe(true);
       }
     });
 
-    it('holds at power-of-2 / 2^k±1 boundaries up to ~200 bits', () => {
+    it("holds at power-of-2 / 2^k±1 boundaries up to ~200 bits", () => {
       for (let k = 0; k <= 200; k++) {
         const p = 1n << BigInt(k);
         for (const n of [p - 1n, p, p + 1n]) {
@@ -231,8 +251,8 @@ describe('stabble-common isqrtFloor — Newton seed fix', () => {
       }
     });
 
-    it('holds for random 64/96/128/160-bit operands and the real weightedPowUp-derived operands', () => {
-      const rng = mulberry32(0xFEEDFACE);
+    it("holds for random 64/96/128/160-bit operands and the real weightedPowUp-derived operands", () => {
+      const rng = mulberry32(0xfeedface);
       const ns: bigint[] = [...REAL_WEIGHTEDPOWUP_OPERANDS];
       for (const bits of [64, 96, 128, 160]) {
         for (let i = 0; i < 200; i++) ns.push(randomBigIntOfBitLength(bits, rng));
@@ -243,15 +263,17 @@ describe('stabble-common isqrtFloor — Newton seed fix', () => {
     });
   });
 
-  describe('perf: the new seed converges in far fewer Newton iterations', () => {
-    it('a single ~128-bit operand converges in ~5-8x fewer iterations, same result', () => {
+  describe("perf: the new seed converges in far fewer Newton iterations", () => {
+    it("a single ~128-bit operand converges in ~5-8x fewer iterations, same result", () => {
       const n = (1n << 127n) + 123_456_789_012_345n; // a real ~128-bit magnitude, not a round power of 2
       const oldRun = isqrtFloorOldCounting(n);
       const newRun = isqrtFloorNewCounting(n);
       expect(newRun.result).toBe(oldRun.result);
       expect(newRun.result).toBe(isqrtFloor(n));
-      // eslint-disable-next-line no-console
-      console.log(`[isqrtFloor perf] 128-bit operand: old=${oldRun.iters} iters, new=${newRun.iters} iters (${(oldRun.iters / newRun.iters).toFixed(1)}x fewer)`);
+
+      console.log(
+        `[isqrtFloor perf] 128-bit operand: old=${oldRun.iters} iters, new=${newRun.iters} iters (${(oldRun.iters / newRun.iters).toFixed(1)}x fewer)`,
+      );
       expect(oldRun.iters).toBeGreaterThanOrEqual(55);
       expect(oldRun.iters).toBeLessThanOrEqual(75);
       expect(newRun.iters).toBeGreaterThanOrEqual(4);
@@ -259,7 +281,7 @@ describe('stabble-common isqrtFloor — Newton seed fix', () => {
       expect(oldRun.iters / newRun.iters).toBeGreaterThanOrEqual(5);
     });
 
-    it('holds on average across the real ISCALE-inflated weightedPowUp operands (~110-130 bits), not just one hand-picked value', () => {
+    it("holds on average across the real ISCALE-inflated weightedPowUp operands (~110-130 bits), not just one hand-picked value", () => {
       let oldTotal = 0;
       let newTotal = 0;
       for (const n of REAL_WEIGHTEDPOWUP_OPERANDS) {
@@ -271,8 +293,10 @@ describe('stabble-common isqrtFloor — Newton seed fix', () => {
       }
       const oldAvg = oldTotal / REAL_WEIGHTEDPOWUP_OPERANDS.length;
       const newAvg = newTotal / REAL_WEIGHTEDPOWUP_OPERANDS.length;
-      // eslint-disable-next-line no-console
-      console.log(`[isqrtFloor perf] avg over ${REAL_WEIGHTEDPOWUP_OPERANDS.length} real weightedPowUp operands: old=${oldAvg.toFixed(1)} iters, new=${newAvg.toFixed(1)} iters (${(oldAvg / newAvg).toFixed(1)}x fewer)`);
+
+      console.log(
+        `[isqrtFloor perf] avg over ${REAL_WEIGHTEDPOWUP_OPERANDS.length} real weightedPowUp operands: old=${oldAvg.toFixed(1)} iters, new=${newAvg.toFixed(1)} iters (${(oldAvg / newAvg).toFixed(1)}x fewer)`,
+      );
       expect(oldAvg / newAvg).toBeGreaterThanOrEqual(5);
     });
   });

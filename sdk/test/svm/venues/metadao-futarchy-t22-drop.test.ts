@@ -2,11 +2,11 @@
  * metadao-futarchy Token-2022 self-drop: a Spot-state dao whose base mint is a
  * Token-2022 (or un-routable) mint must drop; a classic legacy dao still decodes.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { fetchMetaDaoFutarchySpotConfig } from '../../../src/svm/venues/metadao-futarchy/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { fetchMetaDaoFutarchySpotConfig } from "../../../src/svm/venues/metadao-futarchy/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
 const codec = getAddressCodec();
 const DAO_ACCOUNT_SIZE = 1205;
@@ -16,7 +16,7 @@ const BASE_RESERVES_OFFSET = 117;
 const BASE_MINT_OFFSET = 157;
 const QUOTE_MINT_OFFSET = 189;
 
-const DAO = address('So11111111111111111111111111111111111111112');
+const DAO = address("So11111111111111111111111111111111111111112");
 
 function addrFromByte(b: number): Address {
   return codec.decode(new Uint8Array(32).fill(b));
@@ -41,11 +41,11 @@ function loaderOf(entries: Array<[Address, Uint8Array]>): AccountLoader {
   };
 }
 
-describe('metadao-futarchy Token-2022 self-drop', () => {
+describe("metadao-futarchy Token-2022 self-drop", () => {
   const baseMint = addrFromByte(3);
   const quoteMint = addrFromByte(5);
 
-  it('drops a dao whose base mint is a Token-2022 mint', async () => {
+  it("drops a dao whose base mint is a Token-2022 mint", async () => {
     const load = loaderOf([
       [DAO, buildDao(baseMint, quoteMint)],
       [baseMint, makeT22Mint()],
@@ -53,22 +53,24 @@ describe('metadao-futarchy Token-2022 self-drop', () => {
     await expect(fetchMetaDaoFutarchySpotConfig(load, DAO)).rejects.toThrow(/Token-2022/);
   });
 
-  it('drops a dao whose base mint carries an un-routable extension', async () => {
+  it("drops a dao whose base mint carries an un-routable extension", async () => {
     const load = loaderOf([
       [DAO, buildDao(baseMint, quoteMint)],
       [baseMint, makeT22Mint(NON_TRANSFERABLE_TLV)],
     ]);
-    await expect(fetchMetaDaoFutarchySpotConfig(load, DAO)).rejects.toThrow(/Token-2022|un-routable/);
+    await expect(fetchMetaDaoFutarchySpotConfig(load, DAO)).rejects.toThrow(
+      /Token-2022|un-routable/,
+    );
   });
 
-  it('decodes a classic legacy dao unchanged', async () => {
+  it("decodes a classic legacy dao unchanged", async () => {
     const load = loaderOf([
       [DAO, buildDao(baseMint, quoteMint)],
       [baseMint, makeLegacyMint()],
       [quoteMint, makeLegacyMint()],
     ]);
     const cfg = await fetchMetaDaoFutarchySpotConfig(load, DAO);
-    expect(cfg.venue).toBe('metadao-futarchy');
+    expect(cfg.venue).toBe("metadao-futarchy");
     expect(cfg.baseMint).toBe(baseMint);
     expect(cfg.quoteMint).toBe(quoteMint);
   });

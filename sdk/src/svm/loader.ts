@@ -25,8 +25,8 @@
  * loader that verifies owners. quoteSvmRoute/svmRoute wire the pool
  * accounts' owner expectations to each family's program id.
  */
-import type { Address } from '@solana/kit';
-import type { AccountLoader } from './venues/types.js';
+import type { Address } from "@solana/kit";
+import type { AccountLoader } from "./venues/types.js";
 
 /** getMultipleAccounts pubkey cap on public RPCs. */
 const DEFAULT_CHUNK_SIZE = 100;
@@ -39,7 +39,9 @@ export interface LoadedAccount {
 }
 
 /** Batch transport: addresses in, (data + owner) per account out (null = not found). */
-export type BatchAccountLoader = (addresses: readonly Address[]) => Promise<(LoadedAccount | null)[]>;
+export type BatchAccountLoader = (
+  addresses: readonly Address[],
+) => Promise<(LoadedAccount | null)[]>;
 
 export interface CoalescingLoaderOptions {
   /** getMultipleAccounts cap per request (public RPC limit: 100). */
@@ -59,10 +61,15 @@ interface PendingLoad {
  * Wraps a batch transport as a single-account AccountLoader that coalesces
  * same-turn loads into deduped, chunked sweeps.
  */
-export function coalescingAccountLoader(loadMany: BatchAccountLoader, options: CoalescingLoaderOptions = {}): AccountLoader {
+export function coalescingAccountLoader(
+  loadMany: BatchAccountLoader,
+  options: CoalescingLoaderOptions = {},
+): AccountLoader {
   const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
   if (!Number.isInteger(chunkSize) || chunkSize < 1) {
-    throw new Error(`coalescingAccountLoader chunkSize must be a positive integer, got ${chunkSize}`);
+    throw new Error(
+      `coalescingAccountLoader chunkSize must be a positive integer, got ${chunkSize}`,
+    );
   }
   const maxConcurrentChunks = options.maxConcurrentChunks ?? DEFAULT_MAX_CONCURRENT_CHUNKS;
   if (!Number.isInteger(maxConcurrentChunks) || maxConcurrentChunks < 1) {
@@ -75,12 +82,17 @@ export function coalescingAccountLoader(loadMany: BatchAccountLoader, options: C
   // One chunk's sweep: load it, then resolve/reject every waiter for its
   // addresses. Never rejects — failures are delivered to that chunk's own
   // waiters, so one bad chunk can't sink the others under Promise.all below.
-  const sweepChunk = async (batch: Map<Address, PendingLoad[]>, chunk: Address[]): Promise<void> => {
+  const sweepChunk = async (
+    batch: Map<Address, PendingLoad[]>,
+    chunk: Address[],
+  ): Promise<void> => {
     let results: (LoadedAccount | null)[];
     try {
       results = await loadMany(chunk);
       if (results.length !== chunk.length) {
-        throw new Error(`batch loader returned ${results.length} accounts for ${chunk.length} addresses`);
+        throw new Error(
+          `batch loader returned ${results.length} accounts for ${chunk.length} addresses`,
+        );
       }
     } catch (error) {
       for (const address of chunk) for (const waiter of batch.get(address)!) waiter.reject(error);
@@ -121,7 +133,9 @@ export function coalescingAccountLoader(loadMany: BatchAccountLoader, options: C
         await sweepChunk(batch, chunk);
       }
     };
-    await Promise.all(Array.from({ length: Math.min(maxConcurrentChunks, chunks.length) }, drainChunks));
+    await Promise.all(
+      Array.from({ length: Math.min(maxConcurrentChunks, chunks.length) }, drainChunks),
+    );
   };
 
   return (address: Address): Promise<Uint8Array | null> =>
@@ -144,7 +158,7 @@ export function coalescingAccountLoader(loadMany: BatchAccountLoader, options: C
 export interface GetMultipleAccountsRpc {
   getMultipleAccounts(
     addresses: readonly Address[],
-    config: { encoding: 'base64' },
+    config: { encoding: "base64" },
   ): {
     send(): Promise<{ value: ({ data: readonly [string, string]; owner: Address } | null)[] }>;
   };
@@ -153,9 +167,11 @@ export interface GetMultipleAccountsRpc {
 /** Batch transport over a @solana/kit RPC's getMultipleAccounts (base64). */
 export function kitBatchAccountLoader(rpc: GetMultipleAccountsRpc): BatchAccountLoader {
   return async (addresses: readonly Address[]): Promise<(LoadedAccount | null)[]> => {
-    const { value } = await rpc.getMultipleAccounts(addresses, { encoding: 'base64' }).send();
+    const { value } = await rpc.getMultipleAccounts(addresses, { encoding: "base64" }).send();
     return value.map((account) =>
-      account === null ? null : { data: new Uint8Array(Buffer.from(account.data[0], 'base64')), owner: account.owner },
+      account === null
+        ? null
+        : { data: new Uint8Array(Buffer.from(account.data[0], "base64")), owner: account.owner },
     );
   };
 }

@@ -88,7 +88,9 @@ function toRsDefines(
   defines: Record<string, bigint | boolean | number> | undefined,
 ): Array<[string, string]> | undefined {
   if (!defines) return undefined;
-  const entries = Object.entries(defines).map(([name, v]) => [name, defineValue(v)] as [string, string]);
+  const entries = Object.entries(defines).map(
+    ([name, v]) => [name, defineValue(v)] as [string, string],
+  );
   return entries.length > 0 ? entries : undefined;
 }
 
@@ -100,9 +102,13 @@ function toRsDefines(
  * of a `sauce.toml` `[contracts]` table, which expects a `resolve()`-able PATH per entry --
  * something this seam never has).
  */
-function toInlineContracts(contracts: ContractsConfig | undefined): Array<[string, string]> | undefined {
+function toInlineContracts(
+  contracts: ContractsConfig | undefined,
+): Array<[string, string]> | undefined {
   if (!contracts) return undefined;
-  const entries = Object.entries(contracts).map(([name, cfg]) => [name, JSON.stringify(cfg.abi)] as [string, string]);
+  const entries = Object.entries(contracts).map(
+    ([name, cfg]) => [name, JSON.stringify(cfg.abi)] as [string, string],
+  );
   return entries.length > 0 ? entries : undefined;
 }
 
@@ -133,7 +139,10 @@ export function vendoredStdlibPath(path: string): string | undefined {
  * pre-joined (e.g. `./sub/b.js`), never the raw `./b.js` as written at the call site -- so this
  * only ever needs to try each root directly, never re-derive an importer directory itself.
  */
-function makeResolve(source: string, baseDirs: readonly string[]): (path: string) => Uint8Array | undefined {
+function makeResolve(
+  source: string,
+  baseDirs: readonly string[],
+): (path: string) => Uint8Array | undefined {
   const entryBytes = Buffer.from(source, "utf8");
   const readFile = (full: string): Uint8Array | undefined => {
     try {
@@ -170,7 +179,9 @@ function makeResolve(source: string, baseDirs: readonly string[]): (path: string
  * `resolvePath(dir, path)` returns an absolute input unchanged regardless of which `dir` is tried,
  * so this slots straight back through the same resolver.
  */
-function makeResolvePackage(baseDirs: readonly string[]): (specifier: string) => string | undefined {
+function makeResolvePackage(
+  baseDirs: readonly string[],
+): (specifier: string) => string | undefined {
   return (specifier: string): string | undefined => {
     // The SDK's own vendored stdlib resolves from `STD_ROOT` regardless of `baseDirs` -- it is never
     // in a `node_modules` tree the walk below could find, so it must be matched first.
@@ -209,7 +220,10 @@ function findPackageDir(pkg: string, baseDirs: readonly string[]): string | unde
  *  resolution. Falls back to `index.js`. */
 function packageEntry(pkgDir: string): string {
   try {
-    const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf-8")) as Record<string, unknown>;
+    const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf-8")) as Record<
+      string,
+      unknown
+    >;
     if (typeof pkg.module === "string") return pkg.module;
     if (typeof pkg.main === "string") return pkg.main;
   } catch {

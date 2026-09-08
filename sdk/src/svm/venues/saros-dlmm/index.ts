@@ -121,19 +121,19 @@
  * test/svm/venues/saros-dlmm.test.ts's "exceeding the shipped window"
  * case.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 
-const SLUG = 'saros-dlmm';
-export const SAROS_DLMM_PROGRAM_ID = address('1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const MEMO_PROGRAM = address('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
-const ASSOCIATED_TOKEN_PROGRAM_ID = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+const SLUG = "saros-dlmm";
+export const SAROS_DLMM_PROGRAM_ID = address("1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const MEMO_PROGRAM = address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+const ASSOCIATED_TOKEN_PROGRAM_ID = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 export const PAIR_ACCOUNT_SIZE = 204;
 export const BIN_ARRAY_ACCOUNT_SIZE = 8248;
@@ -198,7 +198,7 @@ export interface SarosDlmmWindow {
 export interface SarosDlmmPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** Trade direction: 'xToY' (default) sells token_x for token_y (swap_for_y, price down). */
-  direction: 'xToY' | 'yToX';
+  direction: "xToY" | "yToX";
   tokenXMint: Address;
   tokenYMint: Address;
   vaultX: Address;
@@ -225,7 +225,7 @@ async function deriveBinArrayPda(pair: Address, index: number): Promise<Address>
   const le = new Uint8Array(4);
   new DataView(le.buffer).setUint32(0, index, true);
   return memoizedGetProgramDerivedAddress(SAROS_DLMM_PROGRAM_ID, [
-    new TextEncoder().encode('bin_array'),
+    new TextEncoder().encode("bin_array"),
     getAddressEncoded(pair),
     le,
   ]);
@@ -293,7 +293,8 @@ export function priceFromId(binId: number, binStep: number): bigint {
   const bps = (BigInt(binStep) << 64n) / BASIS_POINT_MAX;
   const base = ONE_Q64 + bps;
   const price = powQ64(base, binId - CENTER_BIN_ID);
-  if (price === null) throw new Error(`saros-dlmm priceFromId: pow overflow for bin ${binId} step ${binStep}`);
+  if (price === null)
+    throw new Error(`saros-dlmm priceFromId: pow overflow for bin ${binId} step ${binStep}`);
   return price;
 }
 
@@ -337,22 +338,33 @@ function resolveBins(
  * Fetch + gate one Saros DLMM pair (see the module header for the gate list)
  * and freeze both directions' bin windows. Read-only against the loader.
  */
-export async function fetchSarosDlmmConfig(load: AccountLoader, pair: Address): Promise<SarosDlmmPoolConfig> {
+export async function fetchSarosDlmmConfig(
+  load: AccountLoader,
+  pair: Address,
+): Promise<SarosDlmmPoolConfig> {
   const data = await load(pair);
   if (data === null) throw new Error(`${SLUG}: pair account ${pair} not found`);
   if (data.length !== PAIR_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pair ${pair} has ${data.length} bytes, expected ${PAIR_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pair ${pair} has ${data.length} bytes, expected ${PAIR_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, PAIR_DISCRIMINATOR)) {
     throw new Error(`${SLUG}: pair ${pair} has a foreign discriminator (not a Pair account)`);
   }
   if (data[OFF_HOOK_TAG] === 1) {
-    throw new Error(`${SLUG}: pair ${pair} has a hook attached — unmodeled before/after-swap CPI, self-dropped`);
+    throw new Error(
+      `${SLUG}: pair ${pair} has a hook attached — unmodeled before/after-swap CPI, self-dropped`,
+    );
   }
 
   const codec = getAddressCodec();
-  const tokenXMint = codec.decode(data.subarray(OFF_TOKEN_X_MINT, OFF_TOKEN_X_MINT + 32)) as Address;
-  const tokenYMint = codec.decode(data.subarray(OFF_TOKEN_Y_MINT, OFF_TOKEN_Y_MINT + 32)) as Address;
+  const tokenXMint = codec.decode(
+    data.subarray(OFF_TOKEN_X_MINT, OFF_TOKEN_X_MINT + 32),
+  ) as Address;
+  const tokenYMint = codec.decode(
+    data.subarray(OFF_TOKEN_Y_MINT, OFF_TOKEN_Y_MINT + 32),
+  ) as Address;
   // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
   // one carrying an un-routable extension) via the shared data-shape resolver
   // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
@@ -367,11 +379,15 @@ export async function fetchSarosDlmmConfig(load: AccountLoader, pair: Address): 
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pair} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pair} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pair} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pair} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
@@ -394,15 +410,24 @@ export async function fetchSarosDlmmConfig(load: AccountLoader, pair: Address): 
     Number(readUintLE(d, OFF_BA_INDEX, 4)) === expectedIndex;
 
   const bracketValid = arrayValid(lowerData, lowerIndex) && arrayValid(upperData, upperIndex);
-  const xToYBins = bracketValid ? resolveBins(lowerData!, upperData!, lowerIndex, upperIndex, activeId, binStep, true) : [];
-  const yToXBins = bracketValid ? resolveBins(lowerData!, upperData!, lowerIndex, upperIndex, activeId, binStep, false) : [];
+  const xToYBins = bracketValid
+    ? resolveBins(lowerData!, upperData!, lowerIndex, upperIndex, activeId, binStep, true)
+    : [];
+  const yToXBins = bracketValid
+    ? resolveBins(lowerData!, upperData!, lowerIndex, upperIndex, activeId, binStep, false)
+    : [];
 
-  const window: Omit<SarosDlmmWindow, 'bins'> = { binArrayLower, binArrayUpper, lowerIndex, upperIndex };
+  const window: Omit<SarosDlmmWindow, "bins"> = {
+    binArrayLower,
+    binArrayUpper,
+    lowerIndex,
+    upperIndex,
+  };
 
   return {
     venue: SLUG,
     pool: pair,
-    direction: 'xToY',
+    direction: "xToY",
     tokenXMint,
     tokenYMint,
     vaultX,

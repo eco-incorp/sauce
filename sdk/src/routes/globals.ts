@@ -111,7 +111,10 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
  * chain name -- a second SVM chain added to `CANONICAL_CHAINS` gets the
  * venue namespaces automatically, and every EVM chain provably cannot.
  */
-function composeChainGlobal(name: string, origin: Record<string, unknown> & { chain: CanonicalChain; route: unknown }): object {
+function composeChainGlobal(
+  name: string,
+  origin: Record<string, unknown> & { chain: CanonicalChain; route: unknown },
+): object {
   const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;
   const sources: PropertyDescriptorMap[] = [Object.getOwnPropertyDescriptors(contracts)];
   if (origin.chain.kind === "svm") {
@@ -119,7 +122,8 @@ function composeChainGlobal(name: string, origin: Record<string, unknown> & { ch
     sources.push(Object.getOwnPropertyDescriptors(svmVenues));
   }
 
-  const fn = ((...args: unknown[]) => (origin.route as (...a: unknown[]) => unknown)(...args)) as unknown as Record<string, unknown>;
+  const fn = ((...args: unknown[]) =>
+    (origin.route as (...a: unknown[]) => unknown)(...args)) as unknown as Record<string, unknown>;
   const merged: PropertyDescriptorMap = {
     chain: { value: origin.chain, enumerable: true, configurable: false, writable: false },
     route: { value: origin.route, enumerable: true, configurable: false, writable: false },
@@ -127,7 +131,9 @@ function composeChainGlobal(name: string, origin: Record<string, unknown> & { ch
   for (const source of sources) {
     for (const key of Object.keys(source)) {
       if (key in merged || FUNCTION_INTRINSIC_DENYLIST.has(key)) {
-        throw new Error(`routes/globals: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`);
+        throw new Error(
+          `routes/globals: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`,
+        );
       }
     }
     Object.assign(merged, source);
@@ -140,7 +146,10 @@ export function installRouteGlobals(opts: InstallRouteGlobalsOptions = {}): Rout
   const target = (opts.target ?? globalThis) as Record<string, unknown>;
   const entries: [string, unknown][] = Object.entries(chainAccessors).map(([name, origin]) => [
     name,
-    composeChainGlobal(name, origin as unknown as Record<string, unknown> & { chain: CanonicalChain; route: unknown }),
+    composeChainGlobal(
+      name,
+      origin as unknown as Record<string, unknown> & { chain: CanonicalChain; route: unknown },
+    ),
   ]);
   if (opts.includeChain !== false) entries.push(["chain", chain]);
   if (opts.includeToken !== false) entries.push(["Token", Token]);

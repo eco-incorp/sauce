@@ -116,20 +116,20 @@
  * a bespoke, zero-RPC candidate emission in `the consuming app SVM discovery module`
  * instead — see that file's `carrotCandidatesFor`.
  */
-import { address, getAddressDecoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
+import { address, getAddressDecoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
 
-export const CARROT_PROGRAM_ID = address('CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s');
-export const CRT_MINT = address('CRTx1JouZhzSU6XytsE42UQraoGqiHgxabocVfARTy2s');
+export const CARROT_PROGRAM_ID = address("CarrotwivhMpDnm27EHmRLeQ683Z1PufuqEmBZvD282s");
+export const CRT_MINT = address("CRTx1JouZhzSU6XytsE42UQraoGqiHgxabocVfARTy2s");
 /** The one deployed vault — a PDA of `["vault", CRT_MINT]`, singleton today. */
-export const CARROT_VAULT_ADDRESS = address('FfCRL34rkJiMiX5emNDrYp3MdWH2mES3FvDQyFppqgpJ');
+export const CARROT_VAULT_ADDRESS = address("FfCRL34rkJiMiX5emNDrYp3MdWH2mES3FvDQyFppqgpJ");
 
 /** See the module header's TOKEN PROGRAM note — CRT (shares) plus pyUSD are the only Token-2022 mints today. */
 export const CARROT_TOKEN_2022_MINTS: ReadonlySet<Address> = new Set([
   CRT_MINT,
-  address('2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo'), // pyUSD
+  address("2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo"), // pyUSD
 ]);
 
 const ATA_AMOUNT_OFFSET = 64;
@@ -158,7 +158,7 @@ const ASSET_STRUCT_SIZE = 99; // 2 (asset_id) + 32 (mint) + 1 (decimals) + 32 (a
 export const CARROT_MAX_ASSETS = 3;
 
 /** Pyth `PriceUpdateV2` (pyth-solana-receiver) layout, confirmed live against all 3 basket oracles. */
-const PYTH_RECEIVER_PROGRAM_ID = address('rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ');
+const PYTH_RECEIVER_PROGRAM_ID = address("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
 // disc(8) + write_authority(32) = 40 — the verification-level tag sits right after.
 const ORACLE_VERIFICATION_TAG_OFFSET = 40;
 /** `VerificationLevel::Partial{num_signatures}` (tag 0, +1 byte) vs `::Full` (tag 1, +0 bytes). */
@@ -172,7 +172,8 @@ const MAX_ORACLE_STALENESS_SECONDS = 300n;
 
 const U64_MAX = (1n << 64n) - 1n;
 const addressDecoder = getAddressDecoder();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => addressDecoder.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  addressDecoder.decode(data.subarray(offset, offset + 32));
 
 export interface CarrotAssetSnapshot {
   /** The on-chain `asset_id` (stable identity — NOT the array index, which can shift if an asset is ever removed). */
@@ -192,7 +193,7 @@ export interface CarrotAssetSnapshot {
 }
 
 export interface CarrotPoolConfig extends PoolConfig {
-  venue: 'carrot';
+  venue: "carrot";
   sharesMint: Address;
   /** Vault-level redemption fee, bps (1 unit = 1/10000) — snapshotted at fetch time, re-staged like any other family's fee param. */
   redemptionFeeBps: bigint;
@@ -203,25 +204,31 @@ export interface CarrotPoolConfig extends PoolConfig {
 }
 
 export interface CarrotDirection {
-  op: 'issue' | 'redeem';
+  op: "issue" | "redeem";
   assetId: number;
 }
 
 export function parseCarrotDirection(direction: string): CarrotDirection {
   const m = /^(issue|redeem):(\d+)$/.exec(direction);
-  if (m === null) throw new Error(`carrot direction must be 'issue:<assetId>' or 'redeem:<assetId>', got '${direction}'`);
-  return { op: m[1] as 'issue' | 'redeem', assetId: Number(m[2]) };
+  if (m === null)
+    throw new Error(
+      `carrot direction must be 'issue:<assetId>' or 'redeem:<assetId>', got '${direction}'`,
+    );
+  return { op: m[1] as "issue" | "redeem", assetId: Number(m[2]) };
 }
 
 function carrotConfig(cfg: PoolConfig): CarrotPoolConfig {
-  if (cfg.venue !== 'carrot') throw new Error(`carrot ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== "carrot")
+    throw new Error(`carrot ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as CarrotPoolConfig;
 }
 
 function requireAsset(cfg: CarrotPoolConfig, assetId: number): CarrotAssetSnapshot {
   const asset = cfg.assets.find((a) => a.assetId === assetId);
   if (asset === undefined) {
-    throw new Error(`carrot vault ${cfg.pool}: asset id ${assetId} not present (known: ${cfg.assets.map((a) => a.assetId).join(', ')})`);
+    throw new Error(
+      `carrot vault ${cfg.pool}: asset id ${assetId} not present (known: ${cfg.assets.map((a) => a.assetId).join(", ")})`,
+    );
   }
   return asset;
 }
@@ -239,12 +246,18 @@ export function carrotAllDirections(cfg: PoolConfig): string[] {
 
 function decodeOraclePriceOffset(data: Uint8Array, pool: Address, oracle: Address): number {
   if (data.length < ORACLE_VERIFICATION_TAG_OFFSET + 1) {
-    throw new Error(`carrot vault ${pool}: oracle ${oracle} account too small to carry a verification tag`);
+    throw new Error(
+      `carrot vault ${pool}: oracle ${oracle} account too small to carry a verification tag`,
+    );
   }
   const tag = data[ORACLE_VERIFICATION_TAG_OFFSET]!;
-  if (tag === ORACLE_VERIFICATION_FULL_TAG) return ORACLE_VERIFICATION_TAG_OFFSET + 1 + ORACLE_FEED_ID_SIZE;
-  if (tag === ORACLE_VERIFICATION_PARTIAL_TAG) return ORACLE_VERIFICATION_TAG_OFFSET + 2 + ORACLE_FEED_ID_SIZE;
-  throw new Error(`carrot vault ${pool}: oracle ${oracle} has an unrecognized verification-level tag ${tag}`);
+  if (tag === ORACLE_VERIFICATION_FULL_TAG)
+    return ORACLE_VERIFICATION_TAG_OFFSET + 1 + ORACLE_FEED_ID_SIZE;
+  if (tag === ORACLE_VERIFICATION_PARTIAL_TAG)
+    return ORACLE_VERIFICATION_TAG_OFFSET + 2 + ORACLE_FEED_ID_SIZE;
+  throw new Error(
+    `carrot vault ${pool}: oracle ${oracle} has an unrecognized verification-level tag ${tag}`,
+  );
 }
 
 // TODO(t22-fee-netting): the Token-2022 legs (CRT shares + pyUSD, see
@@ -258,10 +271,16 @@ function decodeOraclePriceOffset(data: Uint8Array, pool: Address, oracle: Addres
 // nonzero effective transfer fee, net it there (net(x, feeOfInputMint) into the
 // pool, net(grossOut, feeOfOutputMint) to the user) rather than here — a missed
 // netting is a safe self-limit; a wrong one would silently mis-quote.
-async function fetchCarrotPoolConfig(load: AccountLoader, pool: Address): Promise<CarrotPoolConfig> {
+async function fetchCarrotPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<CarrotPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`carrot vault ${pool} account not found`);
-  if (data.length < ASSET_FIRST_OFFSET) throw new Error(`carrot vault ${pool} account is only ${data.length} bytes — too small to be a Vault`);
+  if (data.length < ASSET_FIRST_OFFSET)
+    throw new Error(
+      `carrot vault ${pool} account is only ${data.length} bytes — too small to be a Vault`,
+    );
 
   const sharesMint = pubkeyAt(data, OFF_SHARES);
   const redemptionFeeBps = readUintLE(data, OFF_FEE_REDEMPTION_BPS, 2);
@@ -286,7 +305,8 @@ async function fetchCarrotPoolConfig(load: AccountLoader, pool: Address): Promis
   const rawAssets: RawAsset[] = [];
   let off = ASSET_FIRST_OFFSET;
   for (let i = 0; i < assetsLen; i++) {
-    if (off + ASSET_STRUCT_SIZE > data.length) throw new Error(`carrot vault ${pool}: truncated asset entry ${i}`);
+    if (off + ASSET_STRUCT_SIZE > data.length)
+      throw new Error(`carrot vault ${pool}: truncated asset entry ${i}`);
     const assetId = Number(readUintLE(data, off, 2));
     const mint = pubkeyAt(data, off + 2);
     const decimals = data[off + 34]!;
@@ -297,29 +317,46 @@ async function fetchCarrotPoolConfig(load: AccountLoader, pool: Address): Promis
   }
 
   const crtMintData = await load(sharesMint);
-  if (crtMintData === null) throw new Error(`carrot vault ${pool}: shares mint ${sharesMint} account not found`);
-  if (crtMintData.length < MINT_SUPPLY_OFFSET + 8) throw new Error(`carrot vault ${pool}: shares mint ${sharesMint} is not a valid SPL mint`);
+  if (crtMintData === null)
+    throw new Error(`carrot vault ${pool}: shares mint ${sharesMint} account not found`);
+  if (crtMintData.length < MINT_SUPPLY_OFFSET + 8)
+    throw new Error(`carrot vault ${pool}: shares mint ${sharesMint} is not a valid SPL mint`);
 
   // Every basket asset is read together (NAV is their joint sum) — one bad asset self-drops the
   // WHOLE vault (every direction), never just that asset (see module header's SELF-DROP SCOPE note).
   const assets: CarrotAssetSnapshot[] = [];
-  const assetAccountPairs = await Promise.all(rawAssets.map((a) => Promise.all([load(a.ata), load(a.oracle)])));
+  const assetAccountPairs = await Promise.all(
+    rawAssets.map((a) => Promise.all([load(a.ata), load(a.oracle)])),
+  );
   for (let ai = 0; ai < rawAssets.length; ai++) {
     const a = rawAssets[ai]!;
     const [ataData, oracleData] = assetAccountPairs[ai]!;
-    if (ataData === null) throw new Error(`carrot vault ${pool}: asset ${a.assetId} vault ATA ${a.ata} not found`);
-    if (ataData.length < ATA_AMOUNT_OFFSET + 8) throw new Error(`carrot vault ${pool}: asset ${a.assetId} vault ATA ${a.ata} is not a valid SPL token account`);
-    if (oracleData === null) throw new Error(`carrot vault ${pool}: asset ${a.assetId} oracle ${a.oracle} not found`);
+    if (ataData === null)
+      throw new Error(`carrot vault ${pool}: asset ${a.assetId} vault ATA ${a.ata} not found`);
+    if (ataData.length < ATA_AMOUNT_OFFSET + 8)
+      throw new Error(
+        `carrot vault ${pool}: asset ${a.assetId} vault ATA ${a.ata} is not a valid SPL token account`,
+      );
+    if (oracleData === null)
+      throw new Error(`carrot vault ${pool}: asset ${a.assetId} oracle ${a.oracle} not found`);
 
     const priceOffset = decodeOraclePriceOffset(oracleData, pool, a.oracle);
     if (oracleData.length < priceOffset + 8 + 8 + 4 + 8) {
-      throw new Error(`carrot vault ${pool}: asset ${a.assetId} oracle ${a.oracle} is too small for a PriceUpdateV2 price message`);
+      throw new Error(
+        `carrot vault ${pool}: asset ${a.assetId} oracle ${a.oracle} is too small for a PriceUpdateV2 price message`,
+      );
     }
     const rawPrice = readUintLE(oracleData, priceOffset, 8);
     // Pyth price is a signed i64; a legitimate USD-stablecoin feed is always positive — reject the
     // top-bit-set (negative) case rather than silently treating it as a huge unsigned price.
-    if (rawPrice >= 1n << 63n) throw new Error(`carrot vault ${pool}: asset ${a.assetId} oracle ${a.oracle} reports a negative price`);
-    if (rawPrice === 0n) throw new Error(`carrot vault ${pool}: asset ${a.assetId} oracle ${a.oracle} reports a zero price`);
+    if (rawPrice >= 1n << 63n)
+      throw new Error(
+        `carrot vault ${pool}: asset ${a.assetId} oracle ${a.oracle} reports a negative price`,
+      );
+    if (rawPrice === 0n)
+      throw new Error(
+        `carrot vault ${pool}: asset ${a.assetId} oracle ${a.oracle} reports a zero price`,
+      );
     const publishTime = readUintLE(oracleData, priceOffset + 8 + 8 + 4, 8);
 
     // exponent (i32) sits AFTER price(i64, 8 bytes) AND conf(u64, 8 bytes) — offset +16, not +8.
@@ -347,7 +384,7 @@ async function fetchCarrotPoolConfig(load: AccountLoader, pool: Address): Promis
   }
 
   return {
-    venue: 'carrot',
+    venue: "carrot",
     pool,
     sharesMint,
     redemptionFeeBps,
@@ -357,9 +394,10 @@ async function fetchCarrotPoolConfig(load: AccountLoader, pool: Address): Promis
 }
 
 export const carrot = {
-  slug: 'carrot' as const,
+  slug: "carrot" as const,
   programId: CARROT_PROGRAM_ID,
-  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<CarrotPoolConfig> => fetchCarrotPoolConfig(load, pool),
+  fetchPoolConfig: (load: AccountLoader, pool: Address): Promise<CarrotPoolConfig> =>
+    fetchCarrotPoolConfig(load, pool),
 };
 
 /** Prepare-time direction gate: self-drops the SPECIFIC direction (not the whole vault) if its asset's oracle reading is stale. */
@@ -378,10 +416,15 @@ export function carrotMints(base: PoolConfig): { inMint: Address; outMint: Addre
   const c = carrotConfig(base);
   const { op, assetId } = parseCarrotDirection(c.direction);
   const asset = requireAsset(c, assetId);
-  return op === 'issue' ? { inMint: asset.mint, outMint: c.sharesMint } : { inMint: c.sharesMint, outMint: asset.mint };
+  return op === "issue"
+    ? { inMint: asset.mint, outMint: c.sharesMint }
+    : { inMint: c.sharesMint, outMint: asset.mint };
 }
 
-export function carrotApplyDirection(base: PoolConfig, direction: string | undefined): CarrotPoolConfig {
+export function carrotApplyDirection(
+  base: PoolConfig,
+  direction: string | undefined,
+): CarrotPoolConfig {
   const c = carrotConfig(base);
   if (direction === undefined) return c;
   parseCarrotDirection(direction); // validates shape; requireAsset (via mints/gate) validates existence

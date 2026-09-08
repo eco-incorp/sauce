@@ -1,13 +1,18 @@
-import { AccountRole, address, generateKeyPairSigner } from '@solana/kit';
-import type { KeyPairSigner } from '@solana/kit';
-import { NATIVE_MINT, buildAtaPrepend, buildComputeBudgetPrepend, buildWrapSolPrepends } from '../../src/svm/index.js';
+import { AccountRole, address, generateKeyPairSigner } from "@solana/kit";
+import type { KeyPairSigner } from "@solana/kit";
+import {
+  NATIVE_MINT,
+  buildAtaPrepend,
+  buildComputeBudgetPrepend,
+  buildWrapSolPrepends,
+} from "../../src/svm/index.js";
 
-const COMPUTE_BUDGET_PROGRAM = address('ComputeBudget111111111111111111111111111111');
-const ATA_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const SYSTEM_PROGRAM = address('11111111111111111111111111111111');
-const OWNER = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-const MINT = address('So11111111111111111111111111111111111111112');
+const COMPUTE_BUDGET_PROGRAM = address("ComputeBudget111111111111111111111111111111");
+const ATA_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const SYSTEM_PROGRAM = address("11111111111111111111111111111111");
+const OWNER = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const MINT = address("So11111111111111111111111111111111111111112");
 
 let payer: KeyPairSigner;
 
@@ -15,8 +20,8 @@ beforeAll(async () => {
   payer = await generateKeyPairSigner();
 });
 
-describe('buildComputeBudgetPrepend', () => {
-  it('emits only SetComputeUnitLimit when no price is given', () => {
+describe("buildComputeBudgetPrepend", () => {
+  it("emits only SetComputeUnitLimit when no price is given", () => {
     const instructions = buildComputeBudgetPrepend({ unitLimit: 200_000 });
 
     expect(instructions).toHaveLength(1);
@@ -25,18 +30,20 @@ describe('buildComputeBudgetPrepend', () => {
     expect(instructions[0].data).toEqual(new Uint8Array([0x02, 0x40, 0x0d, 0x03, 0x00]));
   });
 
-  it('appends SetComputeUnitPrice when a price is given', () => {
+  it("appends SetComputeUnitPrice when a price is given", () => {
     const instructions = buildComputeBudgetPrepend({ unitLimit: 200_000, microLamportsPerCu: 5n });
 
     expect(instructions).toHaveLength(2);
     expect(instructions[1].programAddress).toBe(COMPUTE_BUDGET_PROGRAM);
     // 0x03 = SetComputeUnitPrice, then u64 LE 5
-    expect(instructions[1].data).toEqual(new Uint8Array([0x03, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+    expect(instructions[1].data).toEqual(
+      new Uint8Array([0x03, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+    );
   });
 });
 
-describe('buildAtaPrepend', () => {
-  it('builds a CreateAssociatedTokenIdempotent instruction for the derived ata', async () => {
+describe("buildAtaPrepend", () => {
+  it("builds a CreateAssociatedTokenIdempotent instruction for the derived ata", async () => {
     const { ata, instruction } = await buildAtaPrepend({ payer, owner: OWNER, mint: MINT });
 
     expect(instruction.programAddress).toBe(ATA_PROGRAM);
@@ -53,9 +60,13 @@ describe('buildAtaPrepend', () => {
   });
 });
 
-describe('buildWrapSolPrepends', () => {
-  it('emits create-wSOL-ata + SOL transfer + SyncNative against the derived wSOL ata', async () => {
-    const { wsolAta, instructions } = await buildWrapSolPrepends({ payer, owner: OWNER, lamports: 7n });
+describe("buildWrapSolPrepends", () => {
+  it("emits create-wSOL-ata + SOL transfer + SyncNative against the derived wSOL ata", async () => {
+    const { wsolAta, instructions } = await buildWrapSolPrepends({
+      payer,
+      owner: OWNER,
+      lamports: 7n,
+    });
     const { ata } = await buildAtaPrepend({ payer, owner: OWNER, mint: NATIVE_MINT });
 
     expect(wsolAta).toBe(ata);
@@ -67,7 +78,9 @@ describe('buildWrapSolPrepends', () => {
 
     expect(transfer.programAddress).toBe(SYSTEM_PROGRAM);
     // u32 LE 2 = SystemInstruction::Transfer, then u64 LE 7 lamports
-    expect(transfer.data).toEqual(new Uint8Array([0x02, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+    expect(transfer.data).toEqual(
+      new Uint8Array([0x02, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+    );
     expect(transfer.accounts).toMatchObject([
       { address: payer.address, role: AccountRole.WRITABLE_SIGNER },
       { address: wsolAta, role: AccountRole.WRITABLE },

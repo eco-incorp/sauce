@@ -7,14 +7,16 @@ import { decodeFunctionData, keccak256, type Hex } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { hashIntent } from "../src/routes/encode.js";
-import { assertNestingInvariants, nestedChildCalls, type NestChild } from "../src/routes/nest.js";
+import { assertNestingInvariants, nestedChildCalls } from "../src/routes/nest.js";
 import { PORTAL_ABI } from "../src/routes/portal.js";
 import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import type { Intent, Route, UniversalAddress } from "../src/routes/types.js";
 
-const evmAddr = (byte: string): UniversalAddress => toUniversalAddress(("0x" + byte.repeat(20)) as Hex);
-const svmAddr = (byte: string): UniversalAddress => toUniversalAddress(("0x" + byte.repeat(32)) as Hex);
+const evmAddr = (byte: string): UniversalAddress =>
+  toUniversalAddress(("0x" + byte.repeat(20)) as Hex);
+const svmAddr = (byte: string): UniversalAddress =>
+  toUniversalAddress(("0x" + byte.repeat(32)) as Hex);
 
 const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
@@ -76,8 +78,16 @@ describe("nest.ts: nestedChildCalls", () => {
     expect(calls).toHaveLength(3);
     const decoded0 = decodeFunctionData({
       abi: [
-        { type: "function", name: "approve", stateMutability: "nonpayable",
-          inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ type: "bool" }] },
+        {
+          type: "function",
+          name: "approve",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "spender", type: "address" },
+            { name: "amount", type: "uint256" },
+          ],
+          outputs: [{ type: "bool" }],
+        },
       ] as const,
       data: calls[0]!.data,
     });
@@ -95,7 +105,13 @@ describe("nest.ts: nestedChildCalls", () => {
 
   it("publishAndFund value equals the child's reward nativeAmount", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, nativeAmount: 42n, tokens: [] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        nativeAmount: 42n,
+        tokens: [],
+      }),
     });
     const calls = nestedChildCalls(child, { portal: PARENT_PORTAL, allowPartial: false });
     expect(calls).toHaveLength(1); // no reward tokens -> no approves
@@ -138,27 +154,43 @@ describe("nest.ts: assertNestingInvariants", () => {
   it("passes for a well-formed single child", () => {
     const child = childIntent();
     expect(() =>
-      assertNestingInvariants({ parentChain: BASE, parentRoute: parentRoute(), children: [{ intent: child }] }),
+      assertNestingInvariants({
+        parentChain: BASE,
+        parentRoute: parentRoute(),
+        children: [{ intent: child }],
+      }),
     ).not.toThrow();
   });
 
   it("invariant 1: rejects an svm parent", () => {
     const child = childIntent({ sourceChainId: BigInt(SOLANA.id) });
     expect(() =>
-      assertNestingInvariants({ parentChain: SOLANA, parentRoute: parentRoute(), children: [{ intent: child }] }),
+      assertNestingInvariants({
+        parentChain: SOLANA,
+        parentRoute: parentRoute(),
+        children: [{ intent: child }],
+      }),
     ).toThrow(/evm/i);
   });
 
   it("invariant 2: rejects a child whose source isn't the parent's destination", () => {
     const child = childIntent({ sourceChainId: BigInt(ARBITRUM.id) }); // should be BASE
     expect(() =>
-      assertNestingInvariants({ parentChain: BASE, parentRoute: parentRoute(), children: [{ intent: child }] }),
+      assertNestingInvariants({
+        parentChain: BASE,
+        parentRoute: parentRoute(),
+        children: [{ intent: child }],
+      }),
     ).toThrow(/source/i);
   });
 
   it("invariant 4: rejects a child route.deadline earlier than the parent's route.deadline", () => {
     const child = childIntent({
-      route: normalizeRoute({ salt: ("0x" + "03".repeat(32)) as Hex, deadline: 500n, portal: CHILD_ROUTE_PORTAL }),
+      route: normalizeRoute({
+        salt: ("0x" + "03".repeat(32)) as Hex,
+        deadline: 500n,
+        portal: CHILD_ROUTE_PORTAL,
+      }),
     });
     expect(() =>
       assertNestingInvariants({
@@ -184,7 +216,13 @@ describe("nest.ts: assertNestingInvariants", () => {
 
   it("invariant 5: rejects insufficient native funding coverage", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, nativeAmount: 10n, tokens: [] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        nativeAmount: 10n,
+        tokens: [],
+      }),
     });
     expect(() =>
       assertNestingInvariants({
@@ -215,7 +253,13 @@ describe("nest.ts: assertNestingInvariants", () => {
 
   it("invariant 5: fundedByBody:true opts a child out of the funding-coverage check", () => {
     const child = childIntent({
-      reward: normalizeReward({ deadline: 1000n, creator: CREATOR, prover: PROVER, nativeAmount: 999n, tokens: [] }),
+      reward: normalizeReward({
+        deadline: 1000n,
+        creator: CREATOR,
+        prover: PROVER,
+        nativeAmount: 999n,
+        tokens: [],
+      }),
     });
     expect(() =>
       assertNestingInvariants({

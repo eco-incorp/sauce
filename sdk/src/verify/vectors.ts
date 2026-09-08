@@ -32,7 +32,9 @@ export interface ConformanceVector {
  *  Requires the canonical `0x`, consistent with `encodeSettleProgram`'s inputs. */
 export function settlePayload(args: Hex): Hex {
   if (typeof args !== "string" || !/^0x([0-9a-fA-F]{2})*$/.test(args)) {
-    throw new RangeError(`settlePayload: args must be 0x-prefixed hex of whole bytes, got ${String(args)}`);
+    throw new RangeError(
+      `settlePayload: args must be 0x-prefixed hex of whole bytes, got ${String(args)}`,
+    );
   }
 
   return (SETTLE_PROGRAM + args.slice(2)) as Hex;

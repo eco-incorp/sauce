@@ -20,5 +20,5 @@
 // transitive graph reachable from here and fails if any module declares `__dirname`/`__filename` or
 // references `import.meta` — so a future re-export cannot silently pull `recipes` (or any fs-touching
 // module) back in.
-export * from './engine.js';
-export * from './instructions.js';
+export * from "./engine.js";
+export * from "./instructions.js";

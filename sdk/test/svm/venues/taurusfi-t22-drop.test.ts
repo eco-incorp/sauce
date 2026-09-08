@@ -5,12 +5,12 @@
  * account and both vaults are minimal synthesized stubs (enough to pass the
  * pre-existing gates and reach the mint check); one mint is then poisoned.
  */
-import { address, getAddressEncoder } from '@solana/kit';
-import { fetchTaurusFiConfig, TAURUSFI_POOL_REGISTRY } from '../../../src/svm/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeT22Mint, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { address, getAddressEncoder } from "@solana/kit";
+import { fetchTaurusFiConfig, TAURUSFI_POOL_REGISTRY } from "../../../src/svm/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeT22Mint, NON_TRANSFERABLE_TLV } from "../fixtures/token-2022/synth.js";
 
-const POOL = 'EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP';
+const POOL = "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP";
 const ENTRY = TAURUSFI_POOL_REGISTRY[POOL];
 
 /** A minimal SPL token account (>=72 bytes) holding `mint` at offset 0. */
@@ -35,19 +35,19 @@ function loader(poison?: { mint: string; data: Uint8Array }): AccountLoader {
   return async (addr) => map.get(String(addr)) ?? null;
 }
 
-describe('taurusfi Token-2022 self-drop', () => {
-  test('legacy (unvendored mints) decodes — legacy path unchanged', async () => {
+describe("taurusfi Token-2022 self-drop", () => {
+  test("legacy (unvendored mints) decodes — legacy path unchanged", async () => {
     const cfg = await fetchTaurusFiConfig(loader(), address(POOL));
-    expect(cfg.venue).toBe('taurusfi');
+    expect(cfg.venue).toBe("taurusfi");
     expect(cfg.mint0).toBe(ENTRY.mint0);
   });
 
-  test('a Token-2022 mint0 self-drops', async () => {
+  test("a Token-2022 mint0 self-drops", async () => {
     const load = loader({ mint: String(ENTRY.mint0), data: makeT22Mint() });
     await expect(fetchTaurusFiConfig(load, address(POOL))).rejects.toThrow(/dropping pool/);
   });
 
-  test('a NonTransferable mint1 self-drops as un-routable', async () => {
+  test("a NonTransferable mint1 self-drops as un-routable", async () => {
     const load = loader({ mint: String(ENTRY.mint1), data: makeT22Mint(NON_TRANSFERABLE_TLV) });
     await expect(fetchTaurusFiConfig(load, address(POOL))).rejects.toThrow(/dropping pool/);
   });

@@ -154,22 +154,22 @@
  * against over-promising; depth is purely the coarse liveness/significance
  * signal the relative-depth survivor gate uses.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'trends';
-export const TRENDS_PROGRAM_ID = address('CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz');
-export const WSOL_MINT = address('So11111111111111111111111111111111111111112');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+const SLUG = "trends";
+export const TRENDS_PROGRAM_ID = address("CURVEmPpijXDTNdqrA9PGP1io2rkgiVXH26xdXVGLLfz");
+export const WSOL_MINT = address("So11111111111111111111111111111111111111112");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 /** Global `config` PDA (seeds `["config"]`) — same account for every pool (verified live). */
-export const TRENDS_CONFIG_PDA = address('BMejsRsPsaMypBsexufEmEGh8vjxfp2CMVHZE2PTTetj');
+export const TRENDS_CONFIG_PDA = address("BMejsRsPsaMypBsexufEmEGh8vjxfp2CMVHZE2PTTetj");
 /** Global `pool_authority` — a hardcoded Anchor `address` constraint, identical for every pool. */
-export const TRENDS_POOL_AUTHORITY = address('C6B7knNSF8X8YfW54D8jQvM3VUCifsphHEQZSCyAERoE');
+export const TRENDS_POOL_AUTHORITY = address("C6B7knNSF8X8YfW54D8jQvM3VUCifsphHEQZSCyAERoE");
 /** Global `event_authority` PDA (seeds `["__event_authority"]`) — same for every pool. */
-export const TRENDS_EVENT_AUTHORITY = address('87jkvJSERNjGmzftppK4Kt4Trv6tDh25K66aatP9esXQ');
+export const TRENDS_EVENT_AUTHORITY = address("87jkvJSERNjGmzftppK4Kt4Trv6tDh25K66aatP9esXQ");
 
 export const POOL_ACCOUNT_SIZE = 312;
 /** sha256('account:Pool')[0..8] (the `bonding_curve` Pool account — see module header point 2). */
@@ -193,17 +193,21 @@ function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): b
 function detectBaseTokenProgram(mint: Address, data: Uint8Array): Address {
   if (data.length === 82) return TOKEN_PROGRAM;
   if (data.length < 166) {
-    throw new Error(`${SLUG}: base mint ${mint} data is ${data.length} bytes, not a recognizable mint layout`);
+    throw new Error(
+      `${SLUG}: base mint ${mint} data is ${data.length} bytes, not a recognizable mint layout`,
+    );
   }
   if (data[165] !== 1) {
-    throw new Error(`${SLUG}: base mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`);
+    throw new Error(
+      `${SLUG}: base mint ${mint} token-2022 account type is ${data[165]}, expected 1 (mint)`,
+    );
   }
   // A NonTransferable / DefaultAccountState=frozen base mint genuinely cannot
   // route — self-drop it. PermanentDelegate/Confidential are advisories (a
   // routable T22 mint keeps routing), never blocking.
   const { blocking } = parseMintExtensions(data);
   if (blocking.length > 0) {
-    throw new Error(`${SLUG}: gate: base mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    throw new Error(`${SLUG}: gate: base mint ${mint} is un-routable: ${blocking.join("; ")}`);
   }
   let offset = 166;
   while (offset + 4 <= data.length) {
@@ -231,7 +235,7 @@ function detectBaseTokenProgram(mint: Address, data: Uint8Array): Address {
 export interface TrendsPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'quoteToBase' (default, BUY: pay wSOL, receive base) | 'baseToQuote' (SELL: pay base, receive wSOL). */
-  direction: 'quoteToBase' | 'baseToQuote';
+  direction: "quoteToBase" | "baseToQuote";
   baseMint: Address;
   baseVault: Address;
   quoteVault: Address;
@@ -240,17 +244,26 @@ export interface TrendsPoolConfig extends PoolConfig {
 
 /** Fetch + decode one Pool account. Read-only against the loader; reserves are read LIVE on-chain
  *  at swap time (see emitSetup) — nothing about the curve state is baked here. */
-export async function fetchTrendsPoolConfig(load: AccountLoader, pool: Address): Promise<TrendsPoolConfig> {
+export async function fetchTrendsPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<TrendsPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, POOL_DISCRIMINATOR)) {
-    throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a bonding_curve Pool account)`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has a foreign discriminator (not a bonding_curve Pool account)`,
+    );
   }
   if (data[OFF_IS_MIGRATED] !== 0) {
-    throw new Error(`${SLUG}: pool ${pool} has migrated (is_migrated = true) — no more swaps on the curve`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has migrated (is_migrated = true) — no more swaps on the curve`,
+    );
   }
 
   const codec = getAddressCodec();
@@ -259,13 +272,14 @@ export async function fetchTrendsPoolConfig(load: AccountLoader, pool: Address):
   const quoteVault = codec.decode(data.subarray(OFF_QUOTE_VAULT, OFF_QUOTE_VAULT + 32)) as Address;
 
   const mintData = await load(baseMint);
-  if (mintData === null) throw new Error(`${SLUG}: base mint ${baseMint} of pool ${pool} not found`);
+  if (mintData === null)
+    throw new Error(`${SLUG}: base mint ${baseMint} of pool ${pool} not found`);
   const baseTokenProgram = detectBaseTokenProgram(baseMint, mintData);
 
   return {
     venue: SLUG,
     pool,
-    direction: 'quoteToBase',
+    direction: "quoteToBase",
     baseMint,
     baseVault,
     quoteVault,
@@ -279,4 +293,3 @@ export const trends = {
   programId: TRENDS_PROGRAM_ID,
   fetchPoolConfig: fetchTrendsPoolConfig,
 };
-

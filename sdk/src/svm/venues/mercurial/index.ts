@@ -113,19 +113,19 @@
  * fragment re-checks it live every trade (a disabled pool quotes 0 and never
  * pays its CPI, the same self-drop-by-zero-quote convention Saber uses).
  */
-import { createHash } from 'node:crypto';
-import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { createHash } from "node:crypto";
+import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'mercurial';
+const SLUG = "mercurial";
 
-export const MERCURIAL_PROGRAM_ID = address('MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky');
+export const MERCURIAL_PROGRAM_ID = address("MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky");
 // Mercurial predates Token-2022; every sampled vault is classic Tokenkeg.
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** 1 (version tag) + SwapV2::LEN (264, PoolParameter::MAX_N_COINS = 4 baked into the fixed-size arrays). */
 const SWAP_STATE_LEN = 265;
@@ -138,7 +138,7 @@ const OFF_VAULT_A = 71;
 const OFF_VAULT_B = 103;
 export interface MercurialPoolConfig extends PoolConfig {
   venue: typeof SLUG;
-  direction: 'aToB' | 'bToA';
+  direction: "aToB" | "bToA";
   nonce: number;
   authority: Address;
   vaultA: Address;
@@ -157,11 +157,11 @@ export interface MercurialPoolConfig extends PoolConfig {
  */
 async function deriveMercurialAuthority(pool: Address, nonce: number): Promise<Address> {
   const encoder = getAddressEncoder();
-  const digest = createHash('sha256')
+  const digest = createHash("sha256")
     .update(encoder.encode(pool) as Uint8Array)
     .update(Uint8Array.of(nonce))
     .update(encoder.encode(MERCURIAL_PROGRAM_ID) as Uint8Array)
-    .update('ProgramDerivedAddress')
+    .update("ProgramDerivedAddress")
     .digest();
   const authority = getAddressDecoder().decode(digest);
   if (!isOffCurveAddress(authority)) {
@@ -171,18 +171,26 @@ async function deriveMercurialAuthority(pool: Address, nonce: number): Promise<A
 }
 
 /** Fetch + decode one Mercurial SwapV2 pool, plus its two vaults' mints. Read-only against the loader. */
-export async function fetchMercurialPoolConfig(load: AccountLoader, pool: Address): Promise<MercurialPoolConfig> {
+export async function fetchMercurialPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<MercurialPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== SWAP_STATE_LEN) {
-    throw new Error(`${SLUG}: pool ${pool} data must be ${SWAP_STATE_LEN} bytes (SwapState), got ${data.length}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} data must be ${SWAP_STATE_LEN} bytes (SwapState), got ${data.length}`,
+    );
   }
-  if (data[0] !== 2) throw new Error(`${SLUG}: pool ${pool} is not SwapV2 (version tag ${data[0]})`);
+  if (data[0] !== 2)
+    throw new Error(`${SLUG}: pool ${pool} is not SwapV2 (version tag ${data[0]})`);
   if (data[1] !== 1) throw new Error(`${SLUG}: pool ${pool} is not initialized`);
 
   const tokensLen = Number(readUintLE(data, OFF_TOKENS_LEN, 4));
   if (tokensLen !== 2) {
-    throw new Error(`${SLUG}: pool ${pool} has ${tokensLen} coin slots — only 2-coin pools are supported (see module header)`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${tokensLen} coin slots — only 2-coin pools are supported (see module header)`,
+    );
   }
 
   const nonce = data[OFF_NONCE];
@@ -214,27 +222,35 @@ export async function fetchMercurialPoolConfig(load: AccountLoader, pool: Addres
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   const vaultAOwner = pubkey.decode(vaultAData, 32);
   const vaultBOwner = pubkey.decode(vaultBData, 32);
   if (vaultAOwner !== authority) {
-    throw new Error(`${SLUG}: pool ${pool} vault A owner ${vaultAOwner} does not match the derived authority ${authority}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} vault A owner ${vaultAOwner} does not match the derived authority ${authority}`,
+    );
   }
   if (vaultBOwner !== authority) {
-    throw new Error(`${SLUG}: pool ${pool} vault B owner ${vaultBOwner} does not match the derived authority ${authority}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} vault B owner ${vaultBOwner} does not match the derived authority ${authority}`,
+    );
   }
 
   return {
     venue: SLUG,
     pool,
-    direction: 'aToB',
+    direction: "aToB",
     nonce,
     authority,
     vaultA,
@@ -251,4 +267,3 @@ export const mercurial = {
   tokenProgram: TOKEN_PROGRAM,
   fetchPoolConfig: fetchMercurialPoolConfig,
 };
-

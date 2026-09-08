@@ -138,7 +138,9 @@ export const EVM_REWARD_PARAM = {
 export function denormalizeToEvm(u: UniversalAddress): Hex {
   const bytes = hexToBytes(u);
   if (bytes.length !== 32) {
-    throw new Error(`denormalizeToEvm: expected a 32-byte UniversalAddress, got ${bytes.length} bytes`);
+    throw new Error(
+      `denormalizeToEvm: expected a 32-byte UniversalAddress, got ${bytes.length} bytes`,
+    );
   }
   for (let i = 0; i < 12; i++) {
     if (bytes[i] !== 0) {
@@ -167,29 +169,35 @@ function evmCall(c: Call) {
 /** Encodes a `Route` for an EVM (or TVM) destination via the deployed Portal ABI shape. */
 export function encodeRouteEvm(route: Route): Hex {
   assertSalt32(route.salt);
-  return encodeAbiParameters([EVM_ROUTE_PARAM], [
-    {
-      salt: route.salt,
-      deadline: route.deadline,
-      portal: denormalizeToEvm(route.portal),
-      nativeAmount: route.nativeAmount,
-      tokens: route.tokens.map(evmTokenAmount),
-      calls: route.calls.map(evmCall),
-    },
-  ]);
+  return encodeAbiParameters(
+    [EVM_ROUTE_PARAM],
+    [
+      {
+        salt: route.salt,
+        deadline: route.deadline,
+        portal: denormalizeToEvm(route.portal),
+        nativeAmount: route.nativeAmount,
+        tokens: route.tokens.map(evmTokenAmount),
+        calls: route.calls.map(evmCall),
+      },
+    ],
+  );
 }
 
 /** Encodes a `Reward` for an EVM (or TVM) source via the deployed Portal ABI shape. */
 export function encodeRewardEvm(reward: Reward): Hex {
-  return encodeAbiParameters([EVM_REWARD_PARAM], [
-    {
-      deadline: reward.deadline,
-      creator: denormalizeToEvm(reward.creator),
-      prover: denormalizeToEvm(reward.prover),
-      nativeAmount: reward.nativeAmount,
-      tokens: reward.tokens.map(evmTokenAmount),
-    },
-  ]);
+  return encodeAbiParameters(
+    [EVM_REWARD_PARAM],
+    [
+      {
+        deadline: reward.deadline,
+        creator: denormalizeToEvm(reward.creator),
+        prover: denormalizeToEvm(reward.prover),
+        nativeAmount: reward.nativeAmount,
+        tokens: reward.tokens.map(evmTokenAmount),
+      },
+    ],
+  );
 }
 
 /** Decodes a `Route` previously produced by `encodeRouteEvm`, re-normalizing addresses back to 32-byte form. */
@@ -246,7 +254,9 @@ const svmU64 = getU64Codec();
 const svmU32 = getU32Codec();
 
 /** Borsh `Vec<T>` = a u32 LE element count followed by each element, pinned explicitly. */
-function svmVec<TFrom, TTo extends TFrom = TFrom>(itemCodec: Codec<TFrom, TTo>): Codec<TFrom[], TTo[]> {
+function svmVec<TFrom, TTo extends TFrom = TFrom>(
+  itemCodec: Codec<TFrom, TTo>,
+): Codec<TFrom[], TTo[]> {
   return getArrayCodec(itemCodec, { size: svmU32 });
 }
 
@@ -322,7 +332,9 @@ export const svmRewardCodec = getStructCodec([
 function denormalizeToSvm(u: UniversalAddress): Uint8Array {
   const bytes = hexToBytes(u);
   if (bytes.length !== 32) {
-    throw new Error(`denormalizeToSvm: expected a 32-byte UniversalAddress, got ${bytes.length} bytes`);
+    throw new Error(
+      `denormalizeToSvm: expected a 32-byte UniversalAddress, got ${bytes.length} bytes`,
+    );
   }
   return bytes;
 }
@@ -334,7 +346,9 @@ function svmTokenAmountOf(t: TokenAmount): SvmTokenAmount {
 
 function svmCallOf(c: Call): SvmCall {
   if (c.value !== 0n) {
-    throw new Error("encodeRouteSvm: SVM Call has no value field (nonzero Call.value cannot be encoded)");
+    throw new Error(
+      "encodeRouteSvm: SVM Call has no value field (nonzero Call.value cannot be encoded)",
+    );
   }
   return { target: denormalizeToSvm(c.target), data: hexToBytes(c.data) };
 }

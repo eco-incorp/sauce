@@ -23,27 +23,27 @@
 // OPTIONAL by design: older pins predate the artifact. When it is absent the
 // committed copy is left intact and a note is logged — never fatal — mirroring
 // how sync-engine-artifacts treats V12RuntimeBytecode.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const SDK_DIR = resolve(SCRIPT_DIR, '..');
-const REPO_ROOT = resolve(SDK_DIR, '..');
+const SDK_DIR = resolve(SCRIPT_DIR, "..");
+const REPO_ROOT = resolve(SDK_DIR, "..");
 
 // Same dep-resolution rule as sync-engine-artifacts: `sauce` is a compiler devDep,
 // exposed under a stable symlink there (or hoisted at the root). Never hardcode
 // the SHA-pinned pnpm store path.
 const ABI_CANDIDATES = [
-  resolve(REPO_ROOT, 'compiler', 'node_modules', 'sauce', 'svm', 'abi', 'engine-abi.json'),
-  resolve(REPO_ROOT, 'node_modules', 'sauce', 'svm', 'abi', 'engine-abi.json'),
+  resolve(REPO_ROOT, "compiler", "node_modules", "sauce", "svm", "abi", "engine-abi.json"),
+  resolve(REPO_ROOT, "node_modules", "sauce", "svm", "abi", "engine-abi.json"),
 ];
-const OUT = resolve(SDK_DIR, 'src', 'svm', 'engine-abi.generated.ts');
+const OUT = resolve(SDK_DIR, "src", "svm", "engine-abi.generated.ts");
 
-const SNAKE = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
+const SNAKE = (s) => s.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
 const hexToByteList = (hex) => {
   const bytes = hex.match(/.{2}/g) ?? [];
-  return bytes.map((b) => `0x${b}`).join(', ');
+  return bytes.map((b) => `0x${b}`).join(", ");
 };
 
 /** Reads the artifact and writes the generated module. Returns {generated, abiPath}. */
@@ -51,26 +51,29 @@ export function generateEngineAbi() {
   const abiPath = ABI_CANDIDATES.find(existsSync);
   if (abiPath === undefined) return { generated: false, abiPath: undefined };
 
-  const abi = JSON.parse(readFileSync(abiPath, 'utf8'));
+  const abi = JSON.parse(readFileSync(abiPath, "utf8"));
 
   const off = abi.headerOffsets;
   const offsetLines = Object.keys(off)
     .sort()
     .map((k) => `export const BUFFER_OFFSET_${SNAKE(k)} = ${off[k]};`)
-    .join('\n');
+    .join("\n");
 
   const discLines = abi.instructions
-    .map((ix) => `export const ${SNAKE(ix.name)}_DISCRIMINATOR = /* ${ix.discriminator} */ new Uint8Array([${hexToByteList(ix.discriminator)}]);`)
-    .join('\n');
+    .map(
+      (ix) =>
+        `export const ${SNAKE(ix.name)}_DISCRIMINATOR = /* ${ix.discriminator} */ new Uint8Array([${hexToByteList(ix.discriminator)}]);`,
+    )
+    .join("\n");
 
   // A structural literal copy of the artifact (minus $comment) — the jest drift
   // test deep-equals THIS against the freshly-read artifact, and asserts every
   // artifact key is represented here.
   const structural = JSON.stringify(
-    Object.fromEntries(Object.entries(abi).filter(([k]) => k !== '$comment')),
+    Object.fromEntries(Object.entries(abi).filter(([k]) => k !== "$comment")),
     null,
     2,
-  ).replace(/\n/g, '\n  ');
+  ).replace(/\n/g, "\n  ");
 
   const ts = `// GENERATED FILE — do not edit by hand.
 //
@@ -110,10 +113,11 @@ ${discLines}
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { generated, abiPath } = generateEngineAbi();
-  if (generated) console.log(`[gen-engine-abi] wrote src/svm/engine-abi.generated.ts from ${abiPath}`);
+  if (generated)
+    console.log(`[gen-engine-abi] wrote src/svm/engine-abi.generated.ts from ${abiPath}`);
   else
     console.log(
-      '[gen-engine-abi] svm/abi/engine-abi.json absent from the pinned engine — kept the committed ' +
-        'engine-abi.generated.ts (older pins predate the artifact).',
+      "[gen-engine-abi] svm/abi/engine-abi.json absent from the pinned engine — kept the committed " +
+        "engine-abi.generated.ts (older pins predate the artifact).",
     );
 }

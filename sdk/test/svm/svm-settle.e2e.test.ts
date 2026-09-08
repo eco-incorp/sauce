@@ -26,7 +26,7 @@
  * of the attached mint, so they always agree). The fee-mint case itself is the token program's own
  * logic, not this recipe's — this suite proves the recipe emits ix 12 correctly for both programs.
  */
-import { assertAccountExists, type Address } from '@solana/kit';
+import { assertAccountExists, type Address } from "@solana/kit";
 import {
   describeRustSvm,
   execute,
@@ -41,11 +41,11 @@ import {
   TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
   transferCheckedData,
-} from './engine-harness.js';
-import type { EngineHarness } from './engine-harness.js';
-import { svmSettleSource } from '../../src/svm/index.js';
-import { compileSource } from '../helpers';
-import type { AccountManifest } from 'sauce-compiler';
+} from "./engine-harness.js";
+import type { EngineHarness } from "./engine-harness.js";
+import { svmSettleSource } from "../../src/svm/index.js";
+import { compileSource } from "../helpers";
+import type { AccountManifest } from "sauce-compiler";
 
 const DECIMALS = 6;
 const amountOf = (harness: EngineHarness, a: Address): bigint => {
@@ -59,7 +59,7 @@ interface Compiled {
   manifest: AccountManifest;
 }
 
-describeRustSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022', () => {
+describeRustSvm("svm settle e2e: TransferChecked sweeps, classic + Token-2022", () => {
   let harness: EngineHarness;
   const cache = new Map<string, Compiled>();
 
@@ -69,7 +69,7 @@ describeRustSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022', 
     const hit = cache.get(key);
     if (hit) return hit;
 
-    const { bytecode, manifest } = compileSource(svmSettleSource(escrowCount), 'svm', {
+    const { bytecode, manifest } = compileSource(svmSettleSource(escrowCount), "svm", {
       defines: { SETTLE_MIN_OUT: minOut, SETTLE_SPL_COUNT: splCount },
     });
     const entry: Compiled = { bytecode, manifest: manifest! };
@@ -84,7 +84,12 @@ describeRustSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022', 
 
   /** Run an N=1 blob for `minOut` against one escrow on program `tp` (tokenProgram0, splCount=1). */
   const runOne = async (p: {
-    escrow: Address; mint: Address; dest: Address; owner: Address; minOut: bigint; tp: Address;
+    escrow: Address;
+    mint: Address;
+    dest: Address;
+    owner: Address;
+    minOut: bigint;
+    tp: Address;
   }) => {
     return execute(harness, build(1, p.minOut, 1n), {
       tokenProgram0: p.tp,
@@ -101,39 +106,45 @@ describeRustSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022', 
     dest: setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n, program),
   });
 
-  it('classic SPL: floor met, sweeps the whole escrow via TransferChecked', async () => {
+  it("classic SPL: floor met, sweeps the whole escrow via TransferChecked", async () => {
     const mint = setMint(harness, randomAddress(), DECIMALS, TOKEN_PROGRAM);
     const owner = harness.payer.address;
     const { escrow, dest } = mkEscrow(mint, owner, 1_000_000n, TOKEN_PROGRAM);
 
-    const r = expectOk(await runOne({ escrow, mint, dest, owner, minOut: 1_000_000n, tp: TOKEN_PROGRAM }));
+    const r = expectOk(
+      await runOne({ escrow, mint, dest, owner, minOut: 1_000_000n, tp: TOKEN_PROGRAM }),
+    );
     expect(toBigInt(r.returnData)).toBe(1_000_000n);
     expect(amountOf(harness, escrow)).toBe(0n);
     expect(amountOf(harness, dest)).toBe(1_000_000n);
   });
 
-  it('★ Token-2022: the SAME contract works against the Token-2022 program (what ix 3 could not guarantee)', async () => {
+  it("★ Token-2022: the SAME contract works against the Token-2022 program (what ix 3 could not guarantee)", async () => {
     const mint = setMint(harness, randomAddress(), DECIMALS, TOKEN_2022_PROGRAM);
     const owner = harness.payer.address;
     const { escrow, dest } = mkEscrow(mint, owner, 555_000n, TOKEN_2022_PROGRAM);
 
-    const r = expectOk(await runOne({ escrow, mint, dest, owner, minOut: 0n, tp: TOKEN_2022_PROGRAM }));
+    const r = expectOk(
+      await runOne({ escrow, mint, dest, owner, minOut: 0n, tp: TOKEN_2022_PROGRAM }),
+    );
     expect(toBigInt(r.returnData)).toBe(555_000n);
     expect(amountOf(harness, escrow)).toBe(0n);
     expect(amountOf(harness, dest)).toBe(555_000n);
   });
 
-  it('floor unmet by one unit: reverts atomically, nothing moves', async () => {
+  it("floor unmet by one unit: reverts atomically, nothing moves", async () => {
     const mint = setMint(harness, randomAddress(), DECIMALS, TOKEN_PROGRAM);
     const owner = harness.payer.address;
     const { escrow, dest } = mkEscrow(mint, owner, 1_000_000n, TOKEN_PROGRAM);
 
-    const r = expectFail(await runOne({ escrow, mint, dest, owner, minOut: 1_000_001n, tp: TOKEN_PROGRAM }));
-    expect(Buffer.from(r.revertData).toString('utf8')).toBe('settle: balance below minOut');
+    const r = expectFail(
+      await runOne({ escrow, mint, dest, owner, minOut: 1_000_001n, tp: TOKEN_PROGRAM }),
+    );
+    expect(Buffer.from(r.revertData).toString("utf8")).toBe("settle: balance below minOut");
     expect(amountOf(harness, escrow)).toBe(1_000_000n);
   });
 
-  it('empty escrow, minOut=0: succeeds, returns 0, no transfer attempted', async () => {
+  it("empty escrow, minOut=0: succeeds, returns 0, no transfer attempted", async () => {
     const mint = setMint(harness, randomAddress(), DECIMALS, TOKEN_PROGRAM);
     const owner = harness.payer.address;
     const { escrow, dest } = mkEscrow(mint, owner, 0n, TOKEN_PROGRAM);
@@ -141,7 +152,7 @@ describeRustSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022', 
     expect(toBigInt(r.returnData)).toBe(0n);
   });
 
-  it('★ mixed N=2: splCount=1 routes escrow0 (classic) via tokenProgram0 and escrow1 (Token-2022) via tokenProgram1, one recipient', async () => {
+  it("★ mixed N=2: splCount=1 routes escrow0 (classic) via tokenProgram0 and escrow1 (Token-2022) via tokenProgram1, one recipient", async () => {
     const owner = harness.payer.address;
     const recipient = randomAddress();
 
@@ -149,16 +160,34 @@ describeRustSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022', 
     const mint1 = setMint(harness, randomAddress(), DECIMALS, TOKEN_2022_PROGRAM);
     const escrow0 = setTokenAccount(harness, randomAddress(), mint0, owner, 100n, TOKEN_PROGRAM);
     const dest0 = setTokenAccount(harness, randomAddress(), mint0, recipient, 0n, TOKEN_PROGRAM);
-    const escrow1 = setTokenAccount(harness, randomAddress(), mint1, owner, 200n, TOKEN_2022_PROGRAM);
-    const dest1 = setTokenAccount(harness, randomAddress(), mint1, recipient, 0n, TOKEN_2022_PROGRAM);
+    const escrow1 = setTokenAccount(
+      harness,
+      randomAddress(),
+      mint1,
+      owner,
+      200n,
+      TOKEN_2022_PROGRAM,
+    );
+    const dest1 = setTokenAccount(
+      harness,
+      randomAddress(),
+      mint1,
+      recipient,
+      0n,
+      TOKEN_2022_PROGRAM,
+    );
 
     // splCount=1 → escrow0 via tokenProgram0 (classic), escrow1 via tokenProgram1 (2022).
     const r = expectOk(
       await execute(harness, build(2, 50n, 1n), {
         tokenProgram0: TOKEN_PROGRAM,
         tokenProgram1: TOKEN_2022_PROGRAM,
-        escrow0, mint0, dest0,
-        escrow1, mint1, dest1,
+        escrow0,
+        mint0,
+        dest0,
+        escrow1,
+        mint1,
+        dest1,
         owner: { address: owner, signer: harness.payer },
       }),
     );
@@ -170,7 +199,7 @@ describeRustSvm('svm settle e2e: TransferChecked sweeps, classic + Token-2022', 
     expect(amountOf(harness, dest1)).toBe(200n);
   });
 
-  it('cross-checks the CPI data bytes against the SDK helper: [tag 12][u64 LE amount][decimals]', () => {
+  it("cross-checks the CPI data bytes against the SDK helper: [tag 12][u64 LE amount][decimals]", () => {
     const amount = 123_456n;
     expect(transferCheckedData(amount, DECIMALS)).toEqual(
       Uint8Array.from([12, ...new Uint8Array(new BigUint64Array([amount]).buffer), DECIMALS]),

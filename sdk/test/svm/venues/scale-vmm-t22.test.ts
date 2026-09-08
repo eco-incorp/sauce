@@ -6,9 +6,9 @@
  * TODO(t22-fee-netting) note in scale-common.ts). scale-vmm exposes no
  * referenceQuote, so this covers the fetch/decode + threading path.
  */
-import { getAddressDecoder, getAddressEncoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { scaleVmm } from '../../../src/svm/venues/scale-vmm/index.js';
+import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { scaleVmm } from "../../../src/svm/venues/scale-vmm/index.js";
 import {
   ata,
   CONFIG_SEED,
@@ -16,9 +16,14 @@ import {
   SCALE_VMM_PROGRAM_ID,
   TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
-} from '../../../src/svm/venues/scale-common.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeLegacyMint, makeT22Mint, NON_TRANSFERABLE_TLV, tlvEntry } from '../fixtures/token-2022/synth.js';
+} from "../../../src/svm/venues/scale-common.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import {
+  makeLegacyMint,
+  makeT22Mint,
+  NON_TRANSFERABLE_TLV,
+  tlvEntry,
+} from "../fixtures/token-2022/synth.js";
 
 const dec = getAddressDecoder();
 const aenc = getAddressEncoder();
@@ -82,8 +87,8 @@ async function makeLoader(mintA: Uint8Array, mintB: Uint8Array): Promise<Account
   ]);
 }
 
-describe('scale-vmm Token-2022 handling', () => {
-  it('decodes a legacy/legacy pair (baseline)', async () => {
+describe("scale-vmm Token-2022 handling", () => {
+  it("decodes a legacy/legacy pair (baseline)", async () => {
     const load = await makeLoader(makeLegacyMint(), makeLegacyMint());
     const cfg = await scaleVmm.fetchPoolConfig(load, PAIR);
     expect(cfg.tokenProgramA).toBe(TOKEN_PROGRAM);
@@ -91,7 +96,7 @@ describe('scale-vmm Token-2022 handling', () => {
     expect(cfg.platformFeeTaA).toBe(await ata(FEE_WALLET, MINT_A, TOKEN_PROGRAM));
   });
 
-  it('ROUTES a zero-fee Token-2022 mint_a (not dropped) and threads T22 into the ATA', async () => {
+  it("ROUTES a zero-fee Token-2022 mint_a (not dropped) and threads T22 into the ATA", async () => {
     const load = await makeLoader(makeT22Mint(), makeLegacyMint());
     const cfg = await scaleVmm.fetchPoolConfig(load, PAIR);
     expect(cfg.tokenProgramA).toBe(TOKEN_2022_PROGRAM);
@@ -99,19 +104,21 @@ describe('scale-vmm Token-2022 handling', () => {
     expect(cfg.platformFeeTaA).toBe(await ata(FEE_WALLET, MINT_A, TOKEN_2022_PROGRAM));
   });
 
-  it('ROUTES a zero-fee Token-2022 mint_b too (opposite side differs)', async () => {
+  it("ROUTES a zero-fee Token-2022 mint_b too (opposite side differs)", async () => {
     const load = await makeLoader(makeLegacyMint(), makeT22Mint());
     const cfg = await scaleVmm.fetchPoolConfig(load, PAIR);
     expect(cfg.tokenProgramA).toBe(TOKEN_PROGRAM);
     expect(cfg.tokenProgramB).toBe(TOKEN_2022_PROGRAM);
   });
 
-  it('self-drops a NonTransferable mint_a', async () => {
+  it("self-drops a NonTransferable mint_a", async () => {
     const load = await makeLoader(makeT22Mint(NON_TRANSFERABLE_TLV), makeLegacyMint());
-    await expect(scaleVmm.fetchPoolConfig(load, PAIR)).rejects.toThrow(/un-routable|NonTransferable/);
+    await expect(scaleVmm.fetchPoolConfig(load, PAIR)).rejects.toThrow(
+      /un-routable|NonTransferable/,
+    );
   });
 
-  it('still rejects a TransferFeeConfig mint_a (see TODO(t22-fee-netting))', async () => {
+  it("still rejects a TransferFeeConfig mint_a (see TODO(t22-fee-netting))", async () => {
     const load = await makeLoader(makeT22Mint(tlvEntry(1, new Uint8Array(108))), makeLegacyMint());
     await expect(scaleVmm.fetchPoolConfig(load, PAIR)).rejects.toThrow(/TransferFeeConfig/);
   });

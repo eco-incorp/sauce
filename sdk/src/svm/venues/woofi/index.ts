@@ -113,20 +113,20 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'woofi';
+const SLUG = "woofi";
 
-export const WOOFI_PROGRAM_ID = address('WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb');
+export const WOOFI_PROGRAM_ID = address("WooFif76YGRNjk1pA8wCsN67aQsD9f9iLsz4NcJ1AVb");
 // Module-private (every other venue keeps its own copy of this constant
 // unexported too — see the barrel's `export *`, which would otherwise collide).
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /** Anchor `sha256("global:swap")[0..8]` — program-independent (same bytes obric-v2/meteora use for their own "swap" ix). */
 export const WOOFI_SWAP_DISCRIMINATOR = [248, 198, 158, 145, 225, 117, 135, 200];
@@ -198,20 +198,17 @@ export const OFF_PYTH_EXPONENT = 89;
 export const OFF_PYTH_PUBLISH_TIME = 93;
 export const PYTH_VERIFICATION_FULL = 1;
 
-// SPL token account amount + mint decimals offsets (standard).
-const TOKEN_ACCOUNT_AMOUNT_OFF = 64;
-const MINT_DECIMALS_OFF = 44;
-
 export const ONE_E18 = 1_000_000_000_000_000_000n;
 export const ONE_E5 = 100_000n;
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
 export interface WoofiPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'sellBase' (default) sells the non-quote side for quote; 'sellQuote' is the reverse. */
-  direction: 'sellBase' | 'sellQuote';
+  direction: "sellBase" | "sellQuote";
   wooconfig: Address;
   wooracleBase: Address;
   woopoolBase: Address;
@@ -265,11 +262,15 @@ async function gateMint(load: AccountLoader, mint: Address, pool: Address): Prom
   const data = await load(mint);
   if (data === null) return;
   if (classifyMintProgram(mint, data) === TOKEN_2022_PROGRAM_ID) {
-    throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+    throw new Error(
+      `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+    );
   }
   const { blocking } = parseMintExtensions(data);
   if (blocking.length > 0) {
-    throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+    throw new Error(
+      `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+    );
   }
 }
 
@@ -278,8 +279,14 @@ async function decodeAmmPool(
   load: AccountLoader,
   pool: Address,
 ): Promise<{
-  wooracleA: Address; woopoolA: Address; tokenMintA: Address; tokenVaultA: Address;
-  wooracleB: Address; woopoolB: Address; tokenMintB: Address; tokenVaultB: Address;
+  wooracleA: Address;
+  woopoolA: Address;
+  tokenMintA: Address;
+  tokenVaultA: Address;
+  wooracleB: Address;
+  woopoolB: Address;
+  tokenMintB: Address;
+  tokenVaultB: Address;
   quoteTokenMint: Address;
 }> {
   const data = await load(pool);
@@ -306,7 +313,10 @@ async function decodeAmmPool(
  * genuine base-to-base pair and this adapter throws (not yet wired — a
  * follow-up, not a permission gate).
  */
-export async function fetchWoofiConfig(load: AccountLoader, pool: Address): Promise<WoofiPoolConfig> {
+export async function fetchWoofiConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<WoofiPoolConfig> {
   const bundle = await decodeAmmPool(load, pool);
   const aIsQuote = bundle.tokenMintA === bundle.quoteTokenMint;
   const bIsQuote = bundle.tokenMintB === bundle.quoteTokenMint;
@@ -317,8 +327,18 @@ export async function fetchWoofiConfig(load: AccountLoader, pool: Address): Prom
   }
 
   const base = aIsQuote
-    ? { wooracle: bundle.wooracleB, woopool: bundle.woopoolB, tokenMint: bundle.tokenMintB, tokenVault: bundle.tokenVaultB }
-    : { wooracle: bundle.wooracleA, woopool: bundle.woopoolA, tokenMint: bundle.tokenMintA, tokenVault: bundle.tokenVaultA };
+    ? {
+        wooracle: bundle.wooracleB,
+        woopool: bundle.woopoolB,
+        tokenMint: bundle.tokenMintB,
+        tokenVault: bundle.tokenVaultB,
+      }
+    : {
+        wooracle: bundle.wooracleA,
+        woopool: bundle.woopoolA,
+        tokenMint: bundle.tokenMintA,
+        tokenVault: bundle.tokenVaultA,
+      };
   const quote = aIsQuote
     ? { wooracle: bundle.wooracleA, woopool: bundle.woopoolA, tokenVault: bundle.tokenVaultA }
     : { wooracle: bundle.wooracleB, woopool: bundle.woopoolB, tokenVault: bundle.tokenVaultB };
@@ -329,13 +349,19 @@ export async function fetchWoofiConfig(load: AccountLoader, pool: Address): Prom
   ]);
 
   const [oracleData, poolData] = await Promise.all([load(base.wooracle), load(base.woopool)]);
-  if (oracleData === null) throw new Error(`woofi pool ${pool} base wooracle ${base.wooracle} not found`);
+  if (oracleData === null)
+    throw new Error(`woofi pool ${pool} base wooracle ${base.wooracle} not found`);
   if (oracleData.length !== WOOFI_WOORACLE_SIZE) {
-    throw new Error(`woofi pool ${pool} base wooracle ${base.wooracle} is ${oracleData.length} bytes, expected ${WOOFI_WOORACLE_SIZE}`);
+    throw new Error(
+      `woofi pool ${pool} base wooracle ${base.wooracle} is ${oracleData.length} bytes, expected ${WOOFI_WOORACLE_SIZE}`,
+    );
   }
-  if (poolData === null) throw new Error(`woofi pool ${pool} base woopool ${base.woopool} not found`);
+  if (poolData === null)
+    throw new Error(`woofi pool ${pool} base woopool ${base.woopool} not found`);
   if (poolData.length !== WOOFI_WOOPOOL_SIZE) {
-    throw new Error(`woofi pool ${pool} base woopool ${base.woopool} is ${poolData.length} bytes, expected ${WOOFI_WOOPOOL_SIZE}`);
+    throw new Error(
+      `woofi pool ${pool} base woopool ${base.woopool} is ${poolData.length} bytes, expected ${WOOFI_WOOPOOL_SIZE}`,
+    );
   }
 
   const wooconfig = pubkeyAt(oracleData, OFF_ORACLE_WOOCONFIG);
@@ -358,18 +384,22 @@ export async function fetchWoofiConfig(load: AccountLoader, pool: Address): Prom
   const baseDecimals = poolData[OFF_POOL_BASE_DECIMALS];
 
   const quotePythData = await load(priceUpdateQuote);
-  if (quotePythData === null) throw new Error(`woofi pool ${pool} quote price-update ${priceUpdateQuote} not found`);
+  if (quotePythData === null)
+    throw new Error(`woofi pool ${pool} quote price-update ${priceUpdateQuote} not found`);
   if (quotePythData.length !== WOOFI_PRICE_UPDATE_SIZE) {
-    throw new Error(`woofi pool ${pool} quote price-update ${priceUpdateQuote} is ${quotePythData.length} bytes, expected ${WOOFI_PRICE_UPDATE_SIZE}`);
+    throw new Error(
+      `woofi pool ${pool} quote price-update ${priceUpdateQuote} is ${quotePythData.length} bytes, expected ${WOOFI_PRICE_UPDATE_SIZE}`,
+    );
   }
   const quoteExpoRaw = readUintLE(quotePythData, OFF_PYTH_EXPONENT, 4);
-  const quoteExpo = quoteExpoRaw >= 1n << 31n ? Number(quoteExpoRaw - (1n << 32n)) : Number(quoteExpoRaw);
+  const quoteExpo =
+    quoteExpoRaw >= 1n << 31n ? Number(quoteExpoRaw - (1n << 32n)) : Number(quoteExpoRaw);
   const pythQuoteDecPow = 10n ** BigInt(Math.abs(quoteExpo));
 
   return {
     venue: SLUG,
     pool,
-    direction: 'sellBase',
+    direction: "sellBase",
     wooconfig,
     wooracleBase: base.wooracle,
     woopoolBase: base.woopool,
@@ -407,7 +437,7 @@ export function woofiSwapAccounts(
   make: (ref: string, addr: Address, writable?: boolean) => VenueAccount,
   refFor?: (role: string) => string,
 ): VenueAccount[] {
-  const sellBase = c.direction === 'sellBase';
+  const sellBase = c.direction === "sellBase";
   const r = refFor ?? ((role: string): string => role);
   // "from"/"to" per the real Anchor account order; sellBase: from=base,to=quote; sellQuote: reversed.
   const fromWooracle = sellBase ? c.wooracleBase : c.wooracleQuote;
@@ -421,22 +451,22 @@ export function woofiSwapAccounts(
   const toVault = sellBase ? c.quoteTokenVault : c.tokenVaultBase;
   const toPriceUpdate = sellBase ? c.priceUpdateQuote : c.priceUpdateBase;
   return [
-    make(r('wooconfig'), c.wooconfig),
-    make(r('tokprog'), c.tokenProgram),
+    make(r("wooconfig"), c.wooconfig),
+    make(r("tokprog"), c.tokenProgram),
     { ref: user.owner, signer: true },
-    make(r('wof'), fromWooracle, true),
-    make(r('wpf'), fromWoopool, true),
+    make(r("wof"), fromWooracle, true),
+    make(r("wpf"), fromWoopool, true),
     { ref: fromUserAta, writable: true },
-    make(r('vf'), fromVault, true),
-    make(r('puf'), fromPriceUpdate, true),
-    make(r('wot'), toWooracle, true),
-    make(r('wpt'), toWoopool, true),
+    make(r("vf"), fromVault, true),
+    make(r("puf"), fromPriceUpdate, true),
+    make(r("wot"), toWooracle, true),
+    make(r("wpt"), toWoopool, true),
     { ref: toUserAta, writable: true },
-    make(r('vt'), toVault, true),
-    make(r('put'), toPriceUpdate, true),
-    make(r('wpq'), c.woopoolQuote, true),
-    make(r('puq'), c.priceUpdateQuote),
-    make(r('vq'), c.quoteTokenVault, true),
+    make(r("vt"), toVault, true),
+    make(r("put"), toPriceUpdate, true),
+    make(r("wpq"), c.woopoolQuote, true),
+    make(r("puq"), c.priceUpdateQuote),
+    make(r("vq"), c.quoteTokenVault, true),
     // rebate_to: UncheckedAccount, zero constraints — the payer's own wallet
     // is always a valid (if unused) target; avoids attaching a 17th foreign ref.
     { ref: user.owner },
@@ -468,7 +498,8 @@ export const woofi = {
   buildSwap(cfg: PoolConfig, user: SwapUser, amountIn: bigint): VenueSwap {
     const c = woofiConfig(cfg);
     const U128_MAX = (1n << 128n) - 1n;
-    if (amountIn <= 0n || amountIn > U128_MAX) throw new Error(`woofi buildSwap amountIn must be a positive u128, got ${amountIn}`);
+    if (amountIn <= 0n || amountIn > U128_MAX)
+      throw new Error(`woofi buildSwap amountIn must be a positive u128, got ${amountIn}`);
     const data = new Uint8Array(8 + 16 + 16);
     data.set(WOOFI_SWAP_DISCRIMINATOR, 0);
     for (let b = 0; b < 16; b++) data[8 + b] = Number((amountIn >> BigInt(8 * b)) & 0xffn);

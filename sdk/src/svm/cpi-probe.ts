@@ -46,7 +46,7 @@ import {
   setTransactionMessageFeePayerSigner,
   setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners,
-} from '@solana/kit';
+} from "@solana/kit";
 import type {
   Address,
   Blockhash,
@@ -55,14 +55,14 @@ import type {
   Rpc,
   SimulateTransactionApi,
   TransactionSigner,
-} from '@solana/kit';
-import { readUintLE } from './venues/math.js';
+} from "@solana/kit";
+import { readUintLE } from "./venues/math.js";
 
 /** The instructions sysvar — its presence in a swap's account list = introspection. */
-export const INSTRUCTIONS_SYSVAR = 'Sysvar1nstructions1111111111111111111111111' as Address;
+export const INSTRUCTIONS_SYSVAR = "Sysvar1nstructions1111111111111111111111111" as Address;
 
 /** Prop-AMM integrability tier (see the module doc + docs/svm-venues.md). */
-export type CpiTier = 'P-A' | 'P-B' | 'P-C';
+export type CpiTier = "P-A" | "P-B" | "P-C";
 
 /** One account of a venue swap, for the static screen (address + signer flag). */
 export interface ScreenAccount {
@@ -83,7 +83,7 @@ export interface StaticScreen {
   /** Signer accounts that are NOT the user (maker seats / oracle writers). */
   foreignSigners: Address[];
   /** P-C when introspecting or foreign-signed; else P-A candidate (needs the sim to confirm). */
-  candidateTier: 'P-A' | 'P-C';
+  candidateTier: "P-A" | "P-C";
   /** Human-readable reasons feeding the ledger. */
   reasons: string[];
 }
@@ -100,20 +100,23 @@ export function staticCpiScreen(input: StaticScreenInput): StaticScreen {
   for (const account of input.accounts) {
     if (account.address === INSTRUCTIONS_SYSVAR) {
       introspects = true;
-      reasons.push('carries the Instructions sysvar (transaction introspection)');
+      reasons.push("carries the Instructions sysvar (transaction introspection)");
     }
     if (account.signer && account.address !== undefined && account.address !== input.userSigner) {
       foreignSigners.push(account.address);
       reasons.push(`requires a non-user signer ${account.address} (maker seat / oracle writer)`);
     }
   }
-  const candidateTier: 'P-A' | 'P-C' = introspects || foreignSigners.length > 0 ? 'P-C' : 'P-A';
-  if (candidateTier === 'P-A') reasons.push('no introspection, no foreign signer — P-A candidate (confirm with the simulation probe)');
+  const candidateTier: "P-A" | "P-C" = introspects || foreignSigners.length > 0 ? "P-C" : "P-A";
+  if (candidateTier === "P-A")
+    reasons.push(
+      "no introspection, no foreign signer — P-A candidate (confirm with the simulation probe)",
+    );
   return { introspects, foreignSigners, candidateTier, reasons };
 }
 
 /** ACCEPT / REJECT / DEGRADE / UNKNOWN — the simulation verdict. */
-export type CpiVerdict = 'accept' | 'reject' | 'degrade' | 'unknown';
+export type CpiVerdict = "accept" | "reject" | "degrade" | "unknown";
 
 export interface AcceptanceProbeInput {
   rpc: Rpc<SimulateTransactionApi & GetAccountInfoApi>;
@@ -146,7 +149,7 @@ export interface AcceptanceProbe {
 const TOKEN_AMOUNT_OFFSET = 64;
 const TOKEN_ACCOUNT_MIN_LENGTH = TOKEN_AMOUNT_OFFSET + 8;
 const PLACEHOLDER_BLOCKHASH = {
-  blockhash: '11111111111111111111111111111111' as Blockhash,
+  blockhash: "11111111111111111111111111111111" as Blockhash,
   lastValidBlockHeight: 0n,
 } as const;
 
@@ -166,8 +169,11 @@ function tokenAmount(data: Uint8Array): bigint | null {
  * on `expectedOut` when supplied.
  */
 export async function probeCpiAcceptance(input: AcceptanceProbeInput): Promise<AcceptanceProbe> {
-  const { value: preAccount } = await input.rpc.getAccountInfo(input.outAta, { encoding: 'base64' }).send();
-  const preAmount = preAccount === null ? 0n : tokenAmount(decodeBase64(preAccount.data[0])) ?? 0n;
+  const { value: preAccount } = await input.rpc
+    .getAccountInfo(input.outAta, { encoding: "base64" })
+    .send();
+  const preAmount =
+    preAccount === null ? 0n : (tokenAmount(decodeBase64(preAccount.data[0])) ?? 0n);
 
   const message = pipe(
     createTransactionMessage({ version: 0 }),
@@ -179,31 +185,48 @@ export async function probeCpiAcceptance(input: AcceptanceProbeInput): Promise<A
 
   const { value } = await input.rpc
     .simulateTransaction(getBase64EncodedWireTransaction(transaction), {
-      encoding: 'base64',
+      encoding: "base64",
       replaceRecentBlockhash: true,
-      accounts: { encoding: 'base64', addresses: [input.outAta] },
+      accounts: { encoding: "base64", addresses: [input.outAta] },
     })
     .send();
 
-  const cu = value.unitsConsumed === undefined || value.unitsConsumed === null ? undefined : BigInt(value.unitsConsumed);
+  const cu =
+    value.unitsConsumed === undefined || value.unitsConsumed === null
+      ? undefined
+      : BigInt(value.unitsConsumed);
   if (value.err !== null) {
     // A rejecting program surfaces a custom error / a caller/owner/missing-acct
     // failure — the definitive P-C signal.
-    return { verdict: 'reject', delta: 0n, cu, detail: `${JSON.stringify(value.err)}${value.logs ? `\n${value.logs.join('\n')}` : ''}` };
+    return {
+      verdict: "reject",
+      delta: 0n,
+      cu,
+      detail: `${JSON.stringify(value.err)}${value.logs ? `\n${value.logs.join("\n")}` : ""}`,
+    };
   }
   const postAccount = value.accounts?.[0];
-  const postAmount = postAccount === null || postAccount === undefined ? preAmount : tokenAmount(decodeBase64(postAccount.data[0])) ?? preAmount;
+  const postAmount =
+    postAccount === null || postAccount === undefined
+      ? preAmount
+      : (tokenAmount(decodeBase64(postAccount.data[0])) ?? preAmount);
   const delta = postAmount - preAmount;
-  if (delta <= 0n) return { verdict: 'reject', delta, cu, detail: 'swap simulated but credited no output' };
+  if (delta <= 0n)
+    return { verdict: "reject", delta, cu, detail: "swap simulated but credited no output" };
 
   if (input.expectedOut !== undefined && input.expectedOut > 0n) {
     const bps = BigInt(input.degradeBps ?? 500);
     const floor = input.expectedOut - (input.expectedOut * bps) / 10_000n;
     if (delta < floor) {
-      return { verdict: 'degrade', delta, cu, detail: `delta ${delta} < expected ${input.expectedOut} − ${bps}bps (adverse fill for unrecognized flow)` };
+      return {
+        verdict: "degrade",
+        delta,
+        cu,
+        detail: `delta ${delta} < expected ${input.expectedOut} − ${bps}bps (adverse fill for unrecognized flow)`,
+      };
     }
   }
-  return { verdict: 'accept', delta, cu };
+  return { verdict: "accept", delta, cu };
 }
 
 export interface VenueClassification {
@@ -225,16 +248,34 @@ export function classifyVenue(
   probe?: AcceptanceProbe,
   opts: { internalOracle?: boolean } = {},
 ): VenueClassification {
-  if (screen.candidateTier === 'P-C') {
-    return { tier: 'P-C', reasons: screen.reasons, externalScanEligible: probe?.verdict === 'accept' };
+  if (screen.candidateTier === "P-C") {
+    return {
+      tier: "P-C",
+      reasons: screen.reasons,
+      externalScanEligible: probe?.verdict === "accept",
+    };
   }
   if (probe === undefined) {
-    return { tier: opts.internalOracle ? 'P-B' : 'P-A', reasons: [...screen.reasons, 'no simulation verdict — provisional'], externalScanEligible: true };
+    return {
+      tier: opts.internalOracle ? "P-B" : "P-A",
+      reasons: [...screen.reasons, "no simulation verdict — provisional"],
+      externalScanEligible: true,
+    };
   }
-  if (probe.verdict === 'accept') {
-    const tier: CpiTier = opts.internalOracle ? 'P-B' : 'P-A';
-    return { tier, reasons: [...screen.reasons, `simulation ACCEPT (delta ${probe.delta}${probe.cu ? `, ${probe.cu} CU` : ''})`], externalScanEligible: true };
+  if (probe.verdict === "accept") {
+    const tier: CpiTier = opts.internalOracle ? "P-B" : "P-A";
+    return {
+      tier,
+      reasons: [
+        ...screen.reasons,
+        `simulation ACCEPT (delta ${probe.delta}${probe.cu ? `, ${probe.cu} CU` : ""})`,
+      ],
+      externalScanEligible: true,
+    };
   }
-  const reasons = [...screen.reasons, `simulation ${probe.verdict.toUpperCase()}${probe.detail ? `: ${probe.detail}` : ''}`];
-  return { tier: 'P-C', reasons, externalScanEligible: probe.verdict === 'degrade' };
+  const reasons = [
+    ...screen.reasons,
+    `simulation ${probe.verdict.toUpperCase()}${probe.detail ? `: ${probe.detail}` : ""}`,
+  ];
+  return { tier: "P-C", reasons, externalScanEligible: probe.verdict === "degrade" };
 }

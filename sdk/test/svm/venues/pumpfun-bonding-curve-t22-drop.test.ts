@@ -12,16 +12,21 @@
  * BondingCurve account and derives its ["bonding-curve", mint] PDA so the
  * adapter's own PDA check passes and control reaches detectTokenProgram.
  */
-import { address, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { pumpfunBondingCurve } from '../../../src/svm/venues/pumpfun-bonding-curve/index.js';
-import { makeT22Mint, makeLegacyMint, tlvEntry, NON_TRANSFERABLE_TLV } from '../fixtures/token-2022/synth.js';
+import { address, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { pumpfunBondingCurve } from "../../../src/svm/venues/pumpfun-bonding-curve/index.js";
+import {
+  makeT22Mint,
+  makeLegacyMint,
+  tlvEntry,
+  NON_TRANSFERABLE_TLV,
+} from "../fixtures/token-2022/synth.js";
 
-const PROGRAM = address('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
-const GLOBAL = address('4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf');
-const FEE_CONFIG = address('8Wf5TiAheLUqBrKXeYg2JtAFFMWtKdG2BSFgqUcPVwTt');
-const MINT = address('BXZc6HkQFPZBTbCt1wawvLAsYyH7vEGCY4u8DCwEpump');
+const PROGRAM = address("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
+const GLOBAL = address("4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf");
+const FEE_CONFIG = address("8Wf5TiAheLUqBrKXeYg2JtAFFMWtKdG2BSFgqUcPVwTt");
+const MINT = address("BXZc6HkQFPZBTbCt1wawvLAsYyH7vEGCY4u8DCwEpump");
 const BONDING_CURVE_DISCRIMINATOR = [23, 183, 248, 55, 96, 216, 172, 96];
 
 /** A minimal 115-byte BondingCurve: disc + not-complete/mayhem/cashback + native-SOL sentinel quote_mint. */
@@ -37,7 +42,7 @@ async function bondingCurvePda(mint: Address): Promise<Address> {
   const enc = getAddressEncoder();
   const [pda] = await getProgramDerivedAddress({
     programAddress: PROGRAM,
-    seeds: [new TextEncoder().encode('bonding-curve'), new Uint8Array(enc.encode(mint))],
+    seeds: [new TextEncoder().encode("bonding-curve"), new Uint8Array(enc.encode(mint))],
   });
   return pda;
 }
@@ -53,34 +58,42 @@ function loaderWith(pool: Address, mintData: Uint8Array): AccountLoader {
   };
 }
 
-describe('pumpfun-bonding-curve Token-2022 handling', () => {
-  it('passes the token gate for a zero-fee (extensionless) Token-2022 base mint', async () => {
+describe("pumpfun-bonding-curve Token-2022 handling", () => {
+  it("passes the token gate for a zero-fee (extensionless) Token-2022 base mint", async () => {
     const pool = await bondingCurvePda(MINT);
     // Passing detectTokenProgram surfaces the (deliberately wrong) global-config
     // discriminator — proof the Token-2022 base mint was NOT dropped.
-    await expect(pumpfunBondingCurve.fetchPoolConfig(loaderWith(pool, makeT22Mint()), pool, MINT)).rejects.toThrow(
-      `pumpfun-bonding-curve global ${GLOBAL} discriminator mismatch`,
-    );
+    await expect(
+      pumpfunBondingCurve.fetchPoolConfig(loaderWith(pool, makeT22Mint()), pool, MINT),
+    ).rejects.toThrow(`pumpfun-bonding-curve global ${GLOBAL} discriminator mismatch`);
   });
 
-  it('passes the token gate for a legacy 82-byte base mint (byte-identical legacy path)', async () => {
-    const pool = await bondingCurvePda(MINT);
-    await expect(pumpfunBondingCurve.fetchPoolConfig(loaderWith(pool, makeLegacyMint()), pool, MINT)).rejects.toThrow(
-      `pumpfun-bonding-curve global ${GLOBAL} discriminator mismatch`,
-    );
-  });
-
-  it('drops the pool when the base mint carries a blocking NonTransferable extension', async () => {
+  it("passes the token gate for a legacy 82-byte base mint (byte-identical legacy path)", async () => {
     const pool = await bondingCurvePda(MINT);
     await expect(
-      pumpfunBondingCurve.fetchPoolConfig(loaderWith(pool, makeT22Mint(NON_TRANSFERABLE_TLV)), pool, MINT),
+      pumpfunBondingCurve.fetchPoolConfig(loaderWith(pool, makeLegacyMint()), pool, MINT),
+    ).rejects.toThrow(`pumpfun-bonding-curve global ${GLOBAL} discriminator mismatch`);
+  });
+
+  it("drops the pool when the base mint carries a blocking NonTransferable extension", async () => {
+    const pool = await bondingCurvePda(MINT);
+    await expect(
+      pumpfunBondingCurve.fetchPoolConfig(
+        loaderWith(pool, makeT22Mint(NON_TRANSFERABLE_TLV)),
+        pool,
+        MINT,
+      ),
     ).rejects.toThrow(/un-routable/);
   });
 
-  it('still rejects a TransferFeeConfig base mint (fee-netting is a documented follow-up)', async () => {
+  it("still rejects a TransferFeeConfig base mint (fee-netting is a documented follow-up)", async () => {
     const pool = await bondingCurvePda(MINT);
     await expect(
-      pumpfunBondingCurve.fetchPoolConfig(loaderWith(pool, makeT22Mint(tlvEntry(1, new Uint8Array(108)))), pool, MINT),
+      pumpfunBondingCurve.fetchPoolConfig(
+        loaderWith(pool, makeT22Mint(tlvEntry(1, new Uint8Array(108)))),
+        pool,
+        MINT,
+      ),
     ).rejects.toThrow(/TransferFeeConfig/);
   });
 });

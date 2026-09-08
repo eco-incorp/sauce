@@ -4,7 +4,7 @@ import {
   getCompiledTransactionMessageDecoder,
   getSignatureFromTransaction,
   sendAndConfirmTransactionFactory,
-} from '@solana/kit';
+} from "@solana/kit";
 import type {
   Commitment,
   GetEpochInfoApi,
@@ -18,9 +18,9 @@ import type {
   SimulateTransactionApi,
   SlotNotificationsApi,
   Transaction,
-} from '@solana/kit';
-import { ENGINE_GAS_LIMIT_CU } from './engine.js';
-import type { SignedExecuteTransaction } from './transaction.js';
+} from "@solana/kit";
+import { ENGINE_GAS_LIMIT_CU } from "./engine.js";
+import type { SignedExecuteTransaction } from "./transaction.js";
 
 export interface SimulateExecuteResult {
   ok: boolean;
@@ -44,7 +44,7 @@ function decodeBase64(data: string): Uint8Array {
  * engine execute instruction's.
  */
 function isSauceRevert(err: unknown, executeInstructionIndex: number): boolean {
-  if (typeof err !== 'object' || err === null || !('InstructionError' in err)) return false;
+  if (typeof err !== "object" || err === null || !("InstructionError" in err)) return false;
 
   const detail = (err as { InstructionError: unknown }).InstructionError;
 
@@ -52,13 +52,15 @@ function isSauceRevert(err: unknown, executeInstructionIndex: number): boolean {
 
   const inner: unknown = detail[1];
 
-  return typeof inner === 'object' && inner !== null && (inner as { Custom?: unknown }).Custom === 0;
+  return (
+    typeof inner === "object" && inner !== null && (inner as { Custom?: unknown }).Custom === 0
+  );
 }
 
 function instructionCount(transaction: Transaction): number {
   const compiled = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
 
-  return 'instructions' in compiled ? compiled.instructions.length : compiled.numInstructions;
+  return "instructions" in compiled ? compiled.instructions.length : compiled.numInstructions;
 }
 
 export interface SimulateExecuteOptions {
@@ -85,7 +87,9 @@ export async function simulateExecute(
   { executeInstructionIndex }: SimulateExecuteOptions = {},
 ): Promise<SimulateExecuteResult> {
   const wireTransaction = getBase64EncodedWireTransaction(transaction);
-  const { value } = await rpc.simulateTransaction(wireTransaction, { encoding: 'base64', replaceRecentBlockhash: true }).send();
+  const { value } = await rpc
+    .simulateTransaction(wireTransaction, { encoding: "base64", replaceRecentBlockhash: true })
+    .send();
 
   const logs = value.logs ? [...value.logs] : [];
   const returnData = value.returnData ? decodeBase64(value.returnData.data[0]) : undefined;
@@ -95,7 +99,12 @@ export async function simulateExecute(
   }
 
   const executeIndex = executeInstructionIndex ?? instructionCount(transaction) - 1;
-  const result: SimulateExecuteResult = { ok: false, err: value.err, unitsConsumed: value.unitsConsumed, logs };
+  const result: SimulateExecuteResult = {
+    ok: false,
+    err: value.err,
+    unitsConsumed: value.unitsConsumed,
+    logs,
+  };
 
   if (isSauceRevert(value.err, executeIndex)) {
     result.revert = { payload: returnData ?? new Uint8Array(0) };
@@ -119,12 +128,23 @@ export interface SendExecuteResult {
 }
 
 /** Sends a signed execute transaction, confirms it, and reads back return data from the transaction meta. */
-export async function sendExecute({ rpc, rpcSubscriptions, transaction, commitment = 'confirmed' }: SendExecuteInput): Promise<SendExecuteResult> {
+export async function sendExecute({
+  rpc,
+  rpcSubscriptions,
+  transaction,
+  commitment = "confirmed",
+}: SendExecuteInput): Promise<SendExecuteResult> {
   const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
   await sendAndConfirm(transaction, { commitment });
 
   const signature = getSignatureFromTransaction(transaction);
-  const response = await rpc.getTransaction(signature, { commitment, encoding: 'base64', maxSupportedTransactionVersion: 0 }).send();
+  const response = await rpc
+    .getTransaction(signature, {
+      commitment,
+      encoding: "base64",
+      maxSupportedTransactionVersion: 0,
+    })
+    .send();
   const meta = response?.meta;
 
   return {

@@ -6,15 +6,15 @@
  * offsets) is enough to reach the mint gate; the drop fires before any vault or
  * decimals read. A classic 82-byte mint on both sides is the legacy control.
  */
-import { address, getAddressEncoder } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { kipseli } from '../../../src/svm/venues/kipseli/index.js';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { makeT22Mint, makeLegacyMint } from '../fixtures/token-2022/synth.js';
+import { address, getAddressEncoder } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { kipseli } from "../../../src/svm/venues/kipseli/index.js";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('89dvMturcS87kYgrwyeWqqsaFZUi5dQQpBHs6pvfUu3v');
-const BASE_MINT = address('So11111111111111111111111111111111111111112'); // wSOL
-const QUOTE_MINT = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'); // USDC
+const POOL = address("89dvMturcS87kYgrwyeWqqsaFZUi5dQQpBHs6pvfUu3v");
+const BASE_MINT = address("So11111111111111111111111111111111111111112"); // wSOL
+const QUOTE_MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
 
 // Anchor sha256("account:Pool")[:8] and the scoped 496-byte layout.
 const POOL_DISCRIMINATOR = [0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc];
@@ -40,20 +40,20 @@ function loaderWith(mintBytes: Record<string, Uint8Array>): AccountLoader {
   };
 }
 
-describe('kipseli Token-2022 self-drop', () => {
-  it('drops the pool when the base mint is a Token-2022 mint', async () => {
+describe("kipseli Token-2022 self-drop", () => {
+  it("drops the pool when the base mint is a Token-2022 mint", async () => {
     const load = loaderWith({ [BASE_MINT]: makeT22Mint(), [QUOTE_MINT]: makeLegacyMint() });
     await expect(kipseli.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
-  it('drops the pool when the quote mint is a Token-2022 mint', async () => {
+  it("drops the pool when the quote mint is a Token-2022 mint", async () => {
     const load = loaderWith({ [BASE_MINT]: makeLegacyMint(), [QUOTE_MINT]: makeT22Mint() });
     await expect(kipseli.fetchPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
-  it('passes the mint gate for two classic legacy mints (fails later, never on Token-2022)', async () => {
+  it("passes the mint gate for two classic legacy mints (fails later, never on Token-2022)", async () => {
     const load = loaderWith({ [BASE_MINT]: makeLegacyMint(), [QUOTE_MINT]: makeLegacyMint() });
-    let message = '';
+    let message = "";
     try {
       await kipseli.fetchPoolConfig(load, POOL);
     } catch (err) {

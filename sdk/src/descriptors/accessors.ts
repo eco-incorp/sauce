@@ -11,13 +11,24 @@
  * contracts eagerly built on the SDK's import path would be real cost).
  */
 import type { Address, Abi } from "viem";
-import { requireChain, type CanonicalChain, type ChainRef, type ChainSlug } from "../chains/canonical.js";
+import {
+  requireChain,
+  type CanonicalChain,
+  type ChainRef,
+  type ChainSlug,
+} from "../chains/canonical.js";
 import { pascalOfSlug } from "../routes/builder.js";
 import { makeContractCall, type ContractCall } from "./call.js";
 import { addressOn, requireContract } from "./query.js";
 import { DESCRIPTORS } from "./registry.js";
 import type { ContractCoverage, ContractDescriptor, DescriptorMethod } from "./types.js";
-import type { FamilyContracts, FamilyKey, ContractNameOf, PascalOf, ProtocolSlug } from "./names.js";
+import type {
+  FamilyContracts,
+  FamilyKey,
+  ContractNameOf,
+  PascalOf,
+  ProtocolSlug,
+} from "./names.js";
 
 /**
  * One leaf: a bound (protocol, contract) on a specific chain, plus every
@@ -50,14 +61,21 @@ export interface ContractAccessor {
  * regardless of how many chain globals intersect it.
  */
 export type ChainContracts = {
-  readonly [P in ProtocolSlug as PascalOf<P>]: { readonly [C in ContractNameOf<P>]: ContractAccessor };
+  readonly [P in ProtocolSlug as PascalOf<P>]: {
+    readonly [C in ContractNameOf<P>]: ContractAccessor;
+  };
 } & {
   readonly [F in FamilyKey]: { readonly [C in FamilyContracts<F>]: ContractAccessor };
 };
 
-function buildAccessor(descriptor: ContractDescriptor, chain: CanonicalChain, addressOverride?: Address): ContractAccessor {
+function buildAccessor(
+  descriptor: ContractDescriptor,
+  chain: CanonicalChain,
+  addressOverride?: Address,
+): ContractAccessor {
   const isInterface = descriptor.kind === "interface";
-  const resolvedAddress: Address | undefined = addressOverride ?? (isInterface ? undefined : addressOn(descriptor, chain));
+  const resolvedAddress: Address | undefined =
+    addressOverride ?? (isInterface ? undefined : addressOn(descriptor, chain));
   const available = isInterface ? addressOverride !== undefined : resolvedAddress !== undefined;
 
   const base: Record<string, unknown> = {
@@ -89,7 +107,9 @@ function buildAccessor(descriptor: ContractDescriptor, chain: CanonicalChain, ad
         address = resolved.address;
       }
       if (address === undefined) {
-        throw new Error(`${descriptor.protocol}.${descriptor.contract}: no address resolved on '${chain.slug}'`);
+        throw new Error(
+          `${descriptor.protocol}.${descriptor.contract}: no address resolved on '${chain.slug}'`,
+        );
       }
       return makeContractCall(descriptor, chain, address, method, args);
     };
@@ -162,7 +182,10 @@ export function chainContracts(chainRef: ChainRef): ChainContracts {
     return ns;
   }
 
-  function buildFamilyNamespace(familyKey: string, members: readonly string[]): Record<string, unknown> {
+  function buildFamilyNamespace(
+    familyKey: string,
+    members: readonly string[],
+  ): Record<string, unknown> {
     const ownersByContract = new Map<string, string[]>();
     for (const slug of members) {
       for (const d of protocolGroups.get(slug) ?? []) {
@@ -186,7 +209,9 @@ export function chainContracts(chainRef: ChainRef): ChainContracts {
           configurable: true,
           get(): never {
             const candidates = owners.map((s) => `${pascalOfSlug(s)}.${contractName}`).join(" or ");
-            throw new Error(`"${contractName}" is ambiguous under ${familyKey} (${owners.join(", ")}) — use ${candidates}`);
+            throw new Error(
+              `"${contractName}" is ambiguous under ${familyKey} (${owners.join(", ")}) — use ${candidates}`,
+            );
           },
         });
       }
@@ -210,7 +235,9 @@ export function chainContracts(chainRef: ChainRef): ChainContracts {
 
   for (const [familyKey, members] of familyMembers) {
     if (familyKey in out) {
-      throw new Error(`descriptors: family alias '${familyKey}' collides with a canonical protocol namespace`);
+      throw new Error(
+        `descriptors: family alias '${familyKey}' collides with a canonical protocol namespace`,
+      );
     }
     let memo: Record<string, unknown> | undefined;
     Object.defineProperty(out, familyKey, {

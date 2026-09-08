@@ -59,25 +59,33 @@
  * the AMM/tick math the decode needs). Every `ladder.ts` reference in the text
  * above therefore points at that relocated module, not at a file in this
  * directory.
-  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { AMM_CONFIG_DISCRIMINATOR as RAYDIUM_CLMM_AMM_CONFIG_DISCRIMINATOR, POOL_DISCRIMINATOR as RAYDIUM_CLMM_POOL_DISCRIMINATOR, TICK_ARRAY_DISCRIMINATOR as RAYDIUM_CLMM_TICK_ARRAY_DISCRIMINATOR, windowStartTicks as raydiumClmmWindowStartTicks } from '../raydium-clmm/index.js';
-import { MAX_TICK as RAYDIUM_MAX_TICK, MIN_TICK as RAYDIUM_MIN_TICK } from '../raydium-clmm/tick-math.js';
-import { raydiumSqrtPriceAtTick } from '../raydium-clmm/tick-math.js';
-import { readUintLE } from '../math.js';
-import type { AccountLoader, PoolConfig } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
-import { memoizedGetProgramDerivedAddress } from '../pda-memo.js';
+ */
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import {
+  AMM_CONFIG_DISCRIMINATOR as RAYDIUM_CLMM_AMM_CONFIG_DISCRIMINATOR,
+  POOL_DISCRIMINATOR as RAYDIUM_CLMM_POOL_DISCRIMINATOR,
+  TICK_ARRAY_DISCRIMINATOR as RAYDIUM_CLMM_TICK_ARRAY_DISCRIMINATOR,
+  windowStartTicks as raydiumClmmWindowStartTicks,
+} from "../raydium-clmm/index.js";
+import {
+  MAX_TICK as RAYDIUM_MAX_TICK,
+  MIN_TICK as RAYDIUM_MIN_TICK,
+} from "../raydium-clmm/tick-math.js";
+import { raydiumSqrtPriceAtTick } from "../raydium-clmm/tick-math.js";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 
-const SLUG = 'pancakeswap-clmm';
+const SLUG = "pancakeswap-clmm";
 
 /** PancakeSwap's Solana CLMM program (a Raydium-CLMM-shaped Anchor fork). */
-export const PANCAKESWAP_CLMM_PROGRAM_ID = address('HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const MEMO_PROGRAM = address('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+export const PANCAKESWAP_CLMM_PROGRAM_ID = address("HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+const MEMO_PROGRAM = address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
 export const POOL_ACCOUNT_SIZE = 1544;
 export const AMM_CONFIG_ACCOUNT_SIZE = 117;
@@ -139,7 +147,7 @@ export interface PancakeswapClmmWindow {
 
 export interface PancakeswapClmmPoolConfig extends PoolConfig {
   venue: typeof SLUG;
-  direction: '0to1' | '1to0';
+  direction: "0to1" | "1to0";
   ammConfig: Address;
   tokenMint0: Address;
   tokenMint1: Address;
@@ -153,8 +161,8 @@ export interface PancakeswapClmmPoolConfig extends PoolConfig {
   sqrtPrice: bigint;
   tickCurrentIndex: number;
   windows: {
-    '0to1': PancakeswapClmmWindow;
-    '1to0': PancakeswapClmmWindow;
+    "0to1": PancakeswapClmmWindow;
+    "1to0": PancakeswapClmmWindow;
   };
 }
 
@@ -175,7 +183,7 @@ async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Add
   const be = new Uint8Array(4);
   new DataView(be.buffer).setInt32(0, startTick, false); // start_tick_index.to_be_bytes()
   return memoizedGetProgramDerivedAddress(PANCAKESWAP_CLMM_PROGRAM_ID, [
-    new TextEncoder().encode('tick_array'),
+    new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     be,
   ]);
@@ -190,7 +198,8 @@ function tickInitialized(array: Uint8Array, offset: number): boolean {
 function tickHasLimitOrders(array: Uint8Array, offset: number): boolean {
   const base = OFF_TA_TICKS + offset * TICK_LEN;
   return (
-    readUintLE(array, base + OFF_TICK_ORDERS_AMOUNT, 8) !== 0n || readUintLE(array, base + OFF_TICK_PART_FILLED_ORDERS, 8) !== 0n
+    readUintLE(array, base + OFF_TICK_ORDERS_AMOUNT, 8) !== 0n ||
+    readUintLE(array, base + OFF_TICK_PART_FILLED_ORDERS, 8) !== 0n
   );
 }
 
@@ -205,8 +214,14 @@ async function resolveWindow(
   tickSpacing: number,
   zeroForOne: boolean,
 ): Promise<PancakeswapClmmWindow> {
-  const startTicks = raydiumClmmWindowStartTicks(tickCurrentIndex, tickSpacing, zeroForOne) as [number, number, number];
-  const tickArrays = (await Promise.all(startTicks.map((start) => deriveTickArrayPda(pool, start)))) as [Address, Address, Address];
+  const startTicks = raydiumClmmWindowStartTicks(tickCurrentIndex, tickSpacing, zeroForOne) as [
+    number,
+    number,
+    number,
+  ];
+  const tickArrays = (await Promise.all(
+    startTicks.map((start) => deriveTickArrayPda(pool, start)),
+  )) as [Address, Address, Address];
   // Batch the whole window into ONE coalesced round instead of an outward
   // serial walk (identical rationale to raydium-clmm's resolveWindow): the
   // tick-array PDAs are all derived above, so nothing here depends on a prior
@@ -218,7 +233,7 @@ async function resolveWindow(
   let readable = 0;
   for (let i = 0; i < 3; i++) {
     const settled = loaded[i];
-    if (settled.status === 'rejected') throw settled.reason;
+    if (settled.status === "rejected") throw settled.reason;
     const data = settled.value;
     const valid =
       data !== null &&
@@ -246,7 +261,7 @@ async function resolveWindow(
       if (tickHasLimitOrders(data, offset)) {
         throw new Error(
           `${SLUG}: pool ${pool} has active limit orders at tick ${start + offset * tickSpacing} ` +
-            '— the ladder does not model limit-order matching',
+            "— the ladder does not model limit-order matching",
         );
       }
       if (tickInitialized(data, offset)) {
@@ -279,11 +294,16 @@ async function resolveWindow(
  * Fetch + gate one PancakeSwap CLMM pool (see the header for the gate list)
  * and freeze both directions' boundary windows. Read-only against the loader.
  */
-export async function fetchPancakeswapClmmConfig(load: AccountLoader, pool: Address): Promise<PancakeswapClmmPoolConfig> {
+export async function fetchPancakeswapClmmConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<PancakeswapClmmPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG}: pool account ${pool} not found`);
   if (data.length !== POOL_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`);
+    throw new Error(
+      `${SLUG}: pool ${pool} has ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE}`,
+    );
   }
   if (!hasDiscriminator(data, RAYDIUM_CLMM_POOL_DISCRIMINATOR)) {
     throw new Error(`${SLUG}: pool ${pool} has a foreign discriminator (not a PoolState account)`);
@@ -302,14 +322,18 @@ export async function fetchPancakeswapClmmConfig(load: AccountLoader, pool: Addr
     if (data[OFF_DYNAMIC_FEE_INFO + i] !== 0) {
       throw new Error(
         `${SLUG}: pool ${pool} has a dynamic fee configured — its swap walks tick-spacing-bounded steps with a per-step ` +
-          'volatility fee the in-VM quote does not model',
+          "volatility fee the in-VM quote does not model",
       );
     }
   }
   const codec = getAddressCodec();
   const ammConfig = codec.decode(data.subarray(OFF_AMM_CONFIG, OFF_AMM_CONFIG + 32)) as Address;
-  const tokenMint0 = codec.decode(data.subarray(OFF_TOKEN_MINT_0, OFF_TOKEN_MINT_0 + 32)) as Address;
-  const tokenMint1 = codec.decode(data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32)) as Address;
+  const tokenMint0 = codec.decode(
+    data.subarray(OFF_TOKEN_MINT_0, OFF_TOKEN_MINT_0 + 32),
+  ) as Address;
+  const tokenMint1 = codec.decode(
+    data.subarray(OFF_TOKEN_MINT_1, OFF_TOKEN_MINT_1 + 32),
+  ) as Address;
   // The on-chain swap ix here is legacy-SPL only; detect a Token-2022 mint (or
   // one carrying an un-routable extension) via the shared data-shape resolver
   // and SELF-DROP the pool. The thrown error is the graceful-drop signal — the
@@ -324,17 +348,27 @@ export async function fetchPancakeswapClmmConfig(load: AccountLoader, pool: Addr
     const mintData = mintDatas[mi]!;
     if (mintData === null) continue;
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
   const cfgData = await load(ammConfig);
-  if (cfgData === null) throw new Error(`${SLUG}: AmmConfig ${ammConfig} of pool ${pool} not found`);
-  if (cfgData.length !== AMM_CONFIG_ACCOUNT_SIZE || !hasDiscriminator(cfgData, RAYDIUM_CLMM_AMM_CONFIG_DISCRIMINATOR)) {
-    throw new Error(`${SLUG}: AmmConfig ${ammConfig} of pool ${pool} has an unexpected size/discriminator`);
+  if (cfgData === null)
+    throw new Error(`${SLUG}: AmmConfig ${ammConfig} of pool ${pool} not found`);
+  if (
+    cfgData.length !== AMM_CONFIG_ACCOUNT_SIZE ||
+    !hasDiscriminator(cfgData, RAYDIUM_CLMM_AMM_CONFIG_DISCRIMINATOR)
+  ) {
+    throw new Error(
+      `${SLUG}: AmmConfig ${ammConfig} of pool ${pool} has an unexpected size/discriminator`,
+    );
   }
   const tickSpacing = Number(readUintLE(data, OFF_TICK_SPACING, 2));
   const tickCurrentIndex = readI32(data, OFF_TICK_CURRENT);
@@ -342,27 +376,29 @@ export async function fetchPancakeswapClmmConfig(load: AccountLoader, pool: Addr
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
     resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
     memoizedGetProgramDerivedAddress(PANCAKESWAP_CLMM_PROGRAM_ID, [
-      new TextEncoder().encode('pool_tick_array_bitmap_extension'),
+      new TextEncoder().encode("pool_tick_array_bitmap_extension"),
       getAddressEncoded(pool),
     ]),
   ]);
   return {
     venue: SLUG,
     pool,
-    direction: '0to1',
+    direction: "0to1",
     ammConfig,
     tokenMint0,
     tokenMint1,
     tokenVault0: codec.decode(data.subarray(OFF_TOKEN_VAULT_0, OFF_TOKEN_VAULT_0 + 32)) as Address,
     tokenVault1: codec.decode(data.subarray(OFF_TOKEN_VAULT_1, OFF_TOKEN_VAULT_1 + 32)) as Address,
-    observation: codec.decode(data.subarray(OFF_OBSERVATION_KEY, OFF_OBSERVATION_KEY + 32)) as Address,
+    observation: codec.decode(
+      data.subarray(OFF_OBSERVATION_KEY, OFF_OBSERVATION_KEY + 32),
+    ) as Address,
     bitmapExtension,
     tickSpacing,
     tradeFeeRate: Number(readUintLE(cfgData, OFF_CFG_TRADE_FEE_RATE, 4)),
     liquidity: readUintLE(data, OFF_LIQUIDITY, 16),
     sqrtPrice: readUintLE(data, OFF_SQRT_PRICE, 16),
     tickCurrentIndex,
-    windows: { '0to1': zeroForOne, '1to0': oneForZero },
+    windows: { "0to1": zeroForOne, "1to0": oneForZero },
   };
 }
 

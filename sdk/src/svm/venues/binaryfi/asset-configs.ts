@@ -42,5 +42,5 @@
  * has plausibly moved since 2026-07-31.
  */
 export const BINARYFI_ASSET_FLOOR_RATES: Readonly<Record<string, readonly [bigint, bigint]>> = {
-  '98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g': [7n, 1n],
+  "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g": [7n, 1n],
 };

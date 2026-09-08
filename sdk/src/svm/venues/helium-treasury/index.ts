@@ -116,20 +116,21 @@
  * subsumes both nested CPI programs) — see the recipes repo's `the consuming app SVM CU-budget module`'s
  * `CU_FAMILIES['helium-treasury']` for how that measurement becomes the CU pin.
  */
-import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import { readUintLE } from '../math.js';
-import type { AccountBytesMap, AccountLoader, PoolConfig, SwapUser, VenueAccount } from '../types.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import { readUintLE } from "../math.js";
+import type { AccountLoader, PoolConfig } from "../types.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'helium-treasury';
+const SLUG = "helium-treasury";
 
 /** `TreasuryManagementV0`'s own program — recipe-side `SVM_VENUE_PROGRAM_IDS['helium-treasury']`. */
-export const HELIUM_TREASURY_PROGRAM_ID = address('treaf4wWBBty3fHdyBpo35Mz84M8k3heKXmjmi9vFt5');
+export const HELIUM_TREASURY_PROGRAM_ID = address("treaf4wWBBty3fHdyBpo35Mz84M8k3heKXmjmi9vFt5");
 /** The companion `circuit-breaker` program every treasury's transfer is CPI-gated through. */
-export const HELIUM_CIRCUIT_BREAKER_PROGRAM_ID = address('circAbx64bbsscPbQzZAUvuXpHqrCe6fLMzc2uKXz9g');
-const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const HELIUM_CIRCUIT_BREAKER_PROGRAM_ID = address(
+  "circAbx64bbsscPbQzZAUvuXpHqrCe6fLMzc2uKXz9g",
+);
 
 // ── TreasuryManagementV0 layout (see module doc) ──
 const MGMT_DISC = 0x3bd76e10d1786f44n; // sha256("account:TreasuryManagementV0")[0..8], LE-read for the equality check below
@@ -148,14 +149,8 @@ const OFF_CB_TOKEN_ACCOUNT = 8;
 const OFF_CB_OWNER = 72;
 const OFF_CB_THRESHOLD_TYPE = 112;
 const OFF_CB_THRESHOLD = 113;
-const OFF_CB_LAST_AGG = 121;
 
-/** Standard SPL Token account `amount` field offset. */
-const TOKEN_AMOUNT_OFFSET = 64;
 const SPL_TOKEN_ACCOUNT_SIZE = 165;
-/** Standard SPL Mint `supply` field offset. */
-const MINT_SUPPLY_OFFSET = 36;
-const SPL_MINT_SIZE = 82;
 
 /** `u64::MAX` — the denominator `ThresholdType::Percent` divides by (`window.rs::get_threshold`). */
 export const U64_MAX = 18446744073709551615n;
@@ -173,24 +168,25 @@ export interface HeliumTreasuryPoolConfig extends PoolConfig {
 }
 
 const codec = getAddressCodec();
-const pubkeyAt = (data: Uint8Array, offset: number): Address => codec.decode(data.subarray(offset, offset + 32));
+const pubkeyAt = (data: Uint8Array, offset: number): Address =>
+  codec.decode(data.subarray(offset, offset + 32));
 
-function heliumTreasuryConfig(cfg: PoolConfig): HeliumTreasuryPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
-  return cfg as HeliumTreasuryPoolConfig;
-}
-
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-
-export async function fetchHeliumTreasuryPoolConfig(load: AccountLoader, pool: Address): Promise<HeliumTreasuryPoolConfig> {
+export async function fetchHeliumTreasuryPoolConfig(
+  load: AccountLoader,
+  pool: Address,
+): Promise<HeliumTreasuryPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} treasury management ${pool} does not exist`);
   if (data.length !== MGMT_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} treasury management ${pool} has unexpected size ${data.length} (want ${MGMT_ACCOUNT_SIZE})`);
+    throw new Error(
+      `${SLUG} treasury management ${pool} has unexpected size ${data.length} (want ${MGMT_ACCOUNT_SIZE})`,
+    );
   }
   const disc = readUintLE(data, 0, 8);
   if (disc !== MGMT_DISC) {
-    throw new Error(`${SLUG} treasury management ${pool} has unexpected discriminator ${disc.toString(16)} (want ${MGMT_DISC.toString(16)})`);
+    throw new Error(
+      `${SLUG} treasury management ${pool} has unexpected discriminator ${disc.toString(16)} (want ${MGMT_DISC.toString(16)})`,
+    );
   }
 
   const treasuryMint = pubkeyAt(data, OFF_TREASURY_MINT);
@@ -201,7 +197,9 @@ export async function fetchHeliumTreasuryPoolConfig(load: AccountLoader, pool: A
   const freezeUnixTime = BigInt.asIntN(64, readUintLE(data, OFF_FREEZE_UNIX_TIME, 8));
 
   if (curveTag !== 0) {
-    throw new Error(`${SLUG} treasury management ${pool} has an unknown curve variant tag ${curveTag} (Curve has exactly one Borsh variant, tag 0)`);
+    throw new Error(
+      `${SLUG} treasury management ${pool} has an unknown curve variant tag ${curveTag} (Curve has exactly one Borsh variant, tag 0)`,
+    );
   }
   if (k !== 0n) {
     // Both real mainnet treasuries (IOT, MOBILE) read k=0 (linear-proportional redemption,
@@ -209,22 +207,34 @@ export async function fetchHeliumTreasuryPoolConfig(load: AccountLoader, pool: A
     // R*(1-((S-dS)/S)^(1+k)) power expansion, which this ladder does not implement (no live
     // example exists to validate against): reject cleanly rather than guess a formula nobody
     // can verify against real state — drop just this one pool, never the whole family.
-    throw new Error(`${SLUG} treasury management ${pool} has curve k=${k} (nonzero-k curves are not yet supported — extend this adapter's power computation once a real k!=0 treasury exists to validate against)`);
+    throw new Error(
+      `${SLUG} treasury management ${pool} has curve k=${k} (nonzero-k curves are not yet supported — extend this adapter's power computation once a real k!=0 treasury exists to validate against)`,
+    );
   }
 
   const [circuitBreaker] = await getProgramDerivedAddress({
     programAddress: HELIUM_CIRCUIT_BREAKER_PROGRAM_ID,
-    seeds: [new TextEncoder().encode('account_windowed_breaker'), new Uint8Array(getAddressEncoder().encode(treasury))],
+    seeds: [
+      new TextEncoder().encode("account_windowed_breaker"),
+      new Uint8Array(getAddressEncoder().encode(treasury)),
+    ],
   });
 
   const treasuryData = await load(treasury);
-  if (treasuryData === null) throw new Error(`${SLUG} treasury management ${pool}: treasury token account ${treasury} does not exist`);
+  if (treasuryData === null)
+    throw new Error(
+      `${SLUG} treasury management ${pool}: treasury token account ${treasury} does not exist`,
+    );
   if (treasuryData.length !== SPL_TOKEN_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} treasury management ${pool}: treasury ${treasury} has unexpected size ${treasuryData.length} (want ${SPL_TOKEN_ACCOUNT_SIZE} — token-2022 vaults are not supported)`);
+    throw new Error(
+      `${SLUG} treasury management ${pool}: treasury ${treasury} has unexpected size ${treasuryData.length} (want ${SPL_TOKEN_ACCOUNT_SIZE} — token-2022 vaults are not supported)`,
+    );
   }
   const treasuryMintField = pubkeyAt(treasuryData, 0);
   if (treasuryMintField !== treasuryMint) {
-    throw new Error(`${SLUG} treasury management ${pool}: treasury ${treasury} mint ${treasuryMintField} does not match treasuryMint ${treasuryMint}`);
+    throw new Error(
+      `${SLUG} treasury management ${pool}: treasury ${treasury} mint ${treasuryMintField} does not match treasuryMint ${treasuryMint}`,
+    );
   }
 
   // The redeem_v0 burn/transfer path is Tokenkeg-only (token_program is
@@ -240,34 +250,51 @@ export async function fetchHeliumTreasuryPoolConfig(load: AccountLoader, pool: A
     const mintData = _mintDatas[_i]!;
     if (mintData === null) continue; // an unreadable mint falls back to the legacy assumption
     if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-      throw new Error(`${SLUG}: dropping treasury ${pool} — mint ${mint} is Token-2022 (this venue's redeem is legacy-SPL only)`);
+      throw new Error(
+        `${SLUG}: dropping treasury ${pool} — mint ${mint} is Token-2022 (this venue's redeem is legacy-SPL only)`,
+      );
     }
     const { blocking } = parseMintExtensions(mintData);
     if (blocking.length > 0) {
-      throw new Error(`${SLUG}: dropping treasury ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+      throw new Error(
+        `${SLUG}: dropping treasury ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+      );
     }
   }
 
   const cbData = await load(circuitBreaker);
-  if (cbData === null) throw new Error(`${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} does not exist`);
+  if (cbData === null)
+    throw new Error(
+      `${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} does not exist`,
+    );
   if (cbData.length !== CB_ACCOUNT_SIZE) {
-    throw new Error(`${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} has unexpected size ${cbData.length} (want ${CB_ACCOUNT_SIZE})`);
+    throw new Error(
+      `${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} has unexpected size ${cbData.length} (want ${CB_ACCOUNT_SIZE})`,
+    );
   }
   const cbDisc = readUintLE(cbData, 0, 8);
   if (cbDisc !== CB_DISC) {
-    throw new Error(`${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} has unexpected discriminator ${cbDisc.toString(16)} (want ${CB_DISC.toString(16)})`);
+    throw new Error(
+      `${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} has unexpected discriminator ${cbDisc.toString(16)} (want ${CB_DISC.toString(16)})`,
+    );
   }
   const cbTokenAccount = pubkeyAt(cbData, OFF_CB_TOKEN_ACCOUNT);
   if (cbTokenAccount !== treasury) {
-    throw new Error(`${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} tokenAccount ${cbTokenAccount} does not match treasury ${treasury}`);
+    throw new Error(
+      `${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} tokenAccount ${cbTokenAccount} does not match treasury ${treasury}`,
+    );
   }
   const cbOwner = pubkeyAt(cbData, OFF_CB_OWNER);
   if (cbOwner !== pool) {
-    throw new Error(`${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} owner ${cbOwner} does not match treasury management ${pool}`);
+    throw new Error(
+      `${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} owner ${cbOwner} does not match treasury management ${pool}`,
+    );
   }
   const thresholdTypeByte = cbData[OFF_CB_THRESHOLD_TYPE];
   if (thresholdTypeByte !== 0 && thresholdTypeByte !== 1) {
-    throw new Error(`${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} has unknown thresholdType ${thresholdTypeByte}`);
+    throw new Error(
+      `${SLUG} treasury management ${pool}: circuit breaker ${circuitBreaker} has unknown thresholdType ${thresholdTypeByte}`,
+    );
   }
   const threshold = readUintLE(cbData, OFF_CB_THRESHOLD, 8);
 
@@ -290,4 +317,3 @@ export const heliumTreasury = {
   programId: HELIUM_TREASURY_PROGRAM_ID,
   fetchPoolConfig: fetchHeliumTreasuryPoolConfig,
 };
-

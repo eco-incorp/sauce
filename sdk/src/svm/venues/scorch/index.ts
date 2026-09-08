@@ -74,19 +74,19 @@
  * ./scorch-asset-configs.ts's header for what was tried) — resolved via a
  * vendored, recapturable directory instead.
  */
-import { address } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader, PoolConfig, VenueAccount } from '../types.js';
-import { SCORCH_ASSET_CONFIGS } from './asset-configs.js';
-import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
-import { parseMintExtensions } from '../../token-extensions.js';
+import { address } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
+import { SCORCH_ASSET_CONFIGS } from "./asset-configs.js";
+import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { parseMintExtensions } from "../../token-extensions.js";
 
-const SLUG = 'scorch';
+const SLUG = "scorch";
 
 /** CORE — pool state owner + pricing engine. This is `SVM_VENUE_PROGRAM_IDS.scorch`. */
-export const SCORCH_CORE_PROGRAM_ID = address('ojh19ojaKduoJZuaJADhcVGp4xt1TcdAvZmpVsCorch');
+export const SCORCH_CORE_PROGRAM_ID = address("ojh19ojaKduoJZuaJADhcVGp4xt1TcdAvZmpVsCorch");
 /** ROUTER — the real custodian; the swap CPI's actual CALL target. */
-export const SCORCH_ROUTER_PROGRAM_ID = address('SCoRcH8c2dpjvcJD6FiPbCSQyQgu3PcUAWj2Xxx3mqn');
+export const SCORCH_ROUTER_PROGRAM_ID = address("SCoRcH8c2dpjvcJD6FiPbCSQyQgu3PcUAWj2Xxx3mqn");
 // PairConfig (658 bytes, owned by CORE): tag(1)=0x02, flag(1), reserved(12)=0xff*12,
 // idxA(u16 LE)@14, mintA(32)@16, vaultA(32)@48, idxB(u16 LE)@80, mintB(32)@82,
 // vaultB(32)@114, an 8-byte tail @146 of unrecovered semantics, zero-padded to 658.
@@ -108,7 +108,7 @@ export const SCORCH_HAIRCUT_PPM = 300_000n;
 export interface ScorchPoolConfig extends PoolConfig {
   venue: typeof SLUG;
   /** 'AtoB' (default, mintA in / mintB out) | 'BtoA'. */
-  direction: 'AtoB' | 'BtoA';
+  direction: "AtoB" | "BtoA";
   mintA: Address;
   vaultA: Address;
   assetConfigA: Address;
@@ -123,11 +123,11 @@ function b58Address(bytes: Uint8Array, offset: number): Address {
   return address(b58encode(bytes.subarray(offset, offset + 32)));
 }
 
-const B58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function b58encode(bytes: Uint8Array): string {
   let n = 0n;
   for (const b of bytes) n = (n << 8n) | BigInt(b);
-  let s = '';
+  let s = "";
   while (n > 0n) {
     const r = Number(n % 58n);
     n /= 58n;
@@ -142,15 +142,14 @@ function b58encode(bytes: Uint8Array): string {
 }
 
 function scorchConfig(cfg: PoolConfig): ScorchPoolConfig {
-  if (cfg.venue !== SLUG) throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
+  if (cfg.venue !== SLUG)
+    throw new Error(`${SLUG} ladder adapter got a '${cfg.venue}' pool config`);
   return cfg as ScorchPoolConfig;
 }
 
-const ref = (slot: number, role: string): string => `s${slot}:${role}`;
-
 export const scorch = {
   slug: SLUG,
-  kind: 'constant-product' as const,
+  kind: "constant-product" as const,
   programId: SCORCH_CORE_PROGRAM_ID,
 
   /**
@@ -165,9 +164,12 @@ export const scorch = {
     const data = await load(pool);
     if (data === null) throw new Error(`scorch pool ${pool} does not exist`);
     if (data.length !== PAIR_CONFIG_SIZE) {
-      throw new Error(`scorch pool ${pool} has unexpected size ${data.length} (want ${PAIR_CONFIG_SIZE})`);
+      throw new Error(
+        `scorch pool ${pool} has unexpected size ${data.length} (want ${PAIR_CONFIG_SIZE})`,
+      );
     }
-    if (data[0] !== PAIR_TAG) throw new Error(`scorch pool ${pool} has unexpected tag ${data[0]} (want ${PAIR_TAG})`);
+    if (data[0] !== PAIR_TAG)
+      throw new Error(`scorch pool ${pool} has unexpected tag ${data[0]} (want ${PAIR_TAG})`);
 
     const mintA = b58Address(data, OFF_MINT_A);
     const vaultA = b58Address(data, OFF_VAULT_A);
@@ -189,11 +191,15 @@ export const scorch = {
       const mintData = mintDatas[mi]!;
       if (mintData === null) continue;
       if (classifyMintProgram(mint, mintData) === TOKEN_2022_PROGRAM_ID) {
-        throw new Error(`scorch: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`);
+        throw new Error(
+          `scorch: dropping pool ${pool} — mint ${mint} is Token-2022 (this venue's swap is legacy-SPL only)`,
+        );
       }
       const { blocking } = parseMintExtensions(mintData);
       if (blocking.length > 0) {
-        throw new Error(`scorch: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join('; ')}`);
+        throw new Error(
+          `scorch: dropping pool ${pool} — mint ${mint} is un-routable: ${blocking.join("; ")}`,
+        );
       }
     }
 
@@ -213,20 +219,21 @@ export const scorch = {
     // Vault structural existence check (the T22-vault size proxy that used to
     // live here is superseded by the per-mint Token-2022 detection above).
     const vaultEntries = [
-      ['A', vaultA],
-      ['B', vaultB],
+      ["A", vaultA],
+      ["B", vaultB],
     ] as const;
     const vaultBytesList = await Promise.all(vaultEntries.map(([, vault]) => load(vault)));
     for (let vi = 0; vi < vaultEntries.length; vi++) {
       const [role, vault] = vaultEntries[vi]!;
       const vaultBytes = vaultBytesList[vi]!;
-      if (vaultBytes === null) throw new Error(`scorch pool ${pool}: vault${role} ${vault} does not exist`);
+      if (vaultBytes === null)
+        throw new Error(`scorch pool ${pool}: vault${role} ${vault} does not exist`);
     }
 
     return {
       venue: SLUG,
       pool,
-      direction: 'AtoB',
+      direction: "AtoB",
       mintA,
       vaultA,
       assetConfigA: address(assetConfigAStr),
@@ -244,4 +251,3 @@ export const scorch = {
     ];
   },
 };
-

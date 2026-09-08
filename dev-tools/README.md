@@ -26,13 +26,13 @@ npm run stop
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run start:local` | Start local Hardhat network and deploy Sauce |
-| `npm run start:fork` | Start forked mainnet and deploy Sauce |
-| `npm run stop` | Stop the running network |
-| `npm run sauce <file>` | Compile and execute a SauceScript |
-| `npm run build` | Compile TypeScript |
+| Command                | Description                                  |
+| ---------------------- | -------------------------------------------- |
+| `npm run start:local`  | Start local Hardhat network and deploy Sauce |
+| `npm run start:fork`   | Start forked mainnet and deploy Sauce        |
+| `npm run stop`         | Stop the running network                     |
+| `npm run sauce <file>` | Compile and execute a SauceScript            |
+| `npm run build`        | Compile TypeScript                           |
 
 ## Writing SauceScript
 
@@ -42,7 +42,7 @@ SauceScript files (`.js`) use JavaScript syntax that compiles to Sauce VM byteco
 
 ```javascript
 function main() {
-  return 42
+  return 42;
 }
 ```
 
@@ -52,7 +52,7 @@ Arguments are passed as parameters to `main()`:
 
 ```javascript
 function main(a, b) {
-  return a + b
+  return a + b;
 }
 ```
 
@@ -63,7 +63,7 @@ Run with: `npm run sauce script.js 10 20`
 Import ABIs from npm packages and call external contracts:
 
 ```javascript
-import { IUniswapV3Factory } from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Factory.sol/IUniswapV3Factory.json"
+import { IUniswapV3Factory } from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Factory.sol/IUniswapV3Factory.json";
 
 function main(factoryAddress, token0, token1) {
   const factory = IUniswapV3Factory.at(factoryAddress);
@@ -72,6 +72,7 @@ function main(factoryAddress, token0, token1) {
 ```
 
 Run with:
+
 ```bash
 npm run sauce sauce/call.js \
   0x1F98431c8aD98523631AE4a59f267346ea31F984 \
@@ -83,6 +84,7 @@ npm run sauce sauce/call.js \
 
 Positional arguments are RUNTIME values for `main`'s parameters. They are appended to the compiled
 program as ABI-encoded words, so the program bytes are the same whatever you pass. They parse as:
+
 - Decimal numbers: `123`, `456`, `-1`
 - Hex values: `0x1a2b3c...` (over 32 bytes: passed as `bytes`)
 
@@ -90,10 +92,10 @@ A `NAME=VALUE` operand is a COMPILE-TIME define instead: it replaces the module'
 and is constant-folded, so a different value is a different program.
 
 ```javascript
-const AMOUNT = 0n;            // overridden by AMOUNT=4242
+const AMOUNT = 0n; // overridden by AMOUNT=4242
 
 function main(a) {
-  return a + AMOUNT;          // `a` comes from a positional arg
+  return a + AMOUNT; // `a` comes from a positional arg
 }
 ```
 

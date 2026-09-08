@@ -94,7 +94,9 @@ function fail(message: string): never {
  *  plus the ordered property-name path (the LAST element is always the method name). Returns
  *  `undefined` for anything outside that shape (a computed member, `this`, a call/paren in the
  *  middle, …) -- such a chain is simply not a candidate, not an error. */
-function decomposeMemberChain(node: AstNode): { readonly head: string; readonly path: readonly string[] } | undefined {
+function decomposeMemberChain(
+  node: AstNode,
+): { readonly head: string; readonly path: readonly string[] } | undefined {
   if (node.type === "Identifier") {
     return { head: (node as unknown as { name: string }).name, path: [] };
   }
@@ -106,7 +108,10 @@ function decomposeMemberChain(node: AstNode): { readonly head: string; readonly 
   if (!object || !property || property.type !== "Identifier") return undefined;
   const inner = decomposeMemberChain(object);
   if (inner === undefined) return undefined;
-  return { head: inner.head, path: [...inner.path, (property as unknown as { name: string }).name] };
+  return {
+    head: inner.head,
+    path: [...inner.path, (property as unknown as { name: string }).name],
+  };
 }
 
 interface AccessorCandidate {
@@ -116,7 +121,10 @@ interface AccessorCandidate {
   readonly path: readonly string[];
 }
 
-function collectAccessorCandidates(program: AstNode, shadowed: ReadonlySet<string>): AccessorCandidate[] {
+function collectAccessorCandidates(
+  program: AstNode,
+  shadowed: ReadonlySet<string>,
+): AccessorCandidate[] {
   const out: AccessorCandidate[] = [];
   walk(program, (n) => {
     if (n.type !== "CallExpression") return;
@@ -125,7 +133,7 @@ function collectAccessorCandidates(program: AstNode, shadowed: ReadonlySet<strin
     const decomposed = decomposeMemberChain(callee);
     if (decomposed === undefined) return;
     const { head, path } = decomposed;
-    if (path.length < 1 || path.length > 2 && !isChainKey(head)) return;
+    if (path.length < 1 || (path.length > 2 && !isChainKey(head))) return;
     if (shadowed.has(head)) return;
     // Only a recognized head (namespace key or chain key) is a candidate at all -- an unrecognized
     // head is left completely untouched (isolation).
@@ -186,7 +194,14 @@ function collectValueAccessSites(
     // Shape gate mirroring the call collector, minus the method: a protocol head is exactly
     // `<Protocol>.<Contract>` (path 1); a chain head is `<Chain>.<Protocol>[.<Contract>]` (path 1-2).
     if (chainKey ? path.length < 1 || path.length > 2 : path.length !== 1) return;
-    const { address } = resolveAccessorTarget(head, path, false, enclosingChain, chainScope, allowWidenedSelectors);
+    const { address } = resolveAccessorTarget(
+      head,
+      path,
+      false,
+      enclosingChain,
+      chainScope,
+      allowWidenedSelectors,
+    );
     sites.push({ start: n.start, end: n.end, replacement: formatBigint(BigInt(address)) });
   });
   return sites;
@@ -200,7 +215,11 @@ function resolveContractDescriptor(
   ns: Namespace,
   contractName: string | undefined,
   headForError: string,
-): { readonly protocol: string; readonly contract: string; readonly descriptor: ContractDescriptor } {
+): {
+  readonly protocol: string;
+  readonly contract: string;
+  readonly descriptor: ContractDescriptor;
+} {
   if (ns.kind === "protocol") {
     const contract = contractName ?? ns.defaultContract;
     if (contract === undefined) {
@@ -227,11 +246,15 @@ function resolveContractDescriptor(
   const owners = ns.contractOwners.get(contractName);
   if (owners === undefined || owners.length === 0) {
     const known = [...ns.contractOwners.keys()].join(", ");
-    fail(`Unknown contract '${contractName}' under family alias '${ns.familyKey}' (known: ${known})`);
+    fail(
+      `Unknown contract '${contractName}' under family alias '${ns.familyKey}' (known: ${known})`,
+    );
   }
   if (owners.length > 1) {
     const candidates = owners.map((slug) => `${pascalOfSlug(slug)}.${contractName}`).join(" or ");
-    fail(`"${contractName}" is ambiguous under ${ns.familyKey} (${owners.join(", ")}) — use ${candidates}`);
+    fail(
+      `"${contractName}" is ambiguous under ${ns.familyKey} (${owners.join(", ")}) — use ${candidates}`,
+    );
   }
   const protocol = owners[0]!;
   // Re-derive via a fresh protocol-namespace lookup so the descriptor comes from the SAME
@@ -317,7 +340,11 @@ function resolveAccessorTarget(
   }
   const contractName = nsSegments[0];
 
-  const { protocol, contract, descriptor } = resolveContractDescriptor(ns, contractName, namespaceHead);
+  const { protocol, contract, descriptor } = resolveContractDescriptor(
+    ns,
+    contractName,
+    namespaceHead,
+  );
 
   if (descriptor.kind === "address-only") {
     fail(
@@ -343,7 +370,9 @@ function resolveAccessorTarget(
   const address: Address | undefined = addressOn(descriptor, chain);
   if (address === undefined) {
     const known = descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)";
-    fail(`Contract '${contract}' (${protocol}) is not deployed on '${chain.slug}' (available: ${known})`);
+    fail(
+      `Contract '${contract}' (${protocol}) is not deployed on '${chain.slug}' (available: ${known})`,
+    );
   }
 
   return { chain, protocol, contract, descriptor, address };
@@ -400,7 +429,11 @@ function collectSelfExclusions(program: AstNode): ReadonlySet<AstNode> {
       const id = (n as { id?: AstNode }).id;
       if (id?.type === "Identifier") excluded.add(id);
     }
-    if (n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression") {
+    if (
+      n.type === "FunctionDeclaration" ||
+      n.type === "FunctionExpression" ||
+      n.type === "ArrowFunctionExpression"
+    ) {
       const params = (n as { params?: AstNode[] }).params ?? [];
       for (const p of params) if (p.type === "Identifier") excluded.add(p);
     }
@@ -424,11 +457,19 @@ function collectSelfExclusions(program: AstNode): ReadonlySet<AstNode> {
   return excluded;
 }
 
-function collectSelfSites(program: AstNode, excluded: ReadonlySet<AstNode>, shadowed: ReadonlySet<string>): Splice[] {
+function collectSelfSites(
+  program: AstNode,
+  excluded: ReadonlySet<AstNode>,
+  shadowed: ReadonlySet<string>,
+): Splice[] {
   if (shadowed.has("self")) return [];
   const sites: Splice[] = [];
   walk(program, (n) => {
-    if (n.type === "Identifier" && (n as unknown as { name: string }).name === "self" && !excluded.has(n)) {
+    if (
+      n.type === "Identifier" &&
+      (n as unknown as { name: string }).name === "self" &&
+      !excluded.has(n)
+    ) {
       sites.push({ start: n.start, end: n.end, replacement: "ctx.self()" });
     }
   });
@@ -450,14 +491,21 @@ export function rewriteProtocolAccessors(
   // source that ALREADY carries a leading `import { X } from "./X.json";` line, e.g. the
   // ERC20-import-prefixed transfer program `nest.ts#nestedTransferProgram` can hand
   // `compileSauceRoute` before this pass ever sees it.
-  const program = acorn.parse(source, { ecmaVersion: "latest", sourceType: "module" }) as unknown as AstNode;
+  const program = acorn.parse(source, {
+    ecmaVersion: "latest",
+    sourceType: "module",
+  }) as unknown as AstNode;
   const shadowed = collectDeclaredNames(program);
 
-  const chainScope = opts.chainScope ? new Set(opts.chainScope.map((ref) => requireChain(ref).id)) : undefined;
+  const chainScope = opts.chainScope
+    ? new Set(opts.chainScope.map((ref) => requireChain(ref).id))
+    : undefined;
 
   const candidates = collectAccessorCandidates(program, shadowed);
   const allowWidenedSelectors = opts.allowWidenedSelectors ?? false;
-  const resolved = candidates.map((c) => resolveCandidate(c, chain, chainScope, allowWidenedSelectors));
+  const resolved = candidates.map((c) =>
+    resolveCandidate(c, chain, chainScope, allowWidenedSelectors),
+  );
 
   const contracts: ContractsConfig = { ...(opts.existingContracts ?? {}) };
   for (const site of resolved) {
@@ -468,7 +516,9 @@ export function rewriteProtocolAccessors(
           "compile.contracts entry of the same name but a DIFFERENT abi",
       );
     }
-    contracts[site.bindingName] = { abi: site.descriptor.abi as unknown as ContractsConfig[string]["abi"] };
+    contracts[site.bindingName] = {
+      abi: site.descriptor.abi as unknown as ContractsConfig[string]["abi"],
+    };
   }
 
   // Binding-name collision with a user identifier anywhere in the program (declared or merely
@@ -480,7 +530,9 @@ export function rewriteProtocolAccessors(
     });
     for (const site of resolved) {
       if (allIdentifiers.has(site.bindingName)) {
-        fail(`synthesized binding name '${site.bindingName}' collides with an identifier already used in the program`);
+        fail(
+          `synthesized binding name '${site.bindingName}' collides with an identifier already used in the program`,
+        );
       }
     }
   }
@@ -492,11 +544,24 @@ export function rewriteProtocolAccessors(
   // Bare `<Protocol>.<Contract>` / `<Chain>.<Protocol>[.<Contract>]` in value position -> its
   // on-chain address literal. Terminal by construction (never a call callee), so it can't overlap a
   // `resolved` call-site splice.
-  const valueSites = collectValueAccessSites(program, shadowed, chain, chainScope, allowWidenedSelectors);
+  const valueSites = collectValueAccessSites(
+    program,
+    shadowed,
+    chain,
+    chainScope,
+    allowWidenedSelectors,
+  );
 
   const allSites = [...resolved, ...selfSites, ...valueSites];
   if (allSites.length === 0) {
-    return { source, rewrote: false, contracts: {}, accessorSites: 0, selfSites: 0, valueAccessSites: 0 };
+    return {
+      source,
+      rewrote: false,
+      contracts: {},
+      accessorSites: 0,
+      selfSites: 0,
+      valueAccessSites: 0,
+    };
   }
 
   const ordered = [...allSites].sort((a, b) => b.start - a.start);

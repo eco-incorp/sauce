@@ -23,7 +23,9 @@ export function readUintLE(data: Uint8Array, offset: number, width: number): big
     throw new Error(`readUintLE width must be an integer in 1..=32, got ${width}`);
   }
   if (offset + width > data.length) {
-    throw new Error(`readUintLE reads [${offset}, ${offset + width}) beyond ${data.length}-byte data`);
+    throw new Error(
+      `readUintLE reads [${offset}, ${offset + width}) beyond ${data.length}-byte data`,
+    );
   }
   let value = 0n;
   for (let i = width - 1; i >= 0; i--) {

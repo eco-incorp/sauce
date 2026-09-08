@@ -5,16 +5,16 @@
  * legacy path (classic mints) passes the Token-2022 gate and proceeds to the
  * downstream circuit-breaker read.
  */
-import { address, getAddressCodec } from '@solana/kit';
-import type { Address } from '@solana/kit';
-import type { AccountLoader } from '../../../src/svm/index.js';
-import { fetchHeliumTreasuryPoolConfig } from '../../../src/svm/venues/helium-treasury/index.js';
-import { makeT22Mint, makeLegacyMint } from '../fixtures/token-2022/synth.js';
+import { address, getAddressCodec } from "@solana/kit";
+import type { Address } from "@solana/kit";
+import type { AccountLoader } from "../../../src/svm/index.js";
+import { fetchHeliumTreasuryPoolConfig } from "../../../src/svm/venues/helium-treasury/index.js";
+import { makeT22Mint, makeLegacyMint } from "../fixtures/token-2022/synth.js";
 
-const POOL = address('CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi');
-const TREASURY_MINT = address('So11111111111111111111111111111111111111112'); // HNT stand-in
-const SUPPLY_MINT = address('J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn'); // sub-token
-const TREASURY = address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'); // treasury token account
+const POOL = address("CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi");
+const TREASURY_MINT = address("So11111111111111111111111111111111111111112"); // HNT stand-in
+const SUPPLY_MINT = address("J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"); // sub-token
+const TREASURY = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // treasury token account
 
 const MGMT_DISC = 0x3bd76e10d1786f44n;
 const MGMT_ACCOUNT_SIZE = 228;
@@ -53,8 +53,8 @@ function loaderFrom(map: Record<string, Uint8Array>): AccountLoader {
   return async (addr: Address) => map[addr] ?? null;
 }
 
-describe('helium-treasury Token-2022 self-drop', () => {
-  it('REJECTS a treasury whose supplyMint is a Token-2022 mint', async () => {
+describe("helium-treasury Token-2022 self-drop", () => {
+  it("REJECTS a treasury whose supplyMint is a Token-2022 mint", async () => {
     const load = loaderFrom({
       [POOL]: buildMgmt(),
       [TREASURY]: buildTreasuryTokenAccount(),
@@ -64,7 +64,7 @@ describe('helium-treasury Token-2022 self-drop', () => {
     await expect(fetchHeliumTreasuryPoolConfig(load, POOL)).rejects.toThrow(/Token-2022/);
   });
 
-  it('classic-legacy mints pass the Token-2022 gate (fails later on the breaker read)', async () => {
+  it("classic-legacy mints pass the Token-2022 gate (fails later on the breaker read)", async () => {
     const load = loaderFrom({
       [POOL]: buildMgmt(),
       [TREASURY]: buildTreasuryTokenAccount(),

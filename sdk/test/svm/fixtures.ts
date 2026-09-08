@@ -5,11 +5,11 @@
  * an AccountBytesMap for referenceQuote, and litesvm setAccount arguments
  * (kit EncodedAccount) for the engine-gated suites.
  */
-import { readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { address, lamports } from '@solana/kit';
-import type { EncodedAccount } from '@solana/kit';
-import type { AccountBytesMap, AccountLoader } from '../../src/svm/index.js';
+import { readdirSync, readFileSync } from "fs";
+import { join } from "path";
+import { address, lamports } from "@solana/kit";
+import type { EncodedAccount } from "@solana/kit";
+import type { AccountBytesMap, AccountLoader } from "../../src/svm/index.js";
 
 export interface AccountFixture {
   /** Base58 account address. */
@@ -21,16 +21,18 @@ export interface AccountFixture {
 }
 
 export function fixtureData(fixture: AccountFixture): Uint8Array {
-  return new Uint8Array(Buffer.from(fixture.base64Data, 'base64'));
+  return new Uint8Array(Buffer.from(fixture.base64Data, "base64"));
 }
 
 /** Reads every *.json under dir (sorted by name) as one AccountFixture each. */
 export function loadFixtures(dir: string): AccountFixture[] {
-  const names = readdirSync(dir).filter((name) => name.endsWith('.json')).sort();
+  const names = readdirSync(dir)
+    .filter((name) => name.endsWith(".json"))
+    .sort();
   return names.map((name) => {
-    const parsed = JSON.parse(readFileSync(join(dir, name), 'utf8'));
-    for (const field of ['address', 'owner', 'base64Data'] as const) {
-      if (typeof parsed[field] !== 'string') {
+    const parsed = JSON.parse(readFileSync(join(dir, name), "utf8"));
+    for (const field of ["address", "owner", "base64Data"] as const) {
+      if (typeof parsed[field] !== "string") {
         throw new Error(`fixture ${name} is missing string field '${field}'`);
       }
     }

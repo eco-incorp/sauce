@@ -39,7 +39,11 @@ import { walk, collectDeclaredNames, type AstNode } from "./ast-walk.js";
 import { formatBigint } from "../deposit/format.js";
 import { isChainKey, resolveNamespace } from "./accessor-index.js";
 
-export const REWRITABLE_METHODS: ReadonlySet<string> = new Set(["transfer", "approve", "balanceOf"]);
+export const REWRITABLE_METHODS: ReadonlySet<string> = new Set([
+  "transfer",
+  "approve",
+  "balanceOf",
+]);
 
 /** Either the full registry-resolved `symbol -> address` map (enables BOTH rewrites), or a bare set
  *  of symbols with no addresses (U4 only -- the sugar has no address to inline, so it yields no
@@ -69,7 +73,11 @@ function tokenAddressOf(tokens: TokenSymbols, symbol: string): bigint | undefine
 
 // -- U4: <Sym>.transfer/.approve/.balanceOf(...) in CALL position ---------------------------------
 
-function collectMemberCallSites(program: AstNode, tokens: TokenSymbols, shadowed: ReadonlySet<string>): Splice[] {
+function collectMemberCallSites(
+  program: AstNode,
+  tokens: TokenSymbols,
+  shadowed: ReadonlySet<string>,
+): Splice[] {
   const sites: Splice[] = [];
   walk(program, (n) => {
     if (n.type !== "CallExpression") return;
@@ -86,7 +94,11 @@ function collectMemberCallSites(program: AstNode, tokens: TokenSymbols, shadowed
     if (!tokens.has(symbol)) return;
     if (shadowed.has(symbol)) return;
     if (!REWRITABLE_METHODS.has(method)) return;
-    sites.push({ start: callee.start, end: callee.end, replacement: `IERC20.at(${symbol}).${method}` });
+    sites.push({
+      start: callee.start,
+      end: callee.end,
+      replacement: `IERC20.at(${symbol}).${method}`,
+    });
   });
   return sites;
 }
@@ -124,7 +136,11 @@ function collectValuePositionExclusions(program: AstNode): ReadonlySet<AstNode> 
 /** Resolves `object` (the `<holder>` in `<holder>.<Sym>`) to its emitted text, or `undefined` if
  *  `object` is not one of the three authorized holder shapes (or is itself rejected -- an ambiguous
  *  token-symbol holder, a namespace/chain key, or a name reserved by the compiler). */
-function resolveHolder(object: AstNode | undefined, tokens: TokenSymbols, source: string): string | undefined {
+function resolveHolder(
+  object: AstNode | undefined,
+  tokens: TokenSymbols,
+  source: string,
+): string | undefined {
   if (!object) return undefined;
   if (object.type === "Identifier") {
     const name = (object as unknown as { name: string }).name;
@@ -168,7 +184,11 @@ function collectBalanceSites(
     if (address === undefined) return; // Set form: no address to inline, sugar declines
     const holder = resolveHolder((n as { object?: AstNode }).object, tokens, source);
     if (holder === undefined) return;
-    sites.push({ start: n.start, end: n.end, replacement: `IERC20.at(${formatBigint(address)}).balanceOf(${holder})` });
+    sites.push({
+      start: n.start,
+      end: n.end,
+      replacement: `IERC20.at(${formatBigint(address)}).balanceOf(${holder})`,
+    });
   });
   return sites;
 }
@@ -208,7 +228,10 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
   if (!source.includes(TOKEN_FACTORY_NAME)) {
     return { source, rewrote: false, sites: 0 };
   }
-  const program = acorn.parse(source, { ecmaVersion: "latest", sourceType: "module" }) as unknown as AstNode;
+  const program = acorn.parse(source, {
+    ecmaVersion: "latest",
+    sourceType: "module",
+  }) as unknown as AstNode;
   // A locally-declared `Token` shadows the global wrapper — skip the whole program, conservatively.
   // Every binding form counts, which is `collectDeclaredNames`'s whole job; this used to add its own
   // `FunctionDeclaration` walk on top and still missed `import { Token }` and `class Token`.
@@ -251,7 +274,10 @@ export function rewriteTokenMembers(source: string, tokens: TokenSymbols): Token
   // sourceType: "module" -- this pass now runs by DEFAULT (the registry provides addresses even
   // with no caller-supplied tokens), so it must tolerate a source that already carries a leading
   // `import { IERC20 } from "./artifacts/IERC20.json";` line, e.g. `nest.ts#nestedTransferProgram`.
-  const program = acorn.parse(source, { ecmaVersion: "latest", sourceType: "module" }) as unknown as AstNode;
+  const program = acorn.parse(source, {
+    ecmaVersion: "latest",
+    sourceType: "module",
+  }) as unknown as AstNode;
   const shadowed = collectDeclaredNames(program);
 
   const memberSites = collectMemberCallSites(program, tokens, shadowed);
@@ -269,5 +295,10 @@ export function rewriteTokenMembers(source: string, tokens: TokenSymbols): Token
   for (const site of ordered) {
     out = out.slice(0, site.start) + site.replacement + out.slice(site.end);
   }
-  return { source: out, rewrote: true, memberSites: memberSites.length, balanceSites: balanceSites.length };
+  return {
+    source: out,
+    rewrote: true,
+    memberSites: memberSites.length,
+    balanceSites: balanceSites.length,
+  };
 }
