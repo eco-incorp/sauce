@@ -73,12 +73,13 @@ import {
 // Master index — all protocols, categories, operations, chain coverage
 const index = getProtocolIndex();
 
-// Specific protocol — description, SauceScript examples, addresses, ABI methods
+// Specific protocol — description, SauceScript examples, addresses, ABI methods.
+// `slug` must be one of `listSkillSlugs()`; anything else throws.
 const aaveSkill = getProtocolSkill("aave-v3");
 const uniSkill = getProtocolSkill("uniswap-v3");
 
 // All available slugs
-const slugs = listSkillSlugs(); // 127 slugs
+const slugs = listSkillSlugs(); // 128 slugs
 ```
 
 Each skill file includes:
