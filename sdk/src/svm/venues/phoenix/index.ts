@@ -206,6 +206,8 @@
 import { address } from '@solana/kit';
 import type { Address } from '@solana/kit';
 import type { AccountBytesMap, AccountLoader, PoolConfig } from '../types.js';
+import { makeTreeWalkBudget } from '../tree-walk.js';
+import type { SpendHop } from '../tree-walk.js';
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from '../../token-program.js';
 import { parseMintExtensions } from '../../token-extensions.js';
 
@@ -326,7 +328,8 @@ function hasDiscriminant(data: Uint8Array): boolean {
 // ---------------------------------------------------------------------------
 // Off-chain red-black-tree walk (standard BST successor via Left/Right/Parent
 // registers — mathematically identical to sokoban's own stack-based forward
-// iterator; see the header). Bounded off-chain; unaffordable in-VM.
+// iterator; see the header). Every pointer hop draws from the caller's
+// whole-walk budget; unaffordable in-VM.
 // ---------------------------------------------------------------------------
 
 function nodeAbs(nodesBase: number, nodeIndex: number): number {
@@ -336,23 +339,26 @@ const regLeft = (data: Uint8Array, nodesBase: number, i: number): number => read
 const regRight = (data: Uint8Array, nodesBase: number, i: number): number => readU32(data, nodeAbs(nodesBase, i) + 4);
 const regParent = (data: Uint8Array, nodesBase: number, i: number): number => readU32(data, nodeAbs(nodesBase, i) + 8);
 
-function findMin(data: Uint8Array, nodesBase: number, idx: number): number {
+function findMin(data: Uint8Array, nodesBase: number, idx: number, spendHop: SpendHop): number {
   let cur = idx;
-  for (let guard = 0; guard < 1_000_000 && regLeft(data, nodesBase, cur) !== 0; guard++) cur = regLeft(data, nodesBase, cur);
+  while (regLeft(data, nodesBase, cur) !== 0) {
+    spendHop();
+    cur = regLeft(data, nodesBase, cur);
+  }
   return cur;
 }
 
-function successor(data: Uint8Array, nodesBase: number, idx: number): number {
+function successor(data: Uint8Array, nodesBase: number, idx: number, spendHop: SpendHop): number {
   const right = regRight(data, nodesBase, idx);
-  if (right !== 0) return findMin(data, nodesBase, right);
+  if (right !== 0) return findMin(data, nodesBase, right, spendHop);
   let cur = idx;
-  for (let guard = 0; guard < 1_000_000; guard++) {
+  for (;;) {
+    spendHop();
     const parent = regParent(data, nodesBase, cur);
     if (parent === 0) return 0;
     if (regLeft(data, nodesBase, parent) === cur) return parent;
     cur = parent;
   }
-  return 0;
 }
 
 /**
@@ -363,12 +369,14 @@ function successor(data: Uint8Array, nodesBase: number, idx: number): number {
  * manifest's identical stop) or the first zero-size tombstone (v1 never
  * actually leaves one mid-tree per fifo.rs's own comments, but skip-and-
  * continue costs nothing and matches manifest's defensive posture).
+ * `spendHop` is the whole-walk iteration budget — a market whose tree
+ * registers cycle exhausts it and throws rather than spinning.
  */
-function resolveWindow(data: Uint8Array, root: number, nodesBase: number): PhoenixWindow {
+function resolveWindow(data: Uint8Array, root: number, nodesBase: number, spendHop: SpendHop): PhoenixWindow {
   const orders: PhoenixOrder[] = [];
   if (root === 0) return { orders };
-  let cur = findMin(data, nodesBase, root);
-  for (let guard = 0; guard < 1_000_000 && cur !== 0 && orders.length < PHOENIX_MAX_ORDERS; guard++) {
+  let cur = findMin(data, nodesBase, root, spendHop);
+  while (cur !== 0 && orders.length < PHOENIX_MAX_ORDERS) {
     const base = nodeAbs(nodesBase, cur);
     const lastValidSlot = readU64(data, base + NODE_OFF_LAST_VALID_SLOT);
     const lastValidTs = readU64(data, base + NODE_OFF_LAST_VALID_TS);
@@ -377,7 +385,8 @@ function resolveWindow(data: Uint8Array, root: number, nodesBase: number): Phoen
     if (size > 0n) {
       orders.push({ nodeIndex: cur, orderSequenceNumber: readU64(data, base + NODE_OFF_SEQ) });
     }
-    cur = successor(data, nodesBase, cur);
+    spendHop();
+    cur = successor(data, nodesBase, cur, spendHop);
   }
   return { orders };
 }
@@ -435,6 +444,10 @@ export async function fetchPhoenixConfig(load: AccountLoader, pool: Address): Pr
 
   const bidsRoot = readU32(data, BIDS_TREE_ROOT);
   const asksRoot = readU32(data, asksTreeRoot);
+  // ONE budget for both sides, sized on how many nodes the account can PHYSICALLY
+  // hold — never on the declared bids_size/asks_size, which a corrupt account
+  // sets freely.
+  const spendHop = makeTreeWalkBudget(SLUG, Math.floor((data.length - BIDS_NODES_BASE) / NODE_SIZE));
 
   return {
     venue: SLUG,
@@ -453,8 +466,8 @@ export async function fetchPhoenixConfig(load: AccountLoader, pool: Address): Pr
     asksNodesBase,
     windows: {
       // base-in sells base -> matches BIDS; quote-in buys base -> matches ASKS.
-      baseIn: resolveWindow(data, bidsRoot, BIDS_NODES_BASE),
-      quoteIn: resolveWindow(data, asksRoot, asksNodesBase),
+      baseIn: resolveWindow(data, bidsRoot, BIDS_NODES_BASE, spendHop),
+      quoteIn: resolveWindow(data, asksRoot, asksNodesBase, spendHop),
     },
   };
 }
