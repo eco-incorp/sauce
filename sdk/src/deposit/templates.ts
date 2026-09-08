@@ -8,6 +8,7 @@
  * signature from the ABI itself and fails if the two ever disagree.
  */
 import type { AmountInput } from "../swap/types.js";
+import { toExactBigInt } from "../numeric.js";
 import { formatAddressField, formatBigint } from "./format.js";
 import type { DepositTemplate, ExtraFieldSpec, NormalizedDeposit } from "./types.js";
 
@@ -16,7 +17,7 @@ function uintExtra(bits: number, defaultValue = 0n): ExtraFieldSpec {
   return {
     defaultValue,
     normalize(value: AmountInput, fieldName: string): bigint {
-      const v = typeof value === "bigint" ? value : BigInt(value);
+      const v = typeof value === "number" ? toExactBigInt(value, fieldName) : BigInt(value);
       if (v < 0n || v >= max) {
         throw new Error(`${fieldName}: expected a uint${bits} (0 <= x < ${max}), got ${v}`);
       }

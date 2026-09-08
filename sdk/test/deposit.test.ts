@@ -148,6 +148,18 @@ describe("toDeposit guards", () => {
     expect(() => toDeposit(aaveSpec({ extra: { referralCode: 65_536n } }))).toThrow(/expected a uint16/);
   });
 
+  it("rejects an unsafe integer referralCode before the range check sees a rounded value", () => {
+    expect(() => toDeposit(aaveSpec({ extra: { referralCode: 1234567890123456789 } }))).toThrow(
+      /referralCode: expected a safe integer/,
+    );
+  });
+
+  it("rejects a non-integer referralCode with a labelled message", () => {
+    expect(() => toDeposit(aaveSpec({ extra: { referralCode: 1.5 } }))).toThrow(
+      /referralCode: expected an integer, got 1\.5/,
+    );
+  });
+
   it("rejects a non-integer number amount", () => {
     expect(() => toDeposit(aaveSpec({ amount: 1.5 }))).toThrow(/amount: expected an integer, got 1\.5/);
   });
