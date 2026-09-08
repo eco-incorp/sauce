@@ -11,6 +11,13 @@
  * pool accounts first, then their vault/config satellites — regardless of
  * pool count.
  *
+ * A sweep's chunks go out concurrently but no more than
+ * `maxConcurrentChunks` at a time: unbounded fan-out means a batch of k
+ * addresses opens ceil(k / chunkSize) simultaneous requests, which at
+ * k = 1,000,000 is 10,000. The cap is PER SWEEP, so independent concurrent
+ * prepares never queue behind one another and the O(dependency-depth)
+ * property above is preserved.
+ *
  * Owner checks are PRESERVED through batching: getMultipleAccounts returns
  * each account's owner, and the loader hands (address, owner) to the
  * `expectOwner` hook before releasing the data — a per-account rejection
@@ -20,6 +27,11 @@
  */
 import type { Address } from '@solana/kit';
 import type { AccountLoader } from './venues/types.js';
+
+/** getMultipleAccounts pubkey cap on public RPCs. */
+const DEFAULT_CHUNK_SIZE = 100;
+/** 16 x DEFAULT_CHUNK_SIZE = 1,600 accounts per wave — ~200-500 pools at 3-8 accounts each. */
+const DEFAULT_MAX_CONCURRENT_CHUNKS = 16;
 
 export interface LoadedAccount {
   data: Uint8Array;
@@ -32,6 +44,8 @@ export type BatchAccountLoader = (addresses: readonly Address[]) => Promise<(Loa
 export interface CoalescingLoaderOptions {
   /** getMultipleAccounts cap per request (public RPC limit: 100). */
   chunkSize?: number;
+  /** Chunk requests in flight at once WITHIN one sweep (default 16). */
+  maxConcurrentChunks?: number;
   /** Per-account owner check — throw to reject that account's load(). */
   expectOwner?: (address: Address, owner: Address) => void;
 }
@@ -46,9 +60,15 @@ interface PendingLoad {
  * same-turn loads into deduped, chunked sweeps.
  */
 export function coalescingAccountLoader(loadMany: BatchAccountLoader, options: CoalescingLoaderOptions = {}): AccountLoader {
-  const chunkSize = options.chunkSize ?? 100;
+  const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
   if (!Number.isInteger(chunkSize) || chunkSize < 1) {
     throw new Error(`coalescingAccountLoader chunkSize must be a positive integer, got ${chunkSize}`);
+  }
+  const maxConcurrentChunks = options.maxConcurrentChunks ?? DEFAULT_MAX_CONCURRENT_CHUNKS;
+  if (!Number.isInteger(maxConcurrentChunks) || maxConcurrentChunks < 1) {
+    throw new Error(
+      `coalescingAccountLoader maxConcurrentChunks must be a positive integer, got ${maxConcurrentChunks}`,
+    );
   }
   let pending: Map<Address, PendingLoad[]> | null = null;
 
@@ -87,12 +107,21 @@ export function coalescingAccountLoader(loadMany: BatchAccountLoader, options: C
   const flush = async (batch: Map<Address, PendingLoad[]>): Promise<void> => {
     const addresses = [...batch.keys()];
     // Chunks are independent getMultipleAccounts round-trips (chunkSize is the
-    // RPC's per-call pubkey cap) — fire them in parallel, not one after another.
+    // RPC's per-call pubkey cap) — fire them in parallel, not one after another,
+    // but never more than maxConcurrentChunks at a time. Each worker drains the
+    // shared cursor, so the wave refills as soon as a chunk lands.
     const chunks: Address[][] = [];
     for (let at = 0; at < addresses.length; at += chunkSize) {
       chunks.push(addresses.slice(at, at + chunkSize));
     }
-    await Promise.all(chunks.map((chunk) => sweepChunk(batch, chunk)));
+    let next = 0;
+    const drainChunks = async (): Promise<void> => {
+      while (next < chunks.length) {
+        const chunk = chunks[next++]!;
+        await sweepChunk(batch, chunk);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(maxConcurrentChunks, chunks.length) }, drainChunks));
   };
 
   return (address: Address): Promise<Uint8Array | null> =>
