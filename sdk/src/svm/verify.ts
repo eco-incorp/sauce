@@ -408,8 +408,10 @@ export interface SvmSettleExecutionVerification extends DecodedSvmSettleExecutio
  * count is not a signature). This ties the calldata to the SDK's own recompiled canonical settle
  * bytecode, in one of two ways, no partner bytecode required for either verdict:
  *
- *   - `bytecode` supplied → byte-compare it to `compileCanonicalSettle(escrowCount)` AND check the pin
- *     ties to it (`sha256(bytecode) === pin`). Proves the exact staged bytes ARE the settle and WILL run.
+ *   - `bytecode` supplied → byte-compare it to `compileCanonicalSettle(escrowCount)` AND require the pin
+ *     to tie to it (`sha256(bytecode) === pin`). Proves the exact staged bytes ARE the settle and WILL run.
+ *     Both halves are load-bearing: calldata with no pin commits to no program at all, so bytes alone —
+ *     however genuine — prove nothing about what runs, and the verdict is not genuine.
  *   - no bytecode, but the calldata carries a pin → check `pin === sha256(canonical settle)`. The pin is
  *     the buffer's content hash the engine enforces on-chain, so a match proves the committed program is
  *     the genuine settle (or the execution reverts on the pin gate) — a decoy's pin cannot match.
@@ -435,13 +437,15 @@ export function verifySvmSettleExecution(input: SvmSettleExecutionVerifyInput): 
 
   if (input.bytecode !== undefined) {
     verifiedBy = 'bytecode';
-    genuine = bytecodeMatchesCanonical === true && pinMatchesBytecode !== false;
+    genuine = bytecodeMatchesCanonical === true && pinMatchesBytecode === true;
     mismatch =
       bytecodeMatchesCanonical !== true
         ? `bytecode does not byte-match svmSettleSource(${decoded.escrowCount})`
         : pinMatchesBytecode === false
           ? 'calldata pin does not equal sha256(bytecode) — the calldata targets different bytecode'
-          : undefined;
+          : pinMatchesBytecode === null
+            ? 'calldata carries no pin, so it does not commit to the supplied bytecode — the staged bytes verified here need not be the bytes that run'
+            : undefined;
   } else if (pin !== undefined) {
     verifiedBy = 'pin';
     genuine = pinMatchesCanonical === true;

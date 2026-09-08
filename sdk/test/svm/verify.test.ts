@@ -222,8 +222,31 @@ describe('verifySvmSettleExecution', () => {
       ...fx.expected,
     });
     expect(result.genuine).toBe(true);
+    expect(result.verifiedBy).toBe('bytecode');
     expect(result.pinMatchesBytecode).toBe(true);
     expect(result.mismatch).toBeUndefined();
+  });
+
+  it('★ rejects genuine bytecode whose calldata carries NO pin — the calldata commits to nothing', () => {
+    // The bytes ARE the canonical settle, but a pinless calldata does not commit to them, so nothing
+    // stops a different program running from the buffer.
+    const fx = buildFixture(2);
+    const ix = buildExecuteFromAccountInstruction({ programId: PROGRAM as never, buffer: BUFFER as never, accounts: fx.userMetas }); // no expectedSha256 → no pin
+    const result = verifySvmSettleExecution({ instructionData: ix.data as Uint8Array, accounts: bareAccounts(ix), bytecode: fx.bytecode, ...fx.expected });
+    expect(result.genuine).toBe(false);
+    expect(result.verifiedBy).toBe('bytecode');
+    expect(result.bytecodeMatchesCanonical).toBe(true);
+    expect(result.pinMatchesBytecode).toBeNull();
+    expect(result.mismatch).toMatch(/carries no pin/);
+  });
+
+  it('verifies the recipes split shape (3N+3 user tail, no buffer account) as genuine', () => {
+    const fx = buildFixture(3);
+    const accounts = fx.refs.map((ref) => ({ pubkey: fx.addrByRef[ref], isSigner: false, isWritable: true, ref }));
+    const result = verifySvmSettleExecution({ instructionData: fx.ix.data as Uint8Array, accounts, bytecode: fx.bytecode, ...fx.expected });
+    expect(result.genuine).toBe(true);
+    expect(result.hadBufferAccount).toBe(false);
+    expect(result.verifiedBy).toBe('bytecode');
   });
 
   it('★ rejects a genuine execution checked against the WRONG expected minOut', () => {
