@@ -1,5 +1,5 @@
 /**
- * `@eco-incorp/sauce-sdk`'s `deposit` module — E4.2, the universal deposit/stake/wrap adapter.
+ * `@eco-incorp/sauce`'s `deposit` module — E4.2, the universal deposit/stake/wrap adapter.
  *
  * Types + the per-protocol template registry shape. See `sdk/src/deposit/index.ts` for the
  * module-level overview, and `sdk/src/swap/types.ts` (E4.1) for the sibling module this one mirrors

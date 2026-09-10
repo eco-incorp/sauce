@@ -1,4 +1,4 @@
-// @eco-incorp/sauce-sdk/verify — turn a compiled Sauce settle payload's bytes back into the
+// @eco-incorp/sauce/verify — turn a compiled Sauce settle payload's bytes back into the
 // `(tokens, minOut, recipient)` it will run with, and prove the program half is the audited one.
 //
 // That is the whole job. Dependency closure is `viem` ONLY (no node:fs, no compiler, no @solana/*,

@@ -1,6 +1,6 @@
-// @eco-incorp/sauce-sdk/svm/verify — extract settle params from an Eco intent's SVM calls.
+// @eco-incorp/sauce/svm/verify — extract settle params from an Eco intent's SVM calls.
 //
-// The EVM twin (`@eco-incorp/sauce-sdk/verify`'s `extractEvmSettleFromIntent`) reads the settle program
+// The EVM twin (`@eco-incorp/sauce/verify`'s `extractEvmSettleFromIntent`) reads the settle program
 // straight out of a `Pot.cook(bytes[])` call, because an EVM intent's `route.calls[].data` is plain ABI
 // calldata. An SVM intent is one wrapper deeper: each `route.calls[].data` is the Eco **Portal**
 // program's `CalldataWithAccounts` Borsh envelope — `{ calldata: { data, account_count }, accounts:
@@ -21,7 +21,7 @@
 //
 // GENUINENESS WITHOUT PARTNER BYTECODE. A staged settle carries no structural signature (unlike an
 // EVM settle, whose whole program is a constant that hashes to a pinned value — see
-// `@eco-incorp/sauce-sdk/verify`'s `validateSettleProgram`), so "right shape" is NOT "is a settle" —
+// `@eco-incorp/sauce/verify`'s `validateSettleProgram`), so "right shape" is NOT "is a settle" —
 // a non-settle staged execute, or an adversarial
 // decoy, has the same shape. The extraction here therefore does not trust shape: it recompiles the
 // canonical `svmSettleSource(N)` ITSELF and requires the calldata pin to equal `sha256(canonical settle)`

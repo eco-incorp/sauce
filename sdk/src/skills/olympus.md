@@ -14,7 +14,7 @@ staking | Chains: Ethereum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/olympus";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/olympus";
 ```
 
 ## SauceScript Examples

@@ -1,5 +1,5 @@
 /**
- * `@eco-incorp/sauce-sdk`'s `deposit` module — E4.2, the universal deposit/stake/wrap adapter.
+ * `@eco-incorp/sauce`'s `deposit` module — E4.2, the universal deposit/stake/wrap adapter.
  *
  * There is no engine Router adapter for deposit/stake/wrap — the Router is swap+quote only. So a
  * deposit lowers to a DIRECT protocol call in SauceScript: `token.approve(spender, amount);
@@ -23,7 +23,7 @@
  * program, exactly like `swap`'s own multi-leg story.
  *
  * ```ts
- * import { routes, deposit } from "@eco-incorp/sauce-sdk";
+ * import { routes, deposit } from "@eco-incorp/sauce";
  *
  * // routes.compileSauceRoute, not the compiler directly: a generated `main` falls off the end and
  * // has no return type of its own, so a raw compile rejects it with "`main` does not return on

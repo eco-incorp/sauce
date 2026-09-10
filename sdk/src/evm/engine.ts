@@ -1,4 +1,4 @@
-// @eco-incorp/sauce-sdk/evm/engine — viem-native view of the EVM Sauce engine contracts.
+// @eco-incorp/sauce/evm/engine — viem-native view of the EVM Sauce engine contracts.
 //
 // Mirrors ./svm/engine (a consumer-facing engine subpath) for the EVM side. The SDK vendored the
 // V12Pot / V12Kitchen ABIs (src/artifacts/*.json) but never exported them, so viem consumers

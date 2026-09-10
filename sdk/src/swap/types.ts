@@ -1,5 +1,5 @@
 /**
- * `@eco-incorp/sauce-sdk`'s `swap` module — E4.1, the universal swap adapter.
+ * `@eco-incorp/sauce`'s `swap` module — E4.1, the universal swap adapter.
  *
  * Types + pool-type registry for lowering a chain-agnostic swap SPEC into a `ISauceRouter.swap`
  * call. See `sdk/src/swap/index.ts` for the module-level overview and the E3 composition example.

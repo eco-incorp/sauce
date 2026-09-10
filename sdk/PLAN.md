@@ -20,7 +20,7 @@ The SDK should be the single import a developer needs to interact with any proto
 
 ```
 sdk/
-├── package.json                    # @eco-incorp/sauce-sdk, links to ../compiler
+├── package.json                    # @eco-incorp/sauce, links to ../compiler
 ├── tsconfig.json                   # Strict, ESNext, bundler resolution
 ├── PLAN.md                         # This file
 ├── src/
@@ -186,7 +186,7 @@ Flag and remove any unverified addresses.
 
 ### Developer Experience
 
-- [ ] CLI tool: `sauce-sdk list --category dex --chain base`
+- [ ] CLI tool: `sauce list --category dex --chain base`
 - [ ] Auto-complete for protocol names and function signatures
 - [ ] Documentation generator from protocol info + functions
 

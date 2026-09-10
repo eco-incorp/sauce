@@ -20,7 +20,7 @@ import {
   protocolInfo,
   deployments,
   sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/perpetual-protocol";
+} from "@eco-incorp/sauce/protocols/perpetual-protocol";
 ```
 
 ## SauceScript Examples

@@ -14,7 +14,7 @@ nft-marketplace | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/seaport";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/seaport";
 ```
 
 ## SauceScript Examples

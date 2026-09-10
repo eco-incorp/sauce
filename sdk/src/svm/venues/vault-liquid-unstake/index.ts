@@ -47,7 +47,7 @@
  *     get this value INSIDE a compiled SauceScript fragment: the SVM
  *     account-loader/ladder framework this repo's adapters share
  *     (`AccountLoader`/`BatchAccountLoader`/`accountUint`) is DATA-only —
- *     it has no lamports accessor anywhere in the pinned sauce-sdk surface
+ *     it has no lamports accessor anywhere in the pinned SDK surface
  *     — so every venue in this family reads reserves from account *data*,
  *     never from an account's native lamports; this venue's Pool struct
  *     conveniently keeps its own SOL-reserve accounting inside `.data` for

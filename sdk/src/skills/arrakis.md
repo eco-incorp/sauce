@@ -14,7 +14,7 @@ yield | Chains: Ethereum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/arrakis";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/arrakis";
 ```
 
 ## SauceScript Examples

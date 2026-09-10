@@ -15,7 +15,7 @@ options | Chains: Arbitrum, Ethereum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/premia";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/premia";
 ```
 
 ## SauceScript Examples

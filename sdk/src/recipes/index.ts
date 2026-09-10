@@ -1,5 +1,5 @@
 /**
- * @eco-incorp/sauce-sdk/recipes — reusable Sauce recipes shipped as SOURCE.
+ * @eco-incorp/sauce/recipes — reusable Sauce recipes shipped as SOURCE.
  *
  * WHAT THIS IS FOR: answering the two questions a partner genuinely cannot answer themselves —
  * "what is the program text?" and "where is this package installed?" — and then getting out of the
@@ -11,8 +11,8 @@
  * arguments:
  *
  * ```ts
- * import { compile } from "@eco-incorp/sauce-sdk/compiler";
- * import { settleSource, SAUCE_BASE_DIRS } from "@eco-incorp/sauce-sdk/recipes";
+ * import { compile } from "@eco-incorp/sauce/compiler";
+ * import { settleSource, SAUCE_BASE_DIRS } from "@eco-incorp/sauce/recipes";
  *
  * // A raw compile is right HERE and not for the generated programs: settle's `main` declares its
  * // own return type, so it needs no annotating.
@@ -36,8 +36,8 @@
  * THE VALUES RIDE THE PAYLOAD, NOT THE PROGRAM. `(tokens, minOut, recipient)` are appended after the
  * program as 32-byte big-endian words — `[program | tokensPtr | minOut | recipient | count | token…]`
  * — and read back through CALLDATA. That is why one 370-byte blob serves every argument set, and why
- * `@eco-incorp/sauce-sdk/verify` can answer "is this the audited settle, and what will it do?" from
- * the bytes alone with `viem` as its only dependency. `@eco-incorp/sauce-sdk/verify`'s
+ * `@eco-incorp/sauce/verify` can answer "is this the audited settle, and what will it do?" from
+ * the bytes alone with `viem` as its only dependency. `@eco-incorp/sauce/verify`'s
  * `encodeSettleProgram` builds the tail; its `validateSettleProgram` reads it back and checks the
  * program half against the pinned hash. The full layout is `sdk/src/verify/decode.ts`.
  *
@@ -45,18 +45,18 @@
  * real file inside the package and is reachable by subpath if you want to hash, diff, or vendor it:
  *
  * ```ts
- * const path = fileURLToPath(import.meta.resolve("@eco-incorp/sauce-sdk/recipes/settle.sauce.ts"));
+ * const path = fileURLToPath(import.meta.resolve("@eco-incorp/sauce/recipes/settle.sauce.ts"));
  * ```
  *
- * A bare `readFileSync("@eco-incorp/sauce-sdk/...")` does NOT work — `readFileSync` takes a
+ * A bare `readFileSync("@eco-incorp/sauce/...")` does NOT work — `readFileSync` takes a
  * filesystem path and performs no package resolution. Use either form above.
  *
  * To go the other direction — a compiled payload back to `(tokens, minOut, recipient)` — use
- * `@eco-incorp/sauce-sdk/verify`'s `validateSettleProgram`, whose dependency closure is `viem` only.
+ * `@eco-incorp/sauce/verify`'s `validateSettleProgram`, whose dependency closure is `viem` only.
  *
  * THIS MODULE IS EVM/v12 ONLY. The SVM twin — the SVM `settle.sauce.ts`, same contract, adapted to
  * SPL's account model — lives under the SVM subtree with the rest of the SVM SDK and is exported from
- * `@eco-incorp/sauce-sdk/svm` (`svmSettleSource` / `svmSettleRefs`); see
+ * `@eco-incorp/sauce/svm` (`svmSettleSource` / `svmSettleRefs`); see
  * `sdk/src/svm/recipes/index.ts`.
  */
 import { readFileSync } from "node:fs";

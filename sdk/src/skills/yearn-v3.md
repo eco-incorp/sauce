@@ -15,11 +15,7 @@ yield | Chains: Ethereum
 ## SDK Usage
 
 ```typescript
-import {
-  protocolInfo,
-  deployments,
-  sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/yearn-v3";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/yearn-v3";
 ```
 
 ## SauceScript Examples

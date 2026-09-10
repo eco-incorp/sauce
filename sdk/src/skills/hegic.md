@@ -13,7 +13,7 @@ options | Chains: Arbitrum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/hegic";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/hegic";
 ```
 
 ## SauceScript Examples

@@ -14,7 +14,7 @@
  * sauce-recipes' eventual re-pin. This test is a MECHANICAL, VALUE-LEVEL
  * re-check (not a re-derivation of the migration's own alias logic) that
  * every one of the 474 value-level names the migration actually emits is
- * genuinely reachable from `@eco-incorp/sauce-sdk/svm` today — the exact
+ * genuinely reachable from `@eco-incorp/sauce/svm` today — the exact
  * regression an ambiguous star-export, a typo'd alias, or a future edit to
  * `venues/index.ts` that clobbers one of these lines would cause.
  *
@@ -457,7 +457,7 @@ describe("migrated venue barrel surface", () => {
     expect(MIGRATED_VALUE_EXPORTS.length).toBe(401);
   });
 
-  it("every migrated value-level export actually resolves through the @eco-incorp/sauce-sdk/svm barrel", () => {
+  it("every migrated value-level export actually resolves through the @eco-incorp/sauce/svm barrel", () => {
     // A name silently dropped by an ambiguous `export *` (or a typo'd alias)
     // reads as `undefined` here — this is the exact regression class an
     // explicit named re-export block exists to prevent. Note two DIFFERENT

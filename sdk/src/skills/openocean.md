@@ -13,11 +13,7 @@ aggregator | Chains: Ethereum, Arbitrum, Optimism, BSC, Polygon, Avalanche, Fant
 ## SDK Usage
 
 ```typescript
-import {
-  protocolInfo,
-  deployments,
-  sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/openocean";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/openocean";
 ```
 
 ## SauceScript Examples

@@ -13,7 +13,7 @@ dex | Chains: Blast
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/fenix";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/fenix";
 ```
 
 ## SauceScript Examples

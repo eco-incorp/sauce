@@ -1,4 +1,4 @@
-// @eco-incorp/sauce-sdk/svm/engine — a narrow, FILESYSTEM-FREE view of the Sauce SVM engine wire
+// @eco-incorp/sauce/svm/engine — a narrow, FILESYSTEM-FREE view of the Sauce SVM engine wire
 // contract plus the instruction builders, published as its own subpath for CommonJS consumers.
 //
 // WHY IT EXISTS SEPARATELY FROM `./svm`. The `./svm` barrel re-exports `svm/recipes`, whose module
@@ -9,7 +9,7 @@
 // ESM graph is fine; jest, which wraps modules itself, is not.
 //
 // This subpath re-exports ONLY the engine wire contract — buffer/header/discriminator constants and
-// offsets (via `./engine.js`, which itself re-exports `./engine-abi.generated.js`) — and the buffer
+// offsets (via `./engine.js`, which declares them) — and the buffer
 // lifecycle + execute INSTRUCTION BUILDERS (`./instructions.js`). Its entire transitive runtime module
 // graph is free of `node:fs`, `node:path`, `fileURLToPath`, and `import.meta` (instructions.ts's only
 // tie to the account layer is a TYPE import of `ResolvedAccountMeta`, erased at compile time), so it

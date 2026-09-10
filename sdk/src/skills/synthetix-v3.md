@@ -21,7 +21,7 @@ import {
   protocolInfo,
   deployments,
   sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/synthetix-v3";
+} from "@eco-incorp/sauce/protocols/synthetix-v3";
 ```
 
 ## SauceScript Examples

@@ -1,7 +1,7 @@
 /**
- * @eco-incorp/sauce-sdk/svm — the SVM `settle` recipe, shipped as SOURCE.
+ * @eco-incorp/sauce/svm — the SVM `settle` recipe, shipped as SOURCE.
  *
- * This is the SVM twin of the EVM `settle.sauce.ts` (`@eco-incorp/sauce-sdk/recipes`): enforce a
+ * This is the SVM twin of the EVM `settle.sauce.ts` (`@eco-incorp/sauce/recipes`): enforce a
  * minimum-output floor on the FIRST escrow's balance, then sweep every listed escrow's whole balance
  * to one recipient. Same contract as the EVM program, same "compiled by the ordinary compiler"
  * delivery — a partner recompiles the exact source we ship and byte-compares. Only the VM mechanics
@@ -10,7 +10,7 @@
  *
  * ```ts
  * import { compile } from "@eco-incorp/sauce-compiler";
- * import { svmSettleSource } from "@eco-incorp/sauce-sdk/svm";
+ * import { svmSettleSource } from "@eco-incorp/sauce/svm";
  *
  * const { bytecode, manifest } = compile({
  *   target: "svm",
@@ -44,7 +44,7 @@
  * `decodeSvmSettleProgram` and there cannot be one: the account identities are never in the bytecode
  * on SVM (Solana requires them attached), so there is nothing in the program to parse them back out
  * of. The EVM side decodes because its values ride an argument TAIL appended after the program, not
- * because they are embedded in it. Verification is by RECOMPILE, in `@eco-incorp/sauce-sdk/svm/verify`:
+ * because they are embedded in it. Verification is by RECOMPILE, in `@eco-incorp/sauce/svm/verify`:
  * `verifySvmSettleProgram` recompiles this source with the caller's expected
  * `(escrowCount, minOut, splCount)` and byte-compares — proving the logic is genuine AND pinning
  * those two scalars, since both are folded in. The resolved account identities come from the
@@ -73,7 +73,7 @@ const SVM_HEADER = `// settle.sauce.ts — a STANDALONE, reusable SVM Sauce prog
 // floor on the FIRST escrow SPL token account's CURRENT balance, then sweep every listed escrow's
 // whole balance to ONE recipient.
 //
-// This is the SVM twin of the EVM \`settle.sauce.ts\` (@eco-incorp/sauce-sdk/recipes), statement for
+// This is the SVM twin of the EVM \`settle.sauce.ts\` (@eco-incorp/sauce/recipes), statement for
 // statement: read the floor token's balance, revert if it is below \`minOut\`, then sweep each token
 // in turn, skipping empty ones, and return the floor balance. Only the VM mechanics differ — there
 // is no Pot and no \`balanceOf\` call: a balance lives IN the escrow account's own data, and moving it

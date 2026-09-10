@@ -1,4 +1,4 @@
-// @eco-incorp/sauce-sdk/svm/verify — the SVM counterpart of `@eco-incorp/sauce-sdk/verify`, for a
+// @eco-incorp/sauce/svm/verify — the SVM counterpart of `@eco-incorp/sauce/verify`, for a
 // compiled `settle` program.
 //
 // VERIFICATION IS BY RECOMPILE, on both VMs. A settle program's per-execution values
@@ -19,7 +19,7 @@
 // `svmSettleRefs(N)`. `decodeSvmSettleExecution` does that half; `verifySvmSettleExecution` adds the
 // recompile check and the pin↔bytecode tie.
 //
-// Unlike `@eco-incorp/sauce-sdk/verify`, this pulls the compiler in to recompile — a node-side check.
+// Unlike `@eco-incorp/sauce/verify`, this pulls the compiler in to recompile — a node-side check.
 import { createHash } from "node:crypto";
 import type { Address } from "@solana/kit";
 import { compileWithRs } from "../routes/rs-compile.js";
@@ -27,7 +27,7 @@ import { EXECUTE_DISCRIMINATOR, EXECUTE_FROM_ACCOUNT_DISCRIMINATOR } from "./eng
 import { SVM_MAX_ESCROWS, svmSettleRefs, svmSettleSource } from "./recipes/index.js";
 
 // The intent-level surface (unwrap the Portal envelope + extract from an intent) is re-exported here so
-// the whole partner-facing decode/verify story lives under `@eco-incorp/sauce-sdk/svm/verify`, symmetric
+// the whole partner-facing decode/verify story lives under `@eco-incorp/sauce/svm/verify`, symmetric
 // with the EVM `/verify` barrel re-exporting its own `intent.ts`.
 export {
   decodePortalCalldataWithAccounts,

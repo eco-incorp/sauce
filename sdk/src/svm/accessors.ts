@@ -15,7 +15,7 @@
  * "Keys MUST equal adapter.slug" invariant, now enforced there). The other
  * ~77 venue directories under ./venues/ are exported but unregistered — they
  * stay reachable by name through the `/svm` subpath barrel
- * (`import { orcaWhirlpool } from '@eco-incorp/sauce-sdk/svm'`), just not on
+ * (`import { orcaWhirlpool } from '@eco-incorp/sauce/svm'`), just not on
  * this accessor tree. Registering an eleventh adapter in registry.ts makes
  * `Solana.<NewVenue>` appear here with zero code change — `SvmVenueSlug` is
  * `RegisteredVenueSlug` (`keyof` the registry table), and `venues()` walks

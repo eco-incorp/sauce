@@ -13,15 +13,15 @@ out at `../v12`).
 
 A **pnpm monorepo** of three workspace packages (`pnpm-workspace.yaml`: `dev-tools`, `sdk`,
 `actions`), all `private: true`, bundled and published as a **single npm package
-`@eco-incorp/sauce-sdk`** via subpath exports — only the root `package.json` publishes. This
+`@eco-incorp/sauce`** via subpath exports — only the root `package.json` publishes. This
 bundling is the key mental model: code lives in three packages for development, consumers import
 everything from one name.
 
-| Workspace    | Internal name                  | Published as                                                                                                                             | Role                                                                           |
-| ------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `sdk/`       | `@eco-incorp/sauce-sdk-source` | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`) | 129-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files |
-| `actions/`   | `@eco-incorp/sauce-actions`    | `/actions`                                                                                                                               | Routing-intent → bytecode lowering                                             |
-| `dev-tools/` | `@eco-incorp/sauce-dev-tools`  | bin `sauce-dev-tools`                                                                                                                    | Local/forked hardhat env + recipe runner                                       |
+| Workspace    | Internal name                 | Published as                                                                                                                             | Role                                                                           |
+| ------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`) | 129-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files |
+| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`                                                                                                                               | Routing-intent → bytecode lowering                                             |
+| `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools`                                                                                                                    | Local/forked hardhat env + recipe runner                                       |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
 which may still carry older copies of these packages. The packages here are **siblings, not
@@ -300,8 +300,8 @@ unified `swap()` does not dispatch them.
 
 Tag-driven (`.github/workflows/publish.yml`): `git tag v1.2.3 && git push origin v1.2.3` (or manual
 `workflow_dispatch`). Builds all areas, runs `prepack` (syncs artifacts), stamps the **root**
-`package.json` version, and publishes the single `@eco-incorp/sauce-sdk` to **public npmjs.com only**
+`package.json` version, and publishes the single `@eco-incorp/sauce` to **public npmjs.com only**
 (`NPM_TOKEN`). GitHub Packages was dropped deliberately — `publish.yml:12` records why. Only the root
 version is published; workspace packages stay `private`.
 
-**The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce-sdk` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, imported as `sauce-compiler`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.
+**The root `publishConfig.registry` pin (npmjs.com) is kept as a defensive, explicit anchor.** It used to be load-bearing: a committed root `.npmrc` mapped the whole `@eco-incorp` scope to `https://npm.pkg.github.com` (to fetch the `@eco-incorp/sauce-compiler-wasm` devDependency), and a scope registry governs PUBLISHING as well as resolution — so without the pin this repo's own `@eco-incorp/sauce` could have published to GitHub Packages instead of npmjs.com. That `.npmrc` is now GONE, and the wasm compiler is a public npmjs package (`@eco-incorp/sauce-compiler`, imported as `sauce-compiler`) resolved from the default registry — so the pin is no longer strictly required, but it is kept as an explicit npmjs.com anchor. If a scoped `@eco-incorp` registry mapping is ever reintroduced, this pin becomes load-bearing again.

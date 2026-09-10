@@ -42,7 +42,7 @@
  *
  * Given the confirmed byte-identical layout, this module reuses
  * orca-whirlpool's PURE math and PDA-independent helpers straight from the
- * `@eco-incorp/sauce-sdk/svm` barrel (whirlpoolSqrtPriceAtTick, the account
+ * `@eco-incorp/sauce/svm` barrel (whirlpoolSqrtPriceAtTick, the account
  * discriminators, MIN_TICK_INDEX / MAX_TICK_INDEX, the OFF_* offsets,
  * TICK_ARRAY_SIZE / TICK_LEN, and the PROGRAM-INDEPENDENT windowStartTicks)
  * — nothing here reinvents that arithmetic. Only the parts that are

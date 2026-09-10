@@ -14,7 +14,7 @@ cdp | Chains: Ethereum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/frax";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/frax";
 ```
 
 ## SauceScript Examples

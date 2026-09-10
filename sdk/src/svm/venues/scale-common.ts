@@ -143,7 +143,7 @@ export { pda };
 
 /**
  * Which token program serves this mint, from its account data alone — the SAME
- * detection + gate the sauce-sdk pumpswap adapter uses (a classic layout is exactly 82
+ * detection + gate the SDK's pumpswap adapter uses (a classic layout is exactly 82
  * bytes; an extensionless token-2022 mint is indistinguishable from it, but neither Scale
  * program is known to interact with such a mint in practice, so this stays conservative
  * like pumpswap's own copy). A TransferFeeConfig extension makes real wire amounts

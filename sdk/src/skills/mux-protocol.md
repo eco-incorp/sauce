@@ -20,7 +20,7 @@ import {
   protocolInfo,
   deployments,
   sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/mux-protocol";
+} from "@eco-incorp/sauce/protocols/mux-protocol";
 ```
 
 ## SauceScript Examples

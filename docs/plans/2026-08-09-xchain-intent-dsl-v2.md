@@ -196,7 +196,7 @@ Decision: **do not flip the existing method in stage 1.** The new DSL ships as i
 alongside it:
 
 ```ts
-import { routes } from "@eco-incorp/sauce-sdk";
+import { routes } from "@eco-incorp/sauce";
 routes.intentOn("base").route(spec).reward(spec);
 ```
 

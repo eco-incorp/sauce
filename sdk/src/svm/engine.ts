@@ -7,7 +7,7 @@
  * deleted, so nothing here describes a buffer header, a staging discriminator or a payload flag.
  */
 
-// ── wire contract (generated from svm/abi/engine-abi.json — see the header) ──
+// ── wire contract (declared here, asserted against the release's wire artifact — see below) ──
 /**
  * The released engine's three instruction discriminators.
  *

@@ -1,5 +1,5 @@
 /**
- * @eco-incorp/sauce-sdk/svm/verify — SVM intent extraction (the partner-facing path).
+ * @eco-incorp/sauce/svm/verify — SVM intent extraction (the partner-facing path).
  *
  * An external partner consuming an Eco intent has only this package. So the whole chain is exercised
  * here: decode the Portal CalldataWithAccounts envelope that wraps each SVM route call, then extract the

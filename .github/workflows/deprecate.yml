@@ -13,6 +13,9 @@ on:
       message:
         description: "Deprecation message shown to consumers on install"
         required: true
+      package:
+        description: 'Package to deprecate, e.g. "@eco-incorp/sauce-sdk" (pre-rename) or "@eco-incorp/sauce"'
+        required: true
 
 jobs:
   deprecate:
@@ -27,14 +30,15 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSIONS: ${{ inputs.versions }}
           MESSAGE: ${{ inputs.message }}
+          PACKAGE: ${{ inputs.package }}
         run: |
           set -euo pipefail
           for v in $VERSIONS; do
-            echo "::group::deprecate @eco-incorp/sauce-sdk@$v"
-            npm deprecate "@eco-incorp/sauce-sdk@$v" "$MESSAGE"
+            echo "::group::deprecate $PACKAGE@$v"
+            npm deprecate "$PACKAGE@$v" "$MESSAGE"
             echo "::endgroup::"
           done
           echo "Done. Current deprecation flags:"
           for v in $VERSIONS; do
-            printf '%s: %s\n' "$v" "$(npm view "@eco-incorp/sauce-sdk@$v" deprecated 2>/dev/null || echo '?')"
+            printf '%s: %s\n' "$v" "$(npm view "$PACKAGE@$v" deprecated 2>/dev/null || echo '?')"
           done

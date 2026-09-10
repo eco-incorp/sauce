@@ -15,7 +15,7 @@
  *
  * DERIVATION. In the `sauce-recipes` repo, over its SVM recipe code,
  * `solswap/**` and `test/svm/**`: the union of every named import sourced
- * from `'@eco-incorp/sauce-sdk/svm'`. RE-DERIVED after that package took over
+ * from `'@eco-incorp/sauce/svm'`. RE-DERIVED after that package took over
  * the eco-swap merge-decomposition LADDERS: it now defines every `*Ladder`,
  * every window selector and every rung-feeding decomposition helper locally
  * (its own `ladders/*.ts`), and imports from this barrel only the GENERIC
@@ -35,7 +35,7 @@
  * (consumer-union-types.fixture.ts).
  *
  * VALUES are probed as runtime values against the built module namespace --
- * the exact thing a real `import { X } from '@eco-incorp/sauce-sdk/svm'`
+ * the exact thing a real `import { X } from '@eco-incorp/sauce/svm'`
  * needs. TYPES have no runtime presence and this package's `jest.config.cjs`
  * runs ts-jest with `diagnostics: false`, so a bare `import type { Foo }`
  * that names a missing export is SILENTLY ERASED at transpile time and would
@@ -604,7 +604,7 @@ describe("consumer-union barrel surface (sauce-recipes)", () => {
     expect(CONSUMER_UNION_TYPES.length).toBe(100);
   });
 
-  it("every consumer-union VALUE resolves through the built @eco-incorp/sauce-sdk/svm barrel", () => {
+  it("every consumer-union VALUE resolves through the built @eco-incorp/sauce/svm barrel", () => {
     const missing = CONSUMER_UNION_VALUES.filter(
       (name) => (svm as Record<string, unknown>)[name] === undefined,
     );

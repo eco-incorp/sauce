@@ -16,7 +16,7 @@ yield | Chains: Ethereum, BSC, Polygon, Arbitrum, Optimism, Base, Avalanche
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/beefy";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/beefy";
 ```
 
 ## SauceScript Examples

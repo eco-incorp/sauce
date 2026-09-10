@@ -17,7 +17,7 @@ import {
   protocolInfo,
   deployments,
   sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/kyberswap-aggregator";
+} from "@eco-incorp/sauce/protocols/kyberswap-aggregator";
 ```
 
 ## SauceScript Examples

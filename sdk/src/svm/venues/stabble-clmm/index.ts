@@ -43,7 +43,7 @@
  *     instruction layout, not just the struct offsets.
  *
  * Given the confirmed byte-identical layout, this module reuses raydium-clmm's
- * PURE math and PDA-independent helpers straight from the `@eco-incorp/sauce-sdk/svm`
+ * PURE math and PDA-independent helpers straight from the `@eco-incorp/sauce/svm`
  * barrel (raydiumSqrtPriceAtTick, the tick-math constants,
  * RAYDIUM_CLMM_MAX_BOUNDARIES, the account discriminators, and the
  * PROGRAM-INDEPENDENT arrayStartIndex / windowStartTicks) — nothing here

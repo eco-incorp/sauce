@@ -1,5 +1,5 @@
 /**
- * @eco-incorp/sauce-sdk/svm/engine — the CommonJS-safe engine subpath.
+ * @eco-incorp/sauce/svm/engine — the CommonJS-safe engine subpath.
  *
  * It exists so a CJS consumer (e.g. eco-solver) can pull the engine wire contract + instruction builders
  * WITHOUT reaching through the `./svm` barrel, which re-exports `svm/recipes` and its ESM `__dirname`

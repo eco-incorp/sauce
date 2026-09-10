@@ -16,7 +16,7 @@ dex | Chains: Arbitrum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/camelot";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/camelot";
 ```
 
 ## SauceScript Examples

@@ -14,7 +14,7 @@ restaking | Chains: Ethereum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/puffer";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/puffer";
 ```
 
 ## SauceScript Examples

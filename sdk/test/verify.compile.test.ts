@@ -1,5 +1,5 @@
 /**
- * @eco-incorp/sauce-sdk/verify — the pins, re-derived from source on every run.
+ * @eco-incorp/sauce/verify — the pins, re-derived from source on every run.
  *
  * `SETTLE_PROGRAM`, `SETTLE_WIRE.PROGRAM_BYTES` and `SETTLE_WIRE.PROGRAM_HASH` are constants in a
  * package that also ships the claims they support, which is only worth anything if something
@@ -125,7 +125,7 @@ describe("the settle program pin, recompiled", () => {
 
   /**
    * The version ABOVE is the one resolved from `sdk/`. It is not necessarily the one a consumer
-   * gets: the published package is the ROOT `@eco-incorp/sauce-sdk`, and each workspace declares
+   * gets: the published package is the ROOT `@eco-incorp/sauce`, and each workspace declares
    * `sauce-compiler` separately. Bumping one leaves the pins asserted against a compiler nobody
    * installs — which is exactly what happened here: root moved to ^0.7.0 while `sdk`, `actions` and
    * `dev-tools` stayed on ^0.5.0, and 0.7.0 emits 370 bytes where 0.5.0 emits 391. Every pin above

@@ -19,7 +19,7 @@ import {
   protocolInfo,
   deployments,
   sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/pancakeswap-v2";
+} from "@eco-incorp/sauce/protocols/pancakeswap-v2";
 ```
 
 ## SauceScript Examples

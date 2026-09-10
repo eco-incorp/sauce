@@ -1,5 +1,5 @@
 /**
- * @eco-incorp/sauce-sdk/verify — intent/cook extraction coverage.
+ * @eco-incorp/sauce/verify — intent/cook extraction coverage.
  *
  * `decodeSettleCall` / `extractEvmSettleFromIntent` sit on top of `validateSettleProgram`: a producer
  * hands you an intent whose `route.calls[]` batch carries the settle payload as ONE ingredient inside a

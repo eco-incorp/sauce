@@ -1,6 +1,6 @@
 # syrupUSDC routing + AlphaQ non-stable pricing (SDK-side venue fixes)
 
-Two SVM venue-coverage fixes root-caused to `@eco-incorp/sauce-sdk`, both driven
+Two SVM venue-coverage fixes root-caused to `@eco-incorp/sauce`, both driven
 by the SAME defect in the AlphaQ adapter.
 
 ## Evidence (live mainnet)

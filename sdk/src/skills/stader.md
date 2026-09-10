@@ -13,7 +13,7 @@ liquid-staking | Chains: Ethereum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/stader";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/stader";
 ```
 
 ## SauceScript Examples

@@ -70,7 +70,7 @@ const POOL_SIZE = 324;
 /**
  * Little-endian unsigned field read (the TS mirror of the compiler's
  * accountUint(ref, offset, width)) and ceiling division — the same tiny pure
- * helpers `@eco-incorp/sauce-sdk/svm`'s venue adapters use internally
+ * helpers `@eco-incorp/sauce/svm`'s venue adapters use internally
  * (`venues/math.js`, not part of the package's public `/svm` barrel export,
  * so re-implemented here rather than deep-imported).
  */

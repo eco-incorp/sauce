@@ -1,4 +1,4 @@
-// @eco-incorp/sauce-sdk - Sauce Protocol SDK for all on-chain protocols
+// @eco-incorp/sauce - Sauce Protocol SDK for all on-chain protocols
 export * from "./core/types.js";
 export * from "./chains/index.js";
 export {

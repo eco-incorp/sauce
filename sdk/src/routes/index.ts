@@ -3,7 +3,7 @@
  * `../chains/canonical.js`, each BOTH callable and a namespace.
  *
  * ```ts
- * import { chainAccessors } from "@eco-incorp/sauce-sdk/routes"; // or routes namespace, see sdk/src/index.ts
+ * import { chainAccessors } from "@eco-incorp/sauce/routes"; // or routes namespace, see sdk/src/index.ts
  * const { Base, Solana } = chainAccessors;
  * const built = Base("return 1n;", { pot, deadline, portal }).reward({ source: Solana.chain, creator, prover, deadline });
  * // identically: Base.route("return 1n;", {...}).reward({...})

@@ -1,10 +1,10 @@
 # Sauce
 
 **Sauce** — build, compile and verify Sauce programs: cross-chain intents whose programs execute as
-bytecode on the Eco Pot. One TypeScript package for EVM and SVM. Published as `@eco-incorp/sauce-sdk`.
+bytecode on the Eco Pot. One TypeScript package for EVM and SVM. Published as `@eco-incorp/sauce`.
 
 ```sh
-npm install @eco-incorp/sauce-sdk
+npm install @eco-incorp/sauce
 ```
 
 > The runtime **engine** (the on-chain interpreter these programs execute on) lives in the separate
@@ -18,15 +18,14 @@ Node builtin and work anywhere: `/verify`, `/chains`, `/deployments`, `/protocol
 and `/svm/engine`. The
 compiler package does ship a browser build, but this package does not expose it.
 
-The SauceScript compiler comes with it as a dependency. The only optional extra is
-`@solana/web3.js`, needed just for the `/svm/engine/web3js` interop subpath.
+The SauceScript compiler comes with it as a dependency. There are no optional peers.
 
 ## Quickstart
 
 Open a route on a destination chain, and the SDK compiles the program and assembles the intent:
 
 ```ts
-import { routes } from "@eco-incorp/sauce-sdk";
+import { routes } from "@eco-incorp/sauce";
 
 // Both deadlines are ABSOLUTE unix timestamps, not durations: the chain compares
 // `block.timestamp > route.deadline`. And rewardDeadline must be >= deadline — a solver may fulfil
@@ -89,7 +88,7 @@ and its base dirs together; `swap` and `deposit` return a bare string, with base
 constants:
 
 ```ts
-import { routes, token } from "@eco-incorp/sauce-sdk";
+import { routes, token } from "@eco-incorp/sauce";
 
 // toSauceScript returns the baseDirs the program's own imports need, alongside the source
 const { source, baseDirs } = token.Token.transfer({
@@ -114,7 +113,7 @@ that import. Spread them: `toSauceScript`'s array is `readonly`, the option is n
 own constant:
 
 ```ts
-import { routes, swap, deposit } from "@eco-incorp/sauce-sdk";
+import { routes, swap, deposit } from "@eco-incorp/sauce";
 
 routes
   .openRoute("base", swap.swapSource(spec), {
@@ -145,7 +144,7 @@ the source directly instead.
 `/compiler` re-exports the published Rust/wasm SauceScript compiler:
 
 ```ts
-import { compile } from "@eco-incorp/sauce-sdk/compiler";
+import { compile } from "@eco-incorp/sauce/compiler";
 
 const { bytecode } = compile({
   target: "evm", // or 'svm'
@@ -192,11 +191,11 @@ needs an already-staged buffer, so it is the route path rather than a bare compi
 129 protocols and 39 canonical chains ship with the package — 38 EVM plus Solana:
 
 ```ts
-import { listProtocols, getProtocol, requireChain } from "@eco-incorp/sauce-sdk";
+import { listProtocols, getProtocol, requireChain } from "@eco-incorp/sauce";
 
 listProtocols().length; // 129
 getProtocol("uniswap-v3"); // metadata: category, per-chain deployments, audit status
-// (ABIs live on the subpath: '@eco-incorp/sauce-sdk/protocols/uniswap-v3')
+// (ABIs live on the subpath: '@eco-incorp/sauce/protocols/uniswap-v3')
 ```
 
 `requireChain` and `getChain` read different registries: `CANONICAL_CHAINS` has all 39, while the
@@ -219,7 +218,6 @@ requireChain("base").id; // 8453 — reads CANONICAL_CHAINS (all 39)
 | `/chains`, `/deployments`                                  | canonical chain list; deployed contract addresses                          |
 | `/recipes`                                                 | shipped programs (settle, CCTP split-transfer) and their sources           |
 | `/svm`, `/svm/engine`, `/svm/verify`                       | SVM client, account resolution, engine harness, settle verification        |
-| `/svm/engine/web3js`                                       | the same engine against `@solana/web3.js` (optional peer)                  |
 | `/recipes/settle.sauce.ts`, `/svm/recipes/settle.sauce.ts` | the settle program sources themselves, for partners reproducing bytes      |
 | `/evm/engine`                                              | EVM engine helpers                                                         |
 | `/verify`                                                  | decodes **legacy v1-grammar** settle programs. `viem`-only, browser-safe   |

@@ -1,5 +1,5 @@
 /**
- * @eco-incorp/sauce-sdk/verify — decoder coverage against the appended-args wire.
+ * @eco-incorp/sauce/verify — decoder coverage against the appended-args wire.
  *
  * The corpus this runs on is `SETTLE_VECTORS` (payloads a conformant decoder must accept) and
  * `SETTLE_REJECTIONS` (payloads it must refuse). The rejection half is the load-bearing one: the
@@ -38,7 +38,7 @@ const expectCode = (run: () => unknown, code: string): void => {
   }
 };
 
-describe("@eco-incorp/sauce-sdk/verify", () => {
+describe("@eco-incorp/sauce/verify", () => {
   describe("golden vectors — wire conformance", () => {
     for (const v of SETTLE_VECTORS) {
       it(`decodes ${v.name}`, () => {

@@ -14,7 +14,7 @@ infrastructure | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avala
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/permit2";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/permit2";
 ```
 
 ## SauceScript Examples

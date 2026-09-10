@@ -13,7 +13,7 @@ oracle | Chains: Ethereum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/pyth";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/pyth";
 ```
 
 ## SauceScript Examples

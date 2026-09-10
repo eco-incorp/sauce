@@ -13,7 +13,7 @@ dex | Chains: Mode
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/kim";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/kim";
 ```
 
 ## SauceScript Examples

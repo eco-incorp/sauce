@@ -23,8 +23,8 @@
  * #encodePortalCalldataWithAccounts`) — that envelope IS the SVM route call's `data`.
  *
  * WHY THIS FILE IMPORTS `@solana/kit` BUT NEVER `@solana/web3.js`: `sdk/src/index.ts` re-exports
- * `routes` from the main SDK barrel, and `@solana/web3.js` is an OPTIONAL peer dependency
- * (`svm/engine-web3js.ts`'s own module doc). Hard-requiring it here would make the main barrel fail
+ * `routes` from the main SDK barrel, and `@solana/web3.js` is not a dependency of this package at
+ * all. Hard-requiring it here would make the main barrel fail
  * to load for any consumer who did not install it. So every SVM address parameter accepts a plain
  * base58 string, a kit `Address`, or anything duck-typed like a web3.js `PublicKey`
  * (`{ toBase58(): string }`) — see `SvmAddressInput`/`toSvmAddress` — never an imported `PublicKey`
@@ -33,13 +33,16 @@
  * ── SVM STAGING IS A PREREQUISITE (solver-side, NOT performed here) ──
  *
  * Before any `buildSauceSvmCall`/`buildSauceSvmCalls` output is submittable, the referenced buffer
- * must already be init'd, written, and FINALIZED:
- *   1. `deriveBufferPda(programId, authority, seed)` (`../svm/pda.js`, kit — async — or the sync
- *      web3.js twin in `../svm/engine-web3js.js`) to get the buffer address.
- *   2. `buildInitBufferInstructions` / `buildWriteBufferInstruction` / `buildFinalizeBufferInstruction`
- *      (`@eco-incorp/sauce-sdk/svm/engine`, or `/svm/engine/web3js` for the web3.js-typed twins) to
- *      create, fill, and finalize it — `bytecodeSha256(bytecode)` (both subpaths export it) or an
- *      equivalent sha256 supplies the finalize/pin hash.
+ * must already be created, written, and FINALIZED through the KITCHEN — the engine itself holds no
+ * staging. All of it is on `@eco-incorp/sauce/svm` (`../svm/kitchen.js`):
+ *   1. `deriveCodeBufferPda(kitchen, owner, nonce)` for the metadata account, then
+ *      `deriveCodePda(kitchen, codeBuffer)` for the bytes account — seeded on the metadata
+ *      address, so the pair is bound by derivation. The second is the one a call names.
+ *   2. `buildCreateCodeBufferInstruction` / `buildWriteCodeBufferInstruction` /
+ *      `buildFinalizeCodeBufferInstruction` to create, fill and finalize it, plus
+ *      `Math.ceil(capacity / GROWTH_STEP) - 1` `buildGrowCodeBufferInstruction` calls, because a
+ *      create allocates at most one `GROWTH_STEP`. Finalize takes the 32-byte `expectedSha256`
+ *      the caller computes over the bytecode; that same hash is the pin below.
  *   3. Only THEN does a `StagedBufferRef.buffer` naming that address produce a call that will
  *      actually execute — an unstaged, half-written, or unfinalized buffer fails at FULFILL time
  *      (the engine dispatches on the account's own header, not on anything this module can see), not
@@ -198,17 +201,13 @@ export interface SauceSvmAccountMeta {
  * section for why, and where those pieces actually come from.
  */
 export interface StagedBufferRef {
-  /** Buffer PDA address, already init'd + written + FINALIZED by the solver. */
   /** The finalized CODE account — the engine reads its data verbatim. Not the kitchen's
    *  code-buffer METADATA account; passing that executes the wrong bytes. */
   code: SvmAddressInput;
-  /** Optional 32-byte content pin (e.g. `bytecodeSha256(bytecode)`), engine-verified against the
-   *  buffer's stored hash. Always pass this for a buffer this process did not stage itself — it is
-   *  the only cross-lifecycle trust anchor. Mutually exclusive in practice with `slice` (pin = the
-   *  managed path; slice = the foreign path) — the underlying builder does not reject the
-   *  combination outright, but only one is ever meaningful for a given buffer kind. */
+  /** Optional 32-byte content pin, engine-verified against the buffer's stored hash. Always pass
+   *  this for a buffer this process did not stage itself — it is the only cross-lifecycle trust
+   *  anchor, and it is the same hash `buildFinalizeCodeBufferInstruction` was given. */
   expectedSha256?: Uint8Array;
-  /** Optional FOREIGN-path bytecode extent; omit for a managed engine buffer. */
   /** Per-execution payload args, already encoded. */
   args?: Uint8Array;
 }

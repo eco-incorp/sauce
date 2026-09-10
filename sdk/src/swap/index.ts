@@ -1,5 +1,5 @@
 /**
- * `@eco-incorp/sauce-sdk`'s `swap` module — E4.1, the universal swap adapter.
+ * `@eco-incorp/sauce`'s `swap` module — E4.1, the universal swap adapter.
  *
  * Lowers a chain-agnostic swap SPEC into the call(s) that execute it through the Sauce Router's
  * unified `swap(SwapParams)` entry point, keyed by `SwapPoolType`. Two layers, both pure/sync, no
@@ -16,7 +16,7 @@
  * ## Composing with E3 (route.calls)
  *
  * ```ts
- * import { routes, swap } from "@eco-incorp/sauce-sdk";
+ * import { routes, swap } from "@eco-incorp/sauce";
  *
  * // routes.compileSauceRoute, not the compiler directly: a generated `main` falls off the end and
  * // a raw compile rejects it with "`main` does not return on every path".

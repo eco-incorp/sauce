@@ -13,11 +13,7 @@ dex | Chains: Blast
 ## SDK Usage
 
 ```typescript
-import {
-  protocolInfo,
-  deployments,
-  sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/thruster";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/thruster";
 ```
 
 ## SauceScript Examples

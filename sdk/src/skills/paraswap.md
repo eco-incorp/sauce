@@ -13,11 +13,7 @@ aggregator | Chains: Ethereum, Arbitrum, Optimism, Polygon, BSC, Avalanche, Base
 ## SDK Usage
 
 ```typescript
-import {
-  protocolInfo,
-  deployments,
-  sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/paraswap";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/paraswap";
 ```
 
 ## SauceScript Examples

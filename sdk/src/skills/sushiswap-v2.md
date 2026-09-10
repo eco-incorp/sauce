@@ -19,7 +19,7 @@ import {
   protocolInfo,
   deployments,
   sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/sushiswap-v2";
+} from "@eco-incorp/sauce/protocols/sushiswap-v2";
 ```
 
 ## SauceScript Examples

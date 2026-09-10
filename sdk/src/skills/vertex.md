@@ -13,7 +13,7 @@ perpetuals | Chains: Arbitrum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/vertex";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/vertex";
 ```
 
 ## SauceScript Examples

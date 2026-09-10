@@ -16,7 +16,7 @@ cdp | Chains: Ethereum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/ethena";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/ethena";
 ```
 
 ## SauceScript Examples

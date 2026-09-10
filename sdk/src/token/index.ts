@@ -1,5 +1,5 @@
 /**
- * `@eco-incorp/sauce-sdk`'s `token` module — the universal token interface.
+ * `@eco-incorp/sauce`'s `token` module — the universal token interface.
  *
  * One object, `Token`, exposing `transfer`/`approve`/`balanceOf` — lowered to an ERC20 call on an
  * EVM compile target, and to an SPL Token program CPI on `svm`. Installed as a DEFAULT GLOBAL (zero

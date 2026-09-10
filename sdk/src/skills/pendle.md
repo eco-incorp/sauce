@@ -16,7 +16,7 @@ yield | Chains: Ethereum, Arbitrum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/pendle";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/pendle";
 ```
 
 ## SauceScript Examples

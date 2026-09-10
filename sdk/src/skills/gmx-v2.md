@@ -15,7 +15,7 @@ perpetuals | Chains: Arbitrum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/gmx-v2";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/gmx-v2";
 ```
 
 ## SauceScript Examples

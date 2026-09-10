@@ -2,7 +2,7 @@
 // floor on the FIRST escrow SPL token account's CURRENT balance, then sweep every listed escrow's
 // whole balance to ONE recipient.
 //
-// This is the SVM twin of the EVM `settle.sauce.ts` (@eco-incorp/sauce-sdk/recipes), statement for
+// This is the SVM twin of the EVM `settle.sauce.ts` (@eco-incorp/sauce/recipes), statement for
 // statement: read the floor token's balance, revert if it is below `minOut`, then sweep each token
 // in turn, skipping empty ones, and return the floor balance. Only the VM mechanics differ — there
 // is no Pot and no `balanceOf` call: a balance lives IN the escrow account's own data, and moving it

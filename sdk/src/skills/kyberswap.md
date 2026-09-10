@@ -13,11 +13,7 @@ dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, BSC, Avalanche, Base
 ## SDK Usage
 
 ```typescript
-import {
-  protocolInfo,
-  deployments,
-  sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/kyberswap";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/kyberswap";
 ```
 
 ## SauceScript Examples

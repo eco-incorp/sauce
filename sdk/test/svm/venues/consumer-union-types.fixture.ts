@@ -10,7 +10,7 @@
  * the union load-bearing rather than decorative.
  *
  * The list below is every TYPE name sauce-recipes needs from
- * `@eco-incorp/sauce-sdk/svm` — see consumer-union-surface.test.ts's header
+ * `@eco-incorp/sauce/svm` — see consumer-union-surface.test.ts's header
  * for the full derivation, including why no ladder type appears here.
  */
 import type {

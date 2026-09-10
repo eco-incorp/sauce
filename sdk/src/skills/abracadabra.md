@@ -16,11 +16,7 @@ cdp | Chains: Ethereum, Arbitrum
 ## SDK Usage
 
 ```typescript
-import {
-  protocolInfo,
-  deployments,
-  sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/abracadabra";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/abracadabra";
 ```
 
 ## SauceScript Examples

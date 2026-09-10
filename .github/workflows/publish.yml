@@ -1,6 +1,6 @@
 name: Publish
 
-# Publishes the single @eco-incorp/sauce-sdk package, bundling compiler / sdk /
+# Publishes the single @eco-incorp/sauce package, bundling compiler / sdk /
 # actions / dev-tools under one root package.json with subpath exports.
 #
 # Trigger:
@@ -37,7 +37,7 @@ on:
 
 jobs:
   publish:
-    name: Publish @eco-incorp/sauce-sdk
+    name: Publish @eco-incorp/sauce
     runs-on: ubuntu-latest
     permissions:
       contents: read

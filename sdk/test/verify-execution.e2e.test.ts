@@ -1,5 +1,5 @@
 /**
- * @eco-incorp/sauce-sdk/verify — the corpus, EXECUTED.
+ * @eco-incorp/sauce/verify — the corpus, EXECUTED.
  *
  * Everything else about `/verify` is a claim about bytes: that `SETTLE_VECTORS[i].args` is what the
  * settle program will read as `(tokens, minOut, recipient)`, and that the three

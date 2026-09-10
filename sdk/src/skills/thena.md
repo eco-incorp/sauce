@@ -13,7 +13,7 @@ dex | Chains: BSC
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/thena";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/thena";
 ```
 
 ## SauceScript Examples

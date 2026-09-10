@@ -1,5 +1,5 @@
 /**
- * `@eco-incorp/sauce-sdk/compiler` — the published SauceScript compiler.
+ * `@eco-incorp/sauce/compiler` — the published SauceScript compiler.
  *
  * This subpath used to serve the in-repo TypeScript compiler. It now serves the published Rust/wasm
  * one, which is the only compiler the SDK itself uses. The surface is different, not a superset: the

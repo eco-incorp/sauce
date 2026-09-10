@@ -16,11 +16,7 @@ cdp | Chains: Ethereum
 ## SDK Usage
 
 ```typescript
-import {
-  protocolInfo,
-  deployments,
-  sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/liquity-v1";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/liquity-v1";
 ```
 
 ## SauceScript Examples

@@ -1,14 +1,14 @@
 {
-  "name": "@eco-incorp/sauce-sdk",
+  "name": "@eco-incorp/sauce",
   "version": "0.12.0",
   "description": "Sauce protocol tooling: SDK, action primitives, and a local dev environment.",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/eco-incorp/sauce-sdk.git"
+    "url": "git+https://github.com/eco-incorp/sauce.git"
   },
-  "homepage": "https://github.com/eco-incorp/sauce-sdk#readme",
-  "bugs": "https://github.com/eco-incorp/sauce-sdk/issues",
+  "homepage": "https://github.com/eco-incorp/sauce#readme",
+  "bugs": "https://github.com/eco-incorp/sauce/issues",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -57,10 +57,6 @@
       "types": "./sdk/dist/svm/engine-public.d.ts",
       "default": "./sdk/dist/svm/engine-public.js"
     },
-    "./svm/engine/web3js": {
-      "types": "./sdk/dist/svm/engine-web3js.d.ts",
-      "default": "./sdk/dist/svm/engine-web3js.js"
-    },
     "./evm/engine": {
       "types": "./sdk/dist/evm/engine.d.ts",
       "default": "./sdk/dist/evm/engine.js"
@@ -88,8 +84,7 @@
     "dev-tools/sauce",
     "dev-tools/artifacts",
     "dev-tools/hardhat.config.cjs",
-    "dev-tools/README.md",
-    "artifacts/svm/engine.so"
+    "dev-tools/README.md"
   ],
   "scripts": {
     "build": "pnpm -r --filter './sdk' --filter './actions' build",
@@ -112,14 +107,6 @@
     "sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.7.0",
     "typescript": "^5.7.0",
     "viem": "^2.45.3"
-  },
-  "peerDependencies": {
-    "@solana/web3.js": "^1.98.0"
-  },
-  "peerDependenciesMeta": {
-    "@solana/web3.js": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

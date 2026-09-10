@@ -1,4 +1,4 @@
-// @eco-incorp/sauce-sdk/verify — extract settle params from the CALLS an intent carries.
+// @eco-incorp/sauce/verify — extract settle params from the CALLS an intent carries.
 //
 // `decodeSettleProgram` / `validateSettleProgram` (decode.ts) turn a raw settle PAYLOAD's bytes back
 // into `(tokens, minOut, recipient)`. But a producer (eco-solver, the recipes API) never hands you the
@@ -18,7 +18,7 @@
 // only because the arguments left the program — so what these helpers return is now "the audited
 // settle, with these params", not "something settle-shaped, params unverified".
 //
-// The SVM analogue is `extractSvmSettleFromIntent` in `@eco-incorp/sauce-sdk/svm/verify`: an SVM intent
+// The SVM analogue is `extractSvmSettleFromIntent` in `@eco-incorp/sauce/svm/verify`: an SVM intent
 // wraps its settle CPI one layer deeper (the Eco Portal `CalldataWithAccounts` Borsh envelope), so that
 // module decodes the envelope itself before handing the halves to `decodeSvmSettleExecution` /
 // `verifySvmSettleExecution` — same "one call from intent to params" story, on the SVM side. It reaches

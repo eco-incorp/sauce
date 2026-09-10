@@ -15,11 +15,7 @@ dex | Chains: Ethereum, Polygon, Arbitrum, Optimism, Gnosis, Avalanche, Base, BS
 ## SDK Usage
 
 ```typescript
-import {
-  protocolInfo,
-  deployments,
-  sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/balancer-v2";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/balancer-v2";
 ```
 
 ## SauceScript Examples

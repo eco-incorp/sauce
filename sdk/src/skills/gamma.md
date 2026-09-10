@@ -14,7 +14,7 @@ yield | Chains: Ethereum, Polygon, Arbitrum
 ## SDK Usage
 
 ```typescript
-import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce-sdk/protocols/gamma";
+import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/protocols/gamma";
 ```
 
 ## SauceScript Examples

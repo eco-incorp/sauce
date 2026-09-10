@@ -18,7 +18,7 @@ import {
   protocolInfo,
   deployments,
   sauceFunctions,
-} from "@eco-incorp/sauce-sdk/protocols/level-finance";
+} from "@eco-incorp/sauce/protocols/level-finance";
 ```
 
 ## SauceScript Examples

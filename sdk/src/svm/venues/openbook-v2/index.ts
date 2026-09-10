@@ -1,7 +1,7 @@
 /**
  * OpenBook V2 — a permissionless CLOB (Serum/OpenBook lineage), manifest-shaped:
  * a k-level best-first walk over shipped resting orders, ship-and-verify
- * exactly like `manifest` (see `@eco-incorp/sauce-sdk/svm`'s manifest ladder),
+ * exactly like `manifest` (see `@eco-incorp/sauce/svm`'s manifest ladder),
  * but over a genuinely DIFFERENT on-chain layout — OpenBook keeps the two
  * order-book sides in their OWN accounts (BookSide), not embedded in the
  * market, and settles via a real Anchor CPI (`placeTakeOrder`) rather than a
