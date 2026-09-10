@@ -57,7 +57,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && SYNC_OPTIONAL_FORGE=1 node scripts/sync-engine-artifacts.mjs && node scripts/copy-verify-assets.mjs",
+    "build": "tsc && node scripts/sync-engine-artifacts.mjs && node scripts/copy-verify-assets.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
@@ -65,7 +65,7 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs"
   },
   "dependencies": {
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.7.0",
     "@solana-program/address-lookup-table": "^0.12.1",
     "@solana-program/compute-budget": "^0.16.0",
     "@solana-program/system": "^0.12.2",

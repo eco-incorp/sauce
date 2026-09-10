@@ -17,6 +17,7 @@ import {
 
 const RECIPIENT = "0x000000000000000000000000000000000000abcd";
 const POT = "0x1111111111111111111111111111111111111111";
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222";
 const CREATOR = "0x3333333333333333333333333333333333333333";
 const PROVER = "0x4444444444444444444444444444444444444444";
@@ -33,6 +34,7 @@ function params(over: Partial<CctpTransferParams> = {}): CctpTransferParams {
     perMessageLimit: 1_000_000n, // $1 cap -> 2 chunks
     recipient: RECIPIENT,
     pot: POT,
+    engine: ENGINE,
     portal: PORTAL,
     deadline: 2000n,
     creator: CREATOR,

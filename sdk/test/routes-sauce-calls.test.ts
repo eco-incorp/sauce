@@ -10,12 +10,11 @@ import { encodeFunctionData } from "viem";
 import { address, getAddressEncoder } from "@solana/kit";
 
 import { v12PotAbi, v12KitchenAbi } from "../src/evm/engine.js";
-import { V12_EVM_CONTRACTS, v12SvmProgramId } from "../src/deployments/index.js";
+import { v12SvmProgramId } from "../src/deployments/index.js";
 import {
   decodePortalCalldataWithAccounts,
   encodePortalCalldataWithAccounts,
 } from "../src/svm/intent.js";
-import { EXECUTE_FROM_ACCOUNT_DISCRIMINATOR } from "../src/svm/engine.js";
 import { assembleIntent, hashIntent } from "../src/routes/index.js";
 import { requireChain } from "../src/chains/canonical.js";
 import {
@@ -30,7 +29,6 @@ import {
   encodeRouteSvm,
   mergeSvmAccountFlags,
   sauceEvmDeployPotCall,
-  sauceSvmStagingPlan,
 } from "../src/routes/index.js";
 import { normalizeRoute } from "../src/routes/normalize.js";
 import type { CallInput, RouteInput } from "../src/routes/index.js";
@@ -45,52 +43,59 @@ const POT = "0x1111111111111111111111111111111111111111" as const;
 const KITCHEN = "0x2222222222222222222222222222222222222222" as const;
 const OWNER = "0x3333333333333333333333333333333333333333" as const;
 const SALT = ("0x" + "44".repeat(32)) as `0x${string}`;
+/** `cook` names its interpreter per call — see `evm/engine.ts`. */
+const ENGINE = "0x6666666666666666666666666666666666666666" as const;
 
 describe("buildSauceEvmCall / buildSauceEvmCalls", () => {
   it("reuses v12Pot.encodeCook verbatim (byte-equal to a local encodeFunctionData)", () => {
-    const ingredients = ["0xdeadbeef", "0xc0ffee"] as const;
-    const call = buildSauceEvmCall({ pot: POT, ingredients });
+    const call = buildSauceEvmCall({ pot: POT, engine: ENGINE, program: "0xdeadbeef" });
     const expected = encodeFunctionData({
       abi: v12PotAbi,
       functionName: "cook",
-      args: [[...ingredients]],
+      args: [ENGINE, "0xdeadbeef"],
     });
     expect(call.data).toBe(expected);
   });
 
   it("target is the 32-byte left-padded, lowercased Pot address; value defaults to 0n and honours an override", () => {
-    const call = buildSauceEvmCall({ pot: POT, ingredients: ["0x01"] });
+    const call = buildSauceEvmCall({ pot: POT, engine: ENGINE, program: "0x01" });
     expect(call.target).toBe(("0x" + "00".repeat(12) + POT.slice(2)).toLowerCase());
     expect(call.value).toBe(0n);
 
-    const withValue = buildSauceEvmCall({ pot: POT, ingredients: ["0x01"], value: 7n });
+    const withValue = buildSauceEvmCall({ pot: POT, engine: ENGINE, program: "0x01", value: 7n });
     expect(withValue.value).toBe(7n);
   });
 
   it("emits one call per cook, order preserved, all on the same pot", () => {
-    const calls = buildSauceEvmCalls({
-      pot: POT,
-      cooks: [["0x01"], ["0x02", "0x03"]],
-    });
+    const calls = buildSauceEvmCalls({ pot: POT, engine: ENGINE, cooks: ["0x01", "0x02"] });
     expect(calls).toHaveLength(2);
     expect(calls[0]!.data).toBe(
-      encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [["0x01"]] }),
+      encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [ENGINE, "0x01"] }),
     );
     expect(calls[1]!.data).toBe(
-      encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [["0x02", "0x03"]] }),
+      encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [ENGINE, "0x02"] }),
     );
     expect(calls[0]!.target).toBe(calls[1]!.target);
   });
 });
 
 describe("sauceEvmDeployPotCall", () => {
-  it("targets V12_EVM_CONTRACTS.v12Kitchen by default and matches v12Kitchen.encodeDeployPot", () => {
-    const call = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT });
-    expect(call.target).toBe(V12_EVM_CONTRACTS.v12Kitchen);
+  it("encodes deployPot against the given kitchen, matching v12Kitchen.encodeDeployPot", () => {
+    const call = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT, kitchen: KITCHEN });
+    expect(call.target).toBe(KITCHEN);
     expect(call.data).toBe(
       encodeFunctionData({ abi: v12KitchenAbi, functionName: "deployPot", args: [OWNER, SALT] }),
     );
     expect(call.value).toBe(0n);
+  });
+
+  // The deployment record's addresses predate the `cook` signature change, so reaching them without
+  // the liveness gate is refused rather than defaulted — a Pot deployed through an older-lineage
+  // Kitchen lands at an address the caller never predicted.
+  it("refuses to build without a kitchen or a chainId, rather than using the record ungated", () => {
+    expect(() => sauceEvmDeployPotCall({ owner: OWNER, salt: SALT })).toThrow(
+      /no ungated default Kitchen/,
+    );
   });
 
   it("honours an explicit kitchen override", () => {
@@ -101,7 +106,7 @@ describe("sauceEvmDeployPotCall", () => {
 
 describe("EVM composition with the fluent builder + E3.2 encode/decode round-trip", () => {
   it("produced CallInput[] survives normalizeRoute -> encodeRouteEvm -> decodeRouteEvm verbatim", () => {
-    const calls = buildSauceEvmCalls({ pot: POT, cooks: [["0xaa"], ["0xbb"]] });
+    const calls = buildSauceEvmCalls({ pot: POT, engine: ENGINE, cooks: ["0xaa", "0xbb"] });
     const route: RouteInput = {
       deadline: 2000n,
       portal: "0x5555555555555555555555555555555555555555",
@@ -208,66 +213,14 @@ describe("buildSauceSvmCall", () => {
     { pubkey: A2, isSigner: false, isWritable: true },
   ];
 
-  it("wraps a discriminator-prefixed execute_from_account payload, buffer first + READONLY", () => {
-    const call = buildSauceSvmCall({ programId: PROGRAM, buffer: BUFFER, accounts: baseAccounts });
-    const decoded = decodePortalCalldataWithAccounts(call.data);
-    expect(Array.from(decoded.instructionData.slice(0, 8))).toEqual(
-      Array.from(EXECUTE_FROM_ACCOUNT_DISCRIMINATOR),
-    );
-    expect(decoded.instructionData[8]).toBe(0x00); // flags: no pin, no slice
-    expect(decoded.accounts[0]).toEqual({
-      pubkey: address(BUFFER),
-      isSigner: false,
-      isWritable: false,
-    });
-    expect(decoded.accounts.slice(1)).toEqual([
-      { pubkey: A1, isSigner: true, isWritable: false },
-      { pubkey: A2, isSigner: false, isWritable: true },
-    ]);
-    expect(decoded.accountCount).toBe(3); // buffer + 2 user accounts
-  });
-
-  it("encodes flags/pin/slice/args in the wrapped instruction data", () => {
-    const pin = new Uint8Array(32).fill(0x7);
-    const withPin = buildSauceSvmCall({
-      programId: PROGRAM,
-      buffer: BUFFER,
-      accounts: baseAccounts,
-      expectedSha256: pin,
-    });
-    const decodedPin = decodePortalCalldataWithAccounts(withPin.data);
-    expect(decodedPin.instructionData[8]).toBe(0x01);
-    expect(Array.from(decodedPin.instructionData.slice(9, 41))).toEqual(Array.from(pin));
-
-    const slice = { offset: 4, len: 10 };
-    const withSlice = buildSauceSvmCall({
-      programId: PROGRAM,
-      buffer: BUFFER,
-      accounts: baseAccounts,
-      slice,
-    });
-    const decodedSlice = decodePortalCalldataWithAccounts(withSlice.data);
-    expect(decodedSlice.instructionData[8]).toBe(0x02);
-
-    const args = new Uint8Array([1, 2, 3]);
-    const withArgs = buildSauceSvmCall({
-      programId: PROGRAM,
-      buffer: BUFFER,
-      accounts: baseAccounts,
-      args,
-    });
-    const decodedArgs = decodePortalCalldataWithAccounts(withArgs.data);
-    expect(Array.from(decodedArgs.instructionData.slice(9))).toEqual(Array.from(args));
-  });
-
   it("target equals the programId's 32-byte address encoding; default program id is v12SvmProgramId", () => {
-    const call = buildSauceSvmCall({ programId: PROGRAM, buffer: BUFFER, accounts: baseAccounts });
+    const call = buildSauceSvmCall({ programId: PROGRAM, code: BUFFER, accounts: baseAccounts });
     const expected =
       "0x" + Buffer.from(getAddressEncoder().encode(PROGRAM as never)).toString("hex");
     expect(call.target).toBe(expected);
     expect(call.target.length).toBe(66); // 0x + 64 hex chars = 32 bytes
 
-    const defaulted = buildSauceSvmCall({ buffer: BUFFER, accounts: baseAccounts });
+    const defaulted = buildSauceSvmCall({ code: BUFFER, accounts: baseAccounts });
     const expectedDefault =
       "0x" + Buffer.from(getAddressEncoder().encode(v12SvmProgramId as never)).toString("hex");
     expect(defaulted.target).toBe(expectedDefault);
@@ -276,7 +229,7 @@ describe("buildSauceSvmCall", () => {
   it("executor flattening: an account equal to executor is emitted isSigner=false even when the input said true", () => {
     const call = buildSauceSvmCall({
       programId: PROGRAM,
-      buffer: BUFFER,
+      code: BUFFER,
       accounts: [
         { pubkey: EXECUTOR, isSigner: true, isWritable: false },
         { pubkey: A2, isSigner: false, isWritable: true },
@@ -291,17 +244,17 @@ describe("buildSauceSvmCall", () => {
   it("input coercion: base58 string, kit Address, and a duck-typed { toBase58() } all produce identical output", () => {
     const asString = buildSauceSvmCall({
       programId: PROGRAM,
-      buffer: BUFFER,
+      code: BUFFER,
       accounts: baseAccounts,
     });
     const asAddress = buildSauceSvmCall({
       programId: address(PROGRAM),
-      buffer: address(BUFFER),
+      code: address(BUFFER),
       accounts: baseAccounts,
     });
     const asDuckTyped = buildSauceSvmCall({
       programId: { toBase58: () => PROGRAM },
-      buffer: { toBase58: () => BUFFER },
+      code: { toBase58: () => BUFFER },
       accounts: baseAccounts,
     });
     expect(asAddress).toEqual(asString);
@@ -310,19 +263,8 @@ describe("buildSauceSvmCall", () => {
 
   it("rejects a nonzero value at build time (before svmCallOf would throw)", () => {
     expect(() =>
-      buildSauceSvmCall({ programId: PROGRAM, buffer: BUFFER, accounts: baseAccounts, value: 1n }),
+      buildSauceSvmCall({ programId: PROGRAM, code: BUFFER, accounts: baseAccounts, value: 1n }),
     ).toThrow(/no value field/);
-  });
-
-  it("expectedSha256 of the wrong length throws", () => {
-    expect(() =>
-      buildSauceSvmCall({
-        programId: PROGRAM,
-        buffer: BUFFER,
-        accounts: baseAccounts,
-        expectedSha256: new Uint8Array(31),
-      }),
-    ).toThrow();
   });
 });
 
@@ -333,8 +275,8 @@ describe("buildSauceSvmCalls (leg-wide flag merge)", () => {
     const calls = buildSauceSvmCalls({
       programId: PROGRAM,
       executions: [
-        { buffer: BUFFER, accounts: [{ pubkey: SHARED, isSigner: false, isWritable: true }] },
-        { buffer: BUFFER, accounts: [{ pubkey: SHARED, isSigner: true, isWritable: false }] },
+        { code: BUFFER, accounts: [{ pubkey: SHARED, isSigner: false, isWritable: true }] },
+        { code: BUFFER, accounts: [{ pubkey: SHARED, isSigner: true, isWritable: false }] },
       ],
     });
     expect(calls).toHaveLength(2);
@@ -349,7 +291,7 @@ describe("buildSauceSvmCalls (leg-wide flag merge)", () => {
   it("the singular builder merges within its own instruction only (no cross-call effect)", () => {
     const call = buildSauceSvmCall({
       programId: PROGRAM,
-      buffer: BUFFER,
+      code: BUFFER,
       accounts: [
         { pubkey: SHARED, isSigner: false, isWritable: true },
         { pubkey: SHARED, isSigner: true, isWritable: false },
@@ -374,7 +316,7 @@ describe("SVM composition with the fluent builder + E3.2 encode/decode round-tri
     const calls: CallInput[] = buildSauceSvmCalls({
       programId: PROGRAM,
       executions: [
-        { buffer: BUFFER, accounts: [{ pubkey: A1, isSigner: false, isWritable: false }] },
+        { code: BUFFER, accounts: [{ pubkey: A1, isSigner: false, isWritable: false }] },
       ],
     });
     const route = normalizeRoute({
@@ -387,12 +329,6 @@ describe("SVM composition with the fluent builder + E3.2 encode/decode round-tri
     const decoded = decodeRouteSvm(encoded);
     expect(decoded.calls[0]!.data).toBe(calls[0]!.data);
     expect(decoded.calls[0]!.value).toBe(0n);
-  });
-});
-
-describe("sauceSvmStagingPlan", () => {
-  it("is the real buildStagingPlan: pins the known transaction count for a 4KB program", () => {
-    expect(sauceSvmStagingPlan(4096).transactions.total).toBe(8);
   });
 });
 

@@ -5,9 +5,9 @@
  * v12 runtime creation code, but not the ADDRESSES of the deployed contracts —
  * so a consumer could encode a call and had nowhere to send it, and
  * `createSauceSvmClient` (which takes a required `programId`) had no default to
- * offer. This module closes that: the addresses come from the pinned engine's
- * own deploy record, vendored by `pnpm --filter './sdk' sync-engine-artifacts`
- * into `v12.generated.ts`, so they cannot drift from the pinned engine.
+ * offer. This module closes that with the addresses in `v12.generated.ts` — which
+ * came from a deploy record that no longer exists, and so record the PREVIOUS
+ * deployment. See that file's header before relying on any of them.
  *
  * The EVM addresses are CREATE2-deterministic — factory + salt + initcode only,
  * with no deployer or nonce in the preimage — so they are IDENTICAL on every

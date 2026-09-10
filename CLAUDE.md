@@ -70,93 +70,55 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
 
 ## Toolchain gotchas (why a fresh clone may fail)
 
-- **Private engine git dep.** The ROOT `package.json` devDepends on the engine from
-  `github:eco-incorp/v12#<sha>` (private) — **the dependency KEY stays `sauce`** (so it installs to
-  `node_modules/sauce` and `sync-engine-artifacts.mjs` still finds it), but the URL points at the
-  **renamed engine repo `eco-incorp/v12`** (it was `eco-incorp/sauce` before the SDK took that name —
-  a repin to the old URL now resolves to THIS repo and fails, since the pinned SHA lives on `v12`). It
-  is no longer the compiler's dependency — the compiler comes from npm — it is where
-  `sdk/scripts/sync-engine-artifacts.mjs` gets the Solidity engine sources and the deploy record.
-  Cloning needs GitHub auth — locally `gh auth setup-git` or an `~/.npmrc` token; CI uses the
-  `ECO_INCORP_TOKEN` secret via a `git config insteadOf` rewrite (`.github/workflows/ci.yml` rewrites
-  the HTTPS _and_ SSH forms, because the lockfile may pin either).
-- **Foundry is still required**, for two reasons that have nothing to do with the deleted compiler:
-  (1) `forge` for `pnpm --filter './sdk' sync-engine-artifacts`, which `forge build`s the `sauce`
-  dep's `engine/src` to produce the 8 artifact JSONs — the script also git-fetches the OpenZeppelin
-  sources the dep arrives without, since pnpm doesn't recurse submodules (this work used to live in
-  the compiler's `postinstall`; it is now `sync-engine-artifacts.mjs` itself); and (2) `anvil` on
-  `PATH` for `sdk/test/std/token/evm.e2e.test.ts`, which spawns it directly. CI additionally uses
-  `anvil` + `cast` to derive the deployed v12 runtime bytecode. **A tree where that sync has not run
-  is not green**: on a fresh install with no `sdk/{src,dist}/artifacts/`, 56 tests that import
-  `./artifacts/*.json` fail (measured; the rest pass). The sdk `build` script sets
-  `SYNC_OPTIONAL_FORGE=1` so a Foundry-less build warns rather than failing — which means a missing
-  `forge` surfaces later, as those test failures, not as a build error.
+- **There is no engine git dep.** Every v12 artifact comes from a RELEASE of the private
+  `eco-incorp/v12` repo, pinned in `sdk/scripts/sync-engine-artifacts.mjs` by tag **and** by a
+  sha256/keccak digest committed there. The digest is the guarantee — a git tag is movable on
+  GitHub — and there is deliberately no commit pin, because v12 releases its components
+  independently (the EVM and SVM tags are cut from different commits), so a single shared commit is
+  unsatisfiable rather than merely redundant. To bump: change the tag, run the script, paste the
+  digest it reports. Fetching needs GitHub auth — locally `gh auth setup-git` or an `~/.npmrc`
+  token; CI passes the `ECO_INCORP_TOKEN` secret as `GH_TOKEN`.
+- **Foundry is required only to RUN things, never to build artifacts.** The sync no longer compiles
+  anything: the ABIs arrive as a release asset. What still needs Foundry is `anvil` on `PATH` for
+  `sdk/test/std/token/evm.e2e.test.ts`, which spawns it directly, and CI's `anvil` + `cast` step
+  deriving the deployed v12 runtime bytecode from the release's creation code. **A tree where the
+  sync has not run is not green**: with no `sdk/{src,dist}/artifacts/`, the tests that import
+  `./artifacts/*.json` fail. Run `pnpm --filter './sdk' sync-engine-artifacts`.
 - **`FORK_URL`** — actions `test`/`test:megas-swap` and dev-tools fork flows hit a hardhat mainnet
   fork (loaded from `.env`). `test:unit` is the fork-free subset.
-- **`SAUCE_ENGINE_SO`** — path to the Solana engine binary (`engine.so`, built with
-  `cargo build-sbf` in the engine (`v12`) repo's `svm/`). The SVM integration suites (`sdk/test/svm/*.test.ts`)
-  run compiled `target: 'svm'` bytecode on it via LiteSVM. The binary is **vendored** at
-  `artifacts/svm/engine.so` (committed, force-added — `artifacts/` is gitignored; it is the
-  only force-added path left, since no `dist/` is tracked) and that's the default both
-  locally and in CI, so these suites run **offline by default**, same as the EVM ones; the
-  suites **skip cleanly** only if that binary is somehow missing. Set `SAUCE_ENGINE_SO` to
-  override — e.g. to test a freshly built engine before repinning the `sauce` dep. **Refresh
-  the vendored binary whenever the `sauce` dep is repinned**: `cargo build-sbf` in the pinned
-  commit's `svm/` checkout, copy `target/deploy/engine.so` over `artifacts/svm/engine.so`,
-  force-commit — nothing re-derives this automatically, so a repin without a refresh silently
-  tests against a stale engine again. The `'svm'` compile target, its account-plan output,
-  and the `/svm` SDK subpath are documented in `docs/plans/2026-07-03-solana-svm-support.md`.
-- **`SAUCE_RUST_ENGINE_SO` / `SAUCE_RUST_V12_RUNTIME`** — the two engines every suite that EXECUTES
-  compiled bytecode needs, and **deliberately separate variables** from `SAUCE_ENGINE_SO` above.
-  The SDK compiles through the published compiler (`@eco-incorp/sauce-compiler` from the public npm
-  registry, aliased to the short name `sauce-compiler` in every `package.json` — a naming choice, not
-  a workaround; nothing is built locally and no Rust toolchain is needed), which emits for the sauce
-  `main` engine lineage. `SAUCE_ENGINE_SO`'s vendored `artifacts/svm/engine.so` is built from the pinned
-  `release/beta` lineage, so it can only serve suites that do NOT run freshly compiled bytecode
-  (instruction builders, PDA derivation, decoders). Anything that does run it gates on
-  `describeRustSvm`/`SAUCE_RUST_ENGINE_SO` instead, which hard-fails in CI rather than skipping.
-  **The two wire formats have diverged, measured in both directions**: on the SVM, `JUMP`/`JUMP_I`
-  (0xB0/0xB1) exist only on `main` and `NEW_ARRAY` (0x92) encodes its scalar elements differently, so
-  Rust-compiled bytecode carrying any `require`/`if` is rejected by the vendored `engine.so` with
-  `InvalidInstructionData`; on the EVM, `0xB0–0xB5` are `IF/IF_2/JUMP/JUMP_2/JUMP_BACK/JUMP_BACK_2`
-  on the pin but `JUMP/JUMP_I` on `main`, and `0x88–0x8A` (`MLOAD`/`MSTORE`/`MALLOC` — every
-  value-returning program's epilogue) are `do_unknown` on the pin, so a Rust-compiled `balanceOf`
-  either returns empty or dies with `MemoryOOG` on the `V12RuntimeBytecode` this repo generates.
-  Pointing `SAUCE_ENGINE_SO` itself at a `main` engine is therefore **not** a workaround — it breaks
-  the suites that exercise the SDK's staged-execution instruction builders, which encode the pinned
-  engine's layout. **Staged execution is a known gap**: those builders and `main`-lineage bytecode
-  cannot both be satisfied today, so `svm-settle.e2e` runs its programs INLINE and the staged-path
-  e2e is gone. Restoring it needs the v12-svm v0.4.0 instruction layout; it is unrelated to which
-  compiler the SDK uses. Engine-gated suites skip when their variable is unset LOCALLY, so the
-  default `pnpm test` needs no engines (it does still need the synced artifacts — see the Foundry
-  gotcha above) — but in CI
-  an unset variable is a hard failure, and CI supplies both from the `v12-svm-v0.4.0` and
-  `v12-evm-v0.3.0` release artifacts, which are built from the same sauce commit the published
-  compiler's `compiler-v0.5.0` tag is cut from. (They cannot come from the `sauce` git dep:
-  `release/beta` is the wrong lineage, and sauce `main` deleted the `engine/` tree
-  `sync-engine-artifacts.mjs` reads.)
-  `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines` fetches both from those releases,
-  digest-verified against values pinned in the script, so no Huff toolchain and no local sauce
-  checkout is needed. Building by hand is only for an **unreleased** engine: the `.so` is
-  `cd <v12>/v12-svm && make build`, and the EVM runtime cannot come from `hnc -r` at all —
-  `Runtime.huff`'s CONSTRUCTOR returns its own bytecode, so the deployed code is only known once
-  deployed; deploy the creation code to an anvil and read it back with `cast code`. (The EVM suite
-  needs `anvil` on `PATH` either way.)
-- **EVM engine artifacts** (`sdk/{src,dist}/artifacts/` — `Router`, `SauceRouter`,
-  `ISauceRouter`, `V12Pot`, `V12Kitchen`, `V12RuntimeBytecode`, `IERC20`, `IUniswapV3Pool`,
-  `IStateView`) ship to downstream SDK consumers, which read them for local tests/deploys, so
-  they must track the pinned `sauce` engine. **Nothing is tracked** — `artifacts/` is gitignored,
-  as is every `dist/` — so they exist only where a build has run, and `tsc` does not emit them:
-  **after any repin run `pnpm --filter './sdk' sync-engine-artifacts`** (copies the 8 forge
-  artifacts from the pinned dep's `engine/out/`). CI runs that same sync from the
-  freshly-installed engine (foundry v1.5.1 + solc 0.8.27 → byte-reproducible) and asserts all 9
-  JSONs landed, so a broken generation fails there rather than shipping an empty dir. The one
-  thing it drift-checks against the index is `sdk/src/deployments`, which _is_ committed.
-- **`V12RuntimeBytecode.json` comes from a pinned release asset, not from the `sauce` git dep.**
+- **`SAUCE_ENGINE_SO` / `SAUCE_RUST_ENGINE_SO`** — the path to the Solana engine, fetched by
+  `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines`, which digest-verifies it against
+  the pin and prints `SAUCE_RUST_ENGINE_SO=<path>`. **Nothing about the engine is source-controlled.**
+  There used to be a vendored `artifacts/svm/engine.so` — a `release/beta` build predating every
+  v12-svm release, with no `JUMP`/`JUMP_I` — and it was the DEFAULT, so anything with control flow was
+  rejected with `InvalidInstructionData` while straight-line programs ran, silently, just from not
+  setting a variable. It is deleted, along with the staging surface only it could run
+  (`init_buffer`/`write_buffer`/`finalize_buffer`/`execute_and_close`, `client.stageBuffer`), which no
+  released engine implements. Staging is the kitchen's now (`kitchen.ts`). The engine-gated suites
+  skip locally when the variable is unset and hard-fail in CI.
+
+- **`SAUCE_RUST_V12_RUNTIME`** — the DEPLOYED EVM runtime, which cannot come from a release asset:
+  `Runtime.huff`'s constructor returns its own bytecode, so the deployed form is only known once
+  deployed. CI deploys the release's creation code to an anvil and reads it back with `cast code`;
+  `sdk/test/std/token/evm.e2e.test.ts` and `verify-execution.e2e.test.ts` gate on it.
+
+- **EVM engine artifacts** (`sdk/{src,dist}/artifacts/` — `Router`, `ISauceRouter`, `V12Pot`,
+  `V12Kitchen`, `V12RuntimeBytecode`, `IERC20`, `IUniswapV3Pool`) ship to downstream SDK consumers,
+  which read them for local tests/deploys. **Nothing is tracked** — an `artifacts/` directory at any
+  depth is gitignored, as is every `dist/` — so they exist only where a sync has run, and `tsc` does
+  not emit them: **after any repin run `pnpm --filter './sdk' sync-engine-artifacts`**. Four ABIs
+  come from the release's `abis.json`, `IERC20` is declared in the script (the ERC-20 standard is
+  never v12's), `IUniswapV3Pool` comes from `@uniswap/v3-core`, and `V12RuntimeBytecode` wraps the
+  release's creation code. CI asserts all 7 landed, so a broken generation fails there rather than
+  shipping an empty dir. No generated file is committed and drift-checked any more:
+  `engine-abi.generated.ts` went with the engine that produced it.
+  (`sdk/src/deployments/v12.generated.ts` is committed but is not generated: no release publishes a
+  deploy record, so it is plain source until one does.)
+- **`V12RuntimeBytecode.json` comes from a pinned release asset.**
   The engine deleted its committed `engine-v12/snapshots/` copy (`chore(v12): compile the runtime
 at deploy time`) because a second source of truth rotted — six changed `.huff` handlers once
   shipped with a snapshot built from pre-change source, through green CI.
-  `sync-engine-artifacts.mjs:279` now wraps `v12-evm-v0.3.0`'s `runtime.creation.hex` in the JSON
+  `sync-engine-artifacts.mjs` wraps the pinned EVM release's `runtime.creation.hex` in the JSON
   shape consumers already read. No Huff toolchain is involved in producing it.
 - **A tag is not a pin.** A GitHub tag is movable, so each asset is checked against a digest
   committed in the script itself (`keccak256` of the _decoded_ creation code; `sha256` of the
@@ -224,10 +186,8 @@ TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface beh
 **byte-identical copy** of the engine (`v12`) repo's conformance fixture
 (`compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token/`), kept identical on purpose so
 drift between the two repos shows up as a diff rather than as silently divergent behavior — **do not
-edit it here; change it in sauce and re-copy.** Nothing here enforces that: the `sauce` git dep is
-pinned to a commit that predates the Rust compiler's move into `compiler/crates/`, so that fixture
-path does not exist in `node_modules/sauce` and there is nothing on disk to compare against. The
-check is manual —
+edit it here; change it in sauce and re-copy.** Nothing here enforces that: no release ships that
+fixture, so there is nothing on disk to compare against. The check is manual —
 `diff -r sdk/src/std/token <v12>/compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token`
 against a local checkout. **The formatter is kept off this path for the same reason** — `sdk/src/std`
 is in `.prettierignore`, because a reformat here breaks the invariant silently and permanently
@@ -282,13 +242,15 @@ wraps, stakes) to bytecode. Actions **chain**: output feeds the next implicitly 
 **`dev-tools/`** — harness: `start:local`/`start:fork` boot a hardhat net + deploy the engine;
 `npm run sauce <file.js> [args]` compiles+runs a SauceScript; `npm run recipe …` runs recipes.
 
-## The swap Router (`../v12/engine/src/Router.sol`)
+## The swap Router
 
-Lives in the **private engine repo**, not here, but recipes target it (its `Router`/`SauceRouter`
-artifacts are what `cook()` runs against). `SauceRouter` is a thin delegatecall proxy → `Router`
-(1829 lines at the pinned dep commit). Recipes import the minimal `ISauceRouter` ABI from
-`dev-tools/artifacts/` — gitignored build output, copied from `sdk/src/artifacts/` by
-`pnpm --filter './dev-tools' sync-artifacts`, so it does not exist until that has run.
+Lives in the **private engine repo**, not here, but recipes target it (its `Router` artifact is what
+`cook()` runs against). Recipes import the minimal `ISauceRouter` ABI from `dev-tools/artifacts/` —
+gitignored build output, copied from `sdk/src/artifacts/` by
+`pnpm --filter './dev-tools' sync-artifacts`, so it does not exist until that has run. **There is no
+`SauceRouter` artifact any more**: it came from the engine repo's Solidity tree and no v12 release
+publishes it, which is what blocks `dev-tools/scripts/deploy.ts` and `dev-tools/test/e2e.test.ts`
+(see their headers).
 
 **Entry points** (all the `swap*` ones are `onlySelf` — callable only via `cook()` from the same
 contract, so a recipe calls them as `ISauceRouter.at(address.self).swapX(...)`):

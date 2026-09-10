@@ -17,36 +17,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const DIST = resolve(HERE, "../../dist/svm");
 
 describe("svm/engine subpath surface", () => {
-  it("exposes the buffer-lifecycle + execute instruction builders", () => {
-    const builders = [
-      "buildInitBufferInstructions",
-      "buildWriteBufferInstruction",
-      "buildFinalizeBufferInstruction",
-      "buildCloseBufferInstruction",
-      "buildCloseBufferCheckedInstruction",
-      "buildExecuteFromAccountInstruction",
-      "buildExecuteInstruction",
-      "buildExecuteAndCloseInstruction",
-    ];
+  it("exposes the released engine's two execute builders", () => {
+    const builders = ["buildExecuteInstruction", "buildExecuteFromAccountInstruction"];
     for (const name of builders)
       expect(typeof (engine as Record<string, unknown>)[name]).toBe("function");
   });
 
-  it("exposes the wire-contract constants, offsets, and discriminators", () => {
+  it("exposes the released engine's discriminators and the heap-frame constant", () => {
     const consts = [
-      "BUFFER_HEADER_BYTES",
-      "BUFFER_SEED",
-      "BUFFER_SEED_BYTES",
-      "MAX_BUFFER_CAPACITY",
-      "FLAG_FINALIZED",
-      "KIND_BUFFER",
-      "EXECUTE_FLAG_HAS_PIN",
-      "EXECUTE_FLAG_HAS_SLICE",
+      "EXECUTE_DISCRIMINATOR",
       "EXECUTE_FROM_ACCOUNT_DISCRIMINATOR",
-      "INIT_BUFFER_DISCRIMINATOR",
-      "BUFFER_OFFSET_LEN",
-      "PDA_GROWTH_STEP",
-      "BUFFER_WRITE_CHUNK_BYTES",
+      "CLOSE_ACCOUNT_DISCRIMINATOR",
       "HEAP_FRAME_BYTES",
     ];
     for (const name of consts) expect((engine as Record<string, unknown>)[name]).toBeDefined();

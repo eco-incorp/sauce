@@ -21,17 +21,24 @@ export const SETTLE_WIRE = {
   /** Byte length of the compiled `settle.sauce.ts` program. It is INVARIANT: the program takes its
    *  `(tokens, minOut, recipient)` as runtime entry arguments, so nothing about the caller's values
    *  reaches the compiler. This length is what locates the argument tail. */
-  PROGRAM_BYTES: 391,
+  PROGRAM_BYTES: 370,
   /** Which compiler produced the bytes `PROGRAM_HASH` pins. The dependency is a caret range, so a
-   *  later 0.5.x that changes codegen would make a consumer's own compile fail that pin; the fix then
-   *  is to re-pin both, not to loosen the check. `verify.compile.test.ts` asserts this exact version
-   *  against the resolved package, so it cannot silently describe a producer that never ran. */
-  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@0.5.0",
+   *  later 0.7.x that changes codegen would make a consumer's own compile fail that pin; the fix then
+   *  is to re-pin all three of these, not to loosen the check. `verify.compile.test.ts` asserts this
+   *  exact version against the resolved package, so it cannot silently describe a producer that never
+   *  ran — and it must be asserted against the version EVERY workspace resolves, since a bump in one
+   *  package.json leaves this string describing a compiler no consumer runs.
+   *
+   *  0.5.0 → 0.7.0 moved these bytes: 391 → 370, with a different hash. A consumer on the newer
+   *  compiler and the older pin has every settle it produces rejected on `PROGRAM_HASH`, which is why
+   *  the bump and the re-pin are one change. Intents published against the old hash still verify —
+   *  pass it via `validateSettleProgram`'s accepted-hash set. */
+  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@0.7.0",
   /** `keccak256` of those `PROGRAM_BYTES` bytes — the authenticity pin `validateSettleProgram`
    *  enforces, and the reason a matching payload runs the audited program and nothing else.
    *  Whole-program, not a body slice: program and arguments are disjoint byte regions on this wire.
    *  `verify.compile.test.ts` recomputes it from source every run and fails before any consumer does. */
-  PROGRAM_HASH: "0x39ef0a5f26a7c586649ca3c59726cb4c1156105805ce5f39edfff9ff8704c743",
+  PROGRAM_HASH: "0x539ec5903000571508732abf3e46ac02fcaff5bd1f9cb4d2835aec40d3c70c2e",
   /** Every argument word is 32 bytes, big-endian. */
   WORD_BYTES: 32,
   /** An address occupies the LOW 20 bytes of its word; the upper 12 MUST be zero (§4). */

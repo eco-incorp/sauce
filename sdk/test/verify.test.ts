@@ -248,7 +248,7 @@ describe("@eco-incorp/sauce-sdk/verify", () => {
       expectCode(() => decodeSettleProgram(SETTLE_PROGRAM), "ARGS_TRUNCATED");
     });
 
-    it("decodeSettleProgram accepts ANY 391 bytes — it pins length, not identity", () => {
+    it("decodeSettleProgram accepts ANY 370 bytes — it pins length, not identity", () => {
       // The structural tier deliberately says nothing about what the program does. This is the gap
       // validateSettleProgram closes, and the reason intent.ts identifies by hash.
       const impostor = ("0x" +
@@ -391,7 +391,7 @@ describe("@eco-incorp/sauce-sdk/verify", () => {
 
   describe("closure", () => {
     it("SETTLE_WIRE exposes the wire constants a foreign implementer needs", () => {
-      expect(SETTLE_WIRE.PROGRAM_BYTES).toBe(391);
+      expect(SETTLE_WIRE.PROGRAM_BYTES).toBe(370);
       expect(SETTLE_WIRE.WORD_BYTES).toBe(32);
       expect(SETTLE_WIRE.ADDRESS_BYTES).toBe(20);
       expect(SETTLE_WIRE.HEAD_SLOTS).toBe(3);

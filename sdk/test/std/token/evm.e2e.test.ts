@@ -13,9 +13,9 @@
  * GATED on SAUCE_RUST_V12_RUNTIME — the EVM half of the same engine-lineage finding the sibling
  * `svm.e2e.test.ts` documents, and a REAL FINDING, not a convenience:
  *
- *   The V12 runtime this repo can produce — `sdk/dist/artifacts/V12RuntimeBytecode.json`, generated
- *   by `sync-engine-artifacts` from the pinned `sauce` git dep — comes from the `release/beta`
- *   engine lineage, while the published Rust compiler emits for the `main` lineage. Their opcode
+ *   The V12 runtime this repo can produce — `sdk/dist/artifacts/V12RuntimeBytecode.json`, wrapped
+ *   by `sync-engine-artifacts` from the pinned EVM release's creation code — came from the
+ *   `release/beta` engine lineage, while the published Rust compiler emits for the `main` lineage. Their opcode
  *   tables have diverged: 0xB0–0xB5 are `IF/IF_2/JUMP/JUMP_2/JUMP_BACK/JUMP_BACK_2` on the pin but
  *   `JUMP/JUMP_I` on main, and 0x88–0x8A (`MLOAD`/`MSTORE`/`MALLOC` — which every value-returning
  *   program's epilogue uses) are `do_unknown` on the pin. A `balanceOf` program compiled by the

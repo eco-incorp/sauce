@@ -180,7 +180,7 @@ export interface TokenApi {
   transfer(spec: TokenTransferSpec): TokenCall;
   approve(spec: TokenApproveSpec): TokenCall;
   balanceOf(spec: TokenBalanceSpec): TokenCall;
-  /** N ops in ONE `main()` — because `V12Pot.cook`/an SVM program executes `ingredients[0]` only. */
+  /** N ops in ONE `main()` — because `V12Pot.cook`/an SVM program executes ONE program. */
   program(specs: readonly TokenSpec[], opts: { target: TokenTarget }): string;
   readonly ata: typeof ata;
   readonly TOKEN_PROGRAM: bigint;

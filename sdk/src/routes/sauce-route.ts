@@ -11,11 +11,11 @@
  * SVM STAGING (unchanged prerequisite): a staged SVM route call executes bytecode that already
  * lives in a buffer PDA — this module never stages anything, exactly like `sauce-calls.ts`'s own
  * "SVM STAGING IS A PREREQUISITE" section documents. `compileSauceRoute` compiles the program (so
- * the caller has the bytecode to stage) but requires `execution.buffer` to already name an
+ * the caller has the bytecode to stage) but requires `execution.code` to already name an
  * already-staged buffer; omitting it is a build-time error pointing back at that section, not a
  * silent no-op or a confusing later encode-time failure.
  *
- * ONE COOK = ONE PROGRAM: `V12Pot.cook` only ever executes `ingredients[0]`, so a route body is
+ * ONE COOK = ONE PROGRAM: `V12Pot.cook` takes exactly one `bytes program`, so a route body is
  * always compiled to exactly one bytecode blob (`compiled.bytecode[0]`) and slotted as exactly one
  * `Call` — a multi-statement body is one program with N statements, never N cooks.
  *
@@ -30,7 +30,6 @@ import { bytesToHex } from "viem";
 
 import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
-import { bytecodeSha256 } from "../svm/instructions.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs } from "./rs-compile.js";
 import { rewriteTokenFactory, rewriteTokenMembers } from "./token-rewrite.js";
@@ -82,6 +81,18 @@ export interface SauceCompileOptions {
 export interface SauceEvmExecutionInput {
   /** The Pot contract to `cook()` on — see `sauce-calls.ts#SauceEvmCallParams`, never defaulted. */
   pot: AddressInput;
+  /**
+   * The interpreter this cook runs on, required for the same reason `pot` is: it is not something
+   * this module can guess correctly.
+   *
+   * It exists because a Pot holds no engine — the interpreter is a `cook` argument on both targets.
+   * There is deliberately no default. `V12_EVM_CONTRACTS.v12Runtime` is the obvious candidate and is
+   * the wrong one: those addresses are CREATE2 of the initcode that produced them, so they name the
+   * stack deployed BEFORE the engine moved into `cook`'s arguments — an interpreter of the older
+   * lineage. Defaulting to it would put the right program on the wrong engine silently, which is
+   * the one mistake a caller cannot see in the encoded call.
+   */
+  engine: AddressInput;
   value?: bigint | number | string;
 }
 
@@ -117,37 +128,6 @@ export function wrapSauceBody(sauce: string): string {
 
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
-}
-
-/**
- * Binds a staged SVM execution to the program just compiled, via the engine's content-hash pin.
- *
- * A caller-supplied `expectedSha256` must AGREE with the compile — a pin naming other bytes would have
- * the call execute a program this function did not produce, so the disagreement is an error, not an
- * override. `slice` is the FOREIGN path (a buffer whose bytecode extent the caller names, staged by
- * something other than this compile), where a pin over the compiled program is meaningless: that
- * execution is passed through untouched.
- */
-function svmExecutionPinnedToCompile(
-  execution: SauceSvmExecutionInput,
-  bytecode: Uint8Array,
-): SauceSvmExecutionInput {
-  if (execution.slice !== undefined) return execution;
-
-  const pin = bytecodeSha256(bytecode);
-  if (execution.expectedSha256 === undefined) return { ...execution, expectedSha256: pin };
-
-  const compiledPinHex = bytesToHex(pin);
-  const callerPinHex = bytesToHex(execution.expectedSha256);
-  if (callerPinHex !== compiledPinHex) {
-    throw new Error(
-      `compileSauceRoute: execution.expectedSha256 ${callerPinHex} does not match sha256 of the ` +
-        `compiled program ${compiledPinHex} — the call would pin a buffer holding different bytecode. ` +
-        "Stage `compiled.bytecode[0]` and drop the pin (it is injected from the compile), or fix the pin.",
-    );
-  }
-
-  return execution;
 }
 
 /**
@@ -267,24 +247,26 @@ export function compileSauceRoute(
 
   if (chain.kind === "svm") {
     const svmExecution = execution as SauceSvmExecutionInput;
-    if (svmExecution.buffer === undefined) {
+    if (svmExecution.code === undefined) {
       throw new Error(
-        "compileSauceRoute: an svm route requires execution.buffer — a buffer this module did NOT " +
-          "stage; see sauce-calls.ts's 'SVM STAGING IS A PREREQUISITE' section for the init/write/" +
-          "finalize sequence a solver must run first, staging exactly the bytecode this call returns " +
-          "in `compiled.bytecode[0]`.",
+        "compileSauceRoute: an svm route requires execution.code — a finalized code account this " +
+          "module did NOT stage. Stage it through the kitchen (create/grow/write/finalize) and pass " +
+          "the CODE account; see kitchen.ts. It must hold exactly the bytecode this call returns in " +
+          "`compiled.bytecode[0]`.",
       );
     }
-    const call = buildSauceSvmCall(
-      svmExecutionPinnedToCompile(svmExecution, compiled.bytecode[0]!),
-    );
+    // Passed through unpinned. The pin used to be injected here and encoded into the engine
+    // instruction; the released engine has no payload to carry one, so the commitment belongs to the
+    // kitchen's `cook_from_account` — which the STAGING caller issues, not this call.
+    const call = buildSauceSvmCall(svmExecution);
     return { calls: [call], compiled, source };
   }
 
   const evmExecution = execution as SauceEvmExecutionInput;
   const call = buildSauceEvmCall({
     pot: evmExecution.pot,
-    ingredients: [bytecodeHex],
+    engine: evmExecution.engine,
+    program: bytecodeHex,
     value: evmExecution.value,
   });
   return { calls: [call], compiled, source };

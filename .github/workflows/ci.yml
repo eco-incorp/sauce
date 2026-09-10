@@ -34,46 +34,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ---- engine artifacts + the v12 engines --------------------------------
-      # The EVM engine artifacts (sdk/{dist,src}/artifacts — Router, SauceRouter, V12*, interfaces)
-      # ship to downstream SDK consumers for their local tests/deploys, so they must track the pinned
-      # `sauce` engine. Nothing is committed, so this both regenerates them and asserts the
-      # generation produced every one.
+      # ---- engine artifacts + the v12 releases --------------------------------
+      # The EVM artifacts (sdk/{dist,src}/artifacts — Router, V12*, interfaces) ship to downstream
+      # SDK consumers for their local tests/deploys, and are build output rather than committed, so
+      # this both regenerates them and asserts the generation produced every one.
       #
-      # The same run fetches the v12 engines the @sauce/token execution suites need:
-      # sdk/test/std/token/{evm,svm}.e2e.test.ts run the library's COMPILED bytecode on the real
-      # engines. Those come from the v12 RELEASES, not from the `sauce` git dep — the dep's lineage
-      # opcode table has diverged from the one the published compiler emits for (both suites' headers
-      # document the divergence in detail), while both releases are built from fcedc167a, the commit
-      # the published compiler's `compiler-v0.5.0` tag is cut from: compiler and engines are one
-      # lineage by construction, not by coincidence. `--fetch-v12-engines` downloads them into a
-      # cache, checks each against a digest committed in the script, and prints the paths; the grep
-      # hands those to the steps below. GH_TOKEN because eco-incorp/v12 is a private repo.
+      # Everything comes from the v12 RELEASES, each asset pinned by tag AND by a digest committed in
+      # sync-engine-artifacts.mjs. The components release independently, so there is no single shared
+      # commit to pin — the digest is the guarantee. `--fetch-v12-engines` downloads them into a
+      # cache, checks each against its digest, and prints `NAME=<path>` lines; the grep hands every
+      # one to $GITHUB_ENV. It is deliberately a wildcard: a newly pinned artifact reaches the suites
+      # that need it without a matching edit here, which is how SAUCE_KITCHEN_SO would otherwise have
+      # been silently absent. GH_TOKEN because eco-incorp/v12 is a private repo.
       #
-      # Both suites HARD-FAIL when their variable is absent, so a future edit here cannot quietly
-      # return them to skipping — a skipped suite and a passing suite are the same line in jest's
-      # summary, which is how they went unrun for their whole life before.
+      # The suites that consume these HARD-FAIL when their variable is absent, so a future edit here
+      # cannot quietly return them to skipping — a skipped suite and a passing suite are the same
+      # line in jest's summary, which is how they went unrun for their whole life before.
       - name: Sync engine artifacts and fetch the v12 engines
         env:
           GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
         run: |
           set -euo pipefail
           pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines | tee "$RUNNER_TEMP/sync.log"
-          grep -E '^(SAUCE_RUST_ENGINE_SO|SAUCE_V12_RUNTIME_CREATION_HEX)=' "$RUNNER_TEMP/sync.log" >> "$GITHUB_ENV"
-          # sdk/src/deployments/v12.generated.ts is COMMITTED (src, generated from the pin's deploy
-          # record) — it must match a fresh sync, else a repin that moved the record wasn't committed.
-          if [ -n "$(git status --porcelain -- sdk/src/deployments)" ]; then
-            echo "::error::sdk/src/deployments is stale vs the pinned engine. Run 'pnpm --filter ./sdk sync-engine-artifacts' and commit the result.";
-            git --no-pager diff -- sdk/src/deployments;
-            exit 1;
-          fi
-          # dist/artifacts is BUILD OUTPUT (git-ignored, nothing committed): the 8 forge JSONs come
-          # from the engine build, V12RuntimeBytecode from the release asset. Assert the sync produced
-          # all 9, so a broken generation (missing Foundry, a failed submodule fetch, an unreachable
-          # release) fails CI here instead of shipping an empty dir — the exact regression that broke
-          # 0.7.0.
-          for a in IERC20 ISauceRouter IStateView IUniswapV3Pool Router SauceRouter V12Kitchen V12Pot V12RuntimeBytecode; do
-            test -s "sdk/dist/artifacts/$a.json" || { echo "::error::sync did not produce sdk/dist/artifacts/$a.json (is Foundry set up?)"; exit 1; }
+          grep -E '^SAUCE_[A-Z0-9_]+=' "$RUNNER_TEMP/sync.log" >> "$GITHUB_ENV"
+          # dist/artifacts is BUILD OUTPUT (git-ignored, nothing committed): four ABIs from the
+          # release's abis.json, IERC20 declared in the script, IUniswapV3Pool from @uniswap/v3-core,
+          # and V12RuntimeBytecode from the release's creation code. Assert the sync produced all 7,
+          # so a broken generation (a missing node_modules entry, an unreachable release) fails CI
+          # here instead of shipping an empty dir — the exact regression that broke 0.7.0.
+          for a in IERC20 ISauceRouter IUniswapV3Pool Router V12Kitchen V12Pot V12RuntimeBytecode; do
+            test -s "sdk/dist/artifacts/$a.json" || { echo "::error::sync did not produce sdk/dist/artifacts/$a.json"; exit 1; }
           done
 
       # The EVM suite etches DEPLOYED runtime bytecode at a fixed address, and the release publishes
@@ -84,7 +74,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/v12"
+          # Reaped at the end of this step. It used to be left running for the rest of the job,
+          # holding its memory through the engine suites — which each build a BPF VM and are the
+          # steps least able to spare it.
           anvil --port 8599 --silent &
+          ANVIL_PID=$!
+          trap 'kill "$ANVIL_PID" 2>/dev/null || true' EXIT
           for _ in $(seq 1 60); do
             cast block-number --rpc-url http://127.0.0.1:8599 >/dev/null 2>&1 && break
             sleep 0.5
@@ -103,19 +98,6 @@ jobs:
       # -----------------------------------------------------------------------
 
       # ---- SVM engine binary ------------------------------------------------
-      # The SVM integration suites (sdk/test/svm/*) execute compiled
-      # `target: 'svm'` bytecode on the real
-      # engine via LiteSVM. The engine binary is vendored at
-      # artifacts/svm/engine.so (committed, force-added — built from the exact
-      # commit the `sauce` git dep is pinned to) and that's the harnesses'
-      # default SAUCE_ENGINE_SO path, so these suites run offline here, same as
-      # the EVM ones — no Solana toolchain install, no cargo build-sbf. Fail
-      # loudly if it's somehow missing instead of letting the suites skip
-      # silently and look green.
-      - name: Verify vendored SVM engine binary
-        run: test -s artifacts/svm/engine.so || { echo "::error::artifacts/svm/engine.so missing or empty"; exit 1; }
-      # -----------------------------------------------------------------------
-
       - name: SDK — typecheck
         run: pnpm --filter './sdk' typecheck
 
@@ -130,8 +112,62 @@ jobs:
       # SAUCE_RUST_ENGINE_SO / SAUCE_RUST_V12_RUNTIME come from $GITHUB_ENV, exported by the two
       # engine steps above. Both @sauce/token e2e suites hard-fail in CI when either is unset, so a
       # broken export is loud rather than a silent skip.
-      - name: SDK — test
-        run: pnpm --filter './sdk' test
+      #
+      # TWO invocations, engine suites first — see the next step for why. Together they cover every
+      # suite: the patterns are exact complements, and a file matching neither would fail the count
+      # asserted below.
+      - name: SDK — test (engine e2e)
+        # Set here because these steps invoke jest directly rather than through the package's
+        # `test` script, which is where NODE_OPTIONS normally comes from.
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
+          # Names each test on unbuffered stderr as it starts. A native abort kills the process
+          # before jest flushes, so without this a crashing suite reports no test at all.
+          SAUCE_TRACE_TESTS: "1"
+        run: |
+          set -euo pipefail
+          cd sdk
+          # ONE PROCESS PER SUITE, and the engine suites separated from the rest.
+          #
+          # Running all ~181 suites in one jest process aborts with a native std::bad_alloc after
+          # every test has PASSED — at the end, during teardown, with GBs free and no ulimit, so it
+          # is not exhaustion. It was measured: the engine suites peak between 495 and 785 MB, and
+          # the one that aborted was the LOWEST of them. Reverting this split reproduced the abort
+          # immediately, which is why it is here rather than a tidier single command.
+          #
+          # Each suite in its own short-lived process avoids it, and makes a crash name the suite.
+          # (Distinct from the aborts fixed in the suites themselves — calling litesvm accessors on
+          # a failed transaction or a closed account; see `kitchen-bench.ts`.)
+          node_modules/.bin/jest --config jest.config.cjs --listTests \
+            --testPathPattern '\.e2e\.test\.ts$' > "$RUNNER_TEMP/e2e-suites.txt"
+          [ -s "$RUNNER_TEMP/e2e-suites.txt" ] || { echo "::error::no engine e2e suites matched"; exit 1; }
+          failed=""
+          while IFS= read -r suite; do
+            echo "::group::$(basename "$suite")"
+            # `|| failed=...` rather than letting -e stop the loop: one run then reports EVERY suite,
+            # which is what distinguishes "this suite is broken" from "the box gave out".
+            node_modules/.bin/jest --config jest.config.cjs --runInBand --runTestsByPath "$suite" \
+              || failed="$failed $(basename "$suite")"
+            echo "::endgroup::"
+          done < "$RUNNER_TEMP/e2e-suites.txt"
+          [ -z "$failed" ] || { echo "::error::engine e2e suites failed:$failed"; exit 1; }
+
+      - name: SDK — test (everything else)
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
+        run: pnpm --filter './sdk' exec jest --config jest.config.cjs --testPathIgnorePatterns '\.e2e\.test\.ts$'
+
+      # The split must not silently drop a suite: assert the two halves still add up to every file
+      # jest can see.
+      - name: SDK — the split covers every suite
+        run: |
+          set -euo pipefail
+          cd sdk
+          all=$(node_modules/.bin/jest --config jest.config.cjs --listTests | wc -l)
+          e2e=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathPattern '\.e2e\.test\.ts$' | wc -l)
+          rest=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathIgnorePatterns '\.e2e\.test\.ts$' | wc -l)
+          echo "all=$all e2e=$e2e rest=$rest"
+          [ "$all" -eq "$((e2e + rest))" ] || { echo "::error::the test split covers $((e2e + rest)) of $all suites"; exit 1; }
 
       - name: Actions — typecheck
         run: pnpm --filter './actions' typecheck

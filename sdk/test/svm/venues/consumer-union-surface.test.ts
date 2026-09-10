@@ -25,7 +25,13 @@
  * from it because the SDK no longer exports one, and the consumer no longer
  * asks for one.
  *
- * 545 names total: 445 VALUES (below) + 100 TYPES
+ * 536 names total: 436 VALUES (below) + 100 TYPES
+ *
+ * DOWN FROM 445: the pre-release engine's staging surface is gone with the vendored binary that ran
+ * it — no release ships an engine with those instructions, so they could not execute against
+ * anything deployable. `sauce-recipes` imports some of them today and MUST migrate to the kitchen
+ * builders (`buildCreateCodeBufferInstruction` → grow → write → finalize →
+ * `buildCookFromAccountInstruction`). This list is the record of what it can no longer import.
  * (consumer-union-types.fixture.ts).
  *
  * VALUES are probed as runtime values against the built module namespace --
@@ -86,7 +92,6 @@ const CONSUMER_UNION_VALUES: readonly string[] = [
   "EXPIRY_SCALE",
   "FEE_DENOMINATOR",
   "FEE_SCALE",
-  "FINALIZE_BUFFER_DISCRIMINATOR",
   "FLAT_SLAB_PROGRAM_ID",
   "FLUXBEAM_PROGRAM_ID",
   "GAMMA_PROGRAM_ID",
@@ -111,7 +116,6 @@ const CONSUMER_UNION_VALUES: readonly string[] = [
   "HYLO_STABILITY_POOL_PROGRAM_ID",
   "HYLO_STABILITY_POOL_STABLECOIN_MINT",
   "HYUSD_MINT",
-  "INIT_BUFFER_DISCRIMINATOR",
   "INSTRUCTIONS_SYSVAR",
   "INVARIANT_PROGRAM_ID",
   "JUPITER_LEND_EARN_PROGRAM_ID",
@@ -326,7 +330,6 @@ const CONSUMER_UNION_VALUES: readonly string[] = [
   "WEIGHTED_MAX_IN_RATIO",
   "WOOFI_PROGRAM_ID",
   "WOOFI_SWAP_DISCRIMINATOR",
-  "WRITE_BUFFER_DISCRIMINATOR",
   "WSOL_CALC_PROGRAM_ID",
   "WSOL_MINT",
   "XORCA_MINT_ID",
@@ -342,13 +345,8 @@ const CONSUMER_UNION_VALUES: readonly string[] = [
   "bonkswapForkConfig",
   "bonkswapReadUintLE",
   "buildAtaPrepend",
-  "buildCloseBufferInstruction",
   "buildExecuteFromAccountInstruction",
-  "buildFinalizeBufferInstruction",
   "buildHeapFramePrepend",
-  "buildInitBufferInstructions",
-  "buildStagingPlan",
-  "buildWriteBufferInstruction",
   "byreal",
   "calcUnwrappedAmount",
   "calcWrappedAmount",
@@ -365,7 +363,6 @@ const CONSUMER_UNION_VALUES: readonly string[] = [
   "defituna",
   "denomAdjustedFor",
   "depthReserves",
-  "deriveBufferPda",
   "deriverse",
   "deriverseSwapAccounts",
   "dexlab",
@@ -602,8 +599,8 @@ const CONSUMER_UNION_TYPES: readonly string[] = [
 ];
 
 describe("consumer-union barrel surface (sauce-recipes)", () => {
-  it("pins the expected counts (445 values, 100 types) so a future edit is deliberate", () => {
-    expect(CONSUMER_UNION_VALUES.length).toBe(445);
+  it("pins the expected counts (436 values, 100 types) so a future edit is deliberate", () => {
+    expect(CONSUMER_UNION_VALUES.length).toBe(436);
     expect(CONSUMER_UNION_TYPES.length).toBe(100);
   });
 

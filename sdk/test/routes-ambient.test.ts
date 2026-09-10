@@ -7,11 +7,13 @@ import type { IntentOptions } from "../src/routes/index.js";
 import { getDescriptor, addressOn } from "../src/descriptors/query.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",
@@ -111,7 +113,7 @@ describe("openRoute: ambient defines threading", () => {
   it("an svm destination gets chainId and the caller token map, and compiles on target 'svm'", () => {
     const USDC = "0x5555555555555555555555555555555555555555" as const;
     const built = openRoute("solana", "return chainId;", {
-      execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+      execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
       deadline: 2000n,
       portal: PORTAL,
       source: "base",

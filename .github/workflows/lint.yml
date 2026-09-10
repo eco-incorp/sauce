@@ -12,10 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/setup-private-deps
-        with:
-          token: ${{ secrets.ECO_INCORP_TOKEN }}
-
+      # No `setup-private-deps` here: `pnpm install` has no private source left to authenticate for
+      # (the engine git dep is gone; every v12 artifact is a release download made by the sync step,
+      # which this job never runs). Requiring the secret would only make a fork's lint fail.
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.2

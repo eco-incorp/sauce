@@ -1,7 +1,10 @@
 name: Setup private deps
 description: >
-  Rewrite GitHub URLs to a token-authed HTTPS form so `pnpm install` can clone the private
-  `sauce` git dependency (eco-incorp/v12).
+  Fail fast when ECO_INCORP_TOKEN is absent, and put it on git's GitHub URLs. Nothing in
+  `pnpm install` needs it any more — the engine git dependency is gone — but the jobs that use this
+  go on to download eco-incorp/v12 RELEASE assets, and a missing secret is far clearer here than as
+  a 404 mid-sync. The URL rewriting below is kept for the same reason it was written: a private git
+  source reintroduced in either form would otherwise fail unauthenticated.
 
 inputs:
   token:
@@ -22,7 +25,7 @@ runs:
         ECO_INCORP_TOKEN: ${{ inputs.token }}
       run: |
         if [ -z "${ECO_INCORP_TOKEN:-}" ]; then
-          echo "::error::Missing repo secret ECO_INCORP_TOKEN — required to clone the private eco-incorp/v12 git dep. Add a PAT with read access on eco-incorp/v12 under Settings -> Secrets and variables -> Actions."
+          echo "::error::Missing repo secret ECO_INCORP_TOKEN — required to download eco-incorp/v12 release assets. Add a PAT with read access on eco-incorp/v12 under Settings -> Secrets and variables -> Actions."
           exit 1
         fi
         # The package.json specifier is HTTPS, but pnpm-lock.yaml may pin the SSH form

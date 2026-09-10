@@ -72,7 +72,6 @@ export {
   buildSauceSvmCalls,
   mergeSvmAccountFlags,
   sauceEvmDeployPotCall,
-  sauceSvmStagingPlan,
 } from "./sauce-calls.js";
 export type {
   SauceEvmCallParams,

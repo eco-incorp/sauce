@@ -19,7 +19,6 @@ import {
 } from "../src/routes/encode.js";
 import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
 import { buildSauceSvmCall } from "../src/routes/sauce-calls.js";
-import { bytecodeSha256 } from "../src/svm/instructions.js";
 import { compileSauceRoute, wrapSauceBody } from "../src/routes/sauce-route.js";
 import { predictVaultAddress } from "../src/routes/vault.js";
 import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
@@ -36,6 +35,7 @@ import type { RewardInput, RouteInput } from "../src/routes/types.js";
 import { v12Pot } from "../src/evm/engine.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const PROVER = "0x4444444444444444444444444444444444444444" as const;
@@ -43,6 +43,7 @@ const PROVER = "0x4444444444444444444444444444444444444444" as const;
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",
@@ -62,7 +63,9 @@ describe("openRoute: EVM happy path", () => {
     expect(call.value).toBe(0n);
 
     expect(built.compiled.bytecode.length).toBe(1);
-    const expectedData = v12Pot.encodeCook([bytesToHex(built.compiled.bytecode[0]!)]);
+    // The engine is the caller's — nothing defaults it — so the expectation names the same one the
+    // route was given.
+    const expectedData = v12Pot.encodeCook(ENGINE, bytesToHex(built.compiled.bytecode[0]!));
     expect(call.data).toBe(expectedData);
   });
 });
@@ -71,8 +74,12 @@ describe("openRoute: bare-body wrapping", () => {
   it("wraps a bare body into byte-identical bytecode as the explicit main() form", () => {
     const explicit = compileSauceRoute("ethereum", "function main() { let x = 1n; return x; }", {
       pot: POT,
+      engine: ENGINE,
     });
-    const bare = compileSauceRoute("ethereum", "let x = 1n; return x;", { pot: POT });
+    const bare = compileSauceRoute("ethereum", "let x = 1n; return x;", {
+      pot: POT,
+      engine: ENGINE,
+    });
 
     expect(bare.compiled.bytecode.length).toBe(explicit.compiled.bytecode.length);
     for (let i = 0; i < explicit.compiled.bytecode.length; i++) {
@@ -177,7 +184,7 @@ describe("openRoute: SVM destination", () => {
   it("compiles with target 'svm' and routes through buildSauceSvmCall", () => {
     const built = openRoute("solana", "function main() { return 1n; }", {
       execution: {
-        buffer: BUFFER,
+        code: BUFFER,
         accounts: [{ pubkey: ACCOUNT, isSigner: false, isWritable: false }],
       },
       deadline: 2000n,
@@ -194,9 +201,8 @@ describe("openRoute: SVM destination", () => {
 
     // The pin is injected from the compile, so the equivalent direct call must carry it too.
     const direct = buildSauceSvmCall({
-      buffer: BUFFER,
+      code: BUFFER,
       accounts: [{ pubkey: ACCOUNT, isSigner: false, isWritable: false }],
-      expectedSha256: bytecodeSha256(built.compiled.bytecode[0]!),
     });
     expect(call).toEqual(direct);
   });
@@ -205,7 +211,7 @@ describe("openRoute: SVM destination", () => {
     expect(() =>
       openRoute("solana", "return 1n;", {
         execution: {
-          buffer: BUFFER,
+          code: BUFFER,
           accounts: [{ pubkey: ACCOUNT, isSigner: false, isWritable: false }],
           value: 1n,
         },
@@ -217,52 +223,6 @@ describe("openRoute: SVM destination", () => {
         rewardDeadline: 1000n,
       }),
     ).toThrow(/value/i);
-  });
-});
-
-describe("compileSauceRoute: SVM content pin", () => {
-  const BUFFER = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-  const ACCOUNT = address("So11111111111111111111111111111111111111112");
-  const SAUCE = "function main() { return 1n; }";
-  const accounts = [{ pubkey: ACCOUNT, isSigner: false, isWritable: false }];
-
-  it("injects sha256(compiled.bytecode[0]) as expectedSha256 when the caller passes no pin", () => {
-    const { calls, compiled } = compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts });
-    const pin = bytecodeSha256(compiled.bytecode[0]!);
-
-    expect(calls[0]).toEqual(buildSauceSvmCall({ buffer: BUFFER, accounts, expectedSha256: pin }));
-    // Pinning is what the calldata grows by: flags(1) + pin(32) vs flags(1) alone.
-    const pinless = buildSauceSvmCall({ buffer: BUFFER, accounts });
-    expect((calls[0]!.data.length - pinless.data.length) / 2).toBe(32);
-  });
-
-  it("accepts a caller pin that matches the compiled program", () => {
-    const { compiled } = compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts });
-    const pin = bytecodeSha256(compiled.bytecode[0]!);
-    const { calls } = compileSauceRoute("solana", SAUCE, {
-      buffer: BUFFER,
-      accounts,
-      expectedSha256: pin,
-    });
-
-    expect(calls[0]).toEqual(buildSauceSvmCall({ buffer: BUFFER, accounts, expectedSha256: pin }));
-  });
-
-  it("throws when the caller pin names bytecode other than the compiled program", () => {
-    expect(() =>
-      compileSauceRoute("solana", SAUCE, {
-        buffer: BUFFER,
-        accounts,
-        expectedSha256: new Uint8Array(32),
-      }),
-    ).toThrow(/does not match sha256 of the compiled program/);
-  });
-
-  it("leaves a foreign-path execution (slice) unpinned", () => {
-    const slice = { offset: 0, len: 8 };
-    const { calls } = compileSauceRoute("solana", SAUCE, { buffer: BUFFER, accounts, slice });
-
-    expect(calls[0]).toEqual(buildSauceSvmCall({ buffer: BUFFER, accounts, slice }));
   });
 });
 
@@ -333,15 +293,15 @@ describe("openRoute: fail-closed", () => {
     expect(() => openRoute("not-a-real-chain", "return 1n;", evmOptions())).toThrow();
   });
 
-  it("throws for an svm destination missing a staged buffer, pointing at sauce-calls.ts", () => {
+  it("throws for an svm destination missing a staged code account, pointing at the kitchen", () => {
     expect(() =>
       openRoute("solana", "return 1n;", {
-        // deliberately missing `buffer` to exercise the fail-closed path
+        // deliberately missing `code` to exercise the fail-closed path
         execution: { accounts: [] } as never,
         deadline: 2000n,
         portal: PORTAL,
       }),
-    ).toThrow(/staging/i);
+    ).toThrow(/execution\.code/i);
   });
 
   it("throws naming 'deadline' when IntentOptions.deadline is missing", () => {
@@ -364,7 +324,12 @@ describe("openRoute: fail-closed", () => {
 
   it("throws naming 'source' when the reward has no source and options has none either", () => {
     expect(() =>
-      openRoute("ethereum", "return 1n;", { pot: POT, deadline: 2000n, portal: PORTAL }).reward(0n),
+      openRoute("ethereum", "return 1n;", {
+        pot: POT,
+        engine: ENGINE,
+        deadline: 2000n,
+        portal: PORTAL,
+      }).reward(0n),
     ).toThrow(/source/i);
   });
 
@@ -372,6 +337,7 @@ describe("openRoute: fail-closed", () => {
     expect(() =>
       openRoute("ethereum", "return 1n;", {
         pot: POT,
+        engine: ENGINE,
         deadline: 2000n,
         portal: PORTAL,
         source: "base",
@@ -383,6 +349,7 @@ describe("openRoute: fail-closed", () => {
     expect(() =>
       openRoute("ethereum", "return 1n;", {
         pot: POT,
+        engine: ENGINE,
         deadline: 2000n,
         portal: PORTAL,
         source: "base",

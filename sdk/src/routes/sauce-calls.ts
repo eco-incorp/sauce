@@ -8,7 +8,7 @@
  * kind (`../chains/canonical.js` `isEvm`/`isSvm`, via `encode.js#kindOf` — bigint-aware, so a native
  * `Intent.destination` passes through with no silent evm mis-classification).
  *
- * EVM: `target = pot`, `data = v12Pot.encodeCook(ingredients)` (`../evm/engine.js`, reused verbatim
+ * EVM: `target = pot`, `data = v12Pot.encodeCook(engine, program)` (`../evm/engine.js`, reused verbatim
  * — no re-encoding), `value` defaults to `0n`. The Pot address is deliberately NOT defaulted: it is
  * a per-OWNER CREATE2 address (`v12Kitchen.deployPot(owner, salt)`) and `cook()` is `onlyOwner`, so
  * only the caller (who knows the fulfilling executor) can supply it — see
@@ -44,8 +44,6 @@
  *      actually execute — an unstaged, half-written, or unfinalized buffer fails at FULFILL time
  *      (the engine dispatches on the account's own header, not on anything this module can see), not
  *      at build time here.
- * `sauceSvmStagingPlan` (a verbatim re-export of `buildStagingPlan`) is provided for a caller sizing
- * that staging sequence — it emits zero instructions, advisory only.
  *
  * `StagedBufferRef` deliberately carries no `bytecode`/`seed`/`authority`/`payer` field: accepting
  * any of those would imply this module can perform the staging above. It cannot — it only accepts
@@ -61,18 +59,9 @@ import type { Address } from "@solana/kit";
 import { bytesToHex, type Hex } from "viem";
 
 import { v12Kitchen, v12Pot } from "../evm/engine.js";
-import {
-  requireV12Deployment,
-  v12SvmProgramId,
-  V12_EVM_CONTRACTS,
-  type V12Deployment,
-} from "../deployments/index.js";
+import { requireV12Deployment, v12SvmProgramId, type V12Deployment } from "../deployments/index.js";
 import { encodePortalCalldataWithAccounts, type PortalAccountMeta } from "../svm/intent.js";
-import {
-  buildExecuteFromAccountInstruction,
-  buildStagingPlan,
-  type ExecuteBytecodeSlice,
-} from "../svm/instructions.js";
+import { buildExecuteFromAccountInstruction } from "../svm/instructions.js";
 import type { ResolvedAccountMeta } from "../svm/resolve.js";
 
 import { kindOf, denormalizeToEvm, type ChainKindRef } from "./encode.js";
@@ -80,7 +69,6 @@ import { toBigInt, toUniversalAddress } from "./normalize.js";
 import type { AddressInput, CallInput } from "./types.js";
 
 /** Verbatim re-export — sizing advice only, emits zero instructions. See the module doc above. */
-export { buildStagingPlan as sauceSvmStagingPlan };
 
 // ---------------------------------------------------------------------------
 // EVM
@@ -91,33 +79,36 @@ export interface SauceEvmCallParams {
    *  defaulted). Derive it with `v12Kitchen.encodePredictPot(owner, salt)` if you only know the
    *  owner + salt. */
   pot: AddressInput;
-  /** Compiled Sauce bytecode blob(s) — `cook(bytes[] ingredients)`'s argument. */
-  ingredients: readonly Hex[];
+  /** The interpreter this cook runs on — named per call, since a Pot holds no engine. */
+  engine: AddressInput;
+  /** One compiled Sauce bytecode blob — a cook runs exactly one program. */
+  program: Hex;
   value?: bigint | number | string;
 }
 
-/** One `cook(ingredients)` call on `pot`. `data` is produced by `v12Pot.encodeCook` — the exact
- *  E3.2-adjacent EVM engine encoder, not re-implemented here. */
+/** One `cook(engine, program)` call on `pot`. `data` is produced by `v12Pot.encodeCook` — the exact
+ *  EVM engine encoder, not re-implemented here. */
 export function buildSauceEvmCall(params: SauceEvmCallParams): CallInput {
   return {
     target: toUniversalAddress(params.pot),
-    data: v12Pot.encodeCook(params.ingredients),
+    data: v12Pot.encodeCook(denormalizeToEvm(toUniversalAddress(params.engine)), params.program),
     value: params.value ?? 0n,
   };
 }
 
 export interface SauceEvmCallsParams {
   pot: AddressInput;
+  engine: AddressInput;
   /** One `cook()` per element, execution order preserved (e.g. the swap half then the settle half —
    *  the shape a Pot-based solver leg uses: two `cook()`s on the SAME Pot). */
-  cooks: readonly (readonly Hex[])[];
+  cooks: readonly Hex[];
   value?: bigint | number | string;
 }
 
 /** One `Call` per element of `cooks`, in the given order, all targeting the same `pot`. */
 export function buildSauceEvmCalls(params: SauceEvmCallsParams): CallInput[] {
-  return params.cooks.map((ingredients) =>
-    buildSauceEvmCall({ pot: params.pot, ingredients, value: params.value }),
+  return params.cooks.map((program) =>
+    buildSauceEvmCall({ pot: params.pot, engine: params.engine, program, value: params.value }),
   );
 }
 
@@ -125,22 +116,34 @@ export interface SauceEvmDeployPotCallParams {
   /** Bakes into the Pot's CREATE2 address; `cook()` on the resulting Pot is `onlyOwner`. */
   owner: AddressInput;
   salt: Hex;
-  /** Overrides the Kitchen address. Defaults to `V12_EVM_CONTRACTS.v12Kitchen` (chain-invariant),
-   *  or — if `chainId` is given instead — the deployment gated on that chain being LIVE. */
+  /** The Kitchen to deploy through. Give this, or a `chainId` — there is no bare default. */
   kitchen?: AddressInput;
-  /** When given (and `kitchen` is not), gates the default Kitchen address on `isV12Live(chainId)`
-   *  via `requireV12Deployment` — so a call is never built against a chain with no deployment. */
+  /** When given (and `kitchen` is not), takes the Kitchen from the deployment record GATED on
+   *  `isV12Live(chainId)` via `requireV12Deployment` — so a call is never built against a chain
+   *  with no deployment. */
   chainId?: number;
 }
 
-/** The leading `deployPot(owner, salt)` call a solver issues before its first `cook()` on a Pot
- *  that may not exist yet. */
+/**
+ * The leading `deployPot(owner, salt)` call a solver issues before its first `cook()` on a Pot that
+ * may not exist yet.
+ *
+ * One of `kitchen` / `chainId` is required. The ungated `V12_EVM_CONTRACTS.v12Kitchen` is NOT a
+ * fallback: those addresses are CREATE2 over the initcode that produced them, so they name the
+ * stack deployed before the engine became a `cook` argument (see `deployments/v12.generated.ts`).
+ * Silently deploying a Pot through an older-lineage Kitchen gives a Pot at an address the caller did
+ * not predict, whose `cook` takes the old signature. `chainId` still reaches the record — through
+ * the liveness gate, which is the part that makes it answerable.
+ */
 export function sauceEvmDeployPotCall(params: SauceEvmDeployPotCallParams): CallInput {
+  if (params.kitchen === undefined && params.chainId === undefined) {
+    throw new Error(
+      "sauceEvmDeployPotCall: pass `kitchen`, or a `chainId` to take it from the gated deployment " +
+        "record — there is no ungated default Kitchen address.",
+    );
+  }
   const kitchen: AddressInput =
-    params.kitchen ??
-    ((params.chainId !== undefined
-      ? requireV12Deployment(params.chainId).v12Kitchen
-      : V12_EVM_CONTRACTS.v12Kitchen) as Hex);
+    params.kitchen ?? (requireV12Deployment(params.chainId!).v12Kitchen as Hex);
   const ownerAddress = denormalizeToEvm(toUniversalAddress(params.owner));
   return {
     target: kitchen,
@@ -196,7 +199,9 @@ export interface SauceSvmAccountMeta {
  */
 export interface StagedBufferRef {
   /** Buffer PDA address, already init'd + written + FINALIZED by the solver. */
-  buffer: SvmAddressInput;
+  /** The finalized CODE account — the engine reads its data verbatim. Not the kitchen's
+   *  code-buffer METADATA account; passing that executes the wrong bytes. */
+  code: SvmAddressInput;
   /** Optional 32-byte content pin (e.g. `bytecodeSha256(bytecode)`), engine-verified against the
    *  buffer's stored hash. Always pass this for a buffer this process did not stage itself — it is
    *  the only cross-lifecycle trust anchor. Mutually exclusive in practice with `slice` (pin = the
@@ -204,7 +209,6 @@ export interface StagedBufferRef {
    *  combination outright, but only one is ever meaningful for a given buffer kind. */
   expectedSha256?: Uint8Array;
   /** Optional FOREIGN-path bytecode extent; omit for a managed engine buffer. */
-  slice?: ExecuteBytecodeSlice;
   /** Per-execution payload args, already encoded. */
   args?: Uint8Array;
 }
@@ -314,11 +318,8 @@ function buildOneSauceSvmCall(
 
   const ix = buildExecuteFromAccountInstruction({
     programId,
-    buffer: toSvmAddress(execution.buffer, "buffer"),
+    code: toSvmAddress(execution.code, "code"),
     accounts: resolvedAccounts,
-    expectedSha256: execution.expectedSha256,
-    slice: execution.slice,
-    args: execution.args,
   });
 
   // Buffer rides FIRST (READONLY) — buildExecuteFromAccountInstruction already puts it there; this

@@ -8,6 +8,7 @@ import { chain, chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 import type { PendingSauceRoute } from "../src/routes/index.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const PROVER = "0x4444444444444444444444444444444444444444" as const;
@@ -15,6 +16,7 @@ const PROVER = "0x4444444444444444444444444444444444444444" as const;
 function baseOptions(overrides: Record<string, unknown> = {}) {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",
@@ -72,6 +74,7 @@ describe("routes: EVM happy path", () => {
     const { Ethereum } = chainAccessors;
     const built = Ethereum("function main() { return 1n; }", {
       pot: POT,
+      engine: ENGINE,
       deadline: 2000n,
       portal: PORTAL,
     }).reward({ source: "base", deadline: 1000n, creator: CREATOR, prover: PROVER });
@@ -108,7 +111,7 @@ describe("routes: string-body form (stage-1 compatibility) on an SVM destination
     const { Solana } = chainAccessors;
     const built = Solana.route("function main() { return 1n; }", {
       execution: {
-        buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
         accounts: [
           {
             pubkey: "So11111111111111111111111111111111111111112",

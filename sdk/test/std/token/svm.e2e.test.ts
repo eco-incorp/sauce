@@ -14,27 +14,29 @@
  * resolved by name, in manifest order. A CPI callee is no exception — it is an account the caller
  * passes, so the SPL Token program arrives as a named slot like any other.
  *
- * GATED on SAUCE_RUST_ENGINE_SO, and that gate is a REAL FINDING, not a convenience:
+ * GATED on SAUCE_RUST_ENGINE_SO, which is now a CONVENIENCE: there is one engine, and the gate only
+ * says whether its binary has been fetched. It skips locally without it and hard-fails in CI.
  *
- *   The vendored `artifacts/svm/engine.so` is built from the pinned `sauce` git dep (the
- *   `release/beta` lineage), while the published Rust compiler emits for the `main` lineage, and the
- *   two engines' wire formats have diverged. `JUMP`/`JUMP_I` (0xB0/0xB1) exist only on main, and
- *   `NEW_ARRAY` (0x92) encodes its scalar elements inline there and off the stack on the pin. Every
- *   `@sauce/token` method carries a `require` or an `if`, so its bytecode is rejected by the vendored
- *   engine with InvalidInstructionData before it executes — while a control-flow-free program
- *   (`return 42n`, a bare `svm.sload`) still runs on both. Repinning `sauce` is the real fix and is
- *   out of this suite's scope.
+ * It used to be a real finding, and the history is worth keeping because it explains the shape of
+ * everything around it. A vendored `artifacts/svm/engine.so` was the repo-wide default: the
+ * `release/beta` lineage, while the published compiler emits for `main`. Their wire formats had
+ * diverged — `JUMP`/`JUMP_I` (0xB0/0xB1) existed only on main, and `NEW_ARRAY` (0x92) encoded its
+ * scalar elements inline there and off the stack on the pin — so every `@sauce/token` method, each
+ * carrying a `require` or an `if`, was rejected with `InvalidInstructionData` before executing, while
+ * a control-flow-free program (`return 42n`, a bare `svm.sload`) ran on both. That is why this suite
+ * needed its own variable, and why the header used to say repinning was the real fix and out of
+ * scope.
  *
- * It is a SEPARATE variable from the repo-wide SAUCE_ENGINE_SO on purpose: the divergence runs both
- * ways, so pointing SAUCE_ENGINE_SO at a `main`-lineage engine breaks the sibling suites that run
- * TypeScript-compiler output (`svm/staged.e2e`, `svm/svm-settle.e2e`) — measured, not assumed. Two
- * variables let both halves run in one `pnpm test`, each against the engine it actually targets.
+ * That repin happened. The vendored binary and the pre-release staging surface only it could run are
+ * deleted, `svm-settle.e2e` moved to this same engine, and `staged.e2e` went with the surface it
+ * tested — so the divergence no longer runs both ways and there is no second lineage to protect.
+ * `engine-harness.ts` states the current rule: one engine, from the pinned release, with
+ * SAUCE_ENGINE_SO demoted to an override for an unreleased build.
  *
- * So: point SAUCE_RUST_ENGINE_SO at a `main`-lineage engine to run these. CI downloads one from the
- * `v12-svm-v0.4.0` release, which is built from the same sauce commit the published compiler's
- * `compiler-v0.5.0` tag is cut from; locally, either do the same or build it —
- *   cd <sauce>/v12-svm && make build
- *   SAUCE_RUST_ENGINE_SO=<sauce>/v12-svm/target/deploy/engine.so pnpm --filter './sdk' test
+ * CI fetches it with `sync-engine-artifacts --fetch-v12-engines`, digest-verified against the pin.
+ * Locally, do the same, or build one —
+ *   cd <v12>/v12-svm && make build
+ *   SAUCE_RUST_ENGINE_SO=<v12>/v12-svm/target/deploy/engine.so pnpm --filter './sdk' test
  */
 import { AccountRole, getAddressCodec, lamports } from "@solana/kit";
 import type { Address, Instruction } from "@solana/kit";

@@ -13,12 +13,14 @@ import { TOKEN_BASE_DIRS } from "../src/token/source.js";
 // Base USDC -- pinned fixture, matching src/verify/vectors.ts's own Base USDC constant.
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const TO = "0x6666666666666666666666666666666666666666" as const;
 
 function evmOptions() {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base" as const,
@@ -98,7 +100,7 @@ describe("openRoute: token member rewrite end to end", () => {
   it("an svm destination throws the named error", () => {
     expect(() =>
       openRoute("solana", `USDC.transfer(${TO}, 5n);`, {
-        execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         deadline: 2000n,
         portal: PORTAL,
         source: "base",
@@ -120,7 +122,10 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
   });
 
   it("compileSauceRoute with NO options.tokens at all rewrites via the registry and matches the hand-written literal program", () => {
-    const compiled = compileSauceRoute("base", `USDC.transfer(${TO}, 5n);`, { pot: POT });
+    const compiled = compileSauceRoute("base", `USDC.transfer(${TO}, 5n);`, {
+      pot: POT,
+      engine: ENGINE,
+    });
     expect(compiled.source).toContain(`IERC20.at(USDC).transfer(${TO}, 5n)`);
     expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
 
@@ -136,7 +141,7 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     const compiled = compileSauceRoute(
       "base",
       `USDC.transfer(${TO}, 5n);`,
-      { pot: POT },
+      { pot: POT, engine: ENGINE },
       { tokens: { USDC: OTHER } },
     );
     const overridden = compile(
@@ -158,9 +163,9 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     // The point is that the rewrite declines and the compile FAILS CLOSED rather than emitting a
     // program with an unbound symbol. The compiler reports a member call on an undeclared name as an
     // un-lowerable call expression rather than naming the identifier, so match either shape.
-    expect(() => compileSauceRoute("ronin", `USDC.transfer(${TO}, 5n);`, { pot: POT })).toThrow(
-      /`USDC` is not a declared variable|cannot be lowered to IR yet/,
-    );
+    expect(() =>
+      compileSauceRoute("ronin", `USDC.transfer(${TO}, 5n);`, { pot: POT, engine: ENGINE }),
+    ).toThrow(/`USDC` is not a declared variable|cannot be lowered to IR yet/);
   });
 });
 
@@ -230,7 +235,7 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
   });
 
   it("THE DECISIVE STEP (a): self.USDC for a real chain rewrites to IERC20.at(<real Base USDC>n).balanceOf(ctx.self()) and compiles", () => {
-    const compiled = compileSauceRoute("base", `return self.USDC;`, { pot: POT });
+    const compiled = compileSauceRoute("base", `return self.USDC;`, { pot: POT, engine: ENGINE });
     expect(compiled.source).toContain(
       `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`,
     );
@@ -238,8 +243,14 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
   });
 
   it("chain-scoped: Base USDC != Ethereum USDC in the emitted literal", () => {
-    const baseCompiled = compileSauceRoute("base", `return self.USDC;`, { pot: POT });
-    const ethCompiled = compileSauceRoute("ethereum", `return self.USDC;`, { pot: POT });
+    const baseCompiled = compileSauceRoute("base", `return self.USDC;`, {
+      pot: POT,
+      engine: ENGINE,
+    });
+    const ethCompiled = compileSauceRoute("ethereum", `return self.USDC;`, {
+      pot: POT,
+      engine: ENGINE,
+    });
     expect(baseCompiled.source).not.toBe(ethCompiled.source);
     expect(baseCompiled.source).toContain(`${BigInt(USDC).toString()}n`);
     expect(ethCompiled.source).not.toContain(`${BigInt(USDC).toString()}n`);
@@ -333,7 +344,7 @@ describe("composition: token pass + protocol-accessor pass in ONE compile", () =
     const compiled = compileSauceRoute(
       "base",
       `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); return self.USDC;`,
-      { pot: POT },
+      { pot: POT, engine: ENGINE },
     );
     expect(compiled.source).toContain("IUniswapV4_UniversalRouter.at(");
     expect(compiled.source).toContain(
@@ -357,7 +368,7 @@ describe("svm: the token/balance-sugar pass never rewrites for an svm destinatio
       compileSauceRoute(
         "solana",
         `return self.USDC;`,
-        { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         { accessors: false },
       ),
     ).toThrow(/`self` is not a declared variable|property 'USDC' access not supported/);
@@ -366,7 +377,7 @@ describe("svm: the token/balance-sugar pass never rewrites for an svm destinatio
   it("with accessors default ON, the pre-existing self-sugar rewrite fires and the existing svm guard throws -- a safe, named failure, never a silent drop", () => {
     expect(() =>
       compileSauceRoute("solana", `return self.USDC;`, {
-        buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
         accounts: [],
       }),
     ).toThrow(/svm/i);
@@ -377,7 +388,7 @@ describe("svm: the token/balance-sugar pass never rewrites for an svm destinatio
       compileSauceRoute(
         "solana",
         `USDC.transfer(${TO}, 5n);`,
-        { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         { tokens: { USDC } },
       ),
     ).toThrow(/svm/i);

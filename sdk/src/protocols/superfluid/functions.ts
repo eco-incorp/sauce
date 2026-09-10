@@ -3,7 +3,7 @@ import { CFAForwarderABI as ICFAForwarder } from "./abis";
 
 function main(forwarderAddress: Address, token: Address, sender: Address, receiver: Address, flowrate: Uint256): Uint256 {
   const forwarder = ICFAForwarder.at(forwarderAddress);
-  forwarder.createFlow(token, sender, receiver, flowrate, 0x00);
+  forwarder.createFlow(token, sender, receiver, flowrate, "");
   return 1;
 }
 `;
@@ -13,7 +13,7 @@ import { CFAForwarderABI as ICFAForwarder } from "./abis";
 
 function main(forwarderAddress: Address, token: Address, sender: Address, receiver: Address): Uint256 {
   const forwarder = ICFAForwarder.at(forwarderAddress);
-  forwarder.deleteFlow(token, sender, receiver, 0x00);
+  forwarder.deleteFlow(token, sender, receiver, "");
   return 1;
 }
 `;
@@ -23,7 +23,7 @@ import { CFAForwarderABI as ICFAForwarder } from "./abis";
 
 function main(forwarderAddress: Address, token: Address, sender: Address, receiver: Address, flowrate: Uint256): Uint256 {
   const forwarder = ICFAForwarder.at(forwarderAddress);
-  forwarder.updateFlow(token, sender, receiver, flowrate, 0x00);
+  forwarder.updateFlow(token, sender, receiver, flowrate, "");
   return 1;
 }
 `;

@@ -8,11 +8,13 @@ import { openRoute } from "../src/routes/intent-dsl.js";
 import type { IntentOptions } from "../src/routes/intent-dsl.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",

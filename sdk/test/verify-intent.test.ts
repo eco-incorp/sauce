@@ -9,7 +9,7 @@
  * CONTENT within a mixed batch.
  *
  * Identification is by PROGRAM HASH, so the ingredients here carry the real compiled program from
- * `SETTLE_PROGRAM`, not a stand-in. That is the point of the two impostor cases below: a 391-byte
+ * `SETTLE_PROGRAM`, not a stand-in. That is the point of the two impostor cases below: a 370-byte
  * ingredient with a perfectly canonical argument tail is NOT the settle, and this layer must say so.
  */
 import { encodeFunctionData, keccak256, parseAbi } from "viem";
@@ -24,6 +24,9 @@ import {
 } from "../src/verify/index";
 
 const COOK_ABI = parseAbi(["function cook(bytes[] ingredients) payable returns (bytes)"]);
+const COOK_V12_ABI = parseAbi([
+  "function cook(address engine, bytes program) payable returns (bytes)",
+]);
 const TOKEN0 = ("0x" + "11".repeat(20)) as Hex;
 const TOKEN1 = ("0x" + "22".repeat(20)) as Hex;
 const RECIPIENT = ("0x" + "ab".repeat(20)) as Hex;
@@ -31,15 +34,22 @@ const MINOUT = 1000n;
 
 /** A real settle payload via the encoder — program + canonical tail. */
 const SETTLE_PAYLOAD = encodeSettleProgram([TOKEN0, TOKEN1], MINOUT, RECIPIENT, SETTLE_PROGRAM);
-/** The same canonical tail behind 391 bytes that are NOT the settle program. */
+/** The same canonical tail behind 370 bytes that are NOT the settle program. */
 const IMPOSTOR = ("0x" +
   "ee".repeat(SETTLE_WIRE.PROGRAM_BYTES) +
   SETTLE_PAYLOAD.slice(2 + SETTLE_WIRE.PROGRAM_BYTES * 2)) as Hex;
+/** The interpreter a v12 cook names. */
+const ENGINE = ("0x" + "e9".repeat(20)) as Hex;
 /** A clearly non-settle ingredient (the swap half stands in as junk here). */
 const SWAP_JUNK = "0xdeadbeef" as Hex;
 
 function cook(ingredients: Hex[]): Hex {
   return encodeFunctionData({ abi: COOK_ABI, functionName: "cook", args: [ingredients] });
+}
+
+/** A `V12Pot.cook(address engine, bytes program)` call — the shape a v12 Pot actually takes. */
+function cookV12(program: Hex, engine: Hex = ENGINE): Hex {
+  return encodeFunctionData({ abi: COOK_V12_ABI, functionName: "cook", args: [engine, program] });
 }
 
 describe("decodeSettleCall", () => {
@@ -76,7 +86,7 @@ describe("decodeSettleCall", () => {
     expect(decodeSettleCall("0x1234" as Hex)).toBeNull();
   });
 
-  it("returns null for an impostor — 391 bytes and a canonical tail, but not the settle program", () => {
+  it("returns null for an impostor — 370 bytes and a canonical tail, but not the settle program", () => {
     // The structural decode accepts this ingredient; identification by hash is what refuses it.
     expect(decodeSettleCall(cook([IMPOSTOR]))).toBeNull();
   });
@@ -174,7 +184,7 @@ describe("extractEvmSettleFromCalls / extractEvmSettleFromIntent", () => {
       SETTLE_PAYLOAD.slice(2 + SETTLE_WIRE.PROGRAM_BYTES * 2)) as Hex;
     const call = { data: cook([payload]) };
 
-    // the same hash as a BARE entry is read at the current 391, so the program never hashes to it
+    // the same hash as a BARE entry is read at the current 370, so the program never hashes to it
     expect(extractEvmSettleFromCalls([call], [longerHash])).toBeNull();
 
     // carrying its length, the very same hash matches and the tail decodes
@@ -190,7 +200,7 @@ describe("extractEvmSettleFromCalls / extractEvmSettleFromIntent", () => {
     const call = { data: cook([SETTLE_PAYLOAD]) };
 
     expect(() =>
-      extractEvmSettleFromCalls([call], [{ hash: null as unknown as Hex, bytes: 391 }]),
+      extractEvmSettleFromCalls([call], [{ hash: null as unknown as Hex, bytes: 370 }]),
     ).toThrow(TypeError);
     expect(extractEvmSettleFromCalls([call])).not.toBeNull();
   });
@@ -232,5 +242,60 @@ describe("extractEvmSettleFromCalls / extractEvmSettleFromIntent", () => {
     expect(decodeSettleCall(cook([decoy, SETTLE_PAYLOAD]))).toBeNull();
     // and the honest payload alone still decodes, so this is not just a blanket refusal
     expect(decodeSettleCall(cook([SETTLE_PAYLOAD]))).not.toBeNull();
+  });
+});
+
+/**
+ * The v12 `cook(address engine, bytes program)` shape. It is a DIFFERENT SELECTOR from the v1
+ * `SauceRouter.cook(bytes[])`, so these two are decoded by two fragments rather than one — which is
+ * the thing worth pinning: a single fragment silently returns null for whichever shape it is not.
+ */
+describe("decodeSettleCall — v12 cook(address,bytes)", () => {
+  it("decodes the settle params from a v12 cook and reports the engine it named", () => {
+    const decoded = decodeSettleCall(cookV12(SETTLE_PAYLOAD));
+
+    expect(decoded).not.toBeNull();
+    expect(decoded!.tokens).toEqual([TOKEN0, TOKEN1]);
+    expect(decoded!.minOut).toBe(MINOUT);
+    expect(decoded!.recipient).toBe(RECIPIENT);
+    expect(decoded!.engine).toBe(ENGINE);
+  });
+
+  // The v12 signature carries one program, so the SauceRouter multi-ingredient hazard cannot arise
+  // here at all. Reported as 1 rather than left undefined so a caller's `count === 1` check is
+  // satisfied by the shape that structurally guarantees it.
+  it("reports ingredientCount 1 — a v12 cook carries one program by signature", () => {
+    expect(decodeSettleCall(cookV12(SETTLE_PAYLOAD))!.ingredientCount).toBe(1);
+    expect(decodeSettleCall(cookV12(SETTLE_PAYLOAD))!.ingredientIndex).toBe(0);
+  });
+
+  // The engine is caller-chosen data, so it is REPORTED, never validated here: the audited settle
+  // bytes on a hostile interpreter are a hostile computation, and only the caller knows its
+  // allow-list. A decoder that quietly accepted any engine would read as an endorsement of one.
+  it("reports an arbitrary engine rather than rejecting it", () => {
+    const hostile = ("0x" + "ff".repeat(20)) as Hex;
+
+    expect(decodeSettleCall(cookV12(SETTLE_PAYLOAD, hostile))!.engine).toBe(hostile);
+  });
+
+  it("leaves engine undefined for a v1 cook(bytes[]), which names none", () => {
+    expect(decodeSettleCall(cook([SETTLE_PAYLOAD]))!.engine).toBeUndefined();
+  });
+
+  it("still returns null for a v12 cook whose program is not the settle", () => {
+    expect(decodeSettleCall(cookV12(SWAP_JUNK))).toBeNull();
+    expect(decodeSettleCall(cookV12(IMPOSTOR))).toBeNull();
+  });
+
+  it("finds a v12 settle cook by content within a mixed batch", () => {
+    const pot = ("0x" + "03".repeat(20)) as `0x${string}`;
+    const found = extractEvmSettleFromCalls([
+      { data: cookV12(SWAP_JUNK), target: ("0x" + "02".repeat(20)) as `0x${string}` },
+      { data: cookV12(SETTLE_PAYLOAD), target: pot },
+    ]);
+
+    expect(found).not.toBeNull();
+    expect(found!.target).toBe(pot);
+    expect(found!.engine).toBe(ENGINE);
   });
 });

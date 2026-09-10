@@ -23,13 +23,7 @@
 import { createHash } from "node:crypto";
 import type { Address } from "@solana/kit";
 import { compileWithRs } from "../routes/rs-compile.js";
-import {
-  EXECUTE_AND_CLOSE_DISCRIMINATOR,
-  EXECUTE_DISCRIMINATOR,
-  EXECUTE_FLAG_HAS_PIN,
-  EXECUTE_FLAG_HAS_SLICE,
-  EXECUTE_FROM_ACCOUNT_DISCRIMINATOR,
-} from "./engine.js";
+import { EXECUTE_DISCRIMINATOR, EXECUTE_FROM_ACCOUNT_DISCRIMINATOR } from "./engine.js";
 import { SVM_MAX_ESCROWS, svmSettleRefs, svmSettleSource } from "./recipes/index.js";
 
 // The intent-level surface (unwrap the Portal envelope + extract from an intent) is re-exported here so
@@ -179,72 +173,6 @@ export function verifySvmSettleProgram(
 // ride the calldata, so the only way to establish them is the recompile — `verifySvmSettleExecution`,
 // which adds the bytecode genuineness check and the pin↔bytecode tie.
 
-/** The execute payload grammar: `[disc:8][flags:1][pin:32 iff 0x01][slice:8 iff 0x02][args…]`. */
-export interface ParsedExecutePayload {
-  /** Which staged execute instruction the discriminator names. */
-  instruction: "execute_from_account" | "execute_and_close";
-  /** The 32-byte content-hash pin, iff the flags byte set HAS_PIN. */
-  pin?: Uint8Array;
-  /** The explicit foreign-path bytecode slice, iff the flags byte set HAS_SLICE. */
-  slice?: { offset: number; len: number };
-  /** The args tail — everything after the flags/pin/slice header. */
-  args: Uint8Array;
-}
-
-/**
- * Parses the shared `execute_from_account` / `execute_and_close` instruction data into its
- * `[disc][flags][pin?][slice?][args]` parts. Throws on a non-staged-execute discriminator (an inline
- * `execute` payload carries BYTECODE, not an args tail — a different grammar), a missing flags byte, or
- * a header that runs past the end of the buffer. The exact inverse of `encodeExecutePayload`
- * (instructions.ts).
- */
-export function parseExecutePayload(instructionData: Uint8Array): ParsedExecutePayload {
-  if (!(instructionData instanceof Uint8Array))
-    throw new Error("instructionData must be a Uint8Array");
-  if (instructionData.length < 8)
-    throw new Error(
-      `instructionData is ${instructionData.length} bytes — too short for an 8-byte discriminator`,
-    );
-
-  const disc = instructionData.subarray(0, 8);
-  let instruction: "execute_from_account" | "execute_and_close";
-  if (bytesEqual(disc, EXECUTE_FROM_ACCOUNT_DISCRIMINATOR)) instruction = "execute_from_account";
-  else if (bytesEqual(disc, EXECUTE_AND_CLOSE_DISCRIMINATOR)) instruction = "execute_and_close";
-  else if (bytesEqual(disc, EXECUTE_DISCRIMINATOR)) {
-    throw new Error(
-      "this is an inline `execute` instruction — its payload is bytecode, not a staged args tail; pass the execute_from_account / execute_and_close data",
-    );
-  } else {
-    throw new Error("instructionData does not begin with a Sauce staged-execute discriminator");
-  }
-
-  if (instructionData.length < 9)
-    throw new Error("instructionData is missing the required flags byte");
-  const flags = instructionData[8]!;
-  let offset = 9;
-
-  let pin: Uint8Array | undefined;
-  if (flags & EXECUTE_FLAG_HAS_PIN) {
-    if (instructionData.length < offset + 32)
-      throw new Error("HAS_PIN flag set but the 32-byte pin runs past the end of instructionData");
-    pin = instructionData.subarray(offset, offset + 32);
-    offset += 32;
-  }
-
-  let slice: { offset: number; len: number } | undefined;
-  if (flags & EXECUTE_FLAG_HAS_SLICE) {
-    if (instructionData.length < offset + 8)
-      throw new Error(
-        "HAS_SLICE flag set but the 8-byte slice runs past the end of instructionData",
-      );
-    const view = new DataView(instructionData.buffer, instructionData.byteOffset + offset, 8);
-    slice = { offset: view.getUint32(0, true), len: view.getUint32(4, true) };
-    offset += 8;
-  }
-
-  return { instruction, pin, slice, args: instructionData.subarray(offset) };
-}
-
 /** An account entry as either the base58 address itself or an object carrying it (the recipes split
  *  response uses `{ pubkey, isSigner, isWritable, ref }`; a resolved instruction meta uses `{ address }`). */
 export type SvmSettleAccountLike = string | { address?: string; pubkey?: string; ref?: string };
@@ -274,12 +202,32 @@ function classifyAccountList(length: number): { escrowCount: number; hasBuffer: 
   return null;
 }
 
+/**
+ * Names the engine instruction from its discriminator alone.
+ *
+ * Replaces a parser for the `[disc][flags][pin?][slice?]` grammar the pre-release engine took here;
+ * the released engine has no payload beyond the discriminator, so there is nothing left to parse.
+ */
+function classifyEngineInstruction(data: Uint8Array): "execute" | "execute_from_account" {
+  if (!(data instanceof Uint8Array)) throw new Error("instructionData must be a Uint8Array");
+  if (data.length < 8)
+    throw new Error(
+      `instructionData is ${data.length} bytes — too short for an 8-byte discriminator`,
+    );
+
+  const disc = data.subarray(0, 8);
+  if (bytesEqual(disc, EXECUTE_FROM_ACCOUNT_DISCRIMINATOR)) return "execute_from_account";
+  if (bytesEqual(disc, EXECUTE_DISCRIMINATOR)) return "execute";
+
+  throw new Error("instructionData does not begin with a Sauce engine execute discriminator");
+}
+
 export interface SvmSettleExecutionInput {
   /**
-   * The full `execute_from_account` / `execute_and_close` instruction data
-   * (`[disc][flags][pin?][slice?]`, and no args tail — a settle's params are defines folded into the
-   * bytecode). From the recipes split response this is base64-decode(`execution.instructionData`);
-   * from an executed instruction it is the raw ix data.
+   * The instruction data. On the released engine that is the 8-byte discriminator and nothing else:
+   * `executeFromAccount` reads account 0's data verbatim, and a settle's params are defines folded
+   * into the bytecode. From the recipes split response this is
+   * base64-decode(`execution.instructionData`); from an executed instruction it is the raw ix data.
    */
   instructionData: Uint8Array;
   /**
@@ -292,12 +240,17 @@ export interface SvmSettleExecutionInput {
 }
 
 export interface DecodedSvmSettleExecution {
-  /** Which staged execute instruction the calldata is. */
-  instruction: "execute_from_account" | "execute_and_close";
-  /** The 32-byte content-hash pin the calldata carried, if any (commits to the staged bytecode). */
-  pin?: Uint8Array;
-  /** The explicit bytecode slice the calldata carried, if any (foreign path only). */
-  slice?: { offset: number; len: number };
+  /**
+   * Which engine instruction the calldata is.
+   *
+   * `execute_and_close` is gone with the pre-release engine, and so are the `pin` and `slice` this
+   * used to report: the released engine carries no payload here, so there is nothing on this wire
+   * committing to the staged bytecode. **A caller that wants that commitment must read the
+   * KITCHEN's `cook_from_account`**, whose `pin` refuses unless the staged bytes hash to it — see
+   * `kitchen.ts`. Reporting a pin from here would now always be `undefined`, which reads as "no pin
+   * was given" rather than "this wire cannot carry one".
+   */
+  instruction: "execute" | "execute_from_account";
   /** The escrow count inferred from the account-list length. */
   escrowCount: number;
   /** The canonical ref order for `escrowCount` — `svmSettleRefs(escrowCount)`. */
@@ -337,7 +290,7 @@ export interface DecodedSvmSettleExecution {
  * SDK's own recompiled canonical settle bytecode.
  *
  * The EVM half splits the same two questions the same way — `decodeSettleProgram` is structural and
- * accepts any 391-byte program, `validateSettleProgram` is the genuineness proof — but reaches the
+ * accepts any 370-byte program, `validateSettleProgram` is the genuineness proof — but reaches the
  * second one WITHOUT a compiler: an EVM settle's params ride the payload after the program, so the
  * program is a constant and one `keccak256` settles it. Here they are `defines` folded into the
  * bytecode, which is why this side recompiles.
@@ -345,7 +298,7 @@ export interface DecodedSvmSettleExecution {
 export function decodeSvmSettleExecution(
   input: SvmSettleExecutionInput,
 ): DecodedSvmSettleExecution {
-  const { instruction, pin, slice } = parseExecutePayload(input.instructionData);
+  const instruction = classifyEngineInstruction(input.instructionData);
 
   const shape = classifyAccountList(input.accounts.length);
   if (shape === null) {
@@ -372,8 +325,6 @@ export function decodeSvmSettleExecution(
 
   return {
     instruction,
-    pin,
-    slice,
     escrowCount,
     refs,
     accounts,
@@ -394,6 +345,19 @@ export interface SvmSettleExecutionVerifyInput
    * recompiles the canonical settle itself and proves genuineness via the calldata pin (see below).
    */
   bytecode?: Uint8Array;
+  /**
+   * OPTIONAL. The 32-byte content pin committing to the staged bytes.
+   *
+   * **Supplied by the caller, not read off this instruction.** It used to be decoded from the
+   * engine's own calldata; the released engine's `executeFromAccount` carries no payload, so the
+   * commitment lives one layer up — in the KITCHEN's `cook_from_account`, whose `pin` refuses unless
+   * the staged bytes hash to it. Read it from that instruction and pass it here.
+   *
+   * Without it, supplying `bytecode` proves only that YOUR copy is canonical: nothing ties those
+   * bytes to the code account this execution actually runs, and the verdict says so rather than
+   * calling the execution genuine.
+   */
+  pin?: Uint8Array;
 }
 
 /** How genuineness was established. `bytecode`: the supplied bytes byte-match the canonical settle AND
@@ -447,7 +411,10 @@ export function verifySvmSettleExecution(
 ): SvmSettleExecutionVerification {
   const decoded = decodeSvmSettleExecution(input);
   const canonical = compileCanonicalSettle(decoded.escrowCount, input);
-  const pin = decoded.pin;
+  // The CALLER's pin, from the kitchen's cook_from_account — this instruction has no payload to
+  // carry one. Everything downstream is unchanged: the pin is still what ties the bytes verified
+  // here to the bytes that run, it just arrives from the layer that actually commits to them.
+  const pin = input.pin;
 
   const pinMatchesCanonical = pin === undefined ? null : bytesEqual(sha256(canonical), pin);
   const bytecodeMatchesCanonical =

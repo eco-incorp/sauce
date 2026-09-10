@@ -215,6 +215,15 @@ export interface SvmIntentCallLike {
   /** The callee, as a 32-byte universal address — `0x`-hex on the wire (what `buildSauceSvmCall` emits),
    *  raw bytes, or a base58 `Address`. NOT `BytesInput`: see `UniversalAddressInput`. */
   target?: UniversalAddressInput;
+  /**
+   * The content pin committing to the bytes THIS call executes, if the caller has it — read off the
+   * kitchen's `cook_from_account` for this call, since the engine instruction carries no payload.
+   *
+   * Per call, deliberately. A batch can hold a settle-shaped decoy that differs from the genuine
+   * settle only in its pin, so one pin shared across the scan would make the two indistinguishable
+   * and let the decoy be reported as genuine.
+   */
+  pin?: BytesInput;
 }
 
 /** An intent, duck-typed to just the SVM route calls this reads. */
@@ -305,6 +314,7 @@ export function extractSvmSettleFromCalls(
     let verified: SvmSettleExecutionVerification;
     try {
       verified = verifySvmSettleExecution({
+        pin: calls[i]!.pin !== undefined ? toBytes(calls[i]!.pin!, "pin") : undefined,
         instructionData: envelope.instructionData,
         accounts: envelope.accounts,
         bytecode,

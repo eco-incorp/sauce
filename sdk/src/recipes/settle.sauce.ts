@@ -11,10 +11,10 @@ import { IERC20 } from "./artifacts/IERC20.json";
 // program, so changing it rotates SETTLE_WIRE.PROGRAM_HASH — see sdk/src/verify/wire.ts).
 //
 // COMPOSING IT AFTER ANOTHER PROGRAM (the common case, and the reason the floor exists): a
-// V12Pot.cook executes ONLY ingredients[0] and silently ignores the rest, so ONE cook cannot run
+// V12Pot.cook runs exactly ONE program, so ONE cook cannot run
 // "do the thing, then sweep". That composition is TWO TOP-LEVEL cook() calls joined by an
 // owner-authorised multicall in ONE transaction:
-//   multicall → [ Pot.cook([producerProgram]) , Pot.cook([sweepProgram]) ]
+//   multicall → [ Pot.cook(engine, producerProgram) , Pot.cook(engine, sweepProgram) ]
 // The multicall contract MUST be this Pot's `owner` (V12Pot.cook is
 // `msg.sender == owner || msg.sender == address(this)`-gated — there is no third path) and MUST
 // propagate a reverting call's revert data rather than swallow it (a non-reverting/tryAggregate
@@ -35,7 +35,7 @@ import { IERC20 } from "./artifacts/IERC20.json";
 // THE COMPILED PROGRAM IS A FUNCTION OF THIS FILE AND THE COMPILER PIN ONLY — never of the
 // arguments. `main`'s three parameters below are RUNTIME ENTRY ARGUMENTS: the caller appends them
 // to the compiled program as 32-byte words and the program reads them back through CALLDATA, so no
-// value a caller picks is visible to the compiler at all. One 391-byte blob therefore serves every
+// value a caller picks is visible to the compiler at all. One 370-byte blob therefore serves every
 // token list, floor and recipient, which is what lets `sdk/src/verify/` pin a single
 // `keccak256(program)` and still report per-payload params.
 //

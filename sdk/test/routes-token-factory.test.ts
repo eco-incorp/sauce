@@ -11,6 +11,7 @@ import { openRoute } from "../src/routes/index.js";
 import type { IntentOptions } from "../src/routes/index.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const SPENDER = "0x2626664c2603336E57B271c5C0b26F421741e481" as const;
@@ -20,6 +21,7 @@ const APPROVE_SELECTOR = "095ea7b3";
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",
@@ -150,7 +152,7 @@ describe("Token(addr) through openRoute", () => {
   it("an svm destination rejects Token(addr) with the EVM-only error", () => {
     expect(() =>
       openRoute("solana", `Token(${USDC}).approve(${BigInt(SPENDER)}n, 5n);`, {
-        execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         deadline: 2000n,
         portal: PORTAL,
         source: "base",

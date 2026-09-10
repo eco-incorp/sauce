@@ -28,11 +28,15 @@ const loadArtifactAbi = (name: string): Abi =>
 
 /** Every function whose signature the exported viem ABI is contracted to mirror, per artifact. */
 const CONTRACTS: { artifact: string; exportedAbi: Abi; fns: string[] }[] = [
-  { artifact: "V12Pot", exportedAbi: v12PotAbi, fns: ["cook", "owner", "router", "v12Runtime"] },
+  {
+    artifact: "V12Pot",
+    exportedAbi: v12PotAbi,
+    fns: ["cook", "owner", "router", "inFlightEngine"],
+  },
   {
     artifact: "V12Kitchen",
     exportedAbi: v12KitchenAbi,
-    fns: ["deployPot", "predictPot", "router", "v12Runtime"],
+    fns: ["deployPot", "predictPot", "router"],
   },
 ];
 
@@ -72,9 +76,11 @@ describe("evm/engine load-bearing shapes", () => {
     expect(jsonDeployPot.inputs.map((i) => i.type)).toEqual(["address", "bytes32"]);
   });
 
-  it("encodeCook calldata selector equals toFunctionSelector of cook(bytes[])", () => {
-    const calldata = v12Pot.encodeCook(["0xdeadbeef"]);
-    expect(selectorOf(calldata)).toBe(toFunctionSelector("cook(bytes[])"));
+  // `cook` names the engine per call since v12 #432 — it was `cook(bytes[] ingredients)`, whose
+  // array only ever carried one element. This selector is what the release ABI moving would break.
+  it("encodeCook calldata selector equals toFunctionSelector of cook(address,bytes)", () => {
+    const calldata = v12Pot.encodeCook("0x1111111111111111111111111111111111111111", "0xdeadbeef");
+    expect(selectorOf(calldata)).toBe(toFunctionSelector("cook(address,bytes)"));
   });
 
   it("encodeDeployPot uses (address,bytes32) — its selector equals deployPot(address,bytes32)", () => {

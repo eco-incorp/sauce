@@ -5,16 +5,15 @@
 //   1. The v12 EVM runtime — from the eco-incorp/v12 GitHub RELEASE, pinned to an immutable tag
 //      and checked against a digest committed here. No Huff toolchain, no submodule fetch, no
 //      compile step: the release publishes the exact bytes.
-//   2. The 8 Solidity forge artifacts + the deploy record — from the `sauce` git dep, pinned to an
-//      immutable COMMIT (not a branch) and declared in the ROOT package.json, so it resolves at
-//      `<repo>/node_modules/sauce`. It used to be a devDep of `compiler/`, which made `rm -rf
-//      compiler/` break the sdk build and ~13 test suites. The releases cannot replace it: they
-//      publish only `Router`/`IRouter`/`Pot`/`Kitchen`, and `IERC20`, `IUniswapV3Pool`, `IStateView`
-//      and `SauceRouter` appear in no release asset.
+//   2. The contract ABIs — four from the same release's `abis.json` (`Router`/`IRouter`/`Pot`/
+//      `Kitchen`, the contracts v12 owns), plus `IERC20` declared below (the ERC-20 standard is
+//      OpenZeppelin's, never v12's) and `IUniswapV3Pool` read from `@uniswap/v3-core`. `SauceRouter`
+//      and `IStateView` are NOT produced: they came from the engine repo's Solidity tree, which no
+//      release ships, so anything that wanted them had to stop (see dev-tools/scripts/deploy.ts).
 //
 // The artifacts land in sdk/dist/artifacts (shipped to git-URL/tarball consumers) and sdk/src/artifacts
 // (gitignored, read by the drift tests). Neither is committed; CI re-runs this script and asserts all
-// nine files exist, so a broken generation fails there instead of shipping an empty dir.
+// seven files exist, so a broken generation fails there instead of shipping an empty dir.
 //
 // Why the v12 runtime comes from the release rather than from the pin. The engine dropped its
 // committed snapshot (`chore(v12): compile the runtime at deploy time` — a second source of truth
@@ -31,21 +30,12 @@
 // `NAME=<path>` lines — how CI gets SAUCE_RUST_ENGINE_SO / the runtime creation code.
 // NOTE: a `rm -rf sdk/dist` clean build drops these (tsc emits no JSON) — re-run this after such a
 // build. The normal `tsc` build leaves them in place.
-import {
-  existsSync,
-  mkdirSync,
-  copyFileSync,
-  readFileSync,
-  writeFileSync,
-  renameSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync } from "node:fs";
 import { execFileSync, execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { keccak256, toBytes } from "viem";
-import { generateEngineAbi } from "./gen-engine-abi.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const SDK_DIR = resolve(SCRIPT_DIR, "..");
@@ -54,28 +44,84 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 // ---------------------------------------------------------------------------
 // Release-sourced v12 engine assets.
 //
-// IMMUTABLE TAGS. A git tag is movable on GitHub, so the tag alone is not a pin — every asset is
-// checked against a digest committed HERE, not only against the manifest downloaded beside it. Both
-// releases are built from sauce fcedc167adf762347986feba6e53ed48800a6bfd, the commit the published
-// `@eco-incorp/sauce-compiler` 0.5.0 (`compiler-v0.5.0`) is cut from: compiler and engines are one
-// lineage by construction. To bump: change the tag, run this script, and paste the digest it reports.
-const RELEASE_COMMIT = "fcedc167adf762347986feba6e53ed48800a6bfd";
+// PINNED BY TAG + DIGEST. A git tag is movable on GitHub, so the tag alone is not a pin — every
+// asset is checked against a digest committed HERE, not only against the manifest downloaded beside
+// it. That digest is the whole guarantee: bytes that match it ARE the pinned artifact, whichever
+// commit produced them.
+//
+// There is deliberately no commit pin. v12 releases its components INDEPENDENTLY — `v12-evm-v0.4.0`
+// is built from `dbdda3ff` and `v12-svm-v0.5.0` from `bb65620c` — so a single shared commit is not
+// merely redundant with the digest, it is unsatisfiable. Requiring one made a routine per-component
+// bump fail as "the tag moved".
+//
+// To bump: change the tag, run this script, and paste the digest it reports.
 
 const V12_EVM = {
-  tag: "v12-evm-v0.3.0",
+  tag: "v12-evm-v0.4.0",
   asset: "runtime.creation.hex",
   // keccak256 of the creation code, cross-checked against the release manifest's `creationCodeKeccak`.
-  digest: "0x1102d0061f378fe2a8e3f6644c37a2050c351224a382d3f18be6253d68831ff2",
+  digest: "0x1cc79965657f4a4beb8a64a8d1a0f17e6844c16b24cca7f45e27e6a61de4f52e",
   manifestKey: "creationCodeKeccak",
   // The manifest hashes the DECODED creation bytecode, not the hex file's bytes.
   hash: (buf) => keccak256(toBytes(buf.toString("utf8").trim())),
 };
 
+// The engine is now built PER CLUSTER — `CHAIN_ID` is compiled in, because Solana exposes no chain
+// identifier a program can read — so there is no longer one `engine.so`. Devnet is what the test
+// harnesses load; a mainnet consumer takes `engine-mainnet.so` from the same release.
+//
+// The manifest moved with it: `soSha256` at the top level became an `artifacts` array, so the digest
+// is looked up BY ASSET NAME rather than by a fixed key.
 const V12_SVM = {
-  tag: "v12-svm-v0.4.0",
-  asset: "engine.so",
-  digest: "983ff01645885eecc55c3437339e57de270a367fe18814111be5a26c74440a54",
-  manifestKey: "soSha256",
+  tag: "v12-svm-v0.5.0",
+  asset: "engine-devnet.so",
+  digest: "5841c72fa8d78e8b57186fca57eda6e4019c9333f71a07900f214011a1503d21",
+  manifestKey: null,
+  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
+};
+
+// The four contracts v12 OWNS, as one asset. What the SDK ships under its own names is a superset:
+// `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is Uniswap's,
+// so neither appears here and neither should — see ARTIFACTS below.
+const V12_EVM_ABIS = {
+  tag: "v12-evm-v0.4.0",
+  asset: "abis.json",
+  digest: "3968eabdb54ac0dcd92946563c92c10bcd1e3edb4a4843cebeb9223138e38584",
+  manifestKey: "abis.sha256",
+  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
+};
+
+// The kitchen — the Anchor loader that stages bytecode and owns Pots. Fetched rather than vendored:
+// a released binary is already pinned by tag + digest here, so a second copy in the tree would be a
+// third thing to keep in step. `artifacts/svm/` vendors only the BETA pair, which no release ships.
+const V12_KITCHEN = {
+  tag: "v12-svm-v0.5.0",
+  asset: "kitchen.so",
+  digest: "bf14fbc3f983f13c70b825ae1451f851cc3e8040f5a5925a8e24112aa92520dd",
+  manifestKey: null,
+  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
+};
+
+// The engine's own description of its wire — discriminators, fault codes, memory limits — generated
+// from its Rust constants by the same build. It is the ground truth `engine-wire-drift.test.ts`
+// checks the SDK's released-engine constants against, so it is pinned exactly like the binary: an
+// engine whose wire moved must fail the digest here, not surprise a caller at run time.
+const V12_ENGINE_WIRE = {
+  tag: "v12-svm-v0.5.0",
+  asset: "engine-wire-devnet.json",
+  digest: "1bdb8dcda82e96fb7fca0911fdf5d28bcae8c67df1c66471f7f182e988d00fe2",
+  manifestKey: null,
+  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
+};
+
+// The kitchen's Anchor IDL — discriminators, PDA seeds, and account layouts. `svm/kitchen.ts`
+// transcribes these by hand (Anchor emits no TypeScript the SDK can vendor), which is precisely the
+// hand-copying that let BYTECODE_FORMAT_EPOCH rot. Pinned so the drift test can compare against it.
+const V12_KITCHEN_IDL = {
+  tag: "v12-svm-v0.5.0",
+  asset: "kitchen-idl.json",
+  digest: "9c70d7cfd803a3af39b5cacac73bf3102ad4e83beddc010ea7e02a269d6c24a8",
+  manifestKey: null,
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
 
@@ -196,125 +242,191 @@ function fetchReleaseAsset({ tag, asset, digest, manifestKey, hash }) {
   const manifest = resolve(dir, "manifest.json");
   if (!existsSync(manifest)) download(tag, "manifest.json", manifest);
   const record = JSON.parse(readFileSync(manifest, "utf8"));
-  const claimed = manifestKey.split(".").reduce((o, k) => o?.[k], record);
+  // `manifestKey: null` means the manifest lists its artifacts as `[{ name, sha256 }]` and the
+  // digest is found by asset name — the shape v12-svm moved to once it shipped more than one binary.
+  const claimed =
+    manifestKey === null
+      ? record.artifacts?.find((a) => a.name === asset)?.sha256
+      : manifestKey.split(".").reduce((o, k) => o?.[k], record);
   if (claimed !== digest) {
     throw new Error(
-      `${tag} manifest ${manifestKey} is ${claimed}, not the pinned ${digest} — the tag moved.`,
-    );
-  }
-  if (record.commit !== RELEASE_COMMIT) {
-    throw new Error(
-      `${tag} was built from ${record.commit}, not the pinned ${RELEASE_COMMIT} — the tag moved.`,
+      `${tag} manifest ${manifestKey ?? `artifacts[${asset}]`} is ${claimed}, not the pinned ` +
+        `${digest} — the tag moved.`,
     );
   }
 
   return dest;
 }
 
-// ---------------------------------------------------------------------------
-// The `sauce` git dep. Declared in the ROOT package.json (see the header), so `<repo>/node_modules/sauce`
-// is the only place it can be. The old candidate list also looked in `compiler/node_modules/sauce`,
-// which is what tied the sdk build to `compiler/` existing.
-const SAUCE = resolve(REPO_ROOT, "node_modules", "sauce");
+// SDK artifact name -> where its ABI comes from.
+//
+// The names on the LEFT are the SDK's own and are shipped to consumers, so they do not move; v12
+// renamed three of the four (`ISauceRouter` -> `IRouter`, `V12Pot` -> `Pot`, `V12Kitchen` ->
+// `Kitchen`; `Router` is unchanged) and that is a remap here rather than a rename downstream.
+//
+// Two artifacts left the set entirely. `SauceRouter` was the v1 router and no release publishes it;
+// `IStateView` is Uniswap V4's. Nothing in `sdk/src` reads either — but `dev-tools` DID read
+// `SauceRouter.json` for its local deploy flow, which is blocked until that flow moves to the
+// Pot/Kitchen model (see `dev-tools/scripts/deploy.ts`).
+const RELEASE_ABIS = {
+  Router: "Router",
+  ISauceRouter: "IRouter",
+  V12Pot: "Pot",
+  V12Kitchen: "Kitchen",
+};
 
 /**
- * `engine/out` is forge BUILD OUTPUT — the dep arrives without it, and pnpm does not recurse git
- * submodules, so the OpenZeppelin sources `engine/src` imports are missing too. Fetch them at the
- * SHA the engine's own submodule pins and build. Previously done by `compiler`'s postinstall
- * (integration-test/fetch-engine-libs.js), which is the other half of what made the sdk build depend
- * on `compiler/`.
+ * ERC-20, declared here rather than fetched.
  *
- * Non-fatal without Foundry: the caller reports the missing artifacts, and SYNC_OPTIONAL_FORGE=1
- * downgrades that to a warning for local dev.
+ * It was only ever in the engine's forge output because the engine happens to compile
+ * OpenZeppelin's copy; the interface is the frozen standard and is not v12's to publish, so it
+ * appears in no release asset. OpenZeppelin's npm package ships Solidity sources, not ABIs, so
+ * there is nothing to read from `node_modules` either. These are the six functions the SDK's
+ * generated SauceScript calls — byte-identical to the ABI the forge artifact carried.
  */
-const OPENZEPPELIN_SHA = "33abe27ddb835a49d4b0ecc4717eeff03535a4cd";
+const IERC20_ABI = [
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "totalSupply",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "transfer",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "transferFrom",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+];
 
-function prepareEngineBuild() {
-  const engine = resolve(SAUCE, "engine");
-  if (existsSync(resolve(engine, "out", "Router.sol", "Router.json"))) return;
-
-  const oz = resolve(engine, "lib", "openzeppelin-contracts");
-  if (!existsSync(resolve(oz, "contracts"))) {
-    console.log(
-      `[sync-engine-artifacts] fetching engine lib openzeppelin-contracts@${OPENZEPPELIN_SHA.slice(0, 7)}`,
-    );
-    mkdirSync(oz, { recursive: true });
-    execSync(`git init -q ${JSON.stringify(oz)}`, { stdio: "inherit" });
-    execSync(
-      `git -C ${JSON.stringify(oz)} fetch -q --depth 1 https://github.com/OpenZeppelin/openzeppelin-contracts.git ${OPENZEPPELIN_SHA}`,
-      { stdio: "inherit" },
-    );
-    execSync(`git -C ${JSON.stringify(oz)} checkout -q FETCH_HEAD`, { stdio: "inherit" });
-  }
-
-  if (!onPath("forge")) {
-    console.warn(
-      "[sync-engine-artifacts] forge not on PATH — cannot build the engine (install Foundry).",
-    );
-
-    return;
-  }
-
-  // --skip test --skip script keeps the build off forge-std / huff-neo, which are submodules of the
-  // harness rather than of the contracts this reads.
-  console.log("[sync-engine-artifacts] forge build engine/src …");
-  execSync("forge build --skip test --skip script", { cwd: engine, stdio: "inherit" });
-}
-
-if (!existsSync(SAUCE)) {
-  console.error(
-    "[sync-engine-artifacts] the `sauce` dep is not installed at node_modules/sauce. Run `pnpm install` " +
-      "first (it is a devDependency of the ROOT package.json).",
-  );
-  process.exit(1);
-}
-
-prepareEngineBuild();
-
-// name -> path within the sauce dep. Order/set matches the shipped sdk/dist/artifacts exactly.
-const SOURCES = {
-  Router: "engine/out/Router.sol/Router.json",
-  SauceRouter: "engine/out/SauceRouter.sol/SauceRouter.json",
-  ISauceRouter: "engine/out/ISauceRouter.sol/ISauceRouter.json",
-  V12Pot: "engine/out/V12Pot.sol/V12Pot.json",
-  V12Kitchen: "engine/out/V12Kitchen.sol/V12Kitchen.json",
-  IERC20: "engine/out/IERC20.sol/IERC20.json",
-  IUniswapV3Pool: "engine/out/IUniswapV3Pool.sol/IUniswapV3Pool.json",
-  IStateView: "engine/out/IUniswapV4.sol/IStateView.json",
-};
+/** Uniswap's, from its own npm package — likewise never v12's to publish. */
+const IUNISWAP_V3_POOL = resolve(
+  REPO_ROOT,
+  "node_modules",
+  "@uniswap",
+  "v3-core",
+  "artifacts",
+  "contracts",
+  "interfaces",
+  "IUniswapV3Pool.sol",
+  "IUniswapV3Pool.json",
+);
 
 // Committed + shipped location first; the gitignored src copy is kept coherent for local dev (the
 // drift tests read it).
 const DESTS = [resolve(SDK_DIR, "dist", "artifacts"), resolve(SDK_DIR, "src", "artifacts")];
 for (const d of DESTS) mkdirSync(d, { recursive: true });
 
-const missing = [];
-for (const [name, rel] of Object.entries(SOURCES)) {
-  const src = resolve(SAUCE, rel);
+const write = (name, artifact) => {
+  const json = JSON.stringify(artifact);
+  for (const dest of DESTS) writeFileSync(resolve(dest, `${name}.json`), json);
+};
 
-  if (!existsSync(src)) {
-    missing.push(`${name} (${rel})`);
-    continue;
-  }
-
-  for (const dest of DESTS) copyFileSync(src, resolve(dest, `${name}.json`));
-}
-
-if (missing.length) {
-  const message =
-    `[sync-engine-artifacts] missing from the pinned engine build: ${missing.join(", ")}. ` +
-    "Ensure Foundry is installed so the engine forge build can run.";
-  // Wired into the sdk build, so a local build without Foundry must not hard-fail: SYNC_OPTIONAL_FORGE=1
-  // downgrades to a warning (dist/artifacts is then incomplete locally). CI/publish install Foundry, so
-  // they still produce every artifact; the existence check fails there on any gap.
-  if (process.env.SYNC_OPTIONAL_FORGE === "1") {
-    console.warn(
-      `${message} (SYNC_OPTIONAL_FORGE=1 → continuing; dist/artifacts will be incomplete)`,
+// The release-derived ABIs, with the same latitude V12RuntimeBytecode gets below: a developer who is
+// offline or unauthenticated keeps whatever a previous sync left and gets a warning. It is only
+// latitude when there IS something to keep — with nothing on disk this stops, because continuing
+// would write a partial artifact set, which is how 0.7.0 shipped broken. Either way CI is unaffected:
+// it has credentials, and asserts all seven files afterwards.
+let releaseAbis;
+let fetched = false;
+try {
+  const parsed = JSON.parse(readFileSync(fetchReleaseAsset(V12_EVM_ABIS), "utf8"));
+  // A parse that yields no `.contracts` is a SCHEMA CHANGE, not a fetch failure, and the two must
+  // not share a sentinel: `undefined` from a successful parse would otherwise take the
+  // keep-what-is-on-disk path below and skip all four ABIs behind a success log.
+  if (parsed?.contracts === undefined) {
+    console.error(
+      `[sync-engine-artifacts] ${V12_EVM_ABIS.tag}/abis.json has no 'contracts' object — it carries: ` +
+        `${Object.keys(parsed ?? {}).join(", ") || "(nothing)"}. The release schema changed; this ` +
+        "script needs updating rather than working around it.",
     );
-  } else {
-    console.error(message);
     process.exit(1);
   }
+  releaseAbis = parsed.contracts;
+  fetched = true;
+} catch (e) {
+  const present = Object.keys(RELEASE_ABIS).every((name) =>
+    DESTS.every((d) => existsSync(resolve(d, `${name}.json`))),
+  );
+  if (!present) {
+    console.error(`[sync-engine-artifacts] ${e.message}`);
+    process.exit(1);
+  }
+  console.warn(
+    `[sync-engine-artifacts] ${e.message} — kept the ${Object.keys(RELEASE_ABIS).length} ABIs ` +
+      "already on disk.",
+  );
+}
+
+if (fetched) {
+  for (const [name, contract] of Object.entries(RELEASE_ABIS)) {
+    const found = releaseAbis[contract];
+    if (found === undefined) {
+      console.error(
+        `[sync-engine-artifacts] ${V12_EVM_ABIS.tag}/abis.json has no contract '${contract}' (for ` +
+          `${name}.json). It carries: ${Object.keys(releaseAbis).join(", ")}.`,
+      );
+      process.exit(1);
+    }
+    write(name, { abi: found.abi, bytecode: found.bytecode });
+  }
+}
+
+write("IERC20", { abi: IERC20_ABI, bytecode: { object: "0x" } });
+
+if (!existsSync(IUNISWAP_V3_POOL)) {
+  console.error(
+    `[sync-engine-artifacts] ${IUNISWAP_V3_POOL} is missing — run \`pnpm install\` (@uniswap/v3-core ` +
+      "is a devDependency of the ROOT package.json).",
+  );
+  process.exit(1);
+}
+{
+  const pool = JSON.parse(readFileSync(IUNISWAP_V3_POOL, "utf8"));
+  write("IUniswapV3Pool", { abi: pool.abi, bytecode: { object: "0x" } });
 }
 
 // ---------------------------------------------------------------------------
@@ -344,103 +456,24 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// Deployed-address record -> a typed TS module.
+// The deployment record is NOT generated here any more.
 //
-// The engine records where its stack actually lives in `deployments/v12.json` (written by its own
-// dev-tools/scripts/deploy-v12.ts). Without this, the package shipped ABIs and runtime creation code
-// but no way to discover the ADDRESSES of the deployed router/kitchen/runtime, or the SVM engine's
-// program id — consumers had to hardcode them out of band. `createSauceSvmClient` in particular takes
-// a required `programId` with no default.
+// It used to come from the git dep's `deployments/v12.json`. That dep is gone, and the release
+// lineage does not replace it: `v12-svm-v0.5.0` and `v12-evm-v0.4.0` carry no `deployment-*.json`
+// asset — their predecessors did, and the deploy job that uploads one has not run for these
+// versions. So `src/deployments/v12.generated.ts` is committed source for now, hand-updated when a
+// deploy lands, and CI no longer diffs it against a regeneration.
 //
-// Generated as TypeScript rather than copied as JSON on purpose: a runtime JSON import needs ESM
-// import attributes (`with { type: 'json' }`) to work in Node, which is a portability trap for
-// consumers. Emitting literals sidesteps it and keeps the values typed and tree-shakeable.
-//
-// Generated, not hand-written, so it cannot drift from the pinned engine across a repin. CI re-runs
-// this and fails on drift.
-const DEPLOYMENTS_SRC = resolve(SAUCE, "deployments", "v12.json");
-const GENERATED = resolve(SDK_DIR, "src", "deployments", "v12.generated.ts");
-
-if (!existsSync(DEPLOYMENTS_SRC)) {
-  console.error(
-    "[sync-engine-artifacts] deployments/v12.json missing from the pinned engine. Pin a commit that " +
-      "records a deploy; the v12 release lineage carries no deployments/ directory.",
-  );
-  process.exit(1);
-}
-
-const dep = JSON.parse(readFileSync(DEPLOYMENTS_SRC, "utf8"));
-const q = (s) => `'${String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
-// Numeric chain-id order, so regeneration is byte-stable regardless of JSON key order.
-const chainIds = Object.keys(dep.evm?.chains ?? {}).sort((a, b) => Number(a) - Number(b));
-const clusters = Object.keys(dep.svm?.clusters ?? {}).sort();
-
-const generated = `// GENERATED FILE — do not edit by hand.
-//
-// Written by sdk/scripts/sync-engine-artifacts.mjs from the pinned \`sauce\` dep's
-// deployments/v12.json (produced there by dev-tools/scripts/deploy-v12.ts). Run
-// \`pnpm --filter './sdk' sync-engine-artifacts\` after a repin; CI fails on drift.
-//
-// The EVM addresses are CREATE2-deterministic (factory + salt + initcode only),
-// so they are the SAME on every chain — hence one flat address set plus per-chain
-// liveness, rather than the same three addresses repeated per chain.
-
-/** CREATE2 salt the stack was deployed with. */
-export const V12_SALT = ${q(dep.salt)} as const;
-
-/** Which tool in the engine repo produced the underlying record. */
-export const V12_GENERATED_BY = ${q(dep.generatedBy)} as const;
-
-/** Chain-invariant EVM addresses (identical on every chain — see the note above). */
-export const V12_EVM_CONTRACTS = {
-  router: ${q(dep.evm.contracts.router)},
-  v12Runtime: ${q(dep.evm.contracts.v12Runtime)},
-  v12Kitchen: ${q(dep.evm.contracts.v12Kitchen)},
-} as const;
-
-/** Per-chain deploy outcome. \`live\` is the only field callers should gate on. */
-export const V12_EVM_CHAINS = {
-${chainIds
-  .map((id) => {
-    const c = dep.evm.chains[id];
-    const err = c.error === undefined ? "" : `, error: ${q(c.error)}`;
-    return `  ${id}: { name: ${q(c.name)}, live: ${c.live === true}, status: ${q(c.status)}${err} },`;
-  })
-  .join("\n")}
-} as const;
-
-/** The SVM engine program (non-upgradeable when \`upgradeable\` is false). */
-export const V12_SVM = {
-  programId: ${q(dep.svm.programId)},
-  upgradeable: ${dep.svm.upgradeable === true},
-  clusters: {
-${clusters.map((k) => `    ${q(k)}: { cluster: ${q(dep.svm.clusters[k].cluster)}, status: ${q(dep.svm.clusters[k].status)} },`).join("\n")}
-  },
-} as const;
-`;
-
-mkdirSync(dirname(GENERATED), { recursive: true });
-writeFileSync(GENERATED, generated);
-
-// SVM wire ABI -> a generated TS module of the wire constants (discriminators, header
-// offsets/sizes, payload flags, seed scheme). Same rationale as the deployments module above:
-// generated so it cannot drift from the pinned engine, CI git-diffs the result. OPTIONAL — older
-// pins predate svm/abi/engine-abi.json, so its absence keeps the committed copy, never fatal.
-const abiResult = generateEngineAbi();
-
-const liveCount = chainIds.filter((id) => dep.evm.chains[id].live === true).length;
+// That is a real loss: the file's own header called it generated so it could not drift from the
+// engine, and nothing enforces that today. The fix is to read `deployment-<cluster>.json` from the
+// release once the deploy job publishes one, which restores the property without restoring the dep.
 
 console.log(
-  `[sync-engine-artifacts] synced ${Object.keys(SOURCES).length} forge artifacts from ${SAUCE}`,
-);
-console.log(
-  abiResult.generated
-    ? "[sync-engine-artifacts] generated src/svm/engine-abi.generated.ts from svm/abi/engine-abi.json"
-    : "[sync-engine-artifacts] svm/abi/engine-abi.json absent from this pin — kept the committed engine-abi.generated.ts",
-);
-console.log(
-  `[sync-engine-artifacts] generated src/deployments/v12.generated.ts — ${liveCount} live of ` +
-    `${chainIds.length} EVM chains, svm programId ${dep.svm.programId}`,
+  !fetched
+    ? "[sync-engine-artifacts] wrote IERC20 (declared) and IUniswapV3Pool (@uniswap/v3-core); the " +
+        "release ABIs were kept as they were"
+    : `[sync-engine-artifacts] wrote ${Object.keys(RELEASE_ABIS).length} ABIs from ` +
+        `${V12_EVM_ABIS.tag}/abis.json, plus IERC20 (declared) and IUniswapV3Pool (@uniswap/v3-core)`,
 );
 
 // `--fetch-v12-engines`: also place the SVM engine binary in the cache, and print every cached path
@@ -449,34 +482,14 @@ console.log(
 // check, no second implementation in YAML.
 if (process.argv.includes("--fetch-v12-engines")) {
   const enginePath = fetchReleaseAsset(V12_SVM);
+  const kitchenPath = fetchReleaseAsset(V12_KITCHEN);
+  const wirePath = fetchReleaseAsset(V12_ENGINE_WIRE);
+  const kitchenIdlPath = fetchReleaseAsset(V12_KITCHEN_IDL);
   if (!runtimeCreationPath)
     throw new Error("--fetch-v12-engines: the v12 EVM runtime creation code was not fetched");
   console.log(`SAUCE_RUST_ENGINE_SO=${enginePath}`);
+  console.log(`SAUCE_KITCHEN_SO=${kitchenPath}`);
+  console.log(`SAUCE_ENGINE_WIRE_JSON=${wirePath}`);
+  console.log(`SAUCE_KITCHEN_IDL_JSON=${kitchenIdlPath}`);
   console.log(`SAUCE_V12_RUNTIME_CREATION_HEX=${runtimeCreationPath}`);
-}
-
-// `--fetch-v12-harness`: clone the two harness libs `engine-v12`'s exec-parity suite imports. The
-// v12 runtime comes from a release asset now, so nothing else fetches them -- and
-// compiler/integration-test/{v12-execution,v12-solidity-parity}.test.ts `describe.skip` when they
-// are absent, which is 63 tests reading as green. Their versions do not affect any bytecode: they
-// are the forge Script harness, not the compiler.
-if (process.argv.includes("--fetch-v12-harness")) {
-  const engineV12 = resolve(SAUCE, "engine-v12");
-  if (!existsSync(engineV12)) {
-    throw new Error(`--fetch-v12-harness: ${engineV12} is absent from this pin`);
-  }
-  // Three, and the third is easy to miss: `engine-v12/lib/openzeppelin-contracts` is a DIFFERENT
-  // path from the `engine/lib/openzeppelin-contracts` the artifact sync already fetches, and the
-  // exec-parity harness imports IERC20/SafeERC20/SafeCast/Create2 from it.
-  const HARNESS_LIBS = {
-    "forge-std": "https://github.com/foundry-rs/forge-std",
-    "foundry-huff-neo": "https://github.com/cakevm/foundry-huff-neo",
-    "openzeppelin-contracts": "https://github.com/OpenZeppelin/openzeppelin-contracts",
-  };
-  for (const [name, url] of Object.entries(HARNESS_LIBS)) {
-    const dir = resolve(engineV12, "lib", name);
-    if (existsSync(dir)) continue;
-    console.log(`[sync-engine-artifacts] fetching engine-v12 harness lib: ${name}`);
-    execSync(`git clone --depth 1 -q ${url} ${JSON.stringify(dir)}`, { stdio: "inherit" });
-  }
 }

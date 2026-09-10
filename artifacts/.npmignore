@@ -1,4 +1,0 @@
-# The root .gitignore excludes artifacts/, which npm-packlist honors even against the
-# files whitelist. A present .npmignore overrides the sibling .gitignore for npm only,
-# so re-include the committed (force-added) SVM engine binary in the published tarball.
-!engine.so

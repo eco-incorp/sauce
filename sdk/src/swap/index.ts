@@ -34,10 +34,10 @@
  * that mechanism. This module never rebuilds any of that seam, only emits the SauceScript that
  * exercises it.
  *
- * **One cook = one program** (`V12Pot.cook` executes `ingredients[0]` only): a multi-hop route is
- * ONE `swapSource([legA, legB, ...])` program with N sequential `swap()` statements, not N cooks. A
+ * **One cook = one program** (`V12Pot.cook` takes exactly one): a multi-hop route is ONE
+ * `swapSource([legA, legB, ...])` program with N sequential `swap()` statements, not N cooks. A
  * swap-then-settle composition is two separate `CallInput`s — `routes.buildSauceEvmCalls({ pot,
- * cooks: [[swapBlob], [settleBlob]] })`.
+ * engine, cooks: [swapBlob, settleBlob] })`.
  *
  * ## Scope (this is a minimal first cut)
  *

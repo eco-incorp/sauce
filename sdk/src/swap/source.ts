@@ -113,9 +113,9 @@ export function swapImportLines(
 
 /**
  * A complete, compilable `function main() { ... }` program: one `ISauceRouter.swap(...)` statement
- * per spec, in the given order, inside ONE function — because `V12Pot.cook` executes only
- * `ingredients[0]` (its own doc), a multi-hop route is ONE program with N swap statements, not N
- * separate cooks. See `sdk/src/swap/index.ts` for the full compile → `routes.buildSauceEvmCall`
+ * per spec, in the given order, inside ONE function — because `V12Pot.cook` takes exactly one
+ * program (its own doc), a multi-hop route is ONE program with N swap statements, not N separate
+ * cooks. See `sdk/src/swap/index.ts` for the full compile → `routes.buildSauceEvmCall`
  * seam.
  */
 export function swapSource(

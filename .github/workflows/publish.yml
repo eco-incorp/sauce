@@ -19,8 +19,8 @@ name: Publish
 # not publishing there at all.
 #
 # Required repo secrets:
-#   ECO_INCORP_TOKEN   PAT with read on eco-incorp/v12 (for pnpm install
-#                      of the private git dep `sauce`)
+#   ECO_INCORP_TOKEN   PAT with read on eco-incorp/v12 (to download its
+#                      private RELEASE assets during the sync)
 #   NPM_TOKEN          npmjs.com automation token with publish rights on
 #                      the @eco-incorp scope
 
@@ -49,8 +49,8 @@ jobs:
         with:
           token: ${{ secrets.ECO_INCORP_TOKEN }}
 
-      # Foundry builds the pinned sauce engine (sync-engine-artifacts runs the `forge build`) so the
-      # sdk build produces sdk/dist/artifacts and `prepack` can copy from it into dev-tools/artifacts/.
+      # `anvil` is what the sdk build's engine e2e path needs; nothing here compiles contracts any
+      # more, since the ABIs arrive as a pinned release asset.
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
@@ -78,12 +78,13 @@ jobs:
           GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
         run: pnpm build
 
-      # The sdk build runs sync with SYNC_OPTIONAL_FORGE=1 (tolerant, for local dev), so a broken
-      # generation would NOT fail the build — it would ship an empty dist/artifacts (exactly how 0.7.0
-      # broke). Hard-gate publish on the artifacts + templates actually being present in the tarball dir.
+      # The sdk build's sync is tolerant by design (a local dev tree without the release assets still
+      # builds), so a broken generation would NOT fail the build — it would ship an empty
+      # dist/artifacts, exactly how 0.7.0 broke. Hard-gate publish on the artifacts + templates
+      # actually being present in the tarball dir.
       - name: Verify the tarball will ship the engine artifacts + templates
         run: |
-          for a in IERC20 ISauceRouter IStateView IUniswapV3Pool Router SauceRouter V12Kitchen V12Pot V12RuntimeBytecode; do
+          for a in IERC20 ISauceRouter IUniswapV3Pool Router V12Kitchen V12Pot V12RuntimeBytecode; do
             test -s "sdk/dist/artifacts/$a.json" || { echo "::error::build did not produce sdk/dist/artifacts/$a.json — refusing to publish (would ship broken)"; exit 1; }
           done
           test -s sdk/dist/recipes/settle.sauce.ts || { echo "::error::missing sdk/dist/recipes/settle.sauce.ts"; exit 1; }
@@ -91,7 +92,7 @@ jobs:
           # exports["./compiler"] points here. It exists only if the sdk build ran, and a missing file
           # would ship a package whose /compiler subpath cannot resolve -- the 0.7.0 failure shape.
           test -s sdk/dist/compiler.js || { echo "::error::missing sdk/dist/compiler.js — the ./compiler subpath would not resolve"; exit 1; }
-          echo "verified: 9 engine artifacts + both settle templates + the ./compiler entry point"
+          echo "verified: 7 engine artifacts + both settle templates + the ./compiler entry point"
 
       - name: Resolve version
         id: version

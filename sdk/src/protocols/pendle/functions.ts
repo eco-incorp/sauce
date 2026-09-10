@@ -35,7 +35,7 @@ function main(
       swapData: {
         swapType: 0,
         extRouter: 0x0000000000000000000000000000000000000000,
-        extCalldata: 0x00,
+        extCalldata: "",
         needScale: false
       }
     },
@@ -44,7 +44,7 @@ function main(
       epsSkipMarket: 0,
       normalFills: [],
       flashFills: [],
-      optData: 0x00
+      optData: ""
     }
   );
   return result;
@@ -88,7 +88,7 @@ function main(
       swapData: {
         swapType: 0,
         extRouter: 0x0000000000000000000000000000000000000000,
-        extCalldata: 0x00,
+        extCalldata: "",
         needScale: false
       }
     },
@@ -97,7 +97,7 @@ function main(
       epsSkipMarket: 0,
       normalFills: [],
       flashFills: [],
-      optData: 0x00
+      optData: ""
     }
   );
   return result;
@@ -141,7 +141,7 @@ function main(
       swapData: {
         swapType: 0,
         extRouter: 0x0000000000000000000000000000000000000000,
-        extCalldata: 0x00,
+        extCalldata: "",
         needScale: false
       }
     },
@@ -150,7 +150,7 @@ function main(
       epsSkipMarket: 0,
       normalFills: [],
       flashFills: [],
-      optData: 0x00
+      optData: ""
     }
   );
   return result;
@@ -182,7 +182,7 @@ function main(
       swapData: {
         swapType: 0,
         extRouter: 0x0000000000000000000000000000000000000000,
-        extCalldata: 0x00,
+        extCalldata: "",
         needScale: false
       }
     },
@@ -191,7 +191,7 @@ function main(
       epsSkipMarket: 0,
       normalFills: [],
       flashFills: [],
-      optData: 0x00
+      optData: ""
     }
   );
   return result;

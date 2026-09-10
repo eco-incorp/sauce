@@ -10,13 +10,13 @@ function main(augustusAddress: Address, fromToken: Address, toToken: Address, fr
     toAmount: toAmount,
     expectedAmount: expectedAmount,
     callees: [],
-    exchangeData: 0x00,
+    exchangeData: "",
     startIndexes: [],
     values: [],
     beneficiary: beneficiary,
     partner: 0x0000000000000000000000000000000000000000,
     feePercent: 0,
-    permit: 0x00,
+    permit: "",
     deadline: deadline,
     uuid: 0
   });

@@ -355,7 +355,7 @@ export interface RsCompileInput {
  * Compiles `input.source` and adapts the result to the seam's own `CompileResult`, so
  * `compileSauceRoute` can slot it into `CompiledSauceRoute`.
  *
- * `bytecode` is a one-element list because a cook executes `ingredients[0]`; `warnings` is always
+ * `bytecode` is a one-element list because a cook runs exactly one program; `warnings` is always
  * empty, since a real problem throws rather than being reported. The SVM account `manifest` is not
  * carried through -- nothing `compileSauceRoute` returns reads it, and an SVM caller that needs the
  * attach contract compiles through `svm/` directly.

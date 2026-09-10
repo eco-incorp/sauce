@@ -12,6 +12,7 @@ import type { IntentOptions } from "../src/routes/index.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const AMBIENT_FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "rs-ambient");
 /** The SPL Token program — any valid base58 program id serves as an SVM execution buffer here. */
@@ -20,6 +21,7 @@ const SVM_BUFFER = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" as const;
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",
@@ -68,7 +70,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     const direct = compileSauceRoute(
       requireChain("base"),
       bareBody,
-      { pot: POT },
+      { pot: POT, engine: ENGINE },
       {
         baseDirs: [AMBIENT_FIXTURE_DIR],
         // openRoute merges chainAmbient() (`@sauce/token`) with the caller's list -- match that merge
@@ -101,7 +103,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     const withoutAmbient = compileSauceRoute(
       requireChain("base"),
       "return chainId;",
-      { pot: POT },
+      { pot: POT, engine: ENGINE },
       {
         defines: {
           chainId: BigInt(requireChain("base").id),
@@ -121,7 +123,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     // the EVM assertion.
     const body = "return chainId;";
     const built = openRoute("solana", body, {
-      execution: { buffer: SVM_BUFFER, accounts: [] },
+      execution: { code: SVM_BUFFER, accounts: [] },
       deadline: 2000n,
       portal: PORTAL,
       source: "base",
@@ -135,7 +137,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     const withoutAmbient = compileSauceRoute(
       requireChain("solana"),
       body,
-      { buffer: SVM_BUFFER, accounts: [] },
+      { code: SVM_BUFFER, accounts: [] },
       {
         defines: {
           chainId: BigInt(requireChain("solana").id),

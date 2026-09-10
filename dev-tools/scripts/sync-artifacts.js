@@ -4,11 +4,9 @@
 // the published package (root package.json `files`), so this runs at `prepack` — and
 // on demand via `pnpm sync-artifacts` for local recipe runs / fork tests.
 //
-// Source: sdk/src/artifacts/, produced by sdk/scripts/sync-engine-artifacts.mjs. It used to resolve
-// the `sauce` git dep's forge output itself, with `compiler/node_modules/sauce` first in its
-// candidate list — which is what tied this script to `compiler/` existing. Reading the sdk's synced
-// copy instead leaves ONE place that knows where engine artifacts come from, and one forge build
-// rather than two resolutions of the same thing.
+// Source: sdk/src/artifacts/, produced by sdk/scripts/sync-engine-artifacts.mjs — which now takes
+// the ABIs from a pinned v12 release rather than compiling anything. Reading the sdk's synced copy
+// leaves ONE place that knows where engine artifacts come from.
 //
 // Ordering holds in both flows that matter: `pnpm build` builds the sdk (whose build runs the sync)
 // before `pnpm publish` fires `prepack`, and `pnpm --filter './sdk' sync-engine-artifacts` is the
@@ -23,9 +21,11 @@ const REPO_ROOT = resolve(DEV_TOOLS_DIR, "..");
 const ARTIFACTS_DIR = resolve(DEV_TOOLS_DIR, "artifacts");
 const SOURCE_DIR = resolve(REPO_ROOT, "sdk", "src", "artifacts");
 
-// Contracts the recipes (`import … from "./artifacts/X.json"`, quoting.ts) and the
-// deploy/fork-test flow (Router + SauceRouter, which carry deploy bytecode) read.
-const ARTIFACTS = ["IERC20", "ISauceRouter", "IUniswapV3Pool", "Router", "SauceRouter"];
+// Contracts the recipes (`import … from "./artifacts/X.json"`, quoting.ts) and the deploy/fork-test
+// flow read. `SauceRouter` is NOT among them any more: it was a v1 contract from the engine repo's
+// deleted Solidity tree, and the v12 releases publish only Router/IRouter/Pot/Kitchen, so no source
+// for it exists. `deploy.ts` and `test/e2e.test.ts` still want it — see their headers.
+const ARTIFACTS = ["IERC20", "ISauceRouter", "IUniswapV3Pool", "Router"];
 
 const missing = ARTIFACTS.filter((name) => !existsSync(resolve(SOURCE_DIR, `${name}.json`)));
 

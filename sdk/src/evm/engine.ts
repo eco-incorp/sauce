@@ -7,18 +7,27 @@
 // re-writing the ABI.
 //
 // deployPot uses the CANONICAL engine signature deployPot(address owner, bytes32 salt) — matching
-// engine/src/V12Kitchen.sol and the vendored V12Kitchen.json. (Some consumers hand-wrote a
-// salt-only form; the engine has no such variant.) Drift-guarded against src/artifacts/*.json by
-// test/evm/engine.test.ts.
+// the released Kitchen ABI. (Some consumers hand-wrote a salt-only form; the engine has no such
+// variant.) Drift-guarded against src/artifacts/*.json by test/evm/engine.test.ts — those artifacts
+// come from the v12 release, so a signature change there fails here rather than at run time.
 
 import { encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
 
-/** V12Pot — `cook()` is onlyOwner; the bytecodes are the `ingredients`. */
+/**
+ * V12Pot — `cook()` is onlyOwner.
+ *
+ * **The engine is named per cook.** A Pot holds no engine: `cook(address engine, bytes program)`
+ * takes the interpreter as an argument, and `inFlightEngine()` reports the engine of the cook
+ * currently executing — it is `address(0)` outside one. The SVM kitchen takes an `engine_program`
+ * account per call for the same reason: which interpreter runs is the caller's choice at call time.
+ *
+ * A cook runs exactly ONE program.
+ */
 export const v12PotAbi = parseAbi([
-  "function cook(bytes[] ingredients) payable returns (bytes)",
+  "function cook(address engine, bytes program) payable returns (bytes)",
+  "function inFlightEngine() view returns (address)",
   "function owner() view returns (address)",
   "function router() view returns (address)",
-  "function v12Runtime() view returns (address)",
 ]);
 
 /** V12Kitchen — CREATE2 Pot factory. `deployPot` bakes `owner` into the Pot's CREATE2 address. */
@@ -26,15 +35,20 @@ export const v12KitchenAbi = parseAbi([
   "function deployPot(address owner, bytes32 salt) returns (address pot)",
   "function predictPot(address owner, bytes32 salt) view returns (address)",
   "function router() view returns (address)",
-  "function v12Runtime() view returns (address)",
 ]);
 
 /** Ready-to-use V12Pot handle: the viem ABI plus calldata encoders for route/batch legs. */
 export const v12Pot = {
   abi: v12PotAbi,
-  /** Encode `cook(ingredients)` calldata; each ingredient is a compiled sauce bytecode blob. */
-  encodeCook: (ingredients: readonly Hex[]): Hex =>
-    encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [ingredients as Hex[]] }),
+  /**
+   * Encode `cook(engine, program)` calldata.
+   *
+   * `engine` is the interpreter this cook runs on — the Pot no longer holds one. `program` is a
+   * single compiled sauce blob, where this used to take an array whose first element was the only
+   * one ever executed.
+   */
+  encodeCook: (engine: Address, program: Hex): Hex =>
+    encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [engine, program] }),
 } as const;
 
 /** Ready-to-use V12Kitchen handle: the viem ABI plus calldata encoders. */

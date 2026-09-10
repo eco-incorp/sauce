@@ -60,7 +60,7 @@ describe("svm venue globals: coexistence with .route", () => {
     const built = solana
       .route("function main() { return 1n; }", {
         execution: {
-          buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
           accounts: [],
         },
         deadline: 2000n,

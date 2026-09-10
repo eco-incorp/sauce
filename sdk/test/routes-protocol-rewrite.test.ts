@@ -18,11 +18,13 @@ const BASE_AAVE_POOL = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5";
 const ETHEREUM_AAVE_POOL = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 
 function evmOptions() {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base" as const,
@@ -257,7 +259,7 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
   it("an svm destination throws via compileSauceRoute -- every starter-set descriptor is EVM-only, so it fails closed on 'not deployed' before an accessor site could ever resolve", () => {
     expect(() =>
       openRoute("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
-        execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         deadline: 2000n,
         portal: PORTAL,
         source: "base",
@@ -271,7 +273,7 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
   it("accessors: false makes an svm destination unaffected by the rewrite entirely (falls through to the compiler's own error)", () => {
     expect(() =>
       openRoute("solana", `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`, {
-        execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         deadline: 2000n,
         portal: PORTAL,
         source: "base",

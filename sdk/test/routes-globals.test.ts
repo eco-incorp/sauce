@@ -20,6 +20,7 @@ const CHAIN_PLUS_CHAIN_PLUS_TOKEN = canonicalChains.length + 2;
 const CHAIN_PLUS_TOKEN = canonicalChains.length + 1;
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x3333333333333333333333333333333333333333" as const;
 const CREATOR = "0x5555555555555555555555555555555555555555" as const;
 const PROVER = "0x6666666666666666666666666666666666666666" as const;
@@ -27,6 +28,7 @@ const PROVER = "0x6666666666666666666666666666666666666666" as const;
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",

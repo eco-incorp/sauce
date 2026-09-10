@@ -70,7 +70,11 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
     const src = swapThenDepositSource(univ3Leg, aaveSupply());
     const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
     const ingredient = bytesToHex(bytecode[0]!);
-    const call = buildSauceEvmCall({ pot: POT, ingredients: [ingredient] });
+    const call = buildSauceEvmCall({
+      pot: POT,
+      engine: "0x6666666666666666666666666666666666666666",
+      program: ingredient,
+    });
 
     expect(call.value).toBe(0n);
     const decoded = decodeFunctionData({ abi: v12PotAbi, data: call.data as `0x${string}` });

@@ -19,8 +19,8 @@
  * ## Composing with E4.1 (swap)
  *
  * {@link swapThenDepositSource} is the seam: a swap-then-deposit program is ONE `main()` with the
- * swap statement(s) followed by the deposit statement(s) — because `V12Pot.cook` executes only
- * `ingredients[0]`, exactly like `swap`'s own multi-leg story.
+ * swap statement(s) followed by the deposit statement(s) — because `V12Pot.cook` takes exactly one
+ * program, exactly like `swap`'s own multi-leg story.
  *
  * ```ts
  * import { routes, deposit } from "@eco-incorp/sauce-sdk";

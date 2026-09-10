@@ -1,8 +1,12 @@
-// GENERATED FILE — do not edit by hand.
+// NOT GENERATED ANY MORE — hand-maintained, and hand-checked.
 //
-// Written by sdk/scripts/sync-engine-artifacts.mjs from the pinned `sauce` dep's
-// deployments/v12.json (produced there by dev-tools/scripts/deploy-v12.ts). Run
-// `pnpm --filter './sdk' sync-engine-artifacts` after a repin; CI fails on drift.
+// It was written by sdk/scripts/sync-engine-artifacts.mjs from the engine dep's deployments/v12.json.
+// That dep is gone and no v12 release publishes a deploy record, so nothing regenerates this and
+// nothing checks it. **These addresses describe the stack deployed BEFORE the engine became a `cook`
+// argument** — CREATE2 is over the initcode, so a redeploy of the current contracts lands on
+// different addresses. Treat every address here as stale until a deploy record exists again; in
+// particular `v12Runtime` is an interpreter of the older lineage, which is why nothing defaults to
+// it (see routes/sauce-route.ts#SauceEvmExecutionInput.engine).
 //
 // The EVM addresses are CREATE2-deterministic (factory + salt + initcode only),
 // so they are the SAME on every chain — hence one flat address set plus per-chain

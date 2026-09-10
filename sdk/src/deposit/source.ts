@@ -179,9 +179,9 @@ export interface SwapThenDepositOptions {
 }
 
 /**
- * The E4.1/E4.2 composition seam: **one cook = one program** (`V12Pot.cook` executes
- * `ingredients[0]` only) — a swap-then-deposit is ONE `main()` with the swap statements followed by
- * the deposit statements, not two cooks. Mirrors the `swapAndSupply` recipe's own shape:
+ * The E4.1/E4.2 composition seam: **one cook = one program** (`V12Pot.cook` takes exactly one) — a
+ * swap-then-deposit is ONE `main()` with the swap statements followed by the deposit statements, not
+ * two cooks. Mirrors the `swapAndSupply` recipe's own shape:
  * `outToken.approve(aavePool, swapDelta); IAavePool.at(aavePool).supply(tokenOut, swapDelta,
  * beneficiary, 0);`.
  *

@@ -84,6 +84,9 @@ export interface IntentOptions {
   execution?: SauceEvmExecutionInput | SauceSvmExecutionInput;
   /** EVM shorthand for `execution: { pot }` — mutually redundant with `execution`, never both meaningfully differ. */
   pot?: AddressInput;
+  /** The interpreter the cook runs on, required whenever `pot` is used as the shorthand. Never
+   *  defaulted, for the reason `SauceEvmExecutionInput.engine` gives. */
+  engine?: AddressInput;
   compile?: SauceCompileOptions;
   /** Scalar ambient defines threaded into `compile()`, underneath the chain-scoped ones (see `ambient.ts`). */
   defines?: Record<string, bigint | boolean | number>;
@@ -238,6 +241,9 @@ export interface NestOptions {
   /** Overrides the Pot the transfer `cook()` executes on. Defaults to this route's own EVM
    *  `execution.pot` (T3: required for `via: "transfer"` — a Solana/SVM destination has no Pot). */
   pot?: AddressInput;
+  /** Overrides the interpreter that Pot's cook runs on. Defaults to this route's own
+   *  `execution.engine`. */
+  engine?: AddressInput;
   /** Compile options for the generated transfer program (merged with `baseDirs`/`target: 'v12'`,
    *  which this module always supplies). */
   compile?: SauceCompileOptions;
@@ -412,8 +418,18 @@ export function openRoute(
   if (options.portal === undefined) {
     missingField("portal", "as `IntentOptions.portal`");
   }
+  if (
+    options.execution === undefined &&
+    options.pot !== undefined &&
+    options.engine === undefined
+  ) {
+    missingField("engine", "alongside the `IntentOptions.pot` shorthand");
+  }
   const execution =
-    options.execution ?? (options.pot !== undefined ? { pot: options.pot } : undefined);
+    options.execution ??
+    (options.pot !== undefined && options.engine !== undefined
+      ? { pot: options.pot, engine: options.engine }
+      : undefined);
   if (execution === undefined) {
     missingField(
       "execution",
@@ -484,6 +500,7 @@ export function openRoute(
     readonly native: "balance" | "skip";
     readonly fundNativeFromRoute: boolean;
     readonly pot?: AddressInput;
+    readonly engine?: AddressInput;
     readonly compile?: SauceCompileOptions;
   }
   const nestedEntries: NestEntry[] = [];
@@ -496,6 +513,7 @@ export function openRoute(
     "native",
     "fundNativeFromRoute",
     "pot",
+    "engine",
     "compile",
   ];
   const PUBLISH_ONLY_KEYS: readonly (keyof NestOptions)[] = ["allowPartial", "fundedByBody"];
@@ -518,6 +536,12 @@ export function openRoute(
     exec: SauceEvmExecutionInput | SauceSvmExecutionInput | undefined,
   ): AddressInput | undefined {
     return exec !== undefined && "pot" in exec ? exec.pot : undefined;
+  }
+
+  function evmEngineOf(
+    exec: SauceEvmExecutionInput | SauceSvmExecutionInput | undefined,
+  ): AddressInput | undefined {
+    return exec !== undefined && "engine" in exec ? exec.engine : undefined;
   }
 
   const pending: PendingSauceRoute = {
@@ -558,6 +582,7 @@ export function openRoute(
         native: opts?.native ?? "balance",
         fundNativeFromRoute: opts?.fundNativeFromRoute ?? false,
         pot: opts?.pot,
+        engine: opts?.engine,
         compile: opts?.compile,
       });
       return pending;
@@ -626,12 +651,32 @@ export function openRoute(
               `IntentOptions.execution/pot must name a Pot, or pass NestOptions.pot explicitly.`,
           );
         }
+        const defaultEngine = evmEngineOf(execution);
+        const engine = transferEntries[0]!.engine ?? defaultEngine;
+        if (engine === undefined) {
+          throw new Error(
+            `openRoute: .nest() via: "transfer" needs the interpreter the cook runs on — this route's ` +
+              `own IntentOptions.execution/engine must name one, or pass NestOptions.engine explicitly.`,
+          );
+        }
+        // Both are taken from entry 0 and both must therefore be UNANIMOUS across the group — the
+        // merge produces one cook, so a second opinion cannot be honoured. Checking only the Pot
+        // would silently run entry 1's bytecode on entry 0's interpreter, which is the one thing a
+        // caller cannot see in the encoded call.
         for (const e of transferEntries) {
           const entryPot = e.pot ?? defaultPot;
           if (entryPot !== pot) {
             throw new Error(
               `openRoute: .nest() via: "transfer" children merged into the same position group must ` +
                 `target the same Pot — got conflicting NestOptions.pot values ('${pot}' vs '${entryPot}').`,
+            );
+          }
+          const entryEngine = e.engine ?? defaultEngine;
+          if (entryEngine !== engine) {
+            throw new Error(
+              `openRoute: .nest() via: "transfer" children merged into the same position group must ` +
+                `run on the same engine — got conflicting NestOptions.engine values ('${engine}' vs ` +
+                `'${entryEngine}').`,
             );
           }
         }
@@ -662,7 +707,7 @@ export function openRoute(
         const compiledTransfer = compileSauceRoute(
           destination,
           transferSource,
-          { pot, value: nativeValue },
+          { pot, engine, value: nativeValue },
           transferCompileOptions,
         );
         return compiledTransfer.calls[0]!;

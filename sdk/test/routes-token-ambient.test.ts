@@ -15,12 +15,14 @@ import { openRoute } from "../src/routes/index.js";
 import type { IntentOptions } from "../src/routes/index.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const SPENDER = "0x2626664c2603336E57B271c5C0b26F421741e481" as const;
 
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",
@@ -36,7 +38,7 @@ const MINT = "0x0000000000000000000000000000000000000000000000000000000000000abc
 
 function svmOptions(): IntentOptions {
   return {
-    execution: { buffer: SVM_BUFFER, accounts: [] },
+    execution: { code: SVM_BUFFER, accounts: [] },
     deadline: 2000n,
     portal: PORTAL,
     source: "base",

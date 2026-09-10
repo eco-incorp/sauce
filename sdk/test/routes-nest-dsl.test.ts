@@ -14,6 +14,7 @@ import { hashIntent } from "../src/routes/encode.js";
 import { PORTAL_ABI } from "../src/routes/portal.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const PROVER = "0x4444444444444444444444444444444444444444" as const;
@@ -21,6 +22,7 @@ const PROVER = "0x4444444444444444444444444444444444444444" as const;
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",
@@ -36,6 +38,7 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
 function childSpec(destination: string, deadline = 2000n, source = "base") {
   return openRoute(destination, "return 1n;", {
     pot: POT,
+    engine: ENGINE,
     deadline,
     portal: PORTAL,
     source,
@@ -54,6 +57,7 @@ describe(".nest(): thunk form", () => {
           seenParentSlug = on.slug;
           return openRoute("arbitrum", "return 2n;", {
             pot: POT,
+            engine: ENGINE,
             deadline: 2000n,
             portal: PORTAL,
             source: on,
@@ -98,7 +102,7 @@ describe(".nest(): depth-2 cascade", () => {
   it("head -> child -> grandchild gives intents().length === 3 in pre-order with distinct hashes", () => {
     const grandchild = openRoute("solana", "return 3n;", {
       execution: {
-        buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
         accounts: [],
       },
       deadline: 3000n,
@@ -136,7 +140,7 @@ describe(".nest(): call ordering", () => {
   it("two children preserve .nest() order in route.calls", () => {
     const childA = childSpec("arbitrum").reward(0n);
     const childB = openRoute("solana", "return 1n;", {
-      execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+      execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
       deadline: 2000n,
       portal: PORTAL,
       source: "base",

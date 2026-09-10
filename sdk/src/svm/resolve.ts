@@ -4,10 +4,16 @@ import type { AccountManifest, AccountRole as SlotRole } from "sauce-compiler";
 
 /**
  * Maps each declared slot of the compiler's AccountManifest to a concrete
- * address. `signer: true` upgrades the role only; pass the TransactionSigner
- * itself to also sign the transaction with it (required for any signer ref
- * other than the reserved fee-payer ref — the send layer has no other way to
- * obtain that signature).
+ * address. `signer` REPLACES the manifest's requirement rather than only
+ * raising it: omit it to keep the manifest's own value, `true` to make a
+ * non-signer slot sign, and `false` to attach a slot the program treats as a
+ * signer WITHOUT a transaction signature — which is what a PDA the program
+ * signs for via `invoke_signed` needs. Pass the TransactionSigner itself to
+ * also sign with it (required for any signer ref other than the reserved
+ * fee-payer ref — the send layer has no other way to obtain that signature).
+ *
+ * The two sides describe different things: the manifest states what the PROGRAM
+ * requires of the slot, this states what the TRANSACTION provides.
  */
 export interface AccountResolution {
   [ref: string]: Address | { address: Address; signer?: boolean | TransactionSigner };
@@ -58,8 +64,9 @@ function isSignerSlot(role: SlotRole): boolean {
  * Resolves an AccountManifest into ordered account metas: metas[i] is
  * user-account index i of the execute instruction (inline: instruction account
  * i; staged: i + 1, after the buffer). The base role comes from the slot's
- * `requires`; signer is upgraded by that role, the resolution entry's signer
- * flag or TransactionSigner, or the reserved PAYER_REF. An attached
+ * `requires`; the resolution entry's signer flag then replaces it (see
+ * `AccountResolution`), and a TransactionSigner or the reserved PAYER_REF sets
+ * it. An attached
  * TransactionSigner rides on the meta so the transaction builder signs with it.
  * Duplicate addresses across refs are fine — Solana dedupes at message compile.
  *
@@ -82,6 +89,7 @@ export function resolveAccounts(
 ): ResolvedAccountMeta[] {
   const unresolved: string[] = [];
   const metas: ResolvedAccountMeta[] = [];
+  let hasRemaining = false;
 
   for (const [index, entry] of manifest.accounts.entries()) {
     // A `remaining` marker carries no role: everything after it is the caller's own tail, which only
@@ -97,6 +105,7 @@ export function resolveAccounts(
         );
       }
 
+      hasRemaining = true;
       break;
     }
 
@@ -133,7 +142,16 @@ export function resolveAccounts(
             transactionSigner = entry.signer;
             signer = true;
           } else {
-            signer = signer || (entry.signer ?? false);
+            // The override REPLACES the manifest's requirement rather than only raising it:
+            // `undefined` keeps the manifest default, `true` raises, and `false` LOWERS. Lowering is
+            // the case that matters — a Pot is a PDA the kitchen signs for via `invoke_signed`, so
+            // its slot is `writable_signer` to the program while the TRANSACTION must attach it
+            // unsigned. `signer || …` could only ever raise, which made that unattachable.
+            //
+            // The two sides describe different things: the manifest states what the PROGRAM
+            // requires of the slot, the resolution states what the TRANSACTION provides. Only the
+            // caller knows a CPI supplies the signature.
+            signer = entry.signer ?? signer;
           }
         }
       }
@@ -164,6 +182,22 @@ export function resolveAccounts(
   }
 
   if (appendPayerSigner && !metas.some((meta) => isSignerRole(meta.role))) {
+    // Appending lands at `metas.length` — which, after a `remaining` marker, is exactly where the
+    // caller's own tail begins. Every account they then append would sit one slot later than the
+    // program expects, and the program would read the payer where it expected the first tail
+    // account. The caller owns that region, so the signer has to come from them.
+    //
+    // Reachable only since the resolution's `signer` flag started LOWERING as well as raising: a
+    // manifest signer slot used to guarantee a signing meta here, so this branch could not be
+    // entered by a manifest that declared one.
+    if (hasRemaining) {
+      throw new Error(
+        "appendPayerSigner: this manifest ends with a 'remaining' marker, so appending the payer " +
+          "would take the first index of the caller's own tail and shift every account after it. " +
+          "Include a signer in the tail, or resolve a manifest slot as a signer, instead.",
+      );
+    }
+
     metas.push({ address: payer, role: AccountRole.READONLY_SIGNER });
   }
 

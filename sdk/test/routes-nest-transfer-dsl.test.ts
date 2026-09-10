@@ -10,6 +10,7 @@ import { PORTAL_ABI } from "../src/routes/portal.js";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
+const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const PROVER = "0x4444444444444444444444444444444444444444" as const;
@@ -20,6 +21,7 @@ const VAULT_B = "0x7777777777777777777777777777777777777777" as const;
 function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
   return {
     pot: POT,
+    engine: ENGINE,
     deadline: 2000n,
     portal: PORTAL,
     source: "base",
@@ -33,6 +35,7 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
 function childWithReward(destination: string, source = "base", deadline = 2000n) {
   return openRoute(destination, "return 1n;", {
     pot: POT,
+    engine: ENGINE,
     deadline,
     portal: PORTAL,
     source,
@@ -90,9 +93,12 @@ describe(".nest(): via default is 'transfer'", () => {
     const transferCall = built.intent.route.calls[built.intent.route.calls.length - 1]!;
     const decoded = decodeFunctionData({ abi: v12Pot.abi, data: transferCall.data });
     expect(decoded.functionName).toBe("cook");
-    const [ingredients] = decoded.args as readonly [readonly Hex[]];
-    expect(ingredients).toHaveLength(1);
-    expect(ingredients[0]!.length).toBeGreaterThan(2); // real, nonempty compiled bytecode
+    // `cook(address engine, bytes program)` — one program, not an array of ingredients.
+    const [engine, program] = decoded.args as readonly [Hex, Hex];
+    // The engine the route was GIVEN, not merely a well-formed address — a shape check here passes
+    // for any 20 bytes, including the portal's.
+    expect(engine.toLowerCase()).toBe(ENGINE);
+    expect(program.length).toBeGreaterThan(2); // real, nonempty compiled bytecode
   });
 });
 
@@ -165,8 +171,7 @@ describe(".nest(): merging", () => {
 
     const transferCall = built.intent.route.calls[built.intent.route.calls.length - 1]!;
     const decoded = decodeFunctionData({ abi: v12Pot.abi, data: transferCall.data });
-    const [ingredients] = decoded.args as readonly [readonly Hex[]];
-    const bytecode = ingredients[0]!;
+    const [, bytecode] = decoded.args as readonly [Hex, Hex];
     expect(bytecode.length).toBeGreaterThan(2);
   });
 });
@@ -210,7 +215,7 @@ describe(".nest(): T3 — via:'transfer' requires an EVM Pot execution", () => {
     const svmChild = childWithReward("arbitrum", "solana");
     expect(() =>
       openRoute("solana", "return 1n;", {
-        execution: { buffer: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+        execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         deadline: 2000n,
         portal: PORTAL,
         source: "base",
@@ -219,6 +224,35 @@ describe(".nest(): T3 — via:'transfer' requires an EVM Pot execution", () => {
         rewardDeadline: 2000n,
       }).nest(svmChild, { vault: VAULT_A }),
     ).toThrow(/EVM Pot/i);
+  });
+});
+
+describe(".nest(): merged transfer entries must agree on the Pot AND the engine", () => {
+  // A merge produces ONE cook, so entry 0's values are the ones that land. Both are read from entry
+  // 0, so both need the same unanimity check — with only the Pot checked, entry 1's bytecode ran on
+  // entry 0's interpreter and nothing said so.
+  it("throws on a conflicting engine across children in one position group", () => {
+    const a = childWithReward("arbitrum");
+    const b = childWithReward("optimism");
+
+    expect(() =>
+      openRoute("base", "return 1n;", evmOptions())
+        .nest(a, { vault: VAULT_A })
+        .nest(b, { vault: VAULT_B, engine: "0xabababababababababababababababababababab" })
+        .reward(0n),
+    ).toThrow(/same engine/i);
+  });
+
+  it("CONTROL: the same engine on both children merges without complaint", () => {
+    const a = childWithReward("arbitrum");
+    const b = childWithReward("optimism");
+
+    expect(() =>
+      openRoute("base", "return 1n;", evmOptions())
+        .nest(a, { vault: VAULT_A })
+        .nest(b, { vault: VAULT_B, engine: ENGINE })
+        .reward(0n),
+    ).not.toThrow();
   });
 });
 

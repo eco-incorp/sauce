@@ -9,9 +9,7 @@
  * accounts, no provisioning; every execute transaction carries the
  * RequestHeapFrame prepend.
  */
-import { createHash } from "node:crypto";
 import { existsSync } from "fs";
-import { resolve } from "path";
 import { getAddressCodec, generateKeyPairSigner, lamports } from "@solana/kit";
 import type {
   Address,
@@ -26,13 +24,7 @@ import {
   buildExecuteFromAccountInstruction,
   buildExecuteInstruction,
   buildExecuteTransaction,
-  buildFinalizeBufferInstruction,
   buildHeapFramePrepend,
-  buildInitBufferInstructions,
-  buildStagingPlan,
-  buildWriteBufferInstruction,
-  deriveBufferPda,
-  encodePayloadArgs,
   getTransactionSize,
   resolveAccounts,
 } from "../../src/svm/index.js";
@@ -44,31 +36,31 @@ import type {
 import { fixtureAccounts } from "./fixtures.js";
 import type { AccountFixture } from "./fixtures.js";
 
-const sha256 = (bytes: Uint8Array): Uint8Array =>
-  new Uint8Array(createHash("sha256").update(bytes).digest());
+// ONE engine: the released `engine-devnet.so`, fetched and digest-pinned by
+// `sync-engine-artifacts --fetch-v12-engines`, which prints the path this reads.
+//
+// There is no vendored fallback any more, deliberately. `artifacts/svm/engine.so` used to be the
+// default here — a `release/beta` build predating every v12-svm release, with no JUMP/JUMP_I — so
+// anything with control flow was rejected with `InvalidInstructionData` while straight-line programs
+// ran fine, and a developer got that silently just by not setting a variable. The binary is gone and
+// so is the split: `SAUCE_ENGINE_SO` is accepted as an override for an unreleased build, but the
+// default is the release.
+export const ENGINE_SO = process.env.SAUCE_ENGINE_SO ?? process.env.SAUCE_RUST_ENGINE_SO;
 
-// sdk jest cwd is sdk/; the vendored binary lives at the repo-root
-// artifacts/svm/, one level up (same resolution rule as the compiler's
-// LiteSVM harness). SAUCE_ENGINE_SO overrides it, e.g. to test against a
-// freshly built engine before repinning the sauce dep.
-export const ENGINE_SO =
-  process.env.SAUCE_ENGINE_SO ?? resolve(process.cwd(), "../artifacts/svm/engine.so");
+/** describe when an engine binary is available, describe.skip otherwise (a bare local run). */
+export const describeSvm =
+  ENGINE_SO !== undefined && existsSync(ENGINE_SO) ? describe : describe.skip;
 
-/** describe when the engine binary exists, describe.skip otherwise (CI). */
-export const describeSvm = existsSync(ENGINE_SO) ? describe : describe.skip;
-
-// The vendored engine above is the wrong LINEAGE for compiler-emitted bytecode: it is built from the
-// pinned `sauce` dep, while the compiler this repo consumes is cut from `main`. Anything that
-// EXECUTES a freshly compiled program needs the matching engine, which CI downloads from the v12
-// releases (see the "Fetch the v12 engines" step) and exposes here.
-export const RUST_ENGINE_SO = process.env.SAUCE_RUST_ENGINE_SO;
+// Kept as a name because suites reference it; it is the same engine as ENGINE_SO now that there is
+// only one.
+export const RUST_ENGINE_SO = ENGINE_SO;
 
 /** describe for suites that execute compiler-emitted bytecode — they need the `main`-lineage engine. */
-export const describeRustSvm = RUST_ENGINE_SO ? describe : describe.skip;
+export const describeRustSvm = describeSvm;
 
 // The gate above is a local-developer convenience, never a CI outcome: a skipped suite and a passing
 // one are the same line in jest's summary. CI supplies the engine, so an absent one is a failure.
-if (!RUST_ENGINE_SO && process.env.CI) {
+if (ENGINE_SO === undefined && process.env.CI) {
   throw new Error(
     "SAUCE_RUST_ENGINE_SO is unset in CI. Suites executing compiler-emitted bytecode must never skip " +
       'here — see the "Fetch the v12 engines" step in .github/workflows/ci.yml.',
@@ -100,12 +92,11 @@ export const randomAddress = (): Address =>
  *
  * `engineSo` defaults to the vendored binary; a suite whose bytecode targets a
  * DIFFERENT engine lineage passes its own path rather than overriding
- * SAUCE_ENGINE_SO, which would redirect every other suite too (they run
- * TypeScript-compiler output and need the pinned engine).
+ * SAUCE_ENGINE_SO, which redirects every suite.
  */
 export const startEngine = async (
   unixTimestamp: bigint,
-  engineSo: string = ENGINE_SO,
+  engineSo: string = ENGINE_SO as string,
 ): Promise<EngineHarness> => {
   // The default constructor's program runtime misses the
   // sol_remaining_compute_units syscall (the engine's GasLeft, 0x62 — the
@@ -379,76 +370,15 @@ export const seed32 = (n: number): Uint8Array => {
 };
 
 /**
- * Stages `bytecode` into the buffer at 32-byte `seed` through the real staging protocol; returns its
- * address. Hoisted out of `staged.e2e.test.ts` (was private there) so every suite needing the staged
- * lifecycle drives the SAME real protocol rather than a copy that could silently diverge from it on
- * the next engine change.
- */
-export const stageBytecode = async (
-  harness: EngineHarness,
-  seed: Uint8Array,
-  bytecode: Uint8Array,
-): Promise<Address> => {
-  const plan = buildStagingPlan(bytecode.length);
-  const { address: buffer } = await deriveBufferPda(harness.programId, harness.payer.address, seed);
-  const shared = { programId: harness.programId, authority: harness.payer.address, buffer };
-
-  // init tx (all growth steps pack into one), then one tx per chunk, then the
-  // DEDICATED finalize tx — every tx must clear the 1232-byte wire cap. None
-  // of these carry the heap-frame request: staging never touches interpreter
-  // memory.
-  const initInstructions = buildInitBufferInstructions({
-    programId: harness.programId,
-    payer: harness.payer.address,
-    buffer,
-    seed,
-    capacity: bytecode.length,
-  });
-  if (initInstructions.length !== plan.initInstructionCount) {
-    throw new Error(
-      `expected ${plan.initInstructionCount} init instructions, got ${initInstructions.length}`,
-    );
-  }
-  expectOk(await sendInstructions(harness, initInstructions));
-
-  for (const chunk of plan.chunks) {
-    const write = buildWriteBufferInstruction({
-      ...shared,
-      offset: chunk.offset,
-      chunk: bytecode.subarray(chunk.offset, chunk.offset + chunk.length),
-    });
-    const transaction = await buildExecuteTransactionForHarness(harness, [write]);
-    if (getTransactionSize(transaction) > 1232) {
-      throw new Error(
-        `staged write transaction exceeds 1232 bytes (${getTransactionSize(transaction)})`,
-      );
-    }
-    expectOk(await sendInstructions(harness, [write]));
-  }
-
-  expectOk(
-    await sendInstructions(harness, [
-      buildFinalizeBufferInstruction({
-        ...shared,
-        length: bytecode.length,
-        sha256: sha256(bytecode),
-      }),
-    ]),
-  );
-
-  return buffer;
-};
-
-/**
  * ONE-instruction staged execute: [CU limit, RequestHeapFrame, execute_from_account]
  * — the payload args ride the execute instruction's own data (no writer
  * instruction exists on the Wave D surface). Hoisted alongside `stageBytecode` — see its doc.
  */
 export const executeStaged = async (
   harness: EngineHarness,
-  buffer: Address,
+  code: Address,
   accounts: ReturnType<typeof resolveAccounts>,
-  opts: { pin?: Uint8Array; args?: StagedArgs } = {},
+  _opts: { pin?: Uint8Array; args?: StagedArgs } = {},
 ): Promise<RunResult> => {
   // Generous CU limit — the default 200K/tx starves multi-KB staged programs.
   const instructions: Instruction[] = [
@@ -456,10 +386,8 @@ export const executeStaged = async (
     buildHeapFramePrepend(),
     buildExecuteFromAccountInstruction({
       programId: harness.programId,
-      buffer,
+      code,
       accounts,
-      expectedSha256: opts.pin,
-      args: opts.args ? encodePayloadArgs(opts.args.layout, opts.args.values) : undefined,
     }),
   ];
 

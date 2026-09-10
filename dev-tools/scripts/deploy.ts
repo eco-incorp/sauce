@@ -1,6 +1,13 @@
 /**
  * Deploy script for SauceRouter contract using pre-compiled artifact.
  * SauceRouter inherits Sauce, so cook() works identically.
+ *
+ * BLOCKED: it needs `artifacts/SauceRouter.json`, and no such artifact exists any more. SauceRouter
+ * was a v1 contract in the engine repo's Solidity tree; the v12 releases the SDK now consumes
+ * publish only Router/IRouter/Pot/Kitchen, so `sync-artifacts` cannot produce it and this deploy
+ * fails on a missing file. The local stack has to move to the v12 Pot/Kitchen model — a Pot is
+ * deployed by `V12Kitchen.deployPot(owner, salt)` and cooked with `cook(address engine, bytes
+ * program)` — which is a rewrite of this flow, not a rename.
  */
 
 import { createWalletClient, createPublicClient, http, Hex, defineChain } from "viem";

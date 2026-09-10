@@ -24,7 +24,7 @@
  *       ? new TextEncoder().encode(settleSource())
  *       : readFrom(SAUCE_BASE_DIRS, path),   // serves the program's `./artifacts/IERC20.json`
  * });
- * // bytecode -- 391 bytes, keccak256 === SETTLE_WIRE.PROGRAM_HASH, for every caller and every value
+ * // bytecode -- 370 bytes, keccak256 === SETTLE_WIRE.PROGRAM_HASH, for every caller and every value
  * ```
  *
  * Those three compile inputs are the whole contract — change any of them and the bytes change. They are
@@ -35,7 +35,7 @@
  *
  * THE VALUES RIDE THE PAYLOAD, NOT THE PROGRAM. `(tokens, minOut, recipient)` are appended after the
  * program as 32-byte big-endian words — `[program | tokensPtr | minOut | recipient | count | token…]`
- * — and read back through CALLDATA. That is why one 391-byte blob serves every argument set, and why
+ * — and read back through CALLDATA. That is why one 370-byte blob serves every argument set, and why
  * `@eco-incorp/sauce-sdk/verify` can answer "is this the audited settle, and what will it do?" from
  * the bytes alone with `viem` as its only dependency. `@eco-incorp/sauce-sdk/verify`'s
  * `encodeSettleProgram` builds the tail; its `validateSettleProgram` reads it back and checks the

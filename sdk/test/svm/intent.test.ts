@@ -105,15 +105,14 @@ function buildIntentFixture(n: number, opts: { minOut?: bigint } = {}) {
   const pin = sha256(bytecode);
   const ix = buildExecuteFromAccountInstruction({
     programId: PROGRAM as never,
-    buffer: BUFFER as never,
+    code: BUFFER as never,
     accounts: userMetas,
-    expectedSha256: pin,
   });
   const envelope = encodeEnvelope(
     (ix.data ?? new Uint8Array()) as Uint8Array,
     (ix.accounts ?? []).map((a) => ({ address: a.address as string, role: AccountRole.READONLY })),
   );
-  return { bytecode, envelope, refs, addrByRef, expected, n };
+  return { bytecode, envelope, refs, addrByRef, expected, n, pin };
 }
 
 function u32le(n: number): number[] {
@@ -179,7 +178,7 @@ function decoyEnvelope(n: number, opts: { pin?: Uint8Array } = {}): Uint8Array {
 describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
   it("extracts + VERIFIES a genuine settle from an intent with no partner bytecode (pin proof)", () => {
     const fx = buildIntentFixture(2, { minOut: 4242n });
-    const intent = { route: { calls: [{ data: fx.envelope }] } };
+    const intent = { route: { calls: [{ data: fx.envelope, pin: fx.pin }] } };
     const found = extractSvmSettleFromIntent(intent, fx.expected);
     expect(found).not.toBeNull();
     expect(found!.callIndex).toBe(0);
@@ -193,7 +192,7 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
   it("additionally byte-matches when the staged bytecode is supplied", () => {
     const fx = buildIntentFixture(2);
     const found = extractSvmSettleFromIntent(
-      { route: { calls: [{ data: fx.envelope }] } },
+      { route: { calls: [{ data: fx.envelope, pin: fx.pin }] } },
       { bytecode: fx.bytecode, ...fx.expected },
     );
     expect(found).not.toBeNull();
@@ -210,7 +209,7 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
       { address: makeAddr(10), role: AccountRole.READONLY },
     ]);
     const found = extractSvmSettleFromCalls(
-      [{ data: junk }, { data: settle.envelope }],
+      [{ data: junk }, { data: settle.envelope, pin: settle.pin }],
       settle.expected,
     );
     expect(found!.callIndex).toBe(1);
@@ -237,7 +236,7 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
     const settle = buildIntentFixture(1);
     const calls = [
       { data: decoyEnvelope(1, { pin: new Uint8Array(32).fill(0x11) }) }, // shape-match, wrong pin
-      { data: settle.envelope }, // the real settle
+      { data: settle.envelope, pin: settle.pin }, // the real settle
     ];
     const found = extractSvmSettleFromCalls(calls, settle.expected);
     expect(found).not.toBeNull();
@@ -250,17 +249,19 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
   it("surfaces the call target as base58, from either the 0x-hex or the base58 input form", () => {
     const fx = buildIntentFixture(1);
     const fromHex = extractSvmSettleFromCalls(
-      [{ data: fx.envelope, target: universalAddress(PROGRAM) }],
+      [{ data: fx.envelope, pin: fx.pin, target: universalAddress(PROGRAM) }],
       fx.expected,
     );
     const fromBase58 = extractSvmSettleFromCalls(
-      [{ data: fx.envelope, target: PROGRAM }],
+      [{ data: fx.envelope, pin: fx.pin, target: PROGRAM }],
       fx.expected,
     );
     expect(fromHex!.target).toEqual({ kind: "program", address: PROGRAM });
     expect(fromBase58!.target).toEqual({ kind: "program", address: PROGRAM });
     // A call that carried no target says so in its own state — not `program`, and not `unreadable`.
-    expect(extractSvmSettleFromCalls([{ data: fx.envelope }], fx.expected)!.target).toEqual({
+    expect(
+      extractSvmSettleFromCalls([{ data: fx.envelope, pin: fx.pin }], fx.expected)!.target,
+    ).toEqual({
       kind: "absent",
     });
   });
@@ -272,7 +273,10 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
   it("reports a genuine settle sent to ANY target — validating it is the caller's job", () => {
     const fx = buildIntentFixture(2);
     const attacker = makeAddr(0xfe);
-    const found = extractSvmSettleFromCalls([{ data: fx.envelope, target: attacker }], fx.expected);
+    const found = extractSvmSettleFromCalls(
+      [{ data: fx.envelope, pin: fx.pin, target: attacker }],
+      fx.expected,
+    );
 
     expect(found).not.toBeNull();
     expect(found!.genuine).toBe(true);
@@ -297,11 +301,11 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
     // unused directive and the real TS2322 it was suppressing. Hence `prettier-ignore`.
     // prettier-ignore
     // @ts-expect-error a bare string is base64 under `BytesInput`; a target is bytes, 0x-hex, or `Address`
-    expect(extractSvmSettleFromCalls([{ data: fx.envelope, target: unvalidated }], fx.expected)).not.toBeNull();
+    expect(extractSvmSettleFromCalls([{ data: fx.envelope, pin: fx.pin, target: unvalidated }], fx.expected)).not.toBeNull();
 
     // Validated into an `Address`, the same characters resolve as base58 — never as base64.
     const found = extractSvmSettleFromCalls(
-      [{ data: fx.envelope, target: address(unvalidated) }],
+      [{ data: fx.envelope, pin: fx.pin, target: address(unvalidated) }],
       fx.expected,
     );
     expect(found!.target).toEqual({ kind: "program", address: PROGRAM });
@@ -310,11 +314,11 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
   it("reports an unresolvable target as `unreadable` instead of aborting the scan", () => {
     const fx = buildIntentFixture(1);
     const shortHex = extractSvmSettleFromCalls(
-      [{ data: fx.envelope, target: "0xdeadbeef" }],
+      [{ data: fx.envelope, pin: fx.pin, target: "0xdeadbeef" }],
       fx.expected,
     );
     const notBase58 = extractSvmSettleFromCalls(
-      [{ data: fx.envelope, target: "not a program id" as Address }],
+      [{ data: fx.envelope, pin: fx.pin, target: "not a program id" as Address }],
       fx.expected,
     );
 
@@ -333,7 +337,9 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
       reason: expect.stringContaining("base58"),
     });
     // Distinguishable from the call that supplied nothing at all.
-    expect(extractSvmSettleFromCalls([{ data: fx.envelope }], fx.expected)!.target).toEqual({
+    expect(
+      extractSvmSettleFromCalls([{ data: fx.envelope, pin: fx.pin }], fx.expected)!.target,
+    ).toEqual({
       kind: "absent",
     });
   });
@@ -344,7 +350,7 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
     const found = extractSvmSettleFromCalls(
       [
         { data: decoy, target: "0xbeef" },
-        { data: fx.envelope, target: PROGRAM },
+        { data: fx.envelope, pin: fx.pin, target: PROGRAM },
       ],
       fx.expected,
     );

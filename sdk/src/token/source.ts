@@ -117,8 +117,8 @@ export interface TokenSourceOptions {
 /**
  * A complete, compilable `function main() { ... }` program: one statement per `transfer`/`approve`
  * spec (in order), plus, if the LAST spec is a `balanceOf`, a trailing `return <expr>;` — because
- * `Token.program`'s only consumer (`V12Pot.cook`) executes `ingredients[0]` and wants its result, if
- * any, as the return value. A `balanceOf` in any OTHER position is spliced as a discarded
+ * `Token.program`'s only consumer (`V12Pot.cook`) executes the one program it is handed and wants
+ * its result, if any, as the return value. A `balanceOf` in any OTHER position is spliced as a discarded
  * expression statement.
  */
 export function tokenSource(

@@ -109,7 +109,7 @@
     "@solana/kit": "^6.10.0",
     "acorn": "^8.15.0",
     "dotenv": "^17.3.1",
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.5.0",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@^0.7.0",
     "typescript": "^5.7.0",
     "viem": "^2.45.3"
   },
@@ -128,7 +128,6 @@
     "globals": "16.5.0",
     "hardhat": "^2.22.0",
     "prettier": "3.9.6",
-    "sauce": "github:eco-incorp/v12#cae256b38dccd7d7751cd66a4f509bab9a7a7fb5",
     "typescript-eslint": "8.70.0"
   },
   "packageManager": "pnpm@10.28.2",

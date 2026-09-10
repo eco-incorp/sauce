@@ -9,15 +9,10 @@
  */
 import { createHash } from "node:crypto";
 import { AccountRole, getAddressDecoder } from "@solana/kit";
-import { EXECUTE_DISCRIMINATOR } from "../../src/svm/engine.js";
-import {
-  buildExecuteAndCloseInstruction,
-  buildExecuteFromAccountInstruction,
-} from "../../src/svm/instructions.js";
+import { buildExecuteFromAccountInstruction } from "../../src/svm/instructions.js";
 import { svmSettleRefs, svmSettleSource } from "../../src/svm/recipes/index.js";
 import {
   decodeSvmSettleExecution,
-  parseExecutePayload,
   verifySvmSettleExecution,
   verifySvmSettleProgram,
   type SvmSettleExpectation,
@@ -141,9 +136,8 @@ function buildFixture(n: number, opts: FixtureOpts = {}) {
   const pin = sha256(bytecode);
   const ix = buildExecuteFromAccountInstruction({
     programId: PROGRAM as never,
-    buffer: BUFFER as never,
+    code: BUFFER as never,
     accounts: userMetas,
-    expectedSha256: pin,
   });
   return { bytecode, refs, addrByRef, userMetas, ix, pin, expected, tp0, tp1 };
 }
@@ -151,26 +145,6 @@ function buildFixture(n: number, opts: FixtureOpts = {}) {
 /** The bare `{ address }` account list a raw instruction gives you. */
 const bareAccounts = (ix: { accounts?: readonly { address: unknown }[] }) =>
   ix.accounts!.map((a) => ({ address: a.address as string }));
-
-describe("parseExecutePayload", () => {
-  it("splits [disc][flags][pin] into its parts, with an empty args tail", () => {
-    const { ix, pin } = buildFixture(1);
-    const parsed = parseExecutePayload(ix.data as Uint8Array);
-    expect(parsed.instruction).toBe("execute_from_account");
-    expect(parsed.pin).toEqual(pin);
-    expect(parsed.slice).toBeUndefined();
-    expect(parsed.args.length).toBe(0);
-  });
-
-  it("rejects an inline execute discriminator (its payload is bytecode, not args)", () => {
-    const inline = new Uint8Array([...EXECUTE_DISCRIMINATOR, 0x00, 0x01, 0x02]);
-    expect(() => parseExecutePayload(inline)).toThrow(/inline `execute`/);
-  });
-
-  it("rejects a discriminator that is not a Sauce execute instruction", () => {
-    expect(() => parseExecutePayload(new Uint8Array(16))).toThrow(/staged-execute discriminator/);
-  });
-});
 
 describe("decodeSvmSettleExecution", () => {
   it("resolves account identities from a real instruction (buffer-prefixed list)", () => {
@@ -186,7 +160,7 @@ describe("decodeSvmSettleExecution", () => {
     expect(decoded.refs).toEqual(svmSettleRefs(2));
     // Every ref resolved to the pubkey the fixture attached at that slot.
     for (const ref of decoded.refs) expect(decoded.accounts[ref]).toBe(fx.addrByRef[ref]);
-    expect(decoded.pin).toEqual(fx.pin);
+    // No pin on this wire: the released engine's executeFromAccount carries no payload.
     expect(decoded.labeledRefsConsistent).toBeNull(); // bare {address} entries carry no ref label
   });
 
@@ -225,22 +199,6 @@ describe("decodeSvmSettleExecution", () => {
     expect(decoded.accounts[fx.refs[4]!]).toBe(fx.addrByRef[fx.refs[4]!]);
   });
 
-  it("decodes an execute_and_close payload", () => {
-    const fx = buildFixture(1);
-    const ix = buildExecuteAndCloseInstruction({
-      programId: PROGRAM as never,
-      buffer: BUFFER as never,
-      accounts: fx.userMetas,
-      expectedSha256: fx.pin,
-    });
-    const decoded = decodeSvmSettleExecution({
-      instructionData: ix.data as Uint8Array,
-      accounts: bareAccounts(ix),
-    });
-    expect(decoded.instruction).toBe("execute_and_close");
-    expect(decoded.escrowCount).toBe(1);
-  });
-
   it("rejects an account list whose size fits no settle shape", () => {
     const fx = buildFixture(1);
     expect(() =>
@@ -260,6 +218,7 @@ describe("verifySvmSettleExecution", () => {
       accounts: bareAccounts(fx.ix),
       bytecode: fx.bytecode,
       ...fx.expected,
+      pin: fx.pin,
     });
     expect(result.genuine).toBe(true);
     expect(result.verifiedBy).toBe("bytecode");
@@ -267,13 +226,13 @@ describe("verifySvmSettleExecution", () => {
     expect(result.mismatch).toBeUndefined();
   });
 
-  it("★ rejects genuine bytecode whose calldata carries NO pin — the calldata commits to nothing", () => {
+  it("★ rejects genuine bytecode whose caller supplies NO pin — the calldata commits to nothing", () => {
     // The bytes ARE the canonical settle, but a pinless calldata does not commit to them, so nothing
     // stops a different program running from the buffer.
     const fx = buildFixture(2);
     const ix = buildExecuteFromAccountInstruction({
       programId: PROGRAM as never,
-      buffer: BUFFER as never,
+      code: BUFFER as never,
       accounts: fx.userMetas,
     }); // no expectedSha256 → no pin
     const result = verifySvmSettleExecution({
@@ -302,6 +261,7 @@ describe("verifySvmSettleExecution", () => {
       accounts,
       bytecode: fx.bytecode,
       ...fx.expected,
+      pin: fx.pin,
     });
     expect(result.genuine).toBe(true);
     expect(result.hadBufferAccount).toBe(false);
@@ -316,6 +276,7 @@ describe("verifySvmSettleExecution", () => {
       bytecode: fx.bytecode,
       minOut: 1n,
       splCount: 1n,
+      pin: fx.pin,
     });
     expect(result.genuine).toBe(false);
     expect(result.bytecodeMatchesCanonical).toBe(false);
@@ -328,33 +289,34 @@ describe("verifySvmSettleExecution", () => {
     // Re-pin the calldata to the tampered bytecode so the failure is the byte-match, not the pin.
     const ix = buildExecuteFromAccountInstruction({
       programId: PROGRAM as never,
-      buffer: BUFFER as never,
+      code: BUFFER as never,
       accounts: fx.userMetas,
-      expectedSha256: sha256(tampered),
     });
     const result = verifySvmSettleExecution({
       instructionData: ix.data as Uint8Array,
       accounts: bareAccounts(ix),
       bytecode: tampered,
       ...fx.expected,
+      pin: fx.pin,
     });
     expect(result.genuine).toBe(false);
     expect(result.mismatch).toMatch(/byte-match svmSettleSource\(2\)/);
   });
 
-  it("rejects a calldata pin that does not equal sha256(bytecode)", () => {
+  it("rejects a pin that does not equal sha256(bytecode)", () => {
     const fx = buildFixture(1);
     const ix = buildExecuteFromAccountInstruction({
       programId: PROGRAM as never,
-      buffer: BUFFER as never,
+      code: BUFFER as never,
       accounts: fx.userMetas,
-      expectedSha256: new Uint8Array(32) /* wrong pin */,
     });
     const result = verifySvmSettleExecution({
       instructionData: ix.data as Uint8Array,
       accounts: bareAccounts(ix),
       bytecode: fx.bytecode,
       ...fx.expected,
+      // A pin that is NOT sha256(bytecode) — the subject of this test.
+      pin: new Uint8Array(32).fill(0xab),
     });
     expect(result.genuine).toBe(false);
     expect(result.pinMatchesBytecode).toBe(false);
@@ -369,6 +331,7 @@ describe("verifySvmSettleExecution", () => {
       instructionData: fx.ix.data as Uint8Array,
       accounts: bareAccounts(fx.ix),
       ...fx.expected,
+      pin: fx.pin,
     });
     expect(result.genuine).toBe(true);
     expect(result.verifiedBy).toBe("pin");
@@ -382,14 +345,15 @@ describe("verifySvmSettleExecution", () => {
     const fx = buildFixture(1);
     const ix = buildExecuteFromAccountInstruction({
       programId: PROGRAM as never,
-      buffer: BUFFER as never,
+      code: BUFFER as never,
       accounts: fx.userMetas,
-      expectedSha256: new Uint8Array(32).fill(0xab),
     });
     const result = verifySvmSettleExecution({
       instructionData: ix.data as Uint8Array,
       accounts: bareAccounts(ix),
       ...fx.expected,
+      // A pin that is not the canonical settle's hash — the decoy this test is about.
+      pin: new Uint8Array(32).fill(0xcd),
     });
     expect(result.genuine).toBe(false);
     expect(result.verifiedBy).toBe("pin");
@@ -397,11 +361,11 @@ describe("verifySvmSettleExecution", () => {
     expect(result.mismatch).toMatch(/pin does not match sha256/);
   });
 
-  it("is NOT genuine when the calldata carries no pin and no bytecode is supplied", () => {
+  it("is NOT genuine when no pin is supplied and no bytecode is supplied", () => {
     const fx = buildFixture(1);
     const ix = buildExecuteFromAccountInstruction({
       programId: PROGRAM as never,
-      buffer: BUFFER as never,
+      code: BUFFER as never,
       accounts: fx.userMetas,
     }); // no expectedSha256 → no pin
     const result = verifySvmSettleExecution({
@@ -411,7 +375,6 @@ describe("verifySvmSettleExecution", () => {
     });
     expect(result.genuine).toBe(false);
     expect(result.verifiedBy).toBe("none");
-    expect(result.pin).toBeUndefined();
     expect(result.mismatch).toMatch(/no calldata pin and no bytecode/);
   });
 });

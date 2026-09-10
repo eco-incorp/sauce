@@ -63,6 +63,8 @@ export interface CctpTransferParams {
 
   // ---- intent wiring ----
   readonly pot: AddressInput;
+  /** The interpreter the Pot's cook runs on — see `routes/sauce-route.ts`, never defaulted. */
+  readonly engine: AddressInput;
   readonly portal: AddressInput;
   readonly sourcePortal?: AddressInput;
   readonly deadline: bigint | number | string;
@@ -75,6 +77,7 @@ export interface CctpTransferParams {
 function common(params: CctpTransferParams) {
   return {
     pot: params.pot,
+    engine: params.engine,
     portal: params.portal,
     sourcePortal: params.sourcePortal,
     deadline: params.deadline,

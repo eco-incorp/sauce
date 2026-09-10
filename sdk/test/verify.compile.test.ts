@@ -15,7 +15,7 @@
  */
 import { existsSync, readFileSync } from "fs";
 import { createRequire } from "node:module";
-import { dirname, join } from "path";
+import { dirname, join, resolve } from "path";
 import { keccak256 } from "viem";
 import type { Hex } from "viem";
 
@@ -60,6 +60,15 @@ function compilerPackage(): { name: string; version: string } {
   }
   throw new Error("could not locate the @eco-incorp/sauce-compiler manifest");
 }
+
+/** jest cwd is `sdk/`; the workspaces sit beside it under the repo root. */
+const REPO_ROOT = resolve(process.cwd(), "..");
+const WORKSPACE_MANIFESTS = [
+  "package.json",
+  "sdk/package.json",
+  "actions/package.json",
+  "dev-tools/package.json",
+] as const;
 
 /** The compile `src/recipes/index.ts` documents to partners, run for real. */
 function compileSettle(): Hex {
@@ -106,12 +115,38 @@ describe("the settle program pin, recompiled", () => {
     expect(compileSettle()).toBe(compiled);
   });
 
-  // The dependency is a caret range, so the pins above can stay green while a resolved 0.5.x that
+  // The dependency is a caret range, so the pins above can stay green while a resolved 0.7.x that
   // did not change codegen quietly makes `PROGRAM_COMPILER` name a producer that is not the one
   // that ran. Assert the resolved version, or the provenance string records nothing.
   it("was produced by the compiler SETTLE_WIRE.PROGRAM_COMPILER names", () => {
     const { name, version } = compilerPackage();
     expect(`${name}@${version}`).toBe(SETTLE_WIRE.PROGRAM_COMPILER);
+  });
+
+  /**
+   * The version ABOVE is the one resolved from `sdk/`. It is not necessarily the one a consumer
+   * gets: the published package is the ROOT `@eco-incorp/sauce-sdk`, and each workspace declares
+   * `sauce-compiler` separately. Bumping one leaves the pins asserted against a compiler nobody
+   * installs — which is exactly what happened here: root moved to ^0.7.0 while `sdk`, `actions` and
+   * `dev-tools` stayed on ^0.5.0, and 0.7.0 emits 370 bytes where 0.5.0 emits 391. Every pin above
+   * stayed green while a consumer's own settle hashed to something `validateSettleProgram` rejects.
+   */
+  it("every workspace declares the SAME compiler range, so the pin describes what ships", () => {
+    const declared = WORKSPACE_MANIFESTS.map((rel) => {
+      const manifest = JSON.parse(readFileSync(resolve(REPO_ROOT, rel), "utf8")) as {
+        dependencies?: Record<string, string>;
+      };
+
+      return [rel, manifest.dependencies?.["sauce-compiler"]] as const;
+    });
+
+    // Named individually so a failure says WHICH workspace drifted, not just that one did.
+    for (const [rel, spec] of declared) {
+      expect([rel, spec]).toEqual([rel, declared[0]![1]]);
+    }
+    // …and that shared range must be the major.minor the pin names.
+    const pinned = SETTLE_WIRE.PROGRAM_COMPILER.split("@").pop()!;
+    expect(declared[0]![1]).toBe(`npm:@eco-incorp/sauce-compiler@^${pinned}`);
   });
 });
 

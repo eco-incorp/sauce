@@ -134,6 +134,44 @@ describe("resolveAccounts", () => {
     ]);
   });
 
+  // A Pot is the case this exists for: the kitchen signs for it via `invoke_signed`, so the PROGRAM
+  // requires a `writable_signer` slot while the TRANSACTION must attach it unsigned. `signer` used
+  // to be `signer || (entry.signer ?? false)`, which could only ever raise — so this was
+  // unattachable and a Pot could not be used at all.
+  it("`signer: false` LOWERS a writable_signer slot — a PDA the kitchen signs for via CPI", () => {
+    const metas = resolveAccounts(
+      manifestOf(["pot", "writable_signer"]),
+      { pot: { address: ORACLE, signer: false } },
+      PAYER,
+    );
+
+    expect(metas[0].role).toBe(AccountRole.WRITABLE);
+  });
+
+  it("`signer: false` lowers a readonly_signer slot the same way", () => {
+    const metas = resolveAccounts(
+      manifestOf(["ro", "readonly_signer"]),
+      { ro: { address: ORACLE, signer: false } },
+      PAYER,
+    );
+
+    expect(metas[0].role).toBe(AccountRole.READONLY);
+  });
+
+  it("an omitted `signer` keeps the manifest's own requirement — the override is opt-in", () => {
+    const metas = resolveAccounts(
+      manifestOf(["a", "writable_signer"], ["b", "writable"]),
+      { a: { address: ORACLE }, b: { address: POOL, signer: true } },
+      PAYER,
+    );
+
+    // `a` keeps the slot's signer requirement; `b` is raised by its own override.
+    expect(metas.map((m) => m.role)).toEqual([
+      AccountRole.WRITABLE_SIGNER,
+      AccountRole.WRITABLE_SIGNER,
+    ]);
+  });
+
   it("stops at a `remaining` marker — the tail is the caller's own, not a resolvable slot", () => {
     const manifest: AccountManifest = {
       accounts: [
@@ -196,6 +234,42 @@ describe("resolveAccounts", () => {
     expect(metas).toEqual([
       { address: POOL, role: AccountRole.WRITABLE },
       { address: ORACLE, role: AccountRole.READONLY },
+      { address: PAYER, role: AccountRole.READONLY_SIGNER },
+    ]);
+  });
+
+  /**
+   * The combination the lowering made reachable. `signer: false` can leave a manifest that declares
+   * a signer slot with no signing meta, so this branch is now entered by manifests it could never be
+   * entered by before — and after a `remaining` marker, `metas.length` is the first index of the
+   * CALLER's tail, so appending there shifts every account they add and hands the program the payer
+   * where it expected the first tail account.
+   */
+  it("appendPayerSigner refuses to append into a `remaining` tail rather than shifting it", () => {
+    const manifest: AccountManifest = {
+      accounts: [
+        { kind: "slot", index: 0, name: "pot", requires: "writable_signer" },
+        { kind: "remaining", from: 1 } satisfies AccountEntry,
+      ],
+    };
+
+    expect(() =>
+      resolveAccounts(manifest, { pot: { address: ORACLE, signer: false } }, PAYER, {
+        appendPayerSigner: true,
+      }),
+    ).toThrow(/'remaining' marker/);
+  });
+
+  it("CONTROL: the same lowering WITHOUT a remaining marker appends at the end, as before", () => {
+    const metas = resolveAccounts(
+      manifestOf(["pot", "writable_signer"]),
+      { pot: { address: ORACLE, signer: false } },
+      PAYER,
+      { appendPayerSigner: true },
+    );
+
+    expect(metas).toEqual([
+      { address: ORACLE, role: AccountRole.WRITABLE },
       { address: PAYER, role: AccountRole.READONLY_SIGNER },
     ]);
   });

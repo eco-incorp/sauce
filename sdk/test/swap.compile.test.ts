@@ -122,14 +122,19 @@ describe("the E3 seam, end to end", () => {
       baseDirs: [...SWAP_BASE_DIRS],
     });
     const ingredient = bytesToHex(bytecode[0]!);
-    const call = buildSauceEvmCall({ pot: POT, ingredients: [ingredient] });
+    const call = buildSauceEvmCall({
+      pot: POT,
+      engine: "0x6666666666666666666666666666666666666666",
+      program: ingredient,
+    });
 
     expect(call.target).toBe(("0x" + "00".repeat(12) + POT.slice(2)).toLowerCase());
     expect(call.value).toBe(0n);
 
     const decoded = decodeFunctionData({ abi: v12PotAbi, data: call.data as `0x${string}` });
     expect(decoded.functionName).toBe("cook");
-    expect((decoded.args[0] as readonly string[])[0]).toBe(ingredient);
+    // `cook(address engine, bytes program)` — the program is the SECOND argument now.
+    expect(decoded.args[1]).toBe(ingredient);
 
     const intent = assembleIntent(
       requireChain("base"),

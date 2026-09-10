@@ -1,6 +1,10 @@
 /**
  * End-to-end integration tests for all SauceScript examples.
  *
+ * BLOCKED for the same reason as `scripts/deploy.ts`: it deploys `artifacts/SauceRouter.json`,
+ * which the v12 releases no longer publish. Not run by `pnpm test` (that is examples + runner), so
+ * this does not gate CI.
+ *
  * Starts a local Hardhat node, deploys Sauce for simple V1 scripts,
  * then compiles ERC20 to V12 sauce, deploys via the V12 on-chain compiler,
  * and tests with standard ERC20 calls.
