@@ -16,7 +16,20 @@ import { buildExecuteTransaction } from "../../src/svm/transaction.js";
 
 /** Fetched from the release by `sync-engine-artifacts --fetch-v12-engines`, which exports the path. */
 const KITCHEN_SO = process.env.SAUCE_KITCHEN_SO;
-const IDL_ADDRESS = address("D1ziogwKXoR5ssTxmmaJvx2RFe5zRhfSVUYF4YycpU3u");
+const KITCHEN_IDL_JSON = process.env.SAUCE_KITCHEN_IDL_JSON;
+
+/**
+ * The kitchen's program id, read from the release's own IDL rather than written here.
+ *
+ * It was hardcoded, and the v0.6.0 bump moved it (`D1ziogw…` → `SauceYLd…`, a vanity id) with every
+ * instruction, constant and error unchanged — so the literal silently became a program that does not
+ * exist while the drift guards, which check the IDL's CONTENTS, stayed green. Reading `address` off
+ * the same artifact the discriminators come from means the two cannot disagree.
+ */
+const kitchenProgramId = (): Address =>
+  address(
+    (JSON.parse(readFileSync(KITCHEN_IDL_JSON as string, "utf8")) as { address: string }).address,
+  );
 /**
  * The REAL engine, not a placeholder address. A Pot is owned by the engine, and only its owning
  * program may debit it — so `close_pot` CPIs into the engine and an address with no program behind
@@ -36,6 +49,7 @@ if (process.env.CI) {
     [
       ["SAUCE_KITCHEN_SO", KITCHEN_SO],
       ["SAUCE_RUST_ENGINE_SO", ENGINE_SO],
+      ["SAUCE_KITCHEN_IDL_JSON", KITCHEN_IDL_JSON],
     ] as const
   ).filter(([, path]) => path === undefined || !existsSync(path));
 
@@ -49,8 +63,13 @@ if (process.env.CI) {
   }
 }
 
-export const describeKitchen =
-  KITCHEN_SO && existsSync(KITCHEN_SO) && ENGINE_SO ? describe : describe.skip;
+// existsSync on each, not truthiness on some: a set-but-missing path would otherwise run the suite
+// and fail inside `start()` rather than being named here.
+export const describeKitchen = [KITCHEN_SO, ENGINE_SO, KITCHEN_IDL_JSON].every(
+  (path) => path !== undefined && existsSync(path),
+)
+  ? describe
+  : describe.skip;
 
 export interface Bench {
   svm: LiteSVM;
@@ -69,13 +88,14 @@ export const start = async (): Promise<Bench> => {
   // load TWO programs into one VM — the kitchen and the engine it CPIs into — and the only ones that
   // hit an intermittent native std::bad_alloc at teardown, at the LOWEST peak RSS of the seven on a
   // box with GBs free. Reading the files here keeps the loading in JS.
-  svm.addProgram(IDL_ADDRESS, new Uint8Array(readFileSync(KITCHEN_SO as string)));
+  const kitchen = kitchenProgramId();
+  svm.addProgram(kitchen, new Uint8Array(readFileSync(KITCHEN_SO as string)));
   const engine = (await generateKeyPairSigner()).address;
   svm.addProgram(engine, new Uint8Array(readFileSync(ENGINE_SO as string)));
   const owner = await generateKeyPairSigner();
   svm.airdrop(owner.address, lamports(1_000_000_000_000n));
 
-  return { svm, owner, kitchen: IDL_ADDRESS, engine };
+  return { svm, owner, kitchen, engine };
 };
 
 /**

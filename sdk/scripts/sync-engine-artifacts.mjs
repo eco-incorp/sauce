@@ -49,15 +49,16 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 // it. That digest is the whole guarantee: bytes that match it ARE the pinned artifact, whichever
 // commit produced them.
 //
-// There is deliberately no commit pin. v12 releases its components INDEPENDENTLY — `v12-evm-v0.4.0`
-// is built from `dbdda3ff` and `v12-svm-v0.5.0` from `bb65620c` — so a single shared commit is not
-// merely redundant with the digest, it is unsatisfiable. Requiring one made a routine per-component
+// There is deliberately no commit pin. v12 releases its components INDEPENDENTLY, so a shared commit
+// is not a property this can rely on — `v12-evm-v0.4.0` came from `dbdda3ff` while `v12-svm-v0.5.0`
+// came from `bb65620c`. (The current pair happen to share `ffb90775`; that is a coincidence of one
+// release run, not something to assert.) Requiring one made a routine per-component
 // bump fail as "the tag moved".
 //
 // To bump: change the tag, run this script, and paste the digest it reports.
 
 const V12_EVM = {
-  tag: "v12-evm-v0.4.0",
+  tag: "v12-evm-v0.5.0",
   asset: "runtime.creation.hex",
   // keccak256 of the creation code, cross-checked against the release manifest's `creationCodeKeccak`.
   digest: "0x1cc79965657f4a4beb8a64a8d1a0f17e6844c16b24cca7f45e27e6a61de4f52e",
@@ -73,7 +74,7 @@ const V12_EVM = {
 // The manifest moved with it: `soSha256` at the top level became an `artifacts` array, so the digest
 // is looked up BY ASSET NAME rather than by a fixed key.
 const V12_SVM = {
-  tag: "v12-svm-v0.5.0",
+  tag: "v12-svm-v0.6.0",
   asset: "engine-devnet.so",
   digest: "5841c72fa8d78e8b57186fca57eda6e4019c9333f71a07900f214011a1503d21",
   manifestKey: null,
@@ -84,9 +85,9 @@ const V12_SVM = {
 // `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is Uniswap's,
 // so neither appears here and neither should — see ARTIFACTS below.
 const V12_EVM_ABIS = {
-  tag: "v12-evm-v0.4.0",
+  tag: "v12-evm-v0.5.0",
   asset: "abis.json",
-  digest: "3968eabdb54ac0dcd92946563c92c10bcd1e3edb4a4843cebeb9223138e38584",
+  digest: "55ff5a39a4a40de9e6f4d2ba2235feedefbca6c8bc17fc944c3a420640f8c7f3",
   manifestKey: "abis.sha256",
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
@@ -95,9 +96,9 @@ const V12_EVM_ABIS = {
 // a released binary is already pinned by tag + digest here, so a second copy in the tree would be a
 // third thing to keep in step. `artifacts/svm/` vendors only the BETA pair, which no release ships.
 const V12_KITCHEN = {
-  tag: "v12-svm-v0.5.0",
+  tag: "v12-svm-v0.6.0",
   asset: "kitchen.so",
-  digest: "bf14fbc3f983f13c70b825ae1451f851cc3e8040f5a5925a8e24112aa92520dd",
+  digest: "f3a051ac3837afae4a46c2cd3904372f3558f07869a00cd6ad932f7574fb9b1b",
   manifestKey: null,
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
@@ -107,7 +108,7 @@ const V12_KITCHEN = {
 // checks the SDK's released-engine constants against, so it is pinned exactly like the binary: an
 // engine whose wire moved must fail the digest here, not surprise a caller at run time.
 const V12_ENGINE_WIRE = {
-  tag: "v12-svm-v0.5.0",
+  tag: "v12-svm-v0.6.0",
   asset: "engine-wire-devnet.json",
   digest: "1bdb8dcda82e96fb7fca0911fdf5d28bcae8c67df1c66471f7f182e988d00fe2",
   manifestKey: null,
@@ -118,9 +119,9 @@ const V12_ENGINE_WIRE = {
 // transcribes these by hand (Anchor emits no TypeScript the SDK can vendor), which is precisely the
 // hand-copying that let BYTECODE_FORMAT_EPOCH rot. Pinned so the drift test can compare against it.
 const V12_KITCHEN_IDL = {
-  tag: "v12-svm-v0.5.0",
+  tag: "v12-svm-v0.6.0",
   asset: "kitchen-idl.json",
-  digest: "9c70d7cfd803a3af39b5cacac73bf3102ad4e83beddc010ea7e02a269d6c24a8",
+  digest: "3707e4a126e35b37515de77fe31b0f66ded7b08ec17d5cb7aad715b4c2b933d7",
   manifestKey: null,
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
