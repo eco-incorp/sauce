@@ -5,8 +5,9 @@
 //   1. The v12 EVM runtime — from the eco-incorp/v12 GitHub RELEASE, pinned to an immutable tag
 //      and checked against a digest committed here. No Huff toolchain, no submodule fetch, no
 //      compile step: the release publishes the exact bytes.
-//   2. The contract ABIs — four from the same release's `abis.json` (`Router`/`IRouter`/`Pot`/
-//      `Kitchen`, the contracts v12 owns), plus `IERC20` declared below (the ERC-20 standard is
+//   2. The contract ABIs — four from the `kitchen-evm` release's `abis.json` (`Router`/`IRouter`/
+//      `Pot`/`Kitchen`), a DIFFERENT component from item 1, plus `IERC20` declared below (the
+//      ERC-20 standard is
 //      OpenZeppelin's, never v12's) and `IUniswapV3Pool` read from `@uniswap/v3-core`. `SauceRouter`
 //      and `IStateView` are NOT produced: they came from the engine repo's Solidity tree, which no
 //      release ships, so anything that wanted them had to stop (see dev-tools/scripts/deploy.ts).
@@ -42,17 +43,26 @@ const SDK_DIR = resolve(SCRIPT_DIR, "..");
 const REPO_ROOT = resolve(SDK_DIR, "..");
 
 // ---------------------------------------------------------------------------
-// Release-sourced v12 engine assets.
+// Release-sourced v12 assets, from FOUR independently-released components:
+//
+//   v12-svm      the engine program and its wire artifact
+//   v12-evm      the EVM runtime creation code
+//   kitchen-svm  the kitchen program and its Anchor IDL
+//   kitchen-evm  the Solidity ABIs
+//
+// The kitchen used to ship INSIDE the v12-svm and v12-evm releases. It is its own component now, so
+// `kitchen.so`, `kitchen-idl.json` and `abis.json` come from the kitchen-* tags while the v12-* tags
+// carry only the engine. A pin left on a v12-* tag for one of those three does not resolve at all.
 //
 // PINNED BY TAG + DIGEST. A git tag is movable on GitHub, so the tag alone is not a pin — every
 // asset is checked against a digest committed HERE, not only against the manifest downloaded beside
 // it. That digest is the whole guarantee: bytes that match it ARE the pinned artifact, whichever
 // commit produced them.
 //
-// There is deliberately no commit pin. v12 releases its components INDEPENDENTLY, so a shared commit
-// is not a property this can rely on — `v12-evm-v0.4.0` came from `dbdda3ff` while `v12-svm-v0.5.0`
-// came from `bb65620c`. (The current pair happen to share `ffb90775`; that is a coincidence of one
-// release run, not something to assert.) Requiring one made a routine per-component
+// There is deliberately no commit pin. The components release INDEPENDENTLY, so a shared commit is
+// not a property this can rely on — `v12-evm-v0.4.0` came from `dbdda3ff` while `v12-svm-v0.5.0`
+// came from `bb65620c`. (All four currently share `a396434a`, from one coordinated re-release; that
+// is a property of that run, not something to assert.) Requiring one made a routine per-component
 // bump fail as "the tag moved".
 //
 // To bump: change the tag, run this script, and paste the digest it reports.
@@ -81,22 +91,22 @@ const V12_SVM = {
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
 
-// The four contracts v12 OWNS, as one asset. What the SDK ships under its own names is a superset:
-// `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is Uniswap's,
-// so neither appears here and neither should — see ARTIFACTS below.
+// The contracts the kitchen component OWNS, as one asset. What the SDK ships under its own names is
+// a superset: `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is
+// Uniswap's, so neither appears here and neither should — see ARTIFACTS below.
 const V12_EVM_ABIS = {
-  tag: "v12-evm-v0.5.0",
+  tag: "kitchen-evm-v0.1.0",
   asset: "abis.json",
-  digest: "55ff5a39a4a40de9e6f4d2ba2235feedefbca6c8bc17fc944c3a420640f8c7f3",
+  digest: "3f7f1fa908538f2b804505c6fa925cf633f55f5c1c550dba0bf809e06f25a427",
   manifestKey: "abis.sha256",
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
 
 // The kitchen — the Anchor loader that stages bytecode and owns Pots. Fetched rather than vendored:
 // a released binary is already pinned by tag + digest here, so a second copy in the tree would be a
-// third thing to keep in step. `artifacts/svm/` vendors only the BETA pair, which no release ships.
+// second thing to keep in step.
 const V12_KITCHEN = {
-  tag: "v12-svm-v0.6.0",
+  tag: "kitchen-svm-v0.1.0",
   asset: "kitchen.so",
   digest: "f3a051ac3837afae4a46c2cd3904372f3558f07869a00cd6ad932f7574fb9b1b",
   manifestKey: null,
@@ -119,7 +129,7 @@ const V12_ENGINE_WIRE = {
 // transcribes these by hand (Anchor emits no TypeScript the SDK can vendor), which is precisely the
 // hand-copying that let BYTECODE_FORMAT_EPOCH rot. Pinned so the drift test can compare against it.
 const V12_KITCHEN_IDL = {
-  tag: "v12-svm-v0.6.0",
+  tag: "kitchen-svm-v0.1.0",
   asset: "kitchen-idl.json",
   digest: "3707e4a126e35b37515de77fe31b0f66ded7b08ec17d5cb7aad715b4c2b933d7",
   manifestKey: null,
@@ -457,17 +467,19 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// The deployment record is NOT generated here any more.
+// No ADDRESSES are fetched or generated here, and that is now a deliberate hold rather than a gap.
 //
-// It used to come from the git dep's `deployments/v12.json`. That dep is gone, and the release
-// lineage does not replace it: `v12-svm-v0.5.0` and `v12-evm-v0.4.0` carry no `deployment-*.json`
-// asset — their predecessors did, and the deploy job that uploads one has not run for these
-// versions. So `src/deployments/v12.generated.ts` is committed source for now, hand-updated when a
-// deploy lands, and CI no longer diffs it against a regeneration.
+// Every one of the four releases publishes an `addresses.json`, and it is exactly the shape this
+// once wanted: `chainIndependent: true` / `clusterIndependent: true`, each address with its salt and
+// derivation, because the deploys are CREATE3 (EVM) and a fixed keypair (SVM). It is the only
+// published address source: the per-chain `deployment-kitchen-<chain>.json` the earlier cut of these
+// tags carried was replaced by it.
 //
-// That is a real loss: the file's own header called it generated so it could not drift from the
-// engine, and nothing enforces that today. The fix is to read `deployment-<cluster>.json` from the
-// release once the deploy job publishes one, which restores the property without restoring the dep.
+// It is not consumed because the rollout is not finished — the current Kitchen has code on base and
+// devnet only, so a committed address would resolve on eleven chains where nothing is deployed. See
+// `src/deployments/v12.generated.ts`, which is a chain roster for that reason. When the rollout
+// lands, `addresses.json` is what to pin: one asset per component, chain-independent, so the roster
+// no longer has to be maintained alongside it.
 
 console.log(
   !fetched

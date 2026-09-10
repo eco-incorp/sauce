@@ -25,9 +25,9 @@
  * So: point SAUCE_RUST_V12_RUNTIME at a file of `main`-lineage DEPLOYED runtime hex to run these.
  * `hnc -r` cannot produce it — Runtime.huff's CONSTRUCTOR returns its own bytecode, so the deployed
  * runtime is only known at deployment time — so deploy the creation bytecode and read the code back.
- * CI does exactly this, from the `v12-evm-v0.3.0` release's `runtime.creation.hex` (built from the
- * same sauce commit the published compiler's `compiler-v0.5.0` tag is cut from); by hand, from a
- * local sauce checkout:
+ * CI does exactly this, from the pinned v12-evm release's `runtime.creation.hex` (the tag lives in
+ * `scripts/sync-engine-artifacts.mjs`, so it does not go stale here); by hand, from a local sauce
+ * checkout:
  *   cd <sauce>/v12-evm && anvil --port 8799 --silent &
  *   KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80  # anvil's first account
  *   ADDR=$(cast send --rpc-url http://127.0.0.1:8799 --private-key $KEY --create \

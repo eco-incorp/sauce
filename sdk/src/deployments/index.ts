@@ -5,13 +5,13 @@
  * v12 runtime creation code, but not the ADDRESSES of the deployed contracts —
  * so a consumer could encode a call and had nowhere to send it, and
  * `createSauceSvmClient` (which takes a required `programId`) had no default to
- * offer. This module closes that with the addresses in `v12.generated.ts` — which
- * came from a deploy record that no longer exists, and so record the PREVIOUS
- * deployment. See that file's header before relying on any of them.
+ * offer. This module closes that with the addresses in `v12.generated.ts`, which
+ * record the PREVIOUS deployment: the pinned releases publish an `addresses.json`
+ * naming the current Kitchen and Router, and they are not these. See that file's
+ * header before relying on any of them.
  *
- * The EVM addresses are CREATE2-deterministic — factory + salt + initcode only,
- * with no deployer or nonce in the preimage — so they are IDENTICAL on every
- * chain. That is why this exposes one flat address set plus per-chain liveness
+ * The addresses are chain-invariant — the same on every chain they were deployed
+ * to — which is why this exposes one flat address set plus per-chain liveness
  * rather than repeating the same three addresses twelve times. Do not read that
  * as "the stack is live everywhere": liveness is per chain, and one chain in the
  * record is not live (see `v12FailedChainIds`).

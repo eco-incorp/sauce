@@ -73,10 +73,13 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
 - **There is no engine git dep.** Every v12 artifact comes from a RELEASE of the private
   `eco-incorp/v12` repo, pinned in `sdk/scripts/sync-engine-artifacts.mjs` by tag **and** by a
   sha256/keccak digest committed there. The digest is the guarantee — a git tag is movable on
-  GitHub — and there is deliberately no commit pin, because v12 releases its components
-  independently (the EVM and SVM tags are cut from different commits), so a single shared commit is
-  unsatisfiable rather than merely redundant. To bump: change the tag, run the script, paste the
-  digest it reports. Fetching needs GitHub auth — locally `gh auth setup-git` or an `~/.npmrc`
+  GitHub — and there is deliberately no commit pin, because FOUR components release independently:
+  `v12-svm` (engine + wire artifact), `v12-evm` (runtime creation code), `kitchen-svm` (kitchen
+  program + Anchor IDL) and `kitchen-evm` (the Solidity ABIs). Do not look for `abis.json`,
+  `kitchen.so` or `kitchen-idl.json` under a `v12-*` tag — they moved to the `kitchen-*` releases.
+  The tags MAY be cut from different commits (`v12-evm-v0.4.0` and `v12-svm-v0.5.0` were), so a
+  shared commit is not a property to rely on even while all four happen to share one after a
+  coordinated re-release. To bump: change the tag, run the script, paste the digest it reports. Fetching needs GitHub auth — locally `gh auth setup-git` or an `~/.npmrc`
   token; CI passes the `ECO_INCORP_TOKEN` secret as `GH_TOKEN`.
 - **Foundry is required only to RUN things, never to build artifacts.** The sync no longer compiles
   anything: the ABIs arrive as a release asset. What still needs Foundry is `anvil` on `PATH` for
@@ -107,13 +110,14 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   which read them for local tests/deploys. **Nothing is tracked** — an `artifacts/` directory at any
   depth is gitignored, as is every `dist/` — so they exist only where a sync has run, and `tsc` does
   not emit them: **after any repin run `pnpm --filter './sdk' sync-engine-artifacts`**. Four ABIs
-  come from the release's `abis.json`, `IERC20` is declared in the script (the ERC-20 standard is
+  come from the `kitchen-evm` release's `abis.json`, `IERC20` is declared in the script (the ERC-20 standard is
   never v12's), `IUniswapV3Pool` comes from `@uniswap/v3-core`, and `V12RuntimeBytecode` wraps the
   release's creation code. CI asserts all 7 landed, so a broken generation fails there rather than
   shipping an empty dir. No generated file is committed and drift-checked any more:
   `engine-abi.generated.ts` went with the engine that produced it.
-  (`sdk/src/deployments/v12.generated.ts` is committed but is not generated: no release publishes a
-  deploy record, so it is plain source until one does.)
+  (`sdk/src/deployments/v12.generated.ts` is committed but is not generated, and nothing checks it.
+  Every release now publishes an `addresses.json` — that is what to generate it from once the rollout
+  covers every network; see that file's header for why it is held until then.)
 - **`V12RuntimeBytecode.json` comes from a pinned release asset.**
   The engine deleted its committed `engine-v12/snapshots/` copy (`chore(v12): compile the runtime
 at deploy time`) because a second source of truth rotted — six changed `.huff` handlers once
