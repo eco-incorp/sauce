@@ -36,10 +36,6 @@ describeKitchen("kitchen: code buffer lifecycle", () => {
   // Released before jest tears the module registry down. The VM is a napi handle over a BPF runtime
   // with two loaded programs, and holding one at module scope — which no other engine suite here
   // does — is the shape the intermittent teardown abort followed.
-  afterAll(() => {
-    bench = undefined as unknown as Bench;
-  });
-
   it("create → write → finalize → close round-trips a program's bytes and refunds", async () => {
     const nonce = 1n;
     const { address: codeBuffer } = await deriveCodeBufferPda(

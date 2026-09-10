@@ -52,10 +52,6 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
   // Released before jest tears the module registry down. The VM is a napi handle over a BPF runtime
   // with two loaded programs, and holding one at module scope — which no other engine suite here
   // does — is the shape the intermittent teardown abort followed.
-  afterAll(() => {
-    bench = undefined as unknown as Bench;
-  });
-
   const PROGRAM = new Uint8Array([0x01, 0x2a, 0x00]);
 
   /** Creates the Pot `cook` will sign for, and hands back the tail entry it rides in — UNSIGNED. */

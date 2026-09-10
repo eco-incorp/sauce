@@ -168,11 +168,16 @@ export const present = (
   return { data: account.data, owner: account.programAddress as Address };
 };
 
-// ONE LiteSVM for the whole file, built on first use. It holds a real BPF VM with two loaded
-// programs and exposes no close, so its native arena lives until this process exits — one per test
-// aborted CI's node with std::bad_alloc. Safe to share: every test below uses its own pot salt /
-// buffer nonce. Memoized rather than created in a top-level `beforeAll` so that a gated-off run
-// (no KITCHEN_SO) builds nothing at all.
+// ONE LiteSVM per suite, built in `beforeAll`. It holds a real BPF VM with two loaded programs and
+// exposes no close, so its native arena is reclaimed only when this process exits — one VM per test
+// aborted CI's node with std::bad_alloc. Safe to share across a file: every test uses its own pot
+// salt / buffer nonce.
+//
+// **Keep the reference for the life of the process.** Clearing it in `afterAll` makes the VM
+// collectable while jest is still finishing, so litesvm's native finalizer can free that arena
+// mid-run — which is where the intermittent `std::bad_alloc` landed, after the last test's trace
+// line and before jest printed PASS. Holding it costs nothing: the process is about to exit, and
+// the OS reclaims the arena either way.
 
 /**
  * Names each test on stderr as it starts, when SAUCE_TRACE_TESTS is set.
