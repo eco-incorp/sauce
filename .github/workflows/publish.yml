@@ -36,8 +36,26 @@ on:
       - "v*"
 
 jobs:
+  # THE GATE. A tag push matches neither ci.yml's nor lint.yml's `branches` filter, so a tag used to
+  # publish whatever compiled with no test, lint or typecheck run against the tagged commit — and
+  # `npm version` takes the version from the tag, so there was not even a version-bump PR to gate on.
+  #
+  # These call the same workflows CI runs rather than repeating their steps here. Both also trigger
+  # directly on `v*` now, so the tagged commit is checked even if this job is later restructured;
+  # that means one duplicate run per release, which is the cheaper half of the trade.
+  checks:
+    name: Checks
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint.yml
+    secrets: inherit
+
   publish:
     name: Publish @eco-incorp/sauce
+    needs: [checks, lint]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -66,6 +84,18 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+
+      # BEFORE the build, so a token that cannot publish fails in seconds rather than after the
+      # gate and the build — with the tag already pushed, which is the worst version of this. Note
+      # what it does NOT prove: the FIRST publish of a name cannot be authorised in advance, so for
+      # `@eco-incorp/sauce`'s first release this only shows the token is valid and scoped somewhere.
+      - name: Verify the npm token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          who=$(npm whoami) || { echo "::error::NPM_TOKEN is missing or invalid — refusing to build a release that cannot publish"; exit 1; }
+          echo "authenticated to npmjs.com as $who"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
