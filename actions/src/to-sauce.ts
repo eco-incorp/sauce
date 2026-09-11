@@ -235,9 +235,9 @@ export function buildAction(
     case "uniswapV3ExactInputMultiHop":
       return uniswapV3ExactInputMultiHop(emit, action, amountIn, needsOutput);
     case "uniswapV4ExactInput":
-      return uniswapV4ExactInput(emit, action, amountIn);
+      return uniswapV4ExactInput(emit, action, amountIn, needsOutput);
     case "uniswapV4ExactInputMultiHop":
-      return uniswapV4ExactInputMultiHop(emit, action, amountIn);
+      return uniswapV4ExactInputMultiHop(emit, action, amountIn, needsOutput);
     case "curveSwap":
       return curveSwap(emit, action, amountIn, needsOutput);
     case "balancerV2Swap":
@@ -251,7 +251,7 @@ export function buildAction(
     case "curveRouterNGSwap":
       return curveRouterNGSwap(emit, action, amountIn, needsOutput);
     case "ambientSwap":
-      return ambientSwap(emit, action, amountIn);
+      return ambientSwap(emit, action, amountIn, needsOutput);
     case "dodoSwap":
       return dodoSwap(emit, action, amountIn, needsOutput);
     case "maverickSwap":
@@ -269,7 +269,7 @@ export function buildAction(
     case "fluidDexT1Swap":
       return fluidDexT1Swap(emit, action, amountIn, needsOutput);
     case "fluidDexLiteSwap":
-      return fluidDexLiteSwap(emit, action, amountIn);
+      return fluidDexLiteSwap(emit, action, amountIn, needsOutput);
     case "transfer":
       return transfer(emit, action, amountIn);
     case "approve":
@@ -348,6 +348,36 @@ function voidCall(target: Expr, value: Expr, cd: Fragment, passThrough: Expr): A
   return { stmts: [...cd.stmts, `${evmCall(target, value, cd.expr)};`], output: passThrough };
 }
 
+/**
+ * Runs `stmts` between a pre/post `balanceOf(ctx.self())` snapshot of `token` and returns the
+ * DELTA as the output.
+ *
+ * The shape for any venue whose call has no usable `uint256` return — an array, a struct, an order
+ * id, or `bytes`. `capturedCall` decodes the first 32 bytes of the return, which for those is an
+ * ABI offset or an unrelated value, not an amount. Seven builders got that wrong; this is the one
+ * correct pattern, written once.
+ *
+ * The caller must have routed the output to `ctx.self()` for the delta to mean anything.
+ */
+function balanceDeltaResult(
+  emit: Emitter,
+  needsOutput: boolean,
+  token: Expr,
+  stmts: readonly Stmt[],
+  passThrough: Expr,
+): ActionResult {
+  if (!needsOutput) return { stmts: [...stmts], output: passThrough };
+
+  const pre = selfBalance(emit, token);
+  const post = selfBalance(emit, token);
+  const delta = bindConst(emit, "delta", `${post.expr} - ${pre.expr}`);
+
+  return {
+    stmts: [...pre.stmts, ...stmts, ...post.stmts, ...delta.stmts],
+    output: delta.expr,
+  };
+}
+
 /** `balanceOf(ctx.self())` on `token`, as a bound `uint256` local. */
 function selfBalance(emit: Emitter, token: Expr): Fragment {
   const cd = calldata(emit, "balanceOf(address)", [SELF]);
@@ -412,6 +442,7 @@ function uniswapV4ExactInput(
   emit: Emitter,
   action: UniswapV4ExactInputAction,
   amountIn: Expr,
+  needsOutput: boolean,
 ): ActionResult {
   const currencyIn = action.zeroForOne ? action.poolKey.currency0 : action.poolKey.currency1;
   const currencyOut = action.zeroForOne ? action.poolKey.currency1 : action.poolKey.currency0;
@@ -464,22 +495,26 @@ function uniswapV4ExactInput(
   const sel = bindBytes(emit, "sel", selector("execute(bytes,bytes[])"));
   const blob = bindBytes(emit, "v4", hexToBytes(executeCalldata));
 
-  return {
-    stmts: [
-      ...transferCd.stmts,
-      `${evmCall(word(currencyIn), ZERO, transferCd.expr)};`,
-      ...sel.stmts,
-      ...blob.stmts,
-      `${evmCall(word(action.router), ZERO, concatCalldata(sel.expr, [blob.expr]))};`,
-    ],
-    output: amountIn,
-  };
+  const swap: Stmt[] = [
+    ...transferCd.stmts,
+    `${evmCall(word(currencyIn), ZERO, transferCd.expr)};`,
+    ...sel.stmts,
+    ...blob.stmts,
+    `${evmCall(word(action.router), ZERO, concatCalldata(sel.expr, [blob.expr]))};`,
+  ];
+
+  // V4's take recipient is baked into a STATICALLY encoded blob, so unlike every other builder this
+  // one cannot redirect the output to ctx.self() when capturing. The delta is therefore measured on
+  // the recipient the caller named — which is the true realized output either way, and is only
+  // chainable when that recipient is the executing contract.
+  return balanceDeltaResult(emit, needsOutput, word(currencyOut), swap, amountIn);
 }
 
 function uniswapV4ExactInputMultiHop(
   emit: Emitter,
   action: UniswapV4ExactInputMultiHopAction,
   amountIn: Expr,
+  needsOutput: boolean,
 ): ActionResult {
   const currencyOut = action.path[action.path.length - 1].intermediateCurrency;
 
@@ -534,16 +569,19 @@ function uniswapV4ExactInputMultiHop(
   const sel = bindBytes(emit, "sel", selector("execute(bytes,bytes[])"));
   const blob = bindBytes(emit, "v4", hexToBytes(executeCalldata));
 
-  return {
-    stmts: [
-      ...transferCd.stmts,
-      `${evmCall(word(action.currencyIn), ZERO, transferCd.expr)};`,
-      ...sel.stmts,
-      ...blob.stmts,
-      `${evmCall(word(action.router), ZERO, concatCalldata(sel.expr, [blob.expr]))};`,
-    ],
-    output: amountIn,
-  };
+  const swap: Stmt[] = [
+    ...transferCd.stmts,
+    `${evmCall(word(action.currencyIn), ZERO, transferCd.expr)};`,
+    ...sel.stmts,
+    ...blob.stmts,
+    `${evmCall(word(action.router), ZERO, concatCalldata(sel.expr, [blob.expr]))};`,
+  ];
+
+  // V4's take recipient is baked into a STATICALLY encoded blob, so unlike every other builder this
+  // one cannot redirect the output to ctx.self() when capturing. The delta is therefore measured on
+  // the recipient the caller named — which is the true realized output either way, and is only
+  // chainable when that recipient is the executing contract.
+  return balanceDeltaResult(emit, needsOutput, word(currencyOut), swap, amountIn);
 }
 
 /** `abi.encode(bytes("0x10"), [abi.encode(actions, params)])` — the V4 router's two-level input. */
@@ -646,6 +684,18 @@ function balancerV2BatchSwap(
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
+  // `getExplicitAmount` reads `steps[0].amount`, which a batch swap always has, so `amountRef`
+  // could never win the `resolveAmountIn` precedence — it was accepted and silently ignored. The
+  // step amounts are baked into the pre-encoded blob below, so a runtime amount genuinely cannot
+  // reach this venue: say so rather than encode a different trade than the caller asked for.
+  if (action.amountRef !== undefined) {
+    throw new Error(
+      "balancerV2BatchSwap: `amountRef` cannot be applied — the per-step amounts are ABI-encoded " +
+        "into the batchSwap calldata at build time, so a chained runtime amount has nowhere to go. " +
+        "Set `steps[].amount` explicitly.",
+    );
+  }
+
   const recipientExpr = needsOutput ? SELF : word(action.recipient);
   // Pre-encode the complex calldata with viem, then splice in the runtime values for funds.sender
   // (ctx.self()) and funds.recipient.
@@ -768,7 +818,14 @@ function balancerV2BatchSwap(
 
   stmts.push(`${evmCall(word(action.vault), ZERO, concatCalldata(sel.expr, parts))};`);
 
-  return { stmts, output: amountIn };
+  // `batchSwap` returns `int256[] assetDeltas` — an array, so there is no uint256 to decode, and
+  // the entry that matters is signed and negative for the asset received. `recipientExpr` is
+  // already ctx.self() whenever we are capturing, so the self delta on the last step's output asset
+  // is the realized amount without any sign handling.
+  const lastStep = action.steps[action.steps.length - 1];
+  const assetOut = action.assets[Number(lastStep.assetOutIndex)];
+
+  return balanceDeltaResult(emit, needsOutput, word(assetOut), stmts, amountIn);
 }
 
 // ---------------------------------------------------------------------------
@@ -872,7 +929,12 @@ function balancerV3Swap(
   );
 }
 
-function ambientSwap(emit: Emitter, action: AmbientSwapAction, amountIn: Expr): ActionResult {
+function ambientSwap(
+  emit: Emitter,
+  action: AmbientSwapAction,
+  amountIn: Expr,
+  needsOutput: boolean,
+): ActionResult {
   // abi.encode(base, quote, poolIdx, isBuy, inBaseQty, qty, tip, limitPrice, minOut, settleFlags)
   const cmd = bindConst(
     emit,
@@ -892,12 +954,14 @@ function ambientSwap(emit: Emitter, action: AmbientSwapAction, amountIn: Expr): 
   );
   const cd = calldata(emit, "userCmd(uint16,bytes)", ["1n", cmd.expr]);
 
-  return voidCall(
-    word(action.dex),
-    ZERO,
-    { stmts: [...cmd.stmts, ...cd.stmts], expr: cd.expr },
-    amountIn,
-  );
+  // `userCmd` returns `bytes`, so there is no uint256 to decode. Ambient settles to msg.sender —
+  // ctx.self() here — so the self delta on the received side IS the output. `isBuy` is "paying
+  // base, receiving quote" (AMM_SWAP_INTERFACES.md), so the received token is the quote when
+  // buying and the base otherwise.
+  const swap: Stmt[] = [...cmd.stmts, ...cd.stmts, `${evmCall(word(action.dex), ZERO, cd.expr)};`];
+  const tokenOut = word(action.isBuy ? action.quote : action.base);
+
+  return balanceDeltaResult(emit, needsOutput, tokenOut, swap, amountIn);
 }
 
 function dodoSwap(
@@ -1008,7 +1072,13 @@ function fraxswapSwap(
     word(action.deadline),
   ]);
 
-  return capturedCall(emit, needsOutput, word(action.router), ZERO, cd, amountIn);
+  // `swapExactTokensForTokens` returns `uint256[] memory amounts` — the SAME selector uniswapV2Swap
+  // uses, where decoding the first 32 bytes yields the ABI offset (0x20), not the output amount.
+  // This builder captured it anyway, so a chained fraxswap output was the constant 32.
+  const swap: Stmt[] = [...cd.stmts, `${evmCall(word(action.router), ZERO, cd.expr)};`];
+  const tokenOut = word(action.path[action.path.length - 1]);
+
+  return balanceDeltaResult(emit, needsOutput, tokenOut, swap, amountIn);
 }
 
 function clipperSwap(
@@ -1044,7 +1114,18 @@ function integralSwap(
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
-  const recipient = needsOutput ? SELF : word(action.recipient);
+  // `sell` returns `uint256 orderId`, and Integral executes orders LATER — there is no output in
+  // this transaction to capture, so any number returned here would be a lie. Previously the order
+  // id was captured and chained as an amount.
+  if (needsOutput) {
+    throw new Error(
+      "integralSwap: Integral is a delayed-order venue — `sell` returns an orderId and the swap " +
+        "executes in a later transaction, so this action has no output amount to chain from. " +
+        "Give the next action an explicit amount or an amountRef to a different action.",
+    );
+  }
+
+  const recipient = word(action.recipient);
   const params = tuple([
     word(action.tokenIn),
     word(action.tokenOut),
@@ -1059,7 +1140,7 @@ function integralSwap(
     params,
   ]);
 
-  return capturedCall(emit, needsOutput, word(action.delay), ZERO, cd, amountIn);
+  return voidCall(word(action.delay), ZERO, cd, amountIn);
 }
 
 function fluidDexT1Swap(
@@ -1083,6 +1164,7 @@ function fluidDexLiteSwap(
   emit: Emitter,
   action: FluidDexLiteSwapAction,
   amountIn: Expr,
+  needsOutput: boolean,
 ): ActionResult {
   // DexKey is a tuple: (token0, token1, salt)
   const dexKey = tuple([word(action.token0), word(action.token1), word(action.salt)]);
@@ -1091,10 +1173,16 @@ function fluidDexLiteSwap(
     flag(action.swap0To1),
     amountIn, // positive = exact input
     word(action.amountOutMin),
-    word(action.recipient),
+    needsOutput ? SELF : word(action.recipient),
   ]);
 
-  return voidCall(word(action.dex), ZERO, cd, amountIn);
+  // `swapSingle` returns `(int256 amount0, int256 amount1)` — a signed pair, so the first word is
+  // neither reliably the output nor reliably positive. The self delta on the received token needs
+  // no sign handling.
+  const swap: Stmt[] = [...cd.stmts, `${evmCall(word(action.dex), ZERO, cd.expr)};`];
+  const tokenOut = word(action.swap0To1 ? action.token1 : action.token0);
+
+  return balanceDeltaResult(emit, needsOutput, tokenOut, swap, amountIn);
 }
 
 // ---------------------------------------------------------------------------

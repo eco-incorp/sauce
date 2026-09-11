@@ -639,6 +639,70 @@ describe("actionsToSauce — native value", () => {
   });
 });
 
+/**
+ * Seven builders stored the PASS-THROUGH INPUT amount (or worse) as their chained output, so a
+ * downstream approve/swap acted on a number denominated in the wrong asset — or, for fraxswap, on
+ * the constant 32, and for integral on an order id.
+ *
+ * The check is the same for each: the stored slot must be a realized value, never the literal
+ * amount that went in. `AMOUNT` is a compile-time literal, so if it appears as the whole
+ * right-hand side of the store, the builder captured nothing.
+ */
+describe("actionsToSauce — a chained output is realized, never the input amount", () => {
+  const chained = (name: string): string =>
+    actionsToSauceSource([{ ...CASES[name].action, saveOutputAs: "out" } as RoutingAction]);
+
+  /** The expression a chained action stores, i.e. the right-hand side of `let v_out = …;`. */
+  const storedOutput = (source: string): string => {
+    const m = source.match(/let v_out = (.+);/);
+    assert.ok(m, `expected a stored output slot\n${source}`);
+    return m[1];
+  };
+
+  for (const name of [
+    "balancerV2BatchSwap",
+    "ambientSwap",
+    "uniswapV4ExactInput",
+    "uniswapV4ExactInputMultiHop",
+    "fluidDexLiteSwap",
+    "fraxswapSwap",
+  ]) {
+    it(`${name} stores a balance delta, not \`${AMOUNT}n\``, () => {
+      const source = chained(name);
+      const stored = storedOutput(source);
+
+      assert.notEqual(stored, `${AMOUNT}n`, `${name} stored the input amount\n${source}`);
+      // The delta shape: two `balanceOf(address)` reads bracketing the call, subtracted. The
+      // emitted source carries the SELECTOR, not the signature.
+      assert.equal(
+        source.match(/70a08231/g)?.length,
+        2,
+        `${name} should snapshot the output balance pre and post\n${source}`,
+      );
+      assert.match(stored, /^delta\d+$/, `${name} should store the bound delta\n${source}`);
+      assert.match(source, /const delta\d+ = bal\d+ - bal\d+;/, `${name} delta shape\n${source}`);
+    });
+  }
+
+  // Integral places an order now and executes it later, so there is no output in this transaction.
+  // Returning any number would be a lie; the previous code chained the order id.
+  it("integralSwap refuses to be chained at all", () => {
+    assert.throws(() => chained("integralSwap"), /delayed-order venue/);
+  });
+
+  // `steps[0].amount` always satisfies getExplicitAmount, so amountRef lost the precedence race and
+  // was accepted then ignored. The amounts are ABI-encoded at build time, so it cannot be honoured.
+  it("balancerV2BatchSwap rejects an amountRef it could never apply", () => {
+    assert.throws(
+      () =>
+        actionsToSauceSource([
+          { ...CASES.balancerV2BatchSwap.action, amountRef: "prev" } as RoutingAction,
+        ]),
+      /amountRef` cannot be applied/,
+    );
+  });
+});
+
 describe("actionsToSauce — chaining", () => {
   const v3 = (extra: Record<string, unknown>): RoutingAction =>
     ({ ...CASES.uniswapV3ExactInput.action, ...extra }) as RoutingAction;
