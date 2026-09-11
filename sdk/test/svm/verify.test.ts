@@ -9,7 +9,10 @@
  */
 import { createHash } from "node:crypto";
 import { AccountRole, getAddressDecoder } from "@solana/kit";
-import { buildExecuteFromAccountInstruction } from "../../src/svm/instructions.js";
+import {
+  buildExecuteFromAccountInstruction,
+  buildExecuteInstruction,
+} from "../../src/svm/instructions.js";
 import { svmSettleRefs, svmSettleSource } from "../../src/svm/recipes/index.js";
 import {
   decodeSvmSettleExecution,
@@ -323,9 +326,11 @@ describe("verifySvmSettleExecution", () => {
     expect(result.mismatch).toMatch(/pin does not equal sha256/);
   });
 
-  it("proves genuineness via the calldata PIN alone, with NO partner bytecode", () => {
-    // fx.ix was pinned to sha256(the real settle bytecode) == sha256(canonical) — the SDK recompiles the
-    // canonical settle itself and matches the pin, so a partner needs no bytecode.
+  it("accepts a CALLER-ASSERTED pin alone, with NO partner bytecode", () => {
+    // fx.pin is sha256(the real settle bytecode) == sha256(canonical), so the SDK's own recompile
+    // matches it and a partner needs no bytecode. Note what this does NOT show: nothing on chain
+    // checks this pin, so the verdict is only as good as the caller's evidence for it — which is
+    // why it is `caller-asserted-pin` rather than proof.
     const fx = buildFixture(2, { minOut: 321n });
     const result = verifySvmSettleExecution({
       instructionData: fx.ix.data as Uint8Array,
@@ -334,9 +339,49 @@ describe("verifySvmSettleExecution", () => {
       pin: fx.pin,
     });
     expect(result.genuine).toBe(true);
-    expect(result.verifiedBy).toBe("pin");
+    expect(result.verifiedBy).toBe("caller-asserted-pin");
     expect(result.pinMatchesCanonical).toBe(true);
     expect(result.bytecodeMatchesCanonical).toBeNull();
+  });
+
+  // The inline `execute` path had NO test at all — every fixture used execute_from_account — which is
+  // how a pin-only verdict for inline bytecode survived a previous audit round.
+  it("verifies an INLINE execute against its own payload, no pin needed", () => {
+    const fx = buildFixture(1, { minOut: 555n });
+    const ix = buildExecuteInstruction({
+      programId: PROGRAM as never,
+      bytecode: fx.bytecode,
+      accounts: fx.userMetas,
+    });
+    const result = verifySvmSettleExecution({
+      instructionData: ix.data as Uint8Array,
+      accounts: bareAccounts(ix),
+      ...fx.expected,
+    });
+    expect(result.genuine).toBe(true);
+    expect(result.verifiedBy).toBe("inline-bytecode");
+  });
+
+  it("refuses an INLINE execute carrying arbitrary bytecode, even with a canonical pin", () => {
+    // The attack: the program is inline, so the engine runs THESE bytes and never looks at a pin.
+    // Supplying `pin = sha256(canonical settle)` used to return genuine: true / verifiedBy: "pin",
+    // because the verdict never read `decoded.instruction`.
+    const fx = buildFixture(1, { minOut: 555n });
+    const attacker = new Uint8Array(fx.bytecode.length).fill(0x99);
+    const ix = buildExecuteInstruction({
+      programId: PROGRAM as never,
+      bytecode: attacker,
+      accounts: fx.userMetas,
+    });
+    const result = verifySvmSettleExecution({
+      instructionData: ix.data as Uint8Array,
+      accounts: bareAccounts(ix),
+      ...fx.expected,
+      pin: fx.pin,
+    });
+    expect(result.genuine).toBe(false);
+    expect(result.verifiedBy).toBe("inline-bytecode");
+    expect(result.mismatch).toMatch(/inline execute bytecode does not byte-match/);
   });
 
   it("rejects a settle-SHAPED decoy whose pin does not match the canonical settle (no bytecode)", () => {
@@ -356,7 +401,7 @@ describe("verifySvmSettleExecution", () => {
       pin: new Uint8Array(32).fill(0xcd),
     });
     expect(result.genuine).toBe(false);
-    expect(result.verifiedBy).toBe("pin");
+    expect(result.verifiedBy).toBe("caller-asserted-pin");
     expect(result.pinMatchesCanonical).toBe(false);
     expect(result.mismatch).toMatch(/pin does not match sha256/);
   });

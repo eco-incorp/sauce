@@ -286,10 +286,10 @@ function resolveSettleTarget(input: UniversalAddressInput | undefined): SvmSettl
  * decode the envelope with `decodePortalCalldataWithAccounts` and call `decodeSvmSettleExecution` directly.)
  *
  * AND IT MUST VALIDATE `target`. Matching is on the envelope's instruction data ONLY — nothing here looks
- * at the callee. But the pin is not self-enforcing: it proves genuineness because the SAUCE ENGINE gates
- * the staged buffer's content hash against it on-chain, so the guarantee is a property of that program and
- * says nothing about an arbitrary one that merely accepts the same discriminator and ignores the pin
- * field. For `[{ target: attackerProgram, data: <envelope pinned to the canonical settle> }]` this returns
+ * at the callee. The pin is not self-enforcing, and not engine-enforced either: the released engine's
+ * `execute_from_account` has no payload to check one against, so a pin is an assertion by whoever
+ * supplied it — and on this path that is the untrusted call object itself. It says nothing about an
+ * arbitrary program that merely accepts the same discriminator. For `[{ target: attackerProgram, data: <envelope pinned to the canonical settle> }]` this returns
  * a `genuine` verdict while the attacker's program runs whatever it likes. `target` is carried through on
  * the result for exactly this check — require `{ kind: 'program' }` and compare its `address` against the
  * Sauce engine program id you trust (`v12SvmProgramId`). `absent` (the call named no callee) and

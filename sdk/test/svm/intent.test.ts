@@ -186,7 +186,7 @@ describe("extractSvmSettleFromIntent / extractSvmSettleFromCalls", () => {
     expect(found!.hadBufferAccount).toBe(true); // the envelope carried the full [buffer, ...user] list
     expect(found!.accounts.owner).toBe(fx.addrByRef.owner);
     expect(found!.genuine).toBe(true); // verified via the calldata pin vs the SDK's recompiled canonical
-    expect(found!.verifiedBy).toBe("pin");
+    expect(found!.verifiedBy).toBe("caller-asserted-pin");
   });
 
   it("additionally byte-matches when the staged bytecode is supplied", () => {

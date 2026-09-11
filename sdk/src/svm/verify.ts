@@ -360,17 +360,32 @@ export interface SvmSettleExecutionVerifyInput
   pin?: Uint8Array;
 }
 
-/** How genuineness was established. `bytecode`: the supplied bytes byte-match the canonical settle AND
- *  the calldata pin ties to them — a pinless calldata commits to nothing, so it is never genuine on this
- *  path however good the bytes are. `pin`: no bytecode, but the calldata pin equals `sha256(canonical settle)` — proof
- *  that the program committed by this calldata IS the genuine settle, because the Sauce engine gates the
- *  staged buffer's CONTENTS against the pin and reverts on a mismatch. That gate is the engine's, so it
- *  binds the buffer and nothing else: the instruction's CALLEE is outside every verdict here, and an
- *  arbitrary program accepting the same discriminator can ignore the pin field entirely — see
- *  `ExtractedSvmSettle.target`, whose `program` state a caller must compare against the engine program
- *  id it trusts. `none`: no pin and no bytecode — genuineness cannot be established from structure
- *  alone, so `genuine` is false. */
-export type SvmSettleVerifiedBy = "bytecode" | "pin" | "none";
+/**
+ * How genuineness was established. The verdicts differ in what they actually prove, and the gap
+ * between the strongest and the weakest is the whole reason this type is not a boolean.
+ *
+ * `inline-bytecode` — an `execute`: the program is IN the calldata, and it byte-matches the
+ * canonical settle. The bytes verified are the bytes that run, with nothing in between. A pin means
+ * nothing on this path (the engine never reads one) and cannot make an inline execution genuine.
+ *
+ * `bytecode` — an `execute_from_account` where the caller supplied the staged bytes: they match the
+ * canonical settle AND the caller's pin ties to them. A pinless calldata commits to nothing, so it
+ * is never genuine here however good the bytes are.
+ *
+ * `caller-asserted-pin` — an `execute_from_account` with no bytecode, whose pin equals
+ * `sha256(canonical settle)`. **This is not an on-chain guarantee.** The released engine's
+ * `execute_from_account` has no payload, so nothing enforces this pin at execute time; it means
+ * "the caller asserts these staged bytes hash to this", and it is only as good as the caller's
+ * evidence — a kitchen `cook_from_account` they witnessed. It was named `pin` while documented as
+ * engine-enforced, which is precisely the belief that made it dangerous.
+ *
+ * `none` — no pin and no bytecode. Genuineness cannot be established from structure alone.
+ *
+ * The instruction's CALLEE is outside every verdict here: an arbitrary program accepting the same
+ * discriminator can do whatever it likes — see `ExtractedSvmSettle.target`, whose `program` state a
+ * caller must compare against the engine program id it trusts.
+ */
+export type SvmSettleVerifiedBy = "inline-bytecode" | "bytecode" | "caller-asserted-pin" | "none";
 
 export interface SvmSettleExecutionVerification extends DecodedSvmSettleExecution {
   /** True iff the execution provably runs the genuine `svmSettleSource(escrowCount)` program. */
@@ -397,10 +412,14 @@ export interface SvmSettleExecutionVerification extends DecodedSvmSettleExecutio
  *     to tie to it (`sha256(bytecode) === pin`). Proves the exact staged bytes ARE the settle and WILL run.
  *     Both halves are load-bearing: calldata with no pin commits to no program at all, so bytes alone —
  *     however genuine — prove nothing about what runs, and the verdict is not genuine.
- *   - no bytecode, but the calldata carries a pin → check `pin === sha256(canonical settle)`. The pin is
- *     the buffer's content hash the engine enforces on-chain, so a match proves the committed program is
- *     the genuine settle (or the execution reverts on the pin gate) — a decoy's pin cannot match.
+ *   - no bytecode, but a pin was supplied → check `pin === sha256(canonical settle)`. NOTHING ENFORCES
+ *     THIS ON CHAIN: the released engine's `execute_from_account` has no payload, so this is the
+ *     caller asserting the staged bytes hash to that value, and it is worth exactly what their
+ *     evidence is worth — hence `verifiedBy: 'caller-asserted-pin'`.
  *   - neither → `genuine: false`, `verifiedBy: 'none'` (structure alone is not proof).
+ *
+ * An `execute` is handled separately and BEFORE any of the above: its program is inline in the
+ * calldata, so it is compared directly and a pin cannot make it genuine.
  *
  * Because `minOut`/`splCount` are folded into the bytecode, a `genuine` result also proves the program
  * enforces the `minOut`/`splCount` passed in — leaving only the resolved account identities for the
@@ -411,9 +430,10 @@ export function verifySvmSettleExecution(
 ): SvmSettleExecutionVerification {
   const decoded = decodeSvmSettleExecution(input);
   const canonical = compileCanonicalSettle(decoded.escrowCount, input);
-  // The CALLER's pin, from the kitchen's cook_from_account — this instruction has no payload to
-  // carry one. Everything downstream is unchanged: the pin is still what ties the bytes verified
-  // here to the bytes that run, it just arrives from the layer that actually commits to them.
+  // The CALLER's pin. This instruction has no payload to carry one, and nothing on chain checks it
+  // at execute time, so it is an assertion by whoever supplied it — not a guarantee. On the staged
+  // path it is the only thing tying the bytes verified here to the bytes that run, which is exactly
+  // why the verdict it produces is named `caller-asserted-pin`.
   const pin = input.pin;
 
   const pinMatchesCanonical = pin === undefined ? null : bytesEqual(sha256(canonical), pin);
@@ -428,6 +448,35 @@ export function verifySvmSettleExecution(
   let verifiedBy: SvmSettleVerifiedBy;
   let mismatch: string | undefined;
 
+  // An inline `execute` carries its program in the calldata, so it is verifiable directly and a pin
+  // is irrelevant to it — the engine never reads one. Before this, the branch order below ignored
+  // `decoded.instruction` entirely, so an inline execute carrying ARBITRARY bytecode plus
+  // `pin = sha256(canonical)` returned `genuine: true`.
+  if (decoded.instruction === "execute") {
+    const inline = input.instructionData.subarray(8);
+    const inlineMatchesCanonical = bytesEqual(inline, canonical);
+    const suppliedMatchesInline =
+      input.bytecode === undefined ? null : bytesEqual(input.bytecode, inline);
+
+    verifiedBy = "inline-bytecode";
+    genuine = inlineMatchesCanonical && suppliedMatchesInline !== false;
+    mismatch = !inlineMatchesCanonical
+      ? `inline execute bytecode does not byte-match svmSettleSource(${decoded.escrowCount})`
+      : suppliedMatchesInline === false
+        ? "supplied bytecode does not match the bytecode inline in this execute"
+        : undefined;
+
+    return {
+      ...decoded,
+      genuine,
+      verifiedBy,
+      pinMatchesCanonical,
+      pinMatchesBytecode,
+      bytecodeMatchesCanonical,
+      mismatch,
+    };
+  }
+
   if (input.bytecode !== undefined) {
     verifiedBy = "bytecode";
     genuine = bytecodeMatchesCanonical === true && pinMatchesBytecode === true;
@@ -440,11 +489,11 @@ export function verifySvmSettleExecution(
             ? "calldata carries no pin, so it does not commit to the supplied bytecode — the staged bytes verified here need not be the bytes that run"
             : undefined;
   } else if (pin !== undefined) {
-    verifiedBy = "pin";
+    verifiedBy = "caller-asserted-pin";
     genuine = pinMatchesCanonical === true;
     mismatch = genuine
       ? undefined
-      : `calldata pin does not match sha256(svmSettleSource(${decoded.escrowCount})) — not a genuine settle execution`;
+      : `pin does not match sha256(svmSettleSource(${decoded.escrowCount})) — not a genuine settle execution`;
   } else {
     verifiedBy = "none";
     genuine = false;
