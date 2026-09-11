@@ -42,6 +42,20 @@ export interface MegasSwapOpts extends QuoteOpts {
    * If you need richer setup actions, run them in a separate `cook` segment.
    */
   prepend?: ApproveAction[];
+  /**
+   * Aggregate minimum output, enforced ONCE after every leg has executed.
+   *
+   * Required, because per-leg `amountOutMin` cannot express it and never could: `swap_any` receives
+   * the runtime expression `amount`, so a leg's share is `used[k] * bucket` — a fraction of
+   * `amountIn` decided during the greedy loop — while `amountOutMin` is baked in as a compile-time
+   * literal. A floor sized for the whole trade would be applied to a fraction and revert the leg;
+   * the only per-leg value that composes with runtime allocation is dust, which is why every
+   * candidate here ships `"1"`. So the bound has to live at the end, over the sum.
+   *
+   * Pass `"0"` to waive it deliberately. There is no default: a silent default would be the same
+   * unbounded trade this exists to prevent.
+   */
+  minTotalOut: string;
 }
 
 /**
@@ -81,7 +95,7 @@ export function megasSwapToSauceSource(
   candidates: SwapAction[],
   amountIn: bigint,
   n: number,
-  opts: MegasSwapOpts = {},
+  opts: MegasSwapOpts,
 ): string {
   if (candidates.length === 0) {
     throw new Error("megasSwapToSauce requires at least one candidate");
@@ -128,9 +142,16 @@ export function megasSwapToSauceSource(
     ...returnDispatch(N, (i) => `return quote_${i}(amount);`),
   ]);
 
-  const swapAny = fn("swap_any", ["idx: Uint256", "amount: Uint256"], "void", [
+  // `needsOutput: true` — the whole point. Built void, its `.output` was discarded by
+  // `blockDispatch` and the tstore arrays only ever held QUOTED amounts, so nothing downstream
+  // could see what the trade actually returned.
+  const swapAny = fn("swap_any", ["idx: Uint256", "amount: Uint256"], "Uint256", [
     ...outOfRangeGuard(N),
-    ...blockDispatch(N, (i) => buildAction(emit, candidates[i], "amount", false).stmts),
+    ...blockDispatch(N, (i) => {
+      const built = buildAction(emit, candidates[i], "amount", true);
+
+      return [...built.stmts, `return ${built.output};`];
+    }),
   ]);
 
   return [...quoteFns, quoteAny, swapAny, mainFn(emit, N, n, bucket, opts)].join("\n\n") + "\n";
@@ -140,7 +161,7 @@ export function megasSwapToSauce(
   candidates: SwapAction[],
   amountIn: bigint,
   n: number,
-  opts: MegasSwapOpts = {},
+  opts: MegasSwapOpts,
 ): Uint8Array[] {
   return [compileEvm(megasSwapToSauceSource(candidates, amountIn, n, opts))];
 }
@@ -228,20 +249,53 @@ function mainFn(emit: Emitter, N: number, n: number, bucket: bigint, opts: Megas
     "      bestIdx = j;",
     "    }",
     "  }",
-    `  evm.tstore(${key(0, "bestIdx")}, ${used("bestIdx")} + 1n);`,
-    `  evm.tstore(${key(N, "bestIdx")}, ${total("bestIdx")} + ${marg("bestIdx")});`,
-    `  evm.tstore(${key(2 * N, "bestIdx")}, quote_any(bestIdx, (${used("bestIdx")} + 1n) * ${bucketExpr}) - ${total("bestIdx")});`,
-    "}",
-  );
-
-  // Execute loop: dispatch the swap for every candidate with used > 0.
-  body.push(
-    `for (let k = 0n; k < ${N}n; k = k + 1n) {`,
-    `  if (${used("k")} > 0n) {`,
-    `    swap_any(k, ${used("k")} * ${bucketExpr});`,
+    // Allocate only when some venue actually pays. With every marginal at zero the argmax leaves
+    // bestIdx at 0, so the old code walked used[0] up to n and sent the WHOLE trade to candidate 0.
+    "  if (bestMarg > 0n) {",
+    `    evm.tstore(${key(0, "bestIdx")}, ${used("bestIdx")} + 1n);`,
+    `    evm.tstore(${key(N, "bestIdx")}, ${total("bestIdx")} + ${marg("bestIdx")});`,
+    // The next marginal, CLAMPED. `-` is checked on both engines (compiler/README.md's ledger: the
+    // EVM's Math.huff checks add/sub/mul natively), so a quote that comes back below the running
+    // total does not wrap — it REVERTS, killing the whole route. Quotes are not guaranteed monotone
+    // across sizes: fee tiers are discontinuous, curves are not concave, and an oracle-backed
+    // quoter can move between two calls in the same transaction.
+    `    let nextQuote = quote_any(bestIdx, (${used("bestIdx")} + 1n) * ${bucketExpr});`,
+    `    let running = ${total("bestIdx")};`,
+    `    evm.tstore(${key(2 * N, "bestIdx")}, nextQuote > running ? nextQuote - running : 0n);`,
     "  }",
     "}",
   );
+
+  // Execute loop: dispatch the swap for every candidate with used > 0, summing what each returns.
+  body.push(
+    "let totalOut = 0n;",
+    `for (let k = 0n; k < ${N}n; k = k + 1n) {`,
+    `  if (${used("k")} > 0n) {`,
+    `    totalOut = totalOut + swap_any(k, ${used("k")} * ${bucketExpr});`,
+    "  }",
+    "}",
+  );
+
+  // THE AGGREGATE BOUND, and the only one there is. Per-leg `amountOutMin` is a compile-time
+  // literal applied to a runtime fraction of `amountIn`, so it cannot express this — see
+  // `MegasSwapOpts.minTotalOut`. Checked after every leg, over the realized sum.
+  //
+  // Parsed strictly, because the whole design here is that the caller must CHOOSE a floor and "0"
+  // is the choice that says none. `BigInt("")` and `BigInt("-1")` are both 0n-or-negative and would
+  // land on the same branch as that explicit waiver — and `""` is what an unset env var, a missing
+  // config key or a `?? ""` produces, so it waives silently without anyone deciding to. A value
+  // that waives without being the waiver is exactly the hole a required parameter exists to close.
+  if (!/^\d+$/.test(opts.minTotalOut)) {
+    throw new Error(
+      `megasSwapToSauce: minTotalOut must be a non-negative integer string, got ${JSON.stringify(
+        opts.minTotalOut,
+      )}. Pass "0" to waive the aggregate floor deliberately.`,
+    );
+  }
+  const minTotalOut = BigInt(opts.minTotalOut);
+  if (minTotalOut > 0n) {
+    body.push(`if (totalOut < ${formatBigint(minTotalOut)}) { revert(); }`);
+  }
 
   return fn("main", [], "void", body);
 }
@@ -287,6 +341,7 @@ export function megasUsdcUsdtSwapToSauce(
   amountIn: bigint,
   n: number,
   recipient: Addr,
+  minTotalOut: string,
 ): Uint8Array[] {
   const C = ETH_MAINNET_USDC_USDT;
   const amountStr = amountIn.toString();
@@ -381,5 +436,6 @@ export function megasUsdcUsdtSwapToSauce(
   return megasSwapToSauce(candidates, amountIn, n, {
     quoterV3: C.uniV3QuoterV2,
     prepend: approves,
+    minTotalOut,
   });
 }

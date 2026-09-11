@@ -68,7 +68,9 @@ function uniV2(amount: string): UniswapV2SwapAction {
   };
 }
 
-const QUOTER_OPTS = { quoterV3: QUOTER_V2 } as const;
+// `minTotalOut: "0"` waives the aggregate floor explicitly — these cases assert program
+// SHAPE, not slippage. The floor now has to be a deliberate choice, never a default.
+const QUOTER_OPTS = { quoterV3: QUOTER_V2, minTotalOut: "0" } as const;
 
 function makeCandidates(amount: string, count: number): SwapAction[] {
   const all: SwapAction[] = [uniV3(amount, 100), uniV3(amount, 500), curve(amount), uniV2(amount)];
@@ -110,9 +112,11 @@ describe("megasSwapToSauce — program shape", () => {
         /function quote_any\(idx: Uint256, amount: Uint256\): Uint256/,
         `N=${N}: missing quote_any`,
       );
+      // Uint256, not void: swap_any must RETURN the realized output so main can sum the legs and
+      // check the aggregate floor. Built void, the output was discarded by the dispatcher.
       assert.match(
         source,
-        /function swap_any\(idx: Uint256, amount: Uint256\): void/,
+        /function swap_any\(idx: Uint256, amount: Uint256\): Uint256/,
         `N=${N}: missing swap_any`,
       );
       assert.match(source, /function main\(\): void/, `N=${N}: missing main`);
@@ -274,6 +278,7 @@ describe("megasSwapToSauce — input validation", () => {
       () =>
         megasSwapToSauce([uniV3("1000000"), v4Candidate], 2_000_000n, 2, {
           quoterV3: QUOTER_V2,
+          minTotalOut: "0",
           quoterV4: QUOTER_V2,
         }),
       /does not support runtime-amount quoting/,
@@ -362,5 +367,85 @@ describe("megasSwapToSauce — prepend handling", () => {
       prependMainLen > baseMainLen,
       `prepend should add bytes to the program (was ${baseMainLen}, now ${prependMainLen})`,
     );
+  });
+});
+
+/**
+ * The split router had NO terminal bound: `swap_any` was void, the three tstore arrays held only
+ * QUOTED amounts, and `mainFn` returned straight after the execute loop. Per-leg `amountOutMin`
+ * cannot substitute — it is a compile-time literal applied to `used[k] * bucket`, a runtime
+ * fraction — so every shipped candidate carries `"1"` and the trade was unbounded end to end.
+ */
+describe("megasSwapToSauce — aggregate minimum output", () => {
+  const twoCandidates = makeCandidates("1000000", 2);
+
+  it("emits a single terminal floor over the summed realized outputs", () => {
+    const source = megasSwapToSauceSource(twoCandidates, 1_000_000n, 4, {
+      ...QUOTER_OPTS,
+      minTotalOut: "12345",
+    });
+
+    assert.match(source, /let totalOut = 0n;/, `should accumulate\n${source}`);
+    assert.match(source, /totalOut = totalOut \+ swap_any\(/, `should sum each leg\n${source}`);
+    assert.match(source, /if \(totalOut < 12345n\) \{ revert\(\); \}/, `floor\n${source}`);
+    // Once, after the loop — not per leg, which is the bound that cannot be expressed.
+    assert.equal(source.match(/totalOut < 12345n/g)?.length, 1);
+  });
+
+  it('waives the floor only when asked, with "0"', () => {
+    const source = megasSwapToSauceSource(twoCandidates, 1_000_000n, 4, {
+      ...QUOTER_OPTS,
+      minTotalOut: "0",
+    });
+
+    assert.doesNotMatch(source, /if \(totalOut < /, `an explicit waiver emits no check\n${source}`);
+    // Still summed, and still ACCUMULATING. Asserting only `let totalOut = 0n;` would stay green if
+    // the zero-floor path short-circuited the loop body, leaving totalOut permanently 0 — a hole
+    // that only surfaces when someone later switches to a real floor.
+    assert.match(source, /let totalOut = 0n;/);
+    assert.match(
+      source,
+      /totalOut = totalOut \+ swap_any\(/,
+      `the waiver must not stop the accumulation\n${source}`,
+    );
+  });
+
+  it("clamps the next marginal instead of underflowing", () => {
+    const source = megasSwapToSauceSource(twoCandidates, 1_000_000n, 4, QUOTER_OPTS);
+
+    // `-` is checked on both engines, so a non-monotone quote would REVERT the whole route rather
+    // than wrap. The ternary keeps the marginal at zero instead.
+    assert.match(
+      source,
+      /nextQuote > running \? nextQuote - running : 0n/,
+      `marginal should be clamped\n${source}`,
+    );
+  });
+
+  it("allocates nothing when every marginal is zero", () => {
+    const source = megasSwapToSauceSource(twoCandidates, 1_000_000n, 4, QUOTER_OPTS);
+
+    // Without this the argmax leaves bestIdx at 0 and used[0] climbs to n, sending the whole trade
+    // to candidate 0 on quotes that all said zero.
+    assert.match(source, /if \(bestMarg > 0n\) \{/, `zero-marginal guard\n${source}`);
+  });
+});
+
+describe("megasSwapToSauce — minTotalOut is parsed strictly", () => {
+  const twoCandidates = makeCandidates("1000000", 2);
+  const build = (minTotalOut: string): string =>
+    megasSwapToSauceSource(twoCandidates, 1_000_000n, 4, { ...QUOTER_OPTS, minTotalOut });
+
+  // "" is what an unset env var or a `?? ""` produces; BigInt("") is 0n, so it would waive the
+  // floor without anyone choosing to — the one failure mode a required parameter cannot catch.
+  for (const bad of ["", "-1", "1.5", "abc", " 1", "1_000"]) {
+    it(`rejects ${JSON.stringify(bad)}`, () => {
+      assert.throws(() => build(bad), /must be a non-negative integer string/);
+    });
+  }
+
+  it('accepts "0" as the deliberate waiver, and a plain integer as a floor', () => {
+    assert.doesNotMatch(build("0"), /if \(totalOut < /);
+    assert.match(build("12345"), /if \(totalOut < 12345n\) \{ revert\(\); \}/);
   });
 });

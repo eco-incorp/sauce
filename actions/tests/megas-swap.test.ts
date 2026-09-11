@@ -421,7 +421,7 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
       "UniV2 router ",
       "BalV2 3pool  ",
     ];
-    const quoterOpts = { quoterV3: QUOTER_V2 };
+    const quoterOpts = { quoterV3: QUOTER_V2, minTotalOut: "0" };
 
     // Off-chain quotes at the FULL amount: what each single pool would yield
     // on its own, for an apples-to-apples comparison against the split.
@@ -438,7 +438,9 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     // the 5-candidate split for USDC→USDT, and hands back one cook-ready
     // programs array. No separate approval tx needed.
     const n = 10;
-    cookSend(megasUsdcUsdtSwapToSauce(amountIn, n, CALLER));
+    // "0" waives the aggregate floor: this fork test asserts the split BEATS a single venue, an
+    // economic-quality property, and a real floor would make it a slippage test instead.
+    cookSend(megasUsdcUsdtSwapToSauce(amountIn, n, CALLER, "0"));
 
     const usdtAfter = await balanceOf(USDT, CALLER);
     const usdcAfter = await balanceOf(USDC, SAUCE);
@@ -546,7 +548,7 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     const usdtBefore = await balanceOf(USDT, CALLER);
     const usdcBefore = await balanceOf(USDC, SAUCE);
 
-    const quoterOpts = { quoterV3: QUOTER_V2 };
+    const quoterOpts = { quoterV3: QUOTER_V2, minTotalOut: "0" };
     const singleQuotes = await Promise.all(
       candidates.map(async (cand) => {
         const q = actionToQuote(cand, amountIn, quoterOpts);
@@ -581,7 +583,7 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     const usdtBefore = await balanceOf(USDT, CALLER);
     const usdcBefore = await balanceOf(USDC, SAUCE);
 
-    const quoterOpts = { quoterV3: QUOTER_V2 };
+    const quoterOpts = { quoterV3: QUOTER_V2, minTotalOut: "0" };
     const singleQuotes = await Promise.all(
       candidates.map(async (cand) => {
         const q = actionToQuote(cand, amountIn, quoterOpts);
