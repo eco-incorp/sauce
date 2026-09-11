@@ -22,11 +22,13 @@
  * each account's owner, and the loader hands (address, owner) to the
  * `expectOwner` hook before releasing the data — a per-account rejection
  * there fails that account's load() alone, exactly like a single-account
- * loader that verifies owners. quoteSvmRoute/svmRoute wire the pool
- * accounts' owner expectations to each family's program id.
+ * loader that verifies owners. NOTE: nothing currently passes `expectOwner` —
+ * `quoteSvmRoute`/`svmRoute` do not wire owner expectations, contrary to what
+ * this said. The owner is now carried on the loaded account instead, which is
+ * where mint classification needs it.
  */
 import type { Address } from "@solana/kit";
-import type { AccountLoader } from "./venues/types.js";
+import type { AccountLoader, OwnedAccountLoader } from "./venues/types.js";
 
 /** getMultipleAccounts pubkey cap on public RPCs. */
 const DEFAULT_CHUNK_SIZE = 100;
@@ -53,7 +55,7 @@ export interface CoalescingLoaderOptions {
 }
 
 interface PendingLoad {
-  resolve: (data: Uint8Array | null) => void;
+  resolve: (account: LoadedAccount | null) => void;
   reject: (error: unknown) => void;
 }
 
@@ -61,10 +63,10 @@ interface PendingLoad {
  * Wraps a batch transport as a single-account AccountLoader that coalesces
  * same-turn loads into deduped, chunked sweeps.
  */
-export function coalescingAccountLoader(
+export function coalescingOwnedAccountLoader(
   loadMany: BatchAccountLoader,
   options: CoalescingLoaderOptions = {},
-): AccountLoader {
+): OwnedAccountLoader {
   const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
   if (!Number.isInteger(chunkSize) || chunkSize < 1) {
     throw new Error(
@@ -107,8 +109,10 @@ export function coalescingAccountLoader(
         }
         try {
           options.expectOwner?.(address, result.owner);
-          // Fresh copy per waiter — callers may mutate their view.
-          waiter.resolve(new Uint8Array(result.data));
+          // Fresh copy per waiter — callers may mutate their view. The owner rides along: it is
+          // what tells a legacy mint from an extensionless Token-2022 one, and dropping it here is
+          // what made that classification impossible downstream.
+          waiter.resolve({ data: new Uint8Array(result.data), owner: result.owner });
         } catch (error) {
           waiter.reject(error);
         }
@@ -138,7 +142,7 @@ export function coalescingAccountLoader(
     );
   };
 
-  return (address: Address): Promise<Uint8Array | null> =>
+  return (address: Address): Promise<LoadedAccount | null> =>
     new Promise((resolve, reject) => {
       if (pending === null) {
         pending = new Map();
@@ -152,6 +156,22 @@ export function coalescingAccountLoader(
       if (waiters === undefined) pending.set(address, [{ resolve, reject }]);
       else waiters.push({ resolve, reject });
     });
+}
+
+/**
+ * The data-only loader the venue adapters take, as a projection of the owner-aware one.
+ *
+ * Keeping both means an adapter can be moved to owner-based mint classification on its own, instead
+ * of all 64 changing in one sweep.
+ */
+export function coalescingAccountLoader(
+  loadMany: BatchAccountLoader,
+  options: CoalescingLoaderOptions = {},
+): AccountLoader {
+  const owned = coalescingOwnedAccountLoader(loadMany, options);
+
+  return async (address: Address): Promise<Uint8Array | null> =>
+    (await owned(address))?.data ?? null;
 }
 
 /** The slice of a @solana/kit RPC this loader needs (Rpc<GetMultipleAccountsApi>). */

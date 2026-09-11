@@ -150,7 +150,19 @@ export { pda };
  * diverge from the quote (a portion of every transfer is withheld by the mint itself), so
  * such mints are rejected rather than mis-quoted.
  */
-export function detectTokenProgram(mint: Address, data: Uint8Array): Address {
+export function detectTokenProgram(mint: Address, data: Uint8Array, owner?: Address): Address {
+  // The owner is AUTHORITATIVE where the caller has it, exactly as in `classifyMintProgram`. This
+  // is the fourth shape-based path in the repo and the only one behind a shared helper, so it needs
+  // the parameter threaded rather than a call site edited when the adapters migrate.
+  if (owner !== undefined) {
+    if (owner === TOKEN_PROGRAM) return TOKEN_PROGRAM;
+    if (owner === TOKEN_2022_PROGRAM) return TOKEN_2022_PROGRAM;
+    throw new Error(
+      `scale venue: mint ${mint} is owned by ${owner}, neither the legacy nor Token-2022 program`,
+    );
+  }
+  // An extensionless Token-2022 mint is also exactly 82 bytes, so without an owner this answers
+  // legacy for it — the same known hole `token-program.ts` documents.
   if (data.length === 82) return TOKEN_PROGRAM;
   if (data.length < 166) {
     throw new Error(

@@ -4,10 +4,11 @@
  * A mint account is owned either by the legacy SPL Token program
  * (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA) or by Token-2022
  * (TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb). The correct token program is
- * the ACCOUNT OWNER of the mint — but an AccountLoader (see ./venues/types.ts)
- * only returns account DATA, never the owning program. So the primary resolver
- * infers the program from the mint's data SHAPE, exactly as the pumpswap /
- * juplend-amm adapters already do:
+ * the ACCOUNT OWNER of the mint. `OwnedAccountLoader` (see ./venues/types.ts)
+ * carries it, and `resolveTokenProgramOwned` is the correct resolver — prefer
+ * both. The data-only `AccountLoader` drops the owner, so where only that is
+ * available the resolver must infer the program from the mint's data SHAPE,
+ * with the unresolvable case below:
  *
  *   - A classic SPL mint is EXACTLY 82 bytes.
  *   - A Token-2022 mint that carries at least one extension is padded to a
@@ -31,7 +32,7 @@
  */
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import type { AccountLoader } from "./venues/types.js";
+import type { AccountLoader, OwnedAccountLoader } from "./venues/types.js";
 
 /** Legacy SPL Token program (classic Tokenkeg). */
 export const TOKEN_PROGRAM_ID: Address = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -62,7 +63,16 @@ export type OwnerLoader = (mint: Address) => Promise<Address | null>;
  * length/type that is not a mint layout. See the file header for the one
  * ambiguous case (extensionless T22 mint → classified legacy).
  */
-export function classifyMintProgram(mint: Address, data: Uint8Array): Address {
+export function classifyMintProgram(mint: Address, data: Uint8Array, owner?: Address): Address {
+  // The owner is AUTHORITATIVE and settles the ambiguity below outright. Prefer it whenever the
+  // caller has it — `coalescingOwnedAccountLoader` now carries it through.
+  if (owner !== undefined) {
+    if (owner === TOKEN_PROGRAM_ID) return TOKEN_PROGRAM_ID;
+    if (owner === TOKEN_2022_PROGRAM_ID) return TOKEN_2022_PROGRAM_ID;
+    throw new Error(
+      `token-program: mint ${mint} is owned by ${owner}, neither the legacy nor Token-2022 program`,
+    );
+  }
   if (data.length === SPL_MINT_SIZE) return TOKEN_PROGRAM_ID;
   if (data.length < T22_TLV_START) {
     throw new Error(
@@ -87,6 +97,23 @@ export async function resolveTokenProgram(load: AccountLoader, mint: Address): P
   const data = await load(mint);
   if (data === null) throw new Error(`token-program: mint ${mint} account not found`);
   return classifyMintProgram(mint, data);
+}
+
+/**
+ * Resolve by the mint's OWNER, the only method that is correct for every mint.
+ *
+ * Prefer this over `resolveTokenProgram` wherever an `OwnedAccountLoader` is available: it settles
+ * the extensionless-Token-2022 case that the shape path cannot see, and needs no extra round trip
+ * because the owner arrives with the data.
+ */
+export async function resolveTokenProgramOwned(
+  load: OwnedAccountLoader,
+  mint: Address,
+): Promise<Address> {
+  const account = await load(mint);
+  if (account === null) throw new Error(`token-program: mint ${mint} account not found`);
+
+  return classifyMintProgram(mint, account.data, account.owner);
 }
 
 /**

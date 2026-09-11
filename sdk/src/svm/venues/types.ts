@@ -14,6 +14,21 @@ import type { Address } from "@solana/kit";
 export type AccountLoader = (address: Address) => Promise<Uint8Array | null>;
 
 /**
+ * The same source, WITH the owning program.
+ *
+ * Owner-based classification is the only correct way to tell a legacy SPL mint from a Token-2022
+ * one — an extensionless T22 mint is byte-identical to a classic 82-byte mint, so no amount of data
+ * inspection can separate them. `AccountLoader` drops the owner at this boundary, which made that
+ * classification structurally impossible for an adapter; this hands it through.
+ *
+ * Additive on purpose: the data-only loader stays the argument every adapter takes, so adapters
+ * move over one at a time rather than in one 64-file sweep.
+ */
+export type OwnedAccountLoader = (
+  address: Address,
+) => Promise<{ data: Uint8Array; owner: Address } | null>;
+
+/**
  * Point-in-time account state keyed by base58 address — what referenceQuote
  * reads instead of the chain.
  */

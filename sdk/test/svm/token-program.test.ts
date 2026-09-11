@@ -13,8 +13,9 @@ import {
   isToken2022Mint,
   resolveTokenProgram,
   resolveTokenProgramByOwner,
+  resolveTokenProgramOwned,
 } from "../../src/svm/token-program.js";
-import type { AccountLoader } from "../../src/svm/venues/types.js";
+import type { AccountLoader, OwnedAccountLoader } from "../../src/svm/venues/types.js";
 
 const decoder = getAddressDecoder();
 
@@ -132,5 +133,58 @@ describe("isToken2022Mint", () => {
   it("is false for a legacy mint and true for a T22 mint", () => {
     expect(isToken2022Mint(legacyMint())).toBe(false);
     expect(isToken2022Mint(t22Mint())).toBe(true);
+  });
+});
+
+/**
+ * THE case the shape path cannot see: an extensionless Token-2022 mint is exactly 82 bytes and
+ * byte-for-byte identical to a classic SPL mint. Nothing in the data separates them, so before the
+ * owner was carried through, every such mint was classified legacy — and there was no test for it,
+ * because `t22Mint()` only ever emits >=166 bytes.
+ */
+describe("owner-based classification", () => {
+  const MINT = synthAddress(9);
+  /** 82 bytes, indistinguishable from `legacyMint()` — the whole point. */
+  const extensionlessT22 = (): Uint8Array => new Uint8Array(82);
+
+  it("shape alone calls an extensionless Token-2022 mint legacy — the known hole", () => {
+    expect(classifyMintProgram(MINT, extensionlessT22())).toBe(TOKEN_PROGRAM_ID);
+  });
+
+  it("the owner settles it, on identical bytes", () => {
+    expect(classifyMintProgram(MINT, extensionlessT22(), TOKEN_2022_PROGRAM_ID)).toBe(
+      TOKEN_2022_PROGRAM_ID,
+    );
+    expect(classifyMintProgram(MINT, extensionlessT22(), TOKEN_PROGRAM_ID)).toBe(TOKEN_PROGRAM_ID);
+  });
+
+  it("the owner wins over the shape, so a mislabelled shape cannot override it", () => {
+    // >=166 bytes with the Mint type byte — the shape path would say Token-2022.
+    const t22Shaped = t22Mint();
+    expect(classifyMintProgram(MINT, t22Shaped)).toBe(TOKEN_2022_PROGRAM_ID);
+    expect(classifyMintProgram(MINT, t22Shaped, TOKEN_PROGRAM_ID)).toBe(TOKEN_PROGRAM_ID);
+  });
+
+  it("rejects an owner that is neither token program", () => {
+    expect(() => classifyMintProgram(MINT, extensionlessT22(), synthAddress(3))).toThrow(
+      /neither the legacy nor Token-2022 program/,
+    );
+  });
+
+  it("resolveTokenProgramOwned reads the owner off the account, with no extra round trip", async () => {
+    const calls: Address[] = [];
+    const load: OwnedAccountLoader = async (address) => {
+      calls.push(address);
+
+      return { data: extensionlessT22(), owner: TOKEN_2022_PROGRAM_ID };
+    };
+
+    await expect(resolveTokenProgramOwned(load, MINT)).resolves.toBe(TOKEN_2022_PROGRAM_ID);
+    expect(calls).toEqual([MINT]);
+  });
+
+  it("resolveTokenProgramOwned still fails closed on a missing mint", async () => {
+    const load: OwnedAccountLoader = async () => null;
+    await expect(resolveTokenProgramOwned(load, MINT)).rejects.toThrow(/account not found/);
   });
 });
