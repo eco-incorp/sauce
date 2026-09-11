@@ -20,7 +20,11 @@ import {
   fetchAlt,
   waitForAltActive,
 } from "./alt.js";
-import { buildExecuteFromAccountInstruction, buildExecuteInstruction } from "./instructions.js";
+import {
+  assertNoExecutePin,
+  buildExecuteFromAccountInstruction,
+  buildExecuteInstruction,
+} from "./instructions.js";
 import { buildComputeBudgetPrepend, buildHeapFramePrepend } from "./prepends.js";
 import { resolveAccounts } from "./resolve.js";
 import type { AccountResolution } from "./resolve.js";
@@ -74,11 +78,12 @@ export interface StagedArgs {
 }
 
 export interface SimulateStagedOpts extends SimulateOpts {
-  args?: StagedArgs;
   /**
-   * Content-hash pin for the execute (32 bytes). Required for buffers this
-   * client did not stage itself — a buffer address alone is never a
-   * cross-lifecycle trust anchor. Buffers from stageBuffer pin automatically.
+   * REJECTED, not enforced. Passing this THROWS.
+   *
+   * `execute_from_account` on the released engine takes no payload, so this was being forwarded
+   * and then dropped while documented as an applied pin. The enforceable content pin is the
+   * kitchen's, given to `buildFinalizeCodeBufferInstruction` when the buffer is finalized.
    */
   expectedSha256?: Uint8Array;
 }
@@ -161,7 +166,6 @@ export async function createSauceSvmClient({
 }: SauceSvmClientConfig): Promise<SauceSvmClient> {
   const rpc = createSolanaRpc(rpcUrl);
   const rpcSubscriptions = createSolanaRpcSubscriptions(wsUrl ?? rpcUrl.replace(/^http/, "ws"));
-  /** Content hashes of buffers staged by THIS client — the automatic execute pins. */
 
   /**
    * Signs an execute transaction: RequestHeapFrame(262144) FIRST (required on
@@ -226,6 +230,8 @@ export async function createSauceSvmClient({
     const accounts = resolveAccounts(manifest, resolution, payer.address, {
       appendPayerSigner: opts.appendPayerSigner,
     });
+    assertNoExecutePin(opts.expectedSha256);
+
     const executeInstruction = buildExecuteFromAccountInstruction({
       programId,
       code: address,
@@ -370,7 +376,6 @@ export async function createSauceSvmClient({
             prepends: opts.prepends,
             lookupTables: opts.lookupTables,
             appendPayerSigner: opts.appendPayerSigner,
-            args: opts.args,
             expectedSha256: opts.expectedSha256,
           }),
         opts,

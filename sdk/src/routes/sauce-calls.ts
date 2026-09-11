@@ -64,7 +64,7 @@ import { bytesToHex, type Hex } from "viem";
 import { v12Kitchen, v12Pot } from "../evm/engine.js";
 import { requireV12Deployment, v12SvmProgramId, type V12Deployment } from "../deployments/index.js";
 import { encodePortalCalldataWithAccounts, type PortalAccountMeta } from "../svm/intent.js";
-import { buildExecuteFromAccountInstruction } from "../svm/instructions.js";
+import { assertNoExecutePin, buildExecuteFromAccountInstruction } from "../svm/instructions.js";
 import type { ResolvedAccountMeta } from "../svm/resolve.js";
 
 import { kindOf, denormalizeToEvm, type ChainKindRef } from "./encode.js";
@@ -204,12 +204,20 @@ export interface StagedBufferRef {
   /** The finalized CODE account — the engine reads its data verbatim. Not the kitchen's
    *  code-buffer METADATA account; passing that executes the wrong bytes. */
   code: SvmAddressInput;
-  /** Optional 32-byte content pin, engine-verified against the buffer's stored hash. Always pass
-   *  this for a buffer this process did not stage itself — it is the only cross-lifecycle trust
-   *  anchor, and it is the same hash `buildFinalizeCodeBufferInstruction` was given. */
+  /**
+   * REJECTED, not enforced. Passing this THROWS.
+   *
+   * The released engine's `execute_from_account` takes no payload at all, so there is nowhere in
+   * the instruction for a pin to go — see `svm/instructions.ts`. The field is kept, and kept
+   * throwing, because it was previously documented as engine-verified: silently ignoring a
+   * security parameter a caller believes is applied is worse than not offering one.
+   *
+   * The content pin that IS enforced on chain is the kitchen's, given to
+   * `buildFinalizeCodeBufferInstruction` at staging time. It is a statement about the bytes then,
+   * made by the party who already controlled them, so it is not a guarantee a route consumer
+   * inherits.
+   */
   expectedSha256?: Uint8Array;
-  /** Per-execution payload args, already encoded. */
-  args?: Uint8Array;
 }
 
 export interface SauceSvmExecution extends StagedBufferRef {
@@ -314,6 +322,8 @@ function buildOneSauceSvmCall(
     address: toSvmAddress(a.pubkey, "account.pubkey"),
     role: toRole(a.isSigner, a.isWritable),
   }));
+
+  assertNoExecutePin(execution.expectedSha256);
 
   const ix = buildExecuteFromAccountInstruction({
     programId,

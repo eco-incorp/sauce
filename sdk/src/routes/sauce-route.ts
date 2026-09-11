@@ -19,11 +19,16 @@
  * always compiled to exactly one bytecode blob (`compiled.bytecode[0]`) and slotted as exactly one
  * `Call` — a multi-statement body is one program with N statements, never N cooks.
  *
- * THE SVM CALL COMMITS TO THE COMPILE: an EVM call carries the compiled bytecode itself, but a staged
- * SVM call names only a buffer address, so this module injects `sha256(compiled.bytecode[0])` as the
- * execution's `expectedSha256` — the engine's content-hash pin. Without it the returned calldata says
- * nothing about the program just compiled and the engine would run whatever those bytes turn out to be.
- * See `svmExecutionPinnedToCompile`.
+ * THE SVM CALL DOES NOT COMMIT TO THE COMPILE. An EVM call carries the compiled bytecode itself, but
+ * a staged SVM call names only a CODE account, and the released engine's `execute_from_account` has
+ * no instruction payload — so there is nowhere to put a content pin and nothing here injects one.
+ * The returned calldata says which account to run, never which bytes are in it.
+ *
+ * The pin that IS enforced on chain is the kitchen's, supplied to
+ * `buildFinalizeCodeBufferInstruction` when the buffer is finalized. That binds the bytes at
+ * staging time, in another transaction, asserted by the party that already controlled them — so a
+ * consumer of this route is not protected by it. Treat `compiled.bytecode[0]` as the thing to
+ * compare the account's contents against yourself.
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import { bytesToHex } from "viem";
@@ -99,9 +104,8 @@ export interface SauceEvmExecutionInput {
 /**
  * Verbatim the existing `sauce-calls.ts#SauceSvmCallParams` shape (`StagedBufferRef` + `accounts` +
  * `programId?`/`executor?`) — a route's SVM execution input IS a staged-buffer execution, no new
- * fields needed. `expectedSha256` is the one field a caller normally leaves off here: on the managed
- * path `compileSauceRoute` fills it from the compile (`svmExecutionPinnedToCompile`), and a value that
- * disagrees with the compiled program is rejected.
+ * fields needed. `expectedSha256` must be left off: nothing fills it, the engine instruction cannot
+ * carry it, and passing it throws — see `svm/instructions.ts#assertNoExecutePin`.
  */
 export type SauceSvmExecutionInput = SauceSvmCallParams;
 
@@ -255,9 +259,10 @@ export function compileSauceRoute(
           "`compiled.bytecode[0]`.",
       );
     }
-    // Passed through unpinned. The pin used to be injected here and encoded into the engine
-    // instruction; the released engine has no payload to carry one, so the commitment belongs to the
-    // kitchen's `cook_from_account` — which the STAGING caller issues, not this call.
+    // Passed through UNPINNED, and no route call can be otherwise: the released engine's
+    // `execute_from_account` has no payload to carry a pin. The kitchen's `cook_from_account` does
+    // enforce one, but the STAGING caller issues that — a different transaction, by the party that
+    // already controlled the bytes — so it is not a guarantee this call's consumer inherits.
     const call = buildSauceSvmCall(svmExecution);
     return { calls: [call], compiled, source };
   }

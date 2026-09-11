@@ -2,6 +2,7 @@ import { AccountRole, address } from "@solana/kit";
 import {
   EXECUTE_DISCRIMINATOR,
   EXECUTE_FROM_ACCOUNT_DISCRIMINATOR,
+  assertNoExecutePin,
   buildExecuteFromAccountInstruction,
   buildExecuteInstruction,
 } from "../../src/svm/index.js";
@@ -64,5 +65,32 @@ describe("buildExecuteFromAccountInstruction", () => {
       { address: BUFFER, role: AccountRole.READONLY },
       { address: PAYER, role: AccountRole.WRITABLE },
     ]);
+  });
+});
+
+/**
+ * The guard both pin-accepting surfaces call — `StagedBufferRef.expectedSha256` through
+ * `buildSauceSvmCall`, and `SimulateStagedOpts.expectedSha256` through the client's staged
+ * transaction. Tested here rather than only through the route, because the client path needs a live
+ * RPC to reach and would otherwise be wired but unproven.
+ */
+describe("assertNoExecutePin", () => {
+  it("passes when no pin is supplied — the only shape the engine can honour", () => {
+    expect(() => assertNoExecutePin(undefined)).not.toThrow();
+  });
+
+  it("throws for any pin, and names where the enforceable one lives", () => {
+    expect(() => assertNoExecutePin(new Uint8Array(32).fill(7))).toThrow(
+      /expectedSha256 cannot be enforced/,
+    );
+    // The message has to be actionable, not just a refusal: staging is where a pin works.
+    expect(() => assertNoExecutePin(new Uint8Array(32))).toThrow(
+      /buildFinalizeCodeBufferInstruction/,
+    );
+  });
+
+  // A wrong-length pin is still a pin: rejecting on length would imply a correct length exists.
+  it("throws for a wrong-length pin too", () => {
+    expect(() => assertNoExecutePin(new Uint8Array(4))).toThrow(/cannot be enforced/);
   });
 });

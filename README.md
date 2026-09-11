@@ -136,7 +136,7 @@ intent — it returns `{ calls, compiled, source }` and has no `.reward()`.
 **On the SVM target this route path does not work.** `toSauceScript('svm')` emits `main` with typed
 account parameters — that parameter list _is_ the account manifest, so it cannot be dropped — and a
 route runs an acorn-based accessor rewrite that rejects annotations. `compile: { accessors: false }` gets past the parse, but a route then still requires
-`execution.buffer` naming an already-staged program buffer, so unless you have staged one, compile
+`execution.code` naming an already-staged code account, so unless you have staged one, compile
 the source directly instead.
 
 ## The compiler

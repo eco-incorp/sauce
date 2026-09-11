@@ -73,3 +73,23 @@ export function buildExecuteFromAccountInstruction({
     data: withDiscriminator(EXECUTE_FROM_ACCOUNT_DISCRIMINATOR, new Uint8Array()),
   };
 }
+
+/**
+ * Rejects a would-be execute-time content pin, naming where the enforceable one lives.
+ *
+ * Lives here because the reason is this module's: `executeFromAccount` above emits the discriminator
+ * and nothing else, so a pin handed to a caller of it has no destination. The surfaces that used to
+ * accept one — `StagedBufferRef.expectedSha256`, `SimulateStagedOpts.expectedSha256` — forwarded it
+ * and dropped it while documenting it as engine-verified, which is the failure this converts into a
+ * loud one.
+ */
+export function assertNoExecutePin(expectedSha256: Uint8Array | undefined): void {
+  if (expectedSha256 === undefined) return;
+
+  throw new Error(
+    "expectedSha256 cannot be enforced: the released v12 SVM engine's `execute_from_account` takes " +
+      "no instruction payload, so there is nowhere to carry a pin. Pin the CONTENT at staging time " +
+      "instead — `buildFinalizeCodeBufferInstruction({ expectedSha256 })`, which the kitchen checks " +
+      "on chain — and omit this field here.",
+  );
+}

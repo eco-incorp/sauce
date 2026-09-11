@@ -199,12 +199,33 @@ describe("openRoute: SVM destination", () => {
     const call = built.intent.route.calls[0]!;
     expect(call.value).toBe(0n);
 
-    // The pin is injected from the compile, so the equivalent direct call must carry it too.
+    // A route SVM call is UNPINNED — the released engine's `execute_from_account` has no payload to
+    // carry a pin — so it must equal the direct call built the same way. This assertion previously
+    // sat under a comment saying the pin was injected from the compile, which made it read as a pin
+    // check while proving the opposite.
     const direct = buildSauceSvmCall({
       code: BUFFER,
       accounts: [{ pubkey: ACCOUNT, isSigner: false, isWritable: false }],
     });
     expect(call).toEqual(direct);
+  });
+
+  it("refuses an execution pin instead of silently dropping it", () => {
+    expect(() =>
+      openRoute("solana", "function main() { return 1n; }", {
+        execution: {
+          code: BUFFER,
+          accounts: [{ pubkey: ACCOUNT, isSigner: false, isWritable: false }],
+          expectedSha256: new Uint8Array(32).fill(1),
+        },
+        deadline: 2000n,
+        portal: PORTAL,
+        source: "base",
+        creator: CREATOR,
+        prover: PROVER,
+        rewardDeadline: 1000n,
+      }).reward(0n),
+    ).toThrow(/expectedSha256 cannot be enforced/);
   });
 
   it("rejects a nonzero value (SVM Call has no value field)", () => {
