@@ -9,6 +9,7 @@ import type {
   UniswapV2SwapAction,
   UniswapV3ExactInputAction,
   UniswapV4ExactInputAction,
+  BalancerV2SwapAction,
 } from "../src/types.js";
 
 // =============================================================================
@@ -282,6 +283,52 @@ describe("megasSwapToSauce — input validation", () => {
           quoterV4: QUOTER_V2,
         }),
       /does not support runtime-amount quoting/,
+    );
+  });
+
+  it("throws when a candidate is BalancerV2 (queryBatchSwap is not callable on-chain)", () => {
+    const balV2Candidate: BalancerV2SwapAction = {
+      type: "balancerV2Swap",
+      chainId: CHAIN_ID,
+      vault: "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      poolId: "0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000063",
+      tokenIn: USDC,
+      tokenOut: USDT,
+      amountIn: "1000000",
+      amountOutMin: "1",
+      recipient: USDC,
+      deadline: 1,
+    };
+    assert.throws(
+      () =>
+        megasSwapToSauce([uniV3("1000000"), balV2Candidate], 2_000_000n, 2, {
+          quoterV3: QUOTER_V2,
+          minTotalOut: "0",
+        }),
+      /does not support runtime-amount quoting/,
+    );
+  });
+
+  it("sweep transfers the realized total, and without it nothing leaves Sauce", () => {
+    const swept = megasSwapToSauceSource(makeCandidates("1000000", 2), 1_000_000n, 1, {
+      ...QUOTER_OPTS,
+      sweep: { token: USDT, to: USDC },
+    });
+    const unswept = megasSwapToSauceSource(
+      makeCandidates("1000000", 2),
+      1_000_000n,
+      1,
+      QUOTER_OPTS,
+    );
+
+    // The signature is compiled to its 4-byte selector, so assert on that and on the amount the
+    // sweep actually moves — the realized total, not a baked literal.
+    assert.match(swept, /a9059cbb/, "sweep should emit an ERC-20 transfer selector");
+    assert.match(swept, /f1: totalOut/, "the swept amount should be the realized total");
+    assert.doesNotMatch(
+      unswept,
+      /a9059cbb/,
+      "no sweep means no transfer — the output stays on Sauce",
     );
   });
 

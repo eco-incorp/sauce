@@ -25,7 +25,6 @@ import { buildAction } from "./to-sauce.js";
 import { actionToQuote, type QuoteOpts } from "./to-quote.js";
 import type {
   ApproveAction,
-  BalancerV2SwapAction,
   CurveSwapAction,
   SwapAction,
   UniswapV2SwapAction,
@@ -56,6 +55,14 @@ export interface MegasSwapOpts extends QuoteOpts {
    * unbounded trade this exists to prevent.
    */
   minTotalOut: string;
+  /**
+   * Token and recipient for the final sweep, emitted after the aggregate floor.
+   *
+   * Every leg is built with `needsOutput`, which makes the swap deliver to Sauce so its realized
+   * amount is measurable as a balance delta — so a candidate's own `recipient` never receives
+   * anything and the whole output accumulates on Sauce. Omit this to leave it there deliberately.
+   */
+  sweep?: { token: Addr; to: Addr };
 }
 
 /**
@@ -154,7 +161,11 @@ export function megasSwapToSauceSource(
     }),
   ]);
 
-  return [...quoteFns, quoteAny, swapAny, mainFn(emit, N, n, bucket, opts)].join("\n\n") + "\n";
+  return (
+    [...quoteFns, quoteAny, swapAny, mainFn(emit, N, n, bucket, opts, candidates[0].chainId)].join(
+      "\n\n",
+    ) + "\n"
+  );
 }
 
 export function megasSwapToSauce(
@@ -205,7 +216,14 @@ function blockDispatch(N: number, branch: (i: number) => readonly Stmt[]): Stmt[
 // main
 // ─────────────────────────────────────────────────────────────────────────────
 
-function mainFn(emit: Emitter, N: number, n: number, bucket: bigint, opts: MegasSwapOpts): string {
+function mainFn(
+  emit: Emitter,
+  N: number,
+  n: number,
+  bucket: bigint,
+  opts: MegasSwapOpts,
+  chainId: number,
+): string {
   // Transient-storage key layout (compile-time bases; indexed at runtime):
   //   used[i]  at key i
   //   total[i] at key N + i
@@ -297,6 +315,13 @@ function mainFn(emit: Emitter, N: number, n: number, bucket: bigint, opts: Megas
     body.push(`if (totalOut < ${formatBigint(minTotalOut)}) { revert(); }`);
   }
 
+  if (opts.sweep) {
+    const { token, to } = opts.sweep;
+    body.push(
+      ...buildAction(emit, { type: "transfer", chainId, token, to }, "totalOut", false).stmts,
+    );
+  }
+
   return fn("main", [], "void", body);
 }
 
@@ -314,8 +339,6 @@ const ETH_MAINNET_USDC_USDT = {
   uniV3QuoterV2: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e" as Addr,
   curve3pool: "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7" as Addr,
   uniV2Router: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D" as Addr,
-  balV2Vault: "0xBA12222222228d8Ba445958a75a0704d566BF2C8" as Addr,
-  balV2_3poolId: "0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000063" as Addr,
 } as const;
 
 /**
@@ -326,16 +349,17 @@ const ETH_MAINNET_USDC_USDT = {
  *   - UniswapV3 at 5 bps (pool 0x7858…)
  *   - Curve stableswap 3pool (DAI/USDC/USDT, indices 1→2)
  *   - Uniswap V2 router via [USDC, USDT] pair
- *   - Balancer V2 Vault against the legacy DAI/USDC/USDT stable pool
  *
  * The returned bytecode is self-contained and can be fed straight into
- * `Sauce.cook(bytes[])`: it approves all 4 spenders for `amountIn`, runs the
+ * `Sauce.cook(bytes[])`: it approves all 3 spenders for `amountIn`, runs the
  * split-swap loop for `n` buckets, and sends the USDT output to `recipient`.
  *
- * Candidates whose pools are empty (drained BalV2 3pool, thin UniV3 5 bps,
- * shallow UniV2 pair) are still included — the greedy algorithm handles
- * them by never routing buckets that direction. That costs `N + n` extra
+ * Candidates whose pools are thin (UniV3 5 bps, shallow UniV2 pair) are still included — the
+ * greedy algorithm handles them by never routing buckets that direction. That costs `N + n` extra
  * quoter CALLs worth of gas; drop them manually if you want to save.
+ *
+ * Balancer V2 is NOT a candidate: its only quote is `queryBatchSwap`, which mutates state and
+ * reverts to return, so it cannot be called on-chain at all.
  */
 export function megasUsdcUsdtSwapToSauce(
   amountIn: bigint,
@@ -381,26 +405,8 @@ export function megasUsdcUsdtSwapToSauce(
     recipient,
     deadline,
   };
-  const balV2Candidate: BalancerV2SwapAction = {
-    type: "balancerV2Swap",
-    chainId: C.chainId,
-    vault: C.balV2Vault,
-    poolId: C.balV2_3poolId,
-    tokenIn: C.usdc,
-    tokenOut: C.usdt,
-    amountIn: amountStr,
-    amountOutMin: "1",
-    recipient,
-    deadline,
-  };
 
-  const candidates: SwapAction[] = [
-    mkUniV3(100),
-    mkUniV3(500),
-    curveCandidate,
-    uniV2Candidate,
-    balV2Candidate,
-  ];
+  const candidates: SwapAction[] = [mkUniV3(100), mkUniV3(500), curveCandidate, uniV2Candidate];
 
   const approves: ApproveAction[] = [
     {
@@ -424,18 +430,12 @@ export function megasUsdcUsdtSwapToSauce(
       spender: C.uniV2Router,
       amount: amountStr,
     },
-    {
-      type: "approve",
-      chainId: C.chainId,
-      token: C.usdc,
-      spender: C.balV2Vault,
-      amount: amountStr,
-    },
   ];
 
   return megasSwapToSauce(candidates, amountIn, n, {
     quoterV3: C.uniV3QuoterV2,
     prepend: approves,
     minTotalOut,
+    sweep: { token: C.usdt, to: recipient },
   });
 }

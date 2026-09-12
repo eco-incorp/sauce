@@ -66,9 +66,12 @@ export interface QuoteCall {
    * output amount. Every quote extracts to a single uint256 regardless of the underlying return
    * shape.
    *
+   * Absent when the protocol's quote cannot run on-chain at all, so its presence is the signal that
+   * emitting it produces a program that can execute. Callers must check for it.
+   *
    * BREAKING: took and returned a `Saucer`; takes an `Emitter` and returns a source [`Fragment`].
    */
-  toSauce: (emit: Emitter) => Fragment;
+  toSauce?: (emit: Emitter) => Fragment;
   /**
    * Runtime-amount variant: splices `amountExpr` into the calldata at the
    * protocol's fixed amount offset and returns the uint256 output expression.
@@ -223,13 +226,6 @@ const arrayLast: Extract = (emit, decoded) => {
  * recover the magnitude. Unary `-` is two's-complement negation, so it wraps
  * rather than tripping an overflow check the way a checked `0 - x` would.
  */
-function int256ArrayAbs(index: number): Extract {
-  return (emit, decoded) => {
-    const arr = bindConst(emit, "qarr", `${decoded.expr}[0]`);
-
-    return { stmts: [...decoded.stmts, ...arr.stmts], expr: `-${arr.expr}[${index}n]` };
-  };
-}
 
 /**
  * Pick the negative flow from Ambient's `(int128 baseFlow, int128 quoteFlow,
@@ -275,16 +271,6 @@ function asUint256(mode: QuoterMode, to: Address, data: Hex): (emit: Emitter) =>
 /** Return is uint256[] (e.g. V2 getAmountsOut) — take the last element. */
 function asUint256ArrayLast(mode: QuoterMode, to: Address, data: Hex): (emit: Emitter) => Fragment {
   return staticQuote(mode, to, data, OUT_UINT256_ARRAY, arrayLast);
-}
-
-/** Return is int256[]; the entry at `index` is negative — recover its magnitude. */
-function asInt256ArrayAbs(
-  mode: QuoterMode,
-  to: Address,
-  data: Hex,
-  index: number,
-): (emit: Emitter) => Fragment {
-  return staticQuote(mode, to, data, OUT_UINT256_ARRAY, int256ArrayAbs(index));
 }
 
 /**
@@ -569,7 +555,6 @@ function buildQueryBatchSwap(
       const out = deltas[outAssetIndex];
       return out < 0n ? -out : out;
     },
-    toSauce: asInt256ArrayAbs("static", vault, data, outAssetIndex),
   };
 }
 
@@ -581,25 +566,12 @@ function quoteBalV2Single(action: BalancerV2SwapAction, amountIn: bigint): Quote
     [action.tokenIn, action.tokenOut],
     1,
   );
-  // Fixed byte offset of the step's `amount` field inside the single-step,
-  // empty-userData queryBatchSwap calldata: 4 (selector) + 7*32 (head) + 32
-  // (swaps length) + 32 (step 0 offset pointer) + 3*32 (poolId, idx0, idx1)
-  // = 388.
-  const AMOUNT_OFFSET = 388;
-  // Output token delta is at index 1 (asset index for tokenOut). It's negative
-  // (vault sends tokens out), so negate via the unchecked NEG opcode to get
-  // the magnitude — plain `0 - x` would trip Solidity's checked-sub panic.
-  return {
-    ...base,
-    toSauceDynamic: makeDynamic(
-      "static",
-      base.to,
-      base.data,
-      AMOUNT_OFFSET,
-      OUT_UINT256_ARRAY,
-      int256ArrayAbs(1),
-    ),
-  };
+  // Neither `toSauce` nor `toSauceDynamic`, here or on the batch variant: the Vault implements
+  // `queryBatchSwap` by performing the swap and reverting with the encoded deltas, so it mutates
+  // state and cannot run inside the STATICCALL an on-chain quote issues. Any emitted form of it is
+  // a program that reverts. It is an `eth_call`-only quote, reachable through `decode` and nothing
+  // else.
+  return base;
 }
 
 /** BalancerV2 batch swap — `queryBatchSwap`. */

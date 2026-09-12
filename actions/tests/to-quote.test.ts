@@ -395,6 +395,14 @@ describe("actionToQuote integration tests", { timeout: 120_000 }, () => {
       deadline: Math.floor(Date.now() / 1000) + 3600,
     };
 
+    // The Vault runs the swap and reverts to return, so every emitted form of this quote is a
+    // program that reverts. Absence of both fields is the contract that says so.
+    it("exposes no on-chain quote form", () => {
+      const quote = actionToQuote(action, amountIn, QUOTE_OPTS);
+      assert.equal(quote.toSauce, undefined, "queryBatchSwap cannot run inside a STATICCALL");
+      assert.equal(quote.toSauceDynamic, undefined, "nor with a runtime amount");
+    });
+
     it("matches manual queryBatchSwap call", async () => {
       const quoted = await executeQuote(action, amountIn);
 
@@ -457,6 +465,14 @@ describe("actionToQuote integration tests", { timeout: 120_000 }, () => {
       recipient: "0x0000000000000000000000000000000000000001" as Address,
       deadline: Math.floor(Date.now() / 1000) + 3600,
     };
+
+    // The Vault runs the swap and reverts to return, so every emitted form of this quote is a
+    // program that reverts. Absence of both fields is the contract that says so.
+    it("exposes no on-chain quote form", () => {
+      const quote = actionToQuote(action, amountIn, QUOTE_OPTS);
+      assert.equal(quote.toSauce, undefined, "queryBatchSwap cannot run inside a STATICCALL");
+      assert.equal(quote.toSauceDynamic, undefined, "nor with a runtime amount");
+    });
 
     it("matches manual queryBatchSwap call", async () => {
       const quoted = await executeQuote(action, amountIn);

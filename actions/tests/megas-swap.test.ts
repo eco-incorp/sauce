@@ -18,7 +18,6 @@ import { privateKeyToAccount } from "viem/accounts";
 import { actionToQuote, megasSwapToSauce, megasUsdcUsdtSwapToSauce } from "../src/index.js";
 import type {
   ApproveAction,
-  BalancerV2SwapAction,
   CurveSwapAction,
   SwapAction,
   UniswapV2SwapAction,
@@ -67,11 +66,6 @@ const QUOTER_V2 = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e" as Address;
 const CURVE_3POOL = "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7" as Address;
 // Uniswap V2 Router — direct USDC/USDT pair at 0x3041CbD36888bECc7bbCBc0045E3B1f144466f5f.
 const UNIV2_ROUTER = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D" as Address;
-// Balancer V2 Vault + original stable-3pool (DAI=0, USDC=1, USDT=2) at
-// 0x06df3b2bbb68adc8b0e302443692037ed9f91b42.
-const BALANCER_V2_VAULT = "0xBA12222222228d8Ba445958a75a0704d566BF2C8" as Address;
-const BALANCER_V2_3POOL_ID =
-  "0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000063" as `0x${string}`;
 
 let SAUCE: Address;
 let hardhatProcess: ChildProcess;
@@ -139,9 +133,10 @@ async function startHardhat(): Promise<ChildProcess> {
  * no `cook` selector to prefix).
  *
  * `runtimeCreationCode` comes from `sdk/dist/artifacts/V12RuntimeBytecode.json`, which
- * `pnpm --filter ./sdk sync-engine-artifacts --fetch-v12-engines` writes from the `v12-evm` release
- * built at the commit the published compiler's `compiler-v0.5.0` tag is cut from — compiler and
- * engine are one lineage by construction. `sdk/src/artifacts/` is the fallback for a local run, and
+ * `pnpm --filter ./sdk sync-engine-artifacts --fetch-v12-engines` writes from the `v12-evm` release.
+ * That release and the published compiler are cut from separate commits, so the two are NOT one
+ * lineage: the tag and digest pinned in `sync-engine-artifacts.mjs` are what tie this artifact to a
+ * known build. `sdk/src/artifacts/` is the fallback for a local run, and
  * `SAUCE_V12_RUNTIME_CREATION_HEX` overrides both (a file of creation hex).
  */
 function v12RuntimeCreationCode(): Hex {
@@ -261,6 +256,19 @@ function revert(id: string): void {
   execSync(`cast rpc evm_revert "${id}" --rpc-url ${RPC}`, { encoding: "utf8" });
 }
 
+// Every quote here is read off the pre-transaction state, while the swap executes after the
+// prepended approvals inside the transaction, so the realized amount drifts from the quote — by a
+// unit or two, measured. This slack absorbs that while staying four orders of magnitude below the
+// ~1.7e7-unit gap between the best pool and the next one, so these comparisons still prove which
+// pool the greedy loop picked. A relative bound cannot: that gap is only ~0.17 bps wide.
+const QUOTE_DRIFT = 1_000n;
+
+const withinDrift = (actual: bigint, expected: bigint): boolean =>
+  (actual > expected ? actual - expected : expected - actual) <= QUOTE_DRIFT;
+
+const atLeastWithinDrift = (actual: bigint, expected: bigint): boolean =>
+  actual + QUOTE_DRIFT >= expected;
+
 async function balanceOf(token: Address, account: Address): Promise<bigint> {
   return client.readContract({
     address: token,
@@ -351,7 +359,7 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     revert(snap);
   });
 
-  it("splits USDC→USDT across five protocols and matches-or-beats any single pool", async () => {
+  it("splits USDC→USDT across four protocols and matches-or-beats any single pool", async () => {
     const amountIn = 10_000_000n * 1_000_000n; // 10,000,000 USDC
     const startUsdc = await fundSauceUSDCFromWhale(amountIn);
     assert.ok(startUsdc >= amountIn, `needed >= ${amountIn} USDC on SAUCE, got ${startUsdc}`);
@@ -394,33 +402,9 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
       recipient: CALLER,
       deadline,
     };
-    const balV2Candidate: BalancerV2SwapAction = {
-      type: "balancerV2Swap",
-      chainId: CHAIN_ID,
-      vault: BALANCER_V2_VAULT,
-      poolId: BALANCER_V2_3POOL_ID,
-      tokenIn: USDC,
-      tokenOut: USDT,
-      amountIn: amountIn.toString(),
-      amountOutMin: "1",
-      recipient: CALLER,
-      deadline,
-    };
 
-    const candidates: SwapAction[] = [
-      mkUniV3(100),
-      mkUniV3(500),
-      curveCandidate,
-      uniV2Candidate,
-      balV2Candidate,
-    ];
-    const labels = [
-      "UniV3 100bps ",
-      "UniV3 500bps ",
-      "Curve 3pool  ",
-      "UniV2 router ",
-      "BalV2 3pool  ",
-    ];
+    const candidates: SwapAction[] = [mkUniV3(100), mkUniV3(500), curveCandidate, uniV2Candidate];
+    const labels = ["UniV3 100bps ", "UniV3 500bps ", "Curve 3pool  ", "UniV2 router "];
     const quoterOpts = { quoterV3: QUOTER_V2, minTotalOut: "0" };
 
     // Off-chain quotes at the FULL amount: what each single pool would yield
@@ -464,7 +448,10 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     assert.equal(usdcBefore - usdcAfter, spent, "SAUCE USDC should decrease by exactly bucket*n");
     // Core invariant of greedy split routing on concave AMMs: the split is
     // always at least as good as the best single-pool execution.
-    assert.ok(received >= bestSingle, `split (${received}) < best single (${bestSingle})`);
+    assert.ok(
+      atLeastWithinDrift(received, bestSingle),
+      `split (${received}) < best single (${bestSingle})`,
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -518,24 +505,11 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
         recipient,
         deadline: dl,
       } satisfies UniswapV2SwapAction,
-      {
-        type: "balancerV2Swap",
-        chainId: CHAIN_ID,
-        vault: BALANCER_V2_VAULT,
-        poolId: BALANCER_V2_3POOL_ID,
-        tokenIn: USDC,
-        tokenOut: USDT,
-        amountIn: amount,
-        amountOutMin: "1",
-        recipient,
-        deadline: dl,
-      } satisfies BalancerV2SwapAction,
     ];
     const approves: ApproveAction[] = [
       { type: "approve", chainId: CHAIN_ID, token: USDC, spender: SWAP_ROUTER_V3, amount },
       { type: "approve", chainId: CHAIN_ID, token: USDC, spender: CURVE_3POOL, amount },
       { type: "approve", chainId: CHAIN_ID, token: USDC, spender: UNIV2_ROUTER, amount },
-      { type: "approve", chainId: CHAIN_ID, token: USDC, spender: BALANCER_V2_VAULT, amount },
     ];
     return { candidates, approves };
   }
@@ -558,7 +532,13 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     );
     const bestSingle = singleQuotes.reduce((a, b) => (a > b ? a : b));
 
-    cookSend(megasSwapToSauce(candidates, amountIn, 1, { ...quoterOpts, prepend: approves }));
+    cookSend(
+      megasSwapToSauce(candidates, amountIn, 1, {
+        ...quoterOpts,
+        prepend: approves,
+        sweep: { token: USDT, to: CALLER },
+      }),
+    );
 
     const usdtAfter = await balanceOf(USDT, CALLER);
     const usdcAfter = await balanceOf(USDC, SAUCE);
@@ -566,9 +546,8 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     assert.equal(usdcBefore - usdcAfter, amountIn, "n=1 should spend the full amount");
     // With one bucket, the greedy algorithm reduces to "pick the best pool";
     // received should match the best single quote exactly.
-    assert.equal(
-      received,
-      bestSingle,
+    assert.ok(
+      withinDrift(received, bestSingle),
       `n=1: received (${received}) != best single (${bestSingle})`,
     );
   });
@@ -593,12 +572,21 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     );
     const bestSingle = singleQuotes.reduce((a, b) => (a > b ? a : b));
 
-    cookSend(megasSwapToSauce(candidates, amountIn, n, { ...quoterOpts, prepend: approves }));
+    cookSend(
+      megasSwapToSauce(candidates, amountIn, n, {
+        ...quoterOpts,
+        prepend: approves,
+        sweep: { token: USDT, to: CALLER },
+      }),
+    );
 
     const usdtAfter = await balanceOf(USDT, CALLER);
     const usdcAfter = await balanceOf(USDC, SAUCE);
     const received = usdtAfter - usdtBefore;
     assert.equal(usdcBefore - usdcAfter, amountIn, "should spend the full amountIn");
-    assert.ok(received >= bestSingle, `split (${received}) < best single (${bestSingle})`);
+    assert.ok(
+      atLeastWithinDrift(received, bestSingle),
+      `split (${received}) < best single (${bestSingle})`,
+    );
   });
 });

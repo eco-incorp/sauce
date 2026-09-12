@@ -1,6 +1,7 @@
 import { describe, it, before, after, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { actionsToSauce } from "../src/to-sauce.js";
+import { actionsToSauce, actionsToSauceSource } from "../src/to-sauce.js";
+import type { RoutingAction } from "../src/types.js";
 import { execSync, spawn, type ChildProcess } from "child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -29,6 +30,7 @@ if (!FORK_URL) {
   throw new Error("FORK_URL env var is required.");
 }
 
+const RAY = 10n ** 27n;
 const RPC = "http://127.0.0.1:8545";
 const PK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as const;
 const CALLER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as Address;
@@ -272,9 +274,10 @@ async function startHardhat(): Promise<ChildProcess> {
  * no `cook` selector to prefix).
  *
  * `runtimeCreationCode` comes from `sdk/dist/artifacts/V12RuntimeBytecode.json`, which
- * `pnpm --filter ./sdk sync-engine-artifacts --fetch-v12-engines` writes from the `v12-evm` release
- * built at the commit the published compiler's `compiler-v0.5.0` tag is cut from — compiler and
- * engine are one lineage by construction. `sdk/src/artifacts/` is the fallback for a local run, and
+ * `pnpm --filter ./sdk sync-engine-artifacts --fetch-v12-engines` writes from the `v12-evm` release.
+ * That release and the published compiler are cut from separate commits, so the two are NOT one
+ * lineage: the tag and digest pinned in `sync-engine-artifacts.mjs` are what tie this artifact to a
+ * known build. `sdk/src/artifacts/` is the fallback for a local run, and
  * `SAUCE_V12_RUNTIME_CREATION_HEX` overrides both (a file of creation hex).
  */
 function v12RuntimeCreationCode(): Hex {
@@ -356,6 +359,9 @@ const aaveSupplyEventAbi = parseAbi([
 ]);
 const aaveWithdrawEventAbi = parseAbi([
   "event Withdraw(address indexed reserve, address indexed user, address indexed to, uint256 amount)",
+]);
+const aavePoolReserveIncomeAbi = parseAbi([
+  "function getReserveNormalizedIncome(address) view returns (uint256)",
 ]);
 const compoundSupplyEventAbi = parseAbi([
   "event Supply(address indexed from, address indexed dst, uint256 amount)",
@@ -830,13 +836,19 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
         args: { to: SAUCE },
       });
       assert.ok(aTokenMint.length >= 1, "Should emit aToken Transfer (mint) to Sauce");
-      const diff =
-        aTokenMint[0].args.value > BigInt(supplyAmount)
-          ? aTokenMint[0].args.value - BigInt(supplyAmount)
-          : BigInt(supplyAmount) - aTokenMint[0].args.value;
+      // Aave mints against the scaled balance — floor(floor(amount·RAY/index)·index/RAY) — so it
+      // truncates twice, losing strictly less than index/RAY + 1 units and never minting more than
+      // was supplied. Deriving the bound from the live index keeps it correct as the index grows.
+      const liquidityIndex = await client.readContract({
+        address: AAVE_V3_POOL,
+        abi: aavePoolReserveIncomeAbi,
+        functionName: "getReserveNormalizedIncome",
+        args: [USDC],
+      });
+      const mintShortfall = BigInt(supplyAmount) - aTokenMint[0].args.value;
       assert.ok(
-        diff <= 1n,
-        `aToken mint amount should equal supplyAmount (within rounding), diff=${diff}`,
+        mintShortfall >= 0n && mintShortfall <= liquidityIndex / RAY + 1n,
+        `aToken mint should be within scaled-balance truncation of supplyAmount, shortfall=${mintShortfall}`,
       );
     });
 
@@ -1752,9 +1764,9 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
   describe("Bytecode generation", () => {
     // Opcode constants
     const OP_CALL = 0xa2;
-    const OP_ALLOCATE_VALUE = 0xc0;
-    const OP_READ_VALUE = 0x50;
-    const OP_WRITE_VALUE = 0xc1;
+    // Chaining is `let v_<name> = …` locals in the emitted SauceScript, so it is observable in the
+    // source and not as an opcode. Byte-scanning cannot assert it either way: a bytecode scan finds
+    // the byte inside UniswapV4's pre-encoded execute blob as readily as an instruction.
 
     /** Check that a 4-byte selector (hex string like '0xa9059cbb') appears in bytecode */
     function containsSelector(bytecode: Uint8Array, selectorHex: string): boolean {
@@ -1801,7 +1813,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
     const SEL_HYPERLANE_DISPATCH = "0xfa31de01"; // dispatch(uint32,bytes32,bytes)
 
     it("uniswapV4ExactInput", () => {
-      const bytecode = actionsToSauce([
+      const actions = [
         {
           type: "uniswapV4ExactInput",
           chainId,
@@ -1818,18 +1830,16 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
           amountOutMin: "1",
           recipient: CALLER,
         },
-      ]);
+      ] satisfies RoutingAction[];
+      const bytecode = actionsToSauce(actions);
+      const source = actionsToSauceSource(actions);
       assert.ok(containsSelector(bytecode, SEL_TRANSFER), "should contain transfer selector");
       assert.ok(containsSelector(bytecode, SEL_EXECUTE), "should contain execute selector");
-      assert.notEqual(
-        bytecode[0],
-        OP_ALLOCATE_VALUE,
-        "no chaining — should not start with ALLOCATE_VALUE",
-      );
+      assert.doesNotMatch(source, /let v_/, "no chaining — no output local should be declared");
     });
 
     it("uniswapV4ExactInput with saveOutputAs", () => {
-      const bytecode = actionsToSauce([
+      const actions = [
         {
           type: "uniswapV4ExactInput",
           chainId,
@@ -1854,17 +1864,18 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
           spender: "0x000000000000000000000000000000000000bEEF",
           amountRef: "v4Out",
         },
-      ]);
+      ] satisfies RoutingAction[];
+      const bytecode = actionsToSauce(actions);
+      const source = actionsToSauceSource(actions);
       assert.ok(containsSelector(bytecode, SEL_TRANSFER), "should contain transfer selector");
       assert.ok(containsSelector(bytecode, SEL_EXECUTE), "should contain execute selector");
       assert.ok(containsSelector(bytecode, SEL_APPROVE), "should contain approve selector");
-      assert.equal(bytecode[0], OP_ALLOCATE_VALUE, "chaining — should start with ALLOCATE_VALUE");
-      assert.ok(containsOpcode(bytecode, OP_WRITE_VALUE), "should store output");
-      assert.ok(containsOpcode(bytecode, OP_READ_VALUE), "should read stored output for approve");
+      assert.match(source, /let v_v4Out = /, "saveOutputAs should declare the local");
+      assert.match(source, /f1: v_v4Out/, "amountRef should read the local, not a literal");
     });
 
     it("uniswapV4ExactInputMultiHop", () => {
-      const bytecode = actionsToSauce([
+      const actions = [
         {
           type: "uniswapV4ExactInputMultiHop",
           chainId,
@@ -1888,18 +1899,19 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
           amountOutMin: "1",
           recipient: CALLER,
         },
-      ]);
+      ] satisfies RoutingAction[];
+      const bytecode = actionsToSauce(actions);
+      const source = actionsToSauceSource(actions);
       assert.ok(containsSelector(bytecode, SEL_TRANSFER), "should contain transfer selector");
       assert.ok(containsSelector(bytecode, SEL_EXECUTE), "should contain execute selector");
-      assert.notEqual(
-        bytecode[0],
-        OP_ALLOCATE_VALUE,
-        "no chaining — should not start with ALLOCATE_VALUE",
-      );
+      // The negative twin of the chained case, and it has to be checked the same way: the old
+      // `bytecode[0] !== 0xc0` held for every program ever emitted, chained or not, so it proved
+      // nothing.
+      assert.doesNotMatch(source, /let v_/, "no chaining — no output local should be declared");
     });
 
     it("uniswapV4ExactInputMultiHop with saveOutputAs", () => {
-      const bytecode = actionsToSauce([
+      const actions = [
         {
           type: "uniswapV4ExactInputMultiHop",
           chainId,
@@ -1931,13 +1943,14 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
           spender: "0x000000000000000000000000000000000000bEEF",
           amountRef: "v4MultiOut",
         },
-      ]);
+      ] satisfies RoutingAction[];
+      const bytecode = actionsToSauce(actions);
+      const source = actionsToSauceSource(actions);
       assert.ok(containsSelector(bytecode, SEL_TRANSFER), "should contain transfer selector");
       assert.ok(containsSelector(bytecode, SEL_EXECUTE), "should contain execute selector");
       assert.ok(containsSelector(bytecode, SEL_APPROVE), "should contain approve selector");
-      assert.equal(bytecode[0], OP_ALLOCATE_VALUE, "chaining — should start with ALLOCATE_VALUE");
-      assert.ok(containsOpcode(bytecode, OP_WRITE_VALUE), "should store output");
-      assert.ok(containsOpcode(bytecode, OP_READ_VALUE), "should read stored output for approve");
+      assert.match(source, /let v_v4MultiOut = /, "saveOutputAs should declare the local");
+      assert.match(source, /f1: v_v4MultiOut/, "amountRef should read the local, not a literal");
     });
 
     it("curveSwap", () => {
