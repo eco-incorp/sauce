@@ -161,7 +161,8 @@
  * see the consuming recipe's budget.ts's CU_FAMILIES entry for the fitted
  * slot/rung coefficients) ──
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressCodec } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 
@@ -190,20 +191,20 @@ function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): b
 }
 
 async function vaultPda(pool: Address, mint: Address): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: GATORSWAP_PROGRAM_ID,
-    seeds: [new TextEncoder().encode("vault"), codec.encode(pool), codec.encode(mint)],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(GATORSWAP_PROGRAM_ID, [
+    new TextEncoder().encode("vault"),
+    codec.encode(pool) as Uint8Array,
+    codec.encode(mint) as Uint8Array,
+  ]);
 }
 
 /** `PDA(gatorLx9a, ["pool", mintA, mintB])` — documentation/testing only; discovery supplies `pool` directly. */
 export async function deriveGatorswapPool(mintA: Address, mintB: Address): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: GATORSWAP_PROGRAM_ID,
-    seeds: [new TextEncoder().encode("pool"), codec.encode(mintA), codec.encode(mintB)],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(GATORSWAP_PROGRAM_ID, [
+    new TextEncoder().encode("pool"),
+    codec.encode(mintA) as Uint8Array,
+    codec.encode(mintB) as Uint8Array,
+  ]);
 }
 
 export interface GatorswapPoolConfig extends PoolConfig {

@@ -76,7 +76,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { findAssociatedTokenPda } from "@solana-program/token";
+import { memoizedFindAssociatedTokenPda } from "../pda-memo.js";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
@@ -206,7 +206,7 @@ export async function pickTesseraVVault(
   mint: Address,
   owned: readonly TesseraVOwnedTokenAccount[],
 ): Promise<Address | null> {
-  const [ata] = await findAssociatedTokenPda({ owner, mint, tokenProgram: TOKEN_PROGRAM });
+  const ata = await memoizedFindAssociatedTokenPda({ owner, mint, tokenProgram: TOKEN_PROGRAM });
   const nonAta = owned.filter((account) => account.address !== ata);
   if (nonAta.length === 0) return null;
   if (nonAta.length === 1) return nonAta[0]!.address;

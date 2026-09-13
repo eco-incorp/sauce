@@ -46,14 +46,10 @@
  * 3 scale-vmm pairs; `Exponential` (1) is declared in the IDL but never seen live and its
  * formula is unverified, so a pool carrying it is rejected rather than guessed at.
  */
-import {
-  address,
-  getAddressDecoder,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-} from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { parseMintExtensions } from "../token-extensions.js";
+import { memoizedGetProgramDerivedAddress } from "./pda-memo.js";
 
 export const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
@@ -122,8 +118,7 @@ async function pda(seeds: (Address | Uint8Array)[], programAddress: Address): Pr
   const bytes = seeds.map((seed) =>
     seed instanceof Uint8Array ? seed : new Uint8Array(encoder.encode(seed)),
   );
-  const [derived] = await getProgramDerivedAddress({ programAddress, seeds: bytes });
-  return derived;
+  return memoizedGetProgramDerivedAddress(programAddress, bytes);
 }
 
 /** Associated Token Account address: PDA([owner, tokenProgram, mint], ASSOCIATED_TOKEN_PROGRAM). */

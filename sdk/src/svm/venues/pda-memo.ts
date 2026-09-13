@@ -37,8 +37,9 @@
  * shape) under DISTINCT program ids can never collide: the program id is
  * part of the key by construction, not by caller discipline.
  */
-import { getProgramDerivedAddress } from "@solana/kit";
+import { getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { ASSOCIATED_TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 
 export interface PdaMemoStats {
   hits: number;
@@ -127,6 +128,38 @@ export async function memoizedGetProgramDerivedAddress(
   }
   memo.set(key, derived);
   return derived;
+}
+
+/** Seeds for {@link memoizedFindAssociatedTokenPda} — the same shape `@solana-program/token`'s `findAssociatedTokenPda` takes (`tokenProgram` is part of the ATA seeds, so it is required just as it is there). */
+export interface AssociatedTokenSeeds {
+  owner: Address;
+  mint: Address;
+  tokenProgram: Address;
+}
+
+/**
+ * Memoized associated-token-account address — the drop-in, memoized twin of
+ * `@solana-program/token`'s `findAssociatedTokenPda`. BYTE-IDENTICAL to it: the
+ * same Associated-Token program id and the same `[owner, tokenProgram, mint]`
+ * seed order (`findAssociatedTokenPda`'s own definition), so it resolves to the
+ * exact same address — but through {@link memoizedGetProgramDerivedAddress}, so
+ * a repeated warm derive of the same ATA is a memo hit instead of a fresh
+ * SHA-256 bump-walk + ed25519 on-curve check. `findAssociatedTokenPda` is a
+ * distinct code path from the raw `getProgramDerivedAddress` calls this module's
+ * venues also route, so it needs its own memoized entry point to stop bypassing
+ * the memo. Returns the address only — the bump `findAssociatedTokenPda` also
+ * returns is unused at every venue call site this replaces (all destructure
+ * `const [ata] = …`).
+ */
+export async function memoizedFindAssociatedTokenPda(
+  seeds: AssociatedTokenSeeds,
+): Promise<Address> {
+  const encoder = getAddressEncoder();
+  return memoizedGetProgramDerivedAddress(ASSOCIATED_TOKEN_PROGRAM_ADDRESS, [
+    encoder.encode(seeds.owner) as Uint8Array,
+    encoder.encode(seeds.tokenProgram) as Uint8Array,
+    encoder.encode(seeds.mint) as Uint8Array,
+  ]);
 }
 
 /** TEST/OBSERVABILITY SEAM: cumulative hit/miss counts since process start or the last reset. */

@@ -104,7 +104,8 @@
  * pair (`reserve0 === 0 || reserve1 === 0`, mirroring `Pair::is_initialized`);
  * a degenerate `swap_fee_bps >= 10000`.
  */
-import { address, getAddressCodec, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressCodec } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
@@ -151,8 +152,7 @@ function getAddressEncoded(value: Address): Uint8Array {
   return new Uint8Array(getAddressCodec().encode(value));
 }
 async function derivePda(seeds: Uint8Array[]): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({ programAddress: OMNIPAIR_PROGRAM_ID, seeds });
-  return pda;
+  return memoizedGetProgramDerivedAddress(OMNIPAIR_PROGRAM_ID, seeds);
 }
 
 /** Fetch + decode one Pair, deriving the fixed accounts the swap CPI needs. Read-only against the loader. */

@@ -136,7 +136,8 @@
  * sizes — likewise essentially flat. This is Denali's OWN native CPI cost
  * only, not this ladder's own setup-read + interpreter overhead.
  */
-import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressCodec, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
@@ -221,10 +222,10 @@ export async function fetchDenaliPoolConfig(
     }
   }
 
-  const [oracle] = await getProgramDerivedAddress({
-    programAddress: DENALI_ORACLE_PROGRAM_ID,
-    seeds: ["oracle", encoder.encode(pool)],
-  });
+  const oracle = await memoizedGetProgramDerivedAddress(DENALI_ORACLE_PROGRAM_ID, [
+    new TextEncoder().encode("oracle"),
+    encoder.encode(pool) as Uint8Array,
+  ]);
   return {
     venue: SLUG,
     pool,

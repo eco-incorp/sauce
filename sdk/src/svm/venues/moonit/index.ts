@@ -113,7 +113,8 @@
  * `pumpfun-bonding-curve` disclosed) — `test/fast/svm-realcpi-coverage.test.ts`
  * names it in KNOWN_GAPS pending an available build.
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
@@ -156,11 +157,7 @@ async function loadAccount(load: AccountLoader, addr: Address, what: string): Pr
 async function ata(owner: Address, mint: Address, tokenProgram: Address): Promise<Address> {
   const encoder = getAddressEncoder();
   const seeds = [owner, tokenProgram, mint].map((a) => new Uint8Array(encoder.encode(a)));
-  const [derived] = await getProgramDerivedAddress({
-    programAddress: ASSOCIATED_TOKEN_PROGRAM,
-    seeds,
-  });
-  return derived;
+  return memoizedGetProgramDerivedAddress(ASSOCIATED_TOKEN_PROGRAM, seeds);
 }
 /** floor(a*b/c), non-negative — the TS mirror of the emitted Math.mulDiv. */
 function mulDiv(a: bigint, b: bigint, c: bigint): bigint {

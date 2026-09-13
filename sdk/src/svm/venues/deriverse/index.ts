@@ -67,7 +67,8 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
  */
-import { getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { getAddressCodec, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
@@ -158,12 +159,11 @@ function seedById(version: number, tag: number, id1: number, id2: number): Uint8
 
 /** `find_program_address([seed_by_id(VERSION, tag, assetId, crncyId), DERIVERSE_AUTH], programId)`. */
 async function spotAcc(tag: number, assetTokenId: number, crncyTokenId: number): Promise<Address> {
-  const authBytes = getAddressEncoder().encode(DERIVERSE_AUTH);
-  const [acc] = await getProgramDerivedAddress({
-    programAddress: DERIVERSE_PROGRAM_ID,
-    seeds: [seedById(VERSION, tag, assetTokenId, crncyTokenId), authBytes],
-  });
-  return acc;
+  const authBytes = getAddressEncoder().encode(DERIVERSE_AUTH) as Uint8Array;
+  return memoizedGetProgramDerivedAddress(DERIVERSE_PROGRAM_ID, [
+    seedById(VERSION, tag, assetTokenId, crncyTokenId),
+    authBytes,
+  ]);
 }
 
 function readFloat64LE(data: Uint8Array, offset: number): number {
@@ -436,12 +436,8 @@ async function spotAccForMint(mint: Address): Promise<Address> {
   const seed = new Uint8Array(32);
   seed.set(mintBytes.subarray(0, 28), 0);
   new DataView(seed.buffer).setUint32(28, VERSION, true);
-  const authBytes = getAddressEncoder().encode(DERIVERSE_AUTH);
-  const [acc] = await getProgramDerivedAddress({
-    programAddress: DERIVERSE_PROGRAM_ID,
-    seeds: [seed, authBytes],
-  });
-  return acc;
+  const authBytes = getAddressEncoder().encode(DERIVERSE_AUTH) as Uint8Array;
+  return memoizedGetProgramDerivedAddress(DERIVERSE_PROGRAM_ID, [seed, authBytes]);
 }
 
 const fixed = (ref: string, addr: Address, writable?: boolean): VenueAccount =>

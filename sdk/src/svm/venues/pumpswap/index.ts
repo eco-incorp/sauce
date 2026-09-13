@@ -23,15 +23,11 @@
  * in-VM product is u64 * u64-or-bps < 2^128, far inside the engine's 256-bit
  * wrap-free range; Math.mulDiv is used for the invariant products anyway.
  */
-import {
-  address,
-  getAddressDecoder,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-} from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { ceilDiv, readUintLE } from "../math.js";
 import { parseMintExtensions } from "../../token-extensions.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -118,8 +114,13 @@ function pubkeyAt(data: Uint8Array, offset: number): Address {
 }
 
 async function pda(seeds: (string | Uint8Array)[], programAddress: Address): Promise<Address> {
-  const [derived] = await getProgramDerivedAddress({ programAddress, seeds });
-  return derived;
+  // Normalize string seeds to their UTF-8 bytes exactly as @solana/kit's own
+  // getProgramDerivedAddress does internally, so the memo derives from — and
+  // keys on — byte-identical seeds (a string seed is never passed to the memo).
+  const bytes = seeds.map((seed) =>
+    typeof seed === "string" ? new TextEncoder().encode(seed) : seed,
+  );
+  return memoizedGetProgramDerivedAddress(programAddress, bytes);
 }
 
 async function ata(owner: Address, mint: Address, tokenProgram: Address): Promise<Address> {

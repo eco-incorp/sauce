@@ -89,7 +89,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { findAssociatedTokenPda } from "@solana-program/token";
+import { memoizedFindAssociatedTokenPda } from "../pda-memo.js";
 import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -260,7 +260,7 @@ export const vaultLiquidUnstake = {
       }
     }
 
-    const [poolLstAta] = await findAssociatedTokenPda({
+    const poolLstAta = await memoizedFindAssociatedTokenPda({
       owner: address(POOL_ADDRESS),
       tokenProgram: address(TOKEN_PROGRAM_ADDRESS),
       mint,

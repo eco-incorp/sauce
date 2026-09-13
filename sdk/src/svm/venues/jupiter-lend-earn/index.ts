@@ -152,13 +152,9 @@
  * measurement + calibration method (real `simulateTransaction` CU: deposit
  * ~56.3-57.5k, redeem ~66.3-67.7k raw CPI cost).
  */
-import {
-  address,
-  getAddressDecoder,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-} from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -272,11 +268,10 @@ async function fetchJupiterLendEarnConfig(
 
 /** PDA(["rate_model", mint], LIQUIDITY_PROGRAM) — verified live for all three test markets. */
 async function deriveRateModel(mint: Address): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: JUPITER_LEND_LIQUIDITY_PROGRAM_ID,
-    seeds: [Buffer.from("rate_model"), Uint8Array.from(getAddressEncoder().encode(mint))],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(JUPITER_LEND_LIQUIDITY_PROGRAM_ID, [
+    Buffer.from("rate_model"),
+    Uint8Array.from(getAddressEncoder().encode(mint)),
+  ]);
 }
 
 function makeJupiterLendEarn(): {

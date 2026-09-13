@@ -196,8 +196,9 @@
  * adapter attaches it but never reads its balance.
  */
 import { createHash } from "node:crypto";
-import { address, getAddressCodec, getBase58Decoder, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressCodec, getBase58Decoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 
@@ -326,32 +327,20 @@ export interface MSwapPoolConfig extends PoolConfig {
 }
 
 async function derivePdas(extProgramId: Address, mMint: Address, mTokenProgram: Address) {
-  const [global] = await getProgramDerivedAddress({
-    programAddress: extProgramId,
-    seeds: [M_EXT_GLOBAL_SEED],
-  });
-  const [mVaultAuth] = await getProgramDerivedAddress({
-    programAddress: extProgramId,
-    seeds: [M_VAULT_SEED],
-  });
-  const [mintAuthority] = await getProgramDerivedAddress({
-    programAddress: extProgramId,
-    seeds: [MINT_AUTHORITY_SEED],
-  });
-  const [mVault] = await findAta(mVaultAuth, mMint, mTokenProgram);
+  const global = await memoizedGetProgramDerivedAddress(extProgramId, [M_EXT_GLOBAL_SEED]);
+  const mVaultAuth = await memoizedGetProgramDerivedAddress(extProgramId, [M_VAULT_SEED]);
+  const mintAuthority = await memoizedGetProgramDerivedAddress(extProgramId, [MINT_AUTHORITY_SEED]);
+  const mVault = await findAta(mVaultAuth, mMint, mTokenProgram);
   return { global, mVaultAuth, mintAuthority, mVault };
 }
 
 const ATA_PROGRAM = address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-async function findAta(
-  owner: Address,
-  mint: Address,
-  tokenProgram: Address,
-): Promise<readonly [Address, number]> {
-  return getProgramDerivedAddress({
-    programAddress: ATA_PROGRAM,
-    seeds: [codec.encode(owner), codec.encode(tokenProgram), codec.encode(mint)],
-  });
+async function findAta(owner: Address, mint: Address, tokenProgram: Address): Promise<Address> {
+  return memoizedGetProgramDerivedAddress(ATA_PROGRAM, [
+    codec.encode(owner) as Uint8Array,
+    codec.encode(tokenProgram) as Uint8Array,
+    codec.encode(mint) as Uint8Array,
+  ]);
 }
 
 /**

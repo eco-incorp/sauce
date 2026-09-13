@@ -186,9 +186,9 @@ import {
   getProgramDerivedAddress,
 } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { findAssociatedTokenPda } from "@solana-program/token";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
+import { memoizedFindAssociatedTokenPda, memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import { parseMintExtensions } from "../../token-extensions.js";
 
 const SLUG = "voltr";
@@ -268,21 +268,21 @@ export async function fetchVoltrConfig(
   const lpMint = readAddress(raw, OFF_LP_MINT);
 
   const enc = getAddressEncoder();
-  const poolBytes = enc.encode(pool);
-  const [protocol, [vaultAssetIdleAuth], [vaultLpMintAuth], [derivedLpMint]] = await Promise.all([
+  const poolBytes = enc.encode(pool) as Uint8Array;
+  const [protocol, vaultAssetIdleAuth, vaultLpMintAuth, derivedLpMint] = await Promise.all([
     protocolPda(),
-    getProgramDerivedAddress({
-      programAddress: VOLTR_PROGRAM_ID,
-      seeds: [new TextEncoder().encode("vault_asset_idle_auth"), poolBytes],
-    }),
-    getProgramDerivedAddress({
-      programAddress: VOLTR_PROGRAM_ID,
-      seeds: [new TextEncoder().encode("vault_lp_mint_auth"), poolBytes],
-    }),
-    getProgramDerivedAddress({
-      programAddress: VOLTR_PROGRAM_ID,
-      seeds: [new TextEncoder().encode("vault_lp_mint"), poolBytes],
-    }),
+    memoizedGetProgramDerivedAddress(VOLTR_PROGRAM_ID, [
+      new TextEncoder().encode("vault_asset_idle_auth"),
+      poolBytes,
+    ]),
+    memoizedGetProgramDerivedAddress(VOLTR_PROGRAM_ID, [
+      new TextEncoder().encode("vault_lp_mint_auth"),
+      poolBytes,
+    ]),
+    memoizedGetProgramDerivedAddress(VOLTR_PROGRAM_ID, [
+      new TextEncoder().encode("vault_lp_mint"),
+      poolBytes,
+    ]),
   ]);
   if (derivedLpMint !== lpMint) {
     throw new Error(
@@ -290,7 +290,7 @@ export async function fetchVoltrConfig(
     );
   }
 
-  const [vaultAssetIdleAta] = await findAssociatedTokenPda({
+  const vaultAssetIdleAta = await memoizedFindAssociatedTokenPda({
     owner: vaultAssetIdleAuth,
     mint: assetMint,
     tokenProgram: SPL_TOKEN_PROGRAM_ID,

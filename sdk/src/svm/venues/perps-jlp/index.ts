@@ -110,6 +110,7 @@ import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 
 const SLUG = "perps-jlp";
 
@@ -250,11 +251,11 @@ const addrEnc = getAddressEncoder();
 
 /** `findProgramAddress(["custody", pool, mint], PERPS_JLP_PROGRAM_ID)` — verified against real SOL custody. */
 export async function custodyPda(pool: Address, mint: Address): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: PERPS_JLP_PROGRAM_ID,
-    seeds: [utf8.encode("custody"), addrEnc.encode(pool), addrEnc.encode(mint)],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(PERPS_JLP_PROGRAM_ID, [
+    utf8.encode("custody") as Uint8Array,
+    addrEnc.encode(pool) as Uint8Array,
+    addrEnc.encode(mint) as Uint8Array,
+  ]);
 }
 
 let cachedTransferAuthority: Address | undefined;

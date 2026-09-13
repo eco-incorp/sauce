@@ -117,7 +117,8 @@
  * base mint has no correct program to route its own transfer through; such a mint is rejected with
  * a named gate error rather than silently mis-targeted.
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
@@ -152,8 +153,7 @@ async function pda(seeds: (Uint8Array | Address)[], programAddress: Address): Pr
   const rawSeeds = seeds.map((s) =>
     typeof s === "string" ? new Uint8Array(encoder.encode(s as Address)) : s,
   );
-  const [derived] = await getProgramDerivedAddress({ programAddress, seeds: rawSeeds });
-  return derived;
+  return memoizedGetProgramDerivedAddress(programAddress, rawSeeds);
 }
 const SEED = (s: string): Uint8Array => new TextEncoder().encode(s);
 

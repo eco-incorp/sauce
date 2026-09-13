@@ -112,13 +112,9 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
  */
-import {
-  address,
-  getAddressDecoder,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-} from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig, SwapUser, VenueAccount, VenueSwap } from "../types.js";
 import { JUPITER_LEND_LIQUIDITY_PROGRAM_ID } from "../jupiter-lend-earn/index.js";
@@ -205,8 +201,13 @@ const pubkeyAt = (data: Uint8Array, offset: number): Address =>
   codec.decode(data.subarray(offset, offset + 32));
 
 async function pda(seeds: (string | Uint8Array)[], programAddress: Address): Promise<Address> {
-  const [derived] = await getProgramDerivedAddress({ programAddress, seeds });
-  return derived;
+  // Normalize string seeds to their UTF-8 bytes exactly as @solana/kit's own
+  // getProgramDerivedAddress does internally, so the memo derives from — and
+  // keys on — byte-identical seeds (a string seed is never passed to the memo).
+  const bytes = seeds.map((seed) =>
+    typeof seed === "string" ? new TextEncoder().encode(seed) : seed,
+  );
+  return memoizedGetProgramDerivedAddress(programAddress, bytes);
 }
 
 /**

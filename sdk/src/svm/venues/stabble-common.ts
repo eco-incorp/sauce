@@ -46,15 +46,10 @@
  * account list: `withdrawAuthority`/`authorityBump`/`beneficiary`).
  */
 import { createHash } from "node:crypto";
-import {
-  address,
-  getAddressDecoder,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-  isOffCurveAddress,
-} from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "./math.js";
+import { memoizedGetProgramDerivedAddress } from "./pda-memo.js";
 
 export const STABLE_SWAP_PROGRAM_ID = address("swapNyd8XiQwJ6ianp9snpu4brUqFxadzvHebnAXjJZ");
 export const WEIGHTED_SWAP_PROGRAM_ID = address("swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW");
@@ -272,15 +267,11 @@ export function deriveStabbleVaultAuthority(vault: Address, authorityBump: numbe
 /** Canonical ATA(owner, mint) under the classic SPL Token program — a real find_program_address (off-curve search), needed once per pool at fetch time. */
 export async function findStabbleAta(owner: Address, mint: Address): Promise<Address> {
   const encoder = getAddressEncoder();
-  const [ata] = await getProgramDerivedAddress({
-    programAddress: STABBLE_ATA_PROGRAM_ID,
-    seeds: [
-      encoder.encode(owner) as Uint8Array,
-      encoder.encode(STABBLE_TOKEN_PROGRAM_ID) as Uint8Array,
-      encoder.encode(mint) as Uint8Array,
-    ],
-  });
-  return ata;
+  return memoizedGetProgramDerivedAddress(STABBLE_ATA_PROGRAM_ID, [
+    encoder.encode(owner) as Uint8Array,
+    encoder.encode(STABBLE_TOKEN_PROGRAM_ID) as Uint8Array,
+    encoder.encode(mint) as Uint8Array,
+  ]);
 }
 
 function assertU64AmountIn(amountIn: bigint, label: string): void {

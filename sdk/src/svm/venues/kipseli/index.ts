@@ -156,7 +156,8 @@
  * CP-family baseline plus this REAL, margin-padded CPI cost — never the ~50k placeholder every
  * pre-2026-07-31 pin used).
  */
-import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressCodec, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { readUintLE } from "../math.js";
@@ -180,25 +181,20 @@ export const KIPSELI_BAN_ENTRY_REF = "kipseli-ban-entry";
 /** `[b"ban", owner]` under the Kipseli program — see the module doc's "34 tiny 9-byte accounts" section. */
 export async function deriveKipseliBanEntry(owner: Address): Promise<Address> {
   const encoder = getAddressEncoder();
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: KIPSELI_PROGRAM_ID,
-    seeds: [new TextEncoder().encode("ban"), new Uint8Array(encoder.encode(owner))],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(KIPSELI_PROGRAM_ID, [
+    new TextEncoder().encode("ban"),
+    new Uint8Array(encoder.encode(owner)),
+  ]);
 }
 
 /** Standard ATA PDA: `[owner, tokenProgram, mint]` under the Associated Token program. */
 async function deriveAta(owner: Address, mint: Address, tokenProgram: Address): Promise<Address> {
   const encoder = getAddressEncoder();
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: ASSOCIATED_TOKEN_PROGRAM,
-    seeds: [
-      new Uint8Array(encoder.encode(owner)),
-      new Uint8Array(encoder.encode(tokenProgram)),
-      new Uint8Array(encoder.encode(mint)),
-    ],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(ASSOCIATED_TOKEN_PROGRAM, [
+    new Uint8Array(encoder.encode(owner)),
+    new Uint8Array(encoder.encode(tokenProgram)),
+    new Uint8Array(encoder.encode(mint)),
+  ]);
 }
 
 /** Anchor `sha256("account:Pool")[:8]` — shared with pumpswap's/meteora-damm-v1-stable's own "Pool"

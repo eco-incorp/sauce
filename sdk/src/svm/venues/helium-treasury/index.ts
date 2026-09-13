@@ -116,7 +116,8 @@
  * subsumes both nested CPI programs) — see the recipes repo's `the consuming app SVM CU-budget module`'s
  * `CU_FAMILIES['helium-treasury']` for how that measurement becomes the CU pin.
  */
-import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressCodec, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
@@ -212,13 +213,10 @@ export async function fetchHeliumTreasuryPoolConfig(
     );
   }
 
-  const [circuitBreaker] = await getProgramDerivedAddress({
-    programAddress: HELIUM_CIRCUIT_BREAKER_PROGRAM_ID,
-    seeds: [
-      new TextEncoder().encode("account_windowed_breaker"),
-      new Uint8Array(getAddressEncoder().encode(treasury)),
-    ],
-  });
+  const circuitBreaker = await memoizedGetProgramDerivedAddress(HELIUM_CIRCUIT_BREAKER_PROGRAM_ID, [
+    new TextEncoder().encode("account_windowed_breaker"),
+    new Uint8Array(getAddressEncoder().encode(treasury)),
+  ]);
 
   const treasuryData = await load(treasury);
   if (treasuryData === null)

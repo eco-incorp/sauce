@@ -113,7 +113,8 @@
  * off-chain prepare and the cook's on-chain execution is the SAME accepted drift class every
  * state-gated SVM family already carries.
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
@@ -144,15 +145,11 @@ function pubkeyAt(data: Uint8Array, offset: number): Address {
 }
 async function ata(owner: Address, mint: Address): Promise<Address> {
   const enc = getAddressEncoder();
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: ATA_PROGRAM,
-    seeds: [
-      new Uint8Array(enc.encode(owner)),
-      new Uint8Array(enc.encode(TOKEN_PROGRAM)),
-      new Uint8Array(enc.encode(mint)),
-    ],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(ATA_PROGRAM, [
+    new Uint8Array(enc.encode(owner)),
+    new Uint8Array(enc.encode(TOKEN_PROGRAM)),
+    new Uint8Array(enc.encode(mint)),
+  ]);
 }
 async function loadAccount(load: AccountLoader, addr: Address, what: string): Promise<Uint8Array> {
   const data = await load(addr);

@@ -80,15 +80,10 @@
  * above therefore points at that relocated module, not at a file in this
  * directory.
  */
-import {
-  address,
-  getAddressCodec,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-  getUtf8Encoder,
-} from "@solana/kit";
+import { address, getAddressCodec, getAddressEncoder, getUtf8Encoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type {
   AccountLoader,
   PoolConfig,
@@ -198,11 +193,7 @@ async function derivePda(
 ): Promise<Address> {
   const encoder = getAddressEncoder();
   const rawSeeds = seeds.map((s) => (typeof s === "string" ? encoder.encode(s as Address) : s));
-  const [derived] = await getProgramDerivedAddress({
-    programAddress,
-    seeds: rawSeeds as Uint8Array[],
-  });
-  return derived;
+  return memoizedGetProgramDerivedAddress(programAddress, rawSeeds as Uint8Array[]);
 }
 
 /** Canonical ATA(owner, mint) under the classic SPL Token program. */

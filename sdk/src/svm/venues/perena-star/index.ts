@@ -141,7 +141,7 @@
  */
 import { address, getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { findAssociatedTokenPda } from "@solana-program/token";
+import { memoizedFindAssociatedTokenPda } from "../pda-memo.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -266,12 +266,12 @@ async function fetchPerenaStarPoolConfig(
   const isHaltedDeposit = readUintLE(bankData, OFF_IS_HALTED_DEPOSIT, 1) !== 0n;
   const isHaltedWithdrawal = readUintLE(bankData, OFF_IS_HALTED_WITHDRAWAL, 1) !== 0n;
 
-  const [escrowAta] = await findAssociatedTokenPda({
+  const escrowAta = await memoizedFindAssociatedTokenPda({
     owner: pool,
     mint: bankMint,
     tokenProgram: TOKEN_PROGRAM,
   });
-  const [lockedSharesAta] = await findAssociatedTokenPda({
+  const lockedSharesAta = await memoizedFindAssociatedTokenPda({
     owner: pool,
     mint: juniorMint,
     tokenProgram: TOKEN_PROGRAM,

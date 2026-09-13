@@ -157,7 +157,8 @@
  * bit-exact against the chain's realized net quote-out (1,544,161,703,
  * 46,064 CU for that CPI) over the POST-buy reserves.
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { parseMintExtensions } from "../../token-extensions.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
@@ -185,8 +186,7 @@ async function pda(seeds: (Uint8Array | Address)[], programAddress: Address): Pr
   const rawSeeds = seeds.map((s) =>
     typeof s === "string" ? new Uint8Array(encoder.encode(s as Address)) : s,
   );
-  const [derived] = await getProgramDerivedAddress({ programAddress, seeds: rawSeeds });
-  return derived;
+  return memoizedGetProgramDerivedAddress(programAddress, rawSeeds);
 }
 async function loadAccount(load: AccountLoader, addr: Address, what: string): Promise<Uint8Array> {
   const data = await load(addr);

@@ -122,7 +122,8 @@
  * fix (deriving the PDA forward from a candidate mint, never scanning by mint
  * offset) lives in `withPumpfunBondingCurveDiscovery` (the consuming app SVM discovery module).
  */
-import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -166,8 +167,7 @@ async function pda(seeds: (Uint8Array | Address)[], programAddress: Address): Pr
   const rawSeeds = seeds.map((s) =>
     typeof s === "string" ? new Uint8Array(encoder.encode(s as Address)) : s,
   );
-  const [derived] = await getProgramDerivedAddress({ programAddress, seeds: rawSeeds });
-  return derived;
+  return memoizedGetProgramDerivedAddress(programAddress, rawSeeds);
 }
 async function ata(owner: Address, mint: Address, tokenProgram: Address): Promise<Address> {
   return pda([owner, tokenProgram, mint], ASSOCIATED_TOKEN_PROGRAM);

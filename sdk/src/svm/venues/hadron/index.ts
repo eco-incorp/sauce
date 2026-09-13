@@ -73,7 +73,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { findAssociatedTokenPda } from "@solana-program/token";
+import { memoizedFindAssociatedTokenPda } from "../pda-memo.js";
 import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -258,22 +258,22 @@ export async function fetchHadronConfig(
     }
   }
 
-  const [vaultA] = await findAssociatedTokenPda({
+  const vaultA = await memoizedFindAssociatedTokenPda({
     owner: pool,
     mint: mintA,
     tokenProgram: HADRON_TOKEN_PROGRAM,
   });
-  const [vaultB] = await findAssociatedTokenPda({
+  const vaultB = await memoizedFindAssociatedTokenPda({
     owner: pool,
     mint: mintB,
     tokenProgram: HADRON_TOKEN_PROGRAM,
   });
-  const [feeVaultA] = await findAssociatedTokenPda({
+  const feeVaultA = await memoizedFindAssociatedTokenPda({
     owner: HADRON_FEE_AUTHORITY,
     mint: mintA,
     tokenProgram: HADRON_TOKEN_PROGRAM,
   });
-  const [feeVaultB] = await findAssociatedTokenPda({
+  const feeVaultB = await memoizedFindAssociatedTokenPda({
     owner: HADRON_FEE_AUTHORITY,
     mint: mintB,
     tokenProgram: HADRON_TOKEN_PROGRAM,

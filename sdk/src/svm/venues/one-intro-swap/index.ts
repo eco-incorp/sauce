@@ -83,7 +83,8 @@
  * PRICE here does not come from an external oracle; it comes from the
  * pool's own self-tracked virtual-reserve pair (see ./ladder.ts).
  */
-import { getAddressCodec, getProgramDerivedAddress } from "@solana/kit";
+import { getAddressCodec } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
@@ -154,11 +155,11 @@ export function oneIntroSwapConfig(base: PoolConfig): OneIntroSwapPoolConfig {
 
 async function deriveAta(owner: Address, mint: Address): Promise<Address> {
   const enc = getAddressCodec();
-  const [ata] = await getProgramDerivedAddress({
-    programAddress: ASSOCIATED_TOKEN_PROGRAM_ID,
-    seeds: [enc.encode(owner), enc.encode(TOKEN_PROGRAM_ID), enc.encode(mint)],
-  });
-  return ata;
+  return memoizedGetProgramDerivedAddress(ASSOCIATED_TOKEN_PROGRAM_ID, [
+    enc.encode(owner) as Uint8Array,
+    enc.encode(TOKEN_PROGRAM_ID) as Uint8Array,
+    enc.encode(mint) as Uint8Array,
+  ]);
 }
 
 export async function fetchOneIntroSwapPoolConfig(

@@ -48,7 +48,8 @@
  * this program accepts ANY owner-of-the-source-ATA as signer, not a
  * whitelisted partner key. Landing a real cook needs no separate grant.
  */
-import { address, getAddressCodec, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressCodec, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
@@ -76,15 +77,11 @@ const pubkeyAt = (data: Uint8Array, offset: number): Address =>
 
 /** `ATA(owner, mint)` — the standard SPL associated-token derivation, no extra RPC. */
 export async function deriveAta(owner: Address, mint: Address): Promise<Address> {
-  const [ata] = await getProgramDerivedAddress({
-    programAddress: ATA_PROGRAM,
-    seeds: [
-      addressEncoder.encode(owner),
-      addressEncoder.encode(TOKEN_PROGRAM),
-      addressEncoder.encode(mint),
-    ],
-  });
-  return ata;
+  return memoizedGetProgramDerivedAddress(ATA_PROGRAM, [
+    addressEncoder.encode(owner) as Uint8Array,
+    addressEncoder.encode(TOKEN_PROGRAM) as Uint8Array,
+    addressEncoder.encode(mint) as Uint8Array,
+  ]);
 }
 
 export interface RiptidePoolConfig extends PoolConfig {

@@ -110,7 +110,8 @@
  * consumes more of the existing one per slot than most families.
  */
 import { createHash } from "node:crypto";
-import { address, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { address, getAddressEncoder } from "@solana/kit";
+import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
@@ -288,15 +289,11 @@ const ADDRESS_ENCODER = getAddressEncoder();
  * module doc's account-order citation trail).
  */
 async function findAta(wallet: Address, mint: Address): Promise<Address> {
-  const [pda] = await getProgramDerivedAddress({
-    programAddress: ASSOCIATED_TOKEN_PROGRAM,
-    seeds: [
-      ADDRESS_ENCODER.encode(wallet),
-      ADDRESS_ENCODER.encode(TOKEN_PROGRAM),
-      ADDRESS_ENCODER.encode(mint),
-    ],
-  });
-  return pda;
+  return memoizedGetProgramDerivedAddress(ASSOCIATED_TOKEN_PROGRAM, [
+    ADDRESS_ENCODER.encode(wallet) as Uint8Array,
+    ADDRESS_ENCODER.encode(TOKEN_PROGRAM) as Uint8Array,
+    ADDRESS_ENCODER.encode(mint) as Uint8Array,
+  ]);
 }
 
 /**
