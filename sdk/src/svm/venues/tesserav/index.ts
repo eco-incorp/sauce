@@ -41,15 +41,28 @@
  * pass could test, up to 100 SOL notional, with no measurable curve
  * degradation) and the plan to extend to the full 10-slot walk.
  *
- * SWAP CPI (verified by real `sendTransaction`/`simulateTransaction` replays
- * in LiteSVM against a cloned mainnet pool, both via a real Jupiter `route`
- * CPI AND via a from-scratch native passthrough program — see ladder.ts):
- *   ix data:  tag(1B)=0x10 ++ direction(1B, 1=A→B / 0=B→A) ++
- *             amountIn(u64 LE) ++ minOut(u64 LE)
- *   accounts: [auth, pool(w), owner(signer), vaultA(w), vaultB(w),
+ * SWAP CPI — the mainnet program was UPGRADED (deployed binary sha256
+ * `82fd37995fcece47a253b1a00c1dd7e4c3fff706b2e42384110e2cbabf4201b3`) and the
+ * swap ix changed shape. VERIFIED FIRST-HAND 2026-09-11 against the live
+ * program: a fresh LANDING swap (sig `3ViRTJm9…`, cbBTC/USDC pool) decodes to
+ * tag 0x11 + 14 accounts, and the three APPENDED accounts are byte-identical
+ * across 25 landing swaps on 3 distinct pools (SOL/USDC `FLckH…`, `Ce8W…`,
+ * `7sJf…`), all read-only.
+ *   ix data:  tag(1B)=0x11 ++ direction(1B, 1=A→B / 0=B→A) ++
+ *             amountIn(u64 LE) ++ minOut(u64 LE)      [ARG LAYOUT UNCHANGED]
+ *   accounts (14): [auth, pool(w), owner(signer), vaultA(w), vaultB(w),
  *              userSrcAta(w), userDstAta(w), mintA, mintB, tokenProgram,
  *              tokenProgram (again — an unused Token-2022 slot on this pool),
- *              instructionsSysvar]
+ *              <TESSERAV_SWAP_GLOBAL_ACCOUNTS[0..2] — 3 global read-only accts>]
+ *   DELTA vs the pre-upgrade wire: the trailing Instructions-sysvar account is
+ *   DROPPED, three global read-only accounts are APPENDED, and the tag byte is
+ *   0x10 -> 0x11 (12 -> 14 accounts). The old 0x10/12-account wire now fails
+ *   on-chain with `InstructionError { NotEnoughAccountKeys }`.
+ *
+ *   The SDK does NOT emit this account list — it decodes the pool and produces
+ *   `TesseraVPoolConfig`; the 14-account CPI is assembled DOWNSTREAM (the
+ *   consuming recipes package's `buildSwapV2`) from these config fields plus
+ *   `TESSERAV_SWAP_TAG` / `TESSERAV_SWAP_GLOBAL_ACCOUNTS` below.
  *
  * INTROSPECTION IS NOT A CALLER ALLOWLIST (measured, not assumed). Calling
  * this instruction as the transaction's OUTERMOST instruction reverts (custom
@@ -64,6 +77,13 @@
  * aggregator ids" finding — a DIFFERENT, and stricter, gate that TesseraV
  * does not share). Confirm this holds on every re-verification pass; it is
  * the load-bearing fact that makes this venue buildable at all.
+ *
+ * UPGRADE NOTE (2026-09-11): the upgraded swap ix NO LONGER carries the
+ * Instructions sysvar in its account list (see the SWAP CPI note above — it was
+ * dropped when the 3 global accounts were appended). The 25 landing swaps
+ * inspected in this pass are all CPIs and all succeeded, so the CPI-only
+ * behavior still holds empirically; the exact mechanism the upgraded program
+ * uses for that gate (without the sysvar in the swap ix) was not re-derived.
  *
  * NOTE — RELOCATED LADDER. This venue's merge-decomposition ladder used to sit
  * next to this file as `./ladder.ts`; it now lives in the consuming recipes
@@ -129,6 +149,14 @@ export interface TesseraVPoolConfig extends PoolConfig {
   vaultA: Address;
   /** Global-per-mint vault for mintB (authority = auth). */
   vaultB: Address;
+  /**
+   * The three GLOBAL read-only accounts the upgraded swap ix appends at wire
+   * positions [11], [12], [13] — always `TESSERAV_SWAP_GLOBAL_ACCOUNTS` (a
+   * program-global trio, not per-pool; see that constant's doc). Carried on the
+   * config so the downstream CPI builder gets the FULL account set from here —
+   * they were not derivable downstream, which is why they live in the SDK.
+   */
+  swapGlobalAccounts: readonly Address[];
 }
 
 /**
@@ -143,6 +171,38 @@ export interface TesseraVPoolConfig extends PoolConfig {
  * 3JZMZyMy…), all giving account[0] = 8ekCy2….
  */
 export const TESSERAV_GLOBAL_AUTH = address("8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF");
+
+/**
+ * The swap instruction discriminator. The mainnet upgrade bumped it 0x10 ->
+ * 0x11 (see the SWAP CPI note in this file's header); a program compiled to the
+ * old 0x10 tag now reverts. Exported so the downstream CPI builder reads the tag
+ * from one place rather than hardcoding it.
+ */
+export const TESSERAV_SWAP_TAG = 0x11;
+
+/**
+ * The three GLOBAL read-only accounts the upgraded swap ix (tag 0x11) APPENDS
+ * after the two token-program slots — wire positions [11], [12], [13]. ORDER IS
+ * LOAD-BEARING.
+ *
+ * These are program GLOBALS, not per-pool PDAs, and are carried as verified
+ * CONSTANTS for exactly the reason TESSERAV_GLOBAL_AUTH is: they were BYTE-
+ * IDENTICAL across 25 landing swaps on 3 distinct pools (SOL/USDC `FLckH…`,
+ * `Ce8W…`, `7sJf…`) on 2026-09-11, all read-only — so there is nothing per-pool
+ * to derive. (Deriving a per-pool PDA here would be WRONG: the chain shows one
+ * fixed trio for every pool.) There is no on-chain IDL (closed-source), so the
+ * names below are ROLES INFERRED from each account's on-chain owner/size, not
+ * asserted semantics — re-verify on any re-capture:
+ *   [0] 8xeaWCsJ…tb3d — owner = System Program, 0 bytes  → global authority/holder
+ *   [1] BAT1Ndpu…vdhK — owner = TessVdML… (the program), 2048 bytes → global config/state
+ *   [2] 4cG31VNF…brhPs — owner = tickUcs…ULWY6N (a tick/oracle program), 88 bytes → global oracle/tick
+ * Verified against landing swap sig `3ViRTJm9…` (positions 11-13).
+ */
+export const TESSERAV_SWAP_GLOBAL_ACCOUNTS: readonly Address[] = Object.freeze([
+  address("8xeaWCsJYxRoudEZGJWURdfrtFhLYZz9b4iHJnW5tb3d"),
+  address("BAT1Ndpu5gbLTp2AZkSXP79LJBZfCH4B3zGhi6LtvdhK"),
+  address("4cG31VNF9TzFinNc7BmnjhFvGjxkY3sCETVMtMgbrhPs"),
+]);
 
 /**
  * Committed global-per-mint vault cache. Each TesseraV vault is a plain
@@ -343,6 +403,7 @@ export async function fetchTesseraVConfig(
     auth: TESSERAV_GLOBAL_AUTH,
     vaultA,
     vaultB,
+    swapGlobalAccounts: TESSERAV_SWAP_GLOBAL_ACCOUNTS,
   };
 }
 
