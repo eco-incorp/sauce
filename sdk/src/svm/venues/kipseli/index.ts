@@ -6,28 +6,50 @@
  * ORACLE-PRICED PMM — NOT the constant-product pool the integration brief guessed. There is no
  * published Anchor IDL (confirmed absent at the standard IDL PDA), so everything below is
  * recovered by binary/account/transaction reverse engineering: `getProgramAccounts` over the
- * program (39 owned accounts total: 34 tiny 9-byte `BanEntry` PDAs — see below — plus 5 pool-family
- * accounts of sizes 40/162/168/456/496), Anchor account-discriminator + instruction-log archaeology
+ * program (at integration time 39 owned accounts: 34 tiny 9-byte `BanEntry` PDAs — see below — plus
+ * a 40-byte config-only account and four `Pool` accounts of sizes 162/168/456/496; re-scanned
+ * 2026-09-14 the program held 166 owned accounts: 160 `BanEntry`, the 40-byte config, and FIVE
+ * `Pool` accounts of sizes 162/168/456/496/840 — the 840 is a later realloc, see below), Anchor
+ * account-discriminator + instruction-log archaeology
  * (`Program log: Instruction: <Name>` — Anchor's auto-logged instruction names are present even
  * with no IDL published), and `getTransaction`-decoded real mainnet swaps (a systematic pass over
  * 400 real, successful, program-scoped-log-verified `SwapV2` calls on the one liquid pool, spanning
  * amounts from 10,000 lamports to ~3.9B raw units, both directions).
  *
  * ── Why "no on-chain IDL" does not mean "unreadable": the account graph ──
- * All FOUR non-trivial-size accounts (162/168/456/496 bytes) share the SAME 8-byte Anchor account
- * discriminator `f19a6d0411b16dbc` — `sha256("account:Pool")[:8]`, the same collision pumpswap's and
- * meteora-damm-v1-stable's OWN "Pool" structs carry (see `ecoswap/svm/discovery.ts`'s
- * `SVM_FAMILY_FILTERS.pumpswap` comment — gPA is program-scoped, so the shared name never causes a
- * cross-family match). All four are SOL/USDC pools (only ONE, `89dvMturcS87kYgrwyeWqqsaFZUi5dQQpBHs6pvfUu3v`
- * (496 bytes), carries real inventory: 1185.51 USDC / 1.639 SOL at integration time; the other three
- * are drained to near-zero or exactly zero — see the relative-depth self-drop below). This adapter
- * is SCOPED to the 496-byte layout (`POOL_ACCOUNT_SIZE`), ground-truthed field-by-field against that
- * one real, liquid pool — a fetch-time size gate drops any other-sized `Pool` account cleanly (one
- * bad candidate never kills discovery, the standard venue-robustness convention).
+ * Every non-trivial-size account (162/168/456/496 and, as of 2026-09-14, 840 bytes) shares the SAME
+ * 8-byte Anchor account discriminator `f19a6d0411b16dbc` — `sha256("account:Pool")[:8]`, the same
+ * collision pumpswap's and meteora-damm-v1-stable's OWN "Pool" structs carry (see
+ * `ecoswap/svm/discovery.ts`'s `SVM_FAMILY_FILTERS.pumpswap` comment — gPA is program-scoped, so the
+ * shared name never causes a cross-family match). All are SOL/USDC pools. Liquidity migrates between
+ * pool instances over time: at integration only `89dvMturcS87kYgrwyeWqqsaFZUi5dQQpBHs6pvfUu3v`
+ * (496 bytes) carried real inventory (1185.51 USDC / 1.639 SOL); by 2026-09-14 that pool's keeper had
+ * stopped (~10.8 days stale, drained to ~0.65 USDC / 0.008 SOL) and a NEW 840-byte pool
+ * `7yD7gfXv49SFxhx9uTc11dEd7Nj98rGWeYMdZJgheZbG` had become the live one (~26,036 USDC / 47.48 SOL, a
+ * fresh keeper-pushed price), with 162/168/456 all drained to near-zero and long stale.
  *
- * Confirmed pool layout (offsets from account start): disc(8) @0; `global_config`/admin authority
- * pubkey (identical across every Kipseli account observed, incl. the 40-byte config-only account) @8
- * (32 bytes, unused by this adapter — informational); a per-pool 32-byte field @40 that does NOT
+ * The 840-byte layout is a REALLOC of the SAME `Pool` account type, not a new one: it carries the
+ * identical `account:Pool` discriminator and its first 496 bytes are field-compatible with the 496
+ * layout — every field this adapter reads (`base_token` @72 = WSOL, `quote_token` @104 = USDC,
+ * `price` @136, `expiry` @144, `fee` @152) decodes to the right value at the SAME offset, its derived
+ * ATA vaults exist and hold the matching mint + live balance, and the 344 appended bytes sit entirely
+ * AFTER the last field this adapter needs (so they are never read). Confirmed 2026-09-14 by
+ * `getAccountInfo`/`getProgramAccounts` against live chain data (not an explorer's decoded view).
+ * This adapter is therefore SCOPED to the SET of ground-truthed layouts `POOL_ACCOUNT_SIZES` =
+ * {496, 840} — a fetch-time size gate still drops any OTHER-sized `Pool` account cleanly (one bad
+ * candidate never kills discovery, the standard venue-robustness convention).
+ *
+ * ── Cross-repo coupling (must land together with any bump that serves 840) ──
+ * sauce-recipes' `ecoswap/svm/discovery.ts` filters kipseli candidates with a SINGLE-size gPA filter
+ * `kipseli: { dataSize: 496 }`, so on its own it will never SURFACE the 840-byte pool for discovery.
+ * Serving 840 end-to-end needs BOTH sides: this SDK widening (done) AND a recipes-side discovery
+ * change (two unioned gPA queries by dataSize, or a discriminator-only filter) plus an SDK version
+ * bump and re-pin — the two must ship together, or discovery stays blind to the only live pool.
+ *
+ * Confirmed pool layout (offsets from account start, identical for the 496 and 840 layouts): disc(8)
+ * @0; `global_config`/admin authority pubkey @8 (32 bytes, unused by this adapter — informational;
+ * it was identical across the original four pools + the 40-byte config account, but the newer 840
+ * pool carries a DIFFERENT config pubkey — a new pool generation — so it is NOT a universal constant); a per-pool 32-byte field @40 that does NOT
  * resolve to any funded/existing account for any of the four pools (confirmed via `getAccountInfo` —
  * every candidate reads back null) — most likely a creation-time seed/salt rather than a real
  * address reference, also unused; `base_token` mint @72 (32 bytes, WSOL for the liquid pool);
@@ -41,11 +63,12 @@
  * (owner=pool, mint) under the classic Token program, confirmed by deriving both and matching them
  * byte-for-byte against the pool's real `getTokenAccountsByOwner` result.
  *
- * ── The 34 tiny 9-byte accounts: BanEntry, not pools ──
- * `getProgramAccounts` also returns 34 accounts of exactly 9 bytes, every one holding the SAME
- * content: an 8-byte discriminator + a trailing `0xff` byte. This is consistent with an Anchor
+ * ── The tiny 9-byte accounts: BanEntry, not pools ──
+ * `getProgramAccounts` also returns a GROWING set of 9-byte accounts (34 at integration, 160 by
+ * 2026-09-14 — one is created per distinct trader, so the count only rises), every one holding the
+ * SAME content: an 8-byte discriminator + a trailing `0xff` byte. This is consistent with an Anchor
  * `init_if_needed` PDA storing just `bump: u8` (canonical bump is 255 for the overwhelming majority
- * of addresses — ~255/256 by construction — so 34-for-34 sharing 0xff is expected, not a decoding
+ * of addresses — ~255/256 by construction — so all-sharing-0xff is expected, not a decoding
  * error) — a per-trader compliance/ban-list marker. Its PDA seed formula (`[b"ban", trader_pubkey]`)
  * was recovered by BRUTE-FORCING seed-string candidates against a real transaction whose signer and
  * "real user" account were the SAME pubkey (a direct, non-relayed swap) and matching the derived PDA
@@ -200,8 +223,21 @@ async function deriveAta(owner: Address, mint: Address, tokenProgram: Address): 
 /** Anchor `sha256("account:Pool")[:8]` — shared with pumpswap's/meteora-damm-v1-stable's own "Pool"
  * structs (gPA is program-scoped, so this never causes a cross-family match — see the module doc). */
 const POOL_DISCRIMINATOR = [0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc];
-/** Scoped to the ONE ground-truthed, real-liquidity layout — see the module doc. */
-const POOL_ACCOUNT_SIZE = 496;
+/**
+ * Servable `Pool` layouts, each ground-truthed field-by-field against a real, same-disc pool of that
+ * exact size (see the module doc's "account graph" section):
+ *   - 496: the original layout (`89dvMturcS87kYgrwyeWqqsaFZUi5dQQpBHs6pvfUu3v`).
+ *   - 840: a later realloc that APPENDS 344 trailing bytes (`7yD7gfXv49SFxhx9uTc11dEd7Nj98rGWeYMdZJgheZbG`
+ *     — ~47.5 SOL / ~26k USDC live at 2026-09-14, the current liquid SOL/USDC pool). Same
+ *     `account:Pool` discriminator, and the first 496 bytes are field-compatible: every field THIS
+ *     adapter reads — `base_token` @72, `quote_token` @104, `price` @136, `expiry` @144, `fee` @152 —
+ *     lives in that shared prefix, so the decode below is byte-for-byte identical for both and the
+ *     appended region is never read.
+ * STRICT per-size (a `Set`, not a `>=` floor): any OTHER Pool-disc size — the drained 162/168/456
+ * generations, or a future realloc — still self-drops via the size throw below, so one out-of-scope
+ * candidate never kills discovery (the standard venue-robustness convention).
+ */
+const POOL_ACCOUNT_SIZES: ReadonlySet<number> = new Set([496, 840]);
 const OFF_BASE_MINT = 72;
 const OFF_QUOTE_MINT = 104;
 const OFF_EXPIRY_MS = 144;
@@ -258,9 +294,10 @@ function pow10(n: number): bigint {
 async function fetchPoolConfig(load: AccountLoader, pool: Address): Promise<KipseliPoolConfig> {
   const data = await load(pool);
   if (data === null) throw new Error(`${SLUG} pool ${pool} not found`);
-  if (data.length !== POOL_ACCOUNT_SIZE) {
+  if (!POOL_ACCOUNT_SIZES.has(data.length)) {
+    const accepted = [...POOL_ACCOUNT_SIZES].join("/");
     throw new Error(
-      `${SLUG} pool ${pool} is ${data.length} bytes, expected ${POOL_ACCOUNT_SIZE} (out of scope — see module doc)`,
+      `${SLUG} pool ${pool} is ${data.length} bytes, expected one of ${accepted} (out of scope — see module doc)`,
     );
   }
   if (!POOL_DISCRIMINATOR.every((b, i) => data[i] === b)) {
