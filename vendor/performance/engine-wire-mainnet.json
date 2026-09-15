@@ -1,0 +1,61 @@
+{
+  "$comment": "GENERATED from the engine's own constants by programs/engine/tests/wire_artifact.rs. Do not hand-edit — run `UPDATE_WIRE=1 cargo test -p engine --test wire_artifact`.",
+  "chainId": 1399811149,
+  "cluster": "mainnet",
+  "faults": {
+    "AccountDataTooSmall": 63,
+    "AccountIndexOutOfBounds": 60,
+    "AccountNotFound": 61,
+    "AccountNotSigner": 66,
+    "AccountNotWritable": 62,
+    "BytecodeOutOfBounds": 12,
+    "DataTooLarge": 41,
+    "DivisionByZero": 50,
+    "ExpectedDescriptor": 30,
+    "ExpectedScalar": 31,
+    "HeapFull": 40,
+    "IndexOutOfBounds": 42,
+    "InvalidArrayElement": 14,
+    "InvalidDescriptor": 32,
+    "InvalidInstruction": 11,
+    "InvalidOpcode": 10,
+    "InvalidStackSlot": 13,
+    "InvokeFailed": 64,
+    "Overflow": 51,
+    "Revert": 0,
+    "SeedTooLong": 71,
+    "StackOverflow": 20,
+    "StackUnderflow": 21,
+    "SysvarUnavailable": 65,
+    "TooManySeeds": 70
+  },
+  "instructions": {
+    "closeAccount": {
+      "accounts": "account 0 is the account to close and must sign; account 1 receives its rent",
+      "bytecode": "none — this instruction runs no bytecode",
+      "discriminator": "7dff950e6e224818"
+    },
+    "execute": {
+      "accounts": "the caller's tail, at its natural indices",
+      "bytecode": "instruction data, after the discriminator",
+      "discriminator": "82ddf29a0dc1bd1d"
+    },
+    "executeFromAccount": {
+      "accounts": "account 0 is the code; the tail follows at its natural indices",
+      "bytecode": "account 0's data, verbatim",
+      "discriminator": "712cd572829558c3"
+    }
+  },
+  "isa": {
+    "extensions": {
+      "slot": 156,
+      "unpack": 155
+    },
+    "revision": "stack-compact-v1"
+  },
+  "memory": {
+    "heapBytes": 65535,
+    "requiredHeapFrameBytes": 132096,
+    "stackBytes": 33792
+  }
+}

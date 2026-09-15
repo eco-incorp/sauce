@@ -23,7 +23,7 @@ export const SETTLE_WIRE = {
    *  reaches the compiler. This length is what locates the argument tail. */
   PROGRAM_BYTES: 350,
   /** Exact compiler bundled by the performance artifact manifest. */
-  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@0.7.0+perf.1",
+  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@1.0.1-rc.1",
   /** `keccak256` of those `PROGRAM_BYTES` bytes — the authenticity pin `validateSettleProgram`
    *  enforces, and the reason a matching payload runs the audited program and nothing else.
    *  Whole-program, not a body slice: program and arguments are disjoint byte regions on this wire.

@@ -1,9 +1,9 @@
 # EcoSwap performance package
 
-This draft package pairs compiler `0.7.0+perf.1` with ISA `stack-compact-v1` from
+This release candidate packages compiler `1.0.1-rc.1` with ISA `stack-compact-v1` from
 [v12 #458](https://github.com/eco-incorp/v12/pull/458). `engine-performance.json`
 pins the source commit, tools and SHA-256 of each input. It retains the migration's
-compiler and SVM fixes. It does not include upstream PRs #456 or #457.
+compiler and SVM fixes. It includes upstream PR #456 through engine main; #457 remains separate.
 
 ## Build and verify
 
@@ -48,7 +48,21 @@ SVM settlement programs remain specialized by their complete define set.
 Code hashes, composed code-plus-argument hashes and staging identities must be
 computed from the exact bytes returned to the client.
 
-The SVM artifact is built for devnet. The preserved 65,535-byte kitchen ELF uses
+Separate SVM artifacts are built for devnet and mainnet, with matching wire metadata.
+`sync-engine-artifacts.mjs --fetch-v12-engines --cluster=mainnet` selects the
+mainnet paths explicitly; the legacy local `artifacts/svm/engine.so` filename
+always contains the devnet build. CI executes both binaries and checks their
+actual chain IDs alongside compact decoding and checked mutation.
+
+SDK `0.14.0-rc.1` is a registry-compatible prerelease version of the combined
+`@eco-incorp/sauce` package. The compiler is bundled, so a consumer does not need
+a second compiler install. `node sdk/scripts/check-packed-package.mjs` installs
+the tarball into a fresh temporary consumer and tests the public compiler/codec
+exports plus every manifest digest. It also runs in CI and the publish gate.
+The older published `@eco-incorp/sauce-sdk` line does not provide this interface;
+consumers keeping that import name can use an npm alias after publication.
+
+The preserved 65,535-byte kitchen ELF uses
 program ID `D1ziogwKXoR5ssTxmmaJvx2RFe5zRhfSVUYF4YycpU3u`; its IDL address is derived
 from that pinned source. Do not substitute a release IDL with another address.
 

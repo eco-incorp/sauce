@@ -1,12 +1,11 @@
 {
   "format": 1,
-  "status": "draft integration candidate; local validation only",
+  "status": "release candidate; deployment verification required",
   "isa": "stack-compact-v1",
   "entryEncodings": ["abi-v1", "compact-v1"],
-  "compilerVersion": "0.7.0+perf.1",
+  "compilerVersion": "1.0.1-rc.1",
   "engineBase": "08587560ade349d23365d72ede71a7c7448c3099",
   "sdkBase": "74434486554eb0e05993968a36d5b0406adfe3c6",
-  "chain": "solana-devnet",
   "productionReady": false,
   "tools": {
     "rust": "1.97.1",
@@ -26,12 +25,14 @@
     "vendor/performance/V12Kitchen.json": "854ce154f2368db8e5b50690a26208355b467348d6e628004ad8b6f814db8037",
     "vendor/performance/V12Pot.json": "d51e83d7178b397c912c2ea4470fec8242528f7502e49d7f846d0d8e1aa74c99",
     "vendor/performance/V12RuntimeBytecode.json": "8da5248c203ab9b018ef9ddc7e9b0449efce948a8eba40afa10f6b7084872ef3",
-    "vendor/performance/engine-wire.json": "e0b1766c4cf4f525286fef90e81bf3b5740b17406338a8ca141f0b311d144aca",
-    "vendor/performance/engine.so": "c84ec8a5a0415492e79f89c96bf9c4fd82d16e247c43b031ded4355717646f7b",
     "vendor/performance/kitchen-idl.json": "cadca2ea321c2b265ba279d64fe8ce8ff5e266fbaef20c927e4fc33b670ad358",
     "vendor/performance/kitchen.so": "bf14fbc3f983f13c70b825ae1451f851cc3e8040f5a5925a8e24112aa92520dd",
     "vendor/performance/runtime.creation.hex": "bc988749325aca5fe5b6de040ff55b5bebed066745363a84473ca846bba9dedc",
-    "vendor/eco-incorp-sauce-compiler-0.7.0+perf.1.tgz": "0ba1909cbc86a00e60d9adc1dbe13aca35f26affcf5b1d42bbbe612c523e9330"
+    "vendor/performance/engine-devnet.so": "c84ec8a5a0415492e79f89c96bf9c4fd82d16e247c43b031ded4355717646f7b",
+    "vendor/performance/engine-mainnet.so": "33aa65bcda3bec0afa4da991495f4aa59c04faa11a346767423bd1a2926b1b5f",
+    "vendor/performance/engine-wire-devnet.json": "e0b1766c4cf4f525286fef90e81bf3b5740b17406338a8ca141f0b311d144aca",
+    "vendor/performance/engine-wire-mainnet.json": "2cae436b9dae64add2239822b407b6a338f1cb26cff845eb08217d45c221ac33",
+    "vendor/eco-incorp-sauce-compiler-1.0.1-rc.1.tgz": "87d385cf6415b08d04224ccd27351a0103fcd4ce3670df3e696bcc2b6f64122d"
   },
   "kitchen": {
     "sourceCommit": "dbdda3ff7a73d51dee5b5c581c3b5afed56057dc",
@@ -40,6 +41,18 @@
     "idlDerivation": "kitchen-svm-v0.2.0 IDL with address from pinned source; source diff to 0bc085a3 changes only declare_id and comment",
     "maxCodeBytes": 65535
   },
-  "engineCommit": "aced690fa1f8c8135ba8d0e10e1dea4c12ae9075",
-  "enginePr": "https://github.com/eco-incorp/v12/pull/458"
+  "engineCommit": "92abac91b1f350f6cf9e251ceb325a87eed3fa8d",
+  "enginePr": "https://github.com/eco-incorp/v12/pull/458",
+  "clusters": {
+    "devnet": {
+      "chainId": 1399811150,
+      "engine": "vendor/performance/engine-devnet.so",
+      "wire": "vendor/performance/engine-wire-devnet.json"
+    },
+    "mainnet": {
+      "chainId": 1399811149,
+      "engine": "vendor/performance/engine-mainnet.so",
+      "wire": "vendor/performance/engine-wire-mainnet.json"
+    }
+  }
 }

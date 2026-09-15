@@ -18,6 +18,19 @@ for (const [file, expected] of Object.entries(manifest.artifacts)) {
   if (actual !== expected) throw new Error(`${file}: SHA-256 ${actual} != pinned ${expected}`);
 }
 const source = resolve(root, "vendor/performance");
+const cluster = process.argv.find((arg) => arg.startsWith("--cluster="))?.slice(10) ?? "devnet";
+if (cluster !== "devnet" && cluster !== "mainnet")
+  throw new Error(`Unsupported cluster: ${cluster}`);
+const engineFile = `engine-${cluster}.so`;
+const wireFile = `engine-wire-${cluster}.json`;
+const wire = JSON.parse(readFileSync(resolve(source, wireFile), "utf8"));
+if (
+  wire.cluster !== cluster ||
+  wire.chainId !== (cluster === "mainnet" ? 1399811149 : 1399811150) ||
+  wire.isa?.revision !== manifest.isa
+) {
+  throw new Error(`Engine wire does not describe the ${cluster} ${manifest.isa} build`);
+}
 for (const directory of ["sdk/src/artifacts", "sdk/dist/artifacts"]) {
   const destination = resolve(root, directory);
   mkdirSync(destination, { recursive: true });
@@ -34,17 +47,20 @@ for (const directory of ["sdk/src/artifacts", "sdk/dist/artifacts"]) {
   }
 }
 mkdirSync(resolve(root, "artifacts/svm"), { recursive: true });
-for (const name of ["engine.so", "kitchen.so"]) {
+for (const name of ["engine-devnet.so", "engine-mainnet.so", "kitchen.so"]) {
   copyFileSync(resolve(source, name), resolve(root, "artifacts/svm", name));
 }
+// Existing local harnesses use engine.so, which always means devnet. Selecting
+// mainnet changes the explicit output below, never this compatibility filename.
+copyFileSync(resolve(source, "engine-devnet.so"), resolve(root, "artifacts/svm/engine.so"));
 console.log(
   `[sync-engine-artifacts] verified ${Object.keys(manifest.artifacts).length} pinned inputs (${manifest.isa})`,
 );
 if (process.argv.includes("--fetch-v12-engines")) {
   for (const [name, file] of Object.entries({
-    SAUCE_RUST_ENGINE_SO: "engine.so",
+    SAUCE_RUST_ENGINE_SO: engineFile,
     SAUCE_KITCHEN_SO: "kitchen.so",
-    SAUCE_ENGINE_WIRE_JSON: "engine-wire.json",
+    SAUCE_ENGINE_WIRE_JSON: wireFile,
     SAUCE_KITCHEN_IDL_JSON: "kitchen-idl.json",
     SAUCE_V12_RUNTIME_CREATION_HEX: "runtime.creation.hex",
   }))

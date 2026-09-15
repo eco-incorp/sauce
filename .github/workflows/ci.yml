@@ -227,3 +227,6 @@ jobs:
 
       - name: Dev Tools — test
         run: pnpm --filter './dev-tools' test
+
+      - name: Verify a clean consumer install of the packed SDK
+        run: node sdk/scripts/check-packed-package.mjs
