@@ -35,7 +35,7 @@ import { IERC20 } from "./artifacts/IERC20.json";
 // THE COMPILED PROGRAM IS A FUNCTION OF THIS FILE AND THE COMPILER PIN ONLY — never of the
 // arguments. `main`'s three parameters below are RUNTIME ENTRY ARGUMENTS: the caller appends them
 // to the compiled program as 32-byte words and the program reads them back through CALLDATA, so no
-// value a caller picks is visible to the compiler at all. One 370-byte blob therefore serves every
+// value a caller picks is visible to the compiler at all. One 362-byte blob therefore serves every
 // token list, floor and recipient, which is what lets `sdk/src/verify/` pin a single
 // `keccak256(program)` and still report per-payload params.
 //

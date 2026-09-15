@@ -1,9 +1,9 @@
 # EcoSwap performance package
 
-This release candidate packages compiler `2.2.0-rc.1` with ISA `stack-compact-v2` from
+This release candidate packages compiler `2.2.0-rc.2` with ISA `stack-compact-v2` from
 [UNPACK #461](https://github.com/eco-incorp/v12/pull/461), stacked on [SET_ELEMENT #458](https://github.com/eco-incorp/v12/pull/458). `engine-performance.json`
 pins the source commit, tools and SHA-256 of each input. It retains the migration's
-compiler and SVM fixes. The engine source includes merged #459; the pinned kitchen ELF remains separately identified below.
+compiler and SVM fixes. The engine source includes merged #459; the released kitchen artifacts from SDK main are retained and separately identified below.
 
 ## Build and verify
 
@@ -54,7 +54,7 @@ mainnet paths explicitly; the legacy local `artifacts/svm/engine.so` filename
 always contains the devnet build. CI executes both binaries and checks their
 actual chain IDs alongside compact decoding and checked mutation.
 
-SDK `0.14.0-rc.2` is a registry-compatible prerelease version of the combined
+SDK `0.14.0-rc.3` is a registry-compatible prerelease version of the combined
 `@eco-incorp/sauce` package. The compiler is bundled, so a consumer does not need
 a second compiler install. `node sdk/scripts/check-packed-package.mjs` installs
 the tarball into a fresh temporary consumer and tests the public compiler/codec
@@ -62,9 +62,12 @@ exports plus every manifest digest. It also runs in CI and the publish gate.
 The older published `@eco-incorp/sauce-sdk` line does not provide this interface;
 consumers keeping that import name can use an npm alias after publication.
 
-The preserved 65,535-byte kitchen ELF uses
-program ID `D1ziogwKXoR5ssTxmmaJvx2RFe5zRhfSVUYF4YycpU3u`; its IDL address is derived
-from that pinned source. Do not substitute a release IDL with another address.
+The kitchen-svm 0.3.0 ELF supports 1 MiB code buffers and uses program ID
+`SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`. Its release IDL is included unchanged.
+EVM ABIs and deployment bytecode come from kitchen-evm 0.4.0, including the UUPS
+Kitchen surface. Both release assets are verified against the digests committed
+by SDK main. Compact CALLDATA still copies into the engine's 65,535-byte heap;
+the staging bound does not make larger compact payloads executable.
 
 Before any separately authorized rollout: attest deployed engine/kitchen IDs,
 ELF/runtime hashes, helper availability, authority/ownership and capacity; build
@@ -75,7 +78,7 @@ program compatibility. This work does not deploy or merge anything.
 
 ## Historical measurements
 
-The following figures were measured for RC1 before the opcode split. They are not RC2 acceptance results.
+The following figures were measured for RC1 before the opcode split. They are not RC3 acceptance results.
 
 The integrated consumer evidence lives in sauce-recipes PR #1129 under
 `docs/engine-performance`. Preliminary frozen-fixture receipt gas falls from
@@ -85,9 +88,13 @@ consumer evidence and its exact source/artifact pins for acceptance.
 
 ## Opcode split validation
 
-RC2 packages SET_ELEMENT `0x9B` from engine #458 and UNPACK `0x9C` from #461.
+RC3 packages SET_ELEMENT `0x9B` from engine #458 and UNPACK `0x9C` from #461.
 The 3,158 SDK tests pass across the full SDK run and the kitchen/wire follow-up,
 including actual EVM execution and both packaged Solana clusters. Build,
 TypeScript checks, ESLint, formatting and clean package installation also pass.
 The canonical settlement program was recompiled to 362 bytes and its hash was
-updated from those bytes. Deployment checks must use this RC2 manifest.
+updated from those bytes. Deployment checks must use this RC3 manifest.
+
+RC3 incorporates SDK main through #198 and the measured SBF inlining cleanup.
+Only `find_pda` keeps a non-inlining boundary to prevent an oversized interpreter
+frame. The compiler and both SBF binaries are rebuilt from the exact engine head.

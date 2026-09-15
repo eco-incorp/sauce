@@ -50,7 +50,7 @@ interface WasmCompileOptions {
 }
 
 // The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, depended on under the alias
-// `sauce-compiler` (`"sauce-compiler": "npm:@eco-incorp/sauce-compiler@^1.0.0"`) because the in-repo
+// `sauce-compiler` (`"sauce-compiler": "file:vendor/eco-incorp-sauce-compiler-2.2.0-rc.2.tgz"`) because the in-repo
 // `compiler/` workspace package claims the scoped name itself.
 //
 // Required via `createRequire` for the same reason `test/std/token/harness.ts` and `test/helpers.ts`

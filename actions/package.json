@@ -33,7 +33,7 @@
     "test:megas-swap": "tsx --env-file-if-exists=.env --test --test-concurrency=1 tests/megas-swap.test.ts"
   },
   "dependencies": {
-    "sauce-compiler": "file:../vendor/eco-incorp-sauce-compiler-2.2.0-rc.1.tgz",
+    "sauce-compiler": "file:../vendor/eco-incorp-sauce-compiler-2.2.0-rc.2.tgz",
     "viem": "^2.0.0"
   },
   "devDependencies": {

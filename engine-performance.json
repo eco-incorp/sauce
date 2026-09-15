@@ -3,9 +3,9 @@
   "status": "release candidate; deployment verification required",
   "isa": "stack-compact-v2",
   "entryEncodings": ["abi-v1", "compact-v1"],
-  "compilerVersion": "2.2.0-rc.1",
-  "engineBase": "8403fc478",
-  "sdkBase": "74434486554eb0e05993968a36d5b0406adfe3c6",
+  "compilerVersion": "2.2.0-rc.2",
+  "engineBase": "f2cee91d34927905fd1e36dd288de407435617f0",
+  "sdkBase": "5863fbda2e1e79efee4b28268b9f2108ef3b5181",
   "productionReady": false,
   "tools": {
     "rust": "1.97.1",
@@ -19,29 +19,30 @@
   },
   "artifacts": {
     "vendor/performance/IERC20.json": "00c851416af6d4c694d16f1b855a239e637edd4e3162d836536e66b476ce26c8",
-    "vendor/performance/ISauceRouter.json": "2b839607cf02eedcfc7dd67f8089caced4515a51525c339d62539ef5bb5e8483",
+    "vendor/performance/ISauceRouter.json": "ccc6084245319256d7e7ae3b717d951df64fb49fbed7da7c4e8ca45ad238db4e",
     "vendor/performance/IUniswapV3Pool.json": "51f6504217067fccfa329dcf6d6b8fbdeedda0a8de5f465a0d01781ba96eb703",
-    "vendor/performance/Router.json": "71e87f902b3051ae6caa76fe0999125a5781bac55f88bfdf7973b2b75cf6294a",
-    "vendor/performance/V12Kitchen.json": "854ce154f2368db8e5b50690a26208355b467348d6e628004ad8b6f814db8037",
-    "vendor/performance/V12Pot.json": "d51e83d7178b397c912c2ea4470fec8242528f7502e49d7f846d0d8e1aa74c99",
+    "vendor/performance/Router.json": "0ed389f61b59ad915a227e3598f20f327a7a8db6345b07c4a1691ad8b312c2c1",
+    "vendor/performance/V12Kitchen.json": "d0ac373f64d175c7c0be9ebabc5f0225db41beb26d18c46795840e69f586881c",
+    "vendor/performance/V12Pot.json": "fb3d6c7299af5acb119d5b3634b4d243cffe2f7db9364bdfa73bc5cfca8e2262",
     "vendor/performance/V12RuntimeBytecode.json": "0d35b2aa1308d170f4cb811f9b53fa9749babb54bceabf6c49f4395890267109",
-    "vendor/performance/kitchen-idl.json": "cadca2ea321c2b265ba279d64fe8ce8ff5e266fbaef20c927e4fc33b670ad358",
-    "vendor/performance/kitchen.so": "bf14fbc3f983f13c70b825ae1451f851cc3e8040f5a5925a8e24112aa92520dd",
+    "vendor/performance/kitchen-idl.json": "84309aecd94997738d628510f2ac6fcff56c9b3fcac94b7702083ce45e20390d",
+    "vendor/performance/kitchen.so": "cfe8d98ace6ef72f93e62204dd1b7ed769bf1a5890ad47140144e865fdba8269",
     "vendor/performance/runtime.creation.hex": "2110aad065f30e5e82d6a5cb9a1a4979b6d9df417e5a67cdf735ee5df031b44c",
-    "vendor/performance/engine-devnet.so": "949d86b6579837fb70238155b482a887a4385b3de6d762272fe5ab2c107c3679",
-    "vendor/performance/engine-mainnet.so": "07f309aab38705cb3e29184118a55ec12a951d03429cfa3a06b8ed1dcf367b81",
+    "vendor/performance/engine-devnet.so": "762e972376ef8feb012c58eef513fa454be8b5b79c9bff5e980964aa3aea7ccb",
+    "vendor/performance/engine-mainnet.so": "e3355963047ce0d219781d764a81422d8f1041c025b18047ac2b8bc58ec56959",
     "vendor/performance/engine-wire-devnet.json": "780fe9e2136c4b451a47d1d99a44f6d9abe70aea208b8ad4cb510350c64f9a2d",
     "vendor/performance/engine-wire-mainnet.json": "8ece32c285382fb8a403a6ede9eb4b884e6491b9996157169feefe20483d1006",
-    "vendor/eco-incorp-sauce-compiler-2.2.0-rc.1.tgz": "11e50ecd09b1e3ae2e6f050baaa8ecdcf80f235ee542618d076cbea2f3b1c4b5"
+    "vendor/eco-incorp-sauce-compiler-2.2.0-rc.2.tgz": "e99be5caf75d9de23bb9b5f17f4ea7046d0f732e60b0028a3beb6895d24fa5a7"
   },
   "kitchen": {
-    "sourceCommit": "dbdda3ff7a73d51dee5b5c581c3b5afed56057dc",
-    "programId": "D1ziogwKXoR5ssTxmmaJvx2RFe5zRhfSVUYF4YycpU3u",
-    "binaryOrigin": "sauce-recipes c5e7d0a7f079a58481f543f66688b73148f0aa04:artifacts/svm/kitchen.so",
-    "idlDerivation": "kitchen-svm-v0.2.0 IDL with address from pinned source; source diff to 0bc085a3 changes only declare_id and comment",
-    "maxCodeBytes": 65535
+    "sourceCommit": "ec593103aa6251f93527f604df5859da9295edbf",
+    "release": "kitchen-svm-v0.3.0",
+    "programId": "SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot",
+    "binaryOrigin": "eco-incorp/v12 kitchen-svm-v0.3.0/kitchen.so",
+    "idlDerivation": "unmodified kitchen-svm-v0.3.0/kitchen-idl.json",
+    "maxCodeBytes": 1048576
   },
-  "engineCommit": "47335f59788ae92e7d1a895f11cf70d2586eb87a",
+  "engineCommit": "69f5fd007d227a224e28929e79f75ab8fafc23f6",
   "enginePr": "https://github.com/eco-incorp/v12/pull/461",
   "clusters": {
     "devnet": {
@@ -54,5 +55,11 @@
       "engine": "vendor/performance/engine-mainnet.so",
       "wire": "vendor/performance/engine-wire-mainnet.json"
     }
+  },
+  "evmKitchen": {
+    "sourceCommit": "48f00c3fa1e9b439ee32e2b2feb61e527e80499c",
+    "release": "kitchen-evm-v0.4.0",
+    "abisSha256": "bd3a525e9fcd50d50c1ef9d2d84c7341f90759a4b07c33cd20982fb2bd10c11f",
+    "derivation": "abi and bytecode fields copied unchanged from the release contracts"
   }
 }

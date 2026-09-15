@@ -1,5 +1,5 @@
 {
-  "address": "D1ziogwKXoR5ssTxmmaJvx2RFe5zRhfSVUYF4YycpU3u",
+  "address": "SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot",
   "metadata": {
     "name": "kitchen",
     "version": "0.1.0",
@@ -108,7 +108,7 @@
           "name": "owner",
           "docs": [
             "Seed material for the Pot, the destination for its rent, and the authorization for the",
-            "close \u2014 all three, which is why it signs."
+            "close — all three, which is why it signs."
           ],
           "writable": true,
           "signer": true
@@ -116,7 +116,7 @@
         {
           "name": "engine_program",
           "docs": [
-            "constraints there can name it \u2014 Anchor evaluates fields in declaration order."
+            "constraints there can name it — Anchor evaluates fields in declaration order."
           ]
         },
         {
@@ -129,7 +129,7 @@
             "reclaim that did not happen.",
             "",
             "**The engine must own it.** Note the two senses of \"owner\" meeting on one line below:",
-            "`pot.owner` is Solana's \u2014 the PROGRAM that may mutate the account \u2014 while the `owner` field",
+            "`pot.owner` is Solana's — the PROGRAM that may mutate the account — while the `owner` field",
             "above is this kitchen's, the user who may act on the Pot. They are never the same value.",
             "The name follows the EVM Kitchen's, where a Pot's `owner` is likewise the user.",
             "",
@@ -294,7 +294,7 @@
           "name": "engine_program",
           "docs": [
             "constraint: the kitchen pins no engine, so this account IS authoritative for where the CPI",
-            "goes. An earlier revision pinned it and warned against exactly this change \u2014 that guarantee",
+            "goes. An earlier revision pinned it and warned against exactly this change — that guarantee",
             "is now given up on purpose, and `owner`'s signature is what stands in its place."
           ]
         }
@@ -430,7 +430,7 @@
             "An address with no program behind it is accepted and produces an unusable Pot: nothing can",
             "write it (only an owner may mutate account data) and nothing can close it (only an owner may",
             "debit its lamports), so its rent is stranded and `space` is already fixed forever. An",
-            "`executable` constraint would catch that, and was deliberately not added \u2014 the loss is one",
+            "`executable` constraint would catch that, and was deliberately not added — the loss is one",
             "Pot's rent, and the EVM side takes the same posture for the same reason. Choosing the wrong",
             "interpreter is the caller's business either way."
           ]
@@ -443,7 +443,7 @@
             "Pot that exists\" half of the acceptance criteria; `create_pot` is not idempotent.",
             "",
             "The range sits on the account whose size it decides. Anchor runs every field's",
-            "deserialization \u2014 `init` included \u2014 before any `constraint`, so no position in this struct",
+            "deserialization — `init` included — before any `constraint`, so no position in this struct",
             "makes it a precondition of the allocation; a rejected `space` unwinds the whole instruction",
             "instead, which is what keeps a useless Pot from ever reaching the chain. The upper half is a",
             "floor for `MAX_POT_LEN` rather than the live check: at today's value it equals the runtime's",
@@ -807,7 +807,7 @@
     {
       "name": "CodeBuffer",
       "docs": [
-        "CodeBuffer metadata. Holds no bytecode \u2014 that lives in the sibling code account, so the code",
+        "CodeBuffer metadata. Holds no bytecode — that lives in the sibling code account, so the code",
         "account's entire contents are the hashed image and nothing un-pinned is jump-reachable.",
         "",
         "Every field here is descriptive. The seeds constraint is what proves the account's identity,",
@@ -881,20 +881,34 @@
     {
       "name": "MAX_CODE_LEN",
       "docs": [
-        "Largest program a code buffer may hold. Bounded by what staging can actually afford: `finalize_code_buffer`",
-        "hashes the whole program in one instruction (~39.6k CU at this size, measured), and the write",
-        "path costs one transaction per ~900-byte chunk. Nothing in the engine constrains it \u2014 bytecode is",
-        "interpreted straight out of the account borrow and jump targets decode as `u32` against the",
-        "slice length, so code length is unrelated to the engine's heap size."
+        "Largest program a code buffer may hold.",
+        "",
+        "Bounded by `finalize_code_buffer`, which hashes the whole program in **one instruction**:",
+        "measured at 531,110 CU at this size, against the 1,400,000 a transaction can request — ~2.6x",
+        "headroom, and `finalize_at_max_code_len_fits_the_compute_budget` asserts it. A cap above what",
+        "finalize can hash would be worse than no cap: a program could be written across every chunk and",
+        "then be impossible to finalize, the failure landing on the last instruction after all the cost",
+        "was paid.",
+        "",
+        "Not the account ceiling. `MAX_PERMITTED_DATA_LENGTH` is 10 MiB, but finalize cannot hash that in",
+        "one instruction, and the staging cost — one transaction per ~900-byte chunk, one",
+        "`grow_code_buffer` per [`GROWTH_STEP`], and rent on a `len`-sized account for as long as the",
+        "program lives — scales the whole way there.",
+        "",
+        "Nothing in the engine constrains it: bytecode is interpreted straight out of the account borrow",
+        "and jump targets decode as `u32` against the slice length, so code length is unrelated to the",
+        "engine's heap size. Raising it past the finalize ceiling means hashing incrementally across",
+        "instructions and persisting the sha256 midstate here — a change to the staging protocol, not to",
+        "this number."
       ],
       "type": "u32",
-      "value": "65535"
+      "value": "1048576"
     },
     {
       "name": "MAX_POT_LEN",
       "docs": [
-        "Largest Pot this program will mint. A Pot is created at its final size and can never grow \u2014",
-        "`realloc` belongs to the owning program, which is the engine \u2014 so this is a ceiling on a",
+        "Largest Pot this program will mint. A Pot is created at its final size and can never grow —",
+        "`realloc` belongs to the owning program, which is the engine — so this is a ceiling on a",
         "one-time choice rather than on a running total. Held at one `MAX_PERMITTED_DATA_INCREASE`",
         "because that is the most the System Program will allocate in a single instruction."
       ],
