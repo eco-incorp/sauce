@@ -23,8 +23,8 @@ export const SETTLE_WIRE = {
    *  reaches the compiler. This length is what locates the argument tail. */
   PROGRAM_BYTES: 370,
   /** Which compiler produced the bytes `PROGRAM_HASH` pins. The dependency is a caret range, and on
-   *  `^1.0.0` that is the whole `1.x` line — a far wider window than the `0.7.x` a `^0.7.0` caret
-   *  admitted, since a caret on `0.x` pins the minor. Any `1.x` that changes codegen makes a
+   *  `^2.0.0` that is the whole `2.x` line — a far wider window than the `0.7.x` a `^0.7.0` caret
+   *  admitted, since a caret on `0.x` pins the minor. Any `2.x` that changes codegen makes a
    *  consumer's own compile fail that pin; the fix then is to re-pin all three of these, not to
    *  loosen the check. `verify.compile.test.ts` asserts this
    *  exact version against the resolved package, so it cannot silently describe a producer that never
@@ -37,9 +37,10 @@ export const SETTLE_WIRE = {
    *  pass it via `validateSettleProgram`'s accepted-hash set.
    *
    *  0.7.0 → 1.0.0 did NOT move them, despite carrying ABI type widths through both codec
-   *  directions. So a compiler bump is not evidence either way: this string changes every time, the
-   *  hash only when the output does, and the tests above are what tell them apart. */
-  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@1.0.0",
+   *  directions, and neither did 1.0.0 → 2.0.0 — whose major is an artifact of the release config
+   *  rather than a compiler change. So a compiler bump is not evidence either way: this string
+   *  changes every time, the hash only when the output does, and the tests above tell them apart. */
+  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@2.0.0",
   /** `keccak256` of those `PROGRAM_BYTES` bytes — the authenticity pin `validateSettleProgram`
    *  enforces, and the reason a matching payload runs the audited program and nothing else.
    *  Whole-program, not a body slice: program and arguments are disjoint byte regions on this wire.

@@ -13,7 +13,7 @@ import { keccak256, toBytes, toHex } from "viem";
 import type { CompileResult as RustCompileResult, SauceTarget } from "sauce-compiler";
 
 // The SauceScript compiler: the published `@eco-incorp/sauce-compiler`, depended on under the alias
-// `sauce-compiler` (`"sauce-compiler": "npm:@eco-incorp/sauce-compiler@^1.0.0"`) because the in-repo
+// `sauce-compiler` (`"sauce-compiler": "npm:@eco-incorp/sauce-compiler@^2.0.0"`) because the in-repo
 // `compiler/` workspace package claims the scoped name itself.
 //
 // Required via `createRequire` for the same reason `test/std/token/harness.ts` does: the package's

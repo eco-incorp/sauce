@@ -61,7 +61,8 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 //
 // There is deliberately no commit pin. The components release INDEPENDENTLY, so a shared commit is
 // not a property this can rely on — `v12-evm-v0.4.0` came from `dbdda3ff` while `v12-svm-v0.5.0`
-// came from `bb65620c`. (All four currently share `0bc085a3`; that is a property of a given
+// came from `bb65620c`. (The engines are still cut from `0bc085a3` while both kitchens moved to
+// `ec593103`, so the four no longer share one commit; that is a property of a given
 // release run, not something to assert.) Requiring one made a routine per-component
 // bump fail as "the tag moved".
 //
@@ -95,9 +96,9 @@ const V12_SVM = {
 // a superset: `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is
 // Uniswap's, so neither appears here and neither should — see ARTIFACTS below.
 const V12_EVM_ABIS = {
-  tag: "kitchen-evm-v0.2.0",
+  tag: "kitchen-evm-v0.3.0",
   asset: "abis.json",
-  digest: "63718e4c666c9f6c54a34a121bf24ee96a6b9bb1797bf5b8208d43fdaefbcb23",
+  digest: "b0aa614b29deefd8fc253dba35d1e7054e28d1e48e0314e0c9d96fff274a1111",
   manifestKey: "abis.sha256",
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
@@ -106,9 +107,9 @@ const V12_EVM_ABIS = {
 // a released binary is already pinned by tag + digest here, so a second copy in the tree would be a
 // second thing to keep in step.
 const V12_KITCHEN = {
-  tag: "kitchen-svm-v0.2.0",
+  tag: "kitchen-svm-v0.3.0",
   asset: "kitchen.so",
-  digest: "f3a051ac3837afae4a46c2cd3904372f3558f07869a00cd6ad932f7574fb9b1b",
+  digest: "cfe8d98ace6ef72f93e62204dd1b7ed769bf1a5890ad47140144e865fdba8269",
   manifestKey: null,
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
@@ -129,9 +130,9 @@ const V12_ENGINE_WIRE = {
 // transcribes these by hand (Anchor emits no TypeScript the SDK can vendor), which is precisely the
 // hand-copying that let BYTECODE_FORMAT_EPOCH rot. Pinned so the drift test can compare against it.
 const V12_KITCHEN_IDL = {
-  tag: "kitchen-svm-v0.2.0",
+  tag: "kitchen-svm-v0.3.0",
   asset: "kitchen-idl.json",
-  digest: "3707e4a126e35b37515de77fe31b0f66ded7b08ec17d5cb7aad715b4c2b933d7",
+  digest: "84309aecd94997738d628510f2ac6fcff56c9b3fcac94b7702083ce45e20390d",
   manifestKey: null,
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };

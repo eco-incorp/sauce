@@ -115,8 +115,8 @@ describe("the settle program pin, recompiled", () => {
     expect(compileSettle()).toBe(compiled);
   });
 
-  // The dependency is a caret range — on `^1.0.0`, all of `1.x` — so the pins above can stay green
-  // while a resolved `1.x` that did not change codegen quietly makes `PROGRAM_COMPILER` name a
+  // The dependency is a caret range — on `^2.0.0`, all of `2.x` — so the pins above can stay green
+  // while a resolved `2.x` that did not change codegen quietly makes `PROGRAM_COMPILER` name a
   // producer that is not the one that ran. Assert the resolved version, or the provenance string
   // records nothing.
   it("was produced by the compiler SETTLE_WIRE.PROGRAM_COMPILER names", () => {

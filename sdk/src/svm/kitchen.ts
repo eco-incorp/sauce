@@ -46,7 +46,7 @@ export const POT_SEED = "pot";
 /** One `grow_code_buffer` step: `MAX_PERMITTED_DATA_INCREASE`, the most a CPI-created account can
  *  grow in a single instruction. IDL-guarded by `engine-wire-drift.test.ts`. */
 export const GROWTH_STEP = 10_240;
-export const MAX_CODE_LEN = 65_535;
+export const MAX_CODE_LEN = 1_048_576;
 export const MAX_POT_LEN = 10_240;
 
 /** A Pot's salt and a code buffer's `expected_sha256` are both exactly 32 bytes. */
