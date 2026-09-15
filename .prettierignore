@@ -43,3 +43,6 @@ sdk/test/std/token/fixtures
 # hand-written (e.g. `cctp-split.sauce.ts`, a standalone asset read off disk) and IS formatted.
 sdk/src/recipes/settle.sauce.ts
 sdk/src/svm/recipes/settle.sauce.ts
+
+# Byte-pinned compiler/engine inputs verified by engine-performance.json.
+vendor/performance

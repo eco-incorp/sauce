@@ -328,7 +328,7 @@ packages:
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
 
   '@eco-incorp/sauce-compiler@file:vendor/eco-incorp-sauce-compiler-0.7.0+perf.1.tgz':
-    resolution: {integrity: sha512-1/S1ApEs8FqIeKB73KPCD7gaqD+D/fgVUn9dljprebLmzrKWMxh8hFlaJkVwARV8HcG+fdpIvqjWofZy2C2FSA==, tarball: file:vendor/eco-incorp-sauce-compiler-0.7.0+perf.1.tgz}
+    resolution: {integrity: sha512-VaFXSn5Of+oFfqikTbK2fHBw5+Rvl3Wsi/iiN9NLACtbgVRtZDTMPB4zwwTc+9HfGT0KOH5K+iFi3q2FhrsYHQ==, tarball: file:vendor/eco-incorp-sauce-compiler-0.7.0+perf.1.tgz}
     version: 0.7.0
 
   '@esbuild/aix-ppc64@0.28.0':
