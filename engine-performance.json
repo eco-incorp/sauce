@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "status": "draft integration candidate; local validation only",
+  "isa": "stack-compact-v1",
+  "entryEncodings": ["abi-v1", "compact-v1"],
+  "compilerVersion": "0.7.0+perf.1",
+  "engineBase": "08587560ade349d23365d72ede71a7c7448c3099",
+  "sdkBase": "74434486554eb0e05993968a36d5b0406adfe3c6",
+  "chain": "solana-devnet",
+  "productionReady": false,
+  "tools": {
+    "rust": "1.97.1",
+    "sbfTools": "v1.52",
+    "cargoBuildSbf": "3.1.14",
+    "wasmPack": "0.15.0",
+    "node": "24.14.1",
+    "pnpm": "10.28.2",
+    "hnc": "1.5.17 (rev: deff30ce)",
+    "anvil": "1.5.1"
+  },
+  "artifacts": {
+    "vendor/performance/IERC20.json": "00c851416af6d4c694d16f1b855a239e637edd4e3162d836536e66b476ce26c8",
+    "vendor/performance/ISauceRouter.json": "2b839607cf02eedcfc7dd67f8089caced4515a51525c339d62539ef5bb5e8483",
+    "vendor/performance/IUniswapV3Pool.json": "51f6504217067fccfa329dcf6d6b8fbdeedda0a8de5f465a0d01781ba96eb703",
+    "vendor/performance/Router.json": "71e87f902b3051ae6caa76fe0999125a5781bac55f88bfdf7973b2b75cf6294a",
+    "vendor/performance/V12Kitchen.json": "854ce154f2368db8e5b50690a26208355b467348d6e628004ad8b6f814db8037",
+    "vendor/performance/V12Pot.json": "d51e83d7178b397c912c2ea4470fec8242528f7502e49d7f846d0d8e1aa74c99",
+    "vendor/performance/V12RuntimeBytecode.json": "8da5248c203ab9b018ef9ddc7e9b0449efce948a8eba40afa10f6b7084872ef3",
+    "vendor/performance/engine-wire.json": "e0b1766c4cf4f525286fef90e81bf3b5740b17406338a8ca141f0b311d144aca",
+    "vendor/performance/engine.so": "c84ec8a5a0415492e79f89c96bf9c4fd82d16e247c43b031ded4355717646f7b",
+    "vendor/performance/kitchen-idl.json": "cadca2ea321c2b265ba279d64fe8ce8ff5e266fbaef20c927e4fc33b670ad358",
+    "vendor/performance/kitchen.so": "bf14fbc3f983f13c70b825ae1451f851cc3e8040f5a5925a8e24112aa92520dd",
+    "vendor/performance/runtime.creation.hex": "bc988749325aca5fe5b6de040ff55b5bebed066745363a84473ca846bba9dedc",
+    "vendor/eco-incorp-sauce-compiler-0.7.0+perf.1.tgz": "0ba1909cbc86a00e60d9adc1dbe13aca35f26affcf5b1d42bbbe612c523e9330"
+  },
+  "kitchen": {
+    "sourceCommit": "dbdda3ff7a73d51dee5b5c581c3b5afed56057dc",
+    "programId": "D1ziogwKXoR5ssTxmmaJvx2RFe5zRhfSVUYF4YycpU3u",
+    "binaryOrigin": "sauce-recipes c5e7d0a7f079a58481f543f66688b73148f0aa04:artifacts/svm/kitchen.so",
+    "idlDerivation": "kitchen-svm-v0.2.0 IDL with address from pinned source; source diff to 0bc085a3 changes only declare_id and comment",
+    "maxCodeBytes": 65535
+  },
+  "engineCommit": "aced690fa1f8c8135ba8d0e10e1dea4c12ae9075",
+  "enginePr": "https://github.com/eco-incorp/v12/pull/458"
+}

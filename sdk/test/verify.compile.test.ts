@@ -132,22 +132,16 @@ describe("the settle program pin, recompiled", () => {
    * `dev-tools` stayed on ^0.5.0, and 0.7.0 emits 370 bytes where 0.5.0 emits 391. Every pin above
    * stayed green while a consumer's own settle hashed to something `validateSettleProgram` rejects.
    */
-  it("every workspace declares the SAME compiler range, so the pin describes what ships", () => {
-    const declared = WORKSPACE_MANIFESTS.map((rel) => {
-      const manifest = JSON.parse(readFileSync(resolve(REPO_ROOT, rel), "utf8")) as {
-        dependencies?: Record<string, string>;
-      };
-
-      return [rel, manifest.dependencies?.["sauce-compiler"]] as const;
+  it("every workspace resolves the pinned compiler artifact", () => {
+    const paths = WORKSPACE_MANIFESTS.map((rel) => {
+      const manifest = JSON.parse(readFileSync(resolve(REPO_ROOT, rel), "utf8"));
+      const spec: string = manifest.dependencies["sauce-compiler"];
+      expect(spec.startsWith("file:")).toBe(true);
+      return resolve(dirname(resolve(REPO_ROOT, rel)), spec.slice(5));
     });
-
-    // Named individually so a failure says WHICH workspace drifted, not just that one did.
-    for (const [rel, spec] of declared) {
-      expect([rel, spec]).toEqual([rel, declared[0]![1]]);
-    }
-    // …and that shared range must be the major.minor the pin names.
+    for (const artifact of paths) expect(artifact).toBe(paths[0]);
     const pinned = SETTLE_WIRE.PROGRAM_COMPILER.split("@").pop()!;
-    expect(declared[0]![1]).toBe(`npm:@eco-incorp/sauce-compiler@^${pinned}`);
+    expect(paths[0]).toBe(resolve(REPO_ROOT, `vendor/eco-incorp-sauce-compiler-${pinned}.tgz`));
   });
 });
 

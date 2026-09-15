@@ -11,6 +11,12 @@
  */
 import { createRequire } from "node:module";
 
+export {
+  encodeCompactArguments,
+  decodeCompactArguments,
+  type CompactValue,
+} from "./compact-arguments.js";
+
 export type {
   AccountEntry,
   AccountManifest,

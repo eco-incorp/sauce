@@ -1,6 +1,6 @@
 {
   "name": "@eco-incorp/sauce",
-  "version": "0.12.0",
+  "version": "0.12.0+perf.1",
   "description": "Sauce protocol tooling: SDK, action primitives, and a local dev environment.",
   "type": "module",
   "repository": {
@@ -84,7 +84,11 @@
     "dev-tools/sauce",
     "dev-tools/artifacts",
     "dev-tools/hardhat.config.cjs",
-    "dev-tools/README.md"
+    "dev-tools/README.md",
+    "artifacts/svm",
+    "engine-performance.json",
+    "vendor/performance",
+    "vendor/eco-incorp-sauce-compiler-0.7.0+perf.1.tgz"
   ],
   "scripts": {
     "build": "pnpm -r --filter './sdk' --filter './actions' build",
@@ -104,7 +108,7 @@
     "@solana/kit": "^6.10.0",
     "acorn": "^8.15.0",
     "dotenv": "^17.3.1",
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@^1.0.0",
+    "sauce-compiler": "file:vendor/eco-incorp-sauce-compiler-0.7.0+perf.1.tgz",
     "typescript": "^5.7.0",
     "viem": "^2.45.3"
   },
@@ -120,5 +124,8 @@
   "packageManager": "pnpm@10.28.2",
   "engines": {
     "node": ">=22"
-  }
+  },
+  "bundledDependencies": [
+    "sauce-compiler"
+  ]
 }

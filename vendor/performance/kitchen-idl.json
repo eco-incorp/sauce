@@ -1,0 +1,910 @@
+{
+  "address": "D1ziogwKXoR5ssTxmmaJvx2RFe5zRhfSVUYF4YycpU3u",
+  "metadata": {
+    "name": "kitchen",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "close_code_buffer",
+      "discriminator": [
+        195,
+        203,
+        47,
+        242,
+        198,
+        177,
+        247,
+        6
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "code_buffer"
+          ]
+        },
+        {
+          "name": "code_buffer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer.nonce",
+                "account": "CodeBuffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "code",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_sha256",
+          "type": {
+            "option": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "close_pot",
+      "discriminator": [
+        214,
+        103,
+        62,
+        202,
+        132,
+        229,
+        27,
+        86
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Seed material for the Pot, the destination for its rent, and the authorization for the",
+            "close \u2014 all three, which is why it signs."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engine_program",
+          "docs": [
+            "constraints there can name it \u2014 Anchor evaluates fields in declaration order."
+          ]
+        },
+        {
+          "name": "pot",
+          "docs": [
+            "this instruction's to enforce rather than the CPI's.",
+            "",
+            "**It must exist.** A derivation naming no live account would otherwise reach `close_account`",
+            "and be refused there; checked here so a mistyped salt says so instead of reporting a rent",
+            "reclaim that did not happen.",
+            "",
+            "**The engine must own it.** Note the two senses of \"owner\" meeting on one line below:",
+            "`pot.owner` is Solana's \u2014 the PROGRAM that may mutate the account \u2014 while the `owner` field",
+            "above is this kitchen's, the user who may act on the Pot. They are never the same value.",
+            "The name follows the EVM Kitchen's, where a Pot's `owner` is likewise the user.",
+            "",
+            "Leaving the ownership check to the runtime is not enough: the runtime only",
+            "refuses a program that *attempts* the debit, so pointing `engine_program` at anything that",
+            "accepts arbitrary data and returns `Ok` would make the CPI succeed, this handler return",
+            "`Ok`, and the caller believe the Pot was closed while it sits untouched with its rent. This",
+            "instruction is the one making the promise, so it is the one that checks."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "salt"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "salt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cook",
+      "discriminator": [
+        147,
+        233,
+        205,
+        239,
+        200,
+        21,
+        190,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Seed material for the Pot and the authorization to sign for it. Unlike",
+            "`cook_from_account` there is no code buffer to prove ownership of, so this signature is the only",
+            "thing tying the cook to the Pot it writes."
+          ],
+          "signer": true
+        },
+        {
+          "name": "engine_program",
+          "docs": [
+            "address constraint, so this account is authoritative for where the CPI goes."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "pot_salt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "bytecode",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "cook_from_account",
+      "discriminator": [
+        247,
+        166,
+        195,
+        248,
+        78,
+        176,
+        147,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Seed material for the code buffer and the Pot, and the authorization for both: see the note above",
+            "on why this cannot be an `UncheckedAccount` once a Pot is signed for."
+          ],
+          "signer": true,
+          "relations": [
+            "code_buffer"
+          ]
+        },
+        {
+          "name": "code_buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer.nonce",
+                "account": "CodeBuffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "code",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "engine_program",
+          "docs": [
+            "constraint: the kitchen pins no engine, so this account IS authoritative for where the CPI",
+            "goes. An earlier revision pinned it and warned against exactly this change \u2014 that guarantee",
+            "is now given up on purpose, and `owner`'s signature is what stands in its place."
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "pot_salt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "pin",
+          "type": {
+            "option": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_code_buffer",
+      "discriminator": [
+        94,
+        72,
+        190,
+        83,
+        17,
+        60,
+        103,
+        35
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "code_buffer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "code",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "capacity",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "create_pot",
+      "discriminator": [
+        232,
+        45,
+        123,
+        181,
+        204,
+        121,
+        131,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engine_program",
+          "docs": [
+            "deliberately validates nothing about it.",
+            "",
+            "An address with no program behind it is accepted and produces an unusable Pot: nothing can",
+            "write it (only an owner may mutate account data) and nothing can close it (only an owner may",
+            "debit its lamports), so its rent is stranded and `space` is already fixed forever. An",
+            "`executable` constraint would catch that, and was deliberately not added \u2014 the loss is one",
+            "Pot's rent, and the EVM side takes the same posture for the same reason. Choosing the wrong",
+            "interpreter is the caller's business either way."
+          ]
+        },
+        {
+          "name": "pot",
+          "docs": [
+            "engine owns the bytes, and their layout is the compiled program's business, not ours.",
+            "Anchor's `init` fails loudly if the account already exists, which is the \"fails cleanly on a",
+            "Pot that exists\" half of the acceptance criteria; `create_pot` is not idempotent.",
+            "",
+            "The range sits on the account whose size it decides. Anchor runs every field's",
+            "deserialization \u2014 `init` included \u2014 before any `constraint`, so no position in this struct",
+            "makes it a precondition of the allocation; a rejected `space` unwinds the whole instruction",
+            "instead, which is what keeps a useless Pot from ever reaching the chain. The upper half is a",
+            "floor for `MAX_POT_LEN` rather than the live check: at today's value it equals the runtime's",
+            "own per-instruction allocation ceiling, which refuses anything larger first."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "salt"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "salt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "space",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "finalize_code_buffer",
+      "discriminator": [
+        191,
+        246,
+        136,
+        59,
+        56,
+        1,
+        0,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "code_buffer"
+          ]
+        },
+        {
+          "name": "code_buffer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer.nonce",
+                "account": "CodeBuffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "code",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "len",
+          "type": "u32"
+        },
+        {
+          "name": "expected_sha256",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "grow_code_buffer",
+      "discriminator": [
+        152,
+        136,
+        215,
+        167,
+        37,
+        51,
+        197,
+        62
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "code_buffer"
+          ]
+        },
+        {
+          "name": "code_buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer.nonce",
+                "account": "CodeBuffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "code",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "write_code_buffer",
+      "discriminator": [
+        205,
+        152,
+        182,
+        5,
+        148,
+        70,
+        20,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "code_buffer"
+          ]
+        },
+        {
+          "name": "code_buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer.nonce",
+                "account": "CodeBuffer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "code",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "code_buffer"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "offset",
+          "type": "u32"
+        },
+        {
+          "name": "chunk",
+          "type": "bytes"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "CodeBuffer",
+      "discriminator": [
+        116,
+        250,
+        175,
+        3,
+        238,
+        173,
+        92,
+        241
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "CapacityOutOfRange",
+      "msg": "capacity must be non-zero and at most MAX_CODE_LEN"
+    },
+    {
+      "code": 6001,
+      "name": "CodeBufferFinalized",
+      "msg": "code_buffer is already finalized"
+    },
+    {
+      "code": 6002,
+      "name": "CodeBufferNotFinalized",
+      "msg": "code_buffer has not been finalized"
+    },
+    {
+      "code": 6003,
+      "name": "CodeBufferHashMismatch",
+      "msg": "content hash does not match the expected value"
+    },
+    {
+      "code": 6004,
+      "name": "WriteOutOfBounds",
+      "msg": "write extends past the end of the code account"
+    },
+    {
+      "code": 6005,
+      "name": "EmptyBytecode",
+      "msg": "finalized length must be non-zero"
+    },
+    {
+      "code": 6006,
+      "name": "LenExceedsStagedCode",
+      "msg": "finalized length exceeds the staged code account"
+    },
+    {
+      "code": 6007,
+      "name": "PotSpaceOutOfRange",
+      "msg": "pot space must be non-zero and at most MAX_POT_LEN"
+    },
+    {
+      "code": 6008,
+      "name": "PotNotOwnedByEngine",
+      "msg": "engine does not own this Pot"
+    },
+    {
+      "code": 6009,
+      "name": "PotNotFound",
+      "msg": "no Pot at this address"
+    }
+  ],
+  "types": [
+    {
+      "name": "CodeBuffer",
+      "docs": [
+        "CodeBuffer metadata. Holds no bytecode \u2014 that lives in the sibling code account, so the code",
+        "account's entire contents are the hashed image and nothing un-pinned is jump-reachable.",
+        "",
+        "Every field here is descriptive. The seeds constraint is what proves the account's identity,",
+        "derived from instruction arguments rather than from these stored values."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "content_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "capacity",
+            "type": "u32"
+          },
+          {
+            "name": "len",
+            "type": "u32"
+          },
+          {
+            "name": "finalized",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "code_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ],
+  "constants": [
+    {
+      "name": "CODE_BUFFER_SEED",
+      "type": "bytes",
+      "value": "[98, 117, 102, 102, 101, 114]"
+    },
+    {
+      "name": "CODE_SEED",
+      "type": "bytes",
+      "value": "[99, 111, 100, 101]"
+    },
+    {
+      "name": "GROWTH_STEP",
+      "docs": [
+        "The most an account may grow in one instruction. A code buffer past this is reached by repeating",
+        "`grow_code_buffer`; the runtime measures the delta against the length at instruction entry, so one",
+        "step per instruction is always legal."
+      ],
+      "type": "u32",
+      "value": "10240"
+    },
+    {
+      "name": "MAX_CODE_LEN",
+      "docs": [
+        "Largest program a code buffer may hold. Bounded by what staging can actually afford: `finalize_code_buffer`",
+        "hashes the whole program in one instruction (~39.6k CU at this size, measured), and the write",
+        "path costs one transaction per ~900-byte chunk. Nothing in the engine constrains it \u2014 bytecode is",
+        "interpreted straight out of the account borrow and jump targets decode as `u32` against the",
+        "slice length, so code length is unrelated to the engine's heap size."
+      ],
+      "type": "u32",
+      "value": "65535"
+    },
+    {
+      "name": "MAX_POT_LEN",
+      "docs": [
+        "Largest Pot this program will mint. A Pot is created at its final size and can never grow \u2014",
+        "`realloc` belongs to the owning program, which is the engine \u2014 so this is a ceiling on a",
+        "one-time choice rather than on a running total. Held at one `MAX_PERMITTED_DATA_INCREASE`",
+        "because that is the most the System Program will allocate in a single instruction."
+      ],
+      "type": "u32",
+      "value": "10240"
+    },
+    {
+      "name": "POT_SEED",
+      "type": "bytes",
+      "value": "[112, 111, 116]"
+    }
+  ]
+}

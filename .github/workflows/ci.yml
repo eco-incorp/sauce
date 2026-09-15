@@ -40,23 +40,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ---- engine artifacts + the v12 releases --------------------------------
-      # The EVM artifacts (sdk/{dist,src}/artifacts — Router, V12*, interfaces) ship to downstream
-      # SDK consumers for their local tests/deploys, and are build output rather than committed, so
-      # this both regenerates them and asserts the generation produced every one.
-      #
-      # Everything comes from the v12 RELEASES, each asset pinned by tag AND by a digest committed in
-      # sync-engine-artifacts.mjs. The components release independently, so there is no single shared
-      # commit to pin — the digest is the guarantee. `--fetch-v12-engines` downloads them into a
-      # cache, checks each against its digest, and prints `NAME=<path>` lines; the grep hands every
-      # one to $GITHUB_ENV. It is deliberately a wildcard: a newly pinned artifact reaches the suites
-      # that need it without a matching edit here, which is how SAUCE_KITCHEN_SO would otherwise have
-      # been silently absent. GH_TOKEN because eco-incorp/v12 is a private repo.
-      #
-      # The suites that consume these HARD-FAIL when their variable is absent, so a future edit here
-      # cannot quietly return them to skipping — a skipped suite and a passing suite are the same
-      # line in jest's summary, which is how they went unrun for their whole life before.
-      - name: Sync engine artifacts and fetch the v12 engines
+      # Verify the source-pinned compiler/runtime package before using any asset.
+      # The manifest and vendored inputs are committed together; no release lookup
+      # or external download participates in the compiler/engine pairing.
+      - name: Verify and sync paired engine artifacts
         env:
           GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
         run: |

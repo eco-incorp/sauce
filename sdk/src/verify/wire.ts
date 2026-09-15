@@ -21,30 +21,14 @@ export const SETTLE_WIRE = {
   /** Byte length of the compiled `settle.sauce.ts` program. It is INVARIANT: the program takes its
    *  `(tokens, minOut, recipient)` as runtime entry arguments, so nothing about the caller's values
    *  reaches the compiler. This length is what locates the argument tail. */
-  PROGRAM_BYTES: 370,
-  /** Which compiler produced the bytes `PROGRAM_HASH` pins. The dependency is a caret range, and on
-   *  `^1.0.0` that is the whole `1.x` line — a far wider window than the `0.7.x` a `^0.7.0` caret
-   *  admitted, since a caret on `0.x` pins the minor. Any `1.x` that changes codegen makes a
-   *  consumer's own compile fail that pin; the fix then is to re-pin all three of these, not to
-   *  loosen the check. `verify.compile.test.ts` asserts this
-   *  exact version against the resolved package, so it cannot silently describe a producer that never
-   *  ran — and it must be asserted against the version EVERY workspace resolves, since a bump in one
-   *  package.json leaves this string describing a compiler no consumer runs.
-   *
-   *  0.5.0 → 0.7.0 moved these bytes: 391 → 370, with a different hash. A consumer on the newer
-   *  compiler and the older pin has every settle it produces rejected on `PROGRAM_HASH`, which is why
-   *  the bump and the re-pin are one change. Intents published against the old hash still verify —
-   *  pass it via `validateSettleProgram`'s accepted-hash set.
-   *
-   *  0.7.0 → 1.0.0 did NOT move them, despite carrying ABI type widths through both codec
-   *  directions. So a compiler bump is not evidence either way: this string changes every time, the
-   *  hash only when the output does, and the tests above are what tell them apart. */
-  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@1.0.0",
+  PROGRAM_BYTES: 350,
+  /** Exact compiler bundled by the performance artifact manifest. */
+  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@0.7.0+perf.1",
   /** `keccak256` of those `PROGRAM_BYTES` bytes — the authenticity pin `validateSettleProgram`
    *  enforces, and the reason a matching payload runs the audited program and nothing else.
    *  Whole-program, not a body slice: program and arguments are disjoint byte regions on this wire.
    *  `verify.compile.test.ts` recomputes it from source every run and fails before any consumer does. */
-  PROGRAM_HASH: "0x539ec5903000571508732abf3e46ac02fcaff5bd1f9cb4d2835aec40d3c70c2e",
+  PROGRAM_HASH: "0xfdc0083dd5d41fd40a60804e1fe00645639cb9949a1bcd416205761cec448cbd",
   /** Every argument word is 32 bytes, big-endian. */
   WORD_BYTES: 32,
   /** An address occupies the LOW 20 bytes of its word; the upper 12 MUST be zero (§4). */
