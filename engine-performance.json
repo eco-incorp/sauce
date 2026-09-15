@@ -3,8 +3,8 @@
   "status": "release candidate; deployment verification required",
   "isa": "stack-compact-v2",
   "entryEncodings": ["abi-v1", "compact-v1"],
-  "compilerVersion": "2.2.0-rc.2",
-  "engineBase": "f2cee91d34927905fd1e36dd288de407435617f0",
+  "compilerVersion": "2.2.0-rc.3",
+  "engineBase": "5290cb2a5fa88bd7501f12c79c983c523d22c795",
   "sdkBase": "5863fbda2e1e79efee4b28268b9f2108ef3b5181",
   "productionReady": false,
   "tools": {
@@ -32,7 +32,7 @@
     "vendor/performance/engine-mainnet.so": "e3355963047ce0d219781d764a81422d8f1041c025b18047ac2b8bc58ec56959",
     "vendor/performance/engine-wire-devnet.json": "780fe9e2136c4b451a47d1d99a44f6d9abe70aea208b8ad4cb510350c64f9a2d",
     "vendor/performance/engine-wire-mainnet.json": "8ece32c285382fb8a403a6ede9eb4b884e6491b9996157169feefe20483d1006",
-    "vendor/eco-incorp-sauce-compiler-2.2.0-rc.2.tgz": "e99be5caf75d9de23bb9b5f17f4ea7046d0f732e60b0028a3beb6895d24fa5a7"
+    "vendor/eco-incorp-sauce-compiler-2.2.0-rc.3.tgz": "1ca3d39e54ef07b438b24f4d6b49035ce459d901c0c2746b12c147c0c8d6e5fe"
   },
   "kitchen": {
     "sourceCommit": "ec593103aa6251f93527f604df5859da9295edbf",
@@ -42,7 +42,7 @@
     "idlDerivation": "unmodified kitchen-svm-v0.3.0/kitchen-idl.json",
     "maxCodeBytes": 1048576
   },
-  "engineCommit": "69f5fd007d227a224e28929e79f75ab8fafc23f6",
+  "engineCommit": "4e5415cd3fe47118cd509f27fd3505b98621b965",
   "enginePr": "https://github.com/eco-incorp/v12/pull/461",
   "clusters": {
     "devnet": {

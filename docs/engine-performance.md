@@ -1,6 +1,6 @@
 # EcoSwap performance package
 
-This release candidate packages compiler `2.2.0-rc.2` with ISA `stack-compact-v2` from
+This release candidate packages compiler `2.2.0-rc.3` with ISA `stack-compact-v2` from
 [UNPACK #461](https://github.com/eco-incorp/v12/pull/461), stacked on [SET_ELEMENT #458](https://github.com/eco-incorp/v12/pull/458). `engine-performance.json`
 pins the source commit, tools and SHA-256 of each input. It retains the migration's
 compiler and SVM fixes. The engine source includes merged #459; the released kitchen artifacts from SDK main are retained and separately identified below.
@@ -54,7 +54,7 @@ mainnet paths explicitly; the legacy local `artifacts/svm/engine.so` filename
 always contains the devnet build. CI executes both binaries and checks their
 actual chain IDs alongside compact decoding and checked mutation.
 
-SDK `0.14.0-rc.3` is a registry-compatible prerelease version of the combined
+SDK `0.14.0-rc.4` is a registry-compatible prerelease version of the combined
 `@eco-incorp/sauce` package. The compiler is bundled, so a consumer does not need
 a second compiler install. `node sdk/scripts/check-packed-package.mjs` installs
 the tarball into a fresh temporary consumer and tests the public compiler/codec
@@ -78,7 +78,7 @@ program compatibility. This work does not deploy or merge anything.
 
 ## Historical measurements
 
-The following figures were measured for RC1 before the opcode split. They are not RC3 acceptance results.
+The following figures were measured for RC1 before the opcode split. They are not RC4 acceptance results.
 
 The integrated consumer evidence lives in sauce-recipes PR #1129 under
 `docs/engine-performance`. Preliminary frozen-fixture receipt gas falls from
@@ -93,8 +93,19 @@ The 3,158 SDK tests pass across the full SDK run and the kitchen/wire follow-up,
 including actual EVM execution and both packaged Solana clusters. Build,
 TypeScript checks, ESLint, formatting and clean package installation also pass.
 The canonical settlement program was recompiled to 362 bytes and its hash was
-updated from those bytes. Deployment checks must use this RC3 manifest.
+updated from those bytes. RC4 supersedes that manifest.
 
 RC3 incorporates SDK main through #198 and the measured SBF inlining cleanup.
 Only `find_pda` keeps a non-inlining boundary to prevent an oversized interpreter
 frame. The compiler and both SBF binaries are rebuilt from the exact engine head.
+
+## SVM compute correction in RC4
+
+RC4 uses constant entry-spill addresses on SVM. Compared with RC3's runtime-relative
+addresses, the four-rung Solfi fixture fits at 1,296,579 CU (RC3 exceeded 1.4M),
+and the two-market native Manifest fixture falls from 931,428 to 845,465 CU.
+All 80 interpreted calibration cells pass with the existing budget model.
+Constant addresses increase program bytes; the engine's
+`docs/svm-spill-addressing.md` records both dimensions and the raw A/B results.
+Called frames still use a runtime base. EVM output and both SBF binaries are
+byte-identical to RC3; only compiler code generation changes in this package.
