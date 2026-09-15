@@ -391,7 +391,7 @@ describe("@eco-incorp/sauce/verify", () => {
 
   describe("closure", () => {
     it("SETTLE_WIRE exposes the wire constants a foreign implementer needs", () => {
-      expect(SETTLE_WIRE.PROGRAM_BYTES).toBe(370);
+      expect(SETTLE_WIRE.PROGRAM_BYTES).toBe(363);
       expect(SETTLE_WIRE.WORD_BYTES).toBe(32);
       expect(SETTLE_WIRE.ADDRESS_BYTES).toBe(20);
       expect(SETTLE_WIRE.HEAD_SLOTS).toBe(3);

@@ -30,8 +30,8 @@ importers:
         specifier: ^17.3.1
         version: 17.4.2
       sauce-compiler:
-        specifier: npm:@eco-incorp/sauce-compiler@^2.0.0
-        version: '@eco-incorp/sauce-compiler@2.0.0'
+        specifier: npm:@eco-incorp/sauce-compiler@^2.1.0
+        version: '@eco-incorp/sauce-compiler@2.1.0'
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -64,8 +64,8 @@ importers:
   actions:
     dependencies:
       sauce-compiler:
-        specifier: npm:@eco-incorp/sauce-compiler@^2.0.0
-        version: '@eco-incorp/sauce-compiler@2.0.0'
+        specifier: npm:@eco-incorp/sauce-compiler@^2.1.0
+        version: '@eco-incorp/sauce-compiler@2.1.0'
       viem:
         specifier: ^2.0.0
         version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -89,8 +89,8 @@ importers:
         specifier: ^17.3.1
         version: 17.4.2
       sauce-compiler:
-        specifier: npm:@eco-incorp/sauce-compiler@^2.0.0
-        version: '@eco-incorp/sauce-compiler@2.0.0'
+        specifier: npm:@eco-incorp/sauce-compiler@^2.1.0
+        version: '@eco-incorp/sauce-compiler@2.1.0'
       viem:
         specifier: ^2.45.1
         version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -126,8 +126,8 @@ importers:
         specifier: ^6.10.0
         version: 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       sauce-compiler:
-        specifier: npm:@eco-incorp/sauce-compiler@^2.0.0
-        version: '@eco-incorp/sauce-compiler@2.0.0'
+        specifier: npm:@eco-incorp/sauce-compiler@^2.1.0
+        version: '@eco-incorp/sauce-compiler@2.1.0'
       viem:
         specifier: ^2.45.1
         version: 2.51.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -327,8 +327,8 @@ packages:
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
 
-  '@eco-incorp/sauce-compiler@2.0.0':
-    resolution: {integrity: sha512-kvW0llGmoSvWaLfe4aUKsSBSiwOeGXqaBpdMYmw0Bt6m8/bvAryZvNaEGgmI+pFuASS+RvAGoyZTmEo/yvsyNA==}
+  '@eco-incorp/sauce-compiler@2.1.0':
+    resolution: {integrity: sha512-NufD34NSLi2MDsQq5959/0DD4KLsh9jx9CQ/ReaW2Rg/3aujPbEivoyfRDpoJ5nzxelyTGKql7i8y+T4bNB4cg==}
 
   '@esbuild/aix-ppc64@0.28.0':
     resolution: {integrity: sha512-lhRUCeuOyJQURhTxl4WkpFTjIsbDayJHih5kZC1giwE+MhIzAb7mEsQMqMf18rHLsrb5qI1tafG20mLxEWcWlA==}
@@ -3269,7 +3269,7 @@ snapshots:
       hashery: 1.5.1
       keyv: 5.6.0
 
-  '@eco-incorp/sauce-compiler@2.0.0': {}
+  '@eco-incorp/sauce-compiler@2.1.0': {}
 
   '@esbuild/aix-ppc64@0.28.0':
     optional: true

@@ -61,18 +61,19 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 //
 // There is deliberately no commit pin. The components release INDEPENDENTLY, so a shared commit is
 // not a property this can rely on — `v12-evm-v0.4.0` came from `dbdda3ff` while `v12-svm-v0.5.0`
-// came from `bb65620c`. (The engines are still cut from `0bc085a3` while both kitchens moved to
-// `ec593103`, so the four no longer share one commit; that is a property of a given
+// came from `bb65620c`. (Three commits across the four now: the EVM engine and kitchen are both
+// cut from `48f00c3`, the SVM engine is still on `0bc085a3` and the SVM kitchen on `ec593103`,
+// because a release is cut per package and only what changed gets one; that is a property of a given
 // release run, not something to assert.) Requiring one made a routine per-component
 // bump fail as "the tag moved".
 //
 // To bump: change the tag, run this script, and paste the digest it reports.
 
 const V12_EVM = {
-  tag: "v12-evm-v0.6.0",
+  tag: "v12-evm-v0.7.0",
   asset: "runtime.creation.hex",
   // keccak256 of the creation code, cross-checked against the release manifest's `creationCodeKeccak`.
-  digest: "0x1cc79965657f4a4beb8a64a8d1a0f17e6844c16b24cca7f45e27e6a61de4f52e",
+  digest: "0xc371a5640e0c830be0eb88894fa99c77529ebd1d1cf15d2d66981dfd687901fe",
   manifestKey: "creationCodeKeccak",
   // The manifest hashes the DECODED creation bytecode, not the hex file's bytes.
   hash: (buf) => keccak256(toBytes(buf.toString("utf8").trim())),
@@ -96,9 +97,9 @@ const V12_SVM = {
 // a superset: `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is
 // Uniswap's, so neither appears here and neither should — see ARTIFACTS below.
 const V12_EVM_ABIS = {
-  tag: "kitchen-evm-v0.3.0",
+  tag: "kitchen-evm-v0.4.0",
   asset: "abis.json",
-  digest: "b0aa614b29deefd8fc253dba35d1e7054e28d1e48e0314e0c9d96fff274a1111",
+  digest: "bd3a525e9fcd50d50c1ef9d2d84c7341f90759a4b07c33cd20982fb2bd10c11f",
   manifestKey: "abis.sha256",
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };

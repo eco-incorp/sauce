@@ -21,7 +21,7 @@ export const SETTLE_WIRE = {
   /** Byte length of the compiled `settle.sauce.ts` program. It is INVARIANT: the program takes its
    *  `(tokens, minOut, recipient)` as runtime entry arguments, so nothing about the caller's values
    *  reaches the compiler. This length is what locates the argument tail. */
-  PROGRAM_BYTES: 370,
+  PROGRAM_BYTES: 363,
   /** Which compiler produced the bytes `PROGRAM_HASH` pins. The dependency is a caret range, and on
    *  `^2.0.0` that is the whole `2.x` line — a far wider window than the `0.7.x` a `^0.7.0` caret
    *  admitted, since a caret on `0.x` pins the minor. Any `2.x` that changes codegen makes a
@@ -38,14 +38,15 @@ export const SETTLE_WIRE = {
    *
    *  0.7.0 → 1.0.0 did NOT move them, despite carrying ABI type widths through both codec
    *  directions, and neither did 1.0.0 → 2.0.0 — whose major is an artifact of the release config
-   *  rather than a compiler change. So a compiler bump is not evidence either way: this string
-   *  changes every time, the hash only when the output does, and the tests above tell them apart. */
-  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@2.0.0",
+   *  rather than a compiler change. 2.0.0 → 2.1.0 DID: 370 → 363, on the element/field write
+   *  boxing change. So a compiler bump is not evidence either way: this string changes every time,
+   *  the hash only when the output does, and the tests above tell them apart. */
+  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@2.1.0",
   /** `keccak256` of those `PROGRAM_BYTES` bytes — the authenticity pin `validateSettleProgram`
    *  enforces, and the reason a matching payload runs the audited program and nothing else.
    *  Whole-program, not a body slice: program and arguments are disjoint byte regions on this wire.
    *  `verify.compile.test.ts` recomputes it from source every run and fails before any consumer does. */
-  PROGRAM_HASH: "0x539ec5903000571508732abf3e46ac02fcaff5bd1f9cb4d2835aec40d3c70c2e",
+  PROGRAM_HASH: "0xd5a00fb9969076e546bba89a79ca4ad4076ff9c11dfc0d2dbe4d655280fcac93",
   /** Every argument word is 32 bytes, big-endian. */
   WORD_BYTES: 32,
   /** An address occupies the LOW 20 bytes of its word; the upper 12 MUST be zero (§4). */

@@ -10,14 +10,14 @@
 // WHICH PROGRAMS. The settle program this decodes is what the PUBLISHED RUST COMPILER emits for
 // `recipes/settle.sauce.ts` — the only compiler this package ships against. `main` takes
 // `(tokens, minOut, recipient)` as RUNTIME entry arguments, so the compiled program is a
-// 370-byte constant and the arguments ride the payload AFTER it, as 32-byte big-endian words the
+// 363-byte constant and the arguments ride the payload AFTER it, as 32-byte big-endian words the
 // engine reads back through CALLDATA. `SETTLE_VECTORS` is the conformance corpus and
 // `verify.compile.test.ts` recompiles the program and re-pins it on every run.
 //
 // SCOPE, stated plainly, in two tiers:
 //   • `decodeSettleProgram` is STRUCTURAL. It pins the program's LENGTH and reads the argument tail,
 //     so it names the tokens, floor and recipient a payload carries and nothing about what those
-//     370 bytes do. It is strict about the encoding (§4 of decode.ts: the canonical tokens pointer,
+//     363 bytes do. It is strict about the encoding (§4 of decode.ts: the canonical tokens pointer,
 //     no trailing slack, no dirty bytes above an address, a nonzero recipient), so an accepted
 //     payload is the UNIQUE byte encoding of the values it decodes to.
 //   • `validateSettleProgram` adds the authenticity half: one `keccak256` over the WHOLE program

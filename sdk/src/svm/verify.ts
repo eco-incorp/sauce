@@ -290,7 +290,7 @@ export interface DecodedSvmSettleExecution {
  * SDK's own recompiled canonical settle bytecode.
  *
  * The EVM half splits the same two questions the same way — `decodeSettleProgram` is structural and
- * accepts any 370-byte program, `validateSettleProgram` is the genuineness proof — but reaches the
+ * accepts any 363-byte program, `validateSettleProgram` is the genuineness proof — but reaches the
  * second one WITHOUT a compiler: an EVM settle's params ride the payload after the program, so the
  * program is a constant and one `keccak256` settles it. Here they are `defines` folded into the
  * bytecode, which is why this side recompiles.
