@@ -1,9 +1,9 @@
 # EcoSwap performance package
 
-This release candidate packages compiler `1.0.1-rc.1` with ISA `stack-compact-v1` from
-[v12 #458](https://github.com/eco-incorp/v12/pull/458). `engine-performance.json`
+This release candidate packages compiler `2.2.0-rc.1` with ISA `stack-compact-v2` from
+[UNPACK #461](https://github.com/eco-incorp/v12/pull/461), stacked on [SET_ELEMENT #458](https://github.com/eco-incorp/v12/pull/458). `engine-performance.json`
 pins the source commit, tools and SHA-256 of each input. It retains the migration's
-compiler and SVM fixes. It includes upstream PR #456 through engine main; #457 remains separate.
+compiler and SVM fixes. The engine source includes merged #459; the pinned kitchen ELF remains separately identified below.
 
 ## Build and verify
 
@@ -41,9 +41,9 @@ See the engine's `docs/compact-arguments.md` for byte-level vectors and limits.
 
 ## Compatibility and rollout requirements
 
-`UNPACK` (0x9b) and `SLOT` (0x9c) require the paired engine. The EVM settlement
-verification pin is 350 code bytes, hash
-`0xfdc0083dd5d41fd40a60804e1fe00645639cb9949a1bcd416205761cec448cbd`.
+`SET_ELEMENT` (0x9b) and `UNPACK` (0x9c) require the paired engine. The EVM settlement
+verification pin is 362 code bytes, hash
+`0x2da5c63da0ed3e934f4bb09985a38723de1f2a8e9a9a97ef3993e526cb649d11`.
 SVM settlement programs remain specialized by their complete define set.
 Code hashes, composed code-plus-argument hashes and staging identities must be
 computed from the exact bytes returned to the client.
@@ -54,7 +54,7 @@ mainnet paths explicitly; the legacy local `artifacts/svm/engine.so` filename
 always contains the devnet build. CI executes both binaries and checks their
 actual chain IDs alongside compact decoding and checked mutation.
 
-SDK `0.14.0-rc.1` is a registry-compatible prerelease version of the combined
+SDK `0.14.0-rc.2` is a registry-compatible prerelease version of the combined
 `@eco-incorp/sauce` package. The compiler is bundled, so a consumer does not need
 a second compiler install. `node sdk/scripts/check-packed-package.mjs` installs
 the tarball into a fresh temporary consumer and tests the public compiler/codec
@@ -73,10 +73,21 @@ together; invalidate program/response caches; and verify actual HTTP settlement
 on the intended environment. Local Anvil/LiteSVM results do not establish live
 program compatibility. This work does not deploy or merge anything.
 
-## Measurements
+## Historical measurements
+
+The following figures were measured for RC1 before the opcode split. They are not RC2 acceptance results.
 
 The integrated consumer evidence lives in sauce-recipes PR #1129 under
 `docs/engine-performance`. Preliminary frozen-fixture receipt gas falls from
 8,771,370 to 4,001,642, with identical realized output. Payload falls from 56,347
 to 22,120 bytes; the old 17,404-byte payload target remains unmet. Use the final
 consumer evidence and its exact source/artifact pins for acceptance.
+
+## Opcode split validation
+
+RC2 packages SET_ELEMENT `0x9B` from engine #458 and UNPACK `0x9C` from #461.
+The 3,158 SDK tests pass across the full SDK run and the kitchen/wire follow-up,
+including actual EVM execution and both packaged Solana clusters. Build,
+TypeScript checks, ESLint, formatting and clean package installation also pass.
+The canonical settlement program was recompiled to 362 bytes and its hash was
+updated from those bytes. Deployment checks must use this RC2 manifest.

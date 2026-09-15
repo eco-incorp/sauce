@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const manifest = JSON.parse(readFileSync(resolve(root, "engine-performance.json"), "utf8"));
-if (manifest.format !== 1 || manifest.isa !== "stack-compact-v1") {
+if (manifest.format !== 1 || manifest.isa !== "stack-compact-v2") {
   throw new Error("Unsupported engine artifact manifest");
 }
 for (const [file, expected] of Object.entries(manifest.artifacts)) {

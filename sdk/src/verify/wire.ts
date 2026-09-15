@@ -21,14 +21,14 @@ export const SETTLE_WIRE = {
   /** Byte length of the compiled `settle.sauce.ts` program. It is INVARIANT: the program takes its
    *  `(tokens, minOut, recipient)` as runtime entry arguments, so nothing about the caller's values
    *  reaches the compiler. This length is what locates the argument tail. */
-  PROGRAM_BYTES: 350,
+  PROGRAM_BYTES: 362,
   /** Exact compiler bundled by the performance artifact manifest. */
-  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@1.0.1-rc.1",
+  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@2.2.0-rc.1",
   /** `keccak256` of those `PROGRAM_BYTES` bytes — the authenticity pin `validateSettleProgram`
    *  enforces, and the reason a matching payload runs the audited program and nothing else.
    *  Whole-program, not a body slice: program and arguments are disjoint byte regions on this wire.
    *  `verify.compile.test.ts` recomputes it from source every run and fails before any consumer does. */
-  PROGRAM_HASH: "0xfdc0083dd5d41fd40a60804e1fe00645639cb9949a1bcd416205761cec448cbd",
+  PROGRAM_HASH: "0x2da5c63da0ed3e934f4bb09985a38723de1f2a8e9a9a97ef3993e526cb649d11",
   /** Every argument word is 32 bytes, big-endian. */
   WORD_BYTES: 32,
   /** An address occupies the LOW 20 bytes of its word; the upper 12 MUST be zero (§4). */

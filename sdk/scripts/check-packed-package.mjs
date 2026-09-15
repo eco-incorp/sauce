@@ -43,7 +43,7 @@ try {
     const source = new TextEncoder().encode('function main(x: Uint256): Uint256 { return x + 1; }');
     for (const target of ['evm', 'svm']) {
       const a = compile({ target, compactArgs: true, resolve: () => source });
-      assert.equal(a.isaRevision, 'stack-compact-v1');
+      assert.equal(a.isaRevision, 'stack-compact-v2');
       assert.equal(a.entryEncoding, 'compact-v1');
       const data = encodeCompactArguments(a.entrySchema, [7n]);
       assert.deepEqual(decodeCompactArguments(a.entrySchema, data), [7n]);
@@ -58,7 +58,7 @@ try {
       const wire = JSON.parse(readFileSync(resolve(root, 'vendor/performance/engine-wire-' + cluster + '.json'), 'utf8'));
       assert.equal(wire.cluster, cluster);
       assert.equal(wire.chainId, cluster === 'mainnet' ? 1399811149 : 1399811150);
-      assert.equal(wire.isa.revision, 'stack-compact-v1');
+      assert.equal(wire.isa.revision, 'stack-compact-v2');
       assert.ok(manifest.artifacts['vendor/performance/engine-' + cluster + '.so']);
     }
     console.log('Clean package install: compact compiler/codec and both cluster artifacts verified');

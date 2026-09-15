@@ -44,7 +44,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
-    "sauce-compiler": "file:../vendor/eco-incorp-sauce-compiler-1.0.1-rc.1.tgz",
+    "sauce-compiler": "file:../vendor/eco-incorp-sauce-compiler-2.2.0-rc.1.tgz",
     "@uniswap/v3-core": "^1.0.1",
     "dotenv": "^17.3.1",
     "viem": "^2.45.1"

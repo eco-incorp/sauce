@@ -23,7 +23,7 @@ describe.each(["devnet", "mainnet"] as const)("compact package on %s", (cluster)
     manifest: artifact.manifest!,
   });
 
-  it("executes UNPACK, checked SLOT mutation and the correct cluster ID", async () => {
+  it("executes UNPACK, checked SET_ELEMENT mutation and the correct cluster ID", async () => {
     const harness = await startEngine(1_700_000_000n, resolve(root, `engine-${cluster}.so`));
     const result = expectOk(await execute(harness, payload(args), {}));
     const expected = cluster === "mainnet" ? 1399811149n : 1399811150n;

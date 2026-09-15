@@ -48,10 +48,10 @@
   },
   "isa": {
     "extensions": {
-      "slot": 156,
-      "unpack": 155
+      "setElement": 155,
+      "unpack": 156
     },
-    "revision": "stack-compact-v1"
+    "revision": "stack-compact-v2"
   },
   "memory": {
     "heapBytes": 65535,
