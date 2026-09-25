@@ -75,8 +75,13 @@ export function assertStaticChild(_child: Intent): void {
  * instead of splicing a runtime `publishAndFund` — see `nestedTransferStatements`/
  * `nestedTransferProgram` below for the codegen, and this file's module doc for the on-chain grounding
  * (balance-based payout, no funded-flag gate, no publication requirement).
+ *
+ * `"dynamic"` is the one mode whose child is NOT static: its amounts are placeholders until the
+ * parent runs, and `nest-dynamic.ts` (not this file) emits the program that measures, derives and
+ * splices them. Everything here still applies to it EXCEPT the two invariants that read a child's
+ * amounts as numbers — see `assertNestingInvariants`'s 3 and 5.
  */
-export type NestVia = "transfer" | "publishAndFund";
+export type NestVia = "transfer" | "publishAndFund" | "dynamic";
 
 export interface NestChild {
   readonly intent: Intent;
@@ -132,7 +137,11 @@ function tokenKey(token: string): string {
  *  1. EVM parent — `parentChain.kind === "evm"`. The Solana Portal PROGRAM is not in eco-routes on
  *     `main` (zero `.rs`); a child's OWN destination may still be `svm`.
  *  2. Source match — every child's `sourceChainId` equals the parent's destination chain id.
- *  3. Static child — `assertStaticChild` per child (the S6 seam).
+ *  3. Static child — `assertStaticChild` per child (the S6 seam). SKIPPED for a `via: "dynamic"`
+ *     child, which is the case that seam was reserved for: its reward amounts are deliberately
+ *     placeholders. `nest-dynamic.ts#assertDynamicChild` is its mirror-image check (a child routed
+ *     there with NO placeholder is the error), and it runs at codegen time, where the options that
+ *     say which sentinels to look for are in scope.
  *  4. Deadlines INCREASE with depth — `child.route.deadline >= parentRoute.deadline` AND
  *     `child.reward.deadline >= parentRoute.deadline`. The child publishes DURING the parent's
  *     fulfillment, which `Inbox._fulfill` allows right up to the parent's own `route.deadline`
@@ -145,6 +154,9 @@ function tokenKey(token: string): string {
  *     the (balance-based) funding, so there is nothing static left to compare against
  *     `parentRoute.tokens`/`nativeAmount`. See `intent-dsl.ts`'s T5 for the one native-only coverage
  *     check that DOES still apply to a transfer child (only when it opts into `fundNativeFromRoute`).
+ *     A `via: "dynamic"` child is skipped for a STRONGER reason than a transfer one: its reward
+ *     amount is a ~1.5e77 sentinel, so summing it would not merely be uninformative, it would fail
+ *     every parent. The funding is the runtime measurement, bounded by the Pot's own balance.
  *  6. No duplicate intent hash — `normalizeRoute` defaults `salt` to 32 zero bytes, so two
  *     structurally identical children silently collapse into the SAME intent. A repeat `intentHash`
  *     anywhere in `children` throws, pointing at `options.salt`.
@@ -184,8 +196,10 @@ export function assertNestingInvariants(args: AssertNestingInvariantsArgs): void
       );
     }
 
-    // 3. Static child (the S6 seam).
-    assertStaticChild(intent);
+    // 3. Static child (the S6 seam) — the `"dynamic"` child is exactly what that seam was held
+    // open for, so it is the one mode that skips it rather than being rejected by it.
+    const via = child.via ?? "publishAndFund";
+    if (via !== "dynamic") assertStaticChild(intent);
 
     // 4. Deadlines increase with depth.
     if (intent.route.deadline < parentRoute.deadline) {
@@ -204,9 +218,8 @@ export function assertNestingInvariants(args: AssertNestingInvariantsArgs): void
     }
 
     // 5. Funding coverage (accumulate; checked after the loop) — dropped entirely for a
-    // "transfer"-mode child (see the doc comment above); `fundedByBody` remains the
+    // "transfer"- or "dynamic"-mode child (see the doc comment above); `fundedByBody` remains the
     // publishAndFund-only opt-out it always was.
-    const via = child.via ?? "publishAndFund";
     if (via === "publishAndFund" && !child.fundedByBody) {
       childNativeTotal += intent.reward.nativeAmount;
       for (const t of intent.reward.tokens) {

@@ -140,3 +140,40 @@ export type { PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
 
 export { assertNestingInvariants, assertStaticChild, nestedChildCalls } from "./nest.js";
 export type { AssertNestingInvariantsArgs, NestChild, NestedChildOptions } from "./nest.js";
+
+// --- DYNAMIC nesting: a child intent created on-chain from a runtime measurement ---
+//
+// Unlike the transfer codegen (`nestedTransferProgram`, internal to `intent-dsl.ts`), these ARE
+// public: a caller cannot build a dynamic child at all without the placeholder sentinels, since the
+// sentinels are what it writes into the child's amount fields before handing it to `.nest()`.
+
+export {
+  assertDynamicChild,
+  dynamicChildProgram,
+  dynamicChildStatements,
+  dynamicChildTemplate,
+  renderDynamicChild,
+  AMOUNT_IN_PLACEHOLDER,
+  AMOUNT_OUT_PLACEHOLDER,
+  AMOUNT_IN_PLACEHOLDER_U64,
+  AMOUNT_OUT_PLACEHOLDER_U64,
+  WAD,
+} from "./nest-dynamic.js";
+export type { AmountMeasurement, DynamicChildOptions, DynamicNestEntry } from "./nest-dynamic.js";
+
+export {
+  emitTemplate,
+  encodeFixedWidth,
+  maxScalableBase,
+  renderTemplate,
+  scaleAmount,
+  splitByPlaceholders,
+} from "./template.js";
+export type {
+  AmountSource,
+  ByteTemplate,
+  PlaceholderSpec,
+  TemplateEmitOptions,
+  TemplateEmitResult,
+  TemplateSlot,
+} from "./template.js";

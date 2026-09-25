@@ -35,6 +35,13 @@ import {
   type NestVia,
   type TransferNestEntry,
 } from "./nest.js";
+import {
+  dynamicChildProgram,
+  type AmountMeasurement,
+  type DynamicChildOptions,
+  type DynamicNestEntry,
+  type PlaceholderSpec,
+} from "./nest-dynamic.js";
 import { normalizeRoute, toBigInt } from "./normalize.js";
 import {
   approvalTxs,
@@ -68,6 +75,7 @@ import type {
 } from "./types.js";
 
 export type { NestVia };
+export type { AmountMeasurement, PlaceholderSpec };
 
 /**
  * A route body: a complete `function main(){...}` program, a bare body (see
@@ -209,6 +217,12 @@ export interface NestOptions {
    * needing no on-chain publication. `"publishAndFund"`: the opt-in, kept reachable verbatim — choose
    * it for public on-chain discovery (solvers already index `IntentPublished`) and exact-amount
    * Portal-pulled funding.
+   *
+   * `"dynamic"` is the only mode whose child's AMOUNTS are not known when the parent is signed: the
+   * child is built with sentinel placeholders, and a generated cook measures a balance on the
+   * destination chain, derives `amountIn`/`amountOut` from it, splices them into the child's
+   * precompiled `publishAndFund` calldata and calls the Portal with it. Requires `measure`; see
+   * `nest-dynamic.ts` for the mechanism and the properties it deliberately does not defend against.
    */
   via?: NestVia;
   /** Where the child's calls (the transfer program's `cook()`, or the spliced `approve`s +
@@ -262,9 +276,29 @@ export interface NestOptions {
   /** Overrides the interpreter that Pot's cook runs on. Defaults to this route's own
    *  `execution.engine`. */
   engine?: AddressInput;
-  /** Compile options for the generated transfer program (merged with `baseDirs`/`target: 'v12'`,
-   *  which this module always supplies). */
+  /** Compile options for the generated transfer/dynamic program (merged with `baseDirs`/`target:
+   *  'v12'`, which this module always supplies). */
   compile?: SauceCompileOptions;
+
+  // -- dynamic-only (throws under either other mode) ----------------------------------------------
+  /** REQUIRED under `via: "dynamic"`: where the one runtime number comes from. Defaults to nothing —
+   *  a measurement cannot be guessed, and guessing the wrong token would publish a child funded from
+   *  a balance the parent never earned. */
+  measure?: AmountMeasurement;
+  /** WAD-denominated `amountOut = ceil(amountIn * scale / WAD)`. Default `WAD` (identity). Carries
+   *  both the decimals conversion and the proportional margin. */
+  scale?: bigint;
+  /** Reject a measurement below this floor, reverting the parent's fulfillment. Default `1n`. */
+  minAmountIn?: bigint;
+  /** Which sentinels to cut the encoded child at. Defaults to the two canonical 32-byte
+   *  placeholders; pin `occurrences` here for a real deployment. */
+  placeholders?: readonly PlaceholderSpec[];
+  /** `"auto"` (default) emits the Pot's `approve(portal, amount)` per reward token; `"none"` leaves
+   *  it to the caller. */
+  approve?: "auto" | "none";
+  /** Overrides the native value forwarded to the child's `publishAndFund`. Default
+   *  `child.reward.nativeAmount`. */
+  value?: bigint;
 }
 
 export interface PendingSauceRoute {
@@ -281,6 +315,14 @@ export interface PendingSauceRoute {
    */
   nest(childOrThunk: NestChildOrThunk, opts?: NestOptions): PendingSauceRoute;
 }
+
+/** The three nesting modes produce, per position group, at most three kinds of contribution to
+ *  `route.calls`, always in this order: the spliced `publishAndFund` children first (they are plain
+ *  pre-encoded calls), then ONE merged `"transfer"` cook, then ONE merged `"dynamic"` cook. The
+ *  order matters whenever two of them read the SAME token balance — whichever runs first takes it —
+ *  and is fixed rather than configurable because the escape hatch already exists: put the group that
+ *  must run earlier in `position: "before"`. */
+const NEST_MODE_ORDER: readonly NestVia[] = ["publishAndFund", "transfer", "dynamic"];
 
 function missingField(field: string, where: string): never {
   throw new Error(`openRoute: '${field}' is required — supply it ${where}`);
@@ -521,34 +563,61 @@ export function openRoute(
     readonly pot?: AddressInput;
     readonly engine?: AddressInput;
     readonly compile?: SauceCompileOptions;
+    // dynamic-only:
+    readonly measure?: AmountMeasurement;
+    readonly scale?: bigint;
+    readonly minAmountIn?: bigint;
+    readonly placeholders?: readonly PlaceholderSpec[];
+    readonly approve?: "auto" | "none";
+    readonly value?: bigint;
   }
   const nestedEntries: NestEntry[] = [];
 
-  const TRANSFER_ONLY_KEYS: readonly (keyof NestOptions)[] = [
-    "vault",
-    "vaultConfig",
-    "clamp",
-    "requireCap",
-    "native",
-    "fundNativeFromRoute",
-    "executionFee",
-    "pot",
-    "engine",
-    "compile",
-  ];
-  const PUBLISH_ONLY_KEYS: readonly (keyof NestOptions)[] = ["allowPartial", "fundedByBody"];
+  /**
+   * Which mode(s) each non-universal `.nest()` option means something under. A table rather than two
+   * key lists because there are now three modes and several options are shared by two of them
+   * (`allowPartial` by publishAndFund and dynamic; the cook plumbing by transfer and dynamic) —
+   * which two-list bookkeeping cannot express without silently dropping a check. `via` and
+   * `position` are universal and deliberately absent.
+   */
+  const NEST_OPTION_MODES: Readonly<Partial<Record<keyof NestOptions, readonly NestVia[]>>> = {
+    allowPartial: ["publishAndFund", "dynamic"],
+    fundedByBody: ["publishAndFund"],
+    vault: ["transfer"],
+    vaultConfig: ["transfer"],
+    clamp: ["transfer"],
+    requireCap: ["transfer"],
+    native: ["transfer"],
+    fundNativeFromRoute: ["transfer"],
+    executionFee: ["transfer", "dynamic"],
+    pot: ["transfer", "dynamic"],
+    engine: ["transfer", "dynamic"],
+    compile: ["transfer", "dynamic"],
+    measure: ["dynamic"],
+    scale: ["dynamic"],
+    minAmountIn: ["dynamic"],
+    placeholders: ["dynamic"],
+    approve: ["dynamic"],
+    value: ["dynamic"],
+  };
 
   function assertNestOptionMode(via: NestVia, opts: NestOptions | undefined): void {
     if (opts === undefined) return;
-    const otherVia: NestVia = via === "transfer" ? "publishAndFund" : "transfer";
-    const offendingKeys = via === "transfer" ? PUBLISH_ONLY_KEYS : TRANSFER_ONLY_KEYS;
-    for (const key of offendingKeys) {
-      if (opts[key] !== undefined) {
-        throw new Error(
-          `openRoute: .nest() option '${key}' is only valid with via: "${otherVia}" — it is meaningless ` +
-            `under via: "${via}" (mode-mismatched options throw rather than being silently ignored).`,
-        );
-      }
+    for (const [key, modes] of Object.entries(NEST_OPTION_MODES)) {
+      if (modes.includes(via)) continue;
+      if (opts[key as keyof NestOptions] === undefined) continue;
+      throw new Error(
+        `openRoute: .nest() option '${key}' is only valid with via: ` +
+          `${modes.map((m) => `"${m}"`).join(" | ")} — it is meaningless under via: "${via}" ` +
+          `(mode-mismatched options throw rather than being silently ignored).`,
+      );
+    }
+    if (via === "dynamic" && opts.measure === undefined) {
+      throw new Error(
+        `openRoute: .nest() via: "dynamic" requires \`measure\` — the ONE runtime number the child's ` +
+          `amounts are derived from. It has no safe default: measuring the wrong token would publish a ` +
+          `child funded from a balance this route never earned.`,
+      );
     }
   }
 
@@ -580,9 +649,15 @@ export function openRoute(
       const via: NestVia = opts?.via ?? "transfer";
       assertNestOptionMode(via, opts);
 
-      if (via === "transfer" && evmPotOf(execution) === undefined && opts?.pot === undefined) {
+      // T3 applies to every COOK-producing mode, not just transfer: a dynamic child's renderer is a
+      // compiled program too, and a Solana/SVM destination has no Pot to run it on.
+      if (
+        via !== "publishAndFund" &&
+        evmPotOf(execution) === undefined &&
+        opts?.pot === undefined
+      ) {
         throw new Error(
-          `openRoute: .nest() via: "transfer" requires an EVM Pot execution (T3) — this route's own ` +
+          `openRoute: .nest() via: "${via}" requires an EVM Pot execution (T3) — this route's own ` +
             `IntentOptions.execution/pot must name a Pot (a Solana/SVM destination has none), or pass ` +
             `NestOptions.pot explicitly.`,
         );
@@ -605,6 +680,12 @@ export function openRoute(
         pot: opts?.pot,
         engine: opts?.engine,
         compile: opts?.compile,
+        measure: opts?.measure,
+        scale: opts?.scale,
+        minAmountIn: opts?.minAmountIn,
+        placeholders: opts?.placeholders,
+        approve: opts?.approve,
+        value: opts?.value,
       });
       return pending;
     },
@@ -661,53 +742,64 @@ export function openRoute(
         return { mode: "runtime", portal: e.portal };
       }
 
-      /** Compiles every `via: "transfer"` entry in one position group into ONE merged `cook()`
-       *  call (in `.nest()` order) — see `nest.ts#nestedTransferProgram`. */
-      function buildTransferCall(transferEntries: readonly NestEntry[]): CallInput {
-        const executionFee = transferEntries[0]!.executionFee;
+      /**
+       * The ONE Pot/engine/fee a merged position group cooks on. Taken from entry 0 and then
+       * required to be UNANIMOUS across the group — the merge produces one cook, so a second opinion
+       * cannot be honoured. Checking only the Pot would silently run entry 1's bytecode on entry 0's
+       * interpreter, which is the one thing a caller cannot see in the encoded call. Shared by both
+       * cook-producing modes so a `"dynamic"` group cannot drift from a `"transfer"` one.
+       */
+      function resolveCookExecution(
+        group: readonly NestEntry[],
+        via: NestVia,
+      ): { pot: AddressInput; engine: AddressInput; executionFee: bigint } {
+        const executionFee = group[0]!.executionFee;
         const defaultPot = evmPotOf(execution);
-        const pot = transferEntries[0]!.pot ?? defaultPot;
+        const pot = group[0]!.pot ?? defaultPot;
         if (pot === undefined) {
           throw new Error(
-            `openRoute: .nest() via: "transfer" requires an EVM Pot execution (T3) — this route's own ` +
+            `openRoute: .nest() via: "${via}" requires an EVM Pot execution (T3) — this route's own ` +
               `IntentOptions.execution/pot must name a Pot, or pass NestOptions.pot explicitly.`,
           );
         }
         const defaultEngine = evmEngineOf(execution);
-        const engine = transferEntries[0]!.engine ?? defaultEngine;
+        const engine = group[0]!.engine ?? defaultEngine;
         if (engine === undefined) {
           throw new Error(
-            `openRoute: .nest() via: "transfer" needs the interpreter the cook runs on — this route's ` +
+            `openRoute: .nest() via: "${via}" needs the interpreter the cook runs on — this route's ` +
               `own IntentOptions.execution/engine must name one, or pass NestOptions.engine explicitly.`,
           );
         }
-        // Both are taken from entry 0 and both must therefore be UNANIMOUS across the group — the
-        // merge produces one cook, so a second opinion cannot be honoured. Checking only the Pot
-        // would silently run entry 1's bytecode on entry 0's interpreter, which is the one thing a
-        // caller cannot see in the encoded call.
-        for (const e of transferEntries) {
+        for (const e of group) {
           if (e.executionFee !== executionFee) {
             throw new Error(
-              "openRoute: .nest() transfer children merged into the same position group must " +
+              `openRoute: .nest() ${via} children merged into the same position group must ` +
                 "specify the same executionFee",
             );
           }
           const entryPot = e.pot ?? defaultPot;
           if (entryPot !== pot) {
             throw new Error(
-              `openRoute: .nest() via: "transfer" children merged into the same position group must ` +
+              `openRoute: .nest() via: "${via}" children merged into the same position group must ` +
                 `target the same Pot — got conflicting NestOptions.pot values ('${pot}' vs '${entryPot}').`,
             );
           }
           const entryEngine = e.engine ?? defaultEngine;
           if (entryEngine !== engine) {
             throw new Error(
-              `openRoute: .nest() via: "transfer" children merged into the same position group must ` +
+              `openRoute: .nest() via: "${via}" children merged into the same position group must ` +
                 `run on the same engine — got conflicting NestOptions.engine values ('${engine}' vs ` +
                 `'${entryEngine}').`,
             );
           }
         }
+        return { pot, engine, executionFee };
+      }
+
+      /** Compiles every `via: "transfer"` entry in one position group into ONE merged `cook()`
+       *  call (in `.nest()` order) — see `nest.ts#nestedTransferProgram`. */
+      function buildTransferCall(transferEntries: readonly NestEntry[]): CallInput {
+        const { pot, engine, executionFee } = resolveCookExecution(transferEntries, "transfer");
 
         const entries: TransferNestEntry[] = transferEntries.map((e) => ({
           child: e.built.intent,
@@ -741,18 +833,67 @@ export function openRoute(
         return compiledTransfer.calls[0]!;
       }
 
-      const childCalls = (position: "before" | "after"): CallInput[] => {
-        const group = nestedEntries.filter((e) => e.position === position);
-        const publishCalls = group
-          .filter((e) => e.via === "publishAndFund")
-          .flatMap((e) =>
-            nestedChildCalls(e.built.intent, { portal: e.portal, allowPartial: e.allowPartial }),
-          );
-        const transferEntries = group.filter((e) => e.via === "transfer");
-        const transferCalls =
-          transferEntries.length > 0 ? [buildTransferCall(transferEntries)] : [];
-        return [...publishCalls, ...transferCalls];
-      };
+      /**
+       * Compiles every `via: "dynamic"` entry in one position group into ONE merged `cook()` call
+       * (in `.nest()` order) — see `nest-dynamic.ts#dynamicChildProgram`.
+       *
+       * The cook's `value` is the group's `executionFee` and nothing else. There is deliberately no
+       * `fundNativeFromRoute` analogue here: a dynamic child's `reward.nativeAmount` may itself be a
+       * sentinel, so there is no static number to add, and folding in a placeholder would put ~1.5e77
+       * wei into a call value. A caller forwarding native to a dynamic child sets `executionFee` to
+       * cover both the Kitchen fee and that forwarding, which is what `SauceEvmExecutionInput.value`
+       * already means ("the current Kitchen execution fee plus any native program funding").
+       */
+      function buildDynamicCall(dynamicEntries: readonly NestEntry[]): CallInput {
+        const { pot, engine, executionFee } = resolveCookExecution(dynamicEntries, "dynamic");
+
+        const entries: DynamicNestEntry[] = dynamicEntries.map((e) => {
+          // `measure` is required by `assertNestOptionMode` at `.nest()` time; this narrows it.
+          if (e.measure === undefined) {
+            throw new Error('openRoute: .nest() via: "dynamic" requires `measure`');
+          }
+          const opts: DynamicChildOptions = {
+            portal: e.portal,
+            measure: e.measure,
+            scale: e.scale,
+            minAmountIn: e.minAmountIn,
+            allowPartial: e.allowPartial,
+            placeholders: e.placeholders,
+            approve: e.approve,
+            value: e.value,
+          };
+          return { child: e.built.intent, opts };
+        });
+
+        const { source: dynamicSource, baseDirs } = dynamicChildProgram(entries);
+
+        const perEntryCompile = dynamicEntries.map((e) => e.compile).find((c) => c !== undefined);
+        const dynamicCompileOptions: SauceCompileOptions = {
+          ...perEntryCompile,
+          target: perEntryCompile?.target ?? "v12",
+          baseDirs: [...(perEntryCompile?.baseDirs ?? []), ...baseDirs],
+        };
+
+        const compiledDynamic = compileSauceRoute(
+          destination,
+          dynamicSource,
+          { pot, engine, value: executionFee },
+          dynamicCompileOptions,
+        );
+        return compiledDynamic.calls[0]!;
+      }
+
+      const childCalls = (position: "before" | "after"): CallInput[] =>
+        NEST_MODE_ORDER.flatMap((via) => {
+          const group = nestedEntries.filter((e) => e.position === position && e.via === via);
+          if (group.length === 0) return [];
+          if (via === "publishAndFund") {
+            return group.flatMap((e) =>
+              nestedChildCalls(e.built.intent, { portal: e.portal, allowPartial: e.allowPartial }),
+            );
+          }
+          return [via === "transfer" ? buildTransferCall(group) : buildDynamicCall(group)];
+        });
 
       const calls: CallInput[] = [
         ...(options.precalls ?? []),
