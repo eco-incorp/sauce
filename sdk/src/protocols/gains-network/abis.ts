@@ -1,0 +1,60 @@
+export const DiamondABI = [
+  {
+    name: "openTrade",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "t",
+        type: "tuple",
+        components: [
+          { name: "trader", type: "address" },
+          { name: "pairIndex", type: "uint256" },
+          { name: "index", type: "uint256" },
+          { name: "initialPosToken", type: "uint256" },
+          { name: "positionSizeDai", type: "uint256" },
+          { name: "openPrice", type: "uint256" },
+          { name: "buy", type: "bool" },
+          { name: "leverage", type: "uint256" },
+          { name: "tp", type: "uint256" },
+          { name: "sl", type: "uint256" },
+        ],
+      },
+      { name: "orderType", type: "uint8" },
+      { name: "slippageP", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "closeTradeMarket",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "pairIndex", type: "uint256" },
+      { name: "index", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "updateSl",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "pairIndex", type: "uint256" },
+      { name: "index", type: "uint256" },
+      { name: "newSl", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "updateTp",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "pairIndex", type: "uint256" },
+      { name: "index", type: "uint256" },
+      { name: "newTp", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;

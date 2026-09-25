@@ -1,0 +1,133 @@
+{
+  "name": "@eco-incorp/sauce",
+  "version": "1.0.0",
+  "description": "Sauce protocol tooling: SDK, action primitives, and a local dev environment.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eco-incorp/sauce.git"
+  },
+  "homepage": "https://sauce.eco.com",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": "https://github.com/eco-incorp/sauce/issues",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "main": "sdk/dist/index.js",
+  "types": "sdk/dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./sdk/dist/index.d.ts",
+      "default": "./sdk/dist/index.js"
+    },
+    "./compiler": {
+      "types": "./sdk/dist/compiler.d.ts",
+      "default": "./sdk/dist/compiler.js"
+    },
+    "./actions": {
+      "types": "./actions/dist/index.d.ts",
+      "default": "./actions/dist/index.js"
+    },
+    "./protocols/*": {
+      "types": "./sdk/dist/protocols/*/index.d.ts",
+      "default": "./sdk/dist/protocols/*/index.js"
+    },
+    "./chains": {
+      "types": "./sdk/dist/chains/index.d.ts",
+      "default": "./sdk/dist/chains/index.js"
+    },
+    "./recipes": {
+      "types": "./sdk/dist/recipes/index.d.ts",
+      "default": "./sdk/dist/recipes/index.js"
+    },
+    "./recipes/settle.sauce.ts": "./sdk/dist/recipes/settle.sauce.ts",
+    "./deployments": {
+      "types": "./sdk/dist/deployments/index.d.ts",
+      "default": "./sdk/dist/deployments/index.js"
+    },
+    "./skills": {
+      "types": "./sdk/dist/skills/loader.d.ts",
+      "default": "./sdk/dist/skills/loader.js"
+    },
+    "./svm": {
+      "types": "./sdk/dist/svm/index.d.ts",
+      "default": "./sdk/dist/svm/index.js"
+    },
+    "./svm/engine": {
+      "types": "./sdk/dist/svm/engine-public.d.ts",
+      "default": "./sdk/dist/svm/engine-public.js"
+    },
+    "./svm/engine-artifacts": {
+      "types": "./sdk/dist/svm/engine-artifacts.d.ts",
+      "default": "./sdk/dist/svm/engine-artifacts.js"
+    },
+    "./evm/engine": {
+      "types": "./sdk/dist/evm/engine.d.ts",
+      "default": "./sdk/dist/evm/engine.js"
+    },
+    "./svm/verify": {
+      "types": "./sdk/dist/svm/verify.d.ts",
+      "default": "./sdk/dist/svm/verify.js"
+    },
+    "./svm/recipes/settle.sauce.ts": "./sdk/dist/svm/recipes/settle.sauce.ts",
+    "./verify": {
+      "types": "./sdk/dist/verify/index.d.ts",
+      "default": "./sdk/dist/verify/index.js"
+    }
+  },
+  "bin": {
+    "sauce-dev-tools": "./dev-tools/scripts/init.js"
+  },
+  "files": [
+    "LICENSE.md",
+    "sdk/dist",
+    "actions/dist",
+    "sdk/src/skills",
+    "sdk/src/protocols",
+    "dev-tools/scripts",
+    "dev-tools/src",
+    "dev-tools/sauce",
+    "dev-tools/artifacts",
+    "dev-tools/hardhat.config.cjs",
+    "dev-tools/README.md",
+    "docs/**/*.md",
+    "docs/examples/*.ts"
+  ],
+  "scripts": {
+    "docs:check": "node docs/scripts/check-docs.mjs",
+    "build": "pnpm -r --filter './sdk' --filter './actions' build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepack": "node dev-tools/scripts/sync-artifacts.js"
+  },
+  "dependencies": {
+    "@solana-program/address-lookup-table": "^0.12.1",
+    "@solana-program/compute-budget": "^0.16.0",
+    "@solana-program/system": "^0.12.2",
+    "@solana-program/token": "^0.14.0",
+    "@solana/kit": "^6.10.0",
+    "acorn": "^8.15.0",
+    "dotenv": "^17.3.1",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.3.0",
+    "typescript": "^5.7.0",
+    "viem": "^2.45.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@uniswap/v3-core": "^1.0.1",
+    "eslint": "10.10.0",
+    "globals": "16.5.0",
+    "hardhat": "^2.22.0",
+    "prettier": "3.9.6",
+    "typescript-eslint": "8.70.0"
+  },
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=24"
+  }
+}

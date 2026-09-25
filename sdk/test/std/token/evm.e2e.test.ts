@@ -1,0 +1,308 @@
+/**
+ * `@sauce/token` EXECUTION on the real V12 EVM engine, compiled by the published
+ * `@eco-incorp/sauce-compiler`. The counterpart of the sibling `svm.e2e.test.ts`: the same
+ * library, the same known balance, read back through a genuine ERC20 instead of a genuine SPL
+ * account — which is what makes the pair a cross-target differential rather than two unrelated tests.
+ *
+ * The token is OpenZeppelin's `ERC20Mock` (an unrestricted-`mint` ERC20), solc 0.8.27 / cancun, taken
+ * from the sauce repo's own `v12-evm/test/mocks/MockERC20.sol` — the SAME contract its conformance
+ * differential deploys. Its creation bytecode is vendored at `fixtures/MockERC20.json` so this suite
+ * needs no Solidity toolchain at test time; regenerate with `cd <sauce>/v12-evm && forge build` and
+ * copy `abi` + `bytecode.object` out of `out/MockERC20.sol/MockERC20.json`.
+ *
+ * GATED on SAUCE_RUST_V12_RUNTIME — the EVM half of the same engine-lineage finding the sibling
+ * `svm.e2e.test.ts` documents, and a REAL FINDING, not a convenience:
+ *
+ *   The V12 runtime this repo can produce — `sdk/dist/artifacts/V12RuntimeBytecode.json`, wrapped
+ *   by `sync-engine-artifacts` from the pinned EVM release's creation code — came from the
+ *   `release/beta` engine lineage, while the published Rust compiler emits for the `main` lineage. Their opcode
+ *   tables have diverged: 0xB0–0xB5 are `IF/IF_2/JUMP/JUMP_2/JUMP_BACK/JUMP_BACK_2` on the pin but
+ *   `JUMP/JUMP_I` on main, and 0x88–0x8A (`MLOAD`/`MSTORE`/`MALLOC` — which every value-returning
+ *   program's epilogue uses) are `do_unknown` on the pin. A `balanceOf` program compiled by the
+ *   published compiler therefore does not run on the pinned runtime: it either returns EMPTY or dies
+ *   with MemoryOOG. Repinning `sauce` is the real fix and is out of this suite's scope.
+ *
+ * So: point SAUCE_RUST_V12_RUNTIME at a file of `main`-lineage DEPLOYED runtime hex to run these.
+ * `hnc -r` cannot produce it — Runtime.huff's CONSTRUCTOR returns its own bytecode, so the deployed
+ * runtime is only known at deployment time — so deploy the creation bytecode and read the code back.
+ * CI does exactly this, from the pinned v12-evm release's `runtime.creation.hex` (the tag lives in
+ * `scripts/sync-engine-artifacts.mjs`, so it does not go stale here); by hand, from a local sauce
+ * checkout:
+ *   cd <sauce>/v12-evm && anvil --port 8799 --silent &
+ *   KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80  # anvil's first account
+ *   ADDR=$(cast send --rpc-url http://127.0.0.1:8799 --private-key $KEY --create \
+ *     "0x$(hnc -s . -b v12/Runtime.huff | tr -d '[:space:]')" --json | jq -r .contractAddress)
+ *   cast code "$ADDR" --rpc-url http://127.0.0.1:8799 > /tmp/v12-runtime.hex
+ *   SAUCE_RUST_V12_RUNTIME=/tmp/v12-runtime.hex pnpm --filter './sdk' test
+ * Also needs `anvil` on PATH (Foundry, which CI already installs).
+ */
+import { spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import { once } from "node:events";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  createPublicClient,
+  createTestClient,
+  createWalletClient,
+  encodeFunctionData,
+  http,
+  parseAbi,
+} from "viem";
+import type { Address, Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { compileStdToken } from "./harness.js";
+import { startGatedEngine } from "../../evm/gated-engine.js";
+import type { GatedEngine } from "../../evm/gated-engine.js";
+
+const RUNTIME_HEX_PATH =
+  process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
+
+/** Skips unless a main-lineage runtime is supplied — see the header for why the repo's own pin won't do. */
+const describeEvm = RUNTIME_HEX_PATH ? describe : describe.skip;
+
+// The gate above is a local-developer convenience, never a CI outcome: a skipped suite and a passing
+// one are the same line in jest's summary, which is how these two went unrun for their whole life.
+// CI supplies the engine (see .github/workflows/ci.yml) — so in CI, an absent one is a failure.
+if (!RUNTIME_HEX_PATH && process.env.CI) {
+  throw new Error(
+    "SAUCE_V12_RUNTIME_CREATION_HEX is unset in CI. This suite must never skip here — see the " +
+      '"Fetch the v12 engines" step in .github/workflows/ci.yml.',
+  );
+}
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+const MOCK_ERC20 = JSON.parse(readFileSync(join(FIXTURES, "MockERC20.json"), "utf8")) as {
+  creationCode: Hex;
+};
+
+/** Anvil's first dev account — the deployer, and the caller of every transaction here. */
+const DEPLOYER = privateKeyToAccount(
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+);
+
+/**
+ * The acting account, resolved by `startGatedEngine` in `beforeAll`.
+ *
+ * It is the POT, not the engine. A released engine refuses any caller that is not a Pot it can
+ * re-derive, so every program now runs under `Pot.cook` — and `ctx.self()`, `msg.sender` for a CPI,
+ * and therefore the holder of any balance a program moves, are all the Pot. That is a change of
+ * ACTOR, not just of transport: the assertions below name it wherever they used to name the engine.
+ */
+let sauce: GatedEngine;
+
+/** Per-worker port so concurrent jest workers never share a node. */
+const PORT = 8600 + (Number(process.env.JEST_WORKER_ID ?? "1") % 100);
+const RPC_URL = `http://127.0.0.1:${PORT}`;
+
+const STARTUP_TIMEOUT_MS = 20_000;
+const GAS_LIMIT = 10_000_000n;
+
+/** The same known balance the SVM half plants — multi-byte, and `u64` because an SPL amount is one. */
+const TOKEN_BALANCE = 0x0000_00ab_cdef_1234n;
+const APPROVED = 0x0000_0000_dead_beefn;
+const TRANSFERRED = 0x1234n;
+
+const HOLDER: Address = "0x0000000000000000000000000000000000000002";
+const RECIPIENT: Address = "0x0000000000000000000000000000000000000003";
+const SPENDER: Address = "0x0000000000000000000000000000000000000004";
+
+const erc20Abi = parseAbi([
+  "function mint(address to, uint256 amount)",
+  "function approve(address spender, uint256 value) returns (bool)",
+  "function balanceOf(address account) view returns (uint256)",
+]);
+
+// Built at module scope: viem clients are lazy (no socket until a request), so this costs nothing on
+// a skipped run and keeps the harness down to the two things that are actually per-run state.
+// `connection: close` is load-bearing, not tidiness: Node's global fetch pools keep-alive sockets
+// that outlive the suite, which trips jest's "worker process failed to exit gracefully" force-exit.
+// Anvil is local, so pooling buys nothing here.
+const transport = http(RPC_URL, { fetchOptions: { headers: { connection: "close" } } });
+const publicClient = createPublicClient({ transport });
+const testClient = createTestClient({ mode: "anvil", transport });
+const walletClient = createWalletClient({ account: DEPLOYER, transport });
+
+/** An address as the SauceScript bigint literal the entries bake in (the EVM arm takes plain values). */
+const literal = (value: Address): string => `${value}n`;
+
+const toHex = (bytes: Uint8Array): Hex => `0x${Buffer.from(bytes).toString("hex")}`;
+
+const waitForRpc = (deadline: number): Promise<void> =>
+  Date.now() >= deadline
+    ? Promise.reject(new Error(`anvil did not come up on ${RPC_URL}`))
+    : publicClient
+        .getChainId()
+        .then(() => undefined)
+        .catch(() =>
+          new Promise((resolve) => setTimeout(resolve, 100)).then(() => waitForRpc(deadline)),
+        );
+
+/** Wait for `hash` to land, rejecting with `what` when it reverted. */
+const confirm = (hash: Hex, what: string): Promise<void> =>
+  publicClient
+    .waitForTransactionReceipt({ hash })
+    .then(({ status }) =>
+      status === "success" ? undefined : Promise.reject(new Error(`${what} reverted`)),
+    );
+
+/** Send `data` to `to` from the deployer and wait for it to land. */
+const sendTo = (to: Address, data: Hex, what: string): Promise<void> =>
+  walletClient
+    .sendTransaction({ account: DEPLOYER, chain: null, to, data, gas: GAS_LIMIT })
+    .then((hash) => confirm(hash, what));
+
+const mintTo = (token: Address, holder: Address, amount: bigint): Promise<void> =>
+  sendTo(
+    token,
+    encodeFunctionData({ abi: erc20Abi, functionName: "mint", args: [holder, amount] }),
+    "mint",
+  );
+
+const balanceOf = (token: Address, holder: Address): Promise<bigint> =>
+  publicClient.readContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [holder],
+  });
+
+/** Compile `entry` for the EVM and STATIC-call the engine with it, returning its 256-bit result. */
+const call = (entry: string): Promise<bigint> =>
+  publicClient
+    .call({
+      // `account` is mandatory now, not decoration: `cook` is onlyOwner, and an eth_call with no
+      // `from` reverts with NotOwner() before a single opcode runs.
+      account: DEPLOYER.address,
+      data: sauce.cookData(toHex(compileStdToken(entry, "evm").bytecode)),
+      gas: GAS_LIMIT,
+      to: sauce.pot,
+      value: sauce.fee,
+    })
+    // `call`, never `readContract`: `cook` bubbles the runtime's output verbatim with no ABI
+    // wrapper, so decoding it as the declared `bytes` return reads the result word as an offset.
+    .then(({ data }) => BigInt(data ?? "0x0"));
+
+/** Compile `entry` for the EVM and run it as a TRANSACTION, so its writes stick. */
+const send = (entry: string): Promise<void> =>
+  sendTo(sauce.pot, sauce.cookData(toHex(compileStdToken(entry, "evm").bytecode)), "the Pot");
+
+/** Deploy the vendored ERC20 creation code, returning its address. */
+const deployToken = (): Promise<Address> =>
+  walletClient
+    .sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      data: MOCK_ERC20.creationCode,
+      gas: GAS_LIMIT,
+    })
+    .then((hash) => publicClient.waitForTransactionReceipt({ hash }))
+    .then(
+      ({ contractAddress }) =>
+        contractAddress ?? Promise.reject(new Error("the ERC20 deployment produced no address")),
+    );
+
+/**
+ * Boot anvil, stand up the gated engine (see `gated-engine.ts` — Kitchen at its baked address, then
+ * a real Pot minted from it), and deploy the ERC20.
+ *
+ * CREATION code, not deployed runtime: the engine's constructor appends its own address as a
+ * trailing code word and `EVAL` reads it back, so an etched copy has a dangling self-reference that
+ * fails silently rather than loudly.
+ */
+const startEvm = async (): Promise<{ anvil: ChildProcess; token: Address }> => {
+  const anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
+  const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
+
+  await waitForRpc(Date.now() + STARTUP_TIMEOUT_MS);
+  sauce = await startGatedEngine(
+    { publicClient, testClient, walletClient },
+    DEPLOYER.address,
+    creationCode,
+  );
+
+  return { anvil, token: await deployToken() };
+};
+
+/**
+ * Await the exit rather than firing a bare `kill()`: an un-awaited kill leaves the child alive long
+ * enough to trip jest's "did not exit" warning, and a stray anvil would hold the port for the next run.
+ */
+const stopEvm = (anvil: ChildProcess): Promise<void> => {
+  if (anvil.exitCode !== null) return Promise.resolve();
+
+  const exited = once(anvil, "exit");
+  anvil.kill();
+
+  return exited.then(() => undefined);
+};
+
+describeEvm("@sauce/token e2e: the EVM arm against a real ERC20", () => {
+  let anvil: ChildProcess;
+  let token: Address;
+
+  beforeAll(async () => {
+    ({ anvil, token } = await startEvm());
+    await mintTo(token, HOLDER, TOKEN_BALANCE);
+  }, 60_000);
+
+  afterAll(() => (anvil ? stopEvm(anvil) : undefined));
+
+  it("balanceOf reads the holder’s balance off the deployed ERC20", async () => {
+    const entry = `import { balanceOf } from "@sauce/token"; function main(): Uint256 { return balanceOf(${literal(token)}, ${literal(HOLDER)}); }`;
+
+    // The same value the SVM half reads off a real SPL account — compared over the FULL 256-bit word,
+    // since the library types `balanceOf` `Uint256`.
+    expect(await call(entry)).toBe(TOKEN_BALANCE);
+  });
+
+  it("totalSupply and decimals read the token’s own state", async () => {
+    const supply = `import { totalSupply } from "@sauce/token"; function main(): Uint256 { return totalSupply(${literal(token)}); }`;
+    const decimals = `import { decimals } from "@sauce/token"; function main(): Uint256 { return decimals(${literal(token)}); }`;
+
+    expect(await call(supply)).toBe(TOKEN_BALANCE);
+    expect(await call(decimals)).toBe(18n);
+  });
+
+  it("approve then allowance round-trips through the ERC20’s allowance map", async () => {
+    await send(
+      `import { approve } from "@sauce/token"; function main(): void { approve(${literal(token)}, ${literal(SPENDER)}, ${APPROVED}n); }`,
+    );
+
+    // Read it back with the library's own `allowance`: the write and the read agree on the ERC20
+    // surface, which a one-sided test could not show. The approver is the POT (the `msg.sender` of
+    // the CALL), so that is the owner the allowance is keyed under.
+    const allowance = `import { allowance } from "@sauce/token"; function main(): Uint256 { return allowance(${literal(token)}, ${literal(sauce.pot)}, ${literal(SPENDER)}); }`;
+
+    expect(await call(allowance)).toBe(APPROVED);
+  });
+
+  it("transfer moves the Pot’s own balance", async () => {
+    // `transfer` spends the caller's balance, and the caller here is the engine — so fund it first.
+    await mintTo(token, sauce.pot, TOKEN_BALANCE);
+    await send(
+      `import { transfer } from "@sauce/token"; function main(): void { transfer(${literal(token)}, ${literal(RECIPIENT)}, ${TRANSFERRED}n); }`,
+    );
+
+    expect(await balanceOf(token, RECIPIENT)).toBe(TRANSFERRED);
+    expect(await balanceOf(token, sauce.pot)).toBe(TOKEN_BALANCE - TRANSFERRED);
+  });
+
+  it("transferFrom spends an allowance the Pot was granted", async () => {
+    // The deployer approves the engine and holds the funds, then the library's `transferFrom` pulls
+    // from the deployer — the allowance path, which `transfer` above does not exercise.
+    await mintTo(token, DEPLOYER.address, TRANSFERRED);
+    await sendTo(
+      token,
+      encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [sauce.pot, APPROVED] }),
+      "approve",
+    );
+    await send(
+      `import { transferFrom } from "@sauce/token"; function main(): void { transferFrom(${literal(token)}, ${literal(DEPLOYER.address)}, ${literal(RECIPIENT)}, ${TRANSFERRED}n); }`,
+    );
+
+    // The `transfer` case above already moved one `TRANSFERRED` to the recipient.
+    expect(await balanceOf(token, RECIPIENT)).toBe(TRANSFERRED * 2n);
+  });
+});

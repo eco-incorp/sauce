@@ -1,0 +1,172 @@
+# Writing SauceScript
+
+[Documentation](../README.md) · [Architecture](architecture.md) · [Compiling](../guides/compiling.md)
+
+SauceScript is a checked subset of TypeScript for programs that run inside the
+Sauce engine. It has familiar variables, functions, conditions, loops, arrays,
+and records, but it does not execute in a JavaScript VM. A host application builds
+and submits programs; SauceScript performs their on-chain computation.
+
+## Programs and route bodies
+
+A standalone program can declare an entry function:
+
+```ts
+function main(amounts: Uint256[], minimum: Uint256): Uint256 {
+  let total = 0n;
+  for (let i = 0; i < amounts.length; i = i + 1) {
+    total = total + amounts[i];
+  }
+  require(total >= minimum);
+  return total;
+}
+```
+
+This is SauceScript source, not a host TypeScript module. `Uint256` and `require`
+are interpreted by the Sauce compiler. Source diagnostics identify the relevant
+location and span; option, resolver, and target-capability errors may have no span.
+
+A function declared `: void` can finish without returning a value. Other
+functions must return on every path. Annotate helper functions returning arrays,
+bytes, or records so their callers know the return shape. The raw compiler also
+accepts an entry script without an explicit `main` and synthesizes its entry.
+Entry argument encoding does not determine return encoding. For ABI-decodable
+EVM output, [return `abi.encode(...)`](../guides/compiling.md#encode-evm-return-values).
+
+The SDK provides a second authoring form: a route body passed to a chain helper.
+
+```js
+() => {
+  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+};
+```
+
+Pass this body to `Base(body, options)` or another chain helper as shown in the
+[intent guide](../guides/intents.md). The SDK extracts its text, wraps it in
+`main`, resolves SDK global names, and compiles it. For a body that falls through,
+the compilation adapter adds a `void` entry annotation.
+
+The callback must be synchronous, take no parameters, and retain source text the
+SDK can parse. It captures **no host variables**. A host `const amount = ...`
+does not make `amount` available to the compiler; pass it through
+`options.compile.defines`, write it into generated source, or use a standalone
+program with runtime entry arguments. If bundling/minification rewrites callback
+names or bodies, use explicit source strings or source assets.
+
+## Three ways values enter a program
+
+| Channel                             | When resolved                          | Effect on the compiled program                                                      |
+| ----------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------- |
+| Literals and compile-time `defines` | During compilation                     | Values can be folded into bytecode; changing them can change the program hash       |
+| `main` parameters                   | During execution                       | Values are encoded after the reusable program; their values are not compiler inputs |
+| SVM `Account` parameters            | When instruction accounts are attached | Identities occupy manifest slots, separate from encoded scalar/collection arguments |
+
+The EVM settle recipe takes its token list, floor, and recipient as runtime
+parameters, so one program hash covers all values. The SVM settle recipe compiles
+its floor and token-program split through defines and verifies them by
+recompilation. Those are deliberate API choices, not interchangeable encodings.
+
+## Values and types
+
+SauceScript uses 256-bit scalar words and heap-backed bytes, arrays, and tuples.
+There is no JavaScript floating-point arithmetic. Prefer `bigint` literals in
+host-authored route callbacks so the host preserves exact integer values.
+
+| Type or syntax                            | Meaning                                                      |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| `Uint256`, `number`, `bigint`             | A scalar integer word                                        |
+| `Address`                                 | An address-valued scalar                                     |
+| `bool`, `boolean`                         | A boolean type checked separately from integer values        |
+| `bytes`, `string`                         | Byte strings                                                 |
+| `T[]`                                     | An array whose element type is `T`                           |
+| `{ amount: Uint256, recipient: Address }` | A tuple/record shape                                         |
+| A top-level `interface`                   | A named record type                                          |
+| `Account`, `Account<Writable, Signer>`    | An SVM account slot and required role; address-valued on EVM |
+| `void`                                    | A function with no return value                              |
+
+Annotations are checked. Arbitrary TypeScript types are not accepted, and `as`
+casts cannot be used to bypass a type error. Ordinary arithmetic is checked by
+the compiler/runtime rather than following JavaScript number semantics.
+
+Module-level scalar `const` values are compile-time values. Module-level `let`
+state is initialized for each invocation; it is not persistent chain state. Use
+the target-specific storage builtins when persistent storage is required.
+
+## Language support
+
+The current compiler supports function declarations, recursion, `if`/`else`,
+`while`, C-style `for`, array `for...of`, short-circuit logical operators,
+conditional expressions, array/record values, indexing, mutation, and supported
+byte operations. Modules can import other SauceScript modules, JSON ABIs, and
+JSON data. Constant expressions and compile-time branches can be folded.
+
+Useful boundaries when adapting application code:
+
+- `async`/`await`, promises, classes, arbitrary JavaScript libraries, and host APIs
+  such as `fetch` or `console` are not on-chain operations.
+- Functions are declarations, not first-class values. The outer route callback
+  is an SDK wrapper; it does not add general arrow-function support to the
+  language. The special EVM external-call `.catch(() => { ... })` handler is a
+  supported exception.
+- `switch`, `for...in`, rest/spread, default parameters, and general object
+  destructuring are unsupported. Tuple destructuring in function bodies is
+  supported.
+- Type aliases, enums, generic application types, unions, `as`, and `satisfies`
+  are outside the subset. Use the supported annotations and named interfaces.
+- A template literal with interpolation is unsupported. The `hex` tagged literal
+  produces literal bytes.
+
+These examples and boundaries are validated with Sauce compiler 2.3.0. Additional
+language and builtin references are available at [sauce.eco.com](https://sauce.eco.com).
+
+## EVM and SVM operations
+
+The compiler shares a frontend across targets and rejects unavailable operations
+for the target selected at compile time.
+
+| Capability                                           | EVM                                      | SVM                                               |
+| ---------------------------------------------------- | ---------------------------------------- | ------------------------------------------------- |
+| Arithmetic, functions, arrays, records, control flow | Supported                                | Supported                                         |
+| ABI-bound `Contract.at(address).method(...)`         | Supported                                | Use CPI/account APIs                              |
+| `evm.call`, `evm.static`, `evm.delegate`             | Supported                                | Unavailable                                       |
+| `svm.call` with attached account slots               | Unavailable                              | Supported                                         |
+| `abi.encode` / `abi.decode` builtins                 | Supported                                | Unavailable                                       |
+| Persistent storage                                   | `evm.sload` / `evm.sstore`               | `svm.sload` / `svm.sstore` byte ranges            |
+| Transient storage and external-call catch handlers   | EVM-specific                             | Unavailable                                       |
+| SDK `USDC.approve(...)` and protocol-member rewrites | Supported for registered EVM deployments | Use SVM account-aware builders                    |
+| Runtime entry arguments                              | ABI-v1 or compact-v1                     | ABI-v1 or compact-v1, plus separate Account slots |
+
+The absence of SVM `abi.encode`/`abi.decode` builtins does not remove runtime
+entry parameters: entry decoding is its own compiler feature. Context values
+also have target semantics: an EVM address and a Solana public key have different
+widths, and `ctx.blockNumber()` refers to the target's block/slot model.
+
+## Modules, ABI bindings, and global names
+
+A direct compiler program can bind an EVM ABI explicitly:
+
+```ts
+import ERC20 from "./erc20.abi.json";
+
+function main(token: Address, spender: Address, amount: Uint256): void {
+  ERC20.at(token).approve(spender, amount);
+}
+```
+
+A bare JSON import binds a contract ABI. A JSON data import uses
+`with { type: "json" }`. The host resolver must return the named file's bytes in
+either case.
+
+The compiler's `ambient` option broadcasts a SauceScript module's exports without
+explicit imports. Its `defines` option injects scalar constants into every
+module. Their precedence differs: ambient exports yield to declarations;
+defines replace same-named module `const` values. Pick specific define names
+because that replacement also reaches imported dependencies.
+
+The SDK adds chain selection, token symbols, and protocol member access around
+that compiler API. `openRoute` and chain helpers supply chain defines and the
+default `@sauce/token` ambient module. Direct `compileSauceRoute()` accepts an
+explicit `ambient` list and does not add that default list. Raw `compile()` adds
+neither the SDK registry nor its filesystem resolver. See the
+[compilation guide](../guides/compiling.md#choose-a-compilation-path) for the exact
+boundary.

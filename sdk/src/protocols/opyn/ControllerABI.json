@@ -1,0 +1,81 @@
+{
+  "abi": [
+    {
+      "name": "mintPowerPerpAmount",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        },
+        {
+          "name": "_powerPerpAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "_uniTokenId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "burnPowerPerpAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        },
+        {
+          "name": "_powerPerpAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "_withdrawAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

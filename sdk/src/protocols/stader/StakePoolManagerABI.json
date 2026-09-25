@@ -1,0 +1,33 @@
+{
+  "abi": [
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getExchangeRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

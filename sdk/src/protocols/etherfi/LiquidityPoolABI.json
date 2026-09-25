@@ -1,0 +1,16 @@
+{
+  "abi": [
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

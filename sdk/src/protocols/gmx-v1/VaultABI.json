@@ -1,0 +1,98 @@
+{
+  "abi": [
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_tokenIn",
+          "type": "address"
+        },
+        {
+          "name": "_tokenOut",
+          "type": "address"
+        },
+        {
+          "name": "_receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "increasePosition",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_sizeDelta",
+          "type": "uint256"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "decreasePosition",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_collateralDelta",
+          "type": "uint256"
+        },
+        {
+          "name": "_sizeDelta",
+          "type": "uint256"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        },
+        {
+          "name": "_receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

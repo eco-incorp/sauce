@@ -1,0 +1,40 @@
+{
+  "abi": [
+    {
+      "name": "depositETH",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_amount",
+          "type": "uint256"
+        },
+        {
+          "name": "_gasLimit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "depositERC20",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        },
+        {
+          "name": "_gasLimit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

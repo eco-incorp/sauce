@@ -1,0 +1,68 @@
+{
+  "abi": [
+    {
+      "name": "delegateTo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "operator",
+          "type": "address"
+        },
+        {
+          "name": "approverSignatureAndExpiry",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "expiry",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "approverSalt",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "undelegate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "withdrawalRoots",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "isDelegated",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    }
+  ]
+}

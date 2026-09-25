@@ -1,0 +1,49 @@
+{
+  "abi": [
+    {
+      "name": "depositAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        },
+        {
+          "name": "depositAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "minRSETHAmountExpected",
+          "type": "uint256"
+        },
+        {
+          "name": "referralId",
+          "type": "string"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "getRsETHAmountToMint",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "rsethAmountToMint",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

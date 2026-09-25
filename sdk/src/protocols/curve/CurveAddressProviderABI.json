@@ -1,0 +1,33 @@
+{
+  "abi": [
+    {
+      "name": "get_registry",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "get_address",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_id",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    }
+  ]
+}

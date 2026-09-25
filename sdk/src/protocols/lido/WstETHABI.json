@@ -1,0 +1,72 @@
+{
+  "abi": [
+    {
+      "name": "wrap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_stETHAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "unwrap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_wstETHAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getStETHByWstETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_wstETHAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getWstETHByStETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_stETHAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

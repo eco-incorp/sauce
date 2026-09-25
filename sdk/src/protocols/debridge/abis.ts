@@ -1,0 +1,65 @@
+export const DlnSourceABI = [
+  {
+    name: "createOrder",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "_orderCreation",
+        type: "tuple",
+        components: [
+          { name: "giveTokenAddress", type: "address" },
+          { name: "giveAmount", type: "uint256" },
+          { name: "takeTokenAddress", type: "bytes" },
+          { name: "takeAmount", type: "uint256" },
+          { name: "takeChainId", type: "uint256" },
+          { name: "receiverDst", type: "bytes" },
+          { name: "givePatchAuthoritySrc", type: "address" },
+          { name: "orderAuthorityAddressDst", type: "bytes" },
+          { name: "allowedTakerDst", type: "bytes" },
+          { name: "externalCall", type: "bytes" },
+          { name: "allowedCancelBeneficiarySrc", type: "bytes" },
+        ],
+      },
+      { name: "_affiliateFee", type: "bytes" },
+      { name: "_referralCode", type: "uint32" },
+      { name: "_permitEnvelope", type: "bytes" },
+    ],
+    outputs: [{ name: "orderId", type: "uint256" }],
+  },
+] as const;
+
+export const DlnDestinationABI = [
+  {
+    name: "fulfillOrder",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "_order",
+        type: "tuple",
+        components: [
+          { name: "makerOrderNonce", type: "uint64" },
+          { name: "makerSrc", type: "bytes" },
+          { name: "giveChainId", type: "uint256" },
+          { name: "giveTokenAddress", type: "bytes" },
+          { name: "giveAmount", type: "uint256" },
+          { name: "takeChainId", type: "uint256" },
+          { name: "receiverDst", type: "bytes" },
+          { name: "takeTokenAddress", type: "address" },
+          { name: "takeAmount", type: "uint256" },
+          { name: "givePatchAuthoritySrc", type: "bytes" },
+          { name: "orderAuthorityAddressDst", type: "address" },
+          { name: "allowedTakerDst", type: "bytes" },
+          { name: "allowedCancelBeneficiarySrc", type: "bytes" },
+          { name: "externalCall", type: "bytes" },
+        ],
+      },
+      { name: "_fulFillAmount", type: "uint256" },
+      { name: "_orderId", type: "uint256" },
+      { name: "_permitEnvelope", type: "bytes" },
+      { name: "_unlockAuthority", type: "address" },
+    ],
+    outputs: [],
+  },
+] as const;

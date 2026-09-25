@@ -1,0 +1,44 @@
+{
+  "abi": [
+    {
+      "name": "buyFromAMM",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "expectedPayout",
+          "type": "uint256"
+        },
+        {
+          "name": "additionalSlippage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "exerciseMaturedMarket",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

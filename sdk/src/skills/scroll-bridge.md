@@ -1,0 +1,83 @@
+# Scroll Native Bridge
+
+Official Scroll zkEVM bridge via L1ScrollMessenger and L1GatewayRouter. Deposits ETH and ERC-20 tokens with ZK proof-based finality.
+
+## Category
+
+native L2 bridge | Direction: L1 to L2 (Ethereum to Scroll) | Chains: Ethereum (1), Scroll (534352)
+
+## SauceScript Functions
+
+### depositETH
+
+Deposit ETH from Ethereum L1 to Scroll L2.
+
+```typescript
+import { ScrollL1GatewayRouterABI as IL1GatewayRouter } from "./abis";
+
+function main(gatewayRouterAddress: Address, amount: Uint256, gasLimit: Uint256): Uint256 {
+  const router = IL1GatewayRouter.at(gatewayRouterAddress);
+  router.depositETH(amount, gasLimit);
+  return 1;
+}
+```
+
+- `amount`: Amount of ETH to deposit (also send as `msg.value`)
+- `gasLimit`: L2 gas limit for the deposit execution (e.g. 200000)
+- Requires ETH as msg.value covering amount + L2 gas fees
+
+### depositERC20
+
+Deposit ERC-20 tokens from Ethereum L1 to Scroll L2.
+
+```typescript
+import { ScrollL1GatewayRouterABI as IL1GatewayRouter } from "./abis";
+
+function main(
+  gatewayRouterAddress: Address,
+  token: Address,
+  amount: Uint256,
+  gasLimit: Uint256,
+): Uint256 {
+  const router = IL1GatewayRouter.at(gatewayRouterAddress);
+  router.depositERC20(token, amount, gasLimit);
+  return 1;
+}
+```
+
+- `token`: L1 ERC-20 token address
+- `amount`: Amount of tokens to deposit
+- `gasLimit`: L2 gas limit for the deposit execution (e.g. 200000)
+- Requires ERC-20 approval to the L1GatewayRouter
+- Requires ETH as msg.value for L2 gas fees
+
+## Deployed Addresses
+
+| Chain    | Contract          | Address                                      |
+| -------- | ----------------- | -------------------------------------------- |
+| Ethereum | l1ScrollMessenger | `0x6774Bcbd5ceCeF1336b5300fb5186a12DDD8b367` |
+| Ethereum | l1GatewayRouter   | `0xF8B1378579659D8F7EE5f3C929c2f3E332E41Fd6` |
+| Scroll   | l2ScrollMessenger | `0x781e90f1c8Fc4611c9b7497C3B47F99Ef6969CbC` |
+| Scroll   | l2GatewayRouter   | `0x4C0926FF5252A435FD19e10ED15e5a249Ba19d79` |
+
+## ABI Reference
+
+### ScrollL1GatewayRouterABI
+
+- `depositETH(uint256 _amount, uint256 _gasLimit)` [payable] - Deposit ETH to your own address on Scroll
+- `depositERC20(address _token, uint256 _amount, uint256 _gasLimit)` [payable] - Deposit ERC-20 tokens to your own address on Scroll
+
+### ScrollL1MessengerABI
+
+- `sendMessage(address to, uint256 value, bytes message, uint256 gasLimit)` [payable] - Send arbitrary message from L1 to L2 (low-level messaging)
+
+## Notes
+
+- **L1 to L2** via GatewayRouter (for token deposits) or L1ScrollMessenger (for arbitrary messages)
+- zkEVM architecture -- withdrawals finalize with ZK proofs (faster than optimistic rollups, typically hours not days)
+- GatewayRouter auto-routes tokens to the correct gateway (standard ERC-20, WETH, custom gateways)
+- `msg.value` must include gas fees for L2 execution (even for ERC-20 deposits)
+- L1 to L2 deposits finalize after ZK proof generation (~1-4 hours)
+- L2 to L1 withdrawals also require ZK proof finalization (~1-4 hours)
+- Canonical bridge -- no third-party risk, secured by Scroll's ZK proving system
+- Audited

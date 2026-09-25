@@ -1,0 +1,167 @@
+name: Publish
+
+# Publishes the single @eco-incorp/sauce package, bundling compiler / sdk /
+# actions / dev-tools under one root package.json with subpath exports.
+#
+# Trigger:
+#   git tag v1.2.3 && git push origin v1.2.3
+#   — or manual workflow_dispatch with `version` input.
+#
+# Publishes to PUBLIC npmjs.com ONLY (auth: NPM_TOKEN).
+#
+# GitHub Packages was dropped deliberately: it is not a distribution channel
+# anyone consumes here, and its step was the only failing part of the v0.2.0
+# release — it appended a token line for npm.pkg.github.com to ~/.npmrc, but
+# setup-node had already written a `registry-url` for npmjs, so pnpm resolved
+# auth against the CONFIGURED registry and ignored the one passed via
+# `--registry`, failing with ENEEDAUTH after npmjs had already published. That
+# left the run red on a release that had in fact succeeded, which is worse than
+# not publishing there at all.
+#
+# Required repo secrets:
+#   ECO_INCORP_TOKEN   PAT with read on eco-incorp/v12 (to download its
+#                      private RELEASE assets during the sync)
+#   NPM_TOKEN          npmjs.com automation token with publish rights on
+#                      the @eco-incorp scope
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish (without leading "v")
+        type: string
+        required: true
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # THE GATE. A tag push matches neither ci.yml's nor lint.yml's `branches` filter, so a tag used to
+  # publish whatever compiled with no test, lint or typecheck run against the tagged commit — and
+  # `npm version` takes the version from the tag, so there was not even a version-bump PR to gate on.
+  #
+  # These call the same workflows CI runs rather than repeating their steps here. Both also trigger
+  # directly on `v*` now, so the tagged commit is checked even if this job is later restructured;
+  # that means one duplicate run per release, which is the cheaper half of the trade.
+  checks:
+    name: Checks
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint.yml
+    secrets: inherit
+
+  publish:
+    name: Publish @eco-incorp/sauce
+    needs: [checks, lint]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-private-deps
+        with:
+          token: ${{ secrets.ECO_INCORP_TOKEN }}
+
+      # `anvil` is what the sdk build's engine e2e path needs; nothing here compiles contracts any
+      # more, since the ABIs arrive as a pinned release asset.
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      # BEFORE the build, so a token that cannot publish fails in seconds rather than after the
+      # gate and the build — with the tag already pushed, which is the worst version of this. Note
+      # what it does NOT prove: the FIRST publish of a name cannot be authorised in advance, so for
+      # `@eco-incorp/sauce`'s first release this only shows the token is valid and scoped somewhere.
+      - name: Verify the npm token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          who=$(npm whoami) || { echo "::error::NPM_TOKEN is missing or invalid — refusing to build a release that cannot publish"; exit 1; }
+          echo "authenticated to npmjs.com as $who"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # GH_TOKEN: the sdk build's sync step downloads V12RuntimeBytecode from the eco-incorp/v12
+      # v12-evm release, and that repo is private. Without it the artifact is skipped with a warning
+      # and the verify step below refuses to publish.
+      - name: Build all areas (sdk + actions)
+        env:
+          GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
+        run: pnpm build
+
+      # `pnpm build`'s sync writes only the JSON artifacts; the SVM engine binaries land in
+      # `sdk/dist/artifacts/svm` only under `--fetch-v12-engines`. Run it explicitly (with the
+      # private-repo token) so the gated `.so` ship in the tarball — the ONLY way a consumer gets the
+      # engine, since eco-incorp/v12 is private and the fetch path is closed to them.
+      - name: Fetch + ship the SVM engine binaries
+        env:
+          GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
+        run: pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines
+
+      # The sdk build's sync is tolerant by design (a local dev tree without the release assets still
+      # builds), so a broken generation would NOT fail the build — it would ship an empty
+      # dist/artifacts, exactly how 0.7.0 broke. Hard-gate publish on the artifacts + templates
+      # actually being present in the tarball dir.
+      - name: Verify the tarball will ship the engine artifacts + templates
+        run: |
+          for a in IERC20 ISauceRouter IUniswapV3Pool Router V12Kitchen V12Pot V12RuntimeBytecode V12EngineGate; do
+            test -s "sdk/dist/artifacts/$a.json" || { echo "::error::build did not produce sdk/dist/artifacts/$a.json — refusing to publish (would ship broken)"; exit 1; }
+          done
+          # The SVM engine binaries — the only way a consumer gets the engine (eco-incorp/v12 is
+          # private). Missing here means the published SDK cannot run SVM programs locally at all.
+          for so in engine-devnet engine-mainnet kitchen; do
+            test -s "sdk/dist/artifacts/svm/$so.so" || { echo "::error::build did not produce sdk/dist/artifacts/svm/$so.so — refusing to publish (SVM engine would be missing from the package)"; exit 1; }
+          done
+          # The deployed addresses, assembled from each release's addresses.json — what ./deployments
+          # reads for the current Kitchen / engine / Router. Its own sync step is tolerant, so gate here.
+          test -s sdk/dist/artifacts/V12Deployments.json || { echo "::error::build did not produce sdk/dist/artifacts/V12Deployments.json — refusing to publish (deployed addresses would be missing)"; exit 1; }
+          test -s sdk/dist/recipes/settle.sauce.ts || { echo "::error::missing sdk/dist/recipes/settle.sauce.ts"; exit 1; }
+          test -s sdk/dist/svm/recipes/settle.sauce.ts || { echo "::error::missing sdk/dist/svm/recipes/settle.sauce.ts"; exit 1; }
+          # exports["./compiler"] points here. It exists only if the sdk build ran, and a missing file
+          # would ship a package whose /compiler subpath cannot resolve -- the 0.7.0 failure shape.
+          test -s sdk/dist/compiler.js || { echo "::error::missing sdk/dist/compiler.js — the ./compiler subpath would not resolve"; exit 1; }
+          echo "verified: 8 engine artifacts + deployed addresses + 3 SVM binaries + both settle templates + the ./compiler entry point"
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "Could not resolve version"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version $VERSION"
+
+      - name: Set root package version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish to npmjs.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --access public --no-git-checks

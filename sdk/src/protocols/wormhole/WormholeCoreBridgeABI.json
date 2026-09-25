@@ -1,0 +1,41 @@
+{
+  "abi": [
+    {
+      "name": "publishMessage",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "nonce",
+          "type": "uint32"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "consistencyLevel",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sequence",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "messageFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,230 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    # Tags too: a tag is what publishes, and `branches` does NOT match a tag push, so before this
+    # the released commit was the one commit nothing ever checked.
+    branches: [main]
+    tags: ["v*"]
+  # Callable, so publish.yml can gate on these exact steps instead of copying them. A copy would
+  # drift, and a gate that has drifted is the thing being fixed here.
+  workflow_call:
+
+jobs:
+  ci:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-private-deps
+        with:
+          token: ${{ secrets.ECO_INCORP_TOKEN }}
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ---- engine artifacts + the v12 releases --------------------------------
+      # The EVM artifacts (sdk/{dist,src}/artifacts — Router, V12*, interfaces) ship to downstream
+      # SDK consumers for their local tests/deploys, and are build output rather than committed, so
+      # this both regenerates them and asserts the generation produced every one.
+      #
+      # Everything comes from the v12 RELEASES, each asset pinned by tag AND by a digest committed in
+      # sync-engine-artifacts.mjs. The components release independently, so there is no single shared
+      # commit to pin — the digest is the guarantee. `--fetch-v12-engines` downloads them into a
+      # cache, checks each against its digest, and prints `NAME=<path>` lines; the grep hands every
+      # one to $GITHUB_ENV. It is deliberately a wildcard: a newly pinned artifact reaches the suites
+      # that need it without a matching edit here, which is how SAUCE_KITCHEN_SO would otherwise have
+      # been silently absent. GH_TOKEN because eco-incorp/v12 is a private repo.
+      #
+      # The suites that consume these HARD-FAIL when their variable is absent, so a future edit here
+      # cannot quietly return them to skipping — a skipped suite and a passing suite are the same
+      # line in jest's summary, which is how they went unrun for their whole life before.
+      - name: Sync engine artifacts and fetch the v12 engines
+        env:
+          GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
+        run: |
+          set -euo pipefail
+          pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines | tee "$RUNNER_TEMP/sync.log"
+          grep -E '^SAUCE_[A-Z0-9_]+=' "$RUNNER_TEMP/sync.log" >> "$GITHUB_ENV"
+          # dist/artifacts is BUILD OUTPUT (git-ignored, nothing committed): four ABIs from the
+          # release's abis.json, IERC20 declared in the script, IUniswapV3Pool from @uniswap/v3-core,
+          # V12RuntimeBytecode from the release's creation code, and V12EngineGate. Assert all 8 exist,
+          # so a broken generation (a missing node_modules entry, an unreachable release) fails CI
+          # here instead of shipping an empty dir — the exact regression that broke 0.7.0.
+          for a in IERC20 ISauceRouter IUniswapV3Pool Router V12Kitchen V12Pot V12RuntimeBytecode V12EngineGate; do
+            test -s "sdk/dist/artifacts/$a.json" || { echo "::error::sync did not produce sdk/dist/artifacts/$a.json"; exit 1; }
+          done
+
+      # No runtime DERIVATION step any more, and its absence is the point.
+      #
+      # The EVM suites used to etch deployed runtime at a fixed address, which meant deploying the
+      # release's creation code on a throwaway anvil just to read the code back. They now deploy the
+      # creation code directly, because the gated engine forces it: `Runtime.huff`'s constructor
+      # appends the engine's own address as a trailing code word and `EVAL` staticcalls it, so an
+      # etched copy carries whichever address it was first deployed at and `EVAL` reaches a codeless
+      # account — which succeeds with empty returndata rather than reverting. `SAUCE_V12_RUNTIME_
+      # CREATION_HEX` is already exported by the sync step above; the suites read it directly.
+      # -----------------------------------------------------------------------
+
+      # ---- SVM engine binary ------------------------------------------------
+      - name: SDK — typecheck
+        run: pnpm --filter './sdk' typecheck
+
+      # sdk/tsconfig.json's `include` is src-only, so `typecheck` never sees test/. That is how a
+      # test file that does not parse shipped through three green runs. This is the gate for it.
+      - name: SDK — typecheck tests
+        run: pnpm --filter './sdk' typecheck:test
+
+      - name: SDK — build
+        run: pnpm --filter './sdk' build
+
+      # SAUCE_RUST_ENGINE_SO / SAUCE_V12_RUNTIME_CREATION_HEX come from $GITHUB_ENV, exported by the
+      # engine steps above. Both @sauce/token e2e suites hard-fail in CI when either is unset, so a
+      # broken export is loud rather than a silent skip.
+      #
+      # TWO invocations, engine suites first — see the next step for why. Together they cover every
+      # suite: the patterns are exact complements, and a file matching neither would fail the count
+      # asserted below.
+      - name: SDK — test (engine e2e)
+        # Set here because these steps invoke jest directly rather than through the package's
+        # `test` script, which is where NODE_OPTIONS normally comes from.
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
+          # Names each test on unbuffered stderr as it starts. A native abort kills the process
+          # before jest flushes, so without this a crashing suite reports no test at all.
+          SAUCE_TRACE_TESTS: "1"
+        run: |
+          set -euo pipefail
+          cd sdk
+          # ONE PROCESS PER SUITE, and the engine suites separated from the rest.
+          #
+          # Running all ~181 suites in one jest process aborts with a native std::bad_alloc after
+          # every test has PASSED — at the end, during teardown, with GBs free and no ulimit, so it
+          # is not exhaustion. It was measured: the engine suites peak between 495 and 785 MB, and
+          # the one that aborted was the LOWEST of them. Reverting this split reproduced the abort
+          # immediately, which is why it is here rather than a tidier single command.
+          #
+          # Each suite in its own short-lived process avoids it, and makes a crash name the suite.
+          # (Distinct from the aborts fixed in the suites themselves — calling litesvm accessors on
+          # a failed transaction or a closed account; see `kitchen-bench.ts`.)
+          node_modules/.bin/jest --config jest.config.cjs --listTests \
+            --testPathPattern '\.e2e\.test\.ts$' > "$RUNNER_TEMP/e2e-suites.txt"
+          [ -s "$RUNNER_TEMP/e2e-suites.txt" ] || { echo "::error::no engine e2e suites matched"; exit 1; }
+          failed=""
+          while IFS= read -r suite; do
+            name=$(basename "$suite")
+            echo "::group::$name"
+            log="$RUNNER_TEMP/$name.log"
+            # `|| failed=...` rather than letting -e stop the loop: one run then reports EVERY suite,
+            # which is what distinguishes "this suite is broken" from "the box gave out".
+            set +e
+            node_modules/.bin/jest --config jest.config.cjs --runInBand --forceExit --runTestsByPath "$suite" 2>&1 | tee "$log"
+            status=${PIPESTATUS[0]}
+            set -e
+            # `--forceExit`: jest calls process.exit() once the run is reported, which skips the
+            # native finalizers. Measured: on a retry the suite printed `Tests: 4 passed` and
+            # `Ran all test suites`, and only THEN aborted — every test had passed and the abort
+            # poisoned nothing but the exit status. That case this converts to a true green, and it
+            # cannot hide a failure, because jest derives the code from the results before exiting.
+            #
+            # TODO(litesvm-abort): remove BOTH the flag above and this retry once the abort itself is
+            # fixed. Not tracked in Linear yet — the condition for deleting them is that a suite can
+            # run this step 20 times without a ::warning:: firing. Until then the warning below is
+            # the only signal that the root cause is still there, so do not silence it.
+            #
+            # RETRY ONCE, and only for the litesvm native abort.
+            #
+            # The other case, which --forceExit cannot reach: the abort sometimes lands mid-teardown
+            # BEFORE jest reports, so the suite prints no test at all. That is what this retries.
+            #
+            # `terminate called ... std::bad_alloc` fires in litesvm's native teardown AFTER every
+            # test in the suite has passed, killing node before jest flushes — so the suite reports
+            # no test at all. It is runner-only (never reproduces on darwin/arm64 or in linux
+            # containers), it moves between the three kitchen suites run to run, and it survived the
+            # fix that removed the VM reference-clear. Left alone it failed most runs that reached
+            # this step, which is a gate that reports noise rather than signal.
+            #
+            # Deliberately narrow: gated on that exact string, so a real test failure, a crash with
+            # any other message, or a second bad_alloc all still fail the job.
+            if [ "$status" -ne 0 ] && grep -q 'std::bad_alloc' "$log"; then
+              echo "::warning::$name aborted with std::bad_alloc (litesvm native teardown) — retrying once"
+              set +e
+              node_modules/.bin/jest --config jest.config.cjs --runInBand --forceExit --runTestsByPath "$suite" 2>&1 | tee "$log.retry"
+              status=${PIPESTATUS[0]}
+              set -e
+            fi
+            [ "$status" -eq 0 ] || failed="$failed $name"
+            echo "::endgroup::"
+          done < "$RUNNER_TEMP/e2e-suites.txt"
+          [ -z "$failed" ] || { echo "::error::engine e2e suites failed:$failed"; exit 1; }
+
+      - name: SDK — test (everything else)
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
+        run: pnpm --filter './sdk' exec jest --config jest.config.cjs --testPathIgnorePatterns '\.e2e\.test\.ts$'
+
+      # The split must not silently drop a suite: assert the two halves still add up to every file
+      # jest can see.
+      - name: SDK — the split covers every suite
+        run: |
+          set -euo pipefail
+          cd sdk
+          all=$(node_modules/.bin/jest --config jest.config.cjs --listTests | wc -l)
+          e2e=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathPattern '\.e2e\.test\.ts$' | wc -l)
+          rest=$(node_modules/.bin/jest --config jest.config.cjs --listTests --testPathIgnorePatterns '\.e2e\.test\.ts$' | wc -l)
+          echo "all=$all e2e=$e2e rest=$rest"
+          [ "$all" -eq "$((e2e + rest))" ] || { echo "::error::the test split covers $((e2e + rest)) of $all suites"; exit 1; }
+
+      - name: Actions — typecheck
+        run: pnpm --filter './actions' typecheck
+
+      - name: Actions — build
+        run: pnpm --filter './actions' build
+
+      - name: Documentation — links and executable examples
+        run: pnpm docs:check
+
+      - name: Actions — unit tests
+        run: pnpm --filter './actions' test:unit
+
+      # `test:unit` is 2 of the 5 test files. The other three — to-sauce, to-quote, megas-swap —
+      # need an archive RPC and so have never run in CI, which is where the chained-output builder
+      # bugs live. Gated on the secret because a fork PR has none, and announced with ::warning::
+      # rather than skipped in silence: an absent gate that says nothing is how these went unrun for
+      # their whole life. `secrets` cannot appear in a job-level `if`, hence env + a step-level test.
+      - name: Actions — fork tests
+        env:
+          FORK_URL: ${{ secrets.FORK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FORK_URL:-}" ]; then
+            echo "::warning::FORK_URL is not configured — actions fork tests (to-sauce, to-quote, megas-swap) did NOT run. Add it as a repo or org secret (an archive-node RPC URL) and they start running with no further change."
+            exit 0
+          fi
+          pnpm --filter './actions' test
+          pnpm --filter './actions' test:megas-swap
+
+      - name: Dev Tools — test
+        run: pnpm --filter './dev-tools' test
+
+      # A consumer install, from the packed tarball into an empty directory — which is the only way
+      # to catch a workspace dependency that every in-repo test resolves for free.
+      - name: Verify a clean consumer install of the packed SDK
+        run: node sdk/scripts/check-packed-package.mjs

@@ -1,0 +1,216 @@
+#!/usr/bin/env node
+// Exercise the published entry points from a clean consumer, without workspace
+// dependencies or a separately installed compiler hiding a broken bundle.
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+// The SVM engine binaries ship only when a `--fetch-v12-engines` sync has placed them (CI does; a
+// bare local checkout may not). Assert they resolve from the clean install when they are here, and
+// skip that check otherwise rather than failing a credential-less local run.
+const shipsEngine = existsSync(join(root, "sdk/dist/artifacts/svm/engine-devnet.so"));
+// The deployed addresses (V12Deployments.json) come from the always-run sync, but that still needs the
+// private-repo credential to fetch each addresses.json — so a credential-less local checkout may lack
+// them too. Same treatment as the engine binaries: verify from the clean install when present.
+const shipsAddresses = existsSync(join(root, "sdk/dist/artifacts/V12Deployments.json"));
+// A silent skip is the trap: a maintainer running this locally to "verify the package" would get a
+// green that never checked the shipped binaries. In CI the engine fetch always precedes this, so an
+// absent binary there is a real failure, not a skip; locally, say loudly which half ran.
+if (!shipsEngine) {
+  if (process.env.CI)
+    throw new Error(
+      "check-packed: sdk/dist/artifacts/svm/engine-devnet.so is missing in CI — the " +
+        "`--fetch-v12-engines` sync must run before this step so the packaged-engine check is not skipped.",
+    );
+  console.warn(
+    "\n⚠️  check-packed: no SVM engine binaries in this tree — the compiler/codec exports will be " +
+      "verified but the shipped-engine check is SKIPPED. Run `pnpm --filter './sdk' sync-engine-artifacts " +
+      "--fetch-v12-engines` first to exercise it.\n",
+  );
+}
+if (!shipsAddresses) {
+  if (process.env.CI)
+    throw new Error(
+      "check-packed: sdk/dist/artifacts/V12Deployments.json is missing in CI — the sync must run (with " +
+        "the private-repo token) before this step so the deployed-addresses export check is not skipped.",
+    );
+  console.warn(
+    "\n⚠️  check-packed: no deployed addresses in this tree — the ./deployments export check is SKIPPED. " +
+      "Run `pnpm --filter './sdk' sync-engine-artifacts` (with credentials) first to exercise it.\n",
+  );
+}
+const work = mkdtempSync(join(tmpdir(), "sauce-package-check-"));
+try {
+  execFileSync("npm", ["run", "prepack"], { cwd: root, stdio: "inherit" });
+  const output = execFileSync(
+    "npm",
+    ["pack", "--ignore-scripts", "--json", "--pack-destination", work],
+    {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "inherit"],
+    },
+  );
+  const [{ filename }] = JSON.parse(output);
+  writeFileSync(join(work, "package.json"), JSON.stringify({ private: true, type: "module" }));
+  execFileSync(
+    "npm",
+    [
+      "install",
+      "--engine-strict",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      join(work, filename),
+    ],
+    {
+      cwd: work,
+      stdio: "inherit",
+    },
+  );
+  const name = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).name;
+  const installedRoot = join(work, "node_modules", name);
+  const installedManifest = JSON.parse(readFileSync(join(installedRoot, "package.json"), "utf8"));
+  execFileSync(
+    process.execPath,
+    [join(root, "docs/scripts/check-docs.mjs"), "--package-root", installedRoot],
+    { cwd: work, stdio: "inherit" },
+  );
+  assert.equal(installedManifest.license, "SEE LICENSE IN LICENSE.md");
+  assert.equal(
+    readFileSync(join(installedRoot, "LICENSE.md"), "utf8"),
+    readFileSync(join(root, "LICENSE.md"), "utf8"),
+    "the installed package must ship the repository license verbatim",
+  );
+  console.log("Clean package install: license metadata and full license text ship");
+
+  // Public consumers cannot rely on this private repository. Verify the actual
+  // tarball includes the complete manual and all of its local navigation targets.
+  const manualFiles = readdirSync(join(root, "docs"), { recursive: true }).filter(
+    (file) => !file.startsWith("scripts/") && /\.(md|ts)$/.test(file),
+  );
+  for (const file of manualFiles) {
+    const installed = join(installedRoot, "docs", file);
+    const content = readFileSync(installed, "utf8");
+    assert.ok(
+      content === readFileSync(join(root, "docs", file), "utf8"),
+      `Packaged manual differs from the working tree: ${file}`,
+    );
+  }
+  console.log(
+    `Clean package install: all ${manualFiles.length} manual/example files ship verbatim`,
+  );
+  writeFileSync(
+    join(work, "smoke.mjs"),
+    `
+    import assert from 'node:assert/strict';
+    import { createHash } from 'node:crypto';
+    import { readFileSync } from 'node:fs';
+    import { dirname, resolve } from 'node:path';
+    import { fileURLToPath } from 'node:url';
+    import { compile, encodeCompactArguments, decodeCompactArguments } from '${name}/compiler';
+    const source = new TextEncoder().encode('function main(x: Uint256): Uint256 { return x + 1; }');
+    for (const target of ['evm', 'svm']) {
+      const a = compile({ target, compactArgs: true, resolve: () => source });
+      assert.equal(a.isaRevision, 'stack-compact-v2');
+      assert.equal(a.entryEncoding, 'compact-v1');
+      const data = encodeCompactArguments(a.entrySchema, [7n]);
+      assert.deepEqual(decodeCompactArguments(a.entrySchema, data), [7n]);
+      assert.throws(() => decodeCompactArguments(a.entrySchema, data.slice(0, -1)));
+    }
+    console.log('Clean package install: the compact compiler and codec resolve and round-trip');
+    ${
+      shipsEngine
+        ? `
+    // The gated SVM engine + kitchen must ship in the package (eco-incorp/v12 is private, so this is
+    // the only way a consumer gets them) and resolve from the install with no SAUCE_* env set.
+    const { svmEnginePath, svmKitchenPath } = await import('${name}/svm/engine-artifacts');
+    for (const p of [svmEnginePath('devnet'), svmEnginePath('mainnet'), svmKitchenPath()]) {
+      const bytes = readFileSync(p);
+      assert.ok(bytes.length > 1024, 'shipped SVM binary present and non-trivial: ' + p);
+      assert.deepEqual([...bytes.subarray(0, 4)], [0x7f, 0x45, 0x4c, 0x46], 'a real ELF, not a stub: ' + p);
+    }
+    console.log('Clean package install: the gated SVM engine + kitchen binaries ship and resolve');`
+        : `console.log('Clean package install: SVM engine binaries not in this tree (no --fetch-v12-engines) — skipped');`
+    }
+    ${
+      shipsAddresses
+        ? `
+    // The deployed addresses must ship and resolve through the ./deployments export from a clean install.
+    const dep = await import('${name}/deployments');
+    assert.match(dep.v12EngineAddress(), /^0x[0-9a-fA-F]{40}$/, 'evm engine address resolves');
+    assert.match(dep.v12KitchenAddress(), /^0x[0-9a-fA-F]{40}$/, 'evm kitchen address resolves');
+    assert.match(dep.v12SvmEngineProgramId(), /^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'svm engine program id resolves');
+    assert.match(dep.v12SvmKitchenProgramId(), /^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'svm kitchen program id resolves');
+    assert.ok(dep.v12PotDerivation().initCodeHash, 'pot derivation resolves');
+    console.log('Clean package install: the deployed addresses ship and resolve through ./deployments');`
+        : `console.log('Clean package install: deployed addresses not in this tree (no credential to fetch addresses.json) — skipped');`
+    }
+  `,
+  );
+  // Force the packaged path: with SAUCE_* unset the resolver must find the shipped binary, which is
+  // exactly what a credential-less consumer sees.
+  const smokeEnv = { ...process.env };
+  for (const k of [
+    "SAUCE_ENGINE_SO",
+    "SAUCE_RUST_ENGINE_SO",
+    "SAUCE_RUST_ENGINE_MAINNET_SO",
+    "SAUCE_KITCHEN_SO",
+    "SAUCE_KITCHEN_IDL_JSON",
+  ])
+    delete smokeEnv[k];
+  execFileSync(process.execPath, [join(work, "smoke.mjs")], {
+    cwd: work,
+    stdio: "inherit",
+    env: smokeEnv,
+  });
+  // Check emitted declarations from a real install, not src/. Bare source globals
+  // must survive declaration emit and the root package's side-effect import.
+  const consumer = `
+    import '${name}';
+    const options = {
+      pot: '0x1111111111111111111111111111111111111111' as const,
+      engine: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as const,
+      deadline: 2000000000n,
+      portal: '0x2222222222222222222222222222222222222222' as const,
+      source: 'ethereum' as const,
+      creator: '0x3333333333333333333333333333333333333333' as const,
+      prover: '0x4444444444444444444444444444444444444444' as const,
+    };
+    const built = Base(() => {
+      USDC.approve(Uniswap.UniversalRouter, 1000000n);
+    }, options).reward(0n);
+    if (built.compiled.bytecode[0].length === 0) throw new Error('Empty route');
+  `;
+  writeFileSync(join(work, "consumer.ts"), consumer);
+  execFileSync(
+    process.execPath,
+    [
+      join(work, "node_modules/typescript/bin/tsc"),
+      join(work, "consumer.ts"),
+      "--target",
+      "ES2022",
+      "--module",
+      "NodeNext",
+      "--strict",
+      "--skipLibCheck",
+      "--outDir",
+      join(work, "compiled"),
+    ],
+    { cwd: work, stdio: "inherit" },
+  );
+  execFileSync(process.execPath, [join(work, "compiled/consumer.js")], {
+    cwd: work,
+    stdio: "inherit",
+    env: smokeEnv,
+  });
+  console.log(
+    "Clean package install: typed token/protocol closure compiles through the public API",
+  );
+} finally {
+  rmSync(work, { recursive: true, force: true });
+}

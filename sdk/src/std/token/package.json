@@ -1,0 +1,7 @@
+{
+  "name": "@sauce/token",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript ERC20/SPL token library. `main` names the NEUTRAL BASE the compiler suffixes per target (token.evm.js / token.svm.js) — there is deliberately no token.js: a token program is inherently target-specific, so there is no target-neutral body, and shipping an empty or guessed-signature neutral file would turn a missing arm into a confusing missing-export (or, worse, a silently wrong compile) instead of a clear failure to import the package.",
+  "main": "token.js"
+}

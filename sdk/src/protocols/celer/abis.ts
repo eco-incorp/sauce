@@ -1,0 +1,29 @@
+export const CelerBridgeABI = [
+  {
+    name: "send",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "_receiver", type: "address" },
+      { name: "_token", type: "address" },
+      { name: "_amount", type: "uint256" },
+      { name: "_dstChainId", type: "uint64" },
+      { name: "_nonce", type: "uint64" },
+      { name: "_maxSlippage", type: "uint32" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "sendNative",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "_receiver", type: "address" },
+      { name: "_amount", type: "uint256" },
+      { name: "_dstChainId", type: "uint64" },
+      { name: "_nonce", type: "uint64" },
+      { name: "_maxSlippage", type: "uint32" },
+    ],
+    outputs: [],
+  },
+] as const;

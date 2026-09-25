@@ -1,0 +1,44 @@
+name: Deprecate versions
+
+# Manual, on-demand deprecation of published npm versions. Uses the same NPM_TOKEN
+# secret as publish.yml, so a version can be deprecated without a local npmjs.com
+# login. `npm deprecate` (unlike `unpublish`) is permitted from the bypass-2FA
+# token; it only sets a warning, it does not remove the tarball.
+on:
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: 'Space-separated versions to deprecate (e.g. "0.5.0 0.5.1 0.6.0")'
+        required: true
+      message:
+        description: "Deprecation message shown to consumers on install"
+        required: true
+      package:
+        description: 'Package to deprecate, e.g. "@eco-incorp/sauce-sdk" (pre-rename) or "@eco-incorp/sauce"'
+        required: true
+
+jobs:
+  deprecate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: Deprecate each version
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSIONS: ${{ inputs.versions }}
+          MESSAGE: ${{ inputs.message }}
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          for v in $VERSIONS; do
+            echo "::group::deprecate $PACKAGE@$v"
+            npm deprecate "$PACKAGE@$v" "$MESSAGE"
+            echo "::endgroup::"
+          done
+          echo "Done. Current deprecation flags:"
+          for v in $VERSIONS; do
+            printf '%s: %s\n' "$v" "$(npm view "$PACKAGE@$v" deprecated 2>/dev/null || echo '?')"
+          done

@@ -1,0 +1,24 @@
+{
+  "abi": [
+    {
+      "name": "withdrawCollateral",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "subaccountName",
+          "type": "uint256"
+        },
+        {
+          "name": "productId",
+          "type": "uint32"
+        },
+        {
+          "name": "amount",
+          "type": "uint128"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

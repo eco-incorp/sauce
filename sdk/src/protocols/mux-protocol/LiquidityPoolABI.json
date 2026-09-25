@@ -1,0 +1,36 @@
+{
+  "abi": [
+    {
+      "name": "addLiquidity",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint8"
+        },
+        {
+          "name": "tokenAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeLiquidity",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint8"
+        },
+        {
+          "name": "mlpAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

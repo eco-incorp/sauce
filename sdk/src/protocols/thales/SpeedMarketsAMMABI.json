@@ -1,0 +1,36 @@
+{
+  "abi": [
+    {
+      "name": "createNewMarket",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "uint256"
+        },
+        {
+          "name": "strikeTime",
+          "type": "uint64"
+        },
+        {
+          "name": "direction",
+          "type": "uint8"
+        },
+        {
+          "name": "collateral",
+          "type": "address"
+        },
+        {
+          "name": "buyinAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "referrer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

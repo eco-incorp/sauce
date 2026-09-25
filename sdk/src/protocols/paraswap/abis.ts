@@ -1,0 +1,31 @@
+export const AugustusV5ABI = [
+  {
+    name: "simpleSwap",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "data",
+        type: "tuple",
+        components: [
+          { name: "fromToken", type: "address" },
+          { name: "toToken", type: "address" },
+          { name: "fromAmount", type: "uint256" },
+          { name: "toAmount", type: "uint256" },
+          { name: "expectedAmount", type: "uint256" },
+          { name: "callees", type: "address[]" },
+          { name: "exchangeData", type: "bytes" },
+          { name: "startIndexes", type: "uint256[]" },
+          { name: "values", type: "uint256[]" },
+          { name: "beneficiary", type: "address" },
+          { name: "partner", type: "address" },
+          { name: "feePercent", type: "uint256" },
+          { name: "permit", type: "bytes" },
+          { name: "deadline", type: "uint256" },
+          { name: "uuid", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [{ name: "receivedAmount", type: "uint256" }],
+  },
+] as const;

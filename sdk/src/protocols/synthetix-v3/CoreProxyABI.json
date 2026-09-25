@@ -1,0 +1,72 @@
+{
+  "abi": [
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "accountId",
+          "type": "uint128"
+        },
+        {
+          "name": "collateralType",
+          "type": "address"
+        },
+        {
+          "name": "tokenAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "accountId",
+          "type": "uint128"
+        },
+        {
+          "name": "collateralType",
+          "type": "address"
+        },
+        {
+          "name": "tokenAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "delegateCollateral",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "accountId",
+          "type": "uint128"
+        },
+        {
+          "name": "poolId",
+          "type": "uint128"
+        },
+        {
+          "name": "collateralType",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "leverage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "abi": [
+    {
+      "name": "payNativeGasForContractCall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

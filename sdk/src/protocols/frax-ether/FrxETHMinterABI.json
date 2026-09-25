@@ -1,0 +1,21 @@
+{
+  "abi": [
+    {
+      "name": "submitAndDeposit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

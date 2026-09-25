@@ -1,0 +1,55 @@
+{
+  "name": "@eco-incorp/sauce-dev-tools",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Development tools for the Sauce protocol",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eco-incorp/sauce.git",
+    "directory": "dev-tools"
+  },
+  "homepage": "https://github.com/eco-incorp/sauce#readme",
+  "bugs": "https://github.com/eco-incorp/sauce/issues",
+  "bin": {
+    "sauce-dev-tools": "scripts/init.js"
+  },
+  "files": [
+    "scripts",
+    "src",
+    "sauce",
+    "artifacts",
+    "hardhat.config.cjs",
+    "tsconfig.json",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "sauce": "npx tsx scripts/run.ts",
+    "start:local": "./scripts/start-local.sh",
+    "start:fork": "./scripts/start-fork.sh",
+    "stop": "./scripts/stop-local.sh",
+    "sync-price": "npx tsx scripts/sync-price.ts",
+    "sync-artifacts": "node scripts/sync-artifacts.js",
+    "test": "npx tsx test/examples.test.ts && npx tsx test/runner.test.ts && npx tsx test/svm-local.test.ts",
+    "test:e2e": "npx tsx test/e2e.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eco-incorp/sauce-source": "workspace:*",
+    "@solana/kit": "^6.10.0",
+    "@types/node": "^22.0.0",
+    "hardhat": "^2.22.0",
+    "litesvm": "^1.2.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.3.0",
+    "@uniswap/v3-core": "^1.0.1",
+    "dotenv": "^17.3.1",
+    "viem": "^2.45.1"
+  }
+}

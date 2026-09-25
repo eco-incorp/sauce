@@ -1,0 +1,22 @@
+name: Conventional Commits
+
+on:
+  pull_request:
+
+jobs:
+  conventional-commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: webiny/action-conventional-commits@v1.3.1
+        with:
+          # WITHOUT this the gate cannot fail. The repo is private, so the action's unauthenticated
+          # fetch of `commits_url` 404s and it swallows the error — its own log said
+          # "No commits to check, skipping..." while reporting green, having validated ZERO commits.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pinned, because the default list this action resolves includes `wip` — so `wip: ...`
+          # would pass a gate whose whole point is that it does not. `merge` is KEPT: this repo
+          # merges PRs rather than squashing, so a contributor who merges `main` into their branch
+          # carries a "Merge branch ..." commit that is not theirs to reword.
+          allowed-commit-types: "feat,fix,docs,style,refactor,perf,test,build,ci,chore,revert,merge"

@@ -1,0 +1,56 @@
+{
+  "abi": [
+    {
+      "name": "placePositionOrder",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "subAccountId",
+          "type": "uint256"
+        },
+        {
+          "name": "collateralAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "size",
+          "type": "uint256"
+        },
+        {
+          "name": "price",
+          "type": "uint256"
+        },
+        {
+          "name": "profitTokenId",
+          "type": "uint8"
+        },
+        {
+          "name": "flags",
+          "type": "uint8"
+        },
+        {
+          "name": "deadline",
+          "type": "uint32"
+        },
+        {
+          "name": "referralCode",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "cancelOrder",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "orderId",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

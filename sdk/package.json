@@ -1,0 +1,89 @@
+{
+  "name": "@eco-incorp/sauce-source",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eco-incorp/sauce.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/eco-incorp/sauce#readme",
+  "bugs": "https://github.com/eco-incorp/sauce/issues",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./protocols/*": {
+      "types": "./dist/protocols/*/index.d.ts",
+      "default": "./dist/protocols/*/index.js"
+    },
+    "./chains": {
+      "types": "./dist/chains/index.d.ts",
+      "default": "./dist/chains/index.js"
+    },
+    "./recipes": {
+      "types": "./dist/recipes/index.d.ts",
+      "default": "./dist/recipes/index.js"
+    },
+    "./recipes/settle.sauce.ts": "./dist/recipes/settle.sauce.ts",
+    "./skills": {
+      "types": "./dist/skills/loader.d.ts",
+      "default": "./dist/skills/loader.js"
+    },
+    "./svm": {
+      "types": "./dist/svm/index.d.ts",
+      "default": "./dist/svm/index.js"
+    },
+    "./svm/engine": {
+      "types": "./dist/svm/engine-public.d.ts",
+      "default": "./dist/svm/engine-public.js"
+    },
+    "./svm/engine-artifacts": {
+      "types": "./dist/svm/engine-artifacts.d.ts",
+      "default": "./dist/svm/engine-artifacts.js"
+    },
+    "./svm/recipes/settle.sauce.ts": "./dist/svm/recipes/settle.sauce.ts",
+    "./verify": {
+      "types": "./dist/verify/index.d.ts",
+      "default": "./dist/verify/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/skills",
+    "src/protocols"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc && node scripts/sync-engine-artifacts.mjs && node scripts/copy-verify-assets.mjs",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
+    "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
+    "gen-route-globals": "node scripts/gen-route-globals.mjs",
+    "gen-source-globals": "node scripts/gen-source-globals.mjs",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs"
+  },
+  "dependencies": {
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.3.0",
+    "@solana-program/address-lookup-table": "^0.12.1",
+    "@solana-program/compute-budget": "^0.16.0",
+    "@solana-program/system": "^0.12.2",
+    "@solana-program/token": "^0.14.0",
+    "@solana/kit": "^6.10.0",
+    "viem": "^2.45.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "litesvm": "^1.2.1",
+    "ts-jest": "^29.1.0",
+    "@types/jest": "^29.5.0"
+  }
+}

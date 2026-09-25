@@ -1,0 +1,58 @@
+{
+  "abi": [
+    {
+      "name": "liquidityUtilizationCurrent",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "pooledTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lpToken",
+          "type": "address"
+        },
+        {
+          "name": "isEnabled",
+          "type": "bool"
+        },
+        {
+          "name": "lastLpFeeUpdate",
+          "type": "uint32"
+        },
+        {
+          "name": "utilizedReserves",
+          "type": "uint256"
+        },
+        {
+          "name": "liquidReserves",
+          "type": "uint256"
+        },
+        {
+          "name": "undistributedLpFees",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

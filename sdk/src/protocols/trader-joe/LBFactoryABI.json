@@ -1,0 +1,47 @@
+{
+  "abi": [
+    {
+      "name": "getLBPairInformation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "binStep",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lbPairInformation",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "binStep",
+              "type": "uint16"
+            },
+            {
+              "name": "LBPair",
+              "type": "address"
+            },
+            {
+              "name": "createdByOwner",
+              "type": "bool"
+            },
+            {
+              "name": "ignoredForRouting",
+              "type": "bool"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

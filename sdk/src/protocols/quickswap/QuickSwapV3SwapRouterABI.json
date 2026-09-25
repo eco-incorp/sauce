@@ -1,0 +1,51 @@
+{
+  "abi": [
+    {
+      "name": "exactInputSingle",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "name": "recipient",
+              "type": "address"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "amountIn",
+              "type": "uint256"
+            },
+            {
+              "name": "amountOutMinimum",
+              "type": "uint256"
+            },
+            {
+              "name": "limitSqrtPrice",
+              "type": "uint160"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountOut",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

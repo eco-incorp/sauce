@@ -1,0 +1,25 @@
+{
+  "abi": [
+    {
+      "name": "lookup",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pools",
+          "type": "address[]"
+        }
+      ]
+    }
+  ]
+}

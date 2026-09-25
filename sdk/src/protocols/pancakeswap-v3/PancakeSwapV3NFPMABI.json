@@ -1,0 +1,79 @@
+{
+  "abi": [
+    {
+      "name": "mint",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "token0",
+              "type": "address"
+            },
+            {
+              "name": "token1",
+              "type": "address"
+            },
+            {
+              "name": "fee",
+              "type": "uint32"
+            },
+            {
+              "name": "tickLower",
+              "type": "uint32"
+            },
+            {
+              "name": "tickUpper",
+              "type": "uint32"
+            },
+            {
+              "name": "amount0Desired",
+              "type": "uint256"
+            },
+            {
+              "name": "amount1Desired",
+              "type": "uint256"
+            },
+            {
+              "name": "amount0Min",
+              "type": "uint256"
+            },
+            {
+              "name": "amount1Min",
+              "type": "uint256"
+            },
+            {
+              "name": "recipient",
+              "type": "address"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        },
+        {
+          "name": "liquidity",
+          "type": "uint128"
+        },
+        {
+          "name": "amount0",
+          "type": "uint256"
+        },
+        {
+          "name": "amount1",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

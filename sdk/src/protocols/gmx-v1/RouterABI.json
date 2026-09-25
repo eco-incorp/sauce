@@ -1,0 +1,40 @@
+{
+  "abi": [
+    {
+      "name": "approvePlugin",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_plugin",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_path",
+          "type": "address[]"
+        },
+        {
+          "name": "_amountIn",
+          "type": "uint256"
+        },
+        {
+          "name": "_minOut",
+          "type": "uint256"
+        },
+        {
+          "name": "_receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

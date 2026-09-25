@@ -1,0 +1,34 @@
+# npm-only ignore list for dev-tools/.
+#
+# WHY THIS FILE EXISTS: npm falls back to .gitignore when no .npmignore is
+# present, and dev-tools/.gitignore ignores `artifacts/` (it is generated, not
+# committed). But the ROOT package.json's `files` list ships
+# `dev-tools/artifacts` on purpose — the harness reads ISauceRouter/Router/
+# IERC20/IUniswapV3Pool from there — and a gitignore exclusion beats a `files`
+# inclusion, so the published tarball silently shipped WITHOUT them (verified:
+# 0 entries in the 0.1.0-era tarball). The root `prepack` populates the
+# directory before packing; this file is what lets it survive into the tarball.
+#
+# Keep the rest of dev-tools/.gitignore's exclusions mirrored below, MINUS
+# `artifacts/`. Anything added there that should not ship must be added here too.
+node_modules/
+dist/
+out/
+cache/
+
+# Local deployment state
+.deployment.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo

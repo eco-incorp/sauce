@@ -1,0 +1,58 @@
+{
+  "abi": [
+    {
+      "name": "outboundTransfer",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_to",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        },
+        {
+          "name": "_maxGas",
+          "type": "uint256"
+        },
+        {
+          "name": "_gasPriceBid",
+          "type": "uint256"
+        },
+        {
+          "name": "_data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "getGateway",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "abi": [
+    {
+      "name": "callContract",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "contractAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "callContractWithToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "contractAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "sendToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "tokenAddresses",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    }
+  ]
+}

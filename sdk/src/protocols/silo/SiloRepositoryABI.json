@@ -1,0 +1,21 @@
+{
+  "abi": [
+    {
+      "name": "getSilo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "silo",
+          "type": "address"
+        }
+      ]
+    }
+  ]
+}

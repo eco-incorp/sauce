@@ -1,0 +1,35 @@
+export const DiamondABI = [
+  {
+    name: "trade",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "poolKey", type: "uint256" },
+      { name: "size", type: "uint256" },
+      { name: "isBuy", type: "bool" },
+      { name: "premiumLimit", type: "uint256" },
+      { name: "referrer", type: "address" },
+    ],
+    outputs: [{ name: "totalPremium", type: "uint256" }],
+  },
+  {
+    name: "exercise",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "holder", type: "address" },
+      { name: "longTokenId", type: "uint256" },
+    ],
+    outputs: [{ name: "exerciseValue", type: "uint256" }],
+  },
+  {
+    name: "settle",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "holder", type: "address" },
+      { name: "shortTokenId", type: "uint256" },
+    ],
+    outputs: [{ name: "collateral", type: "uint256" }],
+  },
+] as const;

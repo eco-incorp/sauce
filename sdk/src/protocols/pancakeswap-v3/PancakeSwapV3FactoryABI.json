@@ -1,0 +1,29 @@
+{
+  "abi": [
+    {
+      "name": "getPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "fee",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ]
+    }
+  ]
+}

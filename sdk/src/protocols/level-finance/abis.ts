@@ -1,0 +1,39 @@
+export const LiquidityPoolABI = [
+  {
+    name: "addLiquidity",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "tranche", type: "address" },
+      { name: "token", type: "address" },
+      { name: "amountIn", type: "uint256" },
+      { name: "minLpAmount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "removeLiquidity",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "tranche", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "lpAmount", type: "uint256" },
+      { name: "minOut", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "swap",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "minOut", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "extradata", type: "bytes" },
+    ],
+    outputs: [],
+  },
+] as const;

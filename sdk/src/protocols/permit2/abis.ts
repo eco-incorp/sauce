@@ -1,0 +1,42 @@
+export const Permit2ABI = [
+  {
+    name: "approve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint160" },
+      { name: "expiration", type: "uint64" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "transferFrom",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint160" },
+      { name: "token", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "lockdown",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "approvals",
+        type: "tuple[]",
+        components: [
+          { name: "token", type: "address" },
+          { name: "spender", type: "address" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const;

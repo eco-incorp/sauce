@@ -1,0 +1,38 @@
+{
+  "abi": [
+    {
+      "name": "sharesToUnderlyingView",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "amountShares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "underlyingToSharesView",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "amountUnderlying",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

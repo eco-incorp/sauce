@@ -1,0 +1,82 @@
+{
+  "abi": [
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "poolIdx",
+          "type": "uint256"
+        },
+        {
+          "name": "isBuy",
+          "type": "bool"
+        },
+        {
+          "name": "inBaseQty",
+          "type": "bool"
+        },
+        {
+          "name": "qty",
+          "type": "uint128"
+        },
+        {
+          "name": "tip",
+          "type": "uint16"
+        },
+        {
+          "name": "limitPrice",
+          "type": "uint128"
+        },
+        {
+          "name": "minOut",
+          "type": "uint128"
+        },
+        {
+          "name": "reserveFlags",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "baseFlow",
+          "type": "uint128"
+        },
+        {
+          "name": "quoteFlow",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "userCmd",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "callpath",
+          "type": "uint16"
+        },
+        {
+          "name": "cmd",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bytes"
+        }
+      ]
+    }
+  ]
+}

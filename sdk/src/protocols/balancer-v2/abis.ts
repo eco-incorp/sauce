@@ -1,0 +1,132 @@
+export const BalancerV2VaultABI = [
+  {
+    name: "swap",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "singleSwap",
+        type: "tuple",
+        components: [
+          { name: "poolId", type: "uint256" },
+          { name: "kind", type: "uint8" },
+          { name: "assetIn", type: "address" },
+          { name: "assetOut", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "userData", type: "bytes" },
+        ],
+      },
+      {
+        name: "funds",
+        type: "tuple",
+        components: [
+          { name: "sender", type: "address" },
+          { name: "fromInternalBalance", type: "bool" },
+          { name: "recipient", type: "address" },
+          { name: "toInternalBalance", type: "bool" },
+        ],
+      },
+      { name: "limit", type: "uint256" },
+      { name: "deadline", type: "uint256" },
+    ],
+    outputs: [{ name: "amountCalculated", type: "uint256" }],
+  },
+  {
+    name: "batchSwap",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "kind", type: "uint8" },
+      {
+        name: "swaps",
+        type: "tuple[]",
+        components: [
+          { name: "poolId", type: "uint256" },
+          { name: "assetInIndex", type: "uint256" },
+          { name: "assetOutIndex", type: "uint256" },
+          { name: "amount", type: "uint256" },
+          { name: "userData", type: "bytes" },
+        ],
+      },
+      { name: "assets", type: "address[]" },
+      {
+        name: "funds",
+        type: "tuple",
+        components: [
+          { name: "sender", type: "address" },
+          { name: "fromInternalBalance", type: "bool" },
+          { name: "recipient", type: "address" },
+          { name: "toInternalBalance", type: "bool" },
+        ],
+      },
+      { name: "limits", type: "uint256[]" },
+      { name: "deadline", type: "uint256" },
+    ],
+    outputs: [{ name: "assetDeltas", type: "uint256[]" }],
+  },
+  {
+    name: "joinPool",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "poolId", type: "uint256" },
+      { name: "sender", type: "address" },
+      { name: "recipient", type: "address" },
+      {
+        name: "request",
+        type: "tuple",
+        components: [
+          { name: "assets", type: "address[]" },
+          { name: "maxAmountsIn", type: "uint256[]" },
+          { name: "userData", type: "bytes" },
+          { name: "fromInternalBalance", type: "bool" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    name: "exitPool",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "poolId", type: "uint256" },
+      { name: "sender", type: "address" },
+      { name: "recipient", type: "address" },
+      {
+        name: "request",
+        type: "tuple",
+        components: [
+          { name: "assets", type: "address[]" },
+          { name: "minAmountsOut", type: "uint256[]" },
+          { name: "userData", type: "bytes" },
+          { name: "toInternalBalance", type: "bool" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    name: "flashLoan",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipient", type: "address" },
+      { name: "tokens", type: "address[]" },
+      { name: "amounts", type: "uint256[]" },
+      { name: "userData", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "getPoolTokens",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "poolId", type: "uint256" }],
+    outputs: [
+      { name: "tokens", type: "address[]" },
+      { name: "balances", type: "uint256[]" },
+      { name: "lastChangeBlock", type: "uint256" },
+    ],
+  },
+] as const;

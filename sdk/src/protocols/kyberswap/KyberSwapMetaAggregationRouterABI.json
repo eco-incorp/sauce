@@ -1,0 +1,59 @@
+{
+  "abi": [
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "execution",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "callTo",
+              "type": "address"
+            },
+            {
+              "name": "approveTarget",
+              "type": "address"
+            },
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "name": "amountIn",
+              "type": "uint256"
+            },
+            {
+              "name": "minAmountOut",
+              "type": "uint256"
+            },
+            {
+              "name": "recipient",
+              "type": "address"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "returnAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "gasUsed",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

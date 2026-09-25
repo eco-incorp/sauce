@@ -1,0 +1,47 @@
+{
+  "abi": [
+    {
+      "name": "transformERC20",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "inputToken",
+          "type": "address"
+        },
+        {
+          "name": "outputToken",
+          "type": "address"
+        },
+        {
+          "name": "inputTokenAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "minOutputTokenAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "transformations",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "deploymentNonce",
+              "type": "uint32"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "outputTokenAmount",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}
