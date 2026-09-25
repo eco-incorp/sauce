@@ -89,17 +89,25 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   The tags MAY be cut from different commits (`v12-evm-v0.4.0` and `v12-svm-v0.5.0` were), so a
   shared commit is not a property to rely on even while all four happen to share one after a
   coordinated re-release. To bump: change the tag, run the script, paste the digest it reports.
-  **Fetching needs no credential at all.** Assets come from GHCR as OCI artifacts
-  (`ghcr.io/eco-incorp/<package>:<version>`, one repository per independently-released component),
-  pulled anonymously — ghcr.io issues a pull token to a caller with none. There is deliberately **no
-  `gh` or token fallback**: a fallback would let a developer with `gh` logged in and CI with nothing
-  fetch by different routes, so the route CI depends on could rot unseen. One path means a broken
-  publish breaks for everyone at once. The release tag maps to the OCI reference as
-  `<package>-v<version>` → `<package>:<version>`, the layer's
-  `org.opencontainers.image.title` annotation carries the asset name, and the committed digest is
-  still the guarantee — this changed the TRANSPORT, not the trust model. A 403 here almost always
-  means the release has not published its OCI artifacts yet, or the package is still PRIVATE: a
-  package pushed from a private repo is private by default and must be made public once by hand.
+  **Fetching needs no PAT.** Assets come from GHCR as OCI artifacts
+  (`ghcr.io/eco-incorp/<package>:<version>`, one repository per independently-released component).
+  The packages are PRIVATE and stay that way: read access is granted per package to the CONSUMING
+  REPOSITORY (package settings -> Manage Actions access -> add `eco-incorp/sauce`, Read), so CI
+  authenticates with the `GITHUB_TOKEN` every repo already has and a developer with whatever `gh` is
+  already logged in as. Nothing is published publicly and no token is minted for this. There is
+  deliberately **no `gh release` or REST fallback**: a fallback would let a developer and CI fetch by
+  different routes, so the route CI depends on could rot unseen.
+
+  The release tag maps to the OCI reference as `<package>-v<version>` -> `<package>:<version>`, the
+  layer's `org.opencontainers.image.title` annotation carries the asset name, and the committed
+  digest is still the guarantee — this changed the TRANSPORT, not the trust model.
+
+  Two measured facts worth keeping. A CREDENTIALED token request returns 200 and issues a token even
+  for a package that does not exist (unauthenticated, the same request is 403), so a token proves
+  nothing about existence — only the manifest read does. And a failed `curl` must never have its own
+  message surfaced: `execFileSync` puts the command line in it, and these commands carry the
+  credential, which would print a live token into CI logs.
+
 - **Foundry is required only to RUN things, never to build artifacts.** The sync no longer compiles
   anything: the ABIs arrive as a release asset. What still needs Foundry is `anvil` on `PATH` for
   `sdk/test/std/token/evm.e2e.test.ts` and other EVM execution suites. They deploy the pinned creation

@@ -15,12 +15,14 @@ jobs:
   ci:
     name: Build & Test
     runs-on: ubuntu-latest
+    # `packages: read` is what lets the built-in GITHUB_TOKEN pull the v12 engine artifacts from
+    # GHCR. It is not a default worth relying on: an org that sets restricted default permissions
+    # would otherwise fail the sync with a 403 that reads like a missing grant.
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-private-deps
-        with:
-          token: ${{ secrets.ECO_INCORP_TOKEN }}
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -51,14 +53,16 @@ jobs:
       # cache, checks each against its digest, and prints `NAME=<path>` lines; the grep hands every
       # one to $GITHUB_ENV. It is deliberately a wildcard: a newly pinned artifact reaches the suites
       # that need it without a matching edit here, which is how SAUCE_KITCHEN_SO would otherwise have
-      # been silently absent. GH_TOKEN because eco-incorp/v12 is a private repo.
+      # been silently absent. The artifacts come from GHCR, where the packages are private and this
+      # repository is granted read on each, so the built-in GITHUB_TOKEN is the whole credential —
+      # no PAT, and nothing published publicly.
       #
       # The suites that consume these HARD-FAIL when their variable is absent, so a future edit here
       # cannot quietly return them to skipping — a skipped suite and a passing suite are the same
       # line in jest's summary, which is how they went unrun for their whole life before.
       - name: Sync engine artifacts and fetch the v12 engines
         env:
-          GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines | tee "$RUNNER_TEMP/sync.log"

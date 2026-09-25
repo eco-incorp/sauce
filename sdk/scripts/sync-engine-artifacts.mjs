@@ -181,13 +181,30 @@ const OCI_TAG = /^(?<pkg>v12-evm|v12-svm|kitchen-evm|kitchen-svm)-v(?<version>.+
 
 // `-s` without `-S`: curl stays quiet on failure so the only thing printed is the diagnostic built
 // below, which names the remedy. curl's own "(56) ... error: 403" adds nothing a reader can act on.
-const curlJson = (url, accept) =>
+// NEVER interpolate a failed child process's own message here. `execFileSync` puts the whole command
+// line into it, and these commands carry the credential — as `-u x-access-token:<token>` on the token
+// request and as `Authorization: Bearer <token>` on every call after it. Surfacing that prints a live
+// GitHub token into local output and CI logs, where it is retained and readable. Report the exit
+// status instead: it is what distinguishes the failures anyone acts on, and it cannot leak anything.
+const curlFailure = (err) => `curl exited ${err.status ?? "abnormally"}`;
+
+const curlJson = (url, accept, credential) =>
   JSON.parse(
-    execFileSync("curl", ["-sfL", "-H", `Accept: ${accept}`, url], {
-      encoding: "utf8",
-      maxBuffer: 32 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "ignore"],
-    }),
+    execFileSync(
+      "curl",
+      [
+        "-sfL",
+        ...(credential ? ["-u", `x-access-token:${credential}`] : []),
+        "-H",
+        `Accept: ${accept}`,
+        url,
+      ],
+      {
+        encoding: "utf8",
+        maxBuffer: 32 * 1024 * 1024,
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    ),
   );
 
 /**
@@ -217,27 +234,59 @@ function download(tag, asset, dest) {
   }
 
   const repository = `${GHCR_NAMESPACE}/${parts.pkg}`;
+  // The packages stay PRIVATE. Read access is granted per package to the CONSUMING REPOSITORY, so
+  // the two causes worth naming are "not published yet" and "this repository was never granted".
+  // They are not distinguishable from here: the registry answers a missing package and an ungranted
+  // one alike, and — measured against live ghcr.io — a CREDENTIALED token request returns 200 and
+  // issues a token even for a package that does not exist, where the same request unauthenticated is
+  // 403. So a token proves nothing about existence; only the manifest read does.
   const unreachable = (why) =>
     new Error(
       `cannot download ${asset} from ${GHCR}/${repository}:${parts.version} — ${why}. Either the ` +
-        `${tag} release has not published its OCI artifacts yet, or the package is still PRIVATE ` +
-        "(a package pushed from a private repo is private by default; it has to be made public once " +
-        "in the org's package settings). Anonymous pull is the only supported route.",
+        `${tag} release has not published its OCI artifacts yet, or this repository has not been ` +
+        `granted read access to the package: its settings -> Manage Actions access -> add ` +
+        `eco-incorp/sauce (Read). The package is private by design and stays that way; the grant is ` +
+        "what makes the pull work, and no personal access token is involved.",
     );
 
-  // An anonymous pull token. GHCR issues one without credentials for a PUBLIC package; for a private
-  // one it answers with an error body carrying no token, which is why this is checked rather than
-  // assumed.
+  // A pull token. The packages are PRIVATE by design, so this exchange is authenticated — but with
+  // a credential every caller already has, which is the whole point: in CI the workflow's own
+  // `GITHUB_TOKEN`, locally whatever `gh` is already logged in as. Neither is a PAT minted for this,
+  // and nothing about v12 is published publicly to make it work. What grants the access is a
+  // per-package read grant to the CONSUMING REPOSITORY, configured once on the package itself.
+  const credential =
+    process.env.GITHUB_TOKEN ??
+    process.env.GH_TOKEN ??
+    (() => {
+      try {
+        return execFileSync("gh", ["auth", "token"], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        }).trim();
+      } catch {
+        return undefined;
+      }
+    })();
+  if (!credential) {
+    throw new Error(
+      `cannot download ${asset} from ${GHCR}/${repository}:${parts.version} — no GitHub credential ` +
+        "found. These packages are private, so the pull is authenticated: set GITHUB_TOKEN (CI " +
+        "supplies its own automatically) or run `gh auth login`. No personal access token needs to " +
+        "be minted for this.",
+    );
+  }
+
   let token;
   try {
     ({ token } = curlJson(
       `${GHCR}/token?scope=${encodeURIComponent(`repository:${repository}:pull`)}&service=ghcr.io`,
       "application/json",
+      credential,
     ));
   } catch (err) {
-    throw unreachable(`the registry refused to issue an anonymous pull token (${err.message})`);
+    throw unreachable(`the registry refused to issue a pull token (${curlFailure(err)})`);
   }
-  if (!token) throw unreachable("the registry issued no anonymous pull token");
+  if (!token) throw unreachable("the registry issued no pull token");
 
   const accept = [
     "application/vnd.oci.image.manifest.v1+json",
@@ -256,7 +305,7 @@ function download(tag, asset, dest) {
   try {
     manifest = authed(`${GHCR}/v2/${repository}/manifests/${parts.version}`);
   } catch (err) {
-    throw unreachable(`its manifest could not be read (${err.message})`);
+    throw unreachable(`its manifest could not be read (${curlFailure(err)})`);
   }
 
   // An index points at manifests rather than layers. Follow the first entry: these artifacts are

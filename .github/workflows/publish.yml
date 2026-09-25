@@ -19,7 +19,7 @@ name: Publish
 # not publishing there at all.
 #
 # Required repo secrets:
-#   ECO_INCORP_TOKEN   PAT with read on eco-incorp/v12 (to download its
+#   (no PAT) — v12 artifacts come from GHCR via the built-in GITHUB_TOKEN (to download its
 #                      private RELEASE assets during the sync)
 #   NPM_TOKEN          npmjs.com automation token with publish rights on
 #                      the @eco-incorp scope
@@ -59,13 +59,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-private-deps
-        with:
-          token: ${{ secrets.ECO_INCORP_TOKEN }}
 
       # `anvil` is what the sdk build's engine e2e path needs; nothing here compiles contracts any
       # more, since the ABIs arrive as a pinned release asset.
@@ -105,7 +102,7 @@ jobs:
       # and the verify step below refuses to publish.
       - name: Build all areas (sdk + actions)
         env:
-          GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm build
 
       # `pnpm build`'s sync writes only the JSON artifacts; the SVM engine binaries land in
@@ -114,7 +111,7 @@ jobs:
       # engine, since eco-incorp/v12 is private and the fetch path is closed to them.
       - name: Fetch + ship the SVM engine binaries
         env:
-          GH_TOKEN: ${{ secrets.ECO_INCORP_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines
 
       # The sdk build's sync is tolerant by design (a local dev tree without the release assets still

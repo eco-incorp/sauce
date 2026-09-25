@@ -14,9 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # No `setup-private-deps` here: `pnpm install` has no private source left to authenticate for
-      # (the engine git dep is gone; every v12 artifact is a release download made by the sync step,
-      # which this job never runs). Requiring the secret would only make a fork's lint fail.
+      # No credential here, and none needed: `pnpm install` has no private source left to
+      # authenticate for (the engine git dep is gone), and every v12 artifact is fetched by the sync
+      # step, which this job never runs.
       - uses: pnpm/action-setup@v4
         with:
           version: 10.28.2
