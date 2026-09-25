@@ -15,7 +15,7 @@ The Sauce compiler is a dependency of that package. You do not need a compiler c
 This complete TypeScript example builds an approval intent offline. Addresses and the fee are fixtures; the zero reward demonstrates construction only. Before submission, [read the current Kitchen fee and prepare an Executor-owned Pot](intents.md#prepare-the-destination-pot).
 
 ```ts
-import "@eco-incorp/sauce";
+import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 const executionFee = 1_000n; // Fixture: read the destination Kitchen's executionFee() before use.
@@ -43,11 +43,11 @@ const built = Base(() => {
 console.log(built.hash().intentHash);
 ```
 
-Importing the root package installs `Base` and the other chain globals. Inside the callback, the SDK resolves `USDC` and `Uniswap.UniversalRouter` for Base, compiles the body with Sauce, and encodes a Pot `cook(engine, program)` call. `.reward(...)` completes the Eco intent. Nothing is submitted to a chain.
+`Base` is a named export of the root package, one per supported chain; importing the package installs nothing globally. Inside the callback, the SDK resolves `USDC` and `Uniswap.UniversalRouter` for Base, compiles the body with Sauce, and encodes a Pot `cook(engine, program)` call. `.reward(...)` completes the Eco intent. Nothing is submitted to a chain.
 
 For execution, deploy the Pot with the destination `Portal.executor()` as owner and pay the current Kitchen fee on every cook. [Intent setup](intents.md#prepare-the-destination-pot) shows the reads and deployment call. Fund and empty that shared Pot within the fulfillment.
 
-`USDC` and protocol names have generated TypeScript declarations but are source syntax, not JavaScript clients. The router is registered as `UniswapV4.UniversalRouter`, with `Uniswap.UniversalRouter` as a family alias. `UniswapV3.UniversalRouter` is not a registered name. See [coverage](../api/coverage.md) for which protocols expose these namespaces.
+`USDC` and protocol names are the one thing here that is not an import: they have generated TypeScript declarations but are source syntax resolved at compile time, not JavaScript clients, so there is nothing to import them from. The router is registered as `UniswapV4.UniversalRouter`, with `Uniswap.UniversalRouter` as a family alias. `UniswapV3.UniversalRouter` is not a registered name. See [coverage](../api/coverage.md) for which protocols expose these namespaces.
 
 The callback captures no outer variables. Pass dynamic scalars through `defines`, or use explicit source strings; see the complete [transfer example](../examples/first-intent.ts). Callbacks must remain recognizable synchronous source after your build tooling transforms them.
 

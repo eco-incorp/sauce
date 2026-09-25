@@ -69,7 +69,7 @@ Per-workspace (`--filter`):
 ```sh
 pnpm --filter './sdk' test               # SDK tests, including protocol SauceScript compilation
 pnpm --filter './actions' test:unit      # fork-free subset CI runs
-pnpm --filter './sdk' gen-route-globals  # regenerate host chain-global declarations
+pnpm --filter './sdk' gen-route-globals  # regenerate the per-chain named exports
 pnpm --filter './sdk' gen-source-globals # regenerate source-only token/protocol declarations
 ```
 
@@ -296,11 +296,17 @@ contract binding, no re-export, no method-on-call-result). The rewrite sidesteps
 `@sauce/token` ambient module above still provides the FUNCTION surface (`approve(token, …)`); the two
 are complementary spellings, not competitors.
 
-**Host globals and compiled-source declarations are separate.** `routes/globals.generated.ts`
-declares installed chain helpers (`Base`, `Solana`, `chain`) and `Token`. The generated
-`routes/source-globals.generated.ts` additionally declares bare token symbols and protocol
-namespaces such as `USDC` and `Uniswap` for TypeScript route closures. Those are **type-only
-declarations**: no host `USDC` or `Uniswap` runtime object is installed. They describe source the
+**The host surface and compiled-source declarations are separate — and only one of them is
+global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named
+value per canonical chain (`Base`, `Solana`, …) plus `chain` and `Token`, re-exported from the
+package root, each composed in `routes/composed.ts` (callable + `.chain`/`.route` + the lazy
+contract tree, + the svm venue tree on an svm chain). **Importing the SDK touches nothing on
+`globalThis`**; `installRouteGlobals()`/`uninstallRouteGlobals()` (`routes/globals.ts`) remain as an
+opt-in for a host that wants the bare-name spelling at run time, hand out the SAME memoised objects,
+and install no types. `routeGlobals` is a live view of the last install, empty until one happens.
+Globals are a SAUCESCRIPT concept: the generated `routes/source-globals.generated.ts` declares bare
+token symbols and protocol namespaces such as `USDC` and `Uniswap` for TypeScript route closures.
+Those are **type-only declarations**: no host `USDC` or `Uniswap` runtime object is installed. They describe source the
 SDK extracts with `Function.prototype.toString`; the closure is never invoked and captures no
 outer JavaScript values. Use `compile.defines` for external scalar values.
 

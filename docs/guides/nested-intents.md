@@ -7,7 +7,7 @@
 Use the thunk form to receive the parent's destination as the child's source:
 
 ```ts
-import "@eco-incorp/sauce";
+import { Arbitrum, Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 export function buildCascade(

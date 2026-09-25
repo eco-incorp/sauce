@@ -16,10 +16,10 @@ Use Node.js **24 or newer**. The links open the Markdown manual and examples inc
 ## Programs with protocol and token globals
 
 This complete example builds an intent offline. The repeated-digit addresses and fee are fixtures;
-no transaction is sent. Select a destination chain, then use its contracts and tokens in the program:
+no transaction is sent. Import a destination chain, then use its contracts and tokens in the program:
 
 ```ts
-import "@eco-incorp/sauce";
+import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 // Offline fixtures. Read the destination Kitchen fee and use an Executor-owned Pot before use.
@@ -49,8 +49,10 @@ console.log(built.hash().intentHash);
 ```
 
 The [quick start](docs/guides/quick-start.md) explains the setup, and the [examples](docs/examples/README.md) are checked
-against the SDK. The callback is compiled as source. Token and protocol names resolve on Base;
-values from surrounding JavaScript must be supplied through compile-time `defines`.
+against the SDK. Every chain is a named export — `import { Base, Solana }` — and importing the SDK
+installs nothing globally. The callback is compiled as source, so the names inside it are different:
+`USDC` and `Uniswap` are compile-time names the compiler resolves on Base, never JavaScript values,
+and anything from surrounding JavaScript must be supplied through compile-time `defines`.
 
 Use `USDC.transfer(...)`, `USDC.balanceOf(...)`, `Token(address).approve(...)`, and linked protocol
 methods in the same program. `Uniswap.UniversalRouter` is the family alias for

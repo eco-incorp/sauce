@@ -1,4 +1,4 @@
-import "@eco-incorp/sauce";
+import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 // Offline fixtures. Read the destination Kitchen fee and use an Executor-owned Pot before use.

@@ -86,9 +86,13 @@ Custom symbol names work in source strings. The package's generated TypeScript d
 
 ## Route source and host JavaScript
 
-Importing the package installs real chain globals such as `Base` and `Solana`, plus the host `Token` builder. The package also supplies TypeScript declarations for bare route names such as `USDC` and `Uniswap`. Those bare names are **route syntax**: there is no host JavaScript `USDC` or `Uniswap` object to execute.
+Two different mechanisms share the look of a bare name, and the difference is what you import.
 
-Use a side-effect import, `import "@eco-incorp/sauce"`, when relying on installed globals. A type-only import does not install them, and TypeScript can erase a named import used only for types.
+Chain accessors such as `Base` and `Solana`, the `chain(ref)` front door, and the host `Token` builder are **named exports**: `import { Base, Solana, Token } from "@eco-incorp/sauce"`. They are ordinary JavaScript values, and importing the package installs nothing on `globalThis`.
+
+Bare route names such as `USDC` and `Uniswap` are **route syntax**, resolved by the compiler against the destination chain. The package supplies TypeScript declarations for them so a typed callback checks, but there is no host JavaScript `USDC` or `Uniswap` object to import or execute.
+
+A host that wants the chain names as runtime globals anyway can opt in with `installRouteGlobals()`, which defines them on `globalThis` (or any target you pass) and never overwrites a name already there. It installs values only; declare the names yourself.
 
 Outside a route, `Base.UniswapV4.UniversalRouter` or `contracts.on("base").UniswapV4.UniversalRouter` is a real host accessor. Its methods return inert `ContractCall` objects. A call can provide encoded `data`, `.toCall()` for `{ target, data, value }`, or `.toSauceScript()` for source and import paths. Host accessor methods currently have the static type `unknown`; use an explicit signature when invoking one in TypeScript:
 

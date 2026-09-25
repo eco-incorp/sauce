@@ -2,10 +2,10 @@
 
 [Documentation](../README.md) · [Create an intent](../guides/intents.md) · [Compiler](compiler.md)
 
-Import the routes namespace from the package root:
+Import the routes namespace from the package root, alongside the chain accessors:
 
 ```ts
-import { routes } from "@eco-incorp/sauce";
+import { Base, routes } from "@eco-incorp/sauce";
 
 const destination = routes.chain("base");
 ```
@@ -22,7 +22,9 @@ There is no published `/routes` subpath. Public route types are available as `ro
 | `routes.chainAccessors.Base`           | Explicit access to the route chain entry point    |
 | `routes.openRoute(ref, body, options)` | Direct function behind chain entry points         |
 
-Chain references accept canonical slugs, names/aliases supported by the registry, numeric chain IDs, and canonical chain records. `.chain` exposes the canonical record. Root import installs the composed globals, which also expose host contract/venue accessors; `routes.chain(...)` is the route entry point.
+Chain references accept canonical slugs, names/aliases supported by the registry, numeric chain IDs, and canonical chain records. `.chain` exposes the canonical record.
+
+`Base` and every other chain are **named exports of the package root**; importing the package installs nothing on `globalThis`. A root-imported accessor is the composed one, which also exposes host contract and venue accessors (`Base.Uniswap.UniversalRouter`, `Solana.RaydiumCpSwap`); `routes.chainAccessors.Base` is the bare route entry point without that tree. A host that wants the bare names at run time can call `installRouteGlobals()`; `uninstallRouteGlobals()` reverses it, and neither installs TypeScript declarations.
 
 `body` accepts a source string or a synchronous zero-argument callback. A string can contain a full `function main(...)` or a bare body. A callback supplies source text, with no JavaScript capture. See [callback semantics](../guides/intents.md#callbacks-are-compiled-source).
 

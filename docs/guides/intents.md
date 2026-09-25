@@ -2,10 +2,10 @@
 
 [Documentation](../README.md) · [Routes API](../api/routes.md) · [Nested intents](nested-intents.md)
 
-`Base(body, options).reward(reward)` compiles a program for Base and packages it as an Eco intent. `Base.route(...)` has the same behavior. The destination chain selects the compiler target, token addresses, and protocol deployments.
+`Base(body, options).reward(reward)` compiles a program for Base and packages it as an Eco intent. `Base.route(...)` has the same behavior. The destination chain selects the compiler target, token addresses, and protocol deployments. Each chain is a named export of the root package; import the ones you use.
 
 ```ts
-import "@eco-incorp/sauce";
+import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 export function buildApprovalIntent(routeOptions: routes.IntentOptions, reward: routes.RewardArg) {
@@ -53,7 +53,7 @@ An Executor-owned Pot can be invoked by other valid Portal routes. Deliver asset
 This function takes deployment and reward configuration as inputs. It delivers one USDC on Base to `recipient` and offers the configured source-token reward. It only constructs data.
 
 ```ts
-import { token, type routes } from "@eco-incorp/sauce";
+import { Base, token, type routes } from "@eco-incorp/sauce";
 
 interface TransferIntentConfig {
   pot: routes.AddressInput;

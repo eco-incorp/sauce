@@ -176,7 +176,7 @@ can encode an SVM destination; they do not provide Solana-origin submission.
 
 ## Venue accessors
 
-The `Solana` global includes the venues registered for runtime access. A venue accessor exposes a program ID, pool configuration loading, quote-source generation, swap CPI construction, and a TypeScript reference quote:
+The `Solana` accessor, imported from the package root, includes the venues registered for runtime access. A venue accessor exposes a program ID, pool configuration loading, quote-source generation, swap CPI construction, and a TypeScript reference quote:
 
 ```ts
 import { venue } from "@eco-incorp/sauce/svm";
@@ -195,6 +195,6 @@ export async function buildRaydiumSwap(
 }
 ```
 
-`Solana.RaydiumCpSwap` exposes the same accessor when globals are installed. `poolConfig` uses the account loader you supply; it does not create an RPC client or discover pools. `quoteSource` returns SauceScript source, and `.swap` returns CPI data plus account references, not a transaction.
+`Solana.RaydiumCpSwap` exposes the same accessor after `import { Solana } from "@eco-incorp/sauce"`. `poolConfig` uses the account loader you supply; it does not create an RPC client or discover pools. `quoteSource` returns SauceScript source, and `.swap` returns CPI data plus account references, not a transaction.
 
 Venue swap builders use a venue-level minimum output of one; the composed program must enforce the user's actual minimum with a post-swap output balance delta. Runtime accessors cover the registered venue set. Other adapters exported from `/svm` do not automatically appear as `Solana.<Venue>`; consult [coverage](../api/coverage.md).
