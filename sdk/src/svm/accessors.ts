@@ -109,9 +109,9 @@ function buildVenueAccessor(adapter: SvmVenueAdapter): SvmVenueAccessor {
 }
 
 /**
- * Import-based front door: `venue('raydium-cp-swap').swap(...)` — the
- * analogue of `descriptors/accessors.ts`'s `on(chainRef)`, for
- * `__ECO_ROUTES_NO_GLOBALS__` hosts and the TS2451 own-`const Solana` caveat.
+ * Slug-based front door: `venue('raydium-cp-swap').swap(...)` — the
+ * analogue of `descriptors/accessors.ts`'s `on(chainRef)`, for a caller
+ * resolving a venue at run time rather than naming `Solana.RaydiumCpSwap`.
  */
 export function venue(slug: SvmVenueSlug): SvmVenueAccessor {
   return buildVenueAccessor(venueAdapter(slug));

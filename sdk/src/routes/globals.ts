@@ -1,48 +1,31 @@
 /**
- * Installs the eco-routes chain accessors (and the `chain` front door) as
- * DEFAULT GLOBALS, so a consumer writes `Base(() => USDC.transfer(to, amt)).reward(reward)`
- * with zero import. Registry-derived by construction: it enumerates
- * `chainAccessors` (itself generated from `../chains/canonical.js` by
- * `createChainGlobals`), so adding a chain to `CANONICAL_CHAINS` adds a
- * global with no code change here.
+ * OPT-IN installation of the chain accessors (plus the `chain` front door and
+ * the universal `Token` interface) onto `globalThis`, or onto any other
+ * target object.
  *
- * Imported for its side effect from `../index.js` -- see the comment there
- * for why that import must stay a BARE one (it is what carries the ambient
- * `declare global` block in `./globals.generated.js` into a consumer's type
- * graph, not just the runtime install).
+ * NOTHING HERE RUNS UNLESS A HOST CALLS IT. The SDK's TypeScript surface is
+ * imports only -- `import { Base, Solana } from "@eco-incorp/sauce"` (see
+ * `./chain-exports.generated.ts`). Globals are a SauceScript concept: names
+ * resolved at COMPILE time inside a route body, scoped to the destination
+ * chain (`USDC`, `Uniswap` -- `./source-globals.generated.ts`), which install
+ * no JavaScript values at all. This module is the escape hatch for a host
+ * that deliberately wants the bare-name spelling at RUN time, and it is the
+ * only thing in the SDK that touches `globalThis`.
  *
- * Reversible, in order of how much it undoes:
- *  1. `globalThis.__ECO_ROUTES_NO_GLOBALS__ = true` before importing the SDK
- *     skips the runtime install entirely (ambient types still resolve --
- *     see the module doc on `index.ts` for why that's a type-only nuisance,
- *     not a wrong program).
- *  2. `uninstallRouteGlobals()` removes whatever this module installed.
- *  3. `installRouteGlobals({ includeChain: false })` / `{ target }` re-runs
- *     with a narrower scope.
- *  4. Deleting the two lines in `../index.js` removes both the runtime
- *     install AND the ambient types together (see that file).
+ * It installs values, not types: there is no ambient `declare global` block
+ * to match any more, so a host that calls this declares the names itself.
+ *
+ * Registry-derived by construction: it enumerates `composedChainGlobals()`
+ * (itself generated from `../chains/canonical.js`), so adding a chain to
+ * `CANONICAL_CHAINS` adds an installable name with no code change here.
  *
  * Never clobbers a name already present on the target -- see
  * `installRouteGlobals` below.
  */
-import type { CanonicalChain } from "../chains/canonical.js";
-import { chain, chainAccessors } from "./accessors.js";
-// Load-bearing for TYPES, not runtime: this bare side-effect import is what
-// tsc preserves into dist/routes/globals.d.ts, which is how the ambient
-// `declare global` block reaches a consumer of the built package. Do not
-// "clean up" this import -- see globals.generated.ts and this file's own
-// header comment above.
-import "./globals.generated.js";
-// E2.3: composes each chain global with its native contract accessor tree
-// (`Base.Uniswap.UniversalRouter.method(...)`) alongside the existing
-// eco-routes DSL (`Base.route(...)`) -- see chainContractsFor below.
-import { chainContracts } from "../descriptors/accessors.js";
-// The SVM twin of the above: composes the svm venue accessor tree
-// (`Solana.RaydiumCpSwap.swap(...)`) onto an `svm`-kind chain global only --
-// see composeChainGlobal's `origin.chain.kind === "svm"` branch below.
-import { venues as svmVenueAccessors } from "../svm/accessors.js";
-// The universal token interface as a DEFAULT GLOBAL: `Token.transfer(...)` with no import. A
-// single, non-chain global -- see InstallRouteGlobalsOptions.includeToken below.
+import { chain } from "./accessors.js";
+import { composedChainGlobals } from "./composed.js";
+// The universal token interface, installable as a bare name: `Token.transfer(...)`. A
+// single, non-chain entry -- see InstallRouteGlobalsOptions.includeToken below.
 import { Token } from "../token/api.js";
 
 export interface RouteGlobalsReport {
@@ -67,9 +50,12 @@ export interface InstallRouteGlobalsOptions {
  * remove without guessing at what a consumer already had. */
 const owned = new Set<string>();
 
+const EMPTY_REPORT: RouteGlobalsReport = { installed: [], skipped: [] };
+let lastReport: RouteGlobalsReport = EMPTY_REPORT;
+
 /**
  * Installs every chain accessor (PascalCase-keyed, e.g. `Base`, `Solana`)
- * plus, by default, `chain` onto `target` (default `globalThis`).
+ * plus, by default, `chain` and `Token` onto `target` (default `globalThis`).
  *
  * Never overwrites a name already present: uses the `in` operator (not an
  * `undefined` check), so an inherited or getter-only property on the target
@@ -77,80 +63,14 @@ const owned = new Set<string>();
  * property is `enumerable: false` (so ~40 names don't show up in
  * `Object.keys(globalThis)`/`for...in`) and `configurable: true` (so
  * `uninstallRouteGlobals` can genuinely remove it).
+ *
+ * The chain values are the SAME objects the named exports hand out
+ * (`Base === globalThis.Base` after this call) -- composition is memoised in
+ * `./composed.js`.
  */
-/** Function intrinsics a contract/venue namespace key must never collide with once composed onto a
- *  CALLABLE global -- unlike the plain-object global this replaced, landing on one of these would
- *  corrupt the callable itself, not merely shadow an inert property. */
-const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
-  "length",
-  "name",
-  "prototype",
-  "arguments",
-  "caller",
-  "bind",
-  "call",
-  "apply",
-  "toString",
-  "constructor",
-]);
-
-/**
- * Composes one chain global: a FRESH callable forwarding to `origin.route`
- * (so it stays CALLABLE — a plain object would silently drop that), plus
- * `chain`/`route` and the lazy contract-namespace tree (`Uniswap`,
- * `UniswapV4`, ...) and, for an `svm`-kind chain only, the svm venue
- * accessor tree (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
- * `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's
- * memoising GETTERS stay lazy — spread would invoke every one of them
- * eagerly at install time. `origin` itself is never mutated: this returns a
- * fresh function object. Throws on a name collision (e.g. a future protocol
- * or venue slug literally named "route", "chain", or a function intrinsic
- * like "call"/"bind"), mirroring `createChainGlobals`'s own duplicate-key
- * throw. The `kind === "svm"` gate is registry-derived (from
- * `../chains/canonical.js`'s own `CanonicalChain.kind`), not a hardcoded
- * chain name -- a second SVM chain added to `CANONICAL_CHAINS` gets the
- * venue namespaces automatically, and every EVM chain provably cannot.
- */
-function composeChainGlobal(
-  name: string,
-  origin: Record<string, unknown> & { chain: CanonicalChain; route: unknown },
-): object {
-  const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;
-  const sources: PropertyDescriptorMap[] = [Object.getOwnPropertyDescriptors(contracts)];
-  if (origin.chain.kind === "svm") {
-    const svmVenues = svmVenueAccessors() as unknown as Record<string, unknown>;
-    sources.push(Object.getOwnPropertyDescriptors(svmVenues));
-  }
-
-  const fn = ((...args: unknown[]) =>
-    (origin.route as (...a: unknown[]) => unknown)(...args)) as unknown as Record<string, unknown>;
-  const merged: PropertyDescriptorMap = {
-    chain: { value: origin.chain, enumerable: true, configurable: false, writable: false },
-    route: { value: origin.route, enumerable: true, configurable: false, writable: false },
-  };
-  for (const source of sources) {
-    for (const key of Object.keys(source)) {
-      if (key in merged || FUNCTION_INTRINSIC_DENYLIST.has(key)) {
-        throw new Error(
-          `routes/globals: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`,
-        );
-      }
-    }
-    Object.assign(merged, source);
-  }
-  Object.defineProperties(fn, merged);
-  return fn;
-}
-
 export function installRouteGlobals(opts: InstallRouteGlobalsOptions = {}): RouteGlobalsReport {
   const target = (opts.target ?? globalThis) as Record<string, unknown>;
-  const entries: [string, unknown][] = Object.entries(chainAccessors).map(([name, origin]) => [
-    name,
-    composeChainGlobal(
-      name,
-      origin as unknown as Record<string, unknown> & { chain: CanonicalChain; route: unknown },
-    ),
-  ]);
+  const entries: [string, unknown][] = Object.entries(composedChainGlobals());
   if (opts.includeChain !== false) entries.push(["chain", chain]);
   if (opts.includeToken !== false) entries.push(["Token", Token]);
 
@@ -170,7 +90,8 @@ export function installRouteGlobals(opts: InstallRouteGlobalsOptions = {}): Rout
     owned.add(name);
     installed.push(name);
   }
-  return { installed, skipped };
+  lastReport = { installed, skipped };
+  return lastReport;
 }
 
 /** Removes every name this module has installed (across all calls) from
@@ -182,14 +103,20 @@ export function uninstallRouteGlobals(target: object = globalThis): void {
     delete rec[name];
   }
   owned.clear();
+  lastReport = EMPTY_REPORT;
 }
 
 /**
- * Install-on-import result -- this IS the default-globals behavior. A host
- * that must not have `globalThis` mutated can opt out before the SDK is
- * ever imported: `globalThis.__ECO_ROUTES_NO_GLOBALS__ = true`.
+ * The most recent `installRouteGlobals()` result -- EMPTY until a host calls
+ * it, because the SDK no longer installs on import. A live view rather than a
+ * frozen snapshot, so it can never claim an install that has since been
+ * undone; `uninstallRouteGlobals()` resets it.
  */
-export const routeGlobals: RouteGlobalsReport = (globalThis as Record<string, unknown>)
-  .__ECO_ROUTES_NO_GLOBALS__
-  ? { installed: [], skipped: [] }
-  : installRouteGlobals();
+export const routeGlobals: RouteGlobalsReport = {
+  get installed(): readonly string[] {
+    return lastReport.installed;
+  },
+  get skipped(): readonly string[] {
+    return lastReport.skipped;
+  },
+};

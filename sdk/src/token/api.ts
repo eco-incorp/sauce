@@ -1,5 +1,5 @@
 /**
- * `Token` — the runtime value behind the DEFAULT GLOBAL `Token` (see `sdk/src/routes/globals.ts`).
+ * `Token` — the runtime value behind the package root's `Token` export.
  * A plain, inert builder: `Token.transfer(spec)`/`.approve(spec)`/`.balanceOf(spec)` return a
  * `TokenCall`, synchronous, no RPC, no compiler import — the same posture as
  * `descriptors/call.ts`'s `ContractCall`.
@@ -165,12 +165,12 @@ export interface TokenBinding {
 }
 
 /**
- * The call signature the **ambient** `Token` global carries, intersected onto [`TokenApi`] by
- * `gen-route-globals.mjs` — the same way each chain global is `ChainGlobals[...] & ChainContracts`.
+ * The call signature the package root's `Token` export carries, intersected onto [`TokenApi`] by
+ * `gen-route-globals.mjs` — the same way each chain accessor is `ChainGlobals[...] & ChainContracts`.
  *
- * Deliberately NOT on `TokenApi` itself: the runtime `Token` export is a frozen object and is not
- * callable, so typing it as callable would promise something that throws. The ambient declaration
- * describes what is legal in a route body, where the call never survives to run.
+ * Deliberately NOT on `TokenApi` itself: the runtime `Token` value is a frozen object and is not
+ * callable, so typing it as callable would promise something that throws. It describes what is
+ * legal in a route BODY, where the call is rewritten to `IERC20.at(...)` and never survives to run.
  */
 export interface TokenFactory {
   (address: AddressInput): TokenBinding;
@@ -194,8 +194,8 @@ export interface TokenApi {
 
 /**
  * The universal token interface — ERC20 on an EVM compile target, SPL Token on `svm`. See
- * `sdk/src/token/index.ts` for the module overview. Installed as the DEFAULT GLOBAL `Token` (zero
- * import) by `sdk/src/routes/globals.ts`; also available as the named export `token.Token`.
+ * `sdk/src/token/index.ts` for the module overview. Re-exported from the package root as `Token`;
+ * also available as the named export `token.Token`.
  */
 export const Token: TokenApi = Object.freeze({
   transfer: (spec: TokenTransferSpec): TokenCall => makeTokenCall({ op: "transfer", ...spec }),

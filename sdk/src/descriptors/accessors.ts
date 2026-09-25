@@ -253,8 +253,8 @@ export function chainContracts(chainRef: ChainRef): ChainContracts {
   return out as unknown as ChainContracts;
 }
 
-/** Import-based front door (option-b): `contracts.on('base').Uniswap.UniversalRouter.execute(...)`.
- *  Escape hatch for `__ECO_ROUTES_NO_GLOBALS__` hosts and for the TS2451 own-`const Base` caveat. */
+/** Chain-ref front door: `contracts.on('base').Uniswap.UniversalRouter.execute(...)` — for a
+ *  caller resolving the chain at run time rather than importing the `Base` accessor. */
 export function on(chainRef: ChainRef): ChainContracts {
   return chainContracts(chainRef);
 }

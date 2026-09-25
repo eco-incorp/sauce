@@ -1,10 +1,13 @@
 /**
- * eco-routes cross-chain intent DSL — top-level chain globals generated from
- * `../chains/canonical.js`, each BOTH callable and a namespace.
+ * eco-routes cross-chain intent DSL — one chain accessor per canonical chain,
+ * generated from `../chains/canonical.js`, each BOTH callable and a namespace.
+ *
+ * The composed accessors (callable + `.chain`/`.route` + the native contract
+ * tree) are named exports of the package root; `chainAccessors` below is the
+ * BARE record, carrying `.chain`/`.route` and nothing else.
  *
  * ```ts
- * import { routes } from "@eco-incorp/sauce";
- * const { Base, Solana } = routes.chainAccessors;
+ * import { Base, Solana } from "@eco-incorp/sauce";
  * const built = Base("return 1n;", { pot, engine, deadline, portal }).reward({ source: Solana.chain, creator, prover, deadline });
  * // identically: Base.route("return 1n;", {...}).reward({...})
  * ```
@@ -13,6 +16,7 @@ export { chain, chainAccessors, pascalOfSlug } from "./accessors.js";
 export type { PascalOf } from "./accessors.js";
 
 export { createChainGlobals, makeChainGlobal } from "./builder.js";
+export { composedChainGlobal, composedChainGlobals } from "./composed.js";
 export type { ChainGlobal, ChainGlobals, ChainRef, ChainRoute } from "./builder.js";
 
 export { assembleIntent } from "./intent.js";
