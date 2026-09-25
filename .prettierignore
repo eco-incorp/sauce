@@ -37,6 +37,7 @@ sdk/src/std
 # source. Refreshing them re-emits compact JSON, so formatting only guarantees churn next time.
 sdk/test/svm/fixtures
 sdk/test/std/token/fixtures
+sdk/test/evm/fixtures
 
 # GENERATOR OUTPUT that happens to be SauceScript. Both of these are emitted by TypeScript in
 # `src/recipes/` / `src/svm/recipes/` and pinned BYTE-FOR-BYTE against the emitter —
