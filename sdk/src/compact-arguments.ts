@@ -39,7 +39,17 @@ function parseSchema(schema: Uint8Array): Shape {
  * public keys can be supplied as full-width hexadecimal integers. Bytes are raw,
  * unpadded bytes; collection lengths are unsigned 32-bit big-endian counts.
  */
-export function encodeCompactArguments(schema: Uint8Array, value: CompactValue): Uint8Array {
+export function encodeCompactArguments(
+  schema: Uint8Array,
+  value: CompactValue,
+  options: { scalarWidth?: number } = {},
+): Uint8Array {
+  const { scalarWidth } = options;
+  if (
+    scalarWidth !== undefined &&
+    (!Number.isInteger(scalarWidth) || scalarWidth < 1 || scalarWidth > 32)
+  )
+    throw new RangeError("Compact scalarWidth must be an integer in 1..32");
   const shape = parseSchema(schema);
   const chunks: Uint8Array[] = [Uint8Array.of(0x53, 0x41, 1, 0)];
   const count = (length: number): void => {
@@ -92,7 +102,17 @@ export function encodeCompactArguments(schema: Uint8Array, value: CompactValue):
       bytes.push(Number(scalar & 255n));
       scalar >>= 8n;
     }
-    chunks.push(Uint8Array.of(bytes.length, ...bytes.reverse()));
+    bytes.reverse();
+    // A declared width keeps one encoding per value — still canonical, but at a
+    // FIXED offset, which is what lets a caller splice a runtime-measured number
+    // into an otherwise precompiled payload. Both engines read a 1-byte width and
+    // then that many bytes, and neither requires the minimal one.
+    if (scalarWidth !== undefined) {
+      if (bytes.length > scalarWidth)
+        throw new RangeError(`Compact scalar does not fit the declared ${scalarWidth}-byte width`);
+      while (bytes.length < scalarWidth) bytes.unshift(0);
+    }
+    chunks.push(Uint8Array.of(bytes.length, ...bytes));
   };
   encode(shape, value);
   const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
@@ -114,8 +134,9 @@ export function encodeCompactArguments(schema: Uint8Array, value: CompactValue):
 export function decodeCompactArguments(
   schema: Uint8Array,
   data: Uint8Array,
-  options: { maxValues?: number } = {},
+  options: { maxValues?: number; scalarWidth?: number } = {},
 ): CompactValue {
+  const { scalarWidth } = options;
   // Inspection is unmetered host work. Bound the decoded object graph even when
   // a malicious array claims millions of zero-byte empty tuples.
   let remaining = options.maxValues ?? 1_000_000;
@@ -150,7 +171,11 @@ export function decodeCompactArguments(
     const width = take(1)[0]!;
     if (width > 32) throw new RangeError("Compact scalar exceeds 256 bits");
     const bytes = take(width);
-    if (width > 0 && bytes[0] === 0) throw new RangeError("Non-minimal compact scalar");
+    if (scalarWidth === undefined) {
+      if (width > 0 && bytes[0] === 0) throw new RangeError("Non-minimal compact scalar");
+    } else if (width !== scalarWidth) {
+      throw new RangeError(`Compact scalar width ${width} is not the declared ${scalarWidth}`);
+    }
     const scalar = bytes.reduce((n, byte) => (n << 8n) | BigInt(byte), 0n);
     if (type.tag === 0x40) {
       if (scalar > 1n) throw new RangeError("Non-canonical compact boolean");

@@ -91,3 +91,42 @@ test("bounds nested decoded allocations, including zero-byte tuple arrays", () =
   expect(() => decodeCompactArguments(emptyTupleArray, hostile)).toThrow(/value limit/);
   expect(() => decodeCompactArguments(schema, wire, { maxValues: 0 })).toThrow(/maxValues/);
 });
+
+// A declared width is what makes a scalar spliceable: the payload keeps one
+// encoding per value, but at an offset that no longer moves with the value, so a
+// runtime-measured number can be written into an otherwise precompiled payload.
+// Both engines read a 1-byte width and then that many bytes and neither requires
+// the minimal one (v12-evm Unpack.huff, v12-svm ops/unpack.rs, MAX_SCALAR_BYTES 32).
+test("encodes declared-width scalars at a value-independent offset", () => {
+  const one = Uint8Array.of(0x94, 0, 1, 0x20);
+  const lengths = new Set<number>();
+  for (const value of [0n, 1000n, 10n ** 18n, 2n ** 255n]) {
+    const fixed = encodeCompactArguments(one, [value], { scalarWidth: 32 });
+    lengths.add(fixed.length);
+    expect(decodeCompactArguments(one, fixed, { scalarWidth: 32 })).toEqual([value]);
+    // The declared width is the wire width, whatever the value needs.
+    expect(fixed[4]).toBe(32);
+  }
+  expect(lengths.size).toBe(1);
+  // ...whereas the minimal encoding moves with the value, which is why it cannot
+  // host a spliced number.
+  expect(encodeCompactArguments(one, [1000n]).length).not.toBe(
+    encodeCompactArguments(one, [2n ** 255n]).length,
+  );
+});
+
+test("keeps declared and minimal scalar widths mutually exclusive", () => {
+  const one = Uint8Array.of(0x94, 0, 1, 0x20);
+  const padded = encodeCompactArguments(one, [1n], { scalarWidth: 32 });
+  // Strict decoding is what signing relies on, so padding stays invalid there.
+  expect(() => decodeCompactArguments(one, padded)).toThrow(/Non-minimal/);
+  // ...and a declared width rejects the minimal encoding just as firmly.
+  expect(() =>
+    decodeCompactArguments(one, encodeCompactArguments(one, [1n]), { scalarWidth: 32 }),
+  ).toThrow(/not the declared 32/);
+  expect(() => encodeCompactArguments(one, [2n ** 200n], { scalarWidth: 16 })).toThrow(
+    /does not fit/,
+  );
+  for (const bad of [0, 33, 1.5, -1])
+    expect(() => encodeCompactArguments(one, [1n], { scalarWidth: bad })).toThrow(/1\.\.32/);
+});
