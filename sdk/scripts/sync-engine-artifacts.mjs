@@ -40,7 +40,7 @@ import {
   rmSync,
   copyFileSync,
 } from "node:fs";
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -165,85 +165,144 @@ const V12_KITCHEN_IDL = {
 // Keyed by tag: a bump downloads afresh rather than silently reusing the old bytes.
 const CACHE_ROOT = resolve(REPO_ROOT, "node_modules", ".cache", "sauce-engine-releases");
 
-const REPO = "eco-incorp/v12";
+// The same artifacts, published to GHCR as OCI artifacts by each release. PUBLIC packages there are
+// anonymously pullable — ghcr.io issues a pull token to a caller with no credentials at all — which
+// is the entire point: it removes the personal access token CI otherwise needs purely to read a
+// private repo's release assets. The bytes are identical either way, and the digest committed above
+// is still what decides whether they are the pinned artifact, so this changes the TRANSPORT and not
+// the trust model.
+const GHCR = "https://ghcr.io";
+const GHCR_NAMESPACE = "eco-incorp";
 
-const onPath = (bin) => {
-  try {
-    execSync(`command -v ${bin}`, { stdio: "ignore" });
+// `v12-svm-v1.2.0` -> package `v12-svm`, version `1.2.0`. The four components release independently
+// under their own tag namespaces, so each gets its own OCI repository; there is deliberately no
+// single tag that spans them.
+const OCI_TAG = /^(?<pkg>v12-evm|v12-svm|kitchen-evm|kitchen-svm)-v(?<version>.+)$/;
 
-    return true;
-  } catch {
-    return false;
-  }
-};
+// `-s` without `-S`: curl stays quiet on failure so the only thing printed is the diagnostic built
+// below, which names the remedy. curl's own "(56) ... error: 403" adds nothing a reader can act on.
+const curlJson = (url, accept) =>
+  JSON.parse(
+    execFileSync("curl", ["-sfL", "-H", `Accept: ${accept}`, url], {
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    }),
+  );
 
 /**
- * Download one release asset to `dest`. `gh` first (it carries the user's own credentials for this
- * PRIVATE repo); otherwise the REST API with a token. Throws with both remedies named — an absent
- * credential must not read as a mysterious 404.
+ * Download one release asset to `dest`, from GHCR, anonymously.
+ *
+ * ONE TRANSPORT AND NO CREDENTIAL. There is deliberately no `gh` or token fallback. A fallback would
+ * mean a developer with `gh` logged in and CI with none silently fetch by different routes, so the
+ * route CI depends on could rot unnoticed — which is the shape of failure this repo has already paid
+ * for elsewhere (a second source of truth that drifts). One path means a broken publish is broken
+ * for everyone, immediately.
+ *
+ * Failures name the remedy rather than surfacing a bare 403: for these artifacts "not found" almost
+ * always means the release has not published the OCI package yet, or the package exists but is still
+ * PRIVATE — a package pushed from a private repo is private by default and has to be made public
+ * once, by hand.
  */
 function download(tag, asset, dest) {
   const tmp = `${dest}.partial`;
   rmSync(tmp, { force: true });
 
-  if (onPath("gh")) {
-    execFileSync(
-      "gh",
-      [
-        "release",
-        "download",
-        tag,
-        "--repo",
-        REPO,
-        "--pattern",
-        asset,
-        "--output",
-        tmp,
-        "--clobber",
-      ],
-      {
-        stdio: ["ignore", "ignore", "inherit"],
-      },
-    );
-    renameSync(tmp, dest);
-
-    return;
-  }
-
-  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.ECO_INCORP_TOKEN;
-  if (!token) {
+  const parts = OCI_TAG.exec(tag)?.groups;
+  if (!parts) {
     throw new Error(
-      `cannot download ${tag}/${asset}: eco-incorp/v12 is a PRIVATE repo, and neither the \`gh\` CLI ` +
-        "nor a token was found. Install + `gh auth login`, or export GITHUB_TOKEN / GH_TOKEN with read " +
-        "access on eco-incorp/v12.",
+      `cannot map release tag '${tag}' to an OCI repository: expected <package>-v<version> for one ` +
+        "of v12-evm, v12-svm, kitchen-evm, kitchen-svm.",
     );
   }
 
-  const id = execFileSync(
-    "curl",
-    [
-      "-sSfL",
-      "-H",
-      `Authorization: Bearer ${token}`,
-      "-H",
-      "Accept: application/vnd.github+json",
-      `https://api.github.com/repos/${REPO}/releases/tags/${tag}`,
-    ],
-    { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+  const repository = `${GHCR_NAMESPACE}/${parts.pkg}`;
+  const unreachable = (why) =>
+    new Error(
+      `cannot download ${asset} from ${GHCR}/${repository}:${parts.version} — ${why}. Either the ` +
+        `${tag} release has not published its OCI artifacts yet, or the package is still PRIVATE ` +
+        "(a package pushed from a private repo is private by default; it has to be made public once " +
+        "in the org's package settings). Anonymous pull is the only supported route.",
+    );
+
+  // An anonymous pull token. GHCR issues one without credentials for a PUBLIC package; for a private
+  // one it answers with an error body carrying no token, which is why this is checked rather than
+  // assumed.
+  let token;
+  try {
+    ({ token } = curlJson(
+      `${GHCR}/token?scope=${encodeURIComponent(`repository:${repository}:pull`)}&service=ghcr.io`,
+      "application/json",
+    ));
+  } catch (err) {
+    throw unreachable(`the registry refused to issue an anonymous pull token (${err.message})`);
+  }
+  if (!token) throw unreachable("the registry issued no anonymous pull token");
+
+  const accept = [
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.oci.image.index.v1+json",
+  ].join(",");
+  const authed = (url) =>
+    JSON.parse(
+      execFileSync(
+        "curl",
+        ["-sSfL", "-H", `Authorization: Bearer ${token}`, "-H", `Accept: ${accept}`, url],
+        { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+      ),
+    );
+
+  let manifest;
+  try {
+    manifest = authed(`${GHCR}/v2/${repository}/manifests/${parts.version}`);
+  } catch (err) {
+    throw unreachable(`its manifest could not be read (${err.message})`);
+  }
+
+  // An index points at manifests rather than layers. Follow the first entry: these artifacts are
+  // platform-independent, so a multi-entry index would carry no meaning to choose between.
+  if (Array.isArray(manifest.manifests)) {
+    const first = manifest.manifests[0];
+    if (!first?.digest) throw unreachable("its index carries no manifest");
+    manifest = authed(`${GHCR}/v2/${repository}/manifests/${first.digest}`);
+  }
+
+  // OCI records the original filename in the layer's title annotation, which is how one artifact
+  // carrying several files stays addressable by the asset names the pins above already use.
+  const layer = (manifest.layers ?? []).find(
+    (l) => l.annotations?.["org.opencontainers.image.title"] === asset,
   );
-  const found = JSON.parse(id).assets.find((a) => a.name === asset);
-  if (!found) throw new Error(`release ${tag} has no asset named ${asset}`);
+  if (!layer?.digest) {
+    const titles = (manifest.layers ?? [])
+      .map((l) => l.annotations?.["org.opencontainers.image.title"])
+      .filter(Boolean);
+    throw new Error(
+      `${repository}:${parts.version} carries no file named ${asset}` +
+        (titles.length ? ` — it has: ${titles.join(", ")}` : " — it has no titled layers at all"),
+    );
+  }
 
   execFileSync("curl", [
     "-sSfL",
     "-H",
     `Authorization: Bearer ${token}`,
-    "-H",
-    "Accept: application/octet-stream",
     "-o",
     tmp,
-    found.url,
+    `${GHCR}/v2/${repository}/blobs/${layer.digest}`,
   ]);
+
+  // The registry's own descriptor digest. This is a TRANSPORT check, not the guarantee — the digest
+  // committed above remains that — but a blob that is not what its own manifest described should
+  // fail here rather than be carried into the pin check and reported as a bad pin.
+  const got = `sha256:${createHash("sha256").update(readFileSync(tmp)).digest("hex")}`;
+  if (got !== layer.digest) {
+    rmSync(tmp, { force: true });
+    throw new Error(
+      `${repository}:${parts.version} served ${asset} as ${got}, but its manifest describes ` +
+        `${layer.digest}`,
+    );
+  }
+
   renameSync(tmp, dest);
 }
 

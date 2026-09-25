@@ -88,8 +88,18 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   `kitchen.so` or `kitchen-idl.json` under a `v12-*` tag — they moved to the `kitchen-*` releases.
   The tags MAY be cut from different commits (`v12-evm-v0.4.0` and `v12-svm-v0.5.0` were), so a
   shared commit is not a property to rely on even while all four happen to share one after a
-  coordinated re-release. To bump: change the tag, run the script, paste the digest it reports. Fetching needs GitHub auth — locally an authenticated `gh` CLI, `GH_TOKEN`, or `GITHUB_TOKEN`;
-  CI passes the `ECO_INCORP_TOKEN` secret as `GH_TOKEN`.
+  coordinated re-release. To bump: change the tag, run the script, paste the digest it reports.
+  **Fetching needs no credential at all.** Assets come from GHCR as OCI artifacts
+  (`ghcr.io/eco-incorp/<package>:<version>`, one repository per independently-released component),
+  pulled anonymously — ghcr.io issues a pull token to a caller with none. There is deliberately **no
+  `gh` or token fallback**: a fallback would let a developer with `gh` logged in and CI with nothing
+  fetch by different routes, so the route CI depends on could rot unseen. One path means a broken
+  publish breaks for everyone at once. The release tag maps to the OCI reference as
+  `<package>-v<version>` → `<package>:<version>`, the layer's
+  `org.opencontainers.image.title` annotation carries the asset name, and the committed digest is
+  still the guarantee — this changed the TRANSPORT, not the trust model. A 403 here almost always
+  means the release has not published its OCI artifacts yet, or the package is still PRIVATE: a
+  package pushed from a private repo is private by default and must be made public once by hand.
 - **Foundry is required only to RUN things, never to build artifacts.** The sync no longer compiles
   anything: the ABIs arrive as a release asset. What still needs Foundry is `anvil` on `PATH` for
   `sdk/test/std/token/evm.e2e.test.ts` and other EVM execution suites. They deploy the pinned creation
