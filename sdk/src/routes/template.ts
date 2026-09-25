@@ -155,6 +155,16 @@ function slotOf(spec: PlaceholderSpec): TemplateSlot {
   if (scale <= 0n) {
     throw new Error(`splitByPlaceholders: placeholder scale must be positive, got ${scale}`);
   }
+  // A zero sentinel is not a sentinel: ABI padding is zero bytes, so it would match at hundreds of
+  // offsets in any real payload and the overlap/occurrence checks below would be reporting on
+  // padding rather than on fields. Rejected here so the diagnostic names the cause.
+  if (spec.value === 0n) {
+    throw new Error(
+      "splitByPlaceholders: a zero placeholder value cannot work — zero bytes are what ABI padding is " +
+        "made of, so it would match everywhere. Use a distinctive sentinel (see nest-dynamic.ts's " +
+        "AMOUNT_IN_PLACEHOLDER).",
+    );
+  }
   return {
     source: spec.source,
     scale,

@@ -239,14 +239,20 @@ function localForPlaceholder(
  * used it for nothing.
  */
 export function assertDynamicChild(child: Intent, index: number, opts: DynamicChildOptions): void {
-  const placeholders = opts.placeholders ?? defaultPlaceholders();
-  // Throws, with the placeholder's own diagnostic, when nothing matched -- this call is the check.
-  const template = dynamicChildTemplate(child, opts);
-  if (template.slots.length === 0) {
+  // Building the template IS the check: `splitByPlaceholders` throws when a declared sentinel matched
+  // nothing. What it cannot know is WHY that is interesting here, so its diagnostic is wrapped rather
+  // than re-derived -- the cause keeps the byte-level detail (which sentinel, how long the payload
+  // was) while this message names the decision the caller has to revisit.
+  try {
+    dynamicChildTemplate(child, opts);
+  } catch (cause) {
+    const placeholders = opts.placeholders ?? defaultPlaceholders();
     throw new Error(
-      `assertDynamicChild: child[${index}] encodes no placeholder (${placeholders.length} declared) — ` +
-        `it is fully static, so nest it with via: "publishAndFund"/"transfer" instead of paying for a ` +
-        `measurement nothing consumes.`,
+      `assertDynamicChild: child[${index}] does not carry all ${placeholders.length} declared ` +
+        `placeholder(s), so there is nothing for a measurement to fill. Either write the sentinels into ` +
+        `the child's amount fields, or nest it with via: "publishAndFund"/"transfer" — a fully static ` +
+        `child routed through here would measure a balance and use it for nothing.`,
+      { cause },
     );
   }
 }
@@ -403,9 +409,10 @@ export function dynamicChildProgram(entries: readonly DynamicNestEntry[]): {
     throw new Error("dynamicChildProgram: no entries — nothing to compile");
   }
   const statements = entries.flatMap((e, i) => dynamicChildStatements(e.child, i, e.opts));
-  // Every path that touches an ERC20 needs the binding: the default measurement reads a balance and
-  // the default approve mode writes an allowance. Only an `expression`/`nativeBalance` measurement
-  // with `approve: "none"` and no reward token avoids it entirely.
+  // Sniffed from the emitted text rather than re-derived from the options on purpose: a caller's own
+  // `measure: { kind: "expression" }` may name `IERC20.at(...)` itself, and an options-derived check
+  // would miss that and emit a program referencing an unimported binding. The statements are what
+  // actually compiles, so they are what decides.
   const needsErc20 = statements.some((s) => s.includes("IERC20.at("));
   const imports = needsErc20 ? [ERC20_IMPORT_LINE] : [];
   const body = statements.join("\n");

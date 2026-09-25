@@ -284,8 +284,24 @@ describe("the emitted program", () => {
 describe("fail-closed", () => {
   it("rejects a fully static child — it would measure a balance and use it for nothing", () => {
     expect(() => dynamicChildStatements(evmChild(1n, 2n), 0, OPTS)).toThrow(
-      /does not occur in the/,
+      /does not carry all 2 declared placeholder\(s\)/,
     );
+    // The byte-level diagnostic stays reachable as the cause, rather than being re-derived.
+    try {
+      dynamicChildStatements(evmChild(1n, 2n), 0, OPTS);
+    } catch (err) {
+      expect((err as Error).cause).toBeInstanceOf(Error);
+      expect(((err as Error).cause as Error).message).toMatch(/does not occur in the/);
+    }
+  });
+
+  it("rejects a zero sentinel — zero bytes are what ABI padding is made of", () => {
+    expect(() =>
+      dynamicChildTemplate(templated, {
+        ...OPTS,
+        placeholders: [{ value: 0n, source: "amountIn" }],
+      }),
+    ).toThrow(/zero placeholder value cannot work/);
   });
 
   it("rejects a zero or negative scale, which would oblige the solver to deliver nothing", () => {
