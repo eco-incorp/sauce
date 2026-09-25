@@ -89,24 +89,27 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   The tags MAY be cut from different commits (`v12-evm-v0.4.0` and `v12-svm-v0.5.0` were), so a
   shared commit is not a property to rely on even while all four happen to share one after a
   coordinated re-release. To bump: change the tag, run the script, paste the digest it reports.
-  **Fetching needs no PAT.** Assets come from GHCR as OCI artifacts
-  (`ghcr.io/eco-incorp/<package>:<version>`, one repository per independently-released component).
-  The packages are PRIVATE and stay that way: read access is granted per package to the CONSUMING
-  REPOSITORY (package settings -> Manage Actions access -> add `eco-incorp/sauce`, Read), so CI
-  authenticates with the `GITHUB_TOKEN` every repo already has and a developer with whatever `gh` is
-  already logged in as. Nothing is published publicly and no token is minted for this. There is
-  deliberately **no `gh release` or REST fallback**: a fallback would let a developer and CI fetch by
-  different routes, so the route CI depends on could rot unseen.
+  **Fetching needs no PAT.** Each release publishes its assets as a PRIVATE npm package on GitHub
+  Packages (`@eco-incorp/<package>` at `npm.pkg.github.com`, one per independently-released
+  component). Read access is granted per package to the CONSUMING REPOSITORY (package settings ->
+  Manage Actions access -> add `eco-incorp/sauce`, Read), so CI authenticates with the `GITHUB_TOKEN`
+  every workflow already has and a developer with whatever `gh` is logged in as. Nothing is published
+  publicly. There is deliberately **no `gh release` or REST fallback**: a fallback would let a
+  developer and CI fetch by different routes, so the route CI depends on could rot unseen.
 
-  The release tag maps to the OCI reference as `<package>-v<version>` -> `<package>:<version>`, the
-  layer's `org.opencontainers.image.title` annotation carries the asset name, and the committed
-  digest is still the guarantee — this changed the TRANSPORT, not the trust model.
+  The sync fetches the packument and tarball **straight from the registry** rather than declaring a
+  dependency, DELIBERATELY. Installing would need an `@eco-incorp` scope mapping in `.npmrc`, and a
+  scope registry governs PUBLISHING as well as resolution — the hazard the Publishing section below
+  records. Do not "simplify" this into a devDependency.
 
-  Two measured facts worth keeping. A CREDENTIALED token request returns 200 and issues a token even
-  for a package that does not exist (unauthenticated, the same request is 403), so a token proves
-  nothing about existence — only the manifest read does. And a failed `curl` must never have its own
-  message surfaced: `execFileSync` puts the command line in it, and these commands carry the
-  credential, which would print a live token into CI logs.
+  The release tag maps to the package as `<package>-v<version>` -> `@eco-incorp/<package>@<version>`,
+  files land under `package/` in the tarball, and the committed digest is still the guarantee — this
+  changed the TRANSPORT, not the trust model. A failed `curl` must never have its own message
+  surfaced: `execFileSync` puts the command line in it and these commands carry the credential, which
+  printed a live token into output before this was fixed.
+
+  **If this repository is ever made public**, note that granting a public repository access to a
+  private package lets FORKS of it read that package.
 
 - **Foundry is required only to RUN things, never to build artifacts.** The sync no longer compiles
   anything: the ABIs arrive as a release asset. What still needs Foundry is `anvil` on `PATH` for

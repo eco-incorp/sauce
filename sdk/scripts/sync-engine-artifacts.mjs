@@ -165,191 +165,149 @@ const V12_KITCHEN_IDL = {
 // Keyed by tag: a bump downloads afresh rather than silently reusing the old bytes.
 const CACHE_ROOT = resolve(REPO_ROOT, "node_modules", ".cache", "sauce-engine-releases");
 
-// The same artifacts, published to GHCR as OCI artifacts by each release. PUBLIC packages there are
-// anonymously pullable — ghcr.io issues a pull token to a caller with no credentials at all — which
-// is the entire point: it removes the personal access token CI otherwise needs purely to read a
-// private repo's release assets. The bytes are identical either way, and the digest committed above
-// is still what decides whether they are the pinned artifact, so this changes the TRANSPORT and not
-// the trust model.
-const GHCR = "https://ghcr.io";
-const GHCR_NAMESPACE = "eco-incorp";
+// The same artifacts, published by each release as a PRIVATE npm package on GitHub Packages. The
+// point is the credential: read access is granted per package to the CONSUMING REPOSITORY, so CI
+// authenticates with the `GITHUB_TOKEN` every workflow already has, and a developer with whatever
+// `gh` is already logged in as. No personal access token is minted, and nothing is published
+// publicly. The bytes are identical to the release assets, and the digest committed above still
+// decides whether they are the pinned artifact — this changes the TRANSPORT, not the trust model.
+//
+// Fetched straight from the registry rather than declared as a dependency, DELIBERATELY. Installing
+// it would need an `@eco-incorp` scope mapping in `.npmrc`, and a scope registry governs PUBLISHING
+// as well as resolution — which is how this repo's own package once came within a `publishConfig`
+// pin of publishing to GitHub Packages instead of npmjs.com. Nothing here needs resolving anyway:
+// these are data files, not code this package imports.
+const NPM_REGISTRY = "https://npm.pkg.github.com";
+const NPM_SCOPE = "@eco-incorp";
 
-// `v12-svm-v1.2.0` -> package `v12-svm`, version `1.2.0`. The four components release independently
-// under their own tag namespaces, so each gets its own OCI repository; there is deliberately no
-// single tag that spans them.
-const OCI_TAG = /^(?<pkg>v12-evm|v12-svm|kitchen-evm|kitchen-svm)-v(?<version>.+)$/;
+// `v12-svm-v1.2.0` -> package `@eco-incorp/v12-svm`, version `1.2.0`. The four components release
+// independently under their own tag namespaces, so each gets its own package; there is deliberately
+// no single version spanning them.
+const RELEASE_TAG = /^(?<pkg>v12-evm|v12-svm|kitchen-evm|kitchen-svm)-v(?<version>.+)$/;
 
-// `-s` without `-S`: curl stays quiet on failure so the only thing printed is the diagnostic built
-// below, which names the remedy. curl's own "(56) ... error: 403" adds nothing a reader can act on.
-// NEVER interpolate a failed child process's own message here. `execFileSync` puts the whole command
-// line into it, and these commands carry the credential — as `-u x-access-token:<token>` on the token
-// request and as `Authorization: Bearer <token>` on every call after it. Surfacing that prints a live
-// GitHub token into local output and CI logs, where it is retained and readable. Report the exit
-// status instead: it is what distinguishes the failures anyone acts on, and it cannot leak anything.
+// NEVER interpolate a failed child process's own message. `execFileSync` puts the whole command line
+// into it, and these commands carry the credential as `Authorization: Bearer <token>`. Surfacing it
+// prints a live GitHub token into local output and CI logs, where it is retained and readable.
+// Report the exit status instead: it distinguishes the failures anyone acts on and cannot leak.
 const curlFailure = (err) => `curl exited ${err.status ?? "abnormally"}`;
 
-const curlJson = (url, accept, credential) =>
-  JSON.parse(
-    execFileSync(
-      "curl",
-      [
-        "-sfL",
-        ...(credential ? ["-u", `x-access-token:${credential}`] : []),
-        "-H",
-        `Accept: ${accept}`,
-        url,
-      ],
-      {
-        encoding: "utf8",
-        maxBuffer: 32 * 1024 * 1024,
-        stdio: ["ignore", "pipe", "ignore"],
-      },
-    ),
-  );
+/** The credential every caller already has: CI's own `GITHUB_TOKEN`, or whatever `gh` is logged in
+ *  as. Neither is minted for this. */
+function githubCredential() {
+  const fromEnv = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+  if (fromEnv) return fromEnv;
+  try {
+    return execFileSync("gh", ["auth", "token"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return undefined;
+  }
+}
 
 /**
- * Download one release asset to `dest`, from GHCR, anonymously.
+ * Download one release asset to `dest` out of its published npm package.
  *
- * ONE TRANSPORT AND NO CREDENTIAL. There is deliberately no `gh` or token fallback. A fallback would
- * mean a developer with `gh` logged in and CI with none silently fetch by different routes, so the
- * route CI depends on could rot unnoticed — which is the shape of failure this repo has already paid
- * for elsewhere (a second source of truth that drifts). One path means a broken publish is broken
- * for everyone, immediately.
- *
- * Failures name the remedy rather than surfacing a bare 403: for these artifacts "not found" almost
- * always means the release has not published the OCI package yet, or the package exists but is still
- * PRIVATE — a package pushed from a private repo is private by default and has to be made public
- * once, by hand.
+ * ONE TRANSPORT. There is deliberately no `gh release` or REST fallback: a fallback would let a
+ * developer with `gh` logged in and CI with only its own token fetch by different routes, so the
+ * route CI depends on could rot unseen. One path breaks for everyone at once.
  */
 function download(tag, asset, dest) {
   const tmp = `${dest}.partial`;
   rmSync(tmp, { force: true });
 
-  const parts = OCI_TAG.exec(tag)?.groups;
+  const parts = RELEASE_TAG.exec(tag)?.groups;
   if (!parts) {
     throw new Error(
-      `cannot map release tag '${tag}' to an OCI repository: expected <package>-v<version> for one ` +
-        "of v12-evm, v12-svm, kitchen-evm, kitchen-svm.",
+      `cannot map release tag '${tag}' to a package: expected <package>-v<version> for one of ` +
+        "v12-evm, v12-svm, kitchen-evm, kitchen-svm.",
     );
   }
 
-  const repository = `${GHCR_NAMESPACE}/${parts.pkg}`;
-  // The packages stay PRIVATE. Read access is granted per package to the CONSUMING REPOSITORY, so
-  // the two causes worth naming are "not published yet" and "this repository was never granted".
-  // They are not distinguishable from here: the registry answers a missing package and an ungranted
-  // one alike, and — measured against live ghcr.io — a CREDENTIALED token request returns 200 and
-  // issues a token even for a package that does not exist, where the same request unauthenticated is
-  // 403. So a token proves nothing about existence; only the manifest read does.
-  const unreachable = (why) =>
-    new Error(
-      `cannot download ${asset} from ${GHCR}/${repository}:${parts.version} — ${why}. Either the ` +
-        `${tag} release has not published its OCI artifacts yet, or this repository has not been ` +
-        `granted read access to the package: its settings -> Manage Actions access -> add ` +
-        `eco-incorp/sauce (Read). The package is private by design and stays that way; the grant is ` +
-        "what makes the pull work, and no personal access token is involved.",
-    );
-
-  // A pull token. The packages are PRIVATE by design, so this exchange is authenticated — but with
-  // a credential every caller already has, which is the whole point: in CI the workflow's own
-  // `GITHUB_TOKEN`, locally whatever `gh` is already logged in as. Neither is a PAT minted for this,
-  // and nothing about v12 is published publicly to make it work. What grants the access is a
-  // per-package read grant to the CONSUMING REPOSITORY, configured once on the package itself.
-  const credential =
-    process.env.GITHUB_TOKEN ??
-    process.env.GH_TOKEN ??
-    (() => {
-      try {
-        return execFileSync("gh", ["auth", "token"], {
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "ignore"],
-        }).trim();
-      } catch {
-        return undefined;
-      }
-    })();
+  const name = `${NPM_SCOPE}/${parts.pkg}`;
+  const credential = githubCredential();
   if (!credential) {
     throw new Error(
-      `cannot download ${asset} from ${GHCR}/${repository}:${parts.version} — no GitHub credential ` +
-        "found. These packages are private, so the pull is authenticated: set GITHUB_TOKEN (CI " +
-        "supplies its own automatically) or run `gh auth login`. No personal access token needs to " +
-        "be minted for this.",
+      `cannot download ${asset} from ${name}@${parts.version} — no GitHub credential found. These ` +
+        "packages are private, so the read is authenticated: set GITHUB_TOKEN (CI supplies its own " +
+        "automatically) or run `gh auth login`. No personal access token needs to be minted.",
     );
   }
 
-  let token;
-  try {
-    ({ token } = curlJson(
-      `${GHCR}/token?scope=${encodeURIComponent(`repository:${repository}:pull`)}&service=ghcr.io`,
-      "application/json",
-      credential,
-    ));
-  } catch (err) {
-    throw unreachable(`the registry refused to issue a pull token (${curlFailure(err)})`);
-  }
-  if (!token) throw unreachable("the registry issued no pull token");
-
-  const accept = [
-    "application/vnd.oci.image.manifest.v1+json",
-    "application/vnd.oci.image.index.v1+json",
-  ].join(",");
   const authed = (url) =>
-    JSON.parse(
-      execFileSync(
-        "curl",
-        ["-sSfL", "-H", `Authorization: Bearer ${token}`, "-H", `Accept: ${accept}`, url],
-        { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
-      ),
+    execFileSync("curl", ["-sfL", "-H", `Authorization: Bearer ${credential}`, url], {
+      encoding: "buffer",
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+
+  // The registry answers 404 both for a package that does not exist and for one this caller cannot
+  // read, so the two causes are not distinguishable from here and both are named.
+  const unreachable = (why) =>
+    new Error(
+      `cannot download ${asset} from ${name}@${parts.version} — ${why}. Either the ${tag} release ` +
+        "has not published its package yet, or this repository has not been granted read access to " +
+        "it: the package's settings -> Manage Actions access -> add eco-incorp/sauce (Read). The " +
+        "package is private by design and stays that way; the grant is what makes the read work, " +
+        "and no personal access token is involved.",
     );
 
-  let manifest;
+  let packument;
   try {
-    manifest = authed(`${GHCR}/v2/${repository}/manifests/${parts.version}`);
+    packument = JSON.parse(authed(`${NPM_REGISTRY}/${encodeURIComponent(name)}`).toString("utf8"));
   } catch (err) {
-    throw unreachable(`its manifest could not be read (${curlFailure(err)})`);
+    throw unreachable(`its packument could not be read (${curlFailure(err)})`);
   }
 
-  // An index points at manifests rather than layers. Follow the first entry: these artifacts are
-  // platform-independent, so a multi-entry index would carry no meaning to choose between.
-  if (Array.isArray(manifest.manifests)) {
-    const first = manifest.manifests[0];
-    if (!first?.digest) throw unreachable("its index carries no manifest");
-    manifest = authed(`${GHCR}/v2/${repository}/manifests/${first.digest}`);
-  }
-
-  // OCI records the original filename in the layer's title annotation, which is how one artifact
-  // carrying several files stays addressable by the asset names the pins above already use.
-  const layer = (manifest.layers ?? []).find(
-    (l) => l.annotations?.["org.opencontainers.image.title"] === asset,
-  );
-  if (!layer?.digest) {
-    const titles = (manifest.layers ?? [])
-      .map((l) => l.annotations?.["org.opencontainers.image.title"])
-      .filter(Boolean);
+  const release = packument.versions?.[parts.version];
+  if (!release) {
+    const have = Object.keys(packument.versions ?? {});
     throw new Error(
-      `${repository}:${parts.version} carries no file named ${asset}` +
-        (titles.length ? ` — it has: ${titles.join(", ")}` : " — it has no titled layers at all"),
+      `${name} has no version ${parts.version}` +
+        (have.length ? ` — it has: ${have.join(", ")}` : " — it has no published versions"),
     );
   }
+  const tarball = release.dist?.tarball;
+  if (!tarball) throw unreachable("its version carries no tarball");
 
-  execFileSync("curl", [
-    "-sSfL",
-    "-H",
-    `Authorization: Bearer ${token}`,
-    "-o",
-    tmp,
-    `${GHCR}/v2/${repository}/blobs/${layer.digest}`,
-  ]);
+  let archive;
+  try {
+    archive = authed(tarball);
+  } catch (err) {
+    throw unreachable(`its tarball could not be downloaded (${curlFailure(err)})`);
+  }
 
-  // The registry's own descriptor digest. This is a TRANSPORT check, not the guarantee — the digest
-  // committed above remains that — but a blob that is not what its own manifest described should
-  // fail here rather than be carried into the pin check and reported as a bad pin.
-  const got = `sha256:${createHash("sha256").update(readFileSync(tmp)).digest("hex")}`;
-  if (got !== layer.digest) {
-    rmSync(tmp, { force: true });
-    throw new Error(
-      `${repository}:${parts.version} served ${asset} as ${got}, but its manifest describes ` +
-        `${layer.digest}`,
-    );
+  // The registry's own integrity field, checked before the bytes are handed on. A TRANSPORT check,
+  // NOT the guarantee — the digest committed above remains that — but a tarball that is not what its
+  // own packument described should fail here rather than be reported as a bad pin.
+  const integrity = release.dist.integrity ?? "";
+  const [algorithm, expected] = integrity.split("-");
+  if (algorithm && expected) {
+    const got = createHash(algorithm).update(archive).digest("base64");
+    if (got !== expected) {
+      throw new Error(
+        `${name}@${parts.version} served a tarball hashing to ${algorithm}-${got}, but its ` +
+          `packument describes ${integrity}`,
+      );
+    }
+  }
+
+  // npm tarballs root every file under `package/`.
+  const archivePath = `${tmp}.tgz`;
+  writeFileSync(archivePath, archive);
+  try {
+    const file = execFileSync("tar", ["-xzOf", archivePath, `package/${asset}`], {
+      encoding: "buffer",
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    if (!file.length) throw new Error("empty");
+    writeFileSync(tmp, file);
+  } catch {
+    throw new Error(`${name}@${parts.version} carries no file named ${asset}`);
+  } finally {
+    rmSync(archivePath, { force: true });
   }
 
   renameSync(tmp, dest);
