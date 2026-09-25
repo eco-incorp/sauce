@@ -19,7 +19,10 @@
  *
  * What none of this establishes: that `.concat`/`.toBytesBe` behave at runtime as their names say,
  * that the engine's `evm.call` reaches the Portal with the assembled payload, or that the Portal
- * accepts it. A design that compiles is not a design that lands on-chain.
+ * accepts it. A design that compiles is not a design that lands on-chain. Those four now have their
+ * own suite — `routes-nest-dynamic.e2e.test.ts` runs this exact program on a real engine, a real
+ * Pot and the real eco-routes Portal, and reads the child's route bytes back out of
+ * `IntentPublished`. It is engine-gated; this suite is what still runs without one.
  */
 import {
   decodeFunctionData,

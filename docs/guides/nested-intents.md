@@ -106,6 +106,8 @@ The child's `publishAndFund` calldata is encoded once off-chain, cut at every pl
 | `allowPartial` | `false`                     | Passed through to `publishAndFund`                                                       |
 | `executionFee` | `0n`                        | The cook's total value: Kitchen fee plus any native the child forwards                   |
 
+Every guard in the generated program — the floor, the scale-overflow check, and the per-field width check — reverts the parent's whole fulfilment when it trips. No earlier route call survives it, so a rejected measurement cannot leave a parent completed with its child unpublished and the measured funds sitting in the Pot.
+
 Declare `occurrences` for every placeholder. Without it any count above zero is accepted, and a sentinel that matched one word too few leaves a placeholder amount in a published intent.
 
 The measurement is the Pot's current balance, not a delta against a baseline, so a donated balance rides along — the same property transfer mode has. A child whose destination is Solana needs `AMOUNT_IN_PLACEHOLDER_U64`/`AMOUNT_OUT_PLACEHOLDER_U64` with `width: 8, littleEndian: true` for its Borsh route amounts; its reward stays on the EVM source chain and keeps the 32-byte sentinels.
