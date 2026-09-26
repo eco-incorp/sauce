@@ -70,8 +70,7 @@ The two modes above require every child reward amount before the parent is signe
 Write a placeholder wherever a runtime amount belongs, then name the measurement:
 
 ```ts
-import "@eco-incorp/sauce";
-import { routes } from "@eco-incorp/sauce";
+import { Arbitrum, Base, routes } from "@eco-incorp/sauce";
 
 const { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } = routes;
 
@@ -113,6 +112,74 @@ Declare `occurrences` for every placeholder. Without it any count above zero is 
 The measurement is the Pot's current balance, not a delta against a baseline, so a donated balance rides along — the same property transfer mode has. A child whose destination is Solana needs `AMOUNT_IN_PLACEHOLDER_U64`/`AMOUNT_OUT_PLACEHOLDER_U64` with `width: 8, littleEndian: true` for its Borsh route amounts; its reward stays on the EVM source chain and keeps the 32-byte sentinels.
 
 The child's hash is not known until the parent executes, so `child.hash()`, `child.vaultCall()`, and the approval helpers describe the placeholder intent, not the published one. Recover the real hash from the Portal's `IntentPublished` event. Off-chain, `routes.renderDynamicChild(child.intent, dynamicOptions, amountIn)` returns the exact `publishAndFund` calldata a given measurement produces, where `dynamicOptions` is the `portal`/`measure`/`scale`/`placeholders` set passed to `.nest()`; rebuild the child with those amounts and hash it with `routes.hashIntent`. Funding coverage is not checked for this mode: the funding is the measurement, bounded by the Pot's balance.
+
+A child built this way is an ordinary built intent, so it can nest dynamically in turn; see [Chain more than one hop](#chain-more-than-one-hop).
+
+## Chain more than one hop
+
+A dynamic child is an ordinary built intent, so it can carry a dynamic nest of its own. That is how a chain of swaps whose every hop's output is only known at that hop works: the parent swaps A for B and publishes the child, the child swaps B for C and publishes the grandchild, and the grandchild delivers C. Nothing below the first amount exists when the parent is signed.
+
+```ts
+import { Arbitrum, Base, Optimism, routes } from "@eco-incorp/sauce";
+
+const { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } = routes;
+
+const placeholders = [
+  { value: AMOUNT_IN_PLACEHOLDER, source: "amountIn", occurrences: 1 },
+  { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut", occurrences: 1 },
+] as const;
+
+const grandchild = Optimism("return 1n;", {
+  ...grandchildOptions,
+  tokens: [{ token: USDC_OPTIMISM, amount: AMOUNT_OUT_PLACEHOLDER }],
+}).reward({
+  ...grandchildReward,
+  tokens: [{ token: USDC_ARBITRUM, amount: AMOUNT_IN_PLACEHOLDER }],
+});
+
+const child = Arbitrum(swapBforC, {
+  ...childOptions,
+  tokens: [{ token: USDC_ARBITRUM, amount: AMOUNT_OUT_PLACEHOLDER }],
+})
+  .nest(grandchild, {
+    via: "dynamic",
+    measure: { kind: "erc20Balance", token: USDC_ARBITRUM },
+    placeholders: [...placeholders],
+  })
+  .reward({ ...childReward, tokens: [{ token: USDC_BASE, amount: AMOUNT_IN_PLACEHOLDER }] });
+
+const parent = Base(swapAforB, parentOptions)
+  .nest(child, {
+    via: "dynamic",
+    measure: { kind: "erc20Balance", token: USDC_BASE },
+    placeholders: [...placeholders],
+  })
+  .reward(parentReward);
+```
+
+The middle level is not a special form. It is the same construct applied twice, so depth 3 and beyond follow from depth 2 without new options.
+
+### Why levels do not collide
+
+Each level's route embeds the next level's compiled program as literal calldata, and the level above splices amounts into that. The obvious hazard is that a parent's placeholder search also matches the sentinels belonging to levels below it, overwriting a placeholder the grandchild still needs.
+
+It cannot, and this is an invariant of the mechanism rather than a property of any particular cascade. Splitting a payload **cuts the sentinels out**: a compiled dynamic program holds the literal segments that sat _around_ each placeholder and never the placeholder bytes themselves. So when a parent splits its child's encoding it finds the child's own slots and nothing else, and adding a nest to a level does not change that level's own `occurrences` counts — the extra cook call contributes bytes, not sentinels.
+
+Each level's numbers are therefore spliced by the level directly above it, at that level's own execution time. No level needs to know the amounts below it, and none can disturb them.
+
+### Cost and depth
+
+Growth is linear, not multiplicative: each level's bytes appear exactly once in the chain, so the outermost payload is the sum of the per-level overheads. On the SDK's own fixture that is about 1,156 bytes of `cook` calldata at depth 1 and about 1,600 bytes for each level after it. A measured depth-2 cascade cost 262,926 gas to fulfill the parent and 253,986 gas to fulfill the child; both numbers move with the size of the intents you nest.
+
+The hard ceiling is the compiler's, and it is named rather than silent. A `hex` segment carries a `u16` length, so no single segment may exceed 65,535 bytes; on that same fixture depth 41 compiles and depth 42 fails with `an array literal has … elements, beyond the 65535 the engine can encode`. Nothing truncates. In practice gas binds long before that, and a cascade deep enough to approach the limit is one to reconsider rather than to budget for.
+
+Depth 2 is executed end to end against a real engine, Pot and Portal in the SDK's own suite. Depths 3 to 41 are established by compilation and encoding only — no deeper cascade has been run on a chain.
+
+### What changes beyond the first hop
+
+Hash recovery becomes sequential. At depth 1 the child's real hash is unknown until the parent executes; at depth 2 the grandchild's is unknown until the _child_ executes, which is a separate fulfillment by a different solver at a later time. An indexer must follow `IntentPublished` level by level, and no amount of off-chain computation shortens that — the input to each level is a measurement that has not happened yet.
+
+Everything else compounds rather than changes. Deadlines must still increase with depth, checked per level, and every level needs an Executor-owned Pot and the current Kitchen fee on its own chain. The `Create the child on-chain from a measured amount` section's properties — the current-balance measurement, the guard behavior, the Solana sentinel widths — apply unchanged at every level.
 
 ## Ordering and constraints
 
