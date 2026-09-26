@@ -66,6 +66,7 @@ import {
   dynamicChildStatements,
   type DynamicChildOptions,
 } from "../src/routes/nest-dynamic.js";
+import { decodeAbiParameters } from "viem";
 import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
 import { scaleAmount, WAD } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
@@ -118,6 +119,9 @@ const walletClient = createWalletClient({ account: DEPLOYER, transport });
 const erc20Abi = parseAbi([
   "function mint(address to, uint256 amount)",
   "function balanceOf(address account) view returns (uint256)",
+]);
+const erc20ApproveAbi = parseAbi([
+  "function approve(address spender, uint256 value) returns (bool)",
 ]);
 
 const portalAbi = [
@@ -206,6 +210,11 @@ let executor: Address;
 let executorPot: Address;
 let markerToken: Address;
 let rewardToken: Address;
+/** The depth-2 cascade's three assets: what the parent's "swap" yields, what the child's yields,
+ *  and the delivery obligation neither level ever moves. */
+let tokenB: Address;
+let tokenC: Address;
+let deliveredToken: Address;
 
 const waitForRpc = (deadline: number): Promise<void> =>
   Date.now() >= deadline
@@ -272,30 +281,20 @@ const markerCall = (to: Address) => ({
 let saltCounter = 0;
 const nextSalt = (): Hex => `0x${(++saltCounter).toString(16).padStart(64, "0")}` as Hex;
 
-/** Builds the route, hashes it exactly as `Inbox._fulfill` does, and submits `Portal.fulfill`. */
-const fulfil = async (
-  calls: readonly { target: Address; data: Hex; value: bigint }[],
-): Promise<{ status: "success" | "reverted"; intentHash: Hex; logs: readonly Log[] }> => {
-  const route: EvmRoute = {
-    salt: nextSalt(),
-    deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
-    portal,
-    nativeAmount: 0n,
-    tokens: [],
-    calls,
-  };
-  const rewardHash = keccak256("0xbeef");
+interface Fulfilment {
+  status: "success" | "reverted";
+  intentHash: Hex;
+  gasUsed: bigint;
+  logs: readonly Log[];
+}
+
+/** Hashes `route` exactly as `Inbox._fulfill` does and submits `Portal.fulfill`. */
+const fulfilRoute = async (route: EvmRoute, rewardHash: Hex): Promise<Fulfilment> => {
   const routeHash = keccak256(encodeAbiParameters([EVM_ROUTE_PARAM], [route]));
   const intentHash = keccak256(
     encodePacked(["uint64", "bytes32", "bytes32"], [BigInt(CHAIN_ID), routeHash, rewardHash]),
   );
   const claimant = `0x${"00".repeat(12)}${DEPLOYER.address.slice(2)}` as Hex;
-
-  const data = encodeFunctionData({
-    abi: portalAbi,
-    functionName: "fulfill",
-    args: [intentHash, route, rewardHash, claimant],
-  });
 
   // Sent as a TRANSACTION even when it is expected to revert: a revert has to be observed as a
   // receipt status plus the on-chain state it left behind, which an `eth_call` cannot show.
@@ -303,12 +302,70 @@ const fulfil = async (
     account: DEPLOYER,
     chain: null,
     to: portal,
-    data,
+    data: encodeFunctionData({
+      abi: portalAbi,
+      functionName: "fulfill",
+      args: [intentHash, route, rewardHash, claimant],
+    }),
     gas: GAS_LIMIT,
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-  return { status: receipt.status, intentHash, logs: receipt.logs };
+  return { status: receipt.status, intentHash, gasUsed: receipt.gasUsed, logs: receipt.logs };
+};
+
+/** A fresh top-level route around `calls`, with a reward this suite never has to produce. */
+const fulfil = (
+  calls: readonly { target: Address; data: Hex; value: bigint }[],
+): Promise<Fulfilment> =>
+  fulfilRoute(
+    {
+      salt: nextSalt(),
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
+      portal,
+      nativeAmount: 0n,
+      tokens: [],
+      calls,
+    },
+    keccak256("0xbeef"),
+  );
+
+/** Every `IntentPublished` the Portal emitted in one fulfilment, decoded. */
+const publishedIn = (logs: readonly Log[]) =>
+  logs
+    .filter((l) => l.address.toLowerCase() === portal.toLowerCase())
+    .flatMap((l) => {
+      try {
+        const decoded = decodeEventLog({ abi: portalAbi, data: l.data, topics: l.topics });
+        return decoded.eventName === "IntentPublished" ? [decoded.args] : [];
+      } catch {
+        return [];
+      }
+    }) as unknown as PublishedIntent[];
+
+interface PublishedIntent {
+  intentHash: Hex;
+  destination: bigint;
+  route: Hex;
+  creator: Address;
+  prover: Address;
+  rewardDeadline: bigint;
+  rewardNativeAmount: bigint;
+  rewardTokens: readonly { token: Address; amount: bigint }[];
+}
+
+/** The reward tuple and its hash, rebuilt from what the Portal logged — so the follow-on fulfilment
+ *  uses the bytes the chain published rather than anything this suite predicted. */
+const rewardOf = (published: PublishedIntent) => {
+  const reward = {
+    deadline: published.rewardDeadline,
+    creator: published.creator,
+    prover: published.prover,
+    nativeAmount: published.rewardNativeAmount,
+    tokens: published.rewardTokens.map((t) => ({ token: t.token, amount: t.amount })),
+  };
+
+  return { reward, rewardHash: keccak256(encodeAbiParameters([EVM_REWARD_PARAM], [reward])) };
 };
 
 const startEvm = async (): Promise<ChildProcess> => {
@@ -362,6 +419,9 @@ const startEvm = async (): Promise<ChildProcess> => {
 
   markerToken = await deploy(MOCK_ERC20.creationCode);
   rewardToken = await deploy(MOCK_ERC20.creationCode);
+  tokenB = await deploy(MOCK_ERC20.creationCode);
+  tokenC = await deploy(MOCK_ERC20.creationCode);
+  deliveredToken = await deploy(MOCK_ERC20.creationCode);
 
   return anvil;
 };
@@ -519,23 +579,9 @@ describeEvm("a dynamic child intent, executed", () => {
 
       // 1. The Portal's OWN hash of the bytes it received equals the SDK's hash of the concrete
       //    intent. The Portal derived this from `keccak256(route)` of bytes the program assembled.
-      const published = logs
-        .filter((l) => l.address.toLowerCase() === portal.toLowerCase())
-        .flatMap((l) => {
-          try {
-            const decoded = decodeEventLog({ abi: portalAbi, data: l.data, topics: l.topics });
-            return decoded.eventName === "IntentPublished" ? [decoded.args] : [];
-          } catch {
-            return [];
-          }
-        });
+      const published = publishedIn(logs);
       expect(published).toHaveLength(1);
-      const event = published[0] as unknown as {
-        intentHash: Hex;
-        destination: bigint;
-        route: Hex;
-        rewardTokens: readonly { token: Address; amount: bigint }[];
-      };
+      const event = published[0]!;
       expect(event.intentHash).toBe(expectedHash);
 
       // 2. The ROUTE BYTES the program concatenated, read back off the chain, are byte-for-byte what
@@ -581,6 +627,179 @@ describeEvm("a dynamic child intent, executed", () => {
       // And the Pot kept nothing back.
       expect(await balanceOf(rewardToken, executorPot)).toBe(0n);
     }, 120_000);
+
+    it("DEPTH 2: the child it published creates its own dynamic child when fulfilled", async () => {
+      // Three levels, and NO amount below the first exists when the parent is signed. The parent
+      // measures tokenB and publishes the child; fulfilling the child mints tokenC (standing in for
+      // its own swap), measures it, and publishes the GRANDCHILD.
+      //
+      // Why this composes at all, and it is worth stating because it looks like it should not: the
+      // grandchild's sentinels are CUT OUT by `splitByPlaceholders` before its program is compiled,
+      // so they do not appear in that program's bytecode. The child's route embeds those bytes
+      // verbatim, and when the parent splits the child's calldata it finds only the CHILD's own
+      // sentinels. Each level's numbers are spliced by the level above it, at that level's own
+      // execution time, and no level needs to know the ones below.
+      const PARENT_YIELD = 7_000_000n; // tokenB the parent's "swap" left in the Pot
+      const CHILD_YIELD = 3_000_000n; // tokenC the child's own route call produces
+      const CHILD_SCALE = 990000000000000000n;
+      const GRANDCHILD_SCALE = 980000000000000000n;
+
+      const grandchild = (inn: bigint, out: bigint): Intent => ({
+        destination: BigInt(CHAIN_ID),
+        sourceChainId: BigInt(CHAIN_ID),
+        route: normalizeRoute({
+          salt: `0x${"9c".repeat(32)}` as Hex,
+          deadline: 4_000_000_000n,
+          portal,
+          tokens: [{ token: deliveredToken, amount: out }],
+          calls: [],
+        }),
+        reward: normalizeReward({
+          deadline: 4_000_000_000n,
+          creator: CREATOR,
+          prover: PROVER,
+          tokens: [{ token: tokenC, amount: inn }],
+        }),
+      });
+      const grandchildOpts: DynamicChildOptions = {
+        portal,
+        measure: { kind: "erc20Balance", token: tokenC },
+        scale: GRANDCHILD_SCALE,
+        placeholders: [
+          { value: AMOUNT_IN_PLACEHOLDER, source: "amountIn", occurrences: 1 },
+          { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut", occurrences: 1 },
+        ],
+      };
+      const grandchildProgram = dynamicChildProgram([
+        { child: grandchild(AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER), opts: grandchildOpts },
+      ]);
+
+      // The child: its own route mints tokenC (the "swap") and then cooks the grandchild program.
+      // Its reward and its route delivery obligation are BOTH sentinels the parent will fill.
+      const child = (inn: bigint, out: bigint): Intent => ({
+        destination: BigInt(CHAIN_ID),
+        sourceChainId: BigInt(CHAIN_ID),
+        route: normalizeRoute({
+          salt: `0x${"9b".repeat(32)}` as Hex,
+          deadline: 4_000_000_000n,
+          portal,
+          tokens: [{ token: deliveredToken, amount: out }],
+          calls: [
+            {
+              target: tokenC,
+              data: encodeFunctionData({
+                abi: erc20Abi,
+                functionName: "mint",
+                args: [executorPot, CHILD_YIELD],
+              }),
+            },
+            cookCall(grandchildProgram.source, grandchildProgram.baseDirs),
+          ],
+        }),
+        reward: normalizeReward({
+          deadline: 4_000_000_000n,
+          creator: CREATOR,
+          prover: PROVER,
+          tokens: [{ token: tokenB, amount: inn }],
+        }),
+      });
+      const childOpts: DynamicChildOptions = {
+        portal,
+        measure: { kind: "erc20Balance", token: tokenB },
+        scale: CHILD_SCALE,
+        placeholders: [
+          { value: AMOUNT_IN_PLACEHOLDER, source: "amountIn", occurrences: 1 },
+          { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut", occurrences: 1 },
+        ],
+      };
+      const childProgram = dynamicChildProgram([
+        { child: child(AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER), opts: childOpts },
+      ]);
+
+      // ---- level 1: fulfil the parent ------------------------------------------------------
+      const parent = await fulfil([
+        {
+          target: tokenB,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "mint",
+            args: [executorPot, PARENT_YIELD],
+          }),
+          value: 0n,
+        },
+        cookCall(childProgram.source, childProgram.baseDirs),
+      ]);
+      expect(parent.status).toBe("success");
+
+      const childAmountIn = PARENT_YIELD;
+      const childAmountOut = scaleAmount(childAmountIn, CHILD_SCALE);
+      const concreteChild = child(childAmountIn, childAmountOut);
+      const publishedChild = publishedIn(parent.logs);
+      expect(publishedChild).toHaveLength(1);
+      expect(publishedChild[0]!.intentHash).toBe(hashIntent(concreteChild).intentHash);
+      expect(publishedChild[0]!.route.toLowerCase()).toBe(
+        encodeRouteEvm(concreteChild.route).toLowerCase(),
+      );
+
+      // ---- level 2: fulfil THAT child, from the bytes the chain published -------------------
+      // Decoded from the log, not rebuilt from the SDK: whatever the program actually assembled is
+      // what gets fulfilled, so a discrepancy surfaces as a failed fulfilment rather than as a
+      // passing comparison between two things this suite computed.
+      const [publishedRoute] = decodeAbiParameters(
+        [EVM_ROUTE_PARAM],
+        publishedChild[0]!.route,
+      ) as unknown as [EvmRoute];
+      expect(publishedRoute.tokens[0]!.amount).toBe(childAmountOut);
+
+      // The child's own delivery obligation is a real solver posting, pulled by `_fulfill`.
+      await mintTo(deliveredToken, DEPLOYER.address, childAmountOut);
+      const approve = await walletClient.sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        to: deliveredToken,
+        data: encodeFunctionData({
+          abi: erc20ApproveAbi,
+          functionName: "approve",
+          args: [portal, childAmountOut],
+        }),
+        gas: GAS_LIMIT,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: approve });
+
+      const childFulfilment = await fulfilRoute(
+        publishedRoute,
+        rewardOf(publishedChild[0]!).rewardHash,
+      );
+      expect(childFulfilment.status).toBe("success");
+
+      // ---- the grandchild -------------------------------------------------------------------
+      const grandchildAmountIn = CHILD_YIELD;
+      const grandchildAmountOut = scaleAmount(grandchildAmountIn, GRANDCHILD_SCALE);
+      const concreteGrandchild = grandchild(grandchildAmountIn, grandchildAmountOut);
+      const publishedGrandchild = publishedIn(childFulfilment.logs);
+
+      expect(publishedGrandchild).toHaveLength(1);
+      expect(publishedGrandchild[0]!.intentHash).toBe(hashIntent(concreteGrandchild).intentHash);
+      expect(publishedGrandchild[0]!.route.toLowerCase()).toBe(
+        encodeRouteEvm(concreteGrandchild.route).toLowerCase(),
+      );
+      // Derived from the CHILD's measurement, at the child's execution time -- a number that did
+      // not exist anywhere when the parent was signed, and that the parent never touched.
+      expect(publishedGrandchild[0]!.rewardTokens[0]!.amount).toBe(grandchildAmountIn);
+      expect(
+        await publicClient.readContract({
+          abi: portalAbi,
+          address: portal,
+          functionName: "getRewardStatus",
+          args: [hashIntent(concreteGrandchild).intentHash],
+        }),
+      ).toBe(1);
+
+      // Gas, for the depth budget: reported rather than asserted, since it moves with the fixture.
+      console.log(
+        `depth-2 cascade gas — parent fulfilment ${parent.gasUsed}, child fulfilment ${childFulfilment.gasUsed}`,
+      );
+    }, 180_000);
 
     it("the width guard throws rather than truncating an over-wide amount", async () => {
       await mintTo(rewardToken, executorPot, 2n ** 70n);

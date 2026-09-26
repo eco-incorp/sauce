@@ -69,6 +69,12 @@ const PLACEHOLDERS = [
   { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut" as const, occurrences: 2 },
 ];
 
+/** For a child whose only `amountOut` site is its own `route.tokens` entry. */
+const PLACEHOLDERS_ONE_EACH = [
+  { value: AMOUNT_IN_PLACEHOLDER, source: "amountIn" as const, occurrences: 1 },
+  { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut" as const, occurrences: 1 },
+];
+
 function callKinds(calls: readonly { data: Hex }[]): readonly string[] {
   return calls.map((c) => {
     try {
@@ -278,5 +284,69 @@ describe(".nest(): mixing modes in one position group", () => {
     // Both are cooks; the dynamic one is the LONGER payload (it carries the child's calldata).
     expect(callKinds([first!, second!])).toEqual(["cook", "cook"]);
     expect(first!.data.length).toBeGreaterThan(second!.data.length);
+  });
+});
+
+describe(".nest(): a dynamic child that itself nests a dynamic child", () => {
+  /** Depth 2 through the fluent API alone: Base -> Arbitrum -> Optimism, with no amount below the
+   *  first known when the parent is built. Each level is the SAME construct — there is no special
+   *  "middle" form — which is what makes depth N follow from depth 2. */
+  const cascade = () => {
+    const measureOnArbitrum = { kind: "erc20Balance", token: TOKEN } as const;
+
+    const grandchild = openRoute("optimism", "return 1n;", {
+      ...evmOptions({ source: "arbitrum" }),
+      salt: `0x${"9c".repeat(32)}` as Hex,
+      tokens: [{ token: TOKEN, amount: AMOUNT_OUT_PLACEHOLDER }],
+    }).reward({ tokens: [{ token: TOKEN, amount: AMOUNT_IN_PLACEHOLDER }] });
+
+    const child = openRoute("arbitrum", "return 1n;", {
+      ...evmOptions({ source: "base" }),
+      salt: `0x${"9b".repeat(32)}` as Hex,
+      tokens: [{ token: TOKEN, amount: AMOUNT_OUT_PLACEHOLDER }],
+    })
+      .nest(grandchild, {
+        via: "dynamic",
+        measure: measureOnArbitrum,
+        placeholders: PLACEHOLDERS_ONE_EACH,
+      })
+      .reward({ tokens: [{ token: TOKEN, amount: AMOUNT_IN_PLACEHOLDER }] });
+
+    return openRoute("base", "return 1n;", evmOptions())
+      .nest(child, {
+        via: "dynamic",
+        measure: { kind: "erc20Balance", token: TOKEN },
+        placeholders: PLACEHOLDERS_ONE_EACH,
+      })
+      .reward(0n);
+  };
+
+  it("the API expresses it directly — nothing special is needed at the middle level", () => {
+    expect(cascade).not.toThrow();
+  });
+
+  it("walks three intents, and the parent's cook carries the child's rendered segments", () => {
+    const built = cascade();
+
+    expect(built.intents()).toHaveLength(3);
+    const cook = built.intent.route.calls.at(-1)!;
+    const { segments } = dynamicChildTemplate(built.children[0]!.intent, {
+      portal: PORTAL,
+      measure: { kind: "erc20Balance", token: TOKEN },
+      placeholders: PLACEHOLDERS_ONE_EACH,
+    });
+    for (const segment of segments) {
+      if (segment === "0x") continue;
+      expect(cook.data.toLowerCase()).toContain(segment.slice(2).toLowerCase());
+    }
+  });
+
+  it("the grandchild's own cook is inside the child's route, untouched by the parent", () => {
+    const built = cascade();
+    const child = built.children[0]!;
+    // The child carries its own extra cook -- the grandchild's renderer -- and the parent spliced
+    // amounts around it without disturbing it.
+    expect(child.intent.route.calls).toHaveLength(2); // the child's body cook + the grandchild's
+    expect(child.children).toHaveLength(1);
   });
 });
