@@ -170,8 +170,11 @@ try {
   });
   // Check emitted declarations from a real install, not src/. Bare source globals
   // must survive declaration emit and the root package's side-effect import.
+  // Base is a named export; USDC and Uniswap are SauceScript globals the compiler resolves
+  // inside the route body — declared types with no runtime value, so importing them would be
+  // wrong. This fixture is the packaged surface a consumer actually gets.
   const consumer = `
-    import '${name}';
+    import { Base } from '${name}';
     const options = {
       pot: '0x1111111111111111111111111111111111111111' as const,
       engine: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as const,
