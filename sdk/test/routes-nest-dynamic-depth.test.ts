@@ -87,7 +87,7 @@ const compileLevel = (intent: Intent, measured: Hex): Uint8Array => {
  */
 function cascadeCookSize(depth: number): number {
   let calls: Call[] = [];
-  let bytecode = new Uint8Array();
+  let bytecode: Uint8Array = new Uint8Array();
   for (let level = depth; level >= 1; level--) {
     bytecode = compileLevel(levelIntent(level, calls), token(level + 0x10));
     calls = [
