@@ -1,6 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { compile, encodeCompactArguments } from "../../src/compiler.js";
-import { execute, expectFail, expectOk, startEngine, toBigInt } from "./engine-harness.js";
+import {
+  execute,
+  expectFail,
+  expectOk,
+  startEngine,
+  svmArtifactsPresent,
+  toBigInt,
+} from "./engine-harness.js";
 
 /** Both clusters come from the v12-svm release, each pinned by tag AND digest in
  *  `sync-engine-artifacts.mjs`. They were briefly committed under `vendor/performance` while the
@@ -15,11 +22,29 @@ const WIRE_JSON = {
   mainnet: process.env.SAUCE_ENGINE_WIRE_MAINNET_JSON,
 } as const;
 
-const describeClusters = [...Object.values(ENGINE_SO), ...Object.values(WIRE_JSON)].every(
-  (path) => path !== undefined && existsSync(path),
-)
-  ? describe.each(["devnet", "mainnet"] as const)
-  : describe.each([] as ("devnet" | "mainnet")[]);
+const CLUSTERS = ["devnet", "mainnet"] as const;
+// The harness's own gate (engine, kitchen program, kitchen IDL) AND this suite's per-cluster inputs.
+// Checking only the cluster files let a checkout with engines but no kitchen RUN the suite and crash
+// on an undefined IDL path instead of skipping.
+const clustersPresent =
+  svmArtifactsPresent &&
+  [...Object.values(ENGINE_SO), ...Object.values(WIRE_JSON)].every(
+    (path) => path !== undefined && existsSync(path),
+  );
+
+// Engine-gated like every other suite here: skip locally when the release artifacts are absent, and
+// fail in CI, which always supplies them. The skip is `describe.skip.each` over the real cluster list
+// rather than `describe.each([])`, because jest rejects an empty table as a FAILURE — which made this
+// the one engine-gated suite that failed, instead of skipping, on a checkout without the engines.
+if (!clustersPresent && process.env.CI) {
+  throw new Error(
+    "SAUCE_RUST_ENGINE_SO / SAUCE_RUST_ENGINE_MAINNET_SO / SAUCE_ENGINE_WIRE_JSON / " +
+      "SAUCE_ENGINE_WIRE_MAINNET_JSON are unset or missing in CI. This suite must never skip here — " +
+      'see the "Fetch the v12 engines" step in .github/workflows/ci.yml.',
+  );
+}
+
+const describeClusters = clustersPresent ? describe.each(CLUSTERS) : describe.skip.each(CLUSTERS);
 
 describeClusters("compact package on %s", (cluster) => {
   const engineSo = ENGINE_SO[cluster];
