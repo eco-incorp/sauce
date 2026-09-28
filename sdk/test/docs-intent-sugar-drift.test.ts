@@ -137,7 +137,7 @@ describe("the guide's refusal list is the lowering's", () => {
       "only token `transfer`/`approve`",
       "a program compiled for the destination",
       "destinationExecutionFee",
-      "one canonical Pot per chain",
+      "one shared Pot per Executor",
       "leave nothing in it",
     ]) {
       expect(GUIDE).toContain(claim);
@@ -177,6 +177,11 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       documented: "**`executor()` of the Portal the route records**",
       holds: () =>
         calls()[0]!.data.toLowerCase().includes(ecoRoutesExecutorOf(PORTAL).slice(2).toLowerCase()),
+    },
+    {
+      // The solver's own Pot: one per Portal, salt zero.
+      documented: "salt zero (`SAUCE_INTENT_POT_SALT`)",
+      holds: () => SAUCE_INTENT_POT_SALT === `0x${"00".repeat(32)}`,
     },
     {
       documented: "**A Pot you name gets no such call**",

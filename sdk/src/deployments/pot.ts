@@ -18,20 +18,19 @@ import gate from "../artifacts/V12EngineGate.json" with { type: "json" };
 import { v12PotDerivation } from "./v12-addresses.js";
 
 /**
- * The salt every Pot the SDK derives for itself uses.
+ * The salt of the one Pot every intent on a chain shares: zero.
  *
- * One constant rather than one per intent, deliberately. The owner is already the destination
- * `Portal.executor()`, which is shared by every intent on that chain, so a per-intent salt would
- * mint a fresh Pot per intent — each needing its own deployment transaction before anything could
- * run, and each an empty contract afterwards. A constant gives one canonical Pot per (Kitchen,
- * Executor) pair: deployed once, reused, and the same address for everyone who derives it.
+ * A Pot is fixed by its (owner, salt) pair, so this is not a namespace: whoever calls
+ * `Kitchen.deployPot(executor, 0)` creates this same Pot, owned by the Executor, and nobody can
+ * create a different one there. That sharing is the intent. The owner is the destination
+ * `Portal.executor()`, which every intent through that Portal already shares, and the solver
+ * deploys exactly this Pot, one per Portal, with salt zero. Deriving it here gives the SDK the
+ * solver's Pot rather than a second one that nothing funds or deploys.
  *
- * Tagged rather than zero so it cannot collide with a Pot somebody deployed for their own use with
- * the obvious default salt.
+ * `test/deployments-pot.test.ts` pins the result against what the released Kitchen reports on-chain
+ * for the production Portal.
  */
-export const SAUCE_INTENT_POT_SALT: Hex = keccak256(
-  new TextEncoder().encode("sauce.intent.pot.v1"),
-);
+export const SAUCE_INTENT_POT_SALT: Hex = `0x${"00".repeat(32)}`;
 
 /** The Kitchen the released engine accepts Pots from — the one its gate re-derives against. */
 export const v12GateKitchen = (): Hex => getAddress((gate as { kitchen: string }).kitchen) as Hex;

@@ -53,8 +53,9 @@ the call with `NotOwner()`.
 
 You do not have to supply one. With no `execution.pot` and no `execution.engine`, the builder uses the
 same Pot the [native syntax](#the-destination-pot-is-derived) derives — CREATE2 from the released
-Kitchen over that Executor and the constant `SAUCE_INTENT_POT_SALT` — and the released engine. Both
-remain overrides. `destinationPot(Base.chain, { portal })` returns that address, for a `precalls`
+Kitchen over that Executor and salt zero (`SAUCE_INTENT_POT_SALT`) — and the released engine. That is
+the one Pot the solver deploys per Portal and every intent through that Portal shares. Both remain
+overrides. `destinationPot(Base.chain, { portal })` returns that address, for a `precalls`
 transfer into it.
 
 **A derived Pot is deployed by the route that uses it.** Its first `route.calls` entry is
@@ -264,8 +265,9 @@ is the `executor()` of the Portal the child's route records — itself that Port
 so it follows from the Portal address. That is the registry's Portal, or `destinationPortal` when you
 override it: a route recording one Portal is run by that Portal's Executor, and a Pot owned by any
 other Executor would refuse the cook with `NotOwner()`. Nothing is read from a chain and nothing is
-asked of you. The salt is a constant, so there is **one canonical Pot per chain and Portal** rather
-than one per intent.
+asked of you. The salt is zero (`SAUCE_INTENT_POT_SALT`), so there is **one shared Pot per Executor**
+rather than one per intent: the Pot the solver deploys for that Portal. A Pot is fixed by its owner
+and salt, so whoever calls `deployPot(executor, 0)` creates that same Pot, owned by the Executor.
 
 Deriving an address is not deploying a contract, so the route deploys it: a program body's route
 begins with `Kitchen.deployPot(executor, SAUCE_INTENT_POT_SALT)`, before the delivery into the Pot and
