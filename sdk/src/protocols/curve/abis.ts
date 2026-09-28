@@ -26,14 +26,19 @@ export const CurveRouterNGABI = [
   },
 ] as const;
 
+// The StableSwap-NG pool interface (plain and meta pools): int128 coin indices, dynamic-array
+// liquidity amounts, and swaps that return the amount out. Legacy pools such as 3pool differ:
+// their `exchange` and `remove_liquidity_one_coin` return nothing and their liquidity arrays are
+// fixed-size (`uint256[3]`), so only `get_dy`/`get_virtual_price` read them safely through this ABI.
+// `exchange_underlying` exists on metapools only.
 export const CurveStableSwapABI = [
   {
     name: "exchange",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "i", type: "uint128" },
-      { name: "j", type: "uint128" },
+      { name: "i", type: "int128" },
+      { name: "j", type: "int128" },
       { name: "dx", type: "uint256" },
       { name: "min_dy", type: "uint256" },
     ],
@@ -44,8 +49,8 @@ export const CurveStableSwapABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "i", type: "uint128" },
-      { name: "j", type: "uint128" },
+      { name: "i", type: "int128" },
+      { name: "j", type: "int128" },
       { name: "dx", type: "uint256" },
       { name: "min_dy", type: "uint256" },
     ],
@@ -77,7 +82,7 @@ export const CurveStableSwapABI = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "_token_amount", type: "uint256" },
-      { name: "i", type: "uint128" },
+      { name: "i", type: "int128" },
       { name: "min_amount", type: "uint256" },
     ],
     outputs: [{ name: "", type: "uint256" }],
@@ -87,8 +92,8 @@ export const CurveStableSwapABI = [
     type: "function",
     stateMutability: "view",
     inputs: [
-      { name: "i", type: "uint128" },
-      { name: "j", type: "uint128" },
+      { name: "i", type: "int128" },
+      { name: "j", type: "int128" },
       { name: "dx", type: "uint256" },
     ],
     outputs: [{ name: "", type: "uint256" }],

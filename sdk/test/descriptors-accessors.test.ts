@@ -7,6 +7,7 @@
 import { encodeFunctionData } from "viem";
 import { chainContracts, on, type ContractAccessor } from "../src/descriptors/accessors.js";
 import type { ContractCall } from "../src/descriptors/call.js";
+import { getDescriptor } from "../src/descriptors/query.js";
 import { UniswapV4UniversalRouterABI } from "../src/protocols/uniswap-v4/abis.js";
 
 /** Method names are typed `unknown` on `ContractAccessor` (see accessors.ts's own doc comment) —
@@ -80,22 +81,51 @@ describe("descriptors accessors: per-chain holes fail clearly", () => {
   });
 });
 
+/**
+ * No registry ABI is widened any more (test/registry-abi.test.ts pins every selector against the
+ * deployed code), so the gate is exercised by marking a real descriptor widened for one test.
+ */
+function whileWidened<T>(protocol: string, contract: string, run: () => T): T {
+  const coverage = getDescriptor(protocol, contract)!.coverage as {
+    typeFidelity: "exact" | "widened";
+    caveats: readonly string[];
+  };
+  const saved = { typeFidelity: coverage.typeFidelity, caveats: coverage.caveats };
+  coverage.typeFidelity = "widened";
+  coverage.caveats = ["synthetic: computed selectors do not match the deployed contract"];
+  try {
+    return run();
+  } finally {
+    Object.assign(coverage, saved);
+  }
+}
+
 describe("descriptors accessors: widened-coverage caveat is observable and gated", () => {
-  it("UniswapV3.Factory carries fidelity/caveats, and encode() refuses without the opt-in", () => {
-    const base = chainContracts("base");
-    const call = invoke(
-      base.UniswapV3.Factory,
+  const getPool = () =>
+    invoke(
+      chainContracts("base").UniswapV3.Factory,
       "getPool",
       "0x1111111111111111111111111111111111111111",
       "0x2222222222222222222222222222222222222222",
       3000n,
     );
-    expect(call.fidelity).toBe("widened");
-    expect(call.caveats.length).toBeGreaterThan(0);
-    expect(call.method.selector).toBe("0x71c54fc9");
-    expect(() => call.encode()).toThrow(/WRONG|WIDENED|allowWidened/i);
-    expect(() => call.data).toThrow(/allowWidened/);
-    expect(call.encode({ allowWidened: true })).toMatch(/^0x71c54fc9/);
+
+  it("a widened descriptor carries fidelity/caveats, and encode() refuses without the opt-in", () => {
+    whileWidened("uniswap-v3", "Factory", () => {
+      const call = getPool();
+      expect(call.fidelity).toBe("widened");
+      expect(call.caveats.length).toBeGreaterThan(0);
+      expect(() => call.encode()).toThrow(/WRONG|WIDENED|allowWidened/i);
+      expect(() => call.data).toThrow(/allowWidened/);
+      expect(call.encode({ allowWidened: true })).toMatch(/^0x1698ee82/);
+    });
+  });
+
+  it("UniswapV3.Factory is exact: getPool(address,address,uint24), the deployed selector", () => {
+    const call = getPool();
+    expect(call.fidelity).toBe("exact");
+    expect(call.method.selector).toBe("0x1698ee82");
+    expect(call.encode()).toMatch(/^0x1698ee82/);
   });
 
   it("an exact-fidelity descriptor needs no opt-in", () => {
@@ -188,15 +218,16 @@ describe("descriptors accessors: toCall / toSauceScript", () => {
   });
 
   it("a widened call refuses toSauceScript too", () => {
-    const base = chainContracts("base");
-    const call = invoke(
-      base.UniswapV3.Factory,
-      "getPool",
-      "0x1111111111111111111111111111111111111111",
-      "0x2222222222222222222222222222222222222222",
-      3000n,
-    );
-    expect(() => call.toSauceScript()).toThrow(/allowWidened/);
+    whileWidened("uniswap-v3", "Factory", () => {
+      const call = invoke(
+        chainContracts("base").UniswapV3.Factory,
+        "getPool",
+        "0x1111111111111111111111111111111111111111",
+        "0x2222222222222222222222222222222222222222",
+        3000n,
+      );
+      expect(() => call.toSauceScript()).toThrow(/allowWidened/);
+    });
   });
 });
 

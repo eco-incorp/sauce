@@ -48,7 +48,7 @@ function main(
 }
 ```
 
-- `routerAddress`: Uniswap V3 SwapRouter address for the target chain
+- `routerAddress`: Uniswap V3 SwapRouter address for the target chain. This `swap` uses SwapRouter's params (with `deadline`); chains that only have SwapRouter02 (Base, BSC, Avalanche, Celo, Monad) need `UniswapV3SwapRouter02ABI`, whose params have no `deadline`
 - `tokenIn` / `tokenOut`: Input and output token addresses
 - `fee`: Pool fee tier in hundredths of a bip. Common values: `500` (0.05%), `3000` (0.3%), `10000` (1%)
 - `amountIn`: Exact amount of input token (in wei)
@@ -149,7 +149,7 @@ function main(
 | Base      | SwapRouter02 | `0x2626664c2603336E57B271c5C0b26F421741e481` |
 | Base      | NFPM         | `0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1` |
 | BSC       | Factory      | `0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7` |
-| BSC       | SwapRouter02 | `0xB971eF87ede563556b2ED4b1652CB9cc5aA6f`    |
+| BSC       | SwapRouter02 | `0xB971eF87ede563556b2ED4b1C0b0019111Dd85d2` |
 | Avalanche | Factory      | `0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD` |
 | Avalanche | SwapRouter02 | `0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE` |
 | Celo      | Factory      | `0xAfE208a311B21f13EF87E33A90049fC17A7acDEc` |
@@ -163,6 +163,15 @@ function main(
 - `exactInput(tuple(bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum)) -> uint256 amountOut` - Multi-hop swap with exact input via encoded path (tokenA+fee+tokenB+fee+tokenC)
 - `exactOutputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountOut, uint256 amountInMaximum, uint160 sqrtPriceLimitX96)) -> uint256 amountIn` - Single-hop swap specifying exact output desired
 - `exactOutput(tuple(bytes path, address recipient, uint256 deadline, uint256 amountOut, uint256 amountInMaximum)) -> uint256 amountIn` - Multi-hop swap specifying exact output desired
+
+### UniswapV3SwapRouter02ABI
+
+SwapRouter02's params structs drop `deadline` (wrap the call in a deadline check if needed).
+
+- `exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) -> uint256 amountOut`
+- `exactInput(tuple(bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum)) -> uint256 amountOut`
+- `exactOutputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountOut, uint256 amountInMaximum, uint160 sqrtPriceLimitX96)) -> uint256 amountIn`
+- `exactOutput(tuple(bytes path, address recipient, uint256 amountOut, uint256 amountInMaximum)) -> uint256 amountIn`
 
 ### UniswapV3NonfungiblePositionManagerABI
 
@@ -178,7 +187,7 @@ function main(
 
 ### UniswapV3QuoterV2ABI
 
-- `quoteExactInputSingle(tuple(address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) -> (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)` - Simulate a swap to get expected output (view)
+- `quoteExactInputSingle(tuple(address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) -> (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)` - Simulate a swap to get expected output. Not a view: it reverts internally to measure, so call it off-chain (eth_call)
 
 ## Notes
 

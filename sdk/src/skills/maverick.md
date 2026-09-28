@@ -58,17 +58,17 @@ function main(
 ### MaverickV2RouterABI
 
 - `exactInputSingle(address recipient, address pool, bool tokenAIn, uint256 amountIn, uint256 amountOutMinimum) -> uint256 amountOut` - Swap exact input in a specific pool
-- `exactOutputSingle(address recipient, address pool, bool tokenAIn, uint256 amountOut, uint256 amountInMaximum) -> uint256 amountIn` - Swap to get exact output from a specific pool
+- `exactOutputSingle(address recipient, address pool, bool tokenAIn, uint256 amountOut, uint256 amountInMaximum) -> (uint256 amountIn, uint256 amountOut)` - Swap to get exact output from a specific pool
 
 ### MaverickV2FactoryABI
 
-- `lookup(address tokenA, address tokenB) -> address[] pools` - Look up all available pools for a token pair (view)
+- `lookup(address tokenA, address tokenB, uint256 startIndex, uint256 endIndex) -> address[] pools` - Look up a page of the pools for a token pair (view)
 
 ## Notes
 
 - Uses `tokenAIn` bool instead of separate token addresses to specify swap direction within a pool
 - Pool address must be provided directly (no built-in path routing like Uniswap)
-- Use `factory.lookup(tokenA, tokenB)` to discover available pools for a pair
+- Use `factory.lookup(tokenA, tokenB, 0, n)` to discover available pools for a pair
 - Parameter order is unusual: `recipient` is the FIRST parameter, not the last
 - Maverick's key innovation is directional LP strategies: bins can be configured to move with price in one direction
 - LP modes: Static (like Uniswap V3), Right (follow price up), Left (follow price down), Both (follow both)

@@ -46,7 +46,7 @@ function main(
 }
 ```
 
-- `routerAddress`: KyberSwap Elastic Router address (same on most chains: `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83`)
+- `routerAddress`: KyberSwap Elastic Router address (`0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` on every listed chain except Base, which has no Elastic deployment here)
 - `tokenIn` / `tokenOut`: Input and output token addresses
 - `fee`: Pool fee tier (similar to Uniswap V3 but with KyberSwap's own tiers)
 - `amountIn`: Exact input amount (in wei)
@@ -76,8 +76,6 @@ function main(
 | Avalanche | Elastic Factory    | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` |
 | Avalanche | Elastic Router     | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` |
 | Avalanche | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-| Base      | Elastic Factory    | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` |
-| Base      | Elastic Router     | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` |
 | Base      | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
 
 ## ABI Methods
@@ -88,7 +86,7 @@ function main(
 
 ### KyberSwapMetaAggregationRouterABI
 
-- `swap(tuple(address callTo, address approveTarget, address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, address recipient, bytes data)) -> (uint256 returnAmount, uint256 gasUsed)` - Execute a swap via the meta-aggregation router (routes across multiple DEXes for best price)
+- `swap(tuple(address callTarget, address approveTarget, bytes targetData, tuple(address srcToken, address dstToken, address[] srcReceivers, uint256[] srcAmounts, address[] feeReceivers, uint256[] feeAmounts, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags, bytes permit) desc, bytes clientData)) -> (uint256 returnAmount, uint256 gasUsed)` - Execute a swap via the meta-aggregation router (routes across multiple DEXes for best price). The execution struct comes from the KyberSwap API
 
 ## Notes
 

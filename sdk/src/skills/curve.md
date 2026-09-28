@@ -94,8 +94,10 @@ function main(poolAddress: Address, amount: Uint256, minAmounts: Uint256[]): Uin
 
 ### CurveStableSwapABI
 
+The StableSwap-NG pool interface. Legacy pools such as 3pool share the selectors of `exchange`, `get_dy`, `remove_liquidity_one_coin` and `get_virtual_price`, but their `exchange` and `remove_liquidity_one_coin` return nothing (so the declared `uint256` output reverts on them) and their liquidity functions take fixed-size arrays (`uint256[3]`). Read legacy pools with `get_dy`/`get_virtual_price` only.
+
 - `exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) -> uint256` - Swap between two tokens in the pool by index
-- `exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) -> uint256` - Swap between underlying tokens (for metapools/lending pools)
+- `exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) -> uint256` - Swap between underlying tokens (metapools only)
 - `add_liquidity(uint256[] amounts, uint256 min_mint_amount) -> uint256` - Deposit tokens and receive LP tokens (can be imbalanced)
 - `remove_liquidity(uint256 _amount, uint256[] min_amounts) -> uint256[]` - Burn LP tokens and withdraw all tokens proportionally
 - `remove_liquidity_one_coin(uint256 _token_amount, int128 i, uint256 min_amount) -> uint256` - Burn LP tokens and withdraw as a single token

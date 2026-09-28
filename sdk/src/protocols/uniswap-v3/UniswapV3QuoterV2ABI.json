@@ -23,7 +23,7 @@
             },
             {
               "name": "fee",
-              "type": "uint32"
+              "type": "uint24"
             },
             {
               "name": "sqrtPriceLimitX96",

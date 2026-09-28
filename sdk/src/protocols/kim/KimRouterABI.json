@@ -1,7 +1,7 @@
 {
   "abi": [
     {
-      "name": "swapExactTokensForTokens",
+      "name": "swapExactTokensForTokensSupportingFeeOnTransferTokens",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
@@ -14,25 +14,15 @@
           "type": "uint256"
         },
         {
-          "name": "routes",
-          "type": "tuple[]",
-          "components": [
-            {
-              "name": "from",
-              "type": "address"
-            },
-            {
-              "name": "to",
-              "type": "address"
-            },
-            {
-              "name": "stable",
-              "type": "bool"
-            }
-          ]
+          "name": "path",
+          "type": "address[]"
         },
         {
           "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "referrer",
           "type": "address"
         },
         {
@@ -40,12 +30,7 @@
           "type": "uint256"
         }
       ],
-      "outputs": [
-        {
-          "name": "amounts",
-          "type": "uint256[]"
-        }
-      ]
+      "outputs": []
     },
     {
       "name": "addLiquidity",
@@ -59,10 +44,6 @@
         {
           "name": "tokenB",
           "type": "address"
-        },
-        {
-          "name": "stable",
-          "type": "bool"
         },
         {
           "name": "amountADesired",
