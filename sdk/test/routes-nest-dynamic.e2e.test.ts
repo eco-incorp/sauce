@@ -69,6 +69,7 @@ import {
 } from "../src/routes/nest-dynamic.js";
 import { decodeAbiParameters } from "viem";
 import { nestedTransferProgram } from "../src/routes/nest.js";
+import { safeApproveStatements, safeTransferStatements } from "../src/token/safe.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "../src/routes/normalize.js";
 import { scaleAmount, WAD } from "../src/routes/template.js";
@@ -99,6 +100,11 @@ const MOCK_ERC20 = JSON.parse(
  *  `fix/settle-no-return-token`, deliberately, so the two add/add cleanly when that lands. */
 const NO_RETURN_ERC20 = JSON.parse(
   readFileSync(join(HERE, "std/token/fixtures/NoReturnERC20.json"), "utf8"),
+) as { creationCode: Hex };
+/** The other way an ERC-20 lies about a write: `transfer`/`approve` return `false` and move
+ *  nothing. A caller that ignores the return believes it worked; `SafeERC20` exists for this. */
+const FALSE_RETURN_ERC20 = JSON.parse(
+  readFileSync(join(HERE, "std/token/fixtures/FalseReturnERC20.json"), "utf8"),
 ) as { creationCode: Hex };
 
 const DEPLOYER = privateKeyToAccount(
@@ -132,6 +138,9 @@ const erc20Abi = parseAbi([
 ]);
 const erc20ApproveAbi = parseAbi([
   "function approve(address spender, uint256 value) returns (bool)",
+]);
+const erc20AllowanceAbi = parseAbi([
+  "function allowance(address owner, address spender) view returns (uint256)",
 ]);
 
 const portalAbi = [
@@ -227,6 +236,14 @@ let tokenC: Address;
 let deliveredToken: Address;
 /** A reward token that returns nothing from `approve`/`transfer`. */
 let usdt: Address;
+/** A token that returns `false` from both, and moves nothing. */
+let liar: Address;
+
+/**
+ * A contract whose every call reverts, hand-assembled because it needs no state and no ABI:
+ * creation copies a 5-byte runtime and returns it; the runtime is `PUSH1 0 PUSH1 0 REVERT`.
+ */
+const REVERTING_ERC20_CREATION = "0x6005600c60003960056000f360006000fd" as Hex;
 
 const waitForRpc = (deadline: number): Promise<void> =>
   Date.now() >= deadline
@@ -439,6 +456,7 @@ const startEvm = async (): Promise<ChildProcess> => {
   tokenB = await deploy(MOCK_ERC20.creationCode);
   tokenC = await deploy(MOCK_ERC20.creationCode);
   deliveredToken = await deploy(MOCK_ERC20.creationCode);
+  liar = await deploy(FALSE_RETURN_ERC20.creationCode);
   usdt = await deploy(
     `${NO_RETURN_ERC20.creationCode}${encodeAbiParameters(
       [{ type: "string" }, { type: "string" }, { type: "uint8" }],
@@ -904,13 +922,12 @@ describeEvm("route nesting, executed", () => {
       expect(await balanceOf(usdt, executorPot)).toBe(0n);
     }, 120_000);
 
-    it("DYNAMIC: a token that REFUSES the approve still reverts the whole fulfilment", async () => {
-      // Skipping the bool decode must not turn a real failure into a silent success. This fixture
-      // refuses a nonzero -> nonzero allowance change, exactly as USDT does, so the first route call
-      // leaves an allowance the child's own approve cannot overwrite.
+    it("DYNAMIC: a stale non-zero allowance no longer breaks the next fulfilment", async () => {
+      // USDT refuses a non-zero -> non-zero allowance change, and ONE Executor-owned Pot is shared
+      // by every intent on the chain -- so an allowance left by an earlier fulfilment used to break
+      // the next one outright. `forceApprove` semantics reset it first. Before this change the
+      // fulfilment below reverted.
       await mintTo(usdt, executorPot, USDT_MEASURED);
-      const marker = "0x0000000000000000000000000000000000000d01" as Address;
-
       const child = (inn: bigint): Intent => ({
         destination: BigInt(CHAIN_ID),
         sourceChainId: BigInt(CHAIN_ID),
@@ -940,9 +957,52 @@ describeEvm("route nesting, executed", () => {
       const program = dynamicChildProgram([{ child: child(AMOUNT_IN_PLACEHOLDER), opts }]);
 
       const { status } = await fulfil([
-        // The Pot itself pre-approves 1 wei to the Portal, so the child's own approve is a
-        // nonzero -> nonzero change the token rejects.
+        // Leave 1 wei of allowance standing, as a previous fulfilment would.
         cookCall(`evm.call(${BigInt(usdt)}n, 0n, ${approveLiteral(portal, 1n)});`),
+        cookCall(program.source, program.baseDirs),
+      ]);
+
+      expect(status).toBe("success");
+      // Reset to zero, then set to the measured amount -- and fully consumed by the Portal's pull.
+      expect(await balanceOf(usdt, executorPot)).toBe(0n);
+    }, 120_000);
+
+    it("DYNAMIC: a token that REVERTS on approve still reverts the whole fulfilment", async () => {
+      // Checking the return value must not replace checking the call. A token that refuses outright
+      // still takes the fulfilment down with it.
+      const marker = "0x0000000000000000000000000000000000000d02" as Address;
+      const reverting = await deploy(REVERTING_ERC20_CREATION);
+      await mintTo(usdt, executorPot, USDT_MEASURED);
+
+      const child: Intent = {
+        destination: BigInt(CHAIN_ID),
+        sourceChainId: BigInt(CHAIN_ID),
+        route: normalizeRoute({
+          salt: `0x${"db".repeat(32)}` as Hex,
+          deadline: 4_000_000_000n,
+          portal,
+          calls: [],
+        }),
+        reward: normalizeReward({
+          deadline: 4_000_000_000n,
+          creator: CREATOR,
+          prover: PROVER,
+          tokens: [{ token: reverting, amount: AMOUNT_IN_PLACEHOLDER }],
+        }),
+      };
+      const program = dynamicChildProgram([
+        {
+          child,
+          opts: {
+            portal,
+            measure: { kind: "expression", expression: "5n" },
+            scale: WAD,
+            placeholders: [{ value: AMOUNT_IN_PLACEHOLDER, source: "amountIn", occurrences: 1 }],
+          },
+        },
+      ]);
+
+      const { status } = await fulfil([
         markerCall(marker),
         cookCall(program.source, program.baseDirs),
       ]);
@@ -1144,6 +1204,150 @@ describeEvm("route nesting, executed", () => {
           args: [hashIntent(expected).intentHash],
         }),
       ).toBe(1);
+    }, 180_000);
+  });
+
+  describe("SafeERC20 semantics on every token write", () => {
+    // `token/safe.ts` issues the write raw -- so nothing decodes a `bool` that a no-return token
+    // never sends -- and then CHECKS what came back, which is the half the first version skipped.
+    // These run the emitted statements directly through a cook: no intent, so a failure here is the
+    // token check and nothing else.
+    const cookStatements = (statements: readonly string[], baseDirs: readonly string[] = []) =>
+      cookCall(`function main() {\n${statements.join("\n")}\n}`, baseDirs);
+
+    it("a token that returns FALSE reverts instead of passing", async () => {
+      // The case `SafeERC20` exists for. Skipping the decode accepted this as success and the value
+      // was quietly gone; before this change the fulfilment below succeeded.
+      await mintTo(liar, executorPot, 5_000n);
+      const marker = "0x0000000000000000000000000000000000000e10" as Address;
+
+      const { status } = await fulfil([
+        markerCall(marker),
+        cookStatements(
+          safeTransferStatements(
+            "s0_",
+            `${BigInt(liar)}n`,
+            { literal: BigInt(CREATOR) },
+            {
+              literal: 1_000n,
+            },
+          ),
+        ),
+      ]);
+
+      expect(status).toBe("reverted");
+      expect(await balanceOf(markerToken, marker)).toBe(0n);
+    }, 120_000);
+
+    it("a token that returns NOTHING succeeds", async () => {
+      await mintTo(usdt, executorPot, 5_000n);
+      const before = await balanceOf(usdt, CREATOR);
+
+      const { status } = await fulfil([
+        cookStatements(
+          safeTransferStatements(
+            "s1_",
+            `${BigInt(usdt)}n`,
+            { literal: BigInt(CREATOR) },
+            {
+              literal: 1_000n,
+            },
+          ),
+        ),
+      ]);
+
+      expect(status).toBe("success");
+      expect(await balanceOf(usdt, CREATOR)).toBe(before + 1_000n);
+    }, 120_000);
+
+    it("a target with NO CODE reverts", async () => {
+      // A call to an EOA always succeeds and returns nothing, so an unchecked write to a mistyped
+      // or undeployed token address looked exactly like a successful transfer.
+      const notAToken = "0x000000000000000000000000000000000000ee01" as Address;
+      expect(await publicClient.getCode({ address: notAToken })).toBeUndefined();
+
+      const { status } = await fulfil([
+        cookStatements(
+          safeTransferStatements(
+            "s2_",
+            `${BigInt(notAToken)}n`,
+            { literal: BigInt(CREATOR) },
+            {
+              literal: 1n,
+            },
+          ),
+        ),
+      ]);
+
+      expect(status).toBe("reverted");
+    }, 120_000);
+
+    it("approve resets a standing non-zero allowance before setting a new one", async () => {
+      // USDT's rule, and the reason it matters here: one Pot, shared by every intent on the chain.
+      const spender = "0x000000000000000000000000000000000000ee02" as Address;
+      const allowanceOf = (owner: Address) =>
+        publicClient.readContract({
+          abi: erc20AllowanceAbi,
+          address: usdt,
+          functionName: "allowance",
+          args: [owner, spender],
+        }) as Promise<bigint>;
+
+      const first = await fulfil([
+        cookStatements(
+          safeApproveStatements(
+            "s3_",
+            `${BigInt(usdt)}n`,
+            { literal: BigInt(spender) },
+            {
+              literal: 7n,
+            },
+          ),
+        ),
+      ]);
+      expect(first.status).toBe("success");
+      expect(await allowanceOf(executorPot)).toBe(7n);
+
+      // A plain approve here is the nonzero -> nonzero change USDT refuses; this one resets first.
+      const second = await fulfil([
+        cookStatements(
+          safeApproveStatements(
+            "s4_",
+            `${BigInt(usdt)}n`,
+            { literal: BigInt(spender) },
+            {
+              literal: 9n,
+            },
+          ),
+        ),
+      ]);
+
+      expect(second.status).toBe("success");
+      expect(await allowanceOf(executorPot)).toBe(9n);
+    }, 180_000);
+
+    it("FAILING-FIRST CONTROL: the plain approve USDT refuses does revert", async () => {
+      // Establishes that the case above is real rather than vacuous: without the reset, the same
+      // nonzero -> nonzero change fails.
+      const spender = "0x000000000000000000000000000000000000ee03" as Address;
+      await fulfil([
+        cookStatements(
+          safeApproveStatements(
+            "s5_",
+            `${BigInt(usdt)}n`,
+            { literal: BigInt(spender) },
+            {
+              literal: 3n,
+            },
+          ),
+        ),
+      ]);
+
+      const { status } = await fulfil([
+        cookCall(`evm.call(${BigInt(usdt)}n, 0n, ${approveLiteral(spender, 4n)});`),
+      ]);
+
+      expect(status).toBe("reverted");
     }, 180_000);
   });
 });

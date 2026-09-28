@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import { SWAP_BASE_DIRS, swapCallStatement, swapImportLines } from "../swap/source.js";
 import type { SwapSourceSpec } from "../swap/types.js";
+import { safeApproveStatements } from "../token/safe.js";
 import { formatBigint } from "./format.js";
 import { toDeposit } from "./params.js";
 import type { DepositSpec, DepositSourceSpec, NormalizedDeposit } from "./types.js";
@@ -61,13 +62,25 @@ function balanceExpression(deposit: NormalizedDeposit): string {
 /** The approve line(s) for a normalized deposit whose amount has already resolved to `amountExpr`
  *  (a literal or a bound identifier) — the ONE place `funding`/`approvalPolicy` is consulted, so no
  *  template emits its own approve and none can forget one. */
-function approveLines(d: NormalizedDeposit, amountExpr: string): string[] {
+function approveLines(d: NormalizedDeposit, amountExpr: string, varSuffix = ""): string[] {
   if (d.template.funding !== "erc20-approve" || d.approvalPolicy === "none") return [];
   if (d.token === null)
     throw new Error("deposit: unreachable — erc20-approve template without a token");
-  const approveAmount = d.approvalPolicy === "max" ? formatBigint(MAX_UINT256) : amountExpr;
+  // `SafeERC20`/`forceApprove` semantics, not `IERC20.at(t).approve(...)`: the vendored ABI's
+  // `bool` return is decoded even when discarded (which reverts on a no-return token like USDT),
+  // and skipping the decode alone would accept a `false` return as success. `token/safe.ts` also
+  // resets a non-zero allowance first, which USDT requires. A literal amount is passed as a
+  // literal so it folds into the calldata; anything else is a bound identifier.
+  const amount = /^\d+n$/.test(amountExpr)
+    ? { literal: BigInt(amountExpr.slice(0, -1)) }
+    : { local: amountExpr };
   return [
-    `IERC20.at(${formatBigint(d.token)}).approve(${formatBigint(d.target)}, ${approveAmount});`,
+    ...safeApproveStatements(
+      `dep${varSuffix}_`,
+      formatBigint(d.token),
+      { literal: d.target },
+      d.approvalPolicy === "max" ? { literal: MAX_UINT256 } : amount,
+    ),
   ];
 }
 
@@ -112,7 +125,7 @@ export function depositCallStatement(spec: DepositSourceSpec, varSuffix = ""): s
   const { pre, amountExpr } = resolveAmountExpr(normalized, varSuffix);
   const lines = [
     ...pre,
-    ...approveLines(normalized, amountExpr),
+    ...approveLines(normalized, amountExpr, varSuffix),
     ...normalized.template.emit(normalized, amountExpr, varSuffix),
   ];
   return lines.join("\n");
@@ -252,7 +265,7 @@ export function swapThenDepositSource(
     if (deltaExpr === undefined) return depositCallStatement(d, String(i));
     const normalized = toDeposit({ ...d, amount: 0n } as DepositSpec);
     const lines = [
-      ...approveLines(normalized, deltaExpr),
+      ...approveLines(normalized, deltaExpr, String(i)),
       ...normalized.template.emit(normalized, deltaExpr, String(i)),
     ];
     return lines.join("\n");

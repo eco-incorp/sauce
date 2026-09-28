@@ -61,7 +61,7 @@ import { denormalizeToEvm } from "./encode.js";
 import { formatBigint } from "../deposit/format.js";
 import { toAddressBigint } from "../token/params.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
-import { uncheckedApproveStatements } from "../token/unchecked.js";
+import { safeApproveStatements } from "../token/safe.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { publishAndFundTx } from "./portal.js";
 import {
@@ -357,9 +357,7 @@ export function dynamicChildStatements(
         .filter((i): i is number => i !== undefined);
       if (templated.length === 0) {
         const max = group.amounts.reduce((a, b) => (b > a ? b : a), 0n);
-        statements.push(
-          ...uncheckedApproveStatements(approvePrefix, key, portalWord, { literal: max }),
-        );
+        statements.push(...safeApproveStatements(approvePrefix, key, portalWord, { literal: max }));
         continue;
       }
       if (group.amounts.length !== 1) {
@@ -371,7 +369,7 @@ export function dynamicChildStatements(
         );
       }
       const local = localForPlaceholder(placeholders[templated[0]!]!, template, emitted.slotVars);
-      statements.push(...uncheckedApproveStatements(approvePrefix, key, portalWord, { local }));
+      statements.push(...safeApproveStatements(approvePrefix, key, portalWord, { local }));
     }
   }
 

@@ -25,6 +25,17 @@ export function compileTokenTransfer(
 }
 ```
 
+Every token WRITE these builders emit — and every one the SDK emits anywhere — carries OpenZeppelin
+`SafeERC20` semantics. The call goes out as raw calldata, so nothing decodes a `bool` a token like
+USDT never returns, and the result is then checked: empty returndata is accepted only from an
+address that has code, and anything else must be exactly `true`. A token that returns `false`
+reverts rather than passing silently, and so does a write to an address with no code. `approve` adds
+`forceApprove`'s reset — it reads the current allowance and zeroes it first when it is non-zero,
+which USDT requires and a shared Pot makes likely.
+
+The visible consequence is that a literal amount is encoded into the calldata rather than appearing
+as a decimal in the emitted source.
+
 `TokenCall.toCall()` instead returns `{ target, data, value }` for a fixed EVM call. Values that require runtime state, such as `amount: "balance"` or balance owner `"self"`, must be compiled. `.statement(target)` emits a transfer/approval statement; `.expression(target)` emits a balance read. `Token.program(specs, { target })` combines several operations into one program.
 
 Use `Token.approve({ token, spender, amount })` for approvals and `Token.balanceOf({ token, owner })` for reads. SVM specs name account references instead of ERC-20 addresses; see [Solana](solana.md).

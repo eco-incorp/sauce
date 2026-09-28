@@ -173,7 +173,7 @@ describe("Token: E1.3 capability gate — the two arms are NOT interchangeable (
   it("the ERC20 (evm) source is rejected on target 'svm'", () => {
     const src = tokenSource({ op: "transfer", token: TOKEN_ADDR, to: TO, amount: 5n }, "evm");
     expect(() => compileSource(src, "svm", { baseDirs: TOKEN_BASE_DIRS })).toThrow(
-      /`Contract\.at` is not available on the svm target/,
+      /is not available on the svm target/,
     );
   });
 

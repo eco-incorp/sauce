@@ -130,9 +130,11 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     // `bool` the compiler decodes even when discarded, which reverts on a no-return token (USDT).
     // See `token/unchecked.ts`. The calldata const is hoisted out of the zero-guard.
     expect(stmts[3]).toBe("const n0_0_tr0 = hex`a9059cbb`;");
-    expect(stmts[4]).toBe(
-      `if (n0_amt0 > 0n) { evm.call(${BigInt(TOKEN_A)}n, 0n, n0_0_tr0.concat(n0_vault.toBytesBe(32)).concat(n0_amt0.toBytesBe(32))); }`,
-    );
+    // The call AND its SafeERC20 check sit inside the zero guard -- checking a call that never ran
+    // would read a stale result. See `token/safe.ts`.
+    expect(stmts[4]).toContain("if (n0_amt0 > 0n) { const n0_0_tr = evm.call(");
+    expect(stmts[4]).toContain("require(ctx.codeSize(");
+    expect(stmts[4]).toContain("require(n0_0_tr.toBe() == 1); } }");
     expect(stmts).toHaveLength(5);
   });
 
@@ -148,9 +150,8 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     const stmts = nestedTransferStatements(child, 0, { ...explicitOpts, clamp: false });
 
     expect(stmts.some((s) => s.includes("n0_amt0"))).toBe(false);
-    expect(stmts[stmts.length - 1]).toBe(
-      `if (n0_bal0 > 0n) { evm.call(${BigInt(TOKEN_A)}n, 0n, n0_0_tr0.concat(n0_vault.toBytesBe(32)).concat(n0_bal0.toBytesBe(32))); }`,
-    );
+    expect(stmts[stmts.length - 1]).toContain("if (n0_bal0 > 0n) { const n0_0_tr = evm.call(");
+    expect(stmts[stmts.length - 1]).toContain("n0_bal0.toBytesBe(32)");
   });
 
   it("requireCap:true inserts the underfunded throw before the clamp", () => {

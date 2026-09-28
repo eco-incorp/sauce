@@ -26,7 +26,7 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { formatAddressField, formatBigint } from "../deposit/format.js";
 import { toAddressBigint } from "../token/params.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
-import { uncheckedTransferStatements } from "../token/unchecked.js";
+import { safeTransferStatements } from "../token/safe.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { denormalizeToEvm, hashIntent } from "./encode.js";
 import { approvalTxs, intentVaultAddressCall, publishAndFundTx, type PortalTx } from "./portal.js";
@@ -367,21 +367,22 @@ export function nestedTransferStatements(
     if (clamp) {
       stmts.push(`const ${amtVar} = ${balVar} > ${capLit} ? ${capLit} : ${balVar};`);
     }
-    // The transfer is a raw `evm.call` with no declared output, not `IERC20.at(t).transfer(...)`:
-    // the vendored IERC20 declares a `bool` return, the compiler lowers that to call-then-DECODE
-    // even though nothing reads it, and decoding from empty returndata reverts on this engine. A
-    // no-return token (USDT) therefore used to revert the whole parent fulfilment from the DEFAULT
-    // nesting mode. `balanceOf` above keeps its binding -- a `uint256` return is always there. See
-    // `token/unchecked.ts`; a transfer the token itself refuses still reverts.
-    const transferStmts = uncheckedTransferStatements(
+    // Written with OpenZeppelin `SafeERC20` semantics rather than `IERC20.at(t).transfer(...)`:
+    // the vendored IERC20 declares a `bool` the compiler decodes even when discarded, which reverts
+    // on a no-return token (USDT). `token/safe.ts` issues the call raw and then CHECKS what came
+    // back -- so a token returning `false`, or an address with no code, fails rather than passing
+    // silently. `balanceOf` above keeps its binding; a `uint256` return is always there.
+    const transferStmts = safeTransferStatements(
       `n${index}_${i}_`,
       tokenLit,
       { local: vaultVar },
       { local: amtExpr },
     );
-    // The calldata consts are hoisted out of the zero-guard; only the call belongs inside it.
-    stmts.push(...transferStmts.slice(0, -1));
-    stmts.push(`if (${amtExpr} > 0n) { ${transferStmts.at(-1)!} }`);
+    // The calldata consts are hoisted out of the zero-guard; the call AND its SafeERC20 check go
+    // inside it, since checking a call that never happened would read a stale result.
+    const firstCall = transferStmts.findIndex((line) => line.includes("evm.call("));
+    stmts.push(...transferStmts.slice(0, firstCall));
+    stmts.push(`if (${amtExpr} > 0n) { ${transferStmts.slice(firstCall).join(" ")} }`);
   });
 
   if (willTransferNative) {

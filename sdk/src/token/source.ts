@@ -7,9 +7,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  evmApproveStatement,
+  evmApproveStatements,
   evmBalanceExpression,
-  evmTransferStatement,
+  evmTransferStatements,
   ERC20_IMPORT_LINE,
 } from "./evm.js";
 import {
@@ -74,7 +74,12 @@ export function tokenCallStatement(
     );
   }
   if (isEvmTarget(target)) {
-    return spec.op === "transfer" ? evmTransferStatement(spec) : evmApproveStatement(spec);
+    const prefix = `t${index}_`;
+    return (
+      spec.op === "transfer"
+        ? evmTransferStatements(spec, prefix)
+        : evmApproveStatements(spec, prefix)
+    ).join("\n");
   }
   const lines =
     spec.op === "transfer"

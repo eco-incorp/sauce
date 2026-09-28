@@ -207,10 +207,15 @@ describe("the emitted program", () => {
       "const d0_out = (d0_in * 990000000000000000n + 999999999999999999n) / 1000000000000000000n;",
     );
     // ... segment consts and the concat chain ...
-    // The approve is a raw `evm.call` with no declared output -- see `token/unchecked.ts` for the
-    // USDT revert that forced it -- so it is the calldata const plus the call, not one statement.
-    expect(statements.at(-3)).toMatch(/^const d0_0ap0 = hex`095ea7b3[0-9a-f]+`;$/);
-    expect(statements.at(-2)).toBe(`evm.call(${usdc}n, 0n, d0_0ap0.concat(d0_in.toBytesBe(32)));`);
+    // The approve now carries `SafeERC20`/`forceApprove` semantics: an allowance read, a conditional
+    // reset, the write, and a check on each write. See `token/safe.ts`.
+    const approveText = statements.join("\n");
+    expect(approveText).toContain("const d0_0self = ctx.self();");
+    expect(approveText).toContain("if (d0_0cur > 0n) {");
+    expect(approveText).toMatch(/const d0_0ap0 = hex`095ea7b3[0-9a-f]+`;/);
+    expect(approveText).toContain(
+      `const d0_0ar = evm.call(${usdc}n, 0n, d0_0ap0.concat(d0_in.toBytesBe(32)));`,
+    );
     expect(statements.at(-1)).toBe(`evm.call(${portal}n, 0n, d0_data);`);
 
     // The approve names the SAME local the reward tuple's spliced word carries -- the allowance and
@@ -360,14 +365,15 @@ describe("fail-closed", () => {
 
     // Fully static: one literal, nothing concatenated. The `11n` is the LARGEST leg, encoded into
     // the calldata by viem rather than spelled as a SauceScript argument.
-    expect(stmts.at(-2)).toBe(`evm.call(${BigInt(USDC)}n, 0n, d0_0ap0);`);
-    expect(stmts.at(-3)).toBe(
+    const approveText = stmts.join("\n");
+    expect(approveText).toContain(
       `const d0_0ap0 = hex\`${encodeFunctionData({
         abi: erc20Abi,
         functionName: "approve",
         args: [PARENT_PORTAL, 11n],
       }).slice(2)}\`;`,
     );
+    expect(approveText).toContain(`const d0_0ar = evm.call(${BigInt(USDC)}n, 0n, d0_0ap0);`);
   });
 
   it("dynamicChildProgram rejects an empty entry list", () => {

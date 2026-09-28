@@ -19,6 +19,7 @@ import {
 } from "../src/deposit/index.js";
 import { depositCallStatement, depositImportLines, depositSource } from "../src/deposit/source.js";
 import type { DepositSpec } from "../src/deposit/index.js";
+import { encodeFunctionData, erc20Abi } from "viem";
 
 const TARGET = "0x1111111111111111111111111111111111111111" as const;
 const TOKEN = "0x2222222222222222222222222222222222222222" as const;
@@ -227,7 +228,13 @@ describe("toDeposit guards", () => {
 describe("emission shape — approvals", () => {
   it("emits an approve line by default (approvalPolicy 'exact')", () => {
     const stmt = depositCallStatement(aaveSpec());
-    expect(stmt).toMatch(/IERC20\.at\(.*\)\.approve\(.*1000n\)/);
+    // A checked raw call now, with the amount encoded into the calldata -- `token/safe.ts`.
+    expect(stmt).toContain(
+      encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [TARGET, 1000n] }).slice(
+        2,
+      ),
+    );
+    expect(stmt).toContain("require(ctx.codeSize(");
   });
 
   it("approvalPolicy 'none' emits no approve line", () => {
@@ -237,7 +244,14 @@ describe("emission shape — approvals", () => {
 
   it("approvalPolicy 'max' approves the uint256 max sentinel, not the deposit amount", () => {
     const stmt = depositCallStatement(aaveSpec({ approvalPolicy: "max" }));
-    expect(stmt).toContain(`.approve(${BigInt(TARGET)}n, ${(1n << 256n) - 1n}n)`);
+    // Encoded into the calldata now rather than spelled as an argument -- `token/safe.ts`.
+    expect(stmt).toContain(
+      encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [TARGET, (1n << 256n) - 1n],
+      }).slice(2),
+    );
   });
 
   it("a native-value template (weth:wrap) emits no approve at all", () => {

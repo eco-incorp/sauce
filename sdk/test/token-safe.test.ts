@@ -1,19 +1,18 @@
 /**
- * `token/unchecked.ts` — the USDT-safe ERC-20 lowering, and the regression lock that keeps the two
- * nesting emitters on it.
+ * `token/safe.ts` — OpenZeppelin `SafeERC20` semantics in SauceScript, and the regression lock that
+ * keeps every emitter on them.
  *
- * The hazard is not visible in any assertion about a standard token: compiler 2.3.0 lowers a
- * declared `bool` output to call-then-DECODE even when nothing reads it, and decoding from empty
- * returndata reverts on this engine. So the property under test is the ABSENCE of a declared output,
- * and the thing that must not come back is `IERC20.at(t).approve(...)`/`.transfer(...)`.
- * `routes-nest-dynamic.e2e.test.ts` is where a real no-return token executes; this suite is what
- * still runs with no engine.
+ * Two properties, and neither is visible in an assertion about a well-behaved token. The write must
+ * carry no DECLARED OUTPUT, because the compiler decodes one even when nothing reads it and a
+ * no-return token sends none. And the result must then be CHECKED, because skipping the decode
+ * accepts a `false` return and a call to an address with no code. `routes-nest-dynamic.e2e.test.ts`
+ * runs both against real tokens; this suite is what still runs with no engine.
  */
 import { encodeFunctionData, type Hex } from "viem";
 
 import { compileProgram as compile } from "./helpers";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
-import { uncheckedApproveStatements, uncheckedTransferStatements } from "../src/token/unchecked.js";
+import { safeApproveStatements, safeTransferStatements } from "../src/token/safe.js";
 import { nestedTransferStatements } from "../src/routes/nest.js";
 import { dynamicChildStatements } from "../src/routes/nest-dynamic.js";
 import { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } from "../src/routes/nest-dynamic.js";
@@ -27,13 +26,14 @@ const RECIPIENT = 0x9999999999999999999999999999999999999999n;
 
 const addr = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 
-/** The one `evm.call` a statement list ends with, split into its target and its data expression. */
+/** The LAST `evm.call` in a statement list, split into its target and its data expression. The
+ *  check now follows the call, so this can no longer just take the final line. */
 function callOf(statements: readonly string[]): { target: string; data: string } {
-  const call = statements.at(-1)!;
-  const match = /^evm\.call\(([^,]+), 0n, (.+)\);$/.exec(call);
-  if (match === null) throw new Error(`not an evm.call: ${call}`);
-
-  return { target: match[1]!, data: match[2]! };
+  for (const line of [...statements].reverse()) {
+    const match = /evm\.call\(([^,]+), 0n, (.+)\);$/.exec(line);
+    if (match !== null) return { target: match[1]!, data: match[2]! };
+  }
+  throw new Error(`no evm.call in: ${statements.join(" | ")}`);
 }
 
 /** Rebuilds off-chain what the emitted concat chain assembles at run time, so it can be compared
@@ -60,7 +60,7 @@ function render(statements: readonly string[], locals: Readonly<Record<string, b
 
 describe("the emitted calldata is viem's, byte for byte", () => {
   it("approve with a literal spender and a run-time amount", () => {
-    const statements = uncheckedApproveStatements(
+    const statements = safeApproveStatements(
       "d0_",
       `${TOKEN}n`,
       { literal: SPENDER },
@@ -80,7 +80,7 @@ describe("the emitted calldata is viem's, byte for byte", () => {
   });
 
   it("transfer with BOTH arguments run-time — the empty run between them is not emitted", () => {
-    const statements = uncheckedTransferStatements(
+    const statements = safeTransferStatements(
       "n0_",
       `${TOKEN}n`,
       { local: "to" },
@@ -96,12 +96,12 @@ describe("the emitted calldata is viem's, byte for byte", () => {
         args: [addr(RECIPIENT), 7n],
       }).toLowerCase(),
     );
-    // One const, not two: nothing sits between the two spliced words.
-    expect(statements.filter((s) => s.startsWith("const "))).toHaveLength(1);
+    // Two consts: the one byte run, and the call's result which the check reads.
+    expect(statements.filter((s) => s.startsWith("const ") && s.includes("hex`"))).toHaveLength(1);
   });
 
   it("a fully static call is one literal with nothing concatenated", () => {
-    const statements = uncheckedTransferStatements(
+    const statements = safeTransferStatements(
       "n1_",
       `${TOKEN}n`,
       { literal: RECIPIENT },
@@ -110,7 +110,8 @@ describe("the emitted calldata is viem's, byte for byte", () => {
       },
     );
 
-    expect(statements).toHaveLength(2);
+    // The literal, the call, and the check.
+    expect(statements).toHaveLength(3);
     expect(render(statements, {})).toBe(
       encodeFunctionData({
         abi: ERC20ABI,
@@ -122,12 +123,12 @@ describe("the emitted calldata is viem's, byte for byte", () => {
 
   it("rejects an argument count the ABI does not declare", () => {
     expect(() =>
-      uncheckedApproveStatements("d0_", `${TOKEN}n`, { literal: SPENDER }, { local: "a" }),
+      safeApproveStatements("d0_", `${TOKEN}n`, { literal: SPENDER }, { local: "a" }),
     ).not.toThrow();
     // The guard exists for a moved ABI; the reachable half of it is the arity check.
     expect(() =>
       // @ts-expect-error deliberately calling the private arity path through a wrong shape
-      uncheckedApproveStatements("d0_", `${TOKEN}n`, { literal: SPENDER }),
+      safeApproveStatements("d0_", `${TOKEN}n`, { literal: SPENDER }),
     ).toThrow();
   });
 
@@ -135,12 +136,35 @@ describe("the emitted calldata is viem's, byte for byte", () => {
     const body = [
       "const amt = 5n;",
       "const to = 9n;",
-      ...uncheckedApproveStatements("d0_", `${TOKEN}n`, { literal: SPENDER }, { local: "amt" }),
-      ...uncheckedTransferStatements("n0_", `${TOKEN}n`, { local: "to" }, { local: "amt" }),
-      ...uncheckedTransferStatements("n1_", `${TOKEN}n`, { literal: RECIPIENT }, { literal: 7n }),
+      ...safeApproveStatements("d0_", `${TOKEN}n`, { literal: SPENDER }, { local: "amt" }),
+      ...safeTransferStatements("n0_", `${TOKEN}n`, { local: "to" }, { local: "amt" }),
+      ...safeTransferStatements("n1_", `${TOKEN}n`, { literal: RECIPIENT }, { literal: 7n }),
     ].join("\n");
 
     expect(() => compile(`function main() {\n${body}\n}`)).not.toThrow();
+  });
+});
+
+describe("every emitted write carries the SafeERC20 check", () => {
+  it("accepts empty returndata only from an address with code, and otherwise demands true", () => {
+    const statements = safeTransferStatements("s_", "1n", { local: "to" }, { local: "amt" });
+    const check = statements.at(-1)!;
+
+    expect(check).toBe(
+      "if (s_tr.length == 0) { require(ctx.codeSize(1n) > 0); } else { require(s_tr.toBe() == 1); }",
+    );
+  });
+
+  it("approve reads the current allowance and resets it only when non-zero", () => {
+    const statements = safeApproveStatements("a_", "1n", { literal: 2n }, { literal: 3n });
+    const text = statements.join("\n");
+
+    // `allowance(owner, spender)` returns a uint256, so THIS one is safe to decode normally.
+    expect(text).toContain("const a_self = ctx.self();");
+    expect(text).toContain("evm.static(1n,");
+    expect(text).toContain("if (a_cur > 0n) {");
+    // Reset, then set: two writes, each with its own check.
+    expect(text.match(/require\(ctx\.codeSize/g)).toHaveLength(2);
   });
 });
 
@@ -178,7 +202,9 @@ describe("neither nesting emitter can go back to a bool-returning binding", () =
     });
 
     expect(statements.some((s) => s.includes(".approve("))).toBe(false);
-    expect(statements.filter((s) => s.startsWith("evm.call("))).toHaveLength(2); // approve + publish
+    // The approve's write and the publish; the allowance read is an `evm.static`.
+    expect(statements.filter((s) => s.includes("evm.call("))).toHaveLength(3);
+    expect(statements.some((s) => s.includes("evm.static("))).toBe(true);
     // A `uint256` return is always present, so the read keeps the typed binding.
     expect(statements[0]).toContain("IERC20.at(");
     expect(statements[0]).toContain(".balanceOf(ctx.self())");
@@ -190,7 +216,11 @@ describe("neither nesting emitter can go back to a bool-returning binding", () =
     });
 
     expect(statements.some((s) => s.includes(".transfer("))).toBe(false);
-    expect(statements.some((s) => /^if \(\w+ > 0n\) \{ evm\.call\(/.test(s))).toBe(true);
+    // The call AND its check sit inside the zero guard: checking a call that never ran would read a
+    // stale result.
+    expect(
+      statements.some((s) => /^if \(\w+ > 0n\) \{ const \w+ = evm\.call\(.*require\(/.test(s)),
+    ).toBe(true);
     expect(statements.some((s) => s.includes(".balanceOf(ctx.self())"))).toBe(true);
   });
 });
