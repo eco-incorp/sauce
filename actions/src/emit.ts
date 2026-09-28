@@ -1,22 +1,21 @@
 /**
  * SauceScript source emission — the vocabulary `to-sauce.ts`, `to-quote.ts` and `megas-swap.ts`
- * share now that programs are generated as SOURCE and handed to the published Rust/wasm compiler.
- * The same idiom `sdk/src/deposit/templates.ts` and `sdk/src/token/svm.ts` already use: build
- * statement strings, hand them to one compile seam.
+ * share: build statement strings, hand them to one compile seam.
  *
- * Two compiler rules shape everything here, and both are why this module exists rather than each
- * generator formatting its own strings:
+ * Two compiler rules shape what is here (probed against the pinned compiler, 2.3.0):
  *
- *   1. **A method call's receiver must be a plain identifier or another call.** `hex`…`.concat(x)`,
- *      `(a >> b).toBytesBe(4)` and `t.field.slice(0, 4)` are all rejected with "calling anything
- *      other than a plain function name is not supported in the M1 subset". So every byte literal
- *      is BOUND to a `const` before anything is called on it — that is what [`Fragment`] carries.
+ *   1. **A method call's receiver must be a plain identifier or another call.** `hex`…`.concat(x)`
+ *      and `(a >> b).toBytesBe(4)` are rejected with "calling anything other than a plain function
+ *      name is not supported in the M1 subset". So every byte literal is BOUND to a `const` before
+ *      anything is called on it — that is what [`Fragment`] carries. A binding call,
+ *      `IErc20.at(x).approve(…)`, is fine: its receiver is a call.
  *   2. **A module-scope binding holds one scalar.** A `bytes`/array/tuple initializer at module
- *      scope is rejected outright, so a selector const lives inside the function that uses it, and
- *      two actions of the same kind in one program need two distinct names — hence [`Emitter`].
+ *      scope is rejected outright, so every generated local lives inside the function that uses
+ *      it, and two actions of the same kind in one program need two distinct names — hence
+ *      [`Emitter`].
+ *
+ * `++`/`--` and nested functions are also rejected, so generated loops write `i = i + 1n`.
  */
-
-import { keccak256, toBytes } from "viem";
 
 /** A SauceScript expression. */
 export type Expr = string;
@@ -73,10 +72,6 @@ export function tupleLiteral(fields: readonly Expr[]): Expr {
   return `{ ${fields.map((field, i) => `f${i}: ${field}`).join(", ")} }`;
 }
 
-export function arrayLiteral(elements: readonly Expr[]): Expr {
-  return `[${elements.join(", ")}]`;
-}
-
 /**
  * `abi.encode` of an argument list, always wrapped in one tuple.
  *
@@ -89,11 +84,6 @@ export function arrayLiteral(elements: readonly Expr[]): Expr {
  */
 export function encodeArgs(args: readonly Expr[]): Expr {
   return `abi.encode(${tupleLiteral(args)})`;
-}
-
-/** The 4-byte selector of a Solidity function signature. */
-export function selector(sig: string): Uint8Array {
-  return hexToBytes(keccak256(toBytes(sig)).slice(0, 10));
 }
 
 export function hexToBytes(hex: string): Uint8Array {
@@ -118,35 +108,6 @@ export function bindConst(emit: Emitter, prefix: string, expr: Expr): Fragment {
   const name = emit.name(prefix);
 
   return { stmts: [`const ${name} = ${expr};`], expr: name };
-}
-
-/**
- * Calldata for `sig`: a bound selector const, concatenated with the ABI-encoded arguments. Calldata
- * assembled from pre-encoded blobs instead (UniV4's two-level router input, `balancerV2BatchSwap`'s
- * placeholder splice) uses [`concatCalldata`] over the bound selector directly.
- */
-export function calldata(emit: Emitter, sig: string, args: readonly Expr[]): Fragment {
-  const sel = bindBytes(emit, "sel", selector(sig));
-  if (args.length === 0) return sel;
-
-  return { stmts: sel.stmts, expr: `${sel.expr}.concat(${encodeArgs(args)})` };
-}
-
-/** `sel.concat(part, part, …)` — for calldata assembled from pre-encoded blobs. */
-export function concatCalldata(sel: Expr, parts: readonly Expr[]): Expr {
-  return parts.length === 0 ? sel : `${sel}.concat(${parts.join(", ")})`;
-}
-
-/**
- * A single `uint256` read out of a call's return data.
- *
- * The return data is bound first. That is not tidiness: a projection re-evaluates the object it
- * embeds, so `abi.decode(evm.call(…), ["Uint256"])[0]` would issue the call twice.
- */
-export function decodeUint256(emit: Emitter, callExpr: Expr): Fragment {
-  const ret = bindConst(emit, "ret", callExpr);
-
-  return { stmts: ret.stmts, expr: `abi.decode(${ret.expr}, ["Uint256"])[0]` };
 }
 
 /**

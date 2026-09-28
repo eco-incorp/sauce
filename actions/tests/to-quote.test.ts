@@ -198,7 +198,7 @@ describe("actionToQuote integration tests", { timeout: 120_000 }, () => {
   before(async () => {
     hardhatProcess = await startHardhat();
     client = createPublicClient({ transport: cappedTransport() });
-    console.log(`Hardhat forking ${FORK_URL}`);
+    console.log(`Hardhat forking ${new URL(FORK_URL!).hostname.split(".")[0]}`); // the URL carries an API key
   });
 
   after(() => stopHardhat(hardhatProcess));

@@ -5,15 +5,23 @@
 type Address = `0x${string}`;
 type Hex = `0x${string}`;
 
+/**
+ * An address field that may instead name the executing account — the Pot a program runs in — as the
+ * literal `"self"`. Only recipient-like fields accept it (who receives an output or a position),
+ * never a contract to call or a token: a program authored as JSON rarely knows which Pot will run
+ * it, and "keep the output here" is exactly what a later action or a dynamic child needs.
+ */
+export type Recipient = Address | "self";
+
 // =============================================================================
 // CHAINING OPTIONS — shared by all actions
 // =============================================================================
 
 /** Chaining options shared by all actions. */
 export interface ActionChainInput {
-  /** Use a previously saved output as this action's amount. */
+  /** Use the output an EARLIER action saved under this name as this action's amount. */
   amountRef?: string;
-  /** Save this action's output amount to a named slot for later use. */
+  /** Save this action's output under a name later actions can reference with `amountRef`. */
   saveOutputAs?: string;
 }
 
@@ -33,7 +41,7 @@ interface UniswapV3ExactInputBase extends ActionChainOptions {
   tokenOut: Address;
   fee: 100 | 500 | 3000 | 10000;
   amountIn?: string;
-  recipient: Address;
+  recipient: Recipient;
   deadline: number;
 }
 
@@ -50,7 +58,7 @@ export interface UniswapV3ExactInputMultiHopAction extends ActionChainOptions {
   path: Hex;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
   deadline: number;
 }
 
@@ -69,7 +77,7 @@ export interface UniswapV4ExactInputAction extends ActionChainOptions {
   zeroForOne: boolean;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
 }
 
 /** UniswapV4 multi-hop exact-input swap via Universal Router (PathKey path) */
@@ -86,7 +94,7 @@ export interface UniswapV4ExactInputMultiHopAction extends ActionChainOptions {
   }>;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
 }
 
 /** Curve stable/crypto pool swap (uses exchange with receiver overload) */
@@ -102,7 +110,7 @@ export interface CurveSwapAction extends ActionChainOptions {
   j: number;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
 }
 
 /** BalancerV2 single swap */
@@ -115,7 +123,7 @@ export interface BalancerV2SwapAction extends ActionChainOptions {
   tokenOut: Address;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
   deadline: number;
 }
 
@@ -132,7 +140,7 @@ export interface BalancerV2BatchSwapAction extends ActionChainInput {
   }>;
   assets: Address[];
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
   deadline: number;
 }
 
@@ -145,7 +153,7 @@ export interface UniswapV2SwapAction extends ActionChainOptions {
   amountOutMin: string;
   /** Token addresses defining the swap route */
   path: Address[];
-  recipient: Address;
+  recipient: Recipient;
   deadline: number;
 }
 
@@ -162,7 +170,7 @@ export interface CurveRouterNGSwapAction extends ActionChainOptions {
   amountOutMin: string;
   /** Actual pool addresses when using zaps */
   pools: Address[];
-  recipient: Address;
+  recipient: Recipient;
 }
 
 /** BalancerV3 single-token exact-input swap via Router */
@@ -223,7 +231,7 @@ export interface MaverickSwapAction extends ActionChainOptions {
   tokenAIn: boolean;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
 }
 
 /** Maverick V2 exact-input multi-hop swap */
@@ -235,7 +243,7 @@ export interface MaverickMultiHopSwapAction extends ActionChainOptions {
   path: Hex;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
 }
 
 /** Carbon (Bancor) trade by source amount */
@@ -259,7 +267,7 @@ export interface FraxswapSwapAction extends ActionChainOptions {
   amountIn?: string;
   amountOutMin: string;
   path: Address[];
-  recipient: Address;
+  recipient: Recipient;
   deadline: number;
 }
 
@@ -272,7 +280,7 @@ export interface ClipperSwapAction extends ActionChainOptions {
   outputToken: Address;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
   auxiliaryData: Hex;
 }
 
@@ -286,7 +294,7 @@ export interface IntegralSwapAction extends ActionChainOptions {
   amountIn?: string;
   amountOutMin: string;
   wrapUnwrap: boolean;
-  recipient: Address;
+  recipient: Recipient;
   gasLimit: string;
   submitDeadline: number;
 }
@@ -299,7 +307,7 @@ export interface FluidDexT1SwapAction extends ActionChainOptions {
   swap0to1: boolean;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
 }
 
 /** Fluid DEX Lite singleton swap (swapSingle) */
@@ -313,7 +321,7 @@ export interface FluidDexLiteSwapAction extends ActionChainOptions {
   swap0To1: boolean;
   amountIn?: string;
   amountOutMin: string;
-  recipient: Address;
+  recipient: Recipient;
 }
 
 export type SwapAction =
@@ -513,7 +521,7 @@ export interface AaveV3SupplyAction extends ActionChainInput {
   pool: Address;
   token: Address;
   amount?: string;
-  onBehalfOf: Address;
+  onBehalfOf: Recipient;
   referralCode: number;
 }
 
@@ -524,7 +532,7 @@ export interface AaveV3WithdrawAction extends ActionChainOptions {
   pool: Address;
   token: Address;
   amount?: string;
-  to: Address;
+  to: Recipient;
 }
 
 /** Aave V3: borrow token against collateral */
@@ -536,7 +544,7 @@ export interface AaveV3BorrowAction extends ActionChainInput {
   amount?: string;
   /** 2 = variable rate */
   interestRateMode: 2;
-  onBehalfOf: Address;
+  onBehalfOf: Recipient;
   referralCode: number;
 }
 
@@ -549,7 +557,7 @@ export interface AaveV3RepayAction extends ActionChainInput {
   amount?: string;
   /** 2 = variable rate */
   interestRateMode: 2;
-  onBehalfOf: Address;
+  onBehalfOf: Recipient;
 }
 
 /** Compound V3: supply token to Comet market */
@@ -587,7 +595,7 @@ export interface TransferAction extends ActionChainInput {
   type: "transfer";
   chainId: number;
   token: Address;
-  to: Address;
+  to: Recipient;
   amount?: string;
 }
 
@@ -601,6 +609,47 @@ export interface ApproveAction extends ActionChainInput {
 }
 
 // =============================================================================
+// SOURCE ACTIONS — produce a value, call nothing that moves funds
+// =============================================================================
+
+/** Options a source action takes. It consumes no amount, so it has no `amountRef`. */
+export interface SourceActionOptions {
+  /** Save the value under a name later actions can reference with `amountRef`. */
+  saveOutputAs?: string;
+}
+
+/**
+ * The executing account's balance of `token`, read when the program reaches this action. Its output
+ * is that balance, so a following action spends whatever is actually there — the amount a bridge or
+ * a dynamic child delivered, not a number fixed when the program was written.
+ */
+export interface BalanceOfAction extends SourceActionOptions {
+  type: "balanceOf";
+  chainId: number;
+  token: Address;
+}
+
+/** The executing account's native balance, read when the program reaches this action. */
+export interface NativeBalanceAction extends SourceActionOptions {
+  type: "nativeBalance";
+  chainId: number;
+}
+
+/**
+ * A runtime entry argument: the program declares `main(<name>: Uint256)` and its output is the
+ * value supplied at execution. One compiled program then serves every amount. Only a standalone
+ * program can take arguments — an intent route body is compiled with none.
+ */
+export interface ArgumentAction extends SourceActionOptions {
+  type: "argument";
+  chainId: number;
+  /** The parameter's name. Arguments are encoded in the order their actions appear. */
+  name: string;
+}
+
+export type SourceAction = BalanceOfAction | NativeBalanceAction | ArgumentAction;
+
+// =============================================================================
 // ROUTING ACTION — discriminated union of all concrete actions
 // =============================================================================
 
@@ -611,7 +660,28 @@ export type RoutingAction =
   | StakeAction
   | LendingAction
   | TransferAction
-  | ApproveAction;
+  | ApproveAction
+  | SourceAction;
+
+/** Every `type` a routing action can have. */
+export type RoutingActionType = RoutingAction["type"];
+
+// =============================================================================
+// ACTION PROGRAM — the JSON document
+// =============================================================================
+
+/**
+ * A complete action program: the chain it executes on and its actions, in order. This is the JSON
+ * document `parseActionProgram` reads and `serializeActionProgram` writes, and nothing in it is a
+ * function, a class instance or a `bigint` — amounts are base-10 strings.
+ */
+export interface ActionProgram {
+  /** Format version. `1` is the only version. */
+  version: 1;
+  /** The chain every action executes on. An action's own `chainId`/`srcChainId` must match it. */
+  chainId: number;
+  actions: RoutingAction[];
+}
 
 // =============================================================================
 // ROUTING STEP & PLAN — an ordered execution plan

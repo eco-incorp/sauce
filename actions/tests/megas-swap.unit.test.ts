@@ -321,13 +321,16 @@ describe("megasSwapToSauce — input validation", () => {
       QUOTER_OPTS,
     );
 
-    // The signature is compiled to its 4-byte selector, so assert on that and on the amount the
-    // sweep actually moves — the realized total, not a baked literal.
-    assert.match(swept, /a9059cbb/, "sweep should emit an ERC-20 transfer selector");
-    assert.match(swept, /f1: totalOut/, "the swept amount should be the realized total");
+    // The sweep is an output-free ERC-20 transfer (USDT returns nothing from `transfer`) of the
+    // amount the legs actually realized — not a baked literal.
+    assert.match(
+      swept,
+      /IErc20\.at\(0xdac17f958d2ee523a2206206994597c13d831ec7n\)\.transfer\(0x[0-9a-f]+n, totalOut\);/,
+      "the sweep should transfer the realized total",
+    );
     assert.doesNotMatch(
       unswept,
-      /a9059cbb/,
+      /\.transfer\(/,
       "no sweep means no transfer — the output stays on Sauce",
     );
   });
@@ -400,15 +403,15 @@ describe("megasSwapToSauce — prepend handling", () => {
     const prependMainLen = withPrepend[withPrepend.length - 1].length;
 
     assert.equal(withPrepend.length, baseline.length, "prepend does not change program count");
-    // One `approve` selector const per prepended approval, in the emitted source.
+    // One `approve` binding call per prepended approval, in the emitted source.
     const source = megasSwapToSauceSource(candidates, amountIn, 1, {
       ...QUOTER_OPTS,
       prepend: approves,
     });
     assert.equal(
-      source.match(/hex`095ea7b3`/g)?.length,
+      source.match(/IErc20\.at\([^)]*\)\.approve\(/g)?.length,
       approves.length,
-      "one approve selector per prepended approval",
+      "one approve per prepended approval",
     );
     assert.ok(
       prependMainLen > baseMainLen,

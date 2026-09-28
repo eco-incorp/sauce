@@ -20,8 +20,9 @@ import {
   type Expr,
   type Stmt,
 } from "./emit.js";
+import { contractsFor, type ActionContracts, type BindingName } from "./abis.js";
 import { compileEvm } from "./compile.js";
-import { buildAction } from "./to-sauce.js";
+import { buildAction, type ActionResult } from "./to-sauce.js";
 import { actionToQuote, type QuoteOpts } from "./to-quote.js";
 import type {
   ApproveAction,
@@ -104,6 +105,19 @@ export function megasSwapToSauceSource(
   n: number,
   opts: MegasSwapOpts,
 ): string {
+  return megasSwapProgram(candidates, amountIn, n, opts).source;
+}
+
+/**
+ * The split-swap program's source together with the ABI bindings its swaps and approvals call
+ * through — what `megasSwapToSauce` compiles. The quotes stay raw calls (see `to-quote.ts`).
+ */
+export function megasSwapProgram(
+  candidates: SwapAction[],
+  amountIn: bigint,
+  n: number,
+  opts: MegasSwapOpts,
+): { readonly source: string; readonly contracts: ActionContracts } {
   if (candidates.length === 0) {
     throw new Error("megasSwapToSauce requires at least one candidate");
   }
@@ -123,6 +137,11 @@ export function megasSwapToSauceSource(
 
   const N = candidates.length;
   const emit = newEmitter();
+  const bindings = new Set<BindingName>();
+  const use = (result: ActionResult): ActionResult => {
+    for (const b of result.bindings) bindings.add(b);
+    return result;
+  };
 
   // Resolve dynamic-quote builders; fail early on unsupported protocols.
   const dynQuotes = candidates.map((cand, i) => {
@@ -155,17 +174,16 @@ export function megasSwapToSauceSource(
   const swapAny = fn("swap_any", ["idx: Uint256", "amount: Uint256"], "Uint256", [
     ...outOfRangeGuard(N),
     ...blockDispatch(N, (i) => {
-      const built = buildAction(emit, candidates[i], "amount", true);
+      const built = use(buildAction(emit, candidates[i], "amount", true));
 
       return [...built.stmts, `return ${built.output};`];
     }),
   ]);
 
-  return (
-    [...quoteFns, quoteAny, swapAny, mainFn(emit, N, n, bucket, opts, candidates[0].chainId)].join(
-      "\n\n",
-    ) + "\n"
-  );
+  const main = mainFn(emit, N, n, bucket, opts, candidates[0].chainId, use);
+  const source = [...quoteFns, quoteAny, swapAny, main].join("\n\n") + "\n";
+
+  return { source, contracts: contractsFor(bindings) };
 }
 
 export function megasSwapToSauce(
@@ -174,7 +192,9 @@ export function megasSwapToSauce(
   n: number,
   opts: MegasSwapOpts,
 ): Uint8Array[] {
-  return [compileEvm(megasSwapToSauceSource(candidates, amountIn, n, opts))];
+  const { source, contracts } = megasSwapProgram(candidates, amountIn, n, opts);
+
+  return [compileEvm(source, contracts).bytecode];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -223,6 +243,7 @@ function mainFn(
   bucket: bigint,
   opts: MegasSwapOpts,
   chainId: number,
+  use: (result: ActionResult) => ActionResult,
 ): string {
   // Transient-storage key layout (compile-time bases; indexed at runtime):
   //   used[i]  at key i
@@ -244,7 +265,7 @@ function mainFn(
         `prepend approve action for token ${action.token} has no amount; megasSwapToSauce requires an explicit amount on every prepend approval`,
       );
     }
-    body.push(...buildAction(emit, action, formatBigint(BigInt(action.amount)), false).stmts);
+    body.push(...use(buildAction(emit, action, formatBigint(BigInt(action.amount)), false)).stmts);
   }
 
   // Init loop: marg[i] = quote_any(i, bucket).
@@ -318,7 +339,7 @@ function mainFn(
   if (opts.sweep) {
     const { token, to } = opts.sweep;
     body.push(
-      ...buildAction(emit, { type: "transfer", chainId, token, to }, "totalOut", false).stmts,
+      ...use(buildAction(emit, { type: "transfer", chainId, token, to }, "totalOut", false)).stmts,
     );
   }
 

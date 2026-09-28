@@ -1,11 +1,11 @@
 /**
  * Offline coverage for `to-sauce.ts` — no fork, no node, no network, so it can run in CI.
  *
- * `to-sauce.test.ts` is the only other test for this file and it needs a mainnet fork RPC, so until
- * now the largest module in the package had NO coverage in CI at all. What this pins is the two
- * things a source generator can get wrong without anyone noticing: which contract each action calls
- * (the target literal) and what it calls on it (the 4-byte selector), for every action type — plus
- * that the emitted program actually compiles, which is the whole point of the generator.
+ * What this pins is what a source generator can get wrong without anyone noticing: which contract
+ * each action calls (the target literal in the source), what it calls on it (the 4-byte selector,
+ * which the compiler derives from the binding's ABI and embeds in the bytecode), for every action
+ * type — plus that the emitted program compiles. `calldata.exec.test.ts` checks the full calldata
+ * by executing each program; this file needs neither anvil nor an engine artifact.
  *
  * Selectors are derived with viem's `toFunctionSelector` from the signature, so a signature edit has
  * to be made in both places to pass, and a typo in either is caught.
@@ -14,6 +14,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { toFunctionSelector } from "viem";
 
+import { ACTION_TYPES as SPEC_TYPES } from "../src/spec.js";
 import { actionsToSauce, actionsToSauceSource, actionToSauce } from "../src/to-sauce.js";
 import type { RoutingAction } from "../src/types.js";
 
@@ -29,14 +30,14 @@ const AMOUNT = "1000000";
 const MIN = "1";
 const DEADLINE = 9_999_999_999;
 
-/** `hex`…`` for a signature's selector — the form `emit.ts` binds every selector as. */
-function selectorLiteral(sig: string): string {
-  return `hex\`${toFunctionSelector(sig).slice(2)}\``;
+/** Whether `bytecode` embeds the 4-byte selector of `sig`. */
+function hasSelector(bytecode: Uint8Array, sig: string): boolean {
+  return Buffer.from(bytecode).toString("hex").includes(toFunctionSelector(sig).slice(2));
 }
 
 /** An address as the SauceScript literal the emitted source carries. */
 function literal(addr: A): string {
-  return `${BigInt(addr)}n`;
+  return `0x${addr.slice(2).toLowerCase()}n`;
 }
 
 interface Case {
@@ -533,7 +534,11 @@ const CASES: Record<string, Case> = {
       lzFee: "7",
     },
     targets: [TARGET],
-    signatures: ["swap(uint16,uint256,uint256,address,uint256,uint256,(address,address,bytes))"],
+    // The V1 router's real `swap`. The `(address,address,bytes)` signature pinned here before is not
+    // on the router (checked against its mainnet bytecode), so every such call reverted.
+    signatures: [
+      "swap(uint16,uint256,uint256,address,uint256,uint256,(uint256,uint256,bytes),bytes,bytes)",
+    ],
   },
   cctpBridge: {
     action: {
@@ -576,14 +581,9 @@ describe("actionsToSauce — every action type", () => {
 
       for (const target of targets) {
         assert.ok(
-          source.includes(`evm.call(${literal(target)}, `),
-          `${name}: no evm.call to ${target}\n${source}`,
-        );
-      }
-      for (const sig of signatures) {
-        assert.ok(
-          source.includes(selectorLiteral(sig)),
-          `${name}: missing selector for ${sig} (${selectorLiteral(sig)})\n${source}`,
+          source.includes(`.at(${literal(target)})`) ||
+            source.includes(`evm.call(${literal(target)}, `),
+          `${name}: no call to ${target}\n${source}`,
         );
       }
       // Every generated program is a value-less `main`; the compiler rejects one with no return
@@ -592,6 +592,9 @@ describe("actionsToSauce — every action type", () => {
 
       const bytecode = actionsToSauce([action]);
       assert.ok(bytecode.length > 0, `${name}: compiled to empty bytecode`);
+      for (const sig of signatures) {
+        assert.ok(hasSelector(bytecode, sig), `${name}: missing selector for ${sig}\n${source}`);
+      }
     });
   }
 
@@ -601,6 +604,67 @@ describe("actionsToSauce — every action type", () => {
       assert.doesNotThrow(() => actionToSauce(CASES[type].action), `${type} did not build`);
     }
     assert.equal(ACTION_TYPES.length, 42, "action-type count changed — add or remove a case above");
+    // The three source actions produce a value and call nothing that moves funds; they are covered
+    // by the "source actions" block below, and together these are every type the spec lists.
+    const all = new Set([...ACTION_TYPES, "balanceOf", "nativeBalance", "argument"]);
+    assert.deepEqual([...all].sort(), [...SPEC_TYPES].sort());
+  });
+});
+
+describe("actionsToSauce — source actions", () => {
+  it("balanceOf reads the Pot's balance and the next action spends it", () => {
+    const source = actionsToSauceSource([
+      { type: "balanceOf", chainId: 1, token: TOKEN },
+      { type: "transfer", chainId: 1, token: TOKEN, to: RECIPIENT },
+    ]);
+    assert.match(
+      source,
+      /const bal0 = IErc20\.at\(0x1000000000000000000000000000000000000001n\)\.balanceOf\(ctx\.self\(\)\);/,
+    );
+    assert.match(source, /let t_out0 = bal0;/);
+    assert.match(source, /\.transfer\(0x3000000000000000000000000000000000000001n, t_out0\);/);
+  });
+
+  it("nativeBalance reads ctx.selfBalance()", () => {
+    const source = actionsToSauceSource([
+      { type: "nativeBalance", chainId: 1 },
+      { type: "wrapETH", chainId: 1, weth: TARGET },
+    ]);
+    assert.match(source, /const nat0 = ctx\.selfBalance\(\);/);
+    assert.match(
+      source,
+      /evm\.call\(0x2000000000000000000000000000000000000001n, t_out0, sel\d+\);/,
+    );
+  });
+
+  it("argument becomes a typed `main` parameter, in declaration order", () => {
+    const source = actionsToSauceSource([
+      { type: "argument", chainId: 1, name: "first", saveOutputAs: "first" },
+      { type: "argument", chainId: 1, name: "second" },
+      { type: "approve", chainId: 1, token: TOKEN, spender: TARGET },
+      { type: "transfer", chainId: 1, token: TOKEN, to: RECIPIENT, amountRef: "first" },
+    ]);
+    assert.ok(
+      source.startsWith("function main(a_first: Uint256, a_second: Uint256): void {"),
+      source,
+    );
+    assert.ok(
+      actionsToSauce([
+        { type: "argument", chainId: 1, name: "x" },
+        { type: "approve", chainId: 1, token: TOKEN, spender: TARGET },
+      ]).length > 0,
+    );
+  });
+
+  it("a source action whose value nothing reads is rejected", () => {
+    assert.throws(
+      () =>
+        actionsToSauceSource([
+          { type: "balanceOf", chainId: 1, token: TOKEN },
+          { type: "transfer", chainId: 1, token: TOKEN, to: RECIPIENT, amount: "1" },
+        ]),
+      /never read/,
+    );
   });
 });
 
@@ -626,15 +690,11 @@ describe("actionsToSauce — native value", () => {
     });
   }
 
-  it("every other action attaches zero", () => {
+  it("every other action makes no raw call at all — a binding call cannot attach value", () => {
     for (const [name, { action }] of Object.entries(CASES)) {
       if (valueCases.some(([n]) => n === name)) continue;
       const source = actionsToSauceSource([action]);
-      assert.doesNotMatch(
-        source,
-        /evm\.call\([0-9]+n, (?!0n)[^,]+, /,
-        `${name}: attached non-zero value\n${source}`,
-      );
+      assert.doesNotMatch(source, /evm\.call\(/, `${name}: made a raw call\n${source}`);
     }
   });
 });
@@ -672,10 +732,9 @@ describe("actionsToSauce — a chained output is realized, never the input amoun
       const stored = storedOutput(source);
 
       assert.notEqual(stored, `${AMOUNT}n`, `${name} stored the input amount\n${source}`);
-      // The delta shape: two `balanceOf(address)` reads bracketing the call, subtracted. The
-      // emitted source carries the SELECTOR, not the signature.
+      // The delta shape: two `balanceOf(ctx.self())` reads bracketing the call, subtracted.
       assert.equal(
-        source.match(/70a08231/g)?.length,
+        source.match(/\.balanceOf\(ctx\.self\(\)\)/g)?.length,
         2,
         `${name} should snapshot the output balance pre and post\n${source}`,
       );
@@ -687,18 +746,25 @@ describe("actionsToSauce — a chained output is realized, never the input amoun
   // Integral places an order now and executes it later, so there is no output in this transaction.
   // Returning any number would be a lie; the previous code chained the order id.
   it("integralSwap refuses to be chained at all", () => {
-    assert.throws(() => chained("integralSwap"), /delayed-order venue/);
+    assert.throws(() => chained("integralSwap"), /produces no output in this transaction/);
+    assert.throws(
+      () =>
+        actionsToSauceSource([
+          CASES.integralSwap.action,
+          { type: "transfer", chainId: 1, token: TOKEN_OUT, to: RECIPIENT },
+        ]),
+      /previous action \(integralSwap\) produces no output/,
+    );
   });
 
-  // `steps[0].amount` always satisfies getExplicitAmount, so amountRef lost the precedence race and
-  // was accepted then ignored. The amounts are ABI-encoded at build time, so it cannot be honoured.
+  // Every step's amount is required, so an amountRef could only be ignored or silently override one.
   it("balancerV2BatchSwap rejects an amountRef it could never apply", () => {
     assert.throws(
       () =>
         actionsToSauceSource([
           { ...CASES.balancerV2BatchSwap.action, amountRef: "prev" } as RoutingAction,
         ]),
-      /amountRef` cannot be applied/,
+      /cannot take a referenced amount/,
     );
   });
 });
@@ -717,9 +783,9 @@ describe("actionsToSauce — chaining", () => {
     const actions = [v3({}), v3({ recipient })];
     const source = actionsToSauceSource(actions);
 
-    assert.ok(source.includes(`f3: ${literal(RECIPIENT)}`));
-    assert.ok(source.includes(`f3: ${literal(recipient)}`));
-    assert.doesNotMatch(source, /f3: ctx\.self\(\)/);
+    assert.ok(source.includes(`recipient: ${literal(RECIPIENT)}`));
+    assert.ok(source.includes(`recipient: ${literal(recipient)}`));
+    assert.doesNotMatch(source, /recipient: ctx\.self\(\)/);
     assert.doesNotMatch(source, /let t_out/);
     assert.ok(actionsToSauce(actions).length > 0);
   });
@@ -729,12 +795,12 @@ describe("actionsToSauce — chaining", () => {
     const actions = [v3({}), v3({}), v3({ amountIn: undefined, recipient })];
     const source = actionsToSauceSource(actions);
 
-    assert.ok(source.includes(`f3: ${literal(RECIPIENT)}`));
-    assert.ok(source.includes(`f3: ${literal(recipient)}`));
-    assert.equal(source.match(/f3: ctx\.self\(\)/g)?.length, 1);
+    assert.ok(source.includes(`recipient: ${literal(RECIPIENT)}`));
+    assert.ok(source.includes(`recipient: ${literal(recipient)}`));
+    assert.equal(source.match(/recipient: ctx\.self\(\)/g)?.length, 1);
     assert.doesNotMatch(source, /let t_out0/);
     assert.match(source, /let t_out1 = /);
-    assert.match(source, /f4: t_out1,/);
+    assert.match(source, /amountIn: t_out1,/);
     assert.ok(actionsToSauce(actions).length > 0);
   });
 
@@ -745,19 +811,23 @@ describe("actionsToSauce — chaining", () => {
     ]);
     assert.match(source, /let v_swapOut = /, "saveOutputAs should declare a local");
     // `transfer(address,uint256)`'s second argument is that local, not a baked literal.
-    assert.match(source, /f1: v_swapOut \}/, "amountRef should read the local");
+    assert.match(
+      source,
+      /\.transfer\(0x[0-9a-f]+n, v_swapOut\);/,
+      "amountRef should read the local",
+    );
   });
 
   it("a chained swap sends its output to ctx.self(), an unchained one to the recipient", () => {
     const chained = actionsToSauceSource([v3({ saveOutputAs: "out" })]);
     assert.ok(
-      chained.includes("f3: ctx.self()"),
+      chained.includes("recipient: ctx.self()"),
       `chained recipient should be ctx.self()\n${chained}`,
     );
 
     const standalone = actionsToSauceSource([v3({})]);
     assert.ok(
-      standalone.includes(`f3: ${literal(RECIPIENT)}`),
+      standalone.includes(`recipient: ${literal(RECIPIENT)}`),
       `unchained recipient should be the action's own\n${standalone}`,
     );
   });
@@ -768,8 +838,7 @@ describe("actionsToSauce — chaining", () => {
       v3({ amountIn: undefined }),
     ]);
     assert.match(source, /let t_out0 = /, "the first action should bind an implicit output slot");
-    // `exactInputSingle`'s params tuple carries amountIn at field 4.
-    assert.match(source, /f4: t_out0,/, "the second action should consume it");
+    assert.match(source, /amountIn: t_out0,/, "the second action should consume it");
   });
 
   it("two swaps saving to the same name assign rather than re-declare", () => {
@@ -801,7 +870,7 @@ describe("actionsToSauce — chaining", () => {
   });
 
   it("throws when an action has no amount and nothing to chain from", () => {
-    assert.throws(() => actionsToSauceSource([v3({ amountIn: undefined })]), /No amount specified/);
+    assert.throws(() => actionsToSauceSource([v3({ amountIn: undefined })]), /has no amount/);
   });
 
   it("names are per-program, so two builds of the same actions are byte-identical", () => {

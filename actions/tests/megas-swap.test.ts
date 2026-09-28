@@ -353,7 +353,7 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     await rpc("evm_setBlockGasLimit", ["0x3B9ACA00"]); // 1_000_000_000 gas
     ({ engine: ENGINE, pot: SAUCE } = await deploySauce());
     client = createPublicClient({ transport: http(RPC, { timeout: 300_000 }) });
-    console.log(`Hardhat forking ${FORK_URL}`);
+    console.log(`Hardhat forking ${new URL(FORK_URL!).hostname.split(".")[0]}`); // the URL carries an API key
     console.log(`Sauce deployed at ${SAUCE}`);
   });
 

@@ -1,0 +1,2663 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eco-incorp:sauce:action-program:1",
+  "title": "Sauce action program",
+  "description": "A sequence of protocol actions that compiles to one Sauce program executing on one chain. Amounts are base-10 strings. Beyond this schema, a program must satisfy: every address with mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared width; an action's chain field (if present) equals chainId; an action with no amount and no amountRef follows an action that produces an output; an amountRef names a saveOutputAs set by an earlier action, and is not combined with an explicit amount; integralSwap is never chained from; argument names are unique; and the value of every balanceOf/nativeBalance/argument action is read.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "chainId", "actions"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The schema this document declares; ignored."
+    },
+    "version": {
+      "const": 1
+    },
+    "chainId": {
+      "$ref": "#/$defs/chainId",
+      "description": "The chain every action executes on."
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/action"
+      },
+      "description": "The actions, in execution order."
+    }
+  },
+  "$defs": {
+    "address": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "An address: 0x + 40 hex digits. A mixed-case address must carry a valid EIP-55 checksum."
+    },
+    "recipient": {
+      "description": "An address, or \"self\" for the executing account.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/address"
+        },
+        {
+          "const": "self"
+        }
+      ]
+    },
+    "bytes": {
+      "type": "string",
+      "pattern": "^0x(?:[0-9a-fA-F]{2})*$",
+      "description": "0x-prefixed hex bytes, an even number of digits."
+    },
+    "bytes32": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "32 bytes: 0x + 64 hex digits."
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+      "description": "A name that becomes a local variable in the emitted SauceScript."
+    },
+    "chainId": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "action": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/action_uniswapV3ExactInput"
+        },
+        {
+          "$ref": "#/$defs/action_uniswapV3ExactInputMultiHop"
+        },
+        {
+          "$ref": "#/$defs/action_uniswapV4ExactInput"
+        },
+        {
+          "$ref": "#/$defs/action_uniswapV4ExactInputMultiHop"
+        },
+        {
+          "$ref": "#/$defs/action_curveSwap"
+        },
+        {
+          "$ref": "#/$defs/action_curveRouterNGSwap"
+        },
+        {
+          "$ref": "#/$defs/action_balancerV2Swap"
+        },
+        {
+          "$ref": "#/$defs/action_balancerV2BatchSwap"
+        },
+        {
+          "$ref": "#/$defs/action_balancerV3Swap"
+        },
+        {
+          "$ref": "#/$defs/action_uniswapV2Swap"
+        },
+        {
+          "$ref": "#/$defs/action_ambientSwap"
+        },
+        {
+          "$ref": "#/$defs/action_dodoSwap"
+        },
+        {
+          "$ref": "#/$defs/action_maverickSwap"
+        },
+        {
+          "$ref": "#/$defs/action_maverickMultiHopSwap"
+        },
+        {
+          "$ref": "#/$defs/action_carbonSwap"
+        },
+        {
+          "$ref": "#/$defs/action_fraxswapSwap"
+        },
+        {
+          "$ref": "#/$defs/action_clipperSwap"
+        },
+        {
+          "$ref": "#/$defs/action_integralSwap"
+        },
+        {
+          "$ref": "#/$defs/action_fluidDexT1Swap"
+        },
+        {
+          "$ref": "#/$defs/action_fluidDexLiteSwap"
+        },
+        {
+          "$ref": "#/$defs/action_acrossBridge"
+        },
+        {
+          "$ref": "#/$defs/action_stargateBridge"
+        },
+        {
+          "$ref": "#/$defs/action_cctpBridge"
+        },
+        {
+          "$ref": "#/$defs/action_hyperlaneBridge"
+        },
+        {
+          "$ref": "#/$defs/action_wrapETH"
+        },
+        {
+          "$ref": "#/$defs/action_unwrapETH"
+        },
+        {
+          "$ref": "#/$defs/action_wrapStETH"
+        },
+        {
+          "$ref": "#/$defs/action_unwrapStETH"
+        },
+        {
+          "$ref": "#/$defs/action_lidoStake"
+        },
+        {
+          "$ref": "#/$defs/action_lidoUnstake"
+        },
+        {
+          "$ref": "#/$defs/action_rocketPoolStake"
+        },
+        {
+          "$ref": "#/$defs/action_rocketPoolUnstake"
+        },
+        {
+          "$ref": "#/$defs/action_coinbaseStake"
+        },
+        {
+          "$ref": "#/$defs/action_etherFiStake"
+        },
+        {
+          "$ref": "#/$defs/action_aaveV3Supply"
+        },
+        {
+          "$ref": "#/$defs/action_aaveV3Withdraw"
+        },
+        {
+          "$ref": "#/$defs/action_aaveV3Borrow"
+        },
+        {
+          "$ref": "#/$defs/action_aaveV3Repay"
+        },
+        {
+          "$ref": "#/$defs/action_compoundV3Supply"
+        },
+        {
+          "$ref": "#/$defs/action_compoundV3Withdraw"
+        },
+        {
+          "$ref": "#/$defs/action_transfer"
+        },
+        {
+          "$ref": "#/$defs/action_approve"
+        },
+        {
+          "$ref": "#/$defs/action_balanceOf"
+        },
+        {
+          "$ref": "#/$defs/action_nativeBalance"
+        },
+        {
+          "$ref": "#/$defs/action_argument"
+        }
+      ]
+    },
+    "action_uniswapV3ExactInput": {
+      "title": "uniswapV3ExactInput",
+      "description": "Swaps an exact input through one Uniswap V3 pool. Calls SwapRouter02.exactInputSingle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "tokenIn", "tokenOut", "fee", "recipient", "deadline"],
+      "properties": {
+        "type": {
+          "const": "uniswapV3ExactInput"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the SwapRouter02"
+        },
+        "tokenIn": {
+          "$ref": "#/$defs/address",
+          "description": "the token sold"
+        },
+        "tokenOut": {
+          "$ref": "#/$defs/address",
+          "description": "the token bought"
+        },
+        "fee": {
+          "enum": [100, 500, 3000, 10000],
+          "description": "the pool's fee tier, in hundredths of a bip"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it; set this or `sqrtPriceLimitX96`"
+        },
+        "sqrtPriceLimitX96": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 49,
+          "description": "a price limit instead of a minimum output"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "unused by SwapRouter02, which takes no deadline; kept for the record"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["amountOutMin"],
+          "not": {
+            "required": ["sqrtPriceLimitX96"]
+          }
+        },
+        {
+          "required": ["sqrtPriceLimitX96"],
+          "not": {
+            "required": ["amountOutMin"]
+          }
+        }
+      ]
+    },
+    "action_uniswapV3ExactInputMultiHop": {
+      "title": "uniswapV3ExactInputMultiHop",
+      "description": "Swaps an exact input along an encoded Uniswap V3 path. Calls SwapRouter02.exactInput.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "path", "amountOutMin", "recipient", "deadline"],
+      "properties": {
+        "type": {
+          "const": "uniswapV3ExactInputMultiHop"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the SwapRouter02"
+        },
+        "path": {
+          "$ref": "#/$defs/bytes",
+          "description": "the packed path: token ++ fee (3 bytes) ++ token ++ …"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "unused by SwapRouter02; kept for the record"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_uniswapV4ExactInput": {
+      "title": "uniswapV4ExactInput",
+      "description": "Swaps an exact input through one Uniswap V4 pool via the Universal Router. Calls IERC20.transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "poolKey", "zeroForOne", "amountOutMin", "recipient"],
+      "properties": {
+        "type": {
+          "const": "uniswapV4ExactInput"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the Universal Router"
+        },
+        "poolKey": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency0", "currency1", "fee", "tickSpacing", "hooks"],
+          "properties": {
+            "currency0": {
+              "$ref": "#/$defs/address",
+              "description": "the pool's lower currency"
+            },
+            "currency1": {
+              "$ref": "#/$defs/address",
+              "description": "the pool's higher currency"
+            },
+            "fee": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 16777215,
+              "description": "the pool fee, in hundredths of a bip"
+            },
+            "tickSpacing": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32767,
+              "description": "the pool's tick spacing"
+            },
+            "hooks": {
+              "$ref": "#/$defs/address",
+              "description": "the pool's hooks contract, or the zero address"
+            }
+          },
+          "description": "the V4 pool key"
+        },
+        "zeroForOne": {
+          "type": "boolean",
+          "description": "true sells currency0 for currency1"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_uniswapV4ExactInputMultiHop": {
+      "title": "uniswapV4ExactInputMultiHop",
+      "description": "Swaps an exact input along a Uniswap V4 path via the Universal Router. Calls IERC20.transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "currencyIn", "path", "amountOutMin", "recipient"],
+      "properties": {
+        "type": {
+          "const": "uniswapV4ExactInputMultiHop"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the Universal Router"
+        },
+        "currencyIn": {
+          "$ref": "#/$defs/address",
+          "description": "the currency sold"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["intermediateCurrency", "fee", "tickSpacing", "hooks"],
+            "properties": {
+              "intermediateCurrency": {
+                "$ref": "#/$defs/address",
+                "description": "the currency this hop buys"
+              },
+              "fee": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 16777215,
+                "description": "the hop's pool fee"
+              },
+              "tickSpacing": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32767,
+                "description": "the hop's pool tick spacing"
+              },
+              "hooks": {
+                "$ref": "#/$defs/address",
+                "description": "the hop's pool hooks, or the zero address"
+              }
+            }
+          },
+          "minItems": 1,
+          "description": "the hops, in order; the last hop's currency is the output"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_curveSwap": {
+      "title": "curveSwap",
+      "description": "Swaps through a Curve pool's 4-argument `exchange`; the output is a balance delta. Calls pool.exchange(int128,int128,uint256,uint256).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "tokenIn", "tokenOut", "i", "j", "amountOutMin", "recipient"],
+      "properties": {
+        "type": {
+          "const": "curveSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the Curve pool"
+        },
+        "tokenIn": {
+          "$ref": "#/$defs/address",
+          "description": "the token sold"
+        },
+        "tokenOut": {
+          "$ref": "#/$defs/address",
+          "description": "the token bought, whose balance delta is the output"
+        },
+        "i": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7,
+          "description": "the pool index of the input coin"
+        },
+        "j": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7,
+          "description": "the pool index of the output coin"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account; the output is forwarded by a transfer"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_curveRouterNGSwap": {
+      "title": "curveRouterNGSwap",
+      "description": "Swaps along a Curve RouterNG route of up to five hops. Calls RouterNG.exchange(address[11],uint256[5][5],uint256,uint256,address[5],address).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "route", "swapParams", "amountOutMin", "pools", "recipient"],
+      "properties": {
+        "type": {
+          "const": "curveRouterNGSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the Curve RouterNG"
+        },
+        "route": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/address"
+          },
+          "minItems": 1,
+          "maxItems": 11,
+          "description": "the route, padded to 11 with zero addresses"
+        },
+        "swapParams": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              }
+            ],
+            "items": false,
+            "minItems": 5
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "per hop: [i, j, swap_type, pool_type, n_coins], padded to 5 rows"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "pools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/address"
+          },
+          "maxItems": 5,
+          "description": "zap pools where a hop needs one, padded to 5"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_balancerV2Swap": {
+      "title": "balancerV2Swap",
+      "description": "Swaps through one Balancer V2 pool. Calls Vault.swap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "vault",
+        "poolId",
+        "tokenIn",
+        "tokenOut",
+        "amountOutMin",
+        "recipient",
+        "deadline"
+      ],
+      "properties": {
+        "type": {
+          "const": "balancerV2Swap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "vault": {
+          "$ref": "#/$defs/address",
+          "description": "the Balancer V2 Vault"
+        },
+        "poolId": {
+          "$ref": "#/$defs/bytes32",
+          "description": "the pool id"
+        },
+        "tokenIn": {
+          "$ref": "#/$defs/address",
+          "description": "the token sold"
+        },
+        "tokenOut": {
+          "$ref": "#/$defs/address",
+          "description": "the token bought"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the Vault reverts"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_balancerV2BatchSwap": {
+      "title": "balancerV2BatchSwap",
+      "description": "Swaps along a Balancer V2 multi-pool batch; the output is a balance delta. Calls Vault.batchSwap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "vault", "steps", "assets", "amountOutMin", "recipient", "deadline"],
+      "properties": {
+        "type": {
+          "const": "balancerV2BatchSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "vault": {
+          "$ref": "#/$defs/address",
+          "description": "the Balancer V2 Vault"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["poolId", "assetInIndex", "assetOutIndex", "amount"],
+            "properties": {
+              "poolId": {
+                "$ref": "#/$defs/bytes32",
+                "description": "the step's pool id"
+              },
+              "assetInIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255,
+                "description": "index into `assets` of the step's input"
+              },
+              "assetOutIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255,
+                "description": "index into `assets` of the step's output"
+              },
+              "amount": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 78,
+                "description": "the step's input; 0 spends the previous step's output"
+              }
+            }
+          },
+          "minItems": 1,
+          "description": "the batch's steps; the last step's output asset is the output"
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/address"
+          },
+          "minItems": 2,
+          "description": "every asset the steps index"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the Vault reverts"
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_balancerV3Swap": {
+      "title": "balancerV3Swap",
+      "description": "Swaps an exact input through one Balancer V3 pool; the router pays the executing account. Calls Router.swapSingleTokenExactIn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "router",
+        "pool",
+        "tokenIn",
+        "tokenOut",
+        "amountOutMin",
+        "deadline",
+        "wethIsEth"
+      ],
+      "properties": {
+        "type": {
+          "const": "balancerV3Swap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the Balancer V3 Router"
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the pool"
+        },
+        "tokenIn": {
+          "$ref": "#/$defs/address",
+          "description": "the token sold"
+        },
+        "tokenOut": {
+          "$ref": "#/$defs/address",
+          "description": "the token bought"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the router reverts"
+        },
+        "wethIsEth": {
+          "type": "boolean",
+          "description": "true to pay or receive native ETH for WETH"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_uniswapV2Swap": {
+      "title": "uniswapV2Swap",
+      "description": "Swaps an exact input along a Uniswap V2 path; the output is a balance delta. Calls UniswapV2Router.swapExactTokensForTokens.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "amountOutMin", "path", "recipient", "deadline"],
+      "properties": {
+        "type": {
+          "const": "uniswapV2Swap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the V2 router"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/address"
+          },
+          "minItems": 2,
+          "description": "the token path; the last token is the output"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the router reverts"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_ambientSwap": {
+      "title": "ambientSwap",
+      "description": "Swaps through an Ambient (CrocSwap) pool; the output is a balance delta. Calls CrocSwapDex.userCmd(1, abi.encode(...)).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "dex",
+        "base",
+        "quote",
+        "poolIdx",
+        "isBuy",
+        "inBaseQty",
+        "tip",
+        "limitPrice",
+        "minOut",
+        "reserveFlags"
+      ],
+      "properties": {
+        "type": {
+          "const": "ambientSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "dex": {
+          "$ref": "#/$defs/address",
+          "description": "the CrocSwapDex"
+        },
+        "base": {
+          "$ref": "#/$defs/address",
+          "description": "the pool's base token (numerically lower)"
+        },
+        "quote": {
+          "$ref": "#/$defs/address",
+          "description": "the pool's quote token"
+        },
+        "poolIdx": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "the pool type index (420 is the standard pool)"
+        },
+        "isBuy": {
+          "type": "boolean",
+          "description": "true pays base and receives quote"
+        },
+        "inBaseQty": {
+          "type": "boolean",
+          "description": "true when the amount is denominated in the base token"
+        },
+        "tip": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "0 accepts the pool's default fee"
+        },
+        "limitPrice": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "the worst acceptable price, as a Q64.64 square-root price"
+        },
+        "minOut": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "reserveFlags": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "description": "0x1 settles base from surplus, 0x2 quote"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_dodoSwap": {
+      "title": "dodoSwap",
+      "description": "Swaps through DODO pairs via the DODO proxy. Calls DODOProxy.dodoSwapV2TokenToToken (or dodoSwapV1).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "proxy",
+        "fromToken",
+        "toToken",
+        "amountOutMin",
+        "dodoPairs",
+        "directions",
+        "deadline"
+      ],
+      "properties": {
+        "type": {
+          "const": "dodoSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "proxy": {
+          "$ref": "#/$defs/address",
+          "description": "the DODO proxy; approvals go to DODOApprove, not to it"
+        },
+        "fromToken": {
+          "$ref": "#/$defs/address",
+          "description": "the token sold"
+        },
+        "toToken": {
+          "$ref": "#/$defs/address",
+          "description": "the token bought"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "dodoPairs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/address"
+          },
+          "minItems": 1,
+          "description": "the pairs to route through"
+        },
+        "directions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "a bit per pair: 0 sells base, 1 sells quote"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the proxy reverts"
+        },
+        "version": {
+          "enum": ["v1", "v2"],
+          "description": "\"v1\" routes legacy Classical pairs through `dodoSwapV1`; default \"v2\""
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_maverickSwap": {
+      "title": "maverickSwap",
+      "description": "Swaps an exact input through one Maverick V2 pool. Calls MaverickV2Router.exactInputSingle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "pool", "tokenAIn", "amountOutMin", "recipient"],
+      "properties": {
+        "type": {
+          "const": "maverickSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the Maverick V2 router"
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the pool"
+        },
+        "tokenAIn": {
+          "type": "boolean",
+          "description": "true sells the pool's token A"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_maverickMultiHopSwap": {
+      "title": "maverickMultiHopSwap",
+      "description": "Swaps an exact input along an encoded Maverick V2 path. Calls MaverickV2Router.exactInputMultiHop.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "path", "amountOutMin", "recipient"],
+      "properties": {
+        "type": {
+          "const": "maverickMultiHopSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the Maverick V2 router"
+        },
+        "path": {
+          "$ref": "#/$defs/bytes",
+          "description": "the encoded path of pools and directions"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_carbonSwap": {
+      "title": "carbonSwap",
+      "description": "Trades against Carbon strategies by source amount; the controller pays the executing account. Calls CarbonController.tradeBySourceAmount.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "controller",
+        "sourceToken",
+        "targetToken",
+        "tradeActions",
+        "amountOutMin",
+        "deadline"
+      ],
+      "properties": {
+        "type": {
+          "const": "carbonSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "controller": {
+          "$ref": "#/$defs/address",
+          "description": "the CarbonController"
+        },
+        "sourceToken": {
+          "$ref": "#/$defs/address",
+          "description": "the token sold"
+        },
+        "targetToken": {
+          "$ref": "#/$defs/address",
+          "description": "the token bought"
+        },
+        "tradeActions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["strategyId", "amount"],
+            "properties": {
+              "strategyId": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 78,
+                "description": "the strategy"
+              },
+              "amount": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 39,
+                "description": "source amount for it"
+              }
+            }
+          },
+          "minItems": 1,
+          "description": "per-strategy source amounts; these, not `amountIn`, are traded"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the controller reverts"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_fraxswapSwap": {
+      "title": "fraxswapSwap",
+      "description": "Swaps an exact input along a Fraxswap path; the output is a balance delta. Calls FraxswapRouter.swapExactTokensForTokens.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "amountOutMin", "path", "recipient", "deadline"],
+      "properties": {
+        "type": {
+          "const": "fraxswapSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the Fraxswap router"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/address"
+          },
+          "minItems": 2,
+          "description": "the token path; the last token is the output"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the router reverts"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_clipperSwap": {
+      "title": "clipperSwap",
+      "description": "Sells tokens already transferred to a Clipper exchange, against a signed quote. Calls ClipperExchange.sellTokenForToken.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "exchange",
+        "inputToken",
+        "outputToken",
+        "amountOutMin",
+        "recipient",
+        "auxiliaryData"
+      ],
+      "properties": {
+        "type": {
+          "const": "clipperSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "exchange": {
+          "$ref": "#/$defs/address",
+          "description": "the Clipper exchange"
+        },
+        "inputToken": {
+          "$ref": "#/$defs/address",
+          "description": "the token sold"
+        },
+        "outputToken": {
+          "$ref": "#/$defs/address",
+          "description": "the token bought"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "auxiliaryData": {
+          "$ref": "#/$defs/bytes",
+          "description": "Clipper's signed quote, from its API"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_integralSwap": {
+      "title": "integralSwap",
+      "description": "Places an Integral SIZE sell order, which executes in a later transaction. Calls TwapDelay.sell.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "delay",
+        "tokenIn",
+        "tokenOut",
+        "amountOutMin",
+        "wrapUnwrap",
+        "recipient",
+        "gasLimit",
+        "submitDeadline"
+      ],
+      "properties": {
+        "type": {
+          "const": "integralSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "delay": {
+          "$ref": "#/$defs/address",
+          "description": "the TwapDelay"
+        },
+        "tokenIn": {
+          "$ref": "#/$defs/address",
+          "description": "the token sold"
+        },
+        "tokenOut": {
+          "$ref": "#/$defs/address",
+          "description": "the token bought"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "wrapUnwrap": {
+          "type": "boolean",
+          "description": "true to wrap or unwrap native ETH"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when the order executes"
+        },
+        "gasLimit": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the gas the keeper may spend executing the order"
+        },
+        "submitDeadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Unix seconds by which the order must be submitted"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_fluidDexT1Swap": {
+      "title": "fluidDexT1Swap",
+      "description": "Swaps an exact input through a Fluid DEX T1 pool. Calls FluidDexT1.swapIn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "swap0to1", "amountOutMin", "recipient"],
+      "properties": {
+        "type": {
+          "const": "fluidDexT1Swap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the pool"
+        },
+        "swap0to1": {
+          "type": "boolean",
+          "description": "true sells token0"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_fluidDexLiteSwap": {
+      "title": "fluidDexLiteSwap",
+      "description": "Swaps an exact input through the Fluid DEX Lite singleton; the output is a balance delta. Calls FluidDexLite.swapSingle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "dex",
+        "token0",
+        "token1",
+        "salt",
+        "swap0To1",
+        "amountOutMin",
+        "recipient"
+      ],
+      "properties": {
+        "type": {
+          "const": "fluidDexLiteSwap"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amountIn": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "dex": {
+          "$ref": "#/$defs/address",
+          "description": "the Fluid DEX Lite singleton"
+        },
+        "token0": {
+          "$ref": "#/$defs/address",
+          "description": "the pool's lower token"
+        },
+        "token1": {
+          "$ref": "#/$defs/address",
+          "description": "the pool's higher token"
+        },
+        "salt": {
+          "$ref": "#/$defs/bytes32",
+          "description": "the pool's salt, from the DexLite resolver"
+        },
+        "swap0To1": {
+          "type": "boolean",
+          "description": "true sells token0"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum output; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when it is not chained; `\"self\"` keeps it in the executing account"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_acrossBridge": {
+      "title": "acrossBridge",
+      "description": "Deposits into an Across V3 SpokePool for the same token on the destination. Calls SpokePool.depositV3.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "destChainId",
+        "spokePool",
+        "token",
+        "relayerFeePct",
+        "quoteTimestamp",
+        "fillDeadline",
+        "exclusivityDeadline",
+        "message"
+      ],
+      "properties": {
+        "type": {
+          "const": "acrossBridge"
+        },
+        "srcChainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "destChainId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "the destination chain id"
+        },
+        "spokePool": {
+          "$ref": "#/$defs/address",
+          "description": "the origin SpokePool"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the token bridged (input and output)"
+        },
+        "relayerFeePct": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "recorded for the quote; the deposit sets input = output amount"
+        },
+        "quoteTimestamp": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "the quote's timestamp"
+        },
+        "fillDeadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Unix seconds by which a relayer must fill"
+        },
+        "exclusivityDeadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Unix seconds of relayer exclusivity (0 for none)"
+        },
+        "message": {
+          "$ref": "#/$defs/bytes",
+          "description": "the message delivered with the fill; 0x for none"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_stargateBridge": {
+      "title": "stargateBridge",
+      "description": "Bridges through the Stargate V1 router, paying the LayerZero fee as value. Calls StargateRouter.swap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "destChainId",
+        "router",
+        "token",
+        "srcPoolId",
+        "dstPoolId",
+        "amountOutMin",
+        "lzFee"
+      ],
+      "properties": {
+        "type": {
+          "const": "stargateBridge"
+        },
+        "srcChainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "destChainId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "the destination chain id"
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the Stargate V1 router"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the token bridged"
+        },
+        "srcPoolId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "the source pool id"
+        },
+        "dstPoolId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "the destination pool id"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "minimum received on the destination"
+        },
+        "lzFee": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the LayerZero fee, attached as native value"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_cctpBridge": {
+      "title": "cctpBridge",
+      "description": "Burns USDC through Circle's CCTP V1 TokenMessenger for minting on the destination. Calls TokenMessenger.depositForBurn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "destChainId",
+        "tokenMessenger",
+        "token",
+        "srcDomain",
+        "destDomain",
+        "mintRecipient"
+      ],
+      "properties": {
+        "type": {
+          "const": "cctpBridge"
+        },
+        "srcChainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "destChainId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "the destination chain id"
+        },
+        "tokenMessenger": {
+          "$ref": "#/$defs/address",
+          "description": "the CCTP V1 TokenMessenger"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the burned token (USDC)"
+        },
+        "srcDomain": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "the source CCTP domain (recorded, not sent)"
+        },
+        "destDomain": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "the destination CCTP domain"
+        },
+        "mintRecipient": {
+          "$ref": "#/$defs/bytes32",
+          "description": "the destination recipient, left-padded to 32 bytes"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_hyperlaneBridge": {
+      "title": "hyperlaneBridge",
+      "description": "Dispatches a Hyperlane message, paying interchain gas as value. Calls Mailbox.dispatch(uint32,bytes32,bytes).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "destChainId", "router", "token", "destinationDomain", "gasPayment"],
+      "properties": {
+        "type": {
+          "const": "hyperlaneBridge"
+        },
+        "srcChainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "destChainId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "the destination chain id"
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the contract `dispatch` is called on"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "sent as the message recipient, padded to 32 bytes"
+        },
+        "destinationDomain": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "the Hyperlane destination domain"
+        },
+        "gasPayment": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "interchain gas, attached as native value"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_wrapETH": {
+      "title": "wrapETH",
+      "description": "Wraps native ETH into WETH. Calls WETH.deposit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "weth"],
+      "properties": {
+        "type": {
+          "const": "wrapETH"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "weth": {
+          "$ref": "#/$defs/address",
+          "description": "the WETH contract"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_unwrapETH": {
+      "title": "unwrapETH",
+      "description": "Unwraps WETH into native ETH. Calls WETH.withdraw.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "weth"],
+      "properties": {
+        "type": {
+          "const": "unwrapETH"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "weth": {
+          "$ref": "#/$defs/address",
+          "description": "the WETH contract"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_wrapStETH": {
+      "title": "wrapStETH",
+      "description": "Wraps stETH into wstETH. Calls wstETH.wrap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "wstETH"],
+      "properties": {
+        "type": {
+          "const": "wrapStETH"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "stETHAmount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "wstETH": {
+          "$ref": "#/$defs/address",
+          "description": "the wstETH contract"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_unwrapStETH": {
+      "title": "unwrapStETH",
+      "description": "Unwraps wstETH into stETH. Calls wstETH.unwrap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "wstETH"],
+      "properties": {
+        "type": {
+          "const": "unwrapStETH"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "wstETHAmount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "wstETH": {
+          "$ref": "#/$defs/address",
+          "description": "the wstETH contract"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_lidoStake": {
+      "title": "lidoStake",
+      "description": "Stakes native ETH with Lido for stETH. Calls stETH.submit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "stETH", "referral"],
+      "properties": {
+        "type": {
+          "const": "lidoStake"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "stETH": {
+          "$ref": "#/$defs/address",
+          "description": "the stETH contract"
+        },
+        "referral": {
+          "$ref": "#/$defs/address",
+          "description": "the referral address, or zero"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_lidoUnstake": {
+      "title": "lidoUnstake",
+      "description": "Requests a Lido withdrawal of stETH; the ETH is claimable later. Calls WithdrawalQueue.requestWithdrawals.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "withdrawalQueue"],
+      "properties": {
+        "type": {
+          "const": "lidoUnstake"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "stETHAmount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "withdrawalQueue": {
+          "$ref": "#/$defs/address",
+          "description": "Lido's WithdrawalQueueERC721"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_rocketPoolStake": {
+      "title": "rocketPoolStake",
+      "description": "Stakes native ETH with Rocket Pool for rETH. Calls RocketDepositPool.deposit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "rETH", "depositPool"],
+      "properties": {
+        "type": {
+          "const": "rocketPoolStake"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "rETH": {
+          "$ref": "#/$defs/address",
+          "description": "the rETH token"
+        },
+        "depositPool": {
+          "$ref": "#/$defs/address",
+          "description": "the Rocket deposit pool"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_rocketPoolUnstake": {
+      "title": "rocketPoolUnstake",
+      "description": "Burns rETH for ETH. Calls rETH.burn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "rETH"],
+      "properties": {
+        "type": {
+          "const": "rocketPoolUnstake"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "rETH": {
+          "$ref": "#/$defs/address",
+          "description": "the rETH token"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_coinbaseStake": {
+      "title": "coinbaseStake",
+      "description": "Calls `deposit()` on cbETH with native value. Calls cbETH.deposit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "cbETH"],
+      "properties": {
+        "type": {
+          "const": "coinbaseStake"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "cbETH": {
+          "$ref": "#/$defs/address",
+          "description": "the cbETH contract"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_etherFiStake": {
+      "title": "etherFiStake",
+      "description": "Stakes native ETH with ether.fi for eETH. Calls LiquidityPool.deposit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "liquidityPool"],
+      "properties": {
+        "type": {
+          "const": "etherFiStake"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "liquidityPool": {
+          "$ref": "#/$defs/address",
+          "description": "the ether.fi LiquidityPool"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_aaveV3Supply": {
+      "title": "aaveV3Supply",
+      "description": "Supplies a token to Aave V3. Calls Pool.supply.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "token", "onBehalfOf", "referralCode"],
+      "properties": {
+        "type": {
+          "const": "aaveV3Supply"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the Aave V3 Pool"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the asset supplied"
+        },
+        "onBehalfOf": {
+          "$ref": "#/$defs/recipient",
+          "description": "credited with the position; `\"self\"` is the executing account"
+        },
+        "referralCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Aave's referral code, usually 0"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_aaveV3Withdraw": {
+      "title": "aaveV3Withdraw",
+      "description": "Withdraws a token from Aave V3; the output is the amount withdrawn. Calls Pool.withdraw.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "token", "to"],
+      "properties": {
+        "type": {
+          "const": "aaveV3Withdraw"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the Aave V3 Pool"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the asset withdrawn"
+        },
+        "to": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the asset; `\"self\"` is the executing account"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_aaveV3Borrow": {
+      "title": "aaveV3Borrow",
+      "description": "Borrows a token from Aave V3 at the variable rate. Calls Pool.borrow.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "token", "interestRateMode", "onBehalfOf", "referralCode"],
+      "properties": {
+        "type": {
+          "const": "aaveV3Borrow"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the Aave V3 Pool"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the asset borrowed"
+        },
+        "interestRateMode": {
+          "enum": [2],
+          "description": "2 = variable rate, the only mode Aave V3 offers"
+        },
+        "onBehalfOf": {
+          "$ref": "#/$defs/recipient",
+          "description": "whose collateral backs the debt; `\"self\"` is the executing account"
+        },
+        "referralCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Aave's referral code, usually 0"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_aaveV3Repay": {
+      "title": "aaveV3Repay",
+      "description": "Repays an Aave V3 variable-rate debt. Calls Pool.repay.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "token", "interestRateMode", "onBehalfOf"],
+      "properties": {
+        "type": {
+          "const": "aaveV3Repay"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the Aave V3 Pool"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the asset repaid"
+        },
+        "interestRateMode": {
+          "enum": [2],
+          "description": "2 = variable rate"
+        },
+        "onBehalfOf": {
+          "$ref": "#/$defs/recipient",
+          "description": "whose debt is repaid; `\"self\"` is the executing account"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_compoundV3Supply": {
+      "title": "compoundV3Supply",
+      "description": "Supplies a token to a Compound V3 (Comet) market. Calls Comet.supply.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "comet", "token"],
+      "properties": {
+        "type": {
+          "const": "compoundV3Supply"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "comet": {
+          "$ref": "#/$defs/address",
+          "description": "the Comet market"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the asset supplied"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_compoundV3Withdraw": {
+      "title": "compoundV3Withdraw",
+      "description": "Withdraws a token from a Compound V3 (Comet) market. Calls Comet.withdraw.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "comet", "token"],
+      "properties": {
+        "type": {
+          "const": "compoundV3Withdraw"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "comet": {
+          "$ref": "#/$defs/address",
+          "description": "the Comet market"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the asset withdrawn"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_transfer": {
+      "title": "transfer",
+      "description": "Transfers an ERC-20 token. Calls IERC20.transfer (output-free).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "token", "to"],
+      "properties": {
+        "type": {
+          "const": "transfer"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the token"
+        },
+        "to": {
+          "$ref": "#/$defs/recipient",
+          "description": "the receiver"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_approve": {
+      "title": "approve",
+      "description": "Approves an ERC-20 spender. Calls IERC20.approve (output-free).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "token", "spender"],
+      "properties": {
+        "type": {
+          "const": "approve"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the token"
+        },
+        "spender": {
+          "$ref": "#/$defs/address",
+          "description": "the spender"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_balanceOf": {
+      "title": "balanceOf",
+      "description": "Reads the executing account's balance of a token; the output is that balance. Calls IERC20.balanceOf(self).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "token"],
+      "properties": {
+        "type": {
+          "const": "balanceOf"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the token"
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_nativeBalance": {
+      "title": "nativeBalance",
+      "description": "Reads the executing account's native balance; the output is that balance. Calls ctx.selfBalance().",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "const": "nativeBalance"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_argument": {
+      "title": "argument",
+      "description": "Declares a runtime entry argument; the output is the value supplied at execution. Calls a `main` parameter.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "name"],
+      "properties": {
+        "type": {
+          "const": "argument"
+        },
+        "chainId": {
+          "$ref": "#/$defs/chainId",
+          "description": "Optional; must equal the program's chainId, which it defaults to."
+        },
+        "name": {
+          "$ref": "#/$defs/identifier",
+          "description": "the parameter's name; arguments are encoded in order"
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    }
+  }
+}

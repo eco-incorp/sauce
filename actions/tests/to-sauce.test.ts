@@ -515,7 +515,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
     hardhatProcess = await startHardhat();
     ({ engine: ENGINE, pot: SAUCE } = await deploySauce());
     client = createPublicClient({ transport: http(RPC) });
-    console.log(`Hardhat forking ${FORK_URL}`);
+    console.log(`Hardhat forking ${new URL(FORK_URL!).hostname.split(".")[0]}`); // the URL carries an API key
     console.log(`Sauce deployed at ${SAUCE}`);
   });
 
@@ -1769,8 +1769,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
     // Opcode constants
     const OP_CALL = 0xa2;
     // Chaining is `let v_<name> = …` locals in the emitted SauceScript, so it is observable in the
-    // source and not as an opcode. Byte-scanning cannot assert it either way: a bytecode scan finds
-    // the byte inside UniswapV4's pre-encoded execute blob as readily as an instruction.
+    // source and not as an opcode. A byte scan cannot assert it either way.
 
     /** Check that a 4-byte selector (hex string like '0xa9059cbb') appears in bytecode */
     function containsSelector(bytecode: Uint8Array, selectorHex: string): boolean {
@@ -1812,7 +1811,9 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
     const SEL_BURN = "0x42966c68"; // burn(uint256)
     const SEL_AAVE_BORROW = "0xa415bcad"; // borrow(address,uint256,uint256,uint16,address)
     const SEL_AAVE_REPAY = "0x573ade81"; // repay(address,uint256,uint256,address)
-    const SEL_STARGATE_SWAP = "0x13d356b9"; // swap(uint16,uint256,...)
+    // The V1 router's real `swap` (lzTxObj, to, payload). The `(address,address,bytes)` overload
+    // this pinned before (0x13d356b9) is not on the router — checked against its mainnet bytecode.
+    const SEL_STARGATE_SWAP = "0x9fbf10fc"; // swap(uint16,uint256,uint256,address,uint256,uint256,(uint256,uint256,bytes),bytes,bytes)
     const SEL_CCTP_DEPOSIT = "0x6fd3504e"; // depositForBurn(uint256,uint32,bytes32,address)
     const SEL_HYPERLANE_DISPATCH = "0xfa31de01"; // dispatch(uint32,bytes32,bytes)
 
@@ -1875,7 +1876,11 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
       assert.ok(containsSelector(bytecode, SEL_EXECUTE), "should contain execute selector");
       assert.ok(containsSelector(bytecode, SEL_APPROVE), "should contain approve selector");
       assert.match(source, /let v_v4Out = /, "saveOutputAs should declare the local");
-      assert.match(source, /f1: v_v4Out/, "amountRef should read the local, not a literal");
+      assert.match(
+        source,
+        /\.approve\(0x0*beefn, v_v4Out\)/,
+        "amountRef should read the local, not a literal",
+      );
     });
 
     it("uniswapV4ExactInputMultiHop", () => {
@@ -1954,7 +1959,11 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
       assert.ok(containsSelector(bytecode, SEL_EXECUTE), "should contain execute selector");
       assert.ok(containsSelector(bytecode, SEL_APPROVE), "should contain approve selector");
       assert.match(source, /let v_v4MultiOut = /, "saveOutputAs should declare the local");
-      assert.match(source, /f1: v_v4MultiOut/, "amountRef should read the local, not a literal");
+      assert.match(
+        source,
+        /\.approve\(0x0*beefn, v_v4MultiOut\)/,
+        "amountRef should read the local, not a literal",
+      );
     });
 
     it("curveSwap", () => {
