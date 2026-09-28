@@ -7,7 +7,7 @@
 import { encodeFunctionData } from "viem";
 import { chainContracts, on, type ContractAccessor } from "../src/descriptors/accessors.js";
 import type { ContractCall } from "../src/descriptors/call.js";
-import { getDescriptor } from "../src/descriptors/query.js";
+import { getDescriptor, methodOf, selectorOf } from "../src/descriptors/query.js";
 import { UniswapV4UniversalRouterABI } from "../src/protocols/uniswap-v4/abis.js";
 
 /** Method names are typed `unknown` on `ContractAccessor` (see accessors.ts's own doc comment) —
@@ -32,6 +32,40 @@ describe("descriptors accessors: the motivating path", () => {
     });
     expect(call.data).toBe(expected);
     expect(call.encode()).toBe(expected);
+  });
+
+  // The Universal Router declares two `execute`s, with and without a deadline. The call must
+  // report the overload it encodes: the selector on the `ContractCall` and the one its data starts
+  // with are the same, for each argument count.
+  it("an overloaded method dispatches on argument count, and reports the overload it encodes", () => {
+    const router = chainContracts("base").UniswapV4.UniversalRouter;
+    const withDeadline = invoke(router, "execute", "0x00", ["0x01"], 999n);
+    const withoutDeadline = invoke(router, "execute", "0x00", ["0x01"]);
+
+    expect(withDeadline.method.signature).toBe("execute(bytes,bytes[],uint256)");
+    expect(withDeadline.method.selector).toBe("0x3593564c");
+    expect(withDeadline.data.startsWith(withDeadline.method.selector)).toBe(true);
+    expect(withoutDeadline.method.signature).toBe("execute(bytes,bytes[])");
+    expect(withoutDeadline.method.selector).toBe("0x24856bc3");
+    expect(withoutDeadline.data.startsWith(withoutDeadline.method.selector)).toBe(true);
+    expect(withoutDeadline.data).toBe(
+      encodeFunctionData({
+        abi: UniswapV4UniversalRouterABI,
+        functionName: "execute",
+        args: ["0x00", ["0x01"]],
+      }),
+    );
+    expect(() => invoke(router, "execute", "0x00")).toThrow(
+      "uniswap-v4.UniversalRouter.execute takes 3 or 2 arguments, got 1",
+    );
+  });
+
+  it("methodOf and selectorOf pick an overload by arity, and the first declared without one", () => {
+    const router = getDescriptor("uniswap-v4", "UniversalRouter")!;
+    expect(methodOf(router, "execute", 2)?.selector).toBe("0x24856bc3");
+    expect(methodOf(router, "execute", 3)?.selector).toBe("0x3593564c");
+    expect(methodOf(router, "execute", 1)).toBeUndefined();
+    expect(selectorOf(router, "execute")).toBe("0x3593564c");
   });
 
   it("`on(...)` (the import-based front door) is equivalent to chainContracts(...)", () => {

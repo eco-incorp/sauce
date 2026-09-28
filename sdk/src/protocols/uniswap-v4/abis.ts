@@ -95,6 +95,16 @@ export const UniswapV4UniversalRouterABI = [
     ],
     outputs: [],
   },
+  {
+    name: "execute",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "commands", type: "bytes" },
+      { name: "inputs", type: "bytes[]" },
+    ],
+    outputs: [],
+  },
 ] as const;
 
 export const UniswapV4PositionManagerABI = [

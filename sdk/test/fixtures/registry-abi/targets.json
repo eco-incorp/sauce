@@ -1029,7 +1029,10 @@
         "roles": ["positionManager"]
       },
       "UniswapV4UniversalRouterABI": {
-        "roles": ["universalRouter"]
+        "roles": ["universalRouter"],
+        "required": {
+          "execute(bytes,bytes[])": "actions' uniswapV4ExactInput and uniswapV4ExactInputMultiHop, which call the deadline-free execute"
+        }
       }
     },
     "velodrome": {

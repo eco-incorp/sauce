@@ -74,6 +74,7 @@ export interface UniswapV4Source {
   };
   readonly "UniversalRouter": bigint & {
     "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg2: bigint): void;
+    "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): void;
   };
   readonly "PositionManager": bigint & {
     "modifyLiquidities"(arg0: (string | SauceBytes), arg1: bigint): void;

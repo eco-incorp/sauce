@@ -105,6 +105,7 @@ function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
 ### UniswapV4UniversalRouterABI
 
 - `execute(bytes commands, bytes[] inputs, uint256 deadline)` - Execute a batch of commands (swap, settle, take, etc.) in sequence
+- `execute(bytes commands, bytes[] inputs)` - The same, with no deadline
 
 ### UniswapV4PositionManagerABI
 
