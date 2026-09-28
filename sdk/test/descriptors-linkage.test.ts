@@ -162,12 +162,29 @@ describe("descriptor linkage: (protocol, contract) uniqueness (E2.3's key space)
   });
 });
 
-describe("descriptor linkage: no overloaded function names in any starter ABI", () => {
-  it("every starter-set ABI has zero duplicate function names (the assumption behind name-keyed methodOf)", () => {
+describe("descriptor linkage: an overloaded name is unambiguous by argument count", () => {
+  // The accessor and `methodOf` pick an overload by how many arguments it takes, and the route
+  // rewrite binds a name with `.view` or `.at` before the compiler picks an overload. So overloads
+  // of one name must differ in argument count, and be all view or all non-view.
+  it("every starter-set ABI's overloads differ in argument count and agree on view vs non-view", () => {
+    const ambiguous: string[] = [];
     for (const d of DESCRIPTORS) {
-      const names = d.methods.map((m) => m.name);
-      expect(new Set(names).size).toBe(names.length);
+      const byName = new Map<string, typeof d.methods>();
+      for (const m of d.methods) byName.set(m.name, [...(byName.get(m.name) ?? []), m]);
+      for (const [name, overloads] of byName) {
+        if (overloads.length === 1) continue;
+        const arities = overloads.map((m) => m.inputs.length);
+        const reads = new Set(
+          overloads.map((m) => m.stateMutability === "view" || m.stateMutability === "pure"),
+        );
+        if (new Set(arities).size !== arities.length || reads.size !== 1) {
+          ambiguous.push(
+            `${d.protocol}.${d.contract}.${name}: ${overloads.map((m) => m.signature).join(", ")}`,
+          );
+        }
+      }
     }
+    expect(ambiguous).toEqual([]);
   });
 });
 

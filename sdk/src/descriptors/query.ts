@@ -65,16 +65,27 @@ export function addressOn(descriptor: ContractDescriptor, chain: ChainRef): Addr
   return descriptor.perChainAddress[resolved.id];
 }
 
-/** Name-keyed method lookup. Safe for this dataset: zero overloaded function names across every starter-set ABI (see the linkage test). */
+/**
+ * Name-keyed method lookup. An overloaded name's overloads take different numbers of arguments
+ * (the linkage test holds every descriptor to that), so `arity` names exactly one of them. Without
+ * it, the first overload the ABI declares is returned.
+ */
 export function methodOf(
   descriptor: ContractDescriptor,
   name: string,
+  arity?: number,
 ): DescriptorMethod | undefined {
-  return descriptor.methods.find((m) => m.name === name);
+  return descriptor.methods.find(
+    (m) => m.name === name && (arity === undefined || m.inputs.length === arity),
+  );
 }
 
-export function selectorOf(descriptor: ContractDescriptor, name: string): Hex | undefined {
-  return methodOf(descriptor, name)?.selector;
+export function selectorOf(
+  descriptor: ContractDescriptor,
+  name: string,
+  arity?: number,
+): Hex | undefined {
+  return methodOf(descriptor, name, arity)?.selector;
 }
 
 /** Resolved CanonicalChain records (not raw slugs) for every chain this descriptor has an address on. */

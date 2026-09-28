@@ -42,7 +42,7 @@ function stateMutabilityOf(fn: AbiFunction): StateMutability {
   return "nonpayable";
 }
 
-/** ABI -> ordered DescriptorMethod[] (no name-collapse — an overloaded name would appear twice, see the linkage test's zero-overload invariant). */
+/** ABI -> ordered DescriptorMethod[] (no name-collapse: an overloaded name appears once per overload, which the linkage test holds to distinct argument counts). */
 export function buildMethods(abi: Abi): DescriptorMethod[] {
   const methods: DescriptorMethod[] = [];
   for (const item of abi) {
