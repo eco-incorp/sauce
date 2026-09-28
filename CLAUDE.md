@@ -243,6 +243,32 @@ chain and recipe definitions. **SDK tests compile every protocol's
 to build first, but the suites that import `./artifacts/*.json` need `sync-engine-artifacts` to have
 run (see the Foundry gotcha above).
 
+**Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
+checks each function of each `abis.ts` export against `test/fixtures/registry-abi/evidence.json`: the
+deployed code must dispatch its selector (after resolving EIP-1167 clones, EIP-1967/beacon/legacy
+proxy slots, `implementation()` getters, and diamond or selector routers), and where a verified ABI
+exists, its outputs, mutability and struct field names must match. `targets.json` beside it is the
+hand-written half: which deployments evidence which export (`roles` from `addresses.ts`, or
+representative `instances` for interface ABIs), `probes` (extra signatures to ask a selector router
+about), and every exception with its reason — `exempt` (a deployment that legitimately differs),
+`unverified` (no verified source on any keyless source; the selector is still checked) and
+`unverifiable`. An
+exception that stops applying fails the test. So does a new export with no target, and a
+`<X>ABI.json` twin that no longer matches `abis.ts` (regenerate with
+`bun run scripts/generate-abi-json.ts`, then prettier). The widened-type workaround the registry
+used to carry (`uint32` for `uint24`, `uint256` for `bytes32`/`int*`) is gone: the pinned compiler
+takes every ABI type, so declare the deployed one.
+
+Recapture only on explicit request — it reads live chains: `pnpm --filter './sdk' build` (the script
+reads `dist/`), then `RECAPTURE_REGISTRY_ABI=1 node scripts/capture-registry-abi.mjs [slug ...]` from
+`sdk/`, with no slugs for everything (about 540 deployments; responses cache under
+`node_modules/.cache/registry-abi/`). Without the flag it refuses to run. RPC endpoints come only
+from the environment — `<CHAIN>_RPC_URL` (`ETH_RPC_URL`, `BASE_RPC_URL`, `ARBITRUM_RPC_URL`, … as in
+`sdk/.env`) or `RPC_URL_<chainId>` — falling back to public endpoints; verified ABIs come from
+Sourcify, Blockscout and keyless Etherscan-compatible APIs. The fixture must never hold an endpoint
+or key; the suite greps it. Review the fixture diff before committing it: a changed selector map is
+a contract upgrade to look at, not noise.
+
 `src/std/` is the SauceScript **standard library** — source shipped for the compiler to consume, not
 TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), and
 **the SDK owns it**: this directory is the source of truth, edited here like any other source. The

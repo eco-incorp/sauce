@@ -31,6 +31,9 @@ pnpm-lock.yaml
 sdk/test/svm/fixtures
 sdk/test/std/token/fixtures
 sdk/test/evm/fixtures
+# Captured registry-ABI evidence (scripts/capture-registry-abi.mjs), one entry per line so a
+# recapture diffs by deployment. targets.json beside it is hand-written and IS formatted.
+sdk/test/fixtures/registry-abi/evidence.json
 
 # GENERATOR OUTPUT that happens to be SauceScript. Both of these are emitted by TypeScript in
 # `src/recipes/` / `src/svm/recipes/` and pinned BYTE-FOR-BYTE against the emitter —

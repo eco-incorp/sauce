@@ -1,0 +1,1127 @@
+{
+  "note": "Which deployed contracts evidence each registry ABI export. roles: addresses.ts role keys (every chain that lists them); instances: representative deployments for interface-shaped ABIs. Read by scripts/capture-registry-abi.mjs and test/registry-abi.test.ts.",
+  "protocols": {
+    "aave-v2": {
+      "LendingPoolABI": {
+        "roles": ["lendingPool"]
+      }
+    },
+    "aave-v3": {
+      "PoolABI": {
+        "roles": ["pool"]
+      }
+    },
+    "abracadabra": {
+      "CauldronABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x5B05677971a28d57d27BBa63D039CE5600805302",
+            "note": "a CauldronV4"
+          }
+        ]
+      },
+      "DegenBoxABI": {
+        "roles": ["degenBox"]
+      }
+    },
+    "across": {
+      "AcrossHubPoolABI": {
+        "roles": ["hubPool"]
+      },
+      "AcrossSpokePoolABI": {
+        "roles": ["spokePool"]
+      }
+    },
+    "aerodrome": {
+      "AerodromePoolFactoryABI": {
+        "roles": ["poolFactory"]
+      },
+      "AerodromeRouterABI": {
+        "roles": ["router"]
+      }
+    },
+    "aevo": {
+      "DepositContractABI": {
+        "roles": ["depositContract"]
+      }
+    },
+    "alchemix": {
+      "AlchemistABI": {
+        "roles": ["alchemistAlUSD", "alchemistAlETH"]
+      }
+    },
+    "ambient": {
+      "CrocSwapDexABI": {
+        "roles": ["crocSwapDex"]
+      }
+    },
+    "arbitrum-bridge": {
+      "ArbitrumL1GatewayRouterABI": {
+        "roles": ["l1GatewayRouter"]
+      }
+    },
+    "arrakis": {
+      "ArrakisRouterABI": {
+        "roles": ["router"]
+      },
+      "ArrakisVaultABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xBEA0EBfd3957863A820f5e126eed801CCffF0Bc6",
+            "note": "the ArrakisV2 vault implementation (uninitialized; vault proxies run this code)"
+          }
+        ]
+      }
+    },
+    "axelar": {
+      "AxelarGasServiceABI": {
+        "roles": ["gasService"]
+      },
+      "AxelarGatewayABI": {
+        "roles": ["gateway"]
+      },
+      "AxelarITSABI": {
+        "roles": ["its"]
+      }
+    },
+    "balancer-v2": {
+      "BalancerV2VaultABI": {
+        "roles": ["vault"]
+      }
+    },
+    "base-bridge": {
+      "BaseL1StandardBridgeABI": {
+        "roles": ["l1StandardBridge"]
+      }
+    },
+    "baseswap": {
+      "BaseSwapRouterABI": {
+        "roles": ["v2Router"]
+      }
+    },
+    "beefy": {
+      "BeefyVaultABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x4D02CA7d930623d6C6873FDfc81401074dB48ECa",
+            "note": "a BeefyVaultV7 variant whose deposit returns the minted shares"
+          },
+          {
+            "chainId": 1,
+            "address": "0x039bCedE270660163718CeA278803cCdC6665f81",
+            "note": "a BeefyVaultV7 as published (deposit/withdraw return nothing)"
+          }
+        ],
+        "exempt": {
+          "deposit(uint256)": {
+            "1:0x4d02ca7d930623d6c6873fdfc81401074db48eca": "this variant returns the minted shares; the published BeefyVaultV7 returns nothing, and a declared output would revert on it, so the interface declares none"
+          }
+        }
+      }
+    },
+    "benqi": {
+      "BenqiComptrollerABI": {
+        "roles": ["comptroller"]
+      },
+      "QiTokenABI": {
+        "instances": [
+          {
+            "chainId": 43114,
+            "address": "0xB715808a78F6041E46d61Cb123C9B4A27056AE9C",
+            "note": "qiUSDCn, from comptroller.getAllMarkets()"
+          }
+        ]
+      }
+    },
+    "camelot": {
+      "CamelotV2RouterABI": {
+        "roles": ["v2Router"]
+      },
+      "CamelotV3SwapRouterABI": {
+        "roles": ["v3SwapRouter"]
+      }
+    },
+    "cbeth": {
+      "CbETHABI": {
+        "roles": ["cbETH"],
+        "exempt": {
+          "exchangeRate()": {
+            "8453:0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22": "Base cbETH is the bridged OptimismMintableERC20; the exchange rate lives only on the Ethereum StakedTokenV1"
+          },
+          "mint(address,uint256)": {
+            "8453:0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22": "Base cbETH's mint is the bridge's (returns nothing); the ABI describes the Ethereum token, whose mint returns bool"
+          }
+        }
+      }
+    },
+    "cctp": {
+      "TokenMessengerABI": {
+        "roles": ["tokenMessenger"]
+      }
+    },
+    "celer": {
+      "CelerBridgeABI": {
+        "roles": ["bridge"]
+      }
+    },
+    "chainlink": {
+      "AggregatorV3ABI": {
+        "roles": ["ethUsdFeed"]
+      },
+      "FeedRegistryABI": {
+        "roles": ["feedRegistry"]
+      }
+    },
+    "chainlink-ccip": {
+      "CCIPRouterABI": {
+        "roles": ["router"]
+      }
+    },
+    "compound-v2": {
+      "CErc20ABI": {
+        "roles": ["cUSDC"]
+      },
+      "ComptrollerABI": {
+        "roles": ["comptroller"]
+      }
+    },
+    "compound-v3": {
+      "CometABI": {
+        "roles": ["cUSDCv3", "cWETHv3", "cUSDTv3"]
+      }
+    },
+    "connext": {
+      "EverclearSpokeABI": {
+        "roles": ["everclearSpoke"]
+      }
+    },
+    "convex": {
+      "BaseRewardPoolABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x689440f2Ff927E1f24c72F1087E1FAF471eCe1c8",
+            "note": "3pool rewards, booster.poolInfo(9).crvRewards"
+          }
+        ]
+      },
+      "BoosterABI": {
+        "roles": ["booster"]
+      }
+    },
+    "cowswap": {
+      "GPv2SettlementABI": {
+        "roles": ["gpv2Settlement"]
+      }
+    },
+    "crvusd": {
+      "CrvUSDERC20ABI": {
+        "roles": ["crvusd"]
+      }
+    },
+    "curve": {
+      "CurveAddressProviderABI": {
+        "roles": ["addressProvider"]
+      },
+      "CurveRouterNGABI": {
+        "roles": ["routerNG"]
+      },
+      "CurveStableSwapABI": {
+        "roles": ["threePool"],
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x36DfE783603522566C046Ba1Fa403C8c6F569220",
+            "note": "a StableSwap-NG plain pool, NG factory pool_list(0)"
+          },
+          {
+            "chainId": 1,
+            "address": "0x76Ae7A7DC125E4163a2137e650b7726231FdB917",
+            "note": "a StableSwap-NG metapool (exchange_underlying), NG factory pool_list(5)"
+          }
+        ],
+        "exempt": {
+          "exchange(int128,int128,uint256,uint256)": {
+            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "3pool predates StableSwap-NG: same selector, but it returns nothing, so the NG ABI's uint256 output would revert on it"
+          },
+          "remove_liquidity_one_coin(uint256,int128,uint256)": {
+            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "3pool predates StableSwap-NG: same selector, but it returns nothing"
+          },
+          "add_liquidity(uint256[],uint256)": {
+            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "3pool takes a fixed uint256[3]; dynamic arrays are StableSwap-NG only"
+          },
+          "remove_liquidity(uint256,uint256[])": {
+            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "3pool takes a fixed uint256[3]; dynamic arrays are StableSwap-NG only"
+          },
+          "exchange_underlying(int128,int128,uint256,uint256)": {
+            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "a plain pool: exchange_underlying exists on metapools only",
+            "1:0x36dfe783603522566c046ba1fa403c8c6f569220": "a plain pool: exchange_underlying exists on metapools only"
+          }
+        }
+      }
+    },
+    "debridge": {
+      "DlnDestinationABI": {
+        "roles": ["dlnDestination"]
+      },
+      "DlnSourceABI": {
+        "roles": ["dlnSource"]
+      }
+    },
+    "dodo": {
+      "DODOV2ProxyABI": {
+        "roles": ["dodoV2Proxy"]
+      }
+    },
+    "eigenlayer": {
+      "DelegationManagerABI": {
+        "roles": ["delegationManager"]
+      },
+      "StrategyABI": {
+        "roles": ["stETHStrategy", "rETHStrategy", "cbETHStrategy"]
+      },
+      "StrategyManagerABI": {
+        "roles": ["strategyManager"]
+      }
+    },
+    "ens": {
+      "BaseRegistrarABI": {
+        "roles": ["baseRegistrar"]
+      },
+      "ENSRegistryABI": {
+        "roles": ["registry"]
+      }
+    },
+    "erc20": {
+      "ERC20ABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            "note": "USDC"
+          },
+          {
+            "chainId": 1,
+            "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+            "note": "DAI"
+          }
+        ]
+      }
+    },
+    "erc3156": {
+      "FlashLenderABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x60744434d6339a6B27d73d9Eda62b6F66a0a04FA",
+            "note": "Maker DssFlash, an ERC-3156 lender"
+          }
+        ]
+      }
+    },
+    "erc4626": {
+      "VaultABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
+            "note": "sDAI, an ERC-4626 vault"
+          }
+        ]
+      }
+    },
+    "ethena": {
+      "StakedUSDeABI": {
+        "roles": ["susde"]
+      },
+      "USDeABI": {
+        "roles": ["usde"]
+      }
+    },
+    "etherfi": {
+      "EETHABI": {
+        "roles": ["eETH"]
+      },
+      "LiquidityPoolABI": {
+        "roles": ["liquidityPool"]
+      },
+      "WeETHABI": {
+        "roles": ["weETH"]
+      }
+    },
+    "euler-v2": {
+      "EVCABI": {
+        "roles": ["ethereumVaultConnector"]
+      },
+      "EVaultABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x797DD80692c3b2dAdabCe8e30C07fDE5307D48a9",
+            "note": "EVK Vault eUSDC-2"
+          }
+        ]
+      }
+    },
+    "fenix": {
+      "FenixRouterABI": {
+        "roles": ["router"]
+      }
+    },
+    "fluid": {
+      "FluidLendingABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x9Fb7b4477576Fe5B32be4C1843aFB1e55F251B33",
+            "note": "fUSDC (Fluid USD Coin), an fToken"
+          }
+        ]
+      },
+      "FluidVaultABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xeAbBfca72F8a8bf14C4ac59e69ECB2eB69F0811C",
+            "note": "Fluid Vault 1 (ETH/USDC, VaultT1)"
+          }
+        ]
+      }
+    },
+    "frax": {
+      "FraxERC20ABI": {
+        "roles": ["frax"]
+      }
+    },
+    "frax-ether": {
+      "FrxETHMinterABI": {
+        "roles": ["frxETHMinter"]
+      },
+      "SfrxETHABI": {
+        "roles": ["sfrxETH"]
+      }
+    },
+    "gains-network": {
+      "DiamondABI": {
+        "roles": ["diamond"]
+      }
+    },
+    "gamma": {
+      "HypervisorABI": {
+        "instances": [
+          {
+            "chainId": 137,
+            "address": "0x02203f2351E7aC6aB5051205172D3f772db7D814",
+            "note": "awMATIC-WETH, a Gamma UniV3 hypervisor whose whitelistedAddress() is the Polygon UniProxy"
+          }
+        ]
+      },
+      "UniProxyABI": {
+        "roles": ["uniProxy"],
+        "exempt": {
+          "deposit(uint256,uint256,address,address,uint256[4])": {
+            "1:0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599": "an older UniProxy whose deposit has no minIn argument (deposit(uint256,uint256,address,address)); the ABI follows the current UniProxy, as on Polygon"
+          }
+        }
+      }
+    },
+    "gelato": {
+      "GelatoAutomateABI": {
+        "roles": ["automate"]
+      }
+    },
+    "gho": {
+      "GhoTokenABI": {
+        "roles": ["gho"]
+      }
+    },
+    "gmx-v1": {
+      "PositionRouterABI": {
+        "roles": ["positionRouter"]
+      },
+      "RouterABI": {
+        "roles": ["router"]
+      },
+      "VaultABI": {
+        "roles": ["vault"]
+      }
+    },
+    "gmx-v2": {
+      "ExchangeRouterABI": {
+        "roles": ["exchangeRouter"]
+      }
+    },
+    "harvest": {
+      "VaultABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xf0358e8c3CD5Fa238a29301d0bEa3D63A17bEdBE",
+            "note": "FARM_USDC vault (VaultProxy to VaultV2)"
+          },
+          {
+            "chainId": 1,
+            "address": "0xab7FA2B2985BCcfC13c6D86b1D5A17486ab1e04C",
+            "note": "FARM_DAI vault"
+          }
+        ]
+      }
+    },
+    "hegic": {
+      "HegicABI": {
+        "roles": ["operationalTreasury"]
+      }
+    },
+    "hop": {
+      "HopL1BridgeABI": {
+        "roles": ["l1EthBridge", "l1UsdcBridge"]
+      },
+      "HopL2AmmWrapperABI": {
+        "roles": ["l2AmmWrapper"]
+      }
+    },
+    "hyperlane": {
+      "HyperlaneMailboxABI": {
+        "roles": ["mailbox"]
+      }
+    },
+    "instadapp": {
+      "FlashAggregatorABI": {
+        "roles": ["flashloanAggregator"]
+      }
+    },
+    "kelp": {
+      "LRTDepositPoolABI": {
+        "roles": ["lrtDepositPool"]
+      },
+      "RsETHABI": {
+        "roles": ["rsETH"]
+      }
+    },
+    "kim": {
+      "KimRouterABI": {
+        "roles": ["v2Router"]
+      }
+    },
+    "kyberswap": {
+      "KyberSwapElasticRouterABI": {
+        "roles": ["elasticRouter"]
+      },
+      "KyberSwapMetaAggregationRouterABI": {
+        "roles": ["metaAggregationRouterV2"]
+      }
+    },
+    "kyberswap-aggregator": {
+      "KyberSwapMetaAggregationRouterABI": {
+        "roles": ["metaAggregationRouter"]
+      }
+    },
+    "layerbank": {
+      "LTokenABI": {
+        "instances": [
+          {
+            "chainId": 534352,
+            "address": "0x0D8F8e271DD3f2fC58e5716d3Ff7041dBe3F0688",
+            "note": "lUSDC (LayerBank USDC), from core.allMarkets()"
+          }
+        ]
+      },
+      "LayerBankCoreABI": {
+        "roles": ["core"]
+      }
+    },
+    "layerzero": {
+      "LayerZeroEndpointV2ABI": {
+        "roles": ["endpointV2"]
+      }
+    },
+    "level-finance": {
+      "LiquidityPoolABI": {
+        "roles": ["liquidityPool"]
+      }
+    },
+    "lido": {
+      "LidoABI": {
+        "roles": ["stETH"]
+      },
+      "WstETHABI": {
+        "roles": ["wstETH"],
+        "exempt": {
+          "wrap(uint256)": {
+            "42161:0x5979d7b546e38e414f7e9822514be443a4800529": "Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH"
+          },
+          "unwrap(uint256)": {
+            "42161:0x5979d7b546e38e414f7e9822514be443a4800529": "Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH"
+          },
+          "getStETHByWstETH(uint256)": {
+            "42161:0x5979d7b546e38e414f7e9822514be443a4800529": "Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH"
+          },
+          "getWstETHByStETH(uint256)": {
+            "42161:0x5979d7b546e38e414f7e9822514be443a4800529": "Arbitrum wstETH is the bridged ERC20Bridged token: wrapping and the stETH rate exist only on the Ethereum WstETH"
+          }
+        }
+      }
+    },
+    "lifi": {
+      "LiFiDiamondABI": {
+        "roles": ["lifiDiamond"],
+        "exempt": {
+          "startBridgeTokensViaAcrossV4((bytes32,string,string,address,address,address,uint256,uint256,bool,bool),(bytes32,bytes32,bytes32,bytes32,uint256,uint128,bytes32,uint32,uint32,uint32,bytes))": {
+            "100:0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": "this chain's diamond has no Across V4 facet: facetAddress returns zero for the selector",
+            "250:0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": "this chain's diamond has no Across V4 facet: facetAddress returns zero for the selector",
+            "43114:0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": "this chain's diamond has no Across V4 facet: facetAddress returns zero for the selector"
+          }
+        }
+      }
+    },
+    "linea-bridge": {
+      "LineaL1MessageServiceABI": {
+        "roles": ["l1MessageService"]
+      }
+    },
+    "liquity-v1": {
+      "BorrowerOperationsABI": {
+        "roles": ["borrowerOperations"]
+      }
+    },
+    "liquity-v2": {
+      "BoldTokenABI": {
+        "roles": ["bold"]
+      }
+    },
+    "lynex": {
+      "LynexRouterABI": {
+        "roles": ["router"]
+      }
+    },
+    "maker": {
+      "PotABI": {
+        "roles": ["pot"]
+      },
+      "SavingsDaiABI": {
+        "roles": ["sDAI"]
+      }
+    },
+    "mantle-meth": {
+      "METHABI": {
+        "roles": ["mETH", "staking"],
+        "exempt": {
+          "stake(uint256)": {
+            "1:0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa": "a Staking-contract function; the mETH token does not implement it"
+          },
+          "mETHToETH(uint256)": {
+            "1:0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa": "a Staking-contract function; the mETH token does not implement it"
+          },
+          "ethToMETH(uint256)": {
+            "1:0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa": "a Staking-contract function; the mETH token does not implement it"
+          },
+          "balanceOf(address)": {
+            "1:0xe3cbd06d7dadb3f4e6557bab7edd924cd1489e8f": "a token function; the Staking contract does not implement it"
+          },
+          "approve(address,uint256)": {
+            "1:0xe3cbd06d7dadb3f4e6557bab7edd924cd1489e8f": "a token function; the Staking contract does not implement it"
+          }
+        }
+      }
+    },
+    "maverick": {
+      "MaverickV2FactoryABI": {
+        "roles": ["v2Factory"],
+        "probes": [
+          "lookup(address,address,uint256,uint256)",
+          "lookup(uint256,uint256)",
+          "lookup(uint256,uint256,uint256,uint256,address,address,uint8)",
+          "lookup(address,address)"
+        ],
+        "unverified": {
+          "lookup(address,address,uint256,uint256)": "the MaverickV2Factory has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by the factory bytecode, and the address[] output is not verifiable"
+        }
+      },
+      "MaverickV2RouterABI": {
+        "roles": ["v2Router"]
+      }
+    },
+    "moonwell": {
+      "MTokenABI": {
+        "instances": [
+          {
+            "chainId": 8453,
+            "address": "0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22",
+            "note": "mUSDC, from comptroller.getAllMarkets()"
+          }
+        ]
+      },
+      "MoonwellComptrollerABI": {
+        "roles": ["comptroller"]
+      }
+    },
+    "morpho-blue": {
+      "MorphoABI": {
+        "roles": ["morpho"]
+      }
+    },
+    "mux-protocol": {
+      "LiquidityPoolABI": {
+        "roles": ["liquidityPool"]
+      },
+      "OrderBookABI": {
+        "roles": ["orderBook"]
+      }
+    },
+    "olympus": {
+      "StakingABI": {
+        "roles": ["staking"]
+      }
+    },
+    "oneinch": {
+      "AggregationRouterV6ABI": {
+        "roles": ["aggregationRouterV6"]
+      }
+    },
+    "openocean": {
+      "OpenOceanExchangeV2ABI": {
+        "roles": ["exchangeV2"]
+      }
+    },
+    "optimism-bridge": {
+      "OptimismL1StandardBridgeABI": {
+        "roles": ["l1StandardBridge"]
+      }
+    },
+    "opyn": {
+      "ControllerABI": {
+        "roles": ["controller"]
+      }
+    },
+    "pancakeswap-v2": {
+      "PancakeSwapV2FactoryABI": {
+        "roles": ["factory"]
+      },
+      "PancakeSwapV2RouterABI": {
+        "roles": ["router"]
+      }
+    },
+    "pancakeswap-v3": {
+      "PancakeSwapV3FactoryABI": {
+        "roles": ["factory"]
+      },
+      "PancakeSwapV3NFPMABI": {
+        "roles": ["nonfungiblePositionManager"]
+      },
+      "PancakeSwapV3SmartRouterABI": {
+        "roles": ["smartRouter"]
+      }
+    },
+    "paraswap": {
+      "AugustusV5ABI": {
+        "roles": ["augustusV5"],
+        "probes": [
+          "simpleSwap((address,address,uint256,uint256,uint256,address[],bytes,uint256[],uint256[],address,address,uint256,bytes,uint256,bytes16))"
+        ],
+        "exempt": {
+          "simpleSwap((address,address,uint256,uint256,uint256,address[],bytes,uint256[],uint256[],address,address,uint256,bytes,uint256,bytes16))": {
+            "8453:0xdef171fe48cf0115b1d80b88dc8eab59176fee57": "Augustus V5 on Base has no SimpleSwap router registered: getImplementation returns zero for the selector"
+          }
+        }
+      }
+    },
+    "pendle": {
+      "PendleRouterABI": {
+        "roles": ["router"],
+        "probes": [
+          "swapExactTokenForPt(address,address,uint256,(uint256,uint256,uint256,uint256,uint256),(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
+          "swapExactTokenForYt(address,address,uint256,(uint256,uint256,uint256,uint256,uint256),(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
+          "addLiquiditySingleToken(address,address,uint256,(uint256,uint256,uint256,uint256,uint256),(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
+          "removeLiquiditySingleToken(address,address,uint256,(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))"
+        ]
+      }
+    },
+    "permit2": {
+      "Permit2ABI": {
+        "roles": ["permit2"]
+      }
+    },
+    "perpetual-protocol": {
+      "ClearingHouseABI": {
+        "roles": ["clearingHouse"]
+      },
+      "VaultABI": {
+        "roles": ["vault"]
+      }
+    },
+    "polygon-bridge": {
+      "PolygonRootChainManagerABI": {
+        "roles": ["rootChainManager"]
+      }
+    },
+    "premia": {
+      "DiamondABI": {
+        "instances": [
+          {
+            "chainId": 42161,
+            "address": "0x5FdB7Dc919F7Ab6572FD464bBFe50bb52d37AE8C",
+            "note": "a Premia v3 WETH/USDC.e call pool, from the PoolFactory PoolDeployed event"
+          }
+        ]
+      }
+    },
+    "puffer": {
+      "PufferVaultABI": {
+        "roles": ["pufferVault"]
+      }
+    },
+    "pyth": {
+      "PythOracleABI": {
+        "roles": ["oracle"],
+        "probes": [
+          "getPrice(bytes32)",
+          "getPriceUnsafe(bytes32)",
+          "getPriceNoOlderThan(bytes32,uint256)"
+        ],
+        "unverified": {
+          "updatePriceFeeds(bytes[])": "the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode",
+          "getUpdateFee(bytes[])": "the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode",
+          "getPrice(bytes32)": "the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode; the PythStructs.Price output types come from the Pyth SDK and are not verifiable"
+        }
+      }
+    },
+    "quickswap": {
+      "QuickSwapV2RouterABI": {
+        "roles": ["v2Router"]
+      },
+      "QuickSwapV3SwapRouterABI": {
+        "roles": ["v3SwapRouter"]
+      }
+    },
+    "radiant": {
+      "RadiantLendingPoolABI": {
+        "roles": ["lendingPool"],
+        "unverifiable": "the only listed deployment (Arbitrum LendingPool proxy 0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1) now delegates to a three-function stub (0x3d4c56cdb97355807157f5c7d4f54957f0e9af44): deposit/withdraw/borrow/repay no longer exist on-chain, and no verified source exists for the stub"
+      }
+    },
+    "ramses": {
+      "RamsesRouterABI": {
+        "roles": ["router"]
+      }
+    },
+    "reflexer": {
+      "CoinJoinABI": {
+        "roles": ["coinJoin"]
+      },
+      "ETHJoinABI": {
+        "roles": ["ethJoin"]
+      },
+      "SAFEEngineABI": {
+        "roles": ["safeEngine"]
+      }
+    },
+    "renzo": {
+      "EzETHABI": {
+        "roles": ["ezETH"]
+      },
+      "RestakeManagerABI": {
+        "roles": ["restakeManager"]
+      }
+    },
+    "rocket-pool": {
+      "RETHABI": {
+        "roles": ["rETH"]
+      },
+      "RocketDepositPoolABI": {
+        "roles": ["rocketDepositPool"]
+      }
+    },
+    "sablier": {
+      "LockupLinearABI": {
+        "roles": ["lockupLinear"]
+      }
+    },
+    "safe": {
+      "SafeABI": {
+        "roles": ["safeV141", "safeL2V130"]
+      }
+    },
+    "scroll-bridge": {
+      "ScrollL1GatewayRouterABI": {
+        "roles": ["l1GatewayRouter"]
+      },
+      "ScrollL1MessengerABI": {
+        "roles": ["l1ScrollMessenger"]
+      }
+    },
+    "seamless": {
+      "SeamlessPoolABI": {
+        "roles": ["pool"]
+      }
+    },
+    "seaport": {
+      "SeaportABI": {
+        "roles": ["seaportV16"]
+      }
+    },
+    "silo": {
+      "SiloABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xAA7103F98E57c63e1BC7a9479c8c025aDFf9F71D",
+            "note": "the CRV silo, from SiloRepository 0xd998C35B7900b344bbBe6555cc11576942Cf309d getSilo(CRV)"
+          }
+        ]
+      },
+      "SiloRepositoryABI": {
+        "roles": ["siloRepository"]
+      }
+    },
+    "socket": {
+      "SocketGatewayABI": {
+        "roles": ["socketGateway"]
+      }
+    },
+    "sommelier": {
+      "CellarABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x97e6E0a40a3D02F12d1cEC30ebfbAE04e37C119E",
+            "note": "Real Yield USD cellar"
+          }
+        ]
+      }
+    },
+    "spark": {
+      "SparkPoolABI": {
+        "roles": ["pool"]
+      }
+    },
+    "spookyswap": {
+      "SpookySwapRouterABI": {
+        "roles": ["v2Router"],
+        "unverified": {
+          "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)": "the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)",
+          "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)": "the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)",
+          "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)": "the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)"
+        }
+      }
+    },
+    "squid": {
+      "SquidRouterABI": {
+        "roles": ["squidRouter"]
+      }
+    },
+    "stader": {
+      "ETHxABI": {
+        "roles": ["ETHx"]
+      },
+      "StakePoolManagerABI": {
+        "roles": ["stakePoolManager"]
+      }
+    },
+    "stargate": {
+      "StargatePoolABI": {
+        "roles": ["poolNative", "poolUSDC", "poolUSDT"]
+      }
+    },
+    "superfluid": {
+      "CFAForwarderABI": {
+        "roles": ["cfaForwarder"]
+      }
+    },
+    "sushiswap-v2": {
+      "SushiSwapV2FactoryABI": {
+        "roles": ["factory"]
+      },
+      "SushiSwapV2RouterABI": {
+        "roles": ["router"]
+      }
+    },
+    "swell": {
+      "RswETHABI": {
+        "roles": ["rswETH"]
+      },
+      "SwETHABI": {
+        "roles": ["swETH"]
+      }
+    },
+    "synapse": {
+      "SynapseBridgeABI": {
+        "roles": ["synapseBridge"]
+      }
+    },
+    "syncswap": {
+      "SyncSwapRouterABI": {
+        "roles": ["router"]
+      }
+    },
+    "synthetix-v3": {
+      "CoreProxyABI": {
+        "roles": ["coreProxy"]
+      },
+      "PerpsMarketProxyABI": {
+        "roles": ["perpsMarketProxy"]
+      }
+    },
+    "thales": {
+      "SpeedMarketsAMMABI": {
+        "roles": ["speedMarketsAMM"]
+      },
+      "ThalesAMMABI": {
+        "roles": ["thalesAMM"]
+      },
+      "PositionalMarketABI": {
+        "instances": [
+          {
+            "chainId": 10,
+            "address": "0x10F9Cfeb692c276668b1A8761dcceDaf5b050De7",
+            "note": "a matured positional market (EIP-1167 clone), from the manager maturedMarkets(0, 2)"
+          }
+        ]
+      }
+    },
+    "thena": {
+      "ThenaRouterABI": {
+        "roles": ["routerV2"]
+      }
+    },
+    "thruster": {
+      "ThrusterV3SwapRouterABI": {
+        "roles": ["v3SwapRouter"]
+      }
+    },
+    "tokemak": {
+      "AutopoolABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x0A2b94F6871c1D7A32Fe58E1ab5e6deA2f114E56",
+            "note": "autoETH, autopoolRegistry.listVaults()[0]"
+          }
+        ]
+      }
+    },
+    "trader-joe": {
+      "LBFactoryABI": {
+        "roles": ["lbFactory"]
+      },
+      "LBRouterABI": {
+        "roles": ["lbRouter"]
+      }
+    },
+    "uniswap-v2": {
+      "UniswapV2FactoryABI": {
+        "roles": ["factory"]
+      },
+      "UniswapV2RouterABI": {
+        "roles": ["router"]
+      }
+    },
+    "uniswap-v3": {
+      "UniswapV3FactoryABI": {
+        "roles": ["factory"]
+      },
+      "UniswapV3NonfungiblePositionManagerABI": {
+        "roles": ["nonfungiblePositionManager"]
+      },
+      "UniswapV3QuoterV2ABI": {
+        "roles": ["quoterV2"]
+      },
+      "UniswapV3SwapRouterABI": {
+        "roles": ["swapRouter"]
+      },
+      "UniswapV3SwapRouter02ABI": {
+        "roles": ["swapRouter02"]
+      }
+    },
+    "uniswap-v4": {
+      "UniswapV4PoolManagerABI": {
+        "roles": ["poolManager"]
+      },
+      "UniswapV4PositionManagerABI": {
+        "roles": ["positionManager"]
+      },
+      "UniswapV4UniversalRouterABI": {
+        "roles": ["universalRouter"]
+      }
+    },
+    "velodrome": {
+      "VelodromePoolFactoryABI": {
+        "roles": ["poolFactory"]
+      },
+      "VelodromeRouterABI": {
+        "roles": ["routerV2"]
+      }
+    },
+    "venus": {
+      "VTokenABI": {
+        "roles": ["vBNB"],
+        "instances": [
+          {
+            "chainId": 56,
+            "address": "0xecA88125a5ADbe82614ffC12D0DB554E2e2867C8",
+            "note": "vUSDC, from comptroller.getAllMarkets()"
+          }
+        ],
+        "exempt": {
+          "mint(uint256)": {
+            "56:0xa07c5b74c9b40447a954e1466938b865b6bbea36": "vBNB takes native BNB: its mint() is payable with no amount argument"
+          },
+          "repayBorrow(uint256)": {
+            "56:0xa07c5b74c9b40447a954e1466938b865b6bbea36": "vBNB takes native BNB: its repayBorrow() is payable with no amount argument"
+          }
+        }
+      },
+      "VenusComptrollerABI": {
+        "roles": ["comptroller"],
+        "unverified": {
+          "enterMarkets(address[])": "the Diamond routes it (facetAddress) to MarketFacet 0x21f8e1471b153f49be1d645a008e4a57434eed23, which has no verified source on Sourcify or Routescan; the selector is proven by the routing only",
+          "exitMarket(address)": "the Diamond routes it (facetAddress) to MarketFacet 0x21f8e1471b153f49be1d645a008e4a57434eed23, which has no verified source on Sourcify or Routescan; the selector is proven by the routing only"
+        }
+      }
+    },
+    "vertex": {
+      "ClearinghouseABI": {
+        "roles": ["clearinghouse"]
+      },
+      "EndpointABI": {
+        "roles": ["endpoint"]
+      }
+    },
+    "wormhole": {
+      "WormholeCoreBridgeABI": {
+        "roles": ["coreBridge"]
+      },
+      "WormholeTokenBridgeABI": {
+        "roles": ["tokenBridge"]
+      }
+    },
+    "yearn-v3": {
+      "YearnV3VaultABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xBe53A109B494E5c9f97b9Cd39Fe969BE68BF6204",
+            "note": "USDC-1 yVault"
+          }
+        ]
+      }
+    },
+    "zerolend": {
+      "ZeroLendPoolABI": {
+        "roles": ["pool"]
+      }
+    },
+    "zerox": {
+      "ExchangeProxyABI": {
+        "roles": ["exchangeProxy"]
+      }
+    },
+    "zksync-bridge": {
+      "ZkSyncDiamondProxyABI": {
+        "roles": ["diamondProxy"]
+      }
+    }
+  }
+}
