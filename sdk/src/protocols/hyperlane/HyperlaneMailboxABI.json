@@ -11,7 +11,7 @@
         },
         {
           "name": "_recipientAddress",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "_messageBody",
@@ -21,7 +21,7 @@
       "outputs": [
         {
           "name": "",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ]
     },
@@ -36,7 +36,7 @@
         },
         {
           "name": "_recipientAddress",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "_messageBody",
@@ -53,7 +53,7 @@
     {
       "name": "process",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "payable",
       "inputs": [
         {
           "name": "_metadata",
@@ -73,7 +73,7 @@
       "inputs": [
         {
           "name": "_id",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ],
       "outputs": [

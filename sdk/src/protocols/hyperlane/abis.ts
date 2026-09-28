@@ -5,10 +5,10 @@ export const HyperlaneMailboxABI = [
     stateMutability: "payable",
     inputs: [
       { name: "_destinationDomain", type: "uint32" },
-      { name: "_recipientAddress", type: "uint256" },
+      { name: "_recipientAddress", type: "bytes32" },
       { name: "_messageBody", type: "bytes" },
     ],
-    outputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "", type: "bytes32" }],
   },
   {
     name: "quoteDispatch",
@@ -16,7 +16,7 @@ export const HyperlaneMailboxABI = [
     stateMutability: "view",
     inputs: [
       { name: "_destinationDomain", type: "uint32" },
-      { name: "_recipientAddress", type: "uint256" },
+      { name: "_recipientAddress", type: "bytes32" },
       { name: "_messageBody", type: "bytes" },
     ],
     outputs: [{ name: "", type: "uint256" }],
@@ -24,7 +24,7 @@ export const HyperlaneMailboxABI = [
   {
     name: "process",
     type: "function",
-    stateMutability: "nonpayable",
+    stateMutability: "payable",
     inputs: [
       { name: "_metadata", type: "bytes" },
       { name: "_message", type: "bytes" },
@@ -35,7 +35,7 @@ export const HyperlaneMailboxABI = [
     name: "delivered",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "_id", type: "uint256" }],
+    inputs: [{ name: "_id", type: "bytes32" }],
     outputs: [{ name: "", type: "bool" }],
   },
 ] as const;

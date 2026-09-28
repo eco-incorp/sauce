@@ -46,7 +46,7 @@
           "type": "uint32"
         },
         {
-          "name": "exclusivityDeadline",
+          "name": "exclusivityParameter",
           "type": "uint32"
         },
         {
@@ -62,15 +62,27 @@
       "stateMutability": "payable",
       "inputs": [
         {
+          "name": "depositor",
+          "type": "bytes32"
+        },
+        {
           "name": "recipient",
-          "type": "address"
+          "type": "bytes32"
         },
         {
-          "name": "originToken",
-          "type": "address"
+          "name": "inputToken",
+          "type": "bytes32"
         },
         {
-          "name": "amount",
+          "name": "outputToken",
+          "type": "bytes32"
+        },
+        {
+          "name": "inputAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "outputAmount",
           "type": "uint256"
         },
         {
@@ -78,20 +90,24 @@
           "type": "uint256"
         },
         {
-          "name": "relayerFeePct",
-          "type": "uint64"
+          "name": "exclusiveRelayer",
+          "type": "bytes32"
         },
         {
           "name": "quoteTimestamp",
           "type": "uint32"
         },
         {
-          "name": "message",
-          "type": "bytes"
+          "name": "fillDeadline",
+          "type": "uint32"
         },
         {
-          "name": "maxCount",
-          "type": "uint256"
+          "name": "exclusivityParameter",
+          "type": "uint32"
+        },
+        {
+          "name": "message",
+          "type": "bytes"
         }
       ],
       "outputs": []

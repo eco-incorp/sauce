@@ -24,7 +24,7 @@ export const CCIPRouterABI = [
         ],
       },
     ],
-    outputs: [{ name: "messageId", type: "uint256" }],
+    outputs: [{ name: "messageId", type: "bytes32" }],
   },
   {
     name: "getFee",

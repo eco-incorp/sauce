@@ -1,22 +1,6 @@
 {
   "abi": [
     {
-      "name": "bridge",
-      "type": "function",
-      "stateMutability": "payable",
-      "inputs": [
-        {
-          "name": "routeId",
-          "type": "uint32"
-        },
-        {
-          "name": "bridgeData",
-          "type": "bytes"
-        }
-      ],
-      "outputs": []
-    },
-    {
       "name": "executeRoute",
       "type": "function",
       "stateMutability": "payable",
@@ -26,7 +10,7 @@
           "type": "uint32"
         },
         {
-          "name": "data",
+          "name": "routeData",
           "type": "bytes"
         }
       ],

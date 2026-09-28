@@ -4,7 +4,7 @@ Cross-chain liquidity protocol rebranded as Everclear. Uses intents and a cleari
 
 ## Category
 
-bridge | Direction: any-to-any (L2-to-L2, L1-to-L2, L2-to-L1) | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137)
+bridge | Direction: any-to-any (L2-to-L2, L1-to-L2, L2-to-L1) | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453)
 
 ## SauceScript Functions
 
@@ -22,18 +22,20 @@ function main(
   inputAsset: Address,
   outputAsset: Address,
   amount: Uint256,
+  amountOutMin: Uint256,
 ): Uint256 {
   const spoke = IEverclearSpoke.at(spokeAddress);
-  return spoke.newIntent(
+  const created = spoke.newIntent(
     destinations,
     recipient,
     inputAsset,
     outputAsset,
     amount,
-    300,
+    amountOutMin,
     86400,
-    0x00,
+    "",
   );
+  return created.intentId;
 }
 ```
 
@@ -41,7 +43,7 @@ function main(
 - `recipient`: Address to receive tokens on destination
 - `inputAsset`: Token to send on source chain
 - `outputAsset`: Token to receive on destination chain (can differ from input for cross-chain swaps)
-- `maxFee`: Maximum fee in basis points (300 = 3%)
+- `amountOutMin`: Minimum amount the recipient must receive
 - `ttl`: Time-to-live in seconds (86400 = 24 hours). Intent expires if unfilled
 - Requires ERC-20 approval to the EverclearSpoke
 
@@ -53,13 +55,12 @@ function main(
 | Arbitrum | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` |
 | Optimism | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` |
 | Base     | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` |
-| Polygon  | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` |
 
 ## ABI Reference
 
 ### EverclearSpokeABI
 
-- `newIntent(uint32[] destinations, address to, address inputAsset, address outputAsset, uint256 amount, uint24 maxFee, uint48 ttl, bytes data) returns (uint256 intentId)` [payable] - Create a cross-chain transfer intent. Solvers compete to fill the intent on the destination chain
+- `newIntent(uint32[] destinations, address receiver, address inputAsset, address outputAsset, uint256 amount, uint256 amountOutMin, uint48 ttl, bytes data) returns (bytes32 intentId, Intent intent)` - Create a cross-chain transfer intent. Solvers compete to fill the intent on the destination chain. A `bytes32`-typed overload takes non-EVM receivers and assets
 
 ## Notes
 

@@ -37,7 +37,7 @@
       "outputs": [
         {
           "name": "canonicalTxHash",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ]
     },

@@ -28,7 +28,7 @@ export const WormholeTokenBridgeABI = [
       { name: "token", type: "address" },
       { name: "amount", type: "uint256" },
       { name: "recipientChain", type: "uint16" },
-      { name: "recipient", type: "uint256" },
+      { name: "recipient", type: "bytes32" },
       { name: "arbiterFee", type: "uint256" },
       { name: "nonce", type: "uint32" },
     ],
@@ -47,7 +47,7 @@ export const WormholeTokenBridgeABI = [
     stateMutability: "view",
     inputs: [
       { name: "tokenChainId", type: "uint16" },
-      { name: "tokenAddress", type: "uint256" },
+      { name: "tokenAddress", type: "bytes32" },
     ],
     outputs: [{ name: "", type: "address" }],
   },

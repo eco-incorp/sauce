@@ -9,7 +9,7 @@ export const StargatePoolABI = [
         type: "tuple",
         components: [
           { name: "dstEid", type: "uint32" },
-          { name: "to", type: "uint256" },
+          { name: "to", type: "bytes32" },
           { name: "amountLD", type: "uint256" },
           { name: "minAmountLD", type: "uint256" },
           { name: "extraOptions", type: "bytes" },
@@ -32,7 +32,7 @@ export const StargatePoolABI = [
         name: "msgReceipt",
         type: "tuple",
         components: [
-          { name: "guid", type: "uint256" },
+          { name: "guid", type: "bytes32" },
           { name: "nonce", type: "uint64" },
           {
             name: "fee",
@@ -64,7 +64,7 @@ export const StargatePoolABI = [
         type: "tuple",
         components: [
           { name: "dstEid", type: "uint32" },
-          { name: "to", type: "uint256" },
+          { name: "to", type: "bytes32" },
           { name: "amountLD", type: "uint256" },
           { name: "minAmountLD", type: "uint256" },
           { name: "extraOptions", type: "bytes" },
@@ -80,6 +80,22 @@ export const StargatePoolABI = [
         components: [
           { name: "minAmountLD", type: "uint256" },
           { name: "maxAmountLD", type: "uint256" },
+        ],
+      },
+      {
+        name: "oftFeeDetails",
+        type: "tuple[]",
+        components: [
+          { name: "feeAmountLD", type: "int256" },
+          { name: "description", type: "string" },
+        ],
+      },
+      {
+        name: "oftReceipt",
+        type: "tuple",
+        components: [
+          { name: "amountSentLD", type: "uint256" },
+          { name: "amountReceivedLD", type: "uint256" },
         ],
       },
     ],
