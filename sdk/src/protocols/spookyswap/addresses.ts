@@ -5,7 +5,8 @@ export const deployments: ChainDeployment[] = [
     chainId: 250,
     chainName: "Fantom",
     addresses: {
-      v2Router: "0xa6AD18C2aC47803E193F75c3677b14BF19B94883",
+      // factory() is SpookySwap's factory and WETH() is WFTM; the address listed before had no code.
+      v2Router: "0xF491e7B69E4244ad4002BC14e878a34207E38c29",
     },
   },
 ];

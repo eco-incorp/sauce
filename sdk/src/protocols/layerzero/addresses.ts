@@ -54,7 +54,8 @@ export const deployments: ChainDeployment[] = [
     chainId: 324,
     chainName: "zkSync",
     addresses: {
-      endpointV2: "0xd07C30aF3Ff30D96BDc9c6044958230Eb5b32e1D",
+      // zkSync Era has its own EndpointV2 (eid() = 30165); the address listed before had no code.
+      endpointV2: "0xd07C30aF3Ff30D96BDc9c6044958230Eb797DDBF",
     },
   },
   {

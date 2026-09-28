@@ -4,7 +4,7 @@ Active concentrated liquidity management protocol. Manages Uniswap V3, Algebra, 
 
 ## Category
 
-yield | Chains: Ethereum, Polygon, Arbitrum
+yield | Chains: Ethereum, Polygon
 
 ## Key Operations
 
@@ -44,11 +44,10 @@ function main(hypervisorAddress: Address, shares: Uint256, to: Address, from: Ad
 
 ## Key Addresses
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` |
-| Polygon  | uniProxy | `0xA42d55074869491D60Ac05490376B74cF19B00e6` |
-| Arbitrum | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` |
+| Chain    | Contract | Address                                                                                   |
+| -------- | -------- | ----------------------------------------------------------------------------------------- |
+| Ethereum | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` (older UniProxy: `deposit` takes no `minIn`) |
+| Polygon  | uniProxy | `0xA42d55074869491D60Ac05490376B74cF19B00e6`                                              |
 
 ## ABI Methods
 

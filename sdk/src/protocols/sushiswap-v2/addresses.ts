@@ -54,7 +54,8 @@ export const deployments: ChainDeployment[] = [
     chainName: "Optimism",
     addresses: {
       factory: "0xFbc12984689e5f15626Bad03Ad60160Fe98B303C",
-      router: "0x4C5D5234f232BD2D76B96aA33F5AE4FCF0E4BFAb",
+      // The V2 router (factory() is the factory above); the address listed before is RouteProcessor3.
+      router: "0x2ABf469074dc0b54d793850807E6eb5Faf2625b1",
     },
   },
 ];

@@ -13,7 +13,8 @@ export const deployments: ChainDeployment[] = [
     chainId: 42161,
     chainName: "Arbitrum",
     addresses: {
-      l2AmmWrapper: "0x33ceb27b39d2Bb7D2e36F8Cda811Da1d199967c8",
+      // WETH wrapper (l2CanonicalToken() is WETH); the address listed before had no code.
+      l2AmmWrapper: "0x33ceb27b39d2Bb7D2e61F7564d3Df29344020417",
     },
   },
   {
@@ -27,6 +28,7 @@ export const deployments: ChainDeployment[] = [
     chainId: 137,
     chainName: "Polygon",
     addresses: {
+      // The USDC wrapper (l2CanonicalToken() is USDC.e), unlike the WETH wrappers listed elsewhere.
       l2AmmWrapper: "0x76b22b8C1079A44F1211D867D68b1eda76a635A7",
     },
   },
@@ -34,7 +36,8 @@ export const deployments: ChainDeployment[] = [
     chainId: 8453,
     chainName: "Base",
     addresses: {
-      l2AmmWrapper: "0x46ae9BaB8CEA96610807a275EBD36f8e916b5571",
+      // WETH wrapper (l2CanonicalToken() is WETH); the address listed before had no code.
+      l2AmmWrapper: "0x10541b07d8Ad2647Dc6cD67abd4c03575dade261",
     },
   },
 ];
