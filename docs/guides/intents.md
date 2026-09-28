@@ -20,8 +20,10 @@ export function buildApprovalIntent(routeOptions: routes.IntentOptions, reward: 
 }
 ```
 
-The SDK builds the intent and the transaction requests. It sends nothing. Your application supplies
-the deployments, funds the reward, submits the transactions, and a solver fulfills the destination.
+The SDK builds the intent and the transaction requests, and sends nothing. It looks up the Portals,
+derives the destination Pot and engine, and resolves registered token and protocol addresses. You
+choose the deadlines, creator and prover, read the Kitchen fee, fund the reward and submit. A solver
+then decides whether to fulfill it; the SDK does not price the reward or promise a fill.
 
 ## Source, destination, and funding
 
@@ -150,8 +152,10 @@ function main() {
 }
 ```
 
-Same shape as the TypeScript builder, written in the program. No Portal, selector, encoding or
-approval appears, because none of them is a decision you are making.
+Same shape as the TypeScript builder, written in the program. No Portal, prover, selector, encoding
+or approval appears, because none of them is a decision you are making. The closest TypeScript form
+is a [dynamic nest](nested-intents.md#create-the-child-on-chain-from-a-measured-amount), where you
+build a placeholder child, name the measurement and count each placeholder's occurrences yourself.
 
 ### The braces are a Sauce program
 
@@ -220,9 +224,9 @@ against the enclosing chain would put one chain's address in another chain's rou
 
 ### A throw reverts everything
 
-A `throw` in a program, and every guard the SDK emits, reverts the whole fulfillment — no earlier
-route call survives it. A program that refuses to create an intent therefore leaves nothing behind,
-and a measurement below its floor cannot strand funds in the Pot.
+A `throw` or a failed `require` in a program, and every guard the SDK emits, reverts the whole
+fulfillment — no earlier route call survives it. A program that refuses to create an intent
+therefore leaves nothing behind, and a measurement below its floor cannot strand funds in the Pot.
 
 ### Where each value comes from
 
