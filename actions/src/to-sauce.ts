@@ -195,8 +195,9 @@ class Lowering {
   /**
    * An ERC-20 `approve(spender, amount)` or `transfer(to, amount)` through the SDK's `token/safe`,
    * with OpenZeppelin `SafeERC20` semantics: the call is raw, so nothing is decoded on the way out,
-   * and then its returndata must be empty (from a contract) or `true`. `approve` first resets a
-   * non-zero allowance, which USDT requires. A token that refuses the write reverts the program.
+   * and then its returndata must be empty (from a contract) or decode as an ABI word equal to 1.
+   * `approve` first resets a non-zero allowance, which USDT requires. A token that refuses the
+   * write reverts the program.
    */
   erc20Write(fn: "approve" | "transfer", token: Expr, first: Expr, amount: Expr): void {
     const prefix = this.emit.name("e");
