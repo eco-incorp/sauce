@@ -119,6 +119,7 @@ The StableSwap-NG pool interface (plain and meta pools). Classic pools such as 3
 ### CurveRouterNGABI
 
 - `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _expected, address[5] _pools) -> uint256` - Multi-pool routed swap for optimal execution
+- `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _min_dy, address[5] _pools, address _receiver) -> uint256` - The same routed swap, paying `_receiver` instead of the caller
 - `get_dy(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, address[5] _pools) -> uint256` - Quote routed swap output (view)
 
 ### CurveAddressProviderABI

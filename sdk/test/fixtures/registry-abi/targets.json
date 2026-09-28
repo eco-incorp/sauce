@@ -227,7 +227,10 @@
         "roles": ["addressProvider"]
       },
       "CurveRouterNGABI": {
-        "roles": ["routerNG"]
+        "roles": ["routerNG"],
+        "required": {
+          "exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)": "actions' curveRouterNGSwap, which pays `recipient` through the six-argument exchange"
+        }
       },
       "CurveStableSwapABI": {
         "instances": [

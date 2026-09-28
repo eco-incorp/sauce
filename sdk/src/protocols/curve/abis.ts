@@ -13,6 +13,20 @@ export const CurveRouterNGABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
+    name: "exchange",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "_route", type: "address[11]" },
+      { name: "_swap_params", type: "uint256[5][5]" },
+      { name: "_amount", type: "uint256" },
+      { name: "_min_dy", type: "uint256" },
+      { name: "_pools", type: "address[5]" },
+      { name: "_receiver", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
     name: "get_dy",
     type: "function",
     stateMutability: "view",
