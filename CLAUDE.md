@@ -24,7 +24,7 @@ everything from one name.
 | Workspace    | Internal name                 | Published as                                                                                                                             | Role                                                                           |
 | ------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`) | 129-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files |
-| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`                                                                                                                               | Routing-intent → bytecode lowering                                             |
+| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                        | JSON action programs → SauceScript, intents                                    |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools`                                                                                                                    | Local/forked hardhat env + recipe runner                                       |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
@@ -35,9 +35,14 @@ generations**: `dev-tools` is a dev harness, not a legacy `sdk`.
 
 Use Node.js **24 or newer**, matching the Solana dependencies and CI.
 
-Run from the repo root. **There is no build ordering to respect** — `build` is
-`pnpm -r --filter './sdk' --filter './actions' build`, and neither depends on the other's `dist/`.
-The compiler is an ordinary npm dependency, already built; nothing in this repo builds it.
+Run from the repo root. `build` is `pnpm -r --filter './sdk' --filter './actions' build`, and
+**`actions` reads the SDK's `dist/`**: `actions/src/registry.ts` and `compose.ts` import
+`../../sdk/dist/...` by relative path, the one spelling that resolves both in the repo and in the
+published tarball (where `actions/dist` and `sdk/dist` are siblings; the workspace name
+`@eco-incorp/sauce-source` is not published). So build the SDK before typechecking, building or
+testing `actions`. `pnpm build` orders them — `actions` declares `@eco-incorp/sauce-source` as a
+workspace devDependency for exactly that — and CI builds the SDK first. The compiler is an ordinary
+npm dependency, already built; nothing in this repo builds it.
 
 ```sh
 pnpm install
@@ -77,6 +82,15 @@ pnpm --filter './sdk' gen-source-globals # regenerate source-only token/protocol
 Single test file: jest (sdk) → `pnpm --filter './sdk' test -- routes-void-main.test.ts`.
 Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter './actions' exec tsx
 --test tests/megas-swap.unit.test.ts`.
+
+Actions test layout: `*.unit.test.ts` need nothing; `*.exec.test.ts` EXECUTE programs on a local
+anvil through the released engine and a real Kitchen-minted Pot (`tests/anvil.ts`) — they are in
+`test:unit`, skip locally without the engine artifact and throw under `CI`. `calldata.exec` runs
+every action against contracts that log the call they receive and compares the calldata with an
+independent viem encoding. `to-sauce`, `to-quote`, `megas-swap` (hardhat) and `v4.fork` (anvil,
+because the hardhat fork cannot run V4) need `FORK_URL`; never print it — it carries an API key.
+After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
+gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
 ## Toolchain gotchas (why a fresh clone may fail)
 
@@ -358,9 +372,23 @@ the registry, not availability on every chain. Compilation still enforces the se
 deployments, the SauceScript subset, and ABI fidelity. The public root type graph must keep the
 generated ambient declaration import so downstream typed closures see the same declarations.
 
-**`actions/`** — `actionsToSauce(actions)` lowers routing intents (`uniswapV3ExactInput`, bridges,
-wraps, stakes) to bytecode. Actions **chain**: output feeds the next implicitly (no `amountIn`) or via
-`saveOutputAs`/`amountRef`. See `actions/AMM_SWAP_INTERFACES.md`.
+**`actions/`** — JSON action programs (`{ version, chainId, actions }`) lowered to one SauceScript
+program. `spec.ts` is the single field table: `program.ts` parses/validates against it (located
+issues, canonical serialization) and `schema.ts` generates the committed JSON Schema from it;
+`semantics.ts` holds the cross-action rules both the JSON and the typed `RoutingAction[]` paths
+enforce. `to-sauce.ts` emits every protocol call as an ABI binding (`IBinding.at(addr).method(...)`)
+from the catalogue in `abis.ts`: registry ABIs are taken only when their canonical signature is
+exactly the action's (several registry ABIs are widened — Balancer `poolId` as `uint256`, Curve
+indices as `uint128`, Uniswap V3 `fee` as `uint32` — and would change the selector), and a method
+declares an output ONLY when an action reads it: compiler 2.3.0 decodes declared outputs even when
+discarded, and decoding empty return data reverts (USDT, 3pool-era Curve). Native-value calls stay
+raw `evm.call` because a binding cannot attach value. Actions **chain**: output feeds the next
+implicitly (no amount) or via `saveOutputAs`/`amountRef`; `balanceOf`/`nativeBalance`/`argument`
+are source actions. `compose.ts` builds route bodies/intents (`actionsIntent`) and standalone
+programs with runtime arguments (`compileActions`, ABI-v1 or compact-v1 with fixed-width offsets).
+`to-quote.ts` still emits raw quoter calls over fixed amount offsets, so its on-chain call stays
+byte-identical to the host `eth_call` data it returns. `AMM_SWAP_INTERFACES.md` is third-party
+interface reference; only its sections marked Verified have been checked.
 
 **`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness. Its
 `start:local`/`start:fork` scripts and `sauce` CLI still depend on the retired `SauceRouter`

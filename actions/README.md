@@ -1,78 +1,66 @@
-# Routing actions
+# Actions
 
-[SDK documentation](../docs/README.md) · [Builders and actions](../docs/guides/builders-and-actions.md)
+[SDK documentation](../docs/README.md) · [Actions guide](../docs/guides/actions.md)
 
-`@eco-incorp/sauce/actions` converts action sequences—swaps, bridges, wraps,
-staking, lending, approvals, and transfers—into SauceScript and EVM Sauce
-bytecode. Install `@eco-incorp/sauce` to use these helpers.
-
-Each action is emitted as source and compiled by the published Rust/WASM compiler
-`@eco-incorp/sauce-compiler`, included with the SDK.
-
-## Usage
+`@eco-incorp/sauce/actions` compiles **action programs** — ordered lists of protocol operations
+(swaps, bridges, wrapping, staking, lending, transfers, approvals) written as plain JSON — into one
+Sauce program that executes atomically in a Pot, directly or as the destination route of an Eco
+intent. Install `@eco-incorp/sauce` to use it.
 
 ```ts
-import {
-  actionsToSauce,
-  actionsToSauceSource,
-  type RoutingAction,
-} from "@eco-incorp/sauce/actions";
+import { actionsIntent, compileActions, parseActionProgram } from "@eco-incorp/sauce/actions";
 
-const actions: RoutingAction[] = [
-  {
-    type: "approve",
-    chainId: 8453,
-    token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // Base USDC
-    spender: "0x1111111111111111111111111111111111111111", // Example spender
-    amount: "1000000",
-  },
-];
+const program = parseActionProgram({
+  version: 1,
+  chainId: 8453,
+  actions: [
+    {
+      type: "approve",
+      token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // Base USDC
+      spender: "0x1111111111111111111111111111111111111111", // example spender
+      amount: "1000000",
+    },
+  ],
+});
 
-const source = actionsToSauceSource(actions);
-const bytecode = actionsToSauce(actions); // Uint8Array: one compiled program
-console.log(source);
+const { bytecode, source } = compileActions(program); // Pot.cook(engine, bytecode)
+// or, as an intent: actionsIntent("base", program, intentOptions).reward(reward)
 ```
 
-The generated program contains the sequence's amounts and addresses as literals.
-To review what will execute, inspect `actionsToSauceSource` before compilation.
-`megasSwapToSauceSource` supplies the same inspection surface for the multi-venue
-swap generator.
+- **JSON in, JSON out.** Amounts are base-10 strings. `parseActionProgram` validates strictly and
+  reports every problem with its path; `serializeActionProgram` writes canonical JSON; the
+  [JSON Schema](action-program.schema.json) ships in the package for clients in other languages.
+- **Composition is part of the document.** An action spends its own amount, an earlier output
+  named with `saveOutputAs`/`amountRef`, or the previous action's output. `balanceOf` spends what
+  the Pot actually holds; `"recipient": "self"` keeps an output in the Pot.
+- **Intents and nesting.** `actionsIntent` makes a program a route body. A child of a dynamic
+  `.nest()` can start with `balanceOf` to spend exactly what its parent delivered.
+- **Runtime amounts.** An `argument` action makes an amount a parameter of one reusable compiled
+  program; `compileActions(...).payload(values)` appends the arguments, ABI-v1 or compact-v1.
+- **SDK surfaces.** Each call is an ABI binding, with ABIs from the SDK protocol registry where it
+  has the exact function. ERC-20 `transfer`/`approve` decode no output, so tokens that return
+  nothing (USDT) work.
 
-## Execute through a Pot
+The [actions guide](../docs/guides/actions.md) covers the format, chaining, intents, runtime
+amounts, and the list of supported actions with how each was verified.
+[AMM_SWAP_INTERFACES.md](AMM_SWAP_INTERFACES.md) is a contributor's reference to the protocols'
+Solidity interfaces.
 
-The released engine accepts execution through its Kitchen/Pot gate. Create a Pot
-through the compatible Kitchen and invoke `Pot.cook(engine, program)` as its
-authorized owner. The Pot is the account whose balances the program uses; sending
-the program directly to an engine address is not the current execution path.
+## Changes from the previous release
 
-```ts
-import { bytesToHex, type Address } from "viem";
-import { v12Pot } from "@eco-incorp/sauce/evm/engine";
+The typed API still works: `actionsToSauce`, `actionsToSauceSource`, `actionToSauce`,
+`buildAction`, `actionToQuote` and the `megasSwap*` functions keep their names and signatures. What
+changed underneath:
 
-export function encodeActionCook(engine: Address, bytecode: Uint8Array) {
-  return v12Pot.encodeCook(engine, bytesToHex(bytecode));
-}
-```
-
-Submit the resulting calldata to the Pot, with the deployment's required value
-and execution fee. Encoding does not grant ownership, fund the Pot, or submit a
-transaction. See [compiling programs](../docs/guides/compiling.md) and the
-[engine API exports](../docs/api/README.md) for the surrounding execution setup.
-
-## Action chaining
-
-An action's output can feed later actions:
-
-- **Implicit input:** omitting an action's explicit input amount lets it consume
-  the previous action's output where that action supports chaining.
-- **Named output:** `saveOutputAs` gives an output a name; `amountRef` consumes it
-  later. Names become SauceScript locals and must be valid identifiers.
-
-See [AMM swap interfaces](AMM_SWAP_INTERFACES.md) for protocol-specific action
-shapes. `actionToQuote` builds a protocol quoter call; it does not use the Sauce
-Router's revert-based unified `quote` method.
-
-Action generators specialize source to the action list. Raw compiler consumers
-can instead use runtime `main` parameters and append arguments to a reusable
-program; that is a separate API described in the
-[compiler guide](../docs/guides/compiling.md).
+- **Emitted source uses ABI bindings.** `actionsToSauceSource` names bindings such as
+  `IErc20.at(token).approve(...)`, so compiling it yourself needs their ABIs: use
+  `actionsToProgramSource(actions)` (source plus `contracts`) or `compileActions`.
+  `buildAction` results carry the `bindings` they name; pass them to `contractsFor`.
+- **Stricter chaining.** Setting both an amount and `amountRef`, or giving actions of one list
+  different execution chains, now throws an `ActionProgramError` instead of being ignored.
+- **Fixed encodings.** Uniswap V4 actions encode their swap parameters as the router decodes them
+  and take everything owed (they reverted before); `stargateBridge` calls the Stargate V1 router's
+  real `swap`. A chained V4 output is taken to the Pot like every other swap.
+- **Types.** `recipient`, `to` and `onBehalfOf` accept `"self"`, and `RoutingAction` gains the
+  `balanceOf`, `nativeBalance` and `argument` source actions — an exhaustive `switch` over
+  `RoutingAction["type"]` needs cases for them.

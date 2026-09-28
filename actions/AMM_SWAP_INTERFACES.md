@@ -1,6 +1,14 @@
 # AMM Swap Interfaces on Ethereum Mainnet
 
-A comprehensive reference of all unique AMM protocols and their Solidity swap interfaces.
+A contributor's reference to the Solidity swap interfaces of the AMMs the actions cover, including
+entry points no action calls yet. It is third-party documentation, **not** a description of what
+this package emits: the functions each action calls, and how, are listed in the
+[actions guide](../docs/guides/actions.md#supported-actions), and are checked by executing them
+(`tests/calldata.exec.test.ts`, the fork suites).
+
+Only the sections marked **Verified** have been checked against deployed bytecode or by execution.
+Treat every other signature as a starting point to confirm against the deployment you target —
+this file's Uniswap V4 structs, for instance, were wrong for the deployed router until corrected.
 
 ---
 
@@ -28,9 +36,7 @@ A comprehensive reference of all unique AMM protocols and their Solidity swap in
 11. [Fluid DEX (Instadapp)](#11-fluid-dex-instadapp)
     - [DEX T1 Pool Swaps](#fluid-dex-t1-pool-swaps)
     - [DEX Lite (Singleton)](#fluid-dex-lite-singleton)
-12. [Fluid DEX (Instadapp)](#11-fluid-dex-instadapp)
-    - [DEX T1 Pool Swaps](#fluid-dex-t1-pool-swaps)
-    - [DEX Lite (Singleton)](#fluid-dex-lite-singleton)
+12. [Bridges and staking notes](#12-bridges-and-staking-notes)
 
 ---
 
@@ -134,7 +140,31 @@ function swapExactTokensForETHSupportingFeeOnTransferTokens(
 
 ### Uniswap V3 SwapRouter
 
-**Address:** `0xE592427A0AEce92De3Edee1F18E0157C05861564`
+**Verified (SwapRouter02).** The `uniswapV3ExactInput*` actions call **SwapRouter02**
+(`0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` on Ethereum, `0x2626664c2603336E57B271c5C0b26F421741e481`
+on Base), whose structs have **no `deadline` field**:
+
+```solidity
+struct ExactInputSingleParams {   // SwapRouter02
+    address tokenIn;
+    address tokenOut;
+    uint24 fee;
+    address recipient;
+    uint256 amountIn;
+    uint256 amountOutMinimum;
+    uint160 sqrtPriceLimitX96;
+}
+struct ExactInputParams {         // SwapRouter02
+    bytes path;
+    address recipient;
+    uint256 amountIn;
+    uint256 amountOutMinimum;
+}
+```
+
+The original SwapRouter below keeps a `deadline` in every struct, so its selectors differ.
+
+**Address (original SwapRouter):** `0xE592427A0AEce92De3Edee1F18E0157C05861564`
 
 #### Structs
 
@@ -261,16 +291,14 @@ struct PathKey {
 struct ExactInputSingleParams {
     PoolKey poolKey;
     bool zeroForOne;            // true = swap currency0 → currency1
-    uint128 amountIn;
+    uint128 amountIn;           // 0 (OPEN_DELTA) = the router's full open credit
     uint128 amountOutMinimum;
-    uint256 minHopPriceX36;     // minimum price threshold (scaled by 1e36)
     bytes hookData;
 }
 
 struct ExactInputParams {
     Currency currencyIn;
     PathKey[] path;
-    uint256[] minHopPriceX36;   // per-hop minimum price thresholds
     uint128 amountIn;
     uint128 amountOutMinimum;
 }
@@ -280,18 +308,31 @@ struct ExactOutputSingleParams {
     bool zeroForOne;
     uint128 amountOut;
     uint128 amountInMaximum;
-    uint256 minHopPriceX36;
     bytes hookData;
 }
 
 struct ExactOutputParams {
     Currency currencyOut;
     PathKey[] path;             // reversed: output to input
-    uint256[] minHopPriceX36;
     uint128 amountOut;
     uint128 amountInMaximum;
 }
 ```
+
+**Verified against the deployed mainnet Universal Router** (`tests/v4.fork.test.ts`): the two
+exact-input structs above are what it decodes. Each sub-action's params are ONE `abi.encode` of the
+struct — the head offset word included, which the router's calldata decoder reads. A flat
+`abi.encode(poolKey, zeroForOne, …)` without it reverts, and so does an `ExactInputParams` with an
+extra per-hop array (a `maxHopSlippage`/`minHopPriceX36` field from later periphery versions).
+
+`ActionConstants`: `OPEN_DELTA = 0` (a TAKE or swap amount of 0 means "everything owed"),
+`CONTRACT_BALANCE = 1 << 255` (a SETTLE of the router's own balance), `MSG_SENDER = address(1)`,
+`ADDRESS_THIS = address(2)`. A TAKE of `type(uint256).max` overflows the router's `uint128` cast
+and reverts with `SafeCastOverflow()`.
+
+The actions use `SWAP_EXACT_IN_SINGLE`/`SWAP_EXACT_IN`, then `SETTLE(currencyIn, CONTRACT_BALANCE,
+payerIsUser = false)` after transferring the input to the router, then `TAKE(currencyOut, recipient,
+OPEN_DELTA)` — no Permit2 approval is needed.
 
 #### Typical V4 Swap Flow
 
@@ -1264,3 +1305,32 @@ struct Reserves {
 - **Swap pausing:** Pools can be paused via governance. Monitor `LogPauseSwapAndArbitrage()` and `LogUnpauseSwapAndArbitrage()` events, or check `isSwapAndArbitragePaused` in `DexState`.
 - **Liquidity limits:** Maximum swap size is constrained by `limits.withdrawable.available + limits.borrowable.available` from the resolver.
 - **Reserves are scaled to 1e12 decimals** in the resolver output for uniformity.
+
+---
+
+## 12. Bridges and staking notes
+
+**Verified against mainnet bytecode:**
+
+- **Stargate V1 Router** (`0x8731d54E9D02c286767d56ac03e8037C07e01e98`) exposes
+  `swap(uint16 _dstChainId, uint256 _srcPoolId, uint256 _dstPoolId, address payable _refundAddress,
+uint256 _amountLD, uint256 _minAmountLD, lzTxObj _lzTxParams, bytes _to, bytes _payload)`
+  (selector `0x9fbf10fc`), with `struct lzTxObj { uint256 dstGasForCall; uint256 dstNativeAmount;
+bytes dstNativeAddr; }`. The LayerZero fee is paid as `msg.value`; `_to` is the packed 20-byte
+  destination address. There is no `swap(…, (address,address,bytes))` overload.
+- **cbETH** (`0xBe9895146f7AF43049ca1c1AE358B0541Ea49704`) has no `deposit()`: cbETH is minted by
+  Coinbase, not by depositing ETH, so the `coinbaseStake` action reverts against it.
+- **CCTP V1 TokenMessenger** (`0xBd3fa81B58Ba92a82136038B25aDec7066af3155`) exposes
+  `depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken)`.
+- **Hyperlane Mailbox** (`0xc005dc82818d67AF737725bD4bf75435d065D239`) exposes
+  `dispatch(uint32 destinationDomain, bytes32 recipientAddress, bytes messageBody)`, payable.
+- **Lido WithdrawalQueueERC721** (`0x889edC2eDab5f40e902b864aD4d7AdE8E412F9B1`) exposes
+  `requestWithdrawals(uint256[] amounts, address owner)`.
+- **Rocket Pool**: the deposit pool (`0xDD3f50F8A6CafbE9b31a427582963f465E745AF8`) takes `deposit()`
+  with value; rETH (`0xae78736Cd615f374D3085123A210448E74Fc6393`) takes `burn(uint256)`.
+- **ether.fi LiquidityPool** (`0x308861A430be4cce5502d0A12724771Fc6DaF216`) takes `deposit()` with value.
+
+The address `0xbbF1EE38152E9D8E3470Dc47947eAa65DCA94913`, used for Maverick V2 in the fork suite,
+does not carry the `exactInputSingle(address,address,bool,uint256,uint256)` or
+`exactInputMultiHop(address,bytes,uint256,uint256)` selectors; confirm the router address and its
+return values before relying on the Maverick actions.
