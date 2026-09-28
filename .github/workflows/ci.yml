@@ -208,18 +208,20 @@ jobs:
       - name: Actions — unit tests
         run: pnpm --filter './actions' test:unit
 
-      # `test:unit` is 2 of the 5 test files. The other three — to-sauce, to-quote, megas-swap —
-      # need an archive RPC and so have never run in CI, which is where the chained-output builder
-      # bugs live. Gated on the secret because a fork PR has none, and announced with ::warning::
-      # rather than skipped in silence: an absent gate that says nothing is how these went unrun for
-      # their whole life. `secrets` cannot appear in a job-level `if`, hence env + a step-level test.
+      # `test:unit` needs no RPC: its `*.exec.test.ts` suites execute on a local anvil through the
+      # released engine (Foundry and SAUCE_V12_RUNTIME_CREATION_HEX are set up above, and they throw
+      # under CI rather than skip). The fork suites — to-sauce, to-quote, megas-swap on hardhat, and
+      # v4.fork on anvil — need an archive RPC. Gated on the secret because a fork PR has none, and
+      # announced with ::warning:: rather than skipped in silence: an absent gate that says nothing
+      # is how these went unrun for their whole life. `secrets` cannot appear in a job-level `if`,
+      # hence env + a step-level test.
       - name: Actions — fork tests
         env:
           FORK_URL: ${{ secrets.FORK_URL }}
         run: |
           set -euo pipefail
           if [ -z "${FORK_URL:-}" ]; then
-            echo "::warning::FORK_URL is not configured — actions fork tests (to-sauce, to-quote, megas-swap) did NOT run. Add it as a repo or org secret (an archive-node RPC URL) and they start running with no further change."
+            echo "::warning::FORK_URL is not configured — actions fork tests (to-sauce, to-quote, v4.fork, megas-swap) did NOT run. Add it as a repo or org secret (an archive-node RPC URL) and they start running with no further change."
             exit 0
           fi
           pnpm --filter './actions' test

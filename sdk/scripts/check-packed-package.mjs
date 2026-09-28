@@ -162,6 +162,19 @@ try {
     console.log('Clean package install: the deployed addresses ship and resolve through ./deployments');`
         : `console.log('Clean package install: deployed addresses not in this tree (no credential to fetch addresses.json) — skipped');`
     }
+    // The actions subpath reads the SDK's registry through a RELATIVE path into sdk/dist, and only a
+    // clean install of the tarball proves that path exists in the published layout.
+    const actions = await import('${name}/actions');
+    const program = actions.parseActionProgram({
+      version: 1,
+      chainId: 1,
+      actions: [{ type: 'approve', token: '0x1000000000000000000000000000000000000001', spender: '0x2000000000000000000000000000000000000001', amount: '1' }],
+    });
+    assert.ok(actions.compileActions(program).bytecode.length > 0, 'an action program compiles');
+    const { createRequire } = await import('node:module');
+    const schemaPath = createRequire(import.meta.url).resolve('${name}/actions/action-program.schema.json');
+    assert.deepEqual(JSON.parse(readFileSync(schemaPath, 'utf8')), JSON.parse(JSON.stringify(actions.actionProgramJsonSchema())));
+    console.log('Clean package install: actions compile, and the shipped JSON Schema matches the parser');
   `,
   );
   // Force the packaged path: with SAUCE_* unset the resolver must find the shipped binary, which is
@@ -187,6 +200,7 @@ try {
   // wrong. This fixture is the packaged surface a consumer actually gets.
   const consumer = `
     import { Base } from '${name}';
+    import { actionsIntent, parseActionProgram, type ActionProgram } from '${name}/actions';
     const options = {
       pot: '0x1111111111111111111111111111111111111111' as const,
       engine: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as const,
@@ -200,6 +214,12 @@ try {
       USDC.approve(Uniswap.UniversalRouter, 1000000n);
     }, options).reward(0n);
     if (built.compiled.bytecode[0].length === 0) throw new Error('Empty route');
+    // The actions declarations reference the SDK's by relative path; this checks they resolve.
+    const program: ActionProgram = parseActionProgram({ version: 1, chainId: 8453, actions: [
+      { type: 'approve', token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', spender: options.pot, amount: '1' },
+    ] });
+    const intent = actionsIntent('base', program, options).reward(0n);
+    if (intent.compiled.bytecode[0].length === 0) throw new Error('Empty action route');
   `;
   writeFileSync(join(work, "consumer.ts"), consumer);
   execFileSync(
