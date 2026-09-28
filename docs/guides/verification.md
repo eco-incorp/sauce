@@ -50,9 +50,18 @@ console.log(settlement.floorToken, settlement.programHash);
 ```
 
 `validateSettleProgram()` checks the full program hash and the argument encoding.
-The current `SETTLE_WIRE` pin records compiler **2.3.0** and a **356-byte** program.
-Payloads produced before that recompile are 362 bytes under a different hash; verify them by
-passing their historical `{ hash, bytes: 362 }` pin to `validateSettleProgram`.
+The current `SETTLE_WIRE` pin records compiler **2.3.0** and a **435-byte** program. Each
+transfer in the sweep follows OpenZeppelin `SafeERC20`: a token that returns nothing from `transfer`
+(USDT) is swept like any other, while a token that returns `false` or anything else that does not
+decode as a word equal to `1`, a token address with no code, or a reverting transfer reverts the
+whole sweep. Earlier payloads verify with their historical pin:
+
+| Released in     | `bytes` | `hash`                                                               |
+| --------------- | ------- | -------------------------------------------------------------------- |
+| 0.99.2 – 0.99.4 | 356     | `0xf9fffd262b32ad0cb07f2748f813626363497e09e4f4da134bed1b8da0c5d5fe` |
+| 0.99.0 – 0.99.1 | 362     | `0x2da5c63da0ed3e934f4bb09985a38723de1f2a8e9a9a97ef3993e526cb649d11` |
+
+Pass the current pin together with any historical ones as `validateSettleProgram(payload, [...])`.
 Import `SETTLE_WIRE` when code needs those values; avoid copying them into a
 second constant table.
 

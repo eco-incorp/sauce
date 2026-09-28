@@ -168,7 +168,8 @@ compiler, and deployed runtime work together.
 Current release pins: compiler **2.3.0**, EVM engine **1.0.1**, SVM engine **1.2.0**, both Kitchens
 **1.0.0**.
 
-The EVM settle program compiles to **356 bytes** with a new verification hash. Recompile and
-invalidate cached programs when upgrading; to verify existing 362-byte payloads, pass their
-historical `{ hash, bytes: 362 }` pin to `validateSettleProgram` (see
-[verification](docs/guides/verification.md)).
+The EVM settle program compiles to **435 bytes** with a new verification hash: its sweep now
+transfers with `SafeERC20` semantics, so no-return tokens such as USDT are swept and a token that
+returns `false` reverts the sweep. Recompile and invalidate cached programs when upgrading; to verify
+existing 356- or 362-byte payloads, pass their historical `{ hash, bytes }` pin to
+`validateSettleProgram` (see [verification](docs/guides/verification.md)).
