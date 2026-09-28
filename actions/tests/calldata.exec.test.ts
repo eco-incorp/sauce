@@ -184,8 +184,8 @@ const EXPECT: Record<Exclude<ActionType, "balanceOf" | "nativeBalance" | "argume
       ),
     },
   ],
-  // Unrecorded balance reads bracket the swap (both answer 42, so the delta is 0), then the delta
-  // is forwarded to the recipient.
+  // Unrecorded balance reads bracket the swap (both answer 0 here, so the delta is 0), then the
+  // delta is forwarded to the recipient. The delta test below makes the reads differ.
   curveSwap: () => [
     {
       to: T,
@@ -456,6 +456,31 @@ const EXPECT: Record<Exclude<ActionType, "balanceOf" | "nativeBalance" | "argume
   ],
 };
 
+/** What the paying pool below delivers to the Pot during `exchange`, in wei. */
+const DELIVERED = 58n;
+
+/**
+ * Two recorders for the curveSwap delta test, so its two balance reads differ. A view is a
+ * STATICCALL and cannot change state, so the difference has to come from the swap between them.
+ *
+ * The token answers `balanceOf(owner)` with `owner`'s NATIVE balance, and records any other call
+ * and returns `true`:
+ *
+ *   PUSH0 CALLDATALOAD PUSH1 0xe0 SHR PUSH4 0x70a08231 EQ PUSH1 0x1e JUMPI
+ *   CALLDATASIZE PUSH0 PUSH0 CALLDATACOPY CALLVALUE CALLDATASIZE PUSH0 LOG1
+ *   PUSH1 1 PUSH0 MSTORE PUSH1 32 PUSH0 RETURN
+ *   0x1e: JUMPDEST PUSH1 4 CALLDATALOAD BALANCE PUSH0 MSTORE PUSH1 32 PUSH0 RETURN
+ *
+ * The pool records its call, pays its caller (the Pot) `DELIVERED` wei, and returns `true`:
+ *
+ *   CALLDATASIZE PUSH0 PUSH0 CALLDATACOPY CALLVALUE CALLDATASIZE PUSH0 LOG1
+ *   PUSH0 PUSH0 PUSH0 PUSH0 PUSH1 58 CALLER GAS CALL POP
+ *   PUSH1 1 PUSH0 MSTORE PUSH1 32 PUSH0 RETURN
+ */
+const NATIVE_BALANCE_TOKEN: Hex =
+  "0x5f3560e01c6370a0823114601e57365f5f3734365fa160015f5260205ff35b600435315f5260205ff3";
+const PAYING_POOL: Hex = `0x365f5f3734365fa15f5f5f5f60${DELIVERED.toString(16).padStart(2, "0")}335af15060015f5260205ff3`;
+
 const skip = skipReason();
 
 /** A one-action program's bytecode. */
@@ -551,6 +576,40 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
     const v4 = recordedCalls(await env.cook(saved("uniswapV4ExactInput")), RECORDERS);
     assert.equal(v4.length, 2); // transfer, execute
     assert.ok(v4[1]!.data.includes(env.pot.slice(2).toLowerCase()));
+  });
+
+  it("curveSwap forwards the balance the swap delivered: post minus pre, not a constant", async () => {
+    await env.testClient.setCode({ address: T as Address, bytecode: PAYING_POOL });
+    await env.testClient.setBalance({ address: T as Address, value: 10n ** 18n });
+    await env.testClient.setCode({ address: B as Address, bytecode: NATIVE_BALANCE_TOKEN });
+    try {
+      const pre = await env.publicClient.getBalance({ address: env.pot });
+      const receipt = await env.cook(compiled(SAMPLES.curveSwap));
+      assert.equal(receipt.status, "success", "curveSwap reverted");
+      const post = await env.publicClient.getBalance({ address: env.pot });
+
+      assert.equal(post - pre, DELIVERED);
+      assert.deepEqual(
+        recordedCalls(receipt, RECORDERS).map((c) => [c.to.toLowerCase(), c.data]),
+        [
+          [
+            T.toLowerCase(),
+            call("function exchange(int128,int128,uint256,uint256)", "exchange", [
+              1n,
+              2n,
+              AMOUNT,
+              MIN,
+            ]).toLowerCase(),
+          ],
+          [
+            B.toLowerCase(),
+            call("function transfer(address,uint256)", "transfer", [R, post - pre]).toLowerCase(),
+          ],
+        ],
+      );
+    } finally {
+      await record();
+    }
   });
 
   it("an approve over a standing allowance resets it to zero first", async () => {
