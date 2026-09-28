@@ -189,8 +189,9 @@ For an ABI you already hold, raw compilation takes
 `inlineContracts: [["ERC20", JSON.stringify(abi)]]`. The route API takes the parsed form,
 `contracts: { ERC20: { abi } }`, and adapts it. The two shapes are not interchangeable.
 
-Raw compilation does not find the SDK's bundled `@sauce/token` copy — the route path resolves that
-itself. Serve the package's source and its neutral entry through your own resolver if you need it.
+Raw compilation does not find `@sauce/token`, the token library the SDK owns and ships — the route
+path resolves it itself. Serve the package's source and its neutral entry through your own resolver
+if you need it.
 
 ## Compile for Solana
 
