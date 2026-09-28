@@ -40,11 +40,18 @@ const built = Base(() => {
 console.log(built.hash().intentHash);
 ```
 
-`Base` names the **destination**: the chain the program runs on. The SDK resolves `USDC` and
-`Uniswap.UniversalRouter` there, compiles the body, and encodes it as a `cook(engine, program)` call
-on the Pot it derives for that chain: the shared Pot the solver deploys for that chain's Portal.
-`.reward(...)` names the **source**: the chain where the reward is escrowed. The result carries the
-intent, its hashes, the compiled bytecode and the transaction requests your application submits.
+`Base` names the **destination**, the chain the program runs on; `.reward(...)` names the
+**source**, where the reward is escrowed. That one expression does what an intent otherwise takes
+by hand:
+
+- looks up USDC and the Universal Router on Base, and binds the ERC-20 ABI;
+- compiles the body, so there is no contract to write or deploy;
+- derives the Pot and engine, and encodes the `cook(engine, program)` call on that Pot — the shared
+  one the solver deploys for that Portal;
+- assembles the route and reward, which is all `built.hash()` and the source Portal requests need.
+
+What stays yours: the deadlines, the creator and prover, the Kitchen fee, and a reward that pays a
+solver to fill the intent. The SDK sends nothing, and it does not price the reward.
 
 ## The three things that trip people up
 
