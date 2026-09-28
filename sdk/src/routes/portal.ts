@@ -44,6 +44,7 @@ import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { denormalizeToEvm, encodeRoute, EVM_REWARD_PARAM, hashIntent, kindOf } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
+import type { ContractsConfig } from "./compile-types.js";
 import type { AddressInput, Intent } from "./types.js";
 
 /** A submittable transaction request. `value` is always explicit, never omitted. */
@@ -147,6 +148,23 @@ export const PORTAL_ABI = [
     outputs: [{ name: "", type: "bool" }],
   },
 ] as const;
+
+/**
+ * `PORTAL_ABI` as a compiler BINDING, under the name a route body calls it by.
+ *
+ * `sauce-route.ts` layers this underneath every route compile, so a hand-written program can write
+ * `IPortal.at(portal).publishAndFund(...)` with no import line and no caller configuration — the
+ * same zero-setup posture `@sauce/token` and the protocol accessors already have. It is the BASE
+ * layer, so a caller's own `IPortal` (or a synthesized protocol binding of that name) wins.
+ *
+ * An unused binding costs no bytecode: the compiler emits code for the calls a program makes, not
+ * for the ABIs it was offered. `routes-portal-binding.test.ts` pins that.
+ */
+export const PORTAL_CONTRACTS: ContractsConfig = {
+  // `PORTAL_ABI` is `as const`, so its tuple type is not assignable to viem's mutable `Abi` even
+  // though the value is one. `rs-compile.ts` only ever `JSON.stringify`s it.
+  IPortal: { abi: PORTAL_ABI as unknown as ContractsConfig[string]["abi"] },
+};
 
 function assertEvmSource(intent: Intent, helper: string): void {
   if (kindOf(intent.sourceChainId) !== "evm") {

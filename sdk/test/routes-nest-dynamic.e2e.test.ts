@@ -56,6 +56,7 @@ import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import {
   EVM_REWARD_PARAM,
   EVM_ROUTE_PARAM,
+  denormalizeToEvm,
   encodeRouteEvm,
   hashIntent,
 } from "../src/routes/encode.js";
@@ -68,7 +69,8 @@ import {
 } from "../src/routes/nest-dynamic.js";
 import { decodeAbiParameters } from "viem";
 import { nestedTransferProgram } from "../src/routes/nest.js";
-import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
+import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { normalizeReward, normalizeRoute, toUniversalAddress } from "../src/routes/normalize.js";
 import { scaleAmount, WAD } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
 
@@ -126,6 +128,7 @@ const walletClient = createWalletClient({ account: DEPLOYER, transport });
 const erc20Abi = parseAbi([
   "function mint(address to, uint256 amount)",
   "function balanceOf(address account) view returns (uint256)",
+  "function transfer(address to, uint256 value) returns (bool)",
 ]);
 const erc20ApproveAbi = parseAbi([
   "function approve(address spender, uint256 value) returns (bool)",
@@ -1034,5 +1037,113 @@ describeEvm("route nesting, executed", () => {
       expect(status).toBe("reverted");
       expect(await balanceOf(markerToken, marker)).toBe(0n);
     }, 120_000);
+  });
+
+  describe("the README's hand-written SauceScript example", () => {
+    // The SDK generates the dynamic-nesting program above; this is the other half of the claim --
+    // that the same thing is WRITABLE BY HAND, in SauceScript, with the surface the package already
+    // ships. `docs/examples/cross-chain-intent.sauce.ts` is compiled on every `docs:check` run and
+    // quoted verbatim by the README; what only an engine can settle is whether the Portal accepts
+    // what it builds, which is what this does.
+    //
+    // The load-bearing unknown was the ABI encoding. CLAUDE.md warns that nested-struct field
+    // ordering has broken before, and this program hands the Portal a `Route` containing two arrays
+    // of structs, one of them holding a `bytes`. Comparing the PUBLISHED route bytes against the
+    // SDK's own encoder settles it for every field at once.
+    const HAND_WRITTEN = readFileSync(
+      join(HERE, "../../docs/examples/cross-chain-intent.sauce.ts"),
+      "utf8",
+    );
+    const HAND_SALT = `0x${"5a".repeat(32)}` as Hex;
+    const DELIVER_TO = "0x00000000000000000000000000000000000000a5" as Address;
+    const SEEDED = 12_345_678n;
+
+    it("publishes exactly the intent the SDK encodes for the same fields", async () => {
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const compiled = compileSauceRoute(
+        "base",
+        HAND_WRITTEN,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          // `IPortal` needs no entry here: `sauce-route.ts` layers the Portal binding under every
+          // route compile, which is what makes the program above writable with no setup.
+          defines: {
+            TOKEN: BigInt(token),
+            RECIPIENT: BigInt(DELIVER_TO),
+            PORTAL: BigInt(portal),
+            DESTINATION_PORTAL: BigInt(portal),
+            DESTINATION: BigInt(CHAIN_ID),
+            CREATOR: BigInt(CREATOR),
+            PROVER: BigInt(PROVER),
+            DEADLINE: 4_000_000_000n,
+            SALT: BigInt(HAND_SALT),
+            MIN_AMOUNT: 1n,
+          },
+        },
+      );
+
+      const { status, logs } = await fulfil([
+        {
+          target: token,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "mint",
+            args: [executorPot, SEEDED],
+          }),
+          value: 0n,
+        },
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+      expect(status).toBe("success");
+
+      const expected: Intent = {
+        destination: BigInt(CHAIN_ID),
+        sourceChainId: BigInt(CHAIN_ID),
+        route: normalizeRoute({
+          salt: HAND_SALT,
+          deadline: 4_000_000_000n,
+          portal,
+          nativeAmount: 0n,
+          tokens: [{ token, amount: SEEDED }],
+          calls: [
+            {
+              target: token,
+              data: encodeFunctionData({
+                abi: erc20Abi,
+                functionName: "transfer",
+                args: [DELIVER_TO, SEEDED],
+              }),
+            },
+          ],
+        }),
+        reward: normalizeReward({
+          deadline: 4_000_000_000n,
+          creator: CREATOR,
+          prover: PROVER,
+          nativeAmount: 0n,
+          tokens: [{ token, amount: SEEDED }],
+        }),
+      };
+
+      const published = publishedIn(logs);
+      expect(published).toHaveLength(1);
+      // Byte-for-byte, so the nested `tokens[]`/`calls[]` structs and the inner `bytes` are all
+      // established at once -- including the leading ABI offset word the program prepends by hand.
+      expect(published[0]!.route.toLowerCase()).toBe(encodeRouteEvm(expected.route).toLowerCase());
+      expect(published[0]!.intentHash).toBe(hashIntent(expected).intentHash);
+      // Funded from the measured balance, through the raw approve the program issues.
+      expect(
+        await publicClient.readContract({
+          abi: portalAbi,
+          address: portal,
+          functionName: "getRewardStatus",
+          args: [hashIntent(expected).intentHash],
+        }),
+      ).toBe(1);
+    }, 180_000);
   });
 });
