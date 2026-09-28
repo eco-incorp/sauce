@@ -35,6 +35,7 @@ export {
   UniswapV3QuoterV2ABI,
   UniswapV3SwapRouter02ABI,
 } from "../../sdk/dist/protocols/uniswap-v3/index.js";
+export { UniswapV4UniversalRouterABI } from "../../sdk/dist/protocols/uniswap-v4/index.js";
 export {
   safeApproveStatements,
   safeTransferStatements,

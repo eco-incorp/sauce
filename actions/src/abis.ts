@@ -33,10 +33,11 @@ import {
 } from "viem";
 
 import { AaveV3PoolABI, AcrossSpokePoolABI, BalancerV2VaultABI, CometABI } from "./registry.js";
-import { CrocSwapDexABI, CurveThreePoolABI, DODOV2ProxyABI, ERC20ABI } from "./registry.js";
-import { LidoABI, LiquidityPoolABI, MaverickV2RouterABI, Permit2ABI } from "./registry.js";
-import { RETHABI, RocketDepositPoolABI, StargatePoolABI, TokenMessengerABI } from "./registry.js";
-import { UniswapV2RouterABI, UniswapV3SwapRouter02ABI, WstETHABI } from "./registry.js";
+import { CrocSwapDexABI, CurveRouterNGABI, CurveThreePoolABI, DODOV2ProxyABI } from "./registry.js";
+import { ERC20ABI, LidoABI, LiquidityPoolABI, MaverickV2RouterABI } from "./registry.js";
+import { Permit2ABI, RETHABI, RocketDepositPoolABI, StargatePoolABI } from "./registry.js";
+import { TokenMessengerABI, UniswapV2RouterABI, UniswapV3SwapRouter02ABI } from "./registry.js";
+import { UniswapV4UniversalRouterABI, WstETHABI } from "./registry.js";
 
 /** A parsed ABI in the shape the compiler's `inlineContracts` and the SDK's `compile.contracts` take. */
 export interface ActionContract {
@@ -158,11 +159,13 @@ const CATALOG = {
     ),
   }),
   IUniversalRouter: () => ({
-    execute: local(
-      "function execute(bytes commands, bytes[] inputs) payable",
-      "the registry declares the three-argument `execute` with a deadline; these actions carry no " +
-        "deadline and call the two-argument overload (0x24856bc3), which the registry still omits " +
-        "although every deployed Universal Router dispatches it",
+    // The deadline-free overload: these actions carry no deadline. It returns nothing.
+    execute: sdk(
+      "uniswap-v4",
+      "UniswapV4UniversalRouterABI",
+      UniswapV4UniversalRouterABI,
+      "execute(bytes,bytes[])",
+      "drop",
     ),
   }),
   ICurvePool: () => ({
@@ -177,10 +180,13 @@ const CATALOG = {
     ),
   }),
   ICurveRouterNG: () => ({
-    exchange: local(
-      "function exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _expected, address[5] _pools, address _receiver) returns (uint256)",
-      "the registry declares the five-argument overload, which has no receiver; it still omits the " +
-        "six-argument one (0xc872a3c5), which every deployed RouterNG dispatches",
+    // The six-argument overload, which takes a receiver. Its return is the amount received.
+    exchange: sdk(
+      "curve",
+      "CurveRouterNGABI",
+      CurveRouterNGABI,
+      "exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)",
+      "keep",
     ),
   }),
   IBalancerV2Vault: () => ({
