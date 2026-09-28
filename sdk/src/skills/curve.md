@@ -42,7 +42,8 @@ function main(
 - `j`: Index of the output token within the pool (0-based)
 - `amountIn`: Exact amount of input token (in wei)
 - `minAmountOut`: Minimum output for slippage protection
-- Token indices vary per pool (e.g., 3pool: 0=DAI, 1=USDC, 2=USDT)
+- Token indices vary per pool
+- For StableSwap-NG pools. 3pool's `exchange` returns nothing, so reading back a `uint256` reverts there: use `CurveThreePoolABI` for 3pool
 
 ### addLiquidity
 
