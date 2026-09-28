@@ -145,9 +145,9 @@ function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[]
     const found: string[] = [];
     if (instance.error !== undefined) {
       found.push(`${where}: ${instance.error}`);
-    } else if (instance.abiErrors !== undefined) {
-      found.push(`${where}: an ABI lookup failed during capture — recapture ${slug}`);
     } else {
+      // An explorer that could not answer during capture (`abiErrors`) only costs this deployment
+      // its verified fragments: the function still has to be verified on some deployment below.
       const dispatch = instance.selectors?.[selector];
       if (dispatch === undefined) {
         found.push(`${where}: selector ${selector} was not captured — recapture ${slug}`);
