@@ -1,3 +1,5 @@
+// One ABI for two contracts: `stake`, `mETHToETH` and `ethToMETH` are the Staking contract's
+// (`staking` in addresses.ts); `balanceOf` and `approve` are the mETH token's (`mETH`).
 export const METHABI = [
   {
     name: "stake",

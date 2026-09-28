@@ -7,7 +7,7 @@ export const Permit2ABI = [
       { name: "token", type: "address" },
       { name: "spender", type: "address" },
       { name: "amount", type: "uint160" },
-      { name: "expiration", type: "uint64" },
+      { name: "expiration", type: "uint48" },
     ],
     outputs: [],
   },

@@ -40,8 +40,8 @@ function main(vaultAddress: Address, amount: Uint256): Uint256 {
 
 ## ABI Methods
 
-- `deposit(uint256)` - Deposit tokens
-- `withdraw(uint256)` - Withdraw shares
+- `deposit(uint256) returns (uint256)` - Deposit tokens
+- `withdraw(uint256) returns (uint256)` - Withdraw shares
 - `getPricePerFullShare()` - Get share price
 
 ## Notes

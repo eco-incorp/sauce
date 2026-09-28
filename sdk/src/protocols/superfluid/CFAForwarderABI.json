@@ -19,7 +19,7 @@
         },
         {
           "name": "flowrate",
-          "type": "uint128"
+          "type": "int96"
         },
         {
           "name": "userData",
@@ -52,7 +52,7 @@
         },
         {
           "name": "flowrate",
-          "type": "uint128"
+          "type": "int96"
         },
         {
           "name": "userData",

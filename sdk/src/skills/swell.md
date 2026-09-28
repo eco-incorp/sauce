@@ -24,14 +24,16 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 import { SwETHABI as ISwETH } from "./abis";
 function main(swethAddress: Address): Uint256 {
   const sweth = ISwETH.at(swethAddress);
-  return sweth.deposit();
+  sweth.deposit();
+  return 1;
 }
 
 // Stake ETH for rswETH (restaking)
 import { RswETHABI as IRswETH } from "./abis";
 function main(rswethAddress: Address): Uint256 {
   const rsweth = IRswETH.at(rswethAddress);
-  return rsweth.deposit();
+  rsweth.deposit();
+  return 1;
 }
 ```
 
@@ -46,13 +48,13 @@ function main(rswethAddress: Address): Uint256 {
 
 ### SwETHABI
 
-- `deposit()` - Stake ETH (payable), receive swETH. Returns shares
+- `deposit()` - Stake ETH (payable), receive swETH. Returns nothing: read the minted amount as a balance change
 - `swETHToETHRate()` - Current swETH/ETH exchange rate
 - `balanceOf(address)` - Query swETH balance
 
 ### RswETHABI
 
-- `deposit()` - Stake ETH (payable), receive rswETH. Returns shares
+- `deposit()` - Stake ETH (payable), receive rswETH. Returns nothing: read the minted amount as a balance change
 - `rswETHToETHRate()` - Current rswETH/ETH exchange rate
 - `balanceOf(address)` - Query rswETH balance
 

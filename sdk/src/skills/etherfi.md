@@ -62,7 +62,7 @@ function main(weethAddress: Address, amount: Uint256): Uint256 {
 - `wrap(uint256)` - Wrap eETH amount into weETH. Requires eETH approval
 - `unwrap(uint256)` - Unwrap weETH back to eETH
 - `getEETHByWeETH(uint256)` - Preview eETH for weETH amount
-- `getWeETHByEETH(uint256)` - Preview weETH for eETH amount
+- `getWeETHByeETH(uint256)` - Preview weETH for eETH amount (note the lower-case `e`)
 - `balanceOf(address)` - Query weETH balance
 
 ### EETHABI

@@ -11,14 +11,15 @@ export const StrategyManagerABI = [
     outputs: [{ name: "shares", type: "uint256" }],
   },
   {
-    name: "stakerStrategyShares",
+    // Renamed from `stakerStrategyShares` in the slashing upgrade; the old name no longer exists.
+    name: "stakerDepositShares",
     type: "function",
     stateMutability: "view",
     inputs: [
       { name: "staker", type: "address" },
       { name: "strategy", type: "address" },
     ],
-    outputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "shares", type: "uint256" }],
   },
 ] as const;
 
@@ -37,7 +38,7 @@ export const DelegationManagerABI = [
           { name: "expiry", type: "uint256" },
         ],
       },
-      { name: "approverSalt", type: "uint256" },
+      { name: "approverSalt", type: "bytes32" },
     ],
     outputs: [],
   },
@@ -46,7 +47,7 @@ export const DelegationManagerABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [{ name: "staker", type: "address" }],
-    outputs: [{ name: "withdrawalRoots", type: "uint256[]" }],
+    outputs: [{ name: "withdrawalRoots", type: "bytes32[]" }],
   },
   {
     name: "isDelegated",

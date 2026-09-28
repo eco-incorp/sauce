@@ -52,7 +52,7 @@
       ]
     },
     {
-      "name": "getWeETHByEETH",
+      "name": "getWeETHByeETH",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
