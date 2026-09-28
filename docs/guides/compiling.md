@@ -2,28 +2,23 @@
 
 [Documentation](../README.md) · [Compiler API](../api/compiler.md) · [SauceScript](../concepts/saucescript.md)
 
-Use the SDK route compiler when a program should become an Eco route call with
-chain-scoped token and protocol names. Use the raw compiler when you need a
-reusable parameterized program, an SVM account manifest, or explicit compiler
-options such as compact arguments.
+There are two ways to compile, and the choice is about who resolves names.
 
-## Choose a compilation path
+Use the **route path** when the program is part of an Eco intent and should say `USDC` and
+`Uniswap.UniversalRouter`: the SDK resolves those against the destination chain and hands you a
+ready-made call. Use the **raw compiler** when you want a reusable program that takes values at
+execution time, a Solana account manifest, or full control over module resolution.
 
-| Entry point                                                         | Inputs you supply                                           | What the SDK supplies                                                                              |
-| ------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `Base(body, options)` / `routes.openRoute(...)`                     | Closure or source, intent options, execution addresses      | Chain defines, default ambient `@sauce/token`, registry rewrites, compilation, intent construction |
-| `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | Registry rewrites, token defines, compilation, one encoded route call                              |
-| `compile({ target, resolve, ... })`                                 | Complete source/dependency resolution and compiler settings | The published compiler result, including entry metadata and SVM manifest                           |
+| Entry point                                                         | You supply                                                  | The SDK supplies                                                           |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `Base(body, options)` / `routes.openRoute(...)`                     | Body, intent options, execution addresses                   | Chain defines, the ambient token module, registry rewrites, a built intent |
+| `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | Registry rewrites, token defines, one encoded route call                   |
+| `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing — you get the compiler's own result                                |
 
-Bare `USDC`, `Token(address)`, and protocol-member calls are resolved by SDK route
-rewrites. Raw `compile()` expects compiler-native source, such as
-`ERC20.at(address).approve(...)` backed by an ABI import or registered binding.
+Bare `USDC`, `Token(address)` and protocol members only exist on the route path. Raw `compile()`
+expects compiler-native source: `ERC20.at(address).approve(...)`, backed by an ABI you bound.
 
 ## Compile an EVM route
-
-This function constructs a call; the caller supplies the deployed Pot,
-compatible engine address, and the Kitchen's current execution fee. It submits
-no transaction.
 
 ```ts
 import { routes } from "@eco-incorp/sauce";
@@ -38,24 +33,22 @@ export function buildApprovalRoute(pot: Address, engine: Address, executionFee: 
 }
 ```
 
-The destination determines registry addresses. The result contains one entry in
-`calls` and the compiled program in `compiled.bytecode[0]`. Inspect `source` to
-see the SDK's rewrites. This approval program spends no native token, so its call
-value is only the execution fee. A program spending native tokens also needs that
-amount in its call value. For Portal fulfillment, the Pot must be owned by the
-destination Portal's Executor, and `route.nativeAmount` must cover the call values.
-Use [the intent guide](intents.md) to read the fee, derive the correctly owned Pot,
-and add source-chain funding, a reward, and Portal publication calldata.
+The destination selects the registry addresses. The result has one entry in `calls` and the program
+in `compiled.bytecode[0]`; read `source` to see exactly what the rewrites produced.
 
-`compileSauceRoute` accepts a bare body or a complete `function main(...)`
-program. Keep route source in the JavaScript syntax accepted by its rewrite
-passes; use raw `compile` for programs that require SauceScript type annotations.
-The raw compiler accepts typed source directly.
+The call's `value` is the Kitchen fee plus whatever native the program itself spends — this approval
+spends none. For Portal fulfillment the Pot must be owned by the destination Portal's Executor and
+`route.nativeAmount` must cover every call value. [Create an intent](intents.md) covers reading the
+fee, deriving that Pot, and adding the reward and Portal calldata.
+
+`compileSauceRoute` takes a bare body or a complete `function main(...)`. Its rewrite passes parse
+the body as JavaScript, so a body carrying SauceScript type annotations belongs in raw `compile`,
+which accepts typed source directly.
 
 ## Compile a reusable program
 
-This Node example compiles a program that sums runtime inputs and checks a floor.
-All modules are in memory, so it needs no filesystem resolver.
+A program compiled this way has no values baked into it. Change the amounts and you do not
+recompile — which is what makes one program hash cover every execution.
 
 ```ts
 import { compile } from "@eco-incorp/sauce/compiler";
@@ -78,17 +71,13 @@ const artifact = compile({
   resolve: (path) => (path === "main.ts" ? entry : undefined),
 });
 
-console.log(artifact.isaRevision); // "stack-compact-v2"
 console.log(artifact.entryEncoding); // "abi-v1"
 ```
 
-The amount list and minimum have not been supplied yet. Changing those execution
-values does not require recompilation.
+### Pass arguments with ABI-v1
 
-### ABI-v1 entry arguments
-
-Encode the `main` arguments in declaration order and append them to the compiled
-program. Entry arguments have no function selector.
+Encode `main`'s arguments in declaration order and append them to the program. There is no function
+selector: entry arguments are not a contract call.
 
 ```ts
 import { encodeAbiParameters, hexToBytes, bytesToHex } from "viem";
@@ -104,18 +93,17 @@ payload.set(args, artifact.bytecode.length);
 
 // Given a compatible engine address:
 // const data = v12Pot.encodeCook(engine, bytesToHex(payload));
-// Send `data` from the Pot owner with value = executionFee + programNativeValue.
+// Send it from the Pot owner with value = executionFee + native the program spends.
 ```
 
-The same byte payload is the `program` argument to `Pot.cook(engine, program)`;
-the outer cook call has its own ordinary contract ABI encoding. Supplying
-argument bytes to the compiler as `defines` would produce a different kind of
-program, specialized to those values.
+That whole payload is the `program` argument to `Pot.cook(engine, program)`; the cook call itself is
+an ordinary contract call with its own ABI encoding. Passing those same values as `defines` instead
+would produce a _different_ program — one specialised to them.
 
-### Compact-v1 entry arguments
+### Pass arguments with compact-v1
 
-Compile the same source with `compactArgs: true`, then use the returned schema.
-The schema and bytecode belong to the same artifact.
+Compile with `compactArgs: true` and use the schema that comes back with it. The schema and the
+bytecode belong to the same artifact; do not pair one with another.
 
 ```ts
 import {
@@ -144,16 +132,14 @@ compactPayload.set(compact.bytecode);
 compactPayload.set(compactArgs, compact.bytecode.length);
 ```
 
-A compact program requires an engine implementing its ISA revision. It does not
-accept an ABI-v1 tail, and an ABI-v1 program does not accept compact arguments.
-Compact encoding often reduces scalar and collection payload size, but runtime
-heap, compute, and transaction limits still apply. Its format does not change
-contract ABI calls performed inside the program.
+Compact encoding is usually smaller for scalars and collections. The two formats are not
+interchangeable: a compact program does not accept an ABI-v1 tail, and the reverse is equally true.
+Either way, contract calls the program _makes_ still use their own contract ABIs — this is about
+getting values into `main`, nothing else.
 
-### Encode EVM return values
+### Return values an ABI decoder can read
 
-`entryEncoding` and `compactArgs` describe inputs only. To return data for a host
-ABI decoder, encode it explicitly in SauceScript:
+`entryEncoding` describes inputs. Outputs are yours to encode:
 
 ```ts
 function main(): bytes {
@@ -161,22 +147,17 @@ function main(): bytes {
 }
 ```
 
-Decode that result as one `uint256[]` with Viem's `decodeAbiParameters`. It is
-160 bytes: an offset, an element count, and three values. The EVM Pot returns
-these bytes directly; do not decode another ABI `bytes` wrapper around them.
-This applies with both ABI-v1 and compact-v1 inputs. SVM has no `abi.encode`
-builtin.
-
-Compiler 2.3.0 changed raw EVM scalar-array literal returns: `return [1n, 2n, 3n]`
-now returns three packed 32-byte values without an ABI offset or count. Compiler
-2.2.1 returned heap descriptors for that source. Raw tuple returns still contain
-heap descriptors. Recompilation can therefore change observable return bytes;
-use explicit `abi.encode` when a caller relies on ABI output.
+Decode that as a single `uint256[]` with viem's `decodeAbiParameters`. It is 160 bytes — an offset, a
+count, three values. The Pot returns those bytes directly; there is no extra ABI `bytes` wrapper
+around them. Returning a raw array instead gives you packed words with no offset or count, which a
+generic decoder will not read, so encode explicitly whenever a caller depends on the shape. Solana
+has no `abi.encode`.
 
 ## Resolve source modules and ABIs
 
-A resolver is synchronous and returns bytes. Missing target-arm candidates must
-return `undefined`; unreadable existing files should fail compilation.
+A resolver is synchronous and returns bytes. Return `undefined` for a candidate that does not exist —
+that is how the compiler probes a target-specific arm before falling back. Throw when a file that
+_does_ exist cannot be read, so the failure is not mistaken for absence.
 
 ```ts
 import { readFileSync } from "node:fs";
@@ -200,22 +181,20 @@ const artifact = compile({
 });
 ```
 
-This resolver reads files; it is not an isolation boundary for untrusted source.
-Use an allowlisted virtual module map when applications accept user-supplied
-programs. Fetch any remote modules before the synchronous compile step.
+This resolver reads the filesystem; it is not a sandbox. If your application compiles programs
+somebody else wrote, serve them from an allowlisted in-memory map instead. Fetch anything remote
+_before_ compiling — the resolver cannot await.
 
-For an ABI already held in memory, use raw compiler
-`inlineContracts: [["ERC20", JSON.stringify(abi)]]`. The route API instead accepts
-`contracts: { ERC20: { abi } }` with a parsed ABI and adapts it internally.
-Do not pass the route shape to raw `compile()`.
+For an ABI you already hold, raw compilation takes
+`inlineContracts: [["ERC20", JSON.stringify(abi)]]`. The route API takes the parsed form,
+`contracts: { ERC20: { abi } }`, and adapts it. The two shapes are not interchangeable.
 
-Raw compiler resolution does not automatically locate the SDK's `@sauce/token`
-copy. SDK route compilation resolves that package itself. With raw compilation,
-provide the package's source and neutral entry mapping through your resolver.
+Raw compilation does not find the SDK's bundled `@sauce/token` copy — the route path resolves that
+itself. Serve the package's source and its neutral entry through your own resolver if you need it.
 
-## Compile for SVM
+## Compile for Solana
 
-Selecting `target: "svm"` produces an account manifest. For example:
+`target: "svm"` returns an account manifest alongside the bytecode:
 
 ```ts
 import { compile } from "@eco-incorp/sauce/compiler";
@@ -236,29 +215,23 @@ console.log(artifact.manifest?.accounts);
 // [{ kind: "slot", index: 0, name: "vault", requires: "readonly" }]
 ```
 
-The compact root has one field, `amount`; `vault` is attached at account slot 0.
-Resolve and attach accounts in manifest order using the SVM helpers. The manifest
-does not discover an account's address, balance, owner, or liveness.
+`amount` is the one compact field; `vault` is attached at account slot 0. Resolve and attach accounts
+in manifest order with the SVM helpers. The manifest records what the _author_ declared — it does not
+discover an account's address, balance, owner or existence.
 
-For staged execution, stage the bytes through the Kitchen, finalize the code
-account, then use the Kitchen client or instruction builders. The SVM
-`routes.compileSauceRoute` path drops the manifest and emits a legacy instruction
-incompatible with the released engine. Use raw compilation for account plans
-and follow the [Solana execution guide](solana.md).
+To run a larger program, stage its bytes through the Kitchen, finalize the code account, then execute.
+Keep the raw compilation result: the route path drops the manifest. The
+[Solana guide](solana.md) has the full flow.
 
 ## Keep compilation reproducible
 
-Record the compiler version, target, ISA revision, source/dependency bytes,
-contract ABIs, defines, ambient modules, optimization settings, and argument
-format with an artifact. Keep request arguments separate from the code cache;
-hash the final code-plus-arguments payload when committing to a particular
-execution.
+Store the compiler version, target, source and dependency bytes, ABIs, defines, ambient modules,
+optimization setting and argument format alongside any artifact you keep. Keep request arguments out
+of the code cache, and hash the final code-plus-arguments payload when you commit to one execution.
 
-The compiler's function cache is enabled by default. It is an optimization of
-lowering, not an application-level bytecode cache or a dependency resolver.
-`cache: false` forces fresh lowering. If an application mutates cached resolver
-inputs, refresh those inputs and use the compiler package's cache controls as
-needed.
+The compiler caches its own work between calls as an optimization; `cache: false` forces fresh
+lowering. That cache is not an application-level artifact store — if your resolver's inputs change,
+refresh them yourself.
 
-For canonical settle programs, use the shipped recipe source and the pinned
-verification surface described in [settlement verification](verification.md).
+For the canonical settle programs, use the shipped recipe source and the pinned verification surface
+in [settlement verification](verification.md).

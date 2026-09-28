@@ -1,39 +1,39 @@
 # Sauce documentation
 
-Build programmable EVM and Solana transactions with `@eco-incorp/sauce`, and compose EVM
-executions into Eco intents. Solana execution uses the direct Kitchen client; the
-[legacy SVM intent helper](guides/solana.md#svm-destinations-in-eco-intents) is incompatible
-with the released engine.
+Sauce is a programmable-transaction runtime. A Sauce program compiles to bytecode that an on-chain
+engine executes atomically inside one transaction — every step lands or none does. `@eco-incorp/sauce`
+is the package you build those programs with.
 
-**New here?** Follow the [quick start](guides/quick-start.md), explore
-[token and protocol globals](guides/protocols-and-tokens.md), then
-[create and fund an intent](guides/intents.md). Complete programs live in the
-[examples](examples/README.md).
+**Routes** are the layer above: a route packages a program as an Eco intent, so it can be executed
+on another chain in exchange for a reward escrowed on this one. Everything cross-chain lives there.
+
+New here? [Quick start](guides/quick-start.md) → [protocols and tokens](guides/protocols-and-tokens.md)
+→ [create an intent](guides/intents.md). Complete programs live in the [examples](examples/README.md).
+
+## By task
+
+| You want to                                                     | Guide                                                  |
+| --------------------------------------------------------------- | ------------------------------------------------------ |
+| Install and build your first intent                             | [Quick start](guides/quick-start.md)                   |
+| Call tokens and protocols by name inside a program              | [Protocols and tokens](guides/protocols-and-tokens.md) |
+| Construct, fund, submit and inspect an intent                   | [Create an intent](guides/intents.md)                  |
+| Chain intents — statically, or from an amount measured on chain | [Nested intents](guides/nested-intents.md)             |
+| Compile a standalone program and pass it runtime arguments      | [Compiling programs](guides/compiling.md)              |
+| Generate programs from structured data                          | [Builders](guides/builders-and-actions.md)             |
+| Plan accounts, stage code and execute on Solana                 | [Solana](guides/solana.md)                             |
+| Check what a settlement payload contains                        | [Verification](guides/verification.md)                 |
 
 ## Concepts
 
-| Read                                     | Learn                                                                                   |
-| ---------------------------------------- | --------------------------------------------------------------------------------------- |
-| [Architecture](concepts/architecture.md) | How the SDK, compiler package, on-chain engine, and Eco intents fit together            |
-| [SauceScript](concepts/saucescript.md)   | Execution model, source closures, supported language constructs, and target differences |
+| Read                                     | To understand                                                                     |
+| ---------------------------------------- | --------------------------------------------------------------------------------- |
+| [Architecture](concepts/architecture.md) | How the package, the compiler and the on-chain engine divide the work             |
+| [SauceScript](concepts/saucescript.md)   | The language: what runs on chain, what the compiler accepts, what values reach it |
 
-## Guides
+## Reference
 
-| Task                                                  | Guide                                                  |
-| ----------------------------------------------------- | ------------------------------------------------------ |
-| Install and build your first intent                   | [Quick start](guides/quick-start.md)                   |
-| Use `USDC`, `Token(address)`, and protocol namespaces | [Protocols and tokens](guides/protocols-and-tokens.md) |
-| Construct, fund, and inspect an intent                | [Eco intents](guides/intents.md)                       |
-| Compose multiple intent executions                    | [Nested intents](guides/nested-intents.md)             |
-| Compile directly and encode runtime arguments         | [Compiling programs](guides/compiling.md)              |
-| Generate programs from structured inputs              | [Builders and actions](guides/builders-and-actions.md) |
-| Plan accounts, stage code, and execute on SVM         | [Solana](guides/solana.md)                             |
-| Check a settlement payload                            | [Verification](guides/verification.md)                 |
-
-## Reference and examples
-
-- [API entry points](api/README.md): published imports and where to find each feature.
-- [Compiler API](api/compiler.md): compiler options, output metadata, and argument encoding.
-- [Routes API](api/routes.md): execution options, intent builders, and Portal helpers.
-- [Registry coverage](api/coverage.md): protocols, source globals, tokens, and chain registries.
-- [Examples](examples/README.md): complete examples and how they are validated.
+- [API entry points](api/README.md) — every published import and what it contains.
+- [Routes](api/routes.md) — chain entry points, intent options, built intents, nesting.
+- [Compiler](api/compiler.md) — `compile()` options and result, and the compact argument codec.
+- [Coverage](api/coverage.md) — which protocols, tokens and chains are actually registered.
+- [Examples](examples/README.md) — complete programs, and how they are kept working.

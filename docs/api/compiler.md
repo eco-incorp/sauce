@@ -2,8 +2,8 @@
 
 [Documentation](../README.md) · [Compiling programs](../guides/compiling.md)
 
-`@eco-incorp/sauce/compiler` exposes the published Rust/WASM compiler to Node
-consumers and supplies the SDK's compact argument codec.
+`@eco-incorp/sauce/compiler` is the SauceScript compiler and the codec for its compact
+argument format. Both ship with the SDK; there is nothing extra to install.
 
 ```ts
 import {
@@ -15,8 +15,7 @@ import {
 } from "@eco-incorp/sauce/compiler";
 ```
 
-The compiler is installed with the SDK. This reference and its examples are
-validated with `@eco-incorp/sauce-compiler` **2.3.0**.
+Every example here is checked against the compiler version this package ships.
 
 ## `compile(options): CompileResult`
 
@@ -36,7 +35,7 @@ const artifact = compile({
   resolve: (path) => (path === "main.ts" ? source : undefined),
 });
 
-console.log(artifact.bytecode, artifact.isaRevision, artifact.entryEncoding);
+console.log(artifact.bytecode.length, artifact.entryEncoding);
 ```
 
 ### Options
@@ -55,8 +54,8 @@ console.log(artifact.bytecode, artifact.isaRevision, artifact.entryEncoding);
 | `compactArgs`     | `boolean`                                              | Use compact-v1 entry arguments; default `false`                        |
 | `cache`           | `boolean`                                              | Enable the per-function lowering cache; default `true`                 |
 
-`optimize: false` disables optimizations such as constant folding, loop unrolling,
-common-subexpression elimination, and helper inlining. Validation still runs.
+`optimize: false` turns the optimizer off. Every check the compiler performs still
+runs; you get a larger, more literal program.
 
 `defines` accepts decimal or `0x` integer strings, with supported literal
 separators and an optional trailing `n`. Use strings so the JavaScript host does
@@ -100,20 +99,21 @@ interface CompileResult {
 
 - `bytecode` is one reusable program. Per-execution argument values have not been
   appended.
-- `isaRevision` identifies the compiler's instruction-set contract. It does not
-  check which runtime is deployed at an address.
+- `isaRevision` labels the instruction set this artifact was built for. Record it
+  with the artifact and run the program on an engine built for the same one; it is
+  a label, not a check against any deployed address.
 - `entryEncoding` selects the argument encoder: ordinary ABI arguments by
   default, compact arguments when `compactArgs: true`. It does not describe
-  [program return encoding](../guides/compiling.md#encode-evm-return-values).
+  [program return encoding](../guides/compiling.md#return-values-an-abi-decoder-can-read).
 - `entrySchema` describes compact argument structure. Pass this exact schema to
   the compact codec; do not infer or rebuild it from example bytes.
 - `manifest` is present for SVM and describes attached accounts. It is absent
   for EVM.
 
-Compilation and resolution failures throw a JavaScript `Error`. Source diagnostics
-include a location and span; option, resolver, and target-capability errors may
-have neither. A resolver callback's thrown message is preserved. There is no
-success-with-error result or warning array in this API.
+Compilation and resolution failures throw. A source diagnostic carries a location
+and span; an error about an option, a resolver or a feature the target lacks has
+nothing to point at. A message thrown by your own resolver is preserved. There is
+no success-with-warnings result to inspect — if `compile()` returns, it worked.
 
 ### SVM account manifest
 
@@ -142,12 +142,16 @@ The subpath also exports `AccountEntry`, `AccountManifest`, `AccountRole`,
 ## Compact argument codec
 
 ```ts
-encodeCompactArguments(schema: Uint8Array, value: CompactValue): Uint8Array;
+encodeCompactArguments(
+  schema: Uint8Array,
+  value: CompactValue,
+  options?: { scalarWidth?: number },
+): Uint8Array;
 
 decodeCompactArguments(
   schema: Uint8Array,
   data: Uint8Array,
-  options?: { maxValues?: number },
+  options?: { maxValues?: number; scalarWidth?: number },
 ): CompactValue;
 ```
 
@@ -163,22 +167,26 @@ attached separately; EVM `Account` parameters are encoded as scalars. For
 addresses/public keys are integers or hexadecimal integers; base58 public-key
 text is not a scalar encoding.
 
-The encoder emits compact-v1 data beginning with `53 41 01 00`, minimum-width
-256-bit scalars, canonical booleans, unpadded bytes, and big-endian collection
-lengths. Negative integers preserve their 256-bit two's-complement bit pattern.
-The decoder returns scalar words as unsigned `bigint`, booleans as `boolean`,
-bytes as `Uint8Array`, and collections as arrays. It does not recover a signed
-application type from a scalar word.
+A negative integer keeps its 256-bit two's-complement pattern, and the decoder
+returns every scalar as an unsigned `bigint` — it has no way to know you meant a
+signed type, so convert at your own boundary.
 
-The decoder rejects non-minimal scalars, non-canonical booleans, malformed or
-truncated lengths, and trailing data. `maxValues` bounds its decoded value graph
-and defaults to `1_000_000`. Schemas are limited to 65,535 bytes and 32 nested
-levels. The engine applies its own heap and execution limits as well; successful
-host encoding does not establish that a payload fits a transaction or runtime.
+Encoding is canonical: one value, one byte string. The decoder enforces that, and
+rejects a padded scalar, a non-canonical boolean, a malformed length or trailing
+data. `maxValues` bounds the decoded object graph and defaults to `1_000_000`.
+A schema may be at most 65,535 bytes and 32 levels deep.
 
-Compact-v1 changes **program entry arguments**. EVM contract calls made by the
-program still use their contract ABIs. The SDK's canonical EVM settlement verifier
-currently expects its pinned ABI-v1 settlement payload, not a compact recompile.
+`scalarWidth` fixes every scalar at a declared width of 1–32 bytes instead of the
+smallest that fits. The payload stays canonical — still exactly one encoding per
+value — but its **length stops depending on the values**, which is what lets a
+caller write a number into an already-built payload at a known offset. Pass the
+same width to both functions; a decode without it rejects the padded form, and a
+decode with it rejects the minimal one. A value too wide for the declared width is
+rejected rather than truncated.
+
+Encoding successfully says nothing about whether the payload fits a transaction or
+the engine's own execution limits. And compact-v1 is about **entry arguments only**:
+contract calls the program makes still use their contract ABIs.
 
 ## Raw compiler versus route compilation
 
@@ -196,13 +204,12 @@ rewrites and call encoding. Its result is:
 
 There is one compiled segment and one route call. `source` is the SDK-rewritten
 program; the internal compiler adapter can additionally annotate a falling-through
-`main` as `void`. `warnings` is currently empty: compilation failures throw.
+`main` as `void`. `warnings` is always empty — a compilation failure throws.
 
-The route adapter does not return the raw compiler's ISA metadata, entry schema,
-or SVM manifest, and its options do not expose `compactArgs`, `cache`, or
-`optimize`. Use raw `compile()` when you need those fields, explicit runtime
-parameters, or the compiler's full resolver control. Route `target: "v1"` is a
-compatibility spelling mapped to the same EVM backend as `"v12"`.
+The route adapter keeps neither the entry schema nor the SVM manifest, and its
+options do not expose `compactArgs`, `cache` or `optimize`. Use raw `compile()`
+when you need any of those, runtime entry parameters, or full resolver control.
+Route `target: "v1"` and `"v12"` both select the EVM backend.
 
 See [routes](routes.md) for the route-specific API.
 
@@ -228,7 +235,7 @@ initialized Node build. Arrange for the compiler's WASM asset and dependency
 bytes to be available before compiling. This does not provide the SDK's route
 rewrites or registry resolver in a browser.
 
-The compiler package also exports `clearFunctionCache()` and
-`functionCacheStats()`. The SDK `/compiler` barrel does not re-export them or
-`ready()`. Applications using these compiler-only exports should declare the
-compiler as a direct dependency and import from its published package name.
+The compiler package also exports `clearFunctionCache()` and `functionCacheStats()`
+for inspecting its internal lowering cache. The SDK's `/compiler` export does not
+re-export those or `ready()`; an application that wants them declares the compiler
+as a direct dependency and imports from its own package name.

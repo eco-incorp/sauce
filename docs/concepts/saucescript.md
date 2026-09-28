@@ -2,10 +2,13 @@
 
 [Documentation](../README.md) · [Architecture](architecture.md) · [Compiling](../guides/compiling.md)
 
-SauceScript is a checked subset of TypeScript for programs that run inside the
-Sauce engine. It has familiar variables, functions, conditions, loops, arrays,
-and records, but it does not execute in a JavaScript VM. A host application builds
-and submits programs; SauceScript performs their on-chain computation.
+SauceScript is a checked subset of TypeScript. It has the familiar things —
+variables, functions, conditions, loops, arrays, records — but it does not run in
+a JavaScript engine. Your application builds and submits a program; SauceScript is
+what the chain then executes, atomically, inside that one transaction.
+
+Most of what follows is about the boundary: which TypeScript the compiler accepts,
+and how values get from your application into a program that captures nothing.
 
 ## Programs and route bodies
 
@@ -22,16 +25,17 @@ function main(amounts: Uint256[], minimum: Uint256): Uint256 {
 }
 ```
 
-This is SauceScript source, not a host TypeScript module. `Uint256` and `require`
-are interpreted by the Sauce compiler. Source diagnostics identify the relevant
-location and span; option, resolver, and target-capability errors may have no span.
+This is SauceScript source, not a host TypeScript module: `Uint256` and `require`
+mean something to the Sauce compiler and nothing to `tsc`. A source error points at
+a location and span; an error about an option, a resolver or an unavailable
+target feature has nothing to point at.
 
 A function declared `: void` can finish without returning a value. Other
 functions must return on every path. Annotate helper functions returning arrays,
 bytes, or records so their callers know the return shape. The raw compiler also
 accepts an entry script without an explicit `main` and synthesizes its entry.
 Entry argument encoding does not determine return encoding. For ABI-decodable
-EVM output, [return `abi.encode(...)`](../guides/compiling.md#encode-evm-return-values).
+EVM output, [return `abi.encode(...)`](../guides/compiling.md#return-values-an-abi-decoder-can-read).
 
 The SDK provides a second authoring form: a route body passed to a chain helper.
 
@@ -61,10 +65,11 @@ names or bodies, use explicit source strings or source assets.
 | `main` parameters                   | During execution                       | Values are encoded after the reusable program; their values are not compiler inputs |
 | SVM `Account` parameters            | When instruction accounts are attached | Identities occupy manifest slots, separate from encoded scalar/collection arguments |
 
-The EVM settle recipe takes its token list, floor, and recipient as runtime
-parameters, so one program hash covers all values. The SVM settle recipe compiles
-its floor and token-program split through defines and verifies them by
-recompilation. Those are deliberate API choices, not interchangeable encodings.
+The choice between the first two is a design decision with consequences. The EVM
+settle recipe takes its token list, floor and recipient as runtime parameters, so
+one program — one hash — covers every value. The SVM settle recipe folds its floor
+and token-program split in as defines instead, and is verified by recompiling with
+the same values. Neither is a drop-in for the other.
 
 ## Values and types
 
@@ -88,9 +93,9 @@ Annotations are checked. Arbitrary TypeScript types are not accepted, and `as`
 casts cannot be used to bypass a type error. Ordinary arithmetic is checked by
 the compiler/runtime rather than following JavaScript number semantics.
 
-Module-level scalar `const` values are compile-time values. Module-level `let`
-state is initialized for each invocation; it is not persistent chain state. Use
-the target-specific storage builtins when persistent storage is required.
+A module-level scalar `const` is a compile-time value. A module-level `let` is
+re-initialised on every invocation — it is scratch space, not chain state. Reach
+for the target's storage builtins when something has to persist.
 
 ## Language support
 
@@ -116,8 +121,8 @@ Useful boundaries when adapting application code:
 - A template literal with interpolation is unsupported. The `hex` tagged literal
   produces literal bytes.
 
-These examples and boundaries are validated with Sauce compiler 2.3.0. Additional
-language and builtin references are available at [sauce.eco.com](https://sauce.eco.com).
+Every example and boundary on this page is checked against the compiler this
+package ships.
 
 ## EVM and SVM operations
 
@@ -136,10 +141,10 @@ for the target selected at compile time.
 | SDK `USDC.approve(...)` and protocol-member rewrites | Supported for registered EVM deployments | Use SVM account-aware builders                    |
 | Runtime entry arguments                              | ABI-v1 or compact-v1                     | ABI-v1 or compact-v1, plus separate Account slots |
 
-The absence of SVM `abi.encode`/`abi.decode` builtins does not remove runtime
-entry parameters: entry decoding is its own compiler feature. Context values
-also have target semantics: an EVM address and a Solana public key have different
-widths, and `ctx.blockNumber()` refers to the target's block/slot model.
+Losing `abi.encode`/`abi.decode` on Solana does not cost you runtime entry
+parameters — those are decoded by a separate mechanism and work on both targets.
+Context reads differ where the chains differ: an EVM address and a Solana public
+key are not the same width, and `ctx.blockNumber()` means a slot on Solana.
 
 ## Modules, ABI bindings, and global names
 
@@ -168,5 +173,4 @@ that compiler API. `openRoute` and chain helpers supply chain defines and the
 default `@sauce/token` ambient module. Direct `compileSauceRoute()` accepts an
 explicit `ambient` list and does not add that default list. Raw `compile()` adds
 neither the SDK registry nor its filesystem resolver. See the
-[compilation guide](../guides/compiling.md#choose-a-compilation-path) for the exact
-boundary.
+[compilation guide](../guides/compiling.md) for the exact boundary.
