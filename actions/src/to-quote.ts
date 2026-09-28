@@ -363,7 +363,7 @@ export function actionToQuote(
     case "uniswapV2Swap":
       return quoteV2Router(action.router, action.path, amountIn);
     case "fraxswapSwap":
-      return quoteV2Router(action.router, action.path, amountIn);
+      return quoteFraxswap(action.router, action.path, amountIn);
     case "balancerV2Swap":
       return quoteBalV2Single(action, amountIn);
     case "balancerV2BatchSwap":
@@ -487,6 +487,29 @@ function quoteV2Router(router: Address, path: Address[], amountIn: bigint): Quot
     toSauce: asUint256ArrayLast("static", to, data),
     // selector(4), then amountIn is the first head slot.
     toSauceDynamic: makeDynamic("static", to, data, 4, OUT_UINT256_ARRAY, arrayLast),
+  };
+}
+
+/**
+ * Fraxswap — router `getAmountsOutWithTwamm` (state-changing, so CALL). The view `getAmountsOut`
+ * reverts with "twamm out of date" whenever a pair's TWAMM has pending virtual orders; this variant
+ * executes them first, which is what the router's own swap does.
+ */
+function quoteFraxswap(router: Address, path: Address[], amountIn: bigint): QuoteCall {
+  const to = router;
+  const data = concatHex(
+    sel("getAmountsOutWithTwamm(uint256,address[])"),
+    encodeAbiParameters([{ type: "uint256" }, { type: "address[]" }], [amountIn, path]),
+  );
+  return {
+    to,
+    data,
+    decode: (result: Hex) => {
+      const [amounts] = decodeAbiParameters([{ type: "uint256[]" }], result);
+      return amounts[amounts.length - 1];
+    },
+    toSauce: asUint256ArrayLast("call", to, data),
+    toSauceDynamic: makeDynamic("call", to, data, 4, OUT_UINT256_ARRAY, arrayLast),
   };
 }
 
@@ -679,6 +702,7 @@ function quoteClipper(action: ClipperSwapAction, amountIn: bigint): QuoteCall {
 function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
   const pool = getAddress(action.dodoPairs[0]);
   const sellingBase = (action.directions & 1) === 0;
+  if (action.version === "v1") return quoteDODOV1(pool, sellingBase, amountIn);
   const fnSel = sellingBase
     ? sel("querySellBase(address,uint256)")
     : sel("querySellQuote(address,uint256)");
@@ -702,6 +726,33 @@ function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
     toSauce: asUint256("static", to, data),
     // selector(4) + sender/zero(32) = 36
     toSauceDynamic: makeDynamic("static", to, data, 36, OUT_UINT256, firstWord),
+  };
+}
+
+/**
+ * DODO V1 Classical pair — `querySellBaseToken(uint256)` (view). V1 pairs have no `querySellBase`,
+ * which is V2's, so a V1 action quoted through it reverted. A V1 pair prices only a BASE sale this
+ * way; selling the quote token is a `buyBaseToken` the pair cannot quote by input amount.
+ */
+function quoteDODOV1(pool: Address, sellingBase: boolean, amountIn: bigint): QuoteCall {
+  if (!sellingBase) {
+    throw new Error(
+      "actionToQuote: a DODO V1 pair quotes only a base-token sale by input amount " +
+        "(querySellBaseToken); this action sells the quote token",
+    );
+  }
+  const to = pool;
+  const data = concatHex(
+    sel("querySellBaseToken(uint256)"),
+    encodeAbiParameters([{ type: "uint256" }], [amountIn]),
+  );
+  return {
+    to,
+    data,
+    decode: decodeUint256,
+    toSauce: asUint256("static", to, data),
+    // selector(4), then the amount is the first head slot.
+    toSauceDynamic: makeDynamic("static", to, data, 4, OUT_UINT256, firstWord),
   };
 }
 
@@ -800,7 +851,10 @@ function quoteUniV4Single(
 ): QuoteCall {
   const to = quoter;
   const data = concatHex(
-    sel("quoteExactInputSingle((((address,address,uint24,int24,address),bool,uint128,bytes)))"),
+    // One struct parameter: `quoteExactInputSingle(((address,address,uint24,int24,address),bool,
+    // uint128,bytes))`. An extra pair of parentheses here hashed a different signature, and every
+    // V4 quote reverted.
+    sel("quoteExactInputSingle(((address,address,uint24,int24,address),bool,uint128,bytes))"),
     encodeAbiParameters(
       [
         {
@@ -873,7 +927,7 @@ function quoteUniV4Multi(
 ): QuoteCall {
   const to = quoter;
   const data = concatHex(
-    sel("quoteExactInput(((address,(address,uint24,int24,address,bytes)[],uint128)))"),
+    sel("quoteExactInput((address,(address,uint24,int24,address,bytes)[],uint128))"),
     encodeAbiParameters(
       [
         {
@@ -946,7 +1000,10 @@ function quoteMaverick(action: MaverickSwapAction, amountIn: bigint, quoter: Add
         { type: "bool" },
         { type: "int32" },
       ],
-      [action.pool, amountIn, action.tokenAIn, false, 0],
+      // No tick limit, as the router's own swap applies none: the extreme tick in the swap's
+      // direction (up when selling token A). A limit of 0 cut a quote short on any pool whose
+      // active tick was not straddling 0, and reverted it on the far side.
+      [action.pool, amountIn, action.tokenAIn, false, action.tokenAIn ? 2 ** 31 - 1 : -(2 ** 31)],
     ),
   );
   return {
