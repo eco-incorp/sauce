@@ -121,10 +121,13 @@ try {
     `
     import assert from 'node:assert/strict';
     import { createHash } from 'node:crypto';
-    import { readFileSync } from 'node:fs';
-    import { dirname, resolve } from 'node:path';
+    import { existsSync, readFileSync } from 'node:fs';
+    import { dirname, join, resolve } from 'node:path';
     import { fileURLToPath } from 'node:url';
+    import { keccak256 } from 'viem';
     import { compile, encodeCompactArguments, decodeCompactArguments } from '${name}/compiler';
+    import { settleSource, SAUCE_BASE_DIRS } from '${name}/recipes';
+    import { SETTLE_PROGRAM, SETTLE_WIRE } from '${name}/verify';
     const source = new TextEncoder().encode('function main(x: Uint256): Uint256 { return x + 1; }');
     for (const target of ['evm', 'svm']) {
       const a = compile({ target, compactArgs: true, resolve: () => source });
@@ -135,6 +138,23 @@ try {
       assert.throws(() => decodeCompactArguments(a.entrySchema, data.slice(0, -1)));
     }
     console.log('Clean package install: the compact compiler and codec resolve and round-trip');
+
+    // The settle recipe, compiled the way ./recipes documents it to partners, from the shipped
+    // source and the shipped IERC20 artifact. A pin the tarball cannot reproduce rejects every
+    // settle a consumer builds, so this is checked here and not only against src/.
+    const { bytecode: settle } = compile({
+      target: 'evm',
+      entry: 'settle.sauce.ts',
+      resolve: (path) => {
+        if (path.endsWith('settle.sauce.ts')) return new TextEncoder().encode(settleSource());
+        const found = SAUCE_BASE_DIRS.map((dir) => join(dir, path.replace(/^\\.\\//, ''))).find(existsSync);
+        return found === undefined ? undefined : readFileSync(found);
+      },
+    });
+    assert.equal(settle.length, SETTLE_WIRE.PROGRAM_BYTES, 'settle program length matches its pin');
+    assert.equal(keccak256(settle), SETTLE_WIRE.PROGRAM_HASH, 'settle program hash matches its pin');
+    assert.equal('0x' + Buffer.from(settle).toString('hex'), SETTLE_PROGRAM, 'settle program bytes match SETTLE_PROGRAM');
+    console.log('Clean package install: the shipped settle recipe compiles to its pin (' + settle.length + ' bytes, ' + SETTLE_WIRE.PROGRAM_HASH + ')');
     ${
       shipsEngine
         ? `
