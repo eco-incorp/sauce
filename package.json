@@ -29,6 +29,7 @@
       "types": "./actions/dist/index.d.ts",
       "default": "./actions/dist/index.js"
     },
+    "./actions/action-program.schema.json": "./actions/action-program.schema.json",
     "./protocols/*": {
       "types": "./sdk/dist/protocols/*/index.d.ts",
       "default": "./sdk/dist/protocols/*/index.js"
@@ -83,6 +84,7 @@
     "LICENSE.md",
     "sdk/dist",
     "actions/dist",
+    "actions/action-program.schema.json",
     "sdk/src/skills",
     "sdk/src/protocols",
     "dev-tools/scripts",

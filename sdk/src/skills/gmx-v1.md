@@ -42,6 +42,7 @@ function main(
     0,
     200000000000000,
     0x0000000000000000000000000000000000000000000000000000000000000000,
+    0x0000000000000000000000000000000000000000,
   );
   return 1;
 }
@@ -69,6 +70,7 @@ function main(
     0,
     200000000000000,
     false,
+    0x0000000000000000000000000000000000000000,
   );
   return 1;
 }
@@ -103,8 +105,8 @@ function main(
 
 ### PositionRouterABI
 
-- `createIncreasePosition(address[],address,uint256,uint256,uint256,bool,uint256,uint256,bytes32)` - Open/increase. Params: path, indexToken, amountIn, minOut, sizeDelta, isLong, acceptablePrice, executionFee, referralCode
-- `createDecreasePosition(address[],address,uint256,uint256,bool,address,uint256,uint256,uint256,bool)` - Close/decrease. Params: path, indexToken, collateralDelta, sizeDelta, isLong, receiver, acceptablePrice, minOut, executionFee, withdrawETH
+- `createIncreasePosition(address[],address,uint256,uint256,uint256,bool,uint256,uint256,bytes32,address) returns (bytes32)` - Open/increase. Params: path, indexToken, amountIn, minOut, sizeDelta, isLong, acceptablePrice, executionFee, referralCode, callbackTarget (zero for none). Returns the request key
+- `createDecreasePosition(address[],address,uint256,uint256,bool,address,uint256,uint256,uint256,bool,address) returns (bytes32)` - Close/decrease. Params: path, indexToken, collateralDelta, sizeDelta, isLong, receiver, acceptablePrice, minOut, executionFee, withdrawETH, callbackTarget (zero for none). Returns the request key
 
 ### RouterABI
 

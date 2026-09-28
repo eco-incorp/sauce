@@ -58,6 +58,11 @@ console.log(settlement.floorToken, settlement.programHash);
 against is `SETTLE_WIRE` — a hash and a byte length, exported so your code can import them instead of
 keeping a second copy that will drift.
 
+Each transfer in the sweep follows OpenZeppelin `SafeERC20`: a token that returns nothing from
+`transfer` (USDT) is swept like any other, while a token that returns `false` or anything else that
+does not decode as a word equal to `1`, a token address with no code, or a reverting transfer reverts
+the whole sweep.
+
 A payload built against an earlier compiler has a different hash and length. To accept one, pass its
 `{ hash, bytes }` record explicitly; see [pins](#compiler-upgrades-and-historical-pins) below.
 
@@ -136,6 +141,17 @@ engine it names.
 `{ hash, bytes }` `ProgramPin` records. Use the full record for a historical
 program with a different length. Passing an empty list accepts no program; it
 does not fall back to the default pin.
+
+Programs from earlier releases, before the sweep followed `SafeERC20`:
+
+| Released in     | `bytes` | `hash`                                                               |
+| --------------- | ------- | -------------------------------------------------------------------- |
+| 0.99.2 – 0.99.4 | 356     | `0xf9fffd262b32ad0cb07f2748f813626363497e09e4f4da134bed1b8da0c5d5fe` |
+| 0.99.0 – 0.99.1 | 362     | `0x2da5c63da0ed3e934f4bb09985a38723de1f2a8e9a9a97ef3993e526cb649d11` |
+
+An explicit list replaces the default, so include the current pin —
+`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }` — alongside the historical
+ones you accept.
 
 A compiler change can change program bytes without changing a line of the recipe. So an SDK or
 compiler upgrade is the moment to check two separate things: which program version your application

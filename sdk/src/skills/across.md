@@ -10,7 +10,7 @@ bridge | Direction: L2-to-L2, L1-to-L2, L2-to-L1 | Chains: Ethereum (1), Arbitru
 
 ### bridge
 
-Deposit tokens into SpokePool for cross-chain transfer. Uses the legacy `deposit` function.
+Deposit tokens into the SpokePool for a cross-chain transfer, through `depositV3`.
 
 ```typescript
 import { AcrossSpokePoolABI as ISpokePool } from "./abis";
@@ -18,21 +18,39 @@ import { AcrossSpokePoolABI as ISpokePool } from "./abis";
 function main(
   spokePoolAddress: Address,
   token: Address,
+  outputToken: Address,
   amount: Uint256,
+  outputAmount: Uint256,
   destinationChainId: Uint256,
   recipient: Address,
+  quoteTimestamp: Uint256,
+  fillDeadline: Uint256,
 ): Uint256 {
   const spokePool = ISpokePool.at(spokePoolAddress);
-  spokePool.deposit(recipient, token, amount, destinationChainId, 0, 0, ctx.msgSender(), 0);
+  spokePool.depositV3(
+    ctx.msgSender(),
+    recipient,
+    token,
+    outputToken,
+    amount,
+    outputAmount,
+    destinationChainId,
+    0x0000000000000000000000000000000000000000,
+    quoteTimestamp,
+    fillDeadline,
+    0,
+    "",
+  );
   return 1;
 }
 ```
 
-- `token`: ERC-20 token to bridge (must be supported by Across)
-- `destinationChainId`: EVM chain ID of destination chain
+- `token` / `outputToken`: ERC-20 to bridge, and the token the recipient receives on the destination
+- `outputAmount`: amount the relayer delivers (input minus the quoted fees)
+- `quoteTimestamp`: the quote's timestamp; the SpokePool rejects one outside its `depositQuoteTimeBuffer`
+- `fillDeadline`: unix time after which the deposit can no longer be filled
 - `recipient`: Address to receive tokens on destination chain
 - Requires ERC-20 approval to the SpokePool
-- Note: `depositV3` is the current recommended method (see ABI below)
 
 ## Deployed Addresses
 
@@ -54,19 +72,18 @@ function main(
 
 ### AcrossSpokePoolABI
 
-- `depositV3(address depositor, address recipient, address inputToken, address outputToken, uint256 inputAmount, uint256 outputAmount, uint256 destinationChainId, address exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityDeadline, bytes message)` [payable] - Current recommended deposit method. Supports cross-chain swaps (inputToken != outputToken), exclusive relayer, and arbitrary message passing
-- `deposit(address recipient, address originToken, uint256 amount, uint256 destinationChainId, int64 relayerFeePct, uint32 quoteTimestamp, bytes message, uint256 maxCount)` [payable] - Legacy deposit method (deprecated, use depositV3)
+- `depositV3(address depositor, address recipient, address inputToken, address outputToken, uint256 inputAmount, uint256 outputAmount, uint256 destinationChainId, address exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message)` [payable] - EVM-address deposit. Supports cross-chain swaps (inputToken != outputToken), exclusive relayer, and arbitrary message passing
+- `deposit(bytes32 depositor, bytes32 recipient, bytes32 inputToken, bytes32 outputToken, uint256 inputAmount, uint256 outputAmount, uint256 destinationChainId, bytes32 exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message)` [payable] - The same deposit with every address as `bytes32`, so it can name non-EVM recipients and tokens. The legacy address-typed `deposit` no longer exists on the deployed SpokePools
 
 ### AcrossHubPoolABI
 
-- `liquidityUtilizationCurrent(address l1Token) returns (uint256)` - Get current utilization rate (view)
+- `liquidityUtilizationCurrent(address l1Token) returns (uint256)` - Get current utilization rate. Not a view: it syncs pool balances first
 - `pooledTokens(address l1Token) returns (address lpToken, bool isEnabled, uint32 lastLpFeeUpdate, int256 utilizedReserves, uint256 liquidReserves, uint256 undistributedLpFees)` - Get pool token info (view)
 
 ## Notes
 
 - Fast fills: relayers fill deposits on destination within minutes, then claim reimbursement via optimistic oracle
 - Finality: deposit confirmation on source chain, fill within 1-10 minutes typically
-- `depositV3` is recommended over legacy `deposit` -- supports output token specification and exclusive relayers
 - Requires ERC-20 approval to the SpokePool address on source chain
 - HubPool on Ethereum only -- SpokePools on all supported L2s
 - TVL: $500M+. Audited

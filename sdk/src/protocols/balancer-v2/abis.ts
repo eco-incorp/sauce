@@ -8,7 +8,7 @@ export const BalancerV2VaultABI = [
         name: "singleSwap",
         type: "tuple",
         components: [
-          { name: "poolId", type: "uint256" },
+          { name: "poolId", type: "bytes32" },
           { name: "kind", type: "uint8" },
           { name: "assetIn", type: "address" },
           { name: "assetOut", type: "address" },
@@ -41,7 +41,7 @@ export const BalancerV2VaultABI = [
         name: "swaps",
         type: "tuple[]",
         components: [
-          { name: "poolId", type: "uint256" },
+          { name: "poolId", type: "bytes32" },
           { name: "assetInIndex", type: "uint256" },
           { name: "assetOutIndex", type: "uint256" },
           { name: "amount", type: "uint256" },
@@ -59,17 +59,17 @@ export const BalancerV2VaultABI = [
           { name: "toInternalBalance", type: "bool" },
         ],
       },
-      { name: "limits", type: "uint256[]" },
+      { name: "limits", type: "int256[]" },
       { name: "deadline", type: "uint256" },
     ],
-    outputs: [{ name: "assetDeltas", type: "uint256[]" }],
+    outputs: [{ name: "assetDeltas", type: "int256[]" }],
   },
   {
     name: "joinPool",
     type: "function",
     stateMutability: "payable",
     inputs: [
-      { name: "poolId", type: "uint256" },
+      { name: "poolId", type: "bytes32" },
       { name: "sender", type: "address" },
       { name: "recipient", type: "address" },
       {
@@ -90,7 +90,7 @@ export const BalancerV2VaultABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "poolId", type: "uint256" },
+      { name: "poolId", type: "bytes32" },
       { name: "sender", type: "address" },
       { name: "recipient", type: "address" },
       {
@@ -122,7 +122,7 @@ export const BalancerV2VaultABI = [
     name: "getPoolTokens",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "poolId", type: "uint256" }],
+    inputs: [{ name: "poolId", type: "bytes32" }],
     outputs: [
       { name: "tokens", type: "address[]" },
       { name: "balances", type: "uint256[]" },

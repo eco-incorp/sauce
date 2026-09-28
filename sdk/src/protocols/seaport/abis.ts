@@ -1,3 +1,5 @@
+// Seaport 1.6. Order components are the full on-chain structs: offer/consideration items, zone
+// hashes and conduit keys as bytes32, and fulfillBasicOrder's additional recipients.
 export const SeaportABI = [
   {
     name: "fulfillBasicOrder",
@@ -19,11 +21,19 @@ export const SeaportABI = [
           { name: "basicOrderType", type: "uint8" },
           { name: "startTime", type: "uint256" },
           { name: "endTime", type: "uint256" },
-          { name: "zoneHash", type: "uint256" },
+          { name: "zoneHash", type: "bytes32" },
           { name: "salt", type: "uint256" },
-          { name: "offererConduitKey", type: "uint256" },
-          { name: "fulfillerConduitKey", type: "uint256" },
+          { name: "offererConduitKey", type: "bytes32" },
+          { name: "fulfillerConduitKey", type: "bytes32" },
           { name: "totalOriginalAdditionalRecipients", type: "uint256" },
+          {
+            name: "additionalRecipients",
+            type: "tuple[]",
+            components: [
+              { name: "amount", type: "uint256" },
+              { name: "recipient", type: "address" },
+            ],
+          },
           { name: "signature", type: "bytes" },
         ],
       },
@@ -41,9 +51,35 @@ export const SeaportABI = [
         components: [
           { name: "offerer", type: "address" },
           { name: "zone", type: "address" },
-          { name: "zoneHash", type: "uint256" },
+          {
+            name: "offer",
+            type: "tuple[]",
+            components: [
+              { name: "itemType", type: "uint8" },
+              { name: "token", type: "address" },
+              { name: "identifierOrCriteria", type: "uint256" },
+              { name: "startAmount", type: "uint256" },
+              { name: "endAmount", type: "uint256" },
+            ],
+          },
+          {
+            name: "consideration",
+            type: "tuple[]",
+            components: [
+              { name: "itemType", type: "uint8" },
+              { name: "token", type: "address" },
+              { name: "identifierOrCriteria", type: "uint256" },
+              { name: "startAmount", type: "uint256" },
+              { name: "endAmount", type: "uint256" },
+              { name: "recipient", type: "address" },
+            ],
+          },
+          { name: "orderType", type: "uint8" },
+          { name: "startTime", type: "uint256" },
+          { name: "endTime", type: "uint256" },
+          { name: "zoneHash", type: "bytes32" },
           { name: "salt", type: "uint256" },
-          { name: "conduitKey", type: "uint256" },
+          { name: "conduitKey", type: "bytes32" },
           { name: "counter", type: "uint256" },
         ],
       },

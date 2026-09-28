@@ -1,17 +1,17 @@
 export const exercise = `
-import { DiamondABI as IDiamond } from "./abis";
+import { DiamondABI as IPool } from "./abis";
 
-function main(diamondAddress: Address, holder: Address, longTokenId: Uint256): Uint256 {
-  const diamond = IDiamond.at(diamondAddress);
-  return diamond.exercise(holder, longTokenId);
+function main(poolAddress: Address): { exerciseValue: Uint256, exerciseFee: Uint256 } {
+  const pool = IPool.at(poolAddress);
+  return pool.exercise();
 }
 `;
 
 export const settle = `
-import { DiamondABI as IDiamond } from "./abis";
+import { DiamondABI as IPool } from "./abis";
 
-function main(diamondAddress: Address, holder: Address, shortTokenId: Uint256): Uint256 {
-  const diamond = IDiamond.at(diamondAddress);
-  return diamond.settle(holder, shortTokenId);
+function main(poolAddress: Address): Uint256 {
+  const pool = IPool.at(poolAddress);
+  return pool.settle();
 }
 `;

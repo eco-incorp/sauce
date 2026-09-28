@@ -44,7 +44,7 @@ function main(endpointAddress: Address, productId: Uint256, amount: Uint256): Ui
 
 ### ClearinghouseABI
 
-- `withdrawCollateral(bytes12,uint32,uint128)` - Withdraw collateral. Same params as depositCollateral
+- `withdrawCollateral((bytes32 sender, uint32 productId, uint128 amount, uint64 nonce))` - Apply a sequenced WithdrawCollateral transaction; users submit withdrawals through the Endpoint's `submitSlowModeTransaction`
 
 ## Notes
 

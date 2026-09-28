@@ -7,7 +7,7 @@
       "inputs": [
         {
           "name": "subaccountName",
-          "type": "uint256"
+          "type": "bytes12"
         },
         {
           "name": "productId",

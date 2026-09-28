@@ -15,7 +15,7 @@
             },
             {
               "name": "to",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "amountLD",
@@ -65,7 +65,7 @@
           "components": [
             {
               "name": "guid",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "nonce",
@@ -118,7 +118,7 @@
             },
             {
               "name": "to",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "amountLD",
@@ -154,6 +154,34 @@
             },
             {
               "name": "maxAmountLD",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "oftFeeDetails",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "feeAmountLD",
+              "type": "int256"
+            },
+            {
+              "name": "description",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "name": "oftReceipt",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "amountSentLD",
+              "type": "uint256"
+            },
+            {
+              "name": "amountReceivedLD",
               "type": "uint256"
             }
           ]

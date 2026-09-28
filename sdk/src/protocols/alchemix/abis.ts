@@ -58,7 +58,7 @@ export const AlchemistABI = [
     stateMutability: "view",
     inputs: [{ name: "owner", type: "address" }],
     outputs: [
-      { name: "debt", type: "uint256" },
+      { name: "debt", type: "int256" },
       { name: "depositedTokens", type: "address[]" },
     ],
   },

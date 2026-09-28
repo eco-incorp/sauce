@@ -57,6 +57,7 @@ function main(
       executionFee: executionFee,
       callbackGasLimit: 0,
       minOutputAmount: minOutputAmount,
+      validFromTime: 0,
     },
     orderType: orderType,
     decreasePositionSwapType: 0,
@@ -64,6 +65,7 @@ function main(
     shouldUnwrapNativeToken: false,
     autoCancel: false,
     referralCode: 0x0000000000000000000000000000000000000000000000000000000000000000,
+    dataList: [],
   });
   return result;
 }
@@ -94,7 +96,7 @@ function main(exchangeRouterAddress: Address, orderKey: Uint256): Uint256 {
 
 | Chain    | Contract       | Address                                      |
 | -------- | -------------- | -------------------------------------------- |
-| Arbitrum | exchangeRouter | `0x7C68C7866A64FA2160F78EEaE12217FFbf871fa8` |
+| Arbitrum | exchangeRouter | `0x7dE39FF2e232A2203196788d37e234cF8F1b83f1` |
 | Arbitrum | dataStore      | `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8` |
 
 ## ABI Methods
@@ -108,7 +110,8 @@ function main(exchangeRouterAddress: Address, orderKey: Uint256): Uint256 {
 ### CreateOrderParams Struct
 
 - **addresses**: { receiver, cancellationReceiver, callbackContract, uiFeeReceiver, market, initialCollateralToken, swapPath[] }
-- **numbers**: { sizeDeltaUsd, initialCollateralDeltaAmount, triggerPrice, acceptablePrice, executionFee, callbackGasLimit, minOutputAmount }
+- **numbers**: { sizeDeltaUsd, initialCollateralDeltaAmount, triggerPrice, acceptablePrice, executionFee, callbackGasLimit, minOutputAmount, validFromTime }
+- **flags and extras**: orderType, decreasePositionSwapType, isLong, shouldUnwrapNativeToken, autoCancel, referralCode (bytes32), dataList (bytes32[])
 - **orderType**: 0=MarketSwap, 1=LimitSwap, 2=MarketIncrease, 3=LimitIncrease, 4=MarketDecrease, 5=LimitDecrease, 6=StopLossDecrease
 - **isLong**: true for long, false for short
 
@@ -116,6 +119,7 @@ function main(exchangeRouterAddress: Address, orderKey: Uint256): Uint256 {
 
 - TVL: $800M+. Isolated markets with separate GM tokens per trading pair
 - Order flow: 1) sendTokens to market vault, 2) createOrder with execution fee
+- GMX redeploys the ExchangeRouter on upgrades and revokes the old one; the listed router is the one RoleStore currently grants CONTROLLER
 - executionFee is paid in ETH (msg.value) to cover keeper gas costs
 - sizeDeltaUsd is in USD with 30 decimals (1 USD = 1e30)
 - Each market has its own address - query dataStore for market info

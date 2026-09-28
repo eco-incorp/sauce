@@ -1,35 +1,37 @@
 export const deposit = `
-import { FluidLendingABI as IFluidLending } from "./abis";
+import { FluidLendingABI as IFToken } from "./abis";
 
-function main(liquidityAddress: Address, token: Address, amount: Uint256, to: Address): Uint256 {
-  const lending = IFluidLending.at(liquidityAddress);
-  return lending.deposit(token, amount, to);
+function main(fTokenAddress: Address, amount: Uint256, to: Address): Uint256 {
+  const fToken = IFToken.at(fTokenAddress);
+  return fToken.deposit(amount, to);
 }
 `;
 
 export const withdraw = `
-import { FluidLendingABI as IFluidLending } from "./abis";
+import { FluidLendingABI as IFToken } from "./abis";
 
-function main(liquidityAddress: Address, token: Address, amount: Uint256, to: Address): Uint256 {
-  const lending = IFluidLending.at(liquidityAddress);
-  return lending.withdraw(token, amount, to);
+function main(fTokenAddress: Address, amount: Uint256, to: Address, owner: Address): Uint256 {
+  const fToken = IFToken.at(fTokenAddress);
+  return fToken.withdraw(amount, to, owner);
 }
 `;
 
 export const borrow = `
-import { FluidLendingABI as IFluidLending } from "./abis";
+import { FluidVaultABI as IFluidVault } from "./abis";
 
-function main(liquidityAddress: Address, token: Address, amount: Uint256, to: Address): Uint256 {
-  const lending = IFluidLending.at(liquidityAddress);
-  return lending.borrow(token, amount, to);
+function main(vaultAddress: Address, nftId: Uint256, amount: Uint256, to: Address): Uint256 {
+  const vault = IFluidVault.at(vaultAddress);
+  vault.operate(nftId, 0, amount, to);
+  return 1;
 }
 `;
 
 export const repay = `
-import { FluidLendingABI as IFluidLending } from "./abis";
+import { FluidVaultABI as IFluidVault } from "./abis";
 
-function main(liquidityAddress: Address, token: Address, amount: Uint256, onBehalfOf: Address): Uint256 {
-  const lending = IFluidLending.at(liquidityAddress);
-  return lending.repay(token, amount, onBehalfOf);
+function main(vaultAddress: Address, nftId: Uint256, negativeDebtDelta: Uint256, to: Address): Uint256 {
+  const vault = IFluidVault.at(vaultAddress);
+  vault.operate(nftId, 0, negativeDebtDelta, to);
+  return 1;
 }
 `;

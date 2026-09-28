@@ -4,14 +4,14 @@ export const VaultABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [{ name: "amount", type: "uint256" }],
-    outputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
   {
     name: "withdraw",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [{ name: "numberOfShares", type: "uint256" }],
-    outputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
   {
     name: "getPricePerFullShare",

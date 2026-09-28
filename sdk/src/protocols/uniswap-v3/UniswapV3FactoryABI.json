@@ -15,7 +15,7 @@
         },
         {
           "name": "fee",
-          "type": "uint32"
+          "type": "uint24"
         }
       ],
       "outputs": [
@@ -40,7 +40,7 @@
         },
         {
           "name": "fee",
-          "type": "uint32"
+          "type": "uint24"
         }
       ],
       "outputs": [

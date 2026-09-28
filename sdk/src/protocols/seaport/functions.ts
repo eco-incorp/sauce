@@ -39,6 +39,7 @@ function main(
     offererConduitKey: offererConduitKey,
     fulfillerConduitKey: fulfillerConduitKey,
     totalOriginalAdditionalRecipients: totalOriginalAdditionalRecipients,
+    additionalRecipients: [],
     signature: signature
   });
 }

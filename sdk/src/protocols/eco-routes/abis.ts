@@ -619,12 +619,12 @@ export const ProverABI = [
         type: "tuple",
         components: [
           {
-            name: "destination",
-            type: "uint64",
-          },
-          {
             name: "claimant",
             type: "address",
+          },
+          {
+            name: "destination",
+            type: "uint64",
           },
         ],
       },

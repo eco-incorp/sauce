@@ -25,7 +25,7 @@
         },
         {
           "name": "approverSalt",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ],
       "outputs": []
@@ -43,7 +43,7 @@
       "outputs": [
         {
           "name": "withdrawalRoots",
-          "type": "uint256[]"
+          "type": "bytes32[]"
         }
       ]
     },

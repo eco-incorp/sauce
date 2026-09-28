@@ -1,9 +1,9 @@
 export const stake = `
-import { METHABI as IMETH } from "./abis";
+import { METHStakingABI as IStaking } from "./abis";
 
-function main(methAddress: Address, minMETHAmount: Uint256): Uint256 {
-  const meth = IMETH.at(methAddress);
-  meth.stake(minMETHAmount);
+function main(stakingAddress: Address, minMETHAmount: Uint256): Uint256 {
+  const staking = IStaking.at(stakingAddress);
+  staking.stake(minMETHAmount);
   return 1;
 }
 `;

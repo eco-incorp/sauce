@@ -30,22 +30,6 @@
       ]
     },
     {
-      "name": "totalUnderlying",
-      "type": "function",
-      "stateMutability": "view",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "amount0",
-          "type": "uint256"
-        },
-        {
-          "name": "amount1",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "token0",
       "type": "function",
       "stateMutability": "view",

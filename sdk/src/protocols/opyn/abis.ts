@@ -22,7 +22,7 @@ export const ControllerABI = [
       { name: "_powerPerpAmount", type: "uint256" },
       { name: "_withdrawAmount", type: "uint256" },
     ],
-    outputs: [],
+    outputs: [{ name: "wPowerPerpAmount", type: "uint256" }],
   },
   {
     name: "deposit",

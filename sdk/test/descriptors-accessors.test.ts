@@ -7,6 +7,7 @@
 import { encodeFunctionData } from "viem";
 import { chainContracts, on, type ContractAccessor } from "../src/descriptors/accessors.js";
 import type { ContractCall } from "../src/descriptors/call.js";
+import { getDescriptor, methodOf, selectorOf } from "../src/descriptors/query.js";
 import { UniswapV4UniversalRouterABI } from "../src/protocols/uniswap-v4/abis.js";
 
 /** Method names are typed `unknown` on `ContractAccessor` (see accessors.ts's own doc comment) —
@@ -31,6 +32,40 @@ describe("descriptors accessors: the motivating path", () => {
     });
     expect(call.data).toBe(expected);
     expect(call.encode()).toBe(expected);
+  });
+
+  // The Universal Router declares two `execute`s, with and without a deadline. The call must
+  // report the overload it encodes: the selector on the `ContractCall` and the one its data starts
+  // with are the same, for each argument count.
+  it("an overloaded method dispatches on argument count, and reports the overload it encodes", () => {
+    const router = chainContracts("base").UniswapV4.UniversalRouter;
+    const withDeadline = invoke(router, "execute", "0x00", ["0x01"], 999n);
+    const withoutDeadline = invoke(router, "execute", "0x00", ["0x01"]);
+
+    expect(withDeadline.method.signature).toBe("execute(bytes,bytes[],uint256)");
+    expect(withDeadline.method.selector).toBe("0x3593564c");
+    expect(withDeadline.data.startsWith(withDeadline.method.selector)).toBe(true);
+    expect(withoutDeadline.method.signature).toBe("execute(bytes,bytes[])");
+    expect(withoutDeadline.method.selector).toBe("0x24856bc3");
+    expect(withoutDeadline.data.startsWith(withoutDeadline.method.selector)).toBe(true);
+    expect(withoutDeadline.data).toBe(
+      encodeFunctionData({
+        abi: UniswapV4UniversalRouterABI,
+        functionName: "execute",
+        args: ["0x00", ["0x01"]],
+      }),
+    );
+    expect(() => invoke(router, "execute", "0x00")).toThrow(
+      "uniswap-v4.UniversalRouter.execute takes 3 or 2 arguments, got 1",
+    );
+  });
+
+  it("methodOf and selectorOf pick an overload by arity, and the first declared without one", () => {
+    const router = getDescriptor("uniswap-v4", "UniversalRouter")!;
+    expect(methodOf(router, "execute", 2)?.selector).toBe("0x24856bc3");
+    expect(methodOf(router, "execute", 3)?.selector).toBe("0x3593564c");
+    expect(methodOf(router, "execute", 1)).toBeUndefined();
+    expect(selectorOf(router, "execute")).toBe("0x3593564c");
   });
 
   it("`on(...)` (the import-based front door) is equivalent to chainContracts(...)", () => {
@@ -80,22 +115,51 @@ describe("descriptors accessors: per-chain holes fail clearly", () => {
   });
 });
 
+/**
+ * No registry ABI is widened any more (test/registry-abi.test.ts pins every selector against the
+ * deployed code), so the gate is exercised by marking a real descriptor widened for one test.
+ */
+function whileWidened<T>(protocol: string, contract: string, run: () => T): T {
+  const coverage = getDescriptor(protocol, contract)!.coverage as {
+    typeFidelity: "exact" | "widened";
+    caveats: readonly string[];
+  };
+  const saved = { typeFidelity: coverage.typeFidelity, caveats: coverage.caveats };
+  coverage.typeFidelity = "widened";
+  coverage.caveats = ["synthetic: computed selectors do not match the deployed contract"];
+  try {
+    return run();
+  } finally {
+    Object.assign(coverage, saved);
+  }
+}
+
 describe("descriptors accessors: widened-coverage caveat is observable and gated", () => {
-  it("UniswapV3.Factory carries fidelity/caveats, and encode() refuses without the opt-in", () => {
-    const base = chainContracts("base");
-    const call = invoke(
-      base.UniswapV3.Factory,
+  const getPool = () =>
+    invoke(
+      chainContracts("base").UniswapV3.Factory,
       "getPool",
       "0x1111111111111111111111111111111111111111",
       "0x2222222222222222222222222222222222222222",
       3000n,
     );
-    expect(call.fidelity).toBe("widened");
-    expect(call.caveats.length).toBeGreaterThan(0);
-    expect(call.method.selector).toBe("0x71c54fc9");
-    expect(() => call.encode()).toThrow(/WRONG|WIDENED|allowWidened/i);
-    expect(() => call.data).toThrow(/allowWidened/);
-    expect(call.encode({ allowWidened: true })).toMatch(/^0x71c54fc9/);
+
+  it("a widened descriptor carries fidelity/caveats, and encode() refuses without the opt-in", () => {
+    whileWidened("uniswap-v3", "Factory", () => {
+      const call = getPool();
+      expect(call.fidelity).toBe("widened");
+      expect(call.caveats.length).toBeGreaterThan(0);
+      expect(() => call.encode()).toThrow(/WRONG|WIDENED|allowWidened/i);
+      expect(() => call.data).toThrow(/allowWidened/);
+      expect(call.encode({ allowWidened: true })).toMatch(/^0x1698ee82/);
+    });
+  });
+
+  it("UniswapV3.Factory is exact: getPool(address,address,uint24), the deployed selector", () => {
+    const call = getPool();
+    expect(call.fidelity).toBe("exact");
+    expect(call.method.selector).toBe("0x1698ee82");
+    expect(call.encode()).toMatch(/^0x1698ee82/);
   });
 
   it("an exact-fidelity descriptor needs no opt-in", () => {
@@ -188,15 +252,16 @@ describe("descriptors accessors: toCall / toSauceScript", () => {
   });
 
   it("a widened call refuses toSauceScript too", () => {
-    const base = chainContracts("base");
-    const call = invoke(
-      base.UniswapV3.Factory,
-      "getPool",
-      "0x1111111111111111111111111111111111111111",
-      "0x2222222222222222222222222222222222222222",
-      3000n,
-    );
-    expect(() => call.toSauceScript()).toThrow(/allowWidened/);
+    whileWidened("uniswap-v3", "Factory", () => {
+      const call = invoke(
+        chainContracts("base").UniswapV3.Factory,
+        "getPool",
+        "0x1111111111111111111111111111111111111111",
+        "0x2222222222222222222222222222222222222222",
+        3000n,
+      );
+      expect(() => call.toSauceScript()).toThrow(/allowWidened/);
+    });
   });
 });
 

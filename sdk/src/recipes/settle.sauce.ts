@@ -35,7 +35,7 @@ import { IERC20 } from "./artifacts/IERC20.json";
 // THE COMPILED PROGRAM IS A FUNCTION OF THIS FILE AND THE COMPILER PIN ONLY — never of the
 // arguments. `main`'s three parameters below are RUNTIME ENTRY ARGUMENTS: the caller appends them
 // to the compiled program as 32-byte words and the program reads them back through CALLDATA, so no
-// value a caller picks is visible to the compiler at all. One 356-byte blob therefore serves every
+// value a caller picks is visible to the compiler at all. One 435-byte blob therefore serves every
 // token list, floor and recipient, which is what lets `sdk/src/verify/` pin a single
 // `keccak256(program)` and still report per-payload params.
 //
@@ -52,6 +52,17 @@ import { IERC20 } from "./artifacts/IERC20.json";
 // array slot it names. `minOut` is enforced against tokens[0]'s balance BEFORE any transfer runs,
 // so an unmeetable floor reverts the WHOLE sweep cook (and, when composed with another cook in one
 // transaction, that whole transaction) before anything moves.
+//
+// EVERY TRANSFER IS A SafeERC20 TRANSFER. The loop body's write is exactly what
+// `sdk/src/token/safe.ts#safeTransferStatements` emits — the SDK's one token-write mechanism — and
+// `recipes-assets.test.ts` pins that it stays so. It is OpenZeppelin's `_callOptionalReturn`: the
+// call goes out as raw bytes through `evm.call`, so nothing is decoded on the way back (a `bool`
+// decoded from a no-return token's EMPTY returndata reverts on this engine, which is why a transfer
+// through `IERC20` could not sweep USDT), and then what came back is CHECKED. Empty returndata passes
+// only from an address that has code; anything else must decode as an ABI word equal to `1`, so a
+// token that answers `false` reverts the sweep rather than reading as swept, and so does a return
+// shorter than one word. A transfer that reverts still reverts it.
+// The floor and the balances are read through `IERC20.balanceOf`, whose `uint256` is always there.
 //
 // USEFUL ORDERING PROPERTY: tokens[0] is swept FIRST, and no external call runs between the floor
 // check and that transfer — so for the floor token the amount CHECKED is the amount TRANSFERRED. A
@@ -94,7 +105,9 @@ function main(tokens: Address[], minOut: Uint256, recipient: Address): Uint256 {
     const t = IERC20.at(tokens[i]);
     const bal: Uint256 = t.balanceOf(ctx.self());
     if (bal > 0) {
-      t.transfer(recipient, bal);
+      const sweep_tr0 = hex`a9059cbb`;
+      const sweep_tr = evm.call(tokens[i], 0n, sweep_tr0.concat(recipient.toBytesBe(32)).concat(bal.toBytesBe(32)));
+      if (sweep_tr.length == 0) { require(ctx.codeSize(tokens[i]) > 0); } else { const [sweep_trok] = abi.decode(sweep_tr, ["Uint256"]); require(sweep_trok == 1n); }
     }
   }
   return floorBal;

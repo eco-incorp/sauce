@@ -82,7 +82,7 @@ function main(
 
 ### DlnSourceABI
 
-- `createOrder(OrderCreation _orderCreation, bytes _affiliateFee, uint32 _referralCode, bytes _permitEnvelope) returns (uint256 orderId)` [payable] - Create a cross-chain limit order. Market makers compete to fill on destination
+- `createOrder(OrderCreation _orderCreation, bytes _affiliateFee, uint32 _referralCode, bytes _permitEnvelope) returns (bytes32 orderId)` [payable] - Create a cross-chain limit order. Market makers compete to fill on destination
 
 OrderCreation tuple: `(address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc)`
 

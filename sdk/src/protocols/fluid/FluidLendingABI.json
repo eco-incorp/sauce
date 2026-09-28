@@ -6,15 +6,11 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "token",
-          "type": "address"
-        },
-        {
-          "name": "amount",
+          "name": "assets",
           "type": "uint256"
         },
         {
-          "name": "to",
+          "name": "receiver",
           "type": "address"
         }
       ],
@@ -31,72 +27,59 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "token",
-          "type": "address"
-        },
-        {
-          "name": "amount",
+          "name": "assets",
           "type": "uint256"
         },
         {
-          "name": "to",
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "owner",
           "type": "address"
         }
       ],
       "outputs": [
         {
-          "name": "actualAmount",
+          "name": "shares",
           "type": "uint256"
         }
       ]
     },
     {
-      "name": "borrow",
+      "name": "redeem",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "token",
-          "type": "address"
-        },
-        {
-          "name": "amount",
+          "name": "shares",
           "type": "uint256"
         },
         {
-          "name": "to",
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "owner",
           "type": "address"
         }
       ],
       "outputs": [
         {
-          "name": "actualAmount",
+          "name": "assets",
           "type": "uint256"
         }
       ]
     },
     {
-      "name": "repay",
+      "name": "asset",
       "type": "function",
-      "stateMutability": "nonpayable",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address"
-        },
-        {
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "name": "onBehalfOf",
-          "type": "address"
-        }
-      ],
+      "stateMutability": "view",
+      "inputs": [],
       "outputs": [
         {
-          "name": "actualAmount",
-          "type": "uint256"
+          "name": "",
+          "type": "address"
         }
       ]
     }

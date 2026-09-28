@@ -3,11 +3,15 @@
     {
       "name": "join",
       "type": "function",
-      "stateMutability": "payable",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
           "name": "account",
           "type": "address"
+        },
+        {
+          "name": "wad",
+          "type": "uint256"
         }
       ],
       "outputs": []

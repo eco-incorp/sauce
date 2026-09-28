@@ -10,7 +10,7 @@ export const PancakeSwapV3SmartRouterABI = [
         components: [
           { name: "tokenIn", type: "address" },
           { name: "tokenOut", type: "address" },
-          { name: "fee", type: "uint32" },
+          { name: "fee", type: "uint24" },
           { name: "recipient", type: "address" },
           { name: "amountIn", type: "uint256" },
           { name: "amountOutMinimum", type: "uint256" },
@@ -31,7 +31,7 @@ export const PancakeSwapV3SmartRouterABI = [
         components: [
           { name: "tokenIn", type: "address" },
           { name: "tokenOut", type: "address" },
-          { name: "fee", type: "uint32" },
+          { name: "fee", type: "uint24" },
           { name: "recipient", type: "address" },
           { name: "amountOut", type: "uint256" },
           { name: "amountInMaximum", type: "uint256" },
@@ -51,7 +51,7 @@ export const PancakeSwapV3FactoryABI = [
     inputs: [
       { name: "tokenA", type: "address" },
       { name: "tokenB", type: "address" },
-      { name: "fee", type: "uint32" },
+      { name: "fee", type: "uint24" },
     ],
     outputs: [{ name: "pool", type: "address" }],
   },
@@ -69,9 +69,9 @@ export const PancakeSwapV3NFPMABI = [
         components: [
           { name: "token0", type: "address" },
           { name: "token1", type: "address" },
-          { name: "fee", type: "uint32" },
-          { name: "tickLower", type: "uint32" },
-          { name: "tickUpper", type: "uint32" },
+          { name: "fee", type: "uint24" },
+          { name: "tickLower", type: "int24" },
+          { name: "tickUpper", type: "int24" },
           { name: "amount0Desired", type: "uint256" },
           { name: "amount1Desired", type: "uint256" },
           { name: "amount0Min", type: "uint256" },

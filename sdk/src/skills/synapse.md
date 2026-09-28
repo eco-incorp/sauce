@@ -41,7 +41,7 @@ function main(
 | Arbitrum  | synapseBridge | `0x6F4e8eba4d337f874AB57478AcC2Cb5BacDc19c9` |
 | Optimism  | synapseBridge | `0xAf41a65F786339e7911F4acDAD6BD49426F2Dc6b` |
 | Base      | synapseBridge | `0xf07d1C752fAb503E47FEF309bf14fbDD3E867089` |
-| Polygon   | synapseBridge | `0x8F5BBB2585b4009Ee16a8b589fE81B1A204aD9d7` |
+| Polygon   | synapseBridge | `0x8F5BBB2BB8c2Ee94639E55d5F41de9b4839C1280` |
 | Avalanche | synapseBridge | `0xC05e61d0E7a63D27546389B7aD62FdFf5A91aACE` |
 
 ## ABI Reference

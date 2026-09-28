@@ -17,11 +17,11 @@
       "outputs": [
         {
           "name": "roundId",
-          "type": "uint128"
+          "type": "uint80"
         },
         {
           "name": "answer",
-          "type": "uint256"
+          "type": "int256"
         },
         {
           "name": "startedAt",
@@ -33,7 +33,7 @@
         },
         {
           "name": "answeredInRound",
-          "type": "uint128"
+          "type": "uint80"
         }
       ]
     },

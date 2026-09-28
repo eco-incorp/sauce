@@ -12,7 +12,7 @@ export const ZkSyncDiamondProxyABI = [
       { name: "_factoryDeps", type: "bytes[]" },
       { name: "_refundRecipient", type: "address" },
     ],
-    outputs: [{ name: "canonicalTxHash", type: "uint256" }],
+    outputs: [{ name: "canonicalTxHash", type: "bytes32" }],
   },
   {
     name: "l2TransactionBaseCost",

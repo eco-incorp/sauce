@@ -41,7 +41,8 @@ export interface ContractLink {
   readonly kind: ContractKind;
   /** Default "exact". "widened" flags a vendored ABI using a wider-than-real type
    *  (e.g. uint32 in place of the deployed contract's uint24) — the computed
-   *  selector will NOT match the real, deployed contract. */
+   *  selector will NOT match the real, deployed contract. No entry below sets
+   *  it: every registry ABI declares the deployed types. */
   readonly typeFidelity?: "widened";
   readonly caveats?: readonly string[];
 }
@@ -70,20 +71,12 @@ export const CONTRACT_LINKS = [
   },
 
   // --- uniswap-v3 ---
-  // `fee` is vendored as uint32 throughout this protocol's ABIs; the real
-  // deployed contracts use uint24 (verified against sdk/src/artifacts/IUniswapV3Pool.json,
-  // and by hand: getPool(address,address,uint32) -> 0x71c54fc9, the real
-  // getPool(address,address,uint24) -> 0x1698ee82).
   {
     protocol: "uniswap-v3",
     roleKey: "factory",
     abiExport: "UniswapV3FactoryABI",
     contract: "Factory",
     kind: "singleton",
-    typeFidelity: "widened",
-    caveats: [
-      "fee is vendored as uint32; the deployed factory uses uint24, so computed selectors do not match the real contract",
-    ],
   },
   {
     protocol: "uniswap-v3",
@@ -91,26 +84,14 @@ export const CONTRACT_LINKS = [
     abiExport: "UniswapV3SwapRouterABI",
     contract: "SwapRouter",
     kind: "singleton",
-    typeFidelity: "widened",
-    caveats: [
-      "fee is vendored as uint32; the deployed SwapRouter uses uint24, so computed selectors do not match the real contract",
-    ],
   },
-  // Deliberately wrong-and-flagged, not omitted: the address is real (5
-  // chains), but SwapRouter02 dropped the `deadline` field this ABI still
-  // carries, so its selectors are wrong for a SECOND, independent reason on
-  // top of the fee-width issue (real exactInputSingle selector: 0x04e45aaf).
+  // SwapRouter02 has its own ABI: its params structs drop SwapRouter's `deadline` field.
   {
     protocol: "uniswap-v3",
     roleKey: "swapRouter02",
-    abiExport: "UniswapV3SwapRouterABI",
+    abiExport: "UniswapV3SwapRouter02ABI",
     contract: "SwapRouter02",
     kind: "singleton",
-    typeFidelity: "widened",
-    caveats: [
-      "fee is vendored as uint32; the deployed SwapRouter02 uses uint24",
-      "this ABI is UniswapV3SwapRouterABI's exactInputSingle shape, which still carries a deadline field the deployed SwapRouter02 dropped — selectors do not match the real contract for this reason too",
-    ],
   },
   {
     protocol: "uniswap-v3",
@@ -118,10 +99,6 @@ export const CONTRACT_LINKS = [
     abiExport: "UniswapV3QuoterV2ABI",
     contract: "QuoterV2",
     kind: "singleton",
-    typeFidelity: "widened",
-    caveats: [
-      "fee is vendored as uint32; the deployed QuoterV2 uses uint24, so computed selectors do not match the real contract",
-    ],
   },
   {
     protocol: "uniswap-v3",
@@ -132,18 +109,12 @@ export const CONTRACT_LINKS = [
   },
 
   // --- uniswap-v4 ---
-  // fee/tickSpacing/tick are vendored as uint32; the real PoolManager packs
-  // fee as uint24 and tickSpacing/tick as int24.
   {
     protocol: "uniswap-v4",
     roleKey: "poolManager",
     abiExport: "UniswapV4PoolManagerABI",
     contract: "PoolManager",
     kind: "singleton",
-    typeFidelity: "widened",
-    caveats: [
-      "fee/tickSpacing/tick are vendored as uint32; the deployed PoolManager uses uint24/int24, so computed selectors do not match the real contract",
-    ],
   },
   // Only `execute` is vendored; the Universal Router's real swap surface is
   // expressed through the `commands`/`inputs` byte encoding, not modelled

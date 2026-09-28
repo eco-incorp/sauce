@@ -12,6 +12,14 @@
         {
           "name": "tokenB",
           "type": "address"
+        },
+        {
+          "name": "startIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "endIndex",
+          "type": "uint256"
         }
       ],
       "outputs": [

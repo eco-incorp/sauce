@@ -150,6 +150,10 @@
                     {
                       "name": "failSafeRate",
                       "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
                     }
                   ]
                 },
@@ -214,6 +218,10 @@
                     {
                       "name": "failSafeRate",
                       "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
                     }
                   ]
                 },
@@ -325,12 +333,138 @@
             {
               "name": "normalFills",
               "type": "tuple[]",
-              "components": []
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
             },
             {
               "name": "flashFills",
               "type": "tuple[]",
-              "components": []
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
             },
             {
               "name": "optData",
@@ -456,12 +590,138 @@
             {
               "name": "normalFills",
               "type": "tuple[]",
-              "components": []
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
             },
             {
               "name": "flashFills",
               "type": "tuple[]",
-              "components": []
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
             },
             {
               "name": "optData",
@@ -587,12 +847,138 @@
             {
               "name": "normalFills",
               "type": "tuple[]",
-              "components": []
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
             },
             {
               "name": "flashFills",
               "type": "tuple[]",
-              "components": []
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
             },
             {
               "name": "optData",

@@ -66,7 +66,7 @@ export const AxelarITSABI = [
     type: "function",
     stateMutability: "payable",
     inputs: [
-      { name: "tokenId", type: "uint256" },
+      { name: "tokenId", type: "bytes32" },
       { name: "destinationChain", type: "string" },
       { name: "destinationAddress", type: "bytes" },
       { name: "amount", type: "uint256" },

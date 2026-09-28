@@ -36,6 +36,7 @@ const ABI_EXPORTS: Readonly<Record<string, Readonly<Record<string, Abi>>>> = {
   "uniswap-v3": {
     UniswapV3FactoryABI: uniswapV3.UniswapV3FactoryABI as unknown as Abi,
     UniswapV3SwapRouterABI: uniswapV3.UniswapV3SwapRouterABI as unknown as Abi,
+    UniswapV3SwapRouter02ABI: uniswapV3.UniswapV3SwapRouter02ABI as unknown as Abi,
     UniswapV3QuoterV2ABI: uniswapV3.UniswapV3QuoterV2ABI as unknown as Abi,
     UniswapV3NonfungiblePositionManagerABI:
       uniswapV3.UniswapV3NonfungiblePositionManagerABI as unknown as Abi,

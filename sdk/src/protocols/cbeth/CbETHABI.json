@@ -6,11 +6,20 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
+          "name": "to",
+          "type": "address"
+        },
+        {
           "name": "amount",
           "type": "uint256"
         }
       ],
-      "outputs": []
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
     },
     {
       "name": "exchangeRate",

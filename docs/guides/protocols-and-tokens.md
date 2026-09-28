@@ -117,7 +117,7 @@ That declaration does not build or send a swap. Supply valid Universal Router co
 
 A bare protocol reference uses the enclosing destination. A qualified reference such as `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not** move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Use separate intents and [nesting](nested-intents.md) for cross-chain execution. Set `compile.accessors.chainScope` to restrict explicitly qualified chain names when needed.
 
-Route rewriting rejects missing methods, ambiguous aliases, missing deployments, and descriptors marked with widened ABI types. A widened ABI can produce a selector different from the deployed contract. Inspect `coverage` and use the exact ABI for that deployment; opting past the check does not repair the ABI.
+Route rewriting rejects missing methods, ambiguous aliases and missing deployments. Every descriptor declares its contract's deployed ABI types, so the selectors it computes are the ones the deployed contract dispatches.
 
 To call a contract outside the descriptor registry, supply an ABI binding through `compile.contracts` or a resolved ABI import, then call `Binding.at(address).method(...)` in source. See [compiler integration](../api/compiler.md). Host `.at(address)` rebinding and SauceScript ABI `.at(address)` are separate APIs; the global protocol rewrite does not provide arbitrary `.at(...)` chains.
 

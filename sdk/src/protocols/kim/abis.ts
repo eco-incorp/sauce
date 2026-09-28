@@ -1,24 +1,19 @@
+// Kim's V2 router is a Camelot fork: a single fee-on-transfer-aware swap with a referrer (no
+// Solidly-style route structs, no stable flag) and UniswapV2-shaped liquidity functions.
 export const KimRouterABI = [
   {
-    name: "swapExactTokensForTokens",
+    name: "swapExactTokensForTokensSupportingFeeOnTransferTokens",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
       { name: "amountIn", type: "uint256" },
       { name: "amountOutMin", type: "uint256" },
-      {
-        name: "routes",
-        type: "tuple[]",
-        components: [
-          { name: "from", type: "address" },
-          { name: "to", type: "address" },
-          { name: "stable", type: "bool" },
-        ],
-      },
+      { name: "path", type: "address[]" },
       { name: "to", type: "address" },
+      { name: "referrer", type: "address" },
       { name: "deadline", type: "uint256" },
     ],
-    outputs: [{ name: "amounts", type: "uint256[]" }],
+    outputs: [],
   },
   {
     name: "addLiquidity",
@@ -27,7 +22,6 @@ export const KimRouterABI = [
     inputs: [
       { name: "tokenA", type: "address" },
       { name: "tokenB", type: "address" },
-      { name: "stable", type: "bool" },
       { name: "amountADesired", type: "uint256" },
       { name: "amountBDesired", type: "uint256" },
       { name: "amountAMin", type: "uint256" },

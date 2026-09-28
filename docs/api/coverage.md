@@ -23,27 +23,26 @@ These names are available inside compiled EVM route bodies. Availability on the 
 is checked during compilation. The declarations describe the vendored ABI surface, which is a
 subset of each protocol's complete API.
 
-| Namespace       | Contract leaves                                                                       |
-| --------------- | ------------------------------------------------------------------------------------- |
-| `UniswapV2`     | `Factory`, `Router`                                                                   |
-| `UniswapV3`     | `Factory`†, `SwapRouter`†, `SwapRouter02`†, `QuoterV2`†, `NonfungiblePositionManager` |
-| `UniswapV4`     | `PoolManager`†, `UniversalRouter`, `PositionManager`                                  |
-| `SushiswapV2`   | `Factory`, `Router`                                                                   |
-| `PancakeswapV2` | `Factory`, `Router`                                                                   |
-| `Aerodrome`     | `Router`, `PoolFactory`                                                               |
-| `Cctp`          | `TokenMessenger`                                                                      |
-| `AaveV3`        | `Pool`                                                                                |
-| `AaveV2`        | `LendingPool`                                                                         |
-| `Permit2`       | `Permit2`                                                                             |
-| `Oneinch`       | `AggregationRouterV6`                                                                 |
-| `Pendle`        | `Router`                                                                              |
-| `MorphoBlue`    | `Morpho`                                                                              |
-| `CompoundV3`    | `CometUSDC`, `CometWETH`, `CometUSDT`                                                 |
+| Namespace       | Contract leaves                                                                   |
+| --------------- | --------------------------------------------------------------------------------- |
+| `UniswapV2`     | `Factory`, `Router`                                                               |
+| `UniswapV3`     | `Factory`, `SwapRouter`, `SwapRouter02`, `QuoterV2`, `NonfungiblePositionManager` |
+| `UniswapV4`     | `PoolManager`, `UniversalRouter`, `PositionManager`                               |
+| `SushiswapV2`   | `Factory`, `Router`                                                               |
+| `PancakeswapV2` | `Factory`, `Router`                                                               |
+| `Aerodrome`     | `Router`, `PoolFactory`                                                           |
+| `Cctp`          | `TokenMessenger`                                                                  |
+| `AaveV3`        | `Pool`                                                                            |
+| `AaveV2`        | `LendingPool`                                                                     |
+| `Permit2`       | `Permit2`                                                                         |
+| `Oneinch`       | `AggregationRouterV6`                                                             |
+| `Pendle`        | `Router`                                                                          |
+| `MorphoBlue`    | `Morpho`                                                                          |
+| `CompoundV3`    | `CometUSDC`, `CometWETH`, `CometUSDT`                                             |
 
-† These descriptors have **widened ABI types** whose selectors differ from the deployed contract.
-Compilation refuses them by default, with an explanation in `descriptor.coverage.caveats`.
-`compile.accessors.allowWidenedSelectors: true` only bypasses that check; it does not repair the
-ABI or make the resulting call valid.
+Every descriptor declares its contract's deployed ABI types, so its selectors are the deployed
+ones. `compile.accessors.allowWidenedSelectors` is still accepted, and no shipped descriptor needs
+it.
 
 Family aliases are `Uniswap`, `Sushiswap`, `Pancakeswap`, `Aave`, and `Compound`. A family exposes
 a contract only when exactly one member owns its name. Consequently:

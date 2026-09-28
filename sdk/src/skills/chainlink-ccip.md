@@ -55,7 +55,7 @@ function main(
 
 ### CCIPRouterABI
 
-- `ccipSend(uint64 destinationChainSelector, EVM2AnyMessage message) returns (uint256 messageId)` [payable] - Send cross-chain message and/or tokens. Returns message ID for tracking
+- `ccipSend(uint64 destinationChainSelector, EVM2AnyMessage message) returns (bytes32 messageId)` [payable] - Send cross-chain message and/or tokens. Returns message ID for tracking
 - `getFee(uint64 destinationChainSelector, EVM2AnyMessage message) returns (uint256 fee)` - Estimate fee for a CCIP message before sending (view)
 - `isChainSupported(uint64 chainSelector) returns (bool)` - Check if a destination chain selector is supported (view)
 

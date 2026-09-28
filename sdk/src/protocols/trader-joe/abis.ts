@@ -39,7 +39,7 @@ export const LBRouterABI = [
       { name: "to", type: "address" },
       { name: "deadline", type: "uint256" },
     ],
-    outputs: [{ name: "amountIn", type: "uint256" }],
+    outputs: [{ name: "amountsIn", type: "uint256[]" }],
   },
   {
     name: "addLiquidity",
@@ -59,7 +59,7 @@ export const LBRouterABI = [
           { name: "amountYMin", type: "uint256" },
           { name: "activeIdDesired", type: "uint256" },
           { name: "idSlippage", type: "uint256" },
-          { name: "deltaIds", type: "uint256[]" },
+          { name: "deltaIds", type: "int256[]" },
           { name: "distributionX", type: "uint256[]" },
           { name: "distributionY", type: "uint256[]" },
           { name: "to", type: "address" },

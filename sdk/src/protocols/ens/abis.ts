@@ -3,14 +3,14 @@ export const ENSRegistryABI = [
     name: "owner",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "node", type: "uint256" }],
+    inputs: [{ name: "node", type: "bytes32" }],
     outputs: [{ name: "", type: "address" }],
   },
   {
     name: "resolver",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "node", type: "uint256" }],
+    inputs: [{ name: "node", type: "bytes32" }],
     outputs: [{ name: "", type: "address" }],
   },
   {
@@ -18,7 +18,7 @@ export const ENSRegistryABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "node", type: "uint256" },
+      { name: "node", type: "bytes32" },
       { name: "owner", type: "address" },
     ],
     outputs: [],
@@ -28,7 +28,7 @@ export const ENSRegistryABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "node", type: "uint256" },
+      { name: "node", type: "bytes32" },
       { name: "resolver", type: "address" },
     ],
     outputs: [],

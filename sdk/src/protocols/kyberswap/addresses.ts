@@ -59,8 +59,7 @@ export const deployments: ChainDeployment[] = [
     chainId: 8453,
     chainName: "Base",
     addresses: {
-      elasticFactory: "0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a",
-      elasticRouter: "0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83",
+      // No Elastic factory/router: the addresses listed here before have no code on Base.
       metaAggregationRouterV2: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
     },
   },

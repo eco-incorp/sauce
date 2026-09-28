@@ -11,7 +11,7 @@
           "components": [
             {
               "name": "poolId",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "kind",
@@ -88,7 +88,7 @@
           "components": [
             {
               "name": "poolId",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "assetInIndex",
@@ -136,7 +136,7 @@
         },
         {
           "name": "limits",
-          "type": "uint256[]"
+          "type": "int256[]"
         },
         {
           "name": "deadline",
@@ -146,7 +146,7 @@
       "outputs": [
         {
           "name": "assetDeltas",
-          "type": "uint256[]"
+          "type": "int256[]"
         }
       ]
     },
@@ -157,7 +157,7 @@
       "inputs": [
         {
           "name": "poolId",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "sender",
@@ -199,7 +199,7 @@
       "inputs": [
         {
           "name": "poolId",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "sender",
@@ -265,7 +265,7 @@
       "inputs": [
         {
           "name": "poolId",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ],
       "outputs": [

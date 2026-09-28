@@ -19,15 +19,15 @@
             },
             {
               "name": "fee",
-              "type": "uint32"
+              "type": "uint24"
             },
             {
               "name": "tickLower",
-              "type": "uint32"
+              "type": "int24"
             },
             {
               "name": "tickUpper",
-              "type": "uint32"
+              "type": "int24"
             },
             {
               "name": "amount0Desired",

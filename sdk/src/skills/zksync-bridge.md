@@ -49,7 +49,7 @@ function main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint
 
 ### ZkSyncDiamondProxyABI
 
-- `requestL2Transaction(address _contractL2, uint256 _l2Value, bytes _calldata, uint256 _l2GasLimit, uint256 _l2GasPerPubdataByteLimit, bytes[] _factoryDeps, address _refundRecipient) returns (uint256 canonicalTxHash)` [payable] - Request an L2 transaction from L1. Used for ETH deposits, contract calls, and contract deployments
+- `requestL2Transaction(address _contractL2, uint256 _l2Value, bytes _calldata, uint256 _l2GasLimit, uint256 _l2GasPerPubdataByteLimit, bytes[] _factoryDeps, address _refundRecipient) returns (bytes32 canonicalTxHash)` [payable] - Request an L2 transaction from L1. Used for ETH deposits, contract calls, and contract deployments
 - `l2TransactionBaseCost(uint256 _gasPrice, uint256 _l2GasLimit, uint256 _l2GasPerPubdataByteLimit) returns (uint256)` - Estimate the base cost of an L2 transaction (view). Use to calculate required msg.value
 
 ## Notes

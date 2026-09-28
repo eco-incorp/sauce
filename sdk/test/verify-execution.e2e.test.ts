@@ -26,6 +26,7 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  encodeDeployData,
   encodeFunctionData,
   http,
   parseAbi,
@@ -42,6 +43,7 @@ import {
   SETTLE_PROGRAM,
   SETTLE_REJECTIONS,
   SETTLE_VECTORS,
+  SETTLE_WIRE,
 } from "../src/verify/index";
 
 const RUNTIME_HEX_PATH =
@@ -59,6 +61,35 @@ if (!RUNTIME_HEX_PATH && process.env.CI) {
 const MOCK_ERC20 = JSON.parse(
   readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), "std", "token", "fixtures", "MockERC20.json"),
+    "utf8",
+  ),
+) as { creationCode: Hex };
+
+/**
+ * A token whose `transfer`/`approve`/`transferFrom` return NOTHING, like USDT on Ethereum. The source
+ * is vendored beside it (`fixtures/NoReturnERC20.sol`); the creation code was produced by
+ * `solc 0.8.36 --evm-version cancun --optimize --optimize-runs 200 --combined-json abi,bin`. The
+ * constructor takes `(name, symbol, decimals)`, but the code is etched with `setCode`, so its storage
+ * starts empty and those three values are never read.
+ */
+const NO_RETURN_ERC20 = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "std", "token", "fixtures", "NoReturnERC20.json"),
+    "utf8",
+  ),
+) as { abi: unknown[]; creationCode: Hex };
+
+/** A token whose `transfer` returns `false` and moves nothing — the case `SafeERC20` exists for. The
+ *  same vendored fixture `routes-nest-dynamic.e2e.test.ts` runs `token/safe.ts` against. */
+const FALSE_RETURN_ERC20 = JSON.parse(
+  readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "std",
+      "token",
+      "fixtures",
+      "FalseReturnERC20.json",
+    ),
     "utf8",
   ),
 ) as { creationCode: Hex };
@@ -122,6 +153,15 @@ const balanceOf = (token: Address, holder: Address): Promise<bigint> =>
 /** A token no vector names, so the floor-violation case cannot inherit a balance from one. */
 const FLOOR_TOKEN: Address = "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA";
 
+/** Where the no-return token is etched. No vector names it, so every balance on it is minted here. */
+const NO_RETURN_TOKEN: Address = "0x7a5e9b3c2d4f6e8a0b1c3d5e7f9a2b4c6d8e0f12";
+
+/** Where the false-returning token is etched. No vector names it either. */
+const FALSE_RETURN_TOKEN: Address = "0x3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f";
+
+/** An address nothing is ever etched at, so a call to it runs no code and returns nothing. */
+const NO_CODE_TOKEN: Address = "0x5b6c7d8e9fa0b1c2d3e4f5061728394a5b6c7d8e";
+
 // ENGINE NOTE — do not use `0x1111…11` as a token address here. Observed while building this corpus:
 // as an ARRAY ELEMENT value it makes the v12 runtime revert `MemoryOOG` rather than perform (or
 // cleanly refuse) the sweep, and the failure is value-dependent — neighbouring addresses run fine.
@@ -175,6 +215,34 @@ const startEvm = async (): Promise<ChildProcess> => {
     const erc20Runtime = await publicClient.getCode({ address: contractAddress as Address });
     for (const address of addressesInPlay())
       await testClient.setCode({ address, bytecode: erc20Runtime as Hex });
+
+    const noReturnHash = await walletClient.sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      data: encodeDeployData({
+        abi: NO_RETURN_ERC20.abi,
+        bytecode: NO_RETURN_ERC20.creationCode,
+        args: ["No Return", "NRT", 6],
+      }),
+      gas: GAS_LIMIT,
+    });
+    const noReturn = await publicClient.waitForTransactionReceipt({ hash: noReturnHash });
+    const noReturnRuntime = await publicClient.getCode({
+      address: noReturn.contractAddress as Address,
+    });
+    await testClient.setCode({ address: NO_RETURN_TOKEN, bytecode: noReturnRuntime as Hex });
+
+    const falseReturnHash = await walletClient.sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      data: FALSE_RETURN_ERC20.creationCode,
+      gas: GAS_LIMIT,
+    });
+    const falseReturn = await publicClient.waitForTransactionReceipt({ hash: falseReturnHash });
+    const falseReturnRuntime = await publicClient.getCode({
+      address: falseReturn.contractAddress as Address,
+    });
+    await testClient.setCode({ address: FALSE_RETURN_TOKEN, bytecode: falseReturnRuntime as Hex });
 
     return anvil;
   } catch (err) {
@@ -255,6 +323,142 @@ describeEvm("settle payload execution on the real V12 EVM engine", () => {
     expect(await sendTo(sauce.pot, sauce.cookData(payload))).toBe("success");
     expect((await balanceOf(FLOOR_TOKEN, recipient)) - before).toBe(10_000n);
   }, 60_000);
+
+  // A token that returns nothing from `transfer`, like USDT. While the template transferred through
+  // `IERC20`, the compiled program decoded a `bool` from the empty return and the engine reverted the
+  // whole sweep; these cells are what caught it. The SafeERC20 transfer accepts an empty return from
+  // an address that has code.
+  describe("a no-return token (USDT-style) is swept like any other", () => {
+    it("as the floor token: swept in full, and the program returns its balance", async () => {
+      const recipient = SETTLE_VECTORS[0]!.recipient as Address;
+      const payload = encodeSettleProgram([NO_RETURN_TOKEN], 5_000n, recipient, SETTLE_PROGRAM);
+      await mintTo(NO_RETURN_TOKEN, sauce.pot, 7_777n);
+      const before = await balanceOf(NO_RETURN_TOKEN, recipient);
+
+      const returned = await publicClient.call({
+        account: DEPLOYER.address,
+        data: sauce.cookData(payload),
+        gas: GAS_LIMIT,
+        to: sauce.pot,
+        value: sauce.fee,
+      });
+      expect(await sendTo(sauce.pot, sauce.cookData(payload))).toBe("success");
+      expect((await balanceOf(NO_RETURN_TOKEN, recipient)) - before).toBe(7_777n);
+      expect(await balanceOf(NO_RETURN_TOKEN, sauce.pot)).toBe(0n);
+      expect(BigInt(returned.data ?? "0x0")).toBe(7_777n);
+    }, 60_000);
+
+    it("after a standard ERC20 in the same list: both swept in full", async () => {
+      const recipient = SETTLE_VECTORS[0]!.recipient as Address;
+      const payload = encodeSettleProgram(
+        [FLOOR_TOKEN, NO_RETURN_TOKEN],
+        1n,
+        recipient,
+        SETTLE_PROGRAM,
+      );
+      await mintTo(FLOOR_TOKEN, sauce.pot, 1_111n);
+      await mintTo(NO_RETURN_TOKEN, sauce.pot, 2_222n);
+      const before = await Promise.all(
+        [FLOOR_TOKEN, NO_RETURN_TOKEN].map((t) => balanceOf(t, recipient)),
+      );
+
+      expect(await sendTo(sauce.pot, sauce.cookData(payload))).toBe("success");
+      const after = await Promise.all(
+        [FLOOR_TOKEN, NO_RETURN_TOKEN].map((t) => balanceOf(t, recipient)),
+      );
+      expect(after.map((a, i) => a - before[i]!)).toEqual([1_111n, 2_222n]);
+      expect(await balanceOf(NO_RETURN_TOKEN, sauce.pot)).toBe(0n);
+    }, 60_000);
+
+    it("the balance-based floor still reverts the whole sweep, then clears", async () => {
+      const recipient = SETTLE_VECTORS[0]!.recipient as Address;
+      const payload = encodeSettleProgram([NO_RETURN_TOKEN], 10_000n, recipient, SETTLE_PROGRAM);
+      await mintTo(NO_RETURN_TOKEN, sauce.pot, 9_999n);
+      const before = await balanceOf(NO_RETURN_TOKEN, recipient);
+
+      expect(await sendTo(sauce.pot, sauce.cookData(payload))).toBe("reverted");
+      expect(await balanceOf(NO_RETURN_TOKEN, recipient)).toBe(before);
+
+      await mintTo(NO_RETURN_TOKEN, sauce.pot, 1n);
+      expect(await sendTo(sauce.pot, sauce.cookData(payload))).toBe("success");
+      expect((await balanceOf(NO_RETURN_TOKEN, recipient)) - before).toBe(10_000n);
+    }, 60_000);
+  });
+
+  // What `SafeERC20` adds over skipping the decode: a write that did not happen must not read as one
+  // that did. The first two cells list a standard token FIRST, so the revert is shown to take the
+  // whole sweep down: the balance swept before the bad token never leaves the Pot.
+  describe("a transfer that did not happen reverts the whole sweep", () => {
+    it("a token that returns false", async () => {
+      // Before the SafeERC20 transfer, this sweep succeeded: the recipient got nothing, the Pot kept
+      // the balance, and the program reported the sweep as done.
+      const recipient = SETTLE_VECTORS[0]!.recipient as Address;
+      const payload = encodeSettleProgram(
+        [FLOOR_TOKEN, FALSE_RETURN_TOKEN],
+        0n,
+        recipient,
+        SETTLE_PROGRAM,
+      );
+      await mintTo(FLOOR_TOKEN, sauce.pot, 4_444n);
+      await mintTo(FALSE_RETURN_TOKEN, sauce.pot, 5_555n);
+      const held = await balanceOf(FLOOR_TOKEN, sauce.pot);
+
+      expect(await sendTo(sauce.pot, sauce.cookData(payload))).toBe("reverted");
+      expect(await balanceOf(FLOOR_TOKEN, sauce.pot)).toBe(held);
+      expect(await balanceOf(FALSE_RETURN_TOKEN, sauce.pot)).toBe(5_555n);
+
+      // Control: without the false-returning token the same balance sweeps.
+      const control = encodeSettleProgram([FLOOR_TOKEN], 0n, recipient, SETTLE_PROGRAM);
+      expect(await sendTo(sauce.pot, sauce.cookData(control))).toBe("success");
+      expect(await balanceOf(FLOOR_TOKEN, sauce.pot)).toBe(0n);
+    }, 60_000);
+
+    it("a token address with no code", async () => {
+      // The sweep reads `balanceOf` first, and decoding its `uint256` from a codeless address's empty
+      // return already refuses this; the transfer's own code-size check is the second line behind it.
+      expect(await publicClient.getCode({ address: NO_CODE_TOKEN })).toBeUndefined();
+      const recipient = SETTLE_VECTORS[0]!.recipient as Address;
+      const payload = encodeSettleProgram(
+        [FLOOR_TOKEN, NO_CODE_TOKEN],
+        0n,
+        recipient,
+        SETTLE_PROGRAM,
+      );
+      await mintTo(FLOOR_TOKEN, sauce.pot, 6_666n);
+      const held = await balanceOf(FLOOR_TOKEN, sauce.pot);
+
+      expect(await sendTo(sauce.pot, sauce.cookData(payload))).toBe("reverted");
+      expect(await balanceOf(FLOOR_TOKEN, sauce.pot)).toBe(held);
+
+      const control = encodeSettleProgram([FLOOR_TOKEN], 0n, recipient, SETTLE_PROGRAM);
+      expect(await sendTo(sauce.pot, sauce.cookData(control))).toBe("success");
+      expect(await balanceOf(FLOOR_TOKEN, sauce.pot)).toBe(0n);
+    }, 60_000);
+
+    // A token that refuses by REVERTING: the raw call bubbles it. `ERC20Mock` refuses a zero
+    // receiver, and the encoder refuses to build one, so the recipient word is zeroed by hand.
+    it("a transfer the token refuses by reverting", async () => {
+      const encoded = encodeSettleProgram(
+        [FLOOR_TOKEN],
+        0n,
+        SETTLE_VECTORS[0]!.recipient,
+        SETTLE_PROGRAM,
+      );
+      const at = 2 + (SETTLE_WIRE.PROGRAM_BYTES + 2 * SETTLE_WIRE.WORD_BYTES) * 2;
+      const payload = (encoded.slice(0, at) +
+        "00".repeat(SETTLE_WIRE.WORD_BYTES) +
+        encoded.slice(at + SETTLE_WIRE.WORD_BYTES * 2)) as Hex;
+      await mintTo(FLOOR_TOKEN, sauce.pot, 3_333n);
+      const held = await balanceOf(FLOOR_TOKEN, sauce.pot);
+
+      expect(await sendTo(sauce.pot, sauce.cookData(payload))).toBe("reverted");
+      expect(await balanceOf(FLOOR_TOKEN, sauce.pot)).toBe(held);
+
+      // Control: the untouched payload sweeps the same balance, so the revert above was the refusal.
+      expect(await sendTo(sauce.pot, sauce.cookData(encoded))).toBe("success");
+      expect(await balanceOf(FLOOR_TOKEN, sauce.pot)).toBe(0n);
+    }, 60_000);
+  });
 
   describe("the traps — payloads the ENGINE cannot tell from the canonical one", () => {
     const canonical = SETTLE_VECTORS[0]!;

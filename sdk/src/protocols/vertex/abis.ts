@@ -4,7 +4,7 @@ export const EndpointABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "subaccountName", type: "uint256" },
+      { name: "subaccountName", type: "bytes12" },
       { name: "productId", type: "uint32" },
       { name: "amount", type: "uint128" },
     ],
@@ -19,15 +19,24 @@ export const EndpointABI = [
   },
 ] as const;
 
+// The Clearinghouse applies a sequenced WithdrawCollateral transaction (sender subaccount, product,
+// amount, nonce); users submit withdrawals through the Endpoint (`submitSlowModeTransaction`).
 export const ClearinghouseABI = [
   {
     name: "withdrawCollateral",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "subaccountName", type: "uint256" },
-      { name: "productId", type: "uint32" },
-      { name: "amount", type: "uint128" },
+      {
+        name: "txn",
+        type: "tuple",
+        components: [
+          { name: "sender", type: "bytes32" },
+          { name: "productId", type: "uint32" },
+          { name: "amount", type: "uint128" },
+          { name: "nonce", type: "uint64" },
+        ],
+      },
     ],
     outputs: [],
   },

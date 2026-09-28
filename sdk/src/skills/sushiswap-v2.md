@@ -128,7 +128,7 @@ function main(
 | Fantom    | Factory  | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` |
 | Fantom    | Router   | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` |
 | Optimism  | Factory  | `0xFbc12984689e5f15626Bad03Ad60160Fe98B303C` |
-| Optimism  | Router   | `0x4C5D5234f232BD2D76B96aA33F5AE4FCF0E4BFAb` |
+| Optimism  | Router   | `0x2ABf469074dc0b54d793850807E6eb5Faf2625b1` |
 
 ## ABI Methods
 

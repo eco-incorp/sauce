@@ -3,7 +3,7 @@
     {
       "name": "enableCollateral",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "payable",
       "inputs": [
         {
           "name": "account",
@@ -19,7 +19,7 @@
     {
       "name": "enableController",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "payable",
       "inputs": [
         {
           "name": "account",

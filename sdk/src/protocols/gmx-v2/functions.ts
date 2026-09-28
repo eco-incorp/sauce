@@ -34,14 +34,16 @@ function main(
       acceptablePrice: acceptablePrice,
       executionFee: executionFee,
       callbackGasLimit: 0,
-      minOutputAmount: minOutputAmount
+      minOutputAmount: minOutputAmount,
+      validFromTime: 0
     },
     orderType: orderType,
     decreasePositionSwapType: 0,
     isLong: isLong,
     shouldUnwrapNativeToken: false,
     autoCancel: false,
-    referralCode: 0x0000000000000000000000000000000000000000000000000000000000000000
+    referralCode: 0x0000000000000000000000000000000000000000000000000000000000000000,
+    dataList: []
   });
   return result;
 }

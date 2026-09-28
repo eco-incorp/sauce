@@ -45,11 +45,11 @@ function main(wstethAddress: Address, amount: Uint256): Uint256 {
 
 ## Key Addresses
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | stETH    | `0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84` |
-| Ethereum | wstETH   | `0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0` |
-| Arbitrum | wstETH   | `0x5979D7b546E38E414F7E9822514be443A4800529` |
+| Chain    | Contract | Address                                                                                      |
+| -------- | -------- | -------------------------------------------------------------------------------------------- |
+| Ethereum | stETH    | `0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84`                                                 |
+| Ethereum | wstETH   | `0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0`                                                 |
+| Arbitrum | wstETH   | `0x5979D7b546E38E414F7E9822514be443A4800529` (bridged token: transfers only, no wrap/unwrap) |
 
 ## ABI Methods
 

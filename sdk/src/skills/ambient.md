@@ -38,7 +38,7 @@ function main(
 }
 ```
 
-- `dexAddress`: CrocSwapDex contract address (same on both chains: `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688`)
+- `dexAddress`: CrocSwapDex contract address (`0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688` on Ethereum, `0xaaaaAAAACB71BF2C8CaE522EA5fa455571A74106` on Scroll)
 - `base`: Base token address (lower address of the pair by convention)
 - `quote`: Quote token address (higher address of the pair)
 - `poolIdx`: Pool index identifying the pool type (e.g., `420` for standard pools on Ethereum)
@@ -53,7 +53,7 @@ function main(
 | Chain    | Contract    | Address                                      |
 | -------- | ----------- | -------------------------------------------- |
 | Ethereum | CrocSwapDex | `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688` |
-| Scroll   | CrocSwapDex | `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688` |
+| Scroll   | CrocSwapDex | `0xaaaaAAAACB71BF2C8CaE522EA5fa455571A74106` |
 
 ## ABI Methods
 

@@ -1,17 +1,17 @@
 {
   "abi": [
     {
-      "name": "startBridgeTokensViaBridge",
+      "name": "startBridgeTokensViaAcrossV4",
       "type": "function",
       "stateMutability": "payable",
       "inputs": [
         {
-          "name": "_bridgeData",
+          "name": "bridgeData",
           "type": "tuple",
           "components": [
             {
               "name": "transactionId",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "bridge",
@@ -50,6 +50,56 @@
               "type": "bool"
             }
           ]
+        },
+        {
+          "name": "acrossData",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "receiverAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "refundAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "sendingAssetId",
+              "type": "bytes32"
+            },
+            {
+              "name": "receivingAssetId",
+              "type": "bytes32"
+            },
+            {
+              "name": "outputAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "outputAmountMultiplier",
+              "type": "uint128"
+            },
+            {
+              "name": "exclusiveRelayer",
+              "type": "bytes32"
+            },
+            {
+              "name": "quoteTimestamp",
+              "type": "uint32"
+            },
+            {
+              "name": "fillDeadline",
+              "type": "uint32"
+            },
+            {
+              "name": "exclusivityParameter",
+              "type": "uint32"
+            },
+            {
+              "name": "message",
+              "type": "bytes"
+            }
+          ]
         }
       ],
       "outputs": []
@@ -71,7 +121,7 @@
           "components": [
             {
               "name": "transactionId",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "bridge",
