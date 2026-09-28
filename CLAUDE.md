@@ -282,7 +282,7 @@ exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any ro
 way with **zero import**. `openRoute` and no further: `chainAmbient` has exactly one call site
 (`intent-dsl.ts`), and `compileSauceRoute` passes its caller's `ambient` straight through without
 merging this list in — so a direct `compileSauceRoute(..., {})` gets no ambient module at all. This resolves because `rs-compile.ts`'s `SDK_STD_PACKAGES` maps the bare
-`@sauce/token` specifier to the SDK's own vendored `std/token` dir (`STD_ROOT`, = `dist/std` once
+`@sauce/token` specifier to the SDK's own `std/token` source dir (`STD_ROOT`, = `dist/std` once
 built) regardless of `baseDirs` — an ambient module the compile can't resolve makes EVERY route
 throw, so that list must only ever name modules the SDK resolves itself. Two DISTINCT mechanisms
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
