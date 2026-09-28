@@ -76,7 +76,14 @@ export function allowance(token: Address, account: Account, spender: Address): U
 // amounts are `u64`, so an infinite-approve (`2^256 - 1`) reverts here while it succeeds on the EVM
 // (`uint256`); (2) the mint check reverts on a wrong `token`, where the EVM read arm returns 0 for a
 // codeless/wrong address — an error-path divergence, not a value one.
-export function transfer(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void {
+export function transfer(
+  token: Address,
+  tokenProgram: Account,
+  source: Account,
+  dest: Account,
+  authority: Account,
+  amount: Uint256,
+): void {
   require(tokenProgram == SPL_TOKEN_PROGRAM);
   require(source.owner == SPL_TOKEN_PROGRAM);
   require(svm.sload(source, 0, 32).toBe() == token);
@@ -90,14 +97,28 @@ export function transfer(token: Address, tokenProgram: Account, source: Account,
 // so `transferFrom` IS `transfer` here, and delegates to it rather than repeating the CPI. (The EVM
 // arm keeps two distinct methods because ERC20 genuinely has two: `transfer` moves the caller's
 // balance, `transferFrom` spends an allowance.)
-export function transferFrom(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void {
+export function transferFrom(
+  token: Address,
+  tokenProgram: Account,
+  source: Account,
+  dest: Account,
+  authority: Account,
+  amount: Uint256,
+): void {
   transfer(token, tokenProgram, source, dest, authority, amount);
 }
 
 // `approve` sets a single SPL delegate on `source` (SPL tracks one delegate per account, so a second
 // approve overwrites the first) — the EVM's `approve` writes a per-spender allowance map, so this
 // arm and `allowance` are single-delegate where the EVM is per-spender (a documented divergence).
-export function approve(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void {
+export function approve(
+  token: Address,
+  tokenProgram: Account,
+  source: Account,
+  delegate: Account,
+  authority: Account,
+  amount: Uint256,
+): void {
   require(tokenProgram == SPL_TOKEN_PROGRAM);
   require(source.owner == SPL_TOKEN_PROGRAM);
   require(svm.sload(source, 0, 32).toBe() == token);

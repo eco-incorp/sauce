@@ -20,13 +20,6 @@ pnpm-lock.yaml
 # calls (so `no-unused-vars` fires on every program) and `require(cond)` is SauceScript's ASSERTION,
 # which `no-require-imports` reads as a module import.
 
-# BYTE-PINNED to another repo. `CLAUDE.md` states `sdk/src/std/token` is a byte-identical copy of
-# `v12`'s conformance fixture (compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token),
-# and nothing here enforces it — the check is a manual `diff -r`, so a formatter reaching this path
-# breaks the invariant silently and permanently. Verified: on `main` all four files match v12's
-# copy; formatting split three signatures in `token.svm.js` and only that one drifted.
-sdk/src/std
-
 # GENERATED sources. `ci.yml` asserts `sdk/src/deployments` still matches a fresh
 # `sync-engine-artifacts` run, and the generators emit their own (unformatted) text — so
 # formatting the committed copy diverges it from what regeneration produces and fails that check.

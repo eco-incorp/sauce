@@ -56,7 +56,10 @@ export function transfer(token: Address, to: Address, amount: Uint256): void {
 
 export function transferFrom(token: Address, from: Address, to: Address, amount: Uint256): void {
   const selector = hex`23b872dd`;
-  const data = selector.concat(from.toBytesBe(32)).concat(to.toBytesBe(32)).concat(amount.toBytesBe(32));
+  const data = selector
+    .concat(from.toBytesBe(32))
+    .concat(to.toBytesBe(32))
+    .concat(amount.toBytesBe(32));
   checked(token, evm.call(token, 0n, data));
 }
 

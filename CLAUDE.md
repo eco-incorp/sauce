@@ -61,8 +61,9 @@ minors would start failing CI on a PR that changed nothing.
 positive: `main` is the entry point the Sauce compiler calls, so `no-unused-vars` fires on every
 program, and `require(cond)` is SauceScript's ASSERTION, which `no-require-imports` reads as a
 module import. Prettier's list is different and narrower — generated output (`**/*.generated.ts`,
-the two `settle.sauce.ts` recipes), captured fixtures, and `sdk/src/std` (formatted in the next
-commit). Everything else, SauceScript included, is formatted.
+the two `settle.sauce.ts` recipes) and captured fixtures. Everything else, SauceScript included, is
+formatted; `.prettierrc.json` names the `typescript` parser for `sdk/src/std`, whose `.js` files
+carry type annotations Prettier's default parser rejects.
 
 Per-workspace (`--filter`):
 
