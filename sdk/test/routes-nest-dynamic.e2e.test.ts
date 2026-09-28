@@ -1100,48 +1100,41 @@ describeEvm("route nesting, executed", () => {
     }, 120_000);
   });
 
-  describe("the README's hand-written SauceScript example", () => {
-    // The SDK generates the dynamic-nesting program above; this is the other half of the claim --
-    // that the same thing is WRITABLE BY HAND, in SauceScript, with the surface the package already
-    // ships. `docs/examples/cross-chain-intent.sauce.ts` is compiled on every `docs:check` run and
-    // quoted verbatim by the README; what only an engine can settle is whether the Portal accepts
-    // what it builds, which is what this does.
-    //
-    // The load-bearing unknown was the ABI encoding. CLAUDE.md warns that nested-struct field
-    // ordering has broken before, and this program hands the Portal a `Route` containing two arrays
-    // of structs, one of them holding a `bytes`. Comparing the PUBLISHED route bytes against the
-    // SDK's own encoder settles it for every field at once.
-    const HAND_WRITTEN = readFileSync(
+  describe("the README's example, as published", () => {
+    // `docs/examples/cross-chain-intent.sauce.ts` is compiled on every `docs:check` run and quoted
+    // verbatim by the README. What only an engine can settle is whether the Portal accepts what its
+    // lowering builds -- and whether the amount the program measured is the amount the published
+    // intent carries, which is the claim the README makes.
+    const README_EXAMPLE = readFileSync(
       join(HERE, "../../docs/examples/cross-chain-intent.sauce.ts"),
       "utf8",
     );
-    const HAND_SALT = `0x${"5a".repeat(32)}` as Hex;
-    const DELIVER_TO = "0x00000000000000000000000000000000000000a5" as Address;
     const SEEDED = 12_345_678n;
+    const DELIVER_TO = "0x00000000000000000000000000000000000000a5" as Address;
 
-    it("publishes exactly the intent the SDK encodes for the same fields", async () => {
+    it("publishes an intent carrying the balance it measured", async () => {
       const token = await deploy(MOCK_ERC20.creationCode);
       const compiled = compileSauceRoute(
         "base",
-        HAND_WRITTEN,
+        README_EXAMPLE,
         { pot: executorPot, engine: sauce.engine },
         {
-          // `IPortal` needs no entry here: `sauce-route.ts` layers the Portal binding under every
-          // route compile, which is what makes the program above writable with no setup.
-          defines: {
-            TOKEN: BigInt(token),
-            RECIPIENT: BigInt(DELIVER_TO),
-            PORTAL: BigInt(portal),
-            DESTINATION_PORTAL: BigInt(portal),
-            DESTINATION: BigInt(CHAIN_ID),
-            CREATOR: BigInt(CREATOR),
-            PROVER: BigInt(PROVER),
-            DEADLINE: 4_000_000_000n,
-            SALT: BigInt(HAND_SALT),
-            MIN_AMOUNT: 1n,
+          // The example says `USDC`; on this anvil that symbol is the mock deployed above.
+          tokens: { USDC: token },
+          defines: { RECIPIENT: BigInt(DELIVER_TO), MIN_AMOUNT: 1n },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            // This anvil's Portal, not the registry's. On a real chain both come from the registry.
+            sourcePortal: portal,
+            destinationPortal: portal,
+            salt: `0x${"ee".repeat(32)}` as Hex,
           },
         },
       );
+      // Nothing in the example mentions the Portal, a selector or an approval.
+      expect(README_EXAMPLE).not.toMatch(/publishAndFund|evm\.call|hex`/);
 
       const { status, logs } = await fulfil([
         {
@@ -1161,50 +1154,53 @@ describeEvm("route nesting, executed", () => {
       ]);
       expect(status).toBe("success");
 
-      const expected: Intent = {
-        destination: BigInt(CHAIN_ID),
-        sourceChainId: BigInt(CHAIN_ID),
-        route: normalizeRoute({
-          salt: HAND_SALT,
-          deadline: 4_000_000_000n,
-          portal,
-          nativeAmount: 0n,
-          tokens: [{ token, amount: SEEDED }],
-          calls: [
-            {
-              target: token,
-              data: encodeFunctionData({
-                abi: erc20Abi,
-                functionName: "transfer",
-                args: [DELIVER_TO, SEEDED],
-              }),
-            },
-          ],
-        }),
-        reward: normalizeReward({
-          deadline: 4_000_000_000n,
-          creator: CREATOR,
-          prover: PROVER,
-          nativeAmount: 0n,
-          tokens: [{ token, amount: SEEDED }],
-        }),
-      };
-
       const published = publishedIn(logs);
       expect(published).toHaveLength(1);
-      // Byte-for-byte, so the nested `tokens[]`/`calls[]` structs and the inner `bytes` are all
-      // established at once -- including the leading ABI offset word the program prepends by hand.
-      expect(published[0]!.route.toLowerCase()).toBe(encodeRouteEvm(expected.route).toLowerCase());
-      expect(published[0]!.intentHash).toBe(hashIntent(expected).intentHash);
-      // Funded from the measured balance, through the raw approve the program issues.
+      expect(published[0]!.destination).toBe(42_161n); // Arbitrum, as the example names
+      expect(published[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
       expect(
         await publicClient.readContract({
           abi: portalAbi,
           address: portal,
           functionName: "getRewardStatus",
-          args: [hashIntent(expected).intentHash],
+          args: [published[0]!.intentHash],
         }),
       ).toBe(1);
+    }, 180_000);
+
+    it("refuses to create the intent when the floor is not met, reverting everything", async () => {
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const marker = "0x0000000000000000000000000000000000000f01" as Address;
+      const compiled = compileSauceRoute(
+        "base",
+        README_EXAMPLE,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          tokens: { USDC: token },
+          // Nothing was minted, so the balance is below this floor and the program throws.
+          defines: { RECIPIENT: BigInt(DELIVER_TO), MIN_AMOUNT: 1n },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            sourcePortal: portal,
+            destinationPortal: portal,
+            salt: `0x${"ef".repeat(32)}` as Hex,
+          },
+        },
+      );
+
+      const { status } = await fulfil([
+        markerCall(marker),
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+
+      expect(status).toBe("reverted");
+      expect(await balanceOf(markerToken, marker)).toBe(0n);
     }, 180_000);
   });
 
