@@ -158,6 +158,9 @@ function parseImports(source: string): ParsedImport[] {
 function extractExportsFromTs(tsSource: string): Record<string, unknown> {
   // Strip TypeScript-specific syntax
   let js = tsSource;
+  // Remove whole-line comments: the value extractor below counts brackets and quotes, and an
+  // apostrophe in a comment ("the pool's") would read as an unterminated string.
+  js = js.replace(/^\s*\/\/.*$/gm, "");
   // Remove `import type ...` lines
   js = js.replace(/^\s*import\s+type\s+[^;]*;?\s*$/gm, "");
   // Remove `satisfies TypeName`

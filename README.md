@@ -1,24 +1,31 @@
 # Sauce
 
-Write programmable transactions and Eco intents with **`@eco-incorp/sauce`**. The SDK compiles
-SauceScript into bytecode for the Sauce EVM and Solana runtimes, resolves protocol contracts and
-tokens, and builds the calls that execute your program.
+**Sauce is a programmable-transaction runtime.** You write a program, it compiles to bytecode, and a
+Sauce engine executes it atomically inside one transaction on EVM or Solana. Either the whole
+program lands or none of it does.
+
+`@eco-incorp/sauce` is the developer package for that runtime: the compiler, the chain and protocol
+knowledge a program needs, and the builders that turn a program into a transaction.
+
+On top of the runtime sits a second layer — **routes**. A route packages a program as an Eco intent:
+an offer to have that program executed on another chain, with a reward escrowed here for whoever
+executes it there. Cross-chain execution is this layer, not the runtime.
 
 ```sh
 npm install @eco-incorp/sauce
 ```
 
+Node.js **24 or newer**.
+
 [Documentation](docs/README.md) · [Quick start](docs/guides/quick-start.md) ·
 [Examples](docs/examples/README.md) · [API reference](docs/api/README.md)
 
-Use Node.js **24 or newer**. The links open the Markdown manual and examples included in this package version. After installation, you can also open `node_modules/@eco-incorp/sauce/docs/README.md` locally.
+## A program that creates a cross-chain intent
 
-## Create a cross-chain intent, in Sauce
-
-Sauce programs are not only a way to spend an intent's funds — a program can create the NEXT intent
-while it runs. That matters because the amount is usually not known in advance: it is whatever the
-swap, bridge or transfer just before it produced. The program below measures that amount on chain
-and publishes an intent carrying it onward.
+Programs are usually thought of as a way to _spend_ an intent's funds. They can also create the next
+one. That matters because the amount is rarely known in advance: it is whatever the swap, bridge or
+transfer just before it produced. This program measures that amount on chain and publishes an intent
+carrying it onward.
 
 ```js
 // Create a cross-chain intent from inside a Sauce program.
@@ -82,24 +89,26 @@ function main() {
 ```
 
 `Token`, `ctx`, `abi`, `hex`, `evm` and `IPortal` are the language and the SDK's built-in bindings,
-available with no import. The capitalised names are compile-time `defines`: one 256-bit word each,
-folded into the bytecode, which is how a program is parameterised without capturing anything from
-JavaScript. The program is compiled and attached to a route by the TypeScript beside it —
-[docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts), which is run on every
-release — and [nested intents](docs/guides/nested-intents.md) shows how to have the SDK generate
-this program for you, including cascades several hops deep.
+available with no import. The capitalised names are compile-time `defines` — one 256-bit word each,
+folded into the bytecode. That is how a program is parameterised, because a program captures nothing
+from the JavaScript around it.
 
-## Programs with protocol and token globals
+The TypeScript beside it compiles the program and attaches it to a route:
+[docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts), run on every release.
+[Nested intents](docs/guides/nested-intents.md) shows how to have the SDK generate this program for
+you instead, including cascades several hops deep.
 
-This complete example builds an intent offline. The repeated-digit addresses and fee are fixtures;
-no transaction is sent. Import a destination chain, then use its contracts and tokens in the program:
+## A program that calls protocols and tokens by name
+
+Inside a route body the SDK resolves token symbols and protocol contracts against the destination
+chain, so a program reads like the operation it performs. This example builds a complete intent
+offline; the repeated-digit addresses and the fee are fixtures and nothing is sent.
 
 ```ts
 import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
-// Offline fixtures. Read the destination Kitchen fee and use an Executor-owned Pot before use.
-const executionFee = 1_000n;
+const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before use.
 const options: routes.IntentOptions = {
   execution: {
     pot: "0x1111111111111111111111111111111111111111",
@@ -124,52 +133,28 @@ const built = Base(() => {
 console.log(built.hash().intentHash);
 ```
 
-The [quick start](docs/guides/quick-start.md) explains the setup, and the [examples](docs/examples/README.md) are checked
-against the SDK. Every chain is a named export — `import { Base, Solana }` — and importing the SDK
-installs nothing globally. The callback is compiled as source, so the names inside it are different:
-`USDC` and `Uniswap` are compile-time names the compiler resolves on Base, never JavaScript values,
-and anything from surrounding JavaScript must be supplied through compile-time `defines`.
+Two kinds of name meet in that snippet, and telling them apart is most of the learning curve. `Base`
+is a **named export** — an ordinary JavaScript value, one per chain, and importing the package puts
+nothing on `globalThis`. `USDC` and `Uniswap` are **program syntax**: the compiler resolves them
+against Base, and there is no JavaScript object behind them to import or call. The callback is read
+as source text, never invoked, and captures nothing; application values reach it through `defines`.
 
-Use `USDC.transfer(...)`, `USDC.balanceOf(...)`, `Token(address).approve(...)`, and linked protocol
-methods in the same program. `Uniswap.UniversalRouter` is the family alias for
-`UniswapV4.UniversalRouter`; available contracts and methods come from the
-[accessor registry](docs/api/coverage.md). The compiler checks chain availability and ABI fidelity.
+`.reward(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
+requests your application submits. [Quick start](docs/guides/quick-start.md) walks through it, and
+[protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 
-## From a program to an intent
+## What else is in the package
 
-`Base(body, options).reward(reward)` compiles a destination program and constructs an Eco intent.
-The result exposes the intent, bytecode, hashes, and Portal transaction requests. Your application
-submits those requests. Direct Portal execution requires an Executor-owned Pot and native value for the Kitchen execution fee. Use `.nest(...)` to compose intents with separate executions and funding.
+| You want to                                         | Start at                                        |
+| --------------------------------------------------- | ----------------------------------------------- |
+| Build, fund and submit an intent                    | [Create an intent](docs/guides/intents.md)      |
+| Chain intents together, statically or at run time   | [Nested intents](docs/guides/nested-intents.md) |
+| Generate programs from data instead of writing them | [Builders](docs/guides/builders-and-actions.md) |
+| Compile a standalone program with runtime arguments | [Compiling programs](docs/guides/compiling.md)  |
+| Execute on Solana                                   | [Solana](docs/guides/solana.md)                 |
+| Check what a settlement payload contains            | [Verification](docs/guides/verification.md)     |
+| Know which protocols, tokens and chains are wired   | [Coverage](docs/api/coverage.md)                |
 
-Use the direct Kitchen client for Solana execution. The legacy SVM intent helper is incompatible
-with the released gated engine; the Solana guide below describes this boundary.
-
-- [Create and fund an intent](docs/guides/intents.md)
-- [Compose nested intents](docs/guides/nested-intents.md)
-- [Build programs with token, swap, deposit, and action helpers](docs/guides/builders-and-actions.md)
-- [Execute on Solana](docs/guides/solana.md)
-- [Verify settlement programs](docs/guides/verification.md)
-
-## Compiler and runtime
-
-The SDK includes **`@eco-incorp/sauce-compiler`**, the Rust/WebAssembly SauceScript compiler, and
-exposes it through `@eco-incorp/sauce/compiler`. Compile directly when you need entry arguments,
-custom module resolution, or SVM account manifests. See the [compiler guide](docs/guides/compiling.md)
-and [compiler API](docs/api/compiler.md).
-
-SauceScript supports contract calls, arithmetic, control flow, and composition within the
-[compiler's language subset](docs/concepts/saucescript.md). A program executes atomically in one
-transaction on its target chain. Cross-chain intents coordinate separate transactions.
-
-The root SDK and its compiler integration require Node.js **24 or newer**. The compiler dependency also has its
-own browser entry point. See [architecture](docs/concepts/architecture.md) for how the SDK,
-compiler, and deployed runtime work together.
-
-Current release pins: compiler **2.3.0**, EVM engine **1.0.1**, SVM engine **1.2.0**, both Kitchens
-**1.0.0**.
-
-The EVM settle program compiles to **435 bytes** with a new verification hash: its sweep now
-transfers with `SafeERC20` semantics, so no-return tokens such as USDT are swept and a token that
-returns `false` reverts the sweep. Recompile and invalidate cached programs when upgrading; to verify
-existing 356- or 362-byte payloads, pass their historical `{ hash, bytes }` pin to
-`validateSettleProgram` (see [verification](docs/guides/verification.md)).
+The SauceScript compiler ships inside this package; there is no separate install and no compiler
+checkout. [Architecture](docs/concepts/architecture.md) explains how the pieces fit,
+[SauceScript](docs/concepts/saucescript.md) the language itself.

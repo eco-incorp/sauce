@@ -35,7 +35,7 @@
       "outputs": [
         {
           "name": "taskId",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ]
     },
@@ -46,7 +46,7 @@
       "inputs": [
         {
           "name": "taskId",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ],
       "outputs": []

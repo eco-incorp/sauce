@@ -37,11 +37,19 @@ describe("descriptors: golden selectors", () => {
     expect(selectorOf(d, "execute")).toBe("0x3593564c");
   });
 
-  it("known-wrong-and-flagged: uniswap-v3.Factory.getPool (widened uint32 vs real uint24 -> 0x1698ee82)", () => {
+  it("correct: uniswap-v3.Factory.getPool (uint24 fee, the deployed selector)", () => {
     const d = getDescriptor("uniswap-v3", "Factory")!;
-    expect(selectorOf(d, "getPool")).toBe("0x71c54fc9");
-    expect(d.coverage.typeFidelity).toBe("widened");
-    expect(d.coverage.caveats.length).toBeGreaterThan(0);
+    expect(selectorOf(d, "getPool")).toBe("0x1698ee82");
+    expect(d.coverage.typeFidelity).toBe("exact");
+  });
+
+  it("correct: uniswap-v3.SwapRouter02.exactInputSingle has no deadline field", () => {
+    const d = getDescriptor("uniswap-v3", "SwapRouter02")!;
+    expect(selectorOf(d, "exactInputSingle")).toBe("0x04e45aaf");
+  });
+
+  it("no linked descriptor is widened", () => {
+    expect(listDescriptors().filter((d) => d.coverage.typeFidelity === "widened")).toEqual([]);
   });
 });
 
@@ -196,7 +204,7 @@ describe("descriptors: registry totals + purity", () => {
       DESCRIPTORS.map((d) => d.abiExport).filter((x): x is string => x !== undefined),
     );
     expect(protocolSlugs.size).toBe(16);
-    expect(abiExports.size).toBe(25);
+    expect(abiExports.size).toBe(26);
     expect(DESCRIPTORS.length).toBe(30);
   });
 

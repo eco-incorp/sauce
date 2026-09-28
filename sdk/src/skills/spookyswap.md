@@ -37,7 +37,7 @@ function main(
 }
 ```
 
-- `routerAddress`: SpookySwap Router on Fantom (`0xa6AD18C2aC47803E193F75c3677b14BF19B94883`)
+- `routerAddress`: SpookySwap Router on Fantom (`0xF491e7B69E4244ad4002BC14e878a34207E38c29`)
 - `path`: Ordered token address array for the swap route
 - `amountIn`: Exact input amount (in wei)
 - `amountOutMin`: Minimum output for slippage protection
@@ -107,7 +107,7 @@ function main(
 
 | Chain  | Contract  | Address                                      |
 | ------ | --------- | -------------------------------------------- |
-| Fantom | V2 Router | `0xa6AD18C2aC47803E193F75c3677b14BF19B94883` |
+| Fantom | V2 Router | `0xF491e7B69E4244ad4002BC14e878a34207E38c29` |
 
 ## ABI Methods
 

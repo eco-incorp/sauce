@@ -18,8 +18,8 @@ export const LockupLinearABI = [
             name: "durations",
             type: "tuple",
             components: [
-              { name: "cliff", type: "uint64" },
-              { name: "total", type: "uint64" },
+              { name: "cliff", type: "uint40" },
+              { name: "total", type: "uint40" },
             ],
           },
           {

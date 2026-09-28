@@ -21,7 +21,7 @@ function main(vTokenAddress: Address, amount: Uint256): Uint256 {
 }
 ```
 
-- `vTokenAddress`: The vToken market contract (each asset has its own vToken, e.g. vBNB)
+- `vTokenAddress`: A BEP-20 vToken market (each asset has its own vToken, e.g. vUSDC). vBNB takes native BNB instead: see `VBNBABI`
 - Returns 0 on success, error code on failure
 - Requires ERC-20 approval of underlying to the vToken
 
@@ -84,7 +84,15 @@ function main(vTokenAddress: Address, amount: Uint256): Uint256 {
 - `redeemUnderlying(uint256 redeemAmount) returns (uint256)` - Redeem exact underlying amount
 - `borrow(uint256 borrowAmount) returns (uint256)` - Borrow underlying
 - `repayBorrow(uint256 repayAmount) returns (uint256)` - Repay borrow debt
-- `balanceOfUnderlying(address owner) returns (uint256)` - Get underlying balance including accrued interest (view)
+- `balanceOfUnderlying(address owner) returns (uint256)` - Get underlying balance including accrued interest. Not a view: it accrues interest first, so it cannot be STATICCALLed
+
+### VBNBABI
+
+vBNB (`vBNB`) takes native BNB, so its `mint` and `repayBorrow` take no amount: the BNB sent with the call is the amount.
+
+- `mint()` - Supply BNB (payable), receive vBNB. Returns nothing; reverts on failure
+- `repayBorrow()` - Repay BNB borrow debt (payable). Returns nothing; reverts on failure
+- `redeem`, `redeemUnderlying`, `borrow`, `balanceOfUnderlying` - As on `VTokenABI`
 
 ### VenusComptrollerABI
 

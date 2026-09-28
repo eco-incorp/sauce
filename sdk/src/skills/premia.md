@@ -4,7 +4,7 @@ Decentralized options protocol with an AMM-based pricing model and concentrated 
 
 ## Category
 
-options | Chains: Arbitrum, Ethereum
+options | Chains: Arbitrum
 
 ## Key Operations
 
@@ -20,41 +20,41 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 
 ## SauceScript Examples
 
+Premia v3 has one pool contract per market (base, quote, strike, maturity, call/put), deployed by the PoolFactory; its `PoolDeployed` event names each pool. `exercise` and `settle` act on the caller's own position in that pool.
+
 ```typescript
-// Exercise long option
-import { DiamondABI as IDiamond } from "./abis";
-function main(diamondAddress: Address, holder: Address, longTokenId: Uint256): Uint256 {
-  const diamond = IDiamond.at(diamondAddress);
-  return diamond.exercise(holder, longTokenId);
+// Exercise a long position after maturity
+import { DiamondABI as IPool } from "./abis";
+function main(poolAddress: Address): { exerciseValue: Uint256; exerciseFee: Uint256 } {
+  const pool = IPool.at(poolAddress);
+  return pool.exercise();
 }
 
-// Settle short option
-import { DiamondABI as IDiamond } from "./abis";
-function main(diamondAddress: Address, holder: Address, shortTokenId: Uint256): Uint256 {
-  const diamond = IDiamond.at(diamondAddress);
-  return diamond.settle(holder, shortTokenId);
+// Settle a short position after maturity
+import { DiamondABI as IPool } from "./abis";
+function main(poolAddress: Address): Uint256 {
+  const pool = IPool.at(poolAddress);
+  return pool.settle();
 }
 ```
 
 ## Key Addresses
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Arbitrum | diamond  | `0xa079C6B032133b95Cf8b3d273D27eeb6B110a469` |
-| Ethereum | diamond  | `0xc22FAe86443aEed038A4ED887bbA8F5035FD12F0` |
+| Chain    | Contract    | Address                                      |
+| -------- | ----------- | -------------------------------------------- |
+| Arbitrum | poolFactory | `0xAE4fB6622F25f397587F11638dA8CE88C27b5645` |
 
 ## ABI Methods
 
-### DiamondABI
+### DiamondABI (a Premia v3 pool)
 
-- `trade(bytes32,uint256,bool,uint256,address)` - Buy/sell options. Params: poolKey (identifies option market), size (option amount), isBuy (true=buy, false=sell), premiumLimit (max/min premium), referrer. Returns totalPremium
-- `exercise(address,uint256)` - Exercise long option. Params: holder, longTokenId. Returns exerciseValue (profit amount)
-- `settle(address,uint256)` - Settle short option after expiry. Params: holder, shortTokenId. Returns collateral (returned amount)
+- `trade(uint256 size, bool isBuy, uint256 premiumLimit, address referrer) returns (uint256 totalPremium, (int256 collateral, int256 longs, int256 shorts) delta)` - Buy/sell options from the pool's AMM. `size` is 18-decimal
+- `exercise() returns (uint256 exerciseValue, uint256 exerciseFee)` - Exercise the caller's long position after maturity
+- `settle() returns (uint256 collateral)` - Settle the caller's short position after maturity
 
 ## Notes
 
-- Diamond proxy pattern - single contract for all operations
+- Each pool is a proxy routed through the pool Diamond's facets
 - Supports calls and puts on ETH, BTC, and other assets
-- poolKey (bytes32) encodes the option parameters (strike, expiry, type)
 - Long token = bought option, short token = sold/written option
 - exercise returns the in-the-money value; settle returns remaining collateral to writers

@@ -19,7 +19,7 @@
         },
         {
           "name": "recipient",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "arbiterFee",
@@ -60,7 +60,7 @@
         },
         {
           "name": "tokenAddress",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ],
       "outputs": [

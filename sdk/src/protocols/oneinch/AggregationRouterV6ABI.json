@@ -62,11 +62,11 @@
     {
       "name": "unoswap",
       "type": "function",
-      "stateMutability": "payable",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "srcToken",
-          "type": "address"
+          "name": "token",
+          "type": "uint256"
         },
         {
           "name": "amount",
@@ -77,8 +77,8 @@
           "type": "uint256"
         },
         {
-          "name": "pools",
-          "type": "uint256[]"
+          "name": "dex",
+          "type": "uint256"
         }
       ],
       "outputs": [

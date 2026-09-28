@@ -45,14 +45,13 @@ function main(
 
 ### ArrakisRouterABI
 
-- `addLiquidity(tuple)` - Add liquidity. Tuple: (amount0Max, amount1Max, amount0Min, amount1Min, amountSharesMin, vault, receiver, gauge). Returns (amount0, amount1, sharesReceived)
-- `removeLiquidity(tuple)` - Remove liquidity. Tuple: (burnAmount, amount0Min, amount1Min, vault, receiver, gauge). Returns (amount0, amount1)
+- `addLiquidity(tuple)` [payable] - Add liquidity. Tuple: (amount0Max, amount1Max, amount0Min, amount1Min, amountSharesMin, vault, receiver, gauge). Returns (amount0, amount1, sharesReceived)
+- `removeLiquidity(tuple)` - Remove liquidity. Tuple: (burnAmount, amount0Min, amount1Min, vault, receiver, gauge, receiveETH). Returns (amount0, amount1)
 
 ### ArrakisVaultABI
 
 - `totalSupply()` - Total vault shares outstanding
 - `balanceOf(address)` - Query vault share balance
-- `totalUnderlying()` - Total (amount0, amount1) managed by vault
 - `token0()` - First token address
 - `token1()` - Second token address
 
@@ -63,3 +62,4 @@ function main(
 - Approve both token0 and token1 to the router before adding liquidity
 - Vault shares represent proportional ownership of the managed position
 - gauge param can be zero address if not staking in a gauge
+- The vault itself does not report its underlying amounts; ArrakisV2Helper's `totalUnderlying(vault)` does

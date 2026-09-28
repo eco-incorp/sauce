@@ -63,6 +63,10 @@
         {
           "name": "amountIn",
           "type": "uint256"
+        },
+        {
+          "name": "amountOut",
+          "type": "uint256"
         }
       ]
     }

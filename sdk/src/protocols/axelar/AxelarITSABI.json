@@ -7,7 +7,7 @@
       "inputs": [
         {
           "name": "tokenId",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "destinationChain",

@@ -28,7 +28,8 @@ function main(routerAddress: Address, vault: Address, receiver: Address, burnAmo
     amount1Min: 0,
     vault: vault,
     receiver: receiver,
-    gauge: 0x0000000000000000000000000000000000000000
+    gauge: 0x0000000000000000000000000000000000000000,
+    receiveETH: false
   });
   return result;
 }

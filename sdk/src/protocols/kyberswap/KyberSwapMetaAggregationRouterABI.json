@@ -10,7 +10,7 @@
           "type": "tuple",
           "components": [
             {
-              "name": "callTo",
+              "name": "callTarget",
               "type": "address"
             },
             {
@@ -18,27 +18,61 @@
               "type": "address"
             },
             {
-              "name": "tokenIn",
-              "type": "address"
+              "name": "targetData",
+              "type": "bytes"
             },
             {
-              "name": "tokenOut",
-              "type": "address"
+              "name": "desc",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "srcToken",
+                  "type": "address"
+                },
+                {
+                  "name": "dstToken",
+                  "type": "address"
+                },
+                {
+                  "name": "srcReceivers",
+                  "type": "address[]"
+                },
+                {
+                  "name": "srcAmounts",
+                  "type": "uint256[]"
+                },
+                {
+                  "name": "feeReceivers",
+                  "type": "address[]"
+                },
+                {
+                  "name": "feeAmounts",
+                  "type": "uint256[]"
+                },
+                {
+                  "name": "dstReceiver",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                },
+                {
+                  "name": "minReturnAmount",
+                  "type": "uint256"
+                },
+                {
+                  "name": "flags",
+                  "type": "uint256"
+                },
+                {
+                  "name": "permit",
+                  "type": "bytes"
+                }
+              ]
             },
             {
-              "name": "amountIn",
-              "type": "uint256"
-            },
-            {
-              "name": "minAmountOut",
-              "type": "uint256"
-            },
-            {
-              "name": "recipient",
-              "type": "address"
-            },
-            {
-              "name": "data",
+              "name": "clientData",
               "type": "bytes"
             }
           ]

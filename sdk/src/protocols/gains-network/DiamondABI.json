@@ -6,58 +6,78 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "t",
+          "name": "trade",
           "type": "tuple",
           "components": [
             {
-              "name": "trader",
+              "name": "user",
               "type": "address"
             },
             {
-              "name": "pairIndex",
-              "type": "uint256"
-            },
-            {
               "name": "index",
-              "type": "uint256"
+              "type": "uint32"
             },
             {
-              "name": "initialPosToken",
-              "type": "uint256"
-            },
-            {
-              "name": "positionSizeDai",
-              "type": "uint256"
-            },
-            {
-              "name": "openPrice",
-              "type": "uint256"
-            },
-            {
-              "name": "buy",
-              "type": "bool"
+              "name": "pairIndex",
+              "type": "uint16"
             },
             {
               "name": "leverage",
-              "type": "uint256"
+              "type": "uint24"
+            },
+            {
+              "name": "long",
+              "type": "bool"
+            },
+            {
+              "name": "isOpen",
+              "type": "bool"
+            },
+            {
+              "name": "collateralIndex",
+              "type": "uint8"
+            },
+            {
+              "name": "tradeType",
+              "type": "uint8"
+            },
+            {
+              "name": "collateralAmount",
+              "type": "uint120"
+            },
+            {
+              "name": "openPrice",
+              "type": "uint64"
             },
             {
               "name": "tp",
-              "type": "uint256"
+              "type": "uint64"
             },
             {
               "name": "sl",
-              "type": "uint256"
+              "type": "uint64"
+            },
+            {
+              "name": "isCounterTrade",
+              "type": "bool"
+            },
+            {
+              "name": "positionSizeToken",
+              "type": "uint160"
+            },
+            {
+              "name": "__placeholder",
+              "type": "uint24"
             }
           ]
         },
         {
-          "name": "orderType",
-          "type": "uint8"
+          "name": "maxSlippageP",
+          "type": "uint16"
         },
         {
-          "name": "slippageP",
-          "type": "uint256"
+          "name": "referrer",
+          "type": "address"
         }
       ],
       "outputs": []
@@ -68,12 +88,12 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "pairIndex",
-          "type": "uint256"
+          "name": "index",
+          "type": "uint32"
         },
         {
-          "name": "index",
-          "type": "uint256"
+          "name": "expectedPrice",
+          "type": "uint64"
         }
       ],
       "outputs": []
@@ -84,16 +104,12 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "pairIndex",
-          "type": "uint256"
-        },
-        {
           "name": "index",
-          "type": "uint256"
+          "type": "uint32"
         },
         {
           "name": "newSl",
-          "type": "uint256"
+          "type": "uint64"
         }
       ],
       "outputs": []
@@ -104,16 +120,12 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "pairIndex",
-          "type": "uint256"
-        },
-        {
           "name": "index",
-          "type": "uint256"
+          "type": "uint32"
         },
         {
           "name": "newTp",
-          "type": "uint256"
+          "type": "uint64"
         }
       ],
       "outputs": []

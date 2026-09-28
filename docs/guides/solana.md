@@ -2,9 +2,9 @@
 
 [Documentation](../README.md) · [Compiler](../api/compiler.md) · [Coverage](../api/coverage.md)
 
-Solana programs use the `svm` compiler target, explicit account parameters, and a Kitchen that invokes the engine. EVM token/protocol member rewrites such as `USDC.transfer(...)` do not apply to SVM routes.
+Solana execution differs from EVM in one structural way, and everything on this page follows from it: **a Solana program must declare every account it touches, up front.** Those declarations are `Account` parameters on `main`, and the compiler returns them as an account manifest you resolve to real addresses before sending anything.
 
-Use `@eco-incorp/sauce/compiler` to retain the compiler's account manifest. `routes.compileSauceRoute()` returns execution calls and a `compiled.bytecode` segment list, but does not expose that manifest; applications resolving account slots should use the direct compiler result.
+Two consequences. The EVM name rewrites (`USDC.transfer(...)`, protocol members) do not apply here — there is no address to fold in without an account slot to put it in. And you want `@eco-incorp/sauce/compiler` directly: `routes.compileSauceRoute()` returns calls and bytecode but drops the manifest, which is the part you need.
 
 ## Compile an SPL transfer
 
@@ -42,9 +42,9 @@ The account references are names, not addresses. `manifest.accounts` records the
 
 Use `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from
 `@eco-incorp/sauce/deployments` for the released program identities, and confirm
-they are deployed on your cluster. The older `v12SvmProgramId` constant identifies
-a legacy engine. The client derives a Pot owned by its `payer` signer; select it
-with `potSalt` when configuring the client.
+they are deployed on your cluster. `v12SvmProgramId` names an earlier engine
+generation, not these. The client derives a Pot owned by its `payer` signer;
+choose it with `potSalt` when you configure the client.
 
 ```ts
 import {
@@ -71,14 +71,12 @@ After successful simulation, `client.execute(bytecode, manifest, resolution, { c
 
 ### Select the released programs and quote the fee
 
-The pinned SVM engine **1.2.0** is `HB8b1oD5PB2ptkLH6EV56Rr9RHevutEfvG2YdA7an6rK`;
-Kitchen **1.0.0** is `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`.
-These are release addresses; confirm deployment on your cluster before use.
-Engine 1.2.0 adds a code-hash-pinned staged variant of the direct paid calls introduced
-in 1.1.0. The SDK clients use Kitchen-mediated cooks;
-builders for the direct paid instructions are not exposed.
-Use the deployment helpers and read the Kitchen's fee configuration on the selected
-cluster. This example checks a caller-selected lamport budget before signing:
+Read the program ids from the deployment helpers rather than pasting them, and
+confirm each is deployed on the cluster you are targeting. The SDK's clients cook
+through the Kitchen; the engine's direct paid instructions have no builder here.
+
+Every cook pays the Kitchen's fee in lamports, and the fee is read from chain, not
+assumed. This example quotes it and refuses to sign past a budget the caller set:
 
 ```ts
 import { createHash } from "node:crypto";
@@ -145,34 +143,34 @@ Staging belongs to the Kitchen. There is no `client.stageBuffer()` convenience m
 
 The low-level instruction builders return instructions; the application groups, signs, submits, and confirms them. The two Kitchen cook paths require `buildHeapFramePrepend()` when assembling transactions yourself. A staged client's first argument is the **code-buffer metadata address**; it derives the associated code account.
 
-`buildCookFromAccountInstruction` supports a `pin` that the Kitchen checks at execution. The client's `expectedSha256` option is currently rejected; it is not a supported substitute for that low-level `pin`. A finalized buffer's digest and an execution-time caller-selected digest are different guarantees.
+`buildCookFromAccountInstruction` takes a `pin` the Kitchen checks at execution time. The client's `expectedSha256` option is rejected — it is not a substitute for that pin. The digest checked when a buffer is finalized and a digest chosen by a caller at execution are different guarantees about different moments; read both before relying on either.
 
 ## SVM destinations in Eco intents
 
-**The SDK's SVM route helpers are incompatible with the released gated engine.**
-For an SVM destination, `Solana(body, { execution, ... }).reward(...)`,
-`routes.compileSauceRoute()`, `buildSauceSvmCall()`, and `buildSauceSvmCalls()` emit
-a legacy `execute_from_account` instruction containing only its 8-byte
-discriminator. Engine 1.2.0 still requires another 65 bytes of Pot derivation material
-and a trailing Pot signer supplied by the Kitchen.
+**Build Solana execution with the Kitchen client, not the SVM route helpers.**
 
-The [SVM Portal fulfillment implementation](https://github.com/eco/eco-routes-svm/blob/5e544b72d368d9d1f0ee5269e2a1a5d2a9f8c2f2/programs/portal/src/instructions/fulfill.rs#L139-L192)
-forwards the route's instruction bytes to its target unchanged. It signs for its
-Executor PDA; it does not construct a Kitchen call or sign for a Sauce Pot.
-Changing only the helper's engine program ID therefore does not make these routes
-executable. Do not distribute them as executable intents against the pinned release.
+`Solana(body, { execution, ... }).reward(...)`, `routes.compileSauceRoute()`,
+`buildSauceSvmCall()` and `buildSauceSvmCalls()` emit an `execute_from_account`
+instruction carrying only its 8-byte discriminator. The engine needs 65 further
+bytes of Pot derivation material and a trailing Pot signer that the Kitchen
+supplies, so that instruction is not one it will run — and pointing the helper at
+a different engine id does not add the missing bytes.
 
-A Kitchen-targeted Portal integration needs separately constructed cook data and
-accounts, including the owner signature, Pot, fee configuration and payer, engine,
-and staged metadata/code where applicable. The SDK does not build or
-validate that complete integration. For standalone execution, use the client or
-Kitchen instruction builders described above.
+The [SVM Portal's fulfillment](https://github.com/eco/eco-routes-svm/blob/5e544b72d368d9d1f0ee5269e2a1a5d2a9f8c2f2/programs/portal/src/instructions/fulfill.rs#L139-L192)
+forwards a route's instruction bytes to their target unchanged and signs for its
+own Executor PDA. It does not assemble a Kitchen call or sign for a Sauce Pot.
+A Portal integration that reaches the Kitchen therefore needs cook data and
+accounts built separately — the owner signature, the Pot, the fee configuration
+and payer, the engine, and staged metadata and code where they apply. That
+assembly is not in this package.
 
-The legacy route's `execution.code` means the finalized **code account**, not its
-metadata address. The helper neither stages nor checks that code against its newly
-compiled bytes, and it drops the compiler account manifest. Keep the direct
-compilation result when inspecting historical routes. EVM-source Portal helpers
-can encode an SVM destination; they do not provide Solana-origin submission.
+One detail worth knowing if you are reading routes somebody already built:
+`execution.code` there means the finalized **code account**, not its metadata
+address, and the helper neither stages that code nor checks it against the bytes
+it just compiled. Keep the direct compilation result when you inspect one.
+
+The EVM-source Portal helpers can encode a Solana destination perfectly well.
+That is about encoding, not about submitting from Solana.
 
 ## Venue accessors
 

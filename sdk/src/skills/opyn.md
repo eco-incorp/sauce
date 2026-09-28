@@ -56,7 +56,7 @@ function main(controllerAddress: Address, vaultId: Uint256, amount: Uint256): Ui
 ### ControllerABI
 
 - `mintPowerPerpAmount(uint256,uint256,uint256)` - Mint oSQTH. Params: vaultId (0 to create new), powerPerpAmount (oSQTH to mint), uniTokenId (Uniswap LP NFT as collateral, 0 for ETH). Payable (send ETH as collateral). Returns (vaultId, wPowerPerpAmount)
-- `burnPowerPerpAmount(uint256,uint256,uint256)` - Burn oSQTH to close position. Params: vaultId, powerPerpAmount (oSQTH to burn), withdrawAmount (ETH collateral to withdraw)
+- `burnPowerPerpAmount(uint256,uint256,uint256) returns (uint256)` - Burn oSQTH to close position. Params: vaultId, powerPerpAmount (oSQTH to burn), withdrawAmount (ETH collateral to withdraw)
 - `deposit(uint256)` - Deposit additional ETH collateral. Params: vaultId. Payable (ETH sent = deposit amount)
 - `withdraw(uint256,uint256)` - Withdraw ETH collateral. Params: vaultId, amount (ETH to withdraw)
 

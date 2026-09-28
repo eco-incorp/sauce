@@ -2,14 +2,21 @@
 
 [Documentation](../README.md) · [Quick start](../guides/quick-start.md)
 
-These examples use the published package exports. The construction examples run offline: they compile source and construct transaction data without sending transactions. Repeated-digit addresses and illustrative fees are fixtures, not deployment configuration. The RPC setup helper is typechecked but only makes chain reads when your application calls it.
+These run against the published package exports, and they run on every release — if one of them
+stops working, the release does. The construction examples are offline: they compile source and
+build transaction data without sending anything. Repeated-digit addresses and round fees are
+fixtures, not configuration. The RPC helper is typechecked here and reads chain state only when your
+application calls it.
 
-| Example                                      | Demonstrates                                                                                                                   |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| [protocol-approval.ts](protocol-approval.ts) | A typed `Base(() => ...)` callback with `USDC.approve(Uniswap.UniversalRouter, ...)`                                           |
-| [first-intent.ts](first-intent.ts)           | Ethereum reward, Base USDC delivery, Executor-to-Pot funding, explicit callback defines, source transaction requests           |
-| [compile-program.ts](compile-program.ts)     | The compiler dependency, compact entry schema, argument encoding and decoding                                                  |
-| [evm-execution.ts](evm-execution.ts)         | Destination RPC setup helper: current Kitchen, Portal Executor ownership, Pot prediction/deployment request, and execution fee |
+| Example                                                    | Shows                                                                                                                 |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| [cross-chain-intent.sauce.ts](cross-chain-intent.sauce.ts) | A program that measures a balance and publishes a new intent carrying it — written in SauceScript                     |
+| [cross-chain-intent.ts](cross-chain-intent.ts)             | Compiling that program with `defines` and attaching it to a route                                                     |
+| [protocol-approval.ts](protocol-approval.ts)               | A typed `Base(() => ...)` body calling `USDC.approve(Uniswap.UniversalRouter, ...)`                                   |
+| [first-intent.ts](first-intent.ts)                         | Both sides of a transfer intent: Ethereum reward, Base delivery, Executor-to-Pot funding, source transaction requests |
+| [compile-program.ts](compile-program.ts)                   | Direct compilation, a compact entry schema, and argument encoding and decoding                                        |
+| [action-program.ts](action-program.ts)                     | A JSON action program: strict parsing, compilation with a runtime amount, and an intent on the program's chain        |
+| [evm-execution.ts](evm-execution.ts)                       | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                |
 
 ## Run an example in your project
 
@@ -29,6 +36,7 @@ node dist/example.js
 
 For `first-intent.ts` and `evm-execution.ts`, also run `pnpm add viem`: they use Viem's address formatter and RPC interfaces.
 
-The examples are typechecked and loaded automatically in the SDK's CI. Construction examples assert their encoded output, including nonzero cook-fee budgeting; the RPC helper is not a live-chain integration test.
+CI typechecks and runs each of them, and asserts the encoded output including a nonzero cook-fee
+budget. The RPC helper is not a live-chain integration test — it is the shape of the reads you make.
 
 For actual EVM execution, first call `prepareDestinationPot` from `evm-execution.ts` with a destination client, Portal, and salt. If it returns `ready: false`, send its deployment request with your signer, wait for a successful receipt, and call it again. When `ready: true`, use its Pot, engine, and observed execution fee instead of the offline fixtures. Supply valid deadlines, source funding, and solver fulfillment. Read [intents](../guides/intents.md) for atomic asset handling and fee budgets, and [Solana](../guides/solana.md) for the separate supported execution paths.

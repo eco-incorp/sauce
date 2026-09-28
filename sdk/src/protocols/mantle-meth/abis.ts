@@ -1,4 +1,27 @@
+// The mETH token (`mETH` in addresses.ts).
 export const METHABI = [
+  {
+    name: "balanceOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "approve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+// The Staking contract (`staking` in addresses.ts): staking and the mETH/ETH rate live here, not
+// on the token.
+export const METHStakingABI = [
   {
     name: "stake",
     type: "function",
@@ -19,22 +42,5 @@ export const METHABI = [
     stateMutability: "view",
     inputs: [{ name: "ethAmount", type: "uint256" }],
     outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "balanceOf",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "approve",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
   },
 ] as const;

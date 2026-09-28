@@ -1,36 +1,70 @@
 {
   "abi": [
     {
-      "name": "addLiquidity",
+      "name": "depositCollateral",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "tokenId",
-          "type": "uint8"
+          "name": "subAccountId",
+          "type": "bytes32"
         },
         {
-          "name": "tokenAmount",
+          "name": "rawAmount",
           "type": "uint256"
         }
       ],
       "outputs": []
     },
     {
-      "name": "removeLiquidity",
+      "name": "getAssetAddress",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "view",
       "inputs": [
         {
-          "name": "tokenId",
+          "name": "assetId",
           "type": "uint8"
-        },
-        {
-          "name": "mlpAmount",
-          "type": "uint256"
         }
       ],
-      "outputs": []
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getSubAccount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "subAccountId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "collateral",
+          "type": "uint96"
+        },
+        {
+          "name": "size",
+          "type": "uint96"
+        },
+        {
+          "name": "lastIncreasedTime",
+          "type": "uint32"
+        },
+        {
+          "name": "entryPrice",
+          "type": "uint96"
+        },
+        {
+          "name": "entryFunding",
+          "type": "uint128"
+        }
+      ]
     }
   ]
 }

@@ -13,7 +13,8 @@ import { SiloABI as ISilo } from "./abis";
 
 function main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {
   const silo = ISilo.at(siloAddress);
-  return silo.withdraw(asset, amount, false);
+  const result = silo.withdraw(asset, amount, false);
+  return result.withdrawnAmount;
 }
 `;
 

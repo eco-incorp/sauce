@@ -10,7 +10,7 @@ export const ThrusterV3SwapRouterABI = [
         components: [
           { name: "tokenIn", type: "address" },
           { name: "tokenOut", type: "address" },
-          { name: "fee", type: "uint32" },
+          { name: "fee", type: "uint24" },
           { name: "recipient", type: "address" },
           { name: "deadline", type: "uint256" },
           { name: "amountIn", type: "uint256" },

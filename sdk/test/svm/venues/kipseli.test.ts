@@ -63,6 +63,29 @@ describe("kipseli.fetchPoolConfig — 840-byte realloc layout", () => {
   });
 });
 
+// The SAME live pool, re-dumped 2026-09-26 (slot 450,529,092) after a second realloc grew it from
+// 840 to 848 bytes. The 8 new bytes are appended at @840; the first 840 bytes keep their layout
+// (the mints at @72/@104 are byte-identical to the 840 capture, and price/expiry/fee still sit at
+// @136/@144/@152 — only their live values moved).
+const FIXTURES_848 = resolve(process.cwd(), "test/svm/fixtures/kipseli-848");
+
+describe("kipseli.fetchPoolConfig — 848-byte realloc layout", () => {
+  it("decodes the real 848-byte live pool from its shared prefix", async () => {
+    const fixtures = loadFixtures(FIXTURES_848);
+    expect(fixtureBytesMap(fixtures)[POOL]!.length).toBe(848);
+    const cfg = await kipseli.fetchPoolConfig(fixtureLoader(fixtures), POOL);
+    expect(cfg.baseMint).toBe(WSOL);
+    expect(cfg.quoteMint).toBe(USDC);
+    expect(cfg.baseVault).toBe(BASE_VAULT);
+    expect(cfg.quoteVault).toBe(QUOTE_VAULT);
+    expect(cfg.adjNum.toString()).toBe("1000");
+    expect(cfg.adjDen.toString()).toBe("1");
+    expect(cfg.expiryMs.toString()).toBe(
+      readUintLE(fixtureBytesMap(fixtures)[POOL]!, OFF_EXPIRY_MS, 8).toString(),
+    );
+  });
+});
+
 describe("kipseli.fetchPoolConfig — strict per-size gate", () => {
   const enc = getAddressEncoder();
 
@@ -82,9 +105,9 @@ describe("kipseli.fetchPoolConfig — strict per-size gate", () => {
     return async (a: Address) => (a === POOL ? new Uint8Array(pool) : null);
   }
 
-  // 840 and 496 both clear the SIZE gate (they fail later at the vault reads this loader doesn't
-  // serve — never on size). The message asserts the gate lists BOTH accepted sizes.
-  it.each([496, 840])("accepts the %d-byte layout at the size gate", async (size) => {
+  // 496, 840 and 848 all clear the SIZE gate (they fail later at the vault reads this loader
+  // doesn't serve — never on size). The message asserts the gate lists every accepted size.
+  it.each([496, 840, 848])("accepts the %d-byte layout at the size gate", async (size) => {
     let message = "";
     try {
       await kipseli.fetchPoolConfig(sizedLoader(size), POOL);
@@ -94,11 +117,11 @@ describe("kipseli.fetchPoolConfig — strict per-size gate", () => {
     expect(message).not.toMatch(/out of scope/);
   });
 
-  it.each([162, 168, 456, 495, 841])(
+  it.each([162, 168, 456, 495, 841, 847, 849])(
     "self-drops an out-of-scope %d-byte Pool with a listing error",
     async (size) => {
       await expect(kipseli.fetchPoolConfig(sizedLoader(size), POOL)).rejects.toThrow(
-        new RegExp(`${size} bytes, expected one of 496/840 \\(out of scope`),
+        new RegExp(`${size} bytes, expected one of 496/840/848 \\(out of scope`),
       );
     },
   );

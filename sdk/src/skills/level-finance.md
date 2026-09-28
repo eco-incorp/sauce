@@ -32,9 +32,10 @@ function main(
   token: Address,
   amountIn: Uint256,
   minLpAmount: Uint256,
+  to: Address,
 ): Uint256 {
   const pool = ILiquidityPool.at(poolAddress);
-  pool.addLiquidity(tranche, token, amountIn, minLpAmount);
+  pool.addLiquidity(tranche, token, amountIn, minLpAmount, to);
   return 1;
 }
 
@@ -46,9 +47,10 @@ function main(
   tokenOut: Address,
   lpAmount: Uint256,
   minOut: Uint256,
+  to: Address,
 ): Uint256 {
   const pool = ILiquidityPool.at(poolAddress);
-  pool.removeLiquidity(tranche, tokenOut, lpAmount, minOut);
+  pool.removeLiquidity(tranche, tokenOut, lpAmount, minOut, to);
   return 1;
 }
 ```
@@ -64,8 +66,8 @@ function main(
 
 ### LiquidityPoolABI
 
-- `addLiquidity(address,address,uint256,uint256)` - Add liquidity. Params: tranche address, token, amountIn, minLpAmount
-- `removeLiquidity(address,address,uint256,uint256)` - Remove liquidity. Params: tranche, tokenOut, lpAmount, minOut
+- `addLiquidity(address,address,uint256,uint256,address)` - Add liquidity. Params: tranche address, token, amountIn, minLpAmount, to (receives the LP tokens)
+- `removeLiquidity(address,address,uint256,uint256,address)` - Remove liquidity. Params: tranche, tokenOut, lpAmount, minOut, to (receives tokenOut)
 - `swap(address,address,uint256,address,bytes)` - Swap tokens. Params: tokenIn, tokenOut, minOut, to, extradata
 
 ## Notes

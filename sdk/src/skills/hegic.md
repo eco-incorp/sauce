@@ -19,26 +19,27 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 ## SauceScript Examples
 
 ```typescript
-// Exercise option
+// Exercise option: the OperationalTreasury pays off the position to `account`
 import { HegicABI as IHegic } from "./abis";
-function main(hegicAddress: Address, optionId: Uint256): Uint256 {
-  const hegic = IHegic.at(hegicAddress);
-  hegic.exercise(optionId);
+function main(treasuryAddress: Address, optionId: Uint256, account: Address): Uint256 {
+  const treasury = IHegic.at(treasuryAddress);
+  treasury.payOff(optionId, account);
   return 1;
 }
 ```
 
 ## Key Addresses
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Arbitrum | hegic    | `0x431402e8b9dE9aa016C743880e04E517074D8cEC` |
+| Chain    | Contract            | Address                                                    |
+| -------- | ------------------- | ---------------------------------------------------------- |
+| Arbitrum | hegic               | `0x431402e8b9dE9aa016C743880e04E517074D8cEC` (HEGIC token) |
+| Arbitrum | operationalTreasury | `0xec096ea6eB9aa5ea689b0CF00882366E92377371`               |
 
 ## ABI Methods
 
 ### HegicABI
 
-- `exercise(uint256)` - Exercise option by ID. Params: optionId (NFT token ID of the option)
+- `payOff(uint256 positionID, address account)` - Exercise an option by ID on the OperationalTreasury; the payout goes to `account`
 
 ## Notes
 

@@ -48,9 +48,9 @@ function main(
 
 ### HyperlaneMailboxABI
 
-- `dispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) returns (uint256)` [payable] - Send interchain message. Returns message ID
+- `dispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) returns (bytes32)` [payable] - Send interchain message. Returns message ID
 - `quoteDispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) returns (uint256)` - Quote fee for dispatching a message (view)
-- `process(bytes _metadata, bytes _message)` - Process an inbound message on the destination chain (called by relayers)
+- `process(bytes _metadata, bytes _message)` [payable] - Process an inbound message on the destination chain (called by relayers)
 - `delivered(bytes32 _id) returns (bool)` - Check if a message has been delivered (view)
 
 ## Notes

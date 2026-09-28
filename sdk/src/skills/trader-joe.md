@@ -58,7 +58,7 @@ function main(
 ### LBRouterABI
 
 - `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, tuple(uint256[] pairBinSteps, uint8[] versions, address[] tokenPath) path, address to, uint256 deadline) -> uint256 amountOut` - Swap exact input through LB path
-- `swapTokensForExactTokens(uint256 amountOut, uint256 amountInMax, tuple(uint256[] pairBinSteps, uint8[] versions, address[] tokenPath) path, address to, uint256 deadline) -> uint256 amountIn` - Swap to get exact output
+- `swapTokensForExactTokens(uint256 amountOut, uint256 amountInMax, tuple(uint256[] pairBinSteps, uint8[] versions, address[] tokenPath) path, address to, uint256 deadline) -> uint256[] amountsIn` - Swap to get exact output
 - `addLiquidity(tuple(address tokenX, address tokenY, uint256 binStep, uint256 amountX, uint256 amountY, uint256 amountXMin, uint256 amountYMin, uint256 activeIdDesired, uint256 idSlippage, int256[] deltaIds, uint256[] distributionX, uint256[] distributionY, address to, address refundTo, uint256 deadline)) -> (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] depositIds, uint256[] liquidityMinted)` - Add liquidity with precise bin distribution control
 
 ### LBFactoryABI

@@ -74,6 +74,10 @@
                 {
                   "name": "minOutputAmount",
                   "type": "uint256"
+                },
+                {
+                  "name": "validFromTime",
+                  "type": "uint256"
                 }
               ]
             },
@@ -99,26 +103,30 @@
             },
             {
               "name": "referralCode",
-              "type": "uint256"
+              "type": "bytes32"
+            },
+            {
+              "name": "dataList",
+              "type": "bytes32[]"
             }
           ]
         }
       ],
       "outputs": [
         {
-          "name": "",
-          "type": "uint256"
+          "name": "orderKey",
+          "type": "bytes32"
         }
       ]
     },
     {
       "name": "cancelOrder",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "payable",
       "inputs": [
         {
           "name": "key",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ],
       "outputs": []

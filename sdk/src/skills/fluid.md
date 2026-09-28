@@ -8,76 +8,79 @@ lending | Chains: Ethereum (1), Arbitrum (42161)
 
 ## SauceScript Functions
 
+The Liquidity layer (`liquidity` below) has no user-level deposit or borrow function: its only entry point, `operate`, is restricted to Fluid's own protocols. Users lend through **fTokens** (ERC-4626 vaults such as fUSDC) and borrow through **Vaults**.
+
 ### deposit
 
-Deposit tokens into the Fluid liquidity layer.
+Deposit the fToken's underlying asset and receive fToken shares.
 
 ```typescript
-import { FluidLendingABI as IFluidLending } from "./abis";
+import { FluidLendingABI as IFToken } from "./abis";
 
-function main(liquidityAddress: Address, token: Address, amount: Uint256, to: Address): Uint256 {
-  const lending = IFluidLending.at(liquidityAddress);
-  return lending.deposit(token, amount, to);
+function main(fTokenAddress: Address, amount: Uint256, to: Address): Uint256 {
+  const fToken = IFToken.at(fTokenAddress);
+  return fToken.deposit(amount, to);
 }
 ```
 
-- `token`: ERC-20 token address to deposit
-- `to`: Address that receives the deposit position
-- Returns shares representing the deposit
-- Requires ERC-20 approval to the liquidity address
+- `fTokenAddress`: the fToken for the asset (e.g. fUSDC `0x9Fb7b4477576Fe5B32be4C1843aFB1e55F251B33` on Ethereum)
+- `to`: Address that receives the shares
+- Returns the shares minted
+- Requires ERC-20 approval of the underlying to the fToken
 
 ### withdraw
 
-Withdraw tokens from the liquidity layer.
+Withdraw an amount of the underlying asset, burning the owner's shares.
 
 ```typescript
-import { FluidLendingABI as IFluidLending } from "./abis";
+import { FluidLendingABI as IFToken } from "./abis";
 
-function main(liquidityAddress: Address, token: Address, amount: Uint256, to: Address): Uint256 {
-  const lending = IFluidLending.at(liquidityAddress);
-  return lending.withdraw(token, amount, to);
+function main(fTokenAddress: Address, amount: Uint256, to: Address, owner: Address): Uint256 {
+  const fToken = IFToken.at(fTokenAddress);
+  return fToken.withdraw(amount, to, owner);
 }
 ```
 
-- Returns actual amount withdrawn
+- Returns the shares burned
 
 ### borrow
 
-Borrow tokens against deposited assets.
+Borrow from a Vault position: `operate` with a positive debt delta.
 
 ```typescript
-import { FluidLendingABI as IFluidLending } from "./abis";
+import { FluidVaultABI as IFluidVault } from "./abis";
 
-function main(liquidityAddress: Address, token: Address, amount: Uint256, to: Address): Uint256 {
-  const lending = IFluidLending.at(liquidityAddress);
-  return lending.borrow(token, amount, to);
+function main(vaultAddress: Address, nftId: Uint256, amount: Uint256, to: Address): Uint256 {
+  const vault = IFluidVault.at(vaultAddress);
+  vault.operate(nftId, 0, amount, to);
+  return 1;
 }
 ```
 
-- Must have sufficient collateral deposited first
-- Returns actual amount borrowed
+- `nftId`: the position NFT (0 opens a new position)
+- The position must hold enough collateral (a positive `newCol` delta deposits it)
 
 ### repay
 
-Repay borrowed tokens.
+Repay a Vault position's debt: `operate` with a negative debt delta.
 
 ```typescript
-import { FluidLendingABI as IFluidLending } from "./abis";
+import { FluidVaultABI as IFluidVault } from "./abis";
 
 function main(
-  liquidityAddress: Address,
-  token: Address,
-  amount: Uint256,
-  onBehalfOf: Address,
+  vaultAddress: Address,
+  nftId: Uint256,
+  negativeDebtDelta: Uint256,
+  to: Address,
 ): Uint256 {
-  const lending = IFluidLending.at(liquidityAddress);
-  return lending.repay(token, amount, onBehalfOf);
+  const vault = IFluidVault.at(vaultAddress);
+  vault.operate(nftId, 0, negativeDebtDelta, to);
+  return 1;
 }
 ```
 
-- `onBehalfOf`: Address whose debt is being repaid
-- Requires ERC-20 approval to the liquidity address
-- Returns actual amount repaid
+- `negativeDebtDelta`: the repayment as a negative `int256`, passed in two's complement (`2**256 - amount`)
+- Requires ERC-20 approval of the debt token to the Vault
 
 ## Deployed Addresses
 
@@ -88,12 +91,16 @@ function main(
 
 ## ABI Reference
 
-### FluidLendingABI
+### FluidLendingABI (an fToken)
 
-- `deposit(address token, uint256 amount, address to) returns (uint256 shares)` - Deposit token into liquidity layer
-- `withdraw(address token, uint256 amount, address to) returns (uint256 actualAmount)` - Withdraw token
-- `borrow(address token, uint256 amount, address to) returns (uint256 actualAmount)` - Borrow token against deposits
-- `repay(address token, uint256 amount, address onBehalfOf) returns (uint256 actualAmount)` - Repay borrowed debt
+- `deposit(uint256 assets, address receiver) returns (uint256 shares)` - ERC-4626 deposit
+- `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)` - ERC-4626 withdraw
+- `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` - ERC-4626 redeem
+- `asset() returns (address)` - The underlying token
+
+### FluidVaultABI (a Vault)
+
+- `operate(uint256 nftId, int256 newCol, int256 newDebt, address to) returns (uint256, int256, int256)` [payable] - Change a position's collateral and debt in one call; positive deltas deposit/borrow, negative ones withdraw/repay
 
 ## Notes
 
@@ -101,5 +108,5 @@ function main(
 - No interest rate mode selection -- all rates are algorithmically determined
 - Same contract address on Ethereum and Arbitrum
 - Built by the Instadapp team
-- All deposit/repay operations require ERC-20 approval
+- All deposit/repay operations require ERC-20 approval (to the fToken or Vault)
 - TVL: $1B+. Audited

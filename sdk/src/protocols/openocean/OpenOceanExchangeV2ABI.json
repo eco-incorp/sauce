@@ -57,7 +57,25 @@
         },
         {
           "name": "calls",
-          "type": "bytes"
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "target",
+              "type": "uint256"
+            },
+            {
+              "name": "gasLimit",
+              "type": "uint256"
+            },
+            {
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
         }
       ],
       "outputs": [

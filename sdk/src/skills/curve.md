@@ -42,7 +42,8 @@ function main(
 - `j`: Index of the output token within the pool (0-based)
 - `amountIn`: Exact amount of input token (in wei)
 - `minAmountOut`: Minimum output for slippage protection
-- Token indices vary per pool (e.g., 3pool: 0=DAI, 1=USDC, 2=USDT)
+- Token indices vary per pool
+- For StableSwap-NG pools. 3pool's `exchange` returns nothing, so reading back a `uint256` reverts there: use `CurveThreePoolABI` for 3pool
 
 ### addLiquidity
 
@@ -94,17 +95,31 @@ function main(poolAddress: Address, amount: Uint256, minAmounts: Uint256[]): Uin
 
 ### CurveStableSwapABI
 
+The StableSwap-NG pool interface (plain and meta pools). Classic pools such as 3pool have their own shape: see `CurveThreePoolABI` below.
+
 - `exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) -> uint256` - Swap between two tokens in the pool by index
-- `exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) -> uint256` - Swap between underlying tokens (for metapools/lending pools)
+- `exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) -> uint256` - Swap between underlying tokens (metapools only)
 - `add_liquidity(uint256[] amounts, uint256 min_mint_amount) -> uint256` - Deposit tokens and receive LP tokens (can be imbalanced)
 - `remove_liquidity(uint256 _amount, uint256[] min_amounts) -> uint256[]` - Burn LP tokens and withdraw all tokens proportionally
 - `remove_liquidity_one_coin(uint256 _token_amount, int128 i, uint256 min_amount) -> uint256` - Burn LP tokens and withdraw as a single token
 - `get_dy(int128 i, int128 j, uint256 dx) -> uint256` - Quote: estimate output for a given input (view)
 - `get_virtual_price() -> uint256` - Get the virtual price of the LP token (view, useful for pricing)
 
+### CurveThreePoolABI
+
+3pool (`threePool` in the addresses), a classic StableSwap pool. Its liquidity arrays are fixed-size, and its state-changing functions return nothing: read amounts as balance changes.
+
+- `exchange(int128 i, int128 j, uint256 dx, uint256 min_dy)` - Swap between two of DAI(0), USDC(1), USDT(2)
+- `add_liquidity(uint256[3] amounts, uint256 min_mint_amount)` - Deposit tokens and receive 3CRV
+- `remove_liquidity(uint256 _amount, uint256[3] min_amounts)` - Burn 3CRV and withdraw all three tokens proportionally
+- `remove_liquidity_one_coin(uint256 _token_amount, int128 i, uint256 min_amount)` - Burn 3CRV and withdraw one token
+- `get_dy(int128 i, int128 j, uint256 dx) -> uint256` - Quote (view)
+- `get_virtual_price() -> uint256` - Virtual price of 3CRV (view)
+
 ### CurveRouterNGABI
 
 - `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _expected, address[5] _pools) -> uint256` - Multi-pool routed swap for optimal execution
+- `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _min_dy, address[5] _pools, address _receiver) -> uint256` - The same routed swap, paying `_receiver` instead of the caller
 - `get_dy(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, address[5] _pools) -> uint256` - Quote routed swap output (view)
 
 ### CurveAddressProviderABI

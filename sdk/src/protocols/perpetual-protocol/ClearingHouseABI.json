@@ -6,36 +6,42 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "baseToken",
-          "type": "address"
-        },
-        {
-          "name": "isBaseToQuote",
-          "type": "bool"
-        },
-        {
-          "name": "isExactInput",
-          "type": "bool"
-        },
-        {
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "name": "oppositeAmountBound",
-          "type": "uint256"
-        },
-        {
-          "name": "deadline",
-          "type": "uint256"
-        },
-        {
-          "name": "sqrtPriceLimitX96",
-          "type": "uint256"
-        },
-        {
-          "name": "referralCode",
-          "type": "uint256"
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "baseToken",
+              "type": "address"
+            },
+            {
+              "name": "isBaseToQuote",
+              "type": "bool"
+            },
+            {
+              "name": "isExactInput",
+              "type": "bool"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "oppositeAmountBound",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "sqrtPriceLimitX96",
+              "type": "uint160"
+            },
+            {
+              "name": "referralCode",
+              "type": "bytes32"
+            }
+          ]
         }
       ],
       "outputs": [
@@ -55,24 +61,30 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "baseToken",
-          "type": "address"
-        },
-        {
-          "name": "sqrtPriceLimitX96",
-          "type": "uint256"
-        },
-        {
-          "name": "oppositeAmountBound",
-          "type": "uint256"
-        },
-        {
-          "name": "deadline",
-          "type": "uint256"
-        },
-        {
-          "name": "referralCode",
-          "type": "uint256"
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "baseToken",
+              "type": "address"
+            },
+            {
+              "name": "sqrtPriceLimitX96",
+              "type": "uint160"
+            },
+            {
+              "name": "oppositeAmountBound",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "referralCode",
+              "type": "bytes32"
+            }
+          ]
         }
       ],
       "outputs": [
@@ -99,7 +111,7 @@
       "outputs": [
         {
           "name": "",
-          "type": "uint256"
+          "type": "int256"
         }
       ]
     }

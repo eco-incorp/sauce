@@ -16,6 +16,23 @@
  * 400 real, successful, program-scoped-log-verified `SwapV2` calls on the one liquid pool, spanning
  * amounts from 10,000 lamports to ~3.9B raw units, both directions).
  *
+ * ── ⚠ CURRENT PROGRAM (redeployed 2026-09-22, lastDeploySlot 449,299,233) — read before the swap
+ * sections below, which describe the PRE-upgrade `swap_v2` wire ──
+ * The FETCH half of this adapter (pool decode, vault derivation, decimals) is unaffected and correct.
+ * The swap wire and pricing the rest of this doc describes are HISTORICAL:
+ *   - The program now exposes `swap_v3` only (disc `f0e02621b01ff1af`); a `swap_v2` instruction
+ *     reverts `InstructionFallbackNotFound` (101). The data layout is unchanged:
+ *     `disc(8) ++ amountIn(u64) ++ minOut(u64) ++ direction(u8)`.
+ *   - `swap_v3` takes 15 accounts: the 13 listed below (same order) plus #13 the vote account
+ *     `J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv` and #14 the Instructions sysvar
+ *     (`Sysvar1nstructions1111111111111111111111111`), both constant across every one of 183
+ *     sampled 2026-09-26 mainnet swaps. The two ban-entry accounts (#11/#12) are now READ-ONLY.
+ *   - The charged fee now depends on the LANDING slot relative to the keeper's last price-update
+ *     slot: it rises steeply with each slot of staleness and the swap reverts past roughly 10 slots.
+ *     A quote computed before landing therefore cannot be bounded, so the price x 0.995 model below
+ *     no longer describes what the venue charges. sauce-recipes self-drops this family for that
+ *     reason; re-enabling needs a quote that is provably bounded at the landing slot.
+ *
  * ── Why "no on-chain IDL" does not mean "unreadable": the account graph ──
  * Every non-trivial-size account (162/168/456/496 and, as of 2026-09-14, 840 bytes) shares the SAME
  * 8-byte Anchor account discriminator `f19a6d0411b16dbc` — `sha256("account:Pool")[:8]`, the same
@@ -35,16 +52,16 @@
  * ATA vaults exist and hold the matching mint + live balance, and the 344 appended bytes sit entirely
  * AFTER the last field this adapter needs (so they are never read). Confirmed 2026-09-14 by
  * `getAccountInfo`/`getProgramAccounts` against live chain data (not an explorer's decoded view).
- * This adapter is therefore SCOPED to the SET of ground-truthed layouts `POOL_ACCOUNT_SIZES` =
- * {496, 840} — a fetch-time size gate still drops any OTHER-sized `Pool` account cleanly (one bad
- * candidate never kills discovery, the standard venue-robustness convention).
+ * The same pool was realloc'd AGAIN to 848 bytes (re-dumped 2026-09-26): 8 more bytes appended at @840,
+ * the first 840 bytes unchanged in layout. This adapter is therefore SCOPED to the SET of
+ * ground-truthed layouts `POOL_ACCOUNT_SIZES` = {496, 840, 848} — a fetch-time size gate still drops
+ * any OTHER-sized `Pool` account cleanly (one bad candidate never kills discovery, the standard
+ * venue-robustness convention).
  *
- * ── Cross-repo coupling (must land together with any bump that serves 840) ──
- * sauce-recipes' `ecoswap/svm/discovery.ts` filters kipseli candidates with a SINGLE-size gPA filter
- * `kipseli: { dataSize: 496 }`, so on its own it will never SURFACE the 840-byte pool for discovery.
- * Serving 840 end-to-end needs BOTH sides: this SDK widening (done) AND a recipes-side discovery
- * change (two unioned gPA queries by dataSize, or a discriminator-only filter) plus an SDK version
- * bump and re-pin — the two must ship together, or discovery stays blind to the only live pool.
+ * ── Cross-repo coupling ──
+ * sauce-recipes' `ecoswap/svm/discovery.ts` surfaces kipseli candidates by the shared `account:Pool`
+ * discriminator plus the two mint memcmps (no `dataSize` filter), so every realloc generation is
+ * discovered and THIS size gate is the only per-size scope check.
  *
  * Confirmed pool layout (offsets from account start, identical for the 496 and 840 layouts): disc(8)
  * @0; `global_config`/admin authority pubkey @8 (32 bytes, unused by this adapter — informational;
@@ -86,10 +103,8 @@
  *   out to vary 1/2/4/5 inconsistently with real direction and is NOT the direction signal):
  *   `0x00` = quote(USDC) in / base(SOL) out ("quoteToBase", the family default), `0x01` = base(SOL)
  *   in / quote(USDC) out ("baseToQuote").
- * There is also a `SwapV3` variant (disc `f0e02621b01ff1af`, seen live in a multi-hop Jupiter route)
- * that this adapter does not emit — SwapV2 alone was sufficient to cover every real transaction
- * sampled, and matching an unverified V3 shape risks an account-list mismatch this pass did not
- * ground-truth.
+ * (Superseded 2026-09-22: `swap_v3`, disc `f0e02621b01ff1af`, is now the ONLY swap the program
+ * exposes — see the ⚠ CURRENT PROGRAM section at the top of this doc for its 15-account wire.)
  *
  * ── Accounts (13, FIXED role order regardless of direction — confirmed identical across every one
  * of the 400 sampled swaps, both directions, both the direct-signer and Jupiter-delegated-signer
@@ -233,11 +248,13 @@ const POOL_DISCRIMINATOR = [0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc];
  *     adapter reads — `base_token` @72, `quote_token` @104, `price` @136, `expiry` @144, `fee` @152 —
  *     lives in that shared prefix, so the decode below is byte-for-byte identical for both and the
  *     appended region is never read.
+ *   - 848: a second realloc of the SAME pool (re-dumped 2026-09-26, slot 450,529,092) that appends 8
+ *     more bytes at @840; the first 840 bytes keep their layout, so every field above is unmoved.
  * STRICT per-size (a `Set`, not a `>=` floor): any OTHER Pool-disc size — the drained 162/168/456
  * generations, or a future realloc — still self-drops via the size throw below, so one out-of-scope
  * candidate never kills discovery (the standard venue-robustness convention).
  */
-const POOL_ACCOUNT_SIZES: ReadonlySet<number> = new Set([496, 840]);
+const POOL_ACCOUNT_SIZES: ReadonlySet<number> = new Set([496, 840, 848]);
 const OFF_BASE_MINT = 72;
 const OFF_QUOTE_MINT = 104;
 const OFF_EXPIRY_MS = 144;

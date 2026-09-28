@@ -1,7 +1,8 @@
-# Registry and global namespace coverage
+# What is actually registered
 
-The SDK has several registries with different purposes. A protocol catalog entry does not
-necessarily have a global contract accessor or a deployment on your selected chain.
+The SDK carries several registries, and they answer different questions. "Is this protocol in the
+catalog?" is not "can I call it by name in a program?", and neither is "is it deployed on my chain?".
+Each of the three can be true without the others.
 
 | Registry                         | Current scope                                                                     | Inspect it                                                             |
 | -------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -12,9 +13,9 @@ necessarily have a global contract accessor or a deployment on your selected cha
 | Canonical chain identities       | 40 chains: 39 EVM and Solana                                                      | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
 | EVM chain metadata               | 33 records with RPC and explorer information                                      | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
-The descriptor registry connects each supported address role to an ABI and a contract name.
-Use `contracts.listDescriptors()` to inspect these curated associations; they cannot be
-inferred reliably for every catalog entry.
+The descriptor registry is the one that makes a name callable: it ties a contract name to an ABI and
+an address role. `contracts.listDescriptors()` lists them. These associations are curated rather than
+derived, which is why the catalog is much larger.
 
 ## Protocol globals
 
@@ -22,27 +23,26 @@ These names are available inside compiled EVM route bodies. Availability on the 
 is checked during compilation. The declarations describe the vendored ABI surface, which is a
 subset of each protocol's complete API.
 
-| Namespace       | Contract leaves                                                                       |
-| --------------- | ------------------------------------------------------------------------------------- |
-| `UniswapV2`     | `Factory`, `Router`                                                                   |
-| `UniswapV3`     | `Factory`†, `SwapRouter`†, `SwapRouter02`†, `QuoterV2`†, `NonfungiblePositionManager` |
-| `UniswapV4`     | `PoolManager`†, `UniversalRouter`, `PositionManager`                                  |
-| `SushiswapV2`   | `Factory`, `Router`                                                                   |
-| `PancakeswapV2` | `Factory`, `Router`                                                                   |
-| `Aerodrome`     | `Router`, `PoolFactory`                                                               |
-| `Cctp`          | `TokenMessenger`                                                                      |
-| `AaveV3`        | `Pool`                                                                                |
-| `AaveV2`        | `LendingPool`                                                                         |
-| `Permit2`       | `Permit2`                                                                             |
-| `Oneinch`       | `AggregationRouterV6`                                                                 |
-| `Pendle`        | `Router`                                                                              |
-| `MorphoBlue`    | `Morpho`                                                                              |
-| `CompoundV3`    | `CometUSDC`, `CometWETH`, `CometUSDT`                                                 |
+| Namespace       | Contract leaves                                                                   |
+| --------------- | --------------------------------------------------------------------------------- |
+| `UniswapV2`     | `Factory`, `Router`                                                               |
+| `UniswapV3`     | `Factory`, `SwapRouter`, `SwapRouter02`, `QuoterV2`, `NonfungiblePositionManager` |
+| `UniswapV4`     | `PoolManager`, `UniversalRouter`, `PositionManager`                               |
+| `SushiswapV2`   | `Factory`, `Router`                                                               |
+| `PancakeswapV2` | `Factory`, `Router`                                                               |
+| `Aerodrome`     | `Router`, `PoolFactory`                                                           |
+| `Cctp`          | `TokenMessenger`                                                                  |
+| `AaveV3`        | `Pool`                                                                            |
+| `AaveV2`        | `LendingPool`                                                                     |
+| `Permit2`       | `Permit2`                                                                         |
+| `Oneinch`       | `AggregationRouterV6`                                                             |
+| `Pendle`        | `Router`                                                                          |
+| `MorphoBlue`    | `Morpho`                                                                          |
+| `CompoundV3`    | `CometUSDC`, `CometWETH`, `CometUSDT`                                             |
 
-† These descriptors have **widened ABI types** whose selectors differ from the deployed contract.
-Compilation refuses them by default, with an explanation in `descriptor.coverage.caveats`.
-`compile.accessors.allowWidenedSelectors: true` only bypasses that check; it does not repair the
-ABI or make the resulting call valid.
+Every descriptor declares its contract's deployed ABI types, so its selectors are the deployed
+ones. `compile.accessors.allowWidenedSelectors` is still accepted, and no shipped descriptor needs
+it.
 
 Family aliases are `Uniswap`, `Sushiswap`, `Pancakeswap`, `Aave`, and `Compound`. A family exposes
 a contract only when exactly one member owns its name. Consequently:
@@ -106,12 +106,14 @@ const onBase = contracts.contractsOnChain("base");
 ```
 
 Host accessors such as `Base.Uniswap.UniversalRouter` and `contracts.on(...)` build inert
-`ContractCall` objects when their methods are invoked. Their dynamic method properties are currently
-typed `unknown`; TypeScript callers must narrow or cast a method before calling it. This is distinct
-from the generated ABI method types on bare protocol names inside compiled source.
+`ContractCall` objects when their methods are invoked. Those methods are typed `unknown` — their
+signatures come from an ABI the type system never sees — so narrow one before calling it. The bare
+protocol names _inside_ a compiled program are different: those do have generated ABI method types.
 
-Use `requireChain` for route identities. The separate metadata lookup `getChain` does not
-include Unichain, Monad, Sonic, Ronin, Plasma, or Ink, although they are canonical chains. Chain
-identity, protocol availability, and Sauce engine deployment are separate checks. Deployment helpers
-expose recorded addresses and coverage; applications still need a live deployment suitable for their
-execution path.
+Use `requireChain` for route identities. `getChain` is a separate metadata lookup with RPC and
+explorer details, and it covers fewer chains: Unichain, Monad, Sonic, Ronin, Plasma and Ink are
+canonical chains with no metadata record.
+
+Three questions, three answers: whether a chain is canonical, whether a protocol is available on it,
+and whether a Sauce engine is deployed there. The deployment helpers report recorded addresses — what
+your execution path needs is code that is live, which is a read you make.

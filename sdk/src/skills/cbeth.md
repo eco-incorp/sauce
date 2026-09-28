@@ -48,8 +48,8 @@ function main(cbethAddress: Address, spender: Address, amount: Uint256): Uint256
 
 ### CbETHABI
 
-- `mint(uint256)` - Mint cbETH (restricted to Coinbase)
-- `exchangeRate()` - Current cbETH/ETH exchange rate
+- `mint(address to, uint256 amount) returns (bool)` - Mint cbETH (restricted to Coinbase's minters)
+- `exchangeRate()` - Current cbETH/ETH exchange rate (Ethereum only; Base cbETH is a bridged token without it)
 - `balanceOf(address)` - Query cbETH balance
 - `approve(address,uint256)` - Approve spender
 - `transfer(address,uint256)` - Transfer cbETH

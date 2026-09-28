@@ -1,16 +1,19 @@
 # Sauce SDK
 
-Install `@eco-incorp/sauce` to build programmable transactions and Eco intents:
+`@eco-incorp/sauce` is the developer package for the Sauce programmable-transaction runtime: the
+SauceScript compiler, the chain and protocol knowledge a program needs, and the builders that turn a
+program into a transaction or an Eco intent.
 
 ```sh
 pnpm add @eco-incorp/sauce
 ```
 
 Start with the [quick start](../docs/guides/quick-start.md), then use the
-[documentation hub](../docs/README.md) to find guides and API references.
+[documentation hub](../docs/README.md).
 
-- [Protocol and token globals](../docs/guides/protocols-and-tokens.md): use `USDC.approve(...)` and protocol methods inside compiled routes.
-- [Eco intents](../docs/guides/intents.md): build with `Base(() => ...).reward(...)`, prepare funding, and inspect transaction requests.
-- [Compiler](../docs/guides/compiling.md): compile standalone SauceScript and encode runtime arguments.
-- [Solana](../docs/guides/solana.md): resolve accounts and execute through the Kitchen.
-- [Examples](../docs/examples/README.md): complete programs to copy into your application.
+- [Protocols and tokens](../docs/guides/protocols-and-tokens.md) — call `USDC.approve(...)` and protocol methods by name inside a program.
+- [Create an intent](../docs/guides/intents.md) — build with `Base(() => ...).reward(...)`, fund it, and inspect the requests.
+- [Nested intents](../docs/guides/nested-intents.md) — chain intents, including from an amount only known on chain.
+- [Compiling programs](../docs/guides/compiling.md) — standalone programs and runtime arguments.
+- [Solana](../docs/guides/solana.md) — account plans and Kitchen execution.
+- [Examples](../docs/examples/README.md) — complete programs to copy.

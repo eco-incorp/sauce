@@ -2,7 +2,8 @@
 
 [Documentation](../README.md) · [Quick start](quick-start.md) · [Coverage](../api/coverage.md)
 
-Within an EVM route, token symbols and protocol names resolve against the destination chain:
+Inside an EVM route body, token symbols and protocol contracts are names the compiler resolves
+against the destination chain — so a program reads like the operation it performs:
 
 ```js
 USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
@@ -42,7 +43,9 @@ const baseTokens = routes.knownTokenSymbols(routes.chain("base").chain);
 console.log(protocol, descriptors.length, router.available, baseTokens);
 ```
 
-Contract accessors expose `address`, `available`, `chains`, `abi`, `methods`, and `coverage`. A namespace's presence does not establish deployment on every chain. A call to a registered contract with no deployment on the selected chain fails during construction or compilation.
+Contract accessors expose `address`, `available`, `chains`, `abi`, `methods` and `coverage`. A name
+existing does not mean the contract is deployed on your chain — calling one that is not fails when
+you build or compile, which is the point at which you can still do something about it.
 
 Versioned names are explicit: `UniswapV2.Factory` and `UniswapV3.Factory` select different descriptors. A family alias only resolves a contract name when it identifies one descriptor; `Uniswap.Factory` is ambiguous and fails. A protocol with a single default contract also permits the shorter `Protocol.method(...)` form.
 
@@ -94,7 +97,8 @@ Bare route names such as `USDC` and `Uniswap` are **route syntax**, resolved by 
 
 A host that wants the chain names as runtime globals anyway can opt in with `installRouteGlobals()`, which defines them on `globalThis` (or any target you pass) and never overwrites a name already there. It installs values only; declare the names yourself.
 
-Outside a route, `Base.UniswapV4.UniversalRouter` or `contracts.on("base").UniswapV4.UniversalRouter` is a real host accessor. Its methods return inert `ContractCall` objects. A call can provide encoded `data`, `.toCall()` for `{ target, data, value }`, or `.toSauceScript()` for source and import paths. Host accessor methods currently have the static type `unknown`; use an explicit signature when invoking one in TypeScript:
+Outside a route, `Base.UniswapV4.UniversalRouter` or `contracts.on("base").UniswapV4.UniversalRouter` is a real host accessor. Its methods return inert `ContractCall` objects. A call can provide encoded `data`, `.toCall()` for `{ target, data, value }`, or `.toSauceScript()` for source and import paths. A host accessor's methods are typed `unknown`, because their signatures come from an ABI the type
+system has not seen. Narrow one before calling it:
 
 ```ts
 import { contracts } from "@eco-incorp/sauce";
@@ -107,13 +111,13 @@ const execute = router.execute as (
 ) => contracts.ContractCall;
 ```
 
-That declaration does not build or send a swap. Supply valid Universal Router commands before calling it. For ordinary ERC-20 operations from host code, the typed `token.Token.transfer({ ... })` and `.approve({ ... })` builders are usually more convenient; see [builders and actions](builders-and-actions.md).
+That declaration does not build or send a swap. Supply valid Universal Router commands before calling it. For ordinary ERC-20 operations from host code, the typed `token.Token.transfer({ ... })` and `.approve({ ... })` builders are usually more convenient; see [builders](builders-and-actions.md).
 
 ## Chain selection and ABI bindings
 
 A bare protocol reference uses the enclosing destination. A qualified reference such as `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not** move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Use separate intents and [nesting](nested-intents.md) for cross-chain execution. Set `compile.accessors.chainScope` to restrict explicitly qualified chain names when needed.
 
-Route rewriting rejects missing methods, ambiguous aliases, missing deployments, and descriptors marked with widened ABI types. A widened ABI can produce a selector different from the deployed contract. Inspect `coverage` and use the exact ABI for that deployment; opting past the check does not repair the ABI.
+Route rewriting rejects missing methods, ambiguous aliases and missing deployments. Every descriptor declares its contract's deployed ABI types, so the selectors it computes are the ones the deployed contract dispatches.
 
 To call a contract outside the descriptor registry, supply an ABI binding through `compile.contracts` or a resolved ABI import, then call `Binding.at(address).method(...)` in source. See [compiler integration](../api/compiler.md). Host `.at(address)` rebinding and SauceScript ABI `.at(address)` are separate APIs; the global protocol rewrite does not provide arbitrary `.at(...)` chains.
 

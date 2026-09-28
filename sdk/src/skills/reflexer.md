@@ -60,7 +60,7 @@ function main(coinJoinAddress: Address, account: Address, amount: Uint256): Uint
 
 ### ETHJoinABI
 
-- `join(address)` - Join ETH as collateral. Payable (send ETH). Params: account
+- `join(address account, uint256 wad)` - Join WETH as collateral (the `ethJoin` deployment is a CollateralJoin for WETH; approve WETH first)
 - `exit(address,uint256)` - Exit ETH collateral. Params: account, wad (ETH amount)
 
 ## Notes

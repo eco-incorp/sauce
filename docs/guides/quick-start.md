@@ -1,24 +1,24 @@
 # Quick start
 
-[Documentation](../README.md) · [Protocols and tokens](protocols-and-tokens.md) · [Intents](intents.md)
-
-Use Node.js 24 or newer and install the single public package:
+[Documentation](../README.md) · [Protocols and tokens](protocols-and-tokens.md) · [Create an intent](intents.md)
 
 ```sh
 pnpm add @eco-incorp/sauce
 ```
 
-The Sauce compiler is a dependency of that package. You do not need a compiler checkout or a separate compiler install.
+Node.js **24 or newer**. The SauceScript compiler is a dependency of this package — there is nothing
+else to install and no compiler checkout to keep in sync.
 
-## Compile your first intent
+## Build your first intent
 
-This complete TypeScript example builds an approval intent offline. Addresses and the fee are fixtures; the zero reward demonstrates construction only. Before submission, [read the current Kitchen fee and prepare an Executor-owned Pot](intents.md#prepare-the-destination-pot).
+This is a complete program. It builds an Eco intent offline: the addresses and the fee are fixtures
+and nothing is sent to a chain.
 
 ```ts
 import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
-const executionFee = 1_000n; // Fixture: read the destination Kitchen's executionFee() before use.
+const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before a real run.
 const options: routes.IntentOptions = {
   execution: {
     pot: "0x1111111111111111111111111111111111111111",
@@ -43,22 +43,45 @@ const built = Base(() => {
 console.log(built.hash().intentHash);
 ```
 
-`Base` is a named export of the root package, one per supported chain; importing the package installs nothing globally. Inside the callback, the SDK resolves `USDC` and `Uniswap.UniversalRouter` for Base, compiles the body with Sauce, and encodes a Pot `cook(engine, program)` call. `.reward(...)` completes the Eco intent. Nothing is submitted to a chain.
+`Base` names the **destination**: the chain the program runs on. The SDK resolves `USDC` and
+`Uniswap.UniversalRouter` there, compiles the body, and encodes it as a Pot `cook(engine, program)`
+call. `.reward(...)` names the **source**: the chain where the reward is escrowed. The result carries
+the intent, its hashes, the compiled bytecode and the transaction requests your application submits.
 
-For execution, deploy the Pot with the destination `Portal.executor()` as owner and pay the current Kitchen fee on every cook. [Intent setup](intents.md#prepare-the-destination-pot) shows the reads and deployment call. Fund and empty that shared Pot within the fulfillment.
+## The three things that trip people up
 
-`USDC` and protocol names are the one thing here that is not an import: they have generated TypeScript declarations but are source syntax resolved at compile time, not JavaScript clients, so there is nothing to import them from. The router is registered as `UniswapV4.UniversalRouter`, with `Uniswap.UniversalRouter` as a family alias. `UniswapV3.UniversalRouter` is not a registered name. See [coverage](../api/coverage.md) for which protocols expose these namespaces.
+**The callback is source, not a function.** It is read with `Function.prototype.toString()`, parsed
+and compiled. It never runs as JavaScript, so it captures nothing: a surrounding `const amount` is
+invisible inside it. Pass application values through `defines`, or write the body as a string. If
+your bundler rewrites function bodies, use a string or a source file.
 
-The callback captures no outer variables. Pass dynamic scalars through `defines`, or use explicit source strings; see the complete [transfer example](../examples/first-intent.ts). Callbacks must remain recognizable synchronous source after your build tooling transforms them.
+**`USDC` and `Uniswap` are not imports.** They are program syntax the compiler resolves against the
+destination chain. The package ships TypeScript declarations so a typed body checks, but there is no
+JavaScript object to import. `Base`, by contrast, _is_ a named export. The registered spelling of the
+router is `UniswapV4.UniversalRouter`, with `Uniswap.UniversalRouter` as an unambiguous family alias;
+`UniswapV3.UniversalRouter` does not exist. [Coverage](../api/coverage.md) lists what is registered.
+
+**The Pot is not yours alone.** For a Portal-driven intent the Pot's owner is the destination
+`Portal.executor()`, which every solver can drive. Deliver assets into it, use them, and take the
+remainder out inside the same fulfillment. Every cook also pays the Kitchen's current fee in native
+value. [Intent setup](intents.md#prepare-the-destination-pot) shows the reads and the deployment call.
 
 ## Deliver assets and fund the reward
 
-In a transfer intent, the destination assets and source reward are separate. Destination `tokens` reach the Portal Executor. Add a transfer precall to deliver tokens into the Pot before Sauce spends them. Source reward tokens are approved to the source Portal and escrowed through its funding call.
+The destination assets and the source reward are separate things. Destination `tokens` arrive at the
+Portal's Executor, so a program that spends them needs a transfer precall moving them into the Pot
+first. Source reward tokens are approved to the source Portal, which escrows them in the intent vault.
 
-The [first-intent.ts example](../examples/first-intent.ts) constructs both sides and returns source transaction requests. Read [creating intents](intents.md) before submitting those requests, and [nested intents](nested-intents.md) to compose subsequent routes.
+[first-intent.ts](../examples/first-intent.ts) builds both sides and returns the source transaction
+requests. Read [create an intent](intents.md) before submitting them, and
+[nested intents](nested-intents.md) to chain a second execution onto the first.
 
-## Compile a standalone program
+## Compile without an intent
 
-Use `@eco-incorp/sauce/compiler` when you need raw bytecode, entry schemas, or an SVM account manifest. It exposes the published Rust/Wasm compiler through `compile(options)`; it does not install SDK protocol namespaces into arbitrary compiler input.
+Reach for `@eco-incorp/sauce/compiler` when you want raw bytecode, runtime entry arguments or a
+Solana account manifest — a reusable program you supply values to at execution time rather than one
+specialised at compile time.
 
-The [compiler example](../examples/compile-program.ts) compiles a typed SauceScript entry point and appends compact arguments. [Compiling](compiling.md) explains module resolution and the distinction between raw compiler output and the route wrapper.
+[compile-program.ts](../examples/compile-program.ts) compiles a typed entry point and appends compact
+arguments. [Compiling programs](compiling.md) explains module resolution and how the raw compiler
+differs from the route wrapper.
