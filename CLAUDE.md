@@ -406,12 +406,12 @@ program. The public surface is deliberately small — `parseProgram`, `serialize
 canonical serialization, no defaults filled in), `schema.ts` generates the committed JSON Schema from
 it, and `tests/docs.unit.test.ts` holds the guide's action list and outputs to it; `semantics.ts`
 holds the cross-action rules. `to-sauce.ts` emits every protocol call as an ABI binding
-(`IBinding.at(addr).method(...)`) from the catalogue in `abis.ts`: registry ABIs are taken only when
-their canonical signature is exactly the action's (several registry ABIs are widened — Balancer
-`poolId` as `uint256`, Curve indices as `uint128`, Uniswap V3 `fee` as `uint32`, Stargate's `to` as
-`uint256`, Permit2's expiration as `uint64` — and would change the selector), and a method declares
-an output ONLY when an action reads it: compiler 2.3.0 decodes declared outputs even when discarded,
-and decoding empty return data reverts (3pool-era Curve). ERC-20 `approve`/`transfer` are not
+(`IBinding.at(addr).method(...)`) from the catalogue in `abis.ts`: a binding takes the registry ABI
+wherever the registry declares the function exactly (same canonical signature, so same selector),
+and a method declares an output ONLY when an action reads it: compiler 2.3.0 decodes declared
+outputs even when discarded, and decoding empty return data reverts (3pool-era Curve). A local
+fragment, with its reason, remains only for a contract or method the registry does not carry
+(`abis.unit.test.ts` fails if one ever appears there). ERC-20 `approve`/`transfer` are not
 bindings: they go through the SDK's `token/safe` (USDT returns no `bool`; `SafeERC20` semantics, with
 `forceApprove`'s reset), the lowering every SDK token write uses — one path, so do not add a second. Native-value calls stay raw
 `evm.call` because a binding cannot attach value; the Stargate and Hyperlane fees are quoted by a
