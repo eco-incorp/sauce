@@ -20,11 +20,10 @@ const built = Base(() => {
   nativeAmount: 0n,
 });
 
-// The Pot's deployment (a no-op once it exists), then the cook.
-if (!built.compiled.bytecode[0]?.length || built.intent.route.calls.length !== 2) {
-  throw new Error("Expected a compiled approval, and the Pot's deployment before its cook");
+if (!built.compiled.bytecode[0]?.length || built.intent.route.calls.length !== 1) {
+  throw new Error("Expected a compiled approval and one Pot call");
 }
-if (built.intent.route.calls[1]!.value !== executionFee) {
+if (built.intent.route.calls[0]!.value !== executionFee) {
   throw new Error("Expected the destination cook to receive its fee");
 }
 console.log("Base approval intent:", built.hash().intentHash);

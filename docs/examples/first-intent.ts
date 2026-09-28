@@ -3,7 +3,7 @@ import { toHex } from "viem";
 
 // Offline fixtures. Read the current Kitchen fee before submission.
 const portal = "0x4444444444444444444444444444444444444444";
-// The Pot the route cooks on, owned by that Portal's Executor. The route deploys it if missing.
+// The Pot the route cooks on: the shared one owned by that Portal's Executor. It must already exist.
 const pot = destinationPot(Base.chain, { portal });
 const executionFee = 1_000n;
 const baseUsdcValue = routes.registryTokenAddress(Base.chain, "USDC");
@@ -40,11 +40,11 @@ const built = Base(
 });
 
 const sourceRequests = [...built.approvals(), built.publishAndFundCalldata(false)];
-if (built.intent.route.calls.length !== 3 || sourceRequests.length !== 2) {
-  throw new Error("Expected Pot deployment + delivery + cook, and source approval + funding");
+if (built.intent.route.calls.length !== 2 || sourceRequests.length !== 2) {
+  throw new Error("Expected destination delivery + cook and source approval + funding");
 }
 if (
-  built.intent.route.calls[2]?.value !== executionFee ||
+  built.intent.route.calls[1]?.value !== executionFee ||
   built.intent.route.nativeAmount !== executionFee
 ) {
   throw new Error("Destination funding must include the cook fee");

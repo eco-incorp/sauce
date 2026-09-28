@@ -83,7 +83,7 @@ import type { routes } from "@eco-incorp/sauce";
 
 const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before use.
 const options: routes.IntentOptions = {
-  // No Pot or engine: both are derived, and the route deploys the Pot if it is missing.
+  // No Pot or engine: both are derived. The Pot is the shared one the solver deploys per Portal.
   execution: { value: executionFee },
   nativeAmount: executionFee,
   portal: "0x3333333333333333333333333333333333333333",

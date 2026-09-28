@@ -181,9 +181,9 @@ function compileIntentChild(
   // DERIVED, not asked for. A Pot is CREATE2 from the Kitchen over its owner and a salt; the owner a
   // route call must cook as is the Executor of the Portal this child's route RECORDS, itself that
   // Portal's second CREATE. Both ends are already in the SDK, so this needs no chain read and no
-  // caller input -- `intents.pot` remains as an override for a Pot the caller owns instead, and only
-  // a derived Pot comes with the `deployPot` call that guarantees it exists (`intent-pot.ts`).
-  const { pot, engine, deployPot } = resolveIntentPot(destinationPortal, intents);
+  // caller input -- `intents.pot` remains as an override for a Pot the caller owns instead. Derived
+  // is not deployed: the Pot must exist before the child is fulfilled (`intent-pot.ts`).
+  const { pot, engine } = resolveIntentPot(destinationPortal, intents);
   if (intents.executionFee === undefined) {
     throw new Error(
       `intent sugar: the intent on ${destination.slug} runs a program, so its cook must pay that ` +
@@ -228,7 +228,6 @@ function compileIntentChild(
       data: call.data,
       value: intents.executionFee,
     },
-    deployPot,
     captureSentinels,
   };
 }

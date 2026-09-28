@@ -27,6 +27,7 @@ import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js"
 const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
 const RECIPIENT = 0x9999999999999999999999999999999999999999n;
+const RECIPIENT_ADDRESS = "0x9999999999999999999999999999999999999999" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 
 const context = (overrides: Record<string, unknown> = {}) =>
@@ -213,31 +214,14 @@ describe("the Pot a program body cooks on", () => {
   const PROGRAM_BODY = program(`  Arbitrum(() => {
     if (amount > 1n) { USDC.transfer(RECIPIENT, amount); }
   }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });`);
-  const DEPLOY = {
-    target: "0x5555555555555555555555555555555555555555" as Hex,
-    data: "0xff9763ac" as Hex,
-    value: 0n,
-  };
+  it("delivers into it and cooks on it, and adds no deployment", () => {
+    const calls = rewriteIntentSugar(PROGRAM_BODY, context()).intents[0]!.intent.route.calls;
 
-  it("deploys it first: before the delivery into it and before the cook on it", () => {
-    const base = context() as unknown as { compileChild: (...args: unknown[]) => object };
-    const result = rewriteIntentSugar(
-      PROGRAM_BODY,
-      context({
-        compileChild: (...args: unknown[]) => ({
-          ...base.compileChild(...args),
-          deployPot: DEPLOY,
-        }),
-      }),
-    );
-    const calls = result.intents[0]!.intent.route.calls;
-
-    expect(calls).toHaveLength(3);
-    expect(calls[0]!.data).toBe(DEPLOY.data);
-    expect(decodeFunctionData({ abi: erc20Abi, data: calls[1]!.data }).functionName).toBe(
+    expect(calls).toHaveLength(2);
+    expect(decodeFunctionData({ abi: erc20Abi, data: calls[0]!.data }).functionName).toBe(
       "transfer",
     );
-    expect(denormalizeToEvm(calls[2]!.target)).toBe("0x4444444444444444444444444444444444444444");
+    expect(denormalizeToEvm(calls[1]!.target)).toBe("0x4444444444444444444444444444444444444444");
   });
 
   it("hands the child compile the Portal the route records, override included", () => {
@@ -279,16 +263,17 @@ describe("the Pot a program body cooks on", () => {
           intents: { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n, ...intents },
         },
       ).source;
-    const deployFor = (executor: Hex) =>
-      v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT).slice(2);
     const cookOn = (pot: string) => pot.slice(2).toLowerCase().padStart(64, "0");
+    const deploySelector = v12Kitchen
+      .encodeDeployPot(RECIPIENT_ADDRESS, SAUCE_INTENT_POT_SALT)
+      .slice(2, 10);
 
-    it("derives from the registry Portal's Executor, and deploys that Pot", () => {
+    it("cooks on the registry Portal's shared Pot, and deploys nothing", () => {
       const executor = ecoRoutesExecutorOf(ecoRoutesPortal("arbitrum"));
       const source = compileWith({}).toLowerCase();
 
-      expect(source).toContain(deployFor(executor));
       expect(source).toContain(cookOn(v12PredictPot(executor)));
+      expect(source).not.toContain(deploySelector);
     });
 
     it("derives from an OVERRIDING destination Portal's own Executor", () => {
@@ -298,18 +283,16 @@ describe("the Pot a program body cooks on", () => {
 
       // A Pot owned by the registry Portal's Executor would reject this route's cook with
       // `NotOwner()`: the route records `portal`, so `portal`'s Executor is the caller.
-      expect(source).toContain(deployFor(ecoRoutesExecutorOf(portal)));
-      expect(source).not.toContain(deployFor(registryExecutor));
       expect(source).toContain(cookOn(v12PredictPot(ecoRoutesExecutorOf(portal))));
+      expect(source).not.toContain(cookOn(v12PredictPot(registryExecutor)));
     });
 
-    it("emits no deployPot for a Pot the caller names", () => {
+    it("cooks on a Pot the caller names", () => {
       const pot = "0x7777777777777777777777777777777777777777";
       const source = compileWith({ pot }).toLowerCase();
-      const selector = v12Kitchen.encodeDeployPot(pot, SAUCE_INTENT_POT_SALT).slice(2, 10);
 
-      expect(source).not.toContain(selector);
       expect(source).toContain(cookOn(pot));
+      expect(source).not.toContain(deploySelector);
     });
   });
 });

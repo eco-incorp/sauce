@@ -58,25 +58,26 @@ the one Pot the solver deploys per Portal and every intent through that Portal s
 overrides. `destinationPot(Base.chain, { portal })` returns that address, for a `precalls`
 transfer into it.
 
-**A derived Pot is deployed by the route that uses it.** Its first `route.calls` entry is
-`Kitchen.deployPot(executor, SAUCE_INTENT_POT_SALT)`, ahead of any precall. The Kitchen deploys only
-when nothing is at the predicted address and otherwise returns the existing Pot; the call is
-permissionless and reverts only on a zero owner. The first fulfilment through that Portal pays for
-the deployment, about 350,000 gas; every later one pays about 6,000 gas for the no-op. Nobody has to
-deploy the Pot beforehand.
+**The destination Pot must exist before the intent is fulfilled.** The SDK derives its address and
+deploys nothing: the route contains no deployment call. The solver deploys the shared Pot for each
+Portal. A fulfilment that cooks on a Pot that is not there reverts entirely, because the Executor
+refuses a call with calldata to an address without code (`CallToEOA`).
 
-**A Pot you name gets no such call**, because it need not sit at the SDK's owner and salt. It must
-already exist and be owned by that Executor: the Executor refuses a call to an address without code,
-and a Pot with another owner refuses the cook with `NotOwner()`. Use
-[evm-execution.ts](../examples/evm-execution.ts) on the destination chain to predict one for your own
-salt, deploy it, and check its `owner()` and `kitchen()`. Only use a result with `ready: true`.
+To deploy it yourself first, send this on the destination chain:
+`routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: executor, salt: SAUCE_INTENT_POT_SALT })`.
+The call is permissionless, and it returns the existing Pot when one is already there. A **Pot you
+name** instead must also exist, and be owned by that Executor, or the cook reverts with `NotOwner()`.
+Use
+[evm-execution.ts](../examples/evm-execution.ts) with the destination Portal and a salt — zero for
+the shared Pot — to predict the Pot and check that it is deployed, with the right `owner()` and
+`kitchen()`. Only use a result with `ready: true`.
 
 The deployment helpers return the released addresses. They do not check that code is live at those
 addresses on your chain. The same helper confirms the Kitchen and engine have code, and reads the
 execution fee you need either way.
 
 An Executor-owned Pot can be invoked by other valid Portal routes, and the derived one is shared by
-every intent on its chain. Deliver assets, use them, and return leftovers **within the same
+every intent through its Portal. Deliver assets, use them, and return leftovers **within the same
 fulfillment**; leave nothing in it — no user funds, no standing allowances. Source reward escrow
 belongs in the intent vault. These caller and custody rules follow [Eco Routes' Executor calls](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Executor.sol#L50-L74) and [destination fulfillment](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Inbox.sol#L225-L271).
 
@@ -104,7 +105,7 @@ interface TransferIntentConfig {
 
 export function buildBaseTransfer(config: TransferIntentConfig) {
   const amount = 1_000_000n;
-  // The Pot the route cooks on: derived from the Portal it records, deployed by its first call.
+  // The Pot the route cooks on: the shared one for the Portal it records. It must already exist.
   const pot = destinationPot(Base.chain, { portal: config.destinationPortal });
   const delivery = token.Token.transfer({ token: config.baseUsdc, to: pot, amount }).toCall();
 
@@ -130,7 +131,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 
 The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana — the encoding supports it — but see the [Solana guide](solana.md) for how that execution is actually built.
 
-The route has three calls: the `deployPot` the SDK adds, the delivery into the Pot, and the cook.
+The route has two calls: the delivery into the Pot, and the cook.
 `executionFee` is the destination Kitchen quote obtained above. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
 
 The explicit `tokenDefines` ensures that the token transferred into the Pot matches the token used by the program. To use the SDK's default Base USDC, resolve it with `routes.registryTokenAddress(Base.chain, "USDC")` and check the result before building. That lookup returns a `bigint`; convert it to a 20-byte hex address with Viem's `toHex(value, { size: 20 })` for intent token fields, as in the [complete example](../examples/first-intent.ts).
@@ -269,14 +270,11 @@ asked of you. The salt is zero (`SAUCE_INTENT_POT_SALT`), so there is **one shar
 rather than one per intent: the Pot the solver deploys for that Portal. A Pot is fixed by its owner
 and salt, so whoever calls `deployPot(executor, 0)` creates that same Pot, owned by the Executor.
 
-Deriving an address is not deploying a contract, so the route deploys it: a program body's route
-begins with `Kitchen.deployPot(executor, SAUCE_INTENT_POT_SALT)`, before the delivery into the Pot and
-the cook on it. The Kitchen deploys only when nothing is at that address and otherwise returns the
-existing Pot, so the first fulfilment deploys it, at about 350,000 gas, and every later one pays about
-6,000 gas for a no-op. A token-only body cooks nothing and gets no such call.
+Deriving an address is not deploying a contract, and the lowering deploys nothing. **The Pot must
+exist before the child intent is fulfilled** — the solver deploys it — or the fulfilment reverts
+when the Executor calls an address without code. A token-only body cooks nothing, so it needs no Pot.
 
-A Pot you name with `pot` gets no `deployPot` either: it need not be at the SDK's owner and salt. It
-must already exist and be owned by that Executor, or the fulfilment reverts.
+A Pot you name with `pot` must equally exist already and be owned by that Executor.
 
 Because it is shared, **leave nothing in it**. Deliver assets, use them, and move the remainder out
 within the same fulfillment. Anything resting there, or any allowance left standing, belongs to

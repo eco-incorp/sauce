@@ -8,9 +8,8 @@
  *
  * DERIVING IS NOT DEPLOYING. The address exists as arithmetic the moment you know the owner; the
  * contract exists once somebody has called the Kitchen's `deployPot`, a permissionless call per
- * (owner, salt) that `sauceEvmDeployPotCall` encodes. An intent route whose Pot the SDK derives
- * makes that call itself, first (`routes/intent-pot.ts`); anything else cooking on a derived Pot
- * has to deploy it beforehand.
+ * (owner, salt) that `sauceEvmDeployPotCall` encodes. Nothing the SDK builds makes that call: an
+ * intent's Pot must exist before it is fulfilled, and the solver deploys it (`routes/intent-pot.ts`).
  */
 import { encodeAbiParameters, getAddress, getCreate2Address, keccak256, type Hex } from "viem";
 

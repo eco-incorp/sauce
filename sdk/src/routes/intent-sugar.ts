@@ -92,8 +92,9 @@ export interface IntentSugarDefaults {
   readonly salt?: Hex;
   /** Passed to `publishAndFund`. Default `false`. */
   readonly allowPartial?: boolean;
-  /** Overrides the destination Pot a cook-based child runs on. Derived by default from the
-   *  destination `Portal.executor()` and the SDK's canonical salt — see `deployments/pot.ts`. */
+  /** Overrides the destination Pot a cook-based child runs on. Derived by default: the solver's
+   *  shared Pot for the recorded Portal's `executor()`, salt zero — see `routes/intent-pot.ts`. It
+   *  must exist before the child is fulfilled. */
   readonly pot?: AddressInput;
   /** The interpreter that Pot cooks on. Defaults to the released engine address. */
   readonly engine?: AddressInput;
@@ -141,9 +142,6 @@ export interface CompiledChild {
   /** `cook(engine, bytecode ++ arguments)` calldata, with a sentinel per capture in the argument
    *  tail. `undefined` captures means the program takes none. */
   readonly call: { readonly target: Hex; readonly data: Hex; readonly value: bigint };
-  /** `Kitchen.deployPot(...)` for a Pot the SDK derived, `undefined` for one the caller named. It
-   *  becomes the route's first call, so the cook never meets a Pot that does not exist yet. */
-  readonly deployPot?: { readonly target: Hex; readonly data: Hex; readonly value: bigint };
   /** The sentinel each capture occupies, in the order the program declares them. */
   readonly captureSentinels: readonly bigint[];
 }
@@ -630,9 +628,6 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       captured.forEach((name, i) => {
         captureWords.push({ name, sentinel: child.captureSentinels[i]! });
       });
-      // First, before anything is moved into the Pot or cooked on it: a derived Pot exists only
-      // once somebody has deployed it, and this call is a no-op every time after that.
-      if (child.deployPot !== undefined) calls.push(child.deployPot);
       // Delivered tokens land on the Executor; the program runs in the Pot, so move them first.
       for (const token of explicitDelivery ?? []) {
         calls.push({

@@ -20,7 +20,7 @@ import type { routes } from "@eco-incorp/sauce";
 
 const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before a real run.
 const options: routes.IntentOptions = {
-  // The Pot and engine are derived; the route deploys the Pot if it does not exist yet.
+  // The Pot and engine are derived. The Pot must exist before fulfilment; the solver deploys it.
   execution: { value: executionFee },
   nativeAmount: executionFee,
   portal: "0x3333333333333333333333333333333333333333",
@@ -42,7 +42,7 @@ console.log(built.hash().intentHash);
 
 `Base` names the **destination**: the chain the program runs on. The SDK resolves `USDC` and
 `Uniswap.UniversalRouter` there, compiles the body, and encodes it as a `cook(engine, program)` call
-on the Pot it derives for that chain, preceded by the call that deploys that Pot if it is missing.
+on the Pot it derives for that chain: the shared Pot the solver deploys for that chain's Portal.
 `.reward(...)` names the **source**: the chain where the reward is escrowed. The result carries the
 intent, its hashes, the compiled bytecode and the transaction requests your application submits.
 
@@ -60,9 +60,9 @@ router is `UniswapV4.UniversalRouter`, with `Uniswap.UniversalRouter` as an unam
 `UniswapV3.UniversalRouter` does not exist. [Coverage](../api/coverage.md) lists what is registered.
 
 **The Pot is not yours alone.** For a Portal-driven intent the Pot's owner is the destination
-`Portal.executor()`, which every solver can drive. The SDK derives that Pot and the route deploys it
-on first use, so the example names none. Deliver assets into it, use them, and take the remainder
-out inside the same fulfillment. Every cook also pays the Kitchen's current fee in native value.
+`Portal.executor()`, which every solver can drive. The SDK derives that Pot, so the example names
+none; the solver deploys it before the intent is fulfilled. Deliver assets into it, use them, and
+take the remainder out inside the same fulfillment. Every cook also pays the Kitchen's current fee in native value.
 [The destination Pot](intents.md#the-destination-pot) covers deployment and overrides.
 
 ## Deliver assets and fund the reward

@@ -14,8 +14,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { getAddress } from "viem";
+
 import { requireChain } from "../src/chains/canonical.js";
-import { SAUCE_INTENT_POT_SALT, v12GateKitchen } from "../src/deployments/pot.js";
+import { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "../src/deployments/pot.js";
 import { v12Kitchen } from "../src/evm/engine.js";
 import {
   ecoRoutesExecutorOf,
@@ -26,6 +28,7 @@ import { denormalizeToEvm } from "../src/routes/encode.js";
 import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
+import { compileSauceRoute } from "../src/routes/sauce-route.js";
 
 const GUIDE = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), "../../docs/guides/intents.md"),
@@ -146,8 +149,9 @@ describe("the guide's refusal list is the lowering's", () => {
 });
 
 describe("the guide's account of the destination Pot is the builder's", () => {
-  // Each claim is a sentence the guide must contain and a check on what `openRoute` builds. The
-  // gas figures beside them are pinned by execution, in `routes-nest-dynamic.e2e.test.ts`.
+  // Each claim is a sentence the guide must contain and a check on what the SDK builds. What the
+  // chain does with it -- a missing Pot reverts, a present one cooks -- is executed in
+  // `routes-nest-dynamic.e2e.test.ts`.
   const PORTAL = "0x2222222222222222222222222222222222222222" as const;
   const options = (extra: Partial<IntentOptions> = {}): IntentOptions => ({
     deadline: 2000n,
@@ -159,24 +163,47 @@ describe("the guide's account of the destination Pot is the builder's", () => {
   });
   const calls = (extra: Partial<IntentOptions> = {}) =>
     openRoute("ethereum", "return 1n;", options(extra)).reward(0n).intent.route.calls;
-  const deployCall = v12Kitchen.encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT);
+  const sharedPot = v12PredictPot(ecoRoutesExecutorOf(PORTAL));
+  const deploySelector = v12Kitchen
+    .encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT)
+    .slice(2, 10);
+  const programChild = () =>
+    compileSauceRoute(
+      "base",
+      `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    if (amount > 0n) { USDC.transfer(RECIPIENT, amount); }
+  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+}`,
+      { pot: PORTAL, engine: PORTAL },
+      {
+        defines: { RECIPIENT: 0x9999999999999999999999999999999999999999n },
+        intents: { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
+      },
+    ).source.toLowerCase();
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
-      documented: "**A derived Pot is deployed by the route that uses it.**",
+      // The TypeScript builder: the cook, and nothing that deploys.
+      documented: "**The destination Pot must exist before the intent is fulfilled.**",
       holds: () =>
-        denormalizeToEvm(calls()[0]!.target) === v12GateKitchen().toLowerCase() &&
-        calls()[0]!.data === deployCall,
+        calls().length === 1 &&
+        calls().every(
+          (c) =>
+            denormalizeToEvm(c.target) !== v12GateKitchen().toLowerCase() &&
+            !c.data.startsWith(`0x${deploySelector}`),
+        ),
     },
     {
-      documented: "ahead of any precall",
-      holds: () => calls({ precalls: [{ target: PORTAL, data: "0x12" }] })[0]!.data === deployCall,
+      // The native syntax: the child's encoded route carries no deployment either.
+      documented: "and the lowering deploys nothing",
+      holds: () => !programChild().includes(deploySelector),
     },
     {
-      // The owner is the RECORDED Portal's Executor, which the deploy call names.
+      // The owner is the RECORDED Portal's Executor.
       documented: "**`executor()` of the Portal the route records**",
-      holds: () =>
-        calls()[0]!.data.toLowerCase().includes(ecoRoutesExecutorOf(PORTAL).slice(2).toLowerCase()),
+      holds: () => getAddress(denormalizeToEvm(calls()[0]!.target)) === sharedPot,
     },
     {
       // The solver's own Pot: one per Portal, salt zero.
@@ -184,14 +211,14 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       holds: () => SAUCE_INTENT_POT_SALT === `0x${"00".repeat(32)}`,
     },
     {
-      documented: "**A Pot you name gets no such call**",
-      holds: () => calls({ pot: PORTAL }).length === 1,
+      documented: "`destinationPot(Base.chain, { portal })` returns that address",
+      holds: () => destinationPot("ethereum", { portal: PORTAL }) === sharedPot,
     },
     {
-      documented: "`destinationPot(Base.chain, { portal })` returns that address",
+      documented: "instead must also exist, and be owned by that Executor",
       holds: () =>
-        denormalizeToEvm(calls()[1]!.target) ===
-        destinationPot("ethereum", { portal: PORTAL }).toLowerCase(),
+        calls({ pot: PORTAL }).length === 1 &&
+        denormalizeToEvm(calls({ pot: PORTAL })[0]!.target) === PORTAL,
     },
   ];
 
@@ -205,9 +232,14 @@ describe("the guide's account of the destination Pot is the builder's", () => {
 
   it("no longer claims what stopped being true", () => {
     for (const retired of [
-      // A derived Pot no longer waits for someone else to deploy it.
+      // Routes deploy nothing: the solver deploys the Pot before fulfilment.
       "Before that, a cook against it reverts",
-      // The TypeScript builder derives the Pot now, like the native syntax.
+      "A derived Pot is deployed by the route that uses it",
+      "so the route deploys it",
+      "gas for the no-op",
+      "gas for a no-op",
+      "Nobody has to",
+      // The TypeScript builder derives the Pot, like the native syntax.
       "custody decision worth making explicitly",
       "is still supplied by the caller on this path",
     ]) {

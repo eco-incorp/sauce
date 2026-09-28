@@ -35,7 +35,7 @@ import type { RewardInput, RouteInput } from "../src/routes/types.js";
 import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
-import { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "../src/deployments/pot.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { denormalizeToEvm } from "../src/routes/encode.js";
 
@@ -253,10 +253,10 @@ describe("openRoute: SVM destination", () => {
   });
 });
 
-describe("openRoute: the destination Pot is derived, and deployed by the route", () => {
+describe("openRoute: the destination Pot is derived, not deployed", () => {
   // The same derivation the native syntax uses (`intent-pot.ts`), so the two paths cannot disagree
-  // about where a route cooks. The owner is the RECORDED Portal's Executor; the route's first call
-  // makes sure the Pot exists.
+  // about where a route cooks. The owner is the RECORDED Portal's Executor, under salt zero: the
+  // shared Pot the solver deploys. Nothing in the route deploys it.
   const executor = ecoRoutesExecutorOf(PORTAL);
   const derived = v12PredictPot(executor);
   const derivedOptions = (): IntentOptions => ({
@@ -266,45 +266,36 @@ describe("openRoute: the destination Pot is derived, and deployed by the route",
     creator: CREATOR,
     prover: PROVER,
   });
+  const deploySelector = v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT).slice(0, 10);
 
-  it("cooks on the Executor's canonical Pot with the released engine, and deploys it first", () => {
+  it("cooks on the Executor's shared Pot with the released engine, and adds no other call", () => {
     const built = openRoute("ethereum", "return 1n;", derivedOptions()).reward(0n);
-    const [deploy, cook] = built.intent.route.calls;
+    const [cook] = built.intent.route.calls;
 
-    expect(built.intent.route.calls).toHaveLength(2);
-    expect(denormalizeToEvm(deploy!.target)).toBe(v12GateKitchen().toLowerCase());
-    expect(deploy!.data).toBe(v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT));
-    expect(deploy!.value).toBe(0n);
+    expect(built.intent.route.calls).toHaveLength(1);
     expect(getAddress(denormalizeToEvm(cook!.target))).toBe(derived);
     expect(cook!.data).toBe(
       v12Pot.encodeCook(v12EngineAddress() as Hex, bytesToHex(built.compiled.bytecode[0]!)),
     );
   });
 
-  it("puts the deployment before every precall, which may move assets into the Pot", () => {
+  it("emits no deployPot, before or after the precalls", () => {
     const precall = { target: POT, data: "0x1234" as Hex };
     const built = openRoute("ethereum", "return 1n;", {
       ...derivedOptions(),
       precalls: [precall],
     }).reward(0n);
 
-    expect(built.intent.route.calls.map((c) => c.data)).toEqual([
-      v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT),
-      "0x1234",
-      expect.any(String),
-    ]);
+    expect(built.intent.route.calls.map((c) => c.data.slice(0, 10))).not.toContain(deploySelector);
+    expect(built.intent.route.calls.map((c) => c.data)).toEqual(["0x1234", expect.any(String)]);
   });
 
   it("derives from the registry Portal's Executor when no Portal is named", () => {
     const { portal: _unused, ...options } = derivedOptions();
     const built = openRoute("ethereum", "return 1n;", options).reward(0n);
-    const registryExecutor = ecoRoutesExecutorOf(ecoRoutesPortal("ethereum"));
 
-    expect(built.intent.route.calls[0]!.data).toBe(
-      v12Kitchen.encodeDeployPot(registryExecutor, SAUCE_INTENT_POT_SALT),
-    );
-    expect(getAddress(denormalizeToEvm(built.intent.route.calls[1]!.target))).toBe(
-      v12PredictPot(registryExecutor),
+    expect(getAddress(denormalizeToEvm(built.intent.route.calls[0]!.target))).toBe(
+      v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("ethereum"))),
     );
   });
 
@@ -315,7 +306,7 @@ describe("openRoute: the destination Pot is derived, and deployed by the route",
     // The registry Portal's Pot would reject this route's cook with `NotOwner()`: the route records
     // PORTAL, so PORTAL's Executor is the caller.
     expect(derived).not.toBe(registryPot);
-    expect(getAddress(denormalizeToEvm(built.intent.route.calls[1]!.target))).toBe(derived);
+    expect(getAddress(denormalizeToEvm(built.intent.route.calls[0]!.target))).toBe(derived);
   });
 
   it("`destinationPot` names the same address, for a caller building precalls", () => {
@@ -328,7 +319,7 @@ describe("openRoute: the destination Pot is derived, and deployed by the route",
   it.each([
     ["execution.pot", { execution: { pot: POT } }],
     ["the pot shorthand", { pot: POT }],
-  ])("a Pot named through %s is used as given and gets no deployPot", (_name, override) => {
+  ])("a Pot named through %s is used as given", (_name, override) => {
     const built = openRoute("ethereum", "return 1n;", {
       ...derivedOptions(),
       ...override,
@@ -342,14 +333,14 @@ describe("openRoute: the destination Pot is derived, and deployed by the route",
     );
   });
 
-  it("an overriding engine keeps the derived Pot and its deployment", () => {
+  it("an overriding engine keeps the derived Pot", () => {
     const built = openRoute("ethereum", "return 1n;", {
       ...derivedOptions(),
       execution: { engine: ENGINE, value: 7n },
     }).reward(0n);
-    const [deploy, cook] = built.intent.route.calls;
+    const [cook] = built.intent.route.calls;
 
-    expect(deploy!.data).toBe(v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT));
+    expect(getAddress(denormalizeToEvm(cook!.target))).toBe(derived);
     expect(cook!.data).toBe(v12Pot.encodeCook(ENGINE, bytesToHex(built.compiled.bytecode[0]!)));
     expect(cook!.value).toBe(7n);
   });

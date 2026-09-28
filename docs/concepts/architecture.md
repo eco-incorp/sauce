@@ -53,8 +53,8 @@ value.
 A program runs through `Pot.cook(engine, program)`. A Pot has an owner; the engine is named on each
 cook, so a call needs **both** addresses. A direct `compileSauceRoute` takes them from you. An intent
 derives them: the released engine, and the Pot the recorded Portal's Executor owns under salt zero
-(`SAUCE_INTENT_POT_SALT`), which the route deploys with its first call. An engine accepts only Pots
-created by its own Kitchen.
+(`SAUCE_INTENT_POT_SALT`). That Pot must exist before the route runs; the solver deploys it. An
+engine accepts only Pots created by its own Kitchen.
 
 Every cook must send the Kitchen's current `executionFee()` as native value, even for a program that
 moves only ERC-20s. Native the program itself spends is on top of that. A balance already sitting in

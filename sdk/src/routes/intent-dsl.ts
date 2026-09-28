@@ -127,8 +127,8 @@ interface IntentOptionsCommon {
  * `Chain(() => ...).reward(...)` inside a program derives them (`intent-pot.ts`).
  */
 export interface IntentEvmExecution {
-  /** Overrides the derived Pot — the canonical one owned by the recorded Portal's Executor. A Pot
-   *  named here gets no `deployPot` call, so it must already exist and be that Executor's. */
+  /** Overrides the derived Pot — the shared one owned by the recorded Portal's Executor. Either
+   *  way the Pot must already exist and be that Executor's; nothing in the route deploys it. */
   readonly pot?: AddressInput;
   /** Overrides the released engine the Pot cooks on. */
   readonly engine?: AddressInput;
@@ -494,10 +494,8 @@ export function openRoute(
   const destinationPortal = options.portal ?? ecoRoutesPortal(destination, options.ecoRoutes);
 
   // The Pot and engine the route cooks on, derived when not named -- from `destinationPortal`, the
-  // Portal this route RECORDS, because its Executor is the one that will call the Pot. A derived Pot
-  // also gets the `deployPot` call that becomes this route's first entry.
+  // Portal this route RECORDS, because its Executor is the one that will call the Pot.
   let execution: SauceEvmExecutionInput | SauceSvmExecutionInput;
-  let deployPot: CallInput | undefined;
   if (destination.kind === "svm") {
     if (options.execution === undefined) {
       missingField(
@@ -519,7 +517,6 @@ export function openRoute(
       engine: evm.engine ?? options.engine,
     });
     execution = { pot: resolved.pot, engine: resolved.engine, value: evm.value };
-    deployPot = resolved.deployPot;
   }
 
   const closure = isSauceClosure(sauce);
@@ -932,8 +929,6 @@ export function openRoute(
         });
 
       const calls: CallInput[] = [
-        // First: every later call either moves assets into the Pot or cooks on it.
-        ...(deployPot === undefined ? [] : [deployPot]),
         ...(options.precalls ?? []),
         ...childCalls("before"),
         ...compiledRoute.calls,
