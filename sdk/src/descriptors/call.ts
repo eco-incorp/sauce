@@ -6,10 +6,12 @@
  *
  * The `typeFidelity: "widened"` gate lives here, not in accessors.ts: every
  * production path (`data`, `encode`, `toCall`, `toSauceScript`) funnels
- * through `assertFidelity`, so a widened descriptor (three uniswap-v3
- * entries, uniswap-v4's PoolManager) can never silently hand out calldata
- * that will not hit the deployed contract — see links.ts's own caveats for
- * why each one is widened.
+ * through `assertFidelity`, so a descriptor marked widened can never silently
+ * hand out calldata that will not hit the deployed contract. No shipped
+ * descriptor is marked any more: the registry declares every contract's
+ * deployed types, and `test/registry-abi.test.ts` pins them to the deployed
+ * code. The gate and its `allowWidened` opt-out stay because they are public
+ * API.
  */
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { dirname, join } from "node:path";

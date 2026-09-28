@@ -41,7 +41,8 @@ export interface ContractLink {
   readonly kind: ContractKind;
   /** Default "exact". "widened" flags a vendored ABI using a wider-than-real type
    *  (e.g. uint32 in place of the deployed contract's uint24) — the computed
-   *  selector will NOT match the real, deployed contract. */
+   *  selector will NOT match the real, deployed contract. No entry below sets
+   *  it: every registry ABI declares the deployed types. */
   readonly typeFidelity?: "widened";
   readonly caveats?: readonly string[];
 }
