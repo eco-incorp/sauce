@@ -254,7 +254,9 @@ interface ABIs), `probes` (extra signatures to ask a selector router about), and
 with its reason — `exempt` (a deployment that legitimately differs),
 `unverified` (no verified source on any keyless source; the selector is still checked) and
 `unverifiable`. An
-exception that stops applying fails the test. So does a new export with no target, a deployment
+exception that stops applying fails the test. `required` names an overload a consumer binds (with
+the consumer): the registry need not declare every overload a contract has, but it must keep
+declaring those, and removing one fails the test. So does a new export with no target, a deployment
 of a targeted role the evidence does not cover (an `addresses.ts` edit not yet recaptured, or one
 no export's `chains` includes), and a `<X>ABI.json` twin that is missing or no longer matches
 `abis.ts` (regenerate with `bun run scripts/generate-abi-json.ts`, then prettier). The widened-type workaround the registry

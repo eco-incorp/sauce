@@ -17,7 +17,8 @@
  * token without the L1 token's functions), `unverified` (no verified source on Sourcify, Blockscout or
  * a keyless Etherscan-compatible API, so only the selector is checked) and `unverifiable` (nothing
  * on-chain can evidence the export at all). An exception that no longer applies fails too, so the
- * list cannot rot.
+ * list cannot rot. It also records `required` overloads: a signature some consumer binds, which the
+ * registry must keep declaring even though a contract's other overloads are free to be left out.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -74,6 +75,8 @@ interface Target {
   readonly exempt?: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly unverified?: Readonly<Record<string, string>>;
   readonly unverifiable?: string;
+  /** Signature -> the consumer that binds it. Removing one from `abis.ts` fails the suite. */
+  readonly required?: Readonly<Record<string, string>>;
 }
 
 const targets = JSON.parse(readFileSync(join(FIXTURES, "targets.json"), "utf-8"))
@@ -243,7 +246,7 @@ describe("registry ABI evidence: coverage", () => {
     expect({ missing, unknown }).toEqual({ missing: [], unknown: [] });
   });
 
-  it("every exemption and `unverified` entry names a function the registry declares", () => {
+  it("every exemption, `unverified` and `required` entry names a function the registry declares", () => {
     const orphans: string[] = [];
     for (const [slug, exports] of Object.entries(targets)) {
       if (registry[slug] === undefined) continue; // another branch's protocol, see above
@@ -252,6 +255,7 @@ describe("registry ABI evidence: coverage", () => {
         for (const sig of [
           ...Object.keys(target.exempt ?? {}),
           ...Object.keys(target.unverified ?? {}),
+          ...Object.keys(target.required ?? {}),
         ]) {
           if (!sigs.has(sig)) orphans.push(`${slug}.${name}: ${sig}`);
         }
