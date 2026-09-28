@@ -112,6 +112,66 @@ The submission helpers below generate EVM calldata and reject an SVM source, so 
 
 The explicit `tokenDefines` ensures that the token transferred into the Pot matches the token used by the program. To use the SDK's default Base USDC, resolve it with `routes.registryTokenAddress(Base.chain, "USDC")` and check the result before building. That lookup returns a `bigint`; convert it to a 20-byte hex address with Viem's `toHex(value, { size: 20 })` for intent token fields, as in the [complete example](../examples/first-intent.ts).
 
+## Create an intent from inside a program
+
+Everything above builds an intent in TypeScript, before anything runs. A program can also create one
+while it is running, which is what you want when the amount is the output of the step before it:
+
+```js
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}
+```
+
+Same shape as the TypeScript builder, written in the program. No Portal, selector, encoding or
+approval appears, because none of them is a decision you are making — the SDK emits all of it.
+
+**What a captured variable is.** `amount` is a local of the enclosing program, so its value does not
+exist when the intent is encoded. It is encoded with a sentinel in its place, and the program splices
+the real value in as it runs. One variable is one slot however many times it appears: above it is the
+reward amount, the route's token amount and the transfer argument, and all three are the same number
+by construction rather than by three encodings agreeing.
+
+**What may be captured.** Any scalar the enclosing program holds — an amount, an address, anything
+one 256-bit word wide. What may not is anything a child _program_ would need, because there is no
+child program: each statement becomes one entry in the intent's `route.calls`, which is what an
+eco-routes route is.
+
+**What is refused, by name.** A statement that is not a call. A method other than `transfer` or
+`approve`. An identifier that is neither a compile-time value nor a variable of the enclosing
+program. An intent opened inside another intent — that second execution needs a compiled program, so
+it is `.nest(child, { via: "dynamic" })` on the TypeScript builder instead. Each is a compile error
+naming the construct, never a silently different intent.
+
+**Names resolve per chain.** `USDC` inside the braces is _Arbitrum's_ USDC, because those calls run
+on Arbitrum. Resolving it against the enclosing chain would put one chain's address in another
+chain's route.
+
+**A throw reverts everything.** A `throw` in a program, and every guard the SDK emits, reverts the
+whole fulfillment — no earlier route call survives it. A program that refuses to create an intent
+therefore leaves nothing behind, and a measurement below its floor cannot strand funds in the Pot.
+
+| Value              | Comes from                                                        |
+| ------------------ | ----------------------------------------------------------------- |
+| Portal, both sides | The eco-routes deployment tables, by chain                        |
+| Prover             | The tables, by source/destination pair                            |
+| Destination        | The chain you named                                               |
+| Source             | The chain the program runs on                                     |
+| Deadline           | **You.** Too early is unfulfillable, too late locks the reward up |
+| Creator            | **You.** See below                                                |
+
+The creator is the address that may reclaim the reward if nobody earns it. The executing Pot is the
+obvious default and the wrong one: it is owned by the Portal's Executor, which every solver can
+drive, so a refund landing there is a refund anyone can take. Set `IntentOptions.creator` and every
+intent the program creates inherits it, along with the deadline and the eco-routes deployment; a
+direct `compileSauceRoute` caller sets `compile.intents.creator`.
+
+Override the rest through `compile.intents`: `sourcePortal`, `destinationPortal`, `prover`, `salt`,
+`allowPartial`, and `generation`/`environment` to address a different eco-routes deployment.
+
 ## Callbacks are compiled source
 
 A callback is read with `Function.prototype.toString()`, parsed, and compiled as SauceScript. It is never invoked as a JavaScript callback and captures no outer variables. An `amount` in surrounding JavaScript does not become a value inside the program.
