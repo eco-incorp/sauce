@@ -50,6 +50,23 @@ const { bytecode, source } = compileProgram(program); // Pot.cook(engine, byteco
   `transfer`/`approve` follow OpenZeppelin `SafeERC20`, so a token that returns nothing (USDT) works,
   one that returns `false` reverts, and a standing allowance is reset before it is changed.
 
+## Supported actions
+
+The guide's [reference](../docs/guides/actions.md#supported-actions) says what each action calls and
+what a later action can spend from it.
+
+- **Swaps:** `uniswapV3ExactInput`, `uniswapV3ExactInputMultiHop`, `uniswapV4ExactInput`,
+  `uniswapV4ExactInputMultiHop`, `curveSwap`, `curveRouterNGSwap`, `balancerV2Swap`,
+  `balancerV2BatchSwap`, `balancerV3Swap`, `uniswapV2Swap`, `ambientSwap`, `dodoSwap`,
+  `maverickSwap`, `maverickMultiHopSwap`, `carbonSwap`, `fraxswapSwap`, `fluidDexT1Swap`
+- **Bridges:** `acrossBridge`, `stargateBridge`, `cctpBridge`, `hyperlaneBridge`
+- **Wrapping and staking:** `wrapETH`, `unwrapETH`, `wrapStETH`, `unwrapStETH`, `lidoStake`,
+  `lidoUnstake`, `rocketPoolStake`, `rocketPoolUnstake`, `etherFiStake`
+- **Lending:** `aaveV3Supply`, `aaveV3Withdraw`, `aaveV3Borrow`, `aaveV3Repay`, `compoundV3Supply`,
+  `compoundV3Withdraw`
+- **Tokens and sources:** `transfer`, `approve`, `permit2Approve`, `balanceOf`, `nativeBalance`,
+  `argument`
+
 The [actions guide](../docs/guides/actions.md) covers the format, chaining, intents, runtime
 amounts, quotes, and every supported action. [AMM_SWAP_INTERFACES.md](AMM_SWAP_INTERFACES.md) is a
 contributor's reference to the protocols' Solidity interfaces.
