@@ -22,7 +22,7 @@ export const AugustusV5ABI = [
           { name: "feePercent", type: "uint256" },
           { name: "permit", type: "bytes" },
           { name: "deadline", type: "uint256" },
-          { name: "uuid", type: "uint256" },
+          { name: "uuid", type: "bytes16" },
         ],
       },
     ],

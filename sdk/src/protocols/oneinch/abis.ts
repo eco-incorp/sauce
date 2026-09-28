@@ -26,14 +26,16 @@ export const AggregationRouterV6ABI = [
     ],
   },
   {
+    // V6 packs each address with flags into a uint256 (`Address` in 1inch's source): `token` is
+    // the source token, `dex` the pool plus its protocol/direction bits. The V5 array form is gone.
     name: "unoswap",
     type: "function",
-    stateMutability: "payable",
+    stateMutability: "nonpayable",
     inputs: [
-      { name: "srcToken", type: "address" },
+      { name: "token", type: "uint256" },
       { name: "amount", type: "uint256" },
       { name: "minReturn", type: "uint256" },
-      { name: "pools", type: "uint256[]" },
+      { name: "dex", type: "uint256" },
     ],
     outputs: [{ name: "returnAmount", type: "uint256" }],
   },

@@ -32,7 +32,7 @@ function main(
   minReturnAmount: Uint256,
   guaranteedAmount: Uint256,
   referrer: Address,
-  calls: bytes,
+  calls: { target: Uint256; gasLimit: Uint256; value: Uint256; data: bytes }[],
 ): Uint256 {
   const exchange = IOpenOceanExchange.at(exchangeAddress);
   return exchange.swap(
@@ -70,7 +70,7 @@ function main(
 
 ### OpenOceanExchangeV2ABI
 
-- `swap(address,tuple,bytes)` - Execute aggregated swap. Payable. Params: caller (msg.sender or executor), desc (SwapDescription tuple), calls (encoded swap calldata). Returns returnAmount
+- `swap(address,tuple,tuple[])` - Execute aggregated swap. Payable. Params: caller (msg.sender or executor), desc (SwapDescription tuple), calls (CallDescription[]: `(uint256 target, uint256 gasLimit, uint256 value, bytes data)`). Returns returnAmount
   - SwapDescription tuple: `{ srcToken, dstToken, srcReceiver, dstReceiver, amount, minReturnAmount, guaranteedAmount, flags, referrer, permit }`
   - `srcReceiver` - address that receives srcToken from caller
   - `dstReceiver` - address that receives output tokens
