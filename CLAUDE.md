@@ -381,8 +381,10 @@ from the catalogue in `abis.ts`: registry ABIs are taken only when their canonic
 exactly the action's (several registry ABIs are widened — Balancer `poolId` as `uint256`, Curve
 indices as `uint128`, Uniswap V3 `fee` as `uint32` — and would change the selector), and a method
 declares an output ONLY when an action reads it: compiler 2.3.0 decodes declared outputs even when
-discarded, and decoding empty return data reverts (USDT, 3pool-era Curve). Native-value calls stay
-raw `evm.call` because a binding cannot attach value. Actions **chain**: output feeds the next
+discarded, and decoding empty return data reverts (3pool-era Curve). ERC-20 `approve`/`transfer`
+are not bindings: they go through the SDK's `token/unchecked` (USDT returns no `bool`), the same
+decode-free lowering the route nesting uses — one path, so do not add a second. Native-value calls
+stay raw `evm.call` because a binding cannot attach value. Actions **chain**: output feeds the next
 implicitly (no amount) or via `saveOutputAs`/`amountRef`; `balanceOf`/`nativeBalance`/`argument`
 are source actions. `compose.ts` builds route bodies/intents (`actionsIntent`) and standalone
 programs with runtime arguments (`compileActions`, ABI-v1 or compact-v1 with fixed-width offsets).

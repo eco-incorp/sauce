@@ -1878,7 +1878,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
       assert.match(source, /let v_v4Out = /, "saveOutputAs should declare the local");
       assert.match(
         source,
-        /\.approve\(0x0*beefn, v_v4Out\)/,
+        /\.concat\(v_v4Out\.toBytesBe\(32\)\)/,
         "amountRef should read the local, not a literal",
       );
     });
@@ -1961,7 +1961,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
       assert.match(source, /let v_v4MultiOut = /, "saveOutputAs should declare the local");
       assert.match(
         source,
-        /\.approve\(0x0*beefn, v_v4MultiOut\)/,
+        /\.concat\(v_v4MultiOut\.toBytesBe\(32\)\)/,
         "amountRef should read the local, not a literal",
       );
     });

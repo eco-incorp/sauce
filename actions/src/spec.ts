@@ -682,11 +682,11 @@ const SPECS: readonly ActionSpec[] = [
   ),
 
   // -- tokens ---------------------------------------------------------------------------------
-  simple("transfer", "token", "Transfers an ERC-20 token.", "IERC20.transfer (output-free)", {
+  simple("transfer", "token", "Transfers an ERC-20 token.", "ERC-20 transfer, decoding nothing", {
     token: f(address, "the token"),
     to: f(recipient, "the receiver"),
   }),
-  simple("approve", "token", "Approves an ERC-20 spender.", "IERC20.approve (output-free)", {
+  simple("approve", "token", "Approves an ERC-20 spender.", "ERC-20 approve, decoding nothing", {
     token: f(address, "the token"),
     spender: f(address, "the spender"),
   }),

@@ -2517,7 +2517,7 @@
     },
     "action_transfer": {
       "title": "transfer",
-      "description": "Transfers an ERC-20 token. Calls IERC20.transfer (output-free).",
+      "description": "Transfers an ERC-20 token. Calls ERC-20 transfer, decoding nothing.",
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "token", "to"],
@@ -2555,7 +2555,7 @@
     },
     "action_approve": {
       "title": "approve",
-      "description": "Approves an ERC-20 spender. Calls IERC20.approve (output-free).",
+      "description": "Approves an ERC-20 spender. Calls ERC-20 approve, decoding nothing.",
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "token", "spender"],

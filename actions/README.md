@@ -37,9 +37,9 @@ const { bytecode, source } = compileActions(program); // Pot.cook(engine, byteco
   `.nest()` can start with `balanceOf` to spend exactly what its parent delivered.
 - **Runtime amounts.** An `argument` action makes an amount a parameter of one reusable compiled
   program; `compileActions(...).payload(values)` appends the arguments, ABI-v1 or compact-v1.
-- **SDK surfaces.** Each call is an ABI binding, with ABIs from the SDK protocol registry where it
-  has the exact function. ERC-20 `transfer`/`approve` decode no output, so tokens that return
-  nothing (USDT) work.
+- **SDK surfaces.** Each protocol call is an ABI binding, with ABIs from the SDK protocol registry
+  where it has the exact function. ERC-20 `transfer`/`approve` use the SDK's decode-free lowering,
+  so tokens that return nothing (USDT) work.
 
 The [actions guide](../docs/guides/actions.md) covers the format, chaining, intents, runtime
 amounts, and the list of supported actions with how each was verified.
@@ -53,7 +53,7 @@ The typed API still works: `actionsToSauce`, `actionsToSauceSource`, `actionToSa
 changed underneath:
 
 - **Emitted source uses ABI bindings.** `actionsToSauceSource` names bindings such as
-  `IErc20.at(token).approve(...)`, so compiling it yourself needs their ABIs: use
+  `ISwapRouter02.at(router).exactInputSingle(...)`, so compiling it yourself needs their ABIs: use
   `actionsToProgramSource(actions)` (source plus `contracts`) or `compileActions`.
   `buildAction` results carry the `bindings` they name; pass them to `contractsFor`.
 - **Stricter chaining.** Setting both an amount and `amountRef`, or giving actions of one list

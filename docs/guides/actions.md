@@ -110,7 +110,7 @@ Each action that spends an amount takes it from, in order of precedence:
 2. `amountRef`, naming the output an **earlier** action saved with `saveOutputAs`;
 3. otherwise, the **previous** action's output.
 
-Setting both an amount and an `amountRef` is an error, as is an `amountRef` to a name nothing saved yet, or a first action with no amount at all. Saving a second output under a name reassigns it.
+Setting both an amount and an `amountRef` is an error, as is an `amountRef` to a name no earlier action saved, or a first action with no amount at all. Saving a second output under a name reassigns it.
 
 What an action outputs depends on the action:
 
@@ -264,7 +264,8 @@ let v_usdc = amt1;
 ```
 
 - ABIs come from the SDK's protocol registry wherever it declares the exact function an action calls, and from a fragment in the actions package otherwise. `contracts` on the compiled result lists every binding.
-- A binding decodes only the outputs an action reads. ERC-20 `transfer`/`approve` are bound without their `bool` output, because tokens such as USDT return nothing and decoding empty return data reverts. A token that refuses a call still reverts the program.
+- A binding decodes only the outputs an action reads.
+- ERC-20 `transfer` and `approve` decode nothing. Tokens such as USDT return no `bool` from them, and decoding empty return data reverts, so these two are encoded ahead of time and issued as raw calls with the amount spliced in — the same decode-free lowering the SDK's nested intents use. A token that refuses the write still reverts the program.
 - A call carrying native value (`wrapETH`, the stake actions, the Stargate and Hyperlane fees) is a raw `evm.call`, because a bound call cannot attach value. Its selector comes from the same ABI fragment.
 - Binding names start with `I` and contain no underscore, so they cannot collide with the route compiler's protocol namespaces or its own `IERC20`. Do not bind a different ABI under one of them in `compile.contracts`.
 
@@ -331,13 +332,13 @@ The package builds calldata; it does not select routes, quote, or submit transac
 
 ### Tokens and sources
 
-| Action          | Calls                              | Amount   | Output         | Verified                    |
-| --------------- | ---------------------------------- | -------- | -------------- | --------------------------- |
-| `transfer`      | ERC-20 `transfer`, output-free     | `amount` | the input      | Fork, and a no-return token |
-| `approve`       | ERC-20 `approve`, output-free      | `amount` | the input      | Fork, and a no-return token |
-| `balanceOf`     | ERC-20 `balanceOf(Pot)`            | —        | the value read | Execution                   |
-| `nativeBalance` | The Pot's native balance           | —        | the value read | Calldata                    |
-| `argument`      | A runtime parameter of the program | —        | the value read | Execution                   |
+| Action          | Calls                               | Amount   | Output         | Verified                    |
+| --------------- | ----------------------------------- | -------- | -------------- | --------------------------- |
+| `transfer`      | ERC-20 `transfer`, decoding nothing | `amount` | the input      | Fork, and a no-return token |
+| `approve`       | ERC-20 `approve`, decoding nothing  | `amount` | the input      | Fork, and a no-return token |
+| `balanceOf`     | ERC-20 `balanceOf(Pot)`             | —        | the value read | Execution                   |
+| `nativeBalance` | The Pot's native balance            | —        | the value read | Calldata                    |
+| `argument`      | A runtime parameter of the program  | —        | the value read | Execution                   |
 
 ### Notes and limitations
 

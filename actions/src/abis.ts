@@ -13,11 +13,12 @@
  * here and says why next to it.
  *
  * WHY OUTPUTS ARE DROPPED. A binding decodes every output its ABI declares, even one the program
- * never reads, and decoding from empty return data reverts. Tokens such as USDT return nothing from
- * `transfer`/`approve`, and 3pool-era Curve pools return nothing from `exchange`, so declaring those
- * outputs would revert calls that succeeded. The rule here is therefore: declare an output only when
- * an action reads it. Every other method is bound output-free, which is exactly the raw-call
- * semantics these actions had before — the call must succeed, and nothing is decoded.
+ * never reads, and decoding from empty return data reverts. 3pool-era Curve pools return nothing
+ * from `exchange`, so declaring that output would revert a swap that succeeded. The rule here is
+ * therefore: declare an output only when an action reads it. Every other method is bound
+ * output-free — the call must succeed, and nothing is decoded. ERC-20 `approve`/`transfer` are not
+ * bindings at all: tokens such as USDT return nothing from them, and they go through the SDK's own
+ * decode-free lowering, `token/unchecked` (see `to-sauce.ts#Lowering.erc20Write`).
  *
  * WHY SOME CALLS ARE STILL RAW. A binding call cannot attach native value, and the compiler has no
  * calldata builtin besides `abi.encode`. So a payable call carrying ETH (`WETH.deposit`, Lido
@@ -120,9 +121,8 @@ const OUTPUT_UNREAD = "its output is measured as a balance delta, so it is bound
  * or a name the route rewrite synthesizes (`IAaveV3_Pool`) — `abis.unit.test.ts` checks all three.
  */
 const CATALOG = {
+  // Only the read: `approve`/`transfer` go through `token/unchecked`, which decodes nothing.
   IErc20: () => ({
-    approve: sdk("erc20", "ERC20ABI", ERC20ABI, "approve(address,uint256)", "drop"),
-    transfer: sdk("erc20", "ERC20ABI", ERC20ABI, "transfer(address,uint256)", "drop"),
     balanceOf: sdk("erc20", "ERC20ABI", ERC20ABI, "balanceOf(address)", "keep"),
   }),
   IWeth9: () => ({

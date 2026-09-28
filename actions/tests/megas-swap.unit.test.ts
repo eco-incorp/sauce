@@ -321,16 +321,18 @@ describe("megasSwapToSauce — input validation", () => {
       QUOTER_OPTS,
     );
 
-    // The sweep is an output-free ERC-20 transfer (USDT returns nothing from `transfer`) of the
-    // amount the legs actually realized — not a baked literal.
+    // The sweep is a decode-free ERC-20 transfer (USDT returns nothing from `transfer`), so its
+    // selector is a literal byte run, spliced with the amount the legs actually realized.
+    assert.match(swept, /hex`a9059cbb/, "sweep should emit an ERC-20 transfer");
     assert.match(
       swept,
-      /IErc20\.at\(0xdac17f958d2ee523a2206206994597c13d831ec7n\)\.transfer\(0x[0-9a-f]+n, totalOut\);/,
-      "the sweep should transfer the realized total",
+      /totalOut\.toBytesBe\(32\)/,
+      "the swept amount should be the realized total",
     );
+    assert.match(swept, /evm\.call\(0xdac17f958d2ee523a2206206994597c13d831ec7n, 0n, /);
     assert.doesNotMatch(
       unswept,
-      /\.transfer\(/,
+      /a9059cbb/,
       "no sweep means no transfer — the output stays on Sauce",
     );
   });
@@ -403,13 +405,13 @@ describe("megasSwapToSauce — prepend handling", () => {
     const prependMainLen = withPrepend[withPrepend.length - 1].length;
 
     assert.equal(withPrepend.length, baseline.length, "prepend does not change program count");
-    // One `approve` binding call per prepended approval, in the emitted source.
+    // One decode-free `approve` per prepended approval: its whole calldata is a literal byte run.
     const source = megasSwapToSauceSource(candidates, amountIn, 1, {
       ...QUOTER_OPTS,
       prepend: approves,
     });
     assert.equal(
-      source.match(/IErc20\.at\([^)]*\)\.approve\(/g)?.length,
+      source.match(/hex`095ea7b3/g)?.length,
       approves.length,
       "one approve per prepended approval",
     );

@@ -622,7 +622,8 @@ describe("actionsToSauce — source actions", () => {
       /const bal0 = IErc20\.at\(0x1000000000000000000000000000000000000001n\)\.balanceOf\(ctx\.self\(\)\);/,
     );
     assert.match(source, /let t_out0 = bal0;/);
-    assert.match(source, /\.transfer\(0x3000000000000000000000000000000000000001n, t_out0\);/);
+    assert.match(source, /hex`a9059cbb[0-9a-f]*3000000000000000000000000000000000000001`;/);
+    assert.match(source, /\.concat\(t_out0\.toBytesBe\(32\)\)/);
   });
 
   it("nativeBalance reads ctx.selfBalance()", () => {
@@ -690,11 +691,28 @@ describe("actionsToSauce — native value", () => {
     });
   }
 
-  it("every other action makes no raw call at all — a binding call cannot attach value", () => {
+  it("every other action attaches zero", () => {
     for (const [name, { action }] of Object.entries(CASES)) {
       if (valueCases.some(([n]) => n === name)) continue;
       const source = actionsToSauceSource([action]);
-      assert.doesNotMatch(source, /evm\.call\(/, `${name}: made a raw call\n${source}`);
+      assert.doesNotMatch(
+        source,
+        /evm\.call\(0x[0-9a-f]+n, (?!0n)[^,]+, /,
+        `${name}: attached non-zero value\n${source}`,
+      );
+    }
+  });
+
+  it("the only raw zero-value calls are ERC-20 writes, which decode nothing", () => {
+    for (const [name, { action }] of Object.entries(CASES)) {
+      const source = actionsToSauceSource([action]);
+      for (const [, data] of source.matchAll(/evm\.call\(0x[0-9a-f]+n, 0n, (\w+)/g)) {
+        assert.match(
+          source,
+          new RegExp(`const ${data} = hex\`(a9059cbb|095ea7b3)`),
+          `${name}: a raw call that is not an ERC-20 write\n${source}`,
+        );
+      }
     }
   });
 });
@@ -813,7 +831,7 @@ describe("actionsToSauce — chaining", () => {
     // `transfer(address,uint256)`'s second argument is that local, not a baked literal.
     assert.match(
       source,
-      /\.transfer\(0x[0-9a-f]+n, v_swapOut\);/,
+      /\.concat\(v_swapOut\.toBytesBe\(32\)\)/,
       "amountRef should read the local",
     );
   });

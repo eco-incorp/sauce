@@ -9,12 +9,14 @@
  *
  * Two kinds of call stay raw `evm.call`, each for a stated reason:
  *
- *   - a call carrying native value (`valueCall`), because a binding cannot attach value;
- *   - none other. Uniswap V4's router input and Balancer's `batchSwap` used to be pre-encoded host
- *     side and spliced; both are now encoded in the program, so a chained amount reaches them.
+ *   - an ERC-20 `approve`/`transfer` (`erc20Write`), through the SDK's `token/unchecked` lowering:
+ *     a binding would decode the ABI's `bool` output, and a token that returns nothing (USDT)
+ *     would then revert a write that succeeded;
+ *   - a call carrying native value (`valueCall`), because a binding cannot attach value.
  *
- * A method's output is declared, and so decoded, only when an action reads it — see `abis.ts` for
- * why that is what keeps a token that returns nothing (USDT) from reverting a call that succeeded.
+ * Uniswap V4's router input and Balancer's `batchSwap` used to be pre-encoded host side and spliced;
+ * both are now encoded in the program, so a chained amount reaches them. A binding method's output
+ * is declared, and so decoded, only when an action reads it — see `abis.ts`.
  *
  * AMOUNTS AND OUTPUTS. An action's amount is, in order of precedence, its explicit amount field, the
  * local an earlier action saved under `amountRef`, or the previous action's output. An action's
@@ -44,6 +46,11 @@ import {
   type MethodName,
 } from "./abis.js";
 import { compileEvm } from "./compile.js";
+import {
+  uncheckedApproveStatements,
+  uncheckedTransferStatements,
+  type WordArg,
+} from "./registry.js";
 import { assertActionsSemantics, consumesPrevious, explicitAmountOf } from "./semantics.js";
 
 import type {
@@ -185,6 +192,29 @@ class Lowering {
   /** A call whose value nothing reads. */
   exec<B extends BindingName>(binding: B, target: Expr, method: MethodName<B>, args: Expr[]): void {
     this.stmts.push(`${this.call(binding, target, method, args)};`);
+  }
+
+  /**
+   * An ERC-20 `approve(spender, amount)` or `transfer(to, amount)` that decodes nothing, through the
+   * SDK's `token/unchecked`: the calldata is encoded off-chain, cut at the run-time words, and the
+   * program reassembles it into a raw `evm.call`. A token that refuses the write still reverts.
+   */
+  erc20Write(fn: "approve" | "transfer", token: Expr, first: Expr, amount: Expr): void {
+    const prefix = this.emit.name("e");
+    const statements =
+      fn === "approve"
+        ? uncheckedApproveStatements(prefix, token, this.wordArg(first), this.wordArg(amount))
+        : uncheckedTransferStatements(prefix, token, this.wordArg(first), this.wordArg(amount));
+    this.stmts.push(...statements);
+  }
+
+  /** A word `token/unchecked` can splice: a literal, or a local (an expression is bound to one). */
+  private wordArg(expr: Expr): WordArg {
+    const literal = /^(0x[0-9a-f]+|[0-9]+)n$/.exec(expr);
+    if (literal) return { literal: BigInt(literal[1]!) };
+    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(expr)) return { local: expr };
+
+    return { local: this.bind("w", expr) };
   }
 
   /**
@@ -586,7 +616,7 @@ function v4Execute(
   swapParams: Expr,
   to: Expr,
 ): void {
-  l.exec("IErc20", addr(currencyIn), "transfer", [addr(router), amountIn]);
+  l.erc20Write("transfer", addr(currencyIn), addr(router), amountIn);
   const settle = l.bind(
     "settle",
     encodeArgs([addr(currencyIn), word(V4_CONTRACT_BALANCE), flag(false)]),
@@ -708,7 +738,7 @@ function curveSwap(
 
   // Not chained, and not asked to keep it: forward the delta to the recipient.
   if (!needsOutput && action.recipient !== "self") {
-    l.exec("IErc20", tokenOut, "transfer", [recipient(action.recipient), delta]);
+    l.erc20Write("transfer", tokenOut, recipient(action.recipient), delta);
   }
 
   return l.result(delta);
@@ -1124,17 +1154,17 @@ function fluidDexLiteSwap(
 }
 
 // ---------------------------------------------------------------------------
-// Transfer & approve — pass-through amount
+// Transfer & approve — pass-through amount, no output decoded (`Lowering.erc20Write`)
 // ---------------------------------------------------------------------------
 
 function transfer(l: Lowering, action: TransferAction, amountIn: Expr): ActionResult {
-  l.exec("IErc20", addr(action.token), "transfer", [recipient(action.to), amountIn]);
+  l.erc20Write("transfer", addr(action.token), recipient(action.to), amountIn);
 
   return l.result(amountIn);
 }
 
 function approve(l: Lowering, action: ApproveAction, amountIn: Expr): ActionResult {
-  l.exec("IErc20", addr(action.token), "approve", [addr(action.spender), amountIn]);
+  l.erc20Write("approve", addr(action.token), addr(action.spender), amountIn);
 
   return l.result(amountIn);
 }

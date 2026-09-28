@@ -89,11 +89,15 @@ describe("an action program as a route body", () => {
   it("refuses a caller binding that would shadow an action binding with a different ABI", () => {
     assert.throws(
       () =>
-        actionsIntent("ethereum", sampleProgram("approve") as unknown as ActionProgram, {
-          ...options(),
-          compile: { contracts: { IErc20: { abi: [] } } },
-        }),
-      /already binds 'IErc20' to a different ABI/,
+        actionsIntent(
+          "ethereum",
+          sampleProgram("uniswapV3ExactInput") as unknown as ActionProgram,
+          {
+            ...options(),
+            compile: { contracts: { ISwapRouter02: { abi: [] } } },
+          },
+        ),
+      /already binds 'ISwapRouter02' to a different ABI/,
     );
   });
 });

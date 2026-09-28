@@ -23,13 +23,15 @@ describe("action ABI bindings", () => {
         `${name} could collide with a rewrite-synthesized I<Protocol>_<Contract>`,
       );
       assert.notEqual(name, "IERC20", "the route compiler injects its own IERC20 import");
+      assert.notEqual(name, "IPortal", "the route compiler layers its own IPortal binding");
     }
   });
 
-  it("ERC-20 transfer and approve are output-free, so a token returning nothing (USDT) does not revert", () => {
+  it("ERC-20 writes are not bindings: IErc20 binds only the read", () => {
+    // `approve`/`transfer` go through the SDK's `token/unchecked`, which decodes nothing, so a
+    // token returning no `bool` (USDT) does not revert — `no-return-token.exec.test.ts` executes it.
     const erc20 = bindingMethods("IErc20");
-    assert.deepEqual(erc20.transfer!.fn.outputs, []);
-    assert.deepEqual(erc20.approve!.fn.outputs, []);
+    assert.deepEqual(Object.keys(erc20), ["balanceOf"]);
     assert.deepEqual(
       erc20.balanceOf!.fn.outputs.map((o) => o.type),
       ["uint256"],
@@ -52,7 +54,7 @@ describe("action ABI bindings", () => {
         }
       }
     }
-    assert.ok(fromSdk >= 20, `expected most methods from the SDK registry, got ${fromSdk}`);
+    assert.equal(fromSdk, 18, "a registry-sourced method was added or dropped — update this count");
   });
 
   it("the selectors that were once wrong are now the deployed contracts'", () => {

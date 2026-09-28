@@ -3,12 +3,13 @@
  * executed through the released engine.
  *
  * Compiler 2.3.0 decodes a binding's declared `bool` output even when the program discards it, and
- * decoding from empty return data reverts on this engine. So `transfer`/`approve` are bound
- * output-free (`abis.ts`), and this suite is the proof: the actions succeed against a no-return
- * token, and the same approve through a `bool`-declaring binding reverts — the trap they avoid.
+ * decoding from empty return data reverts on this engine. So `transfer`/`approve` are not bindings:
+ * they go through the SDK's decode-free `token/unchecked` lowering (the one the route layer's
+ * nesting uses), and this suite is the proof for actions — they succeed against a no-return token,
+ * a refused write still reverts, and the same approve through a `bool`-declaring binding reverts.
  *
- * The token is `sdk/test/std/token/fixtures/NoReturnERC20` (solc 0.8.36), byte-identical to the
- * fixture PR #4 adds for the settle recipe. Fork-free; skips without the engine artifact, fails in CI.
+ * The token is `sdk/test/std/token/fixtures/NoReturnERC20` (solc 0.8.36), the SDK's no-return
+ * fixture. Fork-free; skips without the engine artifact, fails in CI.
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
