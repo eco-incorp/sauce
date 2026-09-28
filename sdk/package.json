@@ -67,7 +67,8 @@
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
     "gen-route-globals": "node scripts/gen-route-globals.mjs",
     "gen-source-globals": "node scripts/gen-source-globals.mjs",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
+    "sync-eco-routes-addresses": "node scripts/sync-eco-routes-addresses.mjs"
   },
   "dependencies": {
     "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.3.0",

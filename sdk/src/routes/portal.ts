@@ -10,13 +10,15 @@
  *     make the Portal `abi.encode(intent.route)` ITSELF, producing a different `routeHash` than the
  *     one `hashIntent` computed — a silently unfulfillable intent. The `bytes` overload lets us hand
  *     over exactly the blob we already hashed, one code path for both destination kinds.
- *  2. No viem overload ambiguity — `PORTAL_ABI` carries exactly one overload per name, so
+ *  2. No viem overload ambiguity — the registered `PortalABI` (`protocols/eco-routes/abis.ts`, the
+ *     SDK's only declaration of the Portal) carries exactly one overload per name, so
  *     `encodeFunctionData({ abi, functionName })` can never resolve the wrong signature.
  *
- * `EVM_REWARD_PARAM` is IMPORTED from `encode.ts`, never re-declared, so the calldata's reward bytes
- * and the `rewardHash` `hashIntent` computed are the same bytes by construction. Same for the route:
- * the `bytes` argument below is `encodeRoute(intent.route, intent.destination)` — literally the
- * function `routeHash` calls.
+ * The calldata's reward tuple and the `rewardHash` `hashIntent` computes must be the same bytes.
+ * `eco-routes-abi-drift.test.ts` pins every reward parameter of that ABI to `encode.ts`'s
+ * `EVM_REWARD_PARAM`, the one the hash is taken over. The route needs no such pin: the `bytes`
+ * argument below is `encodeRoute(intent.route, intent.destination)` — literally the function
+ * `routeHash` calls.
  *
  * FUNDING MECHANICS (`IntentSource._fundIntent`/`_fundToken`/`_fundNative`, read verbatim):
  *   - the funder is `msg.sender` of `publishAndFund`/`fund` (a separate `funder` address exists only
@@ -40,11 +42,11 @@
  */
 import { decodeAbiParameters, encodeFunctionData, type Hex } from "viem";
 
+import { PortalABI } from "../protocols/eco-routes/abis.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
-import { denormalizeToEvm, encodeRoute, EVM_REWARD_PARAM, hashIntent, kindOf } from "./encode.js";
+import { denormalizeToEvm, encodeRoute, hashIntent, kindOf } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
-import type { ContractsConfig } from "./compile-types.js";
 import type { AddressInput, Intent } from "./types.js";
 
 /** A submittable transaction request. `value` is always explicit, never omitted. */
@@ -65,106 +67,6 @@ export interface PortalReadCall<T> {
 export interface PortalTarget {
   readonly portal: AddressInput;
 }
-
-/** The `bytes`-route overload only — see the module doc for why. One overload per name, so
- *  `encodeFunctionData({ abi: PORTAL_ABI, functionName })` can never pick the wrong signature. */
-export const PORTAL_ABI = [
-  {
-    type: "function",
-    name: "publish",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "destination", type: "uint64" },
-      { name: "route", type: "bytes" },
-      EVM_REWARD_PARAM,
-    ],
-    outputs: [
-      { name: "intentHash", type: "bytes32" },
-      { name: "vault", type: "address" },
-    ],
-  },
-  {
-    type: "function",
-    name: "publishAndFund",
-    stateMutability: "payable",
-    inputs: [
-      { name: "destination", type: "uint64" },
-      { name: "route", type: "bytes" },
-      EVM_REWARD_PARAM,
-      { name: "allowPartial", type: "bool" },
-    ],
-    outputs: [
-      { name: "intentHash", type: "bytes32" },
-      { name: "vault", type: "address" },
-    ],
-  },
-  {
-    type: "function",
-    name: "fund",
-    stateMutability: "payable",
-    inputs: [
-      { name: "destination", type: "uint64" },
-      { name: "routeHash", type: "bytes32" },
-      EVM_REWARD_PARAM,
-      { name: "allowPartial", type: "bool" },
-    ],
-    outputs: [{ name: "intentHash", type: "bytes32" }],
-  },
-  {
-    type: "function",
-    name: "intentVaultAddress",
-    stateMutability: "view",
-    inputs: [
-      { name: "destination", type: "uint64" },
-      { name: "route", type: "bytes" },
-      EVM_REWARD_PARAM,
-    ],
-    outputs: [{ name: "", type: "address" }],
-  },
-  {
-    type: "function",
-    name: "getIntentHash",
-    stateMutability: "pure",
-    inputs: [
-      { name: "destination", type: "uint64" },
-      { name: "route", type: "bytes" },
-      EVM_REWARD_PARAM,
-    ],
-    outputs: [
-      { name: "intentHash", type: "bytes32" },
-      { name: "routeHash", type: "bytes32" },
-      { name: "rewardHash", type: "bytes32" },
-    ],
-  },
-  {
-    type: "function",
-    name: "isIntentFunded",
-    stateMutability: "view",
-    inputs: [
-      { name: "destination", type: "uint64" },
-      { name: "route", type: "bytes" },
-      EVM_REWARD_PARAM,
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-] as const;
-
-/**
- * `PORTAL_ABI` as a compiler BINDING, under the name a route body calls it by.
- *
- * `sauce-route.ts` layers this underneath every route compile, so a hand-written program can write
- * `IPortal.at(portal).publishAndFund(...)` with no import line and no caller configuration — the
- * same zero-setup posture `@sauce/token` and the protocol accessors already have. It is the BASE
- * layer, so a caller's own `IPortal` (or a synthesized protocol binding of that name) wins.
- *
- * An unused binding costs no bytecode: the compiler emits code for the calls a program makes, not
- * for the ABIs it was offered. `routes-portal-binding.test.ts` pins that.
- */
-export const PORTAL_CONTRACTS: ContractsConfig = {
-  // `PORTAL_ABI` is `as const`, so its tuple type is not assignable to viem's mutable `Abi` even
-  // though the value is one. `rs-compile.ts` only ever `JSON.stringify`s it.
-  IPortal: { abi: PORTAL_ABI as unknown as ContractsConfig[string]["abi"] },
-};
 
 function assertEvmSource(intent: Intent, helper: string): void {
   if (kindOf(intent.sourceChainId) !== "evm") {
@@ -205,7 +107,7 @@ export function publishTx(intent: Intent, target: PortalTarget): PortalTx {
   return {
     to: portalAddress(target),
     data: encodeFunctionData({
-      abi: PORTAL_ABI,
+      abi: PortalABI,
       functionName: "publish",
       args: [destinationArg(intent), routeBytesArg(intent), rewardTupleArg(intent)],
     }),
@@ -223,7 +125,7 @@ export function publishAndFundTx(
   return {
     to: portalAddress(target),
     data: encodeFunctionData({
-      abi: PORTAL_ABI,
+      abi: PortalABI,
       functionName: "publishAndFund",
       args: [destinationArg(intent), routeBytesArg(intent), rewardTupleArg(intent), allowPartial],
     }),
@@ -238,7 +140,7 @@ export function fundTx(intent: Intent, allowPartial: boolean, target: PortalTarg
   return {
     to: portalAddress(target),
     data: encodeFunctionData({
-      abi: PORTAL_ABI,
+      abi: PortalABI,
       functionName: "fund",
       args: [destinationArg(intent), rHash, rewardTupleArg(intent), allowPartial],
     }),
@@ -282,7 +184,7 @@ function readCall<T>(
   return {
     to: portalAddress(target),
     data: encodeFunctionData({
-      abi: PORTAL_ABI,
+      abi: PortalABI,
       functionName: functionName as never,
       args: [destinationArg(intent), routeBytesArg(intent), rewardTupleArg(intent)] as never,
     }),

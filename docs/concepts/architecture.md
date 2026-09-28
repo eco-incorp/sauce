@@ -51,8 +51,10 @@ value.
 ### EVM
 
 A program runs through `Pot.cook(engine, program)`. A Pot has an owner; the engine is named on each
-cook, so building a call needs **both** addresses — the SDK will not guess either. An engine accepts
-only Pots created by its own Kitchen.
+cook, so a call needs **both** addresses. A direct `compileSauceRoute` takes them from you. An intent
+derives them: the released engine, and the Pot the recorded Portal's Executor owns under salt zero
+(`SAUCE_INTENT_POT_SALT`). That Pot must exist before the route runs; the solver deploys it. An
+engine accepts only Pots created by its own Kitchen.
 
 Every cook must send the Kitchen's current `executionFee()` as native value, even for a program that
 moves only ERC-20s. Native the program itself spends is on top of that. A balance already sitting in
@@ -61,7 +63,7 @@ the Pot does not pay the fee.
 One route body is one program and one cook, however many statements it contains. For a Portal-driven
 intent the Pot's owner must be the destination `Portal.executor()`, and the Pot is shared: put
 assets in, use them and take the remainder out within the same fulfillment.
-[Intent setup](../guides/intents.md#prepare-the-destination-pot) has the reads and the deployment call.
+[The destination Pot](../guides/intents.md#the-destination-pot) covers deployment and overrides.
 
 ### Solana
 
@@ -76,6 +78,10 @@ larger program through the Kitchen before executing it. See the [Solana guide](.
 
 `Base(body, options).reward(reward)` builds an Eco intent whose route executes on Base. The SDK
 compiles the destination program, assembles the route, and hands back hashes and Portal calldata.
+
+A program can also create an intent itself, with the same `Chain(() => { ... }).reward({ ... })`
+written in its body — which is how a hop whose amount is only known on arrival gets built at all.
+See [create an intent from inside a program](../guides/intents.md#create-an-intent-from-inside-a-program).
 
 Building an intent publishes nothing. Your application submits the source-chain transactions, and a
 solver fulfills the destination. Nested intents are separate executions composed with `.nest(...)` —

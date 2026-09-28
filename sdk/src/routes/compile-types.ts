@@ -56,6 +56,9 @@ export type CompileTarget = "v1" | "v12" | "svm";
  * `bytecode[0]` as the one `Call` a cook executes (see `sauce-route.ts`'s "ONE COOK = ONE PROGRAM").
  */
 export interface CompileResult {
+  /** Present when the program was compiled for compact-v1 entry arguments — the schema its argument
+   *  payload must be encoded against. */
+  entrySchema?: Uint8Array;
   bytecode: Uint8Array[];
   warnings: string[];
 }

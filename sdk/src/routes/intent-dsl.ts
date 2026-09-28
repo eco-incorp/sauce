@@ -42,7 +42,9 @@ import {
   type DynamicNestEntry,
   type PlaceholderSpec,
 } from "./nest-dynamic.js";
+import { resolveIntentPot } from "./intent-pot.js";
 import { normalizeRoute, toBigInt } from "./normalize.js";
+import { ecoRoutesPortal, type EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import {
   approvalTxs,
   fundTx,
@@ -94,8 +96,10 @@ interface IntentOptionsCommon {
   salt?: Hex;
   /** The ROUTE's own deadline — required. */
   deadline: bigint | number | string;
-  /** The ROUTE's Portal contract — required. */
-  portal: AddressInput;
+  /** The ROUTE's Portal contract. Defaults to the eco-routes Portal this SDK records for the
+   *  destination chain, so it only has to be supplied for a deployment the registry does not carry.
+   *  See `protocols/eco-routes`. */
+  portal?: AddressInput;
   nativeAmount?: bigint | number | string;
   tokens?: readonly TokenAmountInput[];
   /** Calls spliced BEFORE the compiled Sauce call, in order. */
@@ -109,32 +113,42 @@ interface IntentOptionsCommon {
    *  (see `ambient.ts`) -- distinct from `.tokens` above (route/reward TOKEN AMOUNTS). */
   tokenDefines?: Readonly<Record<string, AddressInput>>;
   /** The SOURCE-chain Portal — where this intent is PUBLISHED. Distinct from `portal` above, which
-   *  is the DESTINATION-chain Portal that lands in `route.portal`. Used as the default target for
-   *  every submission/read helper on `BuiltIntent` below. */
+   *  is the DESTINATION-chain Portal that lands in `route.portal`. Defaults, like `portal`, to the
+   *  eco-routes Portal recorded for that chain. Used as the default target for every
+   *  submission/read helper on `BuiltIntent` below. */
   sourcePortal?: AddressInput;
+  /** Which eco-routes deployment to address — generation and environment. Defaults to the current
+   *  production one. */
+  ecoRoutes?: EcoRoutesSelector;
 }
 
 /**
- * Everything a route needs beyond the Sauce program body itself. Supply an explicit destination
- * execution, or both `pot` and `engine` as the EVM shorthand. When `execution` is supplied it takes
- * precedence over any redundant shorthand fields, matching `openRoute`'s runtime behavior.
+ * An EVM destination's execution. Every field is optional: the Pot and engine are derived exactly as
+ * `Chain(() => ...).reward(...)` inside a program derives them (`intent-pot.ts`).
  */
-export type IntentOptions = IntentOptionsCommon &
-  (
-    | {
-        /** The destination-chain execution seam; takes precedence over the EVM shorthand. */
-        execution: SauceEvmExecutionInput | SauceSvmExecutionInput;
-        pot?: AddressInput;
-        engine?: AddressInput;
-      }
-    | {
-        execution?: undefined;
-        /** EVM shorthand for `execution: { pot, engine }`. */
-        pot: AddressInput;
-        /** The interpreter the cook runs on. Never defaulted; see `SauceEvmExecutionInput.engine`. */
-        engine: AddressInput;
-      }
-  );
+export interface IntentEvmExecution {
+  /** Overrides the derived Pot — the shared one owned by the recorded Portal's Executor. Either
+   *  way the Pot must already exist and be that Executor's; nothing in the route deploys it. */
+  readonly pot?: AddressInput;
+  /** Overrides the released engine the Pot cooks on. */
+  readonly engine?: AddressInput;
+  /** Total cook value: the current Kitchen execution fee plus any native program funding. */
+  readonly value?: bigint | number | string;
+}
+
+/**
+ * Everything a route needs beyond the Sauce program body itself. An EVM destination needs no
+ * execution at all; an SVM one names its staged CODE account through `execution`. Fields of
+ * `execution` take precedence over the `pot`/`engine` shorthand, matching `openRoute`'s runtime.
+ */
+export type IntentOptions = IntentOptionsCommon & {
+  /** The destination-chain execution seam; takes precedence over the EVM shorthand. */
+  execution?: IntentEvmExecution | SauceSvmExecutionInput;
+  /** EVM shorthand for `execution.pot`. */
+  pot?: AddressInput;
+  /** EVM shorthand for `execution.engine`. */
+  engine?: AddressInput;
+};
 
 /** The object form of a reward argument — every field optional, since a missing one falls back to
  *  the matching `IntentOptions` field (and a STILL-missing required field throws, naming exactly
@@ -470,31 +484,39 @@ export function openRoute(
   const destination = requireChain(chain);
 
   if (options === undefined) {
-    missingField("execution/pot, deadline, portal", "via `IntentOptions` (the second argument)");
+    missingField("deadline", "via `IntentOptions` (the second argument)");
   }
   if (options.deadline === undefined) {
     missingField("deadline", "as `IntentOptions.deadline`");
   }
-  if (options.portal === undefined) {
-    missingField("portal", "as `IntentOptions.portal`");
-  }
-  if (
-    options.execution === undefined &&
-    options.pot !== undefined &&
-    options.engine === undefined
-  ) {
-    missingField("engine", "alongside the `IntentOptions.pot` shorthand");
-  }
-  const execution =
-    options.execution ??
-    (options.pot !== undefined && options.engine !== undefined
-      ? { pot: options.pot, engine: options.engine }
-      : undefined);
-  if (execution === undefined) {
-    missingField(
-      "execution",
-      "as `IntentOptions.execution` or the EVM shorthand `IntentOptions.pot`",
-    );
+  // Not a required field any more: the SDK knows where eco-routes is deployed, so a caller only
+  // names a Portal to address a deployment the registry does not carry.
+  const destinationPortal = options.portal ?? ecoRoutesPortal(destination, options.ecoRoutes);
+
+  // The Pot and engine the route cooks on, derived when not named -- from `destinationPortal`, the
+  // Portal this route RECORDS, because its Executor is the one that will call the Pot.
+  let execution: SauceEvmExecutionInput | SauceSvmExecutionInput;
+  if (destination.kind === "svm") {
+    if (options.execution === undefined) {
+      missingField(
+        "execution",
+        "as `IntentOptions.execution` — an SVM destination names its staged CODE account",
+      );
+    }
+    execution = options.execution as SauceSvmExecutionInput;
+  } else {
+    const evm: IntentEvmExecution = options.execution ?? {};
+    if ("code" in evm || "accounts" in evm) {
+      throw new Error(
+        `openRoute: '${destination.slug}' is an EVM destination, so \`IntentOptions.execution\` is ` +
+          "`{ pot?, engine?, value? }` — a CODE account and account list describe an SVM execution.",
+      );
+    }
+    const resolved = resolveIntentPot(destinationPortal, {
+      pot: evm.pot ?? options.pot,
+      engine: evm.engine ?? options.engine,
+    });
+    execution = { pot: resolved.pot, engine: resolved.engine, value: evm.value };
   }
 
   const closure = isSauceClosure(sauce);
@@ -517,6 +539,17 @@ export function openRoute(
   );
   const compileOptions: SauceCompileOptions = {
     ...options.compile,
+    // `Chain(() => ...).reward(...)` written INSIDE the program inherits this intent's own creator,
+    // deadlines and eco-routes selection, so the common case needs no second set of options. An
+    // explicit `compile.intents` field still wins.
+    intents: {
+      deadline: toBigInt(options.deadline),
+      rewardDeadline:
+        options.rewardDeadline === undefined ? undefined : toBigInt(options.rewardDeadline),
+      creator: options.creator,
+      ...options.ecoRoutes,
+      ...options.compile?.intents,
+    },
     defines: mergedDefines,
     tokens: options.compile?.tokens ?? options.tokenDefines,
     ambient: mergedAmbient.length > 0 ? mergedAmbient : options.compile?.ambient,
@@ -667,7 +700,7 @@ export function openRoute(
         built,
         via,
         position: opts?.position ?? "after",
-        portal: opts?.portal ?? options.portal,
+        portal: opts?.portal ?? destinationPortal,
         allowPartial: opts?.allowPartial ?? false,
         fundedByBody: opts?.fundedByBody ?? false,
         vault: opts?.vault,
@@ -696,7 +729,7 @@ export function openRoute(
       if (nestedEntries.length > 0) {
         parentRouteForInvariants = normalizeRoute({
           deadline: options.deadline,
-          portal: options.portal,
+          portal: destinationPortal,
           nativeAmount: options.nativeAmount,
           tokens: options.tokens,
           calls: [],
@@ -922,7 +955,7 @@ export function openRoute(
         {
           salt: options.salt,
           deadline: options.deadline,
-          portal: options.portal,
+          portal: destinationPortal,
           nativeAmount: options.nativeAmount,
           tokens: options.tokens,
           calls,
@@ -934,7 +967,10 @@ export function openRoute(
         destination,
         source,
         compiledRoute.compiled,
-        options.sourcePortal,
+        // Defaulted from the eco-routes tables, exactly as the destination Portal is: the SDK knows
+        // where the source chain's Portal is, so a caller only names one to reach a deployment the
+        // registry does not carry.
+        options.sourcePortal ?? ecoRoutesPortal(source, options.ecoRoutes),
         nestedEntries.map((e) => e.built),
       );
     },

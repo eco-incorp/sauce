@@ -30,7 +30,7 @@ export function buildCascade(
 }
 ```
 
-The example isolates composition: replace the no-op bodies with your programs. Each options object supplies its destination execution, Portal, deadline, and body cook fee. `executionFee` is the Base Kitchen quote for the additional transfer cook; include it in `parentOptions.nativeAmount` alongside the parent body and any native reward forwarding. Configure `childOptions.sourcePortal` as the Portal on Base. Deliver or earn the child's reward assets in the parent fulfillment before the funding step; see [the Executor-to-Pot example](intents.md#build-a-base-usdc-transfer-intent).
+The example isolates composition: replace the no-op bodies with your programs. Each options object supplies its deadline and body cook fee, and optionally its Portal; each level's Pot and engine are derived, and each level's Pot must exist before that level is fulfilled. `executionFee` is the Base Kitchen quote for the additional transfer cook; include it in `parentOptions.nativeAmount` alongside the parent body and any native reward forwarding. Configure `childOptions.sourcePortal` as the Portal on Base. Deliver or earn the child's reward assets in the parent fulfillment before the funding step; see [the Executor-to-Pot example](intents.md#build-a-base-usdc-transfer-intent).
 
 You can also pass an already built child. The SDK checks that its source matches the parent's destination. Under the two default modes both forms produce static children: reward amounts and other hashed fields are fixed before execution. A runtime balance can determine how much is transferred to a child's vault; it does not rewrite the child's reward or hash. [`via: "dynamic"`](#create-the-child-on-chain-from-a-measured-amount) is the exception, and it changes the child's hash.
 
@@ -115,6 +115,48 @@ The child's hash is not known until the parent executes, so `child.hash()`, `chi
 
 A child built this way is an ordinary built intent, so it can nest dynamically in turn; see [Chain more than one hop](#chain-more-than-one-hop).
 
+## A cascade in native syntax
+
+The shortest way to chain hops is to write them inside the program, one intent opening the next:
+
+```js
+// Three hops, written as three intents opening one another.
+//
+// No amount below the first exists when this is signed. `amount` is measured here. `swapped` is
+// measured on Arbitrum while that hop is being fulfilled, by the program the middle braces compiled
+// to, and it is the reward of the third hop. Each level's numbers are filled in by the level above
+// it, at that level's own execution time.
+//
+// The middle body is more than token writes, so it compiles to a program and runs on Arbitrum's
+// Pot; its second argument names what a solver must deliver for it to have something to measure.
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(
+    () => {
+      const swapped = USDC.balanceOf(ctx.self());
+      Optimism(() => {
+        USDC.transfer(RECIPIENT, swapped);
+      }).reward({ tokens: [{ token: USDC, amount: swapped }] });
+    },
+    { tokens: [{ token: USDC, amount }] },
+  ).reward({ tokens: [{ token: USDC, amount }] });
+}
+```
+
+Three hops, and **no amount below the first exists when this is signed**. `amount` is measured on the
+first chain. `swapped` is measured on Arbitrum, while that hop is being fulfilled, by the program the
+middle braces compiled to — and it is the reward of the third. Each level's numbers are filled in by
+the level above it, at that level's own execution time.
+
+Nesting is recursive rather than special-cased: the middle body is compiled by re-entering the same
+pipeline, so the same lowering runs inside it at any depth. [Create an intent from inside a
+program](intents.md#create-an-intent-from-inside-a-program) covers what may be captured, the two
+lowerings, and the values you supply.
+
+Use this when the hops are a chain and the amounts are discovered as you go. Use the `.nest(...)`
+builder below when you are assembling intents in TypeScript from data you already hold, when you
+want several children on one parent, or when you need the transfer and publication modes it offers.
+
 ## Chain more than one hop
 
 A dynamic child is an ordinary built intent, so it can carry a dynamic nest of its own. That is how a chain of swaps whose every hop's output is only known at that hop works: the parent swaps A for B and publishes the child, the child swaps B for C and publishes the grandchild, and the grandchild delivers C. Nothing below the first amount exists when the parent is signed.
@@ -179,7 +221,7 @@ Depth 2 is executed end to end against a real engine, Pot and Portal in the SDK'
 
 Hash recovery becomes sequential. At depth 1 the child's real hash is unknown until the parent executes; at depth 2 the grandchild's is unknown until the _child_ executes, which is a separate fulfillment by a different solver at a later time. An indexer must follow `IntentPublished` level by level, and no amount of off-chain computation shortens that — the input to each level is a measurement that has not happened yet.
 
-Everything else compounds rather than changes. Deadlines must still increase with depth, checked per level, and every level needs an Executor-owned Pot and the current Kitchen fee on its own chain. The `Create the child on-chain from a measured amount` section's properties — the current-balance measurement, the guard behavior, the Solana sentinel widths — apply unchanged at every level.
+Everything else compounds rather than changes. Deadlines must still increase with depth, checked per level, and every level cooks on an Executor-owned Pot — the derived shared one unless you name one, deployed beforehand either way — and pays the current Kitchen fee on its own chain. The `Create the child on-chain from a measured amount` section's properties — the current-balance measurement, the guard behavior, the Solana sentinel widths — apply unchanged at every level.
 
 ## Ordering and constraints
 

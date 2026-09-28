@@ -31,7 +31,7 @@ An intent has two sides:
 | ---------------------------------------- | ----------------------------------------------------------------- |
 | `Base(...)`                              | Destination chain where the Sauce program executes                |
 | `options.portal`                         | Destination Portal recorded in the route                          |
-| `options.pot`, `options.engine`          | Destination Pot and interpreter used by `cook`                    |
+| `options.pot`, `options.engine`          | Overrides for the derived destination Pot and released engine     |
 | `options.tokens`, `options.nativeAmount` | Destination assets delivered by the solver to the Portal Executor |
 | `reward.source`                          | Chain where the reward is funded                                  |
 | `options.sourcePortal`                   | Source Portal used by submission and read helpers                 |
@@ -44,26 +44,51 @@ Every EVM `cook` must receive the Kitchen's current `executionFee()` in native w
 
 Deadlines are absolute Unix timestamps in seconds. `route.deadline` limits destination fulfillment. `reward.deadline` allows source refunds when no valid proof exists; leave time for fulfillment and proof delivery before it.
 
-## Prepare the destination Pot
+## The destination Pot
 
-For direct Portal routes, the Pot's owner must be the destination **`Portal.executor()`**. A user-owned or solver-owned Pot rejects the Executor's call with `NotOwner()`.
+A route call runs as the Executor of the Portal that fulfils it, and a Pot's `cook` accepts only
+its owner. So the Pot's owner must be the **`executor()` of the Portal the route records** —
+`options.portal` when you set it, the registry's otherwise. A user-owned or solver-owned Pot rejects
+the call with `NotOwner()`.
 
-Use [evm-execution.ts](../examples/evm-execution.ts) on the destination chain to read the Executor, resolve the current Kitchen and engine, predict the Pot, and quote the execution fee. If the Pot is absent, the helper returns a deployment request. Send it, wait for a successful receipt, and run the helper again. Only use a result with `ready: true`, which confirms code is present and checks the Pot's `owner()` and `kitchen()`.
+You do not have to supply one. With no `execution.pot` and no `execution.engine`, the builder uses the
+same Pot the [native syntax](#the-destination-pot-is-derived) derives — CREATE2 from the released
+Kitchen over that Executor and salt zero (`SAUCE_INTENT_POT_SALT`) — and the released engine. That is
+the one Pot the solver deploys per Portal and every intent through that Portal shares. Both remain
+overrides. `destinationPot(Base.chain, { portal })` returns that address, for a `precalls`
+transfer into it.
 
-The deployment helpers return the released addresses. They do not check that code is live at those addresses on your chain — the helper above does, which is why its `ready: true` is the signal to act on.
+**The destination Pot must exist before the intent is fulfilled.** The SDK derives its address and
+deploys nothing: the route contains no deployment call. The solver deploys the shared Pot for each
+Portal. A fulfilment that cooks on a Pot that is not there reverts entirely, because the Executor
+refuses a call with calldata to an address without code (`CallToEOA`).
 
-An Executor-owned Pot can be invoked by other valid Portal routes. Deliver assets, use them, and return leftovers **within the same fulfillment**; do not leave user funds or standing allowances in it. Source reward escrow belongs in the intent vault. These caller and custody rules follow [Eco Routes' Executor calls](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Executor.sol#L50-L74) and [destination fulfillment](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Inbox.sol#L225-L271).
+To deploy it yourself first, send this on the destination chain:
+`routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: executor, salt: SAUCE_INTENT_POT_SALT })`.
+The call is permissionless, and it returns the existing Pot when one is already there. A **Pot you
+name** instead must also exist, and be owned by that Executor, or the cook reverts with `NotOwner()`.
+Use
+[evm-execution.ts](../examples/evm-execution.ts) with the destination Portal and a salt — zero for
+the shared Pot — to predict the Pot and check that it is deployed, with the right `owner()` and
+`kitchen()`. Only use a result with `ready: true`.
+
+The deployment helpers return the released addresses. They do not check that code is live at those
+addresses on your chain. The same helper confirms the Kitchen and engine have code, and reads the
+execution fee you need either way.
+
+An Executor-owned Pot can be invoked by other valid Portal routes, and the derived one is shared by
+every intent through its Portal. Deliver assets, use them, and return leftovers **within the same
+fulfillment**; leave nothing in it — no user funds, no standing allowances. Source reward escrow
+belongs in the intent vault. These caller and custody rules follow [Eco Routes' Executor calls](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Executor.sol#L50-L74) and [destination fulfillment](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Inbox.sol#L225-L271).
 
 ## Build a Base USDC transfer intent
 
 This function takes deployment and reward configuration as inputs. It delivers one USDC on Base to `recipient` and offers the configured source-token reward. It only constructs data.
 
 ```ts
-import { Base, token, type routes } from "@eco-incorp/sauce";
+import { Base, destinationPot, token, type routes } from "@eco-incorp/sauce";
 
 interface TransferIntentConfig {
-  pot: routes.AddressInput;
-  engine: routes.AddressInput;
   executionFee: bigint;
   destinationPortal: routes.AddressInput;
   baseUsdc: routes.AddressInput;
@@ -80,14 +105,12 @@ interface TransferIntentConfig {
 
 export function buildBaseTransfer(config: TransferIntentConfig) {
   const amount = 1_000_000n;
-  const delivery = token.Token.transfer({
-    token: config.baseUsdc,
-    to: config.pot,
-    amount,
-  }).toCall();
+  // The Pot the route cooks on: the shared one for the Portal it records. It must already exist.
+  const pot = destinationPot(Base.chain, { portal: config.destinationPortal });
+  const delivery = token.Token.transfer({ token: config.baseUsdc, to: pot, amount }).toCall();
 
   return Base("USDC.transfer(RECIPIENT, AMOUNT);", {
-    execution: { pot: config.pot, engine: config.engine, value: config.executionFee },
+    execution: { value: config.executionFee },
     nativeAmount: config.executionFee,
     portal: config.destinationPortal,
     sourcePortal: config.sourcePortal,
@@ -108,9 +131,182 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 
 The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana — the encoding supports it — but see the [Solana guide](solana.md) for how that execution is actually built.
 
+The route has two calls: the delivery into the Pot, and the cook.
 `executionFee` is the destination Kitchen quote obtained above. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
 
 The explicit `tokenDefines` ensures that the token transferred into the Pot matches the token used by the program. To use the SDK's default Base USDC, resolve it with `routes.registryTokenAddress(Base.chain, "USDC")` and check the result before building. That lookup returns a `bigint`; convert it to a 20-byte hex address with Viem's `toHex(value, { size: 20 })` for intent token fields, as in the [complete example](../examples/first-intent.ts).
+
+## Create an intent from inside a program
+
+Everything above builds an intent in TypeScript, before anything runs. A program can also create one
+_while_ it is running, which is what you want when the amount is the output of the step before it:
+
+```js
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}
+```
+
+Same shape as the TypeScript builder, written in the program. No Portal, selector, encoding or
+approval appears, because none of them is a decision you are making.
+
+### The braces are a Sauce program
+
+Anything a route body can do belongs in there: protocol calls, control flow, locals, and an intent
+of its own. There are two lowerings and the SDK picks between them, which matters to you because
+they cost different things.
+
+| The body is…                    | Becomes…                                               | Needs                   |
+| ------------------------------- | ------------------------------------------------------ | ----------------------- |
+| only token `transfer`/`approve` | one `route.calls` entry per statement                  | nothing further         |
+| anything else                   | a program compiled for the destination, run on its Pot | a Pot and a Kitchen fee |
+
+The first shape is free: a route already _is_ a list of calls, so a cook would only add a fee. The
+second is strictly more general.
+
+```js
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(
+    () => {
+      const here = USDC.balanceOf(ctx.self());
+      if (here > 0n) {
+        USDC.transfer(RECIPIENT, here);
+      }
+    },
+    { tokens: [{ token: USDC, amount }] },
+  ).reward({ tokens: [{ token: USDC, amount }] });
+}
+```
+
+**The second argument names what the solver delivers** so the body has something to work with, and
+the lowering adds the Executor-to-Pot transfer. For the token-only shape it is derived instead — a
+`transfer` of N moves N, so N is what has to arrive. It is _not_ derived for a program, and that is
+a judgement rather than an omission: a program's `balanceOf` reads what is _there_, which may be what
+an earlier call in the same route produced rather than what a solver must bring. Inferring an
+obligation from it would silently under- or over-state what the intent asks for, and an intent that
+asks for the wrong delivery is unfulfillable or overfunded.
+
+### Captured variables
+
+`amount` is a local of the enclosing program, so its value does not exist when the intent is
+encoded. It is encoded with a sentinel in its place and the program splices the real value in as it
+runs. Any scalar works — an amount, an address, anything one 256-bit word wide.
+
+A variable can arrive two ways, and the same variable can do both:
+
+- **Into the encoded intent** — a route call's argument, a reward amount, a delivery amount. One
+  slot per variable, however many of those it fills, so they are the same number by construction
+  rather than by several encodings agreeing.
+- **Into the child program** — it becomes one of that program's entry arguments, encoded at a
+  declared width so its offset does not move, and spliced into the cook's calldata.
+
+Used both ways, a variable gets a slot in each: they are different offsets carrying the same value.
+
+### Nesting
+
+An intent inside an intent is lowered recursively — the child is compiled by re-entering the same
+pipeline, so it gets its own chain's names and this same lowering, at any depth. That is how a chain
+of hops whose amounts are each measured on arrival is written; see
+[nested intents](nested-intents.md#a-cascade-in-native-syntax).
+
+### Names resolve per chain
+
+`USDC` inside the braces is _Arbitrum's_ USDC, because those calls run on Arbitrum. Resolving it
+against the enclosing chain would put one chain's address in another chain's route.
+
+### A throw reverts everything
+
+A `throw` in a program, and every guard the SDK emits, reverts the whole fulfillment — no earlier
+route call survives it. A program that refuses to create an intent therefore leaves nothing behind,
+and a measurement below its floor cannot strand funds in the Pot.
+
+### Where each value comes from
+
+| Value              | Comes from                                                        |
+| ------------------ | ----------------------------------------------------------------- |
+| Portal, both sides | The eco-routes deployment tables, by chain                        |
+| Prover             | The tables, by source/destination pair                            |
+| Destination Pot    | Derived — see below                                               |
+| Engine             | The released engine address                                       |
+| Destination        | The chain you named                                               |
+| Source             | The chain the program runs on                                     |
+| Deadline           | **You.** Too early is unfulfillable, too late locks the reward up |
+| Creator            | **You.** See below                                                |
+| Execution fee      | **You**, for a program body. See below                            |
+
+The **creator** is the address that may reclaim the reward if nobody earns it. The executing Pot is
+the obvious default and the wrong one: it is owned by the Portal's Executor, which every solver can
+drive, so a refund landing there is a refund anyone can take. Set `IntentOptions.creator` and every
+intent the program creates inherits it, along with the deadline and the eco-routes deployment; a
+direct `compileSauceRoute` caller sets `compile.intents.creator`.
+
+The **execution fee** is the one value that cannot be derived. It is mutable on-chain, and it lives
+on the destination, which the source chain cannot read while it executes. Read it at build time and
+pass it as `compile.intents.executionFee`:
+
+```ts
+import { destinationExecutionFee } from "@eco-incorp/sauce";
+
+const request = destinationExecutionFee();
+// const { data } = await client.call(request);
+// const executionFee = request.decode(data!);
+```
+
+Read it shortly before building: an increase before fulfillment makes the cook revert, which reverts
+the fulfillment.
+
+### The destination Pot is derived
+
+A Pot is CREATE2 from the Kitchen over its owner and a salt, and the owner a route call must cook as
+is the `executor()` of the Portal the child's route records — itself that Portal's second `CREATE`,
+so it follows from the Portal address. That is the registry's Portal, or `destinationPortal` when you
+override it: a route recording one Portal is run by that Portal's Executor, and a Pot owned by any
+other Executor would refuse the cook with `NotOwner()`. Nothing is read from a chain and nothing is
+asked of you. The salt is zero (`SAUCE_INTENT_POT_SALT`), so there is **one shared Pot per Executor**
+rather than one per intent: the Pot the solver deploys for that Portal. A Pot is fixed by its owner
+and salt, so whoever calls `deployPot(executor, 0)` creates that same Pot, owned by the Executor.
+
+Deriving an address is not deploying a contract, and the lowering deploys nothing. **The Pot must
+exist before the child intent is fulfilled** — the solver deploys it — or the fulfilment reverts
+when the Executor calls an address without code. A token-only body cooks nothing, so it needs no Pot.
+
+A Pot you name with `pot` must equally exist already and be owned by that Executor.
+
+Because it is shared, **leave nothing in it**. Deliver assets, use them, and move the remainder out
+within the same fulfillment. Anything resting there, or any allowance left standing, belongs to
+whoever drives the Executor next.
+
+### Overrides
+
+Everything derived can be overridden through `compile.intents`, and `Base(...)` passes its own
+fields down so the common case sets none of them:
+
+| Field                        | Overrides                                                            |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `deadline`, `rewardDeadline` | The route and reward deadlines                                       |
+| `creator`, `prover`          | The reward's creator and prover                                      |
+| `sourcePortal`               | Where the intent is published                                        |
+| `destinationPortal`          | The Portal recorded in the child's route                             |
+| `pot`, `engine`              | Where a program body cooks, and on what; a named Pot is not deployed |
+| `executionFee`               | The cook's value                                                     |
+| `salt`, `allowPartial`       | The route salt, and partial funding                                  |
+| `generation`, `environment`  | Which eco-routes deployment to address                               |
+
+### What is refused
+
+Each of these is a compile error naming the construct, never a silently different intent:
+
+- An identifier that is neither a compile-time value nor a variable of the enclosing program.
+- A `.reward(...)` that is not an object, or a token entry missing `token` or `amount`.
+- A missing `deadline`, a missing `creator`, or a missing `executionFee` for a program body.
+- A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
+
+Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
+reads the same way: it names the variable that is not declared.
 
 ## Callbacks are compiled source
 

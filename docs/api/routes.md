@@ -32,20 +32,22 @@ Chain references accept canonical slugs, names/aliases supported by the registry
 
 ## Intent options
 
-| Option                                          | Purpose                                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| `execution`                                     | EVM `{ pot, engine, value? }`; an SVM route call is not executable (see below) |
-| `pot`, `engine`                                 | EVM shorthand instead of `execution`; both are required together               |
-| `portal`, `deadline`                            | Required destination Portal and absolute route deadline                        |
-| `salt`                                          | Route salt; defaults to 32 zero bytes                                          |
-| `tokens`, `nativeAmount`                        | Solver-delivered destination assets                                            |
-| `precalls`                                      | Calls before the compiled program and nested calls                             |
-| `tokenDefines`                                  | Token-symbol address overrides                                                 |
-| `defines`, `compile`                            | Program specialization and compile options                                     |
-| `sourcePortal`                                  | Default source Portal for submission/read requests                             |
-| `source`, `creator`, `prover`, `rewardDeadline` | Fallback fields for `.reward(...)`                                             |
+| Option                                          | Purpose                                                                          |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| `execution`                                     | EVM `{ pot?, engine?, value? }`; an SVM route call is not executable (see below) |
+| `pot`, `engine`                                 | EVM shorthand for `execution.pot` and `execution.engine`; each optional          |
+| `deadline`                                      | Absolute route deadline. Required                                                |
+| `portal`                                        | Destination Portal. Defaults to the eco-routes deployment for that chain         |
+| `ecoRoutes`                                     | Which eco-routes deployment to address: `generation` and `environment`           |
+| `salt`                                          | Route salt; defaults to 32 zero bytes                                            |
+| `tokens`, `nativeAmount`                        | Solver-delivered destination assets                                              |
+| `precalls`                                      | Calls before the compiled program and nested calls                               |
+| `tokenDefines`                                  | Token-symbol address overrides                                                   |
+| `defines`, `compile`                            | Program specialization and compile options                                       |
+| `sourcePortal`                                  | Source Portal for submission/read requests. Defaults like `portal`               |
+| `source`, `creator`, `prover`, `rewardDeadline` | Fallback fields for `.reward(...)`                                               |
 
-The EVM shorthand sends zero `cook` value and only works with a fee-free Kitchen when the program needs no native input. For released deployments, use `execution: { pot, engine, value }` with the current Kitchen fee plus any native assets the program spends, and budget `nativeAmount` for all route call values. The direct route's Pot owner must equal the destination `Portal.executor()`. See [deployment and fee setup](../guides/intents.md#prepare-the-destination-pot).
+On an EVM destination the Pot and engine are derived when omitted: the Pot owned by the `executor()` of the Portal the route records, under salt zero (`SAUCE_INTENT_POT_SALT`) — the one Pot per Portal the solver deploys — and the released engine. The route does not deploy it: the Pot must exist before fulfilment, and the solver deploys it. A Pot you name must equally exist and be owned by that Executor. `destinationPot(chain, { portal?, ecoRoutes? })` returns the derived address. Set `execution.value` to the current Kitchen fee plus any native assets the program spends, and budget `nativeAmount` for all route call values; with no `value`, the cook sends zero and works only with a fee-free Kitchen. See [the destination Pot](../guides/intents.md#the-destination-pot).
 
 `.reward(...)` accepts an object, a native amount as `bigint`, or an array of `{ token, amount }`. Object fields override option fallbacks. `source`, `creator`, and `prover` must resolve from one of those places. Reward deadline resolution is `reward.deadline`, then `options.rewardDeadline`, then `options.deadline`. Native and token amounts default to zero/empty where omitted.
 
@@ -81,7 +83,7 @@ The route wrapper has no runtime argument-payload parameter. Use compile-time de
 
 ## Deployment addresses
 
-`sauceEvmDeployPotCall({ owner, salt, kitchen })` encodes Pot deployment through the Kitchen you name; for a direct intent route the owner is the destination `Portal.executor()`.
+`sauceEvmDeployPotCall({ owner, salt, kitchen })` encodes Pot deployment through the Kitchen you name; for a direct intent route the owner is the destination `Portal.executor()`. No route the SDK builds includes this call. To deploy an intent's shared Pot yourself before the solver does, pass `kitchen: v12GateKitchen()`, that Executor, and `SAUCE_INTENT_POT_SALT`.
 
 Every address helper here returns a **recorded** address, never a verified one. `v12EngineAddress()` and `v12KitchenAddress()` give the released addresses directly and are the ones to prefer. `sauceEvmDeployPotCall`'s `chainId` form, `v12Deployment` and `requireV12Deployment` filter by a roster of chains where deployment previously succeeded, which is a different question from whether code is there now. `V12_EVM_CONTRACTS` and `v12SvmProgramId` name an earlier deployment generation. Check the chain before trusting any of them; [evm-execution.ts](../examples/evm-execution.ts) shows prediction, deployment and the owner/Kitchen checks.
 
@@ -105,7 +107,7 @@ Every address helper here returns a **recorded** address, never a verified one. 
 | `vaultCall()`, `hashCall()`, `fundedCall()` | Source Portal read request plus result decoder                      |
 | `predictVault(config)`                      | Offline CREATE2 prediction with caller-provided vault configuration |
 
-Submission and read helpers take an optional `{ portal }` override; without one, `sourcePortal` is required. They build EVM requests, require an EVM source, and perform no RPC — you send them. The codec represents an SVM destination fine; building that execution is the separate matter above. `encodeEVM()`/`encodeSVM()` force a codec for inspection; they do not change an intent's chain kinds.
+Submission and read helpers take an optional `{ portal }` override; without one they use `sourcePortal`, which itself defaults to the eco-routes Portal for the reward's source chain. They build EVM requests, require an EVM source, and perform no RPC — you send them. The codec represents an SVM destination fine; building that execution is the separate matter above. `encodeEVM()`/`encodeSVM()` force a codec for inspection; they do not change an intent's chain kinds.
 
 ## Composition and lower-level encoding
 
@@ -123,6 +125,15 @@ statements and merged program the builder generates. Underneath are `splitByPlac
 `renderTemplate` and `emitTemplate` — byte-templating primitives that work against any encoding whose
 fields sit at fixed offsets, not only intents.
 
-`PORTAL_CONTRACTS` is the Portal ABI as a compiler binding. Every route compile carries it, so a
-hand-written program can call `IPortal.at(portal).publishAndFund(...)` with no import and no setup;
-it is the base layer, so a caller's own `IPortal` binding replaces it.
+A program can also create an intent itself, with `Chain(() => { ... }).reward({ ... })` written in
+its body — see [create an intent](../guides/intents.md#create-an-intent-from-inside-a-program).
+`SauceCompileOptions.intents` carries what that lowering cannot look up (a deadline, a creator) and
+what overrides it: `sourcePortal`, `destinationPortal`, `prover`, `salt`, `allowPartial`, and the
+eco-routes `generation`/`environment`. Through `Base(...)` those are inherited from the enclosing
+intent, so the common case sets none of them.
+
+Where eco-routes is deployed is a registry: `ecoRoutesPortal(chain)`, `ecoRoutesProver(source,
+destination)`, `ecoRoutesDeployment(chain)` and `ecoRoutesGenerations()` from
+`@eco-incorp/sauce/protocols/eco-routes`. Both generations ship — `v3`'s single Portal and `v2`'s
+separate `IntentSource`/`Inbox` — in production and staging, vendored from
+`@eco-foundation/routes-ts` at a pinned version and digest.

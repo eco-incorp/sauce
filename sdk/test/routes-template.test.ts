@@ -195,7 +195,11 @@ describe("renderTemplate agrees with an independent transcription of IntentTempl
       slots: [{ source: "amountIn", scale: WAD, width: 8, littleEndian: false }],
     };
     expect(() => renderTemplate(narrow, 2n ** 64n, 0n)).toThrow(/does not fit its 8-byte width/);
-    expect(() => referenceAmount(narrow.slots[0]!, 2n ** 64n, 0n)).toThrow("AmountDoesNotFit");
+    // The reference transcription only knows the two measurement sources, which is what this
+    // template uses; `SlotSource` is wider since a capture names a local instead.
+    expect(() =>
+      referenceAmount(narrow.slots[0] as unknown as ReferenceItem, 2n ** 64n, 0n),
+    ).toThrow("AmountDoesNotFit");
   });
 
   it("rejects a base the program's own 256-bit multiply could not compute", () => {

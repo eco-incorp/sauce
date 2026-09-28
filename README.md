@@ -23,80 +23,53 @@ Node.js **24 or newer**.
 ## A program that creates a cross-chain intent
 
 Programs are usually thought of as a way to _spend_ an intent's funds. They can also create the next
-one. That matters because the amount is rarely known in advance: it is whatever the swap, bridge or
-transfer just before it produced. This program measures that amount on chain and publishes an intent
-carrying it onward.
+one — and that is where the runtime and the routes layer meet. The amount is rarely known in
+advance: it is whatever the swap, bridge or transfer just before it produced. This program measures
+it on chain and offers an intent carrying it onward.
 
 ```js
 // Create a cross-chain intent from inside a Sauce program.
 //
-// This runs on the destination chain of the intent that contains it, as one of its route calls. It
-// measures what the calls before it left in the Pot, and publishes a NEW intent that forwards that
-// amount onward — so the amount does not have to be known when the first intent is signed. That is
-// the whole point: a swap's output, or a bridge's, becomes the reward of the next leg.
+// This runs on one chain as part of an intent's route, measures what the calls before it left in
+// the Pot, and offers a NEW intent that carries that amount onward to another chain. The amount is
+// never known in advance — it is whatever the swap, bridge or transfer just before it produced —
+// which is the reason to build the intent here rather than off-chain.
 //
-// Every capitalised name is a compile-time `define` the caller supplies. They are not JavaScript
-// values and nothing here captures anything from outside; see cross-chain-intent.ts for the caller.
+// `Arbitrum(() => { ... }).reward({ ... })` is the whole of it. `amount` is an ordinary variable of
+// this program, and using it inside the intent is enough: the SDK splices its run-time value into
+// the encoded intent, and fills in the Portal, the prover, the approval and the encoding.
+//
+// RECIPIENT is a compile-time `define` the caller supplies. `USDC` is a registered symbol, and
+// inside the braces it means Arbitrum's USDC, because that is the chain those calls run on.
 function main() {
-  // What the route calls before this one produced. `ctx.self()` is the Pot the route executes in.
-  const amount = Token(TOKEN).balanceOf(ctx.self());
+  const amount = USDC.balanceOf(ctx.self());
   if (amount < MIN_AMOUNT) {
     throw "cross-chain-intent: nothing to forward";
   }
 
-  // The one call the new intent obliges a solver to make on its destination: move `amount` to
-  // RECIPIENT. `abi.encode` lays the arguments out; the four-byte selector is transfer(address,uint256).
-  const transferSelector = hex`a9059cbb`;
-  const deliver = transferSelector.concat(abi.encode(RECIPIENT, amount));
-
-  // The route, encoded exactly as the Portal hashes it. The leading word is the ABI offset that
-  // Solidity's own `abi.encode(route)` writes for a dynamic struct; SauceScript's `abi.encode`
-  // returns the struct body, so the offset is prepended here.
-  const routeOffset = hex`0000000000000000000000000000000000000000000000000000000000000020`;
-  const route = routeOffset.concat(
-    abi.encode({
-      salt: SALT,
-      deadline: DEADLINE,
-      portal: DESTINATION_PORTAL,
-      nativeAmount: 0n,
-      tokens: [{ token: TOKEN, amount: amount }],
-      calls: [{ target: TOKEN, data: deliver, value: 0n }],
-    }),
-  );
-
-  // The Portal escrows the reward by pulling it from this Pot, so the Pot has to allow it. Issued
-  // as a raw call rather than `Token(TOKEN).approve(...)`: the ERC-20 ABI declares a `bool` return
-  // that the engine decodes even when nothing reads it, and tokens like USDT return nothing at all.
-  const approveSelector = hex`095ea7b3`;
-  const allowance = approveSelector.concat(abi.encode(PORTAL, amount));
-  evm.call(TOKEN, 0n, allowance);
-
-  // Publish and fund it in one call. The reward is what this Pot just measured; the solver who
-  // fulfils the new intent on DESTINATION collects it here.
-  IPortal.at(PORTAL).publishAndFund(
-    DESTINATION,
-    route,
-    {
-      deadline: DEADLINE,
-      creator: CREATOR,
-      prover: PROVER,
-      nativeAmount: 0n,
-      tokens: [{ token: TOKEN, amount: amount }],
-    },
-    false,
-  );
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount }] });
 }
 ```
 
-`Token`, `ctx`, `abi`, `hex`, `evm` and `IPortal` are the language and the SDK's built-in bindings,
-available with no import. The capitalised names are compile-time `defines` — one 256-bit word each,
-folded into the bytecode. That is how a program is parameterised, because a program captures nothing
-from the JavaScript around it.
+That is the whole program. `Arbitrum(() => { ... }).reward({ ... })` is the same fluent shape the
+TypeScript builder has, written inside the program — and `amount` is an ordinary variable of it.
+Using that variable inside the intent is all it takes: the SDK splices its run-time value into the
+encoded intent and fills in everything else. No Portal, no selector, no ABI encoding, no approval
+appears in what you write, because none of it is a decision you were making.
 
-The TypeScript beside it compiles the program and attaches it to a route:
-[docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts), run on every release.
-[Nested intents](docs/guides/nested-intents.md) shows how to have the SDK generate this program for
-you instead, including cascades several hops deep.
+`USDC` is a registered token symbol, and inside the braces it means **Arbitrum's** USDC — a symbol
+resolves against the chain its calls run on. `RECIPIENT` and `MIN_AMOUNT` are compile-time
+`defines`: one 256-bit word each, folded into the bytecode. A program captures nothing from the
+JavaScript around it, so defines are how application values reach one.
+
+The Portal on each side and the prover for the pair come from the SDK's eco-routes deployment
+tables, pinned per version and digest. What it cannot know, you supply once on the enclosing intent
+and every intent the program creates inherits it: a deadline, and the creator who may reclaim the
+reward if nobody earns it. [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts)
+is the caller, run on every release; [nested intents](docs/guides/nested-intents.md) covers cascades
+several hops deep.
 
 ## A program that calls protocols and tokens by name
 
@@ -110,11 +83,8 @@ import type { routes } from "@eco-incorp/sauce";
 
 const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before use.
 const options: routes.IntentOptions = {
-  execution: {
-    pot: "0x1111111111111111111111111111111111111111",
-    engine: "0x2222222222222222222222222222222222222222",
-    value: executionFee,
-  },
+  // No Pot or engine: both are derived. The Pot is the shared one the solver deploys per Portal.
+  execution: { value: executionFee },
   nativeAmount: executionFee,
   portal: "0x3333333333333333333333333333333333333333",
   deadline: 2_000_000_000n,

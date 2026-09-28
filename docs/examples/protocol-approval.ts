@@ -1,14 +1,10 @@
 import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
-// Offline fixtures. Read the destination Kitchen fee and use an Executor-owned Pot before use.
+// Offline fixtures. Read the destination Kitchen fee before use. The Pot and engine are derived.
 const executionFee = 1_000n;
 const options: routes.IntentOptions = {
-  execution: {
-    pot: "0x1111111111111111111111111111111111111111",
-    engine: "0x2222222222222222222222222222222222222222",
-    value: executionFee,
-  },
+  execution: { value: executionFee },
   nativeAmount: executionFee,
   portal: "0x3333333333333333333333333333333333333333",
   deadline: 2_000_000_000n,

@@ -79,16 +79,20 @@ const sources = readdirSync(examples)
 // README's TypeScript fences are extracted, compiled and run below, but a ```js fence is not, so a
 // program quoted by hand could drift from the file that is actually compiled.
 const sauceExamples = readdirSync(examples).filter((name) => name.endsWith(".sauce.ts"));
-const readme = readFileSync(join(root, "README.md"), "utf8");
+// Quoted somewhere in the manual, not only the README: a guide's ```js fence is just as able to
+// drift from the file that actually compiles, and just as unchecked otherwise.
+const quotable = [join(root, "README.md"), ...manual.filter((file) => file.endsWith(".md"))].map(
+  (file) => readFileSync(file, "utf8"),
+);
 for (const name of sauceExamples) {
   const body = readFileSync(join(examples, name), "utf8").trim();
-  if (!readme.includes(body)) {
+  if (!quotable.some((text) => text.includes(body))) {
     throw new Error(
-      `README does not contain docs/examples/${name} verbatim — quote the file, do not retype it`,
+      `No manual page contains docs/examples/${name} verbatim — quote the file, do not retype it`,
     );
   }
 }
-console.log(`SauceScript examples: ${sauceExamples.length} quoted verbatim in the README`);
+console.log(`SauceScript examples: ${sauceExamples.length} quoted verbatim in the manual`);
 // Keep examples under the package so Node resolves its public self-reference exports.
 const temporary = mkdtempSync(join(root, ".sauce-doc-examples-"));
 const input = join(temporary, "src");

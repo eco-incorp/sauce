@@ -32,7 +32,12 @@ import {
   publishTx,
 } from "../src/routes/portal.js";
 import type { RewardInput, RouteInput } from "../src/routes/types.js";
-import { v12Pot } from "../src/evm/engine.js";
+import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
+import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import { v12EngineAddress } from "../src/deployments/index.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { destinationPot } from "../src/routes/intent-pot.js";
+import { denormalizeToEvm } from "../src/routes/encode.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
@@ -131,7 +136,8 @@ describe("openRoute: assembled intent shape", () => {
 
     const expectedRoute: RouteInput = {
       deadline: options.deadline,
-      portal: options.portal,
+      // `portal` is optional now; this fixture always sets it.
+      portal: options.portal!,
       nativeAmount: options.nativeAmount,
       tokens: options.tokens,
       calls: built.intent.route.calls,
@@ -247,6 +253,99 @@ describe("openRoute: SVM destination", () => {
   });
 });
 
+describe("openRoute: the destination Pot is derived, not deployed", () => {
+  // The same derivation the native syntax uses (`intent-pot.ts`), so the two paths cannot disagree
+  // about where a route cooks. The owner is the RECORDED Portal's Executor, under salt zero: the
+  // shared Pot the solver deploys. Nothing in the route deploys it.
+  const executor = ecoRoutesExecutorOf(PORTAL);
+  const derived = v12PredictPot(executor);
+  const derivedOptions = (): IntentOptions => ({
+    deadline: 2000n,
+    portal: PORTAL,
+    source: "base",
+    creator: CREATOR,
+    prover: PROVER,
+  });
+  const deploySelector = v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT).slice(0, 10);
+
+  it("cooks on the Executor's shared Pot with the released engine, and adds no other call", () => {
+    const built = openRoute("ethereum", "return 1n;", derivedOptions()).reward(0n);
+    const [cook] = built.intent.route.calls;
+
+    expect(built.intent.route.calls).toHaveLength(1);
+    expect(getAddress(denormalizeToEvm(cook!.target))).toBe(derived);
+    expect(cook!.data).toBe(
+      v12Pot.encodeCook(v12EngineAddress() as Hex, bytesToHex(built.compiled.bytecode[0]!)),
+    );
+  });
+
+  it("emits no deployPot, before or after the precalls", () => {
+    const precall = { target: POT, data: "0x1234" as Hex };
+    const built = openRoute("ethereum", "return 1n;", {
+      ...derivedOptions(),
+      precalls: [precall],
+    }).reward(0n);
+
+    expect(built.intent.route.calls.map((c) => c.data.slice(0, 10))).not.toContain(deploySelector);
+    expect(built.intent.route.calls.map((c) => c.data)).toEqual(["0x1234", expect.any(String)]);
+  });
+
+  it("derives from the registry Portal's Executor when no Portal is named", () => {
+    const { portal: _unused, ...options } = derivedOptions();
+    const built = openRoute("ethereum", "return 1n;", options).reward(0n);
+
+    expect(getAddress(denormalizeToEvm(built.intent.route.calls[0]!.target))).toBe(
+      v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("ethereum"))),
+    );
+  });
+
+  it("follows an overriding Portal: its OWN Executor owns the Pot, not the registry Portal's", () => {
+    const built = openRoute("ethereum", "return 1n;", derivedOptions()).reward(0n);
+    const registryPot = v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("ethereum")));
+
+    // The registry Portal's Pot would reject this route's cook with `NotOwner()`: the route records
+    // PORTAL, so PORTAL's Executor is the caller.
+    expect(derived).not.toBe(registryPot);
+    expect(getAddress(denormalizeToEvm(built.intent.route.calls[0]!.target))).toBe(derived);
+  });
+
+  it("`destinationPot` names the same address, for a caller building precalls", () => {
+    expect(destinationPot("ethereum", { portal: PORTAL })).toBe(derived);
+    expect(destinationPot("ethereum")).toBe(
+      v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("ethereum"))),
+    );
+  });
+
+  it.each([
+    ["execution.pot", { execution: { pot: POT } }],
+    ["the pot shorthand", { pot: POT }],
+  ])("a Pot named through %s is used as given", (_name, override) => {
+    const built = openRoute("ethereum", "return 1n;", {
+      ...derivedOptions(),
+      ...override,
+    }).reward(0n);
+
+    expect(built.intent.route.calls).toHaveLength(1);
+    expect(denormalizeToEvm(built.intent.route.calls[0]!.target)).toBe(POT);
+    // The engine is still defaulted: overriding one does not require the other.
+    expect(built.intent.route.calls[0]!.data).toBe(
+      v12Pot.encodeCook(v12EngineAddress() as Hex, bytesToHex(built.compiled.bytecode[0]!)),
+    );
+  });
+
+  it("an overriding engine keeps the derived Pot", () => {
+    const built = openRoute("ethereum", "return 1n;", {
+      ...derivedOptions(),
+      execution: { engine: ENGINE, value: 7n },
+    }).reward(0n);
+    const [cook] = built.intent.route.calls;
+
+    expect(getAddress(denormalizeToEvm(cook!.target))).toBe(derived);
+    expect(cook!.data).toBe(v12Pot.encodeCook(ENGINE, bytesToHex(built.compiled.bytecode[0]!)));
+    expect(cook!.value).toBe(7n);
+  });
+});
+
 describe("vault(): predictVaultAddress", () => {
   const VAULT_INIT_CODE_HASH = keccak256("0xdeadbeef") as Hex;
 
@@ -331,16 +430,41 @@ describe("openRoute: fail-closed", () => {
     ).toThrow(/deadline/i);
   });
 
-  it("throws naming 'portal' when IntentOptions.portal is missing", () => {
-    expect(() =>
-      openRoute("ethereum", "return 1n;", { deadline: 2000n, pot: POT } as never),
-    ).toThrow(/portal/i);
+  // `portal` STOPPED being required: the SDK carries the eco-routes deployments, so a caller only
+  // names a Portal to reach one the registry does not have.
+  it("defaults the Portal to the eco-routes deployment for the destination", () => {
+    const built = openRoute("ethereum", "return 1n;", {
+      deadline: 2000n,
+      pot: POT,
+      engine: ENGINE,
+    }).reward({ source: "base", creator: CREATOR, prover: PROVER, deadline: 2000n });
+
+    expect(denormalizeToEvm(built.intent.route.portal).toLowerCase()).toBe(
+      ecoRoutesPortal("ethereum").toLowerCase(),
+    );
   });
 
-  it("throws naming 'execution' when neither .execution nor .pot is supplied", () => {
+  it("says which chain has no deployment rather than failing later", () => {
+    // Zora is canonical but carries no eco-routes deployment in the pinned tables.
     expect(() =>
-      openRoute("ethereum", "return 1n;", { deadline: 2000n, portal: PORTAL } as never),
-    ).toThrow(/execution/i);
+      openRoute("zora", "return 1n;", { deadline: 2000n, pot: POT, engine: ENGINE }),
+    ).toThrow(/eco-routes v3 is not deployed on zora/i);
+  });
+
+  it("throws naming 'execution' for an SVM destination that names no CODE account", () => {
+    expect(() => openRoute("solana", "return 1n;", { deadline: 2000n, portal: PORTAL })).toThrow(
+      /execution/i,
+    );
+  });
+
+  it("refuses an SVM-shaped execution for an EVM destination rather than deriving past it", () => {
+    expect(() =>
+      openRoute("ethereum", "return 1n;", {
+        deadline: 2000n,
+        portal: PORTAL,
+        execution: { code: "11111111111111111111111111111111", accounts: [] },
+      }),
+    ).toThrow(/EVM destination/);
   });
 
   it("throws naming 'source' when the reward has no source and options has none either", () => {
@@ -388,10 +512,19 @@ const SOURCE_PORTAL = "0x8888888888888888888888888888888888888888" as const;
 const OTHER_PORTAL = "0x9999999999999999999999999999999999999999" as const;
 
 describe("BuiltIntent: sourcePortal defaulting", () => {
-  it("throws a named error when neither target.portal nor options.sourcePortal is supplied", () => {
+  // `sourcePortal` stopped being required along with `portal`: the SDK carries the eco-routes
+  // deployments for the source chain too.
+  it("defaults to the eco-routes Portal for the reward's source chain", () => {
     const built = openRoute("ethereum", "return 1n;", evmOptions()).reward(0n);
-    expect(() => built.publishCalldata()).toThrow(/sourcePortal|Portal target/i);
-    expect(() => built.vaultCall()).toThrow(/sourcePortal|Portal target/i);
+
+    expect(built.publishCalldata().to.toLowerCase()).toBe(ecoRoutesPortal("base").toLowerCase());
+    expect(built.vaultCall().to.toLowerCase()).toBe(ecoRoutesPortal("base").toLowerCase());
+  });
+
+  it("still says which chain has none, rather than failing later", () => {
+    expect(() =>
+      openRoute("ethereum", "return 1n;", evmOptions({ source: "zora" })).reward(0n),
+    ).toThrow(/eco-routes v3 is not deployed on zora/i);
   });
 
   it("uses IntentOptions.sourcePortal when no per-call target is given", () => {

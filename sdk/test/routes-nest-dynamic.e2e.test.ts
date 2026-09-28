@@ -39,8 +39,11 @@ import {
   createTestClient,
   createWalletClient,
   decodeEventLog,
+  decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
+  getAddress,
+  getContractAddress,
   getCreate2Address,
   http,
   keccak256,
@@ -51,7 +54,12 @@ import type { Address, Hex, Log } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { compileProgram } from "./helpers";
-import { startGatedEngine, gateAnchors, type GatedEngine } from "./evm/gated-engine.js";
+import {
+  gateAnchors,
+  installEngineAt,
+  startGatedEngine,
+  type GatedEngine,
+} from "./evm/gated-engine.js";
 import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import {
   EVM_REWARD_PARAM,
@@ -71,6 +79,16 @@ import { decodeAbiParameters } from "viem";
 import { nestedTransferProgram } from "../src/routes/nest.js";
 import { safeApproveStatements, safeTransferStatements } from "../src/token/safe.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { sauceEvmDeployPotCall } from "../src/routes/sauce-calls.js";
+import {
+  ECO_ROUTES_EXECUTOR_NONCE,
+  ecoRoutesExecutor,
+} from "../src/protocols/eco-routes/lookup.js";
+import { v12EngineAddress } from "../src/deployments/index.js";
+import { destinationPot } from "../src/routes/intent-pot.js";
+import { openRoute } from "../src/routes/intent-dsl.js";
+import { Token as TokenCalls } from "../src/token/api.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "../src/routes/normalize.js";
 import { scaleAmount, WAD } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
@@ -322,8 +340,12 @@ interface Fulfilment {
   logs: readonly Log[];
 }
 
-/** Hashes `route` exactly as `Inbox._fulfill` does and submits `Portal.fulfill`. */
-const fulfilRoute = async (route: EvmRoute, rewardHash: Hex): Promise<Fulfilment> => {
+/** Hashes `route` exactly as `Inbox._fulfill` does and submits `Portal.fulfill` to `via`. */
+const fulfilRoute = async (
+  route: EvmRoute,
+  rewardHash: Hex,
+  via: Address = portal,
+): Promise<Fulfilment> => {
   const routeHash = keccak256(encodeAbiParameters([EVM_ROUTE_PARAM], [route]));
   const intentHash = keccak256(
     encodePacked(["uint64", "bytes32", "bytes32"], [BigInt(CHAIN_ID), routeHash, rewardHash]),
@@ -335,7 +357,7 @@ const fulfilRoute = async (route: EvmRoute, rewardHash: Hex): Promise<Fulfilment
   const hash = await walletClient.sendTransaction({
     account: DEPLOYER,
     chain: null,
-    to: portal,
+    to: via,
     data: encodeFunctionData({
       abi: portalAbi,
       functionName: "fulfill",
@@ -416,15 +438,10 @@ const startEvm = async (): Promise<ChildProcess> => {
     DEPLOYER.address,
     creationCode,
   );
+  // The SDK's default engine is the released address; a route built with no `engine` cooks there.
+  await installEngineAt({ publicClient, testClient }, sauce.engine, v12EngineAddress() as Address);
 
-  portal = await deploy(
-    `${PORTAL_FIXTURE.creationCode}${encodeAbiParameters([{ type: "address" }], ["0x0000000000000000000000000000000000000000"]).slice(2)}` as Hex,
-  );
-  executor = (await publicClient.readContract({
-    abi: portalAbi,
-    address: portal,
-    functionName: "executor",
-  })) as Address;
+  ({ portal, executor } = await deployPortal());
 
   // A second Pot, owned by the Executor. `deployPot(owner, salt)` takes the owner as a parameter, so
   // the deployer can mint one for an address that has no key.
@@ -467,6 +484,21 @@ const startEvm = async (): Promise<ChildProcess> => {
   return anvil;
 };
 
+/** A fresh eco-routes Portal, and the Executor it created. A new one has a new Executor, and so a
+ *  canonical Pot nobody has deployed yet. */
+const deployPortal = async (): Promise<{ portal: Address; executor: Address }> => {
+  const deployed = await deploy(
+    `${PORTAL_FIXTURE.creationCode}${encodeAbiParameters([{ type: "address" }], ["0x0000000000000000000000000000000000000000"]).slice(2)}` as Hex,
+  );
+  const its = (await publicClient.readContract({
+    abi: portalAbi,
+    address: deployed,
+    functionName: "executor",
+  })) as Address;
+
+  return { portal: deployed, executor: its };
+};
+
 const stopEvm = (anvil: ChildProcess): Promise<void> => {
   if (anvil.exitCode !== null) return Promise.resolve();
   const exited = once(anvil, "exit");
@@ -480,6 +512,10 @@ const stopEvm = (anvil: ChildProcess): Promise<void> => {
 // ---------------------------------------------------------------------------
 
 const CHILD_PORTAL = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
+/** `Pot.cook`'s `onlyOwner` refusal. */
+const NOT_OWNER_SELECTOR = "0x30cd7471" as const;
+/** The Executor's refusal to call an address with no code — what a missing Pot reverts with. */
+const CALL_TO_EOA_SELECTOR = "0x2db59289" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const PROVER = "0x4444444444444444444444444444444444444444" as const;
 const CHILD_SALT = `0x${"0c".repeat(32)}` as Hex;
@@ -1099,48 +1135,41 @@ describeEvm("route nesting, executed", () => {
     }, 120_000);
   });
 
-  describe("the README's hand-written SauceScript example", () => {
-    // The SDK generates the dynamic-nesting program above; this is the other half of the claim --
-    // that the same thing is WRITABLE BY HAND, in SauceScript, with the surface the package already
-    // ships. `docs/examples/cross-chain-intent.sauce.ts` is compiled on every `docs:check` run and
-    // quoted verbatim by the README; what only an engine can settle is whether the Portal accepts
-    // what it builds, which is what this does.
-    //
-    // The load-bearing unknown was the ABI encoding. CLAUDE.md warns that nested-struct field
-    // ordering has broken before, and this program hands the Portal a `Route` containing two arrays
-    // of structs, one of them holding a `bytes`. Comparing the PUBLISHED route bytes against the
-    // SDK's own encoder settles it for every field at once.
-    const HAND_WRITTEN = readFileSync(
+  describe("the README's example, as published", () => {
+    // `docs/examples/cross-chain-intent.sauce.ts` is compiled on every `docs:check` run and quoted
+    // verbatim by the README. What only an engine can settle is whether the Portal accepts what its
+    // lowering builds -- and whether the amount the program measured is the amount the published
+    // intent carries, which is the claim the README makes.
+    const README_EXAMPLE = readFileSync(
       join(HERE, "../../docs/examples/cross-chain-intent.sauce.ts"),
       "utf8",
     );
-    const HAND_SALT = `0x${"5a".repeat(32)}` as Hex;
-    const DELIVER_TO = "0x00000000000000000000000000000000000000a5" as Address;
     const SEEDED = 12_345_678n;
+    const DELIVER_TO = "0x00000000000000000000000000000000000000a5" as Address;
 
-    it("publishes exactly the intent the SDK encodes for the same fields", async () => {
+    it("publishes an intent carrying the balance it measured", async () => {
       const token = await deploy(MOCK_ERC20.creationCode);
       const compiled = compileSauceRoute(
         "base",
-        HAND_WRITTEN,
+        README_EXAMPLE,
         { pot: executorPot, engine: sauce.engine },
         {
-          // `IPortal` needs no entry here: `sauce-route.ts` layers the Portal binding under every
-          // route compile, which is what makes the program above writable with no setup.
-          defines: {
-            TOKEN: BigInt(token),
-            RECIPIENT: BigInt(DELIVER_TO),
-            PORTAL: BigInt(portal),
-            DESTINATION_PORTAL: BigInt(portal),
-            DESTINATION: BigInt(CHAIN_ID),
-            CREATOR: BigInt(CREATOR),
-            PROVER: BigInt(PROVER),
-            DEADLINE: 4_000_000_000n,
-            SALT: BigInt(HAND_SALT),
-            MIN_AMOUNT: 1n,
+          // The example says `USDC`; on this anvil that symbol is the mock deployed above.
+          tokens: { USDC: token },
+          defines: { RECIPIENT: BigInt(DELIVER_TO), MIN_AMOUNT: 1n },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            // This anvil's Portal, not the registry's. On a real chain both come from the registry.
+            sourcePortal: portal,
+            destinationPortal: portal,
+            salt: `0x${"ee".repeat(32)}` as Hex,
           },
         },
       );
+      // Nothing in the example mentions the Portal, a selector or an approval.
+      expect(README_EXAMPLE).not.toMatch(/publishAndFund|evm\.call|hex`/);
 
       const { status, logs } = await fulfil([
         {
@@ -1160,50 +1189,53 @@ describeEvm("route nesting, executed", () => {
       ]);
       expect(status).toBe("success");
 
-      const expected: Intent = {
-        destination: BigInt(CHAIN_ID),
-        sourceChainId: BigInt(CHAIN_ID),
-        route: normalizeRoute({
-          salt: HAND_SALT,
-          deadline: 4_000_000_000n,
-          portal,
-          nativeAmount: 0n,
-          tokens: [{ token, amount: SEEDED }],
-          calls: [
-            {
-              target: token,
-              data: encodeFunctionData({
-                abi: erc20Abi,
-                functionName: "transfer",
-                args: [DELIVER_TO, SEEDED],
-              }),
-            },
-          ],
-        }),
-        reward: normalizeReward({
-          deadline: 4_000_000_000n,
-          creator: CREATOR,
-          prover: PROVER,
-          nativeAmount: 0n,
-          tokens: [{ token, amount: SEEDED }],
-        }),
-      };
-
       const published = publishedIn(logs);
       expect(published).toHaveLength(1);
-      // Byte-for-byte, so the nested `tokens[]`/`calls[]` structs and the inner `bytes` are all
-      // established at once -- including the leading ABI offset word the program prepends by hand.
-      expect(published[0]!.route.toLowerCase()).toBe(encodeRouteEvm(expected.route).toLowerCase());
-      expect(published[0]!.intentHash).toBe(hashIntent(expected).intentHash);
-      // Funded from the measured balance, through the raw approve the program issues.
+      expect(published[0]!.destination).toBe(42_161n); // Arbitrum, as the example names
+      expect(published[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
       expect(
         await publicClient.readContract({
           abi: portalAbi,
           address: portal,
           functionName: "getRewardStatus",
-          args: [hashIntent(expected).intentHash],
+          args: [published[0]!.intentHash],
         }),
       ).toBe(1);
+    }, 180_000);
+
+    it("refuses to create the intent when the floor is not met, reverting everything", async () => {
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const marker = "0x0000000000000000000000000000000000000f01" as Address;
+      const compiled = compileSauceRoute(
+        "base",
+        README_EXAMPLE,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          tokens: { USDC: token },
+          // Nothing was minted, so the balance is below this floor and the program throws.
+          defines: { RECIPIENT: BigInt(DELIVER_TO), MIN_AMOUNT: 1n },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            sourcePortal: portal,
+            destinationPortal: portal,
+            salt: `0x${"ef".repeat(32)}` as Hex,
+          },
+        },
+      );
+
+      const { status } = await fulfil([
+        markerCall(marker),
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+
+      expect(status).toBe("reverted");
+      expect(await balanceOf(markerToken, marker)).toBe(0n);
     }, 180_000);
   });
 
@@ -1349,5 +1381,712 @@ describeEvm("route nesting, executed", () => {
 
       expect(status).toBe("reverted");
     }, 180_000);
+  });
+
+  describe("`Chain(() => ...).reward(...)` written inside the program", () => {
+    // The syntax the SDK exists to offer: an intent created from a Sauce program with no Portal,
+    // no selector, no offset word and no approve written by the author. Everything below the
+    // `PROGRAM` constant is the lowering's output, and none of it appears in the source.
+    //
+    // What only an engine can settle is whether the Portal accepts what that lowering builds, and
+    // whether the value captured from the enclosing program arrives where the encoding says it
+    // does. Both are read back out of the Portal's own log.
+    const SEEDED = 4_242_424n;
+    const DELIVER_TO = "0x00000000000000000000000000000000000000b7" as Address;
+
+    const PROGRAM = `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base(() => {
+    Token(TOKEN).transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: TOKEN, amount }] });
+}`;
+
+    it("publishes and funds the intent the SDK encodes, with the captured amount in it", async () => {
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const compiled = compileSauceRoute(
+        "base",
+        PROGRAM,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(DELIVER_TO) },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            // This anvil's Portal, not the registry's mainnet one. Every OTHER address in the
+            // lowered program -- and on a real chain the Portal too -- comes from the registry.
+            sourcePortal: portal,
+            destinationPortal: portal,
+            salt: `0x${"e0".repeat(32)}` as Hex,
+          },
+        },
+      );
+      // The author wrote none of this.
+      expect(PROGRAM).not.toContain("publishAndFund");
+      expect(PROGRAM).not.toContain("evm.call");
+      expect(compiled.source).toContain("evm.call(");
+
+      const { status, logs } = await fulfil([
+        {
+          target: token,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "mint",
+            args: [executorPot, SEEDED],
+          }),
+          value: 0n,
+        },
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+      expect(status).toBe("success");
+
+      const published = publishedIn(logs);
+      expect(published).toHaveLength(1);
+
+      // The reward carries the balance the enclosing program measured -- so the capture reached the
+      // encoded intent, which is the whole mechanism.
+      expect(published[0]!.rewardTokens).toHaveLength(1);
+      expect(published[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
+      expect(published[0]!.rewardTokens[0]!.token.toLowerCase()).toBe(token.toLowerCase());
+
+      // And the route the solver must run delivers that same amount to the named recipient.
+      const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published[0]!.route) as unknown as [
+        EvmRoute,
+      ];
+      expect(route.tokens[0]!.amount).toBe(SEEDED);
+      expect(route.calls).toHaveLength(1);
+      const delivered = decodeFunctionData({ abi: erc20Abi, data: route.calls[0]!.data });
+      expect(delivered.functionName).toBe("transfer");
+      expect((delivered.args![0] as string).toLowerCase()).toBe(DELIVER_TO.toLowerCase());
+      expect(delivered.args![1]).toBe(SEEDED);
+
+      // Funded, from the emitted approve, into the vault the Portal derives for that hash.
+      expect(
+        await publicClient.readContract({
+          abi: portalAbi,
+          address: portal,
+          functionName: "getRewardStatus",
+          args: [published[0]!.intentHash],
+        }),
+      ).toBe(1);
+      expect(await balanceOf(token, executorPot)).toBe(0n);
+    }, 180_000);
+
+    it("a token whose approve returns nothing (USDT) publishes the same way", async () => {
+      await mintTo(usdt, executorPot, SEEDED);
+      const held = await balanceOf(usdt, executorPot);
+      const compiled = compileSauceRoute(
+        "base",
+        PROGRAM,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          defines: { TOKEN: BigInt(usdt), RECIPIENT: BigInt(DELIVER_TO) },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            sourcePortal: portal,
+            destinationPortal: portal,
+            salt: `0x${"e1".repeat(32)}` as Hex,
+          },
+        },
+      );
+
+      const { status, logs } = await fulfil([
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+
+      expect(status).toBe("success");
+      expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(held);
+      expect(await balanceOf(usdt, executorPot)).toBe(0n);
+    }, 180_000);
+  });
+
+  describe("a three-hop chain, written entirely in the native syntax", () => {
+    // The headline case: every hop's amount is only known when that hop runs. The parent measures a
+    // balance and offers an intent; fulfilling THAT intent delivers the amount to a Pot, where a
+    // program measures it again and offers a third. Nothing below is written by hand -- the program
+    // text is the three `Chain(() => ...).reward(...)` expressions and nothing else.
+    const SEEDED = 7_000_000n;
+    const FINAL_RECIPIENT = "0x00000000000000000000000000000000000000c3" as Address;
+
+    const THREE_HOP = `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base(() => {
+    const got = Token(TOKEN).balanceOf(ctx.self());
+    Base(() => {
+      Token(TOKEN).transfer(RECIPIENT, got);
+    }).reward({ tokens: [{ token: TOKEN, amount: got }] });
+  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+}`;
+
+    it("publishes hop 2, and fulfilling it publishes hop 3 with its own measured amount", async () => {
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const intents = {
+        deadline: 4_000_000_000n,
+        creator: CREATOR,
+        prover: PROVER,
+        sourcePortal: portal,
+        destinationPortal: portal,
+        pot: executorPot,
+        engine: sauce.engine,
+        executionFee: 0n,
+        salt: `0x${"c3".repeat(32)}` as Hex,
+      };
+      const compiled = compileSauceRoute(
+        "base",
+        THREE_HOP,
+        { pot: executorPot, engine: sauce.engine },
+        { defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(FINAL_RECIPIENT) }, intents },
+      );
+      // The author wrote no Portal, no cook, no selector, and no argument encoding.
+      expect(THREE_HOP).not.toMatch(/publishAndFund|cook|evm\.call|hex`|abi\./);
+
+      // ---- hop 1: fulfil the parent ---------------------------------------------------------
+      const parent = await fulfil([
+        {
+          target: token,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "mint",
+            args: [executorPot, SEEDED],
+          }),
+          value: 0n,
+        },
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+      expect(parent.status).toBe("success");
+
+      const hop2 = publishedIn(parent.logs);
+      expect(hop2).toHaveLength(1);
+      // Hop 2's reward is the amount hop 1 measured, and its route asks the solver to deliver the
+      // same amount so the program inside it has something to measure.
+      expect(hop2[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
+      const [hop2Route] = decodeAbiParameters([EVM_ROUTE_PARAM], hop2[0]!.route) as unknown as [
+        EvmRoute,
+      ];
+      expect(hop2Route.tokens[0]!.amount).toBe(SEEDED);
+      // Executor -> Pot, then the cook. Both emitted, neither written.
+      expect(hop2Route.calls).toHaveLength(2);
+
+      // ---- hop 2: fulfil it, from the bytes the chain published ------------------------------
+      await mintTo(token, DEPLOYER.address, SEEDED);
+      const approve = await walletClient.sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        to: token,
+        data: encodeFunctionData({
+          abi: erc20ApproveAbi,
+          functionName: "approve",
+          args: [portal, SEEDED],
+        }),
+        gas: GAS_LIMIT,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: approve });
+
+      const child = await fulfilRoute(hop2Route, rewardOf(hop2[0]!).rewardHash);
+      expect(child.status).toBe("success");
+
+      // ---- hop 3 ------------------------------------------------------------------------------
+      const hop3 = publishedIn(child.logs);
+      expect(hop3).toHaveLength(1);
+      // Measured by hop 2's own program, at hop 2's execution time -- a number that did not exist
+      // when hop 1 was signed and that hop 1 never touched.
+      expect(hop3[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
+      const [hop3Route] = decodeAbiParameters([EVM_ROUTE_PARAM], hop3[0]!.route) as unknown as [
+        EvmRoute,
+      ];
+      const delivery = decodeFunctionData({ abi: erc20Abi, data: hop3Route.calls[0]!.data });
+      expect(delivery.functionName).toBe("transfer");
+      expect((delivery.args![0] as string).toLowerCase()).toBe(FINAL_RECIPIENT.toLowerCase());
+      expect(delivery.args![1]).toBe(SEEDED);
+
+      console.log(`three-hop gas — hop 1 ${parent.gasUsed}, hop 2 ${child.gasUsed}`);
+    }, 300_000);
+
+    it("a single hop whose body is a program, not just token writes", async () => {
+      const token = await deploy(MOCK_ERC20.creationCode);
+      await mintTo(token, executorPot, SEEDED);
+      const held = await balanceOf(token, executorPot);
+
+      // Control flow in the body, so this takes the program path rather than the direct-call one.
+      const WITH_LOGIC = `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base(() => {
+    const here = Token(TOKEN).balanceOf(ctx.self());
+    if (here > 0n) {
+      Token(TOKEN).transfer(RECIPIENT, here);
+    }
+  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+}`;
+      const compiled = compileSauceRoute(
+        "base",
+        WITH_LOGIC,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(FINAL_RECIPIENT) },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            sourcePortal: portal,
+            destinationPortal: portal,
+            pot: executorPot,
+            engine: sauce.engine,
+            executionFee: 0n,
+            salt: `0x${"c4".repeat(32)}` as Hex,
+          },
+        },
+      );
+
+      const { status, logs } = await fulfil([
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+
+      expect(status).toBe("success");
+      expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(held);
+    }, 300_000);
+  });
+
+  describe("the destination Pot is derived, not asked for", () => {
+    // The user's requirement is that every address the SDK can know, it knows. A Pot is CREATE2 from
+    // the Kitchen over its owner and a salt, and the owner a route call must cook as is the
+    // destination `Portal.executor()` -- itself the Portal's SECOND `CREATE`, because `Inbox`'s
+    // constructor does `executor = new Executor()` after `Portal`'s inheritance has created a
+    // `Vault`. Both ends are arithmetic. These check the arithmetic against the real contracts.
+
+    it("the Executor is the Portal's second CREATE", async () => {
+      const derived = getContractAddress({
+        from: portal,
+        nonce: ECO_ROUTES_EXECUTOR_NONCE,
+        opcode: "CREATE",
+      });
+
+      expect(derived.toLowerCase()).toBe(executor.toLowerCase());
+    }, 120_000);
+
+    it("a Pot derived for that Executor is the one the Kitchen mints", async () => {
+      const derived = v12PredictPot(executor as Hex, SAUCE_INTENT_POT_SALT, gateAnchors().kitchen);
+      // Nothing has deployed it yet: the address is arithmetic, the contract is not.
+      expect(await publicClient.getCode({ address: derived })).toBeUndefined();
+
+      const mint = await walletClient.sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        to: gateAnchors().kitchen,
+        data: v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT),
+        gas: GAS_LIMIT,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: mint });
+
+      expect(await publicClient.getCode({ address: derived })).toBeDefined();
+    }, 120_000);
+
+    it("a program cooks on the derived Pot with no `intents.pot` supplied", async () => {
+      // The Pot above is now deployed, so this is the whole flow a caller gets for free: derive,
+      // deploy once, and every intent on that chain cooks there.
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const derived = v12PredictPot(executor as Hex, SAUCE_INTENT_POT_SALT, gateAnchors().kitchen);
+      await mintTo(token, derived, 3_000n);
+
+      const compiled = compileSauceRoute(
+        "base",
+        `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base(() => {
+    const here = Token(TOKEN).balanceOf(ctx.self());
+    if (here > 0n) {
+      Token(TOKEN).transfer(RECIPIENT, here);
+    }
+  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+}`,
+        { pot: derived, engine: sauce.engine },
+        {
+          defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(CREATOR) },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            sourcePortal: portal,
+            destinationPortal: portal,
+            // No `pot`. No `engine`. Both derived.
+            executionFee: 0n,
+            salt: `0x${"d0".repeat(32)}` as Hex,
+          },
+        },
+      );
+      // The child's cook targets the derived Pot, chosen by the SDK.
+      expect(compiled.source).toContain("evm.call(");
+
+      const { status, logs } = await fulfil([
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+
+      expect(status).toBe("success");
+      expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(3_000n);
+    }, 180_000);
+  });
+
+  describe("the Pot the route cooks on must exist beforehand", () => {
+    // The SDK derives the destination Pot -- the Executor of the Portal the route records, salt
+    // zero, the one shared Pot the solver deploys per Portal -- and deploys nothing. A route cooking
+    // on it works once it exists, and reverts the whole fulfilment when it does not: the Executor
+    // refuses a call with calldata to an address with no code.
+    //
+    // Each case deploys its OWN Portal. A new Portal has a new Executor, so whether its shared Pot
+    // exists is decided by the case alone -- and the Portal is never the registry's, which is the
+    // override case: the Pot has to be owned by THAT Portal's Executor or the cook reverts.
+    const AMOUNT = 2_500_000n;
+    const DEADLINE = 4_000_000_000n;
+    const potOwnerAbi = parseAbi(["function owner() view returns (address)"]);
+
+    /** What a solver does before `fulfill`: hold the route's tokens and let the Portal pull them. */
+    const provision = async (via: Address, token: Address, amount: bigint): Promise<void> => {
+      await mintTo(token, DEPLOYER.address, amount);
+      const hash = await walletClient.sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        to: token,
+        data: encodeFunctionData({
+          abi: erc20ApproveAbi,
+          functionName: "approve",
+          args: [via, amount],
+        }),
+        gas: GAS_LIMIT,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+    };
+
+    /** What the solver does once per Portal: deploy the Executor's Pot through the released Kitchen. */
+    const deployPotFor = async (owner: Address, salt: Hex = SAUCE_INTENT_POT_SALT) => {
+      const call = sauceEvmDeployPotCall({ kitchen: gateAnchors().kitchen, owner, salt });
+      const hash = await walletClient.sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        to: denormalizeToEvm(toUniversalAddress(call.target)) as Address,
+        data: call.data,
+        gas: GAS_LIMIT,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      const pot = v12PredictPot(owner as Hex, salt);
+      expect(await publicClient.getCode({ address: pot })).toBeDefined();
+
+      return pot;
+    };
+
+    const evmRouteOf = (intent: Intent): EvmRoute =>
+      decodeAbiParameters(
+        [EVM_ROUTE_PARAM],
+        encodeRouteEvm(intent.route),
+      )[0] as unknown as EvmRoute;
+
+    /** The Executor's `CallToEOA(pot)`: the Pot the route cooks on is not there. */
+    const expectCallToEoa = (reverted: string, pot: Address): void => {
+      expect(reverted).toContain(CALL_TO_EOA_SELECTOR.slice(2));
+      expect(reverted).toContain(pot.slice(2).toLowerCase().padStart(64, "0"));
+    };
+
+    const ownerOf = (pot: Address): Promise<Address> =>
+      publicClient.readContract({ abi: potOwnerAbi, address: pot, functionName: "owner" });
+
+    /** The revert data a `fulfill` would produce, as text, or "" if it would succeed. */
+    const revertOf = async (via: Address, route: EvmRoute, rewardHash: Hex): Promise<string> => {
+      const claimant = `0x${"00".repeat(12)}${DEPLOYER.address.slice(2)}` as Hex;
+      const intentHash = keccak256(
+        encodePacked(
+          ["uint64", "bytes32", "bytes32"],
+          [
+            BigInt(CHAIN_ID),
+            keccak256(encodeAbiParameters([EVM_ROUTE_PARAM], [route])),
+            rewardHash,
+          ],
+        ),
+      );
+
+      return publicClient
+        .call({
+          account: DEPLOYER.address,
+          to: via,
+          data: encodeFunctionData({
+            abi: portalAbi,
+            functionName: "fulfill",
+            args: [intentHash, route, rewardHash, claimant],
+          }),
+          gas: GAS_LIMIT,
+        })
+        .then(
+          () => "",
+          (err: unknown) =>
+            JSON.stringify(err, (_k, v) => (typeof v === "bigint" ? `${v}` : v)).toLowerCase(),
+        );
+    };
+
+    describe("inside a program: `Chain(() => ...).reward(...)`", () => {
+      // Control flow, so the child is a PROGRAM cooked on its destination Pot, not a list of
+      // token calls. Base -> Base so this one anvil can fulfil the child too.
+      const PROGRAM = `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base(() => {
+    const here = Token(TOKEN).balanceOf(ctx.self());
+    if (here > 0n) {
+      Token(TOKEN).transfer(RECIPIENT, here);
+    }
+  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+}`;
+
+      /** Fulfils a parent that publishes one child routed through `theirs`. */
+      const publishChild = async (
+        theirs: Address,
+        recipient: Address,
+        extra: { pot?: Address } = {},
+      ) => {
+        const token = await deploy(MOCK_ERC20.creationCode);
+        await mintTo(token, executorPot, AMOUNT);
+        const compiled = compileSauceRoute(
+          "base",
+          PROGRAM,
+          // The ENCLOSING program's own execution, which is not what is under test.
+          { pot: executorPot, engine: sauce.engine },
+          {
+            defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(recipient) },
+            intents: {
+              deadline: DEADLINE,
+              creator: CREATOR,
+              prover: PROVER,
+              sourcePortal: portal,
+              // Not the registry's Portal. No `engine`, and no `pot` unless the case names one.
+              destinationPortal: theirs,
+              executionFee: 0n,
+              salt: nextSalt(),
+              ...extra,
+            },
+          },
+        );
+        const parent = await fulfil([
+          {
+            target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+            data: compiled.calls[0]!.data,
+            value: 0n,
+          },
+        ]);
+        expect(parent.status).toBe("success");
+        const [published] = publishedIn(parent.logs);
+        const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published!.route) as unknown as [
+          EvmRoute,
+        ];
+        await provision(theirs, token, AMOUNT);
+
+        return { token, route, rewardHash: rewardOf(published!).rewardHash };
+      };
+
+      it("(a) cooks on the shared Pot once it has been deployed", async () => {
+        const { portal: theirs, executor: theirExecutor } = await deployPortal();
+        const pot = await deployPotFor(theirExecutor);
+        const recipient = "0x00000000000000000000000000000000000000e1" as Address;
+
+        const { token, route, rewardHash } = await publishChild(theirs, recipient);
+
+        // The Executor -> Pot delivery, then the cook on the derived Pot. Nothing deploys.
+        expect(route.calls.map((c) => c.target.toLowerCase())).toEqual([
+          token.toLowerCase(),
+          pot.toLowerCase(),
+        ]);
+        const child = await fulfilRoute(route, rewardHash, theirs);
+        expect(child.status).toBe("success");
+        // Owned by the OVERRIDING Portal's Executor, which is the one that just cooked on it.
+        expect(getAddress(await ownerOf(pot))).toBe(getAddress(theirExecutor));
+        expect(getAddress(theirExecutor)).not.toBe(getAddress(ecoRoutesExecutor("base")));
+        expect(await balanceOf(token, recipient)).toBe(AMOUNT);
+      }, 300_000);
+
+      it("(b) reverts the fulfilment when the Pot has not been deployed", async () => {
+        const { portal: theirs, executor: theirExecutor } = await deployPortal();
+        const pot = v12PredictPot(theirExecutor as Hex);
+        const recipient = "0x00000000000000000000000000000000000000e2" as Address;
+
+        const { token, route, rewardHash } = await publishChild(theirs, recipient);
+
+        expectCallToEoa(await revertOf(theirs, route, rewardHash), pot);
+        const child = await fulfilRoute(route, rewardHash, theirs);
+        expect(child.status).toBe("reverted");
+        expect(await publicClient.getCode({ address: pot })).toBeUndefined();
+        expect(await balanceOf(token, recipient)).toBe(0n);
+      }, 300_000);
+
+      it("(c) cooks on a Pot the caller names", async () => {
+        const { portal: theirs, executor: theirExecutor } = await deployPortal();
+        // Owned by the right Executor but at another salt, so it is not the derived Pot.
+        const named = await deployPotFor(theirExecutor, `0x${"00".repeat(31)}c0`);
+        const recipient = "0x00000000000000000000000000000000000000e3" as Address;
+
+        const { token, route, rewardHash } = await publishChild(theirs, recipient, { pot: named });
+
+        expect(route.calls[1]!.target.toLowerCase()).toBe(named.toLowerCase());
+        const child = await fulfilRoute(route, rewardHash, theirs);
+        expect(child.status).toBe("success");
+        expect(await balanceOf(token, recipient)).toBe(AMOUNT);
+      }, 300_000);
+      it("(d) the registry Executor's Pot rejects an overriding Portal's cook with NotOwner", async () => {
+        // What deriving from the registry Portal would have built: the child's route records
+        // `theirs`, so `theirs`'s Executor calls the Pot, and one owned by another Executor refuses.
+        const { portal: theirs } = await deployPortal();
+        const wrongPot = await deployPotFor(ecoRoutesExecutor("base"));
+        const recipient = "0x00000000000000000000000000000000000000e4" as Address;
+
+        const { token, route, rewardHash } = await publishChild(theirs, recipient, {
+          pot: wrongPot,
+        });
+
+        expect(await revertOf(theirs, route, rewardHash)).toContain(NOT_OWNER_SELECTOR.slice(2));
+        expect((await fulfilRoute(route, rewardHash, theirs)).status).toBe("reverted");
+        expect(await balanceOf(token, recipient)).toBe(0n);
+      }, 300_000);
+    });
+
+    describe("from TypeScript: `Base(body, options).reward(...)`", () => {
+      /** The guide's USDC transfer, with no `pot` or `engine` unless `execution` names one. */
+      const buildTransfer = (
+        theirs: Address,
+        token: Address,
+        recipient: Address,
+        execution?: { pot: Address },
+      ) => {
+        const pot = execution?.pot ?? destinationPot("base", { portal: theirs });
+
+        return openRoute("base", "Token(TOKEN).transfer(RECIPIENT, AMOUNT);", {
+          ...(execution === undefined ? {} : { execution }),
+          portal: theirs,
+          deadline: DEADLINE,
+          salt: nextSalt(),
+          defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(recipient), AMOUNT },
+          tokens: [{ token, amount: AMOUNT }],
+          // Route assets arrive at the Executor; the program spends from the Pot.
+          precalls: [TokenCalls.transfer({ token, to: pot, amount: AMOUNT }).toCall()],
+        }).reward({
+          source: "base",
+          creator: CREATOR,
+          prover: PROVER,
+          deadline: DEADLINE,
+          nativeAmount: 0n,
+        }).intent;
+      };
+
+      const run = async (theirs: Address, token: Address, intent: Intent) => {
+        await provision(theirs, token, AMOUNT);
+
+        return fulfilRoute(evmRouteOf(intent), hashIntent(intent).rewardHash, theirs);
+      };
+
+      it("(a) cooks on the shared Pot once it has been deployed, with no pot or engine", async () => {
+        const { portal: theirs, executor: theirExecutor } = await deployPortal();
+        const pot = await deployPotFor(theirExecutor);
+        expect(destinationPot("base", { portal: theirs })).toBe(pot);
+        const token = await deploy(MOCK_ERC20.creationCode);
+        const recipient = "0x00000000000000000000000000000000000000f1" as Address;
+
+        const intent = buildTransfer(theirs, token, recipient);
+        // The delivery into the Pot, then the cook on it. Nothing deploys.
+        expect(intent.route.calls).toHaveLength(2);
+        expect(getAddress(denormalizeToEvm(intent.route.calls[1]!.target))).toBe(pot);
+
+        const done = await run(theirs, token, intent);
+        expect(done.status).toBe("success");
+        expect(getAddress(await ownerOf(pot))).toBe(getAddress(theirExecutor));
+        expect(await balanceOf(token, recipient)).toBe(AMOUNT);
+      }, 300_000);
+
+      it("(b) reverts the fulfilment when the Pot has not been deployed", async () => {
+        const { portal: theirs, executor: theirExecutor } = await deployPortal();
+        const pot = destinationPot("base", { portal: theirs });
+        expect(pot).toBe(v12PredictPot(theirExecutor as Hex));
+        const token = await deploy(MOCK_ERC20.creationCode);
+        const recipient = "0x00000000000000000000000000000000000000f2" as Address;
+
+        const intent = buildTransfer(theirs, token, recipient);
+        await provision(theirs, token, AMOUNT);
+        expectCallToEoa(
+          await revertOf(theirs, evmRouteOf(intent), hashIntent(intent).rewardHash),
+          pot,
+        );
+
+        const done = await fulfilRoute(evmRouteOf(intent), hashIntent(intent).rewardHash, theirs);
+        expect(done.status).toBe("reverted");
+        expect(await publicClient.getCode({ address: pot })).toBeUndefined();
+        expect(await balanceOf(token, recipient)).toBe(0n);
+      }, 300_000);
+
+      it("(c) cooks on a Pot the caller names", async () => {
+        const { portal: theirs, executor: theirExecutor } = await deployPortal();
+        const named = await deployPotFor(theirExecutor, `0x${"00".repeat(31)}c1`);
+        const token = await deploy(MOCK_ERC20.creationCode);
+        const recipient = "0x00000000000000000000000000000000000000f3" as Address;
+
+        const intent = buildTransfer(theirs, token, recipient, { pot: named });
+        expect(getAddress(denormalizeToEvm(intent.route.calls[1]!.target))).toBe(named);
+
+        const done = await run(theirs, token, intent);
+        expect(done.status).toBe("success");
+        expect(await balanceOf(token, recipient)).toBe(AMOUNT);
+      }, 300_000);
+
+      it("(d) the registry Executor's Pot rejects an overriding Portal's cook with NotOwner", async () => {
+        // The case that deriving from the registry Portal would build: the route records `theirs`,
+        // so `theirs`'s Executor makes the call, and a Pot owned by any other Executor refuses it.
+        const { portal: theirs, executor: theirExecutor } = await deployPortal();
+        const wrongPot = await deployPotFor(ecoRoutesExecutor("base"));
+
+        const onWrongPot = openRoute("base", "return 1n;", {
+          portal: theirs,
+          execution: { pot: wrongPot },
+          deadline: DEADLINE,
+          salt: nextSalt(),
+        }).reward({ source: "base", creator: CREATOR, prover: PROVER, deadline: DEADLINE });
+        // `NotOwner()`, carried out through the Executor's `CallFailed(call, result)`.
+        expect(
+          await revertOf(
+            theirs,
+            evmRouteOf(onWrongPot.intent),
+            hashIntent(onWrongPot.intent).rewardHash,
+          ),
+        ).toContain(NOT_OWNER_SELECTOR.slice(2));
+
+        // The SDK's own derivation for the same Portal is owned by the right Executor, and runs.
+        const derived = await deployPotFor(theirExecutor);
+        expect(derived).not.toBe(wrongPot);
+        const right = openRoute("base", "return 1n;", {
+          portal: theirs,
+          deadline: DEADLINE,
+          salt: nextSalt(),
+        }).reward({ source: "base", creator: CREATOR, prover: PROVER, deadline: DEADLINE });
+        expect(getAddress(denormalizeToEvm(right.intent.route.calls[0]!.target))).toBe(derived);
+        const ok = await fulfilRoute(
+          evmRouteOf(right.intent),
+          hashIntent(right.intent).rewardHash,
+          theirs,
+        );
+        expect(ok.status).toBe("success");
+        expect(getAddress(await ownerOf(derived))).toBe(getAddress(theirExecutor));
+      }, 300_000);
+    });
   });
 });

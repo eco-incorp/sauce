@@ -1,9 +1,10 @@
-import { Base, Ethereum, routes, token } from "@eco-incorp/sauce";
+import { Base, destinationPot, Ethereum, routes, token } from "@eco-incorp/sauce";
 import { toHex } from "viem";
 
-// Offline fixtures. Use prepareDestinationPot from evm-execution.ts before submission
-// to verify the Executor-owned Pot and read the current Kitchen fee.
-const pot = "0x1111111111111111111111111111111111111111";
+// Offline fixtures. Read the current Kitchen fee before submission.
+const portal = "0x4444444444444444444444444444444444444444";
+// The Pot the route cooks on: the shared one owned by that Portal's Executor. It must already exist.
+const pot = destinationPot(Base.chain, { portal });
 const executionFee = 1_000n;
 const baseUsdcValue = routes.registryTokenAddress(Base.chain, "USDC");
 const sourceUsdcValue = routes.registryTokenAddress(Ethereum.chain, "USDC");
@@ -19,13 +20,9 @@ const built = Base(
     USDC.transfer(recipient, amount);
   },
   {
-    execution: {
-      pot,
-      engine: "0x3333333333333333333333333333333333333333",
-      value: executionFee,
-    },
+    execution: { value: executionFee },
     nativeAmount: executionFee,
-    portal: "0x4444444444444444444444444444444444444444",
+    portal,
     sourcePortal: "0x5555555555555555555555555555555555555555",
     deadline: 2_000_000_000n,
     // Callbacks capture nothing: explicitly supply every external scalar.

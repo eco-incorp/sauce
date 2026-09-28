@@ -6,7 +6,7 @@ import { decodeFunctionData, type Hex } from "viem";
 
 import { v12Pot } from "../src/evm/engine.js";
 import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
-import { PORTAL_ABI } from "../src/routes/portal.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
@@ -48,7 +48,7 @@ function childWithReward(destination: string, source = "base", deadline = 2000n)
 function decodeCallKinds(calls: readonly { data: Hex }[]): readonly string[] {
   return calls.map((c) => {
     try {
-      return decodeFunctionData({ abi: PORTAL_ABI, data: c.data }).functionName;
+      return decodeFunctionData({ abi: PortalABI, data: c.data }).functionName;
     } catch {
       // fall through
     }

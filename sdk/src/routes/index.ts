@@ -115,8 +115,10 @@ export {
 } from "./token-registry.js";
 export type { TokenRegistryRow } from "./token-registry.js";
 export { openRoute } from "./intent-dsl.js";
+export { destinationPot } from "./intent-pot.js";
 export type {
   BuiltIntent,
+  IntentEvmExecution,
   IntentOptions,
   NestChildOrThunk,
   NestOptions,
@@ -134,8 +136,6 @@ export {
   isIntentFundedCall,
   publishAndFundTx,
   publishTx,
-  PORTAL_ABI,
-  PORTAL_CONTRACTS,
 } from "./portal.js";
 export type { PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
 

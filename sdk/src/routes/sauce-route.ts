@@ -21,13 +21,26 @@ import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs } from "./rs-compile.js";
-import { PORTAL_CONTRACTS } from "./portal.js";
 import { rewriteTokenFactory, rewriteTokenMembers } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
+import { pascalOfSlug } from "./accessors.js";
+import { encodeCompactArguments } from "../compact-arguments.js";
+import { v12KitchenAddress } from "../deployments/index.js";
+import { denormalizeToEvm } from "./encode.js";
+import { toUniversalAddress } from "./normalize.js";
+import { childCaptureSentinel, type CompiledChild } from "./intent-sugar.js";
+import { resolveIntentPot } from "./intent-pot.js";
+import { CANONICAL_CHAINS } from "../chains/canonical.js";
+import {
+  ecoRoutesPortal,
+  ecoRoutesProver,
+  type EcoRoutesSelector,
+} from "../protocols/eco-routes/lookup.js";
+import { rewriteIntentSugar, type IntentSugarDefaults } from "./intent-sugar.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
-import type { AddressInput, CallInput } from "./types.js";
+import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
   /** Defaults by destination `ChainKind`: `'v12'` for evm, `'svm'` for svm. */
@@ -62,6 +75,19 @@ export interface SauceCompileOptions {
    * always loses to user code — a name the module declares, imports or binds wins silently.
    */
   ambient?: string[];
+  /**
+   * Settings for `Chain(() => { ... }).reward({ ... })` written inside the program — creating an
+   * intent from a program, rather than compiling a program into one. Everything the SDK can look up
+   * it looks up; these are the fields it cannot, plus overrides. See `intent-sugar.ts`.
+   *
+   * Omitted entirely, the sugar still lowers if the source uses it — `deadline` and `creator` have
+   * no safe defaults and are reported by name when missing.
+   */
+  intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
+  /** Compile for compact-v1 entry arguments. Set by the intent lowering for a child program whose
+   *  captured values arrive at run time; a caller wanting entry arguments generally uses the raw
+   *  compiler. */
+  compactArgs?: boolean;
 }
 
 export interface SauceEvmExecutionInput {
@@ -101,6 +127,111 @@ export function wrapSauceBody(sauce: string): string {
   return `function main() {\n${sauce}\n}`;
 }
 
+/** Accessor name -> chain, for every canonical chain. `Base(() => ...)` in a program opens an
+ *  intent for exactly the chains `import { Base }` gives a caller, so the two cannot diverge. */
+let chainAccessorCache: ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> | undefined;
+function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> {
+  chainAccessorCache ??= new Map(
+    CANONICAL_CHAINS.map((chain) => [pascalOfSlug(chain.slug), chain]),
+  );
+  return chainAccessorCache;
+}
+
+/** Every name the program can read as a compile-time scalar: the chain's token symbols and the
+ *  caller's own defines, with the caller winning — the same precedence the compiler applies. */
+function compileTimeValues(
+  chain: ChainRefResolved,
+  options: SauceCompileOptions,
+): ReadonlyMap<string, bigint> {
+  const values = new Map<string, bigint>();
+  for (const [symbol, address] of resolveTokenMap(chain, options.tokens)) {
+    values.set(symbol, address);
+  }
+  for (const [name, value] of Object.entries(options.defines ?? {})) {
+    if (typeof value === "bigint") values.set(name, value);
+    else if (typeof value === "number") values.set(name, BigInt(Math.trunc(value)));
+    else values.set(name, value ? 1n : 0n);
+  }
+  return values;
+}
+
+type ChainRefResolved = ReturnType<typeof requireChain>;
+
+/**
+ * Compiles a closure body as a program for its own destination chain, and wraps it in the `cook`
+ * the child's route will call.
+ *
+ * RE-ENTERS `compileSauceRoute`, which is what makes this general rather than a special case: the
+ * child gets that chain's token and protocol rewrites, and the intent lowering runs again inside
+ * it, so an intent opened within an intent is lowered by the same code at every depth.
+ *
+ * Captured values arrive as compact-v1 entry arguments at a DECLARED width. Minimal encoding would
+ * move the payload's length with the values, leaving nothing at a fixed offset to splice; a
+ * declared width keeps exactly one encoding per value and a constant length, which is the property
+ * `compact-arguments.ts`'s `scalarWidth` exists for.
+ */
+function compileIntentChild(
+  destination: ChainRefResolved,
+  childSource: string,
+  captures: readonly string[],
+  destinationPortal: AddressInput,
+  options: SauceCompileOptions,
+): CompiledChild {
+  const intents = options.intents ?? {};
+  // DERIVED, not asked for. A Pot is CREATE2 from the Kitchen over its owner and a salt; the owner a
+  // route call must cook as is the Executor of the Portal this child's route RECORDS, itself that
+  // Portal's second CREATE. Both ends are already in the SDK, so this needs no chain read and no
+  // caller input -- `intents.pot` remains as an override for a Pot the caller owns instead. Derived
+  // is not deployed: the Pot must exist before the child is fulfilled (`intent-pot.ts`).
+  const { pot, engine } = resolveIntentPot(destinationPortal, intents);
+  if (intents.executionFee === undefined) {
+    throw new Error(
+      `intent sugar: the intent on ${destination.slug} runs a program, so its cook must pay that ` +
+        `chain's Kitchen fee — set \`intents.executionFee\`. This one is NOT derivable: the fee is ` +
+        `mutable on-chain and lives on the destination, which the source chain cannot read while it ` +
+        `executes. Read it before building with \`destinationExecutionFee()\` from ` +
+        `\`@eco-incorp/sauce\`, or \`Kitchen.executionFee()\` at ${v12KitchenAddress()}.`,
+    );
+  }
+  const compiled = compileSauceRoute(
+    destination,
+    childSource,
+    { pot, engine, value: intents.executionFee },
+    { ...options, compactArgs: captures.length > 0 },
+  );
+
+  let program: Hex = bytesToHex(compiled.compiled.bytecode[0]!);
+  const captureSentinels: bigint[] = [];
+  if (captures.length > 0) {
+    const schema = compiled.compiled.entrySchema;
+    if (schema === undefined) {
+      throw new Error(
+        "intent sugar: the child program takes captured values but the compiler returned no entry " +
+          "schema — its arguments cannot be encoded.",
+      );
+    }
+    captures.forEach((_, index) => captureSentinels.push(childCaptureSentinel(index)));
+    const args = encodeCompactArguments(schema, captureSentinels, { scalarWidth: 32 });
+    program = `${program}${bytesToHex(args).slice(2)}` as Hex;
+  }
+
+  const call = buildSauceEvmCall({
+    pot,
+    engine,
+    program,
+    value: intents.executionFee,
+  });
+
+  return {
+    call: {
+      target: denormalizeToEvm(toUniversalAddress(call.target)) as Hex,
+      data: call.data,
+      value: intents.executionFee,
+    },
+    captureSentinels,
+  };
+}
+
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
 }
@@ -138,11 +269,24 @@ export function compileSauceRoute(
   const tokenMap = resolveTokenMap(chain, options.tokens);
 
   let source = wrapSauceBody(sauce);
+
+  // The intent sugar runs FIRST, on the source as written. It reads `USDC` and `RECIPIENT` as
+  // compile-time values itself, so a token rewrite that had already turned `USDC.transfer(...)`
+  // into `IERC20.at(...).transfer(...)` would leave it nothing it recognises. What it leaves behind
+  // is ordinary `evm.call` statements, which every later pass is free to walk over.
+  const sugar = rewriteIntentSugar(source, {
+    source: chain,
+    chains: chainAccessorNames(),
+    definesFor: (destination) => compileTimeValues(destination, options),
+    portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
+    proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
+    defaults: options.intents ?? {},
+    compileChild: (destination, childSource, captures, destinationPortal) =>
+      compileIntentChild(destination, childSource, captures, destinationPortal, options),
+  });
+  source = sugar.source;
   let baseDirs = options.baseDirs;
-  // The Portal binding is layered UNDERNEATH the caller's own contracts, so `IPortal.at(...)` is
-  // callable from a hand-written body with no import and no setup, and a caller who supplies their
-  // own `IPortal` still wins. An offered-but-unused ABI emits nothing.
-  let contracts: ContractsConfig | undefined = { ...PORTAL_CONTRACTS, ...options.contracts };
+  let contracts: ContractsConfig | undefined = options.contracts;
   // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
   // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare
   // `IERC20.at(USDC)` (the symbol, not a literal) with no `USDC` define at all. Idempotent with
@@ -195,8 +339,6 @@ export function compileSauceRoute(
       typeof options.accessors === "object" ? options.accessors : {};
     const rewrittenAccessors = rewriteProtocolAccessors(source, chain, {
       ...accessorOpts,
-      // The merged set, not just the caller's: a synthesized binding that collides with `IPortal`
-      // must be reported rather than silently shadowing it.
       existingContracts: contracts,
     });
     if (rewrittenAccessors.rewrote) {
@@ -218,6 +360,7 @@ export function compileSauceRoute(
     defines,
     contracts,
     ambient: options.ambient,
+    compactArgs: options.compactArgs,
   });
 
   if (compiled.bytecode.length === 0) {
