@@ -61,8 +61,8 @@ minors would start failing CI on a PR that changed nothing.
 positive: `main` is the entry point the Sauce compiler calls, so `no-unused-vars` fires on every
 program, and `require(cond)` is SauceScript's ASSERTION, which `no-require-imports` reads as a
 module import. Prettier's list is different and narrower — generated output (`**/*.generated.ts`,
-the two `settle.sauce.ts` recipes), captured fixtures, and `sdk/src/std` (see the byte-identity
-note below). Everything else, SauceScript included, is formatted.
+the two `settle.sauce.ts` recipes), captured fixtures, and `sdk/src/std` (formatted in the next
+commit). Everything else, SauceScript included, is formatted.
 
 Per-workspace (`--filter`):
 
@@ -243,20 +243,25 @@ to build first, but the suites that import `./artifacts/*.json` need `sync-engin
 run (see the Foundry gotcha above).
 
 `src/std/` is the SauceScript **standard library** — source shipped for the compiler to consume, not
-TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), a
-**byte-identical copy** of the engine (`v12`) repo's conformance fixture
-(`compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token/`), kept identical on purpose so
-drift between the two repos shows up as a diff rather than as silently divergent behavior — **do not
-edit it here; change it in sauce and re-copy.** Nothing here enforces that: no release ships that
-fixture, so there is nothing on disk to compare against. The check is manual —
-`diff -r sdk/src/std/token <v12>/compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token`
-against a local checkout. **The formatter is kept off this path for the same reason** — `sdk/src/std`
-is in `.prettierignore`, because a reformat here breaks the invariant silently and permanently
-(a repo-wide `prettier --write` split three signatures in `token.svm.js` and that manual `diff -r`
-then reported a difference forever). Formatting it means landing the same change in `v12` first and
-re-copying. What CI _does_ pin is the SPL Token program id the SVM arm guards on:
-`test/std/token/compile.test.ts` derives it from the canonical base58 address and counts it in the
-emitted bytecode, so a wrong digit or a deleted `require` fails there. It has two per-target arms (`token.evm.js`, `token.svm.js`) and
+TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), and
+**the SDK owns it**: this directory is the source of truth, edited here like any other source. The
+engine (`v12`) repo has a package of the same name under its compiler's test fixtures, but that is
+v12's own INTEGRATION fixture — independent, not kept in sync, and not a reference for this one. Do
+not port changes from it or treat a difference between the two as drift. It used to be the other
+way round (this was a byte-identical copy, left unformatted to stay one); it no longer is.
+
+The EVM arm's writes are OpenZeppelin `SafeERC20`: a raw `evm.call`, then empty returndata accepted
+only from an address with code and anything else decoded as a word that must equal 1, with `approve`
+as `forceApprove` (read the allowance, reset a non-zero one first). `src/token/safe.ts` emits the
+same semantics INLINE into routes, deliberately not as calls into this library: the settle recipe
+is compiled by partners whose resolver serves only `./artifacts/IERC20.json`. What keeps the two
+spellings on one behaviour is `test/std/token/evm.e2e.test.ts`, which runs OpenZeppelin's own
+`SafeERC20`, this library and `safe.ts` over one matrix of tokens (false, empty, no code, a word of
+2, 1/31/64-byte returns, USDT's standing allowance, honest refusals) and requires identical outcomes.
+CI also pins what a wrong digit would break silently: `test/std/token/compile.test.ts` derives the
+SPL Token program id the SVM arm guards on from its base58 address, and each selector the EVM writes
+spell out by hand from `keccak256` of its signature, and counts them in the emitted bytecode. It has
+two per-target arms (`token.evm.js`, `token.svm.js`) and
 **deliberately no neutral `token.js`**: a token program is inherently target-specific, and a neutral
 file would turn a missing arm into a confusing missing-EXPORT error instead of a clear failure to
 import the package (`package.json`'s `main` names the neutral BASE the compiler suffixes per target).
@@ -268,7 +273,7 @@ needed) plus `svm.e2e.test.ts`/`evm.e2e.test.ts`, which EXECUTE the compiled byt
 accounts and a real deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_V12_RUNTIME_CREATION_HEX` above for why
 those two are gated. `src/std/token` now **ships**: `copy-verify-assets.mjs` copies it into
 `dist/std/token` (and `dist/` is in the package `files` list), because the route path resolves
-`@sauce/token` to this vendored copy — see the next paragraph.
+`@sauce/token` to the SDK's own copy — see the next paragraph.
 
 `@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
 list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its

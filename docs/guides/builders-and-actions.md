@@ -28,10 +28,12 @@ export function compileTokenTransfer(
 Every token WRITE these builders emit — and every one the SDK emits anywhere — carries OpenZeppelin
 `SafeERC20` semantics. The call goes out as raw calldata, so nothing decodes a `bool` a token like
 USDT never returns, and the result is then checked: empty returndata is accepted only from an
-address that has code, and anything else must be exactly `true`. A token that returns `false`
-reverts rather than passing silently, and so does a write to an address with no code. `approve` adds
-`forceApprove`'s reset — it reads the current allowance and zeroes it first when it is non-zero,
-which USDT requires and a shared Pot makes likely.
+address that has code, and anything else must decode as an ABI word equal to `1`. A token that
+returns `false` reverts rather than passing silently, and so do a write to an address with no code
+and a return shorter than one ABI word. `approve` adds `forceApprove`'s reset — it reads the current
+allowance and zeroes it first when it is non-zero, which USDT requires and a shared Pot makes
+likely. The `@sauce/token` functions a program calls directly (`transfer`, `transferFrom`,
+`approve`) behave the same way.
 
 The visible consequence is that a literal amount is encoded into the calldata rather than appearing
 as a decimal in the emitted source.
