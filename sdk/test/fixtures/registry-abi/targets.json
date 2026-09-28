@@ -230,7 +230,6 @@
         "roles": ["routerNG"]
       },
       "CurveStableSwapABI": {
-        "roles": ["threePool"],
         "instances": [
           {
             "chainId": 1,
@@ -244,23 +243,13 @@
           }
         ],
         "exempt": {
-          "exchange(int128,int128,uint256,uint256)": {
-            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "3pool predates StableSwap-NG: same selector, but it returns nothing, so the NG ABI's uint256 output would revert on it"
-          },
-          "remove_liquidity_one_coin(uint256,int128,uint256)": {
-            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "3pool predates StableSwap-NG: same selector, but it returns nothing"
-          },
-          "add_liquidity(uint256[],uint256)": {
-            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "3pool takes a fixed uint256[3]; dynamic arrays are StableSwap-NG only"
-          },
-          "remove_liquidity(uint256,uint256[])": {
-            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "3pool takes a fixed uint256[3]; dynamic arrays are StableSwap-NG only"
-          },
           "exchange_underlying(int128,int128,uint256,uint256)": {
-            "1:0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7": "a plain pool: exchange_underlying exists on metapools only",
             "1:0x36dfe783603522566c046ba1fa403c8c6f569220": "a plain pool: exchange_underlying exists on metapools only"
           }
         }
+      },
+      "CurveThreePoolABI": {
+        "roles": ["threePool"]
       }
     },
     "debridge": {
@@ -421,11 +410,11 @@
       },
       "UniProxyABI": {
         "roles": ["uniProxy"],
-        "exempt": {
-          "deposit(uint256,uint256,address,address,uint256[4])": {
-            "1:0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599": "an older UniProxy whose deposit has no minIn argument (deposit(uint256,uint256,address,address)); the ABI follows the current UniProxy, as on Polygon"
-          }
-        }
+        "chains": [137]
+      },
+      "UniProxyLegacyABI": {
+        "roles": ["uniProxy"],
+        "chains": [1]
       }
     },
     "gelato": {

@@ -94,7 +94,7 @@ function main(poolAddress: Address, amount: Uint256, minAmounts: Uint256[]): Uin
 
 ### CurveStableSwapABI
 
-The StableSwap-NG pool interface. Legacy pools such as 3pool share the selectors of `exchange`, `get_dy`, `remove_liquidity_one_coin` and `get_virtual_price`, but their `exchange` and `remove_liquidity_one_coin` return nothing (so the declared `uint256` output reverts on them) and their liquidity functions take fixed-size arrays (`uint256[3]`). Read legacy pools with `get_dy`/`get_virtual_price` only.
+The StableSwap-NG pool interface (plain and meta pools). Classic pools such as 3pool have their own shape: see `CurveThreePoolABI` below.
 
 - `exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) -> uint256` - Swap between two tokens in the pool by index
 - `exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) -> uint256` - Swap between underlying tokens (metapools only)
@@ -103,6 +103,17 @@ The StableSwap-NG pool interface. Legacy pools such as 3pool share the selectors
 - `remove_liquidity_one_coin(uint256 _token_amount, int128 i, uint256 min_amount) -> uint256` - Burn LP tokens and withdraw as a single token
 - `get_dy(int128 i, int128 j, uint256 dx) -> uint256` - Quote: estimate output for a given input (view)
 - `get_virtual_price() -> uint256` - Get the virtual price of the LP token (view, useful for pricing)
+
+### CurveThreePoolABI
+
+3pool (`threePool` in the addresses), a classic StableSwap pool. Its liquidity arrays are fixed-size, and its state-changing functions return nothing: read amounts as balance changes.
+
+- `exchange(int128 i, int128 j, uint256 dx, uint256 min_dy)` - Swap between two of DAI(0), USDC(1), USDT(2)
+- `add_liquidity(uint256[3] amounts, uint256 min_mint_amount)` - Deposit tokens and receive 3CRV
+- `remove_liquidity(uint256 _amount, uint256[3] min_amounts)` - Burn 3CRV and withdraw all three tokens proportionally
+- `remove_liquidity_one_coin(uint256 _token_amount, int128 i, uint256 min_amount)` - Burn 3CRV and withdraw one token
+- `get_dy(int128 i, int128 j, uint256 dx) -> uint256` - Quote (view)
+- `get_virtual_price() -> uint256` - Virtual price of 3CRV (view)
 
 ### CurveRouterNGABI
 
