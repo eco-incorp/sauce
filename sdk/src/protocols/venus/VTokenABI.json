@@ -88,7 +88,7 @@
     {
       "name": "balanceOfUnderlying",
       "type": "function",
-      "stateMutability": "view",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
           "name": "owner",

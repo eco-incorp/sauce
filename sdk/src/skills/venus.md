@@ -84,7 +84,7 @@ function main(vTokenAddress: Address, amount: Uint256): Uint256 {
 - `redeemUnderlying(uint256 redeemAmount) returns (uint256)` - Redeem exact underlying amount
 - `borrow(uint256 borrowAmount) returns (uint256)` - Borrow underlying
 - `repayBorrow(uint256 repayAmount) returns (uint256)` - Repay borrow debt
-- `balanceOfUnderlying(address owner) returns (uint256)` - Get underlying balance including accrued interest (view)
+- `balanceOfUnderlying(address owner) returns (uint256)` - Get underlying balance including accrued interest. Not a view: it accrues interest first, so it cannot be STATICCALLed
 
 ### VenusComptrollerABI
 

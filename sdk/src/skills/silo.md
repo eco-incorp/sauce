@@ -36,7 +36,8 @@ import { SiloABI as ISilo } from "./abis";
 
 function main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {
   const silo = ISilo.at(siloAddress);
-  return silo.withdraw(asset, amount, false);
+  const result = silo.withdraw(asset, amount, false);
+  return result.withdrawnAmount;
 }
 ```
 
@@ -80,14 +81,14 @@ function main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {
 | Chain    | Contract       | Address                                      |
 | -------- | -------------- | -------------------------------------------- |
 | Ethereum | siloRepository | `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49` |
-| Arbitrum | siloRepository | `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49` |
+| Arbitrum | siloRepository | `0x8658047e48CC09161f4152c79155Dac1d710Ff0a` |
 
 ## ABI Reference
 
 ### SiloABI
 
 - `deposit(address asset, uint256 amount, bool collateralOnly) returns (uint256 collateralAmount, uint256 collateralShare)` - Deposit asset into Silo
-- `withdraw(address asset, uint256 amount, bool collateralOnly) returns (uint256 withdrawnAmount)` - Withdraw deposited asset
+- `withdraw(address asset, uint256 amount, bool collateralOnly) returns (uint256 withdrawnAmount, uint256 withdrawnShare)` - Withdraw deposited asset
 - `borrow(address asset, uint256 amount) returns (uint256 debtAmount, uint256 debtShare)` - Borrow asset against collateral
 - `repay(address asset, uint256 amount) returns (uint256 repaidAmount, uint256 repaidShare)` - Repay borrowed debt
 
