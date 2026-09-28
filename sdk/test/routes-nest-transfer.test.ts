@@ -128,7 +128,7 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     expect(stmts[2]).toBe(`const n0_amt0 = n0_bal0 > 500n ? 500n : n0_bal0;`);
     // The transfer is a raw `evm.call` with no declared output -- the vendored IERC20 declares a
     // `bool` the compiler decodes even when discarded, which reverts on a no-return token (USDT).
-    // See `token/unchecked.ts`. The calldata const is hoisted out of the zero-guard.
+    // The calldata const is hoisted out of the zero-guard.
     expect(stmts[3]).toBe("const n0_0_tr0 = hex`a9059cbb`;");
     // The call AND its SafeERC20 check sit inside the zero guard -- checking a call that never ran
     // would read a stale result. See `token/safe.ts`.

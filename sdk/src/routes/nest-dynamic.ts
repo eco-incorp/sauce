@@ -335,11 +335,12 @@ export function dynamicChildStatements(
   // token -- has no single correct allowance to emit without runtime max arithmetic, and is
   // rejected rather than guessed at.
   //
-  // Issued as a raw `evm.call` with no declared output (`token/unchecked.ts`), NOT as
-  // `IERC20.at(t).approve(...)`. The vendored IERC20 declares a `bool` return, the compiler lowers
-  // that to call-then-decode even though nothing reads it, and decoding from empty returndata
-  // reverts on this engine -- so a USDT reward used to revert the entire parent fulfilment. A token
-  // that genuinely refuses the approve still does, because `evm.call` propagates its revert.
+  // Issued through `token/safe.ts`, NOT as `IERC20.at(t).approve(...)`. The vendored IERC20
+  // declares a `bool` return, the compiler lowers that to call-then-decode even though nothing
+  // reads it, and decoding from empty returndata reverts on this engine -- so a USDT reward used to
+  // revert the entire parent fulfilment. The raw call avoids that decode and the emitted SafeERC20
+  // check then judges the result itself. A token that genuinely refuses the approve still reverts,
+  // because `evm.call` propagates it.
   if ((opts.approve ?? "auto") === "auto") {
     const byToken = new Map<string, { literal: string; amounts: bigint[] }>();
     for (const t of child.reward.tokens) {
