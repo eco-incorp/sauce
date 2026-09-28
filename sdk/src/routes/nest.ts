@@ -26,6 +26,7 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { formatAddressField, formatBigint } from "../deposit/format.js";
 import { toAddressBigint } from "../token/params.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
+import { uncheckedTransferStatements } from "../token/unchecked.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { denormalizeToEvm, hashIntent } from "./encode.js";
 import { approvalTxs, intentVaultAddressCall, publishAndFundTx, type PortalTx } from "./portal.js";
@@ -366,9 +367,21 @@ export function nestedTransferStatements(
     if (clamp) {
       stmts.push(`const ${amtVar} = ${balVar} > ${capLit} ? ${capLit} : ${balVar};`);
     }
-    stmts.push(
-      `if (${amtExpr} > 0n) { IERC20.at(${tokenLit}).transfer(${vaultVar}, ${amtExpr}); }`,
+    // The transfer is a raw `evm.call` with no declared output, not `IERC20.at(t).transfer(...)`:
+    // the vendored IERC20 declares a `bool` return, the compiler lowers that to call-then-DECODE
+    // even though nothing reads it, and decoding from empty returndata reverts on this engine. A
+    // no-return token (USDT) therefore used to revert the whole parent fulfilment from the DEFAULT
+    // nesting mode. `balanceOf` above keeps its binding -- a `uint256` return is always there. See
+    // `token/unchecked.ts`; a transfer the token itself refuses still reverts.
+    const transferStmts = uncheckedTransferStatements(
+      `n${index}_${i}_`,
+      tokenLit,
+      { local: vaultVar },
+      { local: amtExpr },
     );
+    // The calldata consts are hoisted out of the zero-guard; only the call belongs inside it.
+    stmts.push(...transferStmts.slice(0, -1));
+    stmts.push(`if (${amtExpr} > 0n) { ${transferStmts.at(-1)!} }`);
   });
 
   if (willTransferNative) {

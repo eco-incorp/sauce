@@ -67,6 +67,7 @@ import {
   type DynamicChildOptions,
 } from "../src/routes/nest-dynamic.js";
 import { decodeAbiParameters } from "viem";
+import { nestedTransferProgram } from "../src/routes/nest.js";
 import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
 import { scaleAmount, WAD } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
@@ -90,6 +91,12 @@ const PORTAL_FIXTURE = JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.j
 };
 const MOCK_ERC20 = JSON.parse(
   readFileSync(join(HERE, "std/token/fixtures/MockERC20.json"), "utf8"),
+) as { creationCode: Hex };
+/** USDT's shape: `transfer`/`approve`/`transferFrom` return NOTHING, and `approve` refuses to move a
+ *  nonzero allowance to another nonzero value. Byte-identical to the fixture on
+ *  `fix/settle-no-return-token`, deliberately, so the two add/add cleanly when that lands. */
+const NO_RETURN_ERC20 = JSON.parse(
+  readFileSync(join(HERE, "std/token/fixtures/NoReturnERC20.json"), "utf8"),
 ) as { creationCode: Hex };
 
 const DEPLOYER = privateKeyToAccount(
@@ -215,6 +222,8 @@ let rewardToken: Address;
 let tokenB: Address;
 let tokenC: Address;
 let deliveredToken: Address;
+/** A reward token that returns nothing from `approve`/`transfer`. */
+let usdt: Address;
 
 const waitForRpc = (deadline: number): Promise<void> =>
   Date.now() >= deadline
@@ -269,6 +278,11 @@ const cookCall = (source: string, baseDirs: readonly string[] = []) => ({
   ),
   value: 0n,
 });
+
+/** `approve(spender, amount)` calldata as the SauceScript `hex` literal a probe program can send
+ *  through `evm.call` -- the same output-free shape the emitters under test produce. */
+const approveLiteral = (spender: Address, amount: bigint): string =>
+  `hex\`${encodeFunctionData({ abi: erc20ApproveAbi, functionName: "approve", args: [spender, amount] }).slice(2)}\``;
 
 /** A `route.calls` entry that mints 1 wei of the marker token — an unmistakable, readable state
  *  change, used to tell "this call ran" from "this call was rolled back". */
@@ -422,6 +436,12 @@ const startEvm = async (): Promise<ChildProcess> => {
   tokenB = await deploy(MOCK_ERC20.creationCode);
   tokenC = await deploy(MOCK_ERC20.creationCode);
   deliveredToken = await deploy(MOCK_ERC20.creationCode);
+  usdt = await deploy(
+    `${NO_RETURN_ERC20.creationCode}${encodeAbiParameters(
+      [{ type: "string" }, { type: "string" }, { type: "uint8" }],
+      ["Tether USD", "USDT", 6],
+    ).slice(2)}` as Hex,
+  );
 
   return anvil;
 };
@@ -479,7 +499,7 @@ const childOptions = (overrides: Partial<DynamicChildOptions> = {}): DynamicChil
   ...overrides,
 });
 
-describeEvm("a dynamic child intent, executed", () => {
+describeEvm("route nesting, executed", () => {
   let anvil: ChildProcess;
 
   beforeAll(async () => {
@@ -821,6 +841,198 @@ describeEvm("a dynamic child intent, executed", () => {
       const { status } = await fulfil([cookCall(program.source, program.baseDirs)]);
 
       expect(status).toBe("reverted");
+    }, 120_000);
+  });
+
+  describe("a token whose approve/transfer returns nothing (USDT)", () => {
+    // The hazard this exists for: compiler 2.3.0 lowers a declared `bool` output to call-then-DECODE
+    // even when nothing reads it, and decoding from empty returndata reverts on this engine. USDT
+    // returns nothing. Both nesting paths used to move tokens through `IERC20`, whose `approve` and
+    // `transfer` declare `bool`, so a USDT reward reverted the entire parent fulfilment. Established
+    // by execution on `fix/settle-no-return-token` for the settle sweep; these are the route-layer
+    // cases. A mintable standard ERC20 cannot catch it, which is why the earlier tests did not.
+    const USDT_MEASURED = 5_000_000n;
+
+    it("DYNAMIC: publishes and funds a child whose reward token returns nothing", async () => {
+      await mintTo(usdt, executorPot, USDT_MEASURED);
+
+      const child = (inn: bigint, out: bigint): Intent => ({
+        destination: BigInt(CHAIN_ID),
+        sourceChainId: BigInt(CHAIN_ID),
+        route: normalizeRoute({
+          salt: `0x${"d7".repeat(32)}` as Hex,
+          deadline: 4_000_000_000n,
+          portal,
+          tokens: [{ token: deliveredToken, amount: out }],
+          calls: [],
+        }),
+        reward: normalizeReward({
+          deadline: 4_000_000_000n,
+          creator: CREATOR,
+          prover: PROVER,
+          tokens: [{ token: usdt, amount: inn }],
+        }),
+      });
+      const opts: DynamicChildOptions = {
+        portal,
+        measure: { kind: "erc20Balance", token: usdt },
+        scale: WAD,
+        placeholders: [
+          { value: AMOUNT_IN_PLACEHOLDER, source: "amountIn", occurrences: 1 },
+          { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut", occurrences: 1 },
+        ],
+      };
+      const program = dynamicChildProgram([
+        { child: child(AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER), opts },
+      ]);
+
+      const { status } = await fulfil([cookCall(program.source, program.baseDirs)]);
+      expect(status).toBe("success");
+
+      const concrete = child(USDT_MEASURED, USDT_MEASURED);
+      expect(
+        await publicClient.readContract({
+          abi: portalAbi,
+          address: portal,
+          functionName: "getRewardStatus",
+          args: [hashIntent(concrete).intentHash],
+        }),
+      ).toBe(1);
+      expect(await balanceOf(usdt, executorPot)).toBe(0n);
+    }, 120_000);
+
+    it("DYNAMIC: a token that REFUSES the approve still reverts the whole fulfilment", async () => {
+      // Skipping the bool decode must not turn a real failure into a silent success. This fixture
+      // refuses a nonzero -> nonzero allowance change, exactly as USDT does, so the first route call
+      // leaves an allowance the child's own approve cannot overwrite.
+      await mintTo(usdt, executorPot, USDT_MEASURED);
+      const marker = "0x0000000000000000000000000000000000000d01" as Address;
+
+      const child = (inn: bigint): Intent => ({
+        destination: BigInt(CHAIN_ID),
+        sourceChainId: BigInt(CHAIN_ID),
+        route: normalizeRoute({
+          salt: `0x${"d8".repeat(32)}` as Hex,
+          deadline: 4_000_000_000n,
+          portal,
+          tokens: [{ token: deliveredToken, amount: AMOUNT_OUT_PLACEHOLDER }],
+          calls: [],
+        }),
+        reward: normalizeReward({
+          deadline: 4_000_000_000n,
+          creator: CREATOR,
+          prover: PROVER,
+          tokens: [{ token: usdt, amount: inn }],
+        }),
+      });
+      const opts: DynamicChildOptions = {
+        portal,
+        measure: { kind: "erc20Balance", token: usdt },
+        scale: WAD,
+        placeholders: [
+          { value: AMOUNT_IN_PLACEHOLDER, source: "amountIn", occurrences: 1 },
+          { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut", occurrences: 1 },
+        ],
+      };
+      const program = dynamicChildProgram([{ child: child(AMOUNT_IN_PLACEHOLDER), opts }]);
+
+      const { status } = await fulfil([
+        // The Pot itself pre-approves 1 wei to the Portal, so the child's own approve is a
+        // nonzero -> nonzero change the token rejects.
+        cookCall(`evm.call(${BigInt(usdt)}n, 0n, ${approveLiteral(portal, 1n)});`),
+        markerCall(marker),
+        cookCall(program.source, program.baseDirs),
+      ]);
+
+      expect(status).toBe("reverted");
+      expect(await balanceOf(markerToken, marker)).toBe(0n);
+    }, 120_000);
+
+    it("TRANSFER MODE: moves a no-return token to the child's vault", async () => {
+      // `nest.ts`'s default nesting mode, not the dynamic one -- the same bool-decode hazard reached
+      // it through `IERC20.transfer`, so a plain static cascade rewarded in USDT failed too.
+      await mintTo(usdt, executorPot, USDT_MEASURED);
+      const vault = "0x0000000000000000000000000000000000000e01" as Address;
+      // Read rather than assumed: earlier cases in this file leave the Pot with a balance, and
+      // `clamp: false` moves whatever is there.
+      const held = await balanceOf(usdt, executorPot);
+      expect(held).toBeGreaterThanOrEqual(USDT_MEASURED);
+
+      const staticChild: Intent = {
+        destination: BigInt(CHAIN_ID),
+        sourceChainId: BigInt(CHAIN_ID),
+        route: normalizeRoute({
+          salt: `0x${"d9".repeat(32)}` as Hex,
+          deadline: 4_000_000_000n,
+          portal,
+          calls: [],
+        }),
+        reward: normalizeReward({
+          deadline: 4_000_000_000n,
+          creator: CREATOR,
+          prover: PROVER,
+          tokens: [{ token: usdt, amount: USDT_MEASURED }],
+        }),
+      };
+      const program = nestedTransferProgram([
+        {
+          child: staticChild,
+          opts: { vaultResolution: { mode: "explicit", vault }, clamp: false },
+        },
+      ]);
+
+      const { status } = await fulfil([cookCall(program.source, program.baseDirs)]);
+
+      expect(status).toBe("success");
+      expect(await balanceOf(usdt, vault)).toBe(held);
+      expect(await balanceOf(usdt, executorPot)).toBe(0n);
+    }, 120_000);
+
+    it("TRANSFER MODE: a transfer the token refuses still reverts the whole fulfilment", async () => {
+      // Skipping the decode must not turn a real failure into a silent success. Neither clamp mode
+      // can ask a token for more than the Pot holds, so the refusal is the RECIPIENT: OpenZeppelin's
+      // ERC20 rejects a transfer to the zero address, which is the same control shape
+      // `fix/settle-no-return-token` uses for the settle sweep. The lowering is token-agnostic, so
+      // this establishes revert propagation for the transfer emitter itself.
+      const marker = "0x0000000000000000000000000000000000000e03" as Address;
+      await mintTo(rewardToken, executorPot, 1_000n);
+
+      const staticChild: Intent = {
+        destination: BigInt(CHAIN_ID),
+        sourceChainId: BigInt(CHAIN_ID),
+        route: normalizeRoute({
+          salt: `0x${"da".repeat(32)}` as Hex,
+          deadline: 4_000_000_000n,
+          portal,
+          calls: [],
+        }),
+        reward: normalizeReward({
+          deadline: 4_000_000_000n,
+          creator: CREATOR,
+          prover: PROVER,
+          tokens: [{ token: rewardToken, amount: 1_000n }],
+        }),
+      };
+      const program = nestedTransferProgram([
+        {
+          child: staticChild,
+          opts: {
+            vaultResolution: {
+              mode: "explicit",
+              vault: "0x0000000000000000000000000000000000000000",
+            },
+            clamp: false,
+          },
+        },
+      ]);
+
+      const { status } = await fulfil([
+        markerCall(marker),
+        cookCall(program.source, program.baseDirs),
+      ]);
+
+      expect(status).toBe("reverted");
+      expect(await balanceOf(markerToken, marker)).toBe(0n);
     }, 120_000);
   });
 });

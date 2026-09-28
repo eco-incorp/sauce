@@ -207,7 +207,10 @@ describe("the emitted program", () => {
       "const d0_out = (d0_in * 990000000000000000n + 999999999999999999n) / 1000000000000000000n;",
     );
     // ... segment consts and the concat chain ...
-    expect(statements.at(-2)).toBe(`IERC20.at(${usdc}n).approve(${portal}n, d0_in);`);
+    // The approve is a raw `evm.call` with no declared output -- see `token/unchecked.ts` for the
+    // USDT revert that forced it -- so it is the calldata const plus the call, not one statement.
+    expect(statements.at(-3)).toMatch(/^const d0_0ap0 = hex`095ea7b3[0-9a-f]+`;$/);
+    expect(statements.at(-2)).toBe(`evm.call(${usdc}n, 0n, d0_0ap0.concat(d0_in.toBytesBe(32)));`);
     expect(statements.at(-1)).toBe(`evm.call(${portal}n, 0n, d0_data);`);
 
     // The approve names the SAME local the reward tuple's spliced word carries -- the allowance and
@@ -355,8 +358,15 @@ describe("fail-closed", () => {
       placeholders: [{ value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut", occurrences: 2 }],
     });
 
-    expect(stmts.at(-2)).toBe(
-      `IERC20.at(${BigInt(USDC)}n).approve(${BigInt(PARENT_PORTAL)}n, 11n);`,
+    // Fully static: one literal, nothing concatenated. The `11n` is the LARGEST leg, encoded into
+    // the calldata by viem rather than spelled as a SauceScript argument.
+    expect(stmts.at(-2)).toBe(`evm.call(${BigInt(USDC)}n, 0n, d0_0ap0);`);
+    expect(stmts.at(-3)).toBe(
+      `const d0_0ap0 = hex\`${encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [PARENT_PORTAL, 11n],
+      }).slice(2)}\`;`,
     );
   });
 

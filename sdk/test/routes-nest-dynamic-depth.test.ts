@@ -155,15 +155,37 @@ describe("payload growth with depth", () => {
 
 describe("the ceiling", () => {
   // The wall is the COMPILER's, it is named, and it arrives long after gas makes the cascade
-  // impractical — a `hex` literal is length-encoded with a u16, so one segment cannot exceed 65535
-  // bytes. Nothing truncates: the compile fails with that sentence.
-  it("fails with a named error once one segment would exceed the engine's 65535-byte encoding", () => {
-    expect(() => cascadeCookSize(42)).toThrow(
-      /array literal has \d+ elements, beyond the 65535 the engine can encode/,
-    );
-  }, 120_000);
+  // impractical: a `hex` literal is length-encoded with a u16, so one segment cannot exceed 65535
+  // bytes. DISCOVERED rather than hardcoded -- the exact depth moves with the per-level byte cost,
+  // and a number baked in here would silently become a weaker assertion after any codegen change.
+  const NAMED = /array literal has \d+ elements, beyond the 65535 the engine can encode/;
 
-  it("and the level below that ceiling still compiles", () => {
-    expect(cascadeCookSize(41)).toBeGreaterThan(60_000);
-  }, 120_000);
+  const compiles = (depth: number): boolean => {
+    try {
+      cascadeCookSize(depth);
+
+      return true;
+    } catch (error) {
+      if (!NAMED.test(String((error as Error).message))) throw error;
+
+      return false;
+    }
+  };
+
+  /** The deepest cascade that compiles, found by walking down from a depth known to fail. */
+  const maxDepth = (): number => {
+    for (let depth = 60; depth > 1; depth--) {
+      if (compiles(depth)) return depth;
+    }
+    throw new Error("no depth compiled at all");
+  };
+
+  it("has a ceiling in the tens, and one level past it fails with the engine's named error", () => {
+    const max = maxDepth();
+
+    expect(max).toBeGreaterThan(20);
+    expect(max).toBeLessThan(60);
+    expect(() => cascadeCookSize(max + 1)).toThrow(NAMED);
+    console.log(`deepest cascade that compiles: ${max} levels (${cascadeCookSize(max)}B)`);
+  }, 300_000);
 });

@@ -61,6 +61,7 @@ import { denormalizeToEvm } from "./encode.js";
 import { formatBigint } from "../deposit/format.js";
 import { toAddressBigint } from "../token/params.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
+import { uncheckedApproveStatements } from "../token/unchecked.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { publishAndFundTx } from "./portal.js";
 import {
@@ -333,6 +334,12 @@ export function dynamicChildStatements(
   // holding the rendered amount. Anything else -- a templated leg alongside another leg in the same
   // token -- has no single correct allowance to emit without runtime max arithmetic, and is
   // rejected rather than guessed at.
+  //
+  // Issued as a raw `evm.call` with no declared output (`token/unchecked.ts`), NOT as
+  // `IERC20.at(t).approve(...)`. The vendored IERC20 declares a `bool` return, the compiler lowers
+  // that to call-then-decode even though nothing reads it, and decoding from empty returndata
+  // reverts on this engine -- so a USDT reward used to revert the entire parent fulfilment. A token
+  // that genuinely refuses the approve still does, because `evm.call` propagates its revert.
   if ((opts.approve ?? "auto") === "auto") {
     const byToken = new Map<string, { literal: string; amounts: bigint[] }>();
     for (const t of child.reward.tokens) {
@@ -341,13 +348,18 @@ export function dynamicChildStatements(
       group.amounts.push(t.amount);
       byToken.set(key, group);
     }
+    const portalWord = { literal: toAddressBigint(opts.portal, "portal") } as const;
+    let approveIndex = 0;
     for (const [key, group] of byToken) {
+      const approvePrefix = `${prefix}${approveIndex++}`;
       const templated = group.amounts
         .map((a) => placeholderIndexOf(a, placeholders))
         .filter((i): i is number => i !== undefined);
       if (templated.length === 0) {
         const max = group.amounts.reduce((a, b) => (b > a ? b : a), 0n);
-        statements.push(`IERC20.at(${key}).approve(${portalLiteral}, ${formatBigint(max)});`);
+        statements.push(
+          ...uncheckedApproveStatements(approvePrefix, key, portalWord, { literal: max }),
+        );
         continue;
       }
       if (group.amounts.length !== 1) {
@@ -359,7 +371,7 @@ export function dynamicChildStatements(
         );
       }
       const local = localForPlaceholder(placeholders[templated[0]!]!, template, emitted.slotVars);
-      statements.push(`IERC20.at(${key}).approve(${portalLiteral}, ${local});`);
+      statements.push(...uncheckedApproveStatements(approvePrefix, key, portalWord, { local }));
     }
   }
 

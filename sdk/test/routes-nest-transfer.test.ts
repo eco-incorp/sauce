@@ -126,10 +126,14 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     expect(stmts[0]).toBe(`const n0_vault = ${BigInt(VAULT)}n;`);
     expect(stmts[1]).toBe(`const n0_bal0 = IERC20.at(${BigInt(TOKEN_A)}n).balanceOf(ctx.self());`);
     expect(stmts[2]).toBe(`const n0_amt0 = n0_bal0 > 500n ? 500n : n0_bal0;`);
-    expect(stmts[3]).toBe(
-      `if (n0_amt0 > 0n) { IERC20.at(${BigInt(TOKEN_A)}n).transfer(n0_vault, n0_amt0); }`,
+    // The transfer is a raw `evm.call` with no declared output -- the vendored IERC20 declares a
+    // `bool` the compiler decodes even when discarded, which reverts on a no-return token (USDT).
+    // See `token/unchecked.ts`. The calldata const is hoisted out of the zero-guard.
+    expect(stmts[3]).toBe("const n0_0_tr0 = hex`a9059cbb`;");
+    expect(stmts[4]).toBe(
+      `if (n0_amt0 > 0n) { evm.call(${BigInt(TOKEN_A)}n, 0n, n0_0_tr0.concat(n0_vault.toBytesBe(32)).concat(n0_amt0.toBytesBe(32))); }`,
     );
-    expect(stmts).toHaveLength(4);
+    expect(stmts).toHaveLength(5);
   });
 
   it("clamp:false drops the ternary and transfers the raw balance", () => {
@@ -145,7 +149,7 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
 
     expect(stmts.some((s) => s.includes("n0_amt0"))).toBe(false);
     expect(stmts[stmts.length - 1]).toBe(
-      `if (n0_bal0 > 0n) { IERC20.at(${BigInt(TOKEN_A)}n).transfer(n0_vault, n0_bal0); }`,
+      `if (n0_bal0 > 0n) { evm.call(${BigInt(TOKEN_A)}n, 0n, n0_0_tr0.concat(n0_vault.toBytesBe(32)).concat(n0_bal0.toBytesBe(32))); }`,
     );
   });
 
