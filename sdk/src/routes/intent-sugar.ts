@@ -39,7 +39,7 @@ import { encodeFunctionData, type Hex } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
-import { uncheckedApproveStatements } from "../token/unchecked.js";
+import { safeApproveStatements } from "../token/safe.js";
 import { collectDeclaredNames, walk, type AstNode } from "./ast-walk.js";
 import { denormalizeToEvm } from "./encode.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "./normalize.js";
@@ -727,8 +727,11 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
 
     const statements: string[] = [...emitted.statements];
     // One approve per distinct reward token, so the Portal can pull the escrow from this Pot.
-    // Decode-free (`token/unchecked.ts`): the ERC-20 ABI's `bool` return is decoded even when
-    // discarded, and a token like USDT returns nothing.
+    // Through `token/safe.ts`: the ERC-20 ABI's `bool` return is decoded even when discarded and a
+    // token like USDT returns nothing, so the call goes out raw and the SafeERC20 check judges the
+    // result. That helper also resets a standing allowance first -- which matters here more than
+    // anywhere, because one Pot publishes every intent on this chain and the previous one's
+    // leftover allowance is exactly what USDT refuses to overwrite.
     const portalWord = {
       literal: BigInt(denormalizeToEvm(toUniversalAddress(sourcePortal))),
     } as const;
@@ -740,7 +743,7 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       const amount =
         "literal" in t.amount ? { literal: t.amount.literal } : { local: t.amount.capture };
       statements.push(
-        ...uncheckedApproveStatements(`${prefix}${i}`, `${BigInt(t.token)}n`, portalWord, amount),
+        ...safeApproveStatements(`${prefix}${i}`, `${BigInt(t.token)}n`, portalWord, amount),
       );
     });
     statements.push(

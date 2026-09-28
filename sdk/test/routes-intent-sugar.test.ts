@@ -130,13 +130,28 @@ describe("what the lowering produces", () => {
     );
   });
 
-  it("approves the source Portal for the reward, without decoding a bool", () => {
+  it("approves the source Portal for the reward with SafeERC20 semantics", () => {
     const result = rewriteIntentSugar(TRANSFER_INTENT, context());
-    const approve = result.source.split("\n").find((line) => line.includes("095ea7b3"))!;
+    const portal = ecoRoutesPortal("base").slice(2).toLowerCase();
+    const lines = result.source.split("\n").map((line) => line.trim());
+    const approvals = lines.filter((line) => line.includes("095ea7b3"));
 
-    expect(approve).toContain(ecoRoutesPortal("base").slice(2).toLowerCase());
-    // A raw call, not `IERC20.at(t).approve(...)` -- see `token/unchecked.ts` for the USDT revert.
+    // A raw call, not `IERC20.at(t).approve(...)`: the vendored ABI's `bool` return is decoded even
+    // when discarded, and a token like USDT returns nothing. See `token/safe.ts`.
     expect(result.source).not.toContain(".approve(");
+    // `forceApprove`, in two halves -- the reset to zero, then the real amount -- both naming the
+    // Portal. One Pot publishes every intent on this chain, so the allowance an earlier intent left
+    // behind is exactly the non-zero-to-non-zero change USDT refuses.
+    expect(approvals).toHaveLength(2);
+    for (const line of approvals) expect(line).toContain(portal);
+    expect(approvals[0]).toContain(`${"0".repeat(64)}\``);
+    // The reset costs a call only when there is something to reset, and that is decided from an
+    // allowance read -- a `uint256`, always safe to decode -- rather than from a caught revert,
+    // because a reverting `evm.call` cannot be caught in a Sauce program the way OZ catches it.
+    expect(lines.some((line) => line.includes("dd62ed3e"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("if (") && line.includes("cur > 0n"))).toBe(true);
+    // Both writes are judged: empty returndata only from an address with code, anything else true.
+    expect(lines.filter((line) => line.includes("ctx.codeSize("))).toHaveLength(2);
   });
 
   it("lowers several intents in one program without colliding", () => {
