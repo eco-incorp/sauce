@@ -9,7 +9,9 @@
  * and read by their last, so its prose and other columns can change freely.
  *
  * Every export either page names must be one `src/index.ts` exports, so a removed or renamed export
- * fails here until the pages stop naming it.
+ * fails here until the pages stop naming it. The names are read by `scripts/documented-exports.mjs`,
+ * which `sdk/scripts/check-packed-package.mjs` also uses to check each one resolves from the packed
+ * `./actions` subpath.
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -18,6 +20,7 @@ import { resolve } from "node:path";
 import ts from "typescript";
 
 import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
+import { documentedExports, mentionedExports, PAGES } from "../scripts/documented-exports.mjs";
 import { REPO_ROOT } from "./anvil.js";
 
 const GUIDE = readFileSync(resolve(REPO_ROOT, "docs/guides/actions.md"), "utf8");
@@ -49,46 +52,6 @@ function readmeTypes(): string[] {
     .split("\n")
     .filter((line) => /^(- | {2})/.test(line))
     .flatMap((line) => [...line.matchAll(/`([^`]+)`/g)].map((m) => m[1]!));
-}
-
-/**
- * Code spans that name something the package would export, but do not. Each is here for a stated
- * reason; a new entry needs one too.
- */
-const NOT_EXPORTS = new Map([
-  ["SafeERC20", "OpenZeppelin's library, whose semantics the ERC-20 writes follow"],
-  ["IERC20", "the route compiler's own ERC-20 binding"],
-  ["I", "the prefix binding names start with"],
-  ["argumentOffset", "a method of the `CompiledProgram` that `compileProgram` returns"],
-]);
-
-/**
- * The export names a page mentions: the names it imports from `@eco-incorp/sauce/actions` in a code
- * block, and outside "## Supported actions" (whose code spans are action types and contract
- * functions) every code span that is a PascalCase identifier or a call `name(…)`.
- */
-function mentionedExports(page: string): string[] {
-  const names = new Set<string>();
-  for (const m of page.matchAll(
-    /import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+"@eco-incorp\/sauce\/actions"/g,
-  )) {
-    for (const part of m[1]!.split(",")) {
-      const name = part
-        .trim()
-        .replace(/^type\s+/, "")
-        .split(/\s+as\s+/)[0]!
-        .trim();
-      if (name) names.add(name);
-    }
-  }
-  const start = page.indexOf("## Supported actions");
-  const end = start === -1 ? -1 : page.indexOf("\n## ", start + 1);
-  const prose = start === -1 ? page : page.slice(0, start) + (end === -1 ? "" : page.slice(end));
-  for (const m of prose.matchAll(/`([A-Z][A-Za-z0-9]*)`|`([a-z][A-Za-z0-9]*)\(/g)) {
-    names.add((m[1] ?? m[2])!);
-  }
-
-  return [...names].filter((name) => !NOT_EXPORTS.has(name));
 }
 
 /**
@@ -154,6 +117,12 @@ describe("the exports the README and the guide name exist", () => {
     for (const name of ["parseProgram", "compileProgram", "ProgramError", "ActionProgram"]) {
       assert.ok(exported.has(name), `${name} is not among src/index.ts's exports`);
     }
+  });
+
+  it("the packed-package check reads these same pages, and every name they mention", () => {
+    assert.deepEqual([...PAGES], ["actions/README.md", "docs/guides/actions.md"]);
+    const union = new Set([...mentionedExports(README), ...mentionedExports(GUIDE)]);
+    assert.deepEqual(documentedExports(REPO_ROOT), [...union].sort());
   });
 
   for (const [page, text] of [
