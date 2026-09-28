@@ -1474,4 +1474,158 @@ describeEvm("route nesting, executed", () => {
       expect(await balanceOf(usdt, executorPot)).toBe(0n);
     }, 180_000);
   });
+
+  describe("a three-hop chain, written entirely in the native syntax", () => {
+    // The headline case: every hop's amount is only known when that hop runs. The parent measures a
+    // balance and offers an intent; fulfilling THAT intent delivers the amount to a Pot, where a
+    // program measures it again and offers a third. Nothing below is written by hand -- the program
+    // text is the three `Chain(() => ...).reward(...)` expressions and nothing else.
+    const SEEDED = 7_000_000n;
+    const FINAL_RECIPIENT = "0x00000000000000000000000000000000000000c3" as Address;
+
+    const THREE_HOP = `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base(() => {
+    const got = Token(TOKEN).balanceOf(ctx.self());
+    Base(() => {
+      Token(TOKEN).transfer(RECIPIENT, got);
+    }).reward({ tokens: [{ token: TOKEN, amount: got }] });
+  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+}`;
+
+    it("publishes hop 2, and fulfilling it publishes hop 3 with its own measured amount", async () => {
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const intents = {
+        deadline: 4_000_000_000n,
+        creator: CREATOR,
+        prover: PROVER,
+        sourcePortal: portal,
+        destinationPortal: portal,
+        pot: executorPot,
+        engine: sauce.engine,
+        executionFee: 0n,
+        salt: `0x${"c3".repeat(32)}` as Hex,
+      };
+      const compiled = compileSauceRoute(
+        "base",
+        THREE_HOP,
+        { pot: executorPot, engine: sauce.engine },
+        { defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(FINAL_RECIPIENT) }, intents },
+      );
+      // The author wrote no Portal, no cook, no selector, and no argument encoding.
+      expect(THREE_HOP).not.toMatch(/publishAndFund|cook|evm\.call|hex`|abi\./);
+
+      // ---- hop 1: fulfil the parent ---------------------------------------------------------
+      const parent = await fulfil([
+        {
+          target: token,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "mint",
+            args: [executorPot, SEEDED],
+          }),
+          value: 0n,
+        },
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+      expect(parent.status).toBe("success");
+
+      const hop2 = publishedIn(parent.logs);
+      expect(hop2).toHaveLength(1);
+      // Hop 2's reward is the amount hop 1 measured, and its route asks the solver to deliver the
+      // same amount so the program inside it has something to measure.
+      expect(hop2[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
+      const [hop2Route] = decodeAbiParameters([EVM_ROUTE_PARAM], hop2[0]!.route) as unknown as [
+        EvmRoute,
+      ];
+      expect(hop2Route.tokens[0]!.amount).toBe(SEEDED);
+      // Executor -> Pot, then the cook. Both emitted, neither written.
+      expect(hop2Route.calls).toHaveLength(2);
+
+      // ---- hop 2: fulfil it, from the bytes the chain published ------------------------------
+      await mintTo(token, DEPLOYER.address, SEEDED);
+      const approve = await walletClient.sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        to: token,
+        data: encodeFunctionData({
+          abi: erc20ApproveAbi,
+          functionName: "approve",
+          args: [portal, SEEDED],
+        }),
+        gas: GAS_LIMIT,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: approve });
+
+      const child = await fulfilRoute(hop2Route, rewardOf(hop2[0]!).rewardHash);
+      expect(child.status).toBe("success");
+
+      // ---- hop 3 ------------------------------------------------------------------------------
+      const hop3 = publishedIn(child.logs);
+      expect(hop3).toHaveLength(1);
+      // Measured by hop 2's own program, at hop 2's execution time -- a number that did not exist
+      // when hop 1 was signed and that hop 1 never touched.
+      expect(hop3[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
+      const [hop3Route] = decodeAbiParameters([EVM_ROUTE_PARAM], hop3[0]!.route) as unknown as [
+        EvmRoute,
+      ];
+      const delivery = decodeFunctionData({ abi: erc20Abi, data: hop3Route.calls[0]!.data });
+      expect(delivery.functionName).toBe("transfer");
+      expect((delivery.args![0] as string).toLowerCase()).toBe(FINAL_RECIPIENT.toLowerCase());
+      expect(delivery.args![1]).toBe(SEEDED);
+
+      console.log(`three-hop gas — hop 1 ${parent.gasUsed}, hop 2 ${child.gasUsed}`);
+    }, 300_000);
+
+    it("a single hop whose body is a program, not just token writes", async () => {
+      const token = await deploy(MOCK_ERC20.creationCode);
+      await mintTo(token, executorPot, SEEDED);
+      const held = await balanceOf(token, executorPot);
+
+      // Control flow in the body, so this takes the program path rather than the direct-call one.
+      const WITH_LOGIC = `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base(() => {
+    const here = Token(TOKEN).balanceOf(ctx.self());
+    if (here > 0n) {
+      Token(TOKEN).transfer(RECIPIENT, here);
+    }
+  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+}`;
+      const compiled = compileSauceRoute(
+        "base",
+        WITH_LOGIC,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(FINAL_RECIPIENT) },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            sourcePortal: portal,
+            destinationPortal: portal,
+            pot: executorPot,
+            engine: sauce.engine,
+            executionFee: 0n,
+            salt: `0x${"c4".repeat(32)}` as Hex,
+          },
+        },
+      );
+
+      const { status, logs } = await fulfil([
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+
+      expect(status).toBe("success");
+      expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(held);
+    }, 300_000);
+  });
 });

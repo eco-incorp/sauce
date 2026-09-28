@@ -488,12 +488,14 @@ function collectSites(program: AstNode, context: IntentSugarContext): SugarSite[
     const openerArgs = (opener as { arguments?: AstNode[] }).arguments ?? [];
     const closure = openerArgs[0];
     if (
-      openerArgs.length !== 1 ||
+      openerArgs.length < 1 ||
+      openerArgs.length > 2 ||
       closure === undefined ||
       closure.type !== "ArrowFunctionExpression"
     ) {
       fail(
-        `\`${chainName}(...)\` opens an intent and takes exactly one argument: \`() => { ... }\``,
+        `\`${chainName}(...)\` opens an intent: \`() => { ... }\`, optionally followed by ` +
+          `\`{ tokens: [...] }\` naming what the solver must deliver to run it.`,
       );
     }
     if (((closure as { params?: AstNode[] }).params ?? []).length > 0) {
