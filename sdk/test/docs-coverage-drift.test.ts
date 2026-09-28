@@ -80,10 +80,22 @@ describe("docs/api/coverage.md still states the registry sizes it has", () => {
     ).map((c) => c.slug);
 
     expect(missing.length).toBeGreaterThan(0);
-    const sentence = /`getChain` is a separate metadata lookup[^.]*\.[^.]*\./.exec(COVERAGE);
-    expect(sentence).not.toBeNull();
-    for (const slug of missing) {
-      expect(sentence![0].toLowerCase()).toContain(slug.toLowerCase());
+    // One sentence: "`getChain` is a separate metadata lookup ...: <list> are canonical chains with
+    // no metadata record." Anchored on both ends, so it cannot run on into the next paragraph, and
+    // any run of whitespace matches a space, so reflowing the prose does not break it.
+    const words = (text: string) => text.split(" ").join("\\s+");
+    const sentence = new RegExp(
+      `${words("`getChain` is a separate metadata lookup")}[^.]*?:([^.]*?)\\s+` +
+        `${words("are canonical chains with no metadata record")}\\.`,
+    ).exec(COVERAGE);
+    if (sentence === null) {
+      throw new Error(
+        "coverage.md no longer has the sentence listing canonical chains with no metadata record " +
+          `(\`getChain\` is a separate metadata lookup ...: <chains> are canonical chains with no metadata record.); expected it to name ${missing.join(", ")}`,
+      );
     }
+    // Each chain the sentence should name and does not, by slug.
+    const listed = sentence[1]!.toLowerCase();
+    expect(missing.filter((slug) => !listed.includes(slug.toLowerCase()))).toEqual([]);
   });
 });
