@@ -297,6 +297,43 @@ describe("the Pot a program body cooks on", () => {
   });
 });
 
+describe("a program with no sugar is not parsed for it", () => {
+  it("returns a program that cannot hold a site unchanged, without parsing it", () => {
+    // Not valid JavaScript: parsing it would throw, so returning shows it was never parsed.
+    const unparseable = "function main( { USDC.transfer(RECIPIENT, 1n); }";
+    expect(rewriteIntentSugar(unparseable, context())).toEqual({
+      source: unparseable,
+      rewrote: false,
+      intents: [],
+    });
+  });
+
+  it("still parses, and lowers, a site whose `reward` is spelled with a unicode escape", () => {
+    const escaped = TRANSFER_INTENT.replace(".reward(", ".\\u0072eward(");
+    expect(escaped).not.toContain("reward");
+    const result = rewriteIntentSugar(escaped, context());
+    expect(result.rewrote).toBe(true);
+    expect(result.intents).toHaveLength(1);
+    expect(result.intents[0]!.intent).toEqual(
+      rewriteIntentSugar(TRANSFER_INTENT, context()).intents[0]!.intent,
+    );
+  });
+
+  it("a skipped program's syntax error is still reported by the compile", () => {
+    expect(() =>
+      compileSauceRoute("base", "function main( { USDC.transfer(RECIPIENT, 1n); }", {
+        pot: "0x1111111111111111111111111111111111111111",
+        engine: "0x2222222222222222222222222222222222222222",
+      }),
+    ).toThrow(SyntaxError);
+  });
+
+  it("still parses a program that mentions `reward` anywhere, even with no site", () => {
+    const unparseable = "function main( { const reward = 1n; }";
+    expect(() => rewriteIntentSugar(unparseable, context())).toThrow(SyntaxError);
+  });
+});
+
 describe("what it refuses, and how clearly", () => {
   it.each([
     [

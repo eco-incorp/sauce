@@ -536,6 +536,15 @@ const addressHex = (value: bigint): Hex => `0x${value.toString(16).padStart(40, 
 /** Lowers every `Chain(() => { ... }).reward({ ... })` in `source`. Purely textual surgery driven by
  *  acorn ranges, so everything else survives byte for byte. */
 export function rewriteIntentSugar(source: string, context: IntentSugarContext): IntentSugarResult {
+  // Every route compile comes through here, and most programs have no sugar, so skip the parse
+  // when a site is impossible. A site is a call whose callee's property is the identifier
+  // `reward`, and an identifier appears in the text either literally or through a `\u` escape
+  // (`.\u0072eward(`). With neither in the source there is nothing to find, so this only ever
+  // skips a program `collectSites` would find nothing in. A syntax error in one is still reported:
+  // the token and protocol rewrites after this parse every program.
+  if (!source.includes("reward") && !source.includes("\\u")) {
+    return { source, rewrote: false, intents: [] };
+  }
   const program = parse(source, {
     ecmaVersion: "latest",
     sourceType: "module",
