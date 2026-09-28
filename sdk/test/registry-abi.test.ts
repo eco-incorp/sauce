@@ -68,6 +68,8 @@ interface Evidence {
 }
 interface Target {
   readonly roles?: readonly string[];
+  /** Narrows `roles` to these chains' deployments, where one role runs different releases. */
+  readonly chains?: readonly number[];
   readonly instances?: readonly { chainId: number; address: string }[];
   readonly exempt?: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly unverified?: Readonly<Record<string, string>>;
@@ -110,6 +112,18 @@ const slugs = readdirSync(PROTOCOLS, { withFileTypes: true })
 const modules: Record<string, Record<string, unknown>> = Object.fromEntries(
   await Promise.all(
     slugs.map(async (slug) => [slug, await import(`../src/protocols/${slug}/abis.js`)] as const),
+  ),
+);
+/** Each protocol's deployments, from its `addresses.ts`. */
+const deployments: Record<
+  string,
+  readonly { chainId: number; addresses: Record<string, string> }[]
+> = Object.fromEntries(
+  await Promise.all(
+    slugs.map(
+      async (slug) =>
+        [slug, (await import(`../src/protocols/${slug}/addresses.js`)).deployments] as const,
+    ),
   ),
 );
 const registry: Record<string, Record<string, readonly AbiFunction[]>> = Object.fromEntries(
@@ -246,12 +260,44 @@ describe("registry ABI evidence: coverage", () => {
     expect(orphans).toEqual([]);
   });
 
+  it("every deployment of a role a target names is captured, and `chains` drops none", () => {
+    const uncaptured: string[] = [];
+    for (const slug of slugs) {
+      const exports = Object.entries(targets[slug] ?? {});
+      const roles = new Set(exports.flatMap(([, target]) => target.roles ?? []));
+      for (const d of deployments[slug]!) {
+        for (const [role, address] of Object.entries(d.addresses)) {
+          // A Solana program id runs no EVM ABI; the capture skips it too.
+          if (!roles.has(role) || !/^0x[0-9a-fA-F]{40}$/.test(address)) continue;
+          const where = `${slug}.${role} ${d.chainId}:${address.toLowerCase()}`;
+          const bound = exports.filter(
+            ([, target]) =>
+              target.roles?.includes(role) &&
+              (target.chains === undefined || target.chains.includes(d.chainId)),
+          );
+          if (bound.length === 0) uncaptured.push(`${where}: no export's \`chains\` includes it`);
+          for (const [name] of bound) {
+            const captured = evidence.instances.some(
+              (i) =>
+                i.protocol === slug &&
+                i.abi === name &&
+                i.chainId === d.chainId &&
+                i.address === address.toLowerCase(),
+            );
+            if (!captured) uncaptured.push(`${where}: no ${name} evidence — recapture ${slug}`);
+          }
+        }
+      }
+    }
+    expect(uncaptured).toEqual([]);
+  });
+
   it("the fixture holds no RPC endpoint or API key", () => {
     const raw = readFileSync(join(FIXTURES, "evidence.json"), "utf-8");
     expect(raw).not.toMatch(/https?:\/\/|apikey|api_key|alchemy|infura/i);
   });
 
-  it("each ABI's JSON twin, where it has one (what route compilation imports), matches abis.ts", () => {
+  it("each ABI's JSON twin (what route compilation imports) matches abis.ts", () => {
     const sort = (value: unknown): unknown =>
       Array.isArray(value)
         ? value.map(sort)
@@ -264,11 +310,15 @@ describe("registry ABI evidence: coverage", () => {
           : value;
     const drift: string[] = [];
     for (const slug of slugs) {
-      for (const [name, value] of Object.entries(modules[slug]!)) {
-        if (!Array.isArray(value)) continue;
-        const path = join(PROTOCOLS, slug, `${name}.json`);
-        if (!existsSync(path)) continue;
-        const json = (JSON.parse(readFileSync(path, "utf-8")) as { abi: unknown }).abi;
+      const exports = Object.entries(modules[slug]!).filter(([, value]) => Array.isArray(value));
+      const path = (name: string) => join(PROTOCOLS, slug, `${name}.json`);
+      // A protocol that ships twins ships one per export, so a new export cannot miss its twin;
+      // one that ships none at all (eco-routes) has nothing to compare.
+      if (!exports.some(([name]) => existsSync(path(name)))) continue;
+      for (const [name, value] of exports) {
+        const json = existsSync(path(name))
+          ? (JSON.parse(readFileSync(path(name), "utf-8")) as { abi: unknown }).abi
+          : undefined;
         if (JSON.stringify(sort(json)) !== JSON.stringify(sort(value))) {
           drift.push(`${slug}/${name}.json`);
         }

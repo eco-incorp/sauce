@@ -254,9 +254,10 @@ interface ABIs), `probes` (extra signatures to ask a selector router about), and
 with its reason — `exempt` (a deployment that legitimately differs),
 `unverified` (no verified source on any keyless source; the selector is still checked) and
 `unverifiable`. An
-exception that stops applying fails the test. So does a new export with no target, and a
-`<X>ABI.json` twin that no longer matches `abis.ts` (regenerate with
-`bun run scripts/generate-abi-json.ts`, then prettier). The widened-type workaround the registry
+exception that stops applying fails the test. So does a new export with no target, a deployment
+of a targeted role the evidence does not cover (an `addresses.ts` edit not yet recaptured, or one
+no export's `chains` includes), and a `<X>ABI.json` twin that is missing or no longer matches
+`abis.ts` (regenerate with `bun run scripts/generate-abi-json.ts`, then prettier). The widened-type workaround the registry
 used to carry (`uint32` for `uint24`, `uint256` for `bytes32`/`int*`) is gone: the pinned compiler
 takes every ABI type, so declare the deployed one.
 
