@@ -7,9 +7,10 @@
  * reads the network.
  *
  * DERIVING IS NOT DEPLOYING. The address exists as arithmetic the moment you know the owner; the
- * contract exists once somebody has called the Kitchen's `deployPot`. A cook against a derived but
- * undeployed Pot reverts, which `routes-nest-dynamic.e2e.test.ts` shows both ways. Deployment is a
- * one-time, permissionless transaction per (owner, salt) — `sauceEvmDeployPotCall` encodes it.
+ * contract exists once somebody has called the Kitchen's `deployPot`, a permissionless call per
+ * (owner, salt) that `sauceEvmDeployPotCall` encodes. An intent route whose Pot the SDK derives
+ * makes that call itself, first (`routes/intent-pot.ts`); anything else cooking on a derived Pot
+ * has to deploy it beforehand.
  */
 import { encodeAbiParameters, getAddress, getCreate2Address, keccak256, type Hex } from "viem";
 

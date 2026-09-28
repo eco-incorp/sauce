@@ -115,8 +115,10 @@ export {
 } from "./token-registry.js";
 export type { TokenRegistryRow } from "./token-registry.js";
 export { openRoute } from "./intent-dsl.js";
+export { destinationPot } from "./intent-pot.js";
 export type {
   BuiltIntent,
+  IntentEvmExecution,
   IntentOptions,
   NestChildOrThunk,
   NestOptions,

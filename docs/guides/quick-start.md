@@ -20,11 +20,8 @@ import type { routes } from "@eco-incorp/sauce";
 
 const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before a real run.
 const options: routes.IntentOptions = {
-  execution: {
-    pot: "0x1111111111111111111111111111111111111111",
-    engine: "0x2222222222222222222222222222222222222222",
-    value: executionFee,
-  },
+  // The Pot and engine are derived; the route deploys the Pot if it does not exist yet.
+  execution: { value: executionFee },
   nativeAmount: executionFee,
   portal: "0x3333333333333333333333333333333333333333",
   deadline: 2_000_000_000n,
@@ -44,9 +41,10 @@ console.log(built.hash().intentHash);
 ```
 
 `Base` names the **destination**: the chain the program runs on. The SDK resolves `USDC` and
-`Uniswap.UniversalRouter` there, compiles the body, and encodes it as a Pot `cook(engine, program)`
-call. `.reward(...)` names the **source**: the chain where the reward is escrowed. The result carries
-the intent, its hashes, the compiled bytecode and the transaction requests your application submits.
+`Uniswap.UniversalRouter` there, compiles the body, and encodes it as a `cook(engine, program)` call
+on the Pot it derives for that chain, preceded by the call that deploys that Pot if it is missing.
+`.reward(...)` names the **source**: the chain where the reward is escrowed. The result carries the
+intent, its hashes, the compiled bytecode and the transaction requests your application submits.
 
 ## The three things that trip people up
 
@@ -62,9 +60,10 @@ router is `UniswapV4.UniversalRouter`, with `Uniswap.UniversalRouter` as an unam
 `UniswapV3.UniversalRouter` does not exist. [Coverage](../api/coverage.md) lists what is registered.
 
 **The Pot is not yours alone.** For a Portal-driven intent the Pot's owner is the destination
-`Portal.executor()`, which every solver can drive. Deliver assets into it, use them, and take the
-remainder out inside the same fulfillment. Every cook also pays the Kitchen's current fee in native
-value. [Intent setup](intents.md#prepare-the-destination-pot) shows the reads and the deployment call.
+`Portal.executor()`, which every solver can drive. The SDK derives that Pot and the route deploys it
+on first use, so the example names none. Deliver assets into it, use them, and take the remainder
+out inside the same fulfillment. Every cook also pays the Kitchen's current fee in native value.
+[The destination Pot](intents.md#the-destination-pot) covers deployment and overrides.
 
 ## Deliver assets and fund the reward
 

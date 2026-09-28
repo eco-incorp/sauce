@@ -51,8 +51,10 @@ value.
 ### EVM
 
 A program runs through `Pot.cook(engine, program)`. A Pot has an owner; the engine is named on each
-cook, so building a call needs **both** addresses — the SDK will not guess either. An engine accepts
-only Pots created by its own Kitchen.
+cook, so a call needs **both** addresses. A direct `compileSauceRoute` takes them from you. An intent
+derives them: the released engine, and the Pot the recorded Portal's Executor owns under
+`SAUCE_INTENT_POT_SALT`, which the route deploys with its first call. An engine accepts only Pots
+created by its own Kitchen.
 
 Every cook must send the Kitchen's current `executionFee()` as native value, even for a program that
 moves only ERC-20s. Native the program itself spends is on top of that. A balance already sitting in
@@ -61,7 +63,7 @@ the Pot does not pay the fee.
 One route body is one program and one cook, however many statements it contains. For a Portal-driven
 intent the Pot's owner must be the destination `Portal.executor()`, and the Pot is shared: put
 assets in, use them and take the remainder out within the same fulfillment.
-[Intent setup](../guides/intents.md#prepare-the-destination-pot) has the reads and the deployment call.
+[The destination Pot](../guides/intents.md#the-destination-pot) covers deployment and overrides.
 
 ### Solana
 

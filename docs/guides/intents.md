@@ -31,7 +31,7 @@ An intent has two sides:
 | ---------------------------------------- | ----------------------------------------------------------------- |
 | `Base(...)`                              | Destination chain where the Sauce program executes                |
 | `options.portal`                         | Destination Portal recorded in the route                          |
-| `options.pot`, `options.engine`          | Destination Pot and interpreter used by `cook`                    |
+| `options.pot`, `options.engine`          | Overrides for the derived destination Pot and released engine     |
 | `options.tokens`, `options.nativeAmount` | Destination assets delivered by the solver to the Portal Executor |
 | `reward.source`                          | Chain where the reward is funded                                  |
 | `options.sourcePortal`                   | Source Portal used by submission and read helpers                 |
@@ -44,31 +44,49 @@ Every EVM `cook` must receive the Kitchen's current `executionFee()` in native w
 
 Deadlines are absolute Unix timestamps in seconds. `route.deadline` limits destination fulfillment. `reward.deadline` allows source refunds when no valid proof exists; leave time for fulfillment and proof delivery before it.
 
-## Prepare the destination Pot
+## The destination Pot
 
-For direct Portal routes, the Pot's owner must be the destination **`Portal.executor()`**. A user-owned or solver-owned Pot rejects the Executor's call with `NotOwner()`.
+A route call runs as the Executor of the Portal that fulfils it, and a Pot's `cook` accepts only
+its owner. So the Pot's owner must be the **`executor()` of the Portal the route records** —
+`options.portal` when you set it, the registry's otherwise. A user-owned or solver-owned Pot rejects
+the call with `NotOwner()`.
 
-`IntentOptions.execution.pot` is still supplied by the caller on this path — the builder does not
-derive it, because the Pot a route cooks on is also where its assets pass through, and that is a
-custody decision worth making explicitly. `v12PredictPot(ecoRoutesExecutor(chain))` gives the same
-canonical address the native syntax derives, if that is the one you want.
+You do not have to supply one. With no `execution.pot` and no `execution.engine`, the builder uses the
+same Pot the [native syntax](#the-destination-pot-is-derived) derives — CREATE2 from the released
+Kitchen over that Executor and the constant `SAUCE_INTENT_POT_SALT` — and the released engine. Both
+remain overrides. `destinationPot(Base.chain, { portal })` returns that address, for a `precalls`
+transfer into it.
 
-Use [evm-execution.ts](../examples/evm-execution.ts) on the destination chain to read the Executor, resolve the current Kitchen and engine, predict the Pot, and quote the execution fee. If the Pot is absent, the helper returns a deployment request. Send it, wait for a successful receipt, and run the helper again. Only use a result with `ready: true`, which confirms code is present and checks the Pot's `owner()` and `kitchen()`.
+**A derived Pot is deployed by the route that uses it.** Its first `route.calls` entry is
+`Kitchen.deployPot(executor, SAUCE_INTENT_POT_SALT)`, ahead of any precall. The Kitchen deploys only
+when nothing is at the predicted address and otherwise returns the existing Pot; the call is
+permissionless and reverts only on a zero owner. The first fulfilment through that Portal pays for
+the deployment, about 350,000 gas; every later one pays about 6,000 gas for the no-op. Nobody has to
+deploy the Pot beforehand.
 
-The deployment helpers return the released addresses. They do not check that code is live at those addresses on your chain — the helper above does, which is why its `ready: true` is the signal to act on.
+**A Pot you name gets no such call**, because it need not sit at the SDK's owner and salt. It must
+already exist and be owned by that Executor: the Executor refuses a call to an address without code,
+and a Pot with another owner refuses the cook with `NotOwner()`. Use
+[evm-execution.ts](../examples/evm-execution.ts) on the destination chain to predict one for your own
+salt, deploy it, and check its `owner()` and `kitchen()`. Only use a result with `ready: true`.
 
-An Executor-owned Pot can be invoked by other valid Portal routes. Deliver assets, use them, and return leftovers **within the same fulfillment**; do not leave user funds or standing allowances in it. Source reward escrow belongs in the intent vault. These caller and custody rules follow [Eco Routes' Executor calls](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Executor.sol#L50-L74) and [destination fulfillment](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Inbox.sol#L225-L271).
+The deployment helpers return the released addresses. They do not check that code is live at those
+addresses on your chain. The same helper confirms the Kitchen and engine have code, and reads the
+execution fee you need either way.
+
+An Executor-owned Pot can be invoked by other valid Portal routes, and the derived one is shared by
+every intent on its chain. Deliver assets, use them, and return leftovers **within the same
+fulfillment**; leave nothing in it — no user funds, no standing allowances. Source reward escrow
+belongs in the intent vault. These caller and custody rules follow [Eco Routes' Executor calls](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Executor.sol#L50-L74) and [destination fulfillment](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Inbox.sol#L225-L271).
 
 ## Build a Base USDC transfer intent
 
 This function takes deployment and reward configuration as inputs. It delivers one USDC on Base to `recipient` and offers the configured source-token reward. It only constructs data.
 
 ```ts
-import { Base, token, type routes } from "@eco-incorp/sauce";
+import { Base, destinationPot, token, type routes } from "@eco-incorp/sauce";
 
 interface TransferIntentConfig {
-  pot: routes.AddressInput;
-  engine: routes.AddressInput;
   executionFee: bigint;
   destinationPortal: routes.AddressInput;
   baseUsdc: routes.AddressInput;
@@ -85,14 +103,12 @@ interface TransferIntentConfig {
 
 export function buildBaseTransfer(config: TransferIntentConfig) {
   const amount = 1_000_000n;
-  const delivery = token.Token.transfer({
-    token: config.baseUsdc,
-    to: config.pot,
-    amount,
-  }).toCall();
+  // The Pot the route cooks on: derived from the Portal it records, deployed by its first call.
+  const pot = destinationPot(Base.chain, { portal: config.destinationPortal });
+  const delivery = token.Token.transfer({ token: config.baseUsdc, to: pot, amount }).toCall();
 
   return Base("USDC.transfer(RECIPIENT, AMOUNT);", {
-    execution: { pot: config.pot, engine: config.engine, value: config.executionFee },
+    execution: { value: config.executionFee },
     nativeAmount: config.executionFee,
     portal: config.destinationPortal,
     sourcePortal: config.sourcePortal,
@@ -113,6 +129,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 
 The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana — the encoding supports it — but see the [Solana guide](solana.md) for how that execution is actually built.
 
+The route has three calls: the `deployPot` the SDK adds, the delivery into the Pot, and the cook.
 `executionFee` is the destination Kitchen quote obtained above. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
 
 The explicit `tokenDefines` ensures that the token transferred into the Pot matches the token used by the program. To use the SDK's default Base USDC, resolve it with `routes.registryTokenAddress(Base.chain, "USDC")` and check the result before building. That lookup returns a `bigint`; convert it to a 20-byte hex address with Viem's `toHex(value, { size: 20 })` for intent token fields, as in the [complete example](../examples/first-intent.ts).
@@ -243,13 +260,21 @@ the fulfillment.
 ### The destination Pot is derived
 
 A Pot is CREATE2 from the Kitchen over its owner and a salt, and the owner a route call must cook as
-is the destination `Portal.executor()` — itself the Portal's second `CREATE`, so it follows from the
-Portal address the registry already has. Nothing is read from a chain and nothing is asked of you.
-The salt is a constant, so there is **one canonical Pot per chain** rather than one per intent.
+is the `executor()` of the Portal the child's route records — itself that Portal's second `CREATE`,
+so it follows from the Portal address. That is the registry's Portal, or `destinationPortal` when you
+override it: a route recording one Portal is run by that Portal's Executor, and a Pot owned by any
+other Executor would refuse the cook with `NotOwner()`. Nothing is read from a chain and nothing is
+asked of you. The salt is a constant, so there is **one canonical Pot per chain and Portal** rather
+than one per intent.
 
-Deriving an address is not deploying a contract. The Pot exists once somebody has called the
-Kitchen's `deployPot` for that owner and salt — one permissionless transaction per chain, after
-which every intent on that chain shares it. Before that, a cook against it reverts.
+Deriving an address is not deploying a contract, so the route deploys it: a program body's route
+begins with `Kitchen.deployPot(executor, SAUCE_INTENT_POT_SALT)`, before the delivery into the Pot and
+the cook on it. The Kitchen deploys only when nothing is at that address and otherwise returns the
+existing Pot, so the first fulfilment deploys it, at about 350,000 gas, and every later one pays about
+6,000 gas for a no-op. A token-only body cooks nothing and gets no such call.
+
+A Pot you name with `pot` gets no `deployPot` either: it need not be at the SDK's owner and salt. It
+must already exist and be owned by that Executor, or the fulfilment reverts.
 
 Because it is shared, **leave nothing in it**. Deliver assets, use them, and move the remainder out
 within the same fulfillment. Anything resting there, or any allowance left standing, belongs to
@@ -260,16 +285,16 @@ whoever drives the Executor next.
 Everything derived can be overridden through `compile.intents`, and `Base(...)` passes its own
 fields down so the common case sets none of them:
 
-| Field                        | Overrides                                |
-| ---------------------------- | ---------------------------------------- |
-| `deadline`, `rewardDeadline` | The route and reward deadlines           |
-| `creator`, `prover`          | The reward's creator and prover          |
-| `sourcePortal`               | Where the intent is published            |
-| `destinationPortal`          | The Portal recorded in the child's route |
-| `pot`, `engine`              | Where a program body cooks, and on what  |
-| `executionFee`               | The cook's value                         |
-| `salt`, `allowPartial`       | The route salt, and partial funding      |
-| `generation`, `environment`  | Which eco-routes deployment to address   |
+| Field                        | Overrides                                                            |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `deadline`, `rewardDeadline` | The route and reward deadlines                                       |
+| `creator`, `prover`          | The reward's creator and prover                                      |
+| `sourcePortal`               | Where the intent is published                                        |
+| `destinationPortal`          | The Portal recorded in the child's route                             |
+| `pot`, `engine`              | Where a program body cooks, and on what; a named Pot is not deployed |
+| `executionFee`               | The cook's value                                                     |
+| `salt`, `allowPartial`       | The route salt, and partial funding                                  |
+| `generation`, `environment`  | Which eco-routes deployment to address                               |
 
 ### What is refused
 

@@ -15,7 +15,16 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { ecoRoutesPortal, ecoRoutesProver } from "../src/protocols/eco-routes/lookup.js";
+import { SAUCE_INTENT_POT_SALT, v12GateKitchen } from "../src/deployments/pot.js";
+import { v12Kitchen } from "../src/evm/engine.js";
+import {
+  ecoRoutesExecutorOf,
+  ecoRoutesPortal,
+  ecoRoutesProver,
+} from "../src/protocols/eco-routes/lookup.js";
+import { denormalizeToEvm } from "../src/routes/encode.js";
+import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
+import { destinationPot } from "../src/routes/intent-pot.js";
 import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
 
 const GUIDE = readFileSync(
@@ -132,6 +141,72 @@ describe("the guide's refusal list is the lowering's", () => {
       "leave nothing in it",
     ]) {
       expect(GUIDE).toContain(claim);
+    }
+  });
+});
+
+describe("the guide's account of the destination Pot is the builder's", () => {
+  // Each claim is a sentence the guide must contain and a check on what `openRoute` builds. The
+  // gas figures beside them are pinned by execution, in `routes-nest-dynamic.e2e.test.ts`.
+  const PORTAL = "0x2222222222222222222222222222222222222222" as const;
+  const options = (extra: Partial<IntentOptions> = {}): IntentOptions => ({
+    deadline: 2000n,
+    portal: PORTAL,
+    source: "base",
+    creator: CREATOR,
+    prover: CREATOR,
+    ...extra,
+  });
+  const calls = (extra: Partial<IntentOptions> = {}) =>
+    openRoute("ethereum", "return 1n;", options(extra)).reward(0n).intent.route.calls;
+  const deployCall = v12Kitchen.encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT);
+
+  const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
+    {
+      documented: "**A derived Pot is deployed by the route that uses it.**",
+      holds: () =>
+        denormalizeToEvm(calls()[0]!.target) === v12GateKitchen().toLowerCase() &&
+        calls()[0]!.data === deployCall,
+    },
+    {
+      documented: "ahead of any precall",
+      holds: () => calls({ precalls: [{ target: PORTAL, data: "0x12" }] })[0]!.data === deployCall,
+    },
+    {
+      // The owner is the RECORDED Portal's Executor, which the deploy call names.
+      documented: "**`executor()` of the Portal the route records**",
+      holds: () =>
+        calls()[0]!.data.toLowerCase().includes(ecoRoutesExecutorOf(PORTAL).slice(2).toLowerCase()),
+    },
+    {
+      documented: "**A Pot you name gets no such call**",
+      holds: () => calls({ pot: PORTAL }).length === 1,
+    },
+    {
+      documented: "`destinationPot(Base.chain, { portal })` returns that address",
+      holds: () =>
+        denormalizeToEvm(calls()[1]!.target) ===
+        destinationPot("ethereum", { portal: PORTAL }).toLowerCase(),
+    },
+  ];
+
+  it.each(CLAIMS.map((c) => [c.documented, c] as const))("the guide says %s", (_name, claim) => {
+    expect(GUIDE).toContain(claim.documented);
+  });
+
+  it.each(CLAIMS.map((c) => [c.documented, c] as const))("and it holds: %s", (_name, claim) => {
+    expect(claim.holds()).toBe(true);
+  });
+
+  it("no longer claims what stopped being true", () => {
+    for (const retired of [
+      // A derived Pot no longer waits for someone else to deploy it.
+      "Before that, a cook against it reverts",
+      // The TypeScript builder derives the Pot now, like the native syntax.
+      "custody decision worth making explicitly",
+      "is still supplied by the caller on this path",
+    ]) {
+      expect(GUIDE).not.toContain(retired);
     }
   });
 });

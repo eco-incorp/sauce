@@ -19,11 +19,7 @@ const creator = "0x4444444444444444444444444444444444444444";
 const executionFee = 1_000n; // Fixture: `destinationExecutionFee()` builds the read for the real one.
 
 const options: routes.IntentOptions = {
-  execution: {
-    pot: "0x1111111111111111111111111111111111111111",
-    engine: "0x2222222222222222222222222222222222222222",
-    value: executionFee,
-  },
+  execution: { value: executionFee },
   nativeAmount: executionFee,
   deadline: 2_000_000_000n,
   creator,

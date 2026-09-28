@@ -132,6 +132,8 @@ export interface IntentSugarContext {
     chain: CanonicalChain,
     source: string,
     captures: readonly string[],
+    /** The destination Portal the child's route records — whose Executor must own the Pot. */
+    destinationPortal: AddressInput,
   ) => CompiledChild;
 }
 
@@ -139,6 +141,9 @@ export interface CompiledChild {
   /** `cook(engine, bytecode ++ arguments)` calldata, with a sentinel per capture in the argument
    *  tail. `undefined` captures means the program takes none. */
   readonly call: { readonly target: Hex; readonly data: Hex; readonly value: bigint };
+  /** `Kitchen.deployPot(...)` for a Pot the SDK derived, `undefined` for one the caller named. It
+   *  becomes the route's first call, so the cook never meets a Pot that does not exist yet. */
+  readonly deployPot?: { readonly target: Hex; readonly data: Hex; readonly value: bigint };
   /** The sentinel each capture occupies, in the order the program declares them. */
   readonly captureSentinels: readonly bigint[];
 }
@@ -598,6 +603,9 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     // destination and run through its Pot. The second shape is strictly more general; the first is
     // kept because it is free.
     const simple = isDirectCallBody(site.body, defines);
+    // The Portal the child's route records. Resolved once, here, because it is also what the Pot's
+    // owner is derived from: a route recording one Portal is run by that Portal's Executor.
+    const destinationPortal = context.defaults.destinationPortal ?? context.portalOf(site.chain);
     const derivedDelivery: { token: bigint; amount: Value }[] = [];
     const calls: { target: Hex; data: Hex; value: bigint }[] = [];
     const captureWords: { name: string; sentinel: bigint }[] = [];
@@ -618,10 +626,13 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
         site.bodyStart + 1,
         site.bodyEnd - 1,
       )}\n}`;
-      const child = context.compileChild(site.chain, childSource, captured);
+      const child = context.compileChild(site.chain, childSource, captured, destinationPortal);
       captured.forEach((name, i) => {
         captureWords.push({ name, sentinel: child.captureSentinels[i]! });
       });
+      // First, before anything is moved into the Pot or cooked on it: a derived Pot exists only
+      // once somebody has deployed it, and this call is a no-op every time after that.
+      if (child.deployPot !== undefined) calls.push(child.deployPot);
       // Delivered tokens land on the Executor; the program runs in the Pot, so move them first.
       for (const token of explicitDelivery ?? []) {
         calls.push({
@@ -678,7 +689,7 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       route: normalizeRoute({
         salt: defaults.salt,
         deadline: requireDeadline(defaults),
-        portal: defaults.destinationPortal ?? context.portalOf(site.chain),
+        portal: destinationPortal,
         // Native the route's own calls need: the Kitchen fee, once per cook.
         nativeAmount: calls.reduce((sum, call) => sum + call.value, 0n),
         // What the SOLVER delivers to run this intent, which is a different thing from the reward

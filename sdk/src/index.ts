@@ -31,3 +31,4 @@ export { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "./rout
 export { destinationExecutionFee } from "./evm/execution-fee.js";
 export type { ExecutionFeeCall } from "./evm/execution-fee.js";
 export { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "./deployments/pot.js";
+export { destinationPot } from "./routes/intent-pot.js";

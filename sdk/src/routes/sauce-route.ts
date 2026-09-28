@@ -27,14 +27,13 @@ import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protoco
 import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
-import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
-import { v12PredictPot } from "../deployments/pot.js";
+import { v12KitchenAddress } from "../deployments/index.js";
 import { denormalizeToEvm } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
 import { childCaptureSentinel, type CompiledChild } from "./intent-sugar.js";
+import { resolveIntentPot } from "./intent-pot.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import {
-  ecoRoutesExecutor,
   ecoRoutesPortal,
   ecoRoutesProver,
   type EcoRoutesSelector,
@@ -175,14 +174,16 @@ function compileIntentChild(
   destination: ChainRefResolved,
   childSource: string,
   captures: readonly string[],
+  destinationPortal: AddressInput,
   options: SauceCompileOptions,
 ): CompiledChild {
   const intents = options.intents ?? {};
   // DERIVED, not asked for. A Pot is CREATE2 from the Kitchen over its owner and a salt; the owner a
-  // route call must cook as is the destination `Portal.executor()`, itself the Portal's second
-  // CREATE. Both ends are already in the SDK, so this needs no chain read and no caller input --
-  // `intents.pot` remains as an override for a Pot the caller owns instead.
-  const pot = intents.pot ?? v12PredictPot(ecoRoutesExecutor(destination, intents));
+  // route call must cook as is the Executor of the Portal this child's route RECORDS, itself that
+  // Portal's second CREATE. Both ends are already in the SDK, so this needs no chain read and no
+  // caller input -- `intents.pot` remains as an override for a Pot the caller owns instead, and only
+  // a derived Pot comes with the `deployPot` call that guarantees it exists (`intent-pot.ts`).
+  const { pot, engine, deployPot } = resolveIntentPot(destinationPortal, intents);
   if (intents.executionFee === undefined) {
     throw new Error(
       `intent sugar: the intent on ${destination.slug} runs a program, so its cook must pay that ` +
@@ -192,8 +193,6 @@ function compileIntentChild(
         `\`@eco-incorp/sauce\`, or \`Kitchen.executionFee()\` at ${v12KitchenAddress()}.`,
     );
   }
-  const engine: AddressInput = intents.engine ?? (v12EngineAddress() as Hex);
-
   const compiled = compileSauceRoute(
     destination,
     childSource,
@@ -229,6 +228,7 @@ function compileIntentChild(
       data: call.data,
       value: intents.executionFee,
     },
+    deployPot,
     captureSentinels,
   };
 }
@@ -282,8 +282,8 @@ export function compileSauceRoute(
     portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
     proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
     defaults: options.intents ?? {},
-    compileChild: (destination, childSource, captures) =>
-      compileIntentChild(destination, childSource, captures, options),
+    compileChild: (destination, childSource, captures, destinationPortal) =>
+      compileIntentChild(destination, childSource, captures, destinationPortal, options),
   });
   source = sugar.source;
   let baseDirs = options.baseDirs;

@@ -159,3 +159,32 @@ export const startGatedEngine = async (
     pot,
   };
 };
+
+/**
+ * Installs a copy of a deployed engine at `at` — for a suite exercising the SDK's DEFAULT engine,
+ * which is the released address and so has no code on a fresh anvil.
+ *
+ * Not a verbatim copy, for the reason `GatedEngine.engine` gives: the constructor appends the
+ * engine's own address as the last 20 bytes of its code and `EVAL` staticcalls it, so a verbatim
+ * copy would call back into the original. That trailing self-reference is rewritten to `at`. Any
+ * other occurrence of the old address fails here, rather than leaving a copy that runs half of
+ * itself somewhere else.
+ */
+export const installEngineAt = async (
+  clients: { publicClient: PublicClient; testClient: TestClient },
+  engine: Address,
+  at: Address,
+): Promise<void> => {
+  const code = (await clients.publicClient.getCode({ address: engine }))?.toLowerCase();
+  const self = engine.slice(2).toLowerCase();
+  if (code === undefined || !code.endsWith(self) || code.indexOf(self) !== code.length - 40) {
+    throw new Error(
+      `the engine at ${engine} does not end in exactly one copy of its own address, so it cannot ` +
+        `be relocated to ${at} by rewriting it`,
+    );
+  }
+  await clients.testClient.setCode({
+    address: at,
+    bytecode: `${code.slice(0, -40)}${at.slice(2).toLowerCase()}` as Hex,
+  });
+};

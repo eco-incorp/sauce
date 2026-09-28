@@ -16,16 +16,12 @@ const program = readFileSync(
   "utf8",
 );
 
-// Offline fixtures. Read the destination Kitchen fee and use an Executor-owned Pot before use.
+// Offline fixtures. Read the destination Kitchen fee before use. The Pot and engine are derived.
 const executionFee = 1_000n;
 const creator = "0x4444444444444444444444444444444444444444";
 
 const options: routes.IntentOptions = {
-  execution: {
-    pot: "0x1111111111111111111111111111111111111111",
-    engine: "0x2222222222222222222222222222222222222222",
-    value: executionFee,
-  },
+  execution: { value: executionFee },
   nativeAmount: executionFee,
   // No `portal`: the SDK carries the eco-routes deployments, and this intent runs on Base.
   deadline: 2_000_000_000n,

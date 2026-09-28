@@ -42,6 +42,7 @@ import {
   type DynamicNestEntry,
   type PlaceholderSpec,
 } from "./nest-dynamic.js";
+import { resolveIntentPot } from "./intent-pot.js";
 import { normalizeRoute, toBigInt } from "./normalize.js";
 import { ecoRoutesPortal, type EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import {
@@ -122,26 +123,32 @@ interface IntentOptionsCommon {
 }
 
 /**
- * Everything a route needs beyond the Sauce program body itself. Supply an explicit destination
- * execution, or both `pot` and `engine` as the EVM shorthand. When `execution` is supplied it takes
- * precedence over any redundant shorthand fields, matching `openRoute`'s runtime behavior.
+ * An EVM destination's execution. Every field is optional: the Pot and engine are derived exactly as
+ * `Chain(() => ...).reward(...)` inside a program derives them (`intent-pot.ts`).
  */
-export type IntentOptions = IntentOptionsCommon &
-  (
-    | {
-        /** The destination-chain execution seam; takes precedence over the EVM shorthand. */
-        execution: SauceEvmExecutionInput | SauceSvmExecutionInput;
-        pot?: AddressInput;
-        engine?: AddressInput;
-      }
-    | {
-        execution?: undefined;
-        /** EVM shorthand for `execution: { pot, engine }`. */
-        pot: AddressInput;
-        /** The interpreter the cook runs on. Never defaulted; see `SauceEvmExecutionInput.engine`. */
-        engine: AddressInput;
-      }
-  );
+export interface IntentEvmExecution {
+  /** Overrides the derived Pot — the canonical one owned by the recorded Portal's Executor. A Pot
+   *  named here gets no `deployPot` call, so it must already exist and be that Executor's. */
+  readonly pot?: AddressInput;
+  /** Overrides the released engine the Pot cooks on. */
+  readonly engine?: AddressInput;
+  /** Total cook value: the current Kitchen execution fee plus any native program funding. */
+  readonly value?: bigint | number | string;
+}
+
+/**
+ * Everything a route needs beyond the Sauce program body itself. An EVM destination needs no
+ * execution at all; an SVM one names its staged CODE account through `execution`. Fields of
+ * `execution` take precedence over the `pot`/`engine` shorthand, matching `openRoute`'s runtime.
+ */
+export type IntentOptions = IntentOptionsCommon & {
+  /** The destination-chain execution seam; takes precedence over the EVM shorthand. */
+  execution?: IntentEvmExecution | SauceSvmExecutionInput;
+  /** EVM shorthand for `execution.pot`. */
+  pot?: AddressInput;
+  /** EVM shorthand for `execution.engine`. */
+  engine?: AddressInput;
+};
 
 /** The object form of a reward argument — every field optional, since a missing one falls back to
  *  the matching `IntentOptions` field (and a STILL-missing required field throws, naming exactly
@@ -477,7 +484,7 @@ export function openRoute(
   const destination = requireChain(chain);
 
   if (options === undefined) {
-    missingField("execution/pot, deadline, portal", "via `IntentOptions` (the second argument)");
+    missingField("deadline", "via `IntentOptions` (the second argument)");
   }
   if (options.deadline === undefined) {
     missingField("deadline", "as `IntentOptions.deadline`");
@@ -485,23 +492,34 @@ export function openRoute(
   // Not a required field any more: the SDK knows where eco-routes is deployed, so a caller only
   // names a Portal to address a deployment the registry does not carry.
   const destinationPortal = options.portal ?? ecoRoutesPortal(destination, options.ecoRoutes);
-  if (
-    options.execution === undefined &&
-    options.pot !== undefined &&
-    options.engine === undefined
-  ) {
-    missingField("engine", "alongside the `IntentOptions.pot` shorthand");
-  }
-  const execution =
-    options.execution ??
-    (options.pot !== undefined && options.engine !== undefined
-      ? { pot: options.pot, engine: options.engine }
-      : undefined);
-  if (execution === undefined) {
-    missingField(
-      "execution",
-      "as `IntentOptions.execution` or the EVM shorthand `IntentOptions.pot`",
-    );
+
+  // The Pot and engine the route cooks on, derived when not named -- from `destinationPortal`, the
+  // Portal this route RECORDS, because its Executor is the one that will call the Pot. A derived Pot
+  // also gets the `deployPot` call that becomes this route's first entry.
+  let execution: SauceEvmExecutionInput | SauceSvmExecutionInput;
+  let deployPot: CallInput | undefined;
+  if (destination.kind === "svm") {
+    if (options.execution === undefined) {
+      missingField(
+        "execution",
+        "as `IntentOptions.execution` — an SVM destination names its staged CODE account",
+      );
+    }
+    execution = options.execution as SauceSvmExecutionInput;
+  } else {
+    const evm: IntentEvmExecution = options.execution ?? {};
+    if ("code" in evm || "accounts" in evm) {
+      throw new Error(
+        `openRoute: '${destination.slug}' is an EVM destination, so \`IntentOptions.execution\` is ` +
+          "`{ pot?, engine?, value? }` — a CODE account and account list describe an SVM execution.",
+      );
+    }
+    const resolved = resolveIntentPot(destinationPortal, {
+      pot: evm.pot ?? options.pot,
+      engine: evm.engine ?? options.engine,
+    });
+    execution = { pot: resolved.pot, engine: resolved.engine, value: evm.value };
+    deployPot = resolved.deployPot;
   }
 
   const closure = isSauceClosure(sauce);
@@ -914,6 +932,8 @@ export function openRoute(
         });
 
       const calls: CallInput[] = [
+        // First: every later call either moves assets into the Pot or cooks on it.
+        ...(deployPot === undefined ? [] : [deployPot]),
         ...(options.precalls ?? []),
         ...childCalls("before"),
         ...compiledRoute.calls,

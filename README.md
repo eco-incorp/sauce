@@ -83,11 +83,8 @@ import type { routes } from "@eco-incorp/sauce";
 
 const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before use.
 const options: routes.IntentOptions = {
-  execution: {
-    pot: "0x1111111111111111111111111111111111111111",
-    engine: "0x2222222222222222222222222222222222222222",
-    value: executionFee,
-  },
+  // No Pot or engine: both are derived, and the route deploys the Pot if it is missing.
+  execution: { value: executionFee },
   nativeAmount: executionFee,
   portal: "0x3333333333333333333333333333333333333333",
   deadline: 2_000_000_000n,

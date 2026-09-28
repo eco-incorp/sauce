@@ -1,14 +1,10 @@
 import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
-// Offline fixtures. Read the destination Kitchen fee and use an Executor-owned Pot before use.
+// Offline fixtures. Read the destination Kitchen fee before use. The Pot and engine are derived.
 const executionFee = 1_000n;
 const options: routes.IntentOptions = {
-  execution: {
-    pot: "0x1111111111111111111111111111111111111111",
-    engine: "0x2222222222222222222222222222222222222222",
-    value: executionFee,
-  },
+  execution: { value: executionFee },
   nativeAmount: executionFee,
   portal: "0x3333333333333333333333333333333333333333",
   deadline: 2_000_000_000n,
@@ -24,10 +20,11 @@ const built = Base(() => {
   nativeAmount: 0n,
 });
 
-if (!built.compiled.bytecode[0]?.length || built.intent.route.calls.length !== 1) {
-  throw new Error("Expected a compiled approval and one Pot call");
+// The Pot's deployment (a no-op once it exists), then the cook.
+if (!built.compiled.bytecode[0]?.length || built.intent.route.calls.length !== 2) {
+  throw new Error("Expected a compiled approval, and the Pot's deployment before its cook");
 }
-if (built.intent.route.calls[0]!.value !== executionFee) {
+if (built.intent.route.calls[1]!.value !== executionFee) {
   throw new Error("Expected the destination cook to receive its fee");
 }
 console.log("Base approval intent:", built.hash().intentHash);

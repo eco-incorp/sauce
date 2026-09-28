@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import ts from "typescript";
 
 describe("IntentOptions execution types", () => {
-  it("requires a complete execution form and preserves explicit execution precedence", () => {
+  it("defaults the EVM execution, still requires a complete SVM one, and rejects misspellings", () => {
     const sdkDir = resolve(process.cwd());
     const config = ts.readConfigFile(join(sdkDir, "tsconfig.json"), ts.sys.readFile);
     if (config.error) {
@@ -23,34 +23,29 @@ describe("IntentOptions execution types", () => {
         const common = { deadline: 2000n, portal: address };
         function accepts(options: IntentOptions): void { void options; }
 
+        // An EVM destination needs no execution: the Pot and engine are derived.
+        accepts(common);
+        accepts({ ...common, execution: { value: 1000n } });
+        // Either may be overridden alone, through execution or the shorthand.
+        accepts({ ...common, pot: address });
+        accepts({ ...common, engine: address });
         accepts({ ...common, pot: address, engine: address });
-        accepts({ ...common, execution: { pot: address, engine: address } });
+        accepts({ ...common, execution: { pot: address } });
+        accepts({ ...common, execution: { engine: address } });
+        accepts({ ...common, execution: { pot: address, engine: address, value: 1n } });
+        accepts({ ...common, execution: undefined, pot: address });
+        accepts({ ...common, execution: { pot: address }, engine: address });
         accepts({ ...common, execution: { code: "11111111111111111111111111111111", accounts: [] } });
-
-        // Explicit execution wins at runtime, so redundant shorthand fields remain accepted.
-        accepts({ ...common, execution: { pot: address, engine: address }, pot: address });
-        accepts({ ...common, execution: { pot: address, engine: address }, engine: address });
-        accepts({ ...common, execution: { pot: address, engine: address }, pot: address, engine: address });
         accepts({ ...common, execution: { code: "11111111111111111111111111111111", accounts: [] }, pot: address });
 
-        // @ts-expect-error An intent always needs destination execution details.
-        accepts(common);
-        // @ts-expect-error The shorthand requires an engine alongside its Pot.
-        accepts({ ...common, pot: address });
-        // @ts-expect-error The shorthand requires a Pot alongside its engine.
-        accepts({ ...common, engine: address });
-        // @ts-expect-error Undefined execution does not bypass shorthand requirements.
-        accepts({ ...common, execution: undefined, pot: address });
-        // @ts-expect-error Explicit EVM execution also requires its engine.
-        accepts({ ...common, execution: { pot: address } });
-        // @ts-expect-error Explicit EVM execution also requires its Pot.
-        accepts({ ...common, execution: { engine: address } });
+        // @ts-expect-error A misspelt override would otherwise be a silently derived Pot.
+        accepts({ ...common, execution: { pott: address } });
         // @ts-expect-error Explicit SVM execution requires its account list.
         accepts({ ...common, execution: { code: "11111111111111111111111111111111" } });
         // @ts-expect-error Explicit SVM execution requires its staged code address.
         accepts({ ...common, execution: { accounts: [] } });
-        // @ts-expect-error Invalid explicit execution cannot fall back to valid shorthand.
-        accepts({ ...common, execution: { pot: address }, pot: address, engine: address });
+        // @ts-expect-error The deadline is still required.
+        accepts({ portal: address });
       `,
     );
 

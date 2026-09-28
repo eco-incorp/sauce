@@ -15,8 +15,14 @@ import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
-import { ecoRoutesPortal, ecoRoutesProver } from "../src/protocols/eco-routes/lookup.js";
+import {
+  ecoRoutesExecutorOf,
+  ecoRoutesPortal,
+  ecoRoutesProver,
+} from "../src/protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../src/routes/encode.js";
+import { v12Kitchen } from "../src/evm/engine.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 
 const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
@@ -200,6 +206,111 @@ describe("a body that is not just token writes becomes a program", () => {
     const result = rewriteIntentSugar(source, context());
     expect(result.intents).toHaveLength(1);
     expect(result.intents[0]!.intent.route.calls).toHaveLength(1);
+  });
+});
+
+describe("the Pot a program body cooks on", () => {
+  const PROGRAM_BODY = program(`  Arbitrum(() => {
+    if (amount > 1n) { USDC.transfer(RECIPIENT, amount); }
+  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });`);
+  const DEPLOY = {
+    target: "0x5555555555555555555555555555555555555555" as Hex,
+    data: "0xff9763ac" as Hex,
+    value: 0n,
+  };
+
+  it("deploys it first: before the delivery into it and before the cook on it", () => {
+    const base = context() as unknown as { compileChild: (...args: unknown[]) => object };
+    const result = rewriteIntentSugar(
+      PROGRAM_BODY,
+      context({
+        compileChild: (...args: unknown[]) => ({
+          ...base.compileChild(...args),
+          deployPot: DEPLOY,
+        }),
+      }),
+    );
+    const calls = result.intents[0]!.intent.route.calls;
+
+    expect(calls).toHaveLength(3);
+    expect(calls[0]!.data).toBe(DEPLOY.data);
+    expect(decodeFunctionData({ abi: erc20Abi, data: calls[1]!.data }).functionName).toBe(
+      "transfer",
+    );
+    expect(denormalizeToEvm(calls[2]!.target)).toBe("0x4444444444444444444444444444444444444444");
+  });
+
+  it("hands the child compile the Portal the route records, override included", () => {
+    const seen: unknown[] = [];
+    const base = context() as unknown as { compileChild: (...args: unknown[]) => object };
+    const override = "0x6666666666666666666666666666666666666666";
+    const result = rewriteIntentSugar(
+      PROGRAM_BODY,
+      context({
+        defaults: { deadline: 4_000_000_000n, creator: CREATOR, destinationPortal: override },
+        compileChild: (...args: unknown[]) => {
+          seen.push(args[3]);
+          return base.compileChild(...args);
+        },
+      }),
+    );
+
+    expect(seen).toEqual([override]);
+    expect(denormalizeToEvm(result.intents[0]!.intent.route.portal)).toBe(override);
+  });
+
+  describe("through the real compile path", () => {
+    const compileWith = (intents: Record<string, unknown>) =>
+      compileSauceRoute(
+        "base",
+        `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    const here = USDC.balanceOf(ctx.self());
+    if (here > 0n) { USDC.transfer(RECIPIENT, here); }
+  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+}`,
+        {
+          pot: "0x1111111111111111111111111111111111111111",
+          engine: "0x2222222222222222222222222222222222222222",
+        },
+        {
+          defines: { RECIPIENT },
+          intents: { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n, ...intents },
+        },
+      ).source;
+    const deployFor = (executor: Hex) =>
+      v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT).slice(2);
+    const cookOn = (pot: string) => pot.slice(2).toLowerCase().padStart(64, "0");
+
+    it("derives from the registry Portal's Executor, and deploys that Pot", () => {
+      const executor = ecoRoutesExecutorOf(ecoRoutesPortal("arbitrum"));
+      const source = compileWith({}).toLowerCase();
+
+      expect(source).toContain(deployFor(executor));
+      expect(source).toContain(cookOn(v12PredictPot(executor)));
+    });
+
+    it("derives from an OVERRIDING destination Portal's own Executor", () => {
+      const portal = "0x6666666666666666666666666666666666666666" as Hex;
+      const source = compileWith({ destinationPortal: portal }).toLowerCase();
+      const registryExecutor = ecoRoutesExecutorOf(ecoRoutesPortal("arbitrum"));
+
+      // A Pot owned by the registry Portal's Executor would reject this route's cook with
+      // `NotOwner()`: the route records `portal`, so `portal`'s Executor is the caller.
+      expect(source).toContain(deployFor(ecoRoutesExecutorOf(portal)));
+      expect(source).not.toContain(deployFor(registryExecutor));
+      expect(source).toContain(cookOn(v12PredictPot(ecoRoutesExecutorOf(portal))));
+    });
+
+    it("emits no deployPot for a Pot the caller names", () => {
+      const pot = "0x7777777777777777777777777777777777777777";
+      const source = compileWith({ pot }).toLowerCase();
+      const selector = v12Kitchen.encodeDeployPot(pot, SAUCE_INTENT_POT_SALT).slice(2, 10);
+
+      expect(source).not.toContain(selector);
+      expect(source).toContain(cookOn(pot));
+    });
   });
 });
 

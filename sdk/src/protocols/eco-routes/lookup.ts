@@ -157,11 +157,18 @@ export function ecoRoutesExecutor(
   chain: ChainRef | CanonicalChain,
   selector?: EcoRoutesSelector,
 ): Hex {
-  return getContractAddress({
-    from: ecoRoutesPortal(chain, selector),
-    nonce: ECO_ROUTES_EXECUTOR_NONCE,
-    opcode: "CREATE",
-  });
+  return ecoRoutesExecutorOf(ecoRoutesPortal(chain, selector));
+}
+
+/**
+ * The Executor of a given Portal, which need not be one this registry carries.
+ *
+ * The intent machinery derives from THIS rather than from the chain whenever a caller names the
+ * Portal: a route recording one Portal is executed by that Portal's Executor, so a Pot derived
+ * from any other Portal's would reject the cook with `NotOwner()`.
+ */
+export function ecoRoutesExecutorOf(portal: Hex): Hex {
+  return getContractAddress({ from: portal, nonce: ECO_ROUTES_EXECUTOR_NONCE, opcode: "CREATE" });
 }
 
 /**
