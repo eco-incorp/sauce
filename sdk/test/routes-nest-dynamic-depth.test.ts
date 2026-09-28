@@ -146,7 +146,7 @@ describe("payload growth with depth", () => {
   });
 
   it("reports the measured sizes, so a budget can be set against numbers rather than a guess", () => {
-    // depth 1 ≈ 1.1 kB of cook calldata, each further level ≈ 1.6 kB on this fixture.
+    // depth 1 ≈ 1.5 kB of cook calldata, each further level ≈ 1.95 kB on this fixture.
     expect(sizes[0]![1]).toBeLessThan(2_000);
     expect(sizes[4]![1]).toBeLessThan(20_000);
     console.log(`cook calldata by depth: ${sizes.map(([d, s]) => `${d}=${s}B`).join(", ")}`);

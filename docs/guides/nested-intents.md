@@ -169,9 +169,9 @@ Each level's numbers are therefore spliced by the level directly above it, at th
 
 ### Cost and depth
 
-Growth is linear, not multiplicative: each level's bytes appear exactly once in the chain, so the outermost payload is the sum of the per-level overheads. On the SDK's own fixture that is about 1,200 bytes of `cook` calldata at depth 1 and about 1,600 bytes for each level after it. A measured depth-2 cascade cost roughly 263,000 gas to fulfill the parent and 254,000 to fulfill the child; every one of these numbers moves with the size of the intents you nest, so treat them as an order of magnitude rather than a budget.
+Growth is linear, not multiplicative: each level's bytes appear exactly once in the chain, so the outermost payload is the sum of the per-level overheads. On the SDK's own fixture that is about 1,500 bytes of `cook` calldata at depth 1 and about 1,950 bytes for each level after it. A measured depth-2 cascade cost roughly 286,000 gas to fulfill the parent and 267,000 to fulfill the child; every one of these numbers moves with the size of the intents you nest, so treat them as an order of magnitude rather than a budget.
 
-The hard ceiling is the compiler's, and it is named rather than silent. A `hex` segment carries a `u16` length, so no single segment may exceed 65,535 bytes; on that fixture the deepest cascade that compiles is 40 levels, and one level further fails with `an array literal has … elements, beyond the 65535 the engine can encode`. Nothing truncates. In practice gas binds long before that, and a cascade deep enough to approach the limit is one to reconsider rather than to budget for.
+The hard ceiling is the compiler's, and it is named rather than silent. A `hex` segment carries a `u16` length, so no single segment may exceed 65,535 bytes; on that fixture the deepest cascade that compiles is 34 levels, and one level further fails with `an array literal has … elements, beyond the 65535 the engine can encode`. Nothing truncates. In practice gas binds long before that, and a cascade deep enough to approach the limit is one to reconsider rather than to budget for.
 
 Depth 2 is executed end to end against a real engine, Pot and Portal in the SDK's own suite. Deeper cascades are established by compilation and encoding only — none has been run on a chain.
 
