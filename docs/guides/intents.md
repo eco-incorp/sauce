@@ -48,6 +48,11 @@ Deadlines are absolute Unix timestamps in seconds. `route.deadline` limits desti
 
 For direct Portal routes, the Pot's owner must be the destination **`Portal.executor()`**. A user-owned or solver-owned Pot rejects the Executor's call with `NotOwner()`.
 
+`IntentOptions.execution.pot` is still supplied by the caller on this path — the builder does not
+derive it, because the Pot a route cooks on is also where its assets pass through, and that is a
+custody decision worth making explicitly. `v12PredictPot(ecoRoutesExecutor(chain))` gives the same
+canonical address the native syntax derives, if that is the one you want.
+
 Use [evm-execution.ts](../examples/evm-execution.ts) on the destination chain to read the Executor, resolve the current Kitchen and engine, predict the Pot, and quote the execution fee. If the Pot is absent, the helper returns a deployment request. Send it, wait for a successful receipt, and run the helper again. Only use a result with `ready: true`, which confirms code is present and checks the Pot's `owner()` and `kitchen()`.
 
 The deployment helpers return the released addresses. They do not check that code is live at those addresses on your chain — the helper above does, which is why its `ready: true` is the signal to act on.
@@ -115,7 +120,7 @@ The explicit `tokenDefines` ensures that the token transferred into the Pot matc
 ## Create an intent from inside a program
 
 Everything above builds an intent in TypeScript, before anything runs. A program can also create one
-while it is running, which is what you want when the amount is the output of the step before it:
+_while_ it is running, which is what you want when the amount is the output of the step before it:
 
 ```js
 function main() {
@@ -127,50 +132,156 @@ function main() {
 ```
 
 Same shape as the TypeScript builder, written in the program. No Portal, selector, encoding or
-approval appears, because none of them is a decision you are making — the SDK emits all of it.
+approval appears, because none of them is a decision you are making.
 
-**What a captured variable is.** `amount` is a local of the enclosing program, so its value does not
-exist when the intent is encoded. It is encoded with a sentinel in its place, and the program splices
-the real value in as it runs. One variable is one slot however many times it appears: above it is the
-reward amount, the route's token amount and the transfer argument, and all three are the same number
-by construction rather than by three encodings agreeing.
+### The braces are a Sauce program
 
-**What may be captured.** Any scalar the enclosing program holds — an amount, an address, anything
-one 256-bit word wide. What may not is anything a child _program_ would need, because there is no
-child program: each statement becomes one entry in the intent's `route.calls`, which is what an
-eco-routes route is.
+Anything a route body can do belongs in there: protocol calls, control flow, locals, and an intent
+of its own. There are two lowerings and the SDK picks between them, which matters to you because
+they cost different things.
 
-**What is refused, by name.** A statement that is not a call. A method other than `transfer` or
-`approve`. An identifier that is neither a compile-time value nor a variable of the enclosing
-program. An intent opened inside another intent — that second execution needs a compiled program, so
-it is `.nest(child, { via: "dynamic" })` on the TypeScript builder instead. Each is a compile error
-naming the construct, never a silently different intent.
+| The body is…                    | Becomes…                                               | Needs                   |
+| ------------------------------- | ------------------------------------------------------ | ----------------------- |
+| only token `transfer`/`approve` | one `route.calls` entry per statement                  | nothing further         |
+| anything else                   | a program compiled for the destination, run on its Pot | a Pot and a Kitchen fee |
 
-**Names resolve per chain.** `USDC` inside the braces is _Arbitrum's_ USDC, because those calls run
-on Arbitrum. Resolving it against the enclosing chain would put one chain's address in another
-chain's route.
+The first shape is free: a route already _is_ a list of calls, so a cook would only add a fee. The
+second is strictly more general.
 
-**A throw reverts everything.** A `throw` in a program, and every guard the SDK emits, reverts the
-whole fulfillment — no earlier route call survives it. A program that refuses to create an intent
-therefore leaves nothing behind, and a measurement below its floor cannot strand funds in the Pot.
+```js
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(
+    () => {
+      const here = USDC.balanceOf(ctx.self());
+      if (here > 0n) {
+        USDC.transfer(RECIPIENT, here);
+      }
+    },
+    { tokens: [{ token: USDC, amount }] },
+  ).reward({ tokens: [{ token: USDC, amount }] });
+}
+```
+
+**The second argument names what the solver delivers** so the body has something to work with, and
+the lowering adds the Executor-to-Pot transfer. For the token-only shape it is derived instead — a
+`transfer` of N moves N, so N is what has to arrive. It is _not_ derived for a program, and that is
+a judgement rather than an omission: a program's `balanceOf` reads what is _there_, which may be what
+an earlier call in the same route produced rather than what a solver must bring. Inferring an
+obligation from it would silently under- or over-state what the intent asks for, and an intent that
+asks for the wrong delivery is unfulfillable or overfunded.
+
+### Captured variables
+
+`amount` is a local of the enclosing program, so its value does not exist when the intent is
+encoded. It is encoded with a sentinel in its place and the program splices the real value in as it
+runs. Any scalar works — an amount, an address, anything one 256-bit word wide.
+
+A variable can arrive two ways, and the same variable can do both:
+
+- **Into the encoded intent** — a route call's argument, a reward amount, a delivery amount. One
+  slot per variable, however many of those it fills, so they are the same number by construction
+  rather than by several encodings agreeing.
+- **Into the child program** — it becomes one of that program's entry arguments, encoded at a
+  declared width so its offset does not move, and spliced into the cook's calldata.
+
+Used both ways, a variable gets a slot in each: they are different offsets carrying the same value.
+
+### Nesting
+
+An intent inside an intent is lowered recursively — the child is compiled by re-entering the same
+pipeline, so it gets its own chain's names and this same lowering, at any depth. That is how a chain
+of hops whose amounts are each measured on arrival is written; see
+[nested intents](nested-intents.md#a-cascade-in-native-syntax).
+
+### Names resolve per chain
+
+`USDC` inside the braces is _Arbitrum's_ USDC, because those calls run on Arbitrum. Resolving it
+against the enclosing chain would put one chain's address in another chain's route.
+
+### A throw reverts everything
+
+A `throw` in a program, and every guard the SDK emits, reverts the whole fulfillment — no earlier
+route call survives it. A program that refuses to create an intent therefore leaves nothing behind,
+and a measurement below its floor cannot strand funds in the Pot.
+
+### Where each value comes from
 
 | Value              | Comes from                                                        |
 | ------------------ | ----------------------------------------------------------------- |
 | Portal, both sides | The eco-routes deployment tables, by chain                        |
 | Prover             | The tables, by source/destination pair                            |
+| Destination Pot    | Derived — see below                                               |
+| Engine             | The released engine address                                       |
 | Destination        | The chain you named                                               |
 | Source             | The chain the program runs on                                     |
 | Deadline           | **You.** Too early is unfulfillable, too late locks the reward up |
 | Creator            | **You.** See below                                                |
+| Execution fee      | **You**, for a program body. See below                            |
 
-The creator is the address that may reclaim the reward if nobody earns it. The executing Pot is the
-obvious default and the wrong one: it is owned by the Portal's Executor, which every solver can
+The **creator** is the address that may reclaim the reward if nobody earns it. The executing Pot is
+the obvious default and the wrong one: it is owned by the Portal's Executor, which every solver can
 drive, so a refund landing there is a refund anyone can take. Set `IntentOptions.creator` and every
 intent the program creates inherits it, along with the deadline and the eco-routes deployment; a
 direct `compileSauceRoute` caller sets `compile.intents.creator`.
 
-Override the rest through `compile.intents`: `sourcePortal`, `destinationPortal`, `prover`, `salt`,
-`allowPartial`, and `generation`/`environment` to address a different eco-routes deployment.
+The **execution fee** is the one value that cannot be derived. It is mutable on-chain, and it lives
+on the destination, which the source chain cannot read while it executes. Read it at build time and
+pass it as `compile.intents.executionFee`:
+
+```ts
+import { destinationExecutionFee } from "@eco-incorp/sauce";
+
+const request = destinationExecutionFee();
+// const { data } = await client.call(request);
+// const executionFee = request.decode(data!);
+```
+
+Read it shortly before building: an increase before fulfillment makes the cook revert, which reverts
+the fulfillment.
+
+### The destination Pot is derived
+
+A Pot is CREATE2 from the Kitchen over its owner and a salt, and the owner a route call must cook as
+is the destination `Portal.executor()` — itself the Portal's second `CREATE`, so it follows from the
+Portal address the registry already has. Nothing is read from a chain and nothing is asked of you.
+The salt is a constant, so there is **one canonical Pot per chain** rather than one per intent.
+
+Deriving an address is not deploying a contract. The Pot exists once somebody has called the
+Kitchen's `deployPot` for that owner and salt — one permissionless transaction per chain, after
+which every intent on that chain shares it. Before that, a cook against it reverts.
+
+Because it is shared, **leave nothing in it**. Deliver assets, use them, and move the remainder out
+within the same fulfillment. Anything resting there, or any allowance left standing, belongs to
+whoever drives the Executor next.
+
+### Overrides
+
+Everything derived can be overridden through `compile.intents`, and `Base(...)` passes its own
+fields down so the common case sets none of them:
+
+| Field                        | Overrides                                |
+| ---------------------------- | ---------------------------------------- |
+| `deadline`, `rewardDeadline` | The route and reward deadlines           |
+| `creator`, `prover`          | The reward's creator and prover          |
+| `sourcePortal`               | Where the intent is published            |
+| `destinationPortal`          | The Portal recorded in the child's route |
+| `pot`, `engine`              | Where a program body cooks, and on what  |
+| `executionFee`               | The cook's value                         |
+| `salt`, `allowPartial`       | The route salt, and partial funding      |
+| `generation`, `environment`  | Which eco-routes deployment to address   |
+
+### What is refused
+
+Each of these is a compile error naming the construct, never a silently different intent:
+
+- An identifier that is neither a compile-time value nor a variable of the enclosing program.
+- A `.reward(...)` that is not an object, or a token entry missing `token` or `amount`.
+- A missing `deadline`, a missing `creator`, or a missing `executionFee` for a program body.
+- A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
+
+Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
+reads the same way: it names the variable that is not declared.
 
 ## Callbacks are compiled source
 

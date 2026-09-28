@@ -406,10 +406,19 @@ const SOURCE_PORTAL = "0x8888888888888888888888888888888888888888" as const;
 const OTHER_PORTAL = "0x9999999999999999999999999999999999999999" as const;
 
 describe("BuiltIntent: sourcePortal defaulting", () => {
-  it("throws a named error when neither target.portal nor options.sourcePortal is supplied", () => {
+  // `sourcePortal` stopped being required along with `portal`: the SDK carries the eco-routes
+  // deployments for the source chain too.
+  it("defaults to the eco-routes Portal for the reward's source chain", () => {
     const built = openRoute("ethereum", "return 1n;", evmOptions()).reward(0n);
-    expect(() => built.publishCalldata()).toThrow(/sourcePortal|Portal target/i);
-    expect(() => built.vaultCall()).toThrow(/sourcePortal|Portal target/i);
+
+    expect(built.publishCalldata().to.toLowerCase()).toBe(ecoRoutesPortal("base").toLowerCase());
+    expect(built.vaultCall().to.toLowerCase()).toBe(ecoRoutesPortal("base").toLowerCase());
+  });
+
+  it("still says which chain has none, rather than failing later", () => {
+    expect(() =>
+      openRoute("ethereum", "return 1n;", evmOptions({ source: "zora" })).reward(0n),
+    ).toThrow(/eco-routes v3 is not deployed on zora/i);
   });
 
   it("uses IntentOptions.sourcePortal when no per-call target is given", () => {

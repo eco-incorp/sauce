@@ -952,7 +952,10 @@ export function openRoute(
         destination,
         source,
         compiledRoute.compiled,
-        options.sourcePortal,
+        // Defaulted from the eco-routes tables, exactly as the destination Portal is: the SDK knows
+        // where the source chain's Portal is, so a caller only names one to reach a deployment the
+        // registry does not carry.
+        options.sourcePortal ?? ecoRoutesPortal(source, options.ecoRoutes),
         nestedEntries.map((e) => e.built),
       );
     },

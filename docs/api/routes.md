@@ -44,7 +44,7 @@ Chain references accept canonical slugs, names/aliases supported by the registry
 | `precalls`                                      | Calls before the compiled program and nested calls                             |
 | `tokenDefines`                                  | Token-symbol address overrides                                                 |
 | `defines`, `compile`                            | Program specialization and compile options                                     |
-| `sourcePortal`                                  | Source Portal for submission/read requests; same default as `portal`           |
+| `sourcePortal`                                  | Source Portal for submission/read requests. Defaults like `portal`             |
 | `source`, `creator`, `prover`, `rewardDeadline` | Fallback fields for `.reward(...)`                                             |
 
 The EVM shorthand sends zero `cook` value and only works with a fee-free Kitchen when the program needs no native input. For released deployments, use `execution: { pot, engine, value }` with the current Kitchen fee plus any native assets the program spends, and budget `nativeAmount` for all route call values. The direct route's Pot owner must equal the destination `Portal.executor()`. See [deployment and fee setup](../guides/intents.md#prepare-the-destination-pot).
@@ -107,7 +107,7 @@ Every address helper here returns a **recorded** address, never a verified one. 
 | `vaultCall()`, `hashCall()`, `fundedCall()` | Source Portal read request plus result decoder                      |
 | `predictVault(config)`                      | Offline CREATE2 prediction with caller-provided vault configuration |
 
-Submission and read helpers take an optional `{ portal }` override; without one, `sourcePortal` is required. They build EVM requests, require an EVM source, and perform no RPC — you send them. The codec represents an SVM destination fine; building that execution is the separate matter above. `encodeEVM()`/`encodeSVM()` force a codec for inspection; they do not change an intent's chain kinds.
+Submission and read helpers take an optional `{ portal }` override; without one they use `sourcePortal`, which itself defaults to the eco-routes Portal for the reward's source chain. They build EVM requests, require an EVM source, and perform no RPC — you send them. The codec represents an SVM destination fine; building that execution is the separate matter above. `encodeEVM()`/`encodeSVM()` force a codec for inspection; they do not change an intent's chain kinds.
 
 ## Composition and lower-level encoding
 

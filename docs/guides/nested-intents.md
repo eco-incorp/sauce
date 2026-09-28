@@ -115,6 +115,48 @@ The child's hash is not known until the parent executes, so `child.hash()`, `chi
 
 A child built this way is an ordinary built intent, so it can nest dynamically in turn; see [Chain more than one hop](#chain-more-than-one-hop).
 
+## A cascade in native syntax
+
+The shortest way to chain hops is to write them inside the program, one intent opening the next:
+
+```js
+// Three hops, written as three intents opening one another.
+//
+// No amount below the first exists when this is signed. `amount` is measured here. `swapped` is
+// measured on Arbitrum while that hop is being fulfilled, by the program the middle braces compiled
+// to, and it is the reward of the third hop. Each level's numbers are filled in by the level above
+// it, at that level's own execution time.
+//
+// The middle body is more than token writes, so it compiles to a program and runs on Arbitrum's
+// Pot; its second argument names what a solver must deliver for it to have something to measure.
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(
+    () => {
+      const swapped = USDC.balanceOf(ctx.self());
+      Optimism(() => {
+        USDC.transfer(RECIPIENT, swapped);
+      }).reward({ tokens: [{ token: USDC, amount: swapped }] });
+    },
+    { tokens: [{ token: USDC, amount }] },
+  ).reward({ tokens: [{ token: USDC, amount }] });
+}
+```
+
+Three hops, and **no amount below the first exists when this is signed**. `amount` is measured on the
+first chain. `swapped` is measured on Arbitrum, while that hop is being fulfilled, by the program the
+middle braces compiled to — and it is the reward of the third. Each level's numbers are filled in by
+the level above it, at that level's own execution time.
+
+Nesting is recursive rather than special-cased: the middle body is compiled by re-entering the same
+pipeline, so the same lowering runs inside it at any depth. [Create an intent from inside a
+program](intents.md#create-an-intent-from-inside-a-program) covers what may be captured, the two
+lowerings, and the values you supply.
+
+Use this when the hops are a chain and the amounts are discovered as you go. Use the `.nest(...)`
+builder below when you are assembling intents in TypeScript from data you already hold, when you
+want several children on one parent, or when you need the transfer and publication modes it offers.
+
 ## Chain more than one hop
 
 A dynamic child is an ordinary built intent, so it can carry a dynamic nest of its own. That is how a chain of swaps whose every hop's output is only known at that hop works: the parent swaps A for B and publishes the child, the child swaps B for C and publishes the grandchild, and the grandchild delivers C. Nothing below the first amount exists when the parent is signed.

@@ -77,6 +77,10 @@ larger program through the Kitchen before executing it. See the [Solana guide](.
 `Base(body, options).reward(reward)` builds an Eco intent whose route executes on Base. The SDK
 compiles the destination program, assembles the route, and hands back hashes and Portal calldata.
 
+A program can also create an intent itself, with the same `Chain(() => { ... }).reward({ ... })`
+written in its body — which is how a hop whose amount is only known on arrival gets built at all.
+See [create an intent from inside a program](../guides/intents.md#create-an-intent-from-inside-a-program).
+
 Building an intent publishes nothing. Your application submits the source-chain transactions, and a
 solver fulfills the destination. Nested intents are separate executions composed with `.nest(...)` —
 a cascade, not one call stack spanning chains. See [create an intent](../guides/intents.md).
