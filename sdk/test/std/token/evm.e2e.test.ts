@@ -10,6 +10,15 @@
  * needs no Solidity toolchain at test time; regenerate with `cd <sauce>/v12-evm && forge build` and
  * copy `abi` + `bytecode.object` out of `out/MockERC20.sol/MockERC20.json`.
  *
+ * THE WRITES ARE SafeERC20, and the matrix at the bottom is what shows it: each write against a
+ * token that returns `true`, `false`, nothing, or something that is not an ABI `bool` (a word of 2,
+ * one byte, 31 bytes, 64 bytes), against an address with no code, and against an honest token
+ * refusing. Every cell runs three ways — through OpenZeppelin's `SafeERC20` itself, through the
+ * library, and through `src/token/safe.ts`, the spelling the SDK emits into routes — and all three
+ * must land it identically. The misbehaving tokens and the OpenZeppelin reference are the other
+ * `fixtures/*.sol`, vendored beside them as `{ abi, creationCode }` compiled by
+ * `solc 0.8.36 --optimize` (each file says how).
+ *
  * GATED on SAUCE_RUST_V12_RUNTIME — the EVM half of the same engine-lineage finding the sibling
  * `svm.e2e.test.ts` documents, and a REAL FINDING, not a convenience:
  *
@@ -46,15 +55,18 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  encodeAbiParameters,
   encodeFunctionData,
   http,
   parseAbi,
+  zeroAddress,
 } from "viem";
 import type { Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { compileStdToken } from "./harness.js";
 import { startGatedEngine } from "../../evm/gated-engine.js";
 import type { GatedEngine } from "../../evm/gated-engine.js";
+import { safeApproveStatements, safeTransferStatements } from "../../../src/token/safe.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -73,9 +85,25 @@ if (!RUNTIME_HEX_PATH && process.env.CI) {
 }
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
-const MOCK_ERC20 = JSON.parse(readFileSync(join(FIXTURES, "MockERC20.json"), "utf8")) as {
-  creationCode: Hex;
-};
+const fixture = (name: string): { creationCode: Hex } =>
+  JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8")) as { creationCode: Hex };
+
+const MOCK_ERC20 = fixture("MockERC20");
+/** `transfer`/`transferFrom`/`approve` return `false` and move nothing. */
+const FALSE_RETURN_ERC20 = fixture("FalseReturnERC20");
+/** USDT: the writes return NOTHING, and `approve` refuses a nonzero -> nonzero change. */
+const NO_RETURN_ERC20 = fixture("NoReturnERC20");
+/** The writes take effect, then return exactly the bytes the token was constructed with. */
+const ODD_RETURN_ERC20 = fixture("OddReturnERC20");
+/** OpenZeppelin's own `SafeERC20`, run on the same cells as the reference. */
+const SAFE_ERC20_REFERENCE = fixture("SafeERC20Reference");
+
+const referenceAbi = parseAbi([
+  "function transfer(address token, address to, uint256 amount)",
+  "function transferFrom(address token, address from, address to, uint256 amount)",
+  "function approve(address token, address spender, uint256 amount)",
+  "function raw(address target, bytes data)",
+]);
 
 /** Anvil's first dev account — the deployer, and the caller of every transaction here. */
 const DEPLOYER = privateKeyToAccount(
@@ -111,7 +139,10 @@ const SPENDER: Address = "0x0000000000000000000000000000000000000004";
 const erc20Abi = parseAbi([
   "function mint(address to, uint256 amount)",
   "function approve(address spender, uint256 value) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
   "function balanceOf(address account) view returns (uint256)",
+  "function transfer(address to, uint256 value) returns (bool)",
+  "function transferFrom(address from, address to, uint256 value) returns (bool)",
 ]);
 
 // Built at module scope: viem clients are lazy (no socket until a request), so this costs nothing on
@@ -188,13 +219,26 @@ const call = (entry: string): Promise<bigint> =>
 const send = (entry: string): Promise<void> =>
   sendTo(sauce.pot, sauce.cookData(toHex(compileStdToken(entry, "evm").bytecode)), "the Pot");
 
-/** Deploy the vendored ERC20 creation code, returning its address. */
-const deployToken = (): Promise<Address> =>
+/** `send`, reporting whether the transaction landed instead of rejecting when it did not. */
+const attempt = (entry: string): Promise<"success" | "reverted"> =>
   walletClient
     .sendTransaction({
       account: DEPLOYER,
       chain: null,
-      data: MOCK_ERC20.creationCode,
+      to: sauce.pot,
+      data: sauce.cookData(toHex(compileStdToken(entry, "evm").bytecode)),
+      gas: GAS_LIMIT,
+    })
+    .then((hash) => publicClient.waitForTransactionReceipt({ hash }))
+    .then(({ status }) => status);
+
+/** Deploy `creationCode`, returning the contract's address. */
+const deploy = (creationCode: Hex): Promise<Address> =>
+  walletClient
+    .sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      data: creationCode,
       gas: GAS_LIMIT,
     })
     .then((hash) => publicClient.waitForTransactionReceipt({ hash }))
@@ -202,6 +246,9 @@ const deployToken = (): Promise<Address> =>
       ({ contractAddress }) =>
         contractAddress ?? Promise.reject(new Error("the ERC20 deployment produced no address")),
     );
+
+/** Deploy the vendored ERC20 creation code, returning its address. */
+const deployToken = (): Promise<Address> => deploy(MOCK_ERC20.creationCode);
 
 /**
  * Boot anvil, stand up the gated engine (see `gated-engine.ts` — Kitchen at its baked address, then
@@ -237,6 +284,299 @@ const stopEvm = (anvil: ChildProcess): Promise<void> => {
 
   return exited.then(() => undefined);
 };
+
+// ---------------------------------------------------------------------------------------------------
+// SafeERC20: every write, against every way a token can answer it
+// ---------------------------------------------------------------------------------------------------
+
+/** What every write in the matrix moves. */
+const AMOUNT = 0x5a0en;
+/** The allowance a USDT-shaped token has to be reset from before it accepts a new one. */
+const STANDING = 7n;
+
+/** Never deployed to. A call to it "succeeds" and returns nothing, which is the whole hazard. */
+const NO_CODE: Address = "0x000000000000000000000000000000000000c0de";
+
+/** The raw returndata `OddReturnERC20` is built to answer every write with. */
+const ODD_RETURNS = {
+  "a word of 2": `0x${"00".repeat(31)}02`,
+  "the single byte 0x01": "0x01",
+  "31 bytes that pad to 1": `0x${"00".repeat(30)}01`,
+  "64 bytes whose first word is 1": `0x${"00".repeat(31)}01${"00".repeat(32)}`,
+} as const satisfies Record<string, Hex>;
+
+type OddReturn = keyof typeof ODD_RETURNS;
+type Write = "transfer" | "transferFrom" | "approve";
+type Status = "success" | "reverted";
+
+/**
+ * Every kind of token the matrix writes to. Each run deploys a FRESH instance, so every spelling of
+ * a cell starts from identical state without anything having to be rolled back between them.
+ */
+const TOKENS = {
+  /** OpenZeppelin: returns `true`, reverts on a real failure. */
+  standard: () => deploy(MOCK_ERC20.creationCode),
+  falseReturn: () => deploy(FALSE_RETURN_ERC20.creationCode),
+  noReturn: () =>
+    deploy(
+      `${NO_RETURN_ERC20.creationCode}${encodeAbiParameters(
+        [{ type: "string" }, { type: "string" }, { type: "uint8" }],
+        ["Tether USD", "USDT", 6],
+      ).slice(2)}` as Hex,
+    ),
+  oddReturn: (odd: OddReturn) =>
+    deploy(
+      `${ODD_RETURN_ERC20.creationCode}${encodeAbiParameters(
+        [{ type: "bytes" }],
+        [ODD_RETURNS[odd]],
+      ).slice(2)}` as Hex,
+    ),
+  noCode: () =>
+    publicClient
+      .getCode({ address: NO_CODE })
+      .then((code) =>
+        code === undefined ? NO_CODE : Promise.reject(new Error(`${NO_CODE} has code`)),
+      ),
+} satisfies Record<string, (odd: OddReturn) => Promise<Address>>;
+
+interface Cell {
+  readonly write: Write;
+  readonly token: keyof typeof TOKENS;
+  /** What an `oddReturn` token answers with. */
+  readonly odd?: OddReturn;
+  readonly given?: keyof typeof GIVEN;
+  /** The recipient (`transfer`/`transferFrom`) or spender (`approve`), when not the default. */
+  readonly to?: Address;
+  readonly expected: Status;
+}
+
+const targetOf = (cell: Cell): Address =>
+  cell.to ?? (cell.write === "approve" ? SPENDER : RECIPIENT);
+
+/** The cell's write as ERC-20 arguments, in declaration order. `transferFrom` pulls from the deployer. */
+const argsOf = (cell: Cell): readonly [Address, bigint] | readonly [Address, Address, bigint] =>
+  cell.write === "transferFrom"
+    ? [DEPLOYER.address, targetOf(cell), AMOUNT]
+    : [targetOf(cell), AMOUNT];
+
+const calldataOf = (cell: Cell): Hex =>
+  encodeFunctionData({ abi: erc20Abi, functionName: cell.write, args: argsOf(cell) as never });
+
+const approveData = (spender: Address, amount: bigint): Hex =>
+  encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] });
+
+/** A raw, UNCHECKED `evm.call` of `data` — what a write is before any SafeERC20 check. */
+const rawCall = (token: Address, data: Hex): string =>
+  `function main(): void { const data = hex\`${data.slice(2)}\`; evm.call(${literal(token)}, 0n, data); }`;
+
+/**
+ * One way of issuing a write. `actor` is the address it runs AS — whose balance moves, whose
+ * allowance is set — so a cell's starting state can be put on whichever one is being tested.
+ */
+interface Spelling {
+  readonly name: string;
+  readonly actor: () => Address;
+  /** Which writes it can express at all. */
+  readonly writes: readonly Write[];
+  readonly write: (cell: Cell, token: Address) => Promise<Status>;
+  /** Issue `data` from the actor with nothing checked, for setting up a starting state. */
+  readonly raw: (token: Address, data: Hex) => Promise<void>;
+}
+
+let reference: Address;
+
+const potRaw = (token: Address, data: Hex): Promise<void> => send(rawCall(token, data));
+
+/** OpenZeppelin's `SafeERC20` itself, deployed as `fixtures/SafeERC20Reference.sol`. */
+const OPENZEPPELIN: Spelling = {
+  name: "OpenZeppelin SafeERC20 (the reference)",
+  actor: () => reference,
+  writes: ["transfer", "transferFrom", "approve"],
+  write: (cell, token) =>
+    walletClient
+      .sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        to: reference,
+        data: encodeFunctionData({
+          abi: referenceAbi,
+          functionName: cell.write,
+          args: [token, ...argsOf(cell)] as never,
+        }),
+        gas: GAS_LIMIT,
+      })
+      .then((hash) => publicClient.waitForTransactionReceipt({ hash }))
+      .then(({ status }) => status),
+  raw: (token, data) =>
+    sendTo(
+      reference,
+      encodeFunctionData({ abi: referenceAbi, functionName: "raw", args: [token, data] }),
+      "the reference's raw call",
+    ),
+};
+
+/** A direct `@sauce/token` call, as SauceScript that imports the library writes it. */
+const SAUCE_TOKEN: Spelling = {
+  name: "@sauce/token",
+  actor: () => sauce.pot,
+  writes: ["transfer", "transferFrom", "approve"],
+  write: (cell, token) => {
+    const args = [token, ...argsOf(cell)].map((arg) =>
+      typeof arg === "bigint" ? `${arg}n` : literal(arg),
+    );
+
+    return attempt(
+      `import { ${cell.write} } from "@sauce/token"; function main(): void { ${cell.write}(${args.join(", ")}); }`,
+    );
+  },
+  raw: potRaw,
+};
+
+/**
+ * `safe.ts`, as the SDK emits it into a route: the amount in a run-time local, the way the nesting
+ * emitters carry a measured one. It has no `transferFrom`, because nothing the SDK emits pulls.
+ */
+const SAFE_TS: Spelling = {
+  name: "safe.ts",
+  actor: () => sauce.pot,
+  writes: ["transfer", "approve"],
+  write: (cell, token) => {
+    const emit = cell.write === "approve" ? safeApproveStatements : safeTransferStatements;
+    const statements = emit(
+      "w_",
+      literal(token),
+      { literal: BigInt(targetOf(cell)) },
+      { local: "amt" },
+    );
+
+    return attempt(`function main(): void {\nconst amt = ${AMOUNT}n;\n${statements.join("\n")}\n}`);
+  },
+  raw: potRaw,
+};
+
+/** The same write with nothing checked, for showing that a refusal is the check's, not the token's. */
+const UNCHECKED: Spelling = {
+  name: "an unchecked evm.call",
+  actor: () => sauce.pot,
+  writes: ["transfer", "transferFrom", "approve"],
+  write: (cell, token) => attempt(rawCall(token, calldataOf(cell))),
+  raw: potRaw,
+};
+
+/** The state a write starts from, put on the spelling's actor before the write runs. */
+const GIVEN = {
+  /** The actor holds what it is asked to transfer. */
+  funded: (token: Address, spelling: Spelling) => mintTo(token, spelling.actor(), AMOUNT),
+  /** The deployer holds the amount and has approved the actor to pull it. */
+  pullApproved: (token: Address, spelling: Spelling) =>
+    mintTo(token, DEPLOYER.address, AMOUNT).then(() =>
+      sendTo(token, approveData(spelling.actor(), AMOUNT), "approve"),
+    ),
+  /** The deployer holds the amount but approved nothing, so an honest token refuses the pull. */
+  pullUnapproved: (token: Address) => mintTo(token, DEPLOYER.address, AMOUNT),
+  /** The actor already allows the spender a non-zero amount — the state USDT will not move from. */
+  standingAllowance: (token: Address, spelling: Spelling) =>
+    spelling.raw(token, approveData(SPENDER, STANDING)),
+} satisfies Record<string, (token: Address, spelling: Spelling) => Promise<void>>;
+
+/** The starting state a write needs to be able to succeed at all. */
+const READY: Record<Write, keyof typeof GIVEN | undefined> = {
+  transfer: "funded",
+  transferFrom: "pullApproved",
+  approve: undefined,
+};
+
+/**
+ * The SafeERC20 contract, as rows. A write that returns an ABI `true`, or nothing from a contract,
+ * lands; one that returns `false`, returns anything that is not a word equal to 1, reaches no code,
+ * or is refused by the token reverts the whole cook. OpenZeppelin runs every row too, so the table
+ * is the reference's observed behaviour, not this file's belief about it.
+ *
+ * The refusals by an HONEST token are real refusals, not the check misfiring: the USDT shape reverts
+ * a transfer the actor cannot fund and a pull nobody approved, and OpenZeppelin's ERC20 reverts an
+ * approve to the zero address. They show that accepting empty returndata never swallows a revert.
+ */
+const CELLS: readonly Cell[] = (["transfer", "transferFrom", "approve"] as const).flatMap(
+  (write): Cell[] => {
+    const ready = READY[write];
+
+    return [
+      { write, token: "standard", given: ready, expected: "success" },
+      { write, token: "falseReturn", given: ready, expected: "reverted" },
+      { write, token: "noReturn", given: ready, expected: "success" },
+      ...(Object.keys(ODD_RETURNS) as OddReturn[]).map((odd): Cell => ({
+        write,
+        token: "oddReturn",
+        odd,
+        given: ready,
+        expected: odd === "64 bytes whose first word is 1" ? "success" : "reverted",
+      })),
+      { write, token: "noCode", expected: "reverted" },
+      ...(write === "transfer"
+        ? [{ write, token: "noReturn", expected: "reverted" } as const]
+        : write === "transferFrom"
+          ? [{ write, token: "noReturn", given: "pullUnapproved", expected: "reverted" } as const]
+          : [
+              {
+                write,
+                token: "noReturn",
+                given: "standingAllowance",
+                expected: "success",
+              } as const,
+              { write, token: "standard", to: zeroAddress, expected: "reverted" } as const,
+            ]),
+    ];
+  },
+);
+
+const title = (cell: Cell): string =>
+  [
+    `${cell.write} on the ${cell.token} token`,
+    cell.odd && `answering ${cell.odd}`,
+    cell.given && `(${cell.given})`,
+    cell.to && `to ${cell.to}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+/** `it.each` rows: the title, the outcome it asserts, and the cell itself. */
+const rows = (cells: readonly Cell[]) =>
+  cells.map((cell) => [title(cell), cell.expected, cell] as const);
+
+/**
+ * What a write did: whether it landed, and the one quantity it exists to change — the target's
+ * balance, or the actor's allowance to the spender — or `null` where there is no token to ask.
+ */
+interface Outcome {
+  readonly status: Status;
+  readonly effect: bigint | null;
+}
+
+const run = async (cell: Cell, spelling: Spelling): Promise<Outcome> => {
+  const token = await TOKENS[cell.token](cell.odd as OddReturn);
+  if (cell.given) await GIVEN[cell.given](token, spelling);
+
+  const status = await spelling.write(cell, token);
+  if (cell.token === "noCode") return { status, effect: null };
+
+  const effect =
+    cell.write === "approve"
+      ? await publicClient.readContract({
+          address: token,
+          abi: erc20Abi,
+          functionName: "allowance",
+          args: [spelling.actor(), targetOf(cell)],
+        })
+      : await balanceOf(token, targetOf(cell));
+
+  return { status, effect };
+};
+
+/** A write that lands moved exactly `AMOUNT`; one that reverted moved nothing. */
+const expectedOutcome = (cell: Cell): Outcome => ({
+  status: cell.expected,
+  effect: cell.token === "noCode" ? null : cell.expected === "success" ? AMOUNT : 0n,
+});
 
 describeEvm("@sauce/token e2e: the EVM arm against a real ERC20", () => {
   let anvil: ChildProcess;
@@ -304,5 +644,53 @@ describeEvm("@sauce/token e2e: the EVM arm against a real ERC20", () => {
 
     // The `transfer` case above already moved one `TRANSFERRED` to the recipient.
     expect(await balanceOf(token, RECIPIENT)).toBe(TRANSFERRED * 2n);
+  });
+
+  // Three spellings of one contract: OpenZeppelin's, the std library's for SauceScript that imports
+  // it, and `safe.ts`'s for what the SDK emits into a route. Each must land every cell it can spell
+  // exactly as the table says — and since the reference must too, that is `safe.ts` == std == OZ.
+  describe.each([OPENZEPPELIN, SAUCE_TOKEN, SAFE_TS])("SafeERC20 through $name", (spelling) => {
+    beforeAll(async () => {
+      reference ??= await deploy(SAFE_ERC20_REFERENCE.creationCode);
+    }, 60_000);
+
+    it.each(rows(CELLS.filter((cell) => spelling.writes.includes(cell.write))))(
+      "%s -> %s",
+      async (_, __, cell) => {
+        expect(await run(cell, spelling)).toEqual(expectedOutcome(cell));
+      },
+      60_000,
+    );
+  });
+
+  describe("each refusal is the check's, not the token's", () => {
+    // A LYING token does not revert on its own, so the same write issued raw, with nothing
+    // inspecting what came back, has to land — or the cell it controls proves nothing.
+    it.each(
+      rows(
+        CELLS.filter(
+          (cell) =>
+            cell.expected === "reverted" &&
+            ["falseReturn", "oddReturn", "noCode"].includes(cell.token),
+        ),
+      ),
+    )(
+      "%s lands when nothing checks what it returns",
+      async (_, __, cell) => {
+        expect((await run(cell, UNCHECKED)).status).toBe("success");
+      },
+      60_000,
+    );
+
+    it("a plain approve over the standing allowance is what USDT refuses", async () => {
+      const cell: Cell = {
+        write: "approve",
+        token: "noReturn",
+        given: "standingAllowance",
+        expected: "reverted",
+      };
+
+      expect(await run(cell, UNCHECKED)).toEqual({ status: "reverted", effect: STANDING });
+    }, 60_000);
   });
 });

@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-/// @notice A mintable ERC20 whose `transfer` and `approve` RETURN FALSE instead of reverting, and
-/// move nothing. Tokens like this exist, and they are the case `SafeERC20` was written for: a caller
-/// that ignores the return value believes the transfer happened and the value is quietly gone.
+/// @notice A mintable ERC20 whose `transfer`, `approve` and `transferFrom` RETURN FALSE instead of
+/// reverting, and move nothing. Tokens like this exist, and they are the case `SafeERC20` was
+/// written for: a caller that ignores the return value believes the transfer happened and the value
+/// is quietly gone.
 ///
-/// The counterpart of `NoReturnERC20`, which returns nothing at all. Between them they cover both
-/// ways an ERC-20 can lie about a write.
+/// The counterpart of `NoReturnERC20`, which returns nothing at all, and of `OddReturnERC20`, which
+/// returns something that is not a `bool`. Between them they cover the ways an ERC-20 can lie about
+/// a write.
 contract FalseReturnERC20 {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
@@ -20,6 +22,10 @@ contract FalseReturnERC20 {
     }
 
     function approve(address, uint256) external pure returns (bool) {
+        return false;
+    }
+
+    function transferFrom(address, address, uint256) external pure returns (bool) {
         return false;
     }
 }

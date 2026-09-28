@@ -2,12 +2,13 @@
  * `@sauce/token` compile conformance, from the CONSUMER side: the library at sdk/src/std/token built
  * through the published `@eco-incorp/sauce-compiler`, for both targets.
  *
- * Four things are asserted here and nowhere else in this repo:
+ * Five things are asserted here and nowhere else in this repo:
  *   1. every exported method compiles on both arms, at the signature each arm actually declares;
  *   2. the SPL Token program id the library pins its `require`s to, counted in the emitted bytecode;
- *   3. what the library demands of its caller, which only a compile failure can show — the manifest
+ *   3. the ERC-20 selectors the EVM writes spell out by hand, counted the same way;
+ *   4. what the library demands of its caller, which only a compile failure can show — the manifest
  *      cannot, being exactly `main`'s own `Account` params;
- *   4. the packaging invariant that there is deliberately NO neutral `token.js`, so a package with no
+ *   5. the packaging invariant that there is deliberately NO neutral `token.js`, so a package with no
  *      arm for the target fails on the IMPORT rather than on a missing export.
  *
  * Execution — the compiled bytecode actually running on a real engine and returning the right value —
@@ -19,6 +20,7 @@
  * engine at all.
  */
 import { address, getAddressCodec } from "@solana/kit";
+import { toFunctionSelector } from "viem";
 import { CASES, compileStdToken, compileWith } from "./harness.js";
 import type { AccountEntry } from "./harness.js";
 
@@ -31,12 +33,14 @@ const slot = (index: number, name: string): AccountEntry => ({
   requires: "readonly",
 });
 
-const svmEntry = (method: string): string => {
+const caseNamed = (method: string) => {
   const testCase = CASES.find((entry) => entry.method === method);
   if (!testCase) throw new Error(`no case named ${method}`);
 
-  return testCase.svm;
+  return testCase;
 };
+
+const svmEntry = (method: string): string => caseNamed(method).svm;
 
 const manifestOf = (method: string): AccountEntry[] => {
   const { manifest } = compileStdToken(svmEntry(method), "svm");
@@ -93,6 +97,46 @@ describe("@sauce/token: the SPL Token program id", () => {
     ["approve", 2],
   ])("%s pins it %i time(s)", (method, expected) => {
     expect(pinnedProgramIds(method)).toBe(expected);
+  });
+});
+
+describe("@sauce/token: the ERC-20 selectors the EVM writes spell out", () => {
+  // The writes build raw calldata for `evm.call`, so each selector is a hex literal written into the
+  // library rather than one the compiler derives from `erc20.abi.json`. A wrong digit still compiles,
+  // and on a run with no engine nothing else here would notice. So, as with the program id above,
+  // each is derived from its canonical signature, never copied from the library. A write carries
+  // its own selector exactly once and no other write's; `approve` also carries `allowance`, the read
+  // that decides whether a reset is needed.
+  const SIGNATURES = [
+    "transfer(address,uint256)",
+    "transferFrom(address,address,uint256)",
+    "approve(address,uint256)",
+    "allowance(address,address)",
+  ];
+
+  const selectorCounts = (method: string): Record<string, number> => {
+    const bytecode = Buffer.from(compileStdToken(caseNamed(method).evm, "evm").bytecode).toString(
+      "hex",
+    );
+
+    return Object.fromEntries(
+      SIGNATURES.map((signature) => [
+        signature,
+        bytecode.split(toFunctionSelector(signature).slice(2)).length - 1,
+      ]),
+    );
+  };
+
+  it.each([
+    ["transfer", ["transfer(address,uint256)"]],
+    ["transferFrom", ["transferFrom(address,address,uint256)"]],
+    ["approve", ["approve(address,uint256)", "allowance(address,address)"]],
+  ])("%s", (method, carried) => {
+    expect(selectorCounts(method)).toEqual(
+      Object.fromEntries(
+        SIGNATURES.map((signature) => [signature, carried.includes(signature) ? 1 : 0]),
+      ),
+    );
   });
 });
 
