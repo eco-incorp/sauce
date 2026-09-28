@@ -2,8 +2,8 @@
  * routes/portal.ts — submission/read calldata contract tests.
  *
  * Pure: hand-built `Intent`s, no compiler, no network. Every tx is re-decoded against the SAME
- * `PORTAL_ABI` and asserted against `encodeRoute`/`decodeRewardEvm` — the "agrees by construction"
- * claim in portal.ts's module doc, checked rather than assumed.
+ * registered `PortalABI` and asserted against `encodeRoute`/`decodeRewardEvm` — the agreement
+ * portal.ts's module doc claims, checked rather than assumed.
  */
 import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, type Hex } from "viem";
 
@@ -13,7 +13,6 @@ import {
   intentHashCall,
   intentVaultAddressCall,
   isIntentFundedCall,
-  PORTAL_ABI,
   publishAndFundTx,
   publishTx,
 } from "../src/routes/portal.js";
@@ -27,7 +26,7 @@ import {
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import type { Intent, Reward, Route, UniversalAddress } from "../src/routes/types.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import { compileProgram } from "./helpers";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 
 const evmAddr = (byte: string): UniversalAddress =>
   toUniversalAddress(("0x" + byte.repeat(20)) as Hex);
@@ -83,7 +82,7 @@ describe("portal.ts: publishTx", () => {
     expect(tx.to.toLowerCase()).toBe(PORTAL.toLowerCase());
     expect(tx.value).toBe(0n);
 
-    const decoded = decodeFunctionData({ abi: PORTAL_ABI, data: tx.data });
+    const decoded = decodeFunctionData({ abi: PortalABI, data: tx.data });
     expect(decoded.functionName).toBe("publish");
     const [destination, routeBytes, rewardArg] = decoded.args as readonly [bigint, Hex, unknown];
     expect(destination).toBe(intent.destination);
@@ -104,7 +103,7 @@ describe("portal.ts: publishAndFundTx", () => {
     const tx = publishAndFundTx(intent, true, { portal: PORTAL });
 
     expect(tx.value).toBe(42n);
-    const decoded = decodeFunctionData({ abi: PORTAL_ABI, data: tx.data });
+    const decoded = decodeFunctionData({ abi: PortalABI, data: tx.data });
     expect(decoded.functionName).toBe("publishAndFund");
     const [destination, routeBytes, rewardArg, allowPartial] = decoded.args as readonly [
       bigint,
@@ -130,7 +129,7 @@ describe("portal.ts: fundTx", () => {
     const tx = fundTx(intent, false, { portal: PORTAL });
 
     expect(tx.value).toBe(7n);
-    const decoded = decodeFunctionData({ abi: PORTAL_ABI, data: tx.data });
+    const decoded = decodeFunctionData({ abi: PortalABI, data: tx.data });
     expect(decoded.functionName).toBe("fund");
     const [destination, routeHashArg, rewardArg, allowPartial] = decoded.args as readonly [
       bigint,
@@ -330,7 +329,7 @@ describe("portal.ts: cross-VM — SVM destination", () => {
       },
     });
     const tx = publishAndFundTx(intent, false, { portal: PORTAL });
-    const decoded = decodeFunctionData({ abi: PORTAL_ABI, data: tx.data });
+    const decoded = decodeFunctionData({ abi: PortalABI, data: tx.data });
     const [, routeBytes] = decoded.args as readonly [bigint, Hex, unknown, boolean];
     expect(routeBytes).toBe(encodeRoute(intent.route, intent.destination));
     // Borsh, not ABI: the route bytes are exactly the Borsh blob encodeRouteSvm produces, not an
@@ -355,16 +354,11 @@ describe("portal.ts: EVM-source guard", () => {
   });
 });
 
-describe("PORTAL_CONTRACTS: the Portal binding every route compile carries", () => {
-  // What this buys is the README's first example: a hand-written program can call
-  // `IPortal.at(portal).publishAndFund(...)` with no import line and no caller configuration. The
-  // cost has to be nothing, or every route in the SDK would pay for a binding it does not use.
-  const EXECUTION = {
-    pot: "0x1111111111111111111111111111111111111111",
-    engine: "0x2222222222222222222222222222222222222222",
-  } as const;
-
-  it("is callable with no `contracts` option at all", () => {
+describe("a route body has no Portal binding", () => {
+  // The SDK lowers `Chain(() => ...).reward(...)` to the Portal call itself, and the TypeScript
+  // builder returns the source-chain requests. A second, hand-written way to reach the Portal from a
+  // program is exactly what that design exists to rule out, so it must stay absent.
+  it("rejects `IPortal.at(...)` with no `contracts` option", () => {
     const source = [
       "function main() {",
       "  const route = hex`aabb`;",
@@ -376,41 +370,11 @@ describe("PORTAL_CONTRACTS: the Portal binding every route compile carries", () 
       "}",
     ].join("\n");
 
-    expect(() => compileSauceRoute("base", source, EXECUTION)).not.toThrow();
-  });
-
-  it("costs a program that does not use it exactly nothing", () => {
-    const body = "function main() { return 1n; }";
-    const withBinding = compileSauceRoute("base", body, EXECUTION).compiled.bytecode[0]!;
-    const without = compileProgram(body).bytecode[0]!;
-
-    expect(Buffer.from(withBinding).toString("hex")).toBe(Buffer.from(without).toString("hex"));
-  });
-
-  it("is the BASE layer — a caller's own IPortal wins", () => {
-    const source = [
-      "function main() {",
-      "  IPortal.at(0x3333333333333333333333333333333333333333).ping(7n);",
-      "}",
-    ].join("\n");
-
-    // `ping` exists only on the caller's ABI. It compiling proves the override reached the compiler.
     expect(() =>
-      compileSauceRoute("base", source, EXECUTION, {
-        contracts: {
-          IPortal: {
-            abi: [
-              {
-                type: "function",
-                name: "ping",
-                stateMutability: "nonpayable",
-                inputs: [{ name: "n", type: "uint256" }],
-                outputs: [],
-              },
-            ],
-          },
-        },
+      compileSauceRoute("base", source, {
+        pot: "0x1111111111111111111111111111111111111111",
+        engine: "0x2222222222222222222222222222222222222222",
       }),
-    ).not.toThrow();
+    ).toThrow(/IPortal/);
   });
 });

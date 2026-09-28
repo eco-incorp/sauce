@@ -50,7 +50,8 @@ import {
 } from "../src/routes/nest-dynamic.js";
 import { assertNestingInvariants } from "../src/routes/nest.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "../src/routes/normalize.js";
-import { PORTAL_ABI, publishAndFundTx } from "../src/routes/portal.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import { publishAndFundTx } from "../src/routes/portal.js";
 import { renderTemplate, scaleAmount } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
 
@@ -114,7 +115,7 @@ const templated = evmChild(AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER);
  *  than from the `Intent` object — `keccak256(abi.encodePacked(uint64 destination, bytes32
  *  routeHash, bytes32 rewardHash))`, per `IntentSource.getIntentHash`. */
 function intentHashOfCalldata(calldata: Hex): Hex {
-  const { functionName, args } = decodeFunctionData({ abi: PORTAL_ABI, data: calldata });
+  const { functionName, args } = decodeFunctionData({ abi: PortalABI, data: calldata });
   expect(functionName).toBe("publishAndFund");
   const [destination, routeBytes, reward] = args as [
     bigint,
@@ -169,7 +170,7 @@ describe("the rendered calldata IS the concrete child's calldata", () => {
   it("carries allowPartial through to the encoded call", () => {
     const decode = (allowPartial: boolean) =>
       decodeFunctionData({
-        abi: PORTAL_ABI,
+        abi: PortalABI,
         data: renderDynamicChild(templated, { ...OPTS, allowPartial }, 1n),
       }).args?.[3];
 

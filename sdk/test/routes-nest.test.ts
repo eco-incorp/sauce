@@ -8,7 +8,7 @@ import { decodeFunctionData, keccak256, type Hex } from "viem";
 import { requireChain } from "../src/chains/canonical.js";
 import { hashIntent } from "../src/routes/encode.js";
 import { assertNestingInvariants, nestedChildCalls } from "../src/routes/nest.js";
-import { PORTAL_ABI } from "../src/routes/portal.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import type { Intent, Route, UniversalAddress } from "../src/routes/types.js";
@@ -98,7 +98,7 @@ describe("nest.ts: nestedChildCalls", () => {
     // ... and NOT the child's own route.portal, nor the child's vault (no vault appears anywhere here).
     expect(spender0.toLowerCase()).not.toBe(CHILD_ROUTE_PORTAL.toLowerCase());
 
-    const decodedLast = decodeFunctionData({ abi: PORTAL_ABI, data: calls[2]!.data });
+    const decodedLast = decodeFunctionData({ abi: PortalABI, data: calls[2]!.data });
     expect(decodedLast.functionName).toBe("publishAndFund");
     expect(calls[2]!.value).toBe(5n);
   });
@@ -123,7 +123,7 @@ describe("nest.ts: nestedChildCalls", () => {
     const calls = nestedChildCalls(child, { portal: PARENT_PORTAL, allowPartial: true });
     const publishCall = calls[calls.length - 1]!;
 
-    const decoded = decodeFunctionData({ abi: PORTAL_ABI, data: publishCall.data });
+    const decoded = decodeFunctionData({ abi: PortalABI, data: publishCall.data });
     expect(decoded.functionName).toBe("publishAndFund");
     const [destination, routeBytes] = decoded.args as readonly [bigint, Hex, unknown, boolean];
     expect(destination).toBe(child.destination);
@@ -145,7 +145,7 @@ describe("nest.ts: nestedChildCalls", () => {
     });
     const calls = nestedChildCalls(child, { portal: PARENT_PORTAL, allowPartial: true });
     expect(calls).toHaveLength(1);
-    const decoded = decodeFunctionData({ abi: PORTAL_ABI, data: calls[0]!.data });
+    const decoded = decodeFunctionData({ abi: PortalABI, data: calls[0]!.data });
     expect(decoded.functionName).toBe("publishAndFund");
   });
 });

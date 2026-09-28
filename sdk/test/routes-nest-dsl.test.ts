@@ -11,7 +11,7 @@ import { decodeFunctionData, type Hex } from "viem";
 
 import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import { hashIntent } from "../src/routes/encode.js";
-import { PORTAL_ABI } from "../src/routes/portal.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
@@ -159,7 +159,7 @@ describe(".nest(): call ordering", () => {
     const publishCalls = built.intent.route.calls
       .map((c) => {
         try {
-          return decodeFunctionData({ abi: PORTAL_ABI, data: c.data });
+          return decodeFunctionData({ abi: PortalABI, data: c.data });
         } catch {
           return undefined;
         }
@@ -183,7 +183,7 @@ describe(".nest(): call ordering", () => {
     // exactly one non-publishAndFund call (the cook), which must be the LAST call.
     const decoded = built.intent.route.calls.map((c) => {
       try {
-        return decodeFunctionData({ abi: PORTAL_ABI, data: c.data }).functionName;
+        return decodeFunctionData({ abi: PortalABI, data: c.data }).functionName;
       } catch {
         return "cook";
       }

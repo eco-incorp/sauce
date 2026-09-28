@@ -19,7 +19,7 @@ import {
   AMOUNT_OUT_PLACEHOLDER,
   dynamicChildTemplate,
 } from "../src/routes/nest-dynamic.js";
-import { PORTAL_ABI } from "../src/routes/portal.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import type { BuiltIntent } from "../src/routes/intent-dsl.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
@@ -78,7 +78,7 @@ const PLACEHOLDERS_ONE_EACH = [
 function callKinds(calls: readonly { data: Hex }[]): readonly string[] {
   return calls.map((c) => {
     try {
-      return decodeFunctionData({ abi: PORTAL_ABI, data: c.data }).functionName;
+      return decodeFunctionData({ abi: PortalABI, data: c.data }).functionName;
     } catch {
       // not a Portal call
     }

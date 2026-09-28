@@ -1,11 +1,10 @@
 /**
  * The eco-routes Portal and prover ABIs, as the SDK registers them.
  *
- * DELIBERATELY DECLARED HERE rather than imported from `routes/portal.ts`. That module's
- * `PORTAL_ABI` is a working subset -- the `bytes`-route overloads its calldata helpers need, and
- * nothing more -- while a registered protocol describes the contract a consumer might call.
- * `eco-routes-abi-drift.test.ts` pins the two against each other by selector for every function
- * both declare, so the pair cannot drift apart while this one grows.
+ * The SDK's ONLY declaration of the Portal. `routes/portal.ts` encodes its submission calldata
+ * against `PortalABI` rather than keeping a subset of its own, so there is no second copy to drift.
+ * What that module does need -- each reward parameter here matching the `EVM_REWARD_PARAM` the
+ * intent hash is taken over -- `eco-routes-abi-drift.test.ts` pins.
  *
  * Every entry is written out in full, with no shared sub-objects. Protocol ABIs are read
  * statically -- by the per-protocol compile suite, among others -- so a reference to a

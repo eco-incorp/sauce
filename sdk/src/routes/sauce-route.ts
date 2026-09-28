@@ -21,7 +21,6 @@ import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs } from "./rs-compile.js";
-import { PORTAL_CONTRACTS } from "./portal.js";
 import { rewriteTokenFactory, rewriteTokenMembers } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
@@ -288,10 +287,7 @@ export function compileSauceRoute(
   });
   source = sugar.source;
   let baseDirs = options.baseDirs;
-  // The Portal binding is layered UNDERNEATH the caller's own contracts, so `IPortal.at(...)` is
-  // callable from a hand-written body with no import and no setup, and a caller who supplies their
-  // own `IPortal` still wins. An offered-but-unused ABI emits nothing.
-  let contracts: ContractsConfig | undefined = { ...PORTAL_CONTRACTS, ...options.contracts };
+  let contracts: ContractsConfig | undefined = options.contracts;
   // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
   // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare
   // `IERC20.at(USDC)` (the symbol, not a literal) with no `USDC` define at all. Idempotent with
@@ -344,8 +340,6 @@ export function compileSauceRoute(
       typeof options.accessors === "object" ? options.accessors : {};
     const rewrittenAccessors = rewriteProtocolAccessors(source, chain, {
       ...accessorOpts,
-      // The merged set, not just the caller's: a synthesized binding that collides with `IPortal`
-      // must be reported rather than silently shadowing it.
       existingContracts: contracts,
     });
     if (rewrittenAccessors.rewrote) {

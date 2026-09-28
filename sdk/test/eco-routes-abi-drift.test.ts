@@ -1,36 +1,55 @@
 /**
- * `protocols/eco-routes/abis.ts` and `routes/portal.ts` both declare the Portal, for different
- * reasons — one describes the contract a consumer might call, the other is the working subset the
- * SDK's own calldata helpers encode against. Two declarations of one contract drift, and the way it
- * shows up is a selector that no longer matches the deployed function: calldata that encodes
- * cleanly, sends cleanly, and reverts.
- *
- * Every function both declare is compared by selector here. The registered ABI is free to grow;
- * it is not free to disagree.
+ * `protocols/eco-routes/abis.ts` is the SDK's only declaration of the Portal, and `routes/portal.ts`
+ * encodes its submission calldata against it. What can still drift is the reward: the calldata
+ * encodes it with this ABI's tuple, while `hashIntent` hashes it with `encode.ts`'s
+ * `EVM_REWARD_PARAM`. Two tuples that disagree give calldata that encodes cleanly, sends cleanly,
+ * and publishes an intent under a hash nobody computed.
  */
-import { getAbiItem, toFunctionSelector, type Abi, type AbiFunction } from "viem";
+import { encodeAbiParameters, getAbiItem, type Abi, type AbiFunction } from "viem";
 
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
-import { PORTAL_ABI } from "../src/routes/portal.js";
 import { ecoRoutesGenerations } from "../src/protocols/eco-routes/lookup.js";
+import { EVM_REWARD_PARAM } from "../src/routes/encode.js";
 
-const shared = (PORTAL_ABI as unknown as Abi)
-  .filter((item): item is AbiFunction => item.type === "function")
-  .map((item) => item.name);
+/** Every Portal function `routes/portal.ts` encodes. */
+const ENCODED = [
+  "publish",
+  "publishAndFund",
+  "fund",
+  "intentVaultAddress",
+  "getIntentHash",
+  "isIntentFunded",
+] as const;
 
-describe("the registered Portal ABI agrees with the one the SDK encodes against", () => {
-  it("covers every function the calldata helpers use", () => {
-    for (const name of shared) {
-      expect(getAbiItem({ abi: PortalABI as unknown as Abi, name })).toBeDefined();
-    }
-    expect(shared.length).toBeGreaterThan(0);
+const functionsNamed = (name: string): AbiFunction[] =>
+  (PortalABI as unknown as Abi).filter(
+    (item): item is AbiFunction => item.type === "function" && item.name === name,
+  );
+
+describe("the registered Portal ABI is the one the SDK encodes against", () => {
+  it.each(ENCODED)("declares exactly one %s", (name) => {
+    // One overload per name is what lets `encodeFunctionData({ functionName })` never pick the wrong
+    // signature.
+    expect(functionsNamed(name)).toHaveLength(1);
   });
 
-  it.each(shared)("%s has the same selector in both", (name) => {
-    const registered = getAbiItem({ abi: PortalABI as unknown as Abi, name }) as AbiFunction;
-    const encoded = getAbiItem({ abi: PORTAL_ABI as unknown as Abi, name }) as AbiFunction;
+  it.each(ENCODED)("%s encodes its reward exactly as the intent hash does", (name) => {
+    const reward = functionsNamed(name)[0]!.inputs.find((input) => input.name === "reward");
+    const sample = {
+      deadline: 2_000_000_000n,
+      creator: "0x4444444444444444444444444444444444444444",
+      prover: "0x5555555555555555555555555555555555555555",
+      nativeAmount: 7n,
+      tokens: [
+        { token: "0x6666666666666666666666666666666666666666", amount: 1n },
+        { token: "0x7777777777777777777777777777777777777777", amount: 2n },
+      ],
+    } as const;
 
-    expect(toFunctionSelector(registered)).toBe(toFunctionSelector(encoded));
+    expect(reward).toBeDefined();
+    expect(encodeAbiParameters([reward!], [sample])).toBe(
+      encodeAbiParameters([EVM_REWARD_PARAM], [sample]),
+    );
   });
 
   it("takes the route as `bytes`, never as a tuple", () => {

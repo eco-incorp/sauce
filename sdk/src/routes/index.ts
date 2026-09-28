@@ -134,8 +134,6 @@ export {
   isIntentFundedCall,
   publishAndFundTx,
   publishTx,
-  PORTAL_ABI,
-  PORTAL_CONTRACTS,
 } from "./portal.js";
 export type { PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
 
