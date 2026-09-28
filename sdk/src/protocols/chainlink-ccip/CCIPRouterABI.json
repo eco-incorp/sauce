@@ -49,7 +49,7 @@
       "outputs": [
         {
           "name": "messageId",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ]
     },

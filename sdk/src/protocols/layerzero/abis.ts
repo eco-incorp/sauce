@@ -9,7 +9,7 @@ export const LayerZeroEndpointV2ABI = [
         type: "tuple",
         components: [
           { name: "dstEid", type: "uint32" },
-          { name: "receiver", type: "uint256" },
+          { name: "receiver", type: "bytes32" },
           { name: "message", type: "bytes" },
           { name: "options", type: "bytes" },
           { name: "payInLzToken", type: "bool" },
@@ -22,7 +22,7 @@ export const LayerZeroEndpointV2ABI = [
         name: "receipt",
         type: "tuple",
         components: [
-          { name: "guid", type: "uint256" },
+          { name: "guid", type: "bytes32" },
           { name: "nonce", type: "uint64" },
           {
             name: "fee",
@@ -46,7 +46,7 @@ export const LayerZeroEndpointV2ABI = [
         type: "tuple",
         components: [
           { name: "dstEid", type: "uint32" },
-          { name: "receiver", type: "uint256" },
+          { name: "receiver", type: "bytes32" },
           { name: "message", type: "bytes" },
           { name: "options", type: "bytes" },
           { name: "payInLzToken", type: "bool" },

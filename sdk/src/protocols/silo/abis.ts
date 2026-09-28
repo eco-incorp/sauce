@@ -22,7 +22,10 @@ export const SiloABI = [
       { name: "amount", type: "uint256" },
       { name: "collateralOnly", type: "bool" },
     ],
-    outputs: [{ name: "withdrawnAmount", type: "uint256" }],
+    outputs: [
+      { name: "withdrawnAmount", type: "uint256" },
+      { name: "withdrawnShare", type: "uint256" },
+    ],
   },
   {
     name: "borrow",

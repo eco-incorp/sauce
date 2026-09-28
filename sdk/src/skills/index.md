@@ -56,7 +56,7 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 | `ramses`         | Ramses         | ARB                                         | swap (stable/volatile routes)                                    |
 | `fenix`          | Fenix          | BLAST                                       | swap (stable/volatile routes)                                    |
 | `lynex`          | Lynex          | LINEA                                       | swap (stable/volatile routes)                                    |
-| `kim`            | Kim            | MODE                                        | swap (stable/volatile routes)                                    |
+| `kim`            | Kim            | MODE                                        | swap (token path, Camelot-style router)                          |
 
 ### Lending (16 protocols)
 
@@ -76,7 +76,7 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 | `venus`       | Venus       | BSC                                                             | mint, redeemUnderlying, borrow, repayBorrow (Compound V2 fork) |
 | `seamless`    | Seamless    | BASE                                                            | supply, withdraw, borrow, repay (Aave V3 fork + ILMs)          |
 | `silo`        | Silo        | ETH, ARB                                                        | deposit, withdraw, borrow, repay (isolated Silos)              |
-| `layerbank`   | LayerBank   | SCROLL                                                          | mint, redeemUnderlying, borrow, repayBorrow (Compound V2 fork) |
+| `layerbank`   | LayerBank   | SCROLL                                                          | supply, redeemUnderlying, borrow, repayBorrow (via Core)       |
 | `zerolend`    | ZeroLend    | zkSync                                                          | supply, withdraw, borrow, repay (Aave V3 fork)                 |
 
 ### Bridges (22 protocols)
@@ -88,7 +88,7 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 | `hop`             | Hop Protocol        | Rollup bridge                | sendToL2, swapAndSend                       |
 | `synapse`         | Synapse             | Multi-chain bridge + DEX     | bridge, bridgeAndSwap                       |
 | `celer`           | Celer Network       | SGN bridge                   | send (cross-chain transfer)                 |
-| `connext`         | Connext (Everclear) | Intent-based bridge          | xcall (cross-chain transfer)                |
+| `connext`         | Connext (Everclear) | Intent-based bridge          | newIntent (cross-chain transfer)            |
 | `debridge`        | deBridge            | DLN bridge                   | send (cross-chain with market makers)       |
 | `lifi`            | LI.FI               | Bridge + DEX aggregator      | swapAndBridge                               |
 | `socket`          | Socket              | Bridge aggregator            | bridge (optimal route selection)            |
@@ -150,7 +150,7 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 | `level-finance`      | Level Finance      | perpetuals | BSC, ARB  | addLiquidity, openPosition                |
 | `perpetual-protocol` | Perpetual Protocol | perpetuals | OP        | openPosition (vAMM)                       |
 | `mux-protocol`       | MUX Protocol       | perpetuals | ARB       | openPosition (aggregated)                 |
-| `premia`             | Premia             | options    | ARB, ETH  | purchase (options AMM)                    |
+| `premia`             | Premia             | options    | ARB       | exercise, settle (v3 option pools)        |
 | `hegic`              | Hegic              | options    | ARB       | createHedge (ETH/BTC options)             |
 | `opyn`               | Opyn               | options    | ETH       | openVault (Squeeth power perps)           |
 | `thales`             | Thales             | options    | OP        | buyFromAMM (positional markets)           |

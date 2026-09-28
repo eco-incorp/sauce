@@ -125,7 +125,7 @@
       "outputs": [
         {
           "name": "debt",
-          "type": "uint256"
+          "type": "int256"
         },
         {
           "name": "depositedTokens",

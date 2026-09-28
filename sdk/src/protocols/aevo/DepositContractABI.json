@@ -6,12 +6,24 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "token",
+          "name": "l1Token",
+          "type": "address"
+        },
+        {
+          "name": "l2Token",
           "type": "address"
         },
         {
           "name": "amount",
           "type": "uint256"
+        },
+        {
+          "name": "minGasLimit",
+          "type": "uint32"
+        },
+        {
+          "name": "extraData",
+          "type": "bytes"
         }
       ],
       "outputs": []
@@ -20,7 +32,16 @@
       "name": "depositETH",
       "type": "function",
       "stateMutability": "payable",
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "minGasLimit",
+          "type": "uint32"
+        },
+        {
+          "name": "extraData",
+          "type": "bytes"
+        }
+      ],
       "outputs": []
     }
   ]

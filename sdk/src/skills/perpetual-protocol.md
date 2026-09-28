@@ -54,8 +54,8 @@ function main(vaultAddress: Address, token: Address, amount: Uint256): Uint256 {
 
 ### ClearingHouseABI
 
-- `openPosition(address,bool,bool,uint256,uint256,uint256,uint256,bytes32)` - Open leveraged position. Params: baseToken (market), isBaseToQuote (true=short, false=long), isExactInput (true=exact input amount), amount (trade amount), oppositeAmountBound (slippage limit), deadline (tx deadline), sqrtPriceLimitX96 (price limit, 0 for none), referralCode. Returns (base, quote)
-- `closePosition(address,uint256,uint256,uint256,bytes32)` - Close position. Params: baseToken, sqrtPriceLimitX96 (0 for market), oppositeAmountBound (slippage), deadline, referralCode. Returns (base, quote)
+- `openPosition((address,bool,bool,uint256,uint256,uint256,uint160,bytes32))` - Open leveraged position. One params struct: baseToken (market), isBaseToQuote (true=short, false=long), isExactInput (true=exact input amount), amount (trade amount), oppositeAmountBound (slippage limit), deadline (tx deadline), sqrtPriceLimitX96 (price limit, 0 for none), referralCode. Returns (base, quote)
+- `closePosition((address,uint160,uint256,uint256,bytes32))` - Close position. One params struct: baseToken, sqrtPriceLimitX96 (0 for market), oppositeAmountBound (slippage), deadline, referralCode. Returns (base, quote)
 - `getAccountValue(address)` - Get account value. Params: trader. Returns int256 value
 
 ### VaultABI

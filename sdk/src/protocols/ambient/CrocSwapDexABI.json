@@ -49,11 +49,11 @@
       "outputs": [
         {
           "name": "baseFlow",
-          "type": "uint128"
+          "type": "int128"
         },
         {
           "name": "quoteFlow",
-          "type": "uint128"
+          "type": "int128"
         }
       ]
     },

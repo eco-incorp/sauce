@@ -37,14 +37,14 @@ export const CErc20ABI = [
   {
     name: "balanceOfUnderlying",
     type: "function",
-    stateMutability: "view",
+    stateMutability: "nonpayable",
     inputs: [{ name: "owner", type: "address" }],
     outputs: [{ name: "", type: "uint256" }],
   },
   {
     name: "borrowBalanceCurrent",
     type: "function",
-    stateMutability: "view",
+    stateMutability: "nonpayable",
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ name: "", type: "uint256" }],
   },

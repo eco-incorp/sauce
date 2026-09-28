@@ -4,7 +4,7 @@ Active concentrated liquidity management protocol. Manages Uniswap V3, Algebra, 
 
 ## Category
 
-yield | Chains: Ethereum, Polygon, Arbitrum
+yield | Chains: Ethereum, Polygon
 
 ## Key Operations
 
@@ -44,11 +44,10 @@ function main(hypervisorAddress: Address, shares: Uint256, to: Address, from: Ad
 
 ## Key Addresses
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` |
-| Polygon  | uniProxy | `0xA42d55074869491D60Ac05490376B74cF19B00e6` |
-| Arbitrum | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` |
+| Chain    | Contract | Address                                                                                    |
+| -------- | -------- | ------------------------------------------------------------------------------------------ |
+| Ethereum | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` (an earlier release: use `UniProxyLegacyABI`) |
+| Polygon  | uniProxy | `0xA42d55074869491D60Ac05490376B74cF19B00e6`                                               |
 
 ## ABI Methods
 
@@ -56,6 +55,13 @@ function main(hypervisorAddress: Address, shares: Uint256, to: Address, from: Ad
 
 - `deposit(uint256,uint256,address,address,uint256[4])` - Deposit tokens. Params: deposit0, deposit1, to (receiver), pos (hypervisor address), minIn[4] (slippage, use [0,0,0,0])
 - `getDepositAmount(address,address,uint256)` - Preview required token1 amount for given token0 deposit. Params: pos, token, deposit amount. Returns (amountStart, amountEnd)
+
+### UniProxyLegacyABI
+
+The Ethereum UniProxy is an earlier release; its `deposit` has no `minIn` (the `depositLegacy` template calls it).
+
+- `deposit(uint256,uint256,address,address)` - Deposit tokens. Params: deposit0, deposit1, to (receiver), pos (hypervisor address). Returns shares
+- `getDepositAmount(address,address,uint256)` - As on the current UniProxy
 
 ### HypervisorABI
 

@@ -29,8 +29,8 @@ export const StakingABI = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
+      { name: "rebasing", type: "bool" },
     ],
-    outputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;

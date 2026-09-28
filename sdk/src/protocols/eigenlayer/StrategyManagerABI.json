@@ -26,7 +26,7 @@
       ]
     },
     {
-      "name": "stakerStrategyShares",
+      "name": "stakerDepositShares",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
@@ -41,7 +41,7 @@
       ],
       "outputs": [
         {
-          "name": "",
+          "name": "shares",
           "type": "uint256"
         }
       ]

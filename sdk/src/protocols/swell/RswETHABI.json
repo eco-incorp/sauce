@@ -5,12 +5,7 @@
       "type": "function",
       "stateMutability": "payable",
       "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256"
-        }
-      ]
+      "outputs": []
     },
     {
       "name": "rswETHToETHRate",

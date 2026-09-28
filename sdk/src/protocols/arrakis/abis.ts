@@ -2,7 +2,7 @@ export const ArrakisRouterABI = [
   {
     name: "addLiquidity",
     type: "function",
-    stateMutability: "nonpayable",
+    stateMutability: "payable",
     inputs: [
       {
         name: "params",
@@ -40,6 +40,7 @@ export const ArrakisRouterABI = [
           { name: "vault", type: "address" },
           { name: "receiver", type: "address" },
           { name: "gauge", type: "address" },
+          { name: "receiveETH", type: "bool" },
         ],
       },
     ],
@@ -64,16 +65,6 @@ export const ArrakisVaultABI = [
     stateMutability: "view",
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "totalUnderlying",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [
-      { name: "amount0", type: "uint256" },
-      { name: "amount1", type: "uint256" },
-    ],
   },
   {
     name: "token0",

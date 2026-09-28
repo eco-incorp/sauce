@@ -67,7 +67,7 @@ function main(
 ### StargatePoolABI
 
 - `send(SendParam _sendParam, MessagingFee _fee, address _refundAddress) returns (MessagingReceipt msgReceipt, OFTReceipt oftReceipt)` [payable] - Bridge tokens to destination chain
-- `quoteOFT(SendParam _sendParam) returns (OFTLimit oftLimit)` - Quote bridge limits and fees (view)
+- `quoteOFT(SendParam _sendParam) returns (OFTLimit oftLimit, OFTFeeDetail[] oftFeeDetails, OFTReceipt oftReceipt)` - Quote bridge limits, fees and the amount received (view)
 
 SendParam tuple: `(uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd)`
 MessagingFee tuple: `(uint256 nativeFee, uint256 lzTokenFee)`

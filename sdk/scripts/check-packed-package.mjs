@@ -4,9 +4,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { documentedExports } from "../../actions/scripts/documented-exports.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // Taken from the SDK's own devDependency rather than written out here, so this consumer typechecks
@@ -116,6 +119,47 @@ try {
   console.log(
     `Clean package install: all ${manualFiles.length} manual/example files ship verbatim`,
   );
+
+  // Every export the actions pages name — read by the same module `actions/tests/docs.unit.test.ts`
+  // holds `src/index.ts` to, so there is no list here to drift — must be one the PACKED `./actions`
+  // declares. The installed declarations then split them: each runtime value must resolve from the
+  // subpath when imported (smoke.mjs), and every name must typecheck from it (actions-exports.ts).
+  const documented = documentedExports(root);
+  const ts = createRequire(join(work, "package.json"))("typescript");
+  const actionsDeclarations = join(installedRoot, installedManifest.exports["./actions"].types);
+  const declarations = ts.createProgram([actionsDeclarations], {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    skipLibCheck: true,
+    noEmit: true,
+  });
+  const checker = declarations.getTypeChecker();
+  const actionsModule = checker.getSymbolAtLocation(
+    declarations.getSourceFile(actionsDeclarations),
+  );
+  assert.ok(actionsModule, `${actionsDeclarations} did not resolve as a module`);
+  const isValue = new Map(
+    checker.getExportsOfModule(actionsModule).map((symbol) => {
+      const target =
+        symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+      return [symbol.name, (target.flags & ts.SymbolFlags.Value) !== 0];
+    }),
+  );
+  assert.deepEqual(
+    documented.filter((export_) => !isValue.has(export_)),
+    [],
+    `exports the actions pages name that the packed ${name}/actions does not declare`,
+  );
+  const actionValues = documented.filter((export_) => isValue.get(export_));
+  const actionTypes = documented.filter((export_) => !isValue.get(export_));
+  assert.ok(actionValues.length > 0, "the actions pages name no runtime export");
+  assert.ok(actionTypes.length > 0, "the actions pages name no type export");
+  console.log(
+    `Clean package install: ./actions declares all ${documented.length} exports its pages name ` +
+      `(${actionValues.length} runtime, ${actionTypes.length} type-only)`,
+  );
+
   writeFileSync(
     join(work, "smoke.mjs"),
     `
@@ -162,6 +206,24 @@ try {
     console.log('Clean package install: the deployed addresses ship and resolve through ./deployments');`
         : `console.log('Clean package install: deployed addresses not in this tree (no credential to fetch addresses.json) — skipped');`
     }
+    // The actions subpath reads the SDK's registry through a RELATIVE path into sdk/dist, and only a
+    // clean install of the tarball proves that path exists in the published layout.
+    const actions = await import('${name}/actions');
+    const program = actions.parseProgram({
+      version: 1,
+      chainId: 1,
+      actions: [{ type: 'approve', amount: '1', token: '0x1000000000000000000000000000000000000001', spender: '0x2000000000000000000000000000000000000001' }],
+    });
+    assert.ok(actions.compileProgram(program).bytecode.length > 0, 'an action program compiles');
+    const { createRequire } = await import('node:module');
+    const schemaPath = createRequire(import.meta.url).resolve('${name}/actions/action-program.schema.json');
+    assert.deepEqual(JSON.parse(readFileSync(schemaPath, 'utf8')), JSON.parse(JSON.stringify(actions.programSchema())));
+    console.log('Clean package install: actions compile, and the shipped JSON Schema matches the parser');
+    const documentedValues = ${JSON.stringify(actionValues)};
+    for (const export_ of documentedValues) {
+      assert.notEqual(typeof actions[export_], 'undefined', export_ + ' does not resolve from ${name}/actions');
+    }
+    console.log('Clean package install: ./actions resolves every runtime export its pages name: ' + documentedValues.join(', '));
   `,
   );
   // Force the packaged path: with SAUCE_* unset the resolver must find the shipped binary, which is
@@ -187,6 +249,7 @@ try {
   // wrong. This fixture is the packaged surface a consumer actually gets.
   const consumer = `
     import { Base } from '${name}';
+    import { parseProgram, programIntent, type ActionProgram } from '${name}/actions';
     const options = {
       pot: '0x1111111111111111111111111111111111111111' as const,
       engine: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as const,
@@ -200,13 +263,31 @@ try {
       USDC.approve(Uniswap.UniversalRouter, 1000000n);
     }, options).reward(0n);
     if (built.compiled.bytecode[0].length === 0) throw new Error('Empty route');
+    // The actions declarations reference the SDK's by relative path; this checks they resolve.
+    const program: ActionProgram = parseProgram({ version: 1, chainId: 8453, actions: [
+      { type: 'approve', amount: '1', token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', spender: options.pot },
+    ] });
+    const intent = programIntent(program, options).reward(0n);
+    if (intent.compiled.bytecode[0].length === 0) throw new Error('Empty action route');
   `;
   writeFileSync(join(work, "consumer.ts"), consumer);
+  // Every export the actions pages name, typechecked from the installed package: the runtime ones as
+  // values, the rest as types. A name the declarations stop exporting fails the compile below.
+  writeFileSync(
+    join(work, "actions-exports.ts"),
+    `
+    import { ${actionValues.join(", ")} } from '${name}/actions';
+    import type { ${actionTypes.join(", ")} } from '${name}/actions';
+    export const values = [${actionValues.join(", ")}] as const;
+    export type Types = [${actionTypes.join(", ")}];
+  `,
+  );
   execFileSync(
     process.execPath,
     [
       join(work, "node_modules/typescript/bin/tsc"),
       join(work, "consumer.ts"),
+      join(work, "actions-exports.ts"),
       "--target",
       "ES2022",
       "--module",
@@ -225,6 +306,10 @@ try {
   });
   console.log(
     "Clean package install: typed token/protocol closure compiles through the public API",
+  );
+  console.log(
+    `Clean package install: all ${documented.length} exports the actions pages name typecheck ` +
+      `from ./actions, the type-only ones being ${actionTypes.join(", ")}`,
   );
 } finally {
   rmSync(work, { recursive: true, force: true });

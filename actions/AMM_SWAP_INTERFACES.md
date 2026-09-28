@@ -1,6 +1,14 @@
 # AMM Swap Interfaces on Ethereum Mainnet
 
-A comprehensive reference of all unique AMM protocols and their Solidity swap interfaces.
+A contributor's reference to the Solidity swap interfaces of the AMMs the actions cover, including
+entry points no action calls yet. It is third-party documentation, **not** a description of what
+this package emits: the functions each action calls, and how, are listed in the
+[actions guide](../docs/guides/actions.md#supported-actions), and are checked by executing them
+(`tests/calldata.exec.test.ts` and `tests/actions.mainnet.test.ts`).
+
+Only the sections marked **Verified** have been checked against deployed bytecode or by execution.
+Treat every other signature as a starting point to confirm against the deployment you target —
+this file's Uniswap V4 structs, for instance, were wrong for the deployed router until corrected.
 
 ---
 
@@ -23,14 +31,9 @@ A comprehensive reference of all unique AMM protocols and their Solidity swap in
 6. [Maverick Protocol](#6-maverick-protocol)
 7. [Carbon (Bancor)](#7-carbon-bancor)
 8. [Fraxswap](#8-fraxswap)
-9. [Clipper](#9-clipper)
-10. [Integral](#10-integral)
-11. [Fluid DEX (Instadapp)](#11-fluid-dex-instadapp)
-    - [DEX T1 Pool Swaps](#fluid-dex-t1-pool-swaps)
-    - [DEX Lite (Singleton)](#fluid-dex-lite-singleton)
-12. [Fluid DEX (Instadapp)](#11-fluid-dex-instadapp)
-    - [DEX T1 Pool Swaps](#fluid-dex-t1-pool-swaps)
-    - [DEX Lite (Singleton)](#fluid-dex-lite-singleton)
+9. [Fluid DEX (Instadapp)](#9-fluid-dex-instadapp)
+   - [DEX T1 Pool Swaps](#fluid-dex-t1-pool-swaps)
+10. [Bridges, staking and Permit2](#10-bridges-staking-and-permit2)
 
 ---
 
@@ -134,7 +137,31 @@ function swapExactTokensForETHSupportingFeeOnTransferTokens(
 
 ### Uniswap V3 SwapRouter
 
-**Address:** `0xE592427A0AEce92De3Edee1F18E0157C05861564`
+**Verified (SwapRouter02).** The `uniswapV3ExactInput*` actions call **SwapRouter02**
+(`0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` on Ethereum, `0x2626664c2603336E57B271c5C0b26F421741e481`
+on Base), whose structs have **no `deadline` field**:
+
+```solidity
+struct ExactInputSingleParams {   // SwapRouter02
+    address tokenIn;
+    address tokenOut;
+    uint24 fee;
+    address recipient;
+    uint256 amountIn;
+    uint256 amountOutMinimum;
+    uint160 sqrtPriceLimitX96;
+}
+struct ExactInputParams {         // SwapRouter02
+    bytes path;
+    address recipient;
+    uint256 amountIn;
+    uint256 amountOutMinimum;
+}
+```
+
+The original SwapRouter below keeps a `deadline` in every struct, so its selectors differ.
+
+**Address (original SwapRouter):** `0xE592427A0AEce92De3Edee1F18E0157C05861564`
 
 #### Structs
 
@@ -261,16 +288,14 @@ struct PathKey {
 struct ExactInputSingleParams {
     PoolKey poolKey;
     bool zeroForOne;            // true = swap currency0 → currency1
-    uint128 amountIn;
+    uint128 amountIn;           // 0 (OPEN_DELTA) = the router's full open credit
     uint128 amountOutMinimum;
-    uint256 minHopPriceX36;     // minimum price threshold (scaled by 1e36)
     bytes hookData;
 }
 
 struct ExactInputParams {
     Currency currencyIn;
     PathKey[] path;
-    uint256[] minHopPriceX36;   // per-hop minimum price thresholds
     uint128 amountIn;
     uint128 amountOutMinimum;
 }
@@ -280,18 +305,31 @@ struct ExactOutputSingleParams {
     bool zeroForOne;
     uint128 amountOut;
     uint128 amountInMaximum;
-    uint256 minHopPriceX36;
     bytes hookData;
 }
 
 struct ExactOutputParams {
     Currency currencyOut;
     PathKey[] path;             // reversed: output to input
-    uint256[] minHopPriceX36;
     uint128 amountOut;
     uint128 amountInMaximum;
 }
 ```
+
+**Verified against the deployed mainnet Universal Router** (`tests/actions.mainnet.test.ts`): the two
+exact-input structs above are what it decodes. Each sub-action's params are ONE `abi.encode` of the
+struct — the head offset word included, which the router's calldata decoder reads. A flat
+`abi.encode(poolKey, zeroForOne, …)` without it reverts, and so does an `ExactInputParams` with an
+extra per-hop array (a `maxHopSlippage`/`minHopPriceX36` field from later periphery versions).
+
+`ActionConstants`: `OPEN_DELTA = 0` (a TAKE or swap amount of 0 means "everything owed"),
+`CONTRACT_BALANCE = 1 << 255` (a SETTLE of the router's own balance), `MSG_SENDER = address(1)`,
+`ADDRESS_THIS = address(2)`. A TAKE of `type(uint256).max` overflows the router's `uint128` cast
+and reverts with `SafeCastOverflow()`.
+
+The actions use `SWAP_EXACT_IN_SINGLE`/`SWAP_EXACT_IN`, then `SETTLE(currencyIn, CONTRACT_BALANCE,
+payerIsUser = false)` after transferring the input to the router, then `TAKE(currencyOut, recipient,
+OPEN_DELTA)` — no Permit2 approval is needed.
 
 #### Typical V4 Swap Flow
 
@@ -714,7 +752,10 @@ function sellQuote(address to) external returns (uint256 receiveBaseAmount);
 
 ## 6. Maverick Protocol
 
-**Maverick V2 Router Address:** `0xbbF1EE38152E9D8E3470Dc47947eAa65DCA94913`
+**Maverick V2 Router Address:** `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` (**Verified**: carries
+both swap selectors, and `exactInputSingle` returns one word, the amount out; a multi-hop `path` is,
+per hop, the pool's 20 bytes then one byte for `tokenAIn`). The address this file listed before,
+`0xbbF1EE38152E9D8E3470Dc47947eAa65DCA94913`, carries neither swap selector.
 
 ### Pool-Level Swap
 
@@ -835,104 +876,7 @@ Also supports fee-on-transfer variants (same as Uniswap V2).
 
 ---
 
-## 9. Clipper
-
-**ClipperExchangeInterface Address:** `0x655eDCE464CC797526600a462A8154650EEe4B77`
-
-Clipper uses off-chain signed quotes via its API. Input tokens must be transferred to the exchange contract before calling `sellTokenForToken` or `sellTokenForEth`.
-
-#### sellTokenForToken
-
-```solidity
-function sellTokenForToken(
-    address inputToken,          // token being sold
-    address outputToken,         // token being bought
-    address recipient,           // address to receive output tokens
-    uint256 minBuyAmount,        // minimum output (slippage protection)
-    bytes calldata auxiliaryData // server-signed price data from Clipper API
-) external returns (uint256 boughtAmount);
-```
-
-#### sellEthForToken
-
-```solidity
-function sellEthForToken(
-    address outputToken,
-    address recipient,
-    uint256 minBuyAmount,
-    bytes calldata auxiliaryData
-) external payable returns (uint256 boughtAmount);
-// msg.value is the ETH input
-```
-
-#### sellTokenForEth
-
-```solidity
-function sellTokenForEth(
-    address inputToken,
-    address payable recipient,
-    uint256 minBuyAmount,
-    bytes calldata auxiliaryData
-) external returns (uint256 boughtAmount);
-```
-
----
-
-## 10. Integral
-
-**TwapDelay Address:** `0x782534550e2553A42CDFf8D5a94066d8c7B6729B`
-
-Integral SIZE executes orders at the 30-minute TWAP price from a Uniswap V2 oracle. Orders are placed now and executed later (delayed execution).
-
-#### Structs
-
-```solidity
-struct SellParams {
-    address tokenIn;
-    address tokenOut;
-    uint256 amountIn;         // exact input amount
-    uint256 amountOutMin;     // minimum output (slippage protection)
-    bool wrapUnwrap;          // if true, wraps/unwraps ETH ↔ WETH
-    address to;               // recipient
-    uint256 gasLimit;         // gas limit for delayed execution tx
-    uint32 submitDeadline;    // deadline for order submission
-}
-
-struct BuyParams {
-    address tokenIn;
-    address tokenOut;
-    uint256 amountInMax;      // maximum input willing to spend
-    uint256 amountOut;        // exact output desired
-    bool wrapUnwrap;
-    address to;
-    uint256 gasLimit;
-    uint32 submitDeadline;
-}
-```
-
-#### sell
-
-```solidity
-function sell(Orders.SellParams calldata sellParams) external payable returns (uint256 orderId);
-```
-
-#### buy
-
-```solidity
-function buy(Orders.BuyParams calldata buyParams) external payable returns (uint256 orderId);
-```
-
-#### relayerSell
-
-```solidity
-function relayerSell(Orders.SellParams calldata sellParams) external payable returns (uint256 orderId);
-```
-
-Same as `sell` but callable by a relayer on behalf of the user.
-
----
-
-## 11. Fluid DEX (Instadapp)
+## 9. Fluid DEX (Instadapp)
 
 Fluid DEX (formerly Instadapp Fluid) is a "DEX-on-lending" protocol where swap liquidity comes from both **Smart Collateral** (supplied assets) and **Smart Debt** (borrowed assets) on top of the Fluid Liquidity Layer. This architecture generates significantly more trading liquidity per dollar of TVL than traditional DEXes.
 
@@ -1143,124 +1087,38 @@ event Swap(bool swap0to1_, uint256 amountIn_, uint256 amountOut_, address to_);
 
 ---
 
-### Fluid DEX Lite (Singleton)
+## 10. Bridges, staking and Permit2
 
-DEX Lite is a singleton contract (`0xBbcb91440523216e2b87052A99F69c604A7b6e00`) that manages multiple pools, each identified by a `DexKey`. It supports both single-hop and multi-hop swaps.
+**Verified by execution against mainnet** (`tests/actions.mainnet.test.ts`):
 
-#### Structs
-
-```solidity
-struct DexKey {
-    address token0;     // lexicographically smaller token address
-    address token1;     // lexicographically larger token address
-    bytes32 salt;       // unique identifier for the pool within this token pair
-}
-```
-
-#### swapSingle
-
-Execute a single-hop swap on one pool.
-
-```solidity
-function swapSingle(
-    DexKey calldata dexKey,   // identifies the pool (token0, token1, salt)
-    bool swap0To1,            // true = sell token0 for token1; false = opposite
-    int256 amountSpecified,   // positive = exact input amount; negative = exact output amount
-    uint256 amountLimit,      // if amountSpecified > 0: minimum output; if < 0: maximum input
-    address receiver          // recipient of output tokens
-) external payable returns (int256 amount0, int256 amount1);
-```
-
-#### swapMultiHop
-
-Execute a multi-hop swap across multiple pools in sequence.
-
-```solidity
-function swapMultiHop(
-    address[] calldata path,      // ordered token addresses in the swap route
-    DexKey[] calldata dexKeys,    // pool keys for each hop (length = path.length - 1)
-    int256 amountSpecified,       // positive = exact input; negative = exact output
-    uint256 amountLimit,          // slippage protection limit
-    address receiver              // recipient of final output tokens
-) external payable returns (int256 totalAmount0, int256 totalAmount1);
-```
-
-#### Callback Interface (DEX Lite)
-
-```solidity
-interface IDexLiteCallback {
-    function dexCallback(address token, uint256 amount, bytes calldata data) external;
-}
-```
-
-#### Resolver Functions (FluidDexLiteResolver)
-
-```solidity
-function getAllDexes() external view returns (DexKey[] memory);
-
-function estimateSwapSingle(
-    DexKey calldata dexKey,
-    bool swap0To1,
-    int256 amountSpecified       // positive = exact input; negative = exact output
-) external returns (uint256);
-
-function estimateSwapHop(
-    address[] calldata path,
-    DexKey[] calldata dexKeys,
-    int256 amountSpecified
-) external returns (uint256);
-
-function getDexState(DexKey memory dexKey) external view returns (DexState memory);
-function getPricesAndReserves(DexKey memory dexKey) external returns (Prices memory, Reserves memory);
-function getDexEntireData(DexKey memory dexKey) external returns (DexEntireData memory);
-function getAllDexesEntireData() external returns (DexEntireData[] memory);
-```
-
-#### DEX Lite Resolver Structs
-
-```solidity
-struct DexVariables {
-    uint256 fee;
-    uint256 revenueCut;
-    uint256 rebalancingStatus;
-    bool isCenterPriceShiftActive;
-    uint256 centerPrice;
-    address centerPriceAddress;
-    bool isRangePercentShiftActive;
-    uint256 upperRangePercent;
-    uint256 lowerRangePercent;
-    bool isThresholdPercentShiftActive;
-    uint256 upperShiftThresholdPercent;
-    uint256 lowerShiftThresholdPercent;
-    uint256 token0Decimals;
-    uint256 token1Decimals;
-    uint256 totalToken0AdjustedAmount;
-    uint256 totalToken1AdjustedAmount;
-}
-
-struct Prices {
-    uint256 poolPrice;
-    uint256 centerPrice;
-    uint256 upperRangePrice;
-    uint256 lowerRangePrice;
-    uint256 upperThresholdPrice;
-    uint256 lowerThresholdPrice;
-}
-
-struct Reserves {
-    uint256 token0RealReserves;
-    uint256 token1RealReserves;
-    uint256 token0ImaginaryReserves;
-    uint256 token1ImaginaryReserves;
-}
-```
-
-#### Integration Notes
-
-- **Pool discovery:** Call `FluidDexLiteResolver.getAllDexes()` to enumerate available pools.
-- **Price estimation:** Use `estimateSwapSingle()` / `estimateSwapHop()` (gas-free static calls) to get expected output amounts before executing.
-- **Token ordering:** `token0` must be lexicographically smaller than `token1` in `DexKey`.
-- **amountSpecified sign convention:** Positive values mean exact input (you specify how much to sell); negative values mean exact output (you specify how much to buy).
-- **Swap pausing:** Pools can be paused via governance. Monitor `LogPauseSwapAndArbitrage()` and `LogUnpauseSwapAndArbitrage()` events, or check `isSwapAndArbitragePaused` in `DexState`.
-- **Liquidity limits:** Maximum swap size is constrained by `limits.withdrawable.available + limits.borrowable.available` from the resolver.
-- **Reserves are scaled to 1e12 decimals** in the resolver output for uniformity.
+- **Stargate V2 pools** (USDC: `0xc026395860Db2d07ee33e05fE50ed7bD583189C7`) take
+  `send(SendParam, MessagingFee, address refundAddress)`, payable, with
+  `struct SendParam { uint32 dstEid; bytes32 to; uint256 amountLD; uint256 minAmountLD;
+bytes extraOptions; bytes composeMsg; bytes oftCmd; }` and `struct MessagingFee { uint256
+nativeFee; uint256 lzTokenFee; }` (selector `0xc7c7f5b3`). `quoteSend(SendParam, bool)` is a view
+  returning the fee; an empty `oftCmd` is taxi mode. The V1 router's `swap` now reverts
+  ("swap func stopped").
+- **CCTP V2 TokenMessenger** (`0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d`) takes
+  `depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken,
+bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold)`; 2000 is a standard
+  (finalized) transfer.
+- **Hyperlane warp routes** (USDC collateral: `0xa9c9a8fb36ce3e5ffbac3757da7141262723541f`) take
+  `transferRemote(uint32 destination, bytes32 recipient, uint256 amount)`, payable with the gas
+  `quoteGasPayment(uint32)` returns. This route pulls the amount plus a fee (3 bps).
+- **Lido WithdrawalQueueERC721** (`0x889edC2eDab5f40e902b864aD4d7AdE8E412F9B1`) takes
+  `requestWithdrawals(uint256[] amounts, address owner)` and mints the owner an NFT per request.
+- **Rocket Pool**: the live deposit pool is `RocketStorage.getAddress(keccak256("contract.address"
+++ "rocketDepositPool"))` (`0xCE15294273CFb9D9b628F4D61636623decDF4fdC` at the pinned block; the
+  older `0xDD3f50F8A6CafbE9b31a427582963f465E745AF8` is retired). rETH
+  (`0xae78736Cd615f374D3085123A210448E74Fc6393`) takes `burn(uint256)`, and refuses to move in the
+  block it was minted in.
+- **ether.fi LiquidityPool** (`0x308861A430be4cce5502d0A12724771Fc6DaF216`) takes `deposit()` with
+  value and mints eETH (`0x35fA164735182de50811E8e2E824cFb9B6118ac2`).
+- **Permit2** (`0x000000000022D473030F116dDEE9F6B43aC78BA3`) takes
+  `approve(address token, address spender, uint160 amount, uint48 expiration)` (selector
+  `0x87517c45`). Balancer V3's router pulls through it.
+- **Balancer V3 queries**: `querySwapSingleTokenExactIn(address pool, address tokenIn, address
+tokenOut, uint256 exactAmountIn, address sender, bytes userData)` answers only when `tx.origin` is
+  the zero address, as in an `eth_call` from it.
+- **cbETH** (`0xBe9895146f7AF43049ca1c1AE358B0541Ea49704`) has no `deposit()`: cbETH is minted by
+  Coinbase, not by depositing ETH, so there is no cbETH staking action.

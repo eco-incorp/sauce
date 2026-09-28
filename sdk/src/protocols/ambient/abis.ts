@@ -15,9 +15,10 @@ export const CrocSwapDexABI = [
       { name: "minOut", type: "uint128" },
       { name: "reserveFlags", type: "uint8" },
     ],
+    // Signed flows from the user's side: negative is tokens paid out to the user.
     outputs: [
-      { name: "baseFlow", type: "uint128" },
-      { name: "quoteFlow", type: "uint128" },
+      { name: "baseFlow", type: "int128" },
+      { name: "quoteFlow", type: "int128" },
     ],
   },
   {

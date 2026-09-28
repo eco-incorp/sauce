@@ -20,6 +20,7 @@ New here? [Quick start](guides/quick-start.md) → [protocols and tokens](guides
 | Chain intents — statically, or from an amount measured on chain | [Nested intents](guides/nested-intents.md)             |
 | Compile a standalone program and pass it runtime arguments      | [Compiling programs](guides/compiling.md)              |
 | Generate programs from structured data                          | [Builders](guides/builders-and-actions.md)             |
+| Write protocol actions as JSON, then run them or make an intent | [Actions](guides/actions.md)                           |
 | Plan accounts, stage code and execute on Solana                 | [Solana](guides/solana.md)                             |
 | Check what a settlement payload contains                        | [Verification](guides/verification.md)                 |
 

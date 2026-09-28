@@ -1,6 +1,6 @@
 # Kim
 
-Mode-native DEX with Solidly-style routing supporting both stable and volatile pool types. The primary trading venue on Mode Network with farming incentives.
+Mode-native DEX. Its V2 router is a Camelot fork: swaps take a plain token path and a referrer, and support fee-on-transfer tokens. The primary trading venue on Mode Network with farming incentives.
 
 ## Category
 
@@ -8,7 +8,7 @@ dex | Chains: Mode
 
 ## Key Operations
 
-- **swap**: Swap tokens with route-based routing specifying stable or volatile pool type
+- **swap**: Swap tokens along a token path
 
 ## SDK Usage
 
@@ -27,30 +27,29 @@ function main(
   routerAddress: Address,
   tokenIn: Address,
   tokenOut: Address,
-  stable: bool,
   amountIn: Uint256,
   amountOutMin: Uint256,
   recipient: Address,
-): Uint256[] {
+): Uint256 {
   const router = IRouter.at(routerAddress);
-  return router.swapExactTokensForTokens(
+  router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
     amountIn,
     amountOutMin,
-    [{ from: tokenIn, to: tokenOut, stable: stable }],
+    [tokenIn, tokenOut],
     recipient,
+    0x0000000000000000000000000000000000000000,
     99999999999,
   );
+  return 1;
 }
 ```
 
 - `routerAddress`: Kim Router on Mode (`0x5D61c537393cf21893BE619E36fC94cd73C77DD3`)
-- `tokenIn` / `tokenOut`: Input and output token addresses
-- `stable`: `true` for stable pools (pegged assets), `false` for volatile pools (uncorrelated)
+- `tokenIn` / `tokenOut`: Input and output token addresses; a longer path swaps through intermediate tokens
 - `amountIn`: Exact input amount (in wei)
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
-- Routes support multi-hop: `[{from: A, to: B, stable: false}, {from: B, to: C, stable: true}]`
-- Note: Kim routes do NOT include a `factory` field (unlike Velodrome/Aerodrome)
+- The swap returns nothing: measure the output as the recipient's balance change
 
 ## Key Addresses
 
@@ -62,13 +61,11 @@ function main(
 
 ### KimRouterABI
 
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, tuple[](address from, address to, bool stable) routes, address to, uint256 deadline) -> uint256[] amounts` - Swap with route tuples specifying pool type per hop
-- `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a stable or volatile pool
+- `swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, address referrer, uint256 deadline)` - Swap along a token path. `referrer` may be the zero address
+- `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a pair
 
 ## Notes
 
-- Solidly-fork routes contain `{from, to, stable}` tuples (NO `factory` field)
-- Two pool types: `stable=true` for correlated assets, `stable=false` for uncorrelated
 - Mode-only deployment; the dominant DEX on Mode Network
 - Mode Network features native yield sharing via Sequencer Fee Sharing (SFS)
 - LP tokens can be staked for farming rewards

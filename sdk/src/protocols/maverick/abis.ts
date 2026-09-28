@@ -23,7 +23,10 @@ export const MaverickV2RouterABI = [
       { name: "amountOut", type: "uint256" },
       { name: "amountInMaximum", type: "uint256" },
     ],
-    outputs: [{ name: "amountIn", type: "uint256" }],
+    outputs: [
+      { name: "amountIn", type: "uint256" },
+      { name: "amountOut", type: "uint256" },
+    ],
   },
 ] as const;
 
@@ -32,9 +35,12 @@ export const MaverickV2FactoryABI = [
     name: "lookup",
     type: "function",
     stateMutability: "view",
+    // Paged: pools [startIndex, endIndex) for the pair. There is no two-argument overload.
     inputs: [
       { name: "tokenA", type: "address" },
       { name: "tokenB", type: "address" },
+      { name: "startIndex", type: "uint256" },
+      { name: "endIndex", type: "uint256" },
     ],
     outputs: [{ name: "pools", type: "address[]" }],
   },

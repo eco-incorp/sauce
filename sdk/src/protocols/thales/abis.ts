@@ -1,3 +1,5 @@
+// Thales. Positional markets are exercised on the market itself (`exerciseOptions`), not on the
+// AMM; Speed Markets are created from one params struct.
 export const ThalesAMMABI = [
   {
     name: "buyFromAMM",
@@ -10,14 +12,17 @@ export const ThalesAMMABI = [
       { name: "expectedPayout", type: "uint256" },
       { name: "additionalSlippage", type: "uint256" },
     ],
-    outputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
+] as const;
+
+export const PositionalMarketABI = [
   {
-    name: "exerciseMaturedMarket",
+    name: "exerciseOptions",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [{ name: "market", type: "address" }],
-    outputs: [],
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;
 
@@ -27,13 +32,25 @@ export const SpeedMarketsAMMABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "asset", type: "uint256" },
-      { name: "strikeTime", type: "uint64" },
-      { name: "direction", type: "uint8" },
-      { name: "collateral", type: "address" },
-      { name: "buyinAmount", type: "uint256" },
-      { name: "referrer", type: "address" },
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "user", type: "address" },
+          { name: "asset", type: "bytes32" },
+          { name: "strikeTime", type: "uint64" },
+          { name: "delta", type: "uint64" },
+          { name: "strikePrice", type: "int64" },
+          { name: "strikePricePublishTime", type: "uint64" },
+          { name: "oracleSource", type: "uint8" },
+          { name: "direction", type: "uint8" },
+          { name: "collateral", type: "address" },
+          { name: "collateralAmount", type: "uint256" },
+          { name: "referrer", type: "address" },
+          { name: "skewImpact", type: "uint256" },
+        ],
+      },
     ],
-    outputs: [],
+    outputs: [{ name: "marketAddress", type: "address" }],
   },
 ] as const;

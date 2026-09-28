@@ -81,11 +81,13 @@ const KITCHEN_IDL_JSON = resolveArtifact(svmKitchenIdlPath);
 export const HARNESS_POT_SALT = new Uint8Array(32).fill(11);
 
 /** describe when an engine binary is available, describe.skip otherwise (a bare local run). */
-export const describeSvm = [ENGINE_SO, KITCHEN_SO, KITCHEN_IDL_JSON].every(
+/** Whether every artifact this harness needs is on disk. Exported so a suite with EXTRA gated inputs
+ *  (per-cluster engines, wire files) can AND its own onto this one instead of re-deriving a partial copy. */
+export const svmArtifactsPresent = [ENGINE_SO, KITCHEN_SO, KITCHEN_IDL_JSON].every(
   (path) => path !== undefined && existsSync(path),
-)
-  ? describe
-  : describe.skip;
+);
+
+export const describeSvm = svmArtifactsPresent ? describe : describe.skip;
 
 // Kept as a name because suites reference it; it is the same engine as ENGINE_SO now that there is
 // only one.

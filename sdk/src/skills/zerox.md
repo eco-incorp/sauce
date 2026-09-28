@@ -29,7 +29,7 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 | --------- | ------------- | -------------------------------------------- |
 | Ethereum  | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
 | Arbitrum  | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| Optimism  | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
+| Optimism  | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` |
 | Polygon   | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
 | BSC       | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
 | Avalanche | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |

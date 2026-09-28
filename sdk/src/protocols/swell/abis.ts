@@ -4,7 +4,8 @@ export const SwETHABI = [
     type: "function",
     stateMutability: "payable",
     inputs: [],
-    outputs: [{ name: "", type: "uint256" }],
+    // Returns nothing: a declared output would decode empty return data and revert.
+    outputs: [],
   },
   {
     name: "swETHToETHRate",
@@ -28,7 +29,8 @@ export const RswETHABI = [
     type: "function",
     stateMutability: "payable",
     inputs: [],
-    outputs: [{ name: "", type: "uint256" }],
+    // Returns nothing: a declared output would decode empty return data and revert.
+    outputs: [],
   },
   {
     name: "rswETHToETHRate",

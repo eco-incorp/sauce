@@ -7,8 +7,8 @@ import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { sauceBodyToSource } from "../src/routes/closure.js";
 
 const cctpSource = `
-  const nonce = Cctp.TokenMessenger.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
-  return nonce;
+  Cctp.TokenMessenger.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
+  return 1n;
 `;
 
 const tokenResultsSource = `
@@ -32,7 +32,8 @@ describe("source globals match the Sauce contract model", () => {
       probePath,
       `
         function body() { ${cctpSource} }
-        const nonce: bigint = Cctp.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
+        // TokenMessengerV2.depositForBurn returns nothing.
+        const burned: void = Cctp.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
         const approved: boolean = USDC.approve(Uniswap.UniversalRouter, 1n);
         const transferred: boolean = USDC.transfer(1n, 1n);
         // Dynamic bytes use hex string source literals.

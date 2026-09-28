@@ -1,19 +1,19 @@
 export const addLiquidity = `
-import { LiquidityPoolABI as ILiquidityPool } from "./abis";
+import { OrderBookABI as IOrderBook } from "./abis";
 
-function main(poolAddress: Address, tokenId: Uint256, tokenAmount: Uint256): Uint256 {
-  const pool = ILiquidityPool.at(poolAddress);
-  pool.addLiquidity(tokenId, tokenAmount);
+function main(orderBookAddress: Address, assetId: Uint256, rawAmount: Uint256): Uint256 {
+  const orderBook = IOrderBook.at(orderBookAddress);
+  orderBook.placeLiquidityOrder(assetId, rawAmount, true);
   return 1;
 }
 `;
 
 export const removeLiquidity = `
-import { LiquidityPoolABI as ILiquidityPool } from "./abis";
+import { OrderBookABI as IOrderBook } from "./abis";
 
-function main(poolAddress: Address, tokenId: Uint256, mlpAmount: Uint256): Uint256 {
-  const pool = ILiquidityPool.at(poolAddress);
-  pool.removeLiquidity(tokenId, mlpAmount);
+function main(orderBookAddress: Address, assetId: Uint256, mlpAmount: Uint256): Uint256 {
+  const orderBook = IOrderBook.at(orderBookAddress);
+  orderBook.placeLiquidityOrder(assetId, mlpAmount, false);
   return 1;
 }
 `;

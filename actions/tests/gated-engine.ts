@@ -69,8 +69,7 @@ export interface GatedEngine {
 /**
  * Deploys the engine, materializes the Kitchen at the address the gate hashes, and mints the Pot.
  *
- * `setCode` goes through `rpc` rather than a typed client because the fork tests drive both hardhat
- * and anvil, whose method names differ only in prefix.
+ * `setCode` and `setStorage` are passed in, so the caller's own test client writes the state.
  */
 export async function startGatedEngine(
   repoRoot: string,

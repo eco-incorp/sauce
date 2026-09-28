@@ -7,7 +7,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `.`                            | Chain accessors (`Base`, `Solana`, …); `routes`, `token`, `swap`, `deposit`, `contracts`, `svmVenues`; protocol and chain queries |
 | `/compiler`                    | `compile`, compiler types, `encodeCompactArguments`, and `decodeCompactArguments`                                                 |
-| `/actions`                     | Routing actions and their composition into a program                                                                              |
+| `/actions`                     | JSON action programs: validation, compilation and intents; the JSON Schema is `/actions/action-program.schema.json`               |
 | `/protocols/*`                 | One protocol's `protocolInfo`, `deployments`, ABI exports, and named SauceScript templates                                        |
 | `/chains`                      | Canonical chain identities and EVM chain metadata                                                                                 |
 | `/deployments`                 | Sauce engine/Kitchen addresses, Pot derivation inputs, and recorded deployment coverage                                           |

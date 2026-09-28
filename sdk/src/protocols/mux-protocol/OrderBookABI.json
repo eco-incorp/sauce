@@ -1,25 +1,57 @@
 {
   "abi": [
     {
-      "name": "placePositionOrder",
+      "name": "cancelOrder",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "orderId",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "placeLiquidityOrder",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint8"
+        },
+        {
+          "name": "rawAmount",
+          "type": "uint96"
+        },
+        {
+          "name": "isAdding",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "placePositionOrder3",
       "type": "function",
       "stateMutability": "payable",
       "inputs": [
         {
           "name": "subAccountId",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "collateralAmount",
-          "type": "uint256"
+          "type": "uint96"
         },
         {
           "name": "size",
-          "type": "uint256"
+          "type": "uint96"
         },
         {
           "name": "price",
-          "type": "uint256"
+          "type": "uint96"
         },
         {
           "name": "profitTokenId",
@@ -35,19 +67,29 @@
         },
         {
           "name": "referralCode",
-          "type": "uint256"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "name": "cancelOrder",
-      "type": "function",
-      "stateMutability": "nonpayable",
-      "inputs": [
+          "type": "bytes32"
+        },
         {
-          "name": "orderId",
-          "type": "uint64"
+          "name": "extra",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tpPrice",
+              "type": "uint96"
+            },
+            {
+              "name": "slPrice",
+              "type": "uint96"
+            },
+            {
+              "name": "tpslProfitTokenId",
+              "type": "uint8"
+            },
+            {
+              "name": "tpslDeadline",
+              "type": "uint32"
+            }
+          ]
         }
       ],
       "outputs": []

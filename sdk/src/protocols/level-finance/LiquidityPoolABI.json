@@ -20,6 +20,10 @@
         {
           "name": "minLpAmount",
           "type": "uint256"
+        },
+        {
+          "name": "to",
+          "type": "address"
         }
       ],
       "outputs": []
@@ -44,6 +48,10 @@
         {
           "name": "minOut",
           "type": "uint256"
+        },
+        {
+          "name": "to",
+          "type": "address"
         }
       ],
       "outputs": []

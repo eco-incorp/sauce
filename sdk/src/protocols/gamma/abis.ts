@@ -28,6 +28,37 @@ export const UniProxyABI = [
   },
 ] as const;
 
+// The UniProxy the Ethereum entry lists (0xf5bfa20f…d599) is an earlier release: its `deposit` has
+// no `minIn` slippage argument. UniProxyABI above is the current release's, as on Polygon.
+export const UniProxyLegacyABI = [
+  {
+    name: "deposit",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "deposit0", type: "uint256" },
+      { name: "deposit1", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "pos", type: "address" },
+    ],
+    outputs: [{ name: "shares", type: "uint256" }],
+  },
+  {
+    name: "getDepositAmount",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "pos", type: "address" },
+      { name: "token", type: "address" },
+      { name: "_deposit", type: "uint256" },
+    ],
+    outputs: [
+      { name: "amountStart", type: "uint256" },
+      { name: "amountEnd", type: "uint256" },
+    ],
+  },
+] as const;
+
 export const HypervisorABI = [
   {
     name: "withdraw",

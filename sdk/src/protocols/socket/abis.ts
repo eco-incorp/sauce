@@ -1,21 +1,13 @@
+// The SocketGateway has no `bridge(uint32,bytes)`: every route, bridge or swap, runs through
+// `executeRoute` (or its fallback, keyed by a leading route id).
 export const SocketGatewayABI = [
-  {
-    name: "bridge",
-    type: "function",
-    stateMutability: "payable",
-    inputs: [
-      { name: "routeId", type: "uint32" },
-      { name: "bridgeData", type: "bytes" },
-    ],
-    outputs: [],
-  },
   {
     name: "executeRoute",
     type: "function",
     stateMutability: "payable",
     inputs: [
       { name: "routeId", type: "uint32" },
-      { name: "data", type: "bytes" },
+      { name: "routeData", type: "bytes" },
     ],
     outputs: [{ name: "result", type: "bytes" }],
   },

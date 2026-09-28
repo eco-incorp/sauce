@@ -34,7 +34,11 @@ function main(borrowerOpsAddress: Address): Uint256 {
 import { BorrowerOperationsABI as IBorrowerOperations } from "./abis";
 function main(borrowerOpsAddress: Address, amount: Uint256): Uint256 {
   const borrowerOps = IBorrowerOperations.at(borrowerOpsAddress);
-  borrowerOps.repayLUSD(amount);
+  borrowerOps.repayLUSD(
+    amount,
+    0x0000000000000000000000000000000000000000,
+    0x0000000000000000000000000000000000000000,
+  );
   return 1;
 }
 ```
@@ -53,7 +57,7 @@ function main(borrowerOpsAddress: Address, amount: Uint256): Uint256 {
 - `openTrove(uint256,uint256,address,address)` - Open new Trove. Payable (send ETH as collateral). Params: maxFeePercentage (max borrowing fee, e.g. 5e16 = 5%), LUSDAmount (LUSD to borrow), upperHint (sorted troves hint), lowerHint (sorted troves hint)
 - `closeTrove()` - Close Trove. Must repay all LUSD debt first. Returns all ETH collateral
 - `adjustTrove(uint256,uint256,uint256,bool,address,address)` - Adjust Trove. Payable (send ETH to add collateral). Params: maxFeePercentage, collWithdrawal (ETH to withdraw), LUSDChange (LUSD amount to change), isDebtIncrease (true=borrow more, false=repay), upperHint, lowerHint
-- `repayLUSD(uint256)` - Repay LUSD debt. Params: LUSDAmount
+- `repayLUSD(uint256,address,address)` - Repay LUSD debt. Params: LUSDAmount, upperHint, lowerHint (sorted-trove hints; the zero address is valid)
 
 ## Notes
 

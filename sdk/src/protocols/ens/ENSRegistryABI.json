@@ -7,7 +7,7 @@
       "inputs": [
         {
           "name": "node",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ],
       "outputs": [
@@ -24,7 +24,7 @@
       "inputs": [
         {
           "name": "node",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ],
       "outputs": [
@@ -41,7 +41,7 @@
       "inputs": [
         {
           "name": "node",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "owner",
@@ -57,7 +57,7 @@
       "inputs": [
         {
           "name": "node",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "resolver",

@@ -27,9 +27,10 @@ function main(
   srcToken: Address,
   amount: Uint256,
   minReturn: Uint256,
+  dex: Uint256,
 ): Uint256 {
   const router = IAggregationRouterV6.at(routerAddress);
-  return router.unoswap(srcToken, amount, minReturn, []);
+  return router.unoswap(srcToken, amount, minReturn, dex);
 }
 ```
 
@@ -51,13 +52,13 @@ function main(
 
 - `swap(address,tuple,bytes)` - Multi-source swap. Params: executor, desc (SwapDescription tuple: srcToken, dstToken, srcReceiver, dstReceiver, amount, minReturnAmount, flags), data (executor calldata). Payable. Returns (returnAmount, spentAmount)
   - SwapDescription tuple: `{ srcToken, dstToken, srcReceiver, dstReceiver, amount, minReturnAmount, flags }`
-- `unoswap(address,uint256,uint256,uint256[])` - Single-source optimized swap. Params: srcToken, amount, minReturn, pools (encoded pool addresses with direction flags). Payable. Returns returnAmount
+- `unoswap(uint256,uint256,uint256,uint256)` - Single-pool optimized swap. Params: token (source token address as uint256), amount, minReturn, dex (pool address packed with protocol and direction flags). Returns returnAmount
 
 ## Notes
 
 - Same contract address across all 7 chains
 - V6 router is the latest version
 - unoswap is gas-efficient for single-pool swaps; swap handles complex multi-hop routes
-- pools[] in unoswap encodes pool addresses with swap direction in high bits
+- `dex` in unoswap packs the pool address with its protocol and swap-direction flags in the high bits
 - Fusion mode enables gasless swaps via order matching (off-chain, not in ABI)
 - Approve srcToken to aggregationRouterV6 before swapping

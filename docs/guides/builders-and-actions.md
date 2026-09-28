@@ -99,9 +99,6 @@ For Aave/Spark withdrawals, use a fixed underlying-asset amount or `amount: "max
 ## Routing actions
 
 Higher-level routing actions — swaps, bridges, wraps, stakes, and the chaining between them — live
-behind the package's `/actions` subpath and are documented separately in `docs/guides/actions.md`.
-
-An action program is EVM bytecode like any other. To put one into a route, convert it to hex and use
-`routes.buildSauceEvmCall({ pot, engine, program })`; see the [Routes API](../api/routes.md). To make
-it a cross-chain intent, build it as the destination program and use the
-[intent builder](intents.md).
+behind the package's `/actions` subpath and are documented in [Actions](actions.md). An action
+program is plain JSON that compiles to one program; `programIntent(program, options)` makes it
+the route of an [intent](intents.md) directly.

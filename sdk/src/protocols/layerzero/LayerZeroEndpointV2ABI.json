@@ -15,7 +15,7 @@
             },
             {
               "name": "receiver",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "message",
@@ -43,7 +43,7 @@
           "components": [
             {
               "name": "guid",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "nonce",
@@ -82,7 +82,7 @@
             },
             {
               "name": "receiver",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "message",

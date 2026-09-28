@@ -16,13 +16,13 @@ export const GelatoAutomateABI = [
       },
       { name: "feeToken", type: "address" },
     ],
-    outputs: [{ name: "taskId", type: "uint256" }],
+    outputs: [{ name: "taskId", type: "bytes32" }],
   },
   {
     name: "cancelTask",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [{ name: "taskId", type: "uint256" }],
+    inputs: [{ name: "taskId", type: "bytes32" }],
     outputs: [],
   },
 ] as const;

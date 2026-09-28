@@ -10,7 +10,7 @@ export const UniswapV3SwapRouterABI = [
         components: [
           { name: "tokenIn", type: "address" },
           { name: "tokenOut", type: "address" },
-          { name: "fee", type: "uint32" },
+          { name: "fee", type: "uint24" },
           { name: "recipient", type: "address" },
           { name: "deadline", type: "uint256" },
           { name: "amountIn", type: "uint256" },
@@ -51,7 +51,7 @@ export const UniswapV3SwapRouterABI = [
         components: [
           { name: "tokenIn", type: "address" },
           { name: "tokenOut", type: "address" },
-          { name: "fee", type: "uint32" },
+          { name: "fee", type: "uint24" },
           { name: "recipient", type: "address" },
           { name: "deadline", type: "uint256" },
           { name: "amountOut", type: "uint256" },
@@ -95,9 +95,9 @@ export const UniswapV3NonfungiblePositionManagerABI = [
         components: [
           { name: "token0", type: "address" },
           { name: "token1", type: "address" },
-          { name: "fee", type: "uint32" },
-          { name: "tickLower", type: "uint32" },
-          { name: "tickUpper", type: "uint32" },
+          { name: "fee", type: "uint24" },
+          { name: "tickLower", type: "int24" },
+          { name: "tickUpper", type: "int24" },
           { name: "amount0Desired", type: "uint256" },
           { name: "amount1Desired", type: "uint256" },
           { name: "amount0Min", type: "uint256" },
@@ -191,7 +191,7 @@ export const UniswapV3FactoryABI = [
     inputs: [
       { name: "tokenA", type: "address" },
       { name: "tokenB", type: "address" },
-      { name: "fee", type: "uint32" },
+      { name: "fee", type: "uint24" },
     ],
     outputs: [{ name: "pool", type: "address" }],
   },
@@ -202,7 +202,7 @@ export const UniswapV3FactoryABI = [
     inputs: [
       { name: "tokenA", type: "address" },
       { name: "tokenB", type: "address" },
-      { name: "fee", type: "uint32" },
+      { name: "fee", type: "uint24" },
     ],
     outputs: [{ name: "pool", type: "address" }],
   },
@@ -221,7 +221,7 @@ export const UniswapV3QuoterV2ABI = [
           { name: "tokenIn", type: "address" },
           { name: "tokenOut", type: "address" },
           { name: "amountIn", type: "uint256" },
-          { name: "fee", type: "uint32" },
+          { name: "fee", type: "uint24" },
           { name: "sqrtPriceLimitX96", type: "uint160" },
         ],
       },
@@ -232,5 +232,88 @@ export const UniswapV3QuoterV2ABI = [
       { name: "initializedTicksCrossed", type: "uint32" },
       { name: "gasEstimate", type: "uint256" },
     ],
+  },
+] as const;
+
+// SwapRouter02 (`swapRouter02` in addresses.ts; the only V3 router on Base, BSC, Avalanche, Celo
+// and Monad). Its params structs have no `deadline` field: that is SwapRouter's shape, above.
+export const UniswapV3SwapRouter02ABI = [
+  {
+    name: "exactInputSingle",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "tokenIn", type: "address" },
+          { name: "tokenOut", type: "address" },
+          { name: "fee", type: "uint24" },
+          { name: "recipient", type: "address" },
+          { name: "amountIn", type: "uint256" },
+          { name: "amountOutMinimum", type: "uint256" },
+          { name: "sqrtPriceLimitX96", type: "uint160" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+  },
+  {
+    name: "exactInput",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "path", type: "bytes" },
+          { name: "recipient", type: "address" },
+          { name: "amountIn", type: "uint256" },
+          { name: "amountOutMinimum", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+  },
+  {
+    name: "exactOutputSingle",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "tokenIn", type: "address" },
+          { name: "tokenOut", type: "address" },
+          { name: "fee", type: "uint24" },
+          { name: "recipient", type: "address" },
+          { name: "amountOut", type: "uint256" },
+          { name: "amountInMaximum", type: "uint256" },
+          { name: "sqrtPriceLimitX96", type: "uint160" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountIn", type: "uint256" }],
+  },
+  {
+    name: "exactOutput",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "path", type: "bytes" },
+          { name: "recipient", type: "address" },
+          { name: "amountOut", type: "uint256" },
+          { name: "amountInMaximum", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountIn", type: "uint256" }],
   },
 ] as const;

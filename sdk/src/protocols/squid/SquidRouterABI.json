@@ -6,6 +6,42 @@
       "stateMutability": "payable",
       "inputs": [
         {
+          "name": "bridgedTokenSymbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "gasRefundRecipient",
+          "type": "address"
+        },
+        {
+          "name": "enableExpress",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "callBridgeCall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
           "name": "token",
           "type": "address"
         },
@@ -50,38 +86,18 @@
         {
           "name": "destinationAddress",
           "type": "string"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "name": "callBridge",
-      "type": "function",
-      "stateMutability": "payable",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address"
-        },
-        {
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "name": "bridgedTokenSymbol",
-          "type": "string"
-        },
-        {
-          "name": "destinationChain",
-          "type": "string"
-        },
-        {
-          "name": "destinationAddress",
-          "type": "string"
         },
         {
           "name": "payload",
           "type": "bytes"
+        },
+        {
+          "name": "gasRefundRecipient",
+          "type": "address"
+        },
+        {
+          "name": "enableExpress",
+          "type": "bool"
         }
       ],
       "outputs": []

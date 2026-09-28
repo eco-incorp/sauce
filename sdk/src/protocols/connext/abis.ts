@@ -1,18 +1,40 @@
+// Everclear (formerly Connext) spoke, EverclearSpokeV6. `newIntent` also has a bytes32-typed
+// overload (non-EVM receivers/assets); this is the EVM-address one.
 export const EverclearSpokeABI = [
   {
     name: "newIntent",
     type: "function",
-    stateMutability: "payable",
+    stateMutability: "nonpayable",
     inputs: [
       { name: "destinations", type: "uint32[]" },
-      { name: "to", type: "address" },
+      { name: "receiver", type: "address" },
       { name: "inputAsset", type: "address" },
       { name: "outputAsset", type: "address" },
       { name: "amount", type: "uint256" },
-      { name: "maxFee", type: "uint32" },
-      { name: "ttl", type: "uint64" },
+      { name: "amountOutMin", type: "uint256" },
+      { name: "ttl", type: "uint48" },
       { name: "data", type: "bytes" },
     ],
-    outputs: [{ name: "intentId", type: "uint256" }],
+    outputs: [
+      { name: "intentId", type: "bytes32" },
+      {
+        name: "intent",
+        type: "tuple",
+        components: [
+          { name: "initiator", type: "bytes32" },
+          { name: "receiver", type: "bytes32" },
+          { name: "inputAsset", type: "bytes32" },
+          { name: "outputAsset", type: "bytes32" },
+          { name: "origin", type: "uint32" },
+          { name: "nonce", type: "uint64" },
+          { name: "timestamp", type: "uint48" },
+          { name: "ttl", type: "uint48" },
+          { name: "amount", type: "uint256" },
+          { name: "amountOutMin", type: "uint256" },
+          { name: "destinations", type: "uint32[]" },
+          { name: "data", type: "bytes" },
+        ],
+      },
+    ],
   },
 ] as const;

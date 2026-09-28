@@ -5,11 +5,11 @@ export const AggregatorV3ABI = [
     stateMutability: "view",
     inputs: [],
     outputs: [
-      { name: "roundId", type: "uint128" },
-      { name: "answer", type: "uint256" },
+      { name: "roundId", type: "uint80" },
+      { name: "answer", type: "int256" },
       { name: "startedAt", type: "uint256" },
       { name: "updatedAt", type: "uint256" },
-      { name: "answeredInRound", type: "uint128" },
+      { name: "answeredInRound", type: "uint80" },
     ],
   },
   {
@@ -31,11 +31,11 @@ export const FeedRegistryABI = [
       { name: "quote", type: "address" },
     ],
     outputs: [
-      { name: "roundId", type: "uint128" },
-      { name: "answer", type: "uint256" },
+      { name: "roundId", type: "uint80" },
+      { name: "answer", type: "int256" },
       { name: "startedAt", type: "uint256" },
       { name: "updatedAt", type: "uint256" },
-      { name: "answeredInRound", type: "uint128" },
+      { name: "answeredInRound", type: "uint80" },
     ],
   },
   {

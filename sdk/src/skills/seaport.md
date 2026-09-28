@@ -52,8 +52,9 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
   - `zoneHash` (bytes32), `salt` (uint256) - Order uniqueness
   - `offererConduitKey`, `fulfillerConduitKey` (bytes32) - Conduit keys for token transfers
   - `totalOriginalAdditionalRecipients` (uint256) - Creator fees count
+  - `additionalRecipients` (`(uint256 amount, address recipient)[]`) - Extra consideration recipients (fees)
   - `signature` (bytes) - Offerer's EIP-712 signature
-- `cancel(tuple[])` - Cancel orders. Params: orders (array of OrderComponents tuples with offerer, zone, zoneHash, salt, conduitKey, counter). Returns cancelled bool
+- `cancel(tuple[])` - Cancel orders. Params: orders (array of OrderComponents: offerer, zone, offer items, consideration items, orderType, startTime, endTime, zoneHash, salt, conduitKey, counter). Returns cancelled bool
 
 ## Notes
 

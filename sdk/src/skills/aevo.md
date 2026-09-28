@@ -21,9 +21,15 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 ```typescript
 // Deposit ERC-20 into Aevo
 import { DepositContractABI as IDeposit } from "./abis";
-function main(depositAddress: Address, token: Address, amount: Uint256): Uint256 {
+function main(
+  depositAddress: Address,
+  token: Address,
+  l2Token: Address,
+  amount: Uint256,
+  minGasLimit: Uint256,
+): Uint256 {
   const deposit = IDeposit.at(depositAddress);
-  deposit.depositERC20(token, amount);
+  deposit.depositERC20(token, l2Token, amount, minGasLimit, "");
   return 1;
 }
 ```
@@ -38,8 +44,10 @@ function main(depositAddress: Address, token: Address, amount: Uint256): Uint256
 
 ### DepositContractABI
 
-- `depositERC20(address,uint256)` - Deposit ERC-20 tokens to Aevo L2. Params: token (ERC-20 address), amount (deposit amount). Approve token to depositContract first
-- `depositETH()` - Deposit ETH to Aevo L2. Payable (send ETH as msg.value)
+The deposit contract is Aevo's OP Stack `L1StandardBridge`, so these are the standard bridge entry points.
+
+- `depositERC20(address l1Token, address l2Token, uint256 amount, uint32 minGasLimit, bytes extraData)` - Deposit ERC-20 tokens to Aevo L2. `l2Token` is the token's Aevo L2 counterpart; `minGasLimit` is the L2 execution gas. Approve token to depositContract first
+- `depositETH(uint32 minGasLimit, bytes extraData)` - Deposit ETH to Aevo L2. Payable (send ETH as msg.value)
 
 ## Notes
 

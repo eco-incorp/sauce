@@ -67,7 +67,7 @@
             },
             {
               "name": "uuid",
-              "type": "uint256"
+              "type": "bytes16"
             }
           ]
         }

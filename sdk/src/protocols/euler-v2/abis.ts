@@ -57,7 +57,7 @@ export const EVCABI = [
   {
     name: "enableCollateral",
     type: "function",
-    stateMutability: "nonpayable",
+    stateMutability: "payable",
     inputs: [
       { name: "account", type: "address" },
       { name: "vault", type: "address" },
@@ -67,7 +67,7 @@ export const EVCABI = [
   {
     name: "enableController",
     type: "function",
-    stateMutability: "nonpayable",
+    stateMutability: "payable",
     inputs: [
       { name: "account", type: "address" },
       { name: "vault", type: "address" },
