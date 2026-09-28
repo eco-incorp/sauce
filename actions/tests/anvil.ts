@@ -140,14 +140,18 @@ export async function startAnvil(options: { mainnet?: string } = {}) {
   );
 
   /** Sends `program` through the Pot's `cook`. Resolves to the receipt, reverted or not. */
-  const cook = async (program: Uint8Array, value = 0n): Promise<TransactionReceipt> => {
+  const cook = async (
+    program: Uint8Array,
+    value = 0n,
+    gas = 30_000_000n,
+  ): Promise<TransactionReceipt> => {
     const hash = await walletClient.sendTransaction({
       account,
       chain,
       to: pot,
       data: cookData(engine, program),
       value,
-      gas: 30_000_000n,
+      gas,
     });
 
     return publicClient.waitForTransactionReceipt({ hash });
@@ -179,33 +183,39 @@ export async function startAnvil(options: { mainnet?: string } = {}) {
   };
 }
 
+/** `balanceOf(address)`, which every balance-delta output reads. */
+const BALANCE_OF = "0x70a08231";
+
 /**
  * Runtime code that records the call it receives and returns `ret`: it LOG1s its calldata with the
  * call's value as the topic. Execution through a binding the engine makes is then observable byte
  * for byte, with no contract of the real protocol behind it.
  *
- * `balanceOf(address)` is answered WITHOUT a log: a binding calls a `view` method with STATICCALL,
- * and a log inside a static call reverts. So balance reads are never recorded.
+ * The `silent` selectors are answered WITHOUT a log: a binding calls a `view` method with
+ * STATICCALL, and a log inside a static call reverts. So those calls are never recorded.
  *
- *   PUSH0 CALLDATALOAD PUSH1 0xe0 SHR PUSH4 balanceOf EQ PUSH2 ret JUMPI
+ *   PUSH0 CALLDATALOAD PUSH1 0xe0 SHR                selector
+ *   per silent selector: DUP1 PUSH4 sel EQ PUSH2 ret JUMPI
  *   CALLDATASIZE PUSH0 PUSH0 CALLDATACOPY          mem[0..] = calldata
  *   CALLVALUE CALLDATASIZE PUSH0 LOG1              log(calldata, topic = value)
  *   ret: JUMPDEST
- *   PUSH2 len PUSH2 0x0025 PUSH0 CODECOPY          mem[0..] = code[37..37+len]
+ *   PUSH2 len PUSH2 body PUSH0 CODECOPY            mem[0..] = code[body..body+len]
  *   PUSH2 len PUSH0 RETURN                         return it
  */
-export function recorderCode(ret: Hex = "0x"): Hex {
+export function recorderCode(ret: Hex = "0x", silent: readonly Hex[] = [BALANCE_OF]): Hex {
+  const u16 = (n: number): string => n.toString(16).padStart(4, "0");
   const body = ret.slice(2);
-  const len = (body.length / 2).toString(16).padStart(4, "0");
+  const len = u16(body.length / 2);
+  const jumpdest = 13 + 11 * silent.length;
   const logic =
-    "5f3560e01c6370a0823114610017" +
-    "57" +
+    "5f3560e01c" +
+    silent.map((sel) => `8063${sel.slice(2)}1461${u16(jumpdest)}57`).join("") +
     "365f5f37" +
     "34365fa1" +
     "5b" +
-    `61${len}6100255f39` +
+    `61${len}61${u16(jumpdest + 14)}5f39` +
     `61${len}5ff3`;
-  if (logic.length / 2 !== 0x25) throw new Error(`recorder logic is ${logic.length / 2} bytes`);
+  if (logic.length / 2 !== jumpdest + 14) throw new Error("recorder layout is off");
 
   return `0x${logic}${body}` as Hex;
 }

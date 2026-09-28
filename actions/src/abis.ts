@@ -36,7 +36,7 @@ import {
 import { AaveV3PoolABI, AcrossSpokePoolABI, CometABI, CrocSwapDexABI } from "./registry.js";
 import { DODOV2ProxyABI, ERC20ABI, LidoABI, LiquidityPoolABI } from "./registry.js";
 import { MaverickV2RouterABI, RETHABI, RocketDepositPoolABI } from "./registry.js";
-import { UniswapV2RouterABI, WstETHABI } from "./registry.js";
+import { TokenMessengerABI, UniswapV2RouterABI, WstETHABI } from "./registry.js";
 
 /** A parsed ABI in the shape the compiler's `inlineContracts` and the SDK's `compile.contracts` take. */
 export interface ActionContract {
@@ -229,33 +229,16 @@ const CATALOG = {
       `Carbon is ${NOT_IN_REGISTRY}`,
     ),
   }),
-  IClipperExchange: () => ({
-    sellTokenForToken: local(
-      "function sellTokenForToken(address inputToken, address outputToken, address recipient, uint256 minBuyAmount, bytes auxiliaryData) returns (uint256 boughtAmount)",
-      `Clipper is ${NOT_IN_REGISTRY}`,
-    ),
-  }),
-  IIntegralDelay: () => ({
-    sell: local(
-      "function sell((address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin, bool wrapUnwrap, address to, uint256 gasLimit, uint32 submitDeadline) sellParams) payable",
-      `Integral is ${NOT_IN_REGISTRY}; the order id it returns is never an amount`,
-    ),
-  }),
   IFluidDexT1: () => ({
     swapIn: local(
       "function swapIn(bool swap0to1, uint256 amountIn, uint256 amountOutMin, address to) payable returns (uint256 amountOut)",
       "the registry's fluid entry covers lending, not the DEX",
     ),
   }),
-  IFluidDexLite: () => ({
-    swapSingle: local(
-      "function swapSingle((address token0, address token1, bytes32 salt) dexKey, bool swap0To1, int256 amountSpecified, uint256 amountLimit, address to) payable",
-      `Fluid DEX Lite is ${NOT_IN_REGISTRY}; ${OUTPUT_UNREAD}`,
-    ),
-  }),
   IWstEth: () => ({
-    wrap: sdk("lido", "WstETHABI", WstETHABI, "wrap(uint256)", "drop"),
-    unwrap: sdk("lido", "WstETHABI", WstETHABI, "unwrap(uint256)", "drop"),
+    // Both return the amount they minted or released, which is the action's output.
+    wrap: sdk("lido", "WstETHABI", WstETHABI, "wrap(uint256)", "keep"),
+    unwrap: sdk("lido", "WstETHABI", WstETHABI, "unwrap(uint256)", "keep"),
   }),
   ILido: () => ({
     submit: sdk("lido", "LidoABI", LidoABI, "submit(address)", "drop"),
@@ -312,22 +295,49 @@ const CATALOG = {
       "keep",
     ),
   }),
-  IStargateRouter: () => ({
-    swap: local(
-      "function swap(uint16 _dstChainId, uint256 _srcPoolId, uint256 _dstPoolId, address _refundAddress, uint256 _amountLD, uint256 _minAmountLD, (uint256 dstGasForCall, uint256 dstNativeAmount, bytes dstNativeAddr) _lzTxParams, bytes _to, bytes _payload) payable",
-      "the registry declares Stargate V2's `send`; these actions call the V1 router",
-    ),
-  }),
+  IStargatePool: () => {
+    const reason =
+      "the registry declares the SendParam's `to` as `uint256`, which changes the selector; " +
+      "the pool takes `bytes32`";
+    const sendParam =
+      "(uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd)";
+    return {
+      quoteSend: local(
+        `function quoteSend(${sendParam} sendParam, bool payInLzToken) view returns ((uint256 nativeFee, uint256 lzTokenFee) fee)`,
+        `${reason}, and has no \`quoteSend\``,
+      ),
+      send: local(
+        `function send(${sendParam} sendParam, (uint256 nativeFee, uint256 lzTokenFee) fee, address refundAddress) payable`,
+        `${reason}; the receipts it returns are never read`,
+      ),
+    };
+  },
   ICctpTokenMessenger: () => ({
-    depositForBurn: local(
-      "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken)",
-      "the registry declares CCTP V2's seven-argument `depositForBurn`; these actions call V1",
+    depositForBurn: sdk(
+      "cctp",
+      "TokenMessengerABI",
+      TokenMessengerABI,
+      "depositForBurn(uint256,uint32,bytes32,address,bytes32,uint256,uint32)",
+      "drop",
     ),
   }),
-  IHyperlaneMailbox: () => ({
-    dispatch: local(
-      "function dispatch(uint32 destinationDomain, bytes32 recipientAddress, bytes messageBody) payable",
-      `Hyperlane is ${NOT_IN_REGISTRY}`,
+  IWarpRoute: () => {
+    const reason = "the registry's hyperlane entry is the Mailbox, not a warp route";
+    return {
+      quoteGasPayment: local(
+        "function quoteGasPayment(uint32 destinationDomain) view returns (uint256)",
+        reason,
+      ),
+      transferRemote: local(
+        "function transferRemote(uint32 destination, bytes32 recipient, uint256 amountOrId) payable",
+        `${reason}; the message id it returns is never read`,
+      ),
+    };
+  },
+  IPermit2: () => ({
+    approve: local(
+      "function approve(address token, address spender, uint160 amount, uint48 expiration)",
+      "the registry declares a `uint64` expiration, which changes the selector; Permit2 takes `uint48`",
     ),
   }),
 } satisfies Record<string, () => Record<string, BoundMethod>>;

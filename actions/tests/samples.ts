@@ -1,86 +1,88 @@
 /**
- * One valid instance of every action type, in JSON form (no `chainId`, which a program supplies),
- * for the suites that need the whole catalogue. NOT a `.test.ts`.
+ * One valid instance of every action type, for the suites that need the whole catalogue. Typed
+ * against `types.ts` and parsed against `spec.ts`, so the two cannot drift apart. NOT a `.test.ts`.
  */
-import type { RoutingAction, RoutingActionType } from "../src/types.js";
+import type { Action, ActionProgram, ActionType } from "../src/types.js";
 
-const T = "0x2000000000000000000000000000000000000001";
-const A = "0x1000000000000000000000000000000000000001";
-const B = "0x1000000000000000000000000000000000000002";
-const R = "0x3000000000000000000000000000000000000001";
-const ZERO = "0x0000000000000000000000000000000000000000";
-const B32 = `0x${"ab".repeat(32)}`;
-const D = 9_999_999_999;
+/** The contract each sample calls. */
+export const T = "0x2000000000000000000000000000000000000001";
+/** The token each sample spends (and a pool address where one is an argument). */
+export const A = "0x1000000000000000000000000000000000000001";
+/** The token each sample buys. */
+export const B = "0x1000000000000000000000000000000000000002";
+/** Each sample's recipient. */
+export const R = "0x3000000000000000000000000000000000000001";
+export const ZERO = "0x0000000000000000000000000000000000000000";
+export const B32 = `0x${"ab".repeat(32)}` as const;
+/** Each sample's deadline. */
+export const D = 9_999_999_999;
 
-type Sample = Record<string, unknown> & { type: RoutingActionType };
+type Samples = { [K in ActionType]: Extract<Action, { type: K }> };
 
-export const SAMPLES: Record<RoutingActionType, Sample> = {
+export const SAMPLES: Samples = {
   uniswapV3ExactInput: {
     type: "uniswapV3ExactInput",
+    amount: "1000",
     router: T,
     tokenIn: A,
     tokenOut: B,
     fee: 500,
-    amountIn: "1000",
     amountOutMin: "1",
     recipient: R,
-    deadline: D,
   },
   uniswapV3ExactInputMultiHop: {
     type: "uniswapV3ExactInputMultiHop",
+    amount: "1000",
     router: T,
     path: `${A}0001f4${B.slice(2)}`,
-    amountIn: "1000",
     amountOutMin: "1",
     recipient: "self",
-    deadline: D,
   },
   uniswapV4ExactInput: {
     type: "uniswapV4ExactInput",
+    amount: "1000",
     router: T,
     poolKey: { currency0: A, currency1: B, fee: 500, tickSpacing: 10, hooks: ZERO },
     zeroForOne: true,
-    amountIn: "1000",
     amountOutMin: "1",
     recipient: R,
   },
   uniswapV4ExactInputMultiHop: {
     type: "uniswapV4ExactInputMultiHop",
+    amount: "1000",
     router: T,
     currencyIn: A,
     path: [{ intermediateCurrency: B, fee: 500, tickSpacing: 10, hooks: ZERO }],
-    amountIn: "1000",
     amountOutMin: "1",
     recipient: R,
   },
   curveSwap: {
     type: "curveSwap",
+    amount: "1000",
     pool: T,
-    tokenIn: A,
     tokenOut: B,
     i: 1,
     j: 2,
-    amountIn: "1000",
     amountOutMin: "1",
     recipient: R,
   },
   curveRouterNGSwap: {
     type: "curveRouterNGSwap",
+    amount: "1000",
     router: T,
     route: [A, T, B],
     swapParams: [[1, 2, 1, 1, 3]],
-    amountIn: "1000",
-    amountOutMin: "1",
     pools: [],
+    amountOutMin: "1",
     recipient: R,
   },
   balancerV2Swap: {
     type: "balancerV2Swap",
+    amount: "1000",
     vault: T,
     poolId: B32,
     tokenIn: A,
     tokenOut: B,
-    amountIn: "1000",
     amountOutMin: "1",
     recipient: R,
     deadline: D,
@@ -96,64 +98,64 @@ export const SAMPLES: Record<RoutingActionType, Sample> = {
   },
   balancerV3Swap: {
     type: "balancerV3Swap",
+    amount: "1000",
     router: T,
     pool: A,
     tokenIn: A,
     tokenOut: B,
-    amountIn: "1000",
     amountOutMin: "1",
     deadline: D,
     wethIsEth: false,
   },
   uniswapV2Swap: {
     type: "uniswapV2Swap",
+    amount: "1000",
     router: T,
-    amountIn: "1000",
-    amountOutMin: "1",
     path: [A, B],
+    amountOutMin: "1",
     recipient: R,
     deadline: D,
   },
   ambientSwap: {
     type: "ambientSwap",
+    amount: "1000",
     dex: T,
     base: A,
     quote: B,
     poolIdx: 420,
     isBuy: true,
     inBaseQty: true,
-    amountIn: "1000",
     tip: 0,
     limitPrice: "1",
-    minOut: "1",
+    amountOutMin: "1",
     reserveFlags: 0,
   },
   dodoSwap: {
     type: "dodoSwap",
+    amount: "1000",
     proxy: T,
     fromToken: A,
     toToken: B,
-    amountIn: "1000",
-    amountOutMin: "1",
-    dodoPairs: [T],
+    pairs: [T],
     directions: 0,
+    amountOutMin: "1",
     deadline: D,
     version: "v1",
   },
   maverickSwap: {
     type: "maverickSwap",
+    amount: "1000",
     router: T,
     pool: A,
     tokenAIn: true,
-    amountIn: "1000",
     amountOutMin: "1",
     recipient: R,
   },
   maverickMultiHopSwap: {
     type: "maverickMultiHopSwap",
+    amount: "1000",
     router: T,
     path: "0xabcd",
-    amountIn: "1000",
     amountOutMin: "1",
     recipient: R,
   },
@@ -163,67 +165,34 @@ export const SAMPLES: Record<RoutingActionType, Sample> = {
     sourceToken: A,
     targetToken: B,
     tradeActions: [{ strategyId: "340282366920938463463374607431768211457", amount: "1000" }],
-    amountIn: "1000",
     amountOutMin: "1",
     deadline: D,
   },
   fraxswapSwap: {
     type: "fraxswapSwap",
+    amount: "1000",
     router: T,
-    amountIn: "1000",
-    amountOutMin: "1",
     path: [A, B],
+    amountOutMin: "1",
     recipient: R,
     deadline: D,
   },
-  clipperSwap: {
-    type: "clipperSwap",
-    exchange: T,
-    inputToken: A,
-    outputToken: B,
-    amountIn: "1000",
-    amountOutMin: "1",
-    recipient: R,
-    auxiliaryData: "0x",
-  },
-  integralSwap: {
-    type: "integralSwap",
-    delay: T,
-    tokenIn: A,
-    tokenOut: B,
-    amountIn: "1000",
-    amountOutMin: "1",
-    wrapUnwrap: false,
-    recipient: R,
-    gasLimit: "400000",
-    submitDeadline: 1_700_000_000,
-  },
   fluidDexT1Swap: {
     type: "fluidDexT1Swap",
+    amount: "1000",
     pool: T,
     swap0to1: true,
-    amountIn: "1000",
-    amountOutMin: "1",
-    recipient: R,
-  },
-  fluidDexLiteSwap: {
-    type: "fluidDexLiteSwap",
-    dex: T,
-    token0: A,
-    token1: B,
-    salt: B32,
-    swap0To1: true,
-    amountIn: "1000",
     amountOutMin: "1",
     recipient: R,
   },
   acrossBridge: {
     type: "acrossBridge",
-    destChainId: 10,
+    amount: "1000",
     spokePool: T,
     token: A,
-    amount: "1000",
-    relayerFeePct: "0",
+    destChainId: 10,
+    recipient: R,
+    relayerFee: "10",
     quoteTimestamp: 1,
     fillDeadline: 2,
     exclusivityDeadline: 0,
@@ -231,82 +200,70 @@ export const SAMPLES: Record<RoutingActionType, Sample> = {
   },
   stargateBridge: {
     type: "stargateBridge",
-    destChainId: 110,
-    router: T,
-    token: A,
-    srcPoolId: 1,
-    dstPoolId: 1,
     amount: "1000",
-    amountOutMin: "1",
-    lzFee: "7",
+    pool: T,
+    dstEid: 30110,
+    recipient: R,
+    amountOutMin: "990",
   },
   cctpBridge: {
     type: "cctpBridge",
-    destChainId: 10,
+    amount: "1000",
     tokenMessenger: T,
     token: A,
-    srcDomain: 0,
-    destDomain: 2,
-    amount: "1000",
-    mintRecipient: B32,
+    destinationDomain: 5,
+    recipient: B32,
+    maxFee: "0",
+    minFinalityThreshold: 2000,
   },
   hyperlaneBridge: {
     type: "hyperlaneBridge",
-    destChainId: 10,
-    router: T,
-    token: A,
     amount: "1000",
+    router: T,
     destinationDomain: 10,
-    gasPayment: "9",
+    recipient: R,
   },
-  wrapETH: { type: "wrapETH", weth: T, amount: "1000" },
-  unwrapETH: { type: "unwrapETH", weth: T, amount: "1000" },
-  wrapStETH: { type: "wrapStETH", wstETH: T, stETHAmount: "1000" },
-  unwrapStETH: { type: "unwrapStETH", wstETH: T, wstETHAmount: "1000" },
-  lidoStake: { type: "lidoStake", stETH: T, amount: "1000", referral: ZERO },
-  lidoUnstake: { type: "lidoUnstake", withdrawalQueue: T, stETHAmount: "1000" },
-  rocketPoolStake: { type: "rocketPoolStake", rETH: A, depositPool: T, amount: "1000" },
-  rocketPoolUnstake: { type: "rocketPoolUnstake", rETH: T, amount: "1000" },
-  etherFiStake: { type: "etherFiStake", liquidityPool: T, amount: "1000" },
+  wrapETH: { type: "wrapETH", amount: "1000", weth: T },
+  unwrapETH: { type: "unwrapETH", amount: "1000", weth: T },
+  wrapStETH: { type: "wrapStETH", amount: "1000", wstETH: T },
+  unwrapStETH: { type: "unwrapStETH", amount: "1000", wstETH: T },
+  lidoStake: { type: "lidoStake", amount: "1000", stETH: T, referral: ZERO },
+  lidoUnstake: { type: "lidoUnstake", amount: "1000", withdrawalQueue: T, owner: "self" },
+  rocketPoolStake: { type: "rocketPoolStake", amount: "1000", depositPool: T, rETH: A },
+  rocketPoolUnstake: { type: "rocketPoolUnstake", amount: "1000", rETH: T },
+  etherFiStake: { type: "etherFiStake", amount: "1000", liquidityPool: T, eETH: A },
   aaveV3Supply: {
     type: "aaveV3Supply",
+    amount: "1000",
     pool: T,
     token: A,
-    amount: "1000",
     onBehalfOf: "self",
     referralCode: 0,
   },
-  aaveV3Withdraw: { type: "aaveV3Withdraw", pool: T, token: A, amount: "1000", to: R },
-  aaveV3Borrow: {
-    type: "aaveV3Borrow",
-    pool: T,
-    token: A,
+  aaveV3Withdraw: { type: "aaveV3Withdraw", amount: "1000", pool: T, token: A, recipient: R },
+  aaveV3Borrow: { type: "aaveV3Borrow", amount: "1000", pool: T, token: A, onBehalfOf: R },
+  aaveV3Repay: { type: "aaveV3Repay", amount: "1000", pool: T, token: A, onBehalfOf: R },
+  compoundV3Supply: { type: "compoundV3Supply", amount: "1000", comet: T, token: A },
+  compoundV3Withdraw: { type: "compoundV3Withdraw", amount: "1000", comet: T, token: A },
+  transfer: { type: "transfer", amount: "1000", token: A, recipient: R },
+  approve: { type: "approve", amount: "1000", token: A, spender: T },
+  permit2Approve: {
+    type: "permit2Approve",
     amount: "1000",
-    interestRateMode: 2,
-    onBehalfOf: R,
-    referralCode: 0,
-  },
-  aaveV3Repay: {
-    type: "aaveV3Repay",
-    pool: T,
+    permit2: T,
     token: A,
-    amount: "1000",
-    interestRateMode: 2,
-    onBehalfOf: R,
+    spender: B,
+    expiration: D,
   },
-  compoundV3Supply: { type: "compoundV3Supply", comet: T, token: A, amount: "1000" },
-  compoundV3Withdraw: { type: "compoundV3Withdraw", comet: T, token: A, amount: "1000" },
-  transfer: { type: "transfer", token: A, to: R, amount: "1000" },
-  approve: { type: "approve", token: A, spender: T, amount: "1000" },
   balanceOf: { type: "balanceOf", token: A },
   nativeBalance: { type: "nativeBalance" },
   argument: { type: "argument", name: "amount" },
 };
 
 /** A one-action program for `type` — or, for a source action, the action plus one that reads it. */
-export function sampleProgram(type: RoutingActionType, chainId = 1): Record<string, unknown> {
-  const sample = SAMPLES[type];
-  const reader =
+export function sampleProgram(type: ActionType, chainId = 1): ActionProgram {
+  const sample = structuredClone(SAMPLES[type]) as Action;
+  const reader: Action =
     type === "nativeBalance"
       ? { type: "wrapETH", weth: T }
       : { type: "approve", token: A, spender: T };
@@ -315,13 +272,5 @@ export function sampleProgram(type: RoutingActionType, chainId = 1): Record<stri
       ? [sample, reader]
       : [sample];
 
-  return { version: 1, chainId, actions: structuredClone(actions) };
-}
-
-/** Every sample as a typed action on `chainId`. */
-export function sampleAction(type: RoutingActionType, chainId = 1): RoutingAction {
-  const sample = structuredClone(SAMPLES[type]);
-  const field = type.endsWith("Bridge") ? "srcChainId" : "chainId";
-
-  return { ...sample, [field]: chainId } as unknown as RoutingAction;
+  return { version: 1, chainId, actions };
 }

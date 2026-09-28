@@ -1,5 +1,5 @@
 /**
- * SauceScript source emission — the vocabulary `to-sauce.ts`, `to-quote.ts` and `megas-swap.ts`
+ * SauceScript source emission — the vocabulary `to-sauce.ts`, `to-quote.ts` and `split-swap.ts`
  * share: build statement strings, hand them to one compile seam.
  *
  * Two compiler rules shape what is here (probed against the pinned compiler, 2.3.0):

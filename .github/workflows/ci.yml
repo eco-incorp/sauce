@@ -212,7 +212,7 @@ jobs:
       # released engine (Foundry and SAUCE_V12_RUNTIME_CREATION_HEX are set up above, and they throw
       # under CI rather than skip).
       #
-      # The prod-like suites — to-sauce, to-quote, v4.mainnet, megas-swap — run against real mainnet
+      # The prod-like suites — every action, every quote, the split swap — run against real mainnet
       # contracts on a LOCAL anvil booted from state captured at a pinned block and checked in
       # (`actions/tests/state/*.genesis.json.gz`, see `actions/tests/mainnet.ts`). No secret and no
       # network: a replayed suite refuses to fork and fails on any non-local request. Recapturing is a

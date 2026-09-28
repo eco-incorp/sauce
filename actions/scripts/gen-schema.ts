@@ -7,9 +7,12 @@
 import { writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { format, resolveConfig } from "prettier";
 
-import { actionProgramJsonSchema } from "../src/schema.js";
+import { programSchema } from "../src/schema.js";
 
 const out = resolve(dirname(fileURLToPath(import.meta.url)), "../action-program.schema.json");
-writeFileSync(out, `${JSON.stringify(actionProgramJsonSchema(), null, 2)}\n`);
+// Formatted as the repository's `format:check` expects, so the output is committed as written.
+const options = { ...(await resolveConfig(out)), filepath: out };
+writeFileSync(out, await format(JSON.stringify(programSchema()), options));
 console.log(`wrote ${out}`);

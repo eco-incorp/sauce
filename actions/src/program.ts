@@ -2,14 +2,13 @@
  * Action programs as JSON: strict parsing with located errors, and canonical serialization.
  *
  * A program is plain data — `{ version, chainId, actions }` — so it can be written by hand, stored,
- * signed, sent to another service, or produced by a client in any language against the published
- * JSON Schema (`action-program.schema.json`). `parseActionProgram` accepts exactly what that schema
- * accepts and then applies the rules a schema cannot express (see `semantics.ts`); every problem is
- * reported with its path, not just the first.
+ * signed, sent to another service, or produced in any language against the published JSON Schema
+ * (`action-program.schema.json`). `parseProgram` accepts exactly what that schema accepts and then
+ * applies the rules a schema cannot express (`semantics.ts`); every problem is reported with its
+ * path, not just the first.
  *
- * Round trip: for any program `p` this module accepts, `parseActionProgram(serializeActionProgram(p))`
- * deep-equals `p`. Parsing fills each action's own chain field from the program's `chainId` when it
- * is omitted, which is the only normalization.
+ * Round trip: for any program `p` this module accepts, `parseProgram(serializeProgram(p))`
+ * deep-equals `p`. Parsing only reorders keys; it fills in no defaults.
  */
 import { getAddress } from "viem";
 
@@ -21,20 +20,11 @@ import {
   type FieldKind,
   type Fields,
 } from "./spec.js";
-import {
-  ActionProgramError,
-  IDENTIFIER_RE,
-  actionsSemanticIssues,
-  type ActionIssue,
-} from "./semantics.js";
-import type { ActionProgram, RoutingAction, RoutingActionType } from "./types.js";
+import { IDENTIFIER_RE, ProgramError, programIssues, type ProgramIssue } from "./semantics.js";
+import type { Action, ActionProgram, ActionType } from "./types.js";
 
-/** The only action-program format version. */
-export const ACTION_PROGRAM_VERSION = 1;
-
-export type ActionProgramValidation =
-  | { readonly ok: true; readonly program: ActionProgram }
-  | { readonly ok: false; readonly issues: readonly ActionIssue[] };
+/** The action-program format version this package reads and writes. */
+export const PROGRAM_VERSION = 1;
 
 const UINT_RE = /^(0|[1-9][0-9]*)$/;
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
@@ -92,7 +82,7 @@ function suggest(word: string, candidates: readonly string[]): string | undefine
 }
 
 class Checker {
-  readonly issues: ActionIssue[] = [];
+  readonly issues: ProgramIssue[] = [];
 
   fail(path: string, message: string): void {
     this.issues.push({ path, message });
@@ -107,6 +97,10 @@ class Checker {
         break;
       case "recipient":
         if (value !== "self") this.address(path, value, ' or "self"');
+        break;
+      case "remoteRecipient":
+        if (typeof value === "string" && BYTES32_RE.test(value)) break;
+        this.address(path, value, " or a 32-byte account (0x + 64 hex digits)");
         break;
       case "uint":
         if (typeof value === "bigint") {
@@ -252,20 +246,14 @@ class Checker {
 export function actionKeys(spec: ActionSpec): string[] {
   return [
     "type",
-    spec.chainField,
-    ...(spec.amountField ? [spec.amountField] : []),
+    ...(spec.spends ? ["amount"] : []),
     ...Object.keys(spec.fields),
-    ...(spec.chainable ? ["amountRef"] : []),
+    ...(spec.spends ? ["amountRef"] : []),
     "saveOutputAs",
   ];
 }
 
-function checkAction(
-  c: Checker,
-  path: string,
-  value: unknown,
-  chainId: unknown,
-): RoutingAction | undefined {
+function checkAction(c: Checker, path: string, value: unknown): Action | undefined {
   if (!isPlainObject(value)) {
     c.fail(path, `expected an action object, got ${describe(value)}`);
     return undefined;
@@ -281,53 +269,42 @@ function checkAction(
     );
     return undefined;
   }
-  const spec = ACTION_SPECS[type as RoutingActionType];
-  const extra = ["type", spec.chainField, "saveOutputAs"];
-  if (spec.amountField) extra.push(spec.amountField);
-  if (spec.chainable) extra.push("amountRef");
-  if (!spec.chainable && has(value, "amountRef")) {
-    c.fail(
-      `${path}.amountRef`,
-      spec.group === "source"
-        ? `${type} consumes no amount, so it takes no \`amountRef\``
-        : `${type} cannot take a referenced amount`,
-    );
-    // Reported once; not also as an unknown field.
-    extra.push("amountRef");
+  const spec = ACTION_SPECS[type as ActionType];
+  const extra = ["type", "saveOutputAs"];
+  if (spec.spends) {
+    extra.push("amount", "amountRef");
+  } else {
+    // Reported here, once, with the reason — not also as an unknown field.
+    for (const key of ["amount", "amountRef"]) {
+      if (!has(value, key)) continue;
+      c.fail(
+        `${path}.${key}`,
+        spec.group === "source"
+          ? `${type} spends nothing, so it takes no \`${key}\``
+          : `${type} takes its amounts from its own fields, so it takes no \`${key}\``,
+      );
+      extra.push(key);
+    }
   }
   const before = c.issues.length;
   if (!c.object(path, value, spec.fields, extra)) return undefined;
 
-  if (has(value, spec.chainField))
-    c.value(`${path}.${spec.chainField}`, value[spec.chainField], {
-      k: "int",
-      min: 1,
-      max: Number.MAX_SAFE_INTEGER,
-    });
-  if (spec.amountField && has(value, spec.amountField))
-    c.value(`${path}.${spec.amountField}`, value[spec.amountField], { k: "uint", bits: 256 });
+  if (spec.spends && has(value, "amount"))
+    c.value(`${path}.amount`, value.amount, { k: "uint", bits: 256 });
   for (const key of ["saveOutputAs", "amountRef"] as const) {
-    if (has(value, key) && (key !== "amountRef" || spec.chainable))
+    if (has(value, key) && (key === "saveOutputAs" || spec.spends))
       c.value(`${path}.${key}`, value[key], { k: "identifier" });
   }
-  if (spec.exactlyOne) {
-    const [a, b] = spec.exactlyOne;
-    const count = Number(has(value, a)) + Number(has(value, b));
-    if (count !== 1)
-      c.fail(
-        path,
-        `set exactly one of \`${a}\` and \`${b}\` (got ${count === 0 ? "neither" : "both"})`,
-      );
-  }
   if (type === "balancerV2BatchSwap" && Array.isArray(value.steps) && Array.isArray(value.assets)) {
+    const assets = value.assets.length;
     (value.steps as unknown[]).forEach((step, i) => {
       if (!isPlainObject(step)) return;
       for (const key of ["assetInIndex", "assetOutIndex"] as const) {
         const index = step[key];
-        if (typeof index === "number" && index >= (value.assets as unknown[]).length) {
+        if (typeof index === "number" && index >= assets) {
           c.fail(
             `${path}.steps[${i}].${key}`,
-            `${index} is not an index into \`assets\` (${(value.assets as unknown[]).length} entries)`,
+            `${index} is not an index into \`assets\` (${assets} entries)`,
           );
         }
       }
@@ -335,11 +312,10 @@ function checkAction(
   }
   if (c.issues.length > before) return undefined;
 
-  // A deep copy, in canonical key order, with the chain filled from the program when omitted.
+  // A deep copy, in canonical key order.
   const copy = JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
-  if (!has(copy, spec.chainField)) copy[spec.chainField] = chainId;
 
-  return ordered(copy, actionKeys(spec), spec.fields) as unknown as RoutingAction;
+  return ordered(copy, actionKeys(spec), spec.fields) as unknown as Action;
 }
 
 /** `value` rebuilt with its keys in `keys` order (nested objects follow their field order too). */
@@ -368,20 +344,27 @@ function orderedValue(value: unknown, kind: FieldKind): unknown {
 }
 
 /**
- * Validates `input` — a parsed JSON value, or JSON text — as an action program, without throwing.
- * On success the program is a fresh copy in canonical key order.
+ * Checks each of `values` as an action on its own — shape only, no chaining rules — and returns
+ * them as canonical copies. Throws a `ProgramError` whose paths start at `path`.
  */
-export function validateActionProgram(input: unknown): ActionProgramValidation {
+export function parseActions(values: readonly unknown[], path: string): Action[] {
+  const c = new Checker();
+  const actions = values.flatMap((value, i) => checkAction(c, `${path}[${i}]`, value) ?? []);
+  if (c.issues.length > 0) throw new ProgramError(c.issues);
+
+  return actions;
+}
+
+type Checked = { readonly program: ActionProgram } | { readonly issues: readonly ProgramIssue[] };
+
+function check(input: unknown): Checked {
   const c = new Checker();
   let value = input;
   if (typeof input === "string") {
     try {
       value = JSON.parse(input);
     } catch (error) {
-      return {
-        ok: false,
-        issues: [{ path: "$", message: `not valid JSON: ${(error as Error).message}` }],
-      };
+      return { issues: [{ path: "$", message: `not valid JSON: ${(error as Error).message}` }] };
     }
   }
 
@@ -390,7 +373,7 @@ export function validateActionProgram(input: unknown): ActionProgramValidation {
       "$",
       `expected an action program object ({ version, chainId, actions }), got ${describe(value)}`,
     );
-    return { ok: false, issues: c.issues };
+    return { issues: c.issues };
   }
   for (const key of Object.keys(value)) {
     if (!(PROGRAM_KEYS as readonly string[]).includes(key) && has(value, key)) {
@@ -403,19 +386,19 @@ export function validateActionProgram(input: unknown): ActionProgramValidation {
   }
   if (has(value, "$schema") && typeof value.$schema !== "string")
     c.fail("$schema", `expected a string, got ${describe(value.$schema)}`);
-  if (value.version !== ACTION_PROGRAM_VERSION) {
+  if (value.version !== PROGRAM_VERSION) {
     c.fail(
       "version",
       value.version === undefined
-        ? `missing — set it to ${ACTION_PROGRAM_VERSION}`
-        : `unsupported version ${describe(value.version)}; this package reads version ${ACTION_PROGRAM_VERSION}`,
+        ? `missing — set it to ${PROGRAM_VERSION}`
+        : `unsupported version ${describe(value.version)}; this package reads version ${PROGRAM_VERSION}`,
     );
   }
-  const chainOk = has(value, "chainId")
-    ? c.value("chainId", value.chainId, { k: "int", min: 1, max: Number.MAX_SAFE_INTEGER })
-    : (c.fail("chainId", "missing — the chain every action executes on"), false);
+  if (has(value, "chainId"))
+    c.value("chainId", value.chainId, { k: "int", min: 1, max: Number.MAX_SAFE_INTEGER });
+  else c.fail("chainId", "missing — the chain every action executes on");
 
-  const actions: RoutingAction[] = [];
+  const actions: Action[] = [];
   if (!Array.isArray(value.actions)) {
     c.fail(
       "actions",
@@ -427,48 +410,34 @@ export function validateActionProgram(input: unknown): ActionProgramValidation {
     c.fail("actions", "is empty — a program needs at least one action");
   } else {
     value.actions.forEach((raw, i) => {
-      const action = checkAction(c, `actions[${i}]`, raw, value.chainId);
+      const action = checkAction(c, `actions[${i}]`, raw);
       if (action) actions.push(action);
     });
   }
 
   // The chaining rules read every action, so they run only once every action is well formed.
-  if (c.issues.length === 0 && chainOk) {
-    c.issues.push(...actionsSemanticIssues(actions, value.chainId as number));
-  }
-  if (c.issues.length > 0) return { ok: false, issues: c.issues };
+  if (c.issues.length === 0) c.issues.push(...programIssues(actions));
+  if (c.issues.length > 0) return { issues: c.issues };
 
-  return {
-    ok: true,
-    program: { version: ACTION_PROGRAM_VERSION, chainId: value.chainId as number, actions },
-  };
+  return { program: { version: PROGRAM_VERSION, chainId: value.chainId as number, actions } };
 }
 
 /**
- * Parses and validates an action program — a parsed JSON value or JSON text. Throws an
- * `ActionProgramError` whose `issues` lists every problem, each with its path.
+ * Parses and validates an action program — JSON text, or an already-parsed value. Returns a fresh
+ * copy with its keys in canonical order. Throws a `ProgramError` whose `issues` lists every
+ * problem, each with its path.
  */
-export function parseActionProgram(input: unknown): ActionProgram {
-  const result = validateActionProgram(input);
-  if (!result.ok) throw new ActionProgramError(result.issues);
+export function parseProgram(input: unknown): ActionProgram {
+  const result = check(input);
+  if ("issues" in result) throw new ProgramError(result.issues);
 
   return result.program;
 }
 
 /**
  * The canonical JSON text of `program`: validated first, keys in schema order, so two equal
- * programs serialize to the same bytes. `space` indents as `JSON.stringify` does.
+ * programs serialize to the same text. `space` indents as `JSON.stringify` does.
  */
-export function serializeActionProgram(program: ActionProgram, space?: number | string): string {
-  const parsed = parseActionProgram(program);
-
-  return JSON.stringify(parsed, null, space);
-}
-
-/**
- * An action list as a program on `chainId` — the bridge from the typed `RoutingAction[]` API to the
- * JSON form. Validates it.
- */
-export function toActionProgram(actions: readonly RoutingAction[], chainId: number): ActionProgram {
-  return parseActionProgram({ version: ACTION_PROGRAM_VERSION, chainId, actions });
+export function serializeProgram(program: ActionProgram, space?: number | string): string {
+  return JSON.stringify(parseProgram(program), null, space);
 }

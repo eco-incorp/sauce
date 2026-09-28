@@ -25,7 +25,8 @@ import {
 } from "viem";
 
 import { compileEvm } from "../src/compile.js";
-import { actionsToSauce } from "../src/to-sauce.js";
+import { compileProgram } from "../src/index.js";
+import type { Action } from "../src/types.js";
 import { REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
 
 const fixture = JSON.parse(
@@ -83,11 +84,14 @@ describe("no-return tokens (USDT-style)", { skip, timeout: 120_000 }, () => {
       args: args as never,
     });
 
+  const program = (actions: Action[]): Uint8Array =>
+    compileProgram({ version: 1, chainId: 31337, actions }).bytecode;
+
   it("approve and transfer actions succeed, and move exactly what they say", async () => {
     const receipt = await env.cook(
-      actionsToSauce([
-        { type: "approve", chainId: 31337, token, spender: SPENDER, amount: "250000" },
-        { type: "transfer", chainId: 31337, token, to: RECIPIENT, amount: "100000" },
+      program([
+        { type: "approve", amount: "250000", token, spender: SPENDER },
+        { type: "transfer", amount: "100000", token, recipient: RECIPIENT },
       ]),
     );
     assert.equal(receipt.status, "success");
@@ -99,9 +103,9 @@ describe("no-return tokens (USDT-style)", { skip, timeout: 120_000 }, () => {
   it("a balanceOf source action feeds a transfer of the whole balance", async () => {
     const before = await read("balanceOf", [env.pot]);
     const receipt = await env.cook(
-      actionsToSauce([
-        { type: "balanceOf", chainId: 31337, token },
-        { type: "transfer", chainId: 31337, token, to: RECIPIENT },
+      program([
+        { type: "balanceOf", token },
+        { type: "transfer", token, recipient: RECIPIENT },
       ]),
     );
     assert.equal(receipt.status, "success");
@@ -112,7 +116,7 @@ describe("no-return tokens (USDT-style)", { skip, timeout: 120_000 }, () => {
   it("a token refusing the call still reverts the program — only the decode is skipped", async () => {
     // USDT refuses to move a nonzero allowance to another nonzero value.
     const receipt = await env.cook(
-      actionsToSauce([{ type: "approve", chainId: 31337, token, spender: SPENDER, amount: "1" }]),
+      program([{ type: "approve", amount: "1", token, spender: SPENDER }]),
     );
     assert.equal(receipt.status, "reverted");
   });

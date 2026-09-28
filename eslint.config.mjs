@@ -39,18 +39,15 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
   {
-    // `no-explicit-any` OFF for these eight files, and nowhere else. Every remaining `any` in them
+    // `no-explicit-any` OFF for these five files, and nowhere else. Every remaining `any` in them
     // is an external-library escape, not a shortcut — checked one by one:
     //
     //   dev-tools/src/sync-price.ts (16)  viem's `ReadContractParameters` marks `authorizationList`
     //     REQUIRED in this version — an EIP-7702 field a READ never uses — so every `readContract`
     //     call needs a cast. Verified by deleting the casts: 13 x TS2345 "Property
     //     'authorizationList' is missing". A viem bump or one shared typed wrapper is the real fix.
-    //   actions/src/to-quote.ts (3), actions/tests/to-quote.test.ts (4)  `encodeAbiParameters`
-    //     values against a runtime-assembled tuple ABI.
-    //   actions/tests/to-sauce.test.ts (2)  decoded log `args`; tightening to
-    //     `Record<string, unknown>` pushes narrowing onto four unrelated assertions.
-    //   actions/scripts/split-swap.ts (1)  a hand-rolled EIP-1193 `request` shim.
+    //   actions/src/to-quote.ts (3)  `encodeAbiParameters` values against a runtime-assembled
+    //     tuple ABI.
     //   dev-tools/test/e2e.test.ts (1)  `hardhat_setCode`, absent from viem's method union.
     //   sdk/test/svm/cpi-probe.test.ts (1), sdk/test/svm/venues/woofi.test.ts (1)  partial litesvm
     //     account/loader stubs standing in for a full fixture.
@@ -61,9 +58,6 @@ export default tseslint.config(
       "dev-tools/src/sync-price.ts",
       "dev-tools/test/e2e.test.ts",
       "actions/src/to-quote.ts",
-      "actions/scripts/split-swap.ts",
-      "actions/tests/to-quote.test.ts",
-      "actions/tests/to-sauce.test.ts",
       "sdk/test/svm/cpi-probe.test.ts",
       "sdk/test/svm/venues/woofi.test.ts",
     ],

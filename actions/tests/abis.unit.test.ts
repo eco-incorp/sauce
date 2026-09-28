@@ -42,6 +42,11 @@ describe("action ABI bindings", () => {
     assert.deepEqual(bindingMethods("ICurvePool").exchange!.fn.outputs, []);
   });
 
+  it("the quotes a bridge pays are view calls, so the program issues them as static calls", () => {
+    assert.equal(bindingMethods("IStargatePool").quoteSend!.fn.stateMutability, "view");
+    assert.equal(bindingMethods("IWarpRoute").quoteGasPayment!.fn.stateMutability, "view");
+  });
+
   it("records where every method comes from, with a reason for each one the registry does not supply", () => {
     let fromSdk = 0;
     for (const name of BINDING_NAMES) {
@@ -54,14 +59,19 @@ describe("action ABI bindings", () => {
         }
       }
     }
-    assert.equal(fromSdk, 18, "a registry-sourced method was added or dropped — update this count");
+    assert.equal(fromSdk, 19, "a registry-sourced method was added or dropped — update this count");
   });
 
-  it("the selectors that were once wrong are now the deployed contracts'", () => {
-    // Checked against mainnet bytecode: the Stargate V1 router has 0x9fbf10fc, not 0x13d356b9.
+  it("where the registry's spelling changes a selector, the binding declares the deployed one", () => {
+    // Stargate V2's SendParam `to` is `bytes32` (the registry says `uint256`): selector 0xc7c7f5b3.
     assert.equal(
-      canonicalSignature(bindingMethods("IStargateRouter").swap!.fn),
-      "swap(uint16,uint256,uint256,address,uint256,uint256,(uint256,uint256,bytes),bytes,bytes)",
+      canonicalSignature(bindingMethods("IStargatePool").send!.fn),
+      "send((uint32,bytes32,uint256,uint256,bytes,bytes,bytes),(uint256,uint256),address)",
+    );
+    // Permit2's expiration is `uint48` (the registry says `uint64`): selector 0x87517c45.
+    assert.equal(
+      canonicalSignature(bindingMethods("IPermit2").approve!.fn),
+      "approve(address,address,uint160,uint48)",
     );
     assert.equal(
       canonicalSignature(bindingMethods("IBalancerV2Vault").swap!.fn),

@@ -1,9 +1,7 @@
 /**
- * The capture-mode recording proxy for `mainnet.ts`, as its OWN process.
- *
- * It cannot live in the test process: the suites shell out with `execSync(cast …)`, which blocks
- * that process's event loop while anvil executes — and anvil, mid-transaction, is waiting on this
- * proxy for the state it has not fetched yet. In-process, the two deadlock until cast times out.
+ * The capture-mode recording proxy for `mainnet.ts`, as its OWN process, so nothing a suite does on
+ * its event loop can stall anvil, which — mid-transaction — waits on this proxy for the state it has
+ * not fetched yet.
  *
  * Forwards every JSON-RPC request to `SAUCE_CAPTURE_UPSTREAM` and records each account and storage
  * slot it answers. A read at any block but `SAUCE_CAPTURE_BLOCK` is refused, so one capture cannot
@@ -60,19 +58,34 @@ function record({ method, params = [] }, result) {
   }
 }
 
+/**
+ * POSTs `body` upstream. An RPC occasionally never answers, and anvil — mid-transaction, waiting on
+ * this proxy — would then hang with it, so each attempt times out and is retried.
+ */
+async function forward(body) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await fetch(upstream, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+        signal: AbortSignal.timeout(20_000),
+      });
+      return { status: response.status, text: await response.text() };
+    } catch (error) {
+      if (attempt === 4) throw error;
+      await new Promise((r) => setTimeout(r, 500 * attempt));
+    }
+  }
+}
+
 const server = createServer(async (req, res) => {
   let body = "";
   for await (const chunk of req) body += chunk;
   let text;
   let status = 502;
   try {
-    const upstreamRes = await fetch(upstream, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-    });
-    status = upstreamRes.status;
-    text = await upstreamRes.text();
+    ({ status, text } = await forward(body));
     const requests = [JSON.parse(body)].flat();
     const responses = [JSON.parse(text)].flat();
     for (const request of requests) {

@@ -6,14 +6,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
 
-import { actionsIntent, actionsRouteBody, compileActions } from "../src/compose.js";
+import { compileProgram, programIntent } from "../src/index.js";
 import { ACTION_TYPES } from "../src/spec.js";
 import type { ActionProgram } from "../src/types.js";
 import { sampleProgram } from "./samples.js";
 import {
   AMOUNT_IN_PLACEHOLDER,
   AMOUNT_OUT_PLACEHOLDER,
-  compileSauceRoute,
   renderDynamicChild,
 } from "../../sdk/dist/routes/index.js";
 
@@ -35,68 +34,52 @@ const options = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
-describe("an action program as a route body", () => {
+const reward = {
+  source: "base",
+  creator: PERSON,
+  prover: PERSON,
+  deadline: 2_000_000_200n,
+  nativeAmount: 1n,
+} as const;
+
+describe("an action program as an intent route", () => {
   it("every action type compiles through the SDK route compiler (its rewrites and ambient module)", () => {
     for (const type of ACTION_TYPES) {
-      if (type === "argument") continue; // a route body takes no arguments — see below
-      const body = actionsRouteBody(sampleProgram(type) as unknown as ActionProgram);
-      assert.doesNotMatch(
-        body.source,
-        /: void|: Uint256/,
-        `${type}: a route body is plain JavaScript`,
-      );
-      const route = compileSauceRoute(
-        "ethereum",
-        body.source,
-        { pot: POT, engine: ENGINE },
-        {
-          contracts: body.contracts as never,
-          ambient: ["@sauce/token"],
-        },
-      );
-      assert.equal(route.calls.length, 1, type);
+      if (type === "argument") continue; // a route takes no arguments — see below
+      const built = programIntent(sampleProgram(type), options()).reward(reward);
+      assert.equal(built.destination.id, 1, type);
+      assert.equal(built.intent.route.calls.length, 1, type);
     }
   });
 
   it("compiles to the same program the standalone compile produces", () => {
-    const program = sampleProgram("uniswapV3ExactInput") as unknown as ActionProgram;
-    const body = actionsRouteBody(program);
-    const route = compileSauceRoute(
-      "ethereum",
-      body.source,
-      { pot: POT, engine: ENGINE },
-      {
-        contracts: body.contracts as never,
-      },
-    );
-    assert.deepEqual(route.compiled.bytecode[0], compileActions(program).bytecode);
+    const program = sampleProgram("uniswapV3ExactInput");
+    const built = programIntent(program, options()).reward(reward);
+    assert.deepEqual(built.compiled.bytecode[0], compileProgram(program).bytecode);
   });
 
-  it("refuses runtime arguments, which a route body cannot receive", () => {
-    assert.throws(
-      () => actionsRouteBody(sampleProgram("argument") as unknown as ActionProgram),
-      /route body takes no runtime arguments, but this program declares 'amount'/,
-    );
+  it("opens the route on the program's own chain", () => {
+    const built = programIntent(sampleProgram("approve", 8453), options()).reward({
+      ...reward,
+      source: "ethereum",
+    });
+    assert.equal(built.destination.slug, "base");
   });
 
-  it("refuses a destination that is not the program's chain", () => {
+  it("refuses runtime arguments, which a route cannot receive", () => {
     assert.throws(
-      () => actionsIntent("base", sampleProgram("approve") as unknown as ActionProgram, options()),
-      /executes on chain 1, but the route's destination is base \(8453\)/,
+      () => programIntent(sampleProgram("argument"), options()),
+      /an intent route takes no runtime arguments, but this program declares 'amount'/,
     );
   });
 
   it("refuses a caller binding that would shadow an action binding with a different ABI", () => {
     assert.throws(
       () =>
-        actionsIntent(
-          "ethereum",
-          sampleProgram("uniswapV3ExactInput") as unknown as ActionProgram,
-          {
-            ...options(),
-            compile: { contracts: { ISwapRouter02: { abi: [] } } },
-          },
-        ),
+        programIntent(sampleProgram("uniswapV3ExactInput"), {
+          ...options(),
+          compile: { contracts: { ISwapRouter02: { abi: [] } } },
+        }),
       /already binds 'ISwapRouter02' to a different ABI/,
     );
   });
@@ -110,22 +93,18 @@ describe("an action program in a dynamic cascade", () => {
     actions: [
       {
         type: "approve",
-        chainId: 8453,
+        amount: "1000000000000000000",
         token: WETH_BASE,
         spender: ROUTER_BASE,
-        amount: "1000000000000000000",
       },
       {
         type: "uniswapV3ExactInput",
-        chainId: 8453,
         router: ROUTER_BASE,
         tokenIn: WETH_BASE,
         tokenOut: USDC_BASE,
         fee: 500,
-        amountIn: "1000000000000000000",
         amountOutMin: "1",
         recipient: "self",
-        deadline: 2_000_000_000,
       },
     ],
   };
@@ -135,15 +114,9 @@ describe("an action program in a dynamic cascade", () => {
     version: 1,
     chainId: 42161,
     actions: [
-      { type: "balanceOf", chainId: 42161, token: USDC_ARB },
-      {
-        type: "aaveV3Supply",
-        chainId: 42161,
-        pool: AAVE_ARB,
-        token: USDC_ARB,
-        onBehalfOf: PERSON,
-        referralCode: 0,
-      },
+      { type: "balanceOf", token: USDC_ARB },
+      { type: "approve", token: USDC_ARB, spender: AAVE_ARB },
+      { type: "aaveV3Supply", pool: AAVE_ARB, token: USDC_ARB, onBehalfOf: PERSON },
     ],
   };
 
@@ -162,7 +135,7 @@ describe("an action program in a dynamic cascade", () => {
   ];
   const measure = { kind: "erc20Balance" as const, token: USDC_BASE };
 
-  const child = actionsIntent("arbitrum", childProgram, {
+  const child = programIntent(childProgram, {
     ...options({ deadline: 2_000_000_100n }),
     tokens: [{ token: USDC_ARB, amount: AMOUNT_OUT_PLACEHOLDER }],
     precalls: [{ target: USDC_ARB, data: toPot(AMOUNT_OUT_PLACEHOLDER) }],
@@ -175,7 +148,7 @@ describe("an action program in a dynamic cascade", () => {
   });
 
   it("the parent's action program nests a dynamic child built from another action program", () => {
-    const parent = actionsIntent("base", parentProgram, options())
+    const parent = programIntent(parentProgram, options())
       .nest(child, { via: "dynamic", measure, placeholders })
       .reward({
         source: "ethereum",

@@ -3,16 +3,16 @@
  *
  *   - one compiled program taking its amount at runtime, ABI-v1 and compact-v1, including a number
  *     spliced into a precompiled compact payload at the offset a declared `scalarWidth` fixes;
- *   - an action program built into an Eco intent by `actionsIntent`, whose route call — the SDK's
+ *   - an action program built into an Eco intent by `programIntent`, whose route call — the SDK's
  *     own `Pot.cook(engine, program)` — runs on the engine.
  *
- * Fork-free; skips without the engine artifact, fails in CI.
+ * Needs no mainnet state; skips without the engine artifact, fails in CI.
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { decodeFunctionData, encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
 
-import { actionsIntent, compileActions } from "../src/compose.js";
+import { compileProgram, programIntent } from "../src/index.js";
 import type { ActionProgram } from "../src/types.js";
 import { recordedCalls, recorderCode, skipReason, startAnvil, type Anvil } from "./anvil.js";
 import { decodeCompactArguments } from "../../sdk/dist/compact-arguments.js";
@@ -32,8 +32,8 @@ const parameterized: ActionProgram = {
   version: 1,
   chainId: 1,
   actions: [
-    { type: "argument", chainId: 1, name: "amount" },
-    { type: "approve", chainId: 1, token: TOKEN, spender: SPENDER },
+    { type: "argument", name: "amount" },
+    { type: "approve", token: TOKEN, spender: SPENDER },
   ],
 };
 
@@ -58,7 +58,7 @@ describe("action programs, composed and executed", { skip, timeout: 120_000 }, (
   };
 
   it("one ABI-v1 program serves every amount", async () => {
-    const compiled = compileActions(parameterized);
+    const compiled = compileProgram(parameterized);
     assert.deepEqual(compiled.parameters, ["amount"]);
     assert.equal(compiled.entryEncoding, "abi-v1");
     assert.equal(await approvedAmount(compiled.payload({ amount: 5n })), approve(5n));
@@ -72,7 +72,7 @@ describe("action programs, composed and executed", { skip, timeout: 120_000 }, (
   });
 
   it("compact-v1 with a declared scalarWidth fixes the amount's offset, so a number can be spliced in", async () => {
-    const compiled = compileActions(parameterized, { compactArgs: true });
+    const compiled = compileProgram(parameterized, { compactArgs: true });
     assert.equal(compiled.entryEncoding, "compact-v1");
     assert.equal(await approvedAmount(compiled.payload({ amount: 7n })), approve(7n));
 
@@ -94,9 +94,9 @@ describe("action programs, composed and executed", { skip, timeout: 120_000 }, (
     const program: ActionProgram = {
       version: 1,
       chainId: 1,
-      actions: [{ type: "approve", chainId: 1, token: TOKEN, spender: SPENDER, amount: "31337" }],
+      actions: [{ type: "approve", amount: "31337", token: TOKEN, spender: SPENDER }],
     };
-    const built = actionsIntent("ethereum", program, {
+    const built = programIntent(program, {
       pot: env.pot,
       engine: env.engine,
       deadline: 2_000_000_000n,

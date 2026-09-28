@@ -9,46 +9,48 @@ import { resolve } from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
 
 import {
-  ActionProgramError,
-  actionProgramJsonSchema,
-  actionsToSauce,
-  compileActions,
-  parseActionProgram,
-  serializeActionProgram,
-  toActionProgram,
-  validateActionProgram,
+  ProgramError,
+  compileProgram,
+  parseProgram,
+  programSchema,
+  serializeProgram,
 } from "../src/index.js";
 import { ACTION_TYPES } from "../src/spec.js";
 import type { ActionProgram } from "../src/types.js";
 import { REPO_ROOT } from "./anvil.js";
-import { SAMPLES, sampleAction, sampleProgram } from "./samples.js";
+import { SAMPLES, sampleProgram } from "./samples.js";
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const ROUTER = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
 
 /** The issues `input` produces, as `path: message` lines. */
 function issues(input: unknown): string[] {
-  const result = validateActionProgram(input);
-  if (result.ok) assert.fail("expected the program to be rejected");
-
-  return result.issues.map((i) => `${i.path}: ${i.message}`);
+  try {
+    parseProgram(input);
+  } catch (error) {
+    if (!(error instanceof ProgramError)) throw error;
+    return error.issues.map((i) => `${i.path}: ${i.message}`);
+  }
+  assert.fail("expected the program to be rejected");
 }
 
-function withAction(action: Record<string, unknown>, extra: Record<string, unknown>[] = []) {
+function rejects(input: unknown): boolean {
+  return issues(input).length > 0;
+}
+
+function withAction(action: object, extra: object[] = []) {
   return { version: 1, chainId: 1, actions: [action, ...extra] };
 }
 
 describe("action programs — every action type round-trips", () => {
   for (const type of ACTION_TYPES) {
     it(`${type}: parse -> serialize -> parse is the identity, and it compiles`, () => {
-      const program = parseActionProgram(sampleProgram(type));
-      const text = serializeActionProgram(program);
-      assert.deepEqual(parseActionProgram(text), program);
-      assert.equal(serializeActionProgram(parseActionProgram(JSON.parse(text))), text);
-      // The action's own chain field is filled from the program's.
-      const field = type.endsWith("Bridge") ? "srcChainId" : "chainId";
-      assert.equal((program.actions[0] as unknown as Record<string, number>)[field], 1);
-      assert.ok(actionsToSauce(program.actions).length > 0);
+      const program = parseProgram(sampleProgram(type));
+      assert.deepEqual(program, sampleProgram(type), "parsing fills in nothing");
+      const text = serializeProgram(program);
+      assert.deepEqual(parseProgram(text), program);
+      assert.equal(serializeProgram(parseProgram(JSON.parse(text))), text);
+      assert.ok(compileProgram(program).bytecode.length > 0);
     });
   }
 
@@ -59,33 +61,26 @@ describe("action programs — every action type round-trips", () => {
       version: 1,
     };
     assert.equal(
-      serializeActionProgram(parseActionProgram(shuffled)),
-      serializeActionProgram(parseActionProgram(sampleProgram("uniswapV3ExactInput"))),
+      serializeProgram(parseProgram(shuffled)),
+      serializeProgram(sampleProgram("uniswapV3ExactInput")),
     );
   });
 
   it("parsing copies: mutating the input afterwards does not change the program", () => {
-    const input = sampleProgram("approve") as { actions: Record<string, unknown>[] };
-    const program = parseActionProgram(input);
+    const input = sampleProgram("approve") as unknown as { actions: Record<string, unknown>[] };
+    const program = parseProgram(input);
     input.actions[0]!.amount = "5";
     assert.equal((program.actions[0] as { amount?: string }).amount, "1000");
   });
 
-  it("the typed API and the JSON API meet: toActionProgram", () => {
-    const actions = [sampleAction("wrapETH"), sampleAction("approve")];
-    const program = toActionProgram(actions, 1);
-    assert.deepEqual(program.actions, actions);
-    assert.deepEqual(actionsToSauce(program.actions), actionsToSauce(actions));
-  });
-
   it("JSON text parses the same as the object", () => {
     const program = sampleProgram("curveSwap");
-    assert.deepEqual(parseActionProgram(JSON.stringify(program)), parseActionProgram(program));
+    assert.deepEqual(parseProgram(JSON.stringify(program)), parseProgram(program));
   });
 });
 
 describe("action programs — chaining is part of the document", () => {
-  const program: ActionProgram = parseActionProgram({
+  const program: ActionProgram = parseProgram({
     version: 1,
     chainId: 1,
     actions: [
@@ -101,28 +96,28 @@ describe("action programs — chaining is part of the document", () => {
         tokenIn: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
         tokenOut: USDC,
         fee: 500,
-        amountIn: "1000000000000000000",
         amountOutMin: "1",
         recipient: "self",
-        deadline: 1,
         saveOutputAs: "usdc",
       },
       {
         type: "transfer",
         token: USDC,
-        to: "0x3000000000000000000000000000000000000001",
+        recipient: "0x3000000000000000000000000000000000000001",
         amountRef: "usdc",
       },
     ],
   });
 
   it("implicit chaining and named outputs compile to locals", () => {
-    const { source } = compileActions(program);
+    const { source } = compileProgram(program);
     assert.match(source, /let t_out0 = 1000000000000000000n;/);
+    assert.match(source, /let t_out1 = t_out0;/);
     // The approve spends the wrap's output and the transfer the saved swap output, each spliced into
     // a decode-free ERC-20 call.
     assert.match(source, /hex`095ea7b3[0-9a-f]*68b3465833fb72a70ecdf485e0e4c7bd8665fc45`;/);
     assert.match(source, /\.concat\(t_out0\.toBytesBe\(32\)\)/);
+    assert.match(source, /amountIn: t_out1/);
     assert.match(source, /let v_usdc = amt\d+;/);
     assert.match(source, /hex`a9059cbb[0-9a-f]*3000000000000000000000000000000000000001`;/);
     assert.match(source, /\.concat\(v_usdc\.toBytesBe\(32\)\)/);
@@ -158,8 +153,13 @@ describe("action programs — errors are precise and complete", () => {
     ],
     [
       "a misspelled field",
-      withAction({ ...SAMPLES.uniswapV2Swap, amountIn: undefined, amountin: "5" }),
-      /^actions\[0\]\.amountin: unknown field — did you mean `amountIn`\?/,
+      withAction({ ...SAMPLES.uniswapV2Swap, amount: undefined, amuont: "5" }),
+      /^actions\[0\]\.amuont: unknown field — did you mean `amount`\?/,
+    ],
+    [
+      "a remote recipient of the wrong width",
+      withAction({ ...SAMPLES.cctpBridge, recipient: `0x${"ab".repeat(31)}` }),
+      /^actions\[0\]\.recipient: expected an address \(0x \+ 40 hex digits\) or a 32-byte account/,
     ],
     [
       "a misspelled type",
@@ -184,26 +184,26 @@ describe("action programs — errors are precise and complete", () => {
       /^actions\[1\]\.amountRef: both `amount` and `amountRef` are set/,
     ],
     [
-      "an action on another chain",
+      "an action carrying a chain",
       withAction({ ...SAMPLES.approve, chainId: 8453 }),
-      /^actions\[0\]\.chainId: executes on chain 8453, but the program executes on chain 1/,
+      /^actions\[0\]\.chainId: unknown field/,
     ],
     [
       "a first action with no amount",
       withAction({ ...SAMPLES.approve, amount: undefined }),
-      /^actions\[0\]: has no amount: set `amount`, an `amountRef`, or put an action before it/,
-    ],
-    [
-      "both of an exactly-one pair",
-      withAction({ ...SAMPLES.uniswapV3ExactInput, sqrtPriceLimitX96: "5" }),
-      /^actions\[0\]: set exactly one of `amountOutMin` and `sqrtPriceLimitX96` \(got both\)$/,
+      /^actions\[0\]: has no amount: set `amount` or `amountRef`, or put an action before it/,
     ],
     [
       "an amountRef on a source action",
       withAction({ ...SAMPLES.balanceOf, amountRef: "x" }, [
         { ...SAMPLES.approve, amount: undefined },
       ]),
-      /^actions\[0\]\.amountRef: balanceOf consumes no amount, so it takes no `amountRef`$/,
+      /^actions\[0\]\.amountRef: balanceOf spends nothing, so it takes no `amountRef`$/,
+    ],
+    [
+      "an amount on an action whose amounts are its own fields",
+      withAction({ ...SAMPLES.carbonSwap, amount: "5" }),
+      /^actions\[0\]\.amount: carbonSwap takes its amounts from its own fields, so it takes no `amount`$/,
     ],
     [
       "a source action nothing reads",
@@ -227,11 +227,6 @@ describe("action programs — errors are precise and complete", () => {
       /^actions\[0\]\.steps\[0\]\.assetOutIndex: 5 is not an index into `assets` \(2 entries\)$/,
     ],
     [
-      "chaining from a delayed order",
-      withAction(SAMPLES.integralSwap, [{ ...SAMPLES.approve, amount: undefined }]),
-      /^actions\[1\]: has no amount, and the previous action \(integralSwap\) produces no output/,
-    ],
-    [
       "an unsupported version",
       { ...withAction(SAMPLES.approve), version: 2 },
       /^version: unsupported version number 2/,
@@ -250,21 +245,21 @@ describe("action programs — errors are precise and complete", () => {
     });
   }
 
-  it("reports every problem at once, and throws them as an ActionProgramError", () => {
+  it("reports every problem at once, as one ProgramError", () => {
     const bad = {
       version: 1,
       chainId: 1,
       actions: [
         { ...SAMPLES.approve, amount: 1 },
-        { ...SAMPLES.transfer, to: "nobody" },
+        { ...SAMPLES.transfer, recipient: "nobody" },
         { type: "swap" },
       ],
     };
     assert.equal(issues(bad).length, 3);
     assert.throws(
-      () => parseActionProgram(bad),
+      () => parseProgram(bad),
       (error: unknown) =>
-        error instanceof ActionProgramError &&
+        error instanceof ProgramError &&
         error.issues.length === 3 &&
         /invalid action program \(3 issues\)/.test(error.message),
     );
@@ -272,10 +267,8 @@ describe("action programs — errors are precise and complete", () => {
 });
 
 describe("action programs — the published JSON Schema", () => {
-  const schema = actionProgramJsonSchema();
-  // Strict, except `strictRequired`: the exactly-one pairs are `oneOf` of `required`/`not required`,
-  // which names properties the enclosing object declares, not the branch.
-  const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
+  const schema = programSchema();
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);
 
   it("the committed action-program.schema.json is what the spec generates", () => {
@@ -294,7 +287,7 @@ describe("action programs — the published JSON Schema", () => {
       const program = sampleProgram(type);
       assert.ok(validate(program), `${type}: ${ajv.errorsText(validate.errors)}`);
       // And the parser's canonical output is itself valid under the schema.
-      assert.ok(validate(JSON.parse(serializeActionProgram(parseActionProgram(program)))));
+      assert.ok(validate(JSON.parse(serializeProgram(program))));
     }
   });
 
@@ -302,10 +295,12 @@ describe("action programs — the published JSON Schema", () => {
     const structural: unknown[] = [
       withAction({ ...SAMPLES.approve, amount: 1000000 }),
       withAction({ ...SAMPLES.approve, amount: "1e18" }),
-      withAction({ ...SAMPLES.uniswapV2Swap, amountin: "5" }),
+      withAction({ ...SAMPLES.uniswapV2Swap, amuont: "5" }),
       withAction({ ...SAMPLES.approve, type: "aprove" }),
-      withAction({ ...SAMPLES.transfer, to: "nobody" }),
-      withAction({ ...SAMPLES.uniswapV3ExactInput, sqrtPriceLimitX96: "5" }),
+      withAction({ ...SAMPLES.transfer, recipient: "nobody" }),
+      withAction({ ...SAMPLES.approve, chainId: 1 }),
+      withAction({ ...SAMPLES.cctpBridge, recipient: "self" }),
+      withAction({ ...SAMPLES.carbonSwap, amount: "5" }),
       withAction({ ...SAMPLES.balanceOf, amountRef: "x" }),
       withAction({ ...SAMPLES.curveRouterNGSwap, swapParams: [[1, 2, 3]] }),
       withAction({ ...SAMPLES.dodoSwap, version: "v3" }),
@@ -314,7 +309,7 @@ describe("action programs — the published JSON Schema", () => {
       { version: 1, chainId: 1, actions: [SAMPLES.approve], extra: true },
     ];
     for (const input of structural) {
-      assert.equal(validateActionProgram(input).ok, false);
+      assert.ok(rejects(input));
       assert.equal(validate(input), false, `schema accepted ${JSON.stringify(input)}`);
     }
   });
@@ -323,11 +318,11 @@ describe("action programs — the published JSON Schema", () => {
     const semanticOnly: unknown[] = [
       withAction({ ...SAMPLES.approve, token: "0xa0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" }),
       withAction({ ...SAMPLES.approve, amount: undefined, amountRef: "nope" }),
-      withAction({ ...SAMPLES.approve, chainId: 8453 }),
+      withAction({ ...SAMPLES.approve, amount: undefined }),
     ].map((p) => JSON.parse(JSON.stringify(p)));
     for (const input of semanticOnly) {
       assert.ok(validate(input), "the schema cannot express this rule");
-      assert.equal(validateActionProgram(input).ok, false);
+      assert.ok(rejects(input));
     }
   });
 });

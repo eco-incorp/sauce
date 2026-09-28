@@ -25,6 +25,7 @@ export { LidoABI, WstETHABI } from "../../sdk/dist/protocols/lido/index.js";
 export { LiquidityPoolABI } from "../../sdk/dist/protocols/etherfi/index.js";
 export { MaverickV2RouterABI } from "../../sdk/dist/protocols/maverick/index.js";
 export { RETHABI, RocketDepositPoolABI } from "../../sdk/dist/protocols/rocket-pool/index.js";
+export { TokenMessengerABI } from "../../sdk/dist/protocols/cctp/index.js";
 export { UniswapV2RouterABI } from "../../sdk/dist/protocols/uniswap-v2/index.js";
 export {
   uncheckedApproveStatements,

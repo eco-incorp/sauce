@@ -1,325 +1,257 @@
-// =============================================================================
-// Routing Actions — concrete protocol-level operations that execute intents
-// =============================================================================
+/**
+ * The action-program JSON document, as TypeScript. Every type here is exactly the JSON it
+ * describes — `parseProgram` returns these, `serializeProgram` writes them — and nothing in it is
+ * a function, a class instance or a `bigint`: amounts are base-10 strings.
+ *
+ * The shared vocabulary:
+ *
+ * - `amount` is what an action spends. Omit it (and `amountRef`) to spend the previous action's
+ *   output; set `amountRef` to spend the output an earlier action saved with `saveOutputAs`.
+ * - `amountOutMin` is the least output a venue may return before it reverts.
+ * - `recipient` receives an action's output when nothing chains it; `"self"` is the executing Pot.
+ */
 
 type Address = `0x${string}`;
 type Hex = `0x${string}`;
 
-/**
- * An address field that may instead name the executing account — the Pot a program runs in — as the
- * literal `"self"`. Only recipient-like fields accept it (who receives an output or a position),
- * never a contract to call or a token: a program authored as JSON rarely knows which Pot will run
- * it, and "keep the output here" is exactly what a later action or a dynamic child needs.
- */
+/** An address, or `"self"` for the executing Pot. */
 export type Recipient = Address | "self";
 
-// =============================================================================
-// CHAINING OPTIONS — shared by all actions
-// =============================================================================
+/** A recipient on another chain: an address, or a 32-byte account for a non-EVM chain (Solana). */
+export type RemoteRecipient = `0x${string}`;
 
-/** Chaining options shared by all actions. */
-export interface ActionChainInput {
-  /** Use the output an EARLIER action saved under this name as this action's amount. */
+/** An action that spends an amount, which may be chained from an earlier action. */
+interface Spends {
+  /** Base-10 integer string. Omit to spend the previous action's output. */
+  amount?: string;
+  /** Spend the output an earlier action saved under this name. */
   amountRef?: string;
-  /** Save this action's output under a name later actions can reference with `amountRef`. */
+  /** Save this action's output under a name later actions can reference. */
   saveOutputAs?: string;
 }
 
-/** Alias for actions that produce a capturable output (e.g. swaps). */
-export type ActionChainOptions = ActionChainInput;
+/** An action whose amounts are all explicit in its own fields. */
+interface Explicit {
+  saveOutputAs?: string;
+}
 
 // =============================================================================
-// SWAP ACTIONS
+// Swaps
 // =============================================================================
 
-/** UniswapV3 single-pool exact-input swap — use either amountOutMin or sqrtPriceLimitX96 */
-interface UniswapV3ExactInputBase extends ActionChainOptions {
+/** One Uniswap V3 pool, through SwapRouter02. */
+export interface UniswapV3ExactInputAction extends Spends {
   type: "uniswapV3ExactInput";
-  chainId: number;
   router: Address;
   tokenIn: Address;
   tokenOut: Address;
   fee: 100 | 500 | 3000 | 10000;
-  amountIn?: string;
+  amountOutMin: string;
+  /** Optional price limit; `"0"` or absent for none. */
+  sqrtPriceLimitX96?: string;
   recipient: Recipient;
-  deadline: number;
 }
 
-export type UniswapV3ExactInputAction =
-  | (UniswapV3ExactInputBase & { amountOutMin: string; sqrtPriceLimitX96?: never })
-  | (UniswapV3ExactInputBase & { sqrtPriceLimitX96: string; amountOutMin?: never });
-
-/** UniswapV3 multi-hop exact-input swap (encoded path) */
-export interface UniswapV3ExactInputMultiHopAction extends ActionChainOptions {
+/** A packed Uniswap V3 path (token ++ fee ++ token …), through SwapRouter02. */
+export interface UniswapV3ExactInputMultiHopAction extends Spends {
   type: "uniswapV3ExactInputMultiHop";
-  chainId: number;
   router: Address;
-  /** ABI-encoded path: token0 ++ fee ++ token1 ++ fee ++ token2 ... */
   path: Hex;
-  amountIn?: string;
   amountOutMin: string;
   recipient: Recipient;
-  deadline: number;
 }
 
-/** UniswapV4 single-pool exact-input swap via Universal Router */
-export interface UniswapV4ExactInputAction extends ActionChainOptions {
+export interface UniswapV4PoolKey {
+  currency0: Address;
+  currency1: Address;
+  fee: number;
+  tickSpacing: number;
+  hooks: Address;
+}
+
+/** One Uniswap V4 pool, through the Universal Router. The input must be an ERC-20. */
+export interface UniswapV4ExactInputAction extends Spends {
   type: "uniswapV4ExactInput";
-  chainId: number;
   router: Address;
-  poolKey: {
-    currency0: Address;
-    currency1: Address;
-    fee: number;
-    tickSpacing: number;
-    hooks: Address;
-  };
+  poolKey: UniswapV4PoolKey;
   zeroForOne: boolean;
-  amountIn?: string;
   amountOutMin: string;
   recipient: Recipient;
 }
 
-/** UniswapV4 multi-hop exact-input swap via Universal Router (PathKey path) */
-export interface UniswapV4ExactInputMultiHopAction extends ActionChainOptions {
+export interface UniswapV4Hop {
+  intermediateCurrency: Address;
+  fee: number;
+  tickSpacing: number;
+  hooks: Address;
+}
+
+/** A Uniswap V4 path, through the Universal Router. The input must be an ERC-20. */
+export interface UniswapV4ExactInputMultiHopAction extends Spends {
   type: "uniswapV4ExactInputMultiHop";
-  chainId: number;
   router: Address;
   currencyIn: Address;
-  path: Array<{
-    intermediateCurrency: Address;
-    fee: number;
-    tickSpacing: number;
-    hooks: Address;
-  }>;
-  amountIn?: string;
+  path: UniswapV4Hop[];
   amountOutMin: string;
   recipient: Recipient;
 }
 
-/** Curve stable/crypto pool swap (uses exchange with receiver overload) */
-export interface CurveSwapAction extends ActionChainOptions {
+/** A Curve pool's 4-argument `exchange`; the output is the `tokenOut` balance delta. */
+export interface CurveSwapAction extends Spends {
   type: "curveSwap";
-  chainId: number;
   pool: Address;
-  tokenIn: Address;
   tokenOut: Address;
-  /** Index of input token in the pool */
   i: number;
-  /** Index of output token in the pool */
   j: number;
-  amountIn?: string;
   amountOutMin: string;
   recipient: Recipient;
 }
 
-/** BalancerV2 single swap */
-export interface BalancerV2SwapAction extends ActionChainOptions {
+/** A Curve RouterNG route of up to five hops. */
+export interface CurveRouterNGSwapAction extends Spends {
+  type: "curveRouterNGSwap";
+  router: Address;
+  route: Address[];
+  /** Per hop: [i, j, swap_type, pool_type, n_coins]. */
+  swapParams: [number, number, number, number, number][];
+  pools: Address[];
+  amountOutMin: string;
+  recipient: Recipient;
+}
+
+/** One Balancer V2 pool. */
+export interface BalancerV2SwapAction extends Spends {
   type: "balancerV2Swap";
-  chainId: number;
   vault: Address;
   poolId: Hex;
   tokenIn: Address;
   tokenOut: Address;
-  amountIn?: string;
   amountOutMin: string;
   recipient: Recipient;
   deadline: number;
 }
 
-/** BalancerV2 batch swap (multi-hop through multiple pools) */
-export interface BalancerV2BatchSwapAction extends ActionChainInput {
+export interface BalancerV2BatchStep {
+  poolId: Hex;
+  assetInIndex: number;
+  assetOutIndex: number;
+  /** The step's input; `"0"` spends the previous step's output. */
+  amount: string;
+}
+
+/** A Balancer V2 batch across pools; the output is the last step's asset delta. */
+export interface BalancerV2BatchSwapAction extends Explicit {
   type: "balancerV2BatchSwap";
-  chainId: number;
   vault: Address;
-  steps: Array<{
-    poolId: Hex;
-    assetInIndex: number;
-    assetOutIndex: number;
-    amount: string;
-  }>;
+  steps: BalancerV2BatchStep[];
   assets: Address[];
   amountOutMin: string;
   recipient: Recipient;
   deadline: number;
 }
 
-/** UniswapV2 exact-input swap via V2 Router */
-export interface UniswapV2SwapAction extends ActionChainOptions {
-  type: "uniswapV2Swap";
-  chainId: number;
-  router: Address;
-  amountIn?: string;
-  amountOutMin: string;
-  /** Token addresses defining the swap route */
-  path: Address[];
-  recipient: Recipient;
-  deadline: number;
-}
-
-/** Curve RouterNG multi-hop swap (up to 5 hops) */
-export interface CurveRouterNGSwapAction extends ActionChainOptions {
-  type: "curveRouterNGSwap";
-  chainId: number;
-  router: Address;
-  /** Routing path (up to 11 entries) */
-  route: Address[];
-  /** Per-swap params: [i, j, swap_type, pool_type, n_coins] */
-  swapParams: [number, number, number, number, number][];
-  amountIn?: string;
-  amountOutMin: string;
-  /** Actual pool addresses when using zaps */
-  pools: Address[];
-  recipient: Recipient;
-}
-
-/** BalancerV3 single-token exact-input swap via Router */
-export interface BalancerV3SwapAction extends ActionChainOptions {
+/** One Balancer V3 pool. The router pulls through Permit2: `permit2Approve` it first. */
+export interface BalancerV3SwapAction extends Spends {
   type: "balancerV3Swap";
-  chainId: number;
   router: Address;
   pool: Address;
   tokenIn: Address;
   tokenOut: Address;
-  amountIn?: string;
   amountOutMin: string;
   deadline: number;
   wethIsEth: boolean;
 }
 
-/** Ambient (CrocSwap) swap via userCmd */
-export interface AmbientSwapAction extends ActionChainOptions {
+/** A Uniswap V2 path; the output is the last token's balance delta. */
+export interface UniswapV2SwapAction extends Spends {
+  type: "uniswapV2Swap";
+  router: Address;
+  path: Address[];
+  amountOutMin: string;
+  recipient: Recipient;
+  deadline: number;
+}
+
+/** An Ambient (CrocSwap) pool; the output is the received token's balance delta. */
+export interface AmbientSwapAction extends Spends {
   type: "ambientSwap";
-  chainId: number;
   dex: Address;
   base: Address;
   quote: Address;
   poolIdx: number;
   isBuy: boolean;
   inBaseQty: boolean;
-  amountIn?: string;
   tip: number;
   limitPrice: string;
-  minOut: string;
+  amountOutMin: string;
   reserveFlags: number;
 }
 
-/** DODO token-to-token swap via DODOProxy (supports V1 Classical and V2 pools) */
-export interface DODOSwapAction extends ActionChainOptions {
+/** DODO pairs through the DODO proxy; approvals go to DODOApprove. */
+export interface DODOSwapAction extends Spends {
   type: "dodoSwap";
-  chainId: number;
   proxy: Address;
   fromToken: Address;
   toToken: Address;
-  amountIn?: string;
-  amountOutMin: string;
-  dodoPairs: Address[];
+  pairs: Address[];
+  /** A bit per pair: 0 sells base, 1 sells quote. */
   directions: number;
+  amountOutMin: string;
   deadline: number;
-  // Pool generation: "v2" (default) uses dodoSwapV2TokenToToken; "v1" routes
-  // legacy Classical pairs (e.g. 0x75c23271661d9d143DCb617222BC4BEc783eFf34)
-  // through dodoSwapV1.
+  /** `"v1"` routes legacy Classical pairs; default `"v2"`. */
   version?: "v1" | "v2";
 }
 
-/** Maverick V2 exact-input single swap */
-export interface MaverickSwapAction extends ActionChainOptions {
+/** One Maverick V2 pool. */
+export interface MaverickSwapAction extends Spends {
   type: "maverickSwap";
-  chainId: number;
   router: Address;
   pool: Address;
   tokenAIn: boolean;
-  amountIn?: string;
   amountOutMin: string;
   recipient: Recipient;
 }
 
-/** Maverick V2 exact-input multi-hop swap */
-export interface MaverickMultiHopSwapAction extends ActionChainOptions {
+/** A packed Maverick V2 path: per hop, the pool's 20 bytes then one byte for `tokenAIn`. */
+export interface MaverickMultiHopSwapAction extends Spends {
   type: "maverickMultiHopSwap";
-  chainId: number;
   router: Address;
-  /** Encoded path of pools and token directions */
   path: Hex;
-  amountIn?: string;
   amountOutMin: string;
   recipient: Recipient;
 }
 
-/** Carbon (Bancor) trade by source amount */
-export interface CarbonSwapAction extends ActionChainOptions {
+export interface CarbonTradeAction {
+  strategyId: string;
+  amount: string;
+}
+
+/** Carbon strategies, by source amount; the controller pays the Pot. */
+export interface CarbonSwapAction extends Explicit {
   type: "carbonSwap";
-  chainId: number;
   controller: Address;
   sourceToken: Address;
   targetToken: Address;
-  tradeActions: Array<{ strategyId: string; amount: string }>;
-  amountIn?: string;
+  tradeActions: CarbonTradeAction[];
   amountOutMin: string;
   deadline: number;
 }
 
-/** Fraxswap exact-input swap (UniV2-compatible router) */
-export interface FraxswapSwapAction extends ActionChainOptions {
+/** A Fraxswap path; the output is the last token's balance delta. */
+export interface FraxswapSwapAction extends Spends {
   type: "fraxswapSwap";
-  chainId: number;
   router: Address;
-  amountIn?: string;
-  amountOutMin: string;
   path: Address[];
+  amountOutMin: string;
   recipient: Recipient;
   deadline: number;
 }
 
-/** Clipper sellTokenForToken swap */
-export interface ClipperSwapAction extends ActionChainOptions {
-  type: "clipperSwap";
-  chainId: number;
-  exchange: Address;
-  inputToken: Address;
-  outputToken: Address;
-  amountIn?: string;
-  amountOutMin: string;
-  recipient: Recipient;
-  auxiliaryData: Hex;
-}
-
-/** Integral SIZE delayed sell order */
-export interface IntegralSwapAction extends ActionChainOptions {
-  type: "integralSwap";
-  chainId: number;
-  delay: Address;
-  tokenIn: Address;
-  tokenOut: Address;
-  amountIn?: string;
-  amountOutMin: string;
-  wrapUnwrap: boolean;
-  recipient: Recipient;
-  gasLimit: string;
-  submitDeadline: number;
-}
-
-/** Fluid DEX T1 pool swap (swapIn) */
-export interface FluidDexT1SwapAction extends ActionChainOptions {
+/** A Fluid DEX T1 pool, selling its ERC-20 side. */
+export interface FluidDexT1SwapAction extends Spends {
   type: "fluidDexT1Swap";
-  chainId: number;
   pool: Address;
   swap0to1: boolean;
-  amountIn?: string;
-  amountOutMin: string;
-  recipient: Recipient;
-}
-
-/** Fluid DEX Lite singleton swap (swapSingle) */
-export interface FluidDexLiteSwapAction extends ActionChainOptions {
-  type: "fluidDexLiteSwap";
-  chainId: number;
-  dex: Address;
-  token0: Address;
-  token1: Address;
-  salt: Hex;
-  swap0To1: boolean;
-  amountIn?: string;
   amountOutMin: string;
   recipient: Recipient;
 }
@@ -341,158 +273,123 @@ export type SwapAction =
   | MaverickMultiHopSwapAction
   | CarbonSwapAction
   | FraxswapSwapAction
-  | ClipperSwapAction
-  | IntegralSwapAction
-  | FluidDexT1SwapAction
-  | FluidDexLiteSwapAction;
+  | FluidDexT1SwapAction;
 
 // =============================================================================
-// BRIDGE ACTIONS
+// Bridges — the program's chain is the source
 // =============================================================================
 
-/** Across V3 bridge */
-export interface AcrossBridgeAction extends ActionChainInput {
+/** Across: deposit for the same token on the destination, less the relayer fee. */
+export interface AcrossBridgeAction extends Spends {
   type: "acrossBridge";
-  srcChainId: number;
-  destChainId: number;
   spokePool: Address;
   token: Address;
-  amount?: string;
-  relayerFeePct: string;
+  destChainId: number;
+  /** Receives on the destination. */
+  recipient: Address;
+  /** Taken by the relayer: the destination receives `amount - relayerFee`. */
+  relayerFee: string;
   quoteTimestamp: number;
   fillDeadline: number;
   exclusivityDeadline: number;
   message: Hex;
 }
 
-/** Stargate / LayerZero bridge */
-export interface StargateBridgeAction extends ActionChainInput {
+/** Stargate V2: send from a StargatePool, paying the LayerZero fee it quotes on-chain. */
+export interface StargateBridgeAction extends Spends {
   type: "stargateBridge";
-  srcChainId: number;
-  destChainId: number;
-  router: Address;
-  token: Address;
-  srcPoolId: number;
-  dstPoolId: number;
-  amount?: string;
+  pool: Address;
+  /** The destination LayerZero endpoint id. */
+  dstEid: number;
+  recipient: RemoteRecipient;
   amountOutMin: string;
-  /** Native fee for LayerZero messaging */
-  lzFee: string;
 }
 
-/** Circle CCTP native USDC bridge */
-export interface CCTPBridgeAction extends ActionChainInput {
+/** Circle CCTP V2: burn USDC for minting on the destination. */
+export interface CCTPBridgeAction extends Spends {
   type: "cctpBridge";
-  srcChainId: number;
-  destChainId: number;
   tokenMessenger: Address;
   token: Address;
-  srcDomain: number;
-  destDomain: number;
-  amount?: string;
-  mintRecipient: Hex;
+  destinationDomain: number;
+  recipient: RemoteRecipient;
+  /** The most the transfer may pay in fees, from the amount; default `"0"`. */
+  maxFee?: string;
+  /** 2000 finalized (standard, the default), 1000 confirmed (fast). */
+  minFinalityThreshold?: number;
 }
 
-/** Hyperlane token bridge */
-export interface HyperlaneBridgeAction extends ActionChainInput {
+/** A Hyperlane warp route: `transferRemote`, paying the interchain gas it quotes on-chain. */
+export interface HyperlaneBridgeAction extends Spends {
   type: "hyperlaneBridge";
-  srcChainId: number;
-  destChainId: number;
   router: Address;
-  token: Address;
-  amount?: string;
-  /** Hyperlane destination domain identifier */
   destinationDomain: number;
-  /** Interchain gas payment */
-  gasPayment: string;
+  recipient: RemoteRecipient;
 }
 
 export type BridgeAction =
   AcrossBridgeAction | StargateBridgeAction | CCTPBridgeAction | HyperlaneBridgeAction;
 
 // =============================================================================
-// WRAP / UNWRAP ACTIONS
+// Wrapping and staking
 // =============================================================================
 
-/** Wrap ETH → WETH via deposit() */
-export interface WrapETHAction extends ActionChainInput {
+export interface WrapETHAction extends Spends {
   type: "wrapETH";
-  chainId: number;
   weth: Address;
-  amount?: string;
 }
 
-/** Unwrap WETH → ETH via withdraw() */
-export interface UnwrapETHAction extends ActionChainInput {
+export interface UnwrapETHAction extends Spends {
   type: "unwrapETH";
-  chainId: number;
   weth: Address;
-  amount?: string;
 }
 
-/** Wrap stETH → wstETH */
-export interface WrapStETHAction extends ActionChainInput {
+/** stETH to wstETH; wstETH pulls the stETH, so approve it first. */
+export interface WrapStETHAction extends Spends {
   type: "wrapStETH";
-  chainId: number;
   wstETH: Address;
-  stETHAmount?: string;
 }
 
-/** Unwrap wstETH → stETH */
-export interface UnwrapStETHAction extends ActionChainInput {
+export interface UnwrapStETHAction extends Spends {
   type: "unwrapStETH";
-  chainId: number;
   wstETH: Address;
-  wstETHAmount?: string;
+}
+
+export interface LidoStakeAction extends Spends {
+  type: "lidoStake";
+  stETH: Address;
+  /** Lido's referral; default the zero address. */
+  referral?: Address;
+}
+
+/** Requests a withdrawal of stETH; the queue pulls it, so approve it first. */
+export interface LidoUnstakeAction extends Spends {
+  type: "lidoUnstake";
+  withdrawalQueue: Address;
+  /** Receives the withdrawal NFT, which claims the ETH once finalized. */
+  owner: Recipient;
+}
+
+export interface RocketPoolStakeAction extends Spends {
+  type: "rocketPoolStake";
+  /** The live RocketDepositPool — Rocket Pool upgrades move it; read it from RocketStorage. */
+  depositPool: Address;
+  /** The rETH token, whose balance delta is the output. */
+  rETH: Address;
+}
+
+export interface RocketPoolUnstakeAction extends Spends {
+  type: "rocketPoolUnstake";
+  rETH: Address;
+}
+
+export interface EtherFiStakeAction extends Spends {
+  type: "etherFiStake";
+  liquidityPool: Address;
+  /** The eETH token, whose balance delta is the output. */
+  eETH: Address;
 }
 
 export type WrapAction = WrapETHAction | UnwrapETHAction | WrapStETHAction | UnwrapStETHAction;
-
-// =============================================================================
-// LIQUID STAKING ACTIONS
-// =============================================================================
-
-/** Lido: stake ETH → stETH via submit() */
-export interface LidoStakeAction extends ActionChainInput {
-  type: "lidoStake";
-  chainId: number;
-  stETH: Address;
-  amount?: string;
-  referral: Address;
-}
-
-/** Lido: request withdrawal stETH → ETH (async, not instant) */
-export interface LidoUnstakeAction extends ActionChainInput {
-  type: "lidoUnstake";
-  chainId: number;
-  withdrawalQueue: Address;
-  stETHAmount?: string;
-}
-
-/** Rocket Pool: stake ETH → rETH */
-export interface RocketPoolStakeAction extends ActionChainInput {
-  type: "rocketPoolStake";
-  chainId: number;
-  rETH: Address;
-  depositPool: Address;
-  amount?: string;
-}
-
-/** Rocket Pool: burn rETH → ETH */
-export interface RocketPoolUnstakeAction extends ActionChainInput {
-  type: "rocketPoolUnstake";
-  chainId: number;
-  rETH: Address;
-  amount?: string;
-}
-
-/** EtherFi: stake ETH → eETH */
-export interface EtherFiStakeAction extends ActionChainInput {
-  type: "etherFiStake";
-  chainId: number;
-  liquidityPool: Address;
-  amount?: string;
-}
 
 export type StakeAction =
   | LidoStakeAction
@@ -502,71 +399,51 @@ export type StakeAction =
   | EtherFiStakeAction;
 
 // =============================================================================
-// LENDING / BORROWING ACTIONS
+// Lending
 // =============================================================================
 
-/** Aave V3: supply token into lending pool */
-export interface AaveV3SupplyAction extends ActionChainInput {
+export interface AaveV3SupplyAction extends Spends {
   type: "aaveV3Supply";
-  chainId: number;
   pool: Address;
   token: Address;
-  amount?: string;
   onBehalfOf: Recipient;
-  referralCode: number;
+  referralCode?: number;
 }
 
-/** Aave V3: withdraw token from lending pool */
-export interface AaveV3WithdrawAction extends ActionChainOptions {
+/** Withdraws from Aave V3; the output is the amount withdrawn. */
+export interface AaveV3WithdrawAction extends Spends {
   type: "aaveV3Withdraw";
-  chainId: number;
   pool: Address;
   token: Address;
-  amount?: string;
-  to: Recipient;
+  recipient: Recipient;
 }
 
-/** Aave V3: borrow token against collateral */
-export interface AaveV3BorrowAction extends ActionChainInput {
+/** Borrows at the variable rate, the only rate Aave V3 offers. */
+export interface AaveV3BorrowAction extends Spends {
   type: "aaveV3Borrow";
-  chainId: number;
   pool: Address;
   token: Address;
-  amount?: string;
-  /** 2 = variable rate */
-  interestRateMode: 2;
   onBehalfOf: Recipient;
-  referralCode: number;
+  referralCode?: number;
 }
 
-/** Aave V3: repay borrowed token */
-export interface AaveV3RepayAction extends ActionChainInput {
+export interface AaveV3RepayAction extends Spends {
   type: "aaveV3Repay";
-  chainId: number;
   pool: Address;
   token: Address;
-  amount?: string;
-  /** 2 = variable rate */
-  interestRateMode: 2;
   onBehalfOf: Recipient;
 }
 
-/** Compound V3: supply token to Comet market */
-export interface CompoundV3SupplyAction extends ActionChainInput {
+export interface CompoundV3SupplyAction extends Spends {
   type: "compoundV3Supply";
-  chainId: number;
   comet: Address;
   token: Address;
-  amount?: string;
 }
 
-/** Compound V3: withdraw token from Comet market */
-export interface CompoundV3WithdrawAction extends ActionChainInput {
+export interface CompoundV3WithdrawAction extends Spends {
   type: "compoundV3Withdraw";
-  chainId: number;
   comet: Address;
   token: Address;
-  amount?: string;
 }
 
 export type LendingAction =
@@ -578,130 +455,74 @@ export type LendingAction =
   | CompoundV3WithdrawAction;
 
 // =============================================================================
-// TRANSFER ACTION
+// Tokens
 // =============================================================================
 
-/** Plain ERC-20 or native token transfer */
-export interface TransferAction extends ActionChainInput {
+export interface TransferAction extends Spends {
   type: "transfer";
-  chainId: number;
   token: Address;
-  to: Recipient;
-  amount?: string;
+  recipient: Recipient;
 }
 
-/** Approve ERC-20 spending */
-export interface ApproveAction extends ActionChainInput {
+export interface ApproveAction extends Spends {
   type: "approve";
-  chainId: number;
   token: Address;
   spender: Address;
-  amount?: string;
-}
-
-// =============================================================================
-// SOURCE ACTIONS — produce a value, call nothing that moves funds
-// =============================================================================
-
-/** Options a source action takes. It consumes no amount, so it has no `amountRef`. */
-export interface SourceActionOptions {
-  /** Save the value under a name later actions can reference with `amountRef`. */
-  saveOutputAs?: string;
 }
 
 /**
- * The executing account's balance of `token`, read when the program reaches this action. Its output
- * is that balance, so a following action spends whatever is actually there — the amount a bridge or
- * a dynamic child delivered, not a number fixed when the program was written.
+ * A Permit2 allowance, for spenders that pull through Permit2 (Balancer V3's router, Uniswap's
+ * Universal Router). The token must also be ERC-20-approved to Permit2 itself.
  */
-export interface BalanceOfAction extends SourceActionOptions {
+export interface Permit2ApproveAction extends Spends {
+  type: "permit2Approve";
+  /** Permit2 — 0x000000000022D473030F116dDEE9F6B43aC78BA3 on every chain Uniswap deploys it. */
+  permit2: Address;
+  token: Address;
+  spender: Address;
+  /** Unix seconds after which the allowance lapses. */
+  expiration: number;
+}
+
+export type TokenAction = TransferAction | ApproveAction | Permit2ApproveAction;
+
+// =============================================================================
+// Sources — produce a value, move nothing
+// =============================================================================
+
+/** The Pot's balance of `token` when the program reaches this action. */
+export interface BalanceOfAction extends Explicit {
   type: "balanceOf";
-  chainId: number;
   token: Address;
 }
 
-/** The executing account's native balance, read when the program reaches this action. */
-export interface NativeBalanceAction extends SourceActionOptions {
+/** The Pot's native balance when the program reaches this action. */
+export interface NativeBalanceAction extends Explicit {
   type: "nativeBalance";
-  chainId: number;
 }
 
-/**
- * A runtime entry argument: the program declares `main(<name>: Uint256)` and its output is the
- * value supplied at execution. One compiled program then serves every amount. Only a standalone
- * program can take arguments — an intent route body is compiled with none.
- */
-export interface ArgumentAction extends SourceActionOptions {
+/** A runtime argument of the compiled program: `main(<name>: Uint256)`. Standalone programs only. */
+export interface ArgumentAction extends Explicit {
   type: "argument";
-  chainId: number;
-  /** The parameter's name. Arguments are encoded in the order their actions appear. */
   name: string;
 }
 
 export type SourceAction = BalanceOfAction | NativeBalanceAction | ArgumentAction;
 
 // =============================================================================
-// ROUTING ACTION — discriminated union of all concrete actions
+// The document
 // =============================================================================
 
-export type RoutingAction =
-  | SwapAction
-  | BridgeAction
-  | WrapAction
-  | StakeAction
-  | LendingAction
-  | TransferAction
-  | ApproveAction
-  | SourceAction;
+export type Action =
+  SwapAction | BridgeAction | WrapAction | StakeAction | LendingAction | TokenAction | SourceAction;
 
-/** Every `type` a routing action can have. */
-export type RoutingActionType = RoutingAction["type"];
+export type ActionType = Action["type"];
 
-// =============================================================================
-// ACTION PROGRAM — the JSON document
-// =============================================================================
-
-/**
- * A complete action program: the chain it executes on and its actions, in order. This is the JSON
- * document `parseActionProgram` reads and `serializeActionProgram` writes, and nothing in it is a
- * function, a class instance or a `bigint` — amounts are base-10 strings.
- */
+/** An action program: the chain it executes on, and its actions in order. */
 export interface ActionProgram {
-  /** Format version. `1` is the only version. */
+  /** Format version; `1`. */
   version: 1;
-  /** The chain every action executes on. An action's own `chainId`/`srcChainId` must match it. */
+  /** The chain every action executes on. A bridge's destination is its own field. */
   chainId: number;
-  actions: RoutingAction[];
-}
-
-// =============================================================================
-// ROUTING STEP & PLAN — an ordered execution plan
-// =============================================================================
-
-/** A single step in a routing plan, with execution metadata */
-export interface RoutingStep {
-  /** Position in the execution sequence (0-based) */
-  stepIndex: number;
-  /** The concrete action to execute */
-  action: RoutingAction;
-  /** Which step's output feeds into this step (undefined for first step) */
-  dependsOn?: number;
-  /** Estimated gas for this step */
-  estimatedGas?: string;
-}
-
-/** A full routing plan that fulfills one or more SauceIntents */
-export interface RoutingPlan {
-  /** Unique identifier for this plan */
-  id: string;
-  /** Ordered steps to execute */
-  steps: RoutingStep[];
-  /** Total estimated gas across all steps and chains */
-  totalEstimatedGas: string;
-  /** Timestamp when this plan expires */
-  expiresAt: number;
-  /** The final output amount after all steps */
-  expectedAmountOut: string;
-  /** Minimum acceptable output (slippage-adjusted) */
-  minAmountOut: string;
+  actions: Action[];
 }

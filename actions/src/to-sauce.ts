@@ -1,5 +1,5 @@
 /**
- * Routing actions -> a SauceScript program, compiled by the published Rust/wasm compiler.
+ * Action programs -> SauceScript, compiled by the published Rust/wasm compiler.
  *
  * Every protocol call is an ABI binding, `IBinding.at(target).method(args)`, the same shape an SDK
  * route body lowers to: the compiler derives the selector and the argument encoding from the ABI,
@@ -14,16 +14,15 @@
  *     would then revert a write that succeeded;
  *   - a call carrying native value (`valueCall`), because a binding cannot attach value.
  *
- * Uniswap V4's router input and Balancer's `batchSwap` used to be pre-encoded host side and spliced;
- * both are now encoded in the program, so a chained amount reaches them. A binding method's output
- * is declared, and so decoded, only when an action reads it — see `abis.ts`.
+ * A binding method's output is declared, and so decoded, only when an action reads it — see
+ * `abis.ts`.
  *
- * AMOUNTS AND OUTPUTS. An action's amount is, in order of precedence, its explicit amount field, the
- * local an earlier action saved under `amountRef`, or the previous action's output. An action's
- * output is a REALIZED amount for a swap (the router's return, or a balance delta where the return
- * is not an amount) and for an Aave withdrawal, the value read for a source action, and otherwise
- * the input amount passed through. When an output is consumed the action delivers it to the
- * executing account (`ctx.self()`), so the next action can spend it.
+ * AMOUNTS AND OUTPUTS. An action's amount is its `amount`, the local an earlier action saved under
+ * its `amountRef`, or the previous action's output. Its output is what it delivered to the Pot
+ * (`ctx.self()`) for a swap, a wrap or a stake and for an Aave withdrawal — the venue's return value
+ * where that is the amount, a balance delta around the call where it is not — the value read for a
+ * source action, and otherwise its own amount, passed through. An action whose output a later
+ * action spends delivers to the Pot whatever its `recipient` says.
  */
 import {
   bindBytes,
@@ -45,17 +44,18 @@ import {
   type BindingName,
   type MethodName,
 } from "./abis.js";
-import { compileEvm } from "./compile.js";
 import {
   uncheckedApproveStatements,
   uncheckedTransferStatements,
   type WordArg,
 } from "./registry.js";
-import { assertActionsSemantics, consumesPrevious, explicitAmountOf } from "./semantics.js";
+import { consumesPrevious } from "./semantics.js";
+import { ACTION_SPECS } from "./spec.js";
 
 import type {
-  RoutingAction,
+  Action,
   Recipient,
+  RemoteRecipient,
   UniswapV3ExactInputAction,
   UniswapV3ExactInputMultiHopAction,
   UniswapV4ExactInputAction,
@@ -72,10 +72,7 @@ import type {
   MaverickMultiHopSwapAction,
   CarbonSwapAction,
   FraxswapSwapAction,
-  ClipperSwapAction,
-  IntegralSwapAction,
   FluidDexT1SwapAction,
-  FluidDexLiteSwapAction,
   AcrossBridgeAction,
   StargateBridgeAction,
   CCTPBridgeAction,
@@ -97,6 +94,7 @@ import type {
   CompoundV3WithdrawAction,
   TransferAction,
   ApproveAction,
+  Permit2ApproveAction,
   BalanceOfAction,
   ArgumentAction,
 } from "./types.js";
@@ -113,9 +111,14 @@ const V4_OPEN_DELTA = 0n;
 /** type(int256).max — Balancer's "no limit" for an asset the Vault may take. */
 const MAX_INT256 = (1n << 255n) - 1n;
 
+/** Aave V3's variable interest-rate mode, the only one it offers. */
+const AAVE_VARIABLE_RATE = 2n;
+
+/** CCTP V2's `minFinalityThreshold` for a standard (finalized) transfer. */
+const CCTP_FINALIZED = 2000;
+
 const ZERO = "0n";
 const SELF = "ctx.self()";
-const MSG_SENDER = "ctx.msgSender()";
 
 /** An integer field, as the decimal literal the emitted source carries. */
 function word(value: string | number | bigint): Expr {
@@ -127,21 +130,26 @@ function addr(value: string | bigint): Expr {
   return `0x${BigInt(value).toString(16).padStart(40, "0")}n`;
 }
 
-/** A recipient field: an address, or the executing account for `"self"`. */
+/** A recipient field: an address, or the Pot for `"self"`. */
 function recipient(value: Recipient): Expr {
   return value === "self" ? SELF : addr(value);
 }
 
-/** A bytes32 field (a pool id, a salt, a padded recipient). */
+/** A bytes32 field (a pool id). */
 function b32(value: string): Expr {
   return `0x${BigInt(value).toString(16).padStart(64, "0")}n`;
+}
+
+/** A recipient on another chain, as the 32-byte word bridges take: an address is left-padded. */
+function remote(value: RemoteRecipient): Expr {
+  return b32(value);
 }
 
 function flag(value: boolean): Expr {
   return value ? "true" : "false";
 }
 
-/** An object literal: the ABI component names order the fields, so their order here is free. */
+/** An object literal. A binding orders its fields by the ABI; `abi.encode` takes them as written. */
 function record(fields: Record<string, Expr>): Expr {
   return `{ ${Object.entries(fields)
     .map(([k, v]) => `${k}: ${v}`)
@@ -153,24 +161,18 @@ function list(elements: readonly Expr[]): Expr {
 }
 
 // ---------------------------------------------------------------------------
-// Action result type
+// One action's lowering
 // ---------------------------------------------------------------------------
 
 export interface ActionResult {
   /** Statements that execute the action, in order. */
   readonly stmts: readonly Stmt[];
   /**
-   * The action's output amount, as an expression valid once `stmts` have run.
-   *
-   * Meaningful only when `buildAction` was asked for the output (`needsOutput`). An action whose
-   * return value was not requested leaves the pass-through input amount here — nothing reads it in
-   * that case.
+   * The action's output, as an expression valid once `stmts` have run. Meaningful only when the
+   * lowering was asked for it (`needsOutput`); otherwise it is the pass-through amount, unread.
    */
   readonly output: Expr;
-  /**
-   * The ABI bindings `stmts` call through. Compile with `contractsFor(bindings)` as the compiler's
-   * `inlineContracts` (the SDK's `compile.contracts`).
-   */
+  /** The ABI bindings `stmts` call through. */
   readonly bindings: readonly BindingName[];
 }
 
@@ -249,9 +251,14 @@ class Lowering {
     return bound.expr;
   }
 
-  /** The executing account's balance of `token`, as a bound local. */
+  /** The Pot's balance of `token`, as a bound local. */
   selfBalance(token: Expr): Expr {
     return this.bind("bal", this.call("IErc20", token, "balanceOf", [SELF]));
+  }
+
+  /** The Pot's native balance, as a bound local. */
+  nativeBalance(): Expr {
+    return this.bind("nat", "ctx.selfBalance()");
   }
 
   result(output: Expr): ActionResult {
@@ -270,25 +277,25 @@ function captured(l: Lowering, needsOutput: boolean, call: Expr, passThrough: Ex
 }
 
 /**
- * Runs `swap` between a pre/post `balanceOf(ctx.self())` snapshot of `token` and returns the DELTA
- * as the output — for a venue whose return is not an amount (an array, a signed pair, `bytes`, or
- * nothing). The swap must deliver to `ctx.self()` for the delta to mean anything, which every
- * caller arranges whenever `needsOutput` is set.
+ * Runs `run` between two readings of `measure` — the Pot's balance of the token it receives — and
+ * returns the DELTA as the output, for a venue whose return is not the amount received (an array,
+ * a signed pair, `bytes`, shares, or nothing). The call must deliver to the Pot for the delta to
+ * mean anything, which every caller arranges whenever `needsOutput` is set.
  */
 function balanceDelta(
   l: Lowering,
   needsOutput: boolean,
-  token: Expr,
-  swap: () => void,
+  measure: () => Expr,
+  run: () => void,
   passThrough: Expr,
 ): ActionResult {
   if (!needsOutput) {
-    swap();
+    run();
     return l.result(passThrough);
   }
-  const pre = l.selfBalance(token);
-  swap();
-  const post = l.selfBalance(token);
+  const pre = measure();
+  run();
+  const post = measure();
 
   return l.result(l.bind("delta", `${post} - ${pre}`));
 }
@@ -298,89 +305,66 @@ function balanceDelta(
 // ---------------------------------------------------------------------------
 
 /** A program's parts, before it is rendered for a standalone compile or a route body. */
-export interface AssembledActions {
+export interface Lowered {
   readonly body: readonly Stmt[];
   readonly contracts: ActionContracts;
-  /** Runtime entry parameters (`argument` actions), in the order `main` declares them. */
+  /** Runtime arguments (`argument` actions), in the order `main` declares them. */
   readonly parameters: readonly string[];
 }
 
-/** The local a runtime entry argument arrives in. Prefixed like `slotVar`, for the same reasons. */
-export function argumentVar(name: string): string {
+/** The local a runtime argument arrives in. Prefixed like `slotVar`, for the same reasons. */
+function argumentVar(name: string): string {
   return `a_${name}`;
 }
 
-/**
- * Lowers `actions` into `main`'s body. Checks the program's chaining and chain rules first, against
- * `chainId` when given and otherwise the chain of the first action.
- */
-export function assembleActions(
-  actions: readonly RoutingAction[],
-  chainId?: number,
-): AssembledActions {
-  assertActionsSemantics(actions, chainId);
-
+/** Lowers a validated action list into `main`'s body. */
+export function lowerActions(actions: readonly Action[]): Lowered {
   const emit = newEmitter();
   const body: Stmt[] = [];
   const bindings = new Set<BindingName>();
   const parameters: string[] = [];
   const declared = new Set<string>();
-  let lastOutputSlot: string | undefined;
+  let previous: string | undefined;
 
-  for (let i = 0; i < actions.length; i++) {
-    const action = actions[i]!;
+  actions.forEach((action, i) => {
     if (action.type === "argument") parameters.push(action.name);
 
-    const amountIn = resolveAmountIn(action, lastOutputSlot);
     const next = actions[i + 1];
-    const needsStore =
+    const needsOutput =
       action.saveOutputAs !== undefined || (next !== undefined && consumesPrevious(next));
 
-    const result = buildAction(emit, action, amountIn, needsStore);
+    const result = lowerAction(emit, action, amountOf(action, previous), needsOutput);
     body.push(...result.stmts);
     for (const b of result.bindings) bindings.add(b);
 
-    if (needsStore) {
+    if (needsOutput) {
       const slot = action.saveOutputAs === undefined ? `t_out${i}` : slotVar(action.saveOutputAs);
       body.push(
         declared.has(slot) ? `${slot} = ${result.output};` : `let ${slot} = ${result.output};`,
       );
       declared.add(slot);
-      lastOutputSlot = slot;
+      previous = slot;
     }
-  }
+  });
 
   return { body, contracts: contractsFor(bindings), parameters };
 }
 
-function hasAmountRef(action: RoutingAction): boolean {
-  return "amountRef" in action && action.amountRef !== undefined;
+/** The amount an action spends: its `amount`, the output it references, or the previous output. */
+function amountOf(action: Action, previous: string | undefined): Expr {
+  if (!ACTION_SPECS[action.type].spends) return ZERO;
+  const { amount, amountRef } = action as { amount?: string; amountRef?: string };
+  if (amount !== undefined) return word(amount);
+  if (amountRef !== undefined) return slotVar(amountRef);
+  if (previous !== undefined) return previous;
+  throw new Error(`${action.type} has no amount — the program was not validated`);
 }
 
-/**
- * The amount an action spends: its explicit amount, the named output it references, or the
- * previous action's output. Source actions spend nothing.
- */
-function resolveAmountIn(action: RoutingAction, lastOutputSlot: string | undefined): Expr {
-  if (action.type === "balanceOf" || action.type === "nativeBalance" || action.type === "argument")
-    return ZERO;
-  const explicit = explicitAmountOf(action);
-  if (explicit !== undefined) return word(explicit);
-  if (hasAmountRef(action)) return slotVar((action as { amountRef: string }).amountRef);
-  if (lastOutputSlot !== undefined) return lastOutputSlot;
-  throw new Error(
-    "No amount specified: provide an explicit amount, amountRef, or chain from a previous action",
-  );
-}
+/** `main` for a standalone compile: typed parameters and the `void` return the compiler requires. */
+export function renderProgram(lowered: Lowered): string {
+  const params = lowered.parameters.map((name) => `${argumentVar(name)}: Uint256`);
 
-/**
- * `main` for a standalone compile: typed parameters and a `void` return, which the compiler
- * requires to be declared.
- */
-export function renderProgram(assembled: AssembledActions): string {
-  const params = assembled.parameters.map((name) => `${argumentVar(name)}: Uint256`);
-
-  return `${fn("main", params, "void", assembled.body)}\n`;
+  return `${fn("main", params, "void", lowered.body)}\n`;
 }
 
 /**
@@ -388,157 +372,111 @@ export function renderProgram(assembled: AssembledActions): string {
  * plain JavaScript and add the `void` themselves. A route body is compiled with no arguments, so a
  * program with `argument` actions cannot be one.
  */
-export function renderRouteBody(assembled: AssembledActions): string {
-  if (assembled.parameters.length > 0) {
+export function renderRouteBody(lowered: Lowered): string {
+  if (lowered.parameters.length > 0) {
     throw new Error(
-      `an intent route body takes no runtime arguments, but this program declares ` +
-        `${assembled.parameters.map((p) => `'${p}'`).join(", ")}. Read the amount on-chain instead ` +
-        `(a \`balanceOf\` action), or compile it standalone with \`compileActions\`.`,
+      `an intent route takes no runtime arguments, but this program declares ` +
+        `${lowered.parameters.map((p) => `'${p}'`).join(", ")}. Read the amount on-chain instead ` +
+        `(a \`balanceOf\` action), or compile it standalone with \`compileProgram\`.`,
     );
   }
-  return `function main() {\n${indent(assembled.body)}\n}\n`;
+  return `function main() {\n${indent(lowered.body)}\n}\n`;
 }
 
 /**
- * The SauceScript source for `actions`, as a standalone program. Empty for an empty list.
- *
- * The source names ABI bindings, so compiling it needs their ABIs: `actionsToProgramSource` returns
- * both, and `actionsToSauce` compiles them together.
+ * The statements for one action, spending the SauceScript expression `amount`. `needsOutput` both
+ * routes the output to the Pot (instead of the action's own `recipient`) and captures it.
  */
-export function actionsToSauceSource(actions: readonly RoutingAction[]): string {
-  if (actions.length === 0) return "";
-
-  return renderProgram(assembleActions(actions));
-}
-
-/** The standalone source for `actions` together with the ABI bindings it compiles against. */
-export function actionsToProgramSource(actions: readonly RoutingAction[]): {
-  readonly source: string;
-  readonly contracts: ActionContracts;
-  readonly parameters: readonly string[];
-} {
-  const assembled = assembleActions(actions);
-
-  return {
-    source: renderProgram(assembled),
-    contracts: assembled.contracts,
-    parameters: assembled.parameters,
-  };
-}
-
-export function actionsToSauce(actions: readonly RoutingAction[]): Uint8Array {
-  if (actions.length === 0) return new Uint8Array();
-  const assembled = assembleActions(actions);
-
-  return compileEvm(renderProgram(assembled), assembled.contracts).bytecode;
-}
-
-export function actionToSauce(action: RoutingAction): Uint8Array {
-  return actionsToSauce([action]);
-}
-
-/**
- * Emit the statements for one action.
- *
- * Takes an [`Emitter`] (from `newEmitter()`) and a SauceScript amount EXPRESSION, and returns source
- * statements plus the ABI bindings they name. `needsOutput` both selects the recipient
- * (`ctx.self()` when the output is consumed, the action's own `recipient` otherwise) and decides
- * whether the output is captured.
- */
-export function buildAction(
+export function lowerAction(
   emit: Emitter,
-  action: RoutingAction,
-  amountIn: Expr,
+  action: Action,
+  amount: Expr,
   needsOutput: boolean,
 ): ActionResult {
   const l = new Lowering(emit);
   switch (action.type) {
     case "uniswapV3ExactInput":
-      return uniswapV3ExactInput(l, action, amountIn, needsOutput);
+      return uniswapV3ExactInput(l, action, amount, needsOutput);
     case "uniswapV3ExactInputMultiHop":
-      return uniswapV3ExactInputMultiHop(l, action, amountIn, needsOutput);
+      return uniswapV3ExactInputMultiHop(l, action, amount, needsOutput);
     case "uniswapV4ExactInput":
-      return uniswapV4ExactInput(l, action, amountIn, needsOutput);
+      return uniswapV4ExactInput(l, action, amount, needsOutput);
     case "uniswapV4ExactInputMultiHop":
-      return uniswapV4ExactInputMultiHop(l, action, amountIn, needsOutput);
+      return uniswapV4ExactInputMultiHop(l, action, amount, needsOutput);
     case "curveSwap":
-      return curveSwap(l, action, amountIn, needsOutput);
-    case "balancerV2Swap":
-      return balancerV2Swap(l, action, amountIn, needsOutput);
-    case "balancerV2BatchSwap":
-      return balancerV2BatchSwap(l, action, amountIn, needsOutput);
-    case "balancerV3Swap":
-      return balancerV3Swap(l, action, amountIn, needsOutput);
-    case "uniswapV2Swap":
-      return uniswapV2Swap(l, action, amountIn, needsOutput);
+      return curveSwap(l, action, amount, needsOutput);
     case "curveRouterNGSwap":
-      return curveRouterNGSwap(l, action, amountIn, needsOutput);
+      return curveRouterNGSwap(l, action, amount, needsOutput);
+    case "balancerV2Swap":
+      return balancerV2Swap(l, action, amount, needsOutput);
+    case "balancerV2BatchSwap":
+      return balancerV2BatchSwap(l, action, amount, needsOutput);
+    case "balancerV3Swap":
+      return balancerV3Swap(l, action, amount, needsOutput);
+    case "uniswapV2Swap":
+      return uniswapV2Swap(l, action, amount, needsOutput);
     case "ambientSwap":
-      return ambientSwap(l, action, amountIn, needsOutput);
+      return ambientSwap(l, action, amount, needsOutput);
     case "dodoSwap":
-      return dodoSwap(l, action, amountIn, needsOutput);
+      return dodoSwap(l, action, amount, needsOutput);
     case "maverickSwap":
-      return maverickSwap(l, action, amountIn, needsOutput);
+      return maverickSwap(l, action, amount, needsOutput);
     case "maverickMultiHopSwap":
-      return maverickMultiHopSwap(l, action, amountIn, needsOutput);
+      return maverickMultiHopSwap(l, action, amount, needsOutput);
     case "carbonSwap":
-      return carbonSwap(l, action, amountIn, needsOutput);
+      return carbonSwap(l, action, amount, needsOutput);
     case "fraxswapSwap":
-      return fraxswapSwap(l, action, amountIn, needsOutput);
-    case "clipperSwap":
-      return clipperSwap(l, action, amountIn, needsOutput);
-    case "integralSwap":
-      return integralSwap(l, action, amountIn, needsOutput);
+      return fraxswapSwap(l, action, amount, needsOutput);
     case "fluidDexT1Swap":
-      return fluidDexT1Swap(l, action, amountIn, needsOutput);
-    case "fluidDexLiteSwap":
-      return fluidDexLiteSwap(l, action, amountIn, needsOutput);
-    case "transfer":
-      return transfer(l, action, amountIn);
-    case "approve":
-      return approve(l, action, amountIn);
-    case "wrapETH":
-      return wrapETH(l, action, amountIn);
-    case "unwrapETH":
-      return unwrapETH(l, action, amountIn);
-    case "wrapStETH":
-      return wrapStETH(l, action, amountIn);
-    case "unwrapStETH":
-      return unwrapStETH(l, action, amountIn);
-    case "lidoStake":
-      return lidoStake(l, action, amountIn);
-    case "lidoUnstake":
-      return lidoUnstake(l, action, amountIn);
-    case "rocketPoolStake":
-      return rocketPoolStake(l, action, amountIn);
-    case "rocketPoolUnstake":
-      return rocketPoolUnstake(l, action, amountIn);
-    case "etherFiStake":
-      return etherFiStake(l, action, amountIn);
-    case "aaveV3Supply":
-      return aaveV3Supply(l, action, amountIn);
-    case "aaveV3Withdraw":
-      return aaveV3Withdraw(l, action, amountIn, needsOutput);
-    case "aaveV3Borrow":
-      return aaveV3Borrow(l, action, amountIn);
-    case "aaveV3Repay":
-      return aaveV3Repay(l, action, amountIn);
-    case "compoundV3Supply":
-      return compoundV3Supply(l, action, amountIn);
-    case "compoundV3Withdraw":
-      return compoundV3Withdraw(l, action, amountIn);
+      return fluidDexT1Swap(l, action, amount, needsOutput);
     case "acrossBridge":
-      return acrossBridge(l, action, amountIn);
+      return acrossBridge(l, action, amount);
     case "stargateBridge":
-      return stargateBridge(l, action, amountIn);
+      return stargateBridge(l, action, amount);
     case "cctpBridge":
-      return cctpBridge(l, action, amountIn);
+      return cctpBridge(l, action, amount);
     case "hyperlaneBridge":
-      return hyperlaneBridge(l, action, amountIn);
+      return hyperlaneBridge(l, action, amount);
+    case "wrapETH":
+      return wrapETH(l, action, amount);
+    case "unwrapETH":
+      return unwrapETH(l, action, amount);
+    case "wrapStETH":
+      return wrapStETH(l, action, amount, needsOutput);
+    case "unwrapStETH":
+      return unwrapStETH(l, action, amount, needsOutput);
+    case "lidoStake":
+      return lidoStake(l, action, amount, needsOutput);
+    case "lidoUnstake":
+      return lidoUnstake(l, action, amount);
+    case "rocketPoolStake":
+      return rocketPoolStake(l, action, amount, needsOutput);
+    case "rocketPoolUnstake":
+      return rocketPoolUnstake(l, action, amount, needsOutput);
+    case "etherFiStake":
+      return etherFiStake(l, action, amount, needsOutput);
+    case "aaveV3Supply":
+      return aaveV3Supply(l, action, amount);
+    case "aaveV3Withdraw":
+      return aaveV3Withdraw(l, action, amount, needsOutput);
+    case "aaveV3Borrow":
+      return aaveV3Borrow(l, action, amount);
+    case "aaveV3Repay":
+      return aaveV3Repay(l, action, amount);
+    case "compoundV3Supply":
+      return compoundV3Supply(l, action, amount);
+    case "compoundV3Withdraw":
+      return compoundV3Withdraw(l, action, amount);
+    case "transfer":
+      return transfer(l, action, amount);
+    case "approve":
+      return approve(l, action, amount);
+    case "permit2Approve":
+      return permit2Approve(l, action, amount);
     case "balanceOf":
       return balanceOf(l, action);
     case "nativeBalance":
-      return l.result(l.bind("nat", "ctx.selfBalance()"));
+      return l.result(l.nativeBalance());
     case "argument":
       return argument(l, action);
     default: {
@@ -564,7 +502,7 @@ function uniswapV3ExactInput(
     fee: word(action.fee),
     recipient: needsOutput ? SELF : recipient(action.recipient),
     amountIn,
-    amountOutMinimum: word(action.amountOutMin ?? "0"),
+    amountOutMinimum: word(action.amountOutMin),
     sqrtPriceLimitX96: word(action.sqrtPriceLimitX96 ?? "0"),
   });
   const call = l.call("ISwapRouter02", addr(action.router), "exactInputSingle", [params]);
@@ -601,7 +539,7 @@ function uniswapV3ExactInputMultiHop(
  * `ctx.self()` when the output is chained, like every other swap. The swap parameters are ONE
  * ABI-encoded struct, head offset included, which is what the V4 router's calldata decoder reads;
  * the multi-hop struct has no `maxHopSlippage` field. Both were checked against the deployed
- * mainnet Universal Router (`v4.fork.test.ts`), where the flattened encoding this replaced reverts.
+ * mainnet Universal Router (`v4.mainnet.test.ts`), where the flattened encoding this replaced reverts.
  */
 function v4Execute(
   l: Lowering,
@@ -639,7 +577,7 @@ function uniswapV4ExactInput(
   return balanceDelta(
     l,
     needsOutput,
-    addr(currencyOut),
+    () => l.selfBalance(addr(currencyOut)),
     () => {
       const hookData = l.bytes("hook", new Uint8Array());
       // ExactInputSingleParams { PoolKey poolKey; bool zeroForOne; uint128 amountIn;
@@ -680,7 +618,7 @@ function uniswapV4ExactInputMultiHop(
   return balanceDelta(
     l,
     needsOutput,
-    addr(currencyOut),
+    () => l.selfBalance(addr(currencyOut)),
     () => {
       const hookData = l.bytes("hook", new Uint8Array());
       // ExactInputParams { Currency currencyIn; PathKey[] path; uint128 amountIn;
@@ -778,15 +716,6 @@ function balancerV2BatchSwap(
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
-  // Every step's amount is a required field, so an `amountRef` could only be ignored or silently
-  // override one of them. Say so rather than execute a different trade than the one written down.
-  if (action.amountRef !== undefined) {
-    throw new Error(
-      "balancerV2BatchSwap: `amountRef` cannot be applied — every step's `amount` is set " +
-        "explicitly (a later step's 0 means \"the previous step's output\"). Set `steps[0].amount`.",
-    );
-  }
-
   const userData = l.bytes("ud", new Uint8Array());
   const steps = list(
     action.steps.map((step) =>
@@ -821,7 +750,7 @@ function balancerV2BatchSwap(
   return balanceDelta(
     l,
     needsOutput,
-    addr(assetOut),
+    () => l.selfBalance(addr(assetOut)),
     () =>
       l.exec("IBalancerV2Vault", addr(action.vault), "batchSwap", [
         ZERO, // GIVEN_IN
@@ -846,7 +775,7 @@ function uniswapV2Swap(
   return balanceDelta(
     l,
     needsOutput,
-    addr(action.path[action.path.length - 1]!),
+    () => l.selfBalance(addr(action.path[action.path.length - 1]!)),
     () =>
       l.exec("IUniswapV2Router", addr(action.router), "swapExactTokensForTokens", [
         amountIn,
@@ -922,7 +851,7 @@ function ambientSwap(
   return balanceDelta(
     l,
     needsOutput,
-    tokenOut,
+    () => l.selfBalance(tokenOut),
     () => {
       const cmd = l.bind(
         "cmd",
@@ -935,7 +864,7 @@ function ambientSwap(
           amountIn,
           word(action.tip),
           word(action.limitPrice),
-          word(action.minOut),
+          word(action.amountOutMin),
           word(action.reserveFlags),
         ]),
       );
@@ -958,7 +887,7 @@ function dodoSwap(
     addr(action.toToken),
     amountIn,
     word(action.amountOutMin),
-    list(action.dodoPairs.map(addr)),
+    list(action.pairs.map(addr)),
     word(action.directions),
     flag(false), // isIncentive
     word(action.deadline),
@@ -1040,7 +969,7 @@ function fraxswapSwap(
   return balanceDelta(
     l,
     needsOutput,
-    addr(action.path[action.path.length - 1]!),
+    () => l.selfBalance(addr(action.path[action.path.length - 1]!)),
     () =>
       l.exec("IUniswapV2Router", addr(action.router), "swapExactTokensForTokens", [
         amountIn,
@@ -1051,57 +980,6 @@ function fraxswapSwap(
       ]),
     amountIn,
   );
-}
-
-function clipperSwap(
-  l: Lowering,
-  action: ClipperSwapAction,
-  amountIn: Expr,
-  needsOutput: boolean,
-): ActionResult {
-  // Clipper swaps tokens already transferred to the exchange, so the amount is not an argument;
-  // `auxiliaryData` carries Clipper's signed quote.
-  const aux = l.bytes("aux", hexToBytes(action.auxiliaryData));
-  const call = l.call("IClipperExchange", addr(action.exchange), "sellTokenForToken", [
-    addr(action.inputToken),
-    addr(action.outputToken),
-    needsOutput ? SELF : recipient(action.recipient),
-    word(action.amountOutMin),
-    aux,
-  ]);
-
-  return captured(l, needsOutput, call, amountIn);
-}
-
-function integralSwap(
-  l: Lowering,
-  action: IntegralSwapAction,
-  amountIn: Expr,
-  needsOutput: boolean,
-): ActionResult {
-  // `sell` returns an order id and Integral executes the order LATER, so there is no output in
-  // this transaction to chain from.
-  if (needsOutput) {
-    throw new Error(
-      "integralSwap: Integral is a delayed-order venue — `sell` returns an orderId and the swap " +
-        "executes in a later transaction, so this action has no output amount to chain from. " +
-        "Give the next action an explicit amount or an amountRef to a different action.",
-    );
-  }
-  l.exec("IIntegralDelay", addr(action.delay), "sell", [
-    record({
-      tokenIn: addr(action.tokenIn),
-      tokenOut: addr(action.tokenOut),
-      amountIn,
-      amountOutMin: word(action.amountOutMin),
-      wrapUnwrap: flag(action.wrapUnwrap),
-      to: recipient(action.recipient),
-      gasLimit: word(action.gasLimit),
-      submitDeadline: word(action.submitDeadline),
-    }),
-  ]);
-
-  return l.result(amountIn);
 }
 
 function fluidDexT1Swap(
@@ -1120,265 +998,307 @@ function fluidDexT1Swap(
   return captured(l, needsOutput, call, amountIn);
 }
 
-function fluidDexLiteSwap(
-  l: Lowering,
-  action: FluidDexLiteSwapAction,
-  amountIn: Expr,
-  needsOutput: boolean,
-): ActionResult {
-  // `swapSingle` returns a signed `(amount0, amount1)` pair; the output is the delta on the
-  // received token instead. A positive `amountSpecified` is exact input.
-  const tokenOut = addr(action.swap0To1 ? action.token1 : action.token0);
-
-  return balanceDelta(
-    l,
-    needsOutput,
-    tokenOut,
-    () =>
-      l.exec("IFluidDexLite", addr(action.dex), "swapSingle", [
-        record({
-          token0: addr(action.token0),
-          token1: addr(action.token1),
-          salt: b32(action.salt),
-        }),
-        flag(action.swap0To1),
-        amountIn,
-        word(action.amountOutMin),
-        needsOutput ? SELF : recipient(action.recipient),
-      ]),
-    amountIn,
-  );
-}
-
 // ---------------------------------------------------------------------------
-// Transfer & approve — pass-through amount, no output decoded (`Lowering.erc20Write`)
+// Bridges — the amount passes through
 // ---------------------------------------------------------------------------
 
-function transfer(l: Lowering, action: TransferAction, amountIn: Expr): ActionResult {
-  l.erc20Write("transfer", addr(action.token), recipient(action.to), amountIn);
-
-  return l.result(amountIn);
-}
-
-function approve(l: Lowering, action: ApproveAction, amountIn: Expr): ActionResult {
-  l.erc20Write("approve", addr(action.token), addr(action.spender), amountIn);
-
-  return l.result(amountIn);
-}
-
-// ---------------------------------------------------------------------------
-// Wrap / unwrap — pass-through amount
-// ---------------------------------------------------------------------------
-
-function wrapETH(l: Lowering, action: WrapETHAction, amountIn: Expr): ActionResult {
-  l.valueCall("IWeth9", addr(action.weth), amountIn, "deposit", []);
-
-  return l.result(amountIn);
-}
-
-function unwrapETH(l: Lowering, action: UnwrapETHAction, amountIn: Expr): ActionResult {
-  l.exec("IWeth9", addr(action.weth), "withdraw", [amountIn]);
-
-  return l.result(amountIn);
-}
-
-function wrapStETH(l: Lowering, action: WrapStETHAction, amountIn: Expr): ActionResult {
-  l.exec("IWstEth", addr(action.wstETH), "wrap", [amountIn]);
-
-  return l.result(amountIn);
-}
-
-function unwrapStETH(l: Lowering, action: UnwrapStETHAction, amountIn: Expr): ActionResult {
-  l.exec("IWstEth", addr(action.wstETH), "unwrap", [amountIn]);
-
-  return l.result(amountIn);
-}
-
-// ---------------------------------------------------------------------------
-// Liquid staking — pass-through amount
-// ---------------------------------------------------------------------------
-
-function lidoStake(l: Lowering, action: LidoStakeAction, amountIn: Expr): ActionResult {
-  l.valueCall("ILido", addr(action.stETH), amountIn, "submit", [addr(action.referral)]);
-
-  return l.result(amountIn);
-}
-
-function lidoUnstake(l: Lowering, action: LidoUnstakeAction, amountIn: Expr): ActionResult {
-  l.exec("ILidoWithdrawalQueue", addr(action.withdrawalQueue), "requestWithdrawals", [
-    list([amountIn]),
-    MSG_SENDER,
-  ]);
-
-  return l.result(amountIn);
-}
-
-function rocketPoolStake(l: Lowering, action: RocketPoolStakeAction, amountIn: Expr): ActionResult {
-  l.valueCall("IRocketDepositPool", addr(action.depositPool), amountIn, "deposit", []);
-
-  return l.result(amountIn);
-}
-
-function rocketPoolUnstake(
-  l: Lowering,
-  action: RocketPoolUnstakeAction,
-  amountIn: Expr,
-): ActionResult {
-  l.exec("IRocketTokenReth", addr(action.rETH), "burn", [amountIn]);
-
-  return l.result(amountIn);
-}
-
-function etherFiStake(l: Lowering, action: EtherFiStakeAction, amountIn: Expr): ActionResult {
-  l.valueCall("IEtherFiLiquidityPool", addr(action.liquidityPool), amountIn, "deposit", []);
-
-  return l.result(amountIn);
-}
-
-// ---------------------------------------------------------------------------
-// Lending / borrowing
-// ---------------------------------------------------------------------------
-
-function aaveV3Supply(l: Lowering, action: AaveV3SupplyAction, amountIn: Expr): ActionResult {
-  l.exec("IAaveV3Pool", addr(action.pool), "supply", [
-    addr(action.token),
-    amountIn,
-    recipient(action.onBehalfOf),
-    word(action.referralCode),
-  ]);
-
-  return l.result(amountIn);
-}
-
-function aaveV3Withdraw(
-  l: Lowering,
-  action: AaveV3WithdrawAction,
-  amountIn: Expr,
-  needsOutput: boolean,
-): ActionResult {
-  // `withdraw` returns the amount actually withdrawn — the realized output.
-  const call = l.call("IAaveV3Pool", addr(action.pool), "withdraw", [
-    addr(action.token),
-    amountIn,
-    recipient(action.to),
-  ]);
-
-  return captured(l, needsOutput, call, amountIn);
-}
-
-function aaveV3Borrow(l: Lowering, action: AaveV3BorrowAction, amountIn: Expr): ActionResult {
-  l.exec("IAaveV3Pool", addr(action.pool), "borrow", [
-    addr(action.token),
-    amountIn,
-    word(action.interestRateMode),
-    word(action.referralCode),
-    recipient(action.onBehalfOf),
-  ]);
-
-  return l.result(amountIn);
-}
-
-function aaveV3Repay(l: Lowering, action: AaveV3RepayAction, amountIn: Expr): ActionResult {
-  l.exec("IAaveV3Pool", addr(action.pool), "repay", [
-    addr(action.token),
-    amountIn,
-    word(action.interestRateMode),
-    recipient(action.onBehalfOf),
-  ]);
-
-  return l.result(amountIn);
-}
-
-function compoundV3Supply(
-  l: Lowering,
-  action: CompoundV3SupplyAction,
-  amountIn: Expr,
-): ActionResult {
-  l.exec("ICometMarket", addr(action.comet), "supply", [addr(action.token), amountIn]);
-
-  return l.result(amountIn);
-}
-
-function compoundV3Withdraw(
-  l: Lowering,
-  action: CompoundV3WithdrawAction,
-  amountIn: Expr,
-): ActionResult {
-  l.exec("ICometMarket", addr(action.comet), "withdraw", [addr(action.token), amountIn]);
-
-  return l.result(amountIn);
-}
-
-// ---------------------------------------------------------------------------
-// Bridges — pass-through amount
-// ---------------------------------------------------------------------------
-
-function acrossBridge(l: Lowering, action: AcrossBridgeAction, amountIn: Expr): ActionResult {
+function acrossBridge(l: Lowering, action: AcrossBridgeAction, amount: Expr): ActionResult {
+  // The Pot deposits, so an expired deposit is refunded to it. The relayer keeps the difference
+  // between the input and output amounts; a fee above the amount reverts the subtraction.
   const message = l.bytes("msg", hexToBytes(action.message));
+  const fee = BigInt(action.relayerFee);
+  const outputAmount = fee === 0n ? amount : l.bind("out", `${amount} - ${word(fee)}`);
   l.exec("IAcrossSpokePool", addr(action.spokePool), "depositV3", [
-    MSG_SENDER, // depositor
-    MSG_SENDER, // recipient
+    SELF, // depositor
+    addr(action.recipient),
     addr(action.token), // inputToken
-    addr(action.token), // outputToken (the same token on the destination)
-    amountIn, // inputAmount
-    amountIn, // outputAmount
+    addr(action.token), // outputToken: the same token on the destination
+    amount,
+    outputAmount,
     word(action.destChainId),
-    ZERO, // exclusiveRelayer (none)
+    ZERO, // exclusiveRelayer: none
     word(action.quoteTimestamp),
     word(action.fillDeadline),
     word(action.exclusivityDeadline),
     message,
   ]);
 
-  return l.result(amountIn);
+  return l.result(amount);
 }
 
-function stargateBridge(l: Lowering, action: StargateBridgeAction, amountIn: Expr): ActionResult {
-  // The V1 Router's `swap(dstChainId, srcPoolId, dstPoolId, refundAddress, amountLD, minAmountLD,
-  // lzTxParams, to, payload)`, paying the LayerZero fee as value. The caller is refunded and
-  // receives on the destination; `to` is its 20 packed bytes, taken from the ABI word.
+function stargateBridge(l: Lowering, action: StargateBridgeAction, amount: Expr): ActionResult {
+  // Taxi mode (an empty `oftCmd`): the pool quotes the LayerZero fee for exactly this send, and the
+  // send pays it from the Pot, which also receives any refund.
   const empty = l.bytes("empty", new Uint8Array());
-  const word32 = l.bind("sender", encodeArgs([MSG_SENDER]));
-  const to = l.bind("to", `${word32}.slice(12, 32)`);
-  l.valueCall("IStargateRouter", addr(action.router), word(action.lzFee), "swap", [
-    word(action.destChainId),
-    word(action.srcPoolId),
-    word(action.dstPoolId),
-    MSG_SENDER,
-    amountIn,
-    word(action.amountOutMin),
-    record({ dstGasForCall: ZERO, dstNativeAmount: ZERO, dstNativeAddr: empty }),
-    to,
-    empty,
+  const sendParam = record({
+    dstEid: word(action.dstEid),
+    to: remote(action.recipient),
+    amountLD: amount,
+    minAmountLD: word(action.amountOutMin),
+    extraOptions: empty,
+    composeMsg: empty,
+    oftCmd: empty,
+  });
+  const pool = addr(action.pool);
+  const quoted = l.bind("lz", l.call("IStargatePool", pool, "quoteSend", [sendParam, "false"]));
+  const nativeFee = l.bind("lzfee", `${quoted}.nativeFee`);
+  l.valueCall("IStargatePool", pool, nativeFee, "send", [
+    sendParam,
+    record({ nativeFee, lzTokenFee: ZERO }),
+    SELF,
   ]);
 
-  return l.result(amountIn);
+  return l.result(amount);
 }
 
-function cctpBridge(l: Lowering, action: CCTPBridgeAction, amountIn: Expr): ActionResult {
+function cctpBridge(l: Lowering, action: CCTPBridgeAction, amount: Expr): ActionResult {
   l.exec("ICctpTokenMessenger", addr(action.tokenMessenger), "depositForBurn", [
-    amountIn,
-    word(action.destDomain),
-    b32(action.mintRecipient),
+    amount,
+    word(action.destinationDomain),
+    remote(action.recipient),
     addr(action.token),
+    ZERO, // destinationCaller: anyone may relay the mint
+    word(action.maxFee ?? "0"),
+    word(action.minFinalityThreshold ?? CCTP_FINALIZED),
   ]);
 
-  return l.result(amountIn);
+  return l.result(amount);
 }
 
-function hyperlaneBridge(l: Lowering, action: HyperlaneBridgeAction, amountIn: Expr): ActionResult {
-  const body = l.bytes("body", new Uint8Array());
-  l.valueCall("IHyperlaneMailbox", addr(action.router), word(action.gasPayment), "dispatch", [
-    word(action.destinationDomain),
-    b32(action.token),
-    body,
+function hyperlaneBridge(l: Lowering, action: HyperlaneBridgeAction, amount: Expr): ActionResult {
+  const router = addr(action.router);
+  const domain = word(action.destinationDomain);
+  const gas = l.bind("igp", l.call("IWarpRoute", router, "quoteGasPayment", [domain]));
+  l.valueCall("IWarpRoute", router, gas, "transferRemote", [
+    domain,
+    remote(action.recipient),
+    amount,
   ]);
 
-  return l.result(amountIn);
+  return l.result(amount);
 }
 
 // ---------------------------------------------------------------------------
-// Source actions — produce a value
+// Wrapping
+// ---------------------------------------------------------------------------
+
+function wrapETH(l: Lowering, action: WrapETHAction, amount: Expr): ActionResult {
+  l.valueCall("IWeth9", addr(action.weth), amount, "deposit", []);
+
+  return l.result(amount);
+}
+
+function unwrapETH(l: Lowering, action: UnwrapETHAction, amount: Expr): ActionResult {
+  l.exec("IWeth9", addr(action.weth), "withdraw", [amount]);
+
+  return l.result(amount);
+}
+
+function wrapStETH(
+  l: Lowering,
+  action: WrapStETHAction,
+  amount: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  // `wrap` returns the wstETH it minted.
+  const call = l.call("IWstEth", addr(action.wstETH), "wrap", [amount]);
+
+  return captured(l, needsOutput, call, amount);
+}
+
+function unwrapStETH(
+  l: Lowering,
+  action: UnwrapStETHAction,
+  amount: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  // `unwrap` returns the stETH it released — never more than the Pot's balance grew by, so a later
+  // action can always spend it.
+  const call = l.call("IWstEth", addr(action.wstETH), "unwrap", [amount]);
+
+  return captured(l, needsOutput, call, amount);
+}
+
+// ---------------------------------------------------------------------------
+// Staking
+// ---------------------------------------------------------------------------
+
+function lidoStake(
+  l: Lowering,
+  action: LidoStakeAction,
+  amount: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  // `submit` returns shares, not stETH, and a stETH balance can round a wei below the ETH staked;
+  // the output is the stETH balance delta.
+  const stETH = addr(action.stETH);
+
+  return balanceDelta(
+    l,
+    needsOutput,
+    () => l.selfBalance(stETH),
+    () =>
+      l.valueCall("ILido", stETH, amount, "submit", [
+        addr(action.referral ?? "0x0000000000000000000000000000000000000000"),
+      ]),
+    amount,
+  );
+}
+
+function lidoUnstake(l: Lowering, action: LidoUnstakeAction, amount: Expr): ActionResult {
+  l.exec("ILidoWithdrawalQueue", addr(action.withdrawalQueue), "requestWithdrawals", [
+    list([amount]),
+    recipient(action.owner),
+  ]);
+
+  return l.result(amount);
+}
+
+function rocketPoolStake(
+  l: Lowering,
+  action: RocketPoolStakeAction,
+  amount: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  return balanceDelta(
+    l,
+    needsOutput,
+    () => l.selfBalance(addr(action.rETH)),
+    () => l.valueCall("IRocketDepositPool", addr(action.depositPool), amount, "deposit", []),
+    amount,
+  );
+}
+
+function rocketPoolUnstake(
+  l: Lowering,
+  action: RocketPoolUnstakeAction,
+  amount: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  return balanceDelta(
+    l,
+    needsOutput,
+    () => l.nativeBalance(),
+    () => l.exec("IRocketTokenReth", addr(action.rETH), "burn", [amount]),
+    amount,
+  );
+}
+
+function etherFiStake(
+  l: Lowering,
+  action: EtherFiStakeAction,
+  amount: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  // `deposit` returns eETH shares; the output is the eETH balance delta.
+  return balanceDelta(
+    l,
+    needsOutput,
+    () => l.selfBalance(addr(action.eETH)),
+    () => l.valueCall("IEtherFiLiquidityPool", addr(action.liquidityPool), amount, "deposit", []),
+    amount,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Lending
+// ---------------------------------------------------------------------------
+
+function aaveV3Supply(l: Lowering, action: AaveV3SupplyAction, amount: Expr): ActionResult {
+  l.exec("IAaveV3Pool", addr(action.pool), "supply", [
+    addr(action.token),
+    amount,
+    recipient(action.onBehalfOf),
+    word(action.referralCode ?? 0),
+  ]);
+
+  return l.result(amount);
+}
+
+function aaveV3Withdraw(
+  l: Lowering,
+  action: AaveV3WithdrawAction,
+  amount: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  // `withdraw` returns the amount withdrawn, which is less than a `type(uint256).max` request.
+  const call = l.call("IAaveV3Pool", addr(action.pool), "withdraw", [
+    addr(action.token),
+    amount,
+    recipient(action.recipient),
+  ]);
+
+  return captured(l, needsOutput, call, amount);
+}
+
+function aaveV3Borrow(l: Lowering, action: AaveV3BorrowAction, amount: Expr): ActionResult {
+  l.exec("IAaveV3Pool", addr(action.pool), "borrow", [
+    addr(action.token),
+    amount,
+    word(AAVE_VARIABLE_RATE),
+    word(action.referralCode ?? 0),
+    recipient(action.onBehalfOf),
+  ]);
+
+  return l.result(amount);
+}
+
+function aaveV3Repay(l: Lowering, action: AaveV3RepayAction, amount: Expr): ActionResult {
+  l.exec("IAaveV3Pool", addr(action.pool), "repay", [
+    addr(action.token),
+    amount,
+    word(AAVE_VARIABLE_RATE),
+    recipient(action.onBehalfOf),
+  ]);
+
+  return l.result(amount);
+}
+
+function compoundV3Supply(l: Lowering, action: CompoundV3SupplyAction, amount: Expr): ActionResult {
+  l.exec("ICometMarket", addr(action.comet), "supply", [addr(action.token), amount]);
+
+  return l.result(amount);
+}
+
+function compoundV3Withdraw(
+  l: Lowering,
+  action: CompoundV3WithdrawAction,
+  amount: Expr,
+): ActionResult {
+  l.exec("ICometMarket", addr(action.comet), "withdraw", [addr(action.token), amount]);
+
+  return l.result(amount);
+}
+
+// ---------------------------------------------------------------------------
+// Tokens — the amount passes through, and nothing is decoded (`Lowering.erc20Write`)
+// ---------------------------------------------------------------------------
+
+function transfer(l: Lowering, action: TransferAction, amount: Expr): ActionResult {
+  l.erc20Write("transfer", addr(action.token), recipient(action.recipient), amount);
+
+  return l.result(amount);
+}
+
+function approve(l: Lowering, action: ApproveAction, amount: Expr): ActionResult {
+  l.erc20Write("approve", addr(action.token), addr(action.spender), amount);
+
+  return l.result(amount);
+}
+
+function permit2Approve(l: Lowering, action: Permit2ApproveAction, amount: Expr): ActionResult {
+  l.exec("IPermit2", addr(action.permit2), "approve", [
+    addr(action.token),
+    addr(action.spender),
+    amount,
+    word(action.expiration),
+  ]);
+
+  return l.result(amount);
+}
+
+// ---------------------------------------------------------------------------
+// Sources — produce a value
 // ---------------------------------------------------------------------------
 
 function balanceOf(l: Lowering, action: BalanceOfAction): ActionResult {

@@ -3,7 +3,7 @@
  * (`spec.ts`), for clients that are not written in TypeScript.
  *
  * The schema is exact about shape and deliberately silent about three things it cannot express,
- * which `parseActionProgram` enforces and the schema's `description` states: an address's EIP-55
+ * which `parseProgram` enforces and the schema's `description` states: an address's EIP-55
  * checksum, an amount's numeric range beyond its digit count, and the chaining rules across actions
  * (`semantics.ts`). A document the schema rejects is always rejected by the parser; the reverse
  * holds only for those three.
@@ -19,7 +19,7 @@ import {
   type FieldKind,
   type Fields,
 } from "./spec.js";
-import { actionKeys, ACTION_PROGRAM_VERSION } from "./program.js";
+import { actionKeys, PROGRAM_VERSION } from "./program.js";
 
 export type JsonSchema = { readonly [key: string]: unknown };
 
@@ -36,8 +36,12 @@ const DEFS = {
       "An address: 0x + 40 hex digits. A mixed-case address must carry a valid EIP-55 checksum.",
   },
   recipient: {
-    description: 'An address, or "self" for the executing account.',
+    description: 'An address, or "self" for the executing Pot.',
     oneOf: [{ $ref: "#/$defs/address" }, { const: "self" }],
+  },
+  remoteRecipient: {
+    description: "An address, or a 32-byte account on a non-EVM destination (0x + 64 hex digits).",
+    oneOf: [{ $ref: "#/$defs/address" }, { $ref: "#/$defs/bytes32" }],
   },
   bytes: {
     type: "string",
@@ -61,6 +65,7 @@ function kindSchema(kind: FieldKind): JsonSchema {
   switch (kind.k) {
     case "address":
     case "recipient":
+    case "remoteRecipient":
     case "bytes":
     case "bytes32":
     case "identifier":
@@ -112,21 +117,13 @@ function objectSchema(fields: Fields, extra: Record<string, JsonSchema>): JsonSc
 }
 
 function actionSchema(spec: ActionSpec): JsonSchema {
-  const extra: Record<string, JsonSchema> = {
-    type: { const: spec.type },
-    [spec.chainField]: {
-      $ref: "#/$defs/chainId",
-      description: "Optional; must equal the program's chainId, which it defaults to.",
-    },
-  };
-  if (spec.amountField) {
-    extra[spec.amountField] = {
+  const extra: Record<string, JsonSchema> = { type: { const: spec.type } };
+  if (spec.spends) {
+    extra.amount = {
       ...kindSchema({ k: "uint", bits: 256 }),
       description:
         "The amount this action spends. Omit it (and amountRef) to spend the previous action's output.",
     };
-  }
-  if (spec.chainable) {
     extra.amountRef = {
       $ref: "#/$defs/identifier",
       description: "Spend the output an earlier action saved under this name.",
@@ -139,54 +136,45 @@ function actionSchema(spec: ActionSpec): JsonSchema {
 
   const schema = objectSchema(spec.fields, extra);
   const properties = schema.properties as Record<string, JsonSchema>;
-  // Emit properties in canonical order, which is the order `serializeActionProgram` writes.
+  // Properties in canonical order, which is the order `serializeProgram` writes.
   const orderedProperties = Object.fromEntries(
     actionKeys(spec)
       .filter((key) => key in properties)
       .map((key) => [key, properties[key]!]),
   );
-  const out: Record<string, unknown> = {
+
+  return {
     title: spec.type,
     description: `${spec.summary} Calls ${spec.calls}.`,
     ...schema,
     required: ["type", ...(schema.required as string[])],
     properties: orderedProperties,
   };
-  if (spec.exactlyOne) {
-    const [a, b] = spec.exactlyOne;
-    out.oneOf = [
-      { required: [a], not: { required: [b] } },
-      { required: [b], not: { required: [a] } },
-    ];
-  }
-
-  return out;
 }
 
 /** The JSON Schema every action program satisfies. */
-export function actionProgramJsonSchema(): JsonSchema {
+export function programSchema(): JsonSchema {
   const actionDefs = Object.fromEntries(
     ACTION_TYPES.map((type) => [`action_${type}`, actionSchema(ACTION_SPECS[type])]),
   );
 
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: `urn:eco-incorp:sauce:action-program:${ACTION_PROGRAM_VERSION}`,
+    $id: `urn:eco-incorp:sauce:action-program:${PROGRAM_VERSION}`,
     title: "Sauce action program",
     description:
       "A sequence of protocol actions that compiles to one Sauce program executing on one chain. " +
       "Amounts are base-10 strings. Beyond this schema, a program must satisfy: every address with " +
-      "mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared width; an " +
-      "action's chain field (if present) equals chainId; an action with no amount and no amountRef " +
-      "follows an action that produces an output; an amountRef names a saveOutputAs set by an earlier " +
-      "action, and is not combined with an explicit amount; integralSwap is never chained from; " +
-      "argument names are unique; and the value of every balanceOf/nativeBalance/argument action is read.",
+      "mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared width; a " +
+      "first action that takes an amount sets `amount`; an amountRef names a " +
+      "saveOutputAs set by an earlier action, and is not combined with `amount`; argument names " +
+      "are unique; and the value of every balanceOf/nativeBalance/argument action is read.",
     type: "object",
     additionalProperties: false,
     required: ["version", "chainId", "actions"],
     properties: {
       $schema: { type: "string", description: "The schema this document declares; ignored." },
-      version: { const: ACTION_PROGRAM_VERSION },
+      version: { const: PROGRAM_VERSION },
       chainId: { $ref: "#/$defs/chainId", description: "The chain every action executes on." },
       actions: {
         type: "array",

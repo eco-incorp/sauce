@@ -1,8 +1,9 @@
 /**
- * `docs/guides/actions.md` lists every supported action. Nothing else ties that list to the code,
- * so this reads it back and compares it with the action table the parser uses (`ACTION_SPECS`): an
- * action added, renamed or removed fails here until the guide says so too. It locates rows by their
- * first cell, so the prose and the other columns can change freely.
+ * `docs/guides/actions.md` lists every supported action with its output. Nothing else ties that
+ * list to the code, so this reads it back and compares it with the action table the parser and the
+ * lowering use (`ACTION_SPECS`): an action added, renamed or removed, or an output changed, fails
+ * here until the guide says so too. It locates rows by their first cell and reads the last, so the
+ * prose and the other columns can change freely.
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -32,14 +33,14 @@ describe("docs/guides/actions.md lists the actions the package supports", () => 
     assert.deepEqual([...listed].sort(), [...ACTION_TYPES].sort());
   });
 
-  it("names each action's amount field as the parser reads it", () => {
+  it("states each action's output as the lowering produces it", () => {
+    const wording = { realized: "received", passThrough: "its amount", value: "the value read" };
     const start = GUIDE.indexOf("## Supported actions");
     for (const type of ACTION_TYPES) {
       const row = new RegExp(`^\\| \`${type}\` +\\|[^\\n]*$`, "m").exec(GUIDE.slice(start))?.[0];
       assert.ok(row, `${type} has no row`);
-      const field = ACTION_SPECS[type].amountField;
-      if (field !== undefined)
-        assert.ok(row.includes(`\`${field}\``), `${type}: amount \`${field}\``);
+      const output = row.split("|").at(-2)!.trim();
+      assert.equal(output, wording[ACTION_SPECS[type].output], `${type}'s output`);
     }
   });
 });

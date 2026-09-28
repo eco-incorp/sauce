@@ -1,14 +1,9 @@
 /**
- * Swap actions -> quote calls, both off-chain (`eth_call`) and on-chain.
+ * Swap actions -> quote calls: an `eth_call` a client sends to price a swap (`quoteAction`), and
+ * the same call emitted as SauceScript, which the split swap runs on-chain (`quoteCall`).
  *
- * The off-chain half (`to`, `data`, `decode`) never touched a compiler and is unchanged. The
- * on-chain half emitted `Saucer` builder nodes against the retired TypeScript compiler; it now
- * emits SauceScript statements plus the `uint256` expression they leave available (a
- * [`Fragment`]), because the Rust compiler's only surface is `compile()` over source text.
- *
- * The four return SHAPES the retired `OutputSpec` described map onto `abi.decode` shape strings —
- * see [`Shape`]. Everything else about a quote (target, selector, arguments, amount offsets) is
- * byte-for-byte what it was.
+ * The on-chain form is statements plus the `uint256` expression they leave available (a
+ * [`Fragment`]); a quote's return shape maps onto an `abi.decode` shape string — see [`Shape`].
  */
 import { keccak256, toBytes, encodeAbiParameters, decodeAbiParameters, getAddress } from "viem";
 
@@ -24,6 +19,7 @@ import {
   type Stmt,
 } from "./emit.js";
 
+import { parseActions } from "./program.js";
 import type {
   SwapAction,
   UniswapV3ExactInputAction,
@@ -40,10 +36,7 @@ import type {
   MaverickSwapAction,
   MaverickMultiHopSwapAction,
   CarbonSwapAction,
-  ClipperSwapAction,
-  IntegralSwapAction,
   FluidDexT1SwapAction,
-  FluidDexLiteSwapAction,
 } from "./types.js";
 
 type Address = `0x${string}`;
@@ -53,60 +46,39 @@ type Hex = `0x${string}`;
 // Public types
 // ---------------------------------------------------------------------------
 
-/** Result of compiling a swap action into a quote call. */
-export interface QuoteCall {
-  /** Contract to call via eth_call */
-  to: Address;
-  /** ABI-encoded calldata */
-  data: Hex;
-  /** Decode the raw eth_call result into the output amount */
-  decode: (result: Hex) => bigint;
+/** A quote as an `eth_call`: send `data` to `to`, and `decode` the result into the output amount. */
+export interface Quote {
+  readonly to: Address;
+  readonly data: Hex;
+  decode(result: Hex): bigint;
+}
+
+/** A quote, plus its on-chain forms where the protocol's quoter can run inside a transaction. */
+export interface QuoteCall extends Quote {
+  /** The quote as SauceScript statements, leaving the output amount as their expression. */
+  readonly toSauce?: (emit: Emitter) => Fragment;
   /**
-   * Emit the SauceScript that performs the on-chain quote call, plus the expression yielding the
-   * output amount. Every quote extracts to a single uint256 regardless of the underlying return
-   * shape.
-   *
-   * Absent when the protocol's quote cannot run on-chain at all, so its presence is the signal that
-   * emitting it produces a program that can execute. Callers must check for it.
-   *
-   * BREAKING: took and returned a `Saucer`; takes an `Emitter` and returns a source [`Fragment`].
+   * The same, with the input amount a runtime expression spliced in at the quote's fixed amount
+   * offset — what the split swap needs. Absent where the amount has no fixed offset.
    */
-  toSauce?: (emit: Emitter) => Fragment;
-  /**
-   * Runtime-amount variant: splices `amountExpr` into the calldata at the
-   * protocol's fixed amount offset and returns the uint256 output expression.
-   *
-   * Only present for protocols whose quote calldata has the input amount at
-   * a fixed 32-byte offset (UniV3, Curve, BalV3, Maverick, Clipper, DODO,
-   * Integral, FluidT1, UniV2/Fraxswap routers). Callers that need
-   * runtime-parameterised quoting (e.g. split routing) must check for this
-   * field and error out if absent.
-   *
-   * BREAKING: took and returned `Saucer`s; takes an `Emitter` plus a SauceScript amount
-   * EXPRESSION, and returns a source [`Fragment`].
-   */
-  toSauceDynamic?: (emit: Emitter, amountExpr: Expr) => Fragment;
+  readonly toSauceDynamic?: (emit: Emitter, amountExpr: Expr) => Fragment;
 }
 
 /**
- * External contract addresses needed for quoting protocols that use a
- * separate quoter / resolver / impact contract.
+ * The quoter contracts for venues that price through one rather than through the pool or router
+ * the action names.
  */
-export interface QuoteOpts {
-  /** UniswapV3 QuoterV2 address (required for uniswapV3 actions) */
-  quoterV3?: Address;
-  /** UniswapV4 V4Quoter address (required for uniswapV4 actions) */
-  quoterV4?: Address;
-  /** Maverick V2 MaverickV2Quoter address (required for maverick actions) */
-  quoterMaverick?: Address;
-  /** Ambient CrocImpact address (required for ambient actions) */
-  impact?: Address;
-  /** Integral TwapRelayer address (required for integral actions) */
-  relayer?: Address;
-  /** Fluid DexReservesResolver address (required for fluidDexT1 actions) */
-  fluidResolver?: Address;
-  /** Fluid DexLiteResolver address (required for fluidDexLite actions) */
-  fluidLiteResolver?: Address;
+export interface QuoteOptions {
+  /** Uniswap's QuoterV2, for `uniswapV3ExactInput` and `uniswapV3ExactInputMultiHop`. */
+  readonly uniswapV3Quoter?: Address;
+  /** Uniswap's V4Quoter, for `uniswapV4ExactInput` and `uniswapV4ExactInputMultiHop`. */
+  readonly uniswapV4Quoter?: Address;
+  /** The MaverickV2Quoter, for `maverickSwap` and `maverickMultiHopSwap`. */
+  readonly maverickQuoter?: Address;
+  /** Ambient's CrocImpact, for `ambientSwap`. */
+  readonly ambientImpact?: Address;
+  /** Fluid's DexReservesResolver, for `fluidDexT1Swap`. */
+  readonly fluidDexResolver?: Address;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,13 +128,10 @@ function shapeLiteral(shape: Shape): string {
  * Two ways to invoke a quoter on-chain:
  *
  * - `'static'` — STATICCALL (`evm.static`). Use for pure-view quoters that make no state
- *   changes (Curve `get_dy`, Balancer `queryBatchSwap` / `querySwap…`,
- *   Carbon, Clipper, DODO, Integral, UniV2/Fraxswap router `getAmountsOut`,
- *   Ambient `calcImpact`). Blocking state writes is exactly the safety
- *   property we want — the quoter target may be caller-supplied (the
- *   action's own `pool`/`vault`/`controller`/`router`/`exchange` field), so
- *   STATICCALL keeps a malicious or buggy target from re-entering or
- *   mutating state.
+ *   changes (Curve `get_dy`, Carbon, DODO, the UniV2 router's `getAmountsOut`, Ambient
+ *   `calcImpact`). Blocking state writes is exactly the safety property we want — the quoter
+ *   target may be caller-supplied (the action's own `pool`/`controller`/`router` field), so
+ *   STATICCALL keeps a malicious or buggy target from re-entering or mutating state.
  *
  * - `'call'` — regular CALL with `value=0` (`evm.call`). Use for revert-simulation
  *   quoters (UniV3 QuoterV2, UniV4 V4Quoter, MaverickV2Quoter, Fluid
@@ -331,8 +300,9 @@ function makeDynamic(
   };
 }
 
-function requireOpt(value: Address | undefined, name: string): Address {
-  if (!value) throw new Error(`opts.${name} is required for this action type`);
+function required(options: QuoteOptions, name: keyof QuoteOptions): Address {
+  const value = options[name];
+  if (!value) throw new Error(`quoting this action needs \`${name}\` in the quote options`);
   return value;
 }
 
@@ -341,18 +311,27 @@ function requireOpt(value: Address | undefined, name: string): Address {
 // ---------------------------------------------------------------------------
 
 /**
- * Compile a swap action into calldata for quoting the output amount via `eth_call`.
- *
- * Every supported action resolves to a view or revert-simulation call that
- * does **not** require token balance or approvals.
- *
- * Some protocols use a separate quoter/resolver contract. Pass the relevant
- * address in {@link QuoteOpts} when quoting those protocols.
+ * The `eth_call` that prices `action` at its own `amount` (a Carbon trade or a Balancer batch at
+ * the amounts it carries). None needs a balance or an allowance. Venues that price through a
+ * separate quoter take its address from `options`.
  */
-export function actionToQuote(
+export function quoteAction(action: SwapAction, options: QuoteOptions = {}): Quote {
+  const [checked] = parseActions([action], "action") as [SwapAction];
+  const amount = (checked as { amount?: string }).amount;
+  const explicit = checked.type === "carbonSwap" || checked.type === "balancerV2BatchSwap";
+  if (amount === undefined && !explicit) {
+    throw new Error(`quoteAction: set the ${checked.type}'s \`amount\` to quote it`);
+  }
+  const { to, data, decode } = quoteCall(checked, BigInt(amount ?? 0), options);
+
+  return { to, data, decode };
+}
+
+/** The quote for `action` at `amountIn`, with its on-chain forms where there are any. */
+export function quoteCall(
   action: SwapAction,
   amountIn: bigint,
-  opts: QuoteOpts = {},
+  opts: QuoteOptions = {},
 ): QuoteCall {
   switch (action.type) {
     // --- On the same contract as the action ---
@@ -372,40 +351,26 @@ export function actionToQuote(
       return quoteBalV3(action, amountIn);
     case "carbonSwap":
       return quoteCarbon(action);
-    case "clipperSwap":
-      return quoteClipper(action, amountIn);
     case "dodoSwap":
       return quoteDODO(action, amountIn);
 
     // --- Separate quoter / resolver contract ---
     case "uniswapV3ExactInput":
-      return quoteUniV3Single(action, amountIn, requireOpt(opts.quoterV3, "quoterV3"));
+      return quoteUniV3Single(action, amountIn, required(opts, "uniswapV3Quoter"));
     case "uniswapV3ExactInputMultiHop":
-      return quoteUniV3Multi(action, amountIn, requireOpt(opts.quoterV3, "quoterV3"));
+      return quoteUniV3Multi(action, amountIn, required(opts, "uniswapV3Quoter"));
     case "uniswapV4ExactInput":
-      return quoteUniV4Single(action, amountIn, requireOpt(opts.quoterV4, "quoterV4"));
+      return quoteUniV4Single(action, amountIn, required(opts, "uniswapV4Quoter"));
     case "uniswapV4ExactInputMultiHop":
-      return quoteUniV4Multi(action, amountIn, requireOpt(opts.quoterV4, "quoterV4"));
+      return quoteUniV4Multi(action, amountIn, required(opts, "uniswapV4Quoter"));
     case "maverickSwap":
-      return quoteMaverick(action, amountIn, requireOpt(opts.quoterMaverick, "quoterMaverick"));
+      return quoteMaverick(action, amountIn, required(opts, "maverickQuoter"));
     case "maverickMultiHopSwap":
-      return quoteMaverickMulti(
-        action,
-        amountIn,
-        requireOpt(opts.quoterMaverick, "quoterMaverick"),
-      );
+      return quoteMaverickMulti(action, amountIn, required(opts, "maverickQuoter"));
     case "ambientSwap":
-      return quoteAmbient(action, amountIn, requireOpt(opts.impact, "impact"));
-    case "integralSwap":
-      return quoteIntegral(action, amountIn, requireOpt(opts.relayer, "relayer"));
+      return quoteAmbient(action, amountIn, required(opts, "ambientImpact"));
     case "fluidDexT1Swap":
-      return quoteFluidT1(action, amountIn, requireOpt(opts.fluidResolver, "fluidResolver"));
-    case "fluidDexLiteSwap":
-      return quoteFluidLite(
-        action,
-        amountIn,
-        requireOpt(opts.fluidLiteResolver, "fluidLiteResolver"),
-      );
+      return quoteFluidT1(action, amountIn, required(opts, "fluidDexResolver"));
 
     default: {
       const _: never = action;
@@ -613,30 +578,28 @@ function quoteBalV2Batch(action: BalancerV2BatchSwapAction): QuoteCall {
   );
 }
 
-/** BalancerV3 — `querySwapSingleTokenExactIn`. */
+/**
+ * BalancerV3 — `querySwapSingleTokenExactIn`. The Vault answers a query only outside a
+ * transaction (`tx.origin` zero, as in an `eth_call` from the zero address), so this quote has no
+ * on-chain form.
+ */
 function quoteBalV3(action: BalancerV3SwapAction, amountIn: bigint): QuoteCall {
   const to = action.router;
   const data = concatHex(
-    sel("querySwapSingleTokenExactIn(address,address,address,uint256,bytes)"),
+    sel("querySwapSingleTokenExactIn(address,address,address,uint256,address,bytes)"),
     encodeAbiParameters(
       [
         { type: "address" },
         { type: "address" },
         { type: "address" },
         { type: "uint256" },
+        { type: "address" },
         { type: "bytes" },
       ],
-      [action.pool, action.tokenIn, action.tokenOut, amountIn, "0x"],
+      [action.pool, action.tokenIn, action.tokenOut, amountIn, ZERO_ADDR, "0x"],
     ),
   );
-  return {
-    to,
-    data,
-    decode: decodeUint256,
-    toSauce: asUint256("static", to, data),
-    // selector(4) + pool(32) + tokenIn(32) + tokenOut(32) = 100
-    toSauceDynamic: makeDynamic("static", to, data, 100, OUT_UINT256, firstWord),
-  };
+  return { to, data, decode: decodeUint256 };
 }
 
 /**
@@ -672,26 +635,6 @@ function quoteCarbon(action: CarbonSwapAction): QuoteCall {
   return { to, data, decode: decodeUint256, toSauce: asUint256("static", to, data) };
 }
 
-/** Clipper — `getSellQuote` (view). On-chain FMM estimate; actual execution uses signed off-chain quotes. */
-function quoteClipper(action: ClipperSwapAction, amountIn: bigint): QuoteCall {
-  const to = action.exchange;
-  const data = concatHex(
-    sel("getSellQuote(address,address,uint256)"),
-    encodeAbiParameters(
-      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
-      [action.inputToken, action.outputToken, amountIn],
-    ),
-  );
-  return {
-    to,
-    data,
-    decode: decodeUint256,
-    toSauce: asUint256("static", to, data),
-    // selector(4) + tokenIn(32) + tokenOut(32) = 68
-    toSauceDynamic: makeDynamic("static", to, data, 68, OUT_UINT256, firstWord),
-  };
-}
-
 /**
  * DODO V2 — `querySellBase` / `querySellQuote` (view) on the pool.
  *
@@ -700,7 +643,7 @@ function quoteClipper(action: ClipperSwapAction, amountIn: bigint): QuoteCall {
  * Only single-hop is supported via view; multi-hop falls back to first pool.
  */
 function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
-  const pool = getAddress(action.dodoPairs[0]);
+  const pool = getAddress(action.pairs[0]!);
   const sellingBase = (action.directions & 1) === 0;
   if (action.version === "v1") return quoteDODOV1(pool, sellingBase, amountIn);
   const fnSel = sellingBase
@@ -737,7 +680,7 @@ function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
 function quoteDODOV1(pool: Address, sellingBase: boolean, amountIn: bigint): QuoteCall {
   if (!sellingBase) {
     throw new Error(
-      "actionToQuote: a DODO V1 pair quotes only a base-token sale by input amount " +
+      "a DODO V1 pair quotes only a base-token sale by input amount " +
         "(querySellBaseToken); this action sells the quote token",
     );
   }
@@ -788,7 +731,7 @@ function quoteUniV3Single(
           tokenOut: action.tokenOut,
           amountIn,
           fee: action.fee,
-          sqrtPriceLimitX96: 0n,
+          sqrtPriceLimitX96: BigInt(action.sqrtPriceLimitX96 ?? 0),
         },
       ],
     ),
@@ -1108,26 +1051,6 @@ function quoteAmbient(action: AmbientSwapAction, amountIn: bigint, impact: Addre
   };
 }
 
-/** Integral SIZE — TwapRelayer `quoteSell` (view). */
-function quoteIntegral(action: IntegralSwapAction, amountIn: bigint, relayer: Address): QuoteCall {
-  const to = relayer;
-  const data = concatHex(
-    sel("quoteSell(address,address,uint256)"),
-    encodeAbiParameters(
-      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
-      [action.tokenIn, action.tokenOut, amountIn],
-    ),
-  );
-  return {
-    to,
-    data,
-    decode: decodeUint256,
-    toSauce: asUint256("static", to, data),
-    // selector(4) + tokenIn(32) + tokenOut(32) = 68
-    toSauceDynamic: makeDynamic("static", to, data, 68, OUT_UINT256, firstWord),
-  };
-}
-
 /**
  * Fluid DEX T1 — DexReservesResolver `estimateSwapIn` (revert-sim).
  *
@@ -1154,51 +1077,5 @@ function quoteFluidT1(
     toSauce: asUint256("call", to, data),
     // selector(4) + dex(32) + swap0to1(32) = 68
     toSauceDynamic: makeDynamic("call", to, data, 68, OUT_UINT256, firstWord),
-  };
-}
-
-/**
- * Fluid DEX Lite — FluidDexLiteResolver `estimateSwapSingle` (revert-sim).
- *
- * estimateSwapSingle(DexKey dexKey_, bool swap0To1_, int256 amountSpecified_)
- *   → uint256 amountUnspecified_
- * DexKey = (address token0, address token1, bytes32 salt)
- * Positive amountSpecified = exact input.
- */
-function quoteFluidLite(
-  action: FluidDexLiteSwapAction,
-  amountIn: bigint,
-  resolver: Address,
-): QuoteCall {
-  const to = resolver;
-  const data = concatHex(
-    sel("estimateSwapSingle((address,address,bytes32),bool,int256)"),
-    encodeAbiParameters(
-      [
-        {
-          type: "tuple",
-          components: [
-            { type: "address", name: "token0" },
-            { type: "address", name: "token1" },
-            { type: "bytes32", name: "salt" },
-          ],
-        },
-        { type: "bool" },
-        { type: "int256" },
-      ],
-      [
-        { token0: action.token0, token1: action.token1, salt: action.salt },
-        action.swap0To1,
-        amountIn, // positive = exact input
-      ],
-    ),
-  );
-  return {
-    to,
-    data,
-    decode: decodeUint256,
-    toSauce: asUint256("call", to, data),
-    // selector(4) + DexKey(3*32) + bool(32) = 132
-    toSauceDynamic: makeDynamic("call", to, data, 132, OUT_UINT256, firstWord),
   };
 }

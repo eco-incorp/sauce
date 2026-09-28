@@ -1,6 +1,6 @@
 /**
- * The JSON shape of every action — one table that both the strict parser (`program.ts`) and the
- * published JSON Schema (`schema.ts`) are generated from, so the two cannot disagree.
+ * The JSON shape of every action — one table that the strict parser (`program.ts`), the published
+ * JSON Schema (`schema.ts`) and the guide's reference are all generated from, so none can disagree.
  *
  * ENCODING. JSON has no integer wider than 2^53, so every amount, price and any other value that can
  * exceed it is a base-10 string (`"1000000000000000000"`): digits only, no sign, no exponent, no
@@ -8,12 +8,14 @@
  * EIP-55 checksum), byte strings are `0x` + an even number of hex digits, and small enumerations —
  * fee tiers, indices, domain ids, deadlines in seconds — are JSON integers.
  */
-import type { RoutingActionType } from "./types.js";
+import type { ActionType } from "./types.js";
 
 export type FieldKind =
   | { readonly k: "address" }
-  /** An address, or `"self"` for the executing account. */
+  /** An address, or `"self"` for the executing Pot. */
   | { readonly k: "recipient" }
+  /** An address, or a 32-byte account on a non-EVM destination. */
+  | { readonly k: "remoteRecipient" }
   /** A base-10 string holding an unsigned integer of at most `bits` bits. */
   | { readonly k: "uint"; readonly bits: number }
   | { readonly k: "bytes" }
@@ -40,34 +42,31 @@ export type Fields = Readonly<Record<string, FieldDef>>;
  * What an action's output is — the value an implicitly chained next action, or an `amountRef`,
  * spends.
  *
- * - `realized`: what the action actually produced (a swap's received amount, an Aave withdrawal).
- * - `passThrough`: the action's own input amount, unchanged.
- * - `none`: no output in this transaction (Integral's delayed order).
+ * - `realized`: what the action delivered to the Pot (a swap's received amount, a staking token,
+ *   an Aave withdrawal).
+ * - `passThrough`: the action's own amount, unchanged.
  * - `value`: a source action's value (a balance, a runtime argument).
  */
-export type OutputKind = "realized" | "passThrough" | "none" | "value";
+export type OutputKind = "realized" | "passThrough" | "value";
 
 export type ActionGroup = "swap" | "bridge" | "wrap" | "stake" | "lending" | "token" | "source";
 
 export interface ActionSpec {
-  readonly type: RoutingActionType;
+  readonly type: ActionType;
   readonly group: ActionGroup;
   /** One sentence for the reference: what the action does. */
   readonly summary: string;
   /** The contract function it calls, as documentation. */
   readonly calls: string;
-  /** `"srcChainId"` for a bridge, whose `chainId` would be ambiguous. */
-  readonly chainField: "chainId" | "srcChainId";
-  /** The field holding the action's own amount; absent when it has none or it is always explicit. */
-  readonly amountField?: string;
-  /** Whether `amountRef` is accepted. */
-  readonly chainable: boolean;
+  /**
+   * Whether the action takes `amount`/`amountRef`, and so spends the previous action's output when
+   * both are absent. False for a source, and for an action whose amounts are its own fields.
+   */
+  readonly spends: boolean;
   readonly output: OutputKind;
   /** Native value the call attaches, for the reference. */
   readonly value?: string;
-  /** Exactly one of these two fields must be present. */
-  readonly exactlyOne?: readonly [string, string];
-  /** Everything but `type`, the chain field, the amount field and the chaining fields. */
+  /** Everything but `type`, `amount`, `amountRef` and `saveOutputAs`. */
   readonly fields: Fields;
 }
 
@@ -75,6 +74,7 @@ export interface ActionSpec {
 
 const address = { k: "address" } as const;
 const recipient = { k: "recipient" } as const;
+const remoteRecipient = { k: "remoteRecipient" } as const;
 const uint256 = { k: "uint", bits: 256 } as const;
 const uint128 = { k: "uint", bits: 128 } as const;
 const uint160 = { k: "uint", bits: 160 } as const;
@@ -89,69 +89,29 @@ const seconds = uintN(53);
 const f = (kind: FieldKind, doc: string): FieldDef => ({ kind, doc });
 const opt = (kind: FieldKind, doc: string): FieldDef => ({ kind, doc, optional: true });
 
-const RECIPIENT_DOC =
-  'receives the output when it is not chained; `"self"` keeps it in the executing account';
-const MIN_OUT = "minimum output; the venue reverts below it";
+const RECIPIENT = f(
+  recipient,
+  'receives the output when no later action spends it; `"self"` keeps it in the Pot',
+);
+const MIN_OUT = f(uint256, "the least output accepted; the venue reverts below it");
+const DEADLINE = f(seconds, "Unix seconds after which the venue reverts");
 
 // ---- the table ------------------------------------------------------------------------------
 
-const swap = (
-  type: RoutingActionType,
-  summary: string,
-  calls: string,
-  fields: Fields,
-  extra: Partial<ActionSpec> = {},
-): ActionSpec => ({
-  type,
-  group: "swap",
-  summary,
-  calls,
-  chainField: "chainId",
-  amountField: "amountIn",
-  chainable: true,
-  output: "realized",
-  fields,
-  ...extra,
-});
+type Extra = Partial<Pick<ActionSpec, "spends" | "output" | "value">>;
 
-const simple = (
-  type: RoutingActionType,
-  group: ActionGroup,
-  summary: string,
-  calls: string,
-  fields: Fields,
-  extra: Partial<ActionSpec> = {},
-): ActionSpec => ({
-  type,
-  group,
-  summary,
-  calls,
-  chainField: "chainId",
-  amountField: "amount",
-  chainable: true,
-  output: "passThrough",
-  fields,
-  ...extra,
-});
+const spec =
+  (group: ActionGroup, defaults: Pick<ActionSpec, "output">) =>
+  (type: ActionType, summary: string, calls: string, fields: Fields, extra: Extra = {}) =>
+    ({ type, group, summary, calls, spends: true, ...defaults, fields, ...extra }) as ActionSpec;
 
-const bridge = (
-  type: RoutingActionType,
-  summary: string,
-  calls: string,
-  fields: Fields,
-  extra: Partial<ActionSpec> = {},
-): ActionSpec => ({
-  type,
-  group: "bridge",
-  summary,
-  calls,
-  chainField: "srcChainId",
-  amountField: "amount",
-  chainable: true,
-  output: "passThrough",
-  fields: { destChainId: f(uintN(53), "the destination chain id"), ...fields },
-  ...extra,
-});
+const swap = spec("swap", { output: "realized" });
+const bridge = spec("bridge", { output: "passThrough" });
+const wrap = spec("wrap", { output: "realized" });
+const stake = spec("stake", { output: "realized" });
+const lending = spec("lending", { output: "passThrough" });
+const token = spec("token", { output: "passThrough" });
+const source = spec("source", { output: "value" });
 
 const SPECS: readonly ActionSpec[] = [
   // -- swaps ----------------------------------------------------------------------------------
@@ -167,29 +127,26 @@ const SPECS: readonly ActionSpec[] = [
         { k: "enum", values: [100, 500, 3000, 10000] },
         "the pool's fee tier, in hundredths of a bip",
       ),
-      amountOutMin: opt(uint256, `${MIN_OUT}; set this or \`sqrtPriceLimitX96\``),
-      sqrtPriceLimitX96: opt(uint160, "a price limit instead of a minimum output"),
-      recipient: f(recipient, RECIPIENT_DOC),
-      deadline: f(seconds, "unused by SwapRouter02, which takes no deadline; kept for the record"),
+      amountOutMin: MIN_OUT,
+      sqrtPriceLimitX96: opt(uint160, "a price limit; absent or 0 for none"),
+      recipient: RECIPIENT,
     },
-    { exactlyOne: ["amountOutMin", "sqrtPriceLimitX96"] },
   ),
   swap(
     "uniswapV3ExactInputMultiHop",
-    "Swaps an exact input along an encoded Uniswap V3 path.",
+    "Swaps an exact input along a packed Uniswap V3 path.",
     "SwapRouter02.exactInput",
     {
       router: f(address, "the SwapRouter02"),
       path: f(bytes, "the packed path: token ++ fee (3 bytes) ++ token ++ …"),
-      amountOutMin: f(uint256, MIN_OUT),
-      recipient: f(recipient, RECIPIENT_DOC),
-      deadline: f(seconds, "unused by SwapRouter02; kept for the record"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
     },
   ),
   swap(
     "uniswapV4ExactInput",
-    "Swaps an exact input through one Uniswap V4 pool via the Universal Router.",
-    "IERC20.transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take)",
+    "Swaps an exact ERC-20 input through one Uniswap V4 pool via the Universal Router.",
+    "an ERC-20 transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take)",
     {
       router: f(address, "the Universal Router"),
       poolKey: f(
@@ -206,14 +163,14 @@ const SPECS: readonly ActionSpec[] = [
         "the V4 pool key",
       ),
       zeroForOne: f(bool, "true sells currency0 for currency1"),
-      amountOutMin: f(uint128, MIN_OUT),
-      recipient: f(recipient, RECIPIENT_DOC),
+      amountOutMin: f(uint128, "the least output accepted; the router reverts below it"),
+      recipient: RECIPIENT,
     },
   ),
   swap(
     "uniswapV4ExactInputMultiHop",
-    "Swaps an exact input along a Uniswap V4 path via the Universal Router.",
-    "IERC20.transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take)",
+    "Swaps an exact ERC-20 input along a Uniswap V4 path via the Universal Router.",
+    "an ERC-20 transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take)",
     {
       router: f(address, "the Universal Router"),
       currencyIn: f(address, "the currency sold"),
@@ -233,8 +190,8 @@ const SPECS: readonly ActionSpec[] = [
         },
         "the hops, in order; the last hop's currency is the output",
       ),
-      amountOutMin: f(uint128, MIN_OUT),
-      recipient: f(recipient, RECIPIENT_DOC),
+      amountOutMin: f(uint128, "the least output accepted; the router reverts below it"),
+      recipient: RECIPIENT,
     },
   ),
   swap(
@@ -243,12 +200,14 @@ const SPECS: readonly ActionSpec[] = [
     "pool.exchange(int128,int128,uint256,uint256)",
     {
       pool: f(address, "the Curve pool"),
-      tokenIn: f(address, "the token sold"),
       tokenOut: f(address, "the token bought, whose balance delta is the output"),
-      i: f(int(0, 7), "the pool index of the input coin"),
-      j: f(int(0, 7), "the pool index of the output coin"),
-      amountOutMin: f(uint256, MIN_OUT),
-      recipient: f(recipient, `${RECIPIENT_DOC}; the output is forwarded by a transfer`),
+      i: f(int(0, 7), "the pool index of the coin sold"),
+      j: f(int(0, 7), "the pool index of the coin bought"),
+      amountOutMin: MIN_OUT,
+      recipient: f(
+        recipient,
+        `${RECIPIENT.doc}; the pool pays the Pot, which forwards it with a transfer`,
+      ),
     },
   ),
   swap(
@@ -259,7 +218,7 @@ const SPECS: readonly ActionSpec[] = [
       router: f(address, "the Curve RouterNG"),
       route: f(
         { k: "array", of: address, min: 1, max: 11 },
-        "the route, padded to 11 with zero addresses",
+        "the route; padded to 11 with zero addresses",
       ),
       swapParams: f(
         {
@@ -268,11 +227,14 @@ const SPECS: readonly ActionSpec[] = [
           max: 5,
           of: { k: "tuple", of: [int(0, 255), int(0, 255), int(0, 255), int(0, 255), int(0, 255)] },
         },
-        "per hop: [i, j, swap_type, pool_type, n_coins], padded to 5 rows",
+        "per hop: [i, j, swap_type, pool_type, n_coins]; padded to 5 rows",
       ),
-      amountOutMin: f(uint256, MIN_OUT),
-      pools: f({ k: "array", of: address, max: 5 }, "zap pools where a hop needs one, padded to 5"),
-      recipient: f(recipient, RECIPIENT_DOC),
+      pools: f(
+        { k: "array", of: address, max: 5 },
+        "a zap pool where a hop needs one; padded to 5",
+      ),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
     },
   ),
   swap("balancerV2Swap", "Swaps through one Balancer V2 pool.", "Vault.swap", {
@@ -280,13 +242,13 @@ const SPECS: readonly ActionSpec[] = [
     poolId: f(bytes32, "the pool id"),
     tokenIn: f(address, "the token sold"),
     tokenOut: f(address, "the token bought"),
-    amountOutMin: f(uint256, MIN_OUT),
-    recipient: f(recipient, RECIPIENT_DOC),
-    deadline: f(seconds, "Unix seconds after which the Vault reverts"),
+    amountOutMin: MIN_OUT,
+    recipient: RECIPIENT,
+    deadline: DEADLINE,
   }),
   swap(
     "balancerV2BatchSwap",
-    "Swaps along a Balancer V2 multi-pool batch; the output is a balance delta.",
+    "Swaps along Balancer V2 pools in one batch; the output is a balance delta.",
     "Vault.batchSwap",
     {
       vault: f(address, "the Balancer V2 Vault"),
@@ -307,23 +269,24 @@ const SPECS: readonly ActionSpec[] = [
         "the batch's steps; the last step's output asset is the output",
       ),
       assets: f({ k: "array", of: address, min: 2 }, "every asset the steps index"),
-      amountOutMin: f(uint256, MIN_OUT),
-      recipient: f(recipient, RECIPIENT_DOC),
-      deadline: f(seconds, "Unix seconds after which the Vault reverts"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
+      deadline: DEADLINE,
     },
-    { amountField: undefined, chainable: false },
+    { spends: false },
   ),
   swap(
     "balancerV3Swap",
-    "Swaps an exact input through one Balancer V3 pool; the router pays the executing account.",
+    "Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls " +
+      "through Permit2.",
     "Router.swapSingleTokenExactIn",
     {
       router: f(address, "the Balancer V3 Router"),
       pool: f(address, "the pool"),
       tokenIn: f(address, "the token sold"),
       tokenOut: f(address, "the token bought"),
-      amountOutMin: f(uint256, MIN_OUT),
-      deadline: f(seconds, "Unix seconds after which the router reverts"),
+      amountOutMin: MIN_OUT,
+      deadline: DEADLINE,
       wethIsEth: f(bool, "true to pay or receive native ETH for WETH"),
     },
   ),
@@ -333,15 +296,15 @@ const SPECS: readonly ActionSpec[] = [
     "UniswapV2Router.swapExactTokensForTokens",
     {
       router: f(address, "the V2 router"),
-      amountOutMin: f(uint256, MIN_OUT),
       path: f({ k: "array", of: address, min: 2 }, "the token path; the last token is the output"),
-      recipient: f(recipient, RECIPIENT_DOC),
-      deadline: f(seconds, "Unix seconds after which the router reverts"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
+      deadline: DEADLINE,
     },
   ),
   swap(
     "ambientSwap",
-    "Swaps through an Ambient (CrocSwap) pool; the output is a balance delta.",
+    "Swaps through an Ambient (CrocSwap) pool; the dex pays the Pot, and the output is a balance delta.",
     "CrocSwapDex.userCmd(1, abi.encode(...))",
     {
       dex: f(address, "the CrocSwapDex"),
@@ -352,22 +315,22 @@ const SPECS: readonly ActionSpec[] = [
       inBaseQty: f(bool, "true when the amount is denominated in the base token"),
       tip: f(uintN(16), "0 accepts the pool's default fee"),
       limitPrice: f(uint128, "the worst acceptable price, as a Q64.64 square-root price"),
-      minOut: f(uint128, MIN_OUT),
+      amountOutMin: f(uint128, "the least output accepted; the dex reverts below it"),
       reserveFlags: f(uintN(8), "0x1 settles base from surplus, 0x2 quote"),
     },
   ),
   swap(
     "dodoSwap",
-    "Swaps through DODO pairs via the DODO proxy.",
+    "Swaps through DODO pairs via the DODO proxy, which pays the Pot.",
     "DODOProxy.dodoSwapV2TokenToToken (or dodoSwapV1)",
     {
       proxy: f(address, "the DODO proxy; approvals go to DODOApprove, not to it"),
       fromToken: f(address, "the token sold"),
       toToken: f(address, "the token bought"),
-      amountOutMin: f(uint256, MIN_OUT),
-      dodoPairs: f({ k: "array", of: address, min: 1 }, "the pairs to route through"),
+      pairs: f({ k: "array", of: address, min: 1 }, "the pairs to route through"),
       directions: f(uintN(53), "a bit per pair: 0 sells base, 1 sells quote"),
-      deadline: f(seconds, "Unix seconds after which the proxy reverts"),
+      amountOutMin: MIN_OUT,
+      deadline: DEADLINE,
       version: opt(
         { k: "enum", values: ["v1", "v2"] },
         '"v1" routes legacy Classical pairs through `dodoSwapV1`; default "v2"',
@@ -382,24 +345,24 @@ const SPECS: readonly ActionSpec[] = [
       router: f(address, "the Maverick V2 router"),
       pool: f(address, "the pool"),
       tokenAIn: f(bool, "true sells the pool's token A"),
-      amountOutMin: f(uint256, MIN_OUT),
-      recipient: f(recipient, RECIPIENT_DOC),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
     },
   ),
   swap(
     "maverickMultiHopSwap",
-    "Swaps an exact input along an encoded Maverick V2 path.",
+    "Swaps an exact input along a packed Maverick V2 path.",
     "MaverickV2Router.exactInputMultiHop",
     {
       router: f(address, "the Maverick V2 router"),
-      path: f(bytes, "the encoded path of pools and directions"),
-      amountOutMin: f(uint256, MIN_OUT),
-      recipient: f(recipient, RECIPIENT_DOC),
+      path: f(bytes, "per hop, the pool's 20 bytes then one byte: 1 sells token A, 0 token B"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
     },
   ),
   swap(
     "carbonSwap",
-    "Trades against Carbon strategies by source amount; the controller pays the executing account.",
+    "Trades against Carbon strategies by source amount; the controller pays the Pot.",
     "CarbonController.tradeBySourceAmount",
     {
       controller: f(address, "the CarbonController"),
@@ -413,15 +376,16 @@ const SPECS: readonly ActionSpec[] = [
             k: "object",
             fields: {
               strategyId: f(uint256, "the strategy"),
-              amount: f(uint128, "source amount for it"),
+              amount: f(uint128, "the source amount traded against it"),
             },
           },
         },
-        "per-strategy source amounts; these, not `amountIn`, are traded",
+        "the source amount per strategy; together they are the trade",
       ),
-      amountOutMin: f(uint128, MIN_OUT),
-      deadline: f(seconds, "Unix seconds after which the controller reverts"),
+      amountOutMin: f(uint128, "the least output accepted; the controller reverts below it"),
+      deadline: DEADLINE,
     },
+    { spends: false },
   ),
   swap(
     "fraxswapSwap",
@@ -429,242 +393,197 @@ const SPECS: readonly ActionSpec[] = [
     "FraxswapRouter.swapExactTokensForTokens",
     {
       router: f(address, "the Fraxswap router"),
-      amountOutMin: f(uint256, MIN_OUT),
       path: f({ k: "array", of: address, min: 2 }, "the token path; the last token is the output"),
-      recipient: f(recipient, RECIPIENT_DOC),
-      deadline: f(seconds, "Unix seconds after which the router reverts"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
+      deadline: DEADLINE,
     },
   ),
   swap(
-    "clipperSwap",
-    "Sells tokens already transferred to a Clipper exchange, against a signed quote.",
-    "ClipperExchange.sellTokenForToken",
+    "fluidDexT1Swap",
+    "Swaps an exact ERC-20 input through a Fluid DEX T1 pool.",
+    "FluidDexT1.swapIn",
     {
-      exchange: f(address, "the Clipper exchange"),
-      inputToken: f(address, "the token sold"),
-      outputToken: f(address, "the token bought"),
-      amountOutMin: f(uint256, MIN_OUT),
-      recipient: f(recipient, RECIPIENT_DOC),
-      auxiliaryData: f(bytes, "Clipper's signed quote, from its API"),
-    },
-  ),
-  swap(
-    "integralSwap",
-    "Places an Integral SIZE sell order, which executes in a later transaction.",
-    "TwapDelay.sell",
-    {
-      delay: f(address, "the TwapDelay"),
-      tokenIn: f(address, "the token sold"),
-      tokenOut: f(address, "the token bought"),
-      amountOutMin: f(uint256, MIN_OUT),
-      wrapUnwrap: f(bool, "true to wrap or unwrap native ETH"),
-      recipient: f(recipient, "receives the output when the order executes"),
-      gasLimit: f(uint256, "the gas the keeper may spend executing the order"),
-      submitDeadline: f(uintN(32), "Unix seconds by which the order must be submitted"),
-    },
-    { output: "none" },
-  ),
-  swap("fluidDexT1Swap", "Swaps an exact input through a Fluid DEX T1 pool.", "FluidDexT1.swapIn", {
-    pool: f(address, "the pool"),
-    swap0to1: f(bool, "true sells token0"),
-    amountOutMin: f(uint256, MIN_OUT),
-    recipient: f(recipient, RECIPIENT_DOC),
-  }),
-  swap(
-    "fluidDexLiteSwap",
-    "Swaps an exact input through the Fluid DEX Lite singleton; the output is a balance delta.",
-    "FluidDexLite.swapSingle",
-    {
-      dex: f(address, "the Fluid DEX Lite singleton"),
-      token0: f(address, "the pool's lower token"),
-      token1: f(address, "the pool's higher token"),
-      salt: f(bytes32, "the pool's salt, from the DexLite resolver"),
-      swap0To1: f(bool, "true sells token0"),
-      amountOutMin: f(uint256, MIN_OUT),
-      recipient: f(recipient, RECIPIENT_DOC),
+      pool: f(address, "the pool"),
+      swap0to1: f(bool, "true sells token0"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
     },
   ),
 
   // -- bridges --------------------------------------------------------------------------------
   bridge(
     "acrossBridge",
-    "Deposits into an Across V3 SpokePool for the same token on the destination.",
+    "Deposits into an Across SpokePool for the same token on the destination, less the relayer fee.",
     "SpokePool.depositV3",
     {
-      spokePool: f(address, "the origin SpokePool"),
+      spokePool: f(address, "the origin SpokePool; it pulls the token, so approve it first"),
       token: f(address, "the token bridged (input and output)"),
-      relayerFeePct: f(uint256, "recorded for the quote; the deposit sets input = output amount"),
-      quoteTimestamp: f(uintN(32), "the quote's timestamp"),
+      destChainId: f(int(1, Number.MAX_SAFE_INTEGER), "the destination chain id"),
+      recipient: f(address, "receives on the destination"),
+      relayerFee: f(uint256, "kept by the relayer: the destination receives `amount - relayerFee`"),
+      quoteTimestamp: f(uintN(32), "the timestamp the fee was quoted at"),
       fillDeadline: f(uintN(32), "Unix seconds by which a relayer must fill"),
-      exclusivityDeadline: f(uintN(32), "Unix seconds of relayer exclusivity (0 for none)"),
-      message: f(bytes, "the message delivered with the fill; 0x for none"),
+      exclusivityDeadline: f(uintN(32), "Unix seconds of relayer exclusivity; 0 for none"),
+      message: f(bytes, "delivered with the fill; 0x for none"),
     },
   ),
   bridge(
     "stargateBridge",
-    "Bridges through the Stargate V1 router, paying the LayerZero fee as value.",
-    "StargateRouter.swap",
+    "Sends through a Stargate V2 ERC-20 pool (taxi), paying the LayerZero fee it quotes.",
+    "StargatePool.quoteSend, then StargatePool.send",
     {
-      router: f(address, "the Stargate V1 router"),
-      token: f(address, "the token bridged"),
-      srcPoolId: f(uintN(53), "the source pool id"),
-      dstPoolId: f(uintN(53), "the destination pool id"),
-      amountOutMin: f(uint256, "minimum received on the destination"),
-      lzFee: f(uint256, "the LayerZero fee, attached as native value"),
+      pool: f(address, "the StargatePool; it pulls the token, so approve it first"),
+      dstEid: f(uintN(32), "the destination's LayerZero endpoint id"),
+      recipient: f(remoteRecipient, "receives on the destination"),
+      amountOutMin: f(uint256, "the least the destination may receive"),
     },
-    { value: "lzFee" },
+    { value: "the quoted native fee, from the Pot" },
   ),
   bridge(
     "cctpBridge",
-    "Burns USDC through Circle's CCTP V1 TokenMessenger for minting on the destination.",
-    "TokenMessenger.depositForBurn",
+    "Burns USDC through Circle's CCTP V2 TokenMessenger for minting on the destination.",
+    "TokenMessengerV2.depositForBurn",
     {
-      tokenMessenger: f(address, "the CCTP V1 TokenMessenger"),
+      tokenMessenger: f(
+        address,
+        "the CCTP V2 TokenMessenger; it pulls the token, so approve it first",
+      ),
       token: f(address, "the burned token (USDC)"),
-      srcDomain: f(uintN(32), "the source CCTP domain (recorded, not sent)"),
-      destDomain: f(uintN(32), "the destination CCTP domain"),
-      mintRecipient: f(bytes32, "the destination recipient, left-padded to 32 bytes"),
+      destinationDomain: f(uintN(32), "the destination's CCTP domain"),
+      recipient: f(remoteRecipient, "receives the mint on the destination"),
+      maxFee: opt(uint256, 'the most the transfer may pay in fees, from the amount; default "0"'),
+      minFinalityThreshold: opt(
+        uintN(32),
+        "2000 waits for finality (standard, the default); 1000 is fast",
+      ),
     },
   ),
   bridge(
     "hyperlaneBridge",
-    "Dispatches a Hyperlane message, paying interchain gas as value.",
-    "Mailbox.dispatch(uint32,bytes32,bytes)",
+    "Transfers through a Hyperlane ERC-20 warp route, paying the interchain gas it quotes.",
+    "TokenRouter.quoteGasPayment, then TokenRouter.transferRemote",
     {
-      router: f(address, "the contract `dispatch` is called on"),
-      token: f(address, "sent as the message recipient, padded to 32 bytes"),
-      destinationDomain: f(uintN(32), "the Hyperlane destination domain"),
-      gasPayment: f(uint256, "interchain gas, attached as native value"),
+      router: f(address, "the warp route; it pulls the amount plus any fee it charges"),
+      destinationDomain: f(uintN(32), "the destination's Hyperlane domain"),
+      recipient: f(remoteRecipient, "receives on the destination"),
     },
-    { value: "gasPayment" },
+    { value: "the quoted gas payment, from the Pot" },
   ),
 
-  // -- wrap / unwrap --------------------------------------------------------------------------
-  simple(
+  // -- wrapping -------------------------------------------------------------------------------
+  wrap(
     "wrapETH",
-    "wrap",
     "Wraps native ETH into WETH.",
     "WETH.deposit",
     { weth: f(address, "the WETH contract") },
-    { value: "amount" },
+    { output: "passThrough", value: "amount" },
   ),
-  simple("unwrapETH", "wrap", "Unwraps WETH into native ETH.", "WETH.withdraw", {
-    weth: f(address, "the WETH contract"),
+  wrap(
+    "unwrapETH",
+    "Unwraps WETH into native ETH.",
+    "WETH.withdraw",
+    { weth: f(address, "the WETH contract") },
+    { output: "passThrough" },
+  ),
+  wrap("wrapStETH", "Wraps stETH into wstETH; the output is the wstETH minted.", "wstETH.wrap", {
+    wstETH: f(address, "the wstETH contract; it pulls the stETH, so approve it first"),
   }),
-  simple(
-    "wrapStETH",
-    "wrap",
-    "Wraps stETH into wstETH.",
-    "wstETH.wrap",
-    { wstETH: f(address, "the wstETH contract") },
-    { amountField: "stETHAmount" },
-  ),
-  simple(
-    "unwrapStETH",
-    "wrap",
-    "Unwraps wstETH into stETH.",
-    "wstETH.unwrap",
-    { wstETH: f(address, "the wstETH contract") },
-    { amountField: "wstETHAmount" },
-  ),
+  wrap("unwrapStETH", "Unwraps wstETH; the output is the stETH returned.", "wstETH.unwrap", {
+    wstETH: f(address, "the wstETH contract"),
+  }),
 
   // -- staking --------------------------------------------------------------------------------
-  simple(
+  stake(
     "lidoStake",
-    "stake",
-    "Stakes native ETH with Lido for stETH.",
+    "Stakes native ETH with Lido; the output is the stETH received.",
     "stETH.submit",
     {
       stETH: f(address, "the stETH contract"),
-      referral: f(address, "the referral address, or zero"),
+      referral: opt(address, "Lido's referral; default the zero address"),
     },
     { value: "amount" },
   ),
-  simple(
+  stake(
     "lidoUnstake",
-    "stake",
-    "Requests a Lido withdrawal of stETH; the ETH is claimable later.",
-    "WithdrawalQueue.requestWithdrawals",
-    { withdrawalQueue: f(address, "Lido's WithdrawalQueueERC721") },
-    { amountField: "stETHAmount" },
+    "Requests a Lido withdrawal of stETH; the ETH is claimed later with the withdrawal NFT.",
+    "WithdrawalQueueERC721.requestWithdrawals",
+    {
+      withdrawalQueue: f(
+        address,
+        "Lido's withdrawal queue; it pulls the stETH, so approve it first",
+      ),
+      owner: f(recipient, 'receives the withdrawal NFT; `"self"` is the Pot'),
+    },
+    { output: "passThrough" },
   ),
-  simple(
+  stake(
     "rocketPoolStake",
-    "stake",
-    "Stakes native ETH with Rocket Pool for rETH.",
+    "Stakes native ETH with Rocket Pool; the output is the rETH received.",
     "RocketDepositPool.deposit",
-    { rETH: f(address, "the rETH token"), depositPool: f(address, "the Rocket deposit pool") },
+    {
+      depositPool: f(
+        address,
+        "the live RocketDepositPool, which upgrades move; read it from RocketStorage",
+      ),
+      rETH: f(address, "the rETH token, whose balance delta is the output"),
+    },
     { value: "amount" },
   ),
-  simple("rocketPoolUnstake", "stake", "Burns rETH for ETH.", "rETH.burn", {
+  stake("rocketPoolUnstake", "Burns rETH; the output is the ETH received.", "rETH.burn", {
     rETH: f(address, "the rETH token"),
   }),
-  simple(
+  stake(
     "etherFiStake",
-    "stake",
-    "Stakes native ETH with ether.fi for eETH.",
+    "Stakes native ETH with ether.fi; the output is the eETH received.",
     "LiquidityPool.deposit",
-    { liquidityPool: f(address, "the ether.fi LiquidityPool") },
+    {
+      liquidityPool: f(address, "the ether.fi LiquidityPool"),
+      eETH: f(address, "the eETH token, whose balance delta is the output"),
+    },
     { value: "amount" },
   ),
 
   // -- lending --------------------------------------------------------------------------------
-  simple("aaveV3Supply", "lending", "Supplies a token to Aave V3.", "Pool.supply", {
-    pool: f(address, "the Aave V3 Pool"),
+  lending("aaveV3Supply", "Supplies a token to Aave V3.", "Pool.supply", {
+    pool: f(address, "the Aave V3 Pool; it pulls the token, so approve it first"),
     token: f(address, "the asset supplied"),
-    onBehalfOf: f(recipient, 'credited with the position; `"self"` is the executing account'),
-    referralCode: f(uintN(16), "Aave's referral code, usually 0"),
+    onBehalfOf: f(recipient, 'credited with the position; `"self"` is the Pot'),
+    referralCode: opt(uintN(16), "Aave's referral code; default 0"),
   }),
-  simple(
+  lending(
     "aaveV3Withdraw",
-    "lending",
     "Withdraws a token from Aave V3; the output is the amount withdrawn.",
     "Pool.withdraw",
     {
       pool: f(address, "the Aave V3 Pool"),
       token: f(address, "the asset withdrawn"),
-      to: f(recipient, 'receives the asset; `"self"` is the executing account'),
+      recipient: f(recipient, 'receives the asset; `"self"` is the Pot'),
     },
     { output: "realized" },
   ),
-  simple(
+  lending(
     "aaveV3Borrow",
-    "lending",
-    "Borrows a token from Aave V3 at the variable rate.",
+    "Borrows a token from Aave V3 at the variable rate, the only rate it offers.",
     "Pool.borrow",
     {
       pool: f(address, "the Aave V3 Pool"),
       token: f(address, "the asset borrowed"),
-      interestRateMode: f(
-        { k: "enum", values: [2] },
-        "2 = variable rate, the only mode Aave V3 offers",
-      ),
-      onBehalfOf: f(
-        recipient,
-        'whose collateral backs the debt; `"self"` is the executing account',
-      ),
-      referralCode: f(uintN(16), "Aave's referral code, usually 0"),
+      onBehalfOf: f(recipient, 'whose collateral backs the debt; `"self"` is the Pot'),
+      referralCode: opt(uintN(16), "Aave's referral code; default 0"),
     },
   ),
-  simple("aaveV3Repay", "lending", "Repays an Aave V3 variable-rate debt.", "Pool.repay", {
-    pool: f(address, "the Aave V3 Pool"),
+  lending("aaveV3Repay", "Repays an Aave V3 variable-rate debt.", "Pool.repay", {
+    pool: f(address, "the Aave V3 Pool; it pulls the token, so approve it first"),
     token: f(address, "the asset repaid"),
-    interestRateMode: f({ k: "enum", values: [2] }, "2 = variable rate"),
-    onBehalfOf: f(recipient, 'whose debt is repaid; `"self"` is the executing account'),
+    onBehalfOf: f(recipient, 'whose debt is repaid; `"self"` is the Pot'),
   }),
-  simple(
-    "compoundV3Supply",
-    "lending",
-    "Supplies a token to a Compound V3 (Comet) market.",
-    "Comet.supply",
-    {
-      comet: f(address, "the Comet market"),
-      token: f(address, "the asset supplied"),
-    },
-  ),
-  simple(
+  lending("compoundV3Supply", "Supplies a token to a Compound V3 (Comet) market.", "Comet.supply", {
+    comet: f(address, "the Comet market; it pulls the token, so approve it first"),
+    token: f(address, "the asset supplied"),
+  }),
+  lending(
     "compoundV3Withdraw",
-    "lending",
     "Withdraws a token from a Compound V3 (Comet) market.",
     "Comet.withdraw",
     {
@@ -674,54 +593,54 @@ const SPECS: readonly ActionSpec[] = [
   ),
 
   // -- tokens ---------------------------------------------------------------------------------
-  simple("transfer", "token", "Transfers an ERC-20 token.", "ERC-20 transfer, decoding nothing", {
+  token("transfer", "Transfers an ERC-20 token.", "ERC-20 transfer, decoding nothing", {
     token: f(address, "the token"),
-    to: f(recipient, "the receiver"),
+    recipient: f(recipient, 'the receiver; `"self"` is the Pot'),
   }),
-  simple("approve", "token", "Approves an ERC-20 spender.", "ERC-20 approve, decoding nothing", {
+  token("approve", "Approves an ERC-20 spender.", "ERC-20 approve, decoding nothing", {
     token: f(address, "the token"),
     spender: f(address, "the spender"),
   }),
+  token(
+    "permit2Approve",
+    "Grants a spender a Permit2 allowance; the token must also be approved to Permit2.",
+    "Permit2.approve(address,address,uint160,uint48)",
+    {
+      permit2: f(address, "Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3)"),
+      token: f(address, "the token"),
+      spender: f(address, "the spender, such as Balancer V3's router"),
+      expiration: f(uintN(48), "Unix seconds after which the allowance lapses"),
+    },
+  ),
 
   // -- sources --------------------------------------------------------------------------------
-  {
-    type: "balanceOf",
-    group: "source",
-    summary: "Reads the executing account's balance of a token; the output is that balance.",
-    calls: "IERC20.balanceOf(self)",
-    chainField: "chainId",
-    chainable: false,
-    output: "value",
-    fields: { token: f(address, "the token") },
-  },
-  {
-    type: "nativeBalance",
-    group: "source",
-    summary: "Reads the executing account's native balance; the output is that balance.",
-    calls: "ctx.selfBalance()",
-    chainField: "chainId",
-    chainable: false,
-    output: "value",
-    fields: {},
-  },
-  {
-    type: "argument",
-    group: "source",
-    summary: "Declares a runtime entry argument; the output is the value supplied at execution.",
-    calls: "a `main` parameter",
-    chainField: "chainId",
-    chainable: false,
-    output: "value",
-    fields: {
-      name: f({ k: "identifier" }, "the parameter's name; arguments are encoded in order"),
-    },
-  },
+  source(
+    "balanceOf",
+    "Reads the Pot's balance of a token; the output is that balance.",
+    "IERC20.balanceOf(pot)",
+    { token: f(address, "the token") },
+    { spends: false },
+  ),
+  source(
+    "nativeBalance",
+    "Reads the Pot's native balance; the output is that balance.",
+    "ctx.selfBalance()",
+    {},
+    { spends: false },
+  ),
+  source(
+    "argument",
+    "Declares a runtime argument of the compiled program; the output is the value supplied.",
+    "a `main` parameter",
+    { name: f({ k: "identifier" }, "the argument's name; arguments are encoded in order") },
+    { spends: false },
+  ),
 ];
 
 /** Every action's specification, by `type`. */
-export const ACTION_SPECS: Readonly<Record<RoutingActionType, ActionSpec>> = Object.fromEntries(
-  SPECS.map((spec) => [spec.type, spec]),
-) as Record<RoutingActionType, ActionSpec>;
+export const ACTION_SPECS: Readonly<Record<ActionType, ActionSpec>> = Object.fromEntries(
+  SPECS.map((s) => [s.type, s]),
+) as Record<ActionType, ActionSpec>;
 
 /** Every action `type`, in reference order. */
-export const ACTION_TYPES: readonly RoutingActionType[] = SPECS.map((spec) => spec.type);
+export const ACTION_TYPES: readonly ActionType[] = SPECS.map((s) => s.type);
