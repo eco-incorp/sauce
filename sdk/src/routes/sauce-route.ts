@@ -193,7 +193,7 @@ export function compileSauceRoute(
   const sugar = rewriteIntentSugar(source, {
     source: chain,
     chains: chainAccessorNames(),
-    defines: compileTimeValues(chain, options),
+    definesFor: (destination) => compileTimeValues(destination, options),
     portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
     proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
     defaults: options.intents ?? {},

@@ -94,8 +94,16 @@ export interface IntentSugarContext {
   readonly source: CanonicalChain;
   /** Chain accessor name (`Base`) -> canonical chain. Only these names open an intent. */
   readonly chains: ReadonlyMap<string, CanonicalChain>;
-  /** Compile-time scalars in scope: chain defines, token symbols, caller defines. */
-  readonly defines: ReadonlyMap<string, bigint>;
+  /**
+   * Compile-time scalars in scope, PER CHAIN: the caller's own defines plus that chain's token
+   * symbols.
+   *
+   * Per chain because a symbol is not an address. `USDC` inside `Arbitrum(() => ...)` is Arbitrum's
+   * USDC, and resolving it against the enclosing program's chain would put a Base address in a
+   * route that executes on Arbitrum — most likely not a token at all, and a transfer to it is
+   * funds gone. The enclosing program's own names resolve against `source`.
+   */
+  readonly definesFor: (chain: CanonicalChain) => ReadonlyMap<string, bigint>;
   /** Resolves the Portal for a chain, and the prover for a pair. Throws with its own diagnostic. */
   readonly portalOf: (chain: CanonicalChain) => AddressInput;
   readonly proverFor: (source: CanonicalChain, destination: CanonicalChain) => AddressInput;
@@ -147,13 +155,16 @@ function literalOf(node: AstNode): bigint | undefined {
   return undefined;
 }
 
-function makeResolver(context: IntentSugarContext, outerLocals: ReadonlySet<string>): Resolver {
+function makeResolver(
+  defines: ReadonlyMap<string, bigint>,
+  outerLocals: ReadonlySet<string>,
+): Resolver {
   return (node, what) => {
     const direct = literalOf(node);
     if (direct !== undefined) return { literal: direct };
     if (node.type === "Identifier") {
       const name = (node as unknown as { name: string }).name;
-      const define = context.defines.get(name);
+      const define = defines.get(name);
       if (define !== undefined) return { literal: define };
       if (outerLocals.has(name)) return { capture: name };
       return fail(
@@ -184,7 +195,7 @@ interface LoweredCall {
 function lowerStatement(
   statement: AstNode,
   resolve: Resolver,
-  context: IntentSugarContext,
+  defines: ReadonlyMap<string, bigint>,
 ): LoweredCall {
   if (statement.type !== "ExpressionStatement") {
     return fail(
@@ -223,7 +234,7 @@ function lowerStatement(
   let target: bigint;
   if (object.type === "Identifier") {
     const name = (object as unknown as { name: string }).name;
-    const address = context.defines.get(name);
+    const address = defines.get(name);
     if (address === undefined) {
       return fail(
         `'${name}' is not a token this chain registers. Use a registered symbol, or ` +
@@ -408,7 +419,6 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
   // program's locals are what this set is -- deliberately whole-program rather than scope-accurate,
   // matching `token-rewrite.ts`'s posture, because SauceScript shares scope across blocks anyway.
   const outerLocals = collectDeclaredNames(program);
-  const resolve = makeResolver(context, outerLocals);
 
   const intents: LoweredIntent[] = [];
   const replacements: { start: number; end: number; text: string }[] = [];
@@ -429,8 +439,13 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       return captureSentinel(at);
     };
 
+    // Resolved against the DESTINATION's registry: `USDC` in this closure is the destination's
+    // USDC, because that is the chain the calls run on.
+    const defines = context.definesFor(site.chain);
+    const resolve = makeResolver(defines, outerLocals);
+
     const calls = site.body.map((statement) => {
-      const lowered = lowerStatement(statement, resolve, context);
+      const lowered = lowerStatement(statement, resolve, defines);
       return {
         target: addressHex(lowered.target),
         // Encoded by viem against the ERC-20 ABI, so the selector and the word layout are the

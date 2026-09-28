@@ -36,13 +36,15 @@ Chain references accept canonical slugs, names/aliases supported by the registry
 | ----------------------------------------------- | ------------------------------------------------------------------------------ |
 | `execution`                                     | EVM `{ pot, engine, value? }`; an SVM route call is not executable (see below) |
 | `pot`, `engine`                                 | EVM shorthand instead of `execution`; both are required together               |
-| `portal`, `deadline`                            | Required destination Portal and absolute route deadline                        |
+| `deadline`                                      | Absolute route deadline. Required                                              |
+| `portal`                                        | Destination Portal. Defaults to the eco-routes deployment for that chain       |
+| `ecoRoutes`                                     | Which eco-routes deployment to address: `generation` and `environment`         |
 | `salt`                                          | Route salt; defaults to 32 zero bytes                                          |
 | `tokens`, `nativeAmount`                        | Solver-delivered destination assets                                            |
 | `precalls`                                      | Calls before the compiled program and nested calls                             |
 | `tokenDefines`                                  | Token-symbol address overrides                                                 |
 | `defines`, `compile`                            | Program specialization and compile options                                     |
-| `sourcePortal`                                  | Default source Portal for submission/read requests                             |
+| `sourcePortal`                                  | Source Portal for submission/read requests; same default as `portal`           |
 | `source`, `creator`, `prover`, `rewardDeadline` | Fallback fields for `.reward(...)`                                             |
 
 The EVM shorthand sends zero `cook` value and only works with a fee-free Kitchen when the program needs no native input. For released deployments, use `execution: { pot, engine, value }` with the current Kitchen fee plus any native assets the program spends, and budget `nativeAmount` for all route call values. The direct route's Pot owner must equal the destination `Portal.executor()`. See [deployment and fee setup](../guides/intents.md#prepare-the-destination-pot).
@@ -123,6 +125,15 @@ statements and merged program the builder generates. Underneath are `splitByPlac
 `renderTemplate` and `emitTemplate` — byte-templating primitives that work against any encoding whose
 fields sit at fixed offsets, not only intents.
 
-`PORTAL_CONTRACTS` is the Portal ABI as a compiler binding. Every route compile carries it, so a
-hand-written program can call `IPortal.at(portal).publishAndFund(...)` with no import and no setup;
-it is the base layer, so a caller's own `IPortal` binding replaces it.
+A program can also create an intent itself, with `Chain(() => { ... }).reward({ ... })` written in
+its body — see [create an intent](../guides/intents.md#create-an-intent-from-inside-a-program).
+`SauceCompileOptions.intents` carries what that lowering cannot look up (a deadline, a creator) and
+what overrides it: `sourcePortal`, `destinationPortal`, `prover`, `salt`, `allowPartial`, and the
+eco-routes `generation`/`environment`. Through `Base(...)` those are inherited from the enclosing
+intent, so the common case sets none of them.
+
+Where eco-routes is deployed is a registry: `ecoRoutesPortal(chain)`, `ecoRoutesProver(source,
+destination)`, `ecoRoutesDeployment(chain)` and `ecoRoutesGenerations()` from
+`@eco-incorp/sauce/protocols/eco-routes`. Both generations ship — `v3`'s single Portal and `v2`'s
+separate `IntentSource`/`Inbox` — in production and staging, vendored from
+`@eco-foundation/routes-ts` at a pinned version and digest.

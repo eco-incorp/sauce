@@ -30,10 +30,11 @@ const context = (overrides: Record<string, unknown> = {}) =>
       ["Arbitrum", ARBITRUM],
       ["Base", BASE],
     ]),
-    defines: new Map([
-      ["USDC", 0x7777777777777777777777777777777777777777n],
-      ["RECIPIENT", RECIPIENT],
-    ]),
+    definesFor: () =>
+      new Map([
+        ["USDC", 0x7777777777777777777777777777777777777777n],
+        ["RECIPIENT", RECIPIENT],
+      ]),
     portalOf: (chain: typeof BASE) => ecoRoutesPortal(chain),
     proverFor: (from: typeof BASE, to: typeof BASE) => ecoRoutesProver(from, to),
     defaults: { deadline: 4_000_000_000n, creator: CREATOR },
@@ -45,6 +46,31 @@ const program = (body: string) => `function main() {\n  const amount = 5n;\n${bo
 const TRANSFER_INTENT = program(`  Arbitrum(() => {
     USDC.transfer(RECIPIENT, amount);
   }).reward({ tokens: [{ token: USDC, amount }] });`);
+
+describe("a token symbol resolves against the chain the calls run on", () => {
+  it("uses the DESTINATION's registry, not the enclosing program's", () => {
+    const perChain = new Map([
+      [BASE.slug, 0x1111111111111111111111111111111111111111n],
+      [ARBITRUM.slug, 0x2222222222222222222222222222222222222222n],
+    ]);
+    const result = rewriteIntentSugar(
+      TRANSFER_INTENT,
+      context({
+        definesFor: (chain: typeof BASE) =>
+          new Map([
+            ["USDC", perChain.get(chain.slug)!],
+            ["RECIPIENT", RECIPIENT],
+          ]),
+      }),
+    );
+
+    // Arbitrum's USDC, because the transfer executes on Arbitrum. Resolving it against Base would
+    // put a Base address in an Arbitrum route -- most likely not a token at all.
+    expect(denormalizeToEvm(result.intents[0]!.intent.route.calls[0]!.target).toLowerCase()).toBe(
+      "0x2222222222222222222222222222222222222222",
+    );
+  });
+});
 
 describe("what the lowering produces", () => {
   it("captures the enclosing local once and splices it everywhere it appears", () => {
