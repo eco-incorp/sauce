@@ -9,6 +9,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+// Taken from the SDK's own devDependency rather than written out here, so this consumer typechecks
+// the shipped examples against the same typings the repo builds them with and a bump moves both.
+const TYPES_NODE_VERSION = JSON.parse(readFileSync(resolve(root, "sdk/package.json"), "utf8"))
+  .devDependencies["@types/node"];
 // The SVM engine binaries ship only when a `--fetch-v12-engines` sync has placed them (CI does; a
 // bare local checkout may not). Assert they resolve from the clean install when they are here, and
 // skip that check otherwise rather than failing a credential-less local run.
@@ -66,6 +70,14 @@ try {
       "--no-audit",
       "--no-fund",
       join(work, filename),
+      // Node typings, because the shipped examples are Node programs: `docs/examples`'s
+      // `cross-chain-intent.ts` reads its SauceScript sibling off disk, which is the property that
+      // keeps the README and the compiled file from drifting. A real consumer typechecking a Node
+      // example has these -- the package declares Node >= 24.
+      //
+      // This cannot weaken the check. `@types/node` ships no runtime code, so it cannot stand in
+      // for anything missing from the tarball; a broken bundle still fails here exactly as before.
+      `@types/node@${TYPES_NODE_VERSION}`,
     ],
     {
       cwd: work,
