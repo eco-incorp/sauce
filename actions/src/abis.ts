@@ -5,12 +5,11 @@
  * WHERE EACH ABI COMES FROM. The SDK's protocol registry (`sdk/src/protocols/<slug>/abis.ts`) is
  * used whenever it declares the exact function an action calls. "Exact" is checked, not assumed:
  * `sdk()` below looks the function up by its canonical signature and throws if the registry spells
- * it differently. That matters because several registry ABIs are curated approximations — Balancer
- * V2's `poolId` is a `uint256` there (the Vault takes `bytes32`), Curve's `exchange` indices are
- * `uint128` (pools take `int128`), and Uniswap V3's `fee` is a `uint32` (the router takes `uint24`)
- * — and each of those changes the selector, so a program built on them would call a function the
- * contract does not have. Where the registry has no exact match, the binding declares its fragment
- * here and says why next to it.
+ * it differently, because a different spelling is a different selector — a function the contract
+ * does not have. The registry's own suite (`sdk/test/registry-abi.test.ts`) pins each of its
+ * functions to the deployed contracts. Where the registry has no such function — the contract is
+ * not in it, or it declares another overload — the binding declares its fragment here and says why
+ * next to it.
  *
  * WHY OUTPUTS ARE DROPPED. A binding decodes every output its ABI declares, even one the program
  * never reads, and decoding from empty return data reverts. 3pool-era Curve pools return nothing
@@ -33,10 +32,11 @@ import {
   type Hex,
 } from "viem";
 
-import { AaveV3PoolABI, AcrossSpokePoolABI, CometABI, CrocSwapDexABI } from "./registry.js";
-import { DODOV2ProxyABI, ERC20ABI, LidoABI, LiquidityPoolABI } from "./registry.js";
-import { MaverickV2RouterABI, RETHABI, RocketDepositPoolABI } from "./registry.js";
-import { TokenMessengerABI, UniswapV2RouterABI, WstETHABI } from "./registry.js";
+import { AaveV3PoolABI, AcrossSpokePoolABI, BalancerV2VaultABI, CometABI } from "./registry.js";
+import { CrocSwapDexABI, CurveThreePoolABI, DODOV2ProxyABI, ERC20ABI } from "./registry.js";
+import { LidoABI, LiquidityPoolABI, MaverickV2RouterABI, Permit2ABI } from "./registry.js";
+import { RETHABI, RocketDepositPoolABI, TokenMessengerABI } from "./registry.js";
+import { UniswapV2RouterABI, UniswapV3SwapRouter02ABI, WstETHABI } from "./registry.js";
 
 /** A parsed ABI in the shape the compiler's `inlineContracts` and the SDK's `compile.contracts` take. */
 export interface ActionContract {
@@ -129,54 +129,62 @@ const CATALOG = {
     withdraw: local("function withdraw(uint256 wad)", `WETH9 is ${NOT_IN_REGISTRY}`),
     deposit: local("function deposit() payable", `WETH9 is ${NOT_IN_REGISTRY}`),
   }),
-  ISwapRouter02: () => {
-    const reason =
-      "the registry's uniswap-v3 router is the original SwapRouter (a `deadline` field and a " +
-      "`uint32` fee); these actions call SwapRouter02";
-    return {
-      exactInputSingle: local(
-        "function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
-        reason,
-      ),
-      exactInput: local(
-        "function exactInput((bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)",
-        reason,
-      ),
-    };
-  },
+  // Both return the amount they swapped out, which is the action's output.
+  ISwapRouter02: () => ({
+    exactInputSingle: sdk(
+      "uniswap-v3",
+      "UniswapV3SwapRouter02ABI",
+      UniswapV3SwapRouter02ABI,
+      "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))",
+      "keep",
+    ),
+    exactInput: sdk(
+      "uniswap-v3",
+      "UniswapV3SwapRouter02ABI",
+      UniswapV3SwapRouter02ABI,
+      "exactInput((bytes,address,uint256,uint256))",
+      "keep",
+    ),
+  }),
   IUniversalRouter: () => ({
     execute: local(
       "function execute(bytes commands, bytes[] inputs) payable",
       "the registry declares the three-argument `execute` with a deadline; these actions carry no " +
-        "deadline and call the two-argument overload",
+        "deadline and call the two-argument overload (0x24856bc3), which the registry still omits " +
+        "although every deployed Universal Router dispatches it",
     ),
   }),
   ICurvePool: () => ({
-    exchange: local(
-      "function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy)",
-      "the registry declares `uint128` indices (a different selector) and a `uint256` output that " +
-        "3pool-era pools do not return; the output is a balance delta",
+    // 3pool's `exchange` returns nothing, and a StableSwap-NG pool's `uint256` return is simply not
+    // decoded: this output-free spelling suits every 4-argument pool. The output is a balance delta.
+    exchange: sdk(
+      "curve",
+      "CurveThreePoolABI",
+      CurveThreePoolABI,
+      "exchange(int128,int128,uint256,uint256)",
+      "drop",
     ),
   }),
   ICurveRouterNG: () => ({
     exchange: local(
       "function exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _expected, address[5] _pools, address _receiver) returns (uint256)",
-      "the registry declares the five-argument overload, which has no receiver",
+      "the registry declares the five-argument overload, which has no receiver; it still omits the " +
+        "six-argument one (0xc872a3c5), which every deployed RouterNG dispatches",
     ),
   }),
-  IBalancerV2Vault: () => {
-    const reason = "the registry declares `poolId` as `uint256`; the Vault takes `bytes32`";
-    return {
-      swap: local(
-        "function swap((bytes32 poolId, uint8 kind, address assetIn, address assetOut, uint256 amount, bytes userData) singleSwap, (address sender, bool fromInternalBalance, address recipient, bool toInternalBalance) funds, uint256 limit, uint256 deadline) payable returns (uint256 amountCalculated)",
-        reason,
-      ),
-      batchSwap: local(
-        "function batchSwap(uint8 kind, (bytes32 poolId, uint256 assetInIndex, uint256 assetOutIndex, uint256 amount, bytes userData)[] swaps, address[] assets, (address sender, bool fromInternalBalance, address recipient, bool toInternalBalance) funds, int256[] limits, uint256 deadline) payable",
-        `${reason}; ${OUTPUT_UNREAD}`,
-      ),
-    };
-  },
+  IBalancerV2Vault: () => ({
+    swap: sdk(
+      "balancer-v2",
+      "BalancerV2VaultABI",
+      BalancerV2VaultABI,
+      "swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
+      "keep",
+    ),
+    batchSwap: local(
+      "function batchSwap(uint8 kind, (bytes32 poolId, uint256 assetInIndex, uint256 assetOutIndex, uint256 amount, bytes userData)[] swaps, address[] assets, (address sender, bool fromInternalBalance, address recipient, bool toInternalBalance) funds, int256[] limits, uint256 deadline) payable",
+      `the registry declares \`poolId\` as \`uint256\`; the Vault takes \`bytes32\`; ${OUTPUT_UNREAD}`,
+    ),
+  }),
   IBalancerV3Router: () => ({
     swapSingleTokenExactIn: local(
       "function swapSingleTokenExactIn(address pool, address tokenIn, address tokenOut, uint256 exactAmountIn, uint256 minAmountOut, uint256 deadline, bool wethIsEth, bytes userData) payable returns (uint256 amountOut)",
@@ -335,9 +343,12 @@ const CATALOG = {
     };
   },
   IPermit2: () => ({
-    approve: local(
-      "function approve(address token, address spender, uint160 amount, uint48 expiration)",
-      "the registry declares a `uint64` expiration, which changes the selector; Permit2 takes `uint48`",
+    approve: sdk(
+      "permit2",
+      "Permit2ABI",
+      Permit2ABI,
+      "approve(address,address,uint160,uint48)",
+      "drop",
     ),
   }),
 } satisfies Record<string, () => Record<string, BoundMethod>>;

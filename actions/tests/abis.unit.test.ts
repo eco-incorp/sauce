@@ -3,9 +3,20 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { toFunctionSelector, type AbiFunction } from "viem";
 
-import { BINDING_NAMES, bindingMethods, canonicalSignature, contractsFor } from "../src/abis.js";
+import {
+  BINDING_NAMES,
+  bindingMethods,
+  canonicalSignature,
+  contractsFor,
+  type BindingName,
+} from "../src/abis.js";
 import { CHAIN_KEY_SET, NAMESPACE_KEYS } from "../../sdk/dist/routes/accessor-index.js";
+import { CurveRouterNGABI } from "../../sdk/dist/protocols/curve/index.js";
+import { DODOV2ProxyABI } from "../../sdk/dist/protocols/dodo/index.js";
+import { MaverickV2RouterABI } from "../../sdk/dist/protocols/maverick/index.js";
+import { UniswapV4UniversalRouterABI } from "../../sdk/dist/protocols/uniswap-v4/index.js";
 
 describe("action ABI bindings", () => {
   it("every binding resolves — each SDK-registry method has exactly the signature the action calls", () => {
@@ -59,24 +70,44 @@ describe("action ABI bindings", () => {
         }
       }
     }
-    assert.equal(fromSdk, 19, "a registry-sourced method was added or dropped — update this count");
+    assert.equal(fromSdk, 24, "a registry-sourced method was added or dropped — update this count");
   });
 
-  it("where the registry's spelling changes a selector, the binding declares the deployed one", () => {
-    // Stargate V2's SendParam `to` is `bytes32` (the registry says `uint256`): selector 0xc7c7f5b3.
-    assert.equal(
-      canonicalSignature(bindingMethods("IStargatePool").send!.fn),
-      "send((uint32,bytes32,uint256,uint256,bytes,bytes,bytes),(uint256,uint256),address)",
-    );
-    // Permit2's expiration is `uint48` (the registry says `uint64`): selector 0x87517c45.
-    assert.equal(
-      canonicalSignature(bindingMethods("IPermit2").approve!.fn),
-      "approve(address,address,uint160,uint48)",
-    );
-    assert.equal(
-      canonicalSignature(bindingMethods("IBalancerV2Vault").swap!.fn),
-      "swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
-    );
+  it("the methods the registry declares with their deployed types come from it, selector unchanged", () => {
+    // Each was a local fragment while the registry spelled it differently — SwapRouter02 missing,
+    // Curve indices `uint128`, Balancer's `poolId` a `uint256`, Permit2's expiration a `uint64`.
+    // The selectors are the deployed ones, dispatched in `sdk/test/fixtures/registry-abi`.
+    const fromRegistry: [BindingName, string, string, string, string][] = [
+      ["ISwapRouter02", "exactInputSingle", "uniswap-v3", "UniswapV3SwapRouter02ABI", "0x04e45aaf"],
+      ["ISwapRouter02", "exactInput", "uniswap-v3", "UniswapV3SwapRouter02ABI", "0xb858183f"],
+      ["ICurvePool", "exchange", "curve", "CurveThreePoolABI", "0x3df02124"],
+      ["IBalancerV2Vault", "swap", "balancer-v2", "BalancerV2VaultABI", "0x52bbbe29"],
+      ["IPermit2", "approve", "permit2", "Permit2ABI", "0x87517c45"],
+    ];
+    for (const [binding, method, protocol, abiExport, selector] of fromRegistry) {
+      const bound = bindingMethods(binding)[method]!;
+      assert.deepEqual(bound.source, { kind: "sdk", protocol, abiExport }, `${binding}.${method}`);
+      assert.equal(toFunctionSelector(bound.fn), selector, `${binding}.${method}`);
+    }
+  });
+
+  it("a fragment is local only while the registry ABI for its contract lacks the function", () => {
+    // When one of these starts passing the check, the registry gained the function: bind it there.
+    const registryAbiFor: [BindingName, string, readonly unknown[]][] = [
+      ["IUniversalRouter", "execute", UniswapV4UniversalRouterABI],
+      ["ICurveRouterNG", "exchange", CurveRouterNGABI],
+      ["IDodoProxy", "dodoSwapV1", DODOV2ProxyABI],
+      ["IMaverickV2Router", "exactInputMultiHop", MaverickV2RouterABI],
+    ];
+    for (const [binding, method, abi] of registryAbiFor) {
+      const bound = bindingMethods(binding)[method]!;
+      assert.equal(bound.source.kind, "local", `${binding}.${method}`);
+      const signature = canonicalSignature(bound.fn);
+      const declared = (abi as AbiFunction[]).filter(
+        (item) => item.type === "function" && canonicalSignature(item) === signature,
+      );
+      assert.deepEqual(declared, [], `the registry now declares ${signature}`);
+    }
   });
 
   it("contractsFor is deterministic and names only what it was given", () => {
