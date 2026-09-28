@@ -593,14 +593,16 @@ const SPECS: readonly ActionSpec[] = [
   ),
 
   // -- tokens ---------------------------------------------------------------------------------
-  token("transfer", "Transfers an ERC-20 token.", "ERC-20 transfer, decoding nothing", {
+  token("transfer", "Transfers an ERC-20 token.", "ERC-20 transfer, checked like SafeERC20", {
     token: f(address, "the token"),
     recipient: f(recipient, 'the receiver; `"self"` is the Pot'),
   }),
-  token("approve", "Approves an ERC-20 spender.", "ERC-20 approve, decoding nothing", {
-    token: f(address, "the token"),
-    spender: f(address, "the spender"),
-  }),
+  token(
+    "approve",
+    "Approves an ERC-20 spender, resetting a non-zero allowance first.",
+    "ERC-20 approve, checked and reset like SafeERC20.forceApprove",
+    { token: f(address, "the token"), spender: f(address, "the spender") },
+  ),
   token(
     "permit2Approve",
     "Grants a spender a Permit2 allowance; the token must also be approved to Permit2.",

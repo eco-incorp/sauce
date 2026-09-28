@@ -4,10 +4,10 @@
  * encoding of the Solidity call the action is meant to make.
  *
  * This is the spec for the emitted calldata, and it needs no mainnet state: the recorders stand in
- * for the protocols (see `anvil.ts#recorderCode`), and every one returns two 32-byte words, which
- * covers each output a binding declares. View calls — balance reads and the bridge fee quotes — are
- * answered but not recorded (a view call is a STATICCALL, which cannot log), so a balance delta
- * shows only the call between its reads. The expected encodings below are written from the
+ * for the protocols (see `anvil.ts#recorderCode`): every write returns `true`, which covers each
+ * output a binding declares and the check an ERC-20 write makes. View calls — balance and allowance
+ * reads, the bridge fee quotes — are answered but not recorded (a view call is a STATICCALL, which
+ * cannot log), so a balance delta shows only the call between its reads. The expected encodings below are written from the
  * protocols' Solidity signatures, not from `abis.ts`, so a wrong fragment there fails here.
  *
  * It runs in `test:unit`; it skips locally without the engine artifact and fails in CI.
@@ -37,8 +37,10 @@ const RECORDERS = [T, A, B] as Address[];
 const AMOUNT = 1000n;
 const MIN = 1n;
 const DEADLINE = BigInt(D);
-/** What every recorder returns: 42, twice — a Stargate fee quote reads both words. */
-const WORD = pad("0x2a");
+/** What every recorded call returns: `true`, which an ERC-20 write requires. */
+const TRUE = pad("0x01");
+/** What a fee quote answers: 42 — twice for Stargate's (nativeFee, lzTokenFee). */
+const FEE = pad("0x2a");
 const MAX_INT256 = (1n << 255n) - 1n;
 
 const call = (abi: string, name: string, args: readonly unknown[]): Hex =>
@@ -463,19 +465,23 @@ const compiled = (action: Action): Uint8Array =>
 describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => {
   let env: Anvil;
 
-  before(async () => {
-    env = await startAnvil();
-    const silent = [
-      toFunctionSelector("balanceOf(address)"),
-      toFunctionSelector(`quoteSend(${SEND_PARAM},bool)`),
-      toFunctionSelector("quoteGasPayment(uint32)"),
-    ];
+  /** Recorders at every address the samples call, answering the fee quotes with 42. */
+  async function record(views: Record<string, Hex> = {}): Promise<void> {
     for (const recorder of RECORDERS) {
       await env.testClient.setCode({
         address: recorder,
-        bytecode: recorderCode(concat([WORD, WORD]), silent),
+        bytecode: recorderCode(TRUE, {
+          [toFunctionSelector(`quoteSend(${SEND_PARAM},bool)`)]: concat([FEE, FEE]),
+          [toFunctionSelector("quoteGasPayment(uint32)")]: FEE,
+          ...views,
+        }),
       });
     }
+  }
+
+  before(async () => {
+    env = await startAnvil();
+    await record();
     await env.testClient.setBalance({ address: env.pot, value: 10n ** 20n });
   });
 
@@ -545,6 +551,31 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
     const v4 = recordedCalls(await env.cook(saved("uniswapV4ExactInput")), RECORDERS);
     assert.equal(v4.length, 2); // transfer, execute
     assert.ok(v4[1]!.data.includes(env.pot.slice(2).toLowerCase()));
+  });
+
+  it("an approve over a standing allowance resets it to zero first", async () => {
+    await record({ [toFunctionSelector("allowance(address,address)")]: pad("0x05") });
+    try {
+      const calls = recordedCalls(await env.cook(compiled(SAMPLES.approve)), RECORDERS);
+      assert.deepEqual(
+        calls.map((c) => c.data),
+        [0n, AMOUNT].map((amount) =>
+          call("function approve(address,uint256)", "approve", [T, amount]).toLowerCase(),
+        ),
+      );
+    } finally {
+      await record();
+    }
+  });
+
+  it("a write whose returndata is not `true` reverts", async () => {
+    await env.testClient.setCode({ address: A as Address, bytecode: recorderCode(pad("0x00")) });
+    try {
+      const receipt = await env.cook(compiled(SAMPLES.transfer));
+      assert.equal(receipt.status, "reverted");
+    } finally {
+      await record();
+    }
   });
 
   it('a "self" recipient is the Pot', async () => {

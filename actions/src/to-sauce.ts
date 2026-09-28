@@ -9,9 +9,10 @@
  *
  * Two kinds of call stay raw `evm.call`, each for a stated reason:
  *
- *   - an ERC-20 `approve`/`transfer` (`erc20Write`), through the SDK's `token/unchecked` lowering:
+ *   - an ERC-20 `approve`/`transfer` (`erc20Write`), through the SDK's `token/safe` lowering:
  *     a binding would decode the ABI's `bool` output, and a token that returns nothing (USDT)
- *     would then revert a write that succeeded;
+ *     would then revert a write that succeeded — the raw call is checked the way OpenZeppelin's
+ *     `SafeERC20` checks it instead;
  *   - a call carrying native value (`valueCall`), because a binding cannot attach value.
  *
  * A binding method's output is declared, and so decoded, only when an action reads it — see
@@ -44,11 +45,7 @@ import {
   type BindingName,
   type MethodName,
 } from "./abis.js";
-import {
-  uncheckedApproveStatements,
-  uncheckedTransferStatements,
-  type WordArg,
-} from "./registry.js";
+import { safeApproveStatements, safeTransferStatements, type WordArg } from "./registry.js";
 import { consumesPrevious } from "./semantics.js";
 import { ACTION_SPECS } from "./spec.js";
 
@@ -196,20 +193,21 @@ class Lowering {
   }
 
   /**
-   * An ERC-20 `approve(spender, amount)` or `transfer(to, amount)` that decodes nothing, through the
-   * SDK's `token/unchecked`: the calldata is encoded off-chain, cut at the run-time words, and the
-   * program reassembles it into a raw `evm.call`. A token that refuses the write still reverts.
+   * An ERC-20 `approve(spender, amount)` or `transfer(to, amount)` through the SDK's `token/safe`,
+   * with OpenZeppelin `SafeERC20` semantics: the call is raw, so nothing is decoded on the way out,
+   * and then its returndata must be empty (from a contract) or `true`. `approve` first resets a
+   * non-zero allowance, which USDT requires. A token that refuses the write reverts the program.
    */
   erc20Write(fn: "approve" | "transfer", token: Expr, first: Expr, amount: Expr): void {
     const prefix = this.emit.name("e");
     const statements =
       fn === "approve"
-        ? uncheckedApproveStatements(prefix, token, this.wordArg(first), this.wordArg(amount))
-        : uncheckedTransferStatements(prefix, token, this.wordArg(first), this.wordArg(amount));
+        ? safeApproveStatements(prefix, token, this.wordArg(first), this.wordArg(amount))
+        : safeTransferStatements(prefix, token, this.wordArg(first), this.wordArg(amount));
     this.stmts.push(...statements);
   }
 
-  /** A word `token/unchecked` can splice: a literal, or a local (an expression is bound to one). */
+  /** A word `token/safe` can splice: a literal, or a local (an expression is bound to one). */
   private wordArg(expr: Expr): WordArg {
     const literal = /^(0x[0-9a-f]+|[0-9]+)n$/.exec(expr);
     if (literal) return { literal: BigInt(literal[1]!) };

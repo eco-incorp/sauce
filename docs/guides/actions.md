@@ -277,7 +277,7 @@ let v_usdc = amt1;
 
 - ABIs come from the SDK's protocol registry wherever it declares the exact function an action calls, and from a fragment in the actions package otherwise.
 - A binding decodes only the outputs an action reads.
-- ERC-20 `transfer` and `approve` decode nothing. Tokens such as USDT return no `bool` from them, and decoding empty return data reverts, so these two are encoded ahead of time and issued as raw calls with the amount spliced in — the same decode-free lowering the SDK's nested intents use. A token that refuses the write still reverts the program.
+- ERC-20 `transfer` and `approve` follow OpenZeppelin `SafeERC20`, through the lowering every SDK token write uses. Tokens such as USDT return no `bool`, and decoding empty return data reverts, so the call is raw, with the amount spliced into calldata encoded ahead of time; its returndata must then be empty from a contract, or `true`. A token that returns `false`, or an address with no code, reverts the program. `approve` first reads the allowance and resets a non-zero one to zero, as `forceApprove` does, because USDT refuses to change one non-zero allowance to another.
 - A call carrying native value (`wrapETH`, the staking deposits, the Stargate and Hyperlane fees) is a raw `evm.call`, because a bound call cannot attach value. Its selector comes from the same ABI fragment. The bridges' fees are quoted on-chain, just before the call that pays them, and come from the Pot's balance.
 - Binding names start with `I` and contain no underscore, so they cannot collide with the route compiler's protocol namespaces or its own `IERC20`.
 
@@ -343,14 +343,14 @@ Every action below is executed in CI against the deployed Ethereum contracts it 
 
 ### Tokens and sources
 
-| Action           | Calls                                             | Output         |
-| ---------------- | ------------------------------------------------- | -------------- |
-| `transfer`       | ERC-20 `transfer`, decoding nothing               | its amount     |
-| `approve`        | ERC-20 `approve`, decoding nothing                | its amount     |
-| `permit2Approve` | Permit2 `approve(address,address,uint160,uint48)` | its amount     |
-| `balanceOf`      | ERC-20 `balanceOf(Pot)`                           | the value read |
-| `nativeBalance`  | The Pot's native balance                          | the value read |
-| `argument`       | A runtime parameter of the program                | the value read |
+| Action           | Calls                                                   | Output         |
+| ---------------- | ------------------------------------------------------- | -------------- |
+| `transfer`       | ERC-20 `transfer`, checked like `SafeERC20`             | its amount     |
+| `approve`        | ERC-20 `approve`, reset and checked like `forceApprove` | its amount     |
+| `permit2Approve` | Permit2 `approve(address,address,uint160,uint48)`       | its amount     |
+| `balanceOf`      | ERC-20 `balanceOf(Pot)`                                 | the value read |
+| `nativeBalance`  | The Pot's native balance                                | the value read |
+| `argument`       | A runtime parameter of the program                      | the value read |
 
 ### Notes
 

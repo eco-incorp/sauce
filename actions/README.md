@@ -47,7 +47,8 @@ const { bytecode, source } = compileProgram(program); // Pot.cook(engine, byteco
 - **Verified on mainnet.** Every action type executes in CI against the deployed Ethereum contracts
   it names, replayed offline from mainnet state at a pinned block. Each protocol call is an ABI
   binding, with ABIs from the SDK protocol registry where it has the exact function; ERC-20
-  `transfer`/`approve` decode nothing, so tokens that return nothing (USDT) work.
+  `transfer`/`approve` follow OpenZeppelin `SafeERC20`, so a token that returns nothing (USDT) works,
+  one that returns `false` reverts, and a standing allowance is reset before it is changed.
 
 The [actions guide](../docs/guides/actions.md) covers the format, chaining, intents, runtime
 amounts, quotes, and every supported action. [AMM_SWAP_INTERFACES.md](AMM_SWAP_INTERFACES.md) is a

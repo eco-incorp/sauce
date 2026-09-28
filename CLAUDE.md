@@ -412,8 +412,8 @@ their canonical signature is exactly the action's (several registry ABIs are wid
 `uint256`, Permit2's expiration as `uint64` — and would change the selector), and a method declares
 an output ONLY when an action reads it: compiler 2.3.0 decodes declared outputs even when discarded,
 and decoding empty return data reverts (3pool-era Curve). ERC-20 `approve`/`transfer` are not
-bindings: they go through the SDK's `token/unchecked` (USDT returns no `bool`), the same decode-free
-lowering the route nesting uses — one path, so do not add a second. Native-value calls stay raw
+bindings: they go through the SDK's `token/safe` (USDT returns no `bool`; `SafeERC20` semantics, with
+`forceApprove`'s reset), the lowering every SDK token write uses — one path, so do not add a second. Native-value calls stay raw
 `evm.call` because a binding cannot attach value; the Stargate and Hyperlane fees are quoted by a
 `view` binding (a STATICCALL) just before. Actions **chain**: output feeds the next implicitly (no
 amount) or via `saveOutputAs`/`amountRef`; an output is what the action delivered to the Pot (a

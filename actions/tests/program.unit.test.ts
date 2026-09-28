@@ -114,7 +114,7 @@ describe("action programs — chaining is part of the document", () => {
     assert.match(source, /let t_out0 = 1000000000000000000n;/);
     assert.match(source, /let t_out1 = t_out0;/);
     // The approve spends the wrap's output and the transfer the saved swap output, each spliced into
-    // a decode-free ERC-20 call.
+    // an ERC-20 call checked like SafeERC20.
     assert.match(source, /hex`095ea7b3[0-9a-f]*68b3465833fb72a70ecdf485e0e4c7bd8665fc45`;/);
     assert.match(source, /\.concat\(t_out0\.toBytesBe\(32\)\)/);
     assert.match(source, /amountIn: t_out1/);

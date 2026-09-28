@@ -152,11 +152,12 @@ describe("split swap — approvals and the sweep", () => {
     spender,
   });
 
-  it("runs each approval first, decoding nothing", () => {
+  it("runs each approval first, through the SDK's SafeERC20 lowering", () => {
     const approvals = [approve(SWAP_ROUTER_V3), approve(CURVE_3POOL)];
     const text = source(swap(2, 2, { approvals }));
-    assert.equal(text.match(/hex`095ea7b3/g)?.length, 2);
-    assert.ok(text.indexOf("095ea7b3") < text.indexOf("for (let i = 0n"));
+    // One allowance read per approval: the reset `forceApprove` makes when one is standing.
+    assert.equal(text.match(/hex`dd62ed3e/g)?.length, 2);
+    assert.ok(text.indexOf("dd62ed3e") < text.indexOf("for (let i = 0n"));
   });
 
   it("sweeps the realized total, and without a sweep nothing leaves the Pot", () => {

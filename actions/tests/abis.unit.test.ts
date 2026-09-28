@@ -28,8 +28,8 @@ describe("action ABI bindings", () => {
   });
 
   it("ERC-20 writes are not bindings: IErc20 binds only the read", () => {
-    // `approve`/`transfer` go through the SDK's `token/unchecked`, which decodes nothing, so a
-    // token returning no `bool` (USDT) does not revert — `no-return-token.exec.test.ts` executes it.
+    // `approve`/`transfer` go through the SDK's `token/safe`, which decodes no output, so a token
+    // returning no `bool` (USDT) does not revert — `erc20-writes.exec.test.ts` executes it.
     const erc20 = bindingMethods("IErc20");
     assert.deepEqual(Object.keys(erc20), ["balanceOf"]);
     assert.deepEqual(

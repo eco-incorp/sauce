@@ -183,41 +183,49 @@ export async function startAnvil(options: { mainnet?: string } = {}) {
   };
 }
 
-/** `balanceOf(address)`, which every balance-delta output reads. */
-const BALANCE_OF = "0x70a08231";
+/** The views every recorder answers: the balance a delta reads, and the allowance an approve reads. */
+const DEFAULT_VIEWS: Readonly<Record<string, Hex>> = {
+  "0x70a08231": `0x${"00".repeat(32)}`, // balanceOf(address)
+  "0xdd62ed3e": `0x${"00".repeat(32)}`, // allowance(address,address)
+};
 
 /**
  * Runtime code that records the call it receives and returns `ret`: it LOG1s its calldata with the
  * call's value as the topic. Execution through a binding the engine makes is then observable byte
  * for byte, with no contract of the real protocol behind it.
  *
- * The `silent` selectors are answered WITHOUT a log: a binding calls a `view` method with
- * STATICCALL, and a log inside a static call reverts. So those calls are never recorded.
+ * A VIEW — a selector in `views`, plus `balanceOf` and `allowance` — is answered with its own
+ * returndata and WITHOUT a log: the program reads a view with STATICCALL, and a log inside a static
+ * call reverts. So views are never recorded.
  *
- *   PUSH0 CALLDATALOAD PUSH1 0xe0 SHR                selector
- *   per silent selector: DUP1 PUSH4 sel EQ PUSH2 ret JUMPI
- *   CALLDATASIZE PUSH0 PUSH0 CALLDATACOPY          mem[0..] = calldata
- *   CALLVALUE CALLDATASIZE PUSH0 LOG1              log(calldata, topic = value)
- *   ret: JUMPDEST
- *   PUSH2 len PUSH2 body PUSH0 CODECOPY            mem[0..] = code[body..body+len]
- *   PUSH2 len PUSH0 RETURN                         return it
+ *   PUSH0 CALLDATALOAD PUSH1 0xe0 SHR                            selector
+ *   per view i: DUP1 PUSH4 sel EQ PUSH2 view_i JUMPI
+ *   CALLDATASIZE PUSH0 PUSH0 CALLDATACOPY CALLVALUE CALLDATASIZE PUSH0 LOG1
+ *   PUSH2 len PUSH2 at PUSH0 CODECOPY PUSH2 len PUSH0 RETURN     return `ret`
+ *   per view i: JUMPDEST, then the same return of its own data
  */
-export function recorderCode(ret: Hex = "0x", silent: readonly Hex[] = [BALANCE_OF]): Hex {
+export function recorderCode(ret: Hex = "0x", views: Readonly<Record<string, Hex>> = {}): Hex {
+  const answers = Object.entries({ ...DEFAULT_VIEWS, ...views });
   const u16 = (n: number): string => n.toString(16).padStart(4, "0");
-  const body = ret.slice(2);
-  const len = u16(body.length / 2);
-  const jumpdest = 13 + 11 * silent.length;
+  const k = answers.length;
+  const logicLength = 26 + 25 * k;
+  const payloads = [ret, ...answers.map(([, data]) => data)].map((hex) => hex.slice(2));
+  const offsets = payloads.reduce<number[]>(
+    (at, payload, i) => [...at, i === 0 ? logicLength : at[i - 1]! + payloads[i - 1]!.length / 2],
+    [],
+  );
+  const returns = (i: number): string =>
+    `61${u16(payloads[i]!.length / 2)}61${u16(offsets[i]!)}5f39` +
+    `61${u16(payloads[i]!.length / 2)}5ff3`;
   const logic =
     "5f3560e01c" +
-    silent.map((sel) => `8063${sel.slice(2)}1461${u16(jumpdest)}57`).join("") +
-    "365f5f37" +
-    "34365fa1" +
-    "5b" +
-    `61${len}61${u16(jumpdest + 14)}5f39` +
-    `61${len}5ff3`;
-  if (logic.length / 2 !== jumpdest + 14) throw new Error("recorder layout is off");
+    answers.map(([sel], i) => `8063${sel.slice(2)}1461${u16(26 + 11 * k + 14 * i)}57`).join("") +
+    "365f5f3734365fa1" +
+    returns(0) +
+    answers.map((_, i) => `5b${returns(i + 1)}`).join("");
+  if (logic.length / 2 !== logicLength) throw new Error("recorder layout is off");
 
-  return `0x${logic}${body}` as Hex;
+  return `0x${logic}${payloads.join("")}` as Hex;
 }
 
 /** The calls `receipt` recorded on each recorder, in order: calldata and attached value. */
