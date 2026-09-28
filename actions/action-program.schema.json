@@ -163,9 +163,6 @@
           "$ref": "#/$defs/action_rocketPoolUnstake"
         },
         {
-          "$ref": "#/$defs/action_coinbaseStake"
-        },
-        {
           "$ref": "#/$defs/action_etherFiStake"
         },
         {
@@ -2172,40 +2169,6 @@
         "rETH": {
           "$ref": "#/$defs/address",
           "description": "the rETH token"
-        },
-        "amountRef": {
-          "$ref": "#/$defs/identifier",
-          "description": "Spend the output an earlier action saved under this name."
-        },
-        "saveOutputAs": {
-          "$ref": "#/$defs/identifier",
-          "description": "Save this action's output under a name later actions can reference."
-        }
-      }
-    },
-    "action_coinbaseStake": {
-      "title": "coinbaseStake",
-      "description": "Calls `deposit()` on cbETH with native value. Calls cbETH.deposit.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type", "cbETH"],
-      "properties": {
-        "type": {
-          "const": "coinbaseStake"
-        },
-        "chainId": {
-          "$ref": "#/$defs/chainId",
-          "description": "Optional; must equal the program's chainId, which it defaults to."
-        },
-        "amount": {
-          "type": "string",
-          "pattern": "^(0|[1-9][0-9]*)$",
-          "maxLength": 78,
-          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
-        },
-        "cbETH": {
-          "$ref": "#/$defs/address",
-          "description": "the cbETH contract"
         },
         "amountRef": {
           "$ref": "#/$defs/identifier",

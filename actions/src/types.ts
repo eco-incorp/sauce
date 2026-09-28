@@ -486,14 +486,6 @@ export interface RocketPoolUnstakeAction extends ActionChainInput {
   amount?: string;
 }
 
-/** Coinbase: stake ETH → cbETH */
-export interface CoinbaseStakeAction extends ActionChainInput {
-  type: "coinbaseStake";
-  chainId: number;
-  cbETH: Address;
-  amount?: string;
-}
-
 /** EtherFi: stake ETH → eETH */
 export interface EtherFiStakeAction extends ActionChainInput {
   type: "etherFiStake";
@@ -507,7 +499,6 @@ export type StakeAction =
   | LidoUnstakeAction
   | RocketPoolStakeAction
   | RocketPoolUnstakeAction
-  | CoinbaseStakeAction
   | EtherFiStakeAction;
 
 // =============================================================================

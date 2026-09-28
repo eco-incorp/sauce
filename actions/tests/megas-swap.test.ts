@@ -1,6 +1,6 @@
 import { describe, it, before, after, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { execSync, spawn, type ChildProcess } from "child_process";
+import { execSync } from "child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,7 @@ import type {
   UniswapV3ExactInputAction,
 } from "../src/index.js";
 import { cookData, startGatedEngine } from "./gated-engine.js";
+import { DEADLINE, startMainnet, type Mainnet } from "./mainnet.js";
 import type { GatedEngine } from "./gated-engine.js";
 
 // =============================================================================
@@ -47,14 +48,10 @@ import type { GatedEngine } from "./gated-engine.js";
 // =============================================================================
 
 const REPO_ROOT = execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim();
-const DEV_TOOLS = resolve(REPO_ROOT, "dev-tools");
 
-const FORK_URL = process.env.FORK_URL;
-if (!FORK_URL) {
-  throw new Error("FORK_URL env var is required (set it in actions/.env).");
-}
-
-const RPC = "http://127.0.0.1:8545";
+/** The local anvil's URL — Ethereum mainnet at the pinned block (`mainnet.ts`), set in `before()`. */
+let RPC: string;
+let mainnet: Mainnet;
 const PK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as const;
 const CALLER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as Address;
 
@@ -79,59 +76,11 @@ const UNIV2_ROUTER = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D" as Address;
 let SAUCE: Address;
 /** The interpreter itself. Named per cook; never called directly. */
 let ENGINE: Address;
-let hardhatProcess: ChildProcess;
 let client: ReturnType<typeof createPublicClient>;
 
 // =============================================================================
-// Hardhat lifecycle
+// Engine
 // =============================================================================
-
-async function startHardhat(): Promise<ChildProcess> {
-  try {
-    execSync(
-      "lsof -ti :8545 | xargs kill -9 2>/dev/null || fuser -k 8545/tcp 2>/dev/null || true",
-      { encoding: "utf8" },
-    );
-  } catch {}
-
-  const hardhatCli = resolve(DEV_TOOLS, "node_modules/hardhat/internal/cli/cli.js");
-  const proc = spawn(process.execPath, [hardhatCli, "node", "--fork", FORK_URL!], {
-    cwd: DEV_TOOLS,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-
-  await new Promise<void>((res, rej) => {
-    const timeout = setTimeout(() => rej(new Error("Hardhat failed to start within 60s")), 60_000);
-    const check = setInterval(async () => {
-      try {
-        const r = await fetch(RPC, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jsonrpc: "2.0", method: "eth_blockNumber", params: [], id: 1 }),
-        });
-        if (r.ok) {
-          clearInterval(check);
-          clearTimeout(timeout);
-          res();
-        }
-      } catch {}
-    }, 500);
-    proc.on("error", (err) => {
-      clearInterval(check);
-      clearTimeout(timeout);
-      rej(err);
-    });
-    proc.on("exit", (code) => {
-      if (code !== null) {
-        clearInterval(check);
-        clearTimeout(timeout);
-        rej(new Error(`Hardhat exited with code ${code}`));
-      }
-    });
-  });
-
-  return proc;
-}
 
 /**
  * The Sauce ENGINE the programs run on.
@@ -203,10 +152,6 @@ async function deploySauce(): Promise<GatedEngine> {
         params: [address, slot, value],
       } as never),
   );
-}
-
-function stopHardhat(proc: ChildProcess): void {
-  if (proc && !proc.killed) proc.kill("SIGTERM");
 }
 
 // =============================================================================
@@ -343,22 +288,21 @@ async function fundSauceUSDCFromWhale(amount: bigint): Promise<bigint> {
 // Tests
 // =============================================================================
 
-describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
+describe("megasSwapToSauce — mainnet state", { timeout: 180_000 }, () => {
   let snap: string;
 
   before(async () => {
-    hardhatProcess = await startHardhat();
+    mainnet = await startMainnet("megas-swap");
+    RPC = mainnet.rpc;
     // Lift the block gas limit so Sauce programs with many QuoterV2 CALLs at
-    // million-USDC depth fit in one tx. Hardhat default is 30M.
+    // million-USDC depth fit in one tx. The pinned block's limit is 60M.
     await rpc("evm_setBlockGasLimit", ["0x3B9ACA00"]); // 1_000_000_000 gas
     ({ engine: ENGINE, pot: SAUCE } = await deploySauce());
     client = createPublicClient({ transport: http(RPC, { timeout: 300_000 }) });
-    console.log(`Hardhat forking ${new URL(FORK_URL!).hostname.split(".")[0]}`); // the URL carries an API key
-    console.log(`Sauce deployed at ${SAUCE}`);
   });
 
-  after(() => {
-    stopHardhat(hardhatProcess);
+  after(async () => {
+    await mainnet?.stop();
   });
 
   beforeEach(() => {
@@ -376,7 +320,7 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     const usdtBefore = await balanceOf(USDT, CALLER);
     const usdcBefore = await balanceOf(USDC, SAUCE);
 
-    const deadline = Math.floor(Date.now() / 1000) + 3600;
+    const deadline = DEADLINE;
     const mkUniV3 = (fee: 100 | 500): UniswapV3ExactInputAction => ({
       type: "uniswapV3ExactInput",
       chainId: CHAIN_ID,
@@ -476,7 +420,7 @@ describe("megasSwapToSauce — mainnet fork", { timeout: 180_000 }, () => {
     approves: ApproveAction[];
   } {
     const amount = amountIn.toString();
-    const dl = Math.floor(Date.now() / 1000) + 3600;
+    const dl = DEADLINE;
     const mkUniV3 = (fee: 100 | 500): UniswapV3ExactInputAction => ({
       type: "uniswapV3ExactInput",
       chainId: CHAIN_ID,

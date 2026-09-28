@@ -272,9 +272,6 @@ const CATALOG = {
   IRocketTokenReth: () => ({
     burn: sdk("rocket-pool", "RETHABI", RETHABI, "burn(uint256)", "drop"),
   }),
-  ICbEth: () => ({
-    deposit: local("function deposit() payable", "the registry's cbETH ABI has no `deposit`"),
-  }),
   IEtherFiLiquidityPool: () => ({
     deposit: sdk("etherfi", "LiquidityPoolABI", LiquidityPoolABI, "deposit()", "drop"),
   }),

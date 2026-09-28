@@ -88,7 +88,6 @@ import type {
   LidoUnstakeAction,
   RocketPoolStakeAction,
   RocketPoolUnstakeAction,
-  CoinbaseStakeAction,
   EtherFiStakeAction,
   AaveV3SupplyAction,
   AaveV3WithdrawAction,
@@ -514,8 +513,6 @@ export function buildAction(
       return rocketPoolStake(l, action, amountIn);
     case "rocketPoolUnstake":
       return rocketPoolUnstake(l, action, amountIn);
-    case "coinbaseStake":
-      return coinbaseStake(l, action, amountIn);
     case "etherFiStake":
       return etherFiStake(l, action, amountIn);
     case "aaveV3Supply":
@@ -1228,12 +1225,6 @@ function rocketPoolUnstake(
   amountIn: Expr,
 ): ActionResult {
   l.exec("IRocketTokenReth", addr(action.rETH), "burn", [amountIn]);
-
-  return l.result(amountIn);
-}
-
-function coinbaseStake(l: Lowering, action: CoinbaseStakeAction, amountIn: Expr): ActionResult {
-  l.valueCall("ICbEth", addr(action.cbETH), amountIn, "deposit", []);
 
   return l.result(amountIn);
 }

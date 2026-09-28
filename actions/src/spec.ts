@@ -600,14 +600,6 @@ const SPECS: readonly ActionSpec[] = [
     rETH: f(address, "the rETH token"),
   }),
   simple(
-    "coinbaseStake",
-    "stake",
-    "Calls `deposit()` on cbETH with native value.",
-    "cbETH.deposit",
-    { cbETH: f(address, "the cbETH contract") },
-    { value: "amount" },
-  ),
-  simple(
     "etherFiStake",
     "stake",
     "Stakes native ETH with ether.fi for eETH.",

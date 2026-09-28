@@ -267,7 +267,6 @@ export const SAMPLES: Record<RoutingActionType, Sample> = {
   lidoUnstake: { type: "lidoUnstake", withdrawalQueue: T, stETHAmount: "1000" },
   rocketPoolStake: { type: "rocketPoolStake", rETH: A, depositPool: T, amount: "1000" },
   rocketPoolUnstake: { type: "rocketPoolUnstake", rETH: T, amount: "1000" },
-  coinbaseStake: { type: "coinbaseStake", cbETH: T, amount: "1000" },
   etherFiStake: { type: "etherFiStake", liquidityPool: T, amount: "1000" },
   aaveV3Supply: {
     type: "aaveV3Supply",

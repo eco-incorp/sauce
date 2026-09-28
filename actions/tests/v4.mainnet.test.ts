@@ -1,17 +1,14 @@
 /**
- * Uniswap V4 actions EXECUTED against the deployed mainnet Universal Router and PoolManager, on an
- * anvil fork of Ethereum.
+ * Uniswap V4 actions EXECUTED against the deployed mainnet Universal Router and PoolManager, on
+ * a local anvil holding mainnet state captured at the pinned block (`mainnet.ts`) — no RPC.
  *
- * Anvil, not the hardhat node `to-sauce.test.ts` uses: that fork cannot run V4 (its transient
- * storage support is the reason those V4 cases are skipped), so until this suite V4 had never
- * executed. It found both V4 actions broken — the swap parameters were encoded flat, without the
- * struct's head offset the router's decoder reads, and TAKE's `OPEN_DELTA` was the all-ones word
- * rather than 0, which overflows the router's `uint128` cast.
+ * Until this suite V4 had never executed: the hardhat fork the other suites used could not run it.
+ * It found both V4 actions broken — the swap parameters were encoded flat, without the struct's head
+ * offset the router's decoder reads, and TAKE's `OPEN_DELTA` was the all-ones word rather than 0,
+ * which overflows the router's `uint128` cast.
  *
  * The pool is USDC/USDT at 0.001% (fee 10, tick spacing 1), which also makes USDT the output —
  * a no-return token, so the chained transfer here is the USDT case end to end.
- *
- * Needs `FORK_URL` (an Ethereum mainnet archive RPC), like the other fork suites.
  */
 import { after, before, beforeEach, afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -20,9 +17,7 @@ import { encodeAbiParameters, keccak256, pad, parseAbi, toHex, type Address } fr
 import { actionsToSauce } from "../src/to-sauce.js";
 import type { RoutingAction } from "../src/types.js";
 import { skipReason, startAnvil, type Anvil } from "./anvil.js";
-
-const FORK_URL = process.env.FORK_URL;
-if (!FORK_URL) throw new Error("FORK_URL env var is required.");
+import { capturing } from "./mainnet.js";
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address;
 const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7" as Address;
@@ -61,16 +56,14 @@ const v4Multi = (extra: Partial<RoutingAction> = {}): RoutingAction =>
   }) as RoutingAction;
 
 describe(
-  "Uniswap V4 actions — mainnet fork (anvil)",
+  "Uniswap V4 actions — mainnet state (anvil)",
   { skip: skipReason(), timeout: 300_000 },
   () => {
     let env: Anvil;
     let snapshot: `0x${string}`;
 
     before(async () => {
-      env = await startAnvil({ forkUrl: FORK_URL });
-      if (env.chain.id !== 1)
-        throw new Error(`FORK_URL is chain ${env.chain.id}; this suite needs Ethereum mainnet`);
+      env = await startAnvil({ mainnet: "v4" });
       // 10 USDC to the Pot. FiatToken keeps balances in the mapping at slot 9.
       const slot = keccak256(
         encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [env.pot, 9n]),
@@ -82,7 +75,14 @@ describe(
       });
     });
 
-    after(() => env?.stop());
+    it("a replayed mainnet suite cannot reach the network", async () => {
+      if (capturing) return; // capture forks through the RPC by design
+      await assert.rejects(fetch("https://example.com"), /network access to example\.com/);
+    });
+
+    after(async () => {
+      await env?.stop();
+    });
     beforeEach(async () => {
       snapshot = await env.testClient.snapshot();
     });

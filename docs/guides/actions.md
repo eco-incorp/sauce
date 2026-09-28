@@ -273,38 +273,38 @@ The package builds calldata; it does not select routes, quote, or submit transac
 
 ## Supported actions
 
-"Verified" says how each action has been checked against real contracts. **Fork**: executed through the engine against a fork of Ethereum mainnet. **Calldata**: executed through the engine against contracts that record the call, and compared byte for byte with the intended Solidity call — the encoding is checked, the protocol's behavior is not.
+"Verified" says how each action has been checked against real contracts. **Mainnet**: executed through the engine against the deployed Ethereum contracts, replayed from mainnet state at a pinned block. **Calldata**: executed through the engine against contracts that record the call, and compared byte for byte with the intended Solidity call — the encoding is checked, the protocol's behavior is not.
 
 ### Swaps
 
-| Action                        | Calls                                                                                 | Amount           | Output   | Verified  |
-| ----------------------------- | ------------------------------------------------------------------------------------- | ---------------- | -------- | --------- |
-| `uniswapV3ExactInput`         | SwapRouter02 `exactInputSingle`                                                       | `amountIn`       | realized | Fork      |
-| `uniswapV3ExactInputMultiHop` | SwapRouter02 `exactInput`                                                             | `amountIn`       | realized | Fork      |
-| `uniswapV4ExactInput`         | ERC-20 `transfer` to the router, then Universal Router `execute` (swap, settle, take) | `amountIn`       | realized | Fork      |
-| `uniswapV4ExactInputMultiHop` | Same, with a path                                                                     | `amountIn`       | realized | Fork      |
-| `curveSwap`                   | Pool `exchange(int128,int128,uint256,uint256)`; output is a balance delta             | `amountIn`       | realized | Fork      |
-| `curveRouterNGSwap`           | RouterNG `exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)`     | `amountIn`       | realized | Fork      |
-| `balancerV2Swap`              | Vault `swap`                                                                          | `amountIn`       | realized | Calldata  |
-| `balancerV2BatchSwap`         | Vault `batchSwap`; output is a balance delta                                          | `steps[].amount` | realized | Calldata  |
-| `balancerV3Swap`              | Router `swapSingleTokenExactIn`                                                       | `amountIn`       | realized | Calldata  |
-| `uniswapV2Swap`               | Router `swapExactTokensForTokens`; output is a balance delta                          | `amountIn`       | realized | Fork      |
-| `ambientSwap`                 | CrocSwapDex `userCmd(1, …)`; output is a balance delta                                | `amountIn`       | realized | Fork      |
-| `dodoSwap`                    | DODO proxy `dodoSwapV2TokenToToken`, or `dodoSwapV1` with `"version": "v1"`           | `amountIn`       | realized | Fork (v1) |
-| `maverickSwap`                | Maverick V2 router `exactInputSingle`                                                 | `amountIn`       | realized | Calldata  |
-| `maverickMultiHopSwap`        | Maverick V2 router `exactInputMultiHop`                                               | `amountIn`       | realized | Calldata  |
-| `carbonSwap`                  | CarbonController `tradeBySourceAmount`                                                | `amountIn`       | realized | Calldata  |
-| `fraxswapSwap`                | Router `swapExactTokensForTokens`; output is a balance delta                          | `amountIn`       | realized | Calldata  |
-| `clipperSwap`                 | Exchange `sellTokenForToken`                                                          | `amountIn`       | realized | Calldata  |
-| `integralSwap`                | TwapDelay `sell`                                                                      | `amountIn`       | none     | Calldata  |
-| `fluidDexT1Swap`              | Pool `swapIn`                                                                         | `amountIn`       | realized | Calldata  |
-| `fluidDexLiteSwap`            | DEX Lite `swapSingle`; output is a balance delta                                      | `amountIn`       | realized | Calldata  |
+| Action                        | Calls                                                                                 | Amount           | Output   | Verified     |
+| ----------------------------- | ------------------------------------------------------------------------------------- | ---------------- | -------- | ------------ |
+| `uniswapV3ExactInput`         | SwapRouter02 `exactInputSingle`                                                       | `amountIn`       | realized | Mainnet      |
+| `uniswapV3ExactInputMultiHop` | SwapRouter02 `exactInput`                                                             | `amountIn`       | realized | Mainnet      |
+| `uniswapV4ExactInput`         | ERC-20 `transfer` to the router, then Universal Router `execute` (swap, settle, take) | `amountIn`       | realized | Mainnet      |
+| `uniswapV4ExactInputMultiHop` | Same, with a path                                                                     | `amountIn`       | realized | Mainnet      |
+| `curveSwap`                   | Pool `exchange(int128,int128,uint256,uint256)`; output is a balance delta             | `amountIn`       | realized | Mainnet      |
+| `curveRouterNGSwap`           | RouterNG `exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)`     | `amountIn`       | realized | Mainnet      |
+| `balancerV2Swap`              | Vault `swap`                                                                          | `amountIn`       | realized | Mainnet      |
+| `balancerV2BatchSwap`         | Vault `batchSwap`; output is a balance delta                                          | `steps[].amount` | realized | Mainnet      |
+| `balancerV3Swap`              | Router `swapSingleTokenExactIn`                                                       | `amountIn`       | realized | Calldata     |
+| `uniswapV2Swap`               | Router `swapExactTokensForTokens`; output is a balance delta                          | `amountIn`       | realized | Mainnet      |
+| `ambientSwap`                 | CrocSwapDex `userCmd(1, …)`; output is a balance delta                                | `amountIn`       | realized | Mainnet      |
+| `dodoSwap`                    | DODO proxy `dodoSwapV2TokenToToken`, or `dodoSwapV1` with `"version": "v1"`           | `amountIn`       | realized | Mainnet (v1) |
+| `maverickSwap`                | Maverick V2 router `exactInputSingle`                                                 | `amountIn`       | realized | Mainnet      |
+| `maverickMultiHopSwap`        | Maverick V2 router `exactInputMultiHop`                                               | `amountIn`       | realized | Mainnet      |
+| `carbonSwap`                  | CarbonController `tradeBySourceAmount`                                                | `amountIn`       | realized | Mainnet      |
+| `fraxswapSwap`                | Router `swapExactTokensForTokens`; output is a balance delta                          | `amountIn`       | realized | Mainnet      |
+| `clipperSwap`                 | Exchange `sellTokenForToken`                                                          | `amountIn`       | realized | Calldata     |
+| `integralSwap`                | TwapDelay `sell`                                                                      | `amountIn`       | none     | Calldata     |
+| `fluidDexT1Swap`              | Pool `swapIn`                                                                         | `amountIn`       | realized | Mainnet      |
+| `fluidDexLiteSwap`            | DEX Lite `swapSingle`; output is a balance delta                                      | `amountIn`       | realized | Calldata     |
 
 ### Bridges
 
 | Action            | Calls                                                        | Amount   | Output    | Verified |
 | ----------------- | ------------------------------------------------------------ | -------- | --------- | -------- |
-| `acrossBridge`    | SpokePool `depositV3`, same token on the destination         | `amount` | the input | Fork     |
+| `acrossBridge`    | SpokePool `depositV3`, same token on the destination         | `amount` | the input | Mainnet  |
 | `stargateBridge`  | Stargate V1 router `swap`, with `lzFee` as value             | `amount` | the input | Calldata |
 | `cctpBridge`      | CCTP V1 TokenMessenger `depositForBurn`                      | `amount` | the input | Calldata |
 | `hyperlaneBridge` | `dispatch(uint32,bytes32,bytes)`, with `gasPayment` as value | `amount` | the input | Calldata |
@@ -313,32 +313,31 @@ The package builds calldata; it does not select routes, quote, or submit transac
 
 | Action               | Calls                                | Amount                  | Output    | Verified |
 | -------------------- | ------------------------------------ | ----------------------- | --------- | -------- |
-| `wrapETH`            | WETH `deposit`                       | `amount`, sent as value | the input | Fork     |
-| `unwrapETH`          | WETH `withdraw`                      | `amount`                | the input | Fork     |
+| `wrapETH`            | WETH `deposit`                       | `amount`, sent as value | the input | Mainnet  |
+| `unwrapETH`          | WETH `withdraw`                      | `amount`                | the input | Mainnet  |
 | `wrapStETH`          | wstETH `wrap`                        | `stETHAmount`           | the input | Calldata |
 | `unwrapStETH`        | wstETH `unwrap`                      | `wstETHAmount`          | the input | Calldata |
 | `lidoStake`          | stETH `submit`                       | `amount`, sent as value | the input | Calldata |
 | `lidoUnstake`        | WithdrawalQueue `requestWithdrawals` | `stETHAmount`           | the input | Calldata |
 | `rocketPoolStake`    | Rocket deposit pool `deposit`        | `amount`, sent as value | the input | Calldata |
 | `rocketPoolUnstake`  | rETH `burn`                          | `amount`                | the input | Calldata |
-| `coinbaseStake`      | cbETH `deposit`                      | `amount`, sent as value | the input | Calldata |
 | `etherFiStake`       | ether.fi LiquidityPool `deposit`     | `amount`, sent as value | the input | Calldata |
-| `aaveV3Supply`       | Pool `supply`                        | `amount`                | the input | Fork     |
-| `aaveV3Withdraw`     | Pool `withdraw`                      | `amount`                | realized  | Fork     |
+| `aaveV3Supply`       | Pool `supply`                        | `amount`                | the input | Mainnet  |
+| `aaveV3Withdraw`     | Pool `withdraw`                      | `amount`                | realized  | Mainnet  |
 | `aaveV3Borrow`       | Pool `borrow` (variable rate)        | `amount`                | the input | Calldata |
 | `aaveV3Repay`        | Pool `repay` (variable rate)         | `amount`                | the input | Calldata |
-| `compoundV3Supply`   | Comet `supply`                       | `amount`                | the input | Fork     |
-| `compoundV3Withdraw` | Comet `withdraw`                     | `amount`                | the input | Fork     |
+| `compoundV3Supply`   | Comet `supply`                       | `amount`                | the input | Mainnet  |
+| `compoundV3Withdraw` | Comet `withdraw`                     | `amount`                | the input | Mainnet  |
 
 ### Tokens and sources
 
-| Action          | Calls                               | Amount   | Output         | Verified                    |
-| --------------- | ----------------------------------- | -------- | -------------- | --------------------------- |
-| `transfer`      | ERC-20 `transfer`, decoding nothing | `amount` | the input      | Fork, and a no-return token |
-| `approve`       | ERC-20 `approve`, decoding nothing  | `amount` | the input      | Fork, and a no-return token |
-| `balanceOf`     | ERC-20 `balanceOf(Pot)`             | —        | the value read | Execution                   |
-| `nativeBalance` | The Pot's native balance            | —        | the value read | Calldata                    |
-| `argument`      | A runtime parameter of the program  | —        | the value read | Execution                   |
+| Action          | Calls                               | Amount   | Output         | Verified                       |
+| --------------- | ----------------------------------- | -------- | -------------- | ------------------------------ |
+| `transfer`      | ERC-20 `transfer`, decoding nothing | `amount` | the input      | Mainnet, and a no-return token |
+| `approve`       | ERC-20 `approve`, decoding nothing  | `amount` | the input      | Mainnet, and a no-return token |
+| `balanceOf`     | ERC-20 `balanceOf(Pot)`             | —        | the value read | Execution                      |
+| `nativeBalance` | The Pot's native balance            | —        | the value read | Calldata                       |
+| `argument`      | A runtime parameter of the program  | —        | the value read | Execution                      |
 
 ### Notes and limitations
 
@@ -347,10 +346,11 @@ The package builds calldata; it does not select routes, quote, or submit transac
 - **Curve `curveSwap`** calls the pool's 4-argument `exchange`, which older pools implement without a return value, and forwards the balance delta to `recipient`.
 - **Balancer V2 batch** amounts are per step (a later step's `"0"` spends the previous step's output), so the action takes no `amountRef`.
 - **Carbon** trades the per-strategy `tradeActions` amounts; **Clipper** sells tokens already transferred to the exchange, against a signed quote from Clipper's API. Neither passes `amountIn` to the protocol.
-- **Integral** places an order that a keeper executes later; nothing can chain from it, and the action attaches no keeper fee.
+- **Integral** places an order that a keeper executes later; nothing can chain from it, and the action attaches no keeper fee. At the pinned mainnet block Integral rejects WETH/USDC orders and quotes.
 - **Across** records the Pot's caller as depositor and recipient, and requests the same amount out as in. **Stargate** refunds and pays the Pot's caller; **Lido withdrawals** are owned by it.
-- **cbETH** cannot be minted by depositing ETH: the live cbETH contract has no `deposit`, so `coinbaseStake` reverts against it.
-- **Maverick**: confirm the router address and its return values for your deployment. The output is the first word the router returns.
+- **Maverick** V2's router is `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` on Ethereum; `exactInputSingle` returns the amount out, which is the action's output. A multi-hop `path` is, per hop, the pool's 20 bytes followed by one byte for `tokenAIn`.
+- **Fluid DEX T1** takes no native value from this action, so it sells the pool's ERC-20 side (for the wstETH/ETH pool, wstETH for ETH), pulling it by allowance.
+- **Balancer V3**'s router pulls its input through Permit2, and no action grants a Permit2 allowance, so `balancerV3Swap` cannot execute from a Pot with actions alone.
 
 ## TypeScript types
 

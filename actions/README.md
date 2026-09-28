@@ -64,3 +64,10 @@ changed underneath:
 - **Types.** `recipient`, `to` and `onBehalfOf` accept `"self"`, and `RoutingAction` gains the
   `balanceOf`, `nativeBalance` and `argument` source actions — an exhaustive `switch` over
   `RoutingAction["type"]` needs cases for them.
+- **Removed `coinbaseStake`.** cbETH is minted by Coinbase, not by depositing ETH: the live cbETH
+  contract has no `deposit`, so the action could only revert. There is no replacement.
+- **Quote fixes** (`actionToQuote`). Uniswap V4 quotes used a selector the V4 Quoter does not have
+  and always reverted; a DODO V1 quote called V2's `querySellBase`; a Fraxswap quote used the view
+  `getAmountsOut`, which reverts while TWAMM orders are pending (it now uses
+  `getAmountsOutWithTwamm`); a Maverick quote applied a tick limit of 0, which the router's swap
+  does not.

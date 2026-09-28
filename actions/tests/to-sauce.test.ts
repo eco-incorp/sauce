@@ -2,7 +2,7 @@ import { describe, it, before, after, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { actionsToSauce, actionsToSauceSource } from "../src/to-sauce.js";
 import type { RoutingAction } from "../src/types.js";
-import { execSync, spawn, type ChildProcess } from "child_process";
+import { execSync } from "child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -13,27 +13,26 @@ import {
   formatUnits,
   defineChain,
   decodeEventLog,
+  encodeAbiParameters,
+  keccak256,
   type Address,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { cookData, startGatedEngine } from "./gated-engine.js";
+import { DEADLINE, startMainnet, type Mainnet } from "./mainnet.js";
 import type { GatedEngine } from "./gated-engine.js";
 
 // =============================================================================
-// Configuration — fork URL from .env, hardhat managed by tests
+// Configuration — Ethereum mainnet at the pinned block, replayed from captured state (mainnet.ts)
 // =============================================================================
 
 const REPO_ROOT = execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim();
-const DEV_TOOLS = resolve(REPO_ROOT, "dev-tools");
-
-const FORK_URL = process.env.FORK_URL;
-if (!FORK_URL) {
-  throw new Error("FORK_URL env var is required.");
-}
 
 const RAY = 10n ** 27n;
-const RPC = "http://127.0.0.1:8545";
+/** The local anvil's URL, set in `before()`. */
+let RPC: string;
+let mainnet: Mainnet;
 const PK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as const;
 const CALLER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as Address;
 
@@ -43,9 +42,8 @@ const CALLER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as Address;
 let SAUCE: Address;
 /** The interpreter. Named per cook; never called directly, because the gate refuses that. */
 let ENGINE: Address;
-let hardhatProcess: ChildProcess;
 
-// Chain-specific addresses keyed by network substring in forkUrl
+// Ethereum mainnet addresses, at the pinned block
 interface ChainAddresses {
   chainId: number;
   weth: Address;
@@ -115,7 +113,8 @@ const CHAINS: Record<string, ChainAddresses> = {
     dodoProxy: "0xa356867fDCEa8e71AEaF87805808803806231FdC",
     dodoApprove: "0xCB859eA579b28e02B87A1FDE08d087ab9dbE5149",
     dodoPairWethUsdc: "0x75c23271661d9d143DCb617222BC4BEc783eFf34",
-    maverickV2Router: "0xbbF1EE38152E9D8E3470Dc47947eAa65DCA94913",
+    // MaverickV2Router. The address this held before carries neither swap selector.
+    maverickV2Router: "0x62e31802c6145A2D5E842EeD8efe01fC224422fA",
     carbonController: "0xC537e898CD774e2dCBa3B14Ea6f34C93d5eA45e1",
     fraxswapRouter: "0xC14d550632db8592D1243Edc8B95b0Ad06703867",
     clipperExchange: "0x655eDCE464CC797526600a462A8154650EEe4B77",
@@ -124,54 +123,9 @@ const CHAINS: Record<string, ChainAddresses> = {
     fluidDexLite: "0xBbcb91440523216e2b87052A99F69c604A7b6e00",
     wsteth: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
   },
-  "base-mainnet": {
-    chainId: 8453,
-    weth: "0x4200000000000000000000000000000000000006",
-    usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    usdbc: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
-    dai: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
-    usdt: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", // placeholder
-    swapRouter: "0x2626664c2603336E57B271c5C0b26F421741e481",
-    aaveV3Pool: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
-    aaveV3aUSDC: "0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB",
-    compoundV3USDC: "0xb125E6687d4313864e53df431d5425969c15Eb2F",
-    acrossSpokePool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
-    balancerV2Vault: "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
-    balancerV2WethUsdcPoolId: "0xbbb4966335677ea24f7b86dc19a423412390e1fb00020000000000000000019a",
-    curvePool: "0xf6C5F01C7F3148891ad0e19DF78743D31E390D1f", // 4pool (USDC/USDbC/axlUSDC/crvUSD)
-    curveTokenOut: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", // USDbC
-    curveI: 0,
-    curveJ: 1, // USDC=0, USDbC=1 in 4pool
-    uniswapV4Router: "0x6ff5693b99212da76ad316178a184ab56d299b43",
-    // Most of these are mainnet-only; use zero placeholders for base
-    uniswapV2Router: "0x0000000000000000000000000000000000000000",
-    curveRouterNG: "0x0000000000000000000000000000000000000000",
-    balancerV3Router: "0x0000000000000000000000000000000000000000",
-    ambientDex: "0x0000000000000000000000000000000000000000",
-    dodoProxy: "0x0000000000000000000000000000000000000000",
-    dodoApprove: "0x0000000000000000000000000000000000000000",
-    dodoPairWethUsdc: "0x0000000000000000000000000000000000000000",
-    maverickV2Router: "0x0000000000000000000000000000000000000000",
-    carbonController: "0x0000000000000000000000000000000000000000",
-    fraxswapRouter: "0x0000000000000000000000000000000000000000",
-    clipperExchange: "0x0000000000000000000000000000000000000000",
-    integralDelay: "0x0000000000000000000000000000000000000000",
-    fluidDexT1WstethEth: "0x0000000000000000000000000000000000000000",
-    fluidDexLite: "0x0000000000000000000000000000000000000000",
-    wsteth: "0x0000000000000000000000000000000000000000",
-  },
 };
 
-function detectChain(forkUrl: string): ChainAddresses {
-  for (const [key, addrs] of Object.entries(CHAINS)) {
-    if (forkUrl.includes(key)) return addrs;
-  }
-  throw new Error(
-    `Unknown chain in forkUrl: ${forkUrl}. Supported: ${Object.keys(CHAINS).join(", ")}`,
-  );
-}
-
-const chain = detectChain(FORK_URL);
+const chain = CHAINS["eth-mainnet"]!;
 const {
   chainId,
   weth: WETH,
@@ -198,9 +152,9 @@ const {
   dodoProxy: DODO_PROXY,
   dodoApprove: DODO_APPROVE,
   dodoPairWethUsdc: DODO_PAIR_WETH_USDC,
-  maverickV2Router: _MAVERICK_V2_ROUTER,
-  carbonController: _CARBON_CONTROLLER,
-  fraxswapRouter: _FRAXSWAP_ROUTER,
+  maverickV2Router: MAVERICK_V2_ROUTER,
+  carbonController: CARBON_CONTROLLER,
+  fraxswapRouter: FRAXSWAP_ROUTER,
   clipperExchange: _CLIPPER_EXCHANGE,
   integralDelay: _INTEGRAL_DELAY,
   fluidDexT1WstethEth: FLUID_DEX_T1_WSTETH_ETH,
@@ -210,64 +164,19 @@ const {
 
 const isMainnet = chainId === 1;
 
+/** Receives outputs whose arrival a test checks; an address nothing else touches. */
+const RECEIVER = "0x000000000000000000000000000000000000c0DE" as Address;
+const FRAX = "0x853d955aCEf822Db058eb8505911ED77F175b99e" as Address;
+/** A Maverick V2 USDC/USDT pool (token A = USDC) with liquidity at the pinned block. */
+const MAVERICK_USDC_USDT_POOL = "0x31373595F40Ea48a7aAb6CBCB0d377C6066E2dCA" as Address;
+/** A Carbon USDC/USDT strategy holding USDT at the pinned block. */
+const CARBON_USDC_USDT_STRATEGY = "1020847100762815390390123822295304634823";
+
 let client: ReturnType<typeof createPublicClient>;
 
 // =============================================================================
 // Hardhat lifecycle — start before all tests, stop after
 // =============================================================================
-
-async function startHardhat(): Promise<ChildProcess> {
-  // Kill any existing process on port 8545 (works on both macOS and Linux)
-  try {
-    execSync(
-      "lsof -ti :8545 | xargs kill -9 2>/dev/null || fuser -k 8545/tcp 2>/dev/null || true",
-      { encoding: "utf8" },
-    );
-  } catch {}
-
-  const hardhatCli = resolve(DEV_TOOLS, "node_modules/hardhat/internal/cli/cli.js");
-  const proc = spawn(process.execPath, [hardhatCli, "node", "--fork", FORK_URL!], {
-    cwd: DEV_TOOLS,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-
-  // Wait for hardhat to be ready (up to 60s)
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error("Hardhat failed to start within 60s")),
-      60_000,
-    );
-    const check = setInterval(async () => {
-      try {
-        const res = await fetch(RPC, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jsonrpc: "2.0", method: "eth_blockNumber", params: [], id: 1 }),
-        });
-        if (res.ok) {
-          clearInterval(check);
-          clearTimeout(timeout);
-          resolve();
-        }
-      } catch {}
-    }, 500);
-
-    proc.on("error", (err: Error) => {
-      clearInterval(check);
-      clearTimeout(timeout);
-      reject(err);
-    });
-    proc.on("exit", (code: number | null) => {
-      if (code !== null) {
-        clearInterval(check);
-        clearTimeout(timeout);
-        reject(new Error(`Hardhat exited with code ${code}`));
-      }
-    });
-  });
-
-  return proc;
-}
 
 /**
  * The Sauce ENGINE the programs run on.
@@ -339,12 +248,6 @@ async function deploySauce(): Promise<GatedEngine> {
         params: [address, slot, value],
       } as never),
   );
-}
-
-function stopHardhat(proc: ChildProcess): void {
-  if (proc && !proc.killed) {
-    proc.kill("SIGTERM");
-  }
 }
 
 const erc20Abi = parseAbi([
@@ -476,6 +379,17 @@ function findEvents<const T extends readonly unknown[]>(
 }
 
 /** Fund Sauce with USDC: wrap ETH + approve + swap in one cook, then transfer USDC from caller to Sauce */
+/** Sets `holder`'s balance of `token`, whose balances mapping lives at `slot`. */
+function setErc20Balance(token: Address, holder: Address, slot: bigint, amount: bigint): void {
+  const key = keccak256(
+    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [holder, slot]),
+  );
+  execSync(
+    `cast rpc anvil_setStorageAt ${token} ${key} ${`0x${amount.toString(16).padStart(64, "0")}`} --rpc-url ${RPC}`,
+    { encoding: "utf8" },
+  );
+}
+
 async function fundSauceUSDC(ethAmount: string): Promise<void> {
   cookSend(
     actionsToSauce([
@@ -491,7 +405,7 @@ async function fundSauceUSDC(ethAmount: string): Promise<void> {
         amountIn: ethAmount,
         amountOutMin: "1",
         recipient: CALLER,
-        deadline: Math.floor(Date.now() / 1000) + 3600,
+        deadline: DEADLINE,
       },
     ]),
     ethAmount,
@@ -512,15 +426,14 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
   let snap: string;
 
   before(async () => {
-    hardhatProcess = await startHardhat();
+    mainnet = await startMainnet("to-sauce");
+    RPC = mainnet.rpc;
     ({ engine: ENGINE, pot: SAUCE } = await deploySauce());
     client = createPublicClient({ transport: http(RPC) });
-    console.log(`Hardhat forking ${new URL(FORK_URL!).hostname.split(".")[0]}`); // the URL carries an API key
-    console.log(`Sauce deployed at ${SAUCE}`);
   });
 
-  after(() => {
-    stopHardhat(hardhatProcess);
+  after(async () => {
+    await mainnet?.stop();
   });
 
   beforeEach(() => {
@@ -669,7 +582,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountIn,
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
           },
         ]),
         "1ether",
@@ -731,7 +644,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountIn,
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
           },
         ]),
         "1ether",
@@ -1164,7 +1077,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             fee: 500,
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
           },
         ]),
         "1ether",
@@ -1261,7 +1174,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountIn,
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
             saveOutputAs: "swapOut",
           },
           { type: "approve", chainId, token: USDC, spender: SAUCE, amountRef: "swapOut" },
@@ -1327,7 +1240,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountIn,
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
             saveOutputAs: "swapOut",
           },
           {
@@ -1417,7 +1330,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountIn,
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
             saveOutputAs: "swapOut",
           },
           { type: "approve", chainId, token: USDC, spender, amountRef: "swapOut" },
@@ -1465,7 +1378,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountIn,
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
             saveOutputAs: "swapOut",
           },
           { type: "approve", chainId, token: USDC, spender, amountRef: "swapOut" },
@@ -1496,7 +1409,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
       );
     });
 
-    it.skip("uniswapV4ExactInput output → approve: V4 swap output chains into approval (Hardhat fork incompatible with V4 transient storage)", async () => {
+    it("uniswapV4ExactInput output → approve: V4 swap output chains into approval", async () => {
       const amountIn = "100000000000000000"; // 0.1 ETH
       const spender = "0x000000000000000000000000000000000000bEEF" as Address;
       cookSend(
@@ -1506,14 +1419,16 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             type: "uniswapV4ExactInput",
             chainId,
             router: UNISWAP_V4_ROUTER,
+            // V4 orders a pool's currencies by address, so USDC is currency0; WETH -> USDC is
+            // therefore one-for-zero. The 0.05% pool is the liquid one at the pinned block.
             poolKey: {
-              currency0: WETH,
-              currency1: USDC,
-              fee: 3000,
-              tickSpacing: 60,
+              currency0: USDC,
+              currency1: WETH,
+              fee: 500,
+              tickSpacing: 10,
               hooks: "0x0000000000000000000000000000000000000000",
             },
-            zeroForOne: true,
+            zeroForOne: false,
             amountIn,
             amountOutMin: "1",
             recipient: CALLER,
@@ -1530,7 +1445,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
       );
     });
 
-    it.skip("uniswapV4ExactInputMultiHop output → approve: V4 multi-hop output chains into approval (Hardhat fork incompatible with V4 transient storage)", async () => {
+    it("uniswapV4ExactInputMultiHop output → approve: V4 multi-hop output chains into approval", async () => {
       const amountIn = "100000000000000000"; // 0.1 ETH
       const spender = "0x000000000000000000000000000000000000bEEF" as Address;
       cookSend(
@@ -1544,8 +1459,8 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             path: [
               {
                 intermediateCurrency: USDC,
-                fee: 3000,
-                tickSpacing: 60,
+                fee: 500,
+                tickSpacing: 10,
                 hooks: "0x0000000000000000000000000000000000000000",
               },
             ],
@@ -1662,7 +1577,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             fee: 100,
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
             amountRef: "curveOut",
           },
         ]),
@@ -1703,7 +1618,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
       );
     });
 
-    it.skip("balancerV2Swap output → approve: Balancer swap output chains into approval (Balancer V2 vault locked after Nov 2025 exploit)", async () => {
+    it("balancerV2Swap output → approve: Balancer swap output chains into approval", async () => {
       const amountIn = "100000000000000"; // 0.0001 ETH (pool has low liquidity)
       const spender = "0x000000000000000000000000000000000000bEEF" as Address;
       cookSend(
@@ -1720,7 +1635,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountIn,
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
             saveOutputAs: "swapOut",
           },
           { type: "approve", chainId, token: USDC, spender, amountRef: "swapOut" },
@@ -1731,7 +1646,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
       assert.ok(a > 0n, `Allowance should reflect Balancer swap output, got ${a}`);
     });
 
-    it.skip("balancerV2BatchSwap output → approve: Balancer batch swap output chains into approval (Balancer V2 vault locked after Nov 2025 exploit)", async () => {
+    it("balancerV2BatchSwap output → approve: Balancer batch swap output chains into approval", async () => {
       const amountIn = "100000000000000"; // 0.0001 ETH
       const spender = "0x000000000000000000000000000000000000bEEF" as Address;
       cookSend(
@@ -1753,7 +1668,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             assets: [WETH, USDC],
             amountOutMin: "1",
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
             saveOutputAs: "swapOut",
           },
           { type: "approve", chainId, token: USDC, spender, amountRef: "swapOut" },
@@ -1766,8 +1681,6 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
   });
 
   describe("Bytecode generation", () => {
-    // Opcode constants
-    const OP_CALL = 0xa2;
     // Chaining is `let v_<name> = …` locals in the emitted SauceScript, so it is observable in the
     // source and not as an opcode. A byte scan cannot assert it either way.
 
@@ -1790,10 +1703,6 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
           return true;
       }
       return false;
-    }
-
-    function containsOpcode(bytecode: Uint8Array, opcode: number): boolean {
-      return bytecode.includes(opcode);
     }
 
     // Selectors
@@ -2102,18 +2011,6 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
       assert.ok(containsSelector(bytecode, SEL_BURN), "should contain burn selector");
     });
 
-    it("coinbaseStake", () => {
-      const bytecode = actionsToSauce([
-        {
-          type: "coinbaseStake",
-          chainId: 1,
-          cbETH: "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
-          amount: "1000000000000000000",
-        },
-      ]);
-      assert.ok(containsOpcode(bytecode, OP_CALL), "should have a CALL op");
-    });
-
     it("etherFiStake", () => {
       const bytecode = actionsToSauce([
         {
@@ -2239,7 +2136,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountOutMin: "1",
             path: [WETH, USDC],
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
           },
         ]),
         "1ether",
@@ -2275,7 +2172,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountOutMin: "1",
             path: [WETH, USDC],
             recipient: CALLER,
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
             saveOutputAs: "v2Out",
           },
           { type: "approve", chainId, token: USDC, spender, amountRef: "v2Out" },
@@ -2364,7 +2261,7 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
             amountOutMin: "1",
             dodoPairs: [DODO_PAIR_WETH_USDC],
             directions: 0, // sellBase at pool 0
-            deadline: Math.floor(Date.now() / 1000) + 3600,
+            deadline: DEADLINE,
             version: "v1", // configured pair is a DODO V1 Classical pool
           },
         ]),
@@ -2420,95 +2317,172 @@ describe("Sauce Action Integration Tests", { timeout: 120_000 }, () => {
   });
 
   describe("Fluid DEX T1 Swaps", () => {
-    it("fluidDexT1Swap: swaps ETH → wstETH via Fluid DEX T1 pool", async () => {
-      if (!isMainnet) return;
-      // Pool is wstETH(token0)/ETH(token1), swap1to0 = sell ETH for wstETH
-      // Fluid DEX T1 swapIn requires tokens to be pre-transferred or sent as ETH value
-      // For native ETH input, we send msg.value; swap0to1=false means selling token1 (ETH) for token0 (wstETH)
-      const amountIn = "100000000000000000"; // 0.1 ETH
-      const wstethBefore = await balanceOf(WSTETH, SAUCE);
-
-      // First transfer ETH to the pool, then call swapIn
-      // Actually Fluid DEX accepts ETH via payable — but our action sends value=0
-      // We need to use WETH approach: wrap ETH, transfer WETH to pool, then swap
-      // But Fluid DEX T1 uses raw token transfers, not WETH
-      // Let's just test that the transaction executes (may revert due to ETH handling)
-      try {
-        cookSend(
-          actionsToSauce([
-            {
-              type: "fluidDexT1Swap",
-              chainId,
-              pool: FLUID_DEX_T1_WSTETH_ETH,
-              swap0to1: false, // sell ETH(token1) for wstETH(token0)
-              amountIn,
-              amountOutMin: "1",
-              recipient: SAUCE,
-            },
-          ]),
-          amountIn,
-        );
-        const wstethAfter = await balanceOf(WSTETH, SAUCE);
-        assert.ok(wstethAfter > wstethBefore, "Sauce should receive wstETH");
-      } catch {
-        // Fluid DEX T1 may require specific token pre-transfer patterns
-        // that are incompatible with the simple swapIn call approach
-        assert.ok(true, "Fluid DEX T1 swap reverted — may need callback pattern");
-      }
+    it("fluidDexT1Swap: sells wstETH for ETH through the Fluid DEX T1 wstETH/ETH pool", async () => {
+      // token0 is wstETH, token1 native ETH. The action attaches no value, so it sells the ERC-20
+      // side: the pool pulls wstETH by allowance and pays ETH to the recipient.
+      const amountIn = 100000000000000000n; // 0.1 wstETH
+      setErc20Balance(WSTETH, SAUCE, 0n, amountIn); // OpenZeppelin ERC20: balances at slot 0
+      const before = await ethBalance(RECEIVER);
+      cookSend(
+        actionsToSauce([
+          {
+            type: "approve",
+            chainId,
+            token: WSTETH,
+            spender: FLUID_DEX_T1_WSTETH_ETH,
+            amount: `${amountIn}`,
+          },
+          {
+            type: "fluidDexT1Swap",
+            chainId,
+            pool: FLUID_DEX_T1_WSTETH_ETH,
+            swap0to1: true,
+            amountIn: `${amountIn}`,
+            amountOutMin: "1",
+            recipient: RECEIVER,
+          },
+        ]),
+      );
+      assert.equal(await balanceOf(WSTETH, SAUCE), 0n);
+      // wstETH is worth more than ETH, so 0.1 of it buys more than 0.1 ETH.
+      assert.ok(
+        (await ethBalance(RECEIVER)) - before > amountIn,
+        "the recipient should receive ETH",
+      );
     });
   });
 
   describe("Clipper Swaps", () => {
-    it.skip("clipperSwap: requires off-chain signed price quote from Clipper API", async () => {
-      // Clipper needs auxiliaryData from their API server containing a signed price quote.
-      // Cannot be tested against a fork without the API.
-    });
+    it.skip("clipperSwap: prices only through a quote signed by Clipper's off-chain signer, which no captured state can hold (the exchange's own getSellQuote reverts at the pinned block)", () => {});
   });
 
   describe("Integral Swaps", () => {
-    it.skip("integralSwap: delayed execution — order placed now, executed later at TWAP price", async () => {
-      // Integral SIZE uses delayed execution: the sell() call places an order
-      // that is executed later by a keeper at the 30-minute TWAP price.
-      // Cannot verify swap output in a single transaction.
-    });
+    it.skip("integralSwap: at the pinned block Integral's TwapDelay rejects a WETH/USDC sell (OS13, with or without a keeper fee) and its relayer rejects the quote (TR5A)", () => {});
   });
 
   describe("Carbon (Bancor) Swaps", () => {
-    it.skip("carbonSwap: requires live strategy IDs with available liquidity", async () => {
-      // Carbon trades require specific strategyId values from active on-chain strategies.
-      // These change dynamically and cannot be hardcoded for a fork test.
+    it("carbonSwap: sells USDC for USDT against a Carbon strategy, and chains the output", async () => {
+      await fundSauceUSDC("1000000000000000000");
+      const before = await balanceOf(USDT, RECEIVER);
+      cookSend(
+        actionsToSauce([
+          { type: "approve", chainId, token: USDC, spender: CARBON_CONTROLLER, amount: "1000000" },
+          {
+            type: "carbonSwap",
+            chainId,
+            controller: CARBON_CONTROLLER,
+            sourceToken: USDC,
+            targetToken: USDT,
+            // A USDC/USDT strategy holding USDT at the pinned block.
+            tradeActions: [{ strategyId: CARBON_USDC_USDT_STRATEGY, amount: "1000000" }],
+            amountIn: "1000000",
+            amountOutMin: "1",
+            deadline: DEADLINE,
+            saveOutputAs: "usdt",
+          },
+          { type: "transfer", chainId, token: USDT, to: RECEIVER, amountRef: "usdt" },
+        ]),
+      );
+      const received = (await balanceOf(USDT, RECEIVER)) - before;
+      assert.ok(received > 990_000n, `1 USDC should buy ~0.99 USDT, got ${received}`);
+      assert.equal(
+        await balanceOf(USDT, SAUCE),
+        0n,
+        "the transfer should spend exactly the output",
+      );
     });
   });
 
   describe("Maverick V2 Swaps", () => {
-    it.skip("maverickSwap: requires specific Maverick V2 pool address for the token pair", async () => {
-      // Maverick V2 pools are individually deployed contracts.
-      // Need to discover pool addresses from the factory for specific token pairs.
+    it("maverickSwap: swaps USDC → USDT through a Maverick V2 pool", async () => {
+      await fundSauceUSDC("1000000000000000000");
+      const before = await balanceOf(USDT, RECEIVER);
+      cookSend(
+        actionsToSauce([
+          {
+            type: "approve",
+            chainId,
+            token: USDC,
+            spender: MAVERICK_V2_ROUTER,
+            amount: "10000000",
+          },
+          {
+            type: "maverickSwap",
+            chainId,
+            router: MAVERICK_V2_ROUTER,
+            pool: MAVERICK_USDC_USDT_POOL,
+            tokenAIn: true, // token A is USDC
+            amountIn: "10000000",
+            amountOutMin: "9900000",
+            recipient: RECEIVER,
+          },
+        ]),
+      );
+      assert.ok((await balanceOf(USDT, RECEIVER)) - before >= 9_900_000n);
     });
 
-    it.skip("maverickMultiHopSwap: requires encoded path with pool addresses and directions", async () => {
-      // Multi-hop path encoding is Maverick-specific and needs known pools.
+    it("maverickMultiHopSwap: swaps along a packed pool/direction path, and chains the output", async () => {
+      await fundSauceUSDC("1000000000000000000");
+      const spender = "0x000000000000000000000000000000000000bEEF" as Address;
+      cookSend(
+        actionsToSauce([
+          {
+            type: "approve",
+            chainId,
+            token: USDC,
+            spender: MAVERICK_V2_ROUTER,
+            amount: "10000000",
+          },
+          {
+            type: "maverickMultiHopSwap",
+            chainId,
+            router: MAVERICK_V2_ROUTER,
+            // Per hop: the pool's 20 bytes, then one byte for tokenAIn.
+            path: `${MAVERICK_USDC_USDT_POOL}01` as Hex,
+            amountIn: "10000000",
+            amountOutMin: "9900000",
+            recipient: RECEIVER,
+            saveOutputAs: "usdt",
+          },
+          { type: "approve", chainId, token: USDT, spender, amountRef: "usdt" },
+        ]),
+      );
+      const out = await balanceOf(USDT, SAUCE);
+      assert.ok(out >= 9_900_000n, "a chained output lands in the Pot");
+      assert.equal(await allowance(USDT, SAUCE, spender), out);
     });
   });
 
   describe("Fraxswap Swaps", () => {
-    it.skip("fraxswapSwap: no WETH/USDC pair on Fraxswap — only FRAX-paired pools exist", async () => {
-      // Fraxswap uses UniV2-compatible router but only has FRAX-related pairs.
-      // Would need to swap WETH→FRAX→USDC via two hops or test with FRAX tokens.
+    it("fraxswapSwap: swaps WETH → FRAX through Fraxswap's FRAX/WETH pair", async () => {
+      const amountIn = "10000000000000000"; // 0.01 ETH
+      cookSend(
+        actionsToSauce([
+          { type: "wrapETH", chainId, weth: WETH, amount: amountIn },
+          { type: "approve", chainId, token: WETH, spender: FRAXSWAP_ROUTER, amount: amountIn },
+          {
+            type: "fraxswapSwap",
+            chainId,
+            router: FRAXSWAP_ROUTER,
+            amountIn,
+            amountOutMin: "1",
+            path: [WETH, FRAX],
+            recipient: RECEIVER,
+            deadline: DEADLINE,
+          },
+        ]),
+        amountIn,
+      );
+      // ~$27 of FRAX at the pinned block's price.
+      assert.ok((await balanceOf(FRAX, RECEIVER)) > 10n ** 19n);
     });
   });
 
   describe("BalancerV3 Swaps", () => {
-    it.skip("balancerV3Swap: requires approved Balancer V3 pool with liquidity", async () => {
-      // BalancerV3 uses a new Router contract. Need to find a V3 pool with
-      // WETH/USDC liquidity and verify the approval flow (Vault permit2).
-    });
+    it.skip("balancerV3Swap: the V3 Router pulls its input through Permit2, and no action grants the Pot a Permit2 allowance", () => {});
   });
 
   describe("Fluid DEX Lite Swaps", () => {
-    it.skip("fluidDexLiteSwap: requires pool discovery via DexLite resolver", async () => {
-      // FluidDexLite pools are identified by DexKey (token0, token1, salt).
-      // Need to discover valid salt values from FluidDexLiteResolver.getAllDexes().
-    });
+    it.skip("fluidDexLiteSwap: a DEX Lite pool is addressed by a DexKey only its resolver lists, and no resolver is known here; the singleton's events are bit-packed and it had no swaps in the 10,000 blocks before the pinned block", () => {});
   });
 });

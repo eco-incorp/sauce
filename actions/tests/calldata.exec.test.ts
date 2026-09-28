@@ -765,10 +765,6 @@ const CASES: Record<string, Case> = {
     action: { type: "rocketPoolUnstake", chainId: 1, rETH: TARGET, amount: `${AMOUNT}` },
     expect: () => [{ to: TARGET, data: call("function burn(uint256)", "burn", [AMOUNT]) }],
   },
-  coinbaseStake: {
-    action: { type: "coinbaseStake", chainId: 1, cbETH: TARGET, amount: `${AMOUNT}` },
-    expect: () => [{ to: TARGET, data: toFunctionSelector("deposit()"), value: AMOUNT }],
-  },
   etherFiStake: {
     action: { type: "etherFiStake", chainId: 1, liquidityPool: TARGET, amount: `${AMOUNT}` },
     expect: () => [{ to: TARGET, data: toFunctionSelector("deposit()"), value: AMOUNT }],

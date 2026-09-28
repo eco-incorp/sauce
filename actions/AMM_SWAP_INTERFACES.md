@@ -755,7 +755,10 @@ function sellQuote(address to) external returns (uint256 receiveBaseAmount);
 
 ## 6. Maverick Protocol
 
-**Maverick V2 Router Address:** `0xbbF1EE38152E9D8E3470Dc47947eAa65DCA94913`
+**Maverick V2 Router Address:** `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` (**Verified**: carries
+both swap selectors, and `exactInputSingle` returns one word, the amount out; a multi-hop `path` is,
+per hop, the pool's 20 bytes then one byte for `tokenAIn`). The address this file listed before,
+`0xbbF1EE38152E9D8E3470Dc47947eAa65DCA94913`, carries neither swap selector.
 
 ### Pool-Level Swap
 
@@ -1319,7 +1322,7 @@ uint256 _amountLD, uint256 _minAmountLD, lzTxObj _lzTxParams, bytes _to, bytes _
 bytes dstNativeAddr; }`. The LayerZero fee is paid as `msg.value`; `_to` is the packed 20-byte
   destination address. There is no `swap(…, (address,address,bytes))` overload.
 - **cbETH** (`0xBe9895146f7AF43049ca1c1AE358B0541Ea49704`) has no `deposit()`: cbETH is minted by
-  Coinbase, not by depositing ETH, so the `coinbaseStake` action reverts against it.
+  Coinbase, not by depositing ETH, which is why the actions have no cbETH staking action.
 - **CCTP V1 TokenMessenger** (`0xBd3fa81B58Ba92a82136038B25aDec7066af3155`) exposes
   `depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken)`.
 - **Hyperlane Mailbox** (`0xc005dc82818d67AF737725bD4bf75435d065D239`) exposes
@@ -1329,8 +1332,3 @@ bytes dstNativeAddr; }`. The LayerZero fee is paid as `msg.value`; `_to` is the 
 - **Rocket Pool**: the deposit pool (`0xDD3f50F8A6CafbE9b31a427582963f465E745AF8`) takes `deposit()`
   with value; rETH (`0xae78736Cd615f374D3085123A210448E74Fc6393`) takes `burn(uint256)`.
 - **ether.fi LiquidityPool** (`0x308861A430be4cce5502d0A12724771Fc6DaF216`) takes `deposit()` with value.
-
-The address `0xbbF1EE38152E9D8E3470Dc47947eAa65DCA94913`, used for Maverick V2 in the fork suite,
-does not carry the `exactInputSingle(address,address,bool,uint256,uint256)` or
-`exactInputMultiHop(address,bytes,uint256,uint256)` selectors; confirm the router address and its
-return values before relying on the Maverick actions.

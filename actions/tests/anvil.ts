@@ -27,6 +27,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 import { cookData, startGatedEngine } from "./gated-engine.js";
+import { startMainnet } from "./mainnet.js";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -76,19 +77,34 @@ async function freePort(): Promise<number> {
 export type Anvil = Awaited<ReturnType<typeof startAnvil>>;
 
 /**
- * Starts anvil on a free port (forking `forkUrl` when given), deploys the engine, the Kitchen and
- * the Pot, and returns clients plus `cook`. Stop it with `stop()`.
+ * Starts anvil on a free port — empty, or, with `mainnet`, Ethereum mainnet frozen at the pinned
+ * block from that suite's captured state (`mainnet.ts`) — deploys the engine, the Kitchen and the
+ * Pot, and returns clients plus `cook`. Stop it with `stop()`, and await it: in capture mode it
+ * writes the suite's state.
  */
-export async function startAnvil(options: { forkUrl?: string } = {}) {
+export async function startAnvil(options: { mainnet?: string } = {}) {
   const creation = engineCreationCode();
   if (creation === undefined) throw new Error(skipReason() as string);
 
-  const port = await freePort();
-  const args = ["--port", String(port), "--silent", "--gas-limit", "100000000"];
-  if (options.forkUrl) args.push("--fork-url", options.forkUrl);
-  const proc: ChildProcess = spawn("anvil", args, { stdio: "ignore" });
+  let rpc: string;
+  let stopNode: () => Promise<void>;
+  if (options.mainnet !== undefined) {
+    const node = await startMainnet(options.mainnet);
+    rpc = node.rpc;
+    stopNode = () => node.stop();
+  } else {
+    const port = await freePort();
+    const proc: ChildProcess = spawn(
+      "anvil",
+      ["--port", String(port), "--silent", "--gas-limit", "100000000"],
+      { stdio: "ignore" },
+    );
+    rpc = `http://127.0.0.1:${port}`;
+    stopNode = async () => {
+      proc.kill("SIGKILL");
+    };
+  }
 
-  const rpc = `http://127.0.0.1:${port}`;
   const probe = createPublicClient({ transport: http(rpc) });
   let chainId = 0;
   for (let i = 0; i < 300 && chainId === 0; i++) {
@@ -99,7 +115,7 @@ export async function startAnvil(options: { forkUrl?: string } = {}) {
     }
   }
   if (chainId === 0) {
-    proc.kill("SIGKILL");
+    await stopNode();
     throw new Error("anvil did not start");
   }
 
@@ -159,7 +175,7 @@ export async function startAnvil(options: { forkUrl?: string } = {}) {
     pot,
     cook,
     send,
-    stop: () => proc.kill("SIGKILL"),
+    stop: stopNode,
   };
 }
 

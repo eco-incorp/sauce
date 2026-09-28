@@ -429,11 +429,6 @@ const CASES: Record<string, Case> = {
     targets: [TARGET],
     signatures: ["burn(uint256)"],
   },
-  coinbaseStake: {
-    action: { type: "coinbaseStake", chainId: 1, cbETH: TARGET, amount: AMOUNT },
-    targets: [TARGET],
-    signatures: ["deposit()"],
-  },
   etherFiStake: {
     action: { type: "etherFiStake", chainId: 1, liquidityPool: TARGET, amount: AMOUNT },
     targets: [TARGET],
@@ -603,7 +598,7 @@ describe("actionsToSauce — every action type", () => {
     for (const type of ACTION_TYPES) {
       assert.doesNotThrow(() => actionToSauce(CASES[type].action), `${type} did not build`);
     }
-    assert.equal(ACTION_TYPES.length, 42, "action-type count changed — add or remove a case above");
+    assert.equal(ACTION_TYPES.length, 41, "action-type count changed — add or remove a case above");
     // The three source actions produce a value and call nothing that moves funds; they are covered
     // by the "source actions" block below, and together these are every type the spec lists.
     const all = new Set([...ACTION_TYPES, "balanceOf", "nativeBalance", "argument"]);
@@ -674,7 +669,6 @@ describe("actionsToSauce — native value", () => {
     ["wrapETH", AMOUNT],
     ["lidoStake", AMOUNT],
     ["rocketPoolStake", AMOUNT],
-    ["coinbaseStake", AMOUNT],
     ["etherFiStake", AMOUNT],
     ["stargateBridge", "7"],
     ["hyperlaneBridge", "9"],

@@ -210,22 +210,15 @@ jobs:
 
       # `test:unit` needs no RPC: its `*.exec.test.ts` suites execute on a local anvil through the
       # released engine (Foundry and SAUCE_V12_RUNTIME_CREATION_HEX are set up above, and they throw
-      # under CI rather than skip). The fork suites — to-sauce, to-quote, megas-swap on hardhat, and
-      # v4.fork on anvil — need an archive RPC. Gated on the secret because a fork PR has none, and
-      # announced with ::warning:: rather than skipped in silence: an absent gate that says nothing
-      # is how these went unrun for their whole life. `secrets` cannot appear in a job-level `if`,
-      # hence env + a step-level test.
-      - name: Actions — fork tests
-        env:
-          FORK_URL: ${{ secrets.FORK_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${FORK_URL:-}" ]; then
-            echo "::warning::FORK_URL is not configured — actions fork tests (to-sauce, to-quote, v4.fork, megas-swap) did NOT run. Add it as a repo or org secret (an archive-node RPC URL) and they start running with no further change."
-            exit 0
-          fi
-          pnpm --filter './actions' test
-          pnpm --filter './actions' test:megas-swap
+      # under CI rather than skip).
+      #
+      # The prod-like suites — to-sauce, to-quote, v4.mainnet, megas-swap — run against real mainnet
+      # contracts on a LOCAL anvil booted from state captured at a pinned block and checked in
+      # (`actions/tests/state/*.genesis.json.gz`, see `actions/tests/mainnet.ts`). No secret and no
+      # network: a replayed suite refuses to fork and fails on any non-local request. Recapturing is a
+      # maintainer step (CLAUDE.md), never part of CI.
+      - name: Actions — mainnet-state suites
+        run: pnpm --filter './actions' test:mainnet
 
       - name: Dev Tools — test
         run: pnpm --filter './dev-tools' test

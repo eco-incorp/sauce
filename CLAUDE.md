@@ -74,7 +74,8 @@ Per-workspace (`--filter`):
 
 ```sh
 pnpm --filter './sdk' test               # SDK tests, including protocol SauceScript compilation
-pnpm --filter './actions' test:unit      # fork-free subset CI runs
+pnpm --filter './actions' test:unit      # no mainnet state
+pnpm --filter './actions' test:mainnet   # real mainnet contracts, replayed locally
 pnpm --filter './sdk' gen-route-globals  # regenerate the per-chain named exports
 pnpm --filter './sdk' gen-source-globals # regenerate source-only token/protocol declarations
 ```
@@ -87,8 +88,9 @@ Actions test layout: `*.unit.test.ts` need nothing; `*.exec.test.ts` EXECUTE pro
 anvil through the released engine and a real Kitchen-minted Pot (`tests/anvil.ts`) — they are in
 `test:unit`, skip locally without the engine artifact and throw under `CI`. `calldata.exec` runs
 every action against contracts that log the call they receive and compares the calldata with an
-independent viem encoding. `to-sauce`, `to-quote`, `megas-swap` (hardhat) and `v4.fork` (anvil,
-because the hardhat fork cannot run V4) need `FORK_URL`; never print it — it carries an API key.
+independent viem encoding. `to-sauce`, `to-quote`, `v4.mainnet` and `megas-swap` (`test:mainnet`)
+run against real Ethereum contracts on a LOCAL anvil booted from mainnet state captured at a pinned
+block — no RPC, no secret, and they run in CI. See "Mainnet state" below.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -133,8 +135,31 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   tests to etch at another address. **A tree where the
   sync has not run is not green**: with no `sdk/{src,dist}/artifacts/`, the tests that import
   `./artifacts/*.json` fail. Run `pnpm --filter './sdk' sync-engine-artifacts`.
-- **`FORK_URL`** — actions `test`/`test:megas-swap` and dev-tools fork flows hit a hardhat mainnet
-  fork (loaded from `.env`). `test:unit` is the fork-free subset.
+- **Mainnet state (`actions/tests/state/*.genesis.json.gz`)** — no test forks a live chain. The
+  actions mainnet suites replay Ethereum at `PINNED_BLOCK` (`actions/tests/mainnet.ts`) from one
+  gzipped anvil genesis per suite: every account and storage slot that suite read, at their values
+  in that block. Replay pins the block number, its timestamp, chain id 1 and a 12-second block
+  interval, refuses to fork, and makes any non-loopback `fetch` throw, so a suite that starts reading
+  something new FAILS (a missing slot reads as zero) rather than reaching the network. Blob sizes at
+  capture: to-sauce ~310 KB, to-quote ~210 KB, megas-swap ~80 KB, v4 ~30 KB.
+
+  **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
+  `PINNED_BLOCK` (then recapture all four, and revisit every pinned figure: pools, strategy ids,
+  expected outputs). With an Ethereum archive RPC:
+
+  ```sh
+  FORK_URL=<archive rpc> pnpm --filter './actions' capture-mainnet
+  ```
+
+  Capture forks at `PINNED_BLOCK` through a local recording proxy (`tests/mainnet-recorder.mjs`, a
+  separate process because the suites block on `execSync(cast …)`) and rewrites each suite's blob
+  from what it answered. Anvil's own mechanisms cannot do this: a fork's `anvil_dumpState` holds only
+  locally modified accounts, and Foundry's RPC cache drops whatever was fetched after a snapshot when
+  the suite reverts it. Capture a WHOLE suite — a `--test-name-pattern` run writes a blob with only
+  those tests' state. Never print the RPC; `stop()` refuses to write a blob that mentions it, and
+  grep the blobs for the host before committing anyway. `actions/scripts/*` (quote tables, split
+  quotes) are manual tools that call an RPC by design; they are not tests.
+
 - **`SAUCE_ENGINE_SO` / `SAUCE_RUST_ENGINE_SO`** — the path to the Solana engine, fetched by
   `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines`, which digest-verifies it against
   the pin and prints `SAUCE_RUST_ENGINE_SO=<path>`. **Nothing about the engine is source-controlled.**
