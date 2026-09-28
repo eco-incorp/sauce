@@ -76,16 +76,16 @@ function plain<T>(value: T): T {
 type Outputs = "keep" | "drop";
 
 /**
- * The registry function with exactly `signature`, from `abi` (the `abiExport` of `protocol`).
- * Throws when the registry has no such function — the signal that it changed under the action.
+ * The registry function with exactly `signature`, from `abi` (the `abiExport` of `protocol`), as a
+ * plain copy. Throws when the registry has no such function — the signal that it changed under the
+ * action. The bindings below and the quotes in `to-quote.ts` both take registry ABIs through it.
  */
-function sdk(
+export function registryFunction(
   protocol: string,
   abiExport: string,
   abi: readonly unknown[],
   signature: string,
-  outputs: Outputs,
-): BoundMethod {
+): AbiFunction {
   const found = (abi as readonly AbiFunction[]).find(
     (item) => item.type === "function" && canonicalSignature(item) === signature,
   );
@@ -99,7 +99,19 @@ function sdk(
         " — the action would call a function the contract does not have.",
     );
   }
-  const fn = plain(found);
+
+  return plain(found);
+}
+
+/** A binding method from the registry, its outputs dropped unless an action reads them. */
+function sdk(
+  protocol: string,
+  abiExport: string,
+  abi: readonly unknown[],
+  signature: string,
+  outputs: Outputs,
+): BoundMethod {
+  const fn = registryFunction(protocol, abiExport, abi, signature);
   if (outputs === "drop") fn.outputs = [];
 
   return { fn, source: { kind: "sdk", protocol, abiExport } };

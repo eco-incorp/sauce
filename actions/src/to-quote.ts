@@ -4,9 +4,29 @@
  *
  * The on-chain form is statements plus the `uint256` expression they leave available (a
  * [`Fragment`]); a quote's return shape maps onto an `abi.decode` shape string — see [`Shape`].
+ *
+ * Where the SDK's protocol registry declares the quote function exactly — the same selector,
+ * input types and outputs — its calldata and decoding come from that registry fragment
+ * (`registryFunction`, checked the way `abis.ts` checks a binding). The rest of the quoters are
+ * not in the registry, and their signatures are written here.
  */
-import { keccak256, toBytes, encodeAbiParameters, decodeAbiParameters, getAddress } from "viem";
+import {
+  keccak256,
+  toBytes,
+  encodeAbiParameters,
+  encodeFunctionData,
+  decodeAbiParameters,
+  getAddress,
+  type AbiFunction,
+} from "viem";
 
+import { registryFunction } from "./abis.js";
+import {
+  CurveRouterNGABI,
+  CurveThreePoolABI,
+  UniswapV2RouterABI,
+  UniswapV3QuoterV2ABI,
+} from "./registry.js";
 import {
   bindBytes,
   bindConst,
@@ -87,6 +107,16 @@ export interface QuoteOptions {
 
 function sel(sig: string): Hex {
   return keccak256(toBytes(sig)).slice(0, 10) as Hex;
+}
+
+/** A registry function's calldata: its selector, then `args` encoded by its own input types. */
+function callData(fn: AbiFunction, args: readonly unknown[]): Hex {
+  return encodeFunctionData({ abi: [fn], functionName: fn.name, args });
+}
+
+/** `result` decoded by a registry function's own output types. */
+function returned(fn: AbiFunction, result: Hex): readonly unknown[] {
+  return decodeAbiParameters(fn.outputs, result);
 }
 
 function concatHex(a: Hex, b: Hex): Hex {
@@ -383,20 +413,23 @@ export function quoteCall(
 // View functions — on the same contract referenced by the action
 // ---------------------------------------------------------------------------
 
-/** Curve StableSwap / CryptoSwap pool — `get_dy(int128,int128,uint256)`. */
+/**
+ * Curve StableSwap / CryptoSwap pool — `get_dy(int128,int128,uint256)`, from the same 3pool ABI
+ * the `curveSwap` binding uses; every 4-argument pool declares it the same way.
+ */
 function quoteCurve(action: CurveSwapAction, amountIn: bigint): QuoteCall {
-  const to = action.pool;
-  const data = concatHex(
-    sel("get_dy(int128,int128,uint256)"),
-    encodeAbiParameters(
-      [{ type: "int128" }, { type: "int128" }, { type: "uint256" }],
-      [BigInt(action.i), BigInt(action.j), amountIn],
-    ),
+  const fn = registryFunction(
+    "curve",
+    "CurveThreePoolABI",
+    CurveThreePoolABI,
+    "get_dy(int128,int128,uint256)",
   );
+  const to = action.pool;
+  const data = callData(fn, [BigInt(action.i), BigInt(action.j), amountIn]);
   return {
     to,
     data,
-    decode: decodeUint256,
+    decode: (result: Hex) => returned(fn, result)[0] as bigint,
     toSauce: asUint256("static", to, data),
     // selector(4) + int128 i(32) + int128 j(32) = 68
     toSauceDynamic: makeDynamic("static", to, data, 68, OUT_UINT256, firstWord),
@@ -412,23 +445,23 @@ function quoteCurveRouterNG(action: CurveRouterNGSwapAction, amountIn: bigint): 
   const pools = [...action.pools] as Address[];
   while (pools.length < 5) pools.push(ZERO_ADDR);
 
-  const to = action.router;
-  const data = concatHex(
-    sel("get_dy(address[11],uint256[5][5],uint256,address[5])"),
-    encodeAbiParameters(
-      [
-        { type: "address[11]" },
-        { type: "uint256[5][5]" },
-        { type: "uint256" },
-        { type: "address[5]" },
-      ],
-      [route as any, swapParams.map((r) => r.map((v) => BigInt(v))) as any, amountIn, pools as any],
-    ),
+  const fn = registryFunction(
+    "curve",
+    "CurveRouterNGABI",
+    CurveRouterNGABI,
+    "get_dy(address[11],uint256[5][5],uint256,address[5])",
   );
+  const to = action.router;
+  const data = callData(fn, [
+    route,
+    swapParams.map((r) => r.map((v) => BigInt(v))),
+    amountIn,
+    pools,
+  ]);
   return {
     to,
     data,
-    decode: decodeUint256,
+    decode: (result: Hex) => returned(fn, result)[0] as bigint,
     toSauce: asUint256("static", to, data),
     // selector(4) + address[11] (11*32) + uint256[5][5] (25*32) = 1156
     toSauceDynamic: makeDynamic("static", to, data, 1156, OUT_UINT256, firstWord),
@@ -437,17 +470,20 @@ function quoteCurveRouterNG(action: CurveRouterNGSwapAction, amountIn: bigint): 
 
 /** UniswapV2 / SushiSwap / Fraxswap router — `getAmountsOut(uint256,address[])`. */
 function quoteV2Router(router: Address, path: Address[], amountIn: bigint): QuoteCall {
-  const to = router;
-  const data = concatHex(
-    sel("getAmountsOut(uint256,address[])"),
-    encodeAbiParameters([{ type: "uint256" }, { type: "address[]" }], [amountIn, path]),
+  const fn = registryFunction(
+    "uniswap-v2",
+    "UniswapV2RouterABI",
+    UniswapV2RouterABI,
+    "getAmountsOut(uint256,address[])",
   );
+  const to = router;
+  const data = callData(fn, [amountIn, path]);
   return {
     to,
     data,
     decode: (result: Hex) => {
-      const [amounts] = decodeAbiParameters([{ type: "uint256[]" }], result);
-      return amounts[amounts.length - 1];
+      const [amounts] = returned(fn, result) as [readonly bigint[]];
+      return amounts[amounts.length - 1]!;
     },
     toSauce: asUint256ArrayLast("static", to, data),
     // selector(4), then amountIn is the first head slot.
@@ -709,44 +745,27 @@ function quoteUniV3Single(
   amountIn: bigint,
   quoter: Address,
 ): QuoteCall {
-  const to = quoter;
-  const data = concatHex(
-    sel("quoteExactInputSingle((address,address,uint256,uint24,uint160))"),
-    encodeAbiParameters(
-      [
-        {
-          type: "tuple",
-          components: [
-            { type: "address", name: "tokenIn" },
-            { type: "address", name: "tokenOut" },
-            { type: "uint256", name: "amountIn" },
-            { type: "uint24", name: "fee" },
-            { type: "uint160", name: "sqrtPriceLimitX96" },
-          ],
-        },
-      ],
-      [
-        {
-          tokenIn: action.tokenIn,
-          tokenOut: action.tokenOut,
-          amountIn,
-          fee: action.fee,
-          sqrtPriceLimitX96: BigInt(action.sqrtPriceLimitX96 ?? 0),
-        },
-      ],
-    ),
+  const fn = registryFunction(
+    "uniswap-v3",
+    "UniswapV3QuoterV2ABI",
+    UniswapV3QuoterV2ABI,
+    "quoteExactInputSingle((address,address,uint256,uint24,uint160))",
   );
+  const to = quoter;
+  const data = callData(fn, [
+    {
+      tokenIn: action.tokenIn,
+      tokenOut: action.tokenOut,
+      amountIn,
+      fee: action.fee,
+      sqrtPriceLimitX96: BigInt(action.sqrtPriceLimitX96 ?? 0),
+    },
+  ]);
   return {
     to,
     data,
-    decode: (result: Hex) => {
-      // (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
-      const [amountOut] = decodeAbiParameters(
-        [{ type: "uint256" }, { type: "uint160" }, { type: "uint32" }, { type: "uint256" }],
-        result,
-      );
-      return amountOut;
-    },
+    // (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
+    decode: (result: Hex) => returned(fn, result)[0] as bigint,
     toSauce: asUint256("call", to, data),
     // Struct args: selector(4) + tokenIn(32) + tokenOut(32) = 68
     toSauceDynamic: makeDynamic("call", to, data, 68, OUT_UINT256, firstWord),
