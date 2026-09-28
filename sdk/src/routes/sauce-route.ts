@@ -27,6 +27,11 @@ import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { pascalOfSlug } from "./accessors.js";
+import { encodeCompactArguments } from "../compact-arguments.js";
+import { v12EngineAddress } from "../deployments/index.js";
+import { denormalizeToEvm } from "./encode.js";
+import { toUniversalAddress } from "./normalize.js";
+import { childCaptureSentinel, type CompiledChild } from "./intent-sugar.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import {
   ecoRoutesPortal,
@@ -35,7 +40,7 @@ import {
 } from "../protocols/eco-routes/lookup.js";
 import { rewriteIntentSugar, type IntentSugarDefaults } from "./intent-sugar.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
-import type { AddressInput, CallInput } from "./types.js";
+import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
   /** Defaults by destination `ChainKind`: `'v12'` for evm, `'svm'` for svm. */
@@ -79,6 +84,10 @@ export interface SauceCompileOptions {
    * no safe defaults and are reported by name when missing.
    */
   intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
+  /** Compile for compact-v1 entry arguments. Set by the intent lowering for a child program whose
+   *  captured values arrive at run time; a caller wanting entry arguments generally uses the raw
+   *  compiler. */
+  compactArgs?: boolean;
 }
 
 export interface SauceEvmExecutionInput {
@@ -148,6 +157,81 @@ function compileTimeValues(
 
 type ChainRefResolved = ReturnType<typeof requireChain>;
 
+/**
+ * Compiles a closure body as a program for its own destination chain, and wraps it in the `cook`
+ * the child's route will call.
+ *
+ * RE-ENTERS `compileSauceRoute`, which is what makes this general rather than a special case: the
+ * child gets that chain's token and protocol rewrites, and the intent lowering runs again inside
+ * it, so an intent opened within an intent is lowered by the same code at every depth.
+ *
+ * Captured values arrive as compact-v1 entry arguments at a DECLARED width. Minimal encoding would
+ * move the payload's length with the values, leaving nothing at a fixed offset to splice; a
+ * declared width keeps exactly one encoding per value and a constant length, which is the property
+ * `compact-arguments.ts`'s `scalarWidth` exists for.
+ */
+function compileIntentChild(
+  destination: ChainRefResolved,
+  childSource: string,
+  captures: readonly string[],
+  options: SauceCompileOptions,
+): CompiledChild {
+  const intents = options.intents ?? {};
+  if (intents.pot === undefined) {
+    throw new Error(
+      `intent sugar: the intent on ${destination.slug} runs a program, so it needs a Pot to run it ` +
+        `in — set \`intents.pot\`. It has no default: a Pot's address is CREATE2 from its owner, ` +
+        `the destination \`Portal.executor()\`, which is a chain read rather than a constant.`,
+    );
+  }
+  if (intents.executionFee === undefined) {
+    throw new Error(
+      `intent sugar: the intent on ${destination.slug} runs a program, so its cook must pay that ` +
+        `chain's Kitchen fee — set \`intents.executionFee\`. Read it from the Kitchen before ` +
+        `building; it is not a constant and an increase before fulfillment makes the route revert.`,
+    );
+  }
+  const engine: AddressInput = intents.engine ?? (v12EngineAddress() as Hex);
+
+  const compiled = compileSauceRoute(
+    destination,
+    childSource,
+    { pot: intents.pot, engine, value: intents.executionFee },
+    { ...options, compactArgs: captures.length > 0 },
+  );
+
+  let program: Hex = bytesToHex(compiled.compiled.bytecode[0]!);
+  const captureSentinels: bigint[] = [];
+  if (captures.length > 0) {
+    const schema = compiled.compiled.entrySchema;
+    if (schema === undefined) {
+      throw new Error(
+        "intent sugar: the child program takes captured values but the compiler returned no entry " +
+          "schema — its arguments cannot be encoded.",
+      );
+    }
+    captures.forEach((_, index) => captureSentinels.push(childCaptureSentinel(index)));
+    const args = encodeCompactArguments(schema, captureSentinels, { scalarWidth: 32 });
+    program = `${program}${bytesToHex(args).slice(2)}` as Hex;
+  }
+
+  const call = buildSauceEvmCall({
+    pot: intents.pot,
+    engine,
+    program,
+    value: intents.executionFee,
+  });
+
+  return {
+    call: {
+      target: denormalizeToEvm(toUniversalAddress(call.target)) as Hex,
+      data: call.data,
+      value: intents.executionFee,
+    },
+    captureSentinels,
+  };
+}
+
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
 }
@@ -197,6 +281,8 @@ export function compileSauceRoute(
     portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
     proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
     defaults: options.intents ?? {},
+    compileChild: (destination, childSource, captures) =>
+      compileIntentChild(destination, childSource, captures, options),
   });
   source = sugar.source;
   let baseDirs = options.baseDirs;
@@ -279,6 +365,7 @@ export function compileSauceRoute(
     defines,
     contracts,
     ambient: options.ambient,
+    compactArgs: options.compactArgs,
   });
 
   if (compiled.bytecode.length === 0) {

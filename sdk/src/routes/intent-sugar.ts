@@ -61,6 +61,12 @@ import type { AddressInput, Intent } from "./types.js";
  * loudly rather than quietly overwriting a field.
  */
 const CAPTURE_TAG = "5acecab7";
+
+/** The sentinel a captured value occupies in a CHILD PROGRAM's argument tail. A separate tag from
+ *  the route-call one so the two can never be mistaken for each other in a payload carrying both. */
+const CHILD_CAPTURE_TAG = "5aceb10c";
+export const childCaptureSentinel = (index: number): bigint =>
+  BigInt(`0x${CHILD_CAPTURE_TAG}${"00".repeat(14)}${index.toString(16).padStart(4, "0")}`);
 const captureSentinel = (index: number): bigint =>
   BigInt(`0x${CAPTURE_TAG}${"00".repeat(14)}${index.toString(16).padStart(4, "0")}`);
 
@@ -86,6 +92,15 @@ export interface IntentSugarDefaults {
   readonly salt?: Hex;
   /** Passed to `publishAndFund`. Default `false`. */
   readonly allowPartial?: boolean;
+  /** The destination Pot a cook-based child runs on. Required as soon as a closure needs a compiled
+   *  program: a Pot's address is CREATE2 from its OWNER, the destination `Portal.executor()`, which
+   *  is a chain read rather than a constant. */
+  readonly pot?: AddressInput;
+  /** The interpreter that Pot cooks on. Defaults to the released engine address. */
+  readonly engine?: AddressInput;
+  /** The destination Kitchen's current execution fee, in wei, paid on every cook. Required for a
+   *  cook-based child: it is read from the chain and it changes. */
+  readonly executionFee?: bigint;
 }
 
 /** Everything the rewrite needs that is not in the source text. */
@@ -108,6 +123,25 @@ export interface IntentSugarContext {
   readonly portalOf: (chain: CanonicalChain) => AddressInput;
   readonly proverFor: (source: CanonicalChain, destination: CanonicalChain) => AddressInput;
   readonly defaults: Partial<IntentSugarDefaults>;
+  /**
+   * Compiles a program for `chain`, re-entering the whole route pipeline — token and protocol
+   * rewrites for THAT chain, and this same lowering, which is what makes a nested intent work
+   * without a second implementation. Supplied by `sauce-route.ts`; a callback rather than an import
+   * because this module is one of the passes that pipeline runs.
+   */
+  readonly compileChild: (
+    chain: CanonicalChain,
+    source: string,
+    captures: readonly string[],
+  ) => CompiledChild;
+}
+
+export interface CompiledChild {
+  /** `cook(engine, bytecode ++ arguments)` calldata, with a sentinel per capture in the argument
+   *  tail. `undefined` captures means the program takes none. */
+  readonly call: { readonly target: Hex; readonly data: Hex; readonly value: bigint };
+  /** The sentinel each capture occupies, in the order the program declares them. */
+  readonly captureSentinels: readonly bigint[];
 }
 
 export interface IntentSugarResult {
@@ -191,6 +225,24 @@ interface LoweredCall {
   readonly args: readonly Value[];
 }
 
+/** Whether every statement is a plain token write, which lowers to direct `route.calls` entries and
+ *  needs no program, no Pot and no Kitchen fee. Anything else — a swap, control flow, a nested
+ *  intent — takes the general path. */
+function isDirectCallBody(body: readonly AstNode[], defines: ReadonlyMap<string, bigint>): boolean {
+  return (
+    body.length > 0 &&
+    body.every((statement) => {
+      try {
+        lowerStatement(statement, () => ({ literal: 0n }), defines);
+
+        return true;
+      } catch {
+        return false;
+      }
+    })
+  );
+}
+
 /** `USDC.transfer(to, amount)` or `Token(addr).transfer(to, amount)` -> one call. */
 function lowerStatement(
   statement: AstNode,
@@ -269,6 +321,57 @@ function lowerStatement(
   return { target, method, args };
 }
 
+/**
+ * The enclosing program's variables a closure body reads.
+ *
+ * Whole-program `outerLocals` minus everything the closure declares itself, minus names the
+ * destination resolves (tokens, protocols, `ctx`, `abi`…). Conservative in the safe direction: a
+ * name wrongly treated as a capture becomes an unused program parameter, while one wrongly left out
+ * becomes an undeclared variable the compiler rejects by name.
+ */
+function collectCaptures(
+  body: readonly AstNode[],
+  outerLocals: ReadonlySet<string>,
+  defines: ReadonlyMap<string, bigint>,
+): string[] {
+  const declared = new Set<string>();
+  const read: string[] = [];
+  for (const statement of body) {
+    walk(statement, (node) => {
+      if (node.type === "VariableDeclarator") {
+        const id = (node as { id?: AstNode }).id;
+        if (id?.type === "Identifier") declared.add((id as unknown as { name: string }).name);
+      }
+    });
+  }
+  for (const statement of body) {
+    walk(statement, (node) => {
+      if (node.type !== "Identifier") return;
+      const name = (node as unknown as { name: string }).name;
+      if (declared.has(name) || defines.has(name)) return;
+      if (!outerLocals.has(name)) return;
+      if (!read.includes(name)) read.push(name);
+    });
+  }
+  return read;
+}
+
+/** Is this identifier a PROPERTY (`a.b`) rather than a value read? Those are never captures. */
+function stripMemberProperties(body: readonly AstNode[]): Set<string> {
+  const properties = new Set<string>();
+  for (const statement of body) {
+    walk(statement, (node) => {
+      if (node.type !== "MemberExpression") return;
+      if ((node as { computed?: boolean }).computed === true) return;
+      const property = (node as { property?: AstNode }).property;
+      if (property?.type === "Identifier") {
+        properties.add((property as unknown as { name: string }).name);
+      }
+    });
+  }
+  return properties;
+}
+
 // ---------------------------------------------------------------------------
 // The reward object
 // ---------------------------------------------------------------------------
@@ -334,6 +437,19 @@ function lowerReward(node: AstNode, resolve: Resolver): RewardSpec {
   return { tokens, nativeAmount };
 }
 
+/** `{ tokens: [{ token, amount }] }` — what the solver delivers to run the intent. Same shape as a
+ *  reward leg, and deliberately the same parser, since the fields mean the same things. */
+function lowerDelivery(node: AstNode, resolve: Resolver): RewardSpec["tokens"] {
+  if (node.type !== "ObjectExpression") {
+    return fail("an intent's second argument is `{ tokens: [{ token, amount }] }`");
+  }
+  const spec = lowerReward(node, resolve);
+  if (spec.nativeAmount !== undefined) {
+    return fail("`nativeAmount` belongs to the reward, not to what the solver delivers");
+  }
+  return spec.tokens;
+}
+
 // ---------------------------------------------------------------------------
 // Site discovery
 // ---------------------------------------------------------------------------
@@ -343,7 +459,12 @@ interface SugarSite {
   readonly end: number;
   readonly chain: CanonicalChain;
   readonly body: AstNode[];
+  /** Source range of the closure's block, so a general body is compiled from the text as written. */
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
   readonly reward: AstNode;
+  /** `Chain(() => {...}, { tokens: [...] })` — what the solver delivers to the destination. */
+  readonly delivery: AstNode | undefined;
 }
 
 function collectSites(program: AstNode, context: IntentSugarContext): SugarSite[] {
@@ -393,7 +514,10 @@ function collectSites(program: AstNode, context: IntentSugarContext): SugarSite[
       end: node.end,
       chain,
       body: (closureBody as { body?: AstNode[] }).body ?? [],
+      bodyStart: closureBody.start,
+      bodyEnd: closureBody.end,
       reward: rewardArgs[0]!,
+      delivery: openerArgs[1],
     });
   });
   return sites;
@@ -427,14 +551,24 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     const prefix = `i${index}_`;
     const captures: string[] = [];
     const placeholders: PlaceholderSpec[] = [];
-    /** A capture is one sentinel, reused wherever the same local appears. */
+    /**
+     * A capture spliced into an ENCODED FIELD -- a route call's argument, a reward amount. One
+     * sentinel per variable, reused wherever that variable appears.
+     *
+     * Keyed by its own map rather than by `captures`, which is the reported list and also collects
+     * the program-argument captures below. Sharing one registry meant a variable already seen there
+     * returned its sentinel without ever registering a placeholder for it, and the sentinel shipped
+     * unspliced inside a real reward.
+     */
+    const routeCaptureIndex = new Map<string, number>();
     const sentinelFor = (value: Value): bigint => {
       if ("literal" in value) return value.literal;
-      let at = captures.indexOf(value.capture);
-      if (at === -1) {
-        at = captures.length;
-        captures.push(value.capture);
+      let at = routeCaptureIndex.get(value.capture);
+      if (at === undefined) {
+        at = routeCaptureIndex.size;
+        routeCaptureIndex.set(value.capture, at);
         placeholders.push({ value: captureSentinel(at), source: value.capture });
+        if (!captures.includes(value.capture)) captures.push(value.capture);
       }
       return captureSentinel(at);
     };
@@ -444,9 +578,71 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     const defines = context.definesFor(site.chain);
     const resolve = makeResolver(defines, outerLocals);
 
-    const calls = site.body.map((statement) => {
+    /**
+     * What the solver delivers to the destination Executor so this intent can run.
+     *
+     * Distinct from the reward, which is what the solver COLLECTS on the source chain for doing it.
+     * Given explicitly as a second argument; for a body of plain token writes it is derived instead,
+     * because there it is not a judgement call — a `transfer` of N moves N, so N is what has to
+     * arrive. A program's needs cannot be read off its source, so the general path asks.
+     */
+    const explicitDelivery =
+      site.delivery === undefined ? undefined : lowerDelivery(site.delivery, resolve);
+
+    // TWO SHAPES, chosen by what the closure actually contains.
+    //
+    // A body of nothing but token writes needs no program: each statement is already one route
+    // call, which is cheaper than a cook and needs neither a Pot nor a Kitchen fee. Anything else --
+    // a swap, a condition, a loop, an intent of its own -- is a program, compiled for the
+    // destination and run through its Pot. The second shape is strictly more general; the first is
+    // kept because it is free.
+    const simple = isDirectCallBody(site.body, defines);
+    const derivedDelivery: { token: bigint; amount: Value }[] = [];
+    const calls: { target: Hex; data: Hex; value: bigint }[] = [];
+    const captureWords: { name: string; sentinel: bigint }[] = [];
+
+    if (!simple) {
+      const properties = stripMemberProperties(site.body);
+      const captured = collectCaptures(site.body, outerLocals, defines).filter(
+        (name) => !properties.has(name),
+      );
+      // Captured values reach the program as ENTRY ARGUMENTS. They cannot be folded in: their
+      // values do not exist when it is compiled. Declared as `main`'s parameters, encoded
+      // compact-v1 at a declared width so the payload's length does not move with them, and spliced
+      // by the parent at a fixed offset -- which is the property `scalarWidth` exists for.
+      // UNTYPED parameters on purpose: the rewrite passes downstream are acorn-based and cannot
+      // parse an annotation. `rs-compile.ts#ensureTypedMainParams` adds them at the compile seam,
+      // after every rewrite has run -- the same staging `ensureVoidMain` already uses.
+      const childSource = `function main(${captured.join(", ")}) {\n${source.slice(
+        site.bodyStart + 1,
+        site.bodyEnd - 1,
+      )}\n}`;
+      const child = context.compileChild(site.chain, childSource, captured);
+      captured.forEach((name, i) => {
+        captureWords.push({ name, sentinel: child.captureSentinels[i]! });
+      });
+      // Delivered tokens land on the Executor; the program runs in the Pot, so move them first.
+      for (const token of explicitDelivery ?? []) {
+        calls.push({
+          target: addressHex(token.token),
+          data: encodeFunctionData({
+            abi: ERC20ABI,
+            functionName: "transfer",
+            args: [child.call.target, sentinelFor(token.amount)] as never,
+          }),
+          value: 0n,
+        });
+      }
+      calls.push(child.call);
+    }
+
+    for (const statement of simple ? site.body : []) {
       const lowered = lowerStatement(statement, resolve, defines);
-      return {
+      // A `transfer` moves tokens the Executor must have been given; an `approve` moves nothing.
+      if (lowered.method === "transfer" && explicitDelivery === undefined) {
+        derivedDelivery.push({ token: lowered.target, amount: lowered.args[1]! });
+      }
+      calls.push({
         target: addressHex(lowered.target),
         // Encoded by viem against the ERC-20 ABI, so the selector and the word layout are the
         // encoder's rather than this file's. A captured argument goes in as its sentinel, which is
@@ -457,8 +653,20 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
           args: [addressHex(sentinelFor(lowered.args[0]!)), sentinelFor(lowered.args[1]!)] as never,
         }),
         value: 0n,
-      };
-    });
+      });
+    }
+
+    // A capture the PROGRAM reads is a slot too: its sentinel sits in the argument tail of the cook
+    // calldata above, which the parent splices exactly as it splices a reward amount.
+    // A program capture gets its OWN placeholder even when the same variable is already spliced
+    // into a route call or the reward: the two sit at different offsets in the payload, under
+    // different sentinels, and both have to be filled. Skipping one because its NAME had been seen
+    // would leave a sentinel in the program's argument tail -- a child that runs with 0x5aceb10c…
+    // as its amount, which is exactly the silent-wrong-number failure this design exists to avoid.
+    for (const { name, sentinel } of captureWords) {
+      placeholders.push({ value: sentinel, source: name });
+      if (!captures.includes(name)) captures.push(name);
+    }
 
     const reward = lowerReward(site.reward, resolve);
     const { defaults } = context;
@@ -470,8 +678,11 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
         salt: defaults.salt,
         deadline: requireDeadline(defaults),
         portal: defaults.destinationPortal ?? context.portalOf(site.chain),
-        nativeAmount: 0n,
-        tokens: reward.tokens.map((t) => ({
+        // Native the route's own calls need: the Kitchen fee, once per cook.
+        nativeAmount: calls.reduce((sum, call) => sum + call.value, 0n),
+        // What the SOLVER delivers to run this intent, which is a different thing from the reward
+        // it collects for doing so.
+        tokens: (explicitDelivery ?? derivedDelivery).map((t) => ({
           token: addressHex(t.token),
           amount: sentinelFor(t.amount),
         })),
@@ -494,6 +705,22 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     const sourcePortal = defaults.sourcePortal ?? context.portalOf(context.source);
     const tx = publishAndFundTx(child, defaults.allowPartial ?? false, { portal: sourcePortal });
     const template = splitByPlaceholders(tx.data, placeholders);
+    // Every sentinel must have become a slot. `splitByPlaceholders` guarantees that for the ones it
+    // was TOLD about; this catches the other direction — a sentinel written into the payload whose
+    // placeholder was never declared, which leaves it in the literal segments and ships an intent
+    // carrying `0x5acecab7…` where an amount belongs. That happened once, silently, which is why it
+    // is checked rather than reasoned about.
+    for (const segment of template.segments) {
+      for (const tag of [CAPTURE_TAG, CHILD_CAPTURE_TAG]) {
+        if (segment.includes(tag)) {
+          throw new SugarError(
+            `intent sugar: a capture sentinel (0x${tag}) survived into the encoded intent — some ` +
+              `captured value was written into the payload without a slot to fill it. This is a bug ` +
+              `in the lowering, not in the program.`,
+          );
+        }
+      }
+    }
     const locals = Object.fromEntries(captures.map((name) => [name, name]));
     const emitted = emitTemplate(template, { prefix, locals });
 

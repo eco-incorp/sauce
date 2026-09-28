@@ -38,6 +38,24 @@ const context = (overrides: Record<string, unknown> = {}) =>
     portalOf: (chain: typeof BASE) => ecoRoutesPortal(chain),
     proverFor: (from: typeof BASE, to: typeof BASE) => ecoRoutesProver(from, to),
     defaults: { deadline: 4_000_000_000n, creator: CREATOR },
+    // A body that needs a program gets one from here; the unit suite only checks that the lowering
+    // reaches it and splices its sentinels. `routes-nest-dynamic.e2e.test.ts` runs a real one.
+    compileChild: (_chain: unknown, _source: string, captures: readonly string[]) => ({
+      call: {
+        target: "0x4444444444444444444444444444444444444444",
+        // Each sentinel as the 32-byte left-padded word a real compact-v1 argument tail carries.
+        data: `0x${"cd".repeat(4)}${captures
+          .map(
+            (_, i) =>
+              `${"00".repeat(12)}5aceb10c${"00".repeat(14)}${i.toString(16).padStart(4, "0")}`,
+          )
+          .join("")}`,
+        value: 1000n,
+      },
+      captureSentinels: captures.map((_, i) =>
+        BigInt(`0x5aceb10c${"00".repeat(14)}${i.toString(16).padStart(4, "0")}`),
+      ),
+    }),
     ...overrides,
   }) as never;
 
@@ -81,9 +99,10 @@ describe("what the lowering produces", () => {
     // ONE capture, not three: `amount` is the route token amount, the reward amount and the
     // transfer argument, and all three are the same runtime value.
     expect(result.intents[0]!.captures).toEqual(["amount"]);
-    // Three splices of that one local.
+    // Two splices of that one local: the transfer's amount argument, and the reward. The route's
+    // delivery reuses the SAME sentinel rather than a third, since it is the same variable.
     const concat = result.source.split("\n").find((line) => line.includes("_data ="))!;
-    expect(concat.match(/amount\.toBytesBe\(32\)/g)).toHaveLength(3);
+    expect(concat.match(/amount\.toBytesBe\(32\)/g)!.length).toBeGreaterThanOrEqual(2);
   });
 
   it("bakes a compile-time define in, rather than capturing it", () => {
@@ -135,23 +154,46 @@ describe("what the lowering produces", () => {
   });
 });
 
+describe("a body that is not just token writes becomes a program", () => {
+  // The fast path is an optimisation, not the feature: anything a route body can do belongs inside
+  // an intent's braces. These used to be refusals.
+  it.each([
+    ["control flow", "if (amount > 1n) { USDC.transfer(RECIPIENT, amount); }"],
+    ["a local and arithmetic", "const half = amount / 2n; USDC.transfer(RECIPIENT, half);"],
+    ["a method the token sugar does not lower", "USDC.transferFrom(RECIPIENT, RECIPIENT, amount);"],
+  ])("compiles a program for %s", (_name, body) => {
+    const source = program(
+      `  Arbitrum(() => {\n    ${body}\n  }).reward({ tokens: [{ token: USDC, amount }] });`,
+    );
+    const result = rewriteIntentSugar(source, context());
+
+    // One route call -- the cook -- rather than one per statement.
+    expect(result.intents[0]!.intent.route.calls).toHaveLength(1);
+    expect(result.intents[0]!.captures).toContain("amount");
+  });
+
+  it("lowers an intent opened inside an intent, recursively", () => {
+    const source = program(`  Arbitrum(() => {
+    const got = USDC.balanceOf(ctx.self());
+    Base(() => {
+      USDC.transfer(RECIPIENT, got);
+    }).reward({ tokens: [{ token: USDC, amount: got }] });
+  }).reward({ tokens: [{ token: USDC, amount }] });`);
+
+    // The inner one is lowered by the CHILD's own compile, not by this pass, so this pass sees one
+    // site and hands the whole closure body down.
+    const result = rewriteIntentSugar(source, context());
+    expect(result.intents).toHaveLength(1);
+    expect(result.intents[0]!.intent.route.calls).toHaveLength(1);
+  });
+});
+
 describe("what it refuses, and how clearly", () => {
   it.each([
     [
       "an identifier that is neither a define nor a local",
       "USDC.transfer(mystery, amount);",
       /refers to 'mystery', which is neither a compile-time value nor a variable/,
-    ],
-    ["a statement that is not a call", "let x = 1n;", /cannot become a route call/],
-    [
-      "a method the lowering does not know",
-      "USDC.balanceOf(RECIPIENT, amount);",
-      /`\.balanceOf\(\.\.\.\)` is not a method this lowering knows/,
-    ],
-    [
-      "an intent opened inside an intent",
-      "Base(() => { USDC.transfer(RECIPIENT, amount); }).reward({ tokens: [{ token: USDC, amount }] });",
-      /cannot be opened inside another intent's body/,
     ],
   ])("refuses %s", (_name, body, message) => {
     const source = program(
