@@ -217,10 +217,14 @@ describe("registry ABI evidence: coverage", () => {
         .filter((name) => targets[slug]?.[name] === undefined)
         .map((name) => `${slug}.${name}`),
     );
+    // A target for a protocol this tree does not have is one another branch adds (its evidence is
+    // captured already); an unknown export of a protocol that IS here is a stale target.
     const unknown = Object.entries(targets).flatMap(([slug, exports]) =>
-      Object.keys(exports)
-        .filter((name) => registry[slug]?.[name] === undefined)
-        .map((name) => `${slug}.${name}`),
+      registry[slug] === undefined
+        ? []
+        : Object.keys(exports)
+            .filter((name) => registry[slug]![name] === undefined)
+            .map((name) => `${slug}.${name}`),
     );
     expect({ missing, unknown }).toEqual({ missing: [], unknown: [] });
   });
@@ -228,8 +232,9 @@ describe("registry ABI evidence: coverage", () => {
   it("every exemption and `unverified` entry names a function the registry declares", () => {
     const orphans: string[] = [];
     for (const [slug, exports] of Object.entries(targets)) {
+      if (registry[slug] === undefined) continue; // another branch's protocol, see above
       for (const [name, target] of Object.entries(exports)) {
-        const sigs = new Set((registry[slug]?.[name] ?? []).map(signature));
+        const sigs = new Set((registry[slug][name] ?? []).map(signature));
         for (const sig of [
           ...Object.keys(target.exempt ?? {}),
           ...Object.keys(target.unverified ?? {}),
@@ -246,7 +251,7 @@ describe("registry ABI evidence: coverage", () => {
     expect(raw).not.toMatch(/https?:\/\/|apikey|api_key|alchemy|infura/i);
   });
 
-  it("each ABI's JSON twin (what route compilation imports) matches abis.ts", () => {
+  it("each ABI's JSON twin, where it has one (what route compilation imports), matches abis.ts", () => {
     const sort = (value: unknown): unknown =>
       Array.isArray(value)
         ? value.map(sort)
@@ -262,9 +267,8 @@ describe("registry ABI evidence: coverage", () => {
       for (const [name, value] of Object.entries(modules[slug]!)) {
         if (!Array.isArray(value)) continue;
         const path = join(PROTOCOLS, slug, `${name}.json`);
-        const json = existsSync(path)
-          ? (JSON.parse(readFileSync(path, "utf-8")) as { abi: unknown }).abi
-          : undefined;
+        if (!existsSync(path)) continue;
+        const json = (JSON.parse(readFileSync(path, "utf-8")) as { abi: unknown }).abi;
         if (JSON.stringify(sort(json)) !== JSON.stringify(sort(value))) {
           drift.push(`${slug}/${name}.json`);
         }

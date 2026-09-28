@@ -60,6 +60,9 @@ const CHAINS = {
   43114: ["AVALANCHE_RPC_URL", "https://api.avax.network/ext/bc/C/rpc"],
   59144: ["LINEA_RPC_URL", "https://rpc.linea.build"],
   81457: ["BLAST_RPC_URL", "https://rpc.blast.io"],
+  2020: ["RONIN_RPC_URL", "https://api.roninchain.com/rpc"],
+  9745: ["PLASMA_RPC_URL", "https://rpc.plasma.to"],
+  57073: ["INK_RPC_URL", "https://rpc-gel.inkonchain.com"],
   534352: ["SCROLL_RPC_URL", "https://rpc.scroll.io"],
   7777777: ["ZORA_RPC_URL", "https://rpc.zora.energy"],
 };
@@ -76,6 +79,7 @@ const BLOCKSCOUT = {
   34443: "explorer.mode.network",
   42161: "arbitrum.blockscout.com",
   42220: "celo.blockscout.com",
+  57073: "explorer.inkonchain.com",
   // Redirects to scrollscan.com, which serves the same Blockscout v2 API.
   534352: "scroll.blockscout.com",
   7777777: "explorer.zora.energy",
@@ -584,10 +588,19 @@ async function main() {
   const previous = existsSync(EVIDENCE_PATH)
     ? expand(JSON.parse(readFileSync(EVIDENCE_PATH, "utf-8")))
     : { instances: [] };
-  const keep = previous.instances.filter((i) => only.size > 0 && !only.has(i.protocol));
+  // A target can name a protocol another branch adds: without its build output there is nothing to
+  // capture, and its evidence is carried over untouched until the protocol lands.
+  const present = (slug) => existsSync(join(SDK, "dist", "protocols", slug, "abis.js"));
+  const keep = previous.instances.filter(
+    (i) => (only.size > 0 && !only.has(i.protocol)) || !present(i.protocol),
+  );
   const jobs = [];
   for (const [slug, exports] of Object.entries(TARGETS.protocols)) {
     if (only.size > 0 && !only.has(slug)) continue;
+    if (!present(slug)) {
+      console.log(`${slug}: not in this tree's build, evidence kept as captured`);
+      continue;
+    }
     const { abis, deployments } = await registryOf(slug);
     for (const [abiExport, spec] of Object.entries(exports)) {
       const abi = abis[abiExport];
@@ -598,6 +611,10 @@ async function main() {
         for (const d of deployments) {
           const address = d.addresses[role];
           if (address === undefined) continue;
+          // A role whose deployments run different releases binds one ABI per chain set.
+          if (spec.chains && !spec.chains.includes(d.chainId)) continue;
+          // A Solana program id (32 bytes) runs no EVM ABI: nothing here applies to it.
+          if (!/^0x[0-9a-fA-F]{40}$/.test(address)) continue;
           instances.push({ chainId: d.chainId, address, role });
         }
       }

@@ -248,9 +248,10 @@ checks each function of each `abis.ts` export against `test/fixtures/registry-ab
 deployed code must dispatch its selector (after resolving EIP-1167 clones, EIP-1967/beacon/legacy
 proxy slots, `implementation()` getters, and diamond or selector routers), and where a verified ABI
 exists, its outputs, mutability and struct field names must match. `targets.json` beside it is the
-hand-written half: which deployments evidence which export (`roles` from `addresses.ts`, or
-representative `instances` for interface ABIs), `probes` (extra signatures to ask a selector router
-about), and every exception with its reason — `exempt` (a deployment that legitimately differs),
+hand-written half: which deployments evidence which export (`roles` from `addresses.ts`, narrowed
+by `chains` where one role's deployments run different releases, or representative `instances` for
+interface ABIs), `probes` (extra signatures to ask a selector router about), and every exception
+with its reason — `exempt` (a deployment that legitimately differs),
 `unverified` (no verified source on any keyless source; the selector is still checked) and
 `unverifiable`. An
 exception that stops applying fails the test. So does a new export with no target, and a
@@ -258,6 +259,11 @@ exception that stops applying fails the test. So does a new export with no targe
 `bun run scripts/generate-abi-json.ts`, then prettier). The widened-type workaround the registry
 used to carry (`uint32` for `uint24`, `uint256` for `bytes32`/`int*`) is gone: the pinned compiler
 takes every ABI type, so declare the deployed one.
+
+A target may name a protocol this tree does not have yet (one another branch adds): the suite skips
+it and the capture carries its evidence over untouched, so the evidence can land before the
+protocol does. Deployments whose address is not a 20-byte EVM address (Solana program ids) are not
+captured: no EVM ABI applies to them.
 
 Recapture only on explicit request — it reads live chains: `pnpm --filter './sdk' build` (the script
 reads `dist/`), then `RECAPTURE_REGISTRY_ABI=1 node scripts/capture-registry-abi.mjs [slug ...]` from
