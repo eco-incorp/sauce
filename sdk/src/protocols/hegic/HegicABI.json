@@ -1,13 +1,17 @@
 {
   "abi": [
     {
-      "name": "exercise",
+      "name": "payOff",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "optionId",
+          "name": "positionID",
           "type": "uint256"
+        },
+        {
+          "name": "account",
+          "type": "address"
         }
       ],
       "outputs": []

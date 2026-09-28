@@ -58,7 +58,7 @@ function main(
 
 | Chain | Contract         | Address                                      |
 | ----- | ---------------- | -------------------------------------------- |
-| Base  | coreProxy        | `0xffffffaEff0B96Ea8e4f94b2253f31abdD875847` |
+| Base  | coreProxy        | `0x32C222A9A159782aFD7529c87FA34b96CA72C696` |
 | Base  | perpsMarketProxy | `0x0A2AF931eFFd34b81ebcc57E3d3c9B1E1dE1C9Ce` |
 
 ## ABI Methods

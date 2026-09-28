@@ -32,15 +32,14 @@ function main(
   slippage: Uint256,
 ): Uint256 {
   const amm = IThalesAMM.at(thalesAMMAddress);
-  amm.buyFromAMM(market, position, amount, expectedPayout, slippage);
-  return 1;
+  return amm.buyFromAMM(market, position, amount, expectedPayout, slippage);
 }
 
-// Exercise matured market
-import { ThalesAMMABI as IThalesAMM } from "./abis";
-function main(thalesAMMAddress: Address, market: Address): Uint256 {
-  const amm = IThalesAMM.at(thalesAMMAddress);
-  amm.exerciseMaturedMarket(market);
+// Exercise a matured market: on the market itself
+import { PositionalMarketABI as IPositionalMarket } from "./abis";
+function main(market: Address): Uint256 {
+  const positionalMarket = IPositionalMarket.at(market);
+  positionalMarket.exerciseOptions();
   return 1;
 }
 ```
@@ -56,12 +55,15 @@ function main(thalesAMMAddress: Address, market: Address): Uint256 {
 
 ### ThalesAMMABI
 
-- `buyFromAMM(address,uint8,uint256,uint256,uint256)` - Buy positional tokens. Params: market (market address), position (0=UP, 1=DOWN), amount (tokens to buy), expectedPayout (expected return), additionalSlippage (slippage tolerance)
-- `exerciseMaturedMarket(address)` - Exercise matured position. Params: market (address of matured market)
+- `buyFromAMM(address,uint8,uint256,uint256,uint256) returns (uint256)` - Buy positional tokens. Params: market (market address), position (0=UP, 1=DOWN), amount (tokens to buy), expectedPayout (expected return), additionalSlippage (slippage tolerance). Returns the amount paid
+
+### PositionalMarketABI
+
+- `exerciseOptions() returns (uint256)` - Exercise the caller's positions in a matured market (called on the market, not the AMM)
 
 ### SpeedMarketsAMMABI
 
-- `createNewMarket(bytes32,uint64,uint8,address,uint256,address)` - Create speed market. Params: asset (bytes32 identifier), strikeTime (expiry timestamp), direction (0=UP, 1=DOWN), collateral (payment token), buyinAmount (amount to bet), referrer
+- `createNewMarket(CreateMarketParams) returns (address)` - Create a speed market. One struct: `(address user, bytes32 asset, uint64 strikeTime, uint64 delta, int64 strikePrice, uint64 strikePricePublishTime, uint8 oracleSource, uint8 direction, address collateral, uint256 collateralAmount, address referrer, uint256 skewImpact)`. Returns the market address
 
 ## Notes
 
