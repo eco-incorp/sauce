@@ -28,8 +28,8 @@
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --env-file-if-exists=.env --test --test-concurrency=1 tests/to-sauce.test.ts tests/to-quote.test.ts tests/v4.fork.test.ts tests/to-sauce.unit.test.ts tests/megas-swap.unit.test.ts tests/abis.unit.test.ts tests/program.unit.test.ts tests/compose.unit.test.ts tests/calldata.exec.test.ts tests/no-return-token.exec.test.ts tests/compose.exec.test.ts",
-    "test:unit": "tsx --test --test-concurrency=1 tests/to-sauce.unit.test.ts tests/megas-swap.unit.test.ts tests/abis.unit.test.ts tests/program.unit.test.ts tests/compose.unit.test.ts tests/calldata.exec.test.ts tests/no-return-token.exec.test.ts tests/compose.exec.test.ts",
+    "test": "tsx --env-file-if-exists=.env --test --test-concurrency=1 tests/to-sauce.test.ts tests/to-quote.test.ts tests/v4.fork.test.ts tests/to-sauce.unit.test.ts tests/megas-swap.unit.test.ts tests/abis.unit.test.ts tests/program.unit.test.ts tests/compose.unit.test.ts tests/docs.unit.test.ts tests/calldata.exec.test.ts tests/no-return-token.exec.test.ts tests/compose.exec.test.ts",
+    "test:unit": "tsx --test --test-concurrency=1 tests/to-sauce.unit.test.ts tests/megas-swap.unit.test.ts tests/abis.unit.test.ts tests/program.unit.test.ts tests/compose.unit.test.ts tests/docs.unit.test.ts tests/calldata.exec.test.ts tests/no-return-token.exec.test.ts tests/compose.exec.test.ts",
     "test:megas-swap": "tsx --env-file-if-exists=.env --test --test-concurrency=1 tests/megas-swap.test.ts",
     "gen-schema": "tsx scripts/gen-schema.ts"
   },
