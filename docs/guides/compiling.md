@@ -2,21 +2,25 @@
 
 [Documentation](../README.md) · [Compiler API](../api/compiler.md) · [SauceScript](../concepts/saucescript.md)
 
-There are two ways to compile, and the choice is about who resolves names.
+There are two ways to compile, and the choice is about who resolves names. Either way the compiler
+is already in this package, and the output is a program a Sauce engine runs, not a contract you
+deploy.
 
 Use the **route path** when the program is part of an Eco intent and should say `USDC` and
 `Uniswap.UniversalRouter`: the SDK resolves those against the destination chain and hands you a
 ready-made call. Use the **raw compiler** when you want a reusable program that takes values at
 execution time, a Solana account manifest, or full control over module resolution.
 
-| Entry point                                                         | You supply                                                  | The SDK supplies                                                           |
-| ------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `Base(body, options)` / `routes.openRoute(...)`                     | Body, intent options, execution addresses                   | Chain defines, the ambient token module, registry rewrites, a built intent |
-| `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | Registry rewrites, token defines, one encoded route call                   |
-| `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing — you get the compiler's own result                                |
+| Entry point                                                         | You supply                                                  | The SDK supplies                                                                                   |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `Base(body, options)` / `routes.openRoute(...)`                     | Body and intent options                                     | Chain defines, the ambient token module, registry rewrites, the EVM Pot and engine, a built intent |
+| `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | Registry rewrites, token defines, one encoded route call                                           |
+| `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing — you get the compiler's own result                                                        |
 
-Bare `USDC`, `Token(address)` and protocol members only exist on the route path. Raw `compile()`
-expects compiler-native source: `ERC20.at(address).approve(...)`, backed by an ABI you bound.
+Bare `USDC`, `Token(address)` and protocol members only exist on the route path. There,
+`USDC.approve(Uniswap.UniversalRouter, 1_000_000n)` becomes an ERC-20 ABI import and
+`IERC20.at(USDC).approve(<the router's Base address>, 1_000_000n)`, with `USDC` defined as Base's
+USDC. Raw `compile()` expects you to write that yourself.
 
 ## Compile an EVM route
 

@@ -2,19 +2,29 @@
 
 Sauce is a programmable-transaction runtime. A Sauce program compiles to bytecode that an on-chain
 engine executes atomically inside one transaction — every step lands or none does. `@eco-incorp/sauce`
-is the package you build those programs with.
+is the package you build those programs with. One install carries the compiler and the chains,
+tokens and protocols a program calls by name; you write the program, not a contract of your own.
 
 **Routes** are the layer above: a route packages a program as an Eco intent, so it can be executed
 on another chain in exchange for a reward escrowed on this one. Everything cross-chain lives there.
 
-New here? [Quick start](guides/quick-start.md) → [protocols and tokens](guides/protocols-and-tokens.md)
-→ [create an intent](guides/intents.md). Complete programs live in the [examples](examples/README.md).
+## First program in five minutes
+
+1. [Install](guides/quick-start.md) the package. The compiler is inside it.
+2. [Build your first intent](guides/quick-start.md#build-your-first-intent) by copying one
+   example. It runs offline.
+3. Put your own calls in its body, naming [tokens and protocols](guides/protocols-and-tokens.md).
+4. [Create an intent from inside the program](guides/intents.md#create-an-intent-from-inside-a-program)
+   when the amount is only known on chain.
+5. [Submit the source reward](guides/intents.md#submit-the-source-reward) with the requests the SDK
+   prepares. A solver then decides whether to fill it.
+
+Complete programs live in the [examples](examples/README.md).
 
 ## By task
 
 | You want to                                                     | Guide                                                  |
 | --------------------------------------------------------------- | ------------------------------------------------------ |
-| Install and build your first intent                             | [Quick start](guides/quick-start.md)                   |
 | Call tokens and protocols by name inside a program              | [Protocols and tokens](guides/protocols-and-tokens.md) |
 | Construct, fund, submit and inspect an intent                   | [Create an intent](guides/intents.md)                  |
 | Chain intents — statically, or from an amount measured on chain | [Nested intents](guides/nested-intents.md)             |
