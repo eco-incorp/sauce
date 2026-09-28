@@ -13,9 +13,11 @@ import {
   type BindingName,
 } from "../src/abis.js";
 import { CHAIN_KEY_SET, NAMESPACE_KEYS } from "../../sdk/dist/routes/accessor-index.js";
+import { BalancerV2VaultABI } from "../../sdk/dist/protocols/balancer-v2/index.js";
 import { CurveRouterNGABI } from "../../sdk/dist/protocols/curve/index.js";
 import { DODOV2ProxyABI } from "../../sdk/dist/protocols/dodo/index.js";
 import { MaverickV2RouterABI } from "../../sdk/dist/protocols/maverick/index.js";
+import { StargatePoolABI } from "../../sdk/dist/protocols/stargate/index.js";
 import { UniswapV4UniversalRouterABI } from "../../sdk/dist/protocols/uniswap-v4/index.js";
 
 describe("action ABI bindings", () => {
@@ -70,24 +72,49 @@ describe("action ABI bindings", () => {
         }
       }
     }
-    assert.equal(fromSdk, 24, "a registry-sourced method was added or dropped — update this count");
+    assert.equal(fromSdk, 26, "a registry-sourced method was added or dropped — update this count");
   });
 
   it("the methods the registry declares with their deployed types come from it, selector unchanged", () => {
     // Each was a local fragment while the registry spelled it differently — SwapRouter02 missing,
-    // Curve indices `uint128`, Balancer's `poolId` a `uint256`, Permit2's expiration a `uint64`.
-    // The selectors are the deployed ones, dispatched in `sdk/test/fixtures/registry-abi`.
+    // Curve indices `uint128`, Balancer's `poolId` a `uint256`, Stargate's `to` a `uint256`,
+    // Permit2's expiration a `uint64`. The selectors are the deployed ones, dispatched in
+    // `sdk/test/fixtures/registry-abi`.
     const fromRegistry: [BindingName, string, string, string, string][] = [
       ["ISwapRouter02", "exactInputSingle", "uniswap-v3", "UniswapV3SwapRouter02ABI", "0x04e45aaf"],
       ["ISwapRouter02", "exactInput", "uniswap-v3", "UniswapV3SwapRouter02ABI", "0xb858183f"],
       ["ICurvePool", "exchange", "curve", "CurveThreePoolABI", "0x3df02124"],
       ["IBalancerV2Vault", "swap", "balancer-v2", "BalancerV2VaultABI", "0x52bbbe29"],
+      ["IBalancerV2Vault", "batchSwap", "balancer-v2", "BalancerV2VaultABI", "0x945bcec9"],
+      ["IStargatePool", "send", "stargate", "StargatePoolABI", "0xc7c7f5b3"],
       ["IPermit2", "approve", "permit2", "Permit2ABI", "0x87517c45"],
     ];
     for (const [binding, method, protocol, abiExport, selector] of fromRegistry) {
       const bound = bindingMethods(binding)[method]!;
       assert.deepEqual(bound.source, { kind: "sdk", protocol, abiExport }, `${binding}.${method}`);
       assert.equal(toFunctionSelector(bound.fn), selector, `${binding}.${method}`);
+    }
+  });
+
+  it("a registry method whose output no action reads is bound output-free", () => {
+    // The registry declares these outputs, and the contracts return them; a program measures a
+    // batch swap's output as a balance delta and never reads Stargate's receipts.
+    const unread: [BindingName, string, readonly unknown[]][] = [
+      ["IBalancerV2Vault", "batchSwap", BalancerV2VaultABI],
+      ["IStargatePool", "send", StargatePoolABI],
+    ];
+    for (const [binding, method, abi] of unread) {
+      const bound = bindingMethods(binding)[method]!;
+      const declared = (abi as AbiFunction[]).find(
+        (item) =>
+          item.type === "function" && canonicalSignature(item) === canonicalSignature(bound.fn),
+      )!;
+      assert.ok(
+        declared.outputs.length > 0,
+        `the registry declares ${binding}.${method}'s outputs`,
+      );
+      assert.deepEqual(bound.fn.outputs, [], `${binding}.${method} decodes nothing`);
+      assert.equal(bound.fn.stateMutability, declared.stateMutability, `${binding}.${method}`);
     }
   });
 
@@ -98,6 +125,7 @@ describe("action ABI bindings", () => {
       ["ICurveRouterNG", "exchange", CurveRouterNGABI],
       ["IDodoProxy", "dodoSwapV1", DODOV2ProxyABI],
       ["IMaverickV2Router", "exactInputMultiHop", MaverickV2RouterABI],
+      ["IStargatePool", "quoteSend", StargatePoolABI],
     ];
     for (const [binding, method, abi] of registryAbiFor) {
       const bound = bindingMethods(binding)[method]!;

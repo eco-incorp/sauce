@@ -28,6 +28,7 @@ export { LiquidityPoolABI } from "../../sdk/dist/protocols/etherfi/index.js";
 export { MaverickV2RouterABI } from "../../sdk/dist/protocols/maverick/index.js";
 export { Permit2ABI } from "../../sdk/dist/protocols/permit2/index.js";
 export { RETHABI, RocketDepositPoolABI } from "../../sdk/dist/protocols/rocket-pool/index.js";
+export { StargatePoolABI } from "../../sdk/dist/protocols/stargate/index.js";
 export { TokenMessengerABI } from "../../sdk/dist/protocols/cctp/index.js";
 export { UniswapV2RouterABI } from "../../sdk/dist/protocols/uniswap-v2/index.js";
 export { UniswapV3SwapRouter02ABI } from "../../sdk/dist/protocols/uniswap-v3/index.js";

@@ -35,7 +35,7 @@ import {
 import { AaveV3PoolABI, AcrossSpokePoolABI, BalancerV2VaultABI, CometABI } from "./registry.js";
 import { CrocSwapDexABI, CurveThreePoolABI, DODOV2ProxyABI, ERC20ABI } from "./registry.js";
 import { LidoABI, LiquidityPoolABI, MaverickV2RouterABI, Permit2ABI } from "./registry.js";
-import { RETHABI, RocketDepositPoolABI, TokenMessengerABI } from "./registry.js";
+import { RETHABI, RocketDepositPoolABI, StargatePoolABI, TokenMessengerABI } from "./registry.js";
 import { UniswapV2RouterABI, UniswapV3SwapRouter02ABI, WstETHABI } from "./registry.js";
 
 /** A parsed ABI in the shape the compiler's `inlineContracts` and the SDK's `compile.contracts` take. */
@@ -113,7 +113,6 @@ function local(signature: string, reason: string): BoundMethod {
 }
 
 const NOT_IN_REGISTRY = "not in the SDK protocol registry";
-const OUTPUT_UNREAD = "its output is measured as a balance delta, so it is bound output-free";
 
 /**
  * Every binding, by the name emitted source calls it. The names start with `I` and contain no `_`,
@@ -180,9 +179,13 @@ const CATALOG = {
       "swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
       "keep",
     ),
-    batchSwap: local(
-      "function batchSwap(uint8 kind, (bytes32 poolId, uint256 assetInIndex, uint256 assetOutIndex, uint256 amount, bytes userData)[] swaps, address[] assets, (address sender, bool fromInternalBalance, address recipient, bool toInternalBalance) funds, int256[] limits, uint256 deadline) payable",
-      `the registry declares \`poolId\` as \`uint256\`; the Vault takes \`bytes32\`; ${OUTPUT_UNREAD}`,
+    // Its output is measured as a balance delta, so the `int256[]` deltas it returns are not decoded.
+    batchSwap: sdk(
+      "balancer-v2",
+      "BalancerV2VaultABI",
+      BalancerV2VaultABI,
+      "batchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool),int256[],uint256)",
+      "drop",
     ),
   }),
   IBalancerV3Router: () => ({
@@ -303,23 +306,20 @@ const CATALOG = {
       "keep",
     ),
   }),
-  IStargatePool: () => {
-    const reason =
-      "the registry declares the SendParam's `to` as `uint256`, which changes the selector; " +
-      "the pool takes `bytes32`";
-    const sendParam =
-      "(uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd)";
-    return {
-      quoteSend: local(
-        `function quoteSend(${sendParam} sendParam, bool payInLzToken) view returns ((uint256 nativeFee, uint256 lzTokenFee) fee)`,
-        `${reason}, and has no \`quoteSend\``,
-      ),
-      send: local(
-        `function send(${sendParam} sendParam, (uint256 nativeFee, uint256 lzTokenFee) fee, address refundAddress) payable`,
-        `${reason}; the receipts it returns are never read`,
-      ),
-    };
-  },
+  IStargatePool: () => ({
+    quoteSend: local(
+      "function quoteSend((uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd) sendParam, bool payInLzToken) view returns ((uint256 nativeFee, uint256 lzTokenFee) fee)",
+      "the registry's StargatePoolABI declares `send` but not `quoteSend`",
+    ),
+    // The receipts it returns are never read, so they are not decoded.
+    send: sdk(
+      "stargate",
+      "StargatePoolABI",
+      StargatePoolABI,
+      "send((uint32,bytes32,uint256,uint256,bytes,bytes,bytes),(uint256,uint256),address)",
+      "drop",
+    ),
+  }),
   ICctpTokenMessenger: () => ({
     depositForBurn: sdk(
       "cctp",
