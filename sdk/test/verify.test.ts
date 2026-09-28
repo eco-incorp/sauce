@@ -214,6 +214,36 @@ describe("@eco-incorp/sauce/verify", () => {
       expectCode(() => validateSettleProgram(impostor, [longer, current]), "PROGRAM_HASH");
     });
 
+    // The pin this release supersedes, with the program it pinned as 0.99.2 – 0.99.4 shipped it.
+    // `SETTLE_WIRE` and the verification guide record `{ hash, bytes }` for it so payloads already
+    // built against it stay readable; this proves the recorded pair is the real one, and that it is
+    // needed: the default (current) pin alone refuses such a payload.
+    it("a payload built against the superseded 356-byte pin validates when that pin is supplied", () => {
+      const previous =
+        ("0xa50201c4d1514702000eb19000b6d00201640120955402016421d1d1d00120d4212295540240000120d22348020033" +
+          "b19000b60120d123012021d221d35147020046b19000b6d0012023d08a04ffffffff30e10120340a9220000000000000" +
+          "000031310100d2d146020070b10200a8b00120d4210120d223e1210120d5210120d3230120e1f12121d3d3d151d14642" +
+          "020161b1d8f1e3e4d0f1e3e4e52295549b0101e121020065b0d402018401209554f1e3e4e50201a4012095540100d497" +
+          "0100e1649401a0900470a082319602a3a10120970100d348020101b1d2d147020101b1901c736574746c653a2062616c" +
+          "616e63652062656c6f77206d696e4f7574b60100d551d14602010fb1020152b0d0d6970100d1649401a0900470a08231" +
+          "9602a3a10120970100d148020146b10100d20100d3d89402a09004a9059cbb9602a2a1012097e00101d321e3e0e0e002" +
+          "0103b0e101208ae1d18905200000000031009000b6") as Hex;
+      const previousPin = {
+        hash: "0xf9fffd262b32ad0cb07f2748f813626363497e09e4f4da134bed1b8da0c5d5fe" as Hex,
+        bytes: 356,
+      };
+      const current = { hash: SETTLE_WIRE.PROGRAM_HASH as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES };
+      const { tokens, minOut, recipient } = SETTLE_VECTORS[1]!;
+      const payload = encodeSettleProgram(tokens, minOut, recipient, previous);
+
+      expect(keccak256(previous)).toBe(previousPin.hash);
+      expect(() => validateSettleProgram(payload)).toThrow(SettleDecodeError);
+      const decoded = validateSettleProgram(payload, [current, previousPin]);
+      expect(decoded.programHash).toBe(previousPin.hash);
+      expect(decoded.tokens.map((t) => BigInt(t))).toEqual(tokens.map((t) => BigInt(t)));
+      expect(decoded.minOut).toBe(minOut);
+    });
+
     // §5 offers encode-and-compare as the equivalent of validateSettleProgram, which now accepts
     // historical pins of other lengths. Pinning the current constant in the encoder would make the two
     // halves diverge for exactly the re-pin ProgramPin.bytes exists to survive.
@@ -391,7 +421,7 @@ describe("@eco-incorp/sauce/verify", () => {
 
   describe("closure", () => {
     it("SETTLE_WIRE exposes the wire constants a foreign implementer needs", () => {
-      expect(SETTLE_WIRE.PROGRAM_BYTES).toBe(356);
+      expect(SETTLE_WIRE.PROGRAM_BYTES).toBe(435);
       expect(SETTLE_WIRE.WORD_BYTES).toBe(32);
       expect(SETTLE_WIRE.ADDRESS_BYTES).toBe(20);
       expect(SETTLE_WIRE.HEAD_SLOTS).toBe(3);
