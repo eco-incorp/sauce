@@ -8,7 +8,7 @@
  *
  * ```
  * payload     := program , args
- * program     := 356 bytes                        ; SETTLE_WIRE.PROGRAM_BYTES — invariant
+ * program     := 435 bytes                        ; SETTLE_WIRE.PROGRAM_BYTES — invariant
  * args        := head , token_array
  * head        := tokens_ptr , minout , recipient  ; three 32-byte big-endian words
  * tokens_ptr  := word, value = 96                 ; byte offset WITHIN args of token_array
@@ -49,7 +49,7 @@
  *
  * WHAT THIS PROVES. `decodeSettleProgram` is STRUCTURAL: it pins the program's LENGTH and reads the
  * tail, so it tells you which `(tokens, minOut, recipient)` a payload carries and nothing about
- * what the 356 program bytes do. `validateSettleProgram` adds the authenticity half — one
+ * what the 435 program bytes do. `validateSettleProgram` adds the authenticity half — one
  * `keccak256` over the WHOLE program against `SETTLE_WIRE.PROGRAM_HASH` — and that is now a
  * complete answer rather than a partial one: because the arguments left the program, a matching
  * hash means the payload runs the audited `settle.sauce.ts` and nothing else — a statement about
@@ -397,8 +397,8 @@ export function bestEffortDecode(parse: SettleParse): DecodedSettleProgram | nul
  * dirty upper bytes, and a zero recipient — see §4 for why. Throws `SettleDecodeError` (carrying a
  * stable `.code`) on any of the failures in `SettleFailureCode`.
  *
- * This is a STRUCTURAL decode: it proves the payload is `356 bytes || a canonical argument tail`.
- * It does NOT prove those 356 bytes are the settle program you audited — any 356-byte prefix
+ * This is a STRUCTURAL decode: it proves the payload is `435 bytes || a canonical argument tail`.
+ * It does NOT prove those 435 bytes are the settle program you audited — any 435-byte prefix
  * passes. Use `validateSettleProgram` when that matters, which is nearly always.
  */
 export function decodeSettleProgram(
@@ -419,12 +419,12 @@ export function decodeSettleProgram(
 }
 
 /**
- * `decodeSettleProgram` plus the authenticity pin: the payload's 356 program bytes must hash to
+ * `decodeSettleProgram` plus the authenticity pin: the payload's 435 program bytes must hash to
  * `SETTLE_WIRE.PROGRAM_HASH`. Because the arguments no longer live inside the program, a match
  * means the payload runs the audited `recipes/settle.sauce.ts` and nothing else — the whole
  * question, not the structural half.
  *
- * Throws `SettleDecodeError` with code `PROGRAM_HASH` when the program is a different 356 bytes,
+ * Throws `SettleDecodeError` with code `PROGRAM_HASH` when the program is a different 435 bytes,
  * and whatever `decodeSettleProgram` would throw otherwise.
  *
  * `accepted` overrides the pin. The dependency is a caret range and `SETTLE_WIRE` documents that a
@@ -465,7 +465,7 @@ export function validateSettleProgram(
   // That precedence is the guarantee, and it is the whole of it. Among parse errors there is no such
   // ordering: each is an artefact of the candidate that produced it, and the FIRST supplied pin's is
   // the one reported -- so with several pins and no match at all, the code can still differ by pin
-  // order (a 356-byte program read at 338 reports TOKENS_OFFSET where reading it at 356 reports
+  // order (measured on v1's 588-byte payload: a 410-byte pin reports TOKENS_OFFSET, a 461-byte pin
   // ARGS_TRUNCATED). Diagnostic only: through `intent.ts` every one of them collapses to `null`, and
   // with a single pin -- the default and common case -- there is no order to depend on.
   let hashMismatch: SettleDecodeError | null = null;
