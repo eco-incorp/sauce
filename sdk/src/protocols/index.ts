@@ -145,6 +145,7 @@ import { protocolInfo as instadappInfo } from "./instadapp/info.js";
 
 // Standards
 import { protocolInfo as erc20Info } from "./erc20/info.js";
+import { protocolInfo as ecoRoutesInfo } from "./eco-routes/info.js";
 import { protocolInfo as erc4626Info } from "./erc4626/info.js";
 
 // Payments & Streaming
@@ -299,6 +300,7 @@ export const protocols: Record<string, ProtocolInfo> = {
 
   // Standards
   erc20: erc20Info,
+  "eco-routes": ecoRoutesInfo,
   erc4626: erc4626Info,
 
   // Payments & Streaming
@@ -362,4 +364,5 @@ export * as sommelier from "./sommelier/index.js";
 export * as olympus from "./olympus/index.js";
 export * as tokemak from "./tokemak/index.js";
 export * as erc20 from "./erc20/index.js";
+export * as ecoRoutes from "./eco-routes/index.js";
 export * as erc4626 from "./erc4626/index.js";

@@ -33,6 +33,8 @@ import {
 } from "../src/routes/portal.js";
 import type { RewardInput, RouteInput } from "../src/routes/types.js";
 import { v12Pot } from "../src/evm/engine.js";
+import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import { denormalizeToEvm } from "../src/routes/encode.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
@@ -131,7 +133,8 @@ describe("openRoute: assembled intent shape", () => {
 
     const expectedRoute: RouteInput = {
       deadline: options.deadline,
-      portal: options.portal,
+      // `portal` is optional now; this fixture always sets it.
+      portal: options.portal!,
       nativeAmount: options.nativeAmount,
       tokens: options.tokens,
       calls: built.intent.route.calls,
@@ -331,10 +334,25 @@ describe("openRoute: fail-closed", () => {
     ).toThrow(/deadline/i);
   });
 
-  it("throws naming 'portal' when IntentOptions.portal is missing", () => {
+  // `portal` STOPPED being required: the SDK carries the eco-routes deployments, so a caller only
+  // names a Portal to reach one the registry does not have.
+  it("defaults the Portal to the eco-routes deployment for the destination", () => {
+    const built = openRoute("ethereum", "return 1n;", {
+      deadline: 2000n,
+      pot: POT,
+      engine: ENGINE,
+    }).reward({ source: "base", creator: CREATOR, prover: PROVER, deadline: 2000n });
+
+    expect(denormalizeToEvm(built.intent.route.portal).toLowerCase()).toBe(
+      ecoRoutesPortal("ethereum").toLowerCase(),
+    );
+  });
+
+  it("says which chain has no deployment rather than failing later", () => {
+    // Zora is canonical but carries no eco-routes deployment in the pinned tables.
     expect(() =>
-      openRoute("ethereum", "return 1n;", { deadline: 2000n, pot: POT } as never),
-    ).toThrow(/portal/i);
+      openRoute("zora", "return 1n;", { deadline: 2000n, pot: POT, engine: ENGINE }),
+    ).toThrow(/eco-routes v3 is not deployed on zora/i);
   });
 
   it("throws naming 'execution' when neither .execution nor .pot is supplied", () => {

@@ -54,9 +54,19 @@ const MAX_UINT256 = 2n ** 256n - 1n;
  */
 export type AmountSource = "amountIn" | "amountOut";
 
+/**
+ * Which runtime value a slot renders, named rather than enumerated.
+ *
+ * `"amountIn"`/`"amountOut"` are the two the MEASUREMENT path uses (`nest-dynamic.ts`). A
+ * capture-lowered intent (`intent-sugar.ts`) names a SauceScript local of the enclosing program
+ * instead, one name per captured variable, so the same splice machinery serves both without either
+ * knowing about the other. A name is opaque here: `emitTemplate` is told which local holds each one.
+ */
+export type SlotSource = AmountSource | (string & {});
+
 /** One computed value, rendered between `segments[i]` and `segments[i + 1]`. */
 export interface TemplateSlot {
-  readonly source: AmountSource;
+  readonly source: SlotSource;
   /** WAD-denominated further transform: `value = ceil(source * scale / WAD)`. `WAD` is identity. */
   readonly scale: bigint;
   /** Byte width of the rendered value, 1..32 — `.toBytesBe(width)`/`.toBytesLe(width)`'s argument. */
@@ -82,7 +92,7 @@ export interface ByteTemplate {
 export interface PlaceholderSpec {
   /** The sentinel written into the structure before encoding. Must fit `width` bytes. */
   readonly value: bigint;
-  readonly source: AmountSource;
+  readonly source: SlotSource;
   /** Default `WAD` (identity). */
   readonly scale?: bigint;
   /** Default 32 — one ABI word. */
@@ -289,10 +299,28 @@ export function splitByPlaceholders(
  * against an independently built concrete intent.
  */
 export function renderTemplate(template: ByteTemplate, amountIn: bigint, amountOut: bigint): Hex {
+  return renderTemplateWith(template, { amountIn, amountOut });
+}
+
+/**
+ * `renderTemplate` for a template whose slots name arbitrary sources — one entry in `values` per
+ * distinct `slot.source`. A slot naming a source `values` does not carry throws rather than
+ * rendering a zero, which would be a valid-looking payload with a missing number in it.
+ */
+export function renderTemplateWith(
+  template: ByteTemplate,
+  values: Readonly<Record<string, bigint>>,
+): Hex {
   assertShape(template, "renderTemplate");
   const parts: Uint8Array[] = [hexToBytes(template.segments[0]!)];
   template.slots.forEach((slot, i) => {
-    const base = slot.source === "amountIn" ? amountIn : amountOut;
+    const base = values[slot.source];
+    if (base === undefined) {
+      throw new Error(
+        `renderTemplate: slot[${i}] renders '${slot.source}', which has no value — every source a ` +
+          `template names must be supplied (got ${Object.keys(values).join(", ") || "nothing"}).`,
+      );
+    }
     if (base > maxScalableBase(slot.scale)) {
       throw new Error(
         `renderTemplate: slot[${i}] base ${base} exceeds ${maxScalableBase(slot.scale)}, the largest ` +
@@ -335,9 +363,12 @@ export interface TemplateEmitOptions {
    *  scope without colliding (same discipline as `nest.ts`'s `n<index>_` prefixes). */
   readonly prefix: string;
   /** The SauceScript local already holding the raw runtime measurement. */
-  readonly amountInVar: string;
+  readonly amountInVar?: string;
   /** The SauceScript local already holding `ceil(amountIn * orderScale / WAD)`. */
-  readonly amountOutVar: string;
+  readonly amountOutVar?: string;
+  /** The local holding each NAMED source, for a template whose slots are not the two measurement
+   *  ones. Takes precedence over `amountInVar`/`amountOutVar` for a name it covers. */
+  readonly locals?: Readonly<Record<string, string>>;
 }
 
 export interface TemplateEmitResult {
@@ -379,14 +410,26 @@ export function emitTemplate(
   options: TemplateEmitOptions,
 ): TemplateEmitResult {
   assertShape(template, "emitTemplate");
-  const { prefix, amountInVar, amountOutVar } = options;
+  const { prefix, amountInVar, amountOutVar, locals } = options;
   const statements: string[] = [];
+
+  /** The SauceScript local holding a slot's UNSCALED source value. */
+  const baseLocal = (source: SlotSource): string => {
+    const named = locals?.[source];
+    if (named !== undefined) return named;
+    if (source === "amountIn" && amountInVar !== undefined) return amountInVar;
+    if (source === "amountOut" && amountOutVar !== undefined) return amountOutVar;
+    throw new Error(
+      `emitTemplate: no local was given for the source '${source}' — every source the template's ` +
+        `slots name needs one, via \`locals\` or the two measurement options.`,
+    );
+  };
 
   // 1. Derived locals, one per distinct (source, scale). The identity scale needs no local at all —
   // the base var IS the value — which also keeps the overwhelmingly common case free of arithmetic.
   const derived = new Map<string, string>();
   const varFor = (slot: TemplateSlot): string => {
-    const baseVar = slot.source === "amountIn" ? amountInVar : amountOutVar;
+    const baseVar = baseLocal(slot.source);
     if (slot.scale === WAD) return baseVar;
     const key = `${slot.source}:${slot.scale}`;
     const existing = derived.get(key);

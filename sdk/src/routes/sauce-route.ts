@@ -26,6 +26,14 @@ import { rewriteTokenFactory, rewriteTokenMembers } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { TOKEN_BASE_DIRS } from "../token/source.js";
+import { pascalOfSlug } from "./accessors.js";
+import { CANONICAL_CHAINS } from "../chains/canonical.js";
+import {
+  ecoRoutesPortal,
+  ecoRoutesProver,
+  type EcoRoutesSelector,
+} from "../protocols/eco-routes/lookup.js";
+import { rewriteIntentSugar, type IntentSugarDefaults } from "./intent-sugar.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import type { AddressInput, CallInput } from "./types.js";
 
@@ -62,6 +70,15 @@ export interface SauceCompileOptions {
    * always loses to user code — a name the module declares, imports or binds wins silently.
    */
   ambient?: string[];
+  /**
+   * Settings for `Chain(() => { ... }).reward({ ... })` written inside the program — creating an
+   * intent from a program, rather than compiling a program into one. Everything the SDK can look up
+   * it looks up; these are the fields it cannot, plus overrides. See `intent-sugar.ts`.
+   *
+   * Omitted entirely, the sugar still lowers if the source uses it — `deadline` and `creator` have
+   * no safe defaults and are reported by name when missing.
+   */
+  intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
 }
 
 export interface SauceEvmExecutionInput {
@@ -101,6 +118,36 @@ export function wrapSauceBody(sauce: string): string {
   return `function main() {\n${sauce}\n}`;
 }
 
+/** Accessor name -> chain, for every canonical chain. `Base(() => ...)` in a program opens an
+ *  intent for exactly the chains `import { Base }` gives a caller, so the two cannot diverge. */
+let chainAccessorCache: ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> | undefined;
+function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> {
+  chainAccessorCache ??= new Map(
+    CANONICAL_CHAINS.map((chain) => [pascalOfSlug(chain.slug), chain]),
+  );
+  return chainAccessorCache;
+}
+
+/** Every name the program can read as a compile-time scalar: the chain's token symbols and the
+ *  caller's own defines, with the caller winning — the same precedence the compiler applies. */
+function compileTimeValues(
+  chain: ChainRefResolved,
+  options: SauceCompileOptions,
+): ReadonlyMap<string, bigint> {
+  const values = new Map<string, bigint>();
+  for (const [symbol, address] of resolveTokenMap(chain, options.tokens)) {
+    values.set(symbol, address);
+  }
+  for (const [name, value] of Object.entries(options.defines ?? {})) {
+    if (typeof value === "bigint") values.set(name, value);
+    else if (typeof value === "number") values.set(name, BigInt(Math.trunc(value)));
+    else values.set(name, value ? 1n : 0n);
+  }
+  return values;
+}
+
+type ChainRefResolved = ReturnType<typeof requireChain>;
+
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
 }
@@ -138,6 +185,20 @@ export function compileSauceRoute(
   const tokenMap = resolveTokenMap(chain, options.tokens);
 
   let source = wrapSauceBody(sauce);
+
+  // The intent sugar runs FIRST, on the source as written. It reads `USDC` and `RECIPIENT` as
+  // compile-time values itself, so a token rewrite that had already turned `USDC.transfer(...)`
+  // into `IERC20.at(...).transfer(...)` would leave it nothing it recognises. What it leaves behind
+  // is ordinary `evm.call` statements, which every later pass is free to walk over.
+  const sugar = rewriteIntentSugar(source, {
+    source: chain,
+    chains: chainAccessorNames(),
+    defines: compileTimeValues(chain, options),
+    portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
+    proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
+    defaults: options.intents ?? {},
+  });
+  source = sugar.source;
   let baseDirs = options.baseDirs;
   // The Portal binding is layered UNDERNEATH the caller's own contracts, so `IPortal.at(...)` is
   // callable from a hand-written body with no import and no setup, and a caller who supplies their

@@ -43,6 +43,7 @@ import {
   type PlaceholderSpec,
 } from "./nest-dynamic.js";
 import { normalizeRoute, toBigInt } from "./normalize.js";
+import { ecoRoutesPortal, type EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import {
   approvalTxs,
   fundTx,
@@ -94,8 +95,10 @@ interface IntentOptionsCommon {
   salt?: Hex;
   /** The ROUTE's own deadline — required. */
   deadline: bigint | number | string;
-  /** The ROUTE's Portal contract — required. */
-  portal: AddressInput;
+  /** The ROUTE's Portal contract. Defaults to the eco-routes Portal this SDK records for the
+   *  destination chain, so it only has to be supplied for a deployment the registry does not carry.
+   *  See `protocols/eco-routes`. */
+  portal?: AddressInput;
   nativeAmount?: bigint | number | string;
   tokens?: readonly TokenAmountInput[];
   /** Calls spliced BEFORE the compiled Sauce call, in order. */
@@ -109,9 +112,13 @@ interface IntentOptionsCommon {
    *  (see `ambient.ts`) -- distinct from `.tokens` above (route/reward TOKEN AMOUNTS). */
   tokenDefines?: Readonly<Record<string, AddressInput>>;
   /** The SOURCE-chain Portal — where this intent is PUBLISHED. Distinct from `portal` above, which
-   *  is the DESTINATION-chain Portal that lands in `route.portal`. Used as the default target for
-   *  every submission/read helper on `BuiltIntent` below. */
+   *  is the DESTINATION-chain Portal that lands in `route.portal`. Defaults, like `portal`, to the
+   *  eco-routes Portal recorded for that chain. Used as the default target for every
+   *  submission/read helper on `BuiltIntent` below. */
   sourcePortal?: AddressInput;
+  /** Which eco-routes deployment to address — generation and environment. Defaults to the current
+   *  production one. */
+  ecoRoutes?: EcoRoutesSelector;
 }
 
 /**
@@ -475,9 +482,9 @@ export function openRoute(
   if (options.deadline === undefined) {
     missingField("deadline", "as `IntentOptions.deadline`");
   }
-  if (options.portal === undefined) {
-    missingField("portal", "as `IntentOptions.portal`");
-  }
+  // Not a required field any more: the SDK knows where eco-routes is deployed, so a caller only
+  // names a Portal to address a deployment the registry does not carry.
+  const destinationPortal = options.portal ?? ecoRoutesPortal(destination, options.ecoRoutes);
   if (
     options.execution === undefined &&
     options.pot !== undefined &&
@@ -517,6 +524,17 @@ export function openRoute(
   );
   const compileOptions: SauceCompileOptions = {
     ...options.compile,
+    // `Chain(() => ...).reward(...)` written INSIDE the program inherits this intent's own creator,
+    // deadlines and eco-routes selection, so the common case needs no second set of options. An
+    // explicit `compile.intents` field still wins.
+    intents: {
+      deadline: toBigInt(options.deadline),
+      rewardDeadline:
+        options.rewardDeadline === undefined ? undefined : toBigInt(options.rewardDeadline),
+      creator: options.creator,
+      ...options.ecoRoutes,
+      ...options.compile?.intents,
+    },
     defines: mergedDefines,
     tokens: options.compile?.tokens ?? options.tokenDefines,
     ambient: mergedAmbient.length > 0 ? mergedAmbient : options.compile?.ambient,
@@ -667,7 +685,7 @@ export function openRoute(
         built,
         via,
         position: opts?.position ?? "after",
-        portal: opts?.portal ?? options.portal,
+        portal: opts?.portal ?? destinationPortal,
         allowPartial: opts?.allowPartial ?? false,
         fundedByBody: opts?.fundedByBody ?? false,
         vault: opts?.vault,
@@ -696,7 +714,7 @@ export function openRoute(
       if (nestedEntries.length > 0) {
         parentRouteForInvariants = normalizeRoute({
           deadline: options.deadline,
-          portal: options.portal,
+          portal: destinationPortal,
           nativeAmount: options.nativeAmount,
           tokens: options.tokens,
           calls: [],
@@ -922,7 +940,7 @@ export function openRoute(
         {
           salt: options.salt,
           deadline: options.deadline,
-          portal: options.portal,
+          portal: destinationPortal,
           nativeAmount: options.nativeAmount,
           tokens: options.tokens,
           calls,

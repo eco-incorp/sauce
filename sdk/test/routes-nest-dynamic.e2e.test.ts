@@ -39,6 +39,7 @@ import {
   createTestClient,
   createWalletClient,
   decodeEventLog,
+  decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
   getCreate2Address,
@@ -1348,6 +1349,133 @@ describeEvm("route nesting, executed", () => {
       ]);
 
       expect(status).toBe("reverted");
+    }, 180_000);
+  });
+
+  describe("`Chain(() => ...).reward(...)` written inside the program", () => {
+    // The syntax the SDK exists to offer: an intent created from a Sauce program with no Portal,
+    // no selector, no offset word and no approve written by the author. Everything below the
+    // `PROGRAM` constant is the lowering's output, and none of it appears in the source.
+    //
+    // What only an engine can settle is whether the Portal accepts what that lowering builds, and
+    // whether the value captured from the enclosing program arrives where the encoding says it
+    // does. Both are read back out of the Portal's own log.
+    const SEEDED = 4_242_424n;
+    const DELIVER_TO = "0x00000000000000000000000000000000000000b7" as Address;
+
+    const PROGRAM = `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base(() => {
+    Token(TOKEN).transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: TOKEN, amount }] });
+}`;
+
+    it("publishes and funds the intent the SDK encodes, with the captured amount in it", async () => {
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const compiled = compileSauceRoute(
+        "base",
+        PROGRAM,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(DELIVER_TO) },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            // This anvil's Portal, not the registry's mainnet one. Every OTHER address in the
+            // lowered program -- and on a real chain the Portal too -- comes from the registry.
+            sourcePortal: portal,
+            destinationPortal: portal,
+            salt: `0x${"e0".repeat(32)}` as Hex,
+          },
+        },
+      );
+      // The author wrote none of this.
+      expect(PROGRAM).not.toContain("publishAndFund");
+      expect(PROGRAM).not.toContain("evm.call");
+      expect(compiled.source).toContain("evm.call(");
+
+      const { status, logs } = await fulfil([
+        {
+          target: token,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "mint",
+            args: [executorPot, SEEDED],
+          }),
+          value: 0n,
+        },
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+      expect(status).toBe("success");
+
+      const published = publishedIn(logs);
+      expect(published).toHaveLength(1);
+
+      // The reward carries the balance the enclosing program measured -- so the capture reached the
+      // encoded intent, which is the whole mechanism.
+      expect(published[0]!.rewardTokens).toHaveLength(1);
+      expect(published[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
+      expect(published[0]!.rewardTokens[0]!.token.toLowerCase()).toBe(token.toLowerCase());
+
+      // And the route the solver must run delivers that same amount to the named recipient.
+      const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published[0]!.route) as unknown as [
+        EvmRoute,
+      ];
+      expect(route.tokens[0]!.amount).toBe(SEEDED);
+      expect(route.calls).toHaveLength(1);
+      const delivered = decodeFunctionData({ abi: erc20Abi, data: route.calls[0]!.data });
+      expect(delivered.functionName).toBe("transfer");
+      expect((delivered.args![0] as string).toLowerCase()).toBe(DELIVER_TO.toLowerCase());
+      expect(delivered.args![1]).toBe(SEEDED);
+
+      // Funded, from the emitted approve, into the vault the Portal derives for that hash.
+      expect(
+        await publicClient.readContract({
+          abi: portalAbi,
+          address: portal,
+          functionName: "getRewardStatus",
+          args: [published[0]!.intentHash],
+        }),
+      ).toBe(1);
+      expect(await balanceOf(token, executorPot)).toBe(0n);
+    }, 180_000);
+
+    it("a token whose approve returns nothing (USDT) publishes the same way", async () => {
+      await mintTo(usdt, executorPot, SEEDED);
+      const held = await balanceOf(usdt, executorPot);
+      const compiled = compileSauceRoute(
+        "base",
+        PROGRAM,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          defines: { TOKEN: BigInt(usdt), RECIPIENT: BigInt(DELIVER_TO) },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            sourcePortal: portal,
+            destinationPortal: portal,
+            salt: `0x${"e1".repeat(32)}` as Hex,
+          },
+        },
+      );
+
+      const { status, logs } = await fulfil([
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+
+      expect(status).toBe("success");
+      expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(held);
+      expect(await balanceOf(usdt, executorPot)).toBe(0n);
     }, 180_000);
   });
 });

@@ -1,0 +1,136 @@
+#!/usr/bin/env node
+// Vendor the eco-routes deployment addresses from `@eco-foundation/routes-ts`, the package Eco
+// publishes them from, into a committed module.
+//
+// WHY VENDOR RATHER THAN DEPEND. `routes-ts` pulls in `viem` and `tronweb` at require time for
+// helpers this SDK does not use, and its address table is a 37-line CSV. Reading that CSV once and
+// committing the result costs nothing at install time, works offline, and — because the output is
+// committed — makes an address change show up as a reviewable diff instead of arriving silently
+// with a transitive bump.
+//
+// WHY A DIGEST. A version alone is not a pin: npm allows a republish, and a wrong Portal address is
+// funds sent somewhere nobody chose. Each CSV is checked against a sha256 committed below, in the
+// same posture as `sync-engine-artifacts.mjs`'s release-asset digests. To bump: change the version,
+// run this, paste the digest it reports, and review the address diff.
+//
+// TWO GENERATIONS, because eco-routes has had two. `3.x` deploys a single `Portal`; `2.x` deployed
+// separate `IntentSource` and `Inbox` contracts with a different ABI. Both ship here so an
+// application can address either, and each has a `default` and a `-staging` environment.
+//
+// Run: `pnpm --filter './sdk' sync-eco-routes-addresses`
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const OUT = resolve(here, "../src/protocols/eco-routes/addresses.generated.ts");
+
+/** Each generation: the pinned npm version, the sha256 of its `deployAddresses.csv`, and the CSV
+ *  columns that are contract roles (everything after `ChainID`). */
+const GENERATIONS = [
+  {
+    id: "v3",
+    version: "3.2.22",
+    sha256: "be8bf2ff1507aa146735ae837cb368b706f0dcfa3e72ec28d72b5919c031c6e1",
+    summary: "single Portal, with Hyper/Meta/Polymer/LayerZero provers",
+  },
+  {
+    id: "v2",
+    version: "2.8.20",
+    sha256: "0e6028eefdef2b0c7533c98f1940adc5004902ad577d45fb76f662fcf4963a9d",
+    summary: "separate IntentSource and Inbox, with Hyper and Meta provers",
+  },
+];
+
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+function fetchCsv(version, work) {
+  execFileSync(
+    "npm",
+    ["pack", `@eco-foundation/routes-ts@${version}`, "--pack-destination", work],
+    {
+      stdio: ["ignore", "ignore", "inherit"],
+    },
+  );
+  const tarball = execFileSync("ls", [work], { encoding: "utf8" })
+    .split("\n")
+    .find((name) => name.includes(version.replace(/\./g, ".")));
+  execFileSync("tar", ["xzf", join(work, tarball), "-C", work], { stdio: "inherit" });
+  return readFileSync(join(work, "package/deployAddresses.csv"), "utf8");
+}
+
+/** `{ [chainId]: { [environment]: { [role]: address } } }`, dropping zero-address (undeployed) cells
+ *  so an absent role is absent rather than a plausible-looking zero. */
+function parse(csv) {
+  const [header, ...rows] = csv.trim().split("\n");
+  const roles = header.split(",").slice(1);
+  const out = {};
+  for (const row of rows) {
+    const cells = row.split(",");
+    const [key, ...values] = cells;
+    const [chainId, environment = "default"] = key.split("-");
+    const entry = {};
+    roles.forEach((role, i) => {
+      const value = (values[i] ?? "").trim();
+      if (value && value.toLowerCase() !== ZERO) entry[role] = value;
+    });
+    if (Object.keys(entry).length === 0) continue;
+    out[chainId] ??= {};
+    out[chainId][environment] = entry;
+  }
+  return { roles, chains: out };
+}
+
+const work = mkdtempSync(join(tmpdir(), "eco-routes-"));
+const collected = [];
+try {
+  for (const generation of GENERATIONS) {
+    const csv = fetchCsv(generation.version, work);
+    const digest = createHash("sha256").update(csv).digest("hex");
+    if (generation.sha256 !== "PENDING" && generation.sha256 !== digest) {
+      throw new Error(
+        `sync-eco-routes-addresses: @eco-foundation/routes-ts@${generation.version}'s ` +
+          `deployAddresses.csv hashes to ${digest}, but ${generation.sha256} is pinned. A published ` +
+          `version changed under us — review the address diff before repinning.`,
+      );
+    }
+    collected.push({ ...generation, digest, ...parse(csv) });
+    rmSync(join(work, "package"), { recursive: true, force: true });
+  }
+} finally {
+  rmSync(work, { recursive: true, force: true });
+}
+
+const body = collected
+  .map(
+    (g) => `  ${g.id}: {
+    version: ${JSON.stringify(g.version)},
+    sha256: ${JSON.stringify(g.digest)},
+    summary: ${JSON.stringify(g.summary)},
+    roles: ${JSON.stringify(g.roles)},
+    chains: ${JSON.stringify(g.chains, null, 6).replace(/\n/g, "\n    ")},
+  },`,
+  )
+  .join("\n");
+
+writeFileSync(
+  OUT,
+  `// GENERATED by sdk/scripts/sync-eco-routes-addresses.mjs -- do not edit.
+//
+// Source: @eco-foundation/routes-ts, one pinned version per eco-routes generation, each checked
+// against the sha256 recorded beside it. Undeployed cells (the zero address) are omitted, so a role
+// that is absent here is a role with no deployment rather than one pointing at nothing.
+export const ECO_ROUTES_ADDRESSES = {
+${body}
+} as const;
+`,
+);
+
+console.log(`[sync-eco-routes-addresses] wrote ${OUT}`);
+for (const g of collected) {
+  const chains = Object.keys(g.chains).length;
+  console.log(`  ${g.id}  v${g.version}  ${chains} chains  sha256=${g.digest}`);
+}
