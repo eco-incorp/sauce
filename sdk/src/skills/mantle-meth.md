@@ -20,9 +20,9 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 
 ```typescript
 // Stake ETH for mETH
-import { METHABI as IMETH } from "./abis";
+import { METHStakingABI as IStaking } from "./abis";
 function main(stakingAddress: Address, minMETHAmount: Uint256): Uint256 {
-  const staking = IMETH.at(stakingAddress);
+  const staking = IStaking.at(stakingAddress);
   staking.stake(minMETHAmount);
   return 1;
 }
@@ -37,11 +37,18 @@ function main(stakingAddress: Address, minMETHAmount: Uint256): Uint256 {
 
 ## ABI Methods
 
-### METHABI
+### METHStakingABI
 
-- `stake(uint256)` - Stake ETH (payable), receive mETH. Param: minMETHAmount for slippage protection. Called on the Staking contract, not the token (so are `mETHToETH`/`ethToMETH`)
+The Staking contract (`staking`), not the token.
+
+- `stake(uint256)` - Stake ETH (payable), receive mETH. Param: minMETHAmount for slippage protection
 - `mETHToETH(uint256)` - Convert mETH amount to ETH value
 - `ethToMETH(uint256)` - Convert ETH amount to mETH value
+
+### METHABI
+
+The mETH token (`mETH`).
+
 - `balanceOf(address)` - Query mETH balance
 - `approve(address,uint256)` - Approve mETH spending
 

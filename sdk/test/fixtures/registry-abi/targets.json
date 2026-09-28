@@ -604,24 +604,10 @@
     },
     "mantle-meth": {
       "METHABI": {
-        "roles": ["mETH", "staking"],
-        "exempt": {
-          "stake(uint256)": {
-            "1:0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa": "a Staking-contract function; the mETH token does not implement it"
-          },
-          "mETHToETH(uint256)": {
-            "1:0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa": "a Staking-contract function; the mETH token does not implement it"
-          },
-          "ethToMETH(uint256)": {
-            "1:0xd5f7838f5c461feff7fe49ea5ebaf7728bb0adfa": "a Staking-contract function; the mETH token does not implement it"
-          },
-          "balanceOf(address)": {
-            "1:0xe3cbd06d7dadb3f4e6557bab7edd924cd1489e8f": "a token function; the Staking contract does not implement it"
-          },
-          "approve(address,uint256)": {
-            "1:0xe3cbd06d7dadb3f4e6557bab7edd924cd1489e8f": "a token function; the Staking contract does not implement it"
-          }
-        }
+        "roles": ["mETH"]
+      },
+      "METHStakingABI": {
+        "roles": ["staking"]
       }
     },
     "maverick": {
@@ -1052,23 +1038,17 @@
       }
     },
     "venus": {
+      "VBNBABI": {
+        "roles": ["vBNB"]
+      },
       "VTokenABI": {
-        "roles": ["vBNB"],
         "instances": [
           {
             "chainId": 56,
             "address": "0xecA88125a5ADbe82614ffC12D0DB554E2e2867C8",
             "note": "vUSDC, from comptroller.getAllMarkets()"
           }
-        ],
-        "exempt": {
-          "mint(uint256)": {
-            "56:0xa07c5b74c9b40447a954e1466938b865b6bbea36": "vBNB takes native BNB: its mint() is payable with no amount argument"
-          },
-          "repayBorrow(uint256)": {
-            "56:0xa07c5b74c9b40447a954e1466938b865b6bbea36": "vBNB takes native BNB: its repayBorrow() is payable with no amount argument"
-          }
-        }
+        ]
       },
       "VenusComptrollerABI": {
         "roles": ["comptroller"],

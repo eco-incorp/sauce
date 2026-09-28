@@ -1,0 +1,50 @@
+{
+  "abi": [
+    {
+      "name": "stake",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "minMETHAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "mETHToETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "mETHAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ethToMETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "ethAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}
