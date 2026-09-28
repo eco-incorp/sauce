@@ -6,6 +6,7 @@
 import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
+import { getDescriptor } from "../src/descriptors/query.js";
 import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 
@@ -217,15 +218,41 @@ describe("rewriteProtocolAccessors: fallback / named errors", () => {
     );
   });
 
+  // No registry ABI is widened any more (the registry-abi suite pins every selector against the
+  // deployed code), so the gate is exercised by marking a real descriptor widened for one test.
+  function whileWidened<T>(protocol: string, contract: string, run: () => T): T {
+    const coverage = getDescriptor(protocol, contract)!.coverage as {
+      typeFidelity: "exact" | "widened";
+      caveats: readonly string[];
+    };
+    const saved = { typeFidelity: coverage.typeFidelity, caveats: coverage.caveats };
+    coverage.typeFidelity = "widened";
+    coverage.caveats = ["synthetic: computed selectors do not match the deployed contract"];
+    try {
+      return run();
+    } finally {
+      Object.assign(coverage, saved);
+    }
+  }
+
   it("a widened-selector descriptor is refused by default, with a named error quoting the caveat", () => {
     const source = `function main() { UniswapV4.PoolManager.initialize(1n); }`;
-    expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/widened/);
+    whileWidened("uniswap-v4", "PoolManager", () =>
+      expect(() => rewriteProtocolAccessors(source, BASE)).toThrow(/widened.*synthetic/),
+    );
   });
 
   it("allowWidenedSelectors opts in", () => {
     const source = `function main() { UniswapV4.PoolManager.initialize(1n); }`;
-    const { rewrote } = rewriteProtocolAccessors(source, BASE, { allowWidenedSelectors: true });
+    const { rewrote } = whileWidened("uniswap-v4", "PoolManager", () =>
+      rewriteProtocolAccessors(source, BASE, { allowWidenedSelectors: true }),
+    );
     expect(rewrote).toBe(true);
+  });
+
+  it("an exact descriptor needs no opt-in: UniswapV4.PoolManager now carries the deployed types", () => {
+    const source = `function main() { UniswapV4.PoolManager.initialize(1n); }`;
+    expect(rewriteProtocolAccessors(source, BASE).rewrote).toBe(true);
   });
 
   it("a family-ambiguous contract -> named error", () => {

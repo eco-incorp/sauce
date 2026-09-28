@@ -10,7 +10,7 @@ bridge aggregator | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (4216
 
 ### bridge
 
-Bridge tokens cross-chain via LI.FI Diamond.
+Bridge tokens cross-chain via the LI.FI Diamond's Across V4 facet. Each underlying bridge has its own facet entry point (`startBridgeTokensVia<Bridge>`), with a bridge-specific second struct.
 
 ```typescript
 import { LiFiDiamondABI as ILiFiDiamond } from "./abis";
@@ -19,37 +19,53 @@ function main(
   diamondAddress: Address,
   transactionId: Uint256,
   sendingAsset: Address,
+  receivingAsset: Address,
   receiver: Address,
   amount: Uint256,
+  outputAmount: Uint256,
   destinationChainId: Uint256,
+  quoteTimestamp: Uint256,
+  fillDeadline: Uint256,
 ): Uint256 {
   const lifi = ILiFiDiamond.at(diamondAddress);
-  lifi.startBridgeTokensViaBridge({
-    transactionId: transactionId,
-    bridge: "across",
-    integrator: "sauce",
-    referrer: 0x0000000000000000000000000000000000000000,
-    sendingAssetId: sendingAsset,
-    receiver: receiver,
-    minAmount: amount,
-    destinationChainId: destinationChainId,
-    hasSourceSwaps: false,
-    hasDestinationCall: false,
-  });
+  lifi.startBridgeTokensViaAcrossV4(
+    {
+      transactionId: transactionId,
+      bridge: "acrossV4",
+      integrator: "sauce",
+      referrer: 0x0000000000000000000000000000000000000000,
+      sendingAssetId: sendingAsset,
+      receiver: receiver,
+      minAmount: amount,
+      destinationChainId: destinationChainId,
+      hasSourceSwaps: false,
+      hasDestinationCall: false,
+    },
+    {
+      receiverAddress: receiver,
+      refundAddress: receiver,
+      sendingAssetId: sendingAsset,
+      receivingAssetId: receivingAsset,
+      outputAmount: outputAmount,
+      outputAmountMultiplier: 0,
+      exclusiveRelayer: 0,
+      quoteTimestamp: quoteTimestamp,
+      fillDeadline: fillDeadline,
+      exclusivityParameter: 0,
+      message: "",
+    },
+  );
   return 1;
 }
 ```
 
 - `transactionId`: Unique identifier for tracking this bridge transaction (bytes32)
-- `bridge`: Name of the underlying bridge to use (e.g. "across", "stargate", "hop", "cbridge")
 - `integrator`: Integration partner identifier (e.g. "sauce")
 - `referrer`: Referral address for fee sharing. `address(0)` for none
-- `sendingAssetId`: ERC-20 token address to bridge
-- `receiver`: Recipient address on the destination chain
-- `minAmount`: Minimum amount of tokens to bridge
-- `destinationChainId`: Destination EVM chain ID
-- `hasSourceSwaps`: Set `true` if including pre-bridge swap steps
-- `hasDestinationCall`: Set `true` if including post-bridge execution on destination
+- `sendingAssetId` / `receivingAssetId`: token sent, and token received on the destination
+- `minAmount` / `outputAmount`: amount bridged, and the amount the Across relayer delivers
+- `quoteTimestamp` / `fillDeadline`: the Across quote's timestamp and fill deadline
+- `hasSourceSwaps` / `hasDestinationCall`: `true` only with pre-bridge swaps or a destination call
 - Requires ERC-20 approval to the LiFi Diamond
 
 ## Deployed Addresses
@@ -70,8 +86,10 @@ function main(
 
 ### LiFiDiamondABI
 
-- `startBridgeTokensViaBridge(BridgeData _bridgeData)` [payable] - Start a cross-chain bridge transaction. Routes through the specified underlying bridge
-- `extractBridgeData(bytes data) returns (BridgeData bridgeData)` - Decode bridge data from raw calldata (pure/view)
+- `startBridgeTokensViaAcrossV4(BridgeData _bridgeData, AcrossV4Data _acrossData)` [payable] - Bridge through Across V4 (AcrossFacetV4)
+- `extractBridgeData(bytes data) returns (BridgeData bridgeData)` - Decode bridge data from raw calldata (pure)
+
+AcrossV4Data tuple: `(bytes32 receiverAddress, bytes32 refundAddress, bytes32 sendingAssetId, bytes32 receivingAssetId, uint256 outputAmount, uint128 outputAmountMultiplier, bytes32 exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message)`
 
 BridgeData tuple: `(bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall)`
 

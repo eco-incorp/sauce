@@ -7,6 +7,16 @@ function main(uniProxyAddress: Address, deposit0: Uint256, deposit1: Uint256, to
 }
 `;
 
+// For the Ethereum UniProxy, an earlier release whose deposit takes no minIn.
+export const depositLegacy = `
+import { UniProxyLegacyABI as IUniProxy } from "./abis";
+
+function main(uniProxyAddress: Address, deposit0: Uint256, deposit1: Uint256, to: Address, pos: Address): Uint256 {
+  const proxy = IUniProxy.at(uniProxyAddress);
+  return proxy.deposit(deposit0, deposit1, to, pos);
+}
+`;
+
 export const withdraw = `
 import { HypervisorABI as IHypervisor } from "./abis";
 

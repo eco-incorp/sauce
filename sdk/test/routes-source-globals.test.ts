@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import ts from "typescript";
-import "../src/index.js";
+import { Base } from "../src/index.js";
 import { CONTRACT_LINKS } from "../src/descriptors/links.js";
 import { NAMESPACE_KEYS } from "../src/routes/accessor-index.js";
 import { TOKEN_REGISTRY } from "../src/routes/token-registry.js";
@@ -24,7 +24,14 @@ function diagnostics(source: string): string[] {
   const dir = mkdtempSync(join(tmpdir(), "sauce-source-types-"));
   try {
     const file = join(dir, "consumer.ts");
-    writeFileSync(file, `import ${JSON.stringify(resolve("src/index.ts"))};\n${source}`);
+    // A NAMED import of `Token`, not a bare one: `Token` is an ordinary export now, while the
+    // route-body names below it (`USDC`, `Uniswap`, `chainId`) are ambient and ride along on the
+    // module merely being in the program. Unused in probes that don't call it, which draws no
+    // diagnostic here (`noUnusedLocals` is off).
+    writeFileSync(
+      file,
+      `import { Token } from ${JSON.stringify(resolve("src/index.ts"))};\n${source}`,
+    );
     const program = ts.createProgram([file], {
       target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.ESNext,
@@ -32,6 +39,9 @@ function diagnostics(source: string): string[] {
       noEmit: true,
       strict: true,
       skipLibCheck: true,
+      // The probe imports `src/index.ts` by absolute path; a VALUE import of a `.ts` path needs
+      // this (a bare side-effect import did not), and `noEmit` above is what makes it legal.
+      allowImportingTsExtensions: true,
     });
     return program
       .getSemanticDiagnostics(program.getSourceFile(file))
@@ -52,6 +62,9 @@ test("token/protocol closures compile identically to the same source text", () =
   // invent global runtime clients or eagerly bind them to one chain.
   expect(Object.hasOwn(globalThis, "USDC")).toBe(false);
   expect(Object.hasOwn(globalThis, "Uniswap")).toBe(false);
+  // Nor does the HOST surface land there: `Base`/`Token` are imports, not globals.
+  expect(Object.hasOwn(globalThis, "Base")).toBe(false);
+  expect(Object.hasOwn(globalThis, "Token")).toBe(false);
 });
 
 test("ABI-derived protocol methods, address values, and ambient chain identity typecheck", () => {

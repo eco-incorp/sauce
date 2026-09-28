@@ -39,11 +39,11 @@
               "components": [
                 {
                   "name": "cliff",
-                  "type": "uint64"
+                  "type": "uint40"
                 },
                 {
                   "name": "total",
-                  "type": "uint64"
+                  "type": "uint40"
                 }
               ]
             },

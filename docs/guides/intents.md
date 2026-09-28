@@ -2,10 +2,15 @@
 
 [Documentation](../README.md) · [Routes API](../api/routes.md) · [Nested intents](nested-intents.md)
 
-`Base(body, options).reward(reward)` compiles a program for Base and packages it as an Eco intent. `Base.route(...)` has the same behavior. The destination chain selects the compiler target, token addresses, and protocol deployments.
+An Eco intent is an offer: _run this program on that chain, and the reward escrowed on this one is
+yours_. `Base(body, options).reward(reward)` builds one. The chain you call names the **destination**
+— where the program runs, and therefore which compiler target, token addresses and protocol
+deployments apply. `.reward(...)` names the **source**, where the reward sits until someone earns it.
+
+`Base.route(...)` is the same function. Every chain is a named export; import the ones you use.
 
 ```ts
-import "@eco-incorp/sauce";
+import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 export function buildApprovalIntent(routeOptions: routes.IntentOptions, reward: routes.RewardArg) {
@@ -15,7 +20,8 @@ export function buildApprovalIntent(routeOptions: routes.IntentOptions, reward: 
 }
 ```
 
-The SDK constructs the intent and transaction requests. Your application supplies deployments, funds the source reward, submits transactions, and arranges fulfillment by a solver.
+The SDK builds the intent and the transaction requests. It sends nothing. Your application supplies
+the deployments, funds the reward, submits the transactions, and a solver fulfills the destination.
 
 ## Source, destination, and funding
 
@@ -44,7 +50,7 @@ For direct Portal routes, the Pot's owner must be the destination **`Portal.exec
 
 Use [evm-execution.ts](../examples/evm-execution.ts) on the destination chain to read the Executor, resolve the current Kitchen and engine, predict the Pot, and quote the execution fee. If the Pot is absent, the helper returns a deployment request. Send it, wait for a successful receipt, and run the helper again. Only use a result with `ready: true`, which confirms code is present and checks the Pot's `owner()` and `kitchen()`.
 
-Deployment helpers return release addresses; the historical chain roster does not attest current release liveness.
+The deployment helpers return the released addresses. They do not check that code is live at those addresses on your chain — the helper above does, which is why its `ready: true` is the signal to act on.
 
 An Executor-owned Pot can be invoked by other valid Portal routes. Deliver assets, use them, and return leftovers **within the same fulfillment**; do not leave user funds or standing allowances in it. Source reward escrow belongs in the intent vault. These caller and custody rules follow [Eco Routes' Executor calls](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Executor.sol#L50-L74) and [destination fulfillment](https://github.com/eco/eco-routes/blob/49de5bb10a5eb00509b21702df6cf54de448ee11/contracts/Inbox.sol#L225-L271).
 
@@ -53,7 +59,7 @@ An Executor-owned Pot can be invoked by other valid Portal routes. Deliver asset
 This function takes deployment and reward configuration as inputs. It delivers one USDC on Base to `recipient` and offers the configured source-token reward. It only constructs data.
 
 ```ts
-import { token, type routes } from "@eco-incorp/sauce";
+import { Base, token, type routes } from "@eco-incorp/sauce";
 
 interface TransferIntentConfig {
   pot: routes.AddressInput;
@@ -100,7 +106,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 }
 ```
 
-Use an EVM source when using the Portal submission helpers below; they generate EVM calldata and reject an SVM source. The route model can represent SVM destinations, but the current SVM route emitter is incompatible with the released gated engine.
+The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana — the encoding supports it — but see the [Solana guide](solana.md) for how that execution is actually built.
 
 `executionFee` is the destination Kitchen quote obtained above. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
 
@@ -155,4 +161,4 @@ export async function readVault(
 
 Execute this read on the source chain. `hashCall()` cross-checks hashes against the Portal; `fundedCall()` checks funding. `predictVault({ portal, vaultInitCodeHash })` provides an offline CREATE2 prediction when you have verified the deployed vault configuration.
 
-The current SVM route emitter produces an older direct-engine instruction and cannot target the released gated engine. Code staging alone does not make those routes executable. See the [Solana guide](solana.md) for supported Kitchen execution and route-helper limitations.
+For a Solana destination, build the execution with the Kitchen client rather than the SVM route helpers: the instruction those helpers emit is not one the Solana engine accepts, and staging the code does not change that. The [Solana guide](solana.md) has the supported path.

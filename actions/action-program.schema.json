@@ -1,0 +1,1810 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eco-incorp:sauce:action-program:1",
+  "title": "Sauce action program",
+  "description": "A sequence of protocol actions that compiles to one Sauce program executing on one chain. Amounts are base-10 strings. Beyond this schema, a program must satisfy: every address with mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared width; a first action that takes an amount sets `amount`; an amountRef names a saveOutputAs set by an earlier action, and is not combined with `amount`; argument names are unique; and the value of every balanceOf/nativeBalance/argument action is read.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "chainId", "actions"],
+  "properties": {
+    "$schema": { "type": "string", "description": "The schema this document declares; ignored." },
+    "version": { "const": 1 },
+    "chainId": { "$ref": "#/$defs/chainId", "description": "The chain every action executes on." },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/action" },
+      "description": "The actions, in execution order."
+    }
+  },
+  "$defs": {
+    "address": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "An address: 0x + 40 hex digits. A mixed-case address must carry a valid EIP-55 checksum."
+    },
+    "recipient": {
+      "description": "An address, or \"self\" for the executing Pot.",
+      "oneOf": [{ "$ref": "#/$defs/address" }, { "const": "self" }]
+    },
+    "remoteRecipient": {
+      "description": "An address, or a 32-byte account on a non-EVM destination (0x + 64 hex digits).",
+      "oneOf": [{ "$ref": "#/$defs/address" }, { "$ref": "#/$defs/bytes32" }]
+    },
+    "bytes": {
+      "type": "string",
+      "pattern": "^0x(?:[0-9a-fA-F]{2})*$",
+      "description": "0x-prefixed hex bytes, an even number of digits."
+    },
+    "bytes32": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "32 bytes: 0x + 64 hex digits."
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+      "description": "A name that becomes a local variable in the emitted SauceScript."
+    },
+    "chainId": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "action": {
+      "oneOf": [
+        { "$ref": "#/$defs/action_uniswapV3ExactInput" },
+        { "$ref": "#/$defs/action_uniswapV3ExactInputMultiHop" },
+        { "$ref": "#/$defs/action_uniswapV4ExactInput" },
+        { "$ref": "#/$defs/action_uniswapV4ExactInputMultiHop" },
+        { "$ref": "#/$defs/action_curveSwap" },
+        { "$ref": "#/$defs/action_curveRouterNGSwap" },
+        { "$ref": "#/$defs/action_balancerV2Swap" },
+        { "$ref": "#/$defs/action_balancerV2BatchSwap" },
+        { "$ref": "#/$defs/action_balancerV3Swap" },
+        { "$ref": "#/$defs/action_uniswapV2Swap" },
+        { "$ref": "#/$defs/action_ambientSwap" },
+        { "$ref": "#/$defs/action_dodoSwap" },
+        { "$ref": "#/$defs/action_maverickSwap" },
+        { "$ref": "#/$defs/action_maverickMultiHopSwap" },
+        { "$ref": "#/$defs/action_carbonSwap" },
+        { "$ref": "#/$defs/action_fraxswapSwap" },
+        { "$ref": "#/$defs/action_fluidDexT1Swap" },
+        { "$ref": "#/$defs/action_acrossBridge" },
+        { "$ref": "#/$defs/action_stargateBridge" },
+        { "$ref": "#/$defs/action_cctpBridge" },
+        { "$ref": "#/$defs/action_hyperlaneBridge" },
+        { "$ref": "#/$defs/action_wrapETH" },
+        { "$ref": "#/$defs/action_unwrapETH" },
+        { "$ref": "#/$defs/action_wrapStETH" },
+        { "$ref": "#/$defs/action_unwrapStETH" },
+        { "$ref": "#/$defs/action_lidoStake" },
+        { "$ref": "#/$defs/action_lidoUnstake" },
+        { "$ref": "#/$defs/action_rocketPoolStake" },
+        { "$ref": "#/$defs/action_rocketPoolUnstake" },
+        { "$ref": "#/$defs/action_etherFiStake" },
+        { "$ref": "#/$defs/action_aaveV3Supply" },
+        { "$ref": "#/$defs/action_aaveV3Withdraw" },
+        { "$ref": "#/$defs/action_aaveV3Borrow" },
+        { "$ref": "#/$defs/action_aaveV3Repay" },
+        { "$ref": "#/$defs/action_compoundV3Supply" },
+        { "$ref": "#/$defs/action_compoundV3Withdraw" },
+        { "$ref": "#/$defs/action_transfer" },
+        { "$ref": "#/$defs/action_approve" },
+        { "$ref": "#/$defs/action_permit2Approve" },
+        { "$ref": "#/$defs/action_balanceOf" },
+        { "$ref": "#/$defs/action_nativeBalance" },
+        { "$ref": "#/$defs/action_argument" }
+      ]
+    },
+    "action_uniswapV3ExactInput": {
+      "title": "uniswapV3ExactInput",
+      "description": "Swaps an exact input through one Uniswap V3 pool. Calls SwapRouter02.exactInputSingle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "tokenIn", "tokenOut", "fee", "amountOutMin", "recipient"],
+      "properties": {
+        "type": { "const": "uniswapV3ExactInput" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the SwapRouter02" },
+        "tokenIn": { "$ref": "#/$defs/address", "description": "the token sold" },
+        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "fee": {
+          "enum": [100, 500, 3000, 10000],
+          "description": "the pool's fee tier, in hundredths of a bip"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "sqrtPriceLimitX96": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 49,
+          "description": "a price limit; absent or 0 for none"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_uniswapV3ExactInputMultiHop": {
+      "title": "uniswapV3ExactInputMultiHop",
+      "description": "Swaps an exact input along a packed Uniswap V3 path. Calls SwapRouter02.exactInput.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "path", "amountOutMin", "recipient"],
+      "properties": {
+        "type": { "const": "uniswapV3ExactInputMultiHop" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the SwapRouter02" },
+        "path": {
+          "$ref": "#/$defs/bytes",
+          "description": "the packed path: token ++ fee (3 bytes) ++ token ++ …"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_uniswapV4ExactInput": {
+      "title": "uniswapV4ExactInput",
+      "description": "Swaps an exact ERC-20 input through one Uniswap V4 pool via the Universal Router. Calls an ERC-20 transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "poolKey", "zeroForOne", "amountOutMin", "recipient"],
+      "properties": {
+        "type": { "const": "uniswapV4ExactInput" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the Universal Router" },
+        "poolKey": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency0", "currency1", "fee", "tickSpacing", "hooks"],
+          "properties": {
+            "currency0": { "$ref": "#/$defs/address", "description": "the pool's lower currency" },
+            "currency1": { "$ref": "#/$defs/address", "description": "the pool's higher currency" },
+            "fee": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 16777215,
+              "description": "the pool fee, in hundredths of a bip"
+            },
+            "tickSpacing": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32767,
+              "description": "the pool's tick spacing"
+            },
+            "hooks": {
+              "$ref": "#/$defs/address",
+              "description": "the pool's hooks contract, or the zero address"
+            }
+          },
+          "description": "the V4 pool key"
+        },
+        "zeroForOne": { "type": "boolean", "description": "true sells currency0 for currency1" },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "the least output accepted; the router reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_uniswapV4ExactInputMultiHop": {
+      "title": "uniswapV4ExactInputMultiHop",
+      "description": "Swaps an exact ERC-20 input along a Uniswap V4 path via the Universal Router. Calls an ERC-20 transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "currencyIn", "path", "amountOutMin", "recipient"],
+      "properties": {
+        "type": { "const": "uniswapV4ExactInputMultiHop" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the Universal Router" },
+        "currencyIn": { "$ref": "#/$defs/address", "description": "the currency sold" },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["intermediateCurrency", "fee", "tickSpacing", "hooks"],
+            "properties": {
+              "intermediateCurrency": {
+                "$ref": "#/$defs/address",
+                "description": "the currency this hop buys"
+              },
+              "fee": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 16777215,
+                "description": "the hop's pool fee"
+              },
+              "tickSpacing": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32767,
+                "description": "the hop's pool tick spacing"
+              },
+              "hooks": {
+                "$ref": "#/$defs/address",
+                "description": "the hop's pool hooks, or the zero address"
+              }
+            }
+          },
+          "minItems": 1,
+          "description": "the hops, in order; the last hop's currency is the output"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "the least output accepted; the router reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_curveSwap": {
+      "title": "curveSwap",
+      "description": "Swaps through a Curve pool's 4-argument `exchange`; the output is a balance delta. Calls pool.exchange(int128,int128,uint256,uint256).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "tokenOut", "i", "j", "amountOutMin", "recipient"],
+      "properties": {
+        "type": { "const": "curveSwap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": { "$ref": "#/$defs/address", "description": "the Curve pool" },
+        "tokenOut": {
+          "$ref": "#/$defs/address",
+          "description": "the token bought, whose balance delta is the output"
+        },
+        "i": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7,
+          "description": "the pool index of the coin sold"
+        },
+        "j": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7,
+          "description": "the pool index of the coin bought"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot; the pool pays the Pot, which forwards it with a transfer"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_curveRouterNGSwap": {
+      "title": "curveRouterNGSwap",
+      "description": "Swaps along a Curve RouterNG route of up to five hops. Calls RouterNG.exchange(address[11],uint256[5][5],uint256,uint256,address[5],address).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "route", "swapParams", "pools", "amountOutMin", "recipient"],
+      "properties": {
+        "type": { "const": "curveRouterNGSwap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the Curve RouterNG" },
+        "route": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/address" },
+          "minItems": 1,
+          "maxItems": 11,
+          "description": "the route; padded to 11 with zero addresses"
+        },
+        "swapParams": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              { "type": "integer", "minimum": 0, "maximum": 255 },
+              { "type": "integer", "minimum": 0, "maximum": 255 },
+              { "type": "integer", "minimum": 0, "maximum": 255 },
+              { "type": "integer", "minimum": 0, "maximum": 255 },
+              { "type": "integer", "minimum": 0, "maximum": 255 }
+            ],
+            "items": false,
+            "minItems": 5
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "per hop: [i, j, swap_type, pool_type, n_coins]; padded to 5 rows"
+        },
+        "pools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/address" },
+          "maxItems": 5,
+          "description": "a zap pool where a hop needs one; padded to 5"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_balancerV2Swap": {
+      "title": "balancerV2Swap",
+      "description": "Swaps through one Balancer V2 pool. Calls Vault.swap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "vault",
+        "poolId",
+        "tokenIn",
+        "tokenOut",
+        "amountOutMin",
+        "recipient",
+        "deadline"
+      ],
+      "properties": {
+        "type": { "const": "balancerV2Swap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "vault": { "$ref": "#/$defs/address", "description": "the Balancer V2 Vault" },
+        "poolId": { "$ref": "#/$defs/bytes32", "description": "the pool id" },
+        "tokenIn": { "$ref": "#/$defs/address", "description": "the token sold" },
+        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the venue reverts"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_balancerV2BatchSwap": {
+      "title": "balancerV2BatchSwap",
+      "description": "Swaps along Balancer V2 pools in one batch; the output is a balance delta. Calls Vault.batchSwap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "vault", "steps", "assets", "amountOutMin", "recipient", "deadline"],
+      "properties": {
+        "type": { "const": "balancerV2BatchSwap" },
+        "vault": { "$ref": "#/$defs/address", "description": "the Balancer V2 Vault" },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["poolId", "assetInIndex", "assetOutIndex", "amount"],
+            "properties": {
+              "poolId": { "$ref": "#/$defs/bytes32", "description": "the step's pool id" },
+              "assetInIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255,
+                "description": "index into `assets` of the step's input"
+              },
+              "assetOutIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255,
+                "description": "index into `assets` of the step's output"
+              },
+              "amount": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 78,
+                "description": "the step's input; 0 spends the previous step's output"
+              }
+            }
+          },
+          "minItems": 1,
+          "description": "the batch's steps; the last step's output asset is the output"
+        },
+        "assets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/address" },
+          "minItems": 2,
+          "description": "every asset the steps index"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the venue reverts"
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_balancerV3Swap": {
+      "title": "balancerV3Swap",
+      "description": "Swaps an exact input through one Balancer V3 pool; the router pays the Pot and pulls through Permit2. Calls Router.swapSingleTokenExactIn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "router",
+        "pool",
+        "tokenIn",
+        "tokenOut",
+        "amountOutMin",
+        "deadline",
+        "wethIsEth"
+      ],
+      "properties": {
+        "type": { "const": "balancerV3Swap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the Balancer V3 Router" },
+        "pool": { "$ref": "#/$defs/address", "description": "the pool" },
+        "tokenIn": { "$ref": "#/$defs/address", "description": "the token sold" },
+        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the venue reverts"
+        },
+        "wethIsEth": {
+          "type": "boolean",
+          "description": "true to pay or receive native ETH for WETH"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_uniswapV2Swap": {
+      "title": "uniswapV2Swap",
+      "description": "Swaps an exact input along a Uniswap V2 path; the output is a balance delta. Calls UniswapV2Router.swapExactTokensForTokens.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "path", "amountOutMin", "recipient", "deadline"],
+      "properties": {
+        "type": { "const": "uniswapV2Swap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the V2 router" },
+        "path": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/address" },
+          "minItems": 2,
+          "description": "the token path; the last token is the output"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the venue reverts"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_ambientSwap": {
+      "title": "ambientSwap",
+      "description": "Swaps through an Ambient (CrocSwap) pool; the dex pays the Pot, and the output is a balance delta. Calls CrocSwapDex.userCmd(1, abi.encode(...)).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "dex",
+        "base",
+        "quote",
+        "poolIdx",
+        "isBuy",
+        "inBaseQty",
+        "tip",
+        "limitPrice",
+        "amountOutMin",
+        "reserveFlags"
+      ],
+      "properties": {
+        "type": { "const": "ambientSwap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "dex": { "$ref": "#/$defs/address", "description": "the CrocSwapDex" },
+        "base": {
+          "$ref": "#/$defs/address",
+          "description": "the pool's base token (numerically lower)"
+        },
+        "quote": { "$ref": "#/$defs/address", "description": "the pool's quote token" },
+        "poolIdx": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "the pool type index (420 is the standard pool)"
+        },
+        "isBuy": { "type": "boolean", "description": "true pays base and receives quote" },
+        "inBaseQty": {
+          "type": "boolean",
+          "description": "true when the amount is denominated in the base token"
+        },
+        "tip": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "0 accepts the pool's default fee"
+        },
+        "limitPrice": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "the worst acceptable price, as a Q64.64 square-root price"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "the least output accepted; the dex reverts below it"
+        },
+        "reserveFlags": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "description": "0x1 settles base from surplus, 0x2 quote"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_dodoSwap": {
+      "title": "dodoSwap",
+      "description": "Swaps through DODO pairs via the DODO proxy, which pays the Pot. Calls DODOProxy.dodoSwapV2TokenToToken (or dodoSwapV1).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "proxy",
+        "fromToken",
+        "toToken",
+        "pairs",
+        "directions",
+        "amountOutMin",
+        "deadline"
+      ],
+      "properties": {
+        "type": { "const": "dodoSwap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "proxy": {
+          "$ref": "#/$defs/address",
+          "description": "the DODO proxy; approvals go to DODOApprove, not to it"
+        },
+        "fromToken": { "$ref": "#/$defs/address", "description": "the token sold" },
+        "toToken": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "pairs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/address" },
+          "minItems": 1,
+          "description": "the pairs to route through"
+        },
+        "directions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "a bit per pair: 0 sells base, 1 sells quote"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the venue reverts"
+        },
+        "version": {
+          "enum": ["v1", "v2"],
+          "description": "\"v1\" routes legacy Classical pairs through `dodoSwapV1`; default \"v2\""
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_maverickSwap": {
+      "title": "maverickSwap",
+      "description": "Swaps an exact input through one Maverick V2 pool. Calls MaverickV2Router.exactInputSingle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "pool", "tokenAIn", "amountOutMin", "recipient"],
+      "properties": {
+        "type": { "const": "maverickSwap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the Maverick V2 router" },
+        "pool": { "$ref": "#/$defs/address", "description": "the pool" },
+        "tokenAIn": { "type": "boolean", "description": "true sells the pool's token A" },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_maverickMultiHopSwap": {
+      "title": "maverickMultiHopSwap",
+      "description": "Swaps an exact input along a packed Maverick V2 path. Calls MaverickV2Router.exactInputMultiHop.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "path", "amountOutMin", "recipient"],
+      "properties": {
+        "type": { "const": "maverickMultiHopSwap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the Maverick V2 router" },
+        "path": {
+          "$ref": "#/$defs/bytes",
+          "description": "per hop, the pool's 20 bytes then one byte: 1 sells token A, 0 token B"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_carbonSwap": {
+      "title": "carbonSwap",
+      "description": "Trades against Carbon strategies by source amount; the controller pays the Pot. Calls CarbonController.tradeBySourceAmount.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "controller",
+        "sourceToken",
+        "targetToken",
+        "tradeActions",
+        "amountOutMin",
+        "deadline"
+      ],
+      "properties": {
+        "type": { "const": "carbonSwap" },
+        "controller": { "$ref": "#/$defs/address", "description": "the CarbonController" },
+        "sourceToken": { "$ref": "#/$defs/address", "description": "the token sold" },
+        "targetToken": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "tradeActions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["strategyId", "amount"],
+            "properties": {
+              "strategyId": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 78,
+                "description": "the strategy"
+              },
+              "amount": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 39,
+                "description": "the source amount traded against it"
+              }
+            }
+          },
+          "minItems": 1,
+          "description": "the source amount per strategy; together they are the trade"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 39,
+          "description": "the least output accepted; the controller reverts below it"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the venue reverts"
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_fraxswapSwap": {
+      "title": "fraxswapSwap",
+      "description": "Swaps an exact input along a Fraxswap path; the output is a balance delta. Calls FraxswapRouter.swapExactTokensForTokens.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "path", "amountOutMin", "recipient", "deadline"],
+      "properties": {
+        "type": { "const": "fraxswapSwap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": { "$ref": "#/$defs/address", "description": "the Fraxswap router" },
+        "path": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/address" },
+          "minItems": 2,
+          "description": "the token path; the last token is the output"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "deadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Unix seconds after which the venue reverts"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_fluidDexT1Swap": {
+      "title": "fluidDexT1Swap",
+      "description": "Swaps an exact ERC-20 input through a Fluid DEX T1 pool. Calls FluidDexT1.swapIn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "swap0to1", "amountOutMin", "recipient"],
+      "properties": {
+        "type": { "const": "fluidDexT1Swap" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": { "$ref": "#/$defs/address", "description": "the pool" },
+        "swap0to1": { "type": "boolean", "description": "true sells token0" },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least output accepted; the venue reverts below it"
+        },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the output when no later action spends it; `\"self\"` keeps it in the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_acrossBridge": {
+      "title": "acrossBridge",
+      "description": "Deposits into an Across SpokePool for the same token on the destination, less the relayer fee. Calls SpokePool.depositV3.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "spokePool",
+        "token",
+        "destChainId",
+        "recipient",
+        "relayerFee",
+        "quoteTimestamp",
+        "fillDeadline",
+        "exclusivityDeadline",
+        "message"
+      ],
+      "properties": {
+        "type": { "const": "acrossBridge" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "spokePool": {
+          "$ref": "#/$defs/address",
+          "description": "the origin SpokePool; it pulls the token, so approve it first"
+        },
+        "token": {
+          "$ref": "#/$defs/address",
+          "description": "the token bridged (input and output)"
+        },
+        "destChainId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "the destination chain id"
+        },
+        "recipient": { "$ref": "#/$defs/address", "description": "receives on the destination" },
+        "relayerFee": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "kept by the relayer: the destination receives `amount - relayerFee`"
+        },
+        "quoteTimestamp": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "the timestamp the fee was quoted at"
+        },
+        "fillDeadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Unix seconds by which a relayer must fill"
+        },
+        "exclusivityDeadline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Unix seconds of relayer exclusivity; 0 for none"
+        },
+        "message": {
+          "$ref": "#/$defs/bytes",
+          "description": "delivered with the fill; 0x for none"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_stargateBridge": {
+      "title": "stargateBridge",
+      "description": "Sends through a Stargate V2 ERC-20 pool (taxi), paying the LayerZero fee it quotes. Calls StargatePool.quoteSend, then StargatePool.send.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "dstEid", "recipient", "amountOutMin"],
+      "properties": {
+        "type": { "const": "stargateBridge" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the StargatePool; it pulls the token, so approve it first"
+        },
+        "dstEid": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "the destination's LayerZero endpoint id"
+        },
+        "recipient": {
+          "$ref": "#/$defs/remoteRecipient",
+          "description": "receives on the destination"
+        },
+        "amountOutMin": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the least the destination may receive"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_cctpBridge": {
+      "title": "cctpBridge",
+      "description": "Burns USDC through Circle's CCTP V2 TokenMessenger for minting on the destination. Calls TokenMessengerV2.depositForBurn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tokenMessenger", "token", "destinationDomain", "recipient"],
+      "properties": {
+        "type": { "const": "cctpBridge" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "tokenMessenger": {
+          "$ref": "#/$defs/address",
+          "description": "the CCTP V2 TokenMessenger; it pulls the token, so approve it first"
+        },
+        "token": { "$ref": "#/$defs/address", "description": "the burned token (USDC)" },
+        "destinationDomain": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "the destination's CCTP domain"
+        },
+        "recipient": {
+          "$ref": "#/$defs/remoteRecipient",
+          "description": "receives the mint on the destination"
+        },
+        "maxFee": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "the most the transfer may pay in fees, from the amount; default \"0\""
+        },
+        "minFinalityThreshold": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "2000 waits for finality (standard, the default); 1000 is fast"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_hyperlaneBridge": {
+      "title": "hyperlaneBridge",
+      "description": "Transfers through a Hyperlane ERC-20 warp route, paying the interchain gas it quotes. Calls TokenRouter.quoteGasPayment, then TokenRouter.transferRemote.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "router", "destinationDomain", "recipient"],
+      "properties": {
+        "type": { "const": "hyperlaneBridge" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "router": {
+          "$ref": "#/$defs/address",
+          "description": "the warp route; it pulls the amount plus any fee it charges"
+        },
+        "destinationDomain": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "the destination's Hyperlane domain"
+        },
+        "recipient": {
+          "$ref": "#/$defs/remoteRecipient",
+          "description": "receives on the destination"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_wrapETH": {
+      "title": "wrapETH",
+      "description": "Wraps native ETH into WETH. Calls WETH.deposit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "weth"],
+      "properties": {
+        "type": { "const": "wrapETH" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "weth": { "$ref": "#/$defs/address", "description": "the WETH contract" },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_unwrapETH": {
+      "title": "unwrapETH",
+      "description": "Unwraps WETH into native ETH. Calls WETH.withdraw.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "weth"],
+      "properties": {
+        "type": { "const": "unwrapETH" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "weth": { "$ref": "#/$defs/address", "description": "the WETH contract" },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_wrapStETH": {
+      "title": "wrapStETH",
+      "description": "Wraps stETH into wstETH; the output is the wstETH minted. Calls wstETH.wrap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "wstETH"],
+      "properties": {
+        "type": { "const": "wrapStETH" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "wstETH": {
+          "$ref": "#/$defs/address",
+          "description": "the wstETH contract; it pulls the stETH, so approve it first"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_unwrapStETH": {
+      "title": "unwrapStETH",
+      "description": "Unwraps wstETH; the output is the stETH returned. Calls wstETH.unwrap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "wstETH"],
+      "properties": {
+        "type": { "const": "unwrapStETH" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "wstETH": { "$ref": "#/$defs/address", "description": "the wstETH contract" },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_lidoStake": {
+      "title": "lidoStake",
+      "description": "Stakes native ETH with Lido; the output is the stETH received. Calls stETH.submit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "stETH"],
+      "properties": {
+        "type": { "const": "lidoStake" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "stETH": { "$ref": "#/$defs/address", "description": "the stETH contract" },
+        "referral": {
+          "$ref": "#/$defs/address",
+          "description": "Lido's referral; default the zero address"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_lidoUnstake": {
+      "title": "lidoUnstake",
+      "description": "Requests a Lido withdrawal of stETH; the ETH is claimed later with the withdrawal NFT. Calls WithdrawalQueueERC721.requestWithdrawals.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "withdrawalQueue", "owner"],
+      "properties": {
+        "type": { "const": "lidoUnstake" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "withdrawalQueue": {
+          "$ref": "#/$defs/address",
+          "description": "Lido's withdrawal queue; it pulls the stETH, so approve it first"
+        },
+        "owner": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the withdrawal NFT; `\"self\"` is the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_rocketPoolStake": {
+      "title": "rocketPoolStake",
+      "description": "Stakes native ETH with Rocket Pool; the output is the rETH received. Calls RocketDepositPool.deposit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "depositPool", "rETH"],
+      "properties": {
+        "type": { "const": "rocketPoolStake" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "depositPool": {
+          "$ref": "#/$defs/address",
+          "description": "the live RocketDepositPool, which upgrades move; read it from RocketStorage"
+        },
+        "rETH": {
+          "$ref": "#/$defs/address",
+          "description": "the rETH token, whose balance delta is the output"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_rocketPoolUnstake": {
+      "title": "rocketPoolUnstake",
+      "description": "Burns rETH; the output is the ETH received. Calls rETH.burn.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "rETH"],
+      "properties": {
+        "type": { "const": "rocketPoolUnstake" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "rETH": { "$ref": "#/$defs/address", "description": "the rETH token" },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_etherFiStake": {
+      "title": "etherFiStake",
+      "description": "Stakes native ETH with ether.fi; the output is the eETH received. Calls LiquidityPool.deposit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "liquidityPool", "eETH"],
+      "properties": {
+        "type": { "const": "etherFiStake" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "liquidityPool": { "$ref": "#/$defs/address", "description": "the ether.fi LiquidityPool" },
+        "eETH": {
+          "$ref": "#/$defs/address",
+          "description": "the eETH token, whose balance delta is the output"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_aaveV3Supply": {
+      "title": "aaveV3Supply",
+      "description": "Supplies a token to Aave V3. Calls Pool.supply.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "token", "onBehalfOf"],
+      "properties": {
+        "type": { "const": "aaveV3Supply" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the Aave V3 Pool; it pulls the token, so approve it first"
+        },
+        "token": { "$ref": "#/$defs/address", "description": "the asset supplied" },
+        "onBehalfOf": {
+          "$ref": "#/$defs/recipient",
+          "description": "credited with the position; `\"self\"` is the Pot"
+        },
+        "referralCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Aave's referral code; default 0"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_aaveV3Withdraw": {
+      "title": "aaveV3Withdraw",
+      "description": "Withdraws a token from Aave V3; the output is the amount withdrawn. Calls Pool.withdraw.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "token", "recipient"],
+      "properties": {
+        "type": { "const": "aaveV3Withdraw" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": { "$ref": "#/$defs/address", "description": "the Aave V3 Pool" },
+        "token": { "$ref": "#/$defs/address", "description": "the asset withdrawn" },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "receives the asset; `\"self\"` is the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_aaveV3Borrow": {
+      "title": "aaveV3Borrow",
+      "description": "Borrows a token from Aave V3 at the variable rate, the only rate it offers. Calls Pool.borrow.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "token", "onBehalfOf"],
+      "properties": {
+        "type": { "const": "aaveV3Borrow" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": { "$ref": "#/$defs/address", "description": "the Aave V3 Pool" },
+        "token": { "$ref": "#/$defs/address", "description": "the asset borrowed" },
+        "onBehalfOf": {
+          "$ref": "#/$defs/recipient",
+          "description": "whose collateral backs the debt; `\"self\"` is the Pot"
+        },
+        "referralCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Aave's referral code; default 0"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_aaveV3Repay": {
+      "title": "aaveV3Repay",
+      "description": "Repays an Aave V3 variable-rate debt. Calls Pool.repay.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pool", "token", "onBehalfOf"],
+      "properties": {
+        "type": { "const": "aaveV3Repay" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "pool": {
+          "$ref": "#/$defs/address",
+          "description": "the Aave V3 Pool; it pulls the token, so approve it first"
+        },
+        "token": { "$ref": "#/$defs/address", "description": "the asset repaid" },
+        "onBehalfOf": {
+          "$ref": "#/$defs/recipient",
+          "description": "whose debt is repaid; `\"self\"` is the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_compoundV3Supply": {
+      "title": "compoundV3Supply",
+      "description": "Supplies a token to a Compound V3 (Comet) market. Calls Comet.supply.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "comet", "token"],
+      "properties": {
+        "type": { "const": "compoundV3Supply" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "comet": {
+          "$ref": "#/$defs/address",
+          "description": "the Comet market; it pulls the token, so approve it first"
+        },
+        "token": { "$ref": "#/$defs/address", "description": "the asset supplied" },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_compoundV3Withdraw": {
+      "title": "compoundV3Withdraw",
+      "description": "Withdraws a token from a Compound V3 (Comet) market. Calls Comet.withdraw.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "comet", "token"],
+      "properties": {
+        "type": { "const": "compoundV3Withdraw" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "comet": { "$ref": "#/$defs/address", "description": "the Comet market" },
+        "token": { "$ref": "#/$defs/address", "description": "the asset withdrawn" },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_transfer": {
+      "title": "transfer",
+      "description": "Transfers an ERC-20 token. Calls ERC-20 transfer, checked like SafeERC20.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "token", "recipient"],
+      "properties": {
+        "type": { "const": "transfer" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "token": { "$ref": "#/$defs/address", "description": "the token" },
+        "recipient": {
+          "$ref": "#/$defs/recipient",
+          "description": "the receiver; `\"self\"` is the Pot"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_approve": {
+      "title": "approve",
+      "description": "Approves an ERC-20 spender, resetting a non-zero allowance first. Calls ERC-20 approve, checked and reset like SafeERC20.forceApprove.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "token", "spender"],
+      "properties": {
+        "type": { "const": "approve" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "token": { "$ref": "#/$defs/address", "description": "the token" },
+        "spender": { "$ref": "#/$defs/address", "description": "the spender" },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_permit2Approve": {
+      "title": "permit2Approve",
+      "description": "Grants a spender a Permit2 allowance; the token must also be approved to Permit2. Calls Permit2.approve(address,address,uint160,uint48).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "permit2", "token", "spender", "expiration"],
+      "properties": {
+        "type": { "const": "permit2Approve" },
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "maxLength": 78,
+          "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
+        },
+        "permit2": {
+          "$ref": "#/$defs/address",
+          "description": "Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3)"
+        },
+        "token": { "$ref": "#/$defs/address", "description": "the token" },
+        "spender": {
+          "$ref": "#/$defs/address",
+          "description": "the spender, such as Balancer V3's router"
+        },
+        "expiration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 281474976710655,
+          "description": "Unix seconds after which the allowance lapses"
+        },
+        "amountRef": {
+          "$ref": "#/$defs/identifier",
+          "description": "Spend the output an earlier action saved under this name."
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_balanceOf": {
+      "title": "balanceOf",
+      "description": "Reads the Pot's balance of a token; the output is that balance. Calls IERC20.balanceOf(pot).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "token"],
+      "properties": {
+        "type": { "const": "balanceOf" },
+        "token": { "$ref": "#/$defs/address", "description": "the token" },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_nativeBalance": {
+      "title": "nativeBalance",
+      "description": "Reads the Pot's native balance; the output is that balance. Calls ctx.selfBalance().",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "nativeBalance" },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    },
+    "action_argument": {
+      "title": "argument",
+      "description": "Declares a runtime argument of the compiled program; the output is the value supplied. Calls a `main` parameter.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "name"],
+      "properties": {
+        "type": { "const": "argument" },
+        "name": {
+          "$ref": "#/$defs/identifier",
+          "description": "the argument's name; arguments are encoded in order"
+        },
+        "saveOutputAs": {
+          "$ref": "#/$defs/identifier",
+          "description": "Save this action's output under a name later actions can reference."
+        }
+      }
+    }
+  }
+}

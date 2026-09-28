@@ -27,35 +27,25 @@ import {
 ```typescript
 // Close trade at market price
 import { DiamondABI as IDiamond } from "./abis";
-function main(diamondAddress: Address, pairIndex: Uint256, index: Uint256): Uint256 {
+function main(diamondAddress: Address, index: Uint256, expectedPrice: Uint256): Uint256 {
   const diamond = IDiamond.at(diamondAddress);
-  diamond.closeTradeMarket(pairIndex, index);
+  diamond.closeTradeMarket(index, expectedPrice);
   return 1;
 }
 
 // Update stop loss
 import { DiamondABI as IDiamond } from "./abis";
-function main(
-  diamondAddress: Address,
-  pairIndex: Uint256,
-  index: Uint256,
-  newSl: Uint256,
-): Uint256 {
+function main(diamondAddress: Address, index: Uint256, newSl: Uint256): Uint256 {
   const diamond = IDiamond.at(diamondAddress);
-  diamond.updateSl(pairIndex, index, newSl);
+  diamond.updateSl(index, newSl);
   return 1;
 }
 
 // Update take profit
 import { DiamondABI as IDiamond } from "./abis";
-function main(
-  diamondAddress: Address,
-  pairIndex: Uint256,
-  index: Uint256,
-  newTp: Uint256,
-): Uint256 {
+function main(diamondAddress: Address, index: Uint256, newTp: Uint256): Uint256 {
   const diamond = IDiamond.at(diamondAddress);
-  diamond.updateTp(pairIndex, index, newTp);
+  diamond.updateTp(index, newTp);
   return 1;
 }
 ```
@@ -72,15 +62,17 @@ function main(
 
 ### DiamondABI
 
-- `openTrade(tuple,uint8,uint256)` - Open trade. Tuple: { trader, pairIndex, index, initialPosToken, positionSizeDai, openPrice, buy, leverage, tp, sl }. orderType: 0=market, 1=limit. slippageP: max slippage %
-- `closeTradeMarket(uint256,uint256)` - Close at market. Params: pairIndex, index
-- `updateSl(uint256,uint256,uint256)` - Update stop loss. Params: pairIndex, index, newSl
-- `updateTp(uint256,uint256,uint256)` - Update take profit. Params: pairIndex, index, newTp
+These are the multi-collateral Diamond's (v8+) signatures. A trade is addressed by the trader's own `index` (their Nth trade), not by `(pairIndex, index)`.
+
+- `openTrade(Trade trade, uint16 maxSlippageP, address referrer)` - Open a trade. Trade: `(address user, uint32 index, uint16 pairIndex, uint24 leverage, bool long, bool isOpen, uint8 collateralIndex, uint8 tradeType, uint120 collateralAmount, uint64 openPrice, uint64 tp, uint64 sl, bool isCounterTrade, uint160 positionSizeToken, uint24 __placeholder)`
+- `closeTradeMarket(uint32 index, uint64 expectedPrice)` - Close at market
+- `updateSl(uint32 index, uint64 newSl)` - Update stop loss
+- `updateTp(uint32 index, uint64 newTp)` - Update take profit
 
 ## Notes
 
 - TVL: $50M+. Up to 1000x leverage on forex, 250x on crypto
 - Diamond proxy pattern - single contract for all operations
 - pairIndex identifies the trading pair (0=BTC/USD, 1=ETH/USD, etc.)
-- index identifies which trade for a given pair (user can have multiple)
+- index identifies one of the trader's trades (a trader can have several)
 - openTrade uses complex tuple param for trade parameters

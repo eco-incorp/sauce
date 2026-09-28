@@ -14,6 +14,7 @@ import {
   SPL_TRANSFER_CHECKED,
 } from "../src/token/types.js";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
+import { encodeFunctionData, erc20Abi } from "viem";
 
 const TOKEN = "0x1111111111111111111111111111111111111111" as const;
 const TO = "0x2222222222222222222222222222222222222222" as const;
@@ -31,19 +32,38 @@ describe("Token: SPL discriminants and offsets are pinned", () => {
 });
 
 describe("Token: EVM source emission", () => {
-  it("transfer emits an IERC20 typed-binding call", () => {
+  // The write goes out as raw calldata with a SafeERC20 check over the result, not as a typed
+  // `IERC20` call -- see `token/safe.ts`. A literal argument is therefore encoded INTO the hex
+  // rather than spelled as a SauceScript argument.
+  it("transfer emits a checked raw call", () => {
     const src = Token.transfer({ token: TOKEN, to: TO, amount: 5n }).source("evm");
-    expect(src).toContain('import { IERC20 } from "./artifacts/IERC20.json";');
-    expect(src).toContain(
-      `IERC20.at(${BigInt(TOKEN).toString()}n).transfer(${BigInt(TO).toString()}n, 5n);`,
-    );
+    const expected = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "transfer",
+      args: [TO, 5n],
+    });
+
+    expect(src).toContain(`hex\`${expected.slice(2)}\``);
+    expect(src).toContain(`evm.call(${BigInt(TOKEN).toString()}n, 0n,`);
+    expect(src).toContain(`require(ctx.codeSize(${BigInt(TOKEN).toString()}n) > 0)`);
+    expect(src).not.toContain(".transfer(");
   });
 
-  it("approve emits an IERC20 typed-binding call", () => {
+  it("approve emits a checked raw call, preceded by the forceApprove reset", () => {
     const src = Token.approve({ token: TOKEN, spender: SPENDER, amount: 7n }).source("v12");
-    expect(src).toContain(
-      `IERC20.at(${BigInt(TOKEN).toString()}n).approve(${BigInt(SPENDER).toString()}n, 7n);`,
-    );
+    const expected = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [SPENDER, 7n],
+    });
+
+    expect(src).toContain(`hex\`${expected.slice(2)}\``);
+    // The allowance read and the conditional reset that make this `forceApprove` rather than
+    // `approve` -- the rule USDT enforces.
+    expect(src).toContain("ctx.self()");
+    expect(src).toContain("evm.static(");
+    expect(src).toMatch(/if \(\w+cur > 0n\) \{/);
+    expect(src).not.toContain(".approve(");
   });
 
   it("balanceOf emits an expression, and Token.balanceOf('self') resolves to ctx.self()", () => {
@@ -123,7 +143,15 @@ describe("Token: an unsafe number amount never reaches emitted source or calldat
 
   it("a number amount at MAX_SAFE_INTEGER is still emitted and encoded exactly", () => {
     const spec = { token: TOKEN, to: TO, amount: Number.MAX_SAFE_INTEGER } as const;
-    expect(Token.transfer(spec).source("evm")).toContain("9007199254740991n");
+    // The EVM arm encodes a literal into the calldata, so the check is that the bytes match the
+    // bigint form's exactly -- which is the precision question, asked of the thing that ships.
+    expect(Token.transfer(spec).source("evm")).toContain(
+      encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [TO, 9007199254740991n],
+      }).slice(2),
+    );
     expect(Token.transfer(spec).toCall().data).toBe(
       Token.transfer({ ...spec, amount: 9007199254740991n }).toCall().data,
     );

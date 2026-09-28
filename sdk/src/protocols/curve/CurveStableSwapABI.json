@@ -7,11 +7,11 @@
       "inputs": [
         {
           "name": "i",
-          "type": "uint128"
+          "type": "int128"
         },
         {
           "name": "j",
-          "type": "uint128"
+          "type": "int128"
         },
         {
           "name": "dx",
@@ -36,11 +36,11 @@
       "inputs": [
         {
           "name": "i",
-          "type": "uint128"
+          "type": "int128"
         },
         {
           "name": "j",
-          "type": "uint128"
+          "type": "int128"
         },
         {
           "name": "dx",
@@ -111,7 +111,7 @@
         },
         {
           "name": "i",
-          "type": "uint128"
+          "type": "int128"
         },
         {
           "name": "min_amount",
@@ -132,11 +132,11 @@
       "inputs": [
         {
           "name": "i",
-          "type": "uint128"
+          "type": "int128"
         },
         {
           "name": "j",
-          "type": "uint128"
+          "type": "int128"
         },
         {
           "name": "dx",

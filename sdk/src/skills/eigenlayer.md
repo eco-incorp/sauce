@@ -49,7 +49,7 @@ function main(
 ### StrategyManagerABI
 
 - `depositIntoStrategy(address,address,uint256)` - Deposit token into strategy. Params: strategy address, token address, amount. Returns shares
-- `stakerStrategyShares(address,address)` - Query staker's shares in a strategy
+- `stakerDepositShares(address staker, address strategy)` - Query staker's deposit shares in a strategy (renamed from `stakerStrategyShares`)
 
 ### DelegationManagerABI
 

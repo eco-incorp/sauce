@@ -7,18 +7,21 @@ export const PythOracleABI = [
     outputs: [],
   },
   {
+    // The feed id is a bytes32, and PythStructs.Price is signed where a price can be: `price` is an
+    // int64 and `expo` an int32 (usually negative, e.g. -8). The deployed implementation has no
+    // verified source; these are the Pyth SDK's IPyth/PythStructs types.
     name: "getPrice",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "id", type: "uint256" }],
+    inputs: [{ name: "id", type: "bytes32" }],
     outputs: [
       {
         name: "price",
         type: "tuple",
         components: [
-          { name: "price", type: "uint64" },
+          { name: "price", type: "int64" },
           { name: "conf", type: "uint64" },
-          { name: "expo", type: "uint32" },
+          { name: "expo", type: "int32" },
           { name: "publishTime", type: "uint256" },
         ],
       },

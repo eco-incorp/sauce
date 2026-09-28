@@ -19,11 +19,11 @@
             },
             {
               "name": "fee",
-              "type": "uint32"
+              "type": "uint24"
             },
             {
               "name": "tickSpacing",
-              "type": "uint32"
+              "type": "int24"
             },
             {
               "name": "hooks",
@@ -39,7 +39,7 @@
       "outputs": [
         {
           "name": "tick",
-          "type": "uint32"
+          "type": "int24"
         }
       ]
     },
@@ -62,11 +62,11 @@
             },
             {
               "name": "fee",
-              "type": "uint32"
+              "type": "uint24"
             },
             {
               "name": "tickSpacing",
-              "type": "uint32"
+              "type": "int24"
             },
             {
               "name": "hooks",
@@ -84,7 +84,7 @@
             },
             {
               "name": "amountSpecified",
-              "type": "uint256"
+              "type": "int256"
             },
             {
               "name": "sqrtPriceLimitX96",
@@ -100,7 +100,7 @@
       "outputs": [
         {
           "name": "delta",
-          "type": "uint256"
+          "type": "int256"
         }
       ]
     },
@@ -123,11 +123,11 @@
             },
             {
               "name": "fee",
-              "type": "uint32"
+              "type": "uint24"
             },
             {
               "name": "tickSpacing",
-              "type": "uint32"
+              "type": "int24"
             },
             {
               "name": "hooks",
@@ -141,19 +141,19 @@
           "components": [
             {
               "name": "tickLower",
-              "type": "uint32"
+              "type": "int24"
             },
             {
               "name": "tickUpper",
-              "type": "uint32"
+              "type": "int24"
             },
             {
               "name": "liquidityDelta",
-              "type": "uint256"
+              "type": "int256"
             },
             {
               "name": "salt",
-              "type": "uint256"
+              "type": "bytes32"
             }
           ]
         },
@@ -165,11 +165,11 @@
       "outputs": [
         {
           "name": "delta",
-          "type": "uint256"
+          "type": "int256"
         },
         {
           "name": "feeDelta",
-          "type": "uint256"
+          "type": "int256"
         }
       ]
     }

@@ -1,10 +1,13 @@
 /**
- * eco-routes cross-chain intent DSL — top-level chain globals generated from
- * `../chains/canonical.js`, each BOTH callable and a namespace.
+ * eco-routes cross-chain intent DSL — one chain accessor per canonical chain,
+ * generated from `../chains/canonical.js`, each BOTH callable and a namespace.
+ *
+ * The composed accessors (callable + `.chain`/`.route` + the native contract
+ * tree) are named exports of the package root; `chainAccessors` below is the
+ * BARE record, carrying `.chain`/`.route` and nothing else.
  *
  * ```ts
- * import { routes } from "@eco-incorp/sauce";
- * const { Base, Solana } = routes.chainAccessors;
+ * import { Base, Solana } from "@eco-incorp/sauce";
  * const built = Base("return 1n;", { pot, engine, deadline, portal }).reward({ source: Solana.chain, creator, prover, deadline });
  * // identically: Base.route("return 1n;", {...}).reward({...})
  * ```
@@ -13,6 +16,7 @@ export { chain, chainAccessors, pascalOfSlug } from "./accessors.js";
 export type { PascalOf } from "./accessors.js";
 
 export { createChainGlobals, makeChainGlobal } from "./builder.js";
+export { composedChainGlobal, composedChainGlobals } from "./composed.js";
 export type { ChainGlobal, ChainGlobals, ChainRef, ChainRoute } from "./builder.js";
 
 export { assembleIntent } from "./intent.js";
@@ -131,8 +135,46 @@ export {
   publishAndFundTx,
   publishTx,
   PORTAL_ABI,
+  PORTAL_CONTRACTS,
 } from "./portal.js";
 export type { PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
 
 export { assertNestingInvariants, assertStaticChild, nestedChildCalls } from "./nest.js";
 export type { AssertNestingInvariantsArgs, NestChild, NestedChildOptions } from "./nest.js";
+
+// --- DYNAMIC nesting: a child intent created on-chain from a runtime measurement ---
+//
+// Unlike the transfer codegen (`nestedTransferProgram`, internal to `intent-dsl.ts`), these ARE
+// public: a caller cannot build a dynamic child at all without the placeholder sentinels, since the
+// sentinels are what it writes into the child's amount fields before handing it to `.nest()`.
+
+export {
+  assertDynamicChild,
+  dynamicChildProgram,
+  dynamicChildStatements,
+  dynamicChildTemplate,
+  renderDynamicChild,
+  AMOUNT_IN_PLACEHOLDER,
+  AMOUNT_OUT_PLACEHOLDER,
+  AMOUNT_IN_PLACEHOLDER_U64,
+  AMOUNT_OUT_PLACEHOLDER_U64,
+  WAD,
+} from "./nest-dynamic.js";
+export type { AmountMeasurement, DynamicChildOptions, DynamicNestEntry } from "./nest-dynamic.js";
+
+export {
+  emitTemplate,
+  encodeFixedWidth,
+  maxScalableBase,
+  renderTemplate,
+  scaleAmount,
+  splitByPlaceholders,
+} from "./template.js";
+export type {
+  AmountSource,
+  ByteTemplate,
+  PlaceholderSpec,
+  TemplateEmitOptions,
+  TemplateEmitResult,
+  TemplateSlot,
+} from "./template.js";

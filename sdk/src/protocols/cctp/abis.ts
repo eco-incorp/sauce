@@ -16,6 +16,8 @@ export const TokenMessengerABI = [
       { name: "maxFee", type: "uint256" },
       { name: "minFinalityThreshold", type: "uint32" },
     ],
-    outputs: [{ name: "nonce", type: "uint64" }],
+    // V2 returns nothing (V1 returned the nonce; V2 nonces are assigned off-chain by Circle).
+    // Declaring an output here would make every call decode empty return data and revert.
+    outputs: [],
   },
 ] as const;

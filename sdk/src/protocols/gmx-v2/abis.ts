@@ -1,3 +1,4 @@
+// GMX v2 ExchangeRouter (the one RoleStore currently grants CONTROLLER; see addresses.ts).
 export const ExchangeRouterABI = [
   {
     name: "createOrder",
@@ -32,6 +33,7 @@ export const ExchangeRouterABI = [
               { name: "executionFee", type: "uint256" },
               { name: "callbackGasLimit", type: "uint256" },
               { name: "minOutputAmount", type: "uint256" },
+              { name: "validFromTime", type: "uint256" },
             ],
           },
           { name: "orderType", type: "uint8" },
@@ -39,17 +41,18 @@ export const ExchangeRouterABI = [
           { name: "isLong", type: "bool" },
           { name: "shouldUnwrapNativeToken", type: "bool" },
           { name: "autoCancel", type: "bool" },
-          { name: "referralCode", type: "uint256" },
+          { name: "referralCode", type: "bytes32" },
+          { name: "dataList", type: "bytes32[]" },
         ],
       },
     ],
-    outputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "orderKey", type: "bytes32" }],
   },
   {
     name: "cancelOrder",
     type: "function",
-    stateMutability: "nonpayable",
-    inputs: [{ name: "key", type: "uint256" }],
+    stateMutability: "payable",
+    inputs: [{ name: "key", type: "bytes32" }],
     outputs: [],
   },
   {

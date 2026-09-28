@@ -128,9 +128,9 @@ describe("Tier 1 selector verification", () => {
       const result = compileSauceFunctionRust(functions.swap, protocolDir);
       const selectors = extractSelectors(result.bytecode);
 
-      // ABI uses uint32 (widened from Solidity's uint24 for compiler compatibility)
+      // SwapRouter's own signature: the fee is a uint24.
       const expectedSelector = computeSelector(
-        "exactInputSingle((address,address,uint32,address,uint256,uint256,uint256,uint160))",
+        "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
       );
       expect(selectors).toContain(expectedSelector);
     });

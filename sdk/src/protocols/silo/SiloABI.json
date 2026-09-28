@@ -51,6 +51,10 @@
         {
           "name": "withdrawnAmount",
           "type": "uint256"
+        },
+        {
+          "name": "withdrawnShare",
+          "type": "uint256"
         }
       ]
     },

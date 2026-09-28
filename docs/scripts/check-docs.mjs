@@ -69,9 +69,26 @@ if (failures.length) throw new Error(`Broken manual links:\n${failures.join("\n"
 console.log(`Manual links: ${manual.length} files checked`);
 
 const examples = join(root, "docs/examples");
+// `.sauce.ts` files are SauceScript, not TypeScript: they are compiled by the Sauce compiler from
+// the `.ts` example beside them, never by tsc, and running them through Node would be meaningless.
 const sources = readdirSync(examples)
-  .filter((name) => name.endsWith(".ts"))
+  .filter((name) => name.endsWith(".ts") && !name.endsWith(".sauce.ts"))
   .sort();
+
+// A SauceScript example must be the SAME TEXT the README shows. Nothing else checks this: the
+// README's TypeScript fences are extracted, compiled and run below, but a ```js fence is not, so a
+// program quoted by hand could drift from the file that is actually compiled.
+const sauceExamples = readdirSync(examples).filter((name) => name.endsWith(".sauce.ts"));
+const readme = readFileSync(join(root, "README.md"), "utf8");
+for (const name of sauceExamples) {
+  const body = readFileSync(join(examples, name), "utf8").trim();
+  if (!readme.includes(body)) {
+    throw new Error(
+      `README does not contain docs/examples/${name} verbatim — quote the file, do not retype it`,
+    );
+  }
+}
+console.log(`SauceScript examples: ${sauceExamples.length} quoted verbatim in the README`);
 // Keep examples under the package so Node resolves its public self-reference exports.
 const temporary = mkdtempSync(join(root, ".sauce-doc-examples-"));
 const input = join(temporary, "src");
@@ -110,6 +127,11 @@ try {
     ],
     { cwd: root, stdio: "inherit" },
   );
+  // A `.ts` example reads its SauceScript sibling by a path relative to itself, exactly as it would
+  // in an installed package, so the sibling has to sit beside the COMPILED file too.
+  for (const name of sauceExamples) {
+    writeFileSync(join(output, name), readFileSync(join(examples, name)));
+  }
   for (const source of sources) {
     execFileSync(process.execPath, [join(output, source.replace(/\.ts$/, ".js"))], {
       cwd: root,

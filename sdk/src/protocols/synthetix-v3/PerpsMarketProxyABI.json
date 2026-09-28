@@ -19,7 +19,7 @@
             },
             {
               "name": "sizeDelta",
-              "type": "uint128"
+              "type": "int128"
             },
             {
               "name": "settlementStrategyId",
@@ -31,7 +31,7 @@
             },
             {
               "name": "trackingCode",
-              "type": "uint256"
+              "type": "bytes32"
             },
             {
               "name": "referrer",
@@ -40,7 +40,56 @@
           ]
         }
       ],
-      "outputs": []
+      "outputs": [
+        {
+          "name": "retOrder",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "commitmentTime",
+              "type": "uint256"
+            },
+            {
+              "name": "request",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "marketId",
+                  "type": "uint128"
+                },
+                {
+                  "name": "accountId",
+                  "type": "uint128"
+                },
+                {
+                  "name": "sizeDelta",
+                  "type": "int128"
+                },
+                {
+                  "name": "settlementStrategyId",
+                  "type": "uint128"
+                },
+                {
+                  "name": "acceptablePrice",
+                  "type": "uint256"
+                },
+                {
+                  "name": "trackingCode",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "referrer",
+                  "type": "address"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "fees",
+          "type": "uint256"
+        }
+      ]
     },
     {
       "name": "modifyCollateral",
@@ -52,12 +101,12 @@
           "type": "uint128"
         },
         {
-          "name": "synthMarketId",
+          "name": "collateralId",
           "type": "uint128"
         },
         {
           "name": "amountDelta",
-          "type": "uint256"
+          "type": "int256"
         }
       ],
       "outputs": []

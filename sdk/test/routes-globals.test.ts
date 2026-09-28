@@ -1,20 +1,21 @@
 /**
- * eco-routes DEFAULT GLOBALS -- runtime install tests. Pure in-process
- * `globalThis` assertions, no compiler/forge/network involved.
+ * `routes/globals.ts` -- the OPT-IN `globalThis` install. Pure in-process
+ * assertions, no compiler/forge/network involved.
  *
- * `sdk/src/index.ts` installs on import (module-eval time), so by the time
- * this file's imports resolve, the globals are already live -- most of this
- * file exercises `installRouteGlobals`/`uninstallRouteGlobals` directly to
- * probe collision/idempotence/gating behavior without disturbing that
- * already-installed baseline for other test files in the same worker.
+ * The headline case is the first one: importing the SDK installs NOTHING.
+ * Everything below it has to ask for the install explicitly, and every test
+ * that does puts `globalThis` back afterwards (see the top-level `afterEach`),
+ * because the no-install invariant is what the rest of the suite -- and
+ * `routes-chain-exports.test.ts` -- rests on.
  */
 import { canonicalChains, requireChain } from "../src/chains/canonical.js";
 import { chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 import { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "../src/routes/globals.js";
+import { Base as BaseExport } from "../src/routes/chain-exports.generated.js";
 import type { IntentOptions } from "../src/routes/index.js";
 
-/** Every chain global, plus the two non-chain globals this module installs by default: `chain`
- *  and the universal `Token` interface (E-token). Kept derived, not a magic number, so a future
+/** Every chain name, plus the two non-chain names this module installs by default: `chain`
+ *  and the universal `Token` interface. Kept derived, not a magic number, so a future
  *  chain/global addition can't silently mask a real regression here. */
 const CHAIN_PLUS_CHAIN_PLUS_TOKEN = canonicalChains.length + 2;
 const CHAIN_PLUS_TOKEN = canonicalChains.length + 1;
@@ -41,17 +42,37 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
 
 const g = globalThis as unknown as Record<string, unknown>;
 
-describe("routes globals: installed by default on import", () => {
-  it("routeGlobals (the install-on-import result) installed every chain + chain, nothing skipped", () => {
-    expect(routeGlobals.skipped).toEqual([]);
-    expect(routeGlobals.installed).toHaveLength(CHAIN_PLUS_CHAIN_PLUS_TOKEN);
-    expect(routeGlobals.installed).toContain("Token");
+afterEach(() => {
+  uninstallRouteGlobals();
+  delete g.__ECO_ROUTES_TEST_SENTINEL__;
+});
+
+describe("routes globals: nothing is installed on import", () => {
+  it("importing the SDK leaves globalThis alone -- no chain name, no `chain`, no `Token`", () => {
+    for (const c of canonicalChains) {
+      expect(g[pascalOfSlug(c.slug)]).toBeUndefined();
+    }
+    expect(g.chain).toBeUndefined();
+    expect(g.Token).toBeUndefined();
   });
 
-  it("every canonical chain's PascalCase name resolves on globalThis to a composed origin over the SAME CanonicalChain", () => {
-    // Composed, not identical: E2.3 wraps each origin with its native
-    // contract-accessor tree, so this is no longer the SAME object as
-    // `chainAccessors[key]` -- only the same underlying chain/route.
+  it("routeGlobals reports an empty install until a host asks for one", () => {
+    expect(routeGlobals.installed).toEqual([]);
+    expect(routeGlobals.skipped).toEqual([]);
+  });
+
+  it("routeGlobals is a LIVE view: it follows an install and an uninstall, never a stale claim", () => {
+    installRouteGlobals();
+    expect(routeGlobals.installed).toHaveLength(CHAIN_PLUS_CHAIN_PLUS_TOKEN);
+    expect(routeGlobals.installed).toContain("Token");
+    uninstallRouteGlobals();
+    expect(routeGlobals.installed).toEqual([]);
+  });
+});
+
+describe("routes globals: installRouteGlobals installs the composed accessors", () => {
+  it("every canonical chain's PascalCase name lands on globalThis over the SAME CanonicalChain", () => {
+    installRouteGlobals();
     for (const c of canonicalChains) {
       const key = pascalOfSlug(c.slug);
       const composed = g[key] as { chain: unknown; route: unknown };
@@ -61,7 +82,13 @@ describe("routes globals: installed by default on import", () => {
     }
   });
 
-  it("E2.3: the installed global carries BOTH the eco-routes DSL and the native contract accessor tree", () => {
+  it("installs the SAME object the named export hands out -- one composition, two spellings", () => {
+    installRouteGlobals();
+    expect(g.Base).toBe(BaseExport);
+  });
+
+  it("the installed global carries BOTH the eco-routes DSL and the native contract accessor tree", () => {
+    installRouteGlobals();
     const base = g.Base as {
       route: unknown;
       UniswapV4: { UniversalRouter: unknown };
@@ -74,23 +101,27 @@ describe("routes globals: installed by default on import", () => {
   });
 
   it("composition never mutates the imported chainAccessors.Base object", () => {
+    installRouteGlobals();
     expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "route"]);
   });
 
   it("contract namespaces install as lazy, memoising getters (not eagerly constructed)", () => {
+    installRouteGlobals();
     const desc = Object.getOwnPropertyDescriptor(g.Base, "UniswapV4");
     expect(typeof desc?.get).toBe("function");
     const base = g.Base as { UniswapV4: unknown };
     expect(base.UniswapV4).toBe(base.UniswapV4);
   });
 
-  it("`chain` the front door is also a global and behaves identically to the named import", () => {
+  it("`chain` the front door installs too and behaves identically to the named import", () => {
+    installRouteGlobals();
     expect(typeof g.chain).toBe("function");
     const viaGlobal = (g.chain as (ref: unknown) => { chain: unknown })("base");
     expect(viaGlobal.chain).toEqual(requireChain("base"));
   });
 
-  it("end-to-end: Base(sauce, opts).reward(...) through the bare global matches the named-import build, and === Base.route(...)", () => {
+  it("end-to-end: Base(sauce, opts).reward(...) through the installed name matches the named-import build", () => {
+    installRouteGlobals();
     const opts = evmOptions();
 
     type OriginLike = {
@@ -107,6 +138,7 @@ describe("routes globals: installed by default on import", () => {
   });
 
   it("installed properties are non-enumerable (don't pollute Object.keys(globalThis))", () => {
+    installRouteGlobals();
     const enumerableKeys = Object.keys(globalThis);
     for (const c of canonicalChains) {
       expect(enumerableKeys).not.toContain(pascalOfSlug(c.slug));
@@ -114,25 +146,11 @@ describe("routes globals: installed by default on import", () => {
     expect(enumerableKeys).not.toContain("chain");
     expect(enumerableKeys).not.toContain("Token");
   });
-
-  // E-token: adding the Token global must not regress E3.5 (Base.route) or E2.3 (Base.Uniswap).
-  it("REGRESSION (E3.5/E2.3): Base.route(...) and Base.Uniswap.UniversalRouter still resolve via the bare global", () => {
-    const pending = (g.Base as { route: (s: string, o: IntentOptions) => unknown }).route(
-      "return 1n;",
-      evmOptions(),
-    );
-    expect(pending).toBeDefined();
-    const base = g.Base as {
-      UniswapV4: { UniversalRouter: unknown };
-      Uniswap: { UniversalRouter: unknown };
-    };
-    expect(base.UniswapV4.UniversalRouter).toBeDefined();
-    expect(base.Uniswap.UniversalRouter).toBe(base.UniswapV4.UniversalRouter);
-  });
 });
 
 describe("routes globals: the universal Token global", () => {
-  it("Token is installed on globalThis, non-enumerable, and is the SAME object as the named import", () => {
+  it("Token installs non-enumerably and is the SAME object as the named import", () => {
+    installRouteGlobals();
     expect(typeof (g.Token as { transfer: unknown }).transfer).toBe("function");
     expect(Object.keys(globalThis)).not.toContain("Token");
     const desc = Object.getOwnPropertyDescriptor(globalThis, "Token");
@@ -140,6 +158,7 @@ describe("routes globals: the universal Token global", () => {
   });
 
   it("Token.transfer/.approve/.balanceOf each return a TokenCall builder", () => {
+    installRouteGlobals();
     const token = g.Token as {
       transfer: (s: unknown) => { source: (t: string) => string };
       approve: (s: unknown) => { source: (t: string) => string };
@@ -154,56 +173,42 @@ describe("routes globals: the universal Token global", () => {
   });
 
   it("a pre-existing globalThis.Token is SKIPPED, not clobbered", () => {
-    uninstallRouteGlobals();
     const SENTINEL = { marker: "pre-existing" };
     g.Token = SENTINEL;
-    const report = installRouteGlobals();
-    expect(report.skipped).toContain("Token");
-    expect(g.Token).toBe(SENTINEL);
-    delete g.Token;
-    installRouteGlobals();
+    try {
+      const report = installRouteGlobals();
+      expect(report.skipped).toContain("Token");
+      expect(g.Token).toBe(SENTINEL);
+    } finally {
+      uninstallRouteGlobals();
+      delete g.Token;
+    }
   });
 
   it("installRouteGlobals({ includeToken: false }) omits Token only", () => {
-    uninstallRouteGlobals();
     const report = installRouteGlobals({ includeToken: false });
     expect(report.installed).not.toContain("Token");
+    expect(report.installed).toHaveLength(CHAIN_PLUS_TOKEN);
     expect(g.Token).toBeUndefined();
-    installRouteGlobals();
-  });
-
-  it("uninstallRouteGlobals() removes Token; re-install is idempotent", () => {
-    uninstallRouteGlobals();
-    expect(g.Token).toBeUndefined();
-    const report = installRouteGlobals();
-    expect(report.installed).toContain("Token");
-    expect(typeof (g.Token as { transfer: unknown }).transfer).toBe("function");
   });
 });
 
 describe("routes globals: installRouteGlobals / uninstallRouteGlobals", () => {
-  afterEach(() => {
-    // Restore the baseline the whole suite (and other test files sharing
-    // this worker's globalThis) expects: everything installed, nothing
-    // left over from a test-local sentinel.
-    delete g.__ECO_ROUTES_TEST_SENTINEL__;
-    installRouteGlobals();
-  });
-
   it("never clobbers a name already present on the target -- skip, don't overwrite", () => {
-    uninstallRouteGlobals();
     const SENTINEL = Symbol("sentinel");
     g.Zora = SENTINEL;
-
-    const report = installRouteGlobals();
-
-    expect(report.skipped).toContain("Zora");
-    expect(report.installed).not.toContain("Zora");
-    expect(g.Zora).toBe(SENTINEL);
+    try {
+      const report = installRouteGlobals();
+      expect(report.skipped).toContain("Zora");
+      expect(report.installed).not.toContain("Zora");
+      expect(g.Zora).toBe(SENTINEL);
+    } finally {
+      uninstallRouteGlobals();
+      delete g.Zora;
+    }
   });
 
   it("`in` semantics: an inherited/getter-only property on the target still counts as taken", () => {
-    uninstallRouteGlobals();
     const proto = {
       get Base() {
         return "inherited";
@@ -218,21 +223,12 @@ describe("routes globals: installRouteGlobals / uninstallRouteGlobals", () => {
   });
 
   it("includeChain: false omits the `chain` front door only", () => {
-    uninstallRouteGlobals();
     const report = installRouteGlobals({ includeChain: false });
     expect(report.installed).not.toContain("chain");
     expect(report.installed).toHaveLength(CHAIN_PLUS_TOKEN);
   });
 
-  it("includeToken: false omits the `Token` global only", () => {
-    uninstallRouteGlobals();
-    const report = installRouteGlobals({ includeToken: false });
-    expect(report.installed).not.toContain("Token");
-    expect(report.installed).toHaveLength(CHAIN_PLUS_TOKEN);
-  });
-
   it("uninstallRouteGlobals removes exactly what this module installed, and re-install is idempotent (not self-skipping)", () => {
-    uninstallRouteGlobals();
     const first = installRouteGlobals();
     expect(first.installed.length).toBe(CHAIN_PLUS_CHAIN_PLUS_TOKEN);
 
@@ -250,9 +246,9 @@ describe("routes globals: installRouteGlobals / uninstallRouteGlobals", () => {
 
   it("uninstall leaves an unrelated pre-existing global alone", () => {
     g.__ECO_ROUTES_TEST_SENTINEL__ = "untouched";
+    installRouteGlobals();
     uninstallRouteGlobals();
     expect(g.__ECO_ROUTES_TEST_SENTINEL__).toBe("untouched");
-    installRouteGlobals();
   });
 
   it("a custom target object is populated instead of globalThis, and globalThis is unaffected", () => {
@@ -260,8 +256,6 @@ describe("routes globals: installRouteGlobals / uninstallRouteGlobals", () => {
     const report = installRouteGlobals({ target });
     expect(report.skipped).toEqual([]);
     expect((target.Base as { chain: unknown }).chain).toEqual(chainAccessors.Base.chain);
-    // globalThis's own Base is untouched by this call (still whatever the
-    // top-level install-on-import set it to).
-    expect((g.Base as { chain: unknown }).chain).toEqual(chainAccessors.Base.chain);
+    expect(g.Base).toBeUndefined();
   });
 });

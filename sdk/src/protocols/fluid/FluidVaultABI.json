@@ -1,0 +1,41 @@
+{
+  "abi": [
+    {
+      "name": "operate",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "nftId",
+          "type": "uint256"
+        },
+        {
+          "name": "newCol",
+          "type": "int256"
+        },
+        {
+          "name": "newDebt",
+          "type": "int256"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "int256"
+        },
+        {
+          "name": "",
+          "type": "int256"
+        }
+      ]
+    }
+  ]
+}

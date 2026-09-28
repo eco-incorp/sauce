@@ -71,7 +71,7 @@
       "outputs": [
         {
           "name": "orderId",
-          "type": "uint256"
+          "type": "bytes32"
         }
       ]
     }

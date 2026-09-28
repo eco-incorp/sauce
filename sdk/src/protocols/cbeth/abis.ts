@@ -1,10 +1,14 @@
 export const CbETHABI = [
   {
+    // Minter-only (Coinbase). There is no public mint: cbETH is issued off-chain.
     name: "mint",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [{ name: "amount", type: "uint256" }],
-    outputs: [],
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
   },
   {
     name: "exchangeRate",

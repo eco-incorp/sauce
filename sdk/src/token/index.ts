@@ -2,10 +2,10 @@
  * `@eco-incorp/sauce`'s `token` module — the universal token interface.
  *
  * One object, `Token`, exposing `transfer`/`approve`/`balanceOf` — lowered to an ERC20 call on an
- * EVM compile target, and to an SPL Token program CPI on `svm`. Installed as a DEFAULT GLOBAL (zero
- * import, `const Token: TokenApi`) by `sdk/src/routes/globals.ts`; this module is also importable
- * directly as `token.Token` (or any of its named exports) for a caller who prefers not to rely on
- * the global.
+ * EVM compile target, and to an SPL Token program CPI on `svm`. Re-exported from the package root
+ * as `Token` (with the `Token(addr)` call signature intersected in — see
+ * `sdk/src/routes/chain-exports.generated.ts`); this module is also importable directly as
+ * `token.Token`, or any of its named exports.
  *
  * Compiler-free, like `swap/` and `deposit/`: every function here returns SauceScript SOURCE (or a
  * structured EVM `Call`); the caller runs `compile()` with explicit options. See

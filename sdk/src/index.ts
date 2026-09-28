@@ -17,14 +17,14 @@ export * as token from "./token/index.js";
 export * as contracts from "./descriptors/index.js";
 export * as svmVenues from "./svm/accessors.js";
 
-// eco-routes chain globals as default globals: `Base(() => USDC.transfer(to, amt)).reward(reward)`
-// with no import. The bare import both installs at runtime and -- load-bearing --
-// carries the generated ambient `declare global` block into a consumer's type
-// graph (dist/index.d.ts preserves a bare import verbatim through declaration
-// emit). Delete these two lines to opt out; runtime install and ambient types
-// revert together. See routes/globals.ts for the finer-grained escape hatches
-// (a `globalThis.__ECO_ROUTES_NO_GLOBALS__` flag, `uninstallRouteGlobals()`).
-import "./routes/globals.js";
-// Compile-time names inside route bodies; this module installs no JavaScript values.
+// One named export per canonical chain: `import { Base, Solana } from "@eco-incorp/sauce"`,
+// each callable (`Base(body, opts).reward(...)`) and carrying `.chain`/`.route` plus the
+// lazy contract tree (`Base.Uniswap...`). Also `chain` and `Token`. Importing the SDK
+// installs NOTHING on `globalThis` -- see routes/globals.ts for the opt-in install.
+export * from "./routes/chain-exports.generated.js";
+// Compile-time names inside route bodies; this module installs no JavaScript values. The
+// BARE import is load-bearing for TYPES: it is what tsc preserves verbatim into
+// dist/index.d.ts, carrying the ambient `declare global` block (`USDC`, `Uniswap`, ...)
+// into a consumer's type graph so their typed route closures check. Do not "clean it up".
 import "./routes/source-globals.generated.js";
 export { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "./routes/globals.js";

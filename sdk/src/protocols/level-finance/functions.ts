@@ -1,9 +1,9 @@
 export const addLiquidity = `
 import { LiquidityPoolABI as ILiquidityPool } from "./abis";
 
-function main(poolAddress: Address, tranche: Address, token: Address, amountIn: Uint256, minLpAmount: Uint256): Uint256 {
+function main(poolAddress: Address, tranche: Address, token: Address, amountIn: Uint256, minLpAmount: Uint256, to: Address): Uint256 {
   const pool = ILiquidityPool.at(poolAddress);
-  pool.addLiquidity(tranche, token, amountIn, minLpAmount);
+  pool.addLiquidity(tranche, token, amountIn, minLpAmount, to);
   return 1;
 }
 `;
@@ -11,9 +11,9 @@ function main(poolAddress: Address, tranche: Address, token: Address, amountIn: 
 export const removeLiquidity = `
 import { LiquidityPoolABI as ILiquidityPool } from "./abis";
 
-function main(poolAddress: Address, tranche: Address, tokenOut: Address, lpAmount: Uint256, minOut: Uint256): Uint256 {
+function main(poolAddress: Address, tranche: Address, tokenOut: Address, lpAmount: Uint256, minOut: Uint256, to: Address): Uint256 {
   const pool = ILiquidityPool.at(poolAddress);
-  pool.removeLiquidity(tranche, tokenOut, lpAmount, minOut);
+  pool.removeLiquidity(tranche, tokenOut, lpAmount, minOut, to);
   return 1;
 }
 `;

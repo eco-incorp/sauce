@@ -2,15 +2,17 @@
 
 [Documentation](../README.md) · [Create an intent](../guides/intents.md) · [Compiler](compiler.md)
 
-Import the routes namespace from the package root:
+`routes` is the namespace behind every chain accessor: the intent builder, the encoders and hashes,
+the Portal helpers and the nesting modes. Import it from the package root, next to the chains you use:
 
 ```ts
-import { routes } from "@eco-incorp/sauce";
+import { Base, routes } from "@eco-incorp/sauce";
 
 const destination = routes.chain("base");
 ```
 
-There is no published `/routes` subpath. Public route types are available as `routes.IntentOptions`, `routes.BuiltIntent`, and other members of this namespace.
+There is no `/routes` subpath. The public types are members of the namespace: `routes.IntentOptions`,
+`routes.BuiltIntent`, and so on.
 
 ## Chain entry points
 
@@ -22,24 +24,26 @@ There is no published `/routes` subpath. Public route types are available as `ro
 | `routes.chainAccessors.Base`           | Explicit access to the route chain entry point    |
 | `routes.openRoute(ref, body, options)` | Direct function behind chain entry points         |
 
-Chain references accept canonical slugs, names/aliases supported by the registry, numeric chain IDs, and canonical chain records. `.chain` exposes the canonical record. Root import installs the composed globals, which also expose host contract/venue accessors; `routes.chain(...)` is the route entry point.
+Chain references accept canonical slugs, names/aliases supported by the registry, numeric chain IDs, and canonical chain records. `.chain` exposes the canonical record.
+
+`Base` and every other chain are **named exports of the package root**; importing the package installs nothing on `globalThis`. A root-imported accessor is the composed one, which also exposes host contract and venue accessors (`Base.Uniswap.UniversalRouter`, `Solana.RaydiumCpSwap`); `routes.chainAccessors.Base` is the bare route entry point without that tree. A host that wants the bare names at run time can call `installRouteGlobals()`; `uninstallRouteGlobals()` reverses it, and neither installs TypeScript declarations.
 
 `body` accepts a source string or a synchronous zero-argument callback. A string can contain a full `function main(...)` or a bare body. A callback supplies source text, with no JavaScript capture. See [callback semantics](../guides/intents.md#callbacks-are-compiled-source).
 
 ## Intent options
 
-| Option                                          | Purpose                                                                              |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `execution`                                     | EVM `{ pot, engine, value? }`; SVM route calls cannot execute on the released engine |
-| `pot`, `engine`                                 | EVM shorthand instead of `execution`; both are required together                     |
-| `portal`, `deadline`                            | Required destination Portal and absolute route deadline                              |
-| `salt`                                          | Route salt; defaults to 32 zero bytes                                                |
-| `tokens`, `nativeAmount`                        | Solver-delivered destination assets                                                  |
-| `precalls`                                      | Calls before the compiled program and nested calls                                   |
-| `tokenDefines`                                  | Token-symbol address overrides                                                       |
-| `defines`, `compile`                            | Program specialization and compile options                                           |
-| `sourcePortal`                                  | Default source Portal for submission/read requests                                   |
-| `source`, `creator`, `prover`, `rewardDeadline` | Fallback fields for `.reward(...)`                                                   |
+| Option                                          | Purpose                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| `execution`                                     | EVM `{ pot, engine, value? }`; an SVM route call is not executable (see below) |
+| `pot`, `engine`                                 | EVM shorthand instead of `execution`; both are required together               |
+| `portal`, `deadline`                            | Required destination Portal and absolute route deadline                        |
+| `salt`                                          | Route salt; defaults to 32 zero bytes                                          |
+| `tokens`, `nativeAmount`                        | Solver-delivered destination assets                                            |
+| `precalls`                                      | Calls before the compiled program and nested calls                             |
+| `tokenDefines`                                  | Token-symbol address overrides                                                 |
+| `defines`, `compile`                            | Program specialization and compile options                                     |
+| `sourcePortal`                                  | Default source Portal for submission/read requests                             |
+| `source`, `creator`, `prover`, `rewardDeadline` | Fallback fields for `.reward(...)`                                             |
 
 The EVM shorthand sends zero `cook` value and only works with a fee-free Kitchen when the program needs no native input. For released deployments, use `execution: { pot, engine, value }` with the current Kitchen fee plus any native assets the program spends, and budget `nativeAmount` for all route call values. The direct route's Pot owner must equal the destination `Portal.executor()`. See [deployment and fee setup](../guides/intents.md#prepare-the-destination-pot).
 
@@ -77,9 +81,11 @@ The route wrapper has no runtime argument-payload parameter. Use compile-time de
 
 ## Deployment addresses
 
-`sauceEvmDeployPotCall({ owner, salt, kitchen })` encodes Pot deployment through the supplied Kitchen; direct intent routes use the destination `Portal.executor()` as owner. Its `chainId` alternative selects the pinned release Kitchen only for chains in the historical successful-deployment roster. `v12Deployment` and `requireV12Deployment` also return current release addresses under that historical filter; none of these helpers verifies current on-chain deployment. Prefer explicit `v12KitchenAddress()` after checking the target chain. `V12_EVM_CONTRACTS` and `v12SvmProgramId` are legacy addresses; use the current `/deployments` address functions. [evm-execution.ts](../examples/evm-execution.ts) demonstrates prediction, deployment, and owner/Kitchen checks.
+`sauceEvmDeployPotCall({ owner, salt, kitchen })` encodes Pot deployment through the Kitchen you name; for a direct intent route the owner is the destination `Portal.executor()`.
 
-`buildSauceSvmCall` and the SVM route path emit a legacy 8-byte staged-engine instruction, which is **incompatible with engine 1.2.0** even when supplied a code account and the current engine ID. They do not construct the required Kitchen call. Use the direct Kitchen client for Solana execution; see [the SVM intent limitation](../guides/solana.md#svm-destinations-in-eco-intents).
+Every address helper here returns a **recorded** address, never a verified one. `v12EngineAddress()` and `v12KitchenAddress()` give the released addresses directly and are the ones to prefer. `sauceEvmDeployPotCall`'s `chainId` form, `v12Deployment` and `requireV12Deployment` filter by a roster of chains where deployment previously succeeded, which is a different question from whether code is there now. `V12_EVM_CONTRACTS` and `v12SvmProgramId` name an earlier deployment generation. Check the chain before trusting any of them; [evm-execution.ts](../examples/evm-execution.ts) shows prediction, deployment and the owner/Kitchen checks.
+
+`buildSauceSvmCall` and the SVM route path emit an 8-byte engine instruction that the Solana engine does not accept, whatever code account or engine id you give them: they do not build the Kitchen call the engine requires. Build Solana execution with the Kitchen client instead — see [SVM destinations in Eco intents](../guides/solana.md#svm-destinations-in-eco-intents).
 
 ## Built intents
 
@@ -99,7 +105,7 @@ The route wrapper has no runtime argument-payload parameter. Use compile-time de
 | `vaultCall()`, `hashCall()`, `fundedCall()` | Source Portal read request plus result decoder                      |
 | `predictVault(config)`                      | Offline CREATE2 prediction with caller-provided vault configuration |
 
-Submission/read helpers accept an optional `{ portal }` override; otherwise `sourcePortal` is required. They generate EVM requests, require an EVM source, and never perform RPC. The codec can represent an SVM destination, but the built-in SVM Sauce route has the execution limitation above. Source/destination-selected encoding is used internally by hashing and Portal helpers; explicitly forcing a codec does not change an intent's chain kinds.
+Submission and read helpers take an optional `{ portal }` override; without one, `sourcePortal` is required. They build EVM requests, require an EVM source, and perform no RPC — you send them. The codec represents an SVM destination fine; building that execution is the separate matter above. `encodeEVM()`/`encodeSVM()` force a codec for inspection; they do not change an intent's chain kinds.
 
 ## Composition and lower-level encoding
 
@@ -108,3 +114,15 @@ Call `.nest(childOrThunk, options?)` before `.reward(...)`. The fluent default i
 For callers building their own calls, `assembleIntent(source, destination, route, reward)` normalizes an intent without compiling a program. `encodeRoute`, `encodeReward`, `hashIntent`, and their explicit EVM/SVM variants expose encoding and hashing. `toUniversalAddress` normalizes addresses for the cross-chain intent model, while `denormalizeToEvm` converts an EVM-shaped universal address back to its 20-byte form.
 
 The low-level `nestedChildCalls` helper builds approval/publication calls with explicit Portal and `allowPartial` settings. The fluent `.nest()` default is `"transfer"`; pass the current `executionFee` for its additional cook.
+
+`via: "dynamic"` creates the child **during** the parent's execution, from an amount measured on
+chain. `AMOUNT_IN_PLACEHOLDER` and `AMOUNT_OUT_PLACEHOLDER` mark the amounts to splice;
+`renderDynamicChild(child, options, amountIn)` reproduces the resulting calldata off-chain, and
+`dynamicChildTemplate` / `dynamicChildStatements` / `dynamicChildProgram` expose the segments,
+statements and merged program the builder generates. Underneath are `splitByPlaceholders`,
+`renderTemplate` and `emitTemplate` — byte-templating primitives that work against any encoding whose
+fields sit at fixed offsets, not only intents.
+
+`PORTAL_CONTRACTS` is the Portal ABI as a compiler binding. Every route compile carries it, so a
+hand-written program can call `IPortal.at(portal).publishAndFund(...)` with no import and no setup;
+it is the base layer, so a caller's own `IPortal` binding replaces it.

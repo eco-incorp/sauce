@@ -254,6 +254,8 @@ function resolveContractDescriptor(
   return { protocol, contract: contractName, descriptor };
 }
 
+/** The first overload of `name`. It only decides `.view` vs `.at`, which every overload of a name
+ *  agrees on (`descriptors-linkage.test.ts`); the compiler picks the overload by argument count. */
 function methodByName(descriptor: ContractDescriptor, name: string): DescriptorMethod | undefined {
   return descriptor.methods.find((m) => m.name === name);
 }

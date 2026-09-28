@@ -2,7 +2,7 @@ export const RestakeManagerABI = [
   {
     name: "deposit",
     type: "function",
-    stateMutability: "payable",
+    stateMutability: "nonpayable",
     inputs: [
       { name: "_collateralToken", type: "address" },
       { name: "_amount", type: "uint256" },

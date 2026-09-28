@@ -1,17 +1,24 @@
+// Perpetual Protocol v2 (Curie) ClearingHouse: position calls take one params struct.
 export const ClearingHouseABI = [
   {
     name: "openPosition",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "baseToken", type: "address" },
-      { name: "isBaseToQuote", type: "bool" },
-      { name: "isExactInput", type: "bool" },
-      { name: "amount", type: "uint256" },
-      { name: "oppositeAmountBound", type: "uint256" },
-      { name: "deadline", type: "uint256" },
-      { name: "sqrtPriceLimitX96", type: "uint256" },
-      { name: "referralCode", type: "uint256" },
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "baseToken", type: "address" },
+          { name: "isBaseToQuote", type: "bool" },
+          { name: "isExactInput", type: "bool" },
+          { name: "amount", type: "uint256" },
+          { name: "oppositeAmountBound", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+          { name: "sqrtPriceLimitX96", type: "uint160" },
+          { name: "referralCode", type: "bytes32" },
+        ],
+      },
     ],
     outputs: [
       { name: "base", type: "uint256" },
@@ -23,11 +30,17 @@ export const ClearingHouseABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "baseToken", type: "address" },
-      { name: "sqrtPriceLimitX96", type: "uint256" },
-      { name: "oppositeAmountBound", type: "uint256" },
-      { name: "deadline", type: "uint256" },
-      { name: "referralCode", type: "uint256" },
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "baseToken", type: "address" },
+          { name: "sqrtPriceLimitX96", type: "uint160" },
+          { name: "oppositeAmountBound", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+          { name: "referralCode", type: "bytes32" },
+        ],
+      },
     ],
     outputs: [
       { name: "base", type: "uint256" },
@@ -39,7 +52,7 @@ export const ClearingHouseABI = [
     type: "function",
     stateMutability: "view",
     inputs: [{ name: "trader", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "", type: "int256" }],
   },
 ] as const;
 

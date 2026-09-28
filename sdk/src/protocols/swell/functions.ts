@@ -3,7 +3,8 @@ import { SwETHABI as ISwETH } from "./abis";
 
 function main(swethAddress: Address): Uint256 {
   const sweth = ISwETH.at(swethAddress);
-  return sweth.deposit();
+  sweth.deposit();
+  return 1;
 }
 `;
 
@@ -12,6 +13,7 @@ import { RswETHABI as IRswETH } from "./abis";
 
 function main(rswethAddress: Address): Uint256 {
   const rsweth = IRswETH.at(rswethAddress);
-  return rsweth.deposit();
+  rsweth.deposit();
+  return 1;
 }
 `;

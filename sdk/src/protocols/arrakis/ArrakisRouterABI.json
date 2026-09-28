@@ -3,7 +3,7 @@
     {
       "name": "addLiquidity",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "payable",
       "inputs": [
         {
           "name": "params",
@@ -91,6 +91,10 @@
             {
               "name": "gauge",
               "type": "address"
+            },
+            {
+              "name": "receiveETH",
+              "type": "bool"
             }
           ]
         }

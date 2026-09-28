@@ -36,7 +36,13 @@ export const BorrowerOperationsABI = [
     name: "repayLUSD",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [{ name: "_LUSDAmount", type: "uint256" }],
+    // `_upperHint`/`_lowerHint` locate the trove's new position in the sorted list; the zero
+    // address is valid (the list is then searched from the ends, at a higher gas cost).
+    inputs: [
+      { name: "_LUSDAmount", type: "uint256" },
+      { name: "_upperHint", type: "address" },
+      { name: "_lowerHint", type: "address" },
+    ],
     outputs: [],
   },
 ] as const;

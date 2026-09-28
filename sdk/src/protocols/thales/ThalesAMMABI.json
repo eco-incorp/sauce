@@ -26,19 +26,12 @@
           "type": "uint256"
         }
       ],
-      "outputs": []
-    },
-    {
-      "name": "exerciseMaturedMarket",
-      "type": "function",
-      "stateMutability": "nonpayable",
-      "inputs": [
+      "outputs": [
         {
-          "name": "market",
-          "type": "address"
+          "name": "",
+          "type": "uint256"
         }
-      ],
-      "outputs": []
+      ]
     }
   ]
 }

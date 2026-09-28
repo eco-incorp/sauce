@@ -89,8 +89,8 @@
       ],
       "outputs": [
         {
-          "name": "amountIn",
-          "type": "uint256"
+          "name": "amountsIn",
+          "type": "uint256[]"
         }
       ]
     },
@@ -141,7 +141,7 @@
             },
             {
               "name": "deltaIds",
-              "type": "uint256[]"
+              "type": "int256[]"
             },
             {
               "name": "distributionX",

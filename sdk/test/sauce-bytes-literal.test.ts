@@ -30,7 +30,7 @@ const compileWithMessage = (literal: string): Uint8Array =>
       "",
       "function main(spokePoolAddress: Address, token: Address, amount: Uint256, destinationChainId: Uint256, recipient: Address): Uint256 {",
       "  const spokePool = ISpokePool.at(spokePoolAddress);",
-      `  spokePool.deposit(recipient, token, amount, destinationChainId, 0, 0, ${literal}, 0);`,
+      `  spokePool.depositV3(recipient, recipient, token, token, amount, amount, destinationChainId, recipient, 0, 0, 0, ${literal});`,
       "  return 1;",
       "}",
     ].join("\n"),

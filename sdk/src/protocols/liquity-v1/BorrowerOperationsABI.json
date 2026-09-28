@@ -71,6 +71,14 @@
         {
           "name": "_LUSDAmount",
           "type": "uint256"
+        },
+        {
+          "name": "_upperHint",
+          "type": "address"
+        },
+        {
+          "name": "_lowerHint",
+          "type": "address"
         }
       ],
       "outputs": []

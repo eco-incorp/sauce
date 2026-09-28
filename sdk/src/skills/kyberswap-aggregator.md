@@ -64,7 +64,8 @@ function main(
 
 | Chain         | Contract              | Address                                      |
 | ------------- | --------------------- | -------------------------------------------- |
-| All 11 chains | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
+| 10 EVM chains | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
+| zkSync        | metaAggregationRouter | `0x3F95eF3f2eAca871858dbE20A93c01daF6C2e923` |
 
 ## ABI Methods
 

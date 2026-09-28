@@ -1,8 +1,12 @@
-# Builders and actions
+# Builders
 
 [Documentation](../README.md) · [Protocol calls](protocols-and-tokens.md) · [Compiler](../api/compiler.md)
 
-The SDK provides host-language builders for applications that construct programs from data. Token, swap, and deposit builders produce SauceScript source. The actions package accepts a sequence of routing actions and can produce either source or compiled EVM bytecode. None of these builders selects a market route or submits a transaction.
+Sometimes a program is not something you write — it is something your application assembles from
+data it already has: a token and an amount, a pool and a direction, a vault and a deposit. The
+builders on this page take that data and emit SauceScript source you compile like any other program.
+
+They emit source. They do not pick a market route, quote a price, or send anything.
 
 ## Token operations
 
@@ -24,6 +28,19 @@ export function compileTokenTransfer(
   });
 }
 ```
+
+Every token WRITE these builders emit — and every one the SDK emits anywhere — carries OpenZeppelin
+`SafeERC20` semantics. The call goes out as raw calldata, so nothing decodes a `bool` a token like
+USDT never returns, and the result is then checked: empty returndata is accepted only from an
+address that has code, and anything else must decode as an ABI word equal to `1`. A token that
+returns `false` reverts rather than passing silently, and so do a write to an address with no code
+and a return shorter than one ABI word. `approve` adds `forceApprove`'s reset — it reads the current
+allowance and zeroes it first when it is non-zero, which USDT requires and a shared Pot makes
+likely. The `@sauce/token` functions a program calls directly (`transfer`, `transferFrom`,
+`approve`) behave the same way.
+
+The visible consequence is that a literal amount is encoded into the calldata rather than appearing
+as a decimal in the emitted source.
 
 `TokenCall.toCall()` instead returns `{ target, data, value }` for a fixed EVM call. Values that require runtime state, such as `amount: "balance"` or balance owner `"self"`, must be compiled. `.statement(target)` emits a transfer/approval statement; `.expression(target)` emits a balance read. `Token.program(specs, { target })` combines several operations into one program.
 
@@ -81,28 +98,7 @@ For Aave/Spark withdrawals, use a fixed underlying-asset amount or `amount: "max
 
 ## Routing actions
 
-Import actions from the published package's `/actions` subpath:
-
-```ts
-import { actionsToSauce, actionsToSauceSource } from "@eco-incorp/sauce/actions";
-import type { RoutingAction } from "@eco-incorp/sauce/actions";
-
-export function buildRoutingProgram(actions: readonly RoutingAction[]) {
-  return {
-    source: actionsToSauceSource(actions),
-    bytecode: actionsToSauce(actions),
-  };
-}
-```
-
-Action variants cover protocol swaps, bridges, wrapping, staking, lending, transfers, and approvals. Each discriminated action specifies concrete addresses and protocol parameters. Keep all actions in a program compatible with the chain where it executes; a `chainId` field does not turn a program into cross-chain execution.
-
-Amount resolution uses this precedence:
-
-1. An explicit amount on the action.
-2. `amountRef`, naming a previously saved output.
-3. The immediately preceding action's output, for implicit chaining.
-
-Set `saveOutputAs` on an action to name its output for later reuse. Saving an output or implicitly chaining the next action can direct the output to the executing Pot and capture it once. Independent actions retain their configured recipients. Quote helpers such as `actionToQuote` construct protocol quote calls; the application performs and interprets the RPC simulation.
-
-`actionsToSauce` returns a single `Uint8Array`. To put already compiled EVM bytecode into a route, convert it to hex (for example, with Viem's `bytesToHex`) and use `routes.buildSauceEvmCall({ pot, engine, program })`; see the [Routes API](../api/routes.md). To produce an Eco cross-chain intent, build the destination program and use the [intent builder](intents.md).
+Higher-level routing actions — swaps, bridges, wraps, stakes, and the chaining between them — live
+behind the package's `/actions` subpath and are documented in [Actions](actions.md). An action
+program is plain JSON that compiles to one program; `programIntent(program, options)` makes it
+the route of an [intent](intents.md) directly.

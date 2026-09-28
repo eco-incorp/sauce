@@ -19,7 +19,8 @@ export const deployments: ChainDeployment[] = [
     chainId: 10,
     chainName: "Optimism",
     addresses: {
-      exchangeProxy: "0xDef1C0ded9bec7F1a1670819833240f027b25EfF",
+      // Optimism's Exchange Proxy is a separate deployment; 0xDef1C0de… has no code here.
+      exchangeProxy: "0xDEF1ABE32c034e558Cdd535791643C58a13aCC10",
     },
   },
   {

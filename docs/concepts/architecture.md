@@ -1,134 +1,94 @@
-# SDK, compiler, and runtime
+# How Sauce fits together
 
-[Documentation](../README.md) · [Quick start](../guides/quick-start.md)
+[Documentation](../README.md) · [Quick start](../guides/quick-start.md) · [SauceScript](saucescript.md)
 
-Sauce turns a program into an atomic on-chain execution. The SDK supplies chain and
-protocol knowledge, the compiler translates SauceScript into bytecode, and a
-compatible on-chain engine executes that bytecode. An Eco intent describes the
-destination execution and the reward for fulfilling it.
+Sauce turns a program into one atomic on-chain execution. Three pieces divide that work, and knowing
+which piece owns a problem is most of what this page is for.
 
-## The three layers
+| Piece    | Where it lives                                   | What it does                                                                                                 |
+| -------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| This SDK | `@eco-incorp/sauce` and its subpaths             | Chain, protocol and token knowledge; route syntax; builders; intent encoding; account planning; verification |
+| Compiler | bundled, exposed at `@eco-incorp/sauce/compiler` | Checks SauceScript, resolves modules and ABIs, applies compile-time values, emits bytecode for a target      |
+| Engine   | deployed on chain, with a Kitchen and Pot        | Executes that bytecode against the chain's real contracts and accounts                                       |
 
-| Layer    | Published surface                                                                  | Responsibility                                                                                                                             |
-| -------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| SDK      | `@eco-incorp/sauce` and its subpaths                                               | Protocol and token registries, route syntax, builders, intent encoding, account planning, transaction helpers, and settlement verification |
-| Compiler | `@eco-incorp/sauce-compiler`; exposed in Node through `@eco-incorp/sauce/compiler` | Parse and check SauceScript, resolve modules and ABIs, apply compile-time parameters, and emit EVM or SVM bytecode                         |
-| Runtime  | Deployed Sauce EVM/SVM engines and Kitchen/Pot contracts or programs               | Execute compatible bytecode against the chain's accounts and contracts                                                                     |
+You only install one package. The compiler comes with it.
 
-The compiler is included when you install `@eco-incorp/sauce`. Import
-`@eco-incorp/sauce/compiler` to compile standalone programs, or use the SDK
-route builders to resolve protocol and token names automatically.
+What the engine actually does is simple enough to state in a sentence and is all you need to reason
+about: **it runs your program's steps in order, inside the surrounding transaction, and anything
+that reverts reverts the whole thing.** There is no partial execution, no retry, no rollback of one
+step. The bytecode is Sauce's own — not a Solidity contract's deployment code, not a Solana ELF
+program — and only a Sauce engine interprets it.
 
-```mermaid
-flowchart TD
-    A[Route closure or source string] --> B[SDK: destination, tokens, protocols, defines]
-    B --> C[Rewritten SauceScript and ABI bindings]
-    C --> D[Published Sauce compiler]
-    E[Standalone SauceScript and resolver] --> D
-    D --> F[EVM bytecode]
-    D --> G[SVM bytecode and account manifest]
-    F --> H[Pot.cook: engine and program]
-    G --> I[Account plan and Kitchen cook instruction]
-    H --> J[Direct transaction or Eco route call]
-    I --> K[Solana transaction]
-```
+## From a name to a contract call
 
-Both compiler targets use Sauce bytecode. EVM output is not a Solidity contract's
-deployment bytecode, and SVM output is not a Solana ELF program. The selected
-Sauce engine interprets it.
-
-## From global names to contract calls
-
-Inside an EVM route, the SDK lets you write:
+Inside an EVM route body you write:
 
 ```js
 USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
 ```
 
-The destination chain selects `USDC` and the router deployment. Before invoking
-the compiler, the SDK rewrites token and protocol access into contract bindings,
-supplies the matching ABIs, and injects scalar addresses. The compiler then sees
-the equivalent `IERC20.at(...).approve(...)` call.
+The destination chain picks which `USDC` and which router that means. Before compiling, the SDK
+rewrites those names into ABI-bound contract calls, supplies the matching ABIs and injects the
+addresses. The compiler sees the equivalent `IERC20.at(...).approve(...)`.
 
-These names are SDK syntax, not builtins of the standalone compiler. A direct
-`compile()` call needs explicit ABI imports/bindings and any addresses or defines
-the program uses. See [protocols and tokens](../guides/protocols-and-tokens.md) and
-[the compiler API](../api/compiler.md).
+These names belong to the SDK's route path, not to the compiler. A direct `compile()` call resolves
+nothing for you: bind ABIs and supply addresses yourself. See
+[protocols and tokens](../guides/protocols-and-tokens.md) and [compiling](../guides/compiling.md).
 
-There are also separate host JavaScript and SauceScript environments. Importing
-the SDK installs chain helpers such as `Base` in the host. A route callback is
-read as source and compiled; it is never invoked as a JavaScript callback and
-does not capture its surrounding variables. Generated TypeScript declarations
-help you author route bodies, but compilation still resolves each name against
-the selected destination's actual registry.
+## Two environments that look alike
+
+A route body is **source text**, not a callback. The SDK reads it, rewrites it and compiles it; it
+is never invoked as JavaScript and captures no surrounding variable. A host `const amount = …` does
+not exist inside the program — pass it through `defines`.
+
+That is why `Base` and `USDC` behave differently even though both are bare names. `Base` is a named
+export you import. `USDC` is program syntax the compiler resolves. The package ships TypeScript
+declarations for the program names so a typed body still checks, but a declaration is a type, not a
+value.
 
 ## From bytecode to execution
 
 ### EVM
 
-`V12Pot.cook(address engine, bytes program)` runs one program. A Pot has an owner;
-the engine is supplied on each cook. Constructing a call therefore needs both a
-**Pot address** and an **engine address**. The SDK does not infer them from the
-protocol namespace. The released engine accepts only canonical Pots deployed through
-its configured Kitchen. Each cook must send the Kitchen's current `executionFee()`
-in `msg.value`; the Pot remits it before running the program. Add native program
-funding on top of that fee. An existing Pot balance does not replace this payment.
+A program runs through `Pot.cook(engine, program)`. A Pot has an owner; the engine is named on each
+cook, so building a call needs **both** addresses — the SDK will not guess either. An engine accepts
+only Pots created by its own Kitchen.
 
-A multi-statement route body compiles to one program and one cook. To run separate
-programs, construct separate calls and use an authorized execution mechanism that
-propagates failures if the entire operation must be atomic. The caller must have
-authority to invoke the Pot. For direct Eco route calls, the caller and required
-Pot owner is the destination `Portal.executor()`. Keep funds in that shared Pot
-only during the fulfillment; [intent setup](../guides/intents.md#prepare-the-destination-pot)
-shows deployment, custody, and fee handling.
+Every cook must send the Kitchen's current `executionFee()` as native value, even for a program that
+moves only ERC-20s. Native the program itself spends is on top of that. A balance already sitting in
+the Pot does not pay the fee.
 
-### SVM
+One route body is one program and one cook, however many statements it contains. For a Portal-driven
+intent the Pot's owner must be the destination `Portal.executor()`, and the Pot is shared: put
+assets in, use them and take the remainder out within the same fulfillment.
+[Intent setup](../guides/intents.md#prepare-the-destination-pot) has the reads and the deployment call.
 
-The compiler returns an account manifest as well as bytecode. `Account` parameters
-name attached slots; their `Writable` and `Signer` modifiers describe required
-roles. Account identities and instruction data travel through separate channels.
+### Solana
 
-The SVM SDK resolves account plans, builds instructions and transactions, and
-supports Kitchen-managed code staging. Staged Kitchen execution uses finalized
-metadata and code accounts. The built-in SVM route helper emits a legacy engine
-instruction and is incompatible with the released engine; use the direct Kitchen
-client described in the [Solana guide](../guides/solana.md).
+The compiler returns an **account manifest** alongside the bytecode. Each `Account` parameter of
+`main` is a slot; its `Writable`/`Signer` modifiers state the role that slot requires. Account
+identities travel with the instruction, separately from the encoded argument values.
 
-The released engine's `execute_from_account` instruction names a code account;
-its instruction data does not carry a content hash. A program hash checked during
-Kitchen staging or cooking and the identity of the account later executed are
-distinct evidence. See [settlement verification](../guides/verification.md#svm-verify-program-and-accounts).
+The SDK resolves those slots into a plan, builds the instructions and transactions, and can stage a
+larger program through the Kitchen before executing it. See the [Solana guide](../guides/solana.md).
 
 ## Intents connect executions across chains
 
-`Base(() => { ... }, options).reward(reward)` creates an Eco intent whose route
-executes on Base. The source chain and funding information come from the intent
-options and reward. The SDK compiles the destination program, constructs the
-route, and provides Portal calldata and hashes.
+`Base(body, options).reward(reward)` builds an Eco intent whose route executes on Base. The SDK
+compiles the destination program, assembles the route, and hands back hashes and Portal calldata.
 
-Building an intent does not publish, fund, or fulfill it. Those are transactions
-submitted by the application and fulfillment actors. Nested intents are separate
-executions composed with `.nest(...)`; they do not form one synchronous call
-stack across chains. See [creating intents](../guides/intents.md).
+Building an intent publishes nothing. Your application submits the source-chain transactions, and a
+solver fulfills the destination. Nested intents are separate executions composed with `.nest(...)` —
+a cascade, not one call stack spanning chains. See [create an intent](../guides/intents.md).
 
-## Compiler and engine compatibility
+## Versions travel with artifacts
 
-Compiler 2.3.0 identifies its output as `isaRevision: "stack-compact-v2"` and
-reports the selected entry-argument format. These fields describe the artifact;
-they do not inspect an address or negotiate runtime support.
+A compiled program is paired with an engine that understands it. The compiler reports what it
+produced; it does not inspect an address to find out what is deployed there. Read the deployment
+helpers in `@eco-incorp/sauce/deployments` for released engine and Kitchen addresses, and confirm the
+code is live on the chain or cluster you are targeting.
 
-Use `v12EngineAddress()`, `v12KitchenAddress()`, `v12SvmEngineProgramId()`, and
-`v12SvmKitchenProgramId()` from `@eco-incorp/sauce/deployments` to obtain released
-engine and Kitchen addresses. The legacy chain roster records an older
-deployment and does not attest liveness of the pinned release. Check deployed
-code, cluster, and instruction support on the target chain. Pair programs with the engine
-release intended for them, and retain the compiler version, ISA revision, target,
-and argument format with cached or staged artifacts.
-
-Changing the compiler can change bytecode without changing the source-level API.
-Settlement hash pins, compiled-program caches, and staged programs therefore
-belong in a compiler upgrade's validation. The [verification guide](../guides/verification.md)
-explains the SDK's current settlement pins.
-
-Start with [SauceScript concepts](saucescript.md) for the language boundary, or
-[compiling programs](../guides/compiling.md) for direct compiler integration.
+Changing the compiler can change bytecode without changing a line of source. Anything that pins
+bytes — a settlement hash, a cached program, a staged code account — has to be re-derived when the
+compiler moves. Keep the compiler version, target and argument format with any artifact you store.
+[Verification](../guides/verification.md) covers the settlement pins the SDK ships.

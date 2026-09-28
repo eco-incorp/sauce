@@ -3,7 +3,7 @@
     {
       "name": "liquidityUtilizationCurrent",
       "type": "function",
-      "stateMutability": "view",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
           "name": "l1Token",
@@ -42,7 +42,7 @@
         },
         {
           "name": "utilizedReserves",
-          "type": "uint256"
+          "type": "int256"
         },
         {
           "name": "liquidReserves",

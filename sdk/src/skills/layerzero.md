@@ -47,7 +47,7 @@ function main(
 | Polygon   | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
 | BSC       | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
 | Avalanche | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-| zkSync    | endpointV2 | `0xd07C30aF3Ff30D96BDc9c6044958230Eb5b32e1D` |
+| zkSync    | endpointV2 | `0xd07C30aF3Ff30D96BDc9c6044958230Eb797DDBF` |
 | Linea     | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
 | Scroll    | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
 

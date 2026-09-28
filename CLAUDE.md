@@ -24,7 +24,7 @@ everything from one name.
 | Workspace    | Internal name                 | Published as                                                                                                                             | Role                                                                           |
 | ------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`) | 129-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files |
-| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`                                                                                                                               | Routing-intent → bytecode lowering                                             |
+| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                        | JSON action programs → SauceScript, intents                                    |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools`                                                                                                                    | Local/forked hardhat env + recipe runner                                       |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
@@ -35,9 +35,14 @@ generations**: `dev-tools` is a dev harness, not a legacy `sdk`.
 
 Use Node.js **24 or newer**, matching the Solana dependencies and CI.
 
-Run from the repo root. **There is no build ordering to respect** — `build` is
-`pnpm -r --filter './sdk' --filter './actions' build`, and neither depends on the other's `dist/`.
-The compiler is an ordinary npm dependency, already built; nothing in this repo builds it.
+Run from the repo root. `build` is `pnpm -r --filter './sdk' --filter './actions' build`, and
+**`actions` reads the SDK's `dist/`**: `actions/src/registry.ts` and `compose.ts` import
+`../../sdk/dist/...` by relative path, the one spelling that resolves both in the repo and in the
+published tarball (where `actions/dist` and `sdk/dist` are siblings; the workspace name
+`@eco-incorp/sauce-source` is not published). So build the SDK before typechecking, building or
+testing `actions`. `pnpm build` orders them — `actions` declares `@eco-incorp/sauce-source` as a
+workspace devDependency for exactly that — and CI builds the SDK first. The compiler is an ordinary
+npm dependency, already built; nothing in this repo builds it.
 
 ```sh
 pnpm install
@@ -61,21 +66,34 @@ minors would start failing CI on a PR that changed nothing.
 positive: `main` is the entry point the Sauce compiler calls, so `no-unused-vars` fires on every
 program, and `require(cond)` is SauceScript's ASSERTION, which `no-require-imports` reads as a
 module import. Prettier's list is different and narrower — generated output (`**/*.generated.ts`,
-the two `settle.sauce.ts` recipes), captured fixtures, and `sdk/src/std` (see the byte-identity
-note below). Everything else, SauceScript included, is formatted.
+the two `settle.sauce.ts` recipes) and captured fixtures. Everything else, SauceScript included, is
+formatted; `.prettierrc.json` names the `typescript` parser for `sdk/src/std`, whose `.js` files
+carry type annotations Prettier's default parser rejects.
 
 Per-workspace (`--filter`):
 
 ```sh
 pnpm --filter './sdk' test               # SDK tests, including protocol SauceScript compilation
-pnpm --filter './actions' test:unit      # fork-free subset CI runs
-pnpm --filter './sdk' gen-route-globals  # regenerate host chain-global declarations
+pnpm --filter './actions' test:unit      # no mainnet state
+pnpm --filter './actions' test:mainnet   # real mainnet contracts, replayed locally
+pnpm --filter './sdk' gen-route-globals  # regenerate the per-chain named exports
 pnpm --filter './sdk' gen-source-globals # regenerate source-only token/protocol declarations
 ```
 
 Single test file: jest (sdk) → `pnpm --filter './sdk' test -- routes-void-main.test.ts`.
 Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter './actions' exec tsx
---test tests/megas-swap.unit.test.ts`.
+--test tests/split-swap.unit.test.ts`.
+
+Actions test layout: `*.unit.test.ts` need nothing; `*.exec.test.ts` EXECUTE programs on a local
+anvil through the released engine and a real Kitchen-minted Pot (`tests/anvil.ts`) — they are in
+`test:unit`, skip locally without the engine artifact and throw under `CI`. `calldata.exec` runs
+every action against contracts that log the call they receive and compares the calldata with an
+independent viem encoding. `actions.mainnet` (every action type, and it fails if one did not run),
+`quote.mainnet` and `split-swap.mainnet` (`test:mainnet`) run against real Ethereum contracts on a
+LOCAL anvil booted from mainnet state captured at a pinned block — no RPC, no secret, and they run
+in CI. See "Mainnet state" below. An action type that cannot execute there does not ship.
+After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
+gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
 ## Toolchain gotchas (why a fresh clone may fail)
 
@@ -118,8 +136,30 @@ Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter 
   tests to etch at another address. **A tree where the
   sync has not run is not green**: with no `sdk/{src,dist}/artifacts/`, the tests that import
   `./artifacts/*.json` fail. Run `pnpm --filter './sdk' sync-engine-artifacts`.
-- **`FORK_URL`** — actions `test`/`test:megas-swap` and dev-tools fork flows hit a hardhat mainnet
-  fork (loaded from `.env`). `test:unit` is the fork-free subset.
+- **Mainnet state (`actions/tests/state/*.genesis.json.gz`)** — no test forks a live chain. The
+  actions mainnet suites replay Ethereum at `PINNED_BLOCK` (`actions/tests/mainnet.ts`) from one
+  gzipped anvil genesis per suite: every account and storage slot that suite read, at their values
+  in that block. Replay pins the block number, its timestamp, chain id 1 and a 12-second block
+  interval, refuses to fork, and makes any non-loopback `fetch` throw, so a suite that starts reading
+  something new FAILS (a missing slot reads as zero) rather than reaching the network. Blob sizes at
+  capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB.
+
+  **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
+  `PINNED_BLOCK` (then recapture all three, and revisit every pinned figure: pools, strategy ids,
+  the live Rocket Pool deposit pool, expected outputs). With an Ethereum archive RPC:
+
+  ```sh
+  FORK_URL=<archive rpc> pnpm --filter './actions' capture-mainnet
+  ```
+
+  Capture forks at `PINNED_BLOCK` through a local recording proxy (`tests/mainnet-recorder.mjs`, its
+  own process, retrying an upstream request that hangs) and rewrites each suite's blob from what it
+  answered. Anvil's own mechanisms cannot do this: a fork's `anvil_dumpState` holds only
+  locally modified accounts, and Foundry's RPC cache drops whatever was fetched after a snapshot when
+  the suite reverts it. Capture a WHOLE suite — a `--test-name-pattern` run writes a blob with only
+  those tests' state. Never print the RPC; `stop()` refuses to write a blob that mentions it, and
+  grep the blobs for the host before committing anyway.
+
 - **`SAUCE_ENGINE_SO` / `SAUCE_RUST_ENGINE_SO`** — the path to the Solana engine, fetched by
   `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines`, which digest-verifies it against
   the pin and prints `SAUCE_RUST_ENGINE_SO=<path>`. **Nothing about the engine is source-controlled.**
@@ -242,21 +282,61 @@ chain and recipe definitions. **SDK tests compile every protocol's
 to build first, but the suites that import `./artifacts/*.json` need `sync-engine-artifacts` to have
 run (see the Foundry gotcha above).
 
+**Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
+checks each function of each `abis.ts` export against `test/fixtures/registry-abi/evidence.json`: the
+deployed code must dispatch its selector (after resolving EIP-1167 clones, EIP-1967/beacon/legacy
+proxy slots, `implementation()` getters, and diamond or selector routers), and where a verified ABI
+exists, its outputs, mutability and struct field names must match. `targets.json` beside it is the
+hand-written half: which deployments evidence which export (`roles` from `addresses.ts`, narrowed
+by `chains` where one role's deployments run different releases, or representative `instances` for
+interface ABIs), `probes` (extra signatures to ask a selector router about), and every exception
+with its reason — `exempt` (a deployment that legitimately differs),
+`unverified` (no verified source on any keyless source; the selector is still checked) and
+`unverifiable`. An
+exception that stops applying fails the test. `required` names an overload a consumer binds (with
+the consumer): the registry need not declare every overload a contract has, but it must keep
+declaring those, and removing one fails the test. So does a new export with no target, a deployment
+of a targeted role the evidence does not cover (an `addresses.ts` edit not yet recaptured, or one
+no export's `chains` includes), and a `<X>ABI.json` twin that is missing or no longer matches
+`abis.ts` (regenerate with `bun run scripts/generate-abi-json.ts`, then prettier). The widened-type workaround the registry
+used to carry (`uint32` for `uint24`, `uint256` for `bytes32`/`int*`) is gone: the pinned compiler
+takes every ABI type, so declare the deployed one.
+
+A target may name a protocol this tree does not have yet (one another branch adds): the suite skips
+it and the capture carries its evidence over untouched, so the evidence can land before the
+protocol does. Deployments whose address is not a 20-byte EVM address (Solana program ids) are not
+captured: no EVM ABI applies to them.
+
+Recapture only on explicit request — it reads live chains: `pnpm --filter './sdk' build` (the script
+reads `dist/`), then `RECAPTURE_REGISTRY_ABI=1 node scripts/capture-registry-abi.mjs [slug ...]` from
+`sdk/`, with no slugs for everything (about 540 deployments; responses cache under
+`node_modules/.cache/registry-abi/`). Without the flag it refuses to run. RPC endpoints come only
+from the environment — `<CHAIN>_RPC_URL` (`ETH_RPC_URL`, `BASE_RPC_URL`, `ARBITRUM_RPC_URL`, … as in
+`sdk/.env`) or `RPC_URL_<chainId>` — falling back to public endpoints; verified ABIs come from
+Sourcify, Blockscout and keyless Etherscan-compatible APIs. The fixture must never hold an endpoint
+or key; the suite greps it. Review the fixture diff before committing it: a changed selector map is
+a contract upgrade to look at, not noise.
+
 `src/std/` is the SauceScript **standard library** — source shipped for the compiler to consume, not
-TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), a
-**byte-identical copy** of the engine (`v12`) repo's conformance fixture
-(`compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token/`), kept identical on purpose so
-drift between the two repos shows up as a diff rather than as silently divergent behavior — **do not
-edit it here; change it in sauce and re-copy.** Nothing here enforces that: no release ships that
-fixture, so there is nothing on disk to compare against. The check is manual —
-`diff -r sdk/src/std/token <v12>/compiler/crates/sauce-cli/tests/fixtures/node_modules/@sauce/token`
-against a local checkout. **The formatter is kept off this path for the same reason** — `sdk/src/std`
-is in `.prettierignore`, because a reformat here breaks the invariant silently and permanently
-(a repo-wide `prettier --write` split three signatures in `token.svm.js` and that manual `diff -r`
-then reported a difference forever). Formatting it means landing the same change in `v12` first and
-re-copying. What CI _does_ pin is the SPL Token program id the SVM arm guards on:
-`test/std/token/compile.test.ts` derives it from the canonical base58 address and counts it in the
-emitted bytecode, so a wrong digit or a deleted `require` fails there. It has two per-target arms (`token.evm.js`, `token.svm.js`) and
+TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), and
+**the SDK owns it**: this directory is the source of truth, edited here like any other source. The
+engine (`v12`) repo has a package of the same name under its compiler's test fixtures, but that is
+v12's own INTEGRATION fixture — independent, not kept in sync, and not a reference for this one. Do
+not port changes from it or treat a difference between the two as drift. It used to be the other
+way round (this was a byte-identical copy, left unformatted to stay one); it no longer is.
+
+The EVM arm's writes are OpenZeppelin `SafeERC20`: a raw `evm.call`, then empty returndata accepted
+only from an address with code and anything else decoded as a word that must equal 1, with `approve`
+as `forceApprove` (read the allowance, reset a non-zero one first). `src/token/safe.ts` emits the
+same semantics INLINE into routes, deliberately not as calls into this library: the settle recipe
+is compiled by partners whose resolver serves only `./artifacts/IERC20.json`. What keeps the two
+spellings on one behaviour is `test/std/token/evm.e2e.test.ts`, which runs OpenZeppelin's own
+`SafeERC20`, this library and `safe.ts` over one matrix of tokens (false, empty, no code, a word of
+2, 1/31/64-byte returns, USDT's standing allowance, honest refusals) and requires identical outcomes.
+CI also pins what a wrong digit would break silently: `test/std/token/compile.test.ts` derives the
+SPL Token program id the SVM arm guards on from its base58 address, and each selector the EVM writes
+spell out by hand from `keccak256` of its signature, and counts them in the emitted bytecode. It has
+two per-target arms (`token.evm.js`, `token.svm.js`) and
 **deliberately no neutral `token.js`**: a token program is inherently target-specific, and a neutral
 file would turn a missing arm into a confusing missing-EXPORT error instead of a clear failure to
 import the package (`package.json`'s `main` names the neutral BASE the compiler suffixes per target).
@@ -268,7 +348,7 @@ needed) plus `svm.e2e.test.ts`/`evm.e2e.test.ts`, which EXECUTE the compiled byt
 accounts and a real deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_V12_RUNTIME_CREATION_HEX` above for why
 those two are gated. `src/std/token` now **ships**: `copy-verify-assets.mjs` copies it into
 `dist/std/token` (and `dist/` is in the package `files` list), because the route path resolves
-`@sauce/token` to this vendored copy — see the next paragraph.
+`@sauce/token` to the SDK's own copy — see the next paragraph.
 
 `@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
 list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
@@ -276,7 +356,7 @@ exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any ro
 way with **zero import**. `openRoute` and no further: `chainAmbient` has exactly one call site
 (`intent-dsl.ts`), and `compileSauceRoute` passes its caller's `ambient` straight through without
 merging this list in — so a direct `compileSauceRoute(..., {})` gets no ambient module at all. This resolves because `rs-compile.ts`'s `SDK_STD_PACKAGES` maps the bare
-`@sauce/token` specifier to the SDK's own vendored `std/token` dir (`STD_ROOT`, = `dist/std` once
+`@sauce/token` specifier to the SDK's own `std/token` source dir (`STD_ROOT`, = `dist/std` once
 built) regardless of `baseDirs` — an ambient module the compile can't resolve makes EVERY route
 throw, so that list must only ever name modules the SDK resolves itself. Two DISTINCT mechanisms
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
@@ -296,11 +376,17 @@ contract binding, no re-export, no method-on-call-result). The rewrite sidesteps
 `@sauce/token` ambient module above still provides the FUNCTION surface (`approve(token, …)`); the two
 are complementary spellings, not competitors.
 
-**Host globals and compiled-source declarations are separate.** `routes/globals.generated.ts`
-declares installed chain helpers (`Base`, `Solana`, `chain`) and `Token`. The generated
-`routes/source-globals.generated.ts` additionally declares bare token symbols and protocol
-namespaces such as `USDC` and `Uniswap` for TypeScript route closures. Those are **type-only
-declarations**: no host `USDC` or `Uniswap` runtime object is installed. They describe source the
+**The host surface and compiled-source declarations are separate — and only one of them is
+global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named
+value per canonical chain (`Base`, `Solana`, …) plus `chain` and `Token`, re-exported from the
+package root, each composed in `routes/composed.ts` (callable + `.chain`/`.route` + the lazy
+contract tree, + the svm venue tree on an svm chain). **Importing the SDK touches nothing on
+`globalThis`**; `installRouteGlobals()`/`uninstallRouteGlobals()` (`routes/globals.ts`) remain as an
+opt-in for a host that wants the bare-name spelling at run time, hand out the SAME memoised objects,
+and install no types. `routeGlobals` is a live view of the last install, empty until one happens.
+Globals are a SAUCESCRIPT concept: the generated `routes/source-globals.generated.ts` declares bare
+token symbols and protocol namespaces such as `USDC` and `Uniswap` for TypeScript route closures.
+Those are **type-only declarations**: no host `USDC` or `Uniswap` runtime object is installed. They describe source the
 SDK extracts with `Function.prototype.toString`; the closure is never invoked and captures no
 outer JavaScript values. Use `compile.defines` for external scalar values.
 
@@ -311,9 +397,32 @@ the registry, not availability on every chain. Compilation still enforces the se
 deployments, the SauceScript subset, and ABI fidelity. The public root type graph must keep the
 generated ambient declaration import so downstream typed closures see the same declarations.
 
-**`actions/`** — `actionsToSauce(actions)` lowers routing intents (`uniswapV3ExactInput`, bridges,
-wraps, stakes) to bytecode. Actions **chain**: output feeds the next implicitly (no `amountIn`) or via
-`saveOutputAs`/`amountRef`. See `actions/AMM_SWAP_INTERFACES.md`.
+**`actions/`** — JSON action programs (`{ version, chainId, actions }`) lowered to one SauceScript
+program. The public surface is deliberately small — `parseProgram`, `serializeProgram`,
+`programSchema`, `compileProgram`, `programIntent`, `quoteAction`, `compileSplitSwap`,
+`ProgramError` and the types — and the types ARE the JSON (no per-action chain, one `amount`, one
+`amountOutMin`, `recipient` everywhere); keep it that way rather than adding parallel entry points.
+`spec.ts` is the single field table: `program.ts` parses/validates against it (located issues,
+canonical serialization, no defaults filled in), `schema.ts` generates the committed JSON Schema from
+it, and `tests/docs.unit.test.ts` holds the guide's action list and outputs to it; `semantics.ts`
+holds the cross-action rules. `to-sauce.ts` emits every protocol call as an ABI binding
+(`IBinding.at(addr).method(...)`) from the catalogue in `abis.ts`: a binding takes the registry ABI
+wherever the registry declares the function exactly (same canonical signature, so same selector),
+and a method declares an output ONLY when an action reads it: compiler 2.3.0 decodes declared
+outputs even when discarded, and decoding empty return data reverts (3pool-era Curve). A local
+fragment, with its reason, remains only for a contract or method the registry does not carry
+(`abis.unit.test.ts` fails if one ever appears there). ERC-20 `approve`/`transfer` are not
+bindings: they go through the SDK's `token/safe` (USDT returns no `bool`; `SafeERC20` semantics, with
+`forceApprove`'s reset), the lowering every SDK token write uses — one path, so do not add a second. Native-value calls stay raw
+`evm.call` because a binding cannot attach value; the Stargate and Hyperlane fees are quoted by a
+`view` binding (a STATICCALL) just before. Actions **chain**: output feeds the next implicitly (no
+amount) or via `saveOutputAs`/`amountRef`; an output is what the action delivered to the Pot (a
+return value or a balance delta) or its own amount, per `spec.ts`. `compose.ts` opens intents
+(`programIntent`, on the program's own chain) and compiles standalone programs with runtime
+arguments (ABI-v1, or compact-v1 with fixed-width offsets). `to-quote.ts` builds the `eth_call`
+quotes and, for the split swap, the same quoter calls as SauceScript over fixed amount offsets.
+`AMM_SWAP_INTERFACES.md` is third-party interface reference; only its sections marked Verified have
+been checked.
 
 **`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness. Its
 `start:local`/`start:fork` scripts and `sauce` CLI still depend on the retired `SauceRouter`

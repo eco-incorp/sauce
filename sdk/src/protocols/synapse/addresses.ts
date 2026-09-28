@@ -34,7 +34,8 @@ export const deployments: ChainDeployment[] = [
     chainId: 137,
     chainName: "Polygon",
     addresses: {
-      synapseBridge: "0x8F5BBB2585b4009Ee16a8b589fE81B1A204aD9d7",
+      // A TransparentUpgradeableProxy to SynapseBridge; the address listed before had no code.
+      synapseBridge: "0x8F5BBB2BB8c2Ee94639E55d5F41de9b4839C1280",
     },
   },
   {

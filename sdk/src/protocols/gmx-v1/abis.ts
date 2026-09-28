@@ -54,9 +54,10 @@ export const PositionRouterABI = [
       { name: "_isLong", type: "bool" },
       { name: "_acceptablePrice", type: "uint256" },
       { name: "_executionFee", type: "uint256" },
-      { name: "_referralCode", type: "uint256" },
+      { name: "_referralCode", type: "bytes32" },
+      { name: "_callbackTarget", type: "address" },
     ],
-    outputs: [],
+    outputs: [{ name: "requestKey", type: "bytes32" }],
   },
   {
     name: "createDecreasePosition",
@@ -73,8 +74,9 @@ export const PositionRouterABI = [
       { name: "_minOut", type: "uint256" },
       { name: "_executionFee", type: "uint256" },
       { name: "_withdrawETH", type: "bool" },
+      { name: "_callbackTarget", type: "address" },
     ],
-    outputs: [],
+    outputs: [{ name: "requestKey", type: "bytes32" }],
   },
 ] as const;
 

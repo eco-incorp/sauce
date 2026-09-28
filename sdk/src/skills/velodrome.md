@@ -49,7 +49,7 @@ function main(
 - `routerAddress`: Velodrome RouterV2 address on Optimism
 - `tokenIn` / `tokenOut`: Input and output token addresses
 - `stable`: `true` for stable pools (pegged assets like USDC/USDT), `false` for volatile pools (uncorrelated like ETH/USDC)
-- `factory`: Pool factory address (`0x8134a2fdc127549480865fb8e5a9e8a8a95a54c5` on Optimism)
+- `factory`: Pool factory address (`0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a` on Optimism)
 - `amountIn`: Exact input amount (in wei)
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
@@ -126,7 +126,7 @@ function main(
 | Chain    | Contract    | Address                                      |
 | -------- | ----------- | -------------------------------------------- |
 | Optimism | RouterV2    | `0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858` |
-| Optimism | PoolFactory | `0x8134a2fdc127549480865fb8e5a9e8a8a95a54c5` |
+| Optimism | PoolFactory | `0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a` |
 
 ## ABI Methods
 

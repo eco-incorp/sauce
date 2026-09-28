@@ -26,6 +26,8 @@ import {
 } from "../src/routes/encode.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import type { Intent, Reward, Route, UniversalAddress } from "../src/routes/types.js";
+import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { compileProgram } from "./helpers";
 
 const evmAddr = (byte: string): UniversalAddress =>
   toUniversalAddress(("0x" + byte.repeat(20)) as Hex);
@@ -350,5 +352,65 @@ describe("portal.ts: EVM-source guard", () => {
     ["isIntentFundedCall", () => isIntentFundedCall(svmSourceIntent, { portal: PORTAL })],
   ])("%s throws for an SVM-sourced intent", (_name, fn) => {
     expect(fn).toThrow(/evm/i);
+  });
+});
+
+describe("PORTAL_CONTRACTS: the Portal binding every route compile carries", () => {
+  // What this buys is the README's first example: a hand-written program can call
+  // `IPortal.at(portal).publishAndFund(...)` with no import line and no caller configuration. The
+  // cost has to be nothing, or every route in the SDK would pay for a binding it does not use.
+  const EXECUTION = {
+    pot: "0x1111111111111111111111111111111111111111",
+    engine: "0x2222222222222222222222222222222222222222",
+  } as const;
+
+  it("is callable with no `contracts` option at all", () => {
+    const source = [
+      "function main() {",
+      "  const route = hex`aabb`;",
+      "  IPortal.at(0x3333333333333333333333333333333333333333).publishAndFund(",
+      "    42161n, route,",
+      "    { deadline: 2000n, creator: 0x4444444444444444444444444444444444444444,",
+      "      prover: 0x5555555555555555555555555555555555555555, nativeAmount: 0n, tokens: [] },",
+      "    false);",
+      "}",
+    ].join("\n");
+
+    expect(() => compileSauceRoute("base", source, EXECUTION)).not.toThrow();
+  });
+
+  it("costs a program that does not use it exactly nothing", () => {
+    const body = "function main() { return 1n; }";
+    const withBinding = compileSauceRoute("base", body, EXECUTION).compiled.bytecode[0]!;
+    const without = compileProgram(body).bytecode[0]!;
+
+    expect(Buffer.from(withBinding).toString("hex")).toBe(Buffer.from(without).toString("hex"));
+  });
+
+  it("is the BASE layer — a caller's own IPortal wins", () => {
+    const source = [
+      "function main() {",
+      "  IPortal.at(0x3333333333333333333333333333333333333333).ping(7n);",
+      "}",
+    ].join("\n");
+
+    // `ping` exists only on the caller's ABI. It compiling proves the override reached the compiler.
+    expect(() =>
+      compileSauceRoute("base", source, EXECUTION, {
+        contracts: {
+          IPortal: {
+            abi: [
+              {
+                type: "function",
+                name: "ping",
+                stateMutability: "nonpayable",
+                inputs: [{ name: "n", type: "uint256" }],
+                outputs: [],
+              },
+            ],
+          },
+        },
+      }),
+    ).not.toThrow();
   });
 });

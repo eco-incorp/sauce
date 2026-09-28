@@ -34,16 +34,16 @@
               "type": "uint256"
             },
             {
-              "name": "receiverDst",
-              "type": "bytes"
-            },
-            {
               "name": "takeTokenAddress",
-              "type": "address"
+              "type": "bytes"
             },
             {
               "name": "takeAmount",
               "type": "uint256"
+            },
+            {
+              "name": "receiverDst",
+              "type": "bytes"
             },
             {
               "name": "givePatchAuthoritySrc",
@@ -51,7 +51,7 @@
             },
             {
               "name": "orderAuthorityAddressDst",
-              "type": "address"
+              "type": "bytes"
             },
             {
               "name": "allowedTakerDst",
@@ -73,7 +73,7 @@
         },
         {
           "name": "_orderId",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "_permitEnvelope",

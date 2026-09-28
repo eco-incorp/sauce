@@ -8,6 +8,7 @@ import { compileProgram as compile } from "./helpers";
 import { DEPOSIT_BASE_DIRS, depositSource } from "../src/deposit/source.js";
 import type { DepositKey } from "../src/deposit/templates.js";
 import type { DepositSourceSpec } from "../src/deposit/types.js";
+import { encodeFunctionData, erc20Abi } from "viem";
 
 const TARGET = "0x1111111111111111111111111111111111111111" as const;
 const TOKEN = "0x2222222222222222222222222222222222222222" as const;
@@ -116,7 +117,14 @@ describe("uint256 maximum amounts compile", () => {
       amount: 1_000n,
       approvalPolicy: "max",
     });
-    expect(source).toContain(`.approve(${BigInt(TARGET)}n, ${(1n << 256n) - 1n}n)`);
+    // Encoded into the calldata by `token/safe.ts` rather than spelled as an argument.
+    expect(source).toContain(
+      encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [TARGET, (1n << 256n) - 1n],
+      }).slice(2),
+    );
     expect(source).toContain(`.supply(${BigInt(TOKEN)}n, 1000n,`);
 
     const { bytecode } = compile(source, { baseDirs: [...DEPOSIT_BASE_DIRS] });

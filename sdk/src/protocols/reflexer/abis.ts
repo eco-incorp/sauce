@@ -4,12 +4,12 @@ export const SAFEEngineABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "collateralType", type: "uint256" },
+      { name: "collateralType", type: "bytes32" },
       { name: "safe", type: "address" },
       { name: "collateralSource", type: "address" },
       { name: "debtDestination", type: "address" },
-      { name: "deltaCollateral", type: "uint256" },
-      { name: "deltaDebt", type: "uint256" },
+      { name: "deltaCollateral", type: "int256" },
+      { name: "deltaDebt", type: "int256" },
     ],
     outputs: [],
   },
@@ -18,7 +18,7 @@ export const SAFEEngineABI = [
     type: "function",
     stateMutability: "view",
     inputs: [
-      { name: "collateralType", type: "uint256" },
+      { name: "collateralType", type: "bytes32" },
       { name: "safe", type: "address" },
     ],
     outputs: [
@@ -51,12 +51,16 @@ export const CoinJoinABI = [
   },
 ] as const;
 
+// The `ethJoin` deployment is a CollateralJoin for WETH: it joins WETH tokens, not native ETH.
 export const ETHJoinABI = [
   {
     name: "join",
     type: "function",
-    stateMutability: "payable",
-    inputs: [{ name: "account", type: "address" }],
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "wad", type: "uint256" },
+    ],
     outputs: [],
   },
   {

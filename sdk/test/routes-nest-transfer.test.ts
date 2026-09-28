@@ -126,10 +126,18 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     expect(stmts[0]).toBe(`const n0_vault = ${BigInt(VAULT)}n;`);
     expect(stmts[1]).toBe(`const n0_bal0 = IERC20.at(${BigInt(TOKEN_A)}n).balanceOf(ctx.self());`);
     expect(stmts[2]).toBe(`const n0_amt0 = n0_bal0 > 500n ? 500n : n0_bal0;`);
-    expect(stmts[3]).toBe(
-      `if (n0_amt0 > 0n) { IERC20.at(${BigInt(TOKEN_A)}n).transfer(n0_vault, n0_amt0); }`,
+    // The transfer is a raw `evm.call` with no declared output -- the vendored IERC20 declares a
+    // `bool` the compiler decodes even when discarded, which reverts on a no-return token (USDT).
+    // The calldata const is hoisted out of the zero-guard.
+    expect(stmts[3]).toBe("const n0_0_tr0 = hex`a9059cbb`;");
+    // The call AND its SafeERC20 check sit inside the zero guard -- checking a call that never ran
+    // would read a stale result. See `token/safe.ts`.
+    expect(stmts[4]).toContain("if (n0_amt0 > 0n) { const n0_0_tr = evm.call(");
+    expect(stmts[4]).toContain("require(ctx.codeSize(");
+    expect(stmts[4]).toContain(
+      'const [n0_0_trok] = abi.decode(n0_0_tr, ["Uint256"]); require(n0_0_trok == 1n); } }',
     );
-    expect(stmts).toHaveLength(4);
+    expect(stmts).toHaveLength(5);
   });
 
   it("clamp:false drops the ternary and transfers the raw balance", () => {
@@ -144,9 +152,8 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     const stmts = nestedTransferStatements(child, 0, { ...explicitOpts, clamp: false });
 
     expect(stmts.some((s) => s.includes("n0_amt0"))).toBe(false);
-    expect(stmts[stmts.length - 1]).toBe(
-      `if (n0_bal0 > 0n) { IERC20.at(${BigInt(TOKEN_A)}n).transfer(n0_vault, n0_bal0); }`,
-    );
+    expect(stmts[stmts.length - 1]).toContain("if (n0_bal0 > 0n) { const n0_0_tr = evm.call(");
+    expect(stmts[stmts.length - 1]).toContain("n0_bal0.toBytesBe(32)");
   });
 
   it("requireCap:true inserts the underfunded throw before the clamp", () => {

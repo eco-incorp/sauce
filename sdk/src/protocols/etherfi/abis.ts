@@ -31,7 +31,8 @@ export const WeETHABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
-    name: "getWeETHByEETH",
+    // Lower-case "e" in the deployed name: `getWeETHByEETH` would be a different selector.
+    name: "getWeETHByeETH",
     type: "function",
     stateMutability: "view",
     inputs: [{ name: "_eETHAmount", type: "uint256" }],

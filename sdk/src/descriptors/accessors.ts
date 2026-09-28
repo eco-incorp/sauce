@@ -19,7 +19,7 @@ import {
 } from "../chains/canonical.js";
 import { pascalOfSlug } from "../routes/builder.js";
 import { makeContractCall, type ContractCall } from "./call.js";
-import { addressOn, requireContract } from "./query.js";
+import { addressOn, methodOf, requireContract } from "./query.js";
 import { DESCRIPTORS } from "./registry.js";
 import type { ContractCoverage, ContractDescriptor, DescriptorMethod } from "./types.js";
 import type {
@@ -92,8 +92,22 @@ function buildAccessor(
     },
   };
 
+  // An overloaded name dispatches on argument count, so the call reports the overload it encodes.
+  // `descriptors-linkage.test.ts` holds every descriptor's overloads to distinct counts.
+  const byName = new Map<string, DescriptorMethod[]>();
   for (const method of descriptor.methods) {
-    base[method.name] = (...args: unknown[]): ContractCall => {
+    byName.set(method.name, [...(byName.get(method.name) ?? []), method]);
+  }
+  for (const [name, overloads] of byName) {
+    base[name] = (...args: unknown[]): ContractCall => {
+      const method =
+        overloads.length === 1 ? overloads[0]! : methodOf(descriptor, name, args.length);
+      if (method === undefined) {
+        throw new Error(
+          `${descriptor.protocol}.${descriptor.contract}.${name} takes ` +
+            `${overloads.map((candidate) => candidate.inputs.length).join(" or ")} arguments, got ${args.length}`,
+        );
+      }
       let address = resolvedAddress;
       if (address === undefined) {
         if (isInterface) {
@@ -253,8 +267,8 @@ export function chainContracts(chainRef: ChainRef): ChainContracts {
   return out as unknown as ChainContracts;
 }
 
-/** Import-based front door (option-b): `contracts.on('base').Uniswap.UniversalRouter.execute(...)`.
- *  Escape hatch for `__ECO_ROUTES_NO_GLOBALS__` hosts and for the TS2451 own-`const Base` caveat. */
+/** Chain-ref front door: `contracts.on('base').Uniswap.UniversalRouter.execute(...)` — for a
+ *  caller resolving the chain at run time rather than importing the `Base` accessor. */
 export function on(chainRef: ChainRef): ChainContracts {
   return chainContracts(chainRef);
 }

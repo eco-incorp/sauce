@@ -7,7 +7,7 @@
       "inputs": [
         {
           "name": "collateralType",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "safe",
@@ -23,11 +23,11 @@
         },
         {
           "name": "deltaCollateral",
-          "type": "uint256"
+          "type": "int256"
         },
         {
           "name": "deltaDebt",
-          "type": "uint256"
+          "type": "int256"
         }
       ],
       "outputs": []
@@ -39,7 +39,7 @@
       "inputs": [
         {
           "name": "collateralType",
-          "type": "uint256"
+          "type": "bytes32"
         },
         {
           "name": "safe",

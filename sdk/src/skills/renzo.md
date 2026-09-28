@@ -48,7 +48,7 @@ function main(restakeManagerAddress: Address, collateralToken: Address, amount: 
 
 ### RestakeManagerABI
 
-- `deposit(address,uint256)` - Deposit LST collateral for ezETH. Payable. Approve token first
+- `deposit(address,uint256)` - Deposit LST collateral for ezETH (not payable). Approve token first
 - `depositETH()` - Deposit ETH (payable) for ezETH. Send ETH as msg.value
 
 ### EzETHABI

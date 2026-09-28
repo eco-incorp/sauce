@@ -2,10 +2,13 @@
 
 [Documentation](../README.md) · [Intents](intents.md) · [Compiler API](../api/compiler.md)
 
-The SDK verifies its canonical settlement programs on EVM and SVM. These helpers
-answer which settlement logic and parameters a payload contains. Applications
-still check the destination, execution target, account identities, and remaining
-intent calls against the operation they intend to authorize.
+Somebody hands you an intent and says it settles a swap to your address. These helpers answer one
+question about it: **is the program inside really the settlement program, and with what parameters?**
+
+That is a narrower question than "is this intent safe to sign", and the gap matters. A genuine
+settlement can sit next to calls that are not, on a chain you did not expect, aimed at a Pot you do
+not control. Verification identifies the program and decodes its arguments. The destination, the
+execution target, the account identities and every other call in the intent remain yours to check.
 
 | Surface                        | Mechanism                                                                                          | Environment                                                            |
 | ------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -14,11 +17,13 @@ intent calls against the operation they intend to authorize.
 
 ## Settlement behavior
 
-The EVM recipe sweeps the Pot's entire current balance of every listed token to
-one recipient. It checks `minOut` against the balance of `tokens[0]` before the
-first transfer; `minOut: 0n` disables that floor. Existing or donated balances
-count toward the floor and are swept as well. The floor is a balance check, not a
-measurement of the amount produced by an earlier swap.
+The EVM recipe sweeps the Pot's **entire current balance** of every listed token to one recipient.
+Before the first transfer it checks `minOut` against the balance of `tokens[0]`; `minOut: 0n` turns
+that floor off.
+
+Read "current balance" literally. A balance that was already there, or that somebody donated, counts
+toward the floor and is swept along with everything else. The floor tells you what the Pot holds, not
+what the swap before it produced.
 
 The SVM recipe applies the same pattern to escrow token accounts. It takes an
 escrow count and compile-time `minOut`/`splCount`, then attaches token programs,
@@ -49,12 +54,12 @@ console.log(settlement.tokens, settlement.minOut, settlement.recipient);
 console.log(settlement.floorToken, settlement.programHash);
 ```
 
-`validateSettleProgram()` checks the full program hash and the argument encoding.
-The current `SETTLE_WIRE` pin records compiler **2.3.0** and a **356-byte** program.
-Payloads produced before that recompile are 362 bytes under a different hash; verify them by
-passing their historical `{ hash, bytes: 362 }` pin to `validateSettleProgram`.
-Import `SETTLE_WIRE` when code needs those values; avoid copying them into a
-second constant table.
+`validateSettleProgram()` checks the whole program hash and the argument encoding. The pin it checks
+against is `SETTLE_WIRE` — a hash and a byte length, exported so your code can import them instead of
+keeping a second copy that will drift.
+
+A payload built against an earlier compiler has a different hash and length. To accept one, pass its
+`{ hash, bytes }` record explicitly; see [pins](#compiler-upgrades-and-historical-pins) below.
 
 The tail contains three 32-byte head words—token-array offset, minimum output,
 recipient—followed by the token count and token addresses in source order. The
@@ -77,10 +82,10 @@ existing settlement decoder.
 | `bestEffortDecode(parse)`                                 | Best-effort inspection or `null` when reporting values would be misleading                |
 | `encodeSettleProgram(tokens, minOut, recipient, program)` | Canonical payload construction                                                            |
 
-An arbitrary prefix of the expected length can pass structural decoding. Only a
-hash-pinned validation establishes that it contains the recognized settlement
-program. Validation failures use `SettleDecodeError.code`, including
-`PROGRAM_HASH`, `TOKENS_OFFSET`, `DIRTY_ADDRESS_WORD`, and `ARGS_OVERLONG`.
+Reach for `validateSettleProgram` unless you have a reason not to. Structural decoding will happily
+accept any bytes of the right length — only the hash check establishes that what you have is the
+settlement program. Failures carry a `SettleDecodeError.code` such as `PROGRAM_HASH`,
+`TOKENS_OFFSET`, `DIRTY_ADDRESS_WORD` or `ARGS_OVERLONG`.
 
 ### Extract a settlement from an intent
 
@@ -132,10 +137,10 @@ engine it names.
 program with a different length. Passing an empty list accepts no program; it
 does not fall back to the default pin.
 
-Compiler upgrades can change program bytes. When upgrading the SDK or compiler,
-check which program versions your application produces and accepts. Import the
-SDK's settlement pins rather than copying their values. Keep historical pins only
-for program versions your application explicitly accepts.
+A compiler change can change program bytes without changing a line of the recipe. So an SDK or
+compiler upgrade is the moment to check two separate things: which program version your application
+now _produces_, and which versions it still _accepts_. Import the SDK's pins rather than copying
+their values, and keep an older pin only for a version you have decided to accept.
 
 The source is available through `settleSource()` from
 `@eco-incorp/sauce/recipes`, and as the
