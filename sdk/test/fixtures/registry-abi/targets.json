@@ -265,6 +265,14 @@
         "roles": ["dodoV2Proxy"]
       }
     },
+    "eco-routes": {
+      "PortalABI": {
+        "roles": ["Portal"]
+      },
+      "ProverABI": {
+        "roles": ["HyperProver", "MetaProver", "PolymerProver", "LayerZeroProver"]
+      }
+    },
     "eigenlayer": {
       "DelegationManagerABI": {
         "roles": ["delegationManager"]
