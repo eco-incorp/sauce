@@ -22,10 +22,9 @@ Node.js **24 or newer**.
 
 ## A program that creates a cross-chain intent
 
-Programs are usually thought of as a way to _spend_ an intent's funds. They can also create the next
-one — and that is where the runtime and the routes layer meet. The amount is rarely known in
-advance: it is whatever the swap, bridge or transfer just before it produced. This program measures
-it on chain and offers an intent carrying it onward.
+A program can spend an intent's funds, and it can also create the next intent. That is where the
+runtime and the routes layer meet. This program measures an amount nobody knew in advance and offers
+an intent carrying it onward.
 
 ```js
 // Create a cross-chain intent from inside a Sauce program.
@@ -53,23 +52,31 @@ function main() {
 }
 ```
 
-That is the whole program. `Arbitrum(() => { ... }).reward({ ... })` is the same fluent shape the
-TypeScript builder has, written inside the program — and `amount` is an ordinary variable of it.
-Using that variable inside the intent is all it takes: the SDK splices its run-time value into the
-encoded intent and fills in everything else. No Portal, no selector, no ABI encoding, no approval
-appears in what you write, because none of it is a decision you were making.
+That is the whole program. What you did not have to do:
 
-`USDC` is a registered token symbol, and inside the braces it means **Arbitrum's** USDC — a symbol
-resolves against the chain its calls run on. `RECIPIENT` and `MIN_AMOUNT` are compile-time
-`defines`: one 256-bit word each, folded into the bytecode. A program captures nothing from the
-JavaScript around it, so defines are how application values reach one.
+- **Write or deploy a contract.** It compiles to bytecode that a Sauce engine runs in the shared
+  Pot the solver deploys.
+- **Import anything.** `USDC`, `Arbitrum` and `ctx` need no import line.
+- **Encode the intent.** No Portal, prover, selector, approval or ABI encoding appears. The SDK
+  looks up the Portal and prover in its eco-routes deployment tables and emits the rest.
+- **Know the amount in advance.** `amount` is an ordinary variable, and the published intent
+  carries the value the program measured.
+- **Roll back by hand.** Below `MIN_AMOUNT` the `throw` reverts the whole fulfilment: nothing is
+  published, and no earlier call in the route survives.
 
-The Portal on each side and the prover for the pair come from the SDK's eco-routes deployment
-tables, pinned per version and digest. What it cannot know, you supply once on the enclosing intent
-and every intent the program creates inherits it: a deadline, and the creator who may reclaim the
-reward if nobody earns it. [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts)
-is the caller, run on every release; [nested intents](docs/guides/nested-intents.md) covers cascades
-several hops deep.
+Without Sauce, this hop is either a contract you write and deploy (read the balance, approve the
+Portal, encode the intent around the amount, call `publishAndFund`) or a second intent you publish
+yourself after the first lands and you have read what it produced.
+
+`USDC` is a registered token symbol, and inside the braces it means **Arbitrum's** USDC, because
+that is where those calls run. `RECIPIENT` and `MIN_AMOUNT` are compile-time `defines`: a program
+captures nothing from the JavaScript around it, so defines are how application values reach one.
+
+You supply what the SDK cannot know once, on the enclosing intent, and every intent the program
+creates inherits it: a deadline, and the creator who may reclaim the reward if nobody earns it. The
+intent is an offer; a solver still decides to fill it.
+[docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts) is the caller, run on
+every release; [nested intents](docs/guides/nested-intents.md) covers cascades several hops deep.
 
 ## A program that calls protocols and tokens by name
 
@@ -103,11 +110,11 @@ const built = Base(() => {
 console.log(built.hash().intentHash);
 ```
 
-Two kinds of name meet in that snippet, and telling them apart is most of the learning curve. `Base`
-is a **named export** — an ordinary JavaScript value, one per chain, and importing the package puts
-nothing on `globalThis`. `USDC` and `Uniswap` are **program syntax**: the compiler resolves them
-against Base, and there is no JavaScript object behind them to import or call. The callback is read
-as source text, never invoked, and captures nothing; application values reach it through `defines`.
+Two kinds of name meet in that snippet. `Base` is a **named export**, one per chain; importing the
+package puts nothing on `globalThis`. `USDC` and `Uniswap` are **program syntax**: the SDK resolves
+them to Base's addresses and binds the ABI, so there is no address to look up and no JavaScript
+object to import. The callback is read as source text and never invoked, so it captures nothing;
+application values reach it through `defines`.
 
 `.reward(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
 requests your application submits. [Quick start](docs/guides/quick-start.md) walks through it, and
