@@ -13,8 +13,8 @@ A program is plain JSON. You can write it by hand, store it, sign it, generate i
   "actions": [
     {
       "type": "wrapETH",
-      "weth": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-      "amount": "1000000000000000000"
+      "amount": "1000000000000000000",
+      "weth": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
     },
     {
       "type": "approve",
@@ -27,103 +27,111 @@ A program is plain JSON. You can write it by hand, store it, sign it, generate i
       "tokenIn": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
       "tokenOut": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
       "fee": 500,
-      "amountIn": "1000000000000000000",
       "amountOutMin": "3000000000",
       "recipient": "self",
-      "deadline": 1893456000,
       "saveOutputAs": "usdc"
+    },
+    {
+      "type": "approve",
+      "token": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "spender": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
     },
     {
       "type": "aaveV3Supply",
       "pool": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
       "token": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
       "onBehalfOf": "0x3000000000000000000000000000000000000001",
-      "referralCode": 0,
       "amountRef": "usdc"
     }
   ]
 }
 ```
 
-This wraps 1 ETH, approves the router for exactly what was wrapped, swaps it for USDC into the executing Pot, and supplies whatever the swap returned to Aave on the owner's behalf. The approve and the supply name no amount: the approve spends the previous action's output, and the supply spends the output saved as `usdc`. (The supply also needs an approval of the Pool; it is left out to keep the example short.)
+This wraps 1 ETH, approves the router for exactly what was wrapped, swaps it for USDC into the executing Pot, approves Aave for whatever the swap returned, and supplies it on the owner's behalf. Only the first action names an amount: each approve and the swap spend the previous action's output, and the supply spends the output saved as `usdc`.
 
 ## Compile and run a program
 
 ```ts
-import { compileActions, parseActionProgram } from "@eco-incorp/sauce/actions";
+import { compileProgram, parseProgram } from "@eco-incorp/sauce/actions";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
 import { bytesToHex, type Address } from "viem";
 
 export function cookProgram(json: string, engine: Address) {
-  const program = parseActionProgram(json); // throws, listing every problem with its path
-  const { bytecode, source } = compileActions(program);
+  const program = parseProgram(json); // throws, listing every problem with its path
+  const { bytecode, source } = compileProgram(program);
   console.log(source); // the SauceScript that will execute
 
   return v12Pot.encodeCook(engine, bytesToHex(bytecode));
 }
 ```
 
-Send the resulting calldata to the Pot from its owner, with the Kitchen's execution fee plus any native value the program spends (for `wrapETH` above, 1 ETH). The Pot is the account whose balances the program uses: fund it before the program runs. See [compiling programs](compiling.md) for the execution boundary.
+Send the resulting calldata to the Pot from its owner, with the Kitchen's execution fee. The Pot is the account whose balances the program uses — its ETH pays for `wrapETH` above — so fund it before the program runs. See [compiling programs](compiling.md) for the execution boundary. The [action-program example](../examples/action-program.ts) runs end to end offline.
 
-`compileActions` also accepts a bare `RoutingAction[]`, held to the chain of its first action. The older entry points keep working: `actionsToSauce(actions)` returns the bytecode and `actionsToSauceSource(actions)` the source.
+| Export                              | Does                                                                                         |
+| ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| `parseProgram(json)`                | Validates a program; throws a `ProgramError` listing every problem with its path             |
+| `serializeProgram(program, space?)` | Writes canonical JSON                                                                        |
+| `programSchema()`                   | Returns the JSON Schema                                                                      |
+| `compileProgram(program, options?)` | Compiles standalone: bytecode, source, and a payload for [runtime amounts](#runtime-amounts) |
+| `programIntent(program, options)`   | Opens the program as an [intent route](#turn-a-program-into-an-intent) on its chain          |
+| `quoteAction(action, quoters?)`     | Builds the `eth_call` that [prices a swap](#quotes-and-split-swaps)                          |
+| `compileSplitSwap(splitSwap)`       | Compiles a swap [split across venues](#quotes-and-split-swaps) by on-chain quotes            |
+
+`compileProgram` and `programIntent` validate the program too, so a typed program that skipped `parseProgram` is held to the same rules.
 
 ## The JSON format
 
-A program is `{ "version": 1, "chainId": <chain>, "actions": [ … ] }`. Each action is an object whose `type` selects its fields; the [reference](#supported-actions) lists every type, and the schema lists every field with its documentation. A `$schema` key is allowed and ignored.
+A program is `{ "version": 1, "chainId": <chain>, "actions": [ … ] }`. Every action runs in one transaction on `chainId`; a bridge's destination is one of its own fields, not a second place the program runs. Each action is an object whose `type` selects its fields; the [reference](#supported-actions) lists every type, and the schema lists every field with its documentation. A `$schema` key is allowed and ignored.
 
-| Value                                                    | Encoding                                                          |
-| -------------------------------------------------------- | ----------------------------------------------------------------- |
-| Amounts, prices, gas, fees, strategy ids                 | Base-10 string: `"1000000"`. No sign, exponent, or leading zeros. |
-| Addresses                                                | `0x` + 40 hex digits. Mixed case must be a valid EIP-55 checksum. |
-| Recipients (`recipient`, `to`, `onBehalfOf`)             | An address, or `"self"` for the executing Pot.                    |
-| Byte strings (`path`, `message`, `auxiliaryData`)        | `0x` + an even number of hex digits.                              |
-| 32-byte values (`poolId`, `salt`, `mintRecipient`)       | `0x` + 64 hex digits.                                             |
-| Fee tiers, indices, domains, pool ids, Unix-second times | JSON integers.                                                    |
+| Value                                                         | Encoding                                                                     |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Amounts, prices, fees, strategy ids                           | Base-10 string: `"1000000"`. No sign, exponent, or leading zeros.            |
+| Addresses                                                     | `0x` + 40 hex digits. Mixed case must be a valid EIP-55 checksum.            |
+| Recipients on this chain (`recipient`, `onBehalfOf`, `owner`) | An address, or `"self"` for the executing Pot.                               |
+| Recipients on another chain (a bridge's `recipient`)          | An address, or a 32-byte account (`0x` + 64 hex digits) for a non-EVM chain. |
+| Byte strings (`path`, `message`)                              | `0x` + an even number of hex digits.                                         |
+| 32-byte values (`poolId`)                                     | `0x` + 64 hex digits.                                                        |
+| Fee tiers, indices, domains, endpoint ids, Unix-second times  | JSON integers.                                                               |
 
 JSON numbers cannot represent integers above 2^53, so the parser rejects an amount written as a number instead of rounding it. Each amount must also fit the width of the field it becomes: a Uniswap V4 `amountOutMin` is a `uint128`, and a larger value is an error rather than a silently truncated one.
 
-An action may carry its own `chainId` (a bridge: `srcChainId`); it must equal the program's, and is filled in from it when omitted. Every action in a program runs in one transaction on one chain. A bridge action's destination is its `destChainId`, not a second place the program runs.
+The same words mean the same thing on every action: `amount` is what it spends, `amountOutMin` is the least output it accepts before the venue reverts, and `recipient` receives its output.
 
 ### Validation and errors
 
-`parseActionProgram(input)` takes the JSON text or a parsed value, checks it strictly, and returns a fresh program in canonical key order. It throws an `ActionProgramError` whose `issues` list every problem, each with a path:
+`parseProgram(input)` takes the JSON text or a parsed value, checks it, and returns a fresh program with its keys in canonical order. It fills in nothing: an optional field left out stays out. It throws a `ProgramError` whose `issues` list every problem, each with a path:
 
 ```text
 invalid action program (2 issues):
   actions[0].amount: expected a base-10 string, got the JSON number 1000000 — JSON numbers lose precision above 2^53, so amounts are strings: write "1000000"
-  actions[1].amountin: unknown field — did you mean `amountIn`? (allowed: type, chainId, amountIn, router, …)
+  actions[1].amuont: unknown field — did you mean `amount`? (allowed: type, amount, router, …)
 ```
 
-`validateActionProgram(input)` returns `{ ok, program }` or `{ ok, issues }` without throwing. `serializeActionProgram(program)` writes canonical JSON, so two equal programs serialize to the same bytes, and `parseActionProgram(serializeActionProgram(p))` equals `p`.
+`serializeProgram(program)` writes canonical JSON, so two equal programs serialize to the same text, and `parseProgram(serializeProgram(p))` equals `p`.
 
 ### The schema
 
-The schema ships in the package as `@eco-incorp/sauce/actions/action-program.schema.json` (JSON Schema draft 2020-12). `actionProgramJsonSchema()` returns the same document. It is generated from the table the parser reads, so a document the schema rejects is always rejected by the parser.
+The schema ships in the package as `@eco-incorp/sauce/actions/action-program.schema.json` (JSON Schema draft 2020-12), and `programSchema()` returns the same document. It is generated from the table the parser reads, so a document the schema rejects is always rejected by the parser.
 
 The schema cannot express three rules, which the parser enforces and the schema's description states: EIP-55 checksums, exact numeric ranges (the schema bounds digit counts), and the chaining rules below. Validate with the schema at the edge of your system, and parse before compiling.
 
 ## Chaining amounts
 
-Each action that spends an amount takes it from, in order of precedence:
+An action that spends an amount takes it from, in order:
 
-1. its own amount field (`amountIn` for swaps, `amount` for most others, `stETHAmount`/`wstETHAmount` for stETH wrapping and Lido withdrawals);
+1. its `amount`;
 2. `amountRef`, naming the output an **earlier** action saved with `saveOutputAs`;
 3. otherwise, the **previous** action's output.
 
-Setting both an amount and an `amountRef` is an error, as is an `amountRef` to a name no earlier action saved, or a first action with no amount at all. Saving a second output under a name reassigns it.
+Setting both `amount` and `amountRef` is an error, as is an `amountRef` to a name no earlier action saved, or a first action with no amount. Saving a second output under a name reassigns it. Two actions carry their amounts in their own fields and take neither: `balancerV2BatchSwap` (`steps[].amount`) and `carbonSwap` (`tradeActions[].amount`).
 
-What an action outputs depends on the action:
+An action's output is one of:
 
-| Output               | Actions                                                                                                        |
-| -------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Realized amount      | Swaps (the router's returned amount, or the balance delta where the return is not an amount), `aaveV3Withdraw` |
-| The input, unchanged | Transfers, approvals, wrapping, staking, lending other than withdrawal, bridges                                |
-| None                 | `integralSwap`: the order executes in a later transaction                                                      |
-| The value read       | `balanceOf`, `nativeBalance`, `argument`                                                                       |
+- **received** — what it delivered to the Pot: a swap's proceeds, the staking or wrapped token minted, the ETH from burning rETH, the amount an Aave withdrawal returned. Where the venue's return value is that amount the program reads it; where it is not (an array, shares, nothing) the program measures the Pot's balance before and after.
+- **its amount** — the amount the action spent, unchanged: transfers, approvals, supplies, borrows, repayments, bridges, WETH wrapping.
+- **the value read** — for a source action.
 
-When an action's output is consumed — by the next action or by `saveOutputAs` — a swap delivers it to the Pot so the next action can spend it, whatever its `recipient` says. An action whose output nothing consumes pays its own `recipient`. Use `"recipient": "self"` to keep an unconsumed output in the Pot, for example for a [dynamic child](#fund-a-child-from-a-measured-amount).
-
-A "passed-through" output is the number the action received, not the number of tokens it produced. `wrapStETH` passes on its stETH input, not the wstETH it minted; follow it with a `balanceOf` of wstETH when the next action needs the minted amount.
+When a later action spends an output, the action delivers it to the Pot so it can be spent, whatever its `recipient` says. An action whose output nothing spends pays its own `recipient`. Use `"recipient": "self"` to keep an unspent output in the Pot, for example for a [dynamic child](#fund-a-child-from-a-measured-amount).
 
 ### Source actions
 
@@ -141,17 +149,17 @@ A source action whose value nothing reads is an error.
   {
     "type": "transfer",
     "token": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    "to": "0x3000000000000000000000000000000000000001"
+    "recipient": "0x3000000000000000000000000000000000000001"
   }
 ]
 ```
 
 ## Turn a program into an intent
 
-`actionsIntent(destination, program, options)` makes the program the route body of an Eco intent. It is the same as `Base(body, options)` with the program's source as the body; its ABI bindings are merged into `options.compile.contracts`. The destination must be the program's chain.
+`programIntent(program, options)` opens the program as the route of an Eco intent on the program's own `chainId`. It is `Base(body, options)` with the program as the body; its ABI bindings are merged into `options.compile.contracts`, and a caller binding of the same name with a different ABI is an error.
 
 ```ts
-import { actionsIntent, type ActionProgram } from "@eco-incorp/sauce/actions";
+import { programIntent, type ActionProgram } from "@eco-incorp/sauce/actions";
 import type { routes } from "@eco-incorp/sauce";
 
 export function buildActionIntent(
@@ -159,22 +167,22 @@ export function buildActionIntent(
   options: routes.IntentOptions,
   reward: routes.RewardArg,
 ) {
-  return actionsIntent(program.chainId, program, options).reward(reward);
+  return programIntent(program, options).reward(reward);
 }
 ```
 
-Everything in [creating an intent](intents.md) applies: the Pot must be owned by the destination Portal's Executor, delivered route tokens arrive in the Executor and need a precall to reach the Pot, and every cook pays the Kitchen fee. `actionsRouteBody(program)` returns the `{ source, contracts }` pair when you call `compileSauceRoute` or `Base(...)` yourself.
+Everything in [creating an intent](intents.md) applies: the Pot must be owned by the destination Portal's Executor, delivered route tokens arrive in the Executor and need a precall to reach the Pot, and every cook pays the Kitchen fee.
 
 ### Fund a child from a measured amount
 
 A program's output is only known once it runs. [Dynamic nesting](nested-intents.md#create-the-child-on-chain-from-a-measured-amount) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
 
-1. The parent program keeps its output in the Pot (`"recipient": "self"`, or `saveOutputAs` on its last action).
+1. The parent program keeps its output in the Pot (`"recipient": "self"`).
 2. `.nest(child, { via: "dynamic", measure: { kind: "erc20Balance", token } })` measures that balance.
 3. The child program starts with `balanceOf`, so it spends exactly what was delivered rather than an amount written before the parent ran.
 
 ```ts
-import { actionsIntent, type ActionProgram } from "@eco-incorp/sauce/actions";
+import { programIntent, type ActionProgram } from "@eco-incorp/sauce/actions";
 import { routes } from "@eco-incorp/sauce";
 import { encodeFunctionData, parseAbi, type Address } from "viem";
 
@@ -182,7 +190,7 @@ const { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } = routes;
 
 export function buildCascade(
   parentProgram: ActionProgram, // e.g. a Base swap into USDC with "recipient": "self"
-  childProgram: ActionProgram, // e.g. balanceOf USDC on Arbitrum, then aaveV3Supply
+  childProgram: ActionProgram, // e.g. balanceOf USDC on Arbitrum, an approve, then aaveV3Supply
   parentOptions: routes.IntentOptions,
   childOptions: routes.IntentOptions & { pot: Address },
   usdcBase: Address,
@@ -196,13 +204,13 @@ export function buildCascade(
     functionName: "transfer",
     args: [childOptions.pot, AMOUNT_OUT_PLACEHOLDER],
   });
-  const child = actionsIntent(childProgram.chainId, childProgram, {
+  const child = programIntent(childProgram, {
     ...childOptions,
     tokens: [{ token: usdcArbitrum, amount: AMOUNT_OUT_PLACEHOLDER }],
     precalls: [{ target: usdcArbitrum, data: toPot }],
   }).reward({ ...childReward, tokens: [{ token: usdcBase, amount: AMOUNT_IN_PLACEHOLDER }] });
 
-  return actionsIntent(parentProgram.chainId, parentProgram, parentOptions)
+  return programIntent(parentProgram, parentOptions)
     .nest(child, {
       via: "dynamic",
       measure: { kind: "erc20Balance", token: usdcBase },
@@ -223,32 +231,36 @@ The measurement is the Pot's balance after the parent program, not the program's
 An `argument` action makes an amount a parameter of the compiled program instead of a value fixed at compile time, so one program serves every amount. The program's bytecode, and its hash, stay the same; the amounts travel as argument bytes appended to it.
 
 ```ts
-import { compileActions, parseActionProgram } from "@eco-incorp/sauce/actions";
+import { compileProgram } from "@eco-incorp/sauce/actions";
 
-export function reusableApproval(token: string, spender: string) {
-  const compiled = compileActions(
-    parseActionProgram({
-      version: 1,
-      chainId: 1,
-      actions: [
-        { type: "argument", name: "amount" },
-        { type: "approve", token, spender },
-      ],
-    }),
-  );
+export function reusableApproval(token: `0x${string}`, spender: `0x${string}`) {
+  const compiled = compileProgram({
+    version: 1,
+    chainId: 1,
+    actions: [
+      { type: "argument", name: "amount" },
+      { type: "approve", token, spender },
+    ],
+  });
 
   // The `program` argument of Pot.cook, for two different amounts, from one compile.
   return [compiled.payload({ amount: 5n }), compiled.payload({ amount: "900000" })];
 }
 ```
 
-Arguments are ABI-v1 by default: each is a 32-byte word, and `argumentOffset(name)` is where it starts in the payload. With `compileActions(program, { compactArgs: true })` they are compact-v1, which is smaller; pass `{ scalarWidth: 32 }` to `payload`/`encodeArguments` to encode every number at a fixed width, so `argumentOffset(name, { scalarWidth: 32 })` locates it. A fixed offset is what lets a caller splice a number measured later into a payload built earlier. The [compiler guide](compiling.md#pass-arguments-with-compact-v1) describes both encodings.
+Arguments are ABI-v1 by default: each is a 32-byte word, and `argumentOffset(name)` is where it starts in the payload. With `compileProgram(program, { compactArgs: true })` they are compact-v1, which is smaller; pass `{ scalarWidth: 32 }` to `payload` to encode every number at a fixed width, so `argumentOffset(name, { scalarWidth: 32 })` locates it. A fixed offset is what lets a caller splice a number measured later into a payload built earlier. The [compiler guide](compiling.md#pass-arguments-with-compact-v1) describes both encodings.
 
-An intent route body is compiled without arguments, so `actionsIntent` refuses a program that has them. Inside an intent, read a runtime amount on-chain with `balanceOf` instead.
+An intent route is compiled without arguments, so `programIntent` refuses a program that has them. Inside an intent, read a runtime amount on-chain with `balanceOf` instead.
+
+## Quotes and split swaps
+
+`quoteAction(action, quoters)` returns the `eth_call` that prices a swap action at its own `amount` — `{ to, data, decode }`. Send it with a JSON-RPC client and pass the result to `decode` for the output amount. It needs no balance or allowance. Venues that price through a separate contract take its address in `quoters`: `uniswapV3Quoter` (QuoterV2), `uniswapV4Quoter`, `maverickQuoter`, `ambientImpact` (CrocImpact) and `fluidDexResolver`. Send the Balancer V3 quote from the zero address: its Vault answers a query only outside a transaction.
+
+`compileSplitSwap({ candidates, amount, buckets, amountOutMin, approvals, sweep, quoters })` compiles one program that divides `amount` into `buckets` equal slices and hands each, in turn, to the candidate whose on-chain quote pays most for it, then executes every candidate's share. Candidates are ordinary swap actions without an amount; each delivers to the Pot. `amountOutMin` bounds the total output, checked once after every leg, and `"0"` waives it explicitly. A candidate must have an on-chain quote with a runtime amount, which every swap has except Uniswap V4, Balancer and Carbon.
 
 ## What the compiled program does
 
-Each action becomes an ABI-bound call, `IBinding.at(address).method(...)`, the same form an SDK route body compiles to; the compiler derives the selector and argument encoding from the ABI. Inspect the result with `compileActions(program).source`:
+Each action becomes an ABI-bound call, `IBinding.at(address).method(...)`, the same form an SDK route body compiles to; the compiler derives the selector and argument encoding from the ABI. Inspect the result with `compileProgram(program).source`:
 
 ```js
 const amt1 = ISwapRouter02.at(0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45n).exactInputSingle({
@@ -256,102 +268,103 @@ const amt1 = ISwapRouter02.at(0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45n).exact
   tokenOut: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n,
   fee: 500n,
   recipient: ctx.self(),
-  amountIn: 1000000000000000000n,
+  amountIn: t_out1,
   amountOutMinimum: 3000000000n,
   sqrtPriceLimitX96: 0n,
 });
 let v_usdc = amt1;
 ```
 
-- ABIs come from the SDK's protocol registry wherever it declares the exact function an action calls, and from a fragment in the actions package otherwise. `contracts` on the compiled result lists every binding.
+- ABIs come from the SDK's protocol registry wherever it declares the exact function an action calls, and from a fragment in the actions package otherwise.
 - A binding decodes only the outputs an action reads.
 - ERC-20 `transfer` and `approve` decode nothing. Tokens such as USDT return no `bool` from them, and decoding empty return data reverts, so these two are encoded ahead of time and issued as raw calls with the amount spliced in — the same decode-free lowering the SDK's nested intents use. A token that refuses the write still reverts the program.
-- A call carrying native value (`wrapETH`, the stake actions, the Stargate and Hyperlane fees) is a raw `evm.call`, because a bound call cannot attach value. Its selector comes from the same ABI fragment.
-- Binding names start with `I` and contain no underscore, so they cannot collide with the route compiler's protocol namespaces or its own `IERC20`. Do not bind a different ABI under one of them in `compile.contracts`.
-
-The package builds calldata; it does not select routes, quote, or submit transactions. `actionToQuote` builds a protocol quoter call for an `eth_call`, and `megasSwapToSauce` splits a trade across several venues using on-chain quotes.
+- A call carrying native value (`wrapETH`, the staking deposits, the Stargate and Hyperlane fees) is a raw `evm.call`, because a bound call cannot attach value. Its selector comes from the same ABI fragment. The bridges' fees are quoted on-chain, just before the call that pays them, and come from the Pot's balance.
+- Binding names start with `I` and contain no underscore, so they cannot collide with the route compiler's protocol namespaces or its own `IERC20`.
 
 ## Supported actions
 
-"Verified" says how each action has been checked against real contracts. **Mainnet**: executed through the engine against the deployed Ethereum contracts, replayed from mainnet state at a pinned block. **Calldata**: executed through the engine against contracts that record the call, and compared byte for byte with the intended Solidity call — the encoding is checked, the protocol's behavior is not.
+Every action below is executed in CI against the deployed Ethereum contracts it names, through the released engine and a real Pot, replayed from mainnet state at a pinned block — and its calldata is compared byte for byte with the intended Solidity call. "Output" is what a later action spends; see [chaining amounts](#chaining-amounts).
 
 ### Swaps
 
-| Action                        | Calls                                                                                 | Amount           | Output   | Verified     |
-| ----------------------------- | ------------------------------------------------------------------------------------- | ---------------- | -------- | ------------ |
-| `uniswapV3ExactInput`         | SwapRouter02 `exactInputSingle`                                                       | `amountIn`       | realized | Mainnet      |
-| `uniswapV3ExactInputMultiHop` | SwapRouter02 `exactInput`                                                             | `amountIn`       | realized | Mainnet      |
-| `uniswapV4ExactInput`         | ERC-20 `transfer` to the router, then Universal Router `execute` (swap, settle, take) | `amountIn`       | realized | Mainnet      |
-| `uniswapV4ExactInputMultiHop` | Same, with a path                                                                     | `amountIn`       | realized | Mainnet      |
-| `curveSwap`                   | Pool `exchange(int128,int128,uint256,uint256)`; output is a balance delta             | `amountIn`       | realized | Mainnet      |
-| `curveRouterNGSwap`           | RouterNG `exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)`     | `amountIn`       | realized | Mainnet      |
-| `balancerV2Swap`              | Vault `swap`                                                                          | `amountIn`       | realized | Mainnet      |
-| `balancerV2BatchSwap`         | Vault `batchSwap`; output is a balance delta                                          | `steps[].amount` | realized | Mainnet      |
-| `balancerV3Swap`              | Router `swapSingleTokenExactIn`                                                       | `amountIn`       | realized | Calldata     |
-| `uniswapV2Swap`               | Router `swapExactTokensForTokens`; output is a balance delta                          | `amountIn`       | realized | Mainnet      |
-| `ambientSwap`                 | CrocSwapDex `userCmd(1, …)`; output is a balance delta                                | `amountIn`       | realized | Mainnet      |
-| `dodoSwap`                    | DODO proxy `dodoSwapV2TokenToToken`, or `dodoSwapV1` with `"version": "v1"`           | `amountIn`       | realized | Mainnet (v1) |
-| `maverickSwap`                | Maverick V2 router `exactInputSingle`                                                 | `amountIn`       | realized | Mainnet      |
-| `maverickMultiHopSwap`        | Maverick V2 router `exactInputMultiHop`                                               | `amountIn`       | realized | Mainnet      |
-| `carbonSwap`                  | CarbonController `tradeBySourceAmount`                                                | `amountIn`       | realized | Mainnet      |
-| `fraxswapSwap`                | Router `swapExactTokensForTokens`; output is a balance delta                          | `amountIn`       | realized | Mainnet      |
-| `clipperSwap`                 | Exchange `sellTokenForToken`                                                          | `amountIn`       | realized | Calldata     |
-| `integralSwap`                | TwapDelay `sell`                                                                      | `amountIn`       | none     | Calldata     |
-| `fluidDexT1Swap`              | Pool `swapIn`                                                                         | `amountIn`       | realized | Mainnet      |
-| `fluidDexLiteSwap`            | DEX Lite `swapSingle`; output is a balance delta                                      | `amountIn`       | realized | Calldata     |
+| Action                        | Calls                                                                             | Output   |
+| ----------------------------- | --------------------------------------------------------------------------------- | -------- |
+| `uniswapV3ExactInput`         | SwapRouter02 `exactInputSingle`                                                   | received |
+| `uniswapV3ExactInputMultiHop` | SwapRouter02 `exactInput`                                                         | received |
+| `uniswapV4ExactInput`         | ERC-20 `transfer` to the Universal Router, then `execute` (swap, settle, take)    | received |
+| `uniswapV4ExactInputMultiHop` | The same, along a path                                                            | received |
+| `curveSwap`                   | Pool `exchange(int128,int128,uint256,uint256)`                                    | received |
+| `curveRouterNGSwap`           | RouterNG `exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)` | received |
+| `balancerV2Swap`              | Vault `swap`                                                                      | received |
+| `balancerV2BatchSwap`         | Vault `batchSwap`                                                                 | received |
+| `balancerV3Swap`              | Router `swapSingleTokenExactIn`, pulling through Permit2                          | received |
+| `uniswapV2Swap`               | Router `swapExactTokensForTokens`                                                 | received |
+| `ambientSwap`                 | CrocSwapDex `userCmd(1, …)`                                                       | received |
+| `dodoSwap`                    | DODO proxy `dodoSwapV2TokenToToken`, or `dodoSwapV1` with `"version": "v1"`       | received |
+| `maverickSwap`                | Maverick V2 router `exactInputSingle`                                             | received |
+| `maverickMultiHopSwap`        | Maverick V2 router `exactInputMultiHop`                                           | received |
+| `carbonSwap`                  | CarbonController `tradeBySourceAmount`                                            | received |
+| `fraxswapSwap`                | Router `swapExactTokensForTokens`                                                 | received |
+| `fluidDexT1Swap`              | Pool `swapIn`                                                                     | received |
 
 ### Bridges
 
-| Action            | Calls                                                        | Amount   | Output    | Verified |
-| ----------------- | ------------------------------------------------------------ | -------- | --------- | -------- |
-| `acrossBridge`    | SpokePool `depositV3`, same token on the destination         | `amount` | the input | Mainnet  |
-| `stargateBridge`  | Stargate V1 router `swap`, with `lzFee` as value             | `amount` | the input | Calldata |
-| `cctpBridge`      | CCTP V1 TokenMessenger `depositForBurn`                      | `amount` | the input | Calldata |
-| `hyperlaneBridge` | `dispatch(uint32,bytes32,bytes)`, with `gasPayment` as value | `amount` | the input | Calldata |
+| Action            | Calls                                                    | Output     |
+| ----------------- | -------------------------------------------------------- | ---------- |
+| `acrossBridge`    | SpokePool `depositV3`, the same token on the destination | its amount |
+| `stargateBridge`  | Stargate V2 pool `quoteSend`, then `send` (taxi)         | its amount |
+| `cctpBridge`      | CCTP V2 TokenMessenger `depositForBurn`                  | its amount |
+| `hyperlaneBridge` | Warp route `quoteGasPayment`, then `transferRemote`      | its amount |
 
-### Wrapping, staking, and lending
+### Wrapping and staking
 
-| Action               | Calls                                | Amount                  | Output    | Verified |
-| -------------------- | ------------------------------------ | ----------------------- | --------- | -------- |
-| `wrapETH`            | WETH `deposit`                       | `amount`, sent as value | the input | Mainnet  |
-| `unwrapETH`          | WETH `withdraw`                      | `amount`                | the input | Mainnet  |
-| `wrapStETH`          | wstETH `wrap`                        | `stETHAmount`           | the input | Calldata |
-| `unwrapStETH`        | wstETH `unwrap`                      | `wstETHAmount`          | the input | Calldata |
-| `lidoStake`          | stETH `submit`                       | `amount`, sent as value | the input | Calldata |
-| `lidoUnstake`        | WithdrawalQueue `requestWithdrawals` | `stETHAmount`           | the input | Calldata |
-| `rocketPoolStake`    | Rocket deposit pool `deposit`        | `amount`, sent as value | the input | Calldata |
-| `rocketPoolUnstake`  | rETH `burn`                          | `amount`                | the input | Calldata |
-| `etherFiStake`       | ether.fi LiquidityPool `deposit`     | `amount`, sent as value | the input | Calldata |
-| `aaveV3Supply`       | Pool `supply`                        | `amount`                | the input | Mainnet  |
-| `aaveV3Withdraw`     | Pool `withdraw`                      | `amount`                | realized  | Mainnet  |
-| `aaveV3Borrow`       | Pool `borrow` (variable rate)        | `amount`                | the input | Calldata |
-| `aaveV3Repay`        | Pool `repay` (variable rate)         | `amount`                | the input | Calldata |
-| `compoundV3Supply`   | Comet `supply`                       | `amount`                | the input | Mainnet  |
-| `compoundV3Withdraw` | Comet `withdraw`                     | `amount`                | the input | Mainnet  |
+| Action              | Calls                                                      | Output     |
+| ------------------- | ---------------------------------------------------------- | ---------- |
+| `wrapETH`           | WETH `deposit`, with the amount as value                   | its amount |
+| `unwrapETH`         | WETH `withdraw`                                            | its amount |
+| `wrapStETH`         | wstETH `wrap`                                              | received   |
+| `unwrapStETH`       | wstETH `unwrap`                                            | received   |
+| `lidoStake`         | stETH `submit`, with the amount as value                   | received   |
+| `lidoUnstake`       | WithdrawalQueueERC721 `requestWithdrawals`                 | its amount |
+| `rocketPoolStake`   | RocketDepositPool `deposit`, with the amount as value      | received   |
+| `rocketPoolUnstake` | rETH `burn`                                                | received   |
+| `etherFiStake`      | ether.fi LiquidityPool `deposit`, with the amount as value | received   |
+
+### Lending
+
+| Action               | Calls                         | Output     |
+| -------------------- | ----------------------------- | ---------- |
+| `aaveV3Supply`       | Pool `supply`                 | its amount |
+| `aaveV3Withdraw`     | Pool `withdraw`               | received   |
+| `aaveV3Borrow`       | Pool `borrow` (variable rate) | its amount |
+| `aaveV3Repay`        | Pool `repay` (variable rate)  | its amount |
+| `compoundV3Supply`   | Comet `supply`                | its amount |
+| `compoundV3Withdraw` | Comet `withdraw`              | its amount |
 
 ### Tokens and sources
 
-| Action          | Calls                               | Amount   | Output         | Verified                       |
-| --------------- | ----------------------------------- | -------- | -------------- | ------------------------------ |
-| `transfer`      | ERC-20 `transfer`, decoding nothing | `amount` | the input      | Mainnet, and a no-return token |
-| `approve`       | ERC-20 `approve`, decoding nothing  | `amount` | the input      | Mainnet, and a no-return token |
-| `balanceOf`     | ERC-20 `balanceOf(Pot)`             | —        | the value read | Execution                      |
-| `nativeBalance` | The Pot's native balance            | —        | the value read | Calldata                       |
-| `argument`      | A runtime parameter of the program  | —        | the value read | Execution                      |
+| Action           | Calls                                             | Output         |
+| ---------------- | ------------------------------------------------- | -------------- |
+| `transfer`       | ERC-20 `transfer`, decoding nothing               | its amount     |
+| `approve`        | ERC-20 `approve`, decoding nothing                | its amount     |
+| `permit2Approve` | Permit2 `approve(address,address,uint160,uint48)` | its amount     |
+| `balanceOf`      | ERC-20 `balanceOf(Pot)`                           | the value read |
+| `nativeBalance`  | The Pot's native balance                          | the value read |
+| `argument`       | A runtime parameter of the program                | the value read |
 
-### Notes and limitations
+### Notes
 
-- **Approvals.** A swap or supply pulls from the Pot, so approve its spender first. DODO pulls through its DODOApprove contract, not the proxy; approve that.
-- **Uniswap V4** transfers the input to the Universal Router and settles from the router's balance, so the input must be an ERC-20; native ETH input is not supported. A chained output is taken to the Pot, and its amount may be a runtime value.
-- **Curve `curveSwap`** calls the pool's 4-argument `exchange`, which older pools implement without a return value, and forwards the balance delta to `recipient`.
-- **Balancer V2 batch** amounts are per step (a later step's `"0"` spends the previous step's output), so the action takes no `amountRef`.
-- **Carbon** trades the per-strategy `tradeActions` amounts; **Clipper** sells tokens already transferred to the exchange, against a signed quote from Clipper's API. Neither passes `amountIn` to the protocol.
-- **Integral** places an order that a keeper executes later; nothing can chain from it, and the action attaches no keeper fee. At the pinned mainnet block Integral rejects WETH/USDC orders and quotes.
-- **Across** records the Pot's caller as depositor and recipient, and requests the same amount out as in. **Stargate** refunds and pays the Pot's caller; **Lido withdrawals** are owned by it.
-- **Maverick** V2's router is `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` on Ethereum; `exactInputSingle` returns the amount out, which is the action's output. A multi-hop `path` is, per hop, the pool's 20 bytes followed by one byte for `tokenAIn`.
+- **Approvals.** A venue that pulls from the Pot needs an approval first; the field docs in the schema say which. DODO pulls through its DODOApprove contract, not the proxy. Balancer V3's router pulls through Permit2: `approve` the token to Permit2, then `permit2Approve` the router. A Hyperlane warp route that charges a fee pulls the amount plus the fee, so approve more than the amount.
+- **Uniswap V4** transfers the input to the Universal Router and settles from the router's balance, so the input must be an ERC-20; native ETH input is not supported.
+- **Curve `curveSwap`** calls the pool's 4-argument `exchange`, which older pools implement without a return value; the pool pays the Pot, which forwards the balance delta to `recipient`.
+- **Balancer V2 batch** amounts are per step: a later step's `"0"` spends the previous step's output.
+- **Across** deposits from the Pot, which is refunded if no relayer fills; the relayer keeps `relayerFee`, so the destination receives `amount - relayerFee`. `quoteTimestamp` must be within the SpokePool's quote buffer of the block time, and `fillDeadline` within its fill buffer.
+- **Stargate** sends in taxi mode and refunds the Pot. **CCTP** lets anyone relay the mint (`destinationCaller` is zero); `maxFee` defaults to `"0"` and `minFinalityThreshold` to 2000, a standard transfer.
+- **Lido withdrawals** mint the withdrawal NFT to `owner`, which claims the ETH once Lido finalizes it.
+- **Rocket Pool** upgrades move the deposit pool: read the live address from RocketStorage. rETH refuses to move in the block it was minted in, so a program cannot stake and then transfer or burn the same rETH.
+- **Maverick** V2's router is `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` on Ethereum. A multi-hop `path` is, per hop, the pool's 20 bytes followed by one byte for `tokenAIn`.
 - **Fluid DEX T1** takes no native value from this action, so it sells the pool's ERC-20 side (for the wstETH/ETH pool, wstETH for ETH), pulling it by allowance.
-- **Balancer V3**'s router pulls its input through Permit2, and no action grants a Permit2 allowance, so `balancerV3Swap` cannot execute from a Pot with actions alone.
 
 ## TypeScript types
 
-Every action has a type (`UniswapV3ExactInputAction`, `AaveV3SupplyAction`, …) in the `RoutingAction` union, and `ActionProgram` is the program document. A typed action list is already valid JSON: `toActionProgram(actions, chainId)` validates it as a program. `ACTION_SPECS` describes every action's fields, as the parser and the schema read them.
+Every type is the JSON it describes. `ActionProgram` is the document, `Action` the union of every action, `ActionType` its `type`, and each action has its own interface (`UniswapV3ExactInputAction`, `AaveV3SupplyAction`, …), grouped as `SwapAction`, `BridgeAction`, `WrapAction`, `StakeAction`, `LendingAction`, `TokenAction` and `SourceAction`. A program typed in TypeScript is already valid input for `serializeProgram`, and `parseProgram` returns the same shape it accepts.

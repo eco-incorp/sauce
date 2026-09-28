@@ -82,15 +82,16 @@ pnpm --filter './sdk' gen-source-globals # regenerate source-only token/protocol
 
 Single test file: jest (sdk) → `pnpm --filter './sdk' test -- routes-void-main.test.ts`.
 Actions and dev-tools use the **node test runner**, not jest → `pnpm --filter './actions' exec tsx
---test tests/megas-swap.unit.test.ts`.
+--test tests/split-swap.unit.test.ts`.
 
 Actions test layout: `*.unit.test.ts` need nothing; `*.exec.test.ts` EXECUTE programs on a local
 anvil through the released engine and a real Kitchen-minted Pot (`tests/anvil.ts`) — they are in
 `test:unit`, skip locally without the engine artifact and throw under `CI`. `calldata.exec` runs
 every action against contracts that log the call they receive and compares the calldata with an
-independent viem encoding. `to-sauce`, `to-quote`, `v4.mainnet` and `megas-swap` (`test:mainnet`)
-run against real Ethereum contracts on a LOCAL anvil booted from mainnet state captured at a pinned
-block — no RPC, no secret, and they run in CI. See "Mainnet state" below.
+independent viem encoding. `actions.mainnet` (every action type, and it fails if one did not run),
+`quote.mainnet` and `split-swap.mainnet` (`test:mainnet`) run against real Ethereum contracts on a
+LOCAL anvil booted from mainnet state captured at a pinned block — no RPC, no secret, and they run
+in CI. See "Mainnet state" below. An action type that cannot execute there does not ship.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -141,24 +142,23 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   in that block. Replay pins the block number, its timestamp, chain id 1 and a 12-second block
   interval, refuses to fork, and makes any non-loopback `fetch` throw, so a suite that starts reading
   something new FAILS (a missing slot reads as zero) rather than reaching the network. Blob sizes at
-  capture: to-sauce ~310 KB, to-quote ~210 KB, megas-swap ~80 KB, v4 ~30 KB.
+  capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
-  `PINNED_BLOCK` (then recapture all four, and revisit every pinned figure: pools, strategy ids,
-  expected outputs). With an Ethereum archive RPC:
+  `PINNED_BLOCK` (then recapture all three, and revisit every pinned figure: pools, strategy ids,
+  the live Rocket Pool deposit pool, expected outputs). With an Ethereum archive RPC:
 
   ```sh
   FORK_URL=<archive rpc> pnpm --filter './actions' capture-mainnet
   ```
 
-  Capture forks at `PINNED_BLOCK` through a local recording proxy (`tests/mainnet-recorder.mjs`, a
-  separate process because the suites block on `execSync(cast …)`) and rewrites each suite's blob
-  from what it answered. Anvil's own mechanisms cannot do this: a fork's `anvil_dumpState` holds only
+  Capture forks at `PINNED_BLOCK` through a local recording proxy (`tests/mainnet-recorder.mjs`, its
+  own process, retrying an upstream request that hangs) and rewrites each suite's blob from what it
+  answered. Anvil's own mechanisms cannot do this: a fork's `anvil_dumpState` holds only
   locally modified accounts, and Foundry's RPC cache drops whatever was fetched after a snapshot when
   the suite reverts it. Capture a WHOLE suite — a `--test-name-pattern` run writes a blob with only
   those tests' state. Never print the RPC; `stop()` refuses to write a blob that mentions it, and
-  grep the blobs for the host before committing anyway. `actions/scripts/*` (quote tables, split
-  quotes) are manual tools that call an RPC by design; they are not tests.
+  grep the blobs for the host before committing anyway.
 
 - **`SAUCE_ENGINE_SO` / `SAUCE_RUST_ENGINE_SO`** — the path to the Solana engine, fetched by
   `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines`, which digest-verifies it against
@@ -398,24 +398,31 @@ deployments, the SauceScript subset, and ABI fidelity. The public root type grap
 generated ambient declaration import so downstream typed closures see the same declarations.
 
 **`actions/`** — JSON action programs (`{ version, chainId, actions }`) lowered to one SauceScript
-program. `spec.ts` is the single field table: `program.ts` parses/validates against it (located
-issues, canonical serialization) and `schema.ts` generates the committed JSON Schema from it;
-`semantics.ts` holds the cross-action rules both the JSON and the typed `RoutingAction[]` paths
-enforce. `to-sauce.ts` emits every protocol call as an ABI binding (`IBinding.at(addr).method(...)`)
-from the catalogue in `abis.ts`: registry ABIs are taken only when their canonical signature is
-exactly the action's (several registry ABIs are widened — Balancer `poolId` as `uint256`, Curve
-indices as `uint128`, Uniswap V3 `fee` as `uint32` — and would change the selector), and a method
-declares an output ONLY when an action reads it: compiler 2.3.0 decodes declared outputs even when
-discarded, and decoding empty return data reverts (3pool-era Curve). ERC-20 `approve`/`transfer`
-are not bindings: they go through the SDK's `token/unchecked` (USDT returns no `bool`), the same
-decode-free lowering the route nesting uses — one path, so do not add a second. Native-value calls
-stay raw `evm.call` because a binding cannot attach value. Actions **chain**: output feeds the next
-implicitly (no amount) or via `saveOutputAs`/`amountRef`; `balanceOf`/`nativeBalance`/`argument`
-are source actions. `compose.ts` builds route bodies/intents (`actionsIntent`) and standalone
-programs with runtime arguments (`compileActions`, ABI-v1 or compact-v1 with fixed-width offsets).
-`to-quote.ts` still emits raw quoter calls over fixed amount offsets, so its on-chain call stays
-byte-identical to the host `eth_call` data it returns. `AMM_SWAP_INTERFACES.md` is third-party
-interface reference; only its sections marked Verified have been checked.
+program. The public surface is deliberately small — `parseProgram`, `serializeProgram`,
+`programSchema`, `compileProgram`, `programIntent`, `quoteAction`, `compileSplitSwap`,
+`ProgramError` and the types — and the types ARE the JSON (no per-action chain, one `amount`, one
+`amountOutMin`, `recipient` everywhere); keep it that way rather than adding parallel entry points.
+`spec.ts` is the single field table: `program.ts` parses/validates against it (located issues,
+canonical serialization, no defaults filled in), `schema.ts` generates the committed JSON Schema from
+it, and `tests/docs.unit.test.ts` holds the guide's action list and outputs to it; `semantics.ts`
+holds the cross-action rules. `to-sauce.ts` emits every protocol call as an ABI binding
+(`IBinding.at(addr).method(...)`) from the catalogue in `abis.ts`: registry ABIs are taken only when
+their canonical signature is exactly the action's (several registry ABIs are widened — Balancer
+`poolId` as `uint256`, Curve indices as `uint128`, Uniswap V3 `fee` as `uint32`, Stargate's `to` as
+`uint256`, Permit2's expiration as `uint64` — and would change the selector), and a method declares
+an output ONLY when an action reads it: compiler 2.3.0 decodes declared outputs even when discarded,
+and decoding empty return data reverts (3pool-era Curve). ERC-20 `approve`/`transfer` are not
+bindings: they go through the SDK's `token/unchecked` (USDT returns no `bool`), the same decode-free
+lowering the route nesting uses — one path, so do not add a second. Native-value calls stay raw
+`evm.call` because a binding cannot attach value; the Stargate and Hyperlane fees are quoted by a
+`view` binding (a STATICCALL) just before. Actions **chain**: output feeds the next implicitly (no
+amount) or via `saveOutputAs`/`amountRef`; an output is what the action delivered to the Pot (a
+return value or a balance delta) or its own amount, per `spec.ts`. `compose.ts` opens intents
+(`programIntent`, on the program's own chain) and compiles standalone programs with runtime
+arguments (ABI-v1, or compact-v1 with fixed-width offsets). `to-quote.ts` builds the `eth_call`
+quotes and, for the split swap, the same quoter calls as SauceScript over fixed amount offsets.
+`AMM_SWAP_INTERFACES.md` is third-party interface reference; only its sections marked Verified have
+been checked.
 
 **`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness. Its
 `start:local`/`start:fork` scripts and `sauce` CLI still depend on the retired `SauceRouter`

@@ -15,6 +15,7 @@ application calls it.
 | [protocol-approval.ts](protocol-approval.ts)               | A typed `Base(() => ...)` body calling `USDC.approve(Uniswap.UniversalRouter, ...)`                                   |
 | [first-intent.ts](first-intent.ts)                         | Both sides of a transfer intent: Ethereum reward, Base delivery, Executor-to-Pot funding, source transaction requests |
 | [compile-program.ts](compile-program.ts)                   | Direct compilation, a compact entry schema, and argument encoding and decoding                                        |
+| [action-program.ts](action-program.ts)                     | A JSON action program: strict parsing, compilation with a runtime amount, and an intent on the program's chain        |
 | [evm-execution.ts](evm-execution.ts)                       | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                |
 
 ## Run an example in your project

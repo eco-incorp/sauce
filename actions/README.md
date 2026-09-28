@@ -8,66 +8,47 @@ Sauce program that executes atomically in a Pot, directly or as the destination 
 intent. Install `@eco-incorp/sauce` to use it.
 
 ```ts
-import { actionsIntent, compileActions, parseActionProgram } from "@eco-incorp/sauce/actions";
+import { compileProgram, parseProgram, programIntent } from "@eco-incorp/sauce/actions";
 
-const program = parseActionProgram({
+const program = parseProgram({
   version: 1,
   chainId: 8453,
   actions: [
     {
       type: "approve",
+      amount: "1000000",
       token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // Base USDC
       spender: "0x1111111111111111111111111111111111111111", // example spender
-      amount: "1000000",
     },
   ],
 });
 
-const { bytecode, source } = compileActions(program); // Pot.cook(engine, bytecode)
-// or, as an intent: actionsIntent("base", program, intentOptions).reward(reward)
+const { bytecode, source } = compileProgram(program); // Pot.cook(engine, bytecode)
+// or, as an intent on the program's chain: programIntent(program, intentOptions).reward(reward)
 ```
 
-- **JSON in, JSON out.** Amounts are base-10 strings. `parseActionProgram` validates strictly and
-  reports every problem with its path; `serializeActionProgram` writes canonical JSON; the
-  [JSON Schema](action-program.schema.json) ships in the package for clients in other languages.
-- **Composition is part of the document.** An action spends its own amount, an earlier output
-  named with `saveOutputAs`/`amountRef`, or the previous action's output. `balanceOf` spends what
-  the Pot actually holds; `"recipient": "self"` keeps an output in the Pot.
-- **Intents and nesting.** `actionsIntent` makes a program a route body. A child of a dynamic
-  `.nest()` can start with `balanceOf` to spend exactly what its parent delivered.
-- **Runtime amounts.** An `argument` action makes an amount a parameter of one reusable compiled
-  program; `compileActions(...).payload(values)` appends the arguments, ABI-v1 or compact-v1.
-- **SDK surfaces.** Each protocol call is an ABI binding, with ABIs from the SDK protocol registry
-  where it has the exact function. ERC-20 `transfer`/`approve` use the SDK's decode-free lowering,
-  so tokens that return nothing (USDT) work.
+| Export                              | Does                                                                                      |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `parseProgram(json)`                | Validates a program strictly; throws a `ProgramError` listing every problem with its path |
+| `serializeProgram(program)`         | Canonical JSON text                                                                       |
+| `programSchema()`                   | The JSON Schema, also shipped as [action-program.schema.json](action-program.schema.json) |
+| `compileProgram(program, options?)` | Bytecode, source, and the payload for runtime arguments                                   |
+| `programIntent(program, options)`   | The program as an intent route on its own chain                                           |
+| `quoteAction(action, quoters?)`     | The `eth_call` that prices a swap action                                                  |
+| `compileSplitSwap(splitSwap)`       | One program that splits a swap across venues by on-chain quotes                           |
+
+- **Types follow the JSON.** Every type the package exports is exactly the document it describes:
+  amounts are base-10 strings, `"self"` is the executing Pot, and `parseProgram` returns the same
+  shape it accepts.
+- **Composition is part of the document.** An action spends its `amount`, an earlier output named
+  with `saveOutputAs`/`amountRef`, or the previous action's output. A `balanceOf` action spends what
+  the Pot actually holds, which is how a child of a dynamic `.nest()` spends exactly what its parent
+  delivered; an `argument` action makes an amount a runtime parameter of one compiled program.
+- **Verified on mainnet.** Every action type executes in CI against the deployed Ethereum contracts
+  it names, replayed offline from mainnet state at a pinned block. Each protocol call is an ABI
+  binding, with ABIs from the SDK protocol registry where it has the exact function; ERC-20
+  `transfer`/`approve` decode nothing, so tokens that return nothing (USDT) work.
 
 The [actions guide](../docs/guides/actions.md) covers the format, chaining, intents, runtime
-amounts, and the list of supported actions with how each was verified.
-[AMM_SWAP_INTERFACES.md](AMM_SWAP_INTERFACES.md) is a contributor's reference to the protocols'
-Solidity interfaces.
-
-## Changes from the previous release
-
-The typed API still works: `actionsToSauce`, `actionsToSauceSource`, `actionToSauce`,
-`buildAction`, `actionToQuote` and the `megasSwap*` functions keep their names and signatures. What
-changed underneath:
-
-- **Emitted source uses ABI bindings.** `actionsToSauceSource` names bindings such as
-  `ISwapRouter02.at(router).exactInputSingle(...)`, so compiling it yourself needs their ABIs: use
-  `actionsToProgramSource(actions)` (source plus `contracts`) or `compileActions`.
-  `buildAction` results carry the `bindings` they name; pass them to `contractsFor`.
-- **Stricter chaining.** Setting both an amount and `amountRef`, or giving actions of one list
-  different execution chains, now throws an `ActionProgramError` instead of being ignored.
-- **Fixed encodings.** Uniswap V4 actions encode their swap parameters as the router decodes them
-  and take everything owed (they reverted before); `stargateBridge` calls the Stargate V1 router's
-  real `swap`. A chained V4 output is taken to the Pot like every other swap.
-- **Types.** `recipient`, `to` and `onBehalfOf` accept `"self"`, and `RoutingAction` gains the
-  `balanceOf`, `nativeBalance` and `argument` source actions — an exhaustive `switch` over
-  `RoutingAction["type"]` needs cases for them.
-- **Removed `coinbaseStake`.** cbETH is minted by Coinbase, not by depositing ETH: the live cbETH
-  contract has no `deposit`, so the action could only revert. There is no replacement.
-- **Quote fixes** (`actionToQuote`). Uniswap V4 quotes used a selector the V4 Quoter does not have
-  and always reverted; a DODO V1 quote called V2's `querySellBase`; a Fraxswap quote used the view
-  `getAmountsOut`, which reverts while TWAMM orders are pending (it now uses
-  `getAmountsOutWithTwamm`); a Maverick quote applied a tick limit of 0, which the router's swap
-  does not.
+amounts, quotes, and every supported action. [AMM_SWAP_INTERFACES.md](AMM_SWAP_INTERFACES.md) is a
+contributor's reference to the protocols' Solidity interfaces.
