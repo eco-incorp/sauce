@@ -242,7 +242,7 @@ export function reusableApproval(token: string, spender: string) {
 }
 ```
 
-Arguments are ABI-v1 by default: each is a 32-byte word, and `argumentOffset(name)` is where it starts in the payload. With `compileActions(program, { compactArgs: true })` they are compact-v1, which is smaller; pass `{ scalarWidth: 32 }` to `payload`/`encodeArguments` to encode every number at a fixed width, so `argumentOffset(name, { scalarWidth: 32 })` locates it. A fixed offset is what lets a caller splice a number measured later into a payload built earlier. The [compiler guide](compiling.md#compact-v1-entry-arguments) describes both encodings.
+Arguments are ABI-v1 by default: each is a 32-byte word, and `argumentOffset(name)` is where it starts in the payload. With `compileActions(program, { compactArgs: true })` they are compact-v1, which is smaller; pass `{ scalarWidth: 32 }` to `payload`/`encodeArguments` to encode every number at a fixed width, so `argumentOffset(name, { scalarWidth: 32 })` locates it. A fixed offset is what lets a caller splice a number measured later into a payload built earlier. The [compiler guide](compiling.md#pass-arguments-with-compact-v1) describes both encodings.
 
 An intent route body is compiled without arguments, so `actionsIntent` refuses a program that has them. Inside an intent, read a runtime amount on-chain with `balanceOf` instead.
 
