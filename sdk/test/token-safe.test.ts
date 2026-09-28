@@ -150,8 +150,12 @@ describe("every emitted write carries the SafeERC20 check", () => {
     const statements = safeTransferStatements("s_", "1n", { local: "to" }, { local: "amt" });
     const check = statements.at(-1)!;
 
+    // A DECODE, not `s_tr.toBe()`: the decode refuses a return shorter than a word and reads only
+    // the first word of a longer one, as OpenZeppelin does. `toBe()` zero-pads a 1-byte `0x01` into
+    // a 1 and accepts it. `test/std/token/evm.e2e.test.ts` runs both cases beside OpenZeppelin.
     expect(check).toBe(
-      "if (s_tr.length == 0) { require(ctx.codeSize(1n) > 0); } else { require(s_tr.toBe() == 1); }",
+      "if (s_tr.length == 0) { require(ctx.codeSize(1n) > 0); } " +
+        'else { const [s_trok] = abi.decode(s_tr, ["Uint256"]); require(s_trok == 1n); }',
     );
   });
 
@@ -162,6 +166,8 @@ describe("every emitted write carries the SafeERC20 check", () => {
     // `allowance(owner, spender)` returns a uint256, so THIS one is safe to decode normally.
     expect(text).toContain("const a_self = ctx.self();");
     expect(text).toContain("evm.static(1n,");
+    // Decoded as a word, like the typed `allowance` read `@sauce/token` makes.
+    expect(text).toContain('const [a_cur] = abi.decode(a_qr, ["Uint256"]);');
     expect(text).toContain("if (a_cur > 0n) {");
     // Reset, then set: two writes, each with its own check.
     expect(text.match(/require\(ctx\.codeSize/g)).toHaveLength(2);

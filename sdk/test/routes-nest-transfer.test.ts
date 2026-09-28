@@ -134,7 +134,9 @@ describe("nest.ts: nestedTransferStatements — text shape", () => {
     // would read a stale result. See `token/safe.ts`.
     expect(stmts[4]).toContain("if (n0_amt0 > 0n) { const n0_0_tr = evm.call(");
     expect(stmts[4]).toContain("require(ctx.codeSize(");
-    expect(stmts[4]).toContain("require(n0_0_tr.toBe() == 1); } }");
+    expect(stmts[4]).toContain(
+      'const [n0_0_trok] = abi.decode(n0_0_tr, ["Uint256"]); require(n0_0_trok == 1n); } }',
+    );
     expect(stmts).toHaveLength(5);
   });
 

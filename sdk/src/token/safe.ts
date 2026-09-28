@@ -12,15 +12,22 @@
  *  - a token that returns `false` instead of reverting was treated as success — value lost, quietly;
  *  - a call to an address with no code "succeeded", because a call to an EOA always does.
  *
- * WHAT THIS EMITS is `SafeERC20._callOptionalReturn`, statement for statement: issue the call as raw
- * bytes so nothing is decoded on the way out, then look at what came back. Empty returndata is
- * accepted only if the target HAS code; anything else must decode to exactly `1`. A callee that
- * reverts still reverts, because `evm.call` bubbles it.
+ * WHAT THIS EMITS is `SafeERC20`'s check: issue the call as raw bytes so nothing is decoded on the
+ * way out, then look at what came back. Empty returndata is accepted only if the target HAS code;
+ * anything else must be an ABI word equal to `1`. A callee that reverts still reverts, because
+ * `evm.call` bubbles it.
  *
  * ```
  * const r = evm.call(token, 0n, calldata);
- * if (r.length == 0) { require(ctx.codeSize(token) > 0); } else { require(r.toBe() == 1); }
+ * if (r.length == 0) { require(ctx.codeSize(token) > 0); }
+ * else { const [rok] = abi.decode(r, ["Uint256"]); require(rok == 1n); }
  * ```
+ *
+ * The decode is load-bearing, not ceremony. It refuses fewer than 32 bytes and reads only the first
+ * word of a longer return, which is what OpenZeppelin does. `r.toBe()`, the obvious alternative,
+ * zero-pads a 1- or 31-byte return into a `1` and accepts it, and refuses a 64-byte return whose
+ * first word is `1` — wrong in both directions, and exactly what this file emitted until the
+ * execution matrix in `test/std/token/evm.e2e.test.ts` ran it beside OpenZeppelin.
  *
  * APPROVE ALSO HANDLES USDT'S RULE, which is `forceApprove`'s job. USDT reverts when a non-zero
  * allowance is changed to another non-zero value, and that is not a theoretical hazard here: every
@@ -34,9 +41,11 @@
  * SDK goes through, cut at the words only known at run time, and reassembled by the program with
  * `.concat` — the mechanism `routes/template.ts` uses to splice an intent.
  *
- * NOT APPLIED TO `sdk/src/std/token` (`@sauce/token`). That is a byte-identical copy of the v12
- * repo's conformance fixture; the change belongs there first. See this PR's description for what it
- * would need.
+ * `@sauce/token`'s EVM writes have the same semantics, as library functions. This file does not call
+ * them, and stays INLINE on purpose: the settle recipe is compiled by partners whose resolver serves
+ * only `./artifacts/IERC20.json`, so an emitted program cannot assume the library resolves.
+ * `test/std/token/evm.e2e.test.ts` holds the two to one behaviour, running both — and OpenZeppelin's
+ * own `SafeERC20` — over the same matrix of tokens.
  */
 import { encodeFunctionData, getAbiItem, type AbiFunction, type Hex } from "viem";
 
@@ -179,14 +188,15 @@ function statementsFor(
 }
 
 /**
- * The `SafeERC20._callOptionalReturn` check over the result of a write already issued into
- * `resultVar`: empty returndata is success only from an address that has code, and anything else
- * must be exactly `true`.
+ * The `SafeERC20` check over the result of a write already issued into `resultVar`: empty
+ * returndata is success only from an address that has code, and anything else must decode as a
+ * word equal to 1 — see the header for why it is a decode and not `toBe()`.
  */
 function optionalReturnCheck(resultVar: string, token: string): string {
   return (
     `if (${resultVar}.length == 0) { require(ctx.codeSize(${token}) > 0); } ` +
-    `else { require(${resultVar}.toBe() == 1); }`
+    `else { const [${resultVar}ok] = abi.decode(${resultVar}, ["Uint256"]); ` +
+    `require(${resultVar}ok == 1n); }`
   );
 }
 
@@ -234,7 +244,7 @@ export function safeApproveStatements(
   statements.push(
     `const ${prefix}qd = ${queryExpr};`,
     `const ${prefix}qr = evm.static(${token}, ${prefix}qd);`,
-    `const ${allowanceVar} = ${prefix}qr.toBe();`,
+    `const [${allowanceVar}] = abi.decode(${prefix}qr, ["Uint256"]);`,
   );
 
   // The reset, only when there is something to reset. USDT refuses a non-zero -> non-zero change,
