@@ -28,12 +28,14 @@ import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protoco
 import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
-import { v12EngineAddress } from "../deployments/index.js";
+import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
+import { v12PredictPot } from "../deployments/pot.js";
 import { denormalizeToEvm } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
 import { childCaptureSentinel, type CompiledChild } from "./intent-sugar.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import {
+  ecoRoutesExecutor,
   ecoRoutesPortal,
   ecoRoutesProver,
   type EcoRoutesSelector,
@@ -177,18 +179,18 @@ function compileIntentChild(
   options: SauceCompileOptions,
 ): CompiledChild {
   const intents = options.intents ?? {};
-  if (intents.pot === undefined) {
-    throw new Error(
-      `intent sugar: the intent on ${destination.slug} runs a program, so it needs a Pot to run it ` +
-        `in — set \`intents.pot\`. It has no default: a Pot's address is CREATE2 from its owner, ` +
-        `the destination \`Portal.executor()\`, which is a chain read rather than a constant.`,
-    );
-  }
+  // DERIVED, not asked for. A Pot is CREATE2 from the Kitchen over its owner and a salt; the owner a
+  // route call must cook as is the destination `Portal.executor()`, itself the Portal's second
+  // CREATE. Both ends are already in the SDK, so this needs no chain read and no caller input --
+  // `intents.pot` remains as an override for a Pot the caller owns instead.
+  const pot = intents.pot ?? v12PredictPot(ecoRoutesExecutor(destination, intents));
   if (intents.executionFee === undefined) {
     throw new Error(
       `intent sugar: the intent on ${destination.slug} runs a program, so its cook must pay that ` +
-        `chain's Kitchen fee — set \`intents.executionFee\`. Read it from the Kitchen before ` +
-        `building; it is not a constant and an increase before fulfillment makes the route revert.`,
+        `chain's Kitchen fee — set \`intents.executionFee\`. This one is NOT derivable: the fee is ` +
+        `mutable on-chain and lives on the destination, which the source chain cannot read while it ` +
+        `executes. Read it before building with \`destinationExecutionFee()\` from ` +
+        `\`@eco-incorp/sauce\`, or \`Kitchen.executionFee()\` at ${v12KitchenAddress()}.`,
     );
   }
   const engine: AddressInput = intents.engine ?? (v12EngineAddress() as Hex);
@@ -196,7 +198,7 @@ function compileIntentChild(
   const compiled = compileSauceRoute(
     destination,
     childSource,
-    { pot: intents.pot, engine, value: intents.executionFee },
+    { pot, engine, value: intents.executionFee },
     { ...options, compactArgs: captures.length > 0 },
   );
 
@@ -216,7 +218,7 @@ function compileIntentChild(
   }
 
   const call = buildSauceEvmCall({
-    pot: intents.pot,
+    pot,
     engine,
     program,
     value: intents.executionFee,

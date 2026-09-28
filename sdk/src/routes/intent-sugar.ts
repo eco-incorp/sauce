@@ -92,9 +92,8 @@ export interface IntentSugarDefaults {
   readonly salt?: Hex;
   /** Passed to `publishAndFund`. Default `false`. */
   readonly allowPartial?: boolean;
-  /** The destination Pot a cook-based child runs on. Required as soon as a closure needs a compiled
-   *  program: a Pot's address is CREATE2 from its OWNER, the destination `Portal.executor()`, which
-   *  is a chain read rather than a constant. */
+  /** Overrides the destination Pot a cook-based child runs on. Derived by default from the
+   *  destination `Portal.executor()` and the SDK's canonical salt — see `deployments/pot.ts`. */
   readonly pot?: AddressInput;
   /** The interpreter that Pot cooks on. Defaults to the released engine address. */
   readonly engine?: AddressInput;

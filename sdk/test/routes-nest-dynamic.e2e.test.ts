@@ -42,6 +42,7 @@ import {
   decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
+  getContractAddress,
   getCreate2Address,
   http,
   keccak256,
@@ -72,6 +73,8 @@ import { decodeAbiParameters } from "viem";
 import { nestedTransferProgram } from "../src/routes/nest.js";
 import { safeApproveStatements, safeTransferStatements } from "../src/token/safe.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { ECO_ROUTES_EXECUTOR_NONCE } from "../src/protocols/eco-routes/lookup.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "../src/routes/normalize.js";
 import { scaleAmount, WAD } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
@@ -1627,5 +1630,88 @@ describeEvm("route nesting, executed", () => {
       expect(status).toBe("success");
       expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(held);
     }, 300_000);
+  });
+
+  describe("the destination Pot is derived, not asked for", () => {
+    // The user's requirement is that every address the SDK can know, it knows. A Pot is CREATE2 from
+    // the Kitchen over its owner and a salt, and the owner a route call must cook as is the
+    // destination `Portal.executor()` -- itself the Portal's SECOND `CREATE`, because `Inbox`'s
+    // constructor does `executor = new Executor()` after `Portal`'s inheritance has created a
+    // `Vault`. Both ends are arithmetic. These check the arithmetic against the real contracts.
+
+    it("the Executor is the Portal's second CREATE", async () => {
+      const derived = getContractAddress({
+        from: portal,
+        nonce: ECO_ROUTES_EXECUTOR_NONCE,
+        opcode: "CREATE",
+      });
+
+      expect(derived.toLowerCase()).toBe(executor.toLowerCase());
+    }, 120_000);
+
+    it("a Pot derived for that Executor is the one the Kitchen mints", async () => {
+      const derived = v12PredictPot(executor as Hex, SAUCE_INTENT_POT_SALT, gateAnchors().kitchen);
+      // Nothing has deployed it yet: the address is arithmetic, the contract is not.
+      expect(await publicClient.getCode({ address: derived })).toBeUndefined();
+
+      const mint = await walletClient.sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        to: gateAnchors().kitchen,
+        data: v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT),
+        gas: GAS_LIMIT,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: mint });
+
+      expect(await publicClient.getCode({ address: derived })).toBeDefined();
+    }, 120_000);
+
+    it("a program cooks on the derived Pot with no `intents.pot` supplied", async () => {
+      // The Pot above is now deployed, so this is the whole flow a caller gets for free: derive,
+      // deploy once, and every intent on that chain cooks there.
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const derived = v12PredictPot(executor as Hex, SAUCE_INTENT_POT_SALT, gateAnchors().kitchen);
+      await mintTo(token, derived, 3_000n);
+
+      const compiled = compileSauceRoute(
+        "base",
+        `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base(() => {
+    const here = Token(TOKEN).balanceOf(ctx.self());
+    if (here > 0n) {
+      Token(TOKEN).transfer(RECIPIENT, here);
+    }
+  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+}`,
+        { pot: derived, engine: sauce.engine },
+        {
+          defines: { TOKEN: BigInt(token), RECIPIENT: BigInt(CREATOR) },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            sourcePortal: portal,
+            destinationPortal: portal,
+            // No `pot`. No `engine`. Both derived.
+            executionFee: 0n,
+            salt: `0x${"d0".repeat(32)}` as Hex,
+          },
+        },
+      );
+      // The child's cook targets the derived Pot, chosen by the SDK.
+      expect(compiled.source).toContain("evm.call(");
+
+      const { status, logs } = await fulfil([
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+
+      expect(status).toBe("success");
+      expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(3_000n);
+    }, 180_000);
   });
 });

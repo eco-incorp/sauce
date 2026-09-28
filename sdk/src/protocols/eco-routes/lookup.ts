@@ -19,7 +19,7 @@
  * An absent role means no deployment, not a zero address: the generator drops zero cells precisely
  * so that a lookup cannot hand back an address that is not one.
  */
-import type { Hex } from "viem";
+import { getContractAddress, type Hex } from "viem";
 
 import type { CanonicalChain } from "../../chains/canonical.js";
 import { requireChain, type ChainRef } from "../../chains/canonical.js";
@@ -138,6 +138,30 @@ export function ecoRoutesContract(
   selector?: EcoRoutesSelector,
 ): Hex {
   return requireRole(chain, role, selector);
+}
+
+/**
+ * The Portal's Executor on `chain` — the contract that runs a fulfilled intent's route calls, and
+ * therefore the owner a Pot must have for those calls to be allowed to cook it.
+ *
+ * DERIVED, not looked up: `Inbox`'s constructor does `executor = new Executor()`, and `Portal`'s
+ * inheritance creates a `Vault` first, so the Executor is the Portal's SECOND `CREATE`. That makes
+ * it a pure function of the Portal address, which this registry already has.
+ *
+ * `eco-routes-executor.e2e.test.ts` deploys the real Portal and checks this against the `executor()`
+ * it reports, which is what keeps the nonce honest if that constructor ever changes.
+ */
+export const ECO_ROUTES_EXECUTOR_NONCE = 2n;
+
+export function ecoRoutesExecutor(
+  chain: ChainRef | CanonicalChain,
+  selector?: EcoRoutesSelector,
+): Hex {
+  return getContractAddress({
+    from: ecoRoutesPortal(chain, selector),
+    nonce: ECO_ROUTES_EXECUTOR_NONCE,
+    opcode: "CREATE",
+  });
 }
 
 /**
