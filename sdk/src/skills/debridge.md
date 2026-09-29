@@ -4,7 +4,7 @@ Cross-chain trading infrastructure with DLN (DeBridge Liquidity Network). Suppor
 
 ## Category
 
-bridge + cross-chain trading | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114)
+bridge + cross-chain trading | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114), Arc (5042)
 
 ## SauceScript Functions
 

@@ -4,7 +4,7 @@ Meta aggregator that routes through multiple aggregators and DEXes for optimal s
 
 ## Category
 
-aggregator | Chains: Ethereum, Arbitrum, BSC, Polygon, Optimism, Avalanche, Base, Fantom, Linea, Scroll, zkSync
+aggregator | Chains: Ethereum, Arbitrum, BSC, Polygon, Optimism, Avalanche, Base, Fantom, Linea, Scroll, zkSync, Arc
 
 ## Key Operations
 

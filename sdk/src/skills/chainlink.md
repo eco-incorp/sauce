@@ -4,7 +4,7 @@ Industry-standard decentralized oracle network providing price feeds, VRF random
 
 ## Category
 
-oracle | Chains: Ethereum
+oracle | Chains: Ethereum, Arc
 
 ## Key Operations
 

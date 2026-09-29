@@ -27,10 +27,14 @@ import { protocolInfo as ramses } from "./ramses/info.js";
 import { protocolInfo as fenix } from "./fenix/info.js";
 import { protocolInfo as lynex } from "./lynex/info.js";
 import { protocolInfo as kim } from "./kim/info.js";
+import { protocolInfo as synthraV3 } from "./synthra-v3/info.js";
+import { protocolInfo as unitflowV3 } from "./unitflow-v3/info.js";
+import { protocolInfo as aerodromeSlipstream } from "./aerodrome-slipstream/info.js";
 
 // Lending protocols
 import { protocolInfo as aaveV2 } from "./aave-v2/info.js";
 import { protocolInfo as aaveV3 } from "./aave-v3/info.js";
+import { protocolInfo as aaveV4 } from "./aave-v4/info.js";
 import { protocolInfo as cctp } from "./cctp/info.js";
 import { protocolInfo as compoundV2 } from "./compound-v2/info.js";
 import { protocolInfo as compoundV3 } from "./compound-v3/info.js";
@@ -59,6 +63,7 @@ import { protocolInfo as wormhole } from "./wormhole/info.js";
 import { protocolInfo as axelar } from "./axelar/info.js";
 import { protocolInfo as chainlinkCcip } from "./chainlink-ccip/info.js";
 import { protocolInfo as hyperlane } from "./hyperlane/info.js";
+import { protocolInfo as circleGateway } from "./circle-gateway/info.js";
 import { protocolInfo as debridge } from "./debridge/info.js";
 import { protocolInfo as lifi } from "./lifi/info.js";
 import { protocolInfo as socket } from "./socket/info.js";
@@ -181,10 +186,14 @@ export const protocols: Record<string, ProtocolInfo> = {
   fenix: fenix,
   lynex: lynex,
   kim: kim,
+  "synthra-v3": synthraV3,
+  "unitflow-v3": unitflowV3,
+  "aerodrome-slipstream": aerodromeSlipstream,
 
   // Lending
   "aave-v2": aaveV2,
   "aave-v3": aaveV3,
+  "aave-v4": aaveV4,
   // Bridge
   cctp,
   "compound-v2": compoundV2,
@@ -214,6 +223,7 @@ export const protocols: Record<string, ProtocolInfo> = {
   axelar: axelar,
   "chainlink-ccip": chainlinkCcip,
   hyperlane: hyperlane,
+  "circle-gateway": circleGateway,
   debridge: debridge,
   lifi: lifi,
   socket: socket,

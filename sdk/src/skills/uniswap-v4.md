@@ -4,7 +4,7 @@ Singleton AMM with hooks architecture enabling custom pool logic, flash accounti
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Blast
+dex | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Blast, Arc
 
 ## Key Operations
 

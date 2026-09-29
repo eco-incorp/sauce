@@ -4,7 +4,7 @@ Permissionless interchain messaging protocol. Supports modular security with ISM
 
 ## Category
 
-cross-chain messaging | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), Avalanche (43114), BSC (56)
+cross-chain messaging | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), Avalanche (43114), BSC (56), Arc (5042)
 
 ## SauceScript Functions
 

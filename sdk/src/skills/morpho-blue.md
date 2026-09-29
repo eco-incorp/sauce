@@ -4,7 +4,7 @@ Minimal and gas-efficient lending primitive with permissionless market creation.
 
 ## Category
 
-lending | Chains: Ethereum (1), Base (8453)
+lending | Chains: Ethereum (1), Base (8453), Arc (5042)
 
 ## SauceScript Functions
 

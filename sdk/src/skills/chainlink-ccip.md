@@ -4,7 +4,7 @@ Cross-Chain Interoperability Protocol by Chainlink. Enterprise-grade cross-chain
 
 ## Category
 
-cross-chain messaging + token transfer | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137)
+cross-chain messaging + token transfer | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), Arc (5042)
 
 ## SauceScript Functions
 

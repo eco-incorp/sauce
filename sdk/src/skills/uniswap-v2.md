@@ -4,7 +4,7 @@ Constant product AMM (x*y=k) with permissionless pair creation. The most forked 
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base, BSC, Avalanche, Blast, Zora
+dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base, BSC, Avalanche, Blast, Zora, Arc
 
 ## Key Operations
 

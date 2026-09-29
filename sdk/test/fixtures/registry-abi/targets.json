@@ -11,6 +11,28 @@
         "roles": ["pool"]
       }
     },
+    "aave-v4": {
+      "AaveV4SpokeABI": {
+        "roles": ["mainSpoke", "forexSpoke"],
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x973a023A77420ba610f06b3858aD991Df6d85A08",
+            "note": "Ethereum's Aave V4 Bluechip Spoke, verified SpokeInstance (aave-address-book AaveV4Ethereum.ts)"
+          }
+        ]
+      },
+      "AaveV4HubABI": {
+        "roles": ["coreHub"],
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xCca852Bc40e560adC3b1Cc58CA5b55638ce826c9",
+            "note": "Ethereum's Aave V4 Core Hub, verified HubInstance (aave-address-book AaveV4Ethereum.ts)"
+          }
+        ]
+      }
+    },
     "abracadabra": {
       "CauldronABI": {
         "instances": [
@@ -39,6 +61,17 @@
       },
       "AerodromeRouterABI": {
         "roles": ["router"]
+      }
+    },
+    "aerodrome-slipstream": {
+      "SlipstreamCLFactoryABI": {
+        "roles": ["clFactory"]
+      },
+      "SlipstreamPositionManagerABI": {
+        "roles": ["nonfungiblePositionManager"]
+      },
+      "AeroMetarouterABI": {
+        "roles": ["metarouter"]
       }
     },
     "aevo": {
@@ -178,6 +211,28 @@
     "chainlink-ccip": {
       "CCIPRouterABI": {
         "roles": ["router"]
+      }
+    },
+    "circle-gateway": {
+      "GatewayWalletABI": {
+        "roles": ["gatewayWallet"],
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE",
+            "note": "Ethereum's GatewayWallet, verified implementation"
+          }
+        ]
+      },
+      "GatewayMinterABI": {
+        "roles": ["gatewayMinter"],
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x2222222d7164433c4C09B0b0D809a9b52C04C205",
+            "note": "Ethereum's GatewayMinter, verified implementation"
+          }
+        ]
       }
     },
     "compound-v2": {
@@ -950,6 +1005,39 @@
         "roles": ["perpsMarketProxy"]
       }
     },
+    "synthra-v3": {
+      "SynthraV3FactoryABI": {
+        "roles": ["factory"],
+        "unverified": {
+          "getPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "createPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+        }
+      },
+      "SynthraV3SwapRouter02ABI": {
+        "roles": ["swapRouter02"],
+        "unverified": {
+          "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "exactInput((bytes,address,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "exactOutputSingle((address,address,uint24,address,uint256,uint256,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "exactOutput((bytes,address,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+        }
+      },
+      "SynthraV3QuoterV2ABI": {
+        "roles": ["quoterV2"],
+        "unverified": {
+          "quoteExactInputSingle((address,address,uint256,uint24,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+        }
+      },
+      "SynthraV3NonfungiblePositionManagerABI": {
+        "roles": ["nonfungiblePositionManager"],
+        "unverified": {
+          "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "increaseLiquidity((uint256,uint256,uint256,uint256,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "decreaseLiquidity((uint256,uint128,uint256,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "collect((uint256,address,uint128,uint128))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+        }
+      }
+    },
     "thales": {
       "SpeedMarketsAMMABI": {
         "roles": ["speedMarketsAMM"]
@@ -1033,6 +1121,21 @@
         "required": {
           "execute(bytes,bytes[])": "actions' uniswapV4ExactInput and uniswapV4ExactInputMultiHop, which call the deadline-free execute"
         }
+      }
+    },
+    "unitflow-v3": {
+      "UnitFlowV3FactoryABI": {
+        "roles": ["factory"],
+        "unverified": {
+          "getPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode",
+          "feeAmountTickSpacing(uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode"
+        }
+      },
+      "UnitFlowV3RouterABI": {
+        "roles": ["router"]
+      },
+      "UnitFlowV3QuoterABI": {
+        "roles": ["quoter"]
       }
     },
     "velodrome": {

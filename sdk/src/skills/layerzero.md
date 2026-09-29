@@ -4,7 +4,7 @@ Omnichain interoperability protocol enabling cross-chain messaging. Powers OFT t
 
 ## Category
 
-cross-chain messaging | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114), zkSync (324), Linea (59144), Scroll (534352)
+cross-chain messaging | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114), zkSync (324), Linea (59144), Scroll (534352), Arc (5042)
 
 ## SauceScript Functions
 

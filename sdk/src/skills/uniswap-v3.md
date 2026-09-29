@@ -4,7 +4,7 @@ Concentrated liquidity AMM allowing LPs to allocate capital within custom price 
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base, BSC, Avalanche, Celo
+dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base, BSC, Avalanche, Celo, Arc
 
 ## Key Operations
 

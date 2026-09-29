@@ -4,7 +4,7 @@ Optimistic cross-chain bridge powered by UMA's optimistic oracle. Uses relayers 
 
 ## Category
 
-bridge | Direction: L2-to-L2, L1-to-L2, L2-to-L1 | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), zkSync (324), Linea (59144), Mode (34443), Blast (81457), Scroll (534352)
+bridge | Direction: L2-to-L2, L1-to-L2, L2-to-L1 | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), zkSync (324), Linea (59144), Mode (34443), Blast (81457), Scroll (534352), Arc (5042)
 
 ## SauceScript Functions
 
