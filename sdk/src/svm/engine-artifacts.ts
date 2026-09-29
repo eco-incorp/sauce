@@ -9,8 +9,9 @@
  * let a consumer load the gated engine + kitchen into LiteSVM and run their own local e2e tests with
  * no credentials.
  *
- * Every function honors the matching `SAUCE_*` env override first — that is how CI points the suite
- * at its verified cache — then falls back to the packaged binary.
+ * Each resolver takes an optional explicit path (a locally built engine, a verified cache) and
+ * otherwise returns the packaged binary. None reads the environment: a path is configuration, and
+ * configuration is passed by the caller.
  */
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -26,48 +27,60 @@ export const SVM_ARTIFACTS_DIR = resolve(
   "svm",
 );
 
-function required(envPath: string | undefined, name: string, envHint: string): string {
-  const path = envPath ?? resolve(SVM_ARTIFACTS_DIR, name);
+/**
+ * Explicit artifact paths, each used instead of the packaged binary it names. An unset field falls
+ * back to the packaged one.
+ */
+export interface SvmEngineArtifactPaths {
+  engineSo?: string;
+  kitchenSo?: string;
+  kitchenIdlJson?: string;
+}
+
+function required(explicit: string | undefined, name: string, option: string): string {
+  const path = explicit ?? resolve(SVM_ARTIFACTS_DIR, name);
   if (!existsSync(path)) {
     throw new Error(
-      `SVM engine artifact '${name}' not found at ${path}. It ships in the published package; from a ` +
-        `source checkout run \`pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines\`, or set ` +
-        `${envHint}.`,
+      explicit === undefined
+        ? `SVM engine artifact '${name}' not found at ${path}. It ships in the published package; ` +
+            `from a source checkout run \`pnpm --filter './sdk' sync-engine-artifacts ` +
+            `--fetch-v12-engines\`, or pass its path as ${option}.`
+        : `SVM engine artifact '${name}' not found at ${path}, the path passed as ${option}.`,
     );
   }
   return path;
 }
 
-/** Absolute path to the packaged engine `.so` for a cluster (default `devnet`). Throws if absent. */
-export function svmEnginePath(cluster: EngineCluster = "devnet"): string {
-  const env =
-    cluster === "mainnet"
-      ? process.env.SAUCE_RUST_ENGINE_MAINNET_SO
-      : (process.env.SAUCE_ENGINE_SO ?? process.env.SAUCE_RUST_ENGINE_SO);
-  const hint = cluster === "mainnet" ? "SAUCE_RUST_ENGINE_MAINNET_SO" : "SAUCE_RUST_ENGINE_SO";
-  return required(env, `engine-${cluster}.so`, hint);
+/**
+ * Absolute path to the engine `.so` for a cluster (default `devnet`): `path` when given, else the
+ * packaged binary. Throws if absent.
+ */
+export function svmEnginePath(cluster: EngineCluster = "devnet", path?: string): string {
+  return required(path, `engine-${cluster}.so`, "`svmEnginePath(cluster, path)`");
 }
 
-/** Absolute path to the packaged kitchen program `.so`. Throws if absent. */
-export function svmKitchenPath(): string {
-  return required(process.env.SAUCE_KITCHEN_SO, "kitchen.so", "SAUCE_KITCHEN_SO");
+/** Absolute path to the kitchen program `.so`: `path` when given, else the packaged one. Throws if
+ *  absent. */
+export function svmKitchenPath(path?: string): string {
+  return required(path, "kitchen.so", "`svmKitchenPath(path)`");
 }
 
-/** Absolute path to the packaged kitchen Anchor IDL JSON. Throws if absent. */
-export function svmKitchenIdlPath(): string {
-  return required(process.env.SAUCE_KITCHEN_IDL_JSON, "kitchen-idl.json", "SAUCE_KITCHEN_IDL_JSON");
+/** Absolute path to the kitchen Anchor IDL JSON: `path` when given, else the packaged one. Throws if
+ *  absent. */
+export function svmKitchenIdlPath(path?: string): string {
+  return required(path, "kitchen-idl.json", "`svmKitchenIdlPath(path)`");
 }
 
-/** The full packaged set a local LiteSVM harness needs to run a kitchen-gated cook. Throws if any
- *  piece is absent, so a caller gets one clear error rather than a partial set. */
-export function svmEngineArtifacts(cluster: EngineCluster = "devnet"): {
-  engineSo: string;
-  kitchenSo: string;
-  kitchenIdlJson: string;
-} {
+/** The full set a local LiteSVM harness needs to run a kitchen-gated cook, each piece from `paths`
+ *  when given and packaged otherwise. Throws if any piece is absent, so a caller gets one clear error
+ *  rather than a partial set. */
+export function svmEngineArtifacts(
+  cluster: EngineCluster = "devnet",
+  paths: SvmEngineArtifactPaths = {},
+): Required<SvmEngineArtifactPaths> {
   return {
-    engineSo: svmEnginePath(cluster),
-    kitchenSo: svmKitchenPath(),
-    kitchenIdlJson: svmKitchenIdlPath(),
+    engineSo: svmEnginePath(cluster, paths.engineSo),
+    kitchenSo: svmKitchenPath(paths.kitchenSo),
+    kitchenIdlJson: svmKitchenIdlPath(paths.kitchenIdlJson),
   };
 }

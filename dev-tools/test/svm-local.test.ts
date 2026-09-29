@@ -9,9 +9,16 @@
 import { svmEnginePath } from "@eco-incorp/sauce-source/svm";
 import { runSvmProgramLocally } from "../src/svm-local";
 
+// CI exports its verified cache paths; the SDK reads no environment, so the test passes them in.
+const artifacts = {
+  engineSo: process.env.SAUCE_ENGINE_SO ?? process.env.SAUCE_RUST_ENGINE_SO,
+  kitchenSo: process.env.SAUCE_KITCHEN_SO,
+  kitchenIdlJson: process.env.SAUCE_KITCHEN_IDL_JSON,
+};
+
 const engineAvailable = (): boolean => {
   try {
-    svmEnginePath("devnet");
+    svmEnginePath("devnet", artifacts.engineSo);
     return true;
   } catch {
     return false;
@@ -29,7 +36,11 @@ async function main(): Promise<void> {
 
   // PUSH 42; STOP — a self-contained program with no accounts (manifest `{ accounts: [] }`). What it
   // computes does not matter here; that the gate lets a kitchen cook run it at all is the assertion.
-  const result = await runSvmProgramLocally(new Uint8Array([0x01, 0x2a, 0x00]), { accounts: [] });
+  const result = await runSvmProgramLocally(
+    new Uint8Array([0x01, 0x2a, 0x00]),
+    { accounts: [] },
+    { artifacts },
+  );
   if (result.err !== null) {
     console.error(`  ✗ local SVM cook rejected: ${result.err}\n${result.logs.join("\n")}`);
     process.exit(1);

@@ -136,3 +136,21 @@ describe("ensureLookupTable on an existing table", () => {
     }
   });
 });
+
+describe("createSauceSvmClient without an RPC URL", () => {
+  // What a plain-JS caller can pass: the type is not there to stop any of these.
+  it.each([undefined, null, 0, false, "", "  "])(
+    "refuses %p, naming the option to pass",
+    async (rpcUrl) => {
+      const payer = await generateKeyPairSigner();
+      await expect(
+        createSauceSvmClient({
+          rpcUrl: rpcUrl as unknown as string,
+          programId: ENGINE_PROGRAM,
+          kitchen: KITCHEN_PROGRAM,
+          payer,
+        }),
+      ).rejects.toThrow("createSauceSvmClient: pass `rpcUrl`");
+    },
+  );
+});

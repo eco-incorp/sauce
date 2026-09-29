@@ -16,6 +16,9 @@ artifacts/
 .env
 .env.local
 
+# RPC URLs for sdk/scripts/capture-registry-abi.mjs --rpc-config (see sdk/rpc.config.example.json)
+sdk/rpc.config.json
+
 # Logs
 *.log
 npm-debug.log*

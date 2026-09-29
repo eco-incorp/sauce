@@ -10,7 +10,7 @@
  *
  * This module is a flat, hand-maintained data table answering exactly that
  * question, for both EVM and SVM chains in ONE numeric id space. It carries no
- * rpcUrls / nativeCurrency / blockExplorerUrls / testnet — those already live on
+ * nativeCurrency / blockExplorerUrls / testnet — those already live on
  * `chains` for the ids that have them; a consumer needing that data still goes
  * through `getChain(id)`, which returns `undefined` for the 5 v12-only EVM
  * chains and for Solana.
