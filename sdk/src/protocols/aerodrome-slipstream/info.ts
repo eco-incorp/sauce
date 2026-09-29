@@ -5,7 +5,7 @@ export const protocolInfo: ProtocolInfo = {
   name: "Aerodrome Slipstream",
   slug: "aerodrome-slipstream",
   description:
-    "Aerodrome's concentrated-liquidity (Uniswap V3-style) pools, keyed by tick spacing rather than fee. Live on Arc as Aero Lite.",
+    "Aerodrome's concentrated-liquidity (Uniswap V3-style) pools, keyed by tick spacing rather than fee: three generations on Base, and Aero Lite on Arc.",
   website: "https://aero.xyz",
   github: "https://github.com/dromos-labs/metadex-public",
   category: "dex",

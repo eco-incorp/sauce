@@ -59,7 +59,7 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 | `kim`                  | Kim                  | MODE                                            | swap (token path, Camelot-style router)                          |
 | `synthra-v3`           | Synthra V3           | ARC                                             | swap (SwapRouter02 exactInputSingle)                             |
 | `unitflow-v3`          | UnitFlow V3          | ARC                                             | swap (exactInputSingle with deadline)                            |
-| `aerodrome-slipstream` | Aerodrome Slipstream | ARC                                             | getPool (tick-spacing keyed CL pools)                            |
+| `aerodrome-slipstream` | Aerodrome Slipstream | BASE, ARC                                       | getPool (tick-spacing keyed CL pools)                            |
 
 ### Lending (17 protocols)
 

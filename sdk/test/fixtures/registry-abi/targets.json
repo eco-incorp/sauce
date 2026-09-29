@@ -81,10 +81,14 @@
     },
     "aerodrome-slipstream": {
       "SlipstreamCLFactoryABI": {
-        "roles": ["clFactory"]
+        "roles": ["clFactory", "clFactoryGaugeCaps", "clFactoryGaugesV3"]
       },
       "SlipstreamPositionManagerABI": {
-        "roles": ["nonfungiblePositionManager"]
+        "roles": [
+          "nonfungiblePositionManager",
+          "nonfungiblePositionManagerGaugeCaps",
+          "nonfungiblePositionManagerGaugesV3"
+        ]
       },
       "AeroMetarouterABI": {
         "roles": ["metarouter"]
