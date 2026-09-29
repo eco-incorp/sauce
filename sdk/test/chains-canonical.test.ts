@@ -123,7 +123,7 @@ describe("canonical chain registry: protocol chainName reconciliation", () => {
       }
     }
     expect(visited).toBeGreaterThan(0); // guards a vacuously-true loop
-    expect(pairs.size).toBe(22);
+    expect(pairs.size).toBe(23); // + (1329, "Sei"), from circle-gateway
   });
 });
 

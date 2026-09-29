@@ -48,7 +48,8 @@ const CHAINS = {
   56: ["BSC_RPC_URL", "https://bsc-dataseed.bnbchain.org"],
   100: ["GNOSIS_RPC_URL", "https://rpc.gnosischain.com"],
   130: ["UNICHAIN_RPC_URL", "https://mainnet.unichain.org"],
-  137: ["POLYGON_RPC_URL", "https://polygon-rpc.com"],
+  // polygon-rpc.com answered 403 ("API key disabled") on 2026-09-28.
+  137: ["POLYGON_RPC_URL", "https://polygon-bor-rpc.publicnode.com"],
   143: ["MONAD_RPC_URL", "https://rpc.monad.xyz"],
   146: ["SONIC_RPC_URL", "https://rpc.soniclabs.com"],
   204: ["OPBNB_RPC_URL", "https://opbnb-mainnet-rpc.bnbchain.org"],
@@ -63,6 +64,7 @@ const CHAINS = {
   59144: ["LINEA_RPC_URL", "https://rpc.linea.build"],
   81457: ["BLAST_RPC_URL", "https://rpc.blast.io"],
   2020: ["RONIN_RPC_URL", "https://api.roninchain.com/rpc"],
+  1329: ["SEI_RPC_URL", "https://evm-rpc.sei-apis.com"],
   9745: ["PLASMA_RPC_URL", "https://rpc.plasma.to"],
   5042: ["ARC_RPC_URL", "https://rpc.mainnet.arc.io"],
   57073: ["INK_RPC_URL", "https://rpc-gel.inkonchain.com"],
