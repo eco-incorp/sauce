@@ -331,6 +331,18 @@ try {
     `Clean package install: all ${documented.length} exports the actions pages name typecheck ` +
       `from ./actions, the type-only ones being ${actionTypes.join(", ")}`,
   );
+
+  // The same browser gates the repository runs, against the INSTALLED package and resolved from
+  // this consumer by name, so what they prove is the shipped `exports` map: every browser-facing
+  // export bundles for the browser without Node, and compiles in headless Chromium to the bytes
+  // this installed package compiles in Node.
+  for (const script of ["check-browser-bundles.mjs", "check-browser-compile.mjs"]) {
+    execFileSync(
+      process.execPath,
+      [join(root, "sdk/scripts", script), "--package-root", installedRoot, "--consumer", work],
+      { cwd: work, stdio: "inherit", env: smokeEnv },
+    );
+  }
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
