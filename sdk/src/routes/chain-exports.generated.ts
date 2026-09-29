@@ -82,6 +82,8 @@ export const Sei = composedChainGlobal("Sei") as Composed<"Sei">;
 export const Kava = composedChainGlobal("Kava") as Composed<"Kava">;
 /** eco-routes chain accessor for Mantle (chain id 5000). */
 export const Mantle = composedChainGlobal("Mantle") as Composed<"Mantle">;
+/** eco-routes chain accessor for Arc (chain id 5042). */
+export const Arc = composedChainGlobal("Arc") as Composed<"Arc">;
 /** eco-routes chain accessor for ZetaChain (chain id 7000). */
 export const Zetachain = composedChainGlobal("Zetachain") as Composed<"Zetachain">;
 /** eco-routes chain accessor for Klaytn (chain id 8217). */

@@ -3,8 +3,10 @@
 //   RECAPTURE_REGISTRY_ABI=1 node scripts/capture-registry-abi.mjs [slug ...]
 //
 // Run after `pnpm build` (it reads the registry from `dist/`). With slugs, only those protocols are
-// recaptured and the rest of the fixture is kept. Nothing else reads the network: the test is
-// offline and only ever reads what this writes.
+// recaptured and the rest of the fixture is kept. `REGISTRY_ABI_CHAINS=<id>[,<id>…]` narrows that to
+// those chains' deployments, keeping every other chain's captured evidence as it is — what adding a
+// chain needs, without re-reading (and re-dating) every other chain. Nothing else reads the network:
+// the test is offline and only ever reads what this writes.
 //
 // For every contract instance in `test/fixtures/registry-abi/targets.json` it records:
 //   - which of the relevant selectors the deployed code dispatches, after resolving proxies
@@ -62,6 +64,7 @@ const CHAINS = {
   81457: ["BLAST_RPC_URL", "https://rpc.blast.io"],
   2020: ["RONIN_RPC_URL", "https://api.roninchain.com/rpc"],
   9745: ["PLASMA_RPC_URL", "https://rpc.plasma.to"],
+  5042: ["ARC_RPC_URL", "https://rpc.mainnet.arc.io"],
   57073: ["INK_RPC_URL", "https://rpc-gel.inkonchain.com"],
   534352: ["SCROLL_RPC_URL", "https://rpc.scroll.io"],
   7777777: ["ZORA_RPC_URL", "https://rpc.zora.energy"],
@@ -585,6 +588,9 @@ async function captureInstance(slug, abiExport, registryFns, target) {
 
 async function main() {
   const only = new Set(process.argv.slice(2));
+  const chainsOnly = process.env.REGISTRY_ABI_CHAINS
+    ? new Set(process.env.REGISTRY_ABI_CHAINS.split(",").map(Number))
+    : null;
   const previous = existsSync(EVIDENCE_PATH)
     ? expand(JSON.parse(readFileSync(EVIDENCE_PATH, "utf-8")))
     : { instances: [] };
@@ -592,7 +598,10 @@ async function main() {
   // capture, and its evidence is carried over untouched until the protocol lands.
   const present = (slug) => existsSync(join(SDK, "dist", "protocols", slug, "abis.js"));
   const keep = previous.instances.filter(
-    (i) => (only.size > 0 && !only.has(i.protocol)) || !present(i.protocol),
+    (i) =>
+      (only.size > 0 && !only.has(i.protocol)) ||
+      !present(i.protocol) ||
+      (chainsOnly !== null && !chainsOnly.has(i.chainId)),
   );
   const jobs = [];
   for (const [slug, exports] of Object.entries(TARGETS.protocols)) {
@@ -623,7 +632,10 @@ async function main() {
       if (instances.length === 0 && !spec.unverifiable) {
         throw new Error(`${slug}.${abiExport}: target names no instance`);
       }
-      for (const inst of instances) jobs.push({ slug, abiExport, registryFns, inst });
+      for (const inst of instances) {
+        if (chainsOnly !== null && !chainsOnly.has(inst.chainId)) continue;
+        jobs.push({ slug, abiExport, registryFns, inst });
+      }
     }
   }
   console.log(`capturing ${jobs.length} instances`);

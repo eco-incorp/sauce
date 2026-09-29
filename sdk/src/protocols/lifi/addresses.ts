@@ -2,6 +2,15 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — lifinance/contracts deployments/arc.json. Not the cross-chain 0x1231…4EaE
+    // diamond. getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436): facetAddresses() is non-empty (EIP-2535 loupe).
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      lifiDiamond: "0xA4072583658Fae592A3506A42431cb6316a8d40b",
+    },
+  },
+  {
     chainId: 1,
     chainName: "Ethereum",
     addresses: {

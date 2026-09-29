@@ -13,6 +13,8 @@ export const deployments: ChainDeployment[] = [
   { chainId: 250, chainName: "Fantom", addresses: { metaAggregationRouter: META_AGG_ROUTER } },
   { chainId: 59144, chainName: "Linea", addresses: { metaAggregationRouter: META_AGG_ROUTER } },
   { chainId: 534352, chainName: "Scroll", addresses: { metaAggregationRouter: META_AGG_ROUTER } },
+  // Arc: the router KyberSwap's own Arc routes API returns (aggregator-api.kyberswap.com/arc).
+  { chainId: 5042, chainName: "Arc", addresses: { metaAggregationRouter: META_AGG_ROUTER } },
   // zkSync Era addresses differ from the EVM CREATE2 ones: META_AGG_ROUTER has no code there.
   {
     chainId: 324,

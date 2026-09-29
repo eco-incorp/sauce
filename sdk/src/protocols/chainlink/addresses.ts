@@ -2,6 +2,16 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — Chainlink data feeds directory (reference-data-directory feeds-arc-mainnet.json,
+    // "ETH / USD" proxy). getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436): description() == "ETH / USD", decimals() == 8. No feed registry or
+    // VRF coordinator is published for Arc.
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      ethUsdFeed: "0x50FCDD99D6762D1C170DC6A9111db944AEE6D364",
+    },
+  },
+  {
     chainId: 1,
     chainName: "Ethereum",
     addresses: {

@@ -2,6 +2,16 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — Morpho Blue (docs.morpho.org/get-started/resources/addresses, Arc). Like Monad,
+    // NOT the cross-chain 0xBBBB…FFCb vanity address. getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436): isIrmEnabled(AdaptiveCurveIrm
+    // 0xF02615d094Fc02fC031C35fe705e175aA4653f20) == true. bundler3 is not registered for Arc.
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
+    },
+  },
+  {
     // Monad (143) — Morpho Blue. morpho getCode-verified on-chain 2026-08-31. NOTE: Monad's
     // singleton is NOT the usual cross-chain vanity 0xBBBB…FFCb — it is a distinct
     // 0xD5D960E8…, per docs.morpho.org's Monad row (independently re-confirmed). bundler3 is

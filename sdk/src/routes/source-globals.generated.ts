@@ -288,8 +288,10 @@ declare global {
   const Pancakeswap: PancakeswapSource;
   const Aave: AaveSource;
   const Compound: CompoundSource;
+  const EURC: bigint & SauceTokenSource;
   const USDC: bigint & SauceTokenSource;
   const USDT: bigint & SauceTokenSource;
+  const USYC: bigint & SauceTokenSource;
   const WETH: bigint & SauceTokenSource;
   const WMON: bigint & SauceTokenSource;
   const WPOL: bigint & SauceTokenSource;

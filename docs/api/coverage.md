@@ -9,9 +9,9 @@ Each of the three can be true without the others.
 | Protocol catalog                 | 130 protocols with metadata, deployments, ABI fragments, and program templates    | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
 | Contract descriptors             | 30 descriptors across 16 protocol/interface namespaces                            | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
 | Compiled-source protocol globals | 26 singleton contract leaves across 14 protocol namespaces, plus 5 family aliases | TypeScript completion after importing `@eco-incorp/sauce`; names below |
-| Token symbols                    | 5 symbols distributed across 6 EVM chains                                         | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
-| Canonical chain identities       | 40 chains: 39 EVM and Solana                                                      | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
-| EVM chain metadata               | 33 records with RPC and explorer information                                      | `chains`, `getChain(id)`, `getAllChainIds()`                           |
+| Token symbols                    | 7 symbols distributed across 7 EVM chains                                         | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
+| Canonical chain identities       | 41 chains: 40 EVM and Solana                                                      | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
+| EVM chain metadata               | 34 records with RPC and explorer information                                      | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
 The descriptor registry is the one that makes a name callable: it ties a contract name to an ABI and
 an address role. `contracts.listDescriptors()` lists them. These associations are curated rather than
@@ -65,14 +65,19 @@ and `MorphoBlue.Bundler3` have addresses but no vendored ABI; `Erc20.ERC20` and
 
 The exported `routes.TOKEN_REGISTRY` contains:
 
-| Chain    | ID    | Symbols                |
-| -------- | ----- | ---------------------- |
-| Ethereum | 1     | `USDC`, `USDT`, `WETH` |
-| Optimism | 10    | `USDC`, `USDT`, `WETH` |
-| Polygon  | 137   | `USDC`, `WETH`, `WPOL` |
-| Monad    | 143   | `USDC`, `WMON`         |
-| Base     | 8453  | `USDC`, `WETH`         |
-| Arbitrum | 42161 | `USDC`, `WETH`         |
+| Chain    | ID    | Symbols                        |
+| -------- | ----- | ------------------------------ |
+| Ethereum | 1     | `USDC`, `USDT`, `WETH`         |
+| Optimism | 10    | `USDC`, `USDT`, `WETH`         |
+| Polygon  | 137   | `USDC`, `WETH`, `WPOL`         |
+| Monad    | 143   | `USDC`, `WMON`                 |
+| Arc      | 5042  | `USDC`, `EURC`, `USYC`, `WETH` |
+| Base     | 8453  | `USDC`, `WETH`                 |
+| Arbitrum | 42161 | `USDC`, `WETH`                 |
+
+On Arc, `USDC` is the 6-decimal ERC-20 interface to the chain's native gas token. The same
+balance is 18 decimals natively (`msg.value`, `eth_getBalance`, gas), so convert native amounts
+by dividing by 10¹² before comparing them with `USDC` token amounts.
 
 A missing symbol means the registry has no verified row under that name. Token variants can have
 different symbols and addresses. `IntentOptions.tokenDefines` or `SauceCompileOptions.tokens`

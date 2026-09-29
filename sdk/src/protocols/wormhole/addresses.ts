@@ -2,6 +2,15 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — wormhole-sdk-ts core contracts (Mainnet, "Arc", Wormhole chain id 71). No Token
+    // Bridge is listed for Arc, so tokenBridge is absent. getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436): chainId() == 71.
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      coreBridge: "0xC8aD24fC6063c41cB5C12a8e3851AafC3b3CF027",
+    },
+  },
+  {
     chainId: 1,
     chainName: "Ethereum",
     addresses: {

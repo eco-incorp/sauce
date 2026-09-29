@@ -2,6 +2,15 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — canonical Permit2 (docs.arc.io contract-addresses). getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436):
+    // DOMAIN_SEPARATOR() equals the EIP-712 domain for chain 5042 at this address.
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    },
+  },
+  {
     // Monad (143) — canonical cross-chain Permit2. getCode-verified on-chain 2026-08-31.
     chainId: 143,
     chainName: "Monad",

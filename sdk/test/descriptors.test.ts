@@ -115,13 +115,15 @@ describe("descriptors: contract-name normalization", () => {
 });
 
 describe("descriptors: hole representation (E2.4 seam)", () => {
-  it("uniswap-v3 QuoterV2 resolves on ethereum + monad, undefined on base (the hole)", () => {
+  it("uniswap-v3 QuoterV2 resolves on ethereum + monad + arc, undefined on base (the hole)", () => {
     const d = getDescriptor("uniswap-v3", "QuoterV2")!;
-    // QuoterV2 is vendored only where the deploy record carries it — ethereum and monad — and is a
-    // genuine hole on base (whose entry omits quoterV2). The hole on base is the load-bearing part.
-    expect(d.chains).toEqual(["ethereum", "monad"]);
+    // QuoterV2 is vendored only where the deploy record carries it — ethereum, monad and arc — and
+    // is a genuine hole on base (whose entry omits quoterV2). The hole on base is the load-bearing
+    // part.
+    expect(d.chains).toEqual(["ethereum", "monad", "arc"]);
     expect(describeContract("ethereum", "uniswap-v3", "QuoterV2")).toBeDefined();
     expect(describeContract("monad", "uniswap-v3", "QuoterV2")).toBeDefined();
+    expect(describeContract("arc", "uniswap-v3", "QuoterV2")).toBeDefined();
     expect(describeContract("base", "uniswap-v3", "QuoterV2")).toBeUndefined();
   });
 

@@ -24,8 +24,8 @@ import { V12_EVM_CHAINS, v12LiveChainIds, v12ChainSlug } from "../src/deployment
 import { listProtocols } from "../src/protocols/index.js";
 
 describe("canonical chain registry: structural invariants", () => {
-  it("has exactly 40 entries", () => {
-    expect(canonicalChains.length).toBe(40);
+  it("has exactly 41 entries", () => {
+    expect(canonicalChains.length).toBe(41);
   });
 
   it("has unique ids and unique slugs", () => {
@@ -68,7 +68,7 @@ describe("canonical chain registry: structural invariants", () => {
 describe("canonical chain registry: superset of `chains` (additivity)", () => {
   it("covers every id in `chains`, byte-identical name, kind evm", () => {
     const ids = Object.keys(chains).map(Number);
-    expect(ids.length).toBe(33); // guards a vacuously-true loop; also pins the known EVM-only count
+    expect(ids.length).toBe(34); // guards a vacuously-true loop; also pins the known EVM-only count
     for (const id of ids) {
       const canonical = chainById(id);
       expect(canonical).toBeDefined();
@@ -117,7 +117,7 @@ describe("canonical chain registry: protocol chainName reconciliation", () => {
       }
     }
     expect(visited).toBeGreaterThan(0); // guards a vacuously-true loop
-    expect(pairs.size).toBe(21);
+    expect(pairs.size).toBe(22);
   });
 });
 
@@ -141,7 +141,7 @@ describe("canonical chain registry: Solana / SVM", () => {
 
   it("evmChains/svmChains partition correctly", () => {
     expect(svmChains().length).toBe(1);
-    expect(evmChains().length).toBe(39);
+    expect(evmChains().length).toBe(40);
   });
 
   it("is absent from the EVM-only `chains` export (additivity, reverse direction)", () => {
@@ -194,7 +194,7 @@ describe("canonical chain registry: lookup semantics", () => {
 describe("canonical chain registry: non-regression of existing exports", () => {
   it("getAllChainIds is unaffected and matches `chains` keys", () => {
     const ids = getAllChainIds();
-    expect(ids.length).toBe(33);
+    expect(ids.length).toBe(34);
     expect(ids.sort((a, b) => a - b)).toEqual(
       Object.keys(chains)
         .map(Number)

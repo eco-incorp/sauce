@@ -269,6 +269,22 @@ export const chains: Record<number, Chain> = {
     blockExplorerUrls: ["https://berascan.com"],
     testnet: false,
   },
+  // Arc — Circle's L1 (docs.arc.io/arc/references/rpc-endpoints). USDC is the native gas token,
+  // and it has TWO decimal scales over ONE balance: the native balance (`eth_getBalance`,
+  // `msg.value`, gas) is 18 decimals, while the ERC-20 interface at
+  // 0x3600000000000000000000000000000000000000 is 6 decimals
+  // (docs.arc.io/arc/concepts/stablecoin-native-model). `balanceOf` is the native value divided
+  // by 1e12 and truncated: a native balance below 1e12 wei reads as 0 through the ERC-20.
+  // Measured 2026-09-28 at block 23287436: eth_getBalance 19396491158961599350 for an account
+  // whose balanceOf is 19396491. Gas cost in USDC ERC-20 units is gasUsed * gasPrice / 1e12.
+  5042: {
+    id: 5042,
+    name: "Arc",
+    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+    rpcUrls: ["https://rpc.mainnet.arc.io"],
+    blockExplorerUrls: ["https://explorer.arc.io"],
+    testnet: false,
+  },
 };
 
 export function getChain(chainId: number): Chain | undefined {

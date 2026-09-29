@@ -13,6 +13,7 @@ export const deployments: ChainDeployment[] = [
   { chainId: 137, chainName: "Polygon", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 143, chainName: "Monad", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 146, chainName: "Sonic", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
+  { chainId: 5042, chainName: "Arc", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 8453, chainName: "Base", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 42161, chainName: "Arbitrum", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
   { chainId: 43114, chainName: "Avalanche", addresses: { tokenMessenger: TOKEN_MESSENGER_V2 } },
@@ -35,4 +36,6 @@ export const CCTP_DOMAIN: Readonly<Record<string, number>> = {
   linea: 11,
   sonic: 13,
   monad: 15,
+  // docs.arc.io contract-addresses (CCTP, domain 26); MessageTransmitterV2.localDomain() == 26 on-chain.
+  arc: 26,
 };

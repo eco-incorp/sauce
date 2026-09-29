@@ -152,6 +152,38 @@ export const TOKEN_REGISTRY: Readonly<Record<number, readonly TokenRegistryRow[]
       source: "probe:monad@2026-08-31",
     },
   ],
+  // arc (5042) -- probe-verified 2026-09-28 at block 23287436 (getCode + symbol() + decimals(),
+  // via rpc.mainnet.arc.io), addresses from docs.arc.io/arc/references/contract-addresses. USDC
+  // here is the 6-decimal ERC-20 INTERFACE to Arc's native gas token, not a separate token: the
+  // same balance reads 18 decimals natively (see chains/index.ts). There is no wrapped USDC. USYC
+  // is allowlist-restricted (only eligible, allowlisted holders can transfer it). cirBTC is not
+  // registered: its symbol() is "cirBTC", which the uppercase ticker rule below rejects.
+  5042: [
+    {
+      symbol: "USDC",
+      address: "0x3600000000000000000000000000000000000000",
+      decimals: 6,
+      source: "probe:arc@2026-09-28",
+    },
+    {
+      symbol: "EURC",
+      address: "0xbEf5f6d51CB62b58e6A8f77868681825C6fe21c1",
+      decimals: 6,
+      source: "probe:arc@2026-09-28",
+    },
+    {
+      symbol: "USYC",
+      address: "0x8a5D989Bbb96929F689B0200f435f53dA42bF490",
+      decimals: 6,
+      source: "probe:arc@2026-09-28",
+    },
+    {
+      symbol: "WETH",
+      address: "0x128cC466B61f542da60c70e3aA11c10e19B84EDB",
+      decimals: 18,
+      source: "probe:arc@2026-09-28",
+    },
+  ],
   // base (8453) -- USDC/WETH already pinned in verify/vectors.ts (Tier 0); re-probed 2026-08-11 to
   // confirm the pinned constants still match a live symbol()/decimals() read.
   8453: [
