@@ -4,7 +4,7 @@ The most trusted multi-signature smart contract wallet, securing billions in dig
 
 ## Category
 
-infrastructure | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon
+infrastructure | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, Arc
 
 ## Key Operations
 

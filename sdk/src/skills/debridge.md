@@ -4,7 +4,7 @@ Cross-chain trading infrastructure with DLN (DeBridge Liquidity Network). Suppor
 
 ## Category
 
-bridge + cross-chain trading | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114)
+bridge + cross-chain trading | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114), Arc (5042)
 
 ## SauceScript Functions
 
@@ -103,3 +103,4 @@ Order tuple: `(uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, byte
 - Finality: typically 1-5 minutes (market maker fills immediately, then settles asynchronously)
 - Requires ERC-20 approval to DlnSource for the give token
 - TVL: $200M+. Audited
+- On Arc (5042) the DLN `globalFixedNativeFee()` is `1000000000000000000` wei, which is 1 USDC: Arc's native coin is USDC at 18 decimals, paid from the same balance as the USDC ERC-20 `0x3600…0000` (read 2026-09-28)

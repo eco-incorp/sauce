@@ -4,7 +4,7 @@ Concentrated liquidity AMM allowing LPs to allocate capital within custom price 
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base, BSC, Avalanche, Celo
+dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base, BSC, Avalanche, Celo, Arc
 
 ## Key Operations
 
@@ -199,3 +199,4 @@ SwapRouter02's params structs drop `deadline` (wrap the call in a deadline check
 - Input token must be ERC20-approved to the SwapRouter for swaps
 - Both tokens must be ERC20-approved to the NFPM for minting positions
 - Prefer V3 over V2 for major pairs to benefit from concentrated liquidity and lower effective slippage
+- On Arc (5042) `WETH9()` on SwapRouter02 and the position manager is a stub that always reverts with `UnsupportedProtocolError()`, so `unwrapWETH9`, `refundETH` and native-value swaps revert. Trade USDC's ERC-20 `0x3600000000000000000000000000000000000000`; Arc's native coin is USDC and it has no canonical wrapped native

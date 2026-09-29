@@ -6,12 +6,12 @@ Each of the three can be true without the others.
 
 | Registry                         | Current scope                                                                     | Inspect it                                                             |
 | -------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Protocol catalog                 | 130 protocols with metadata, deployments, ABI fragments, and program templates    | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
+| Protocol catalog                 | 135 protocols with metadata, deployments, ABI fragments, and program templates    | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
 | Contract descriptors             | 30 descriptors across 16 protocol/interface namespaces                            | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
 | Compiled-source protocol globals | 26 singleton contract leaves across 14 protocol namespaces, plus 5 family aliases | TypeScript completion after importing `@eco-incorp/sauce`; names below |
-| Token symbols                    | 5 symbols distributed across 6 EVM chains                                         | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
-| Canonical chain identities       | 40 chains: 39 EVM and Solana                                                      | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
-| EVM chain metadata               | 33 records with native-currency and explorer information                          | `chains`, `getChain(id)`, `getAllChainIds()`                           |
+| Token symbols                    | 7 symbols distributed across 7 EVM chains                                         | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
+| Canonical chain identities       | 41 chains: 40 EVM and Solana                                                      | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
+| EVM chain metadata               | 34 records with native-currency and explorer information                          | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
 The descriptor registry is the one that makes a name callable: it ties a contract name to an ABI and
 an address role. `contracts.listDescriptors()` lists them. These associations are curated rather than
@@ -65,14 +65,18 @@ and `MorphoBlue.Bundler3` have addresses but no vendored ABI; `Erc20.ERC20` and
 
 The exported `routes.TOKEN_REGISTRY` contains:
 
-| Chain    | ID    | Symbols                |
-| -------- | ----- | ---------------------- |
-| Ethereum | 1     | `USDC`, `USDT`, `WETH` |
-| Optimism | 10    | `USDC`, `USDT`, `WETH` |
-| Polygon  | 137   | `USDC`, `WETH`, `WPOL` |
-| Monad    | 143   | `USDC`, `WMON`         |
-| Base     | 8453  | `USDC`, `WETH`         |
-| Arbitrum | 42161 | `USDC`, `WETH`         |
+| Chain    | ID    | Symbols                        |
+| -------- | ----- | ------------------------------ |
+| Ethereum | 1     | `USDC`, `USDT`, `WETH`         |
+| Optimism | 10    | `USDC`, `USDT`, `WETH`         |
+| Polygon  | 137   | `USDC`, `WETH`, `WPOL`         |
+| Monad    | 143   | `USDC`, `WMON`                 |
+| Arc      | 5042  | `USDC`, `EURC`, `USYC`, `WETH` |
+| Base     | 8453  | `USDC`, `WETH`                 |
+| Arbitrum | 42161 | `USDC`, `WETH`                 |
+
+On Arc, `USDC` is the ERC-20 face of the chain's native coin, and `WETH` is bridged ETH rather than
+a wrapped native. See [Arc: USDC is the native coin](#arc-usdc-is-the-native-coin).
 
 A missing symbol means the registry has no verified row under that name. Token variants can have
 different symbols and addresses. `IntentOptions.tokenDefines` or `SauceCompileOptions.tokens`
@@ -89,6 +93,46 @@ routes.registryTokenAddress(base, "USDC"); // bigint address, or undefined if ab
 
 These ERC-20 source globals target EVM. Use the [Solana account and token helpers](../guides/solana.md)
 for SPL tokens.
+
+## Arc: USDC is the native coin
+
+Arc (chain 5042) pays gas in USDC, and it has **one USDC balance with two decimal scales**:
+
+| Read through                                               | Scale       | 1 USDC is             |
+| ---------------------------------------------------------- | ----------- | --------------------- |
+| Native: `msg.value`, `eth_getBalance`, gas                 | 18 decimals | `1000000000000000000` |
+| The ERC-20 at `0x3600000000000000000000000000000000000000` | 6 decimals  | `1000000`             |
+
+`getChain(5042).nativeCurrency.erc20` records the ERC-20, and `nativeErc20(chainId)` returns it, or
+`undefined` on a chain whose native coin is separate from every token.
+
+- **One balance.** Sending native value and calling `USDC.transfer` move the same money. A Pot that
+  bridges its whole `balanceOf(USDC)` and also pays a native fee — a Hyperlane or LayerZero fee,
+  the Kitchen's execution fee, deBridge's fixed fee — runs out, because the fee comes from that same
+  balance. Leave room for the fee.
+- **Dust is invisible to the ERC-20.** `balanceOf` is the native balance divided by 10¹² and rounded
+  down, so less than 10¹² wei reads as 0. `nativeToErc20Amount(5042, wei)` converts the same way.
+  Compare native and token amounts only after converting one to the other's scale.
+- **Every native amount is 18 decimals.** That includes `executionFee`, `execution.value`,
+  `nativeAmount` in a route or reward, and a cook's `value`. `1_000_000n` of native value is
+  10⁻¹² USDC, not 1 USDC. `Kitchen.executionFee()` read on Arc on 2026-09-28 was
+  `10000000000000000`, which is 0.01 USDC.
+- **Gas has a 20 gwei floor.** The minimum base fee is 20 gwei, and the mempool silently drops a
+  transaction whose `maxFeePerGas` is below it: no error, no receipt. Gas costs
+  `gasUsed × gasPrice / 10¹²` in `USDC` token units.
+- **There is no canonical wrapped native.** Nothing needs wrapping. `WETH` in the token registry is
+  bridged ETH with no `deposit()` or `withdraw()`, and Uniswap's Arc periphery reports a `WETH9()` that
+  always reverts, so the ETH paths of those routers revert too. The one WETH9-shaped contract on Arc is
+  CCIP's fee token `CCIP_USDC`, which the SDK does not register. Actions `wrapETH`, `unwrapETH`, the
+  native ETH stakes, and a `nativeBalance` spent as a token amount are rejected when a program's
+  `chainId` is 5042. The deposit builder's `weth` templates reject Arc's `USDC` and registry tokens as
+  a target.
+- **Native value can be refused.** A value transfer to the zero address, to or from a
+  blocklisted address, or to a self-destructed account reverts, including one a contract forwards.
+
+An intent to Arc also needs its own Pot. Arc's Portal is a different deployment from the one most
+chains share, so its Executor and derived Pot differ; see
+[Arc's Pot](../guides/intents.md#arcs-pot).
 
 ## Host discovery and chain coverage
 

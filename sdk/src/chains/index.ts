@@ -1,4 +1,6 @@
-import type { Chain } from "../core/types.js";
+import type { Chain, NativeErc20 } from "../core/types.js";
+
+export type { NativeErc20 } from "../core/types.js";
 
 /** All supported EVM chains. No RPC endpoints: callers bring their own. */
 export const chains: Record<number, Chain> = {
@@ -236,6 +238,32 @@ export const chains: Record<number, Chain> = {
     blockExplorerUrls: ["https://berascan.com"],
     testnet: false,
   },
+  // Arc — Circle's L1 (docs.arc.io/arc/references/rpc-endpoints). USDC is the native gas token,
+  // and it has TWO decimal scales over ONE balance: the native balance (`eth_getBalance`,
+  // `msg.value`, gas) is 18 decimals, while the ERC-20 interface at
+  // 0x3600000000000000000000000000000000000000 is 6 decimals
+  // (docs.arc.io/arc/concepts/stablecoin-native-model). `balanceOf` is the native value divided
+  // by 1e12 and truncated: a native balance below 1e12 wei reads as 0 through the ERC-20.
+  // Measured 2026-09-28 at block 23287436: eth_getBalance 19396491158961599350 for an account
+  // whose balanceOf is 19396491. Gas cost in USDC ERC-20 units is gasUsed * gasPrice / 1e12.
+  // There is no canonical wrapped native, measured 2026-09-28. The registry's `WETH` is bridged
+  // ETH (Circle's CrossChainToken: no deposit()/withdraw(), a value send reverts). Uniswap's Arc
+  // periphery reports a WETH9() that always reverts with UnsupportedProtocolError(), so every ETH
+  // path through those routers reverts. The one WETH9-shaped contract is CCIP's fee token
+  // CCIP_USDC (0x8DFa585699CB46ca2a5fA649700f09839B4b8743, the CCIP router's getWrappedNative()),
+  // which nothing here registers or treats as Arc's wrapped native.
+  5042: {
+    id: 5042,
+    name: "Arc",
+    nativeCurrency: {
+      name: "USDC",
+      symbol: "USDC",
+      decimals: 18,
+      erc20: { address: "0x3600000000000000000000000000000000000000", decimals: 6 },
+    },
+    blockExplorerUrls: ["https://explorer.arc.io"],
+    testnet: false,
+  },
 };
 
 export function getChain(chainId: number): Chain | undefined {
@@ -244,6 +272,33 @@ export function getChain(chainId: number): Chain | undefined {
 
 export function getAllChainIds(): number[] {
   return Object.keys(chains).map(Number);
+}
+
+/**
+ * The ERC-20 that IS `chainId`'s native coin, or `undefined` on a chain whose native coin is
+ * separate from every token (ETH, POL, …). Where it is defined the chain has no canonical wrapped
+ * native (nothing needs wrapping), and the native balance and the token balance are one balance on
+ * two decimal scales — see {@link NativeErc20}.
+ */
+export function nativeErc20(chainId: number): NativeErc20 | undefined {
+  return chains[chainId]?.nativeCurrency.erc20;
+}
+
+/**
+ * Converts a native amount (wei) on `chainId` to its native ERC-20's units, rounding down the way
+ * `balanceOf` reads it: on Arc, `floor(wei / 1e12)`, so any amount below 1e12 wei reads as 0.
+ * Throws on a chain whose native coin is not an ERC-20.
+ */
+export function nativeToErc20Amount(chainId: number, wei: bigint): bigint {
+  const erc20 = nativeErc20(chainId);
+  const chain = chains[chainId];
+  if (erc20 === undefined || chain === undefined) {
+    throw new Error(
+      `nativeToErc20Amount: chain ${chainId}'s native coin is not an ERC-20, so it has no token scale`,
+    );
+  }
+  if (wei < 0n) throw new Error(`nativeToErc20Amount: negative amount ${wei}`);
+  return wei / 10n ** BigInt(chain.nativeCurrency.decimals - erc20.decimals);
 }
 
 export * from "./canonical.js";

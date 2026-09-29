@@ -4,7 +4,7 @@ Singleton AMM with hooks architecture enabling custom pool logic, flash accounti
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Blast
+dex | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Blast, Arc
 
 ## Key Operations
 
@@ -122,3 +122,4 @@ function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
 - Flash accounting: V4 uses transient storage for balance tracking within a transaction, settling at the end
 - Commands/inputs for the UniversalRouter must be constructed off-chain; this is more complex than V3 but more powerful
 - V4 is the newest Uniswap version; use it for advanced pool logic (custom hooks) or when gas efficiency on multi-hop matters most
+- On Arc (5042) the PositionManager's `WETH9()` is a stub that always reverts with `UnsupportedProtocolError()`. Arc's native coin is USDC at 18 decimals, so a pool keyed on `address(0)` is native USDC, a different currency from the 6-decimal ERC-20 `0x3600000000000000000000000000000000000000` over the same balance

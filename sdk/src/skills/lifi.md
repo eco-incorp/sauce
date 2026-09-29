@@ -4,7 +4,7 @@ Multi-chain bridge and DEX aggregator via LiFiDiamond proxy. Routes through opti
 
 ## Category
 
-bridge aggregator | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114), Gnosis (100), Fantom (250)
+bridge aggregator | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114), Gnosis (100), Fantom (250), Arc (5042)
 
 ## SauceScript Functions
 

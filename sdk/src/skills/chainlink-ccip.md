@@ -4,7 +4,7 @@ Cross-Chain Interoperability Protocol by Chainlink. Enterprise-grade cross-chain
 
 ## Category
 
-cross-chain messaging + token transfer | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137)
+cross-chain messaging + token transfer | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), Arc (5042)
 
 ## SauceScript Functions
 
@@ -72,3 +72,4 @@ EVMTokenAmount tuple: `(address token, uint256 amount)`
 - Finality: typically 5-20 minutes depending on source chain finality
 - Rate limits apply per lane (source-destination pair)
 - TVL: $1B+. Audited
+- On Arc (5042) a native-paid fee is USDC at 18 decimals, from the same balance as the USDC ERC-20 `0x3600…0000`. The router's `getWrappedNative()` is `0x8DFa585699CB46ca2a5fA649700f09839B4b8743` (`CCIP_USDC`, a WETH9-style wrapper over native USDC), CCIP's own fee token rather than a canonical wrapped native

@@ -4,7 +4,7 @@ Universal token approval infrastructure by Uniswap. Provides a single approval c
 
 ## Category
 
-infrastructure | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche
+infrastructure | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Arc
 
 ## Key Operations
 

@@ -1,0 +1,24 @@
+{
+  "abi": [
+    {
+      "name": "execute",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_commands",
+          "type": "bytes"
+        },
+        {
+          "name": "_inputs",
+          "type": "bytes[]"
+        },
+        {
+          "name": "_deadline",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

@@ -3,8 +3,10 @@
  * from, and that every value a source action produces is read. `program.ts` runs the structural
  * checks first, so by the time these run every field has its declared type.
  */
+import { getChain, nativeErc20 } from "../../sdk/dist/chains/index.js";
+
 import { ACTION_SPECS } from "./spec.js";
-import type { Action } from "./types.js";
+import type { Action, ActionType } from "./types.js";
 
 /** One problem with a program, located by a path into the document (`actions[2].amountRef`). */
 export interface ProgramIssue {
@@ -42,8 +44,85 @@ export function consumesPrevious(action: Action): boolean {
   );
 }
 
-/** Every rule `actions` breaks. */
-export function programIssues(actions: readonly Action[]): ProgramIssue[] {
+/**
+ * Actions that exist only because the native coin is ETH with a canonical WETH9: they wrap or
+ * unwrap it, or stake it as ETH. Where the native coin is itself an ERC-20 (Arc's USDC) none of
+ * them has a meaning — there is nothing to wrap, and native value is not ETH.
+ */
+const NATIVE_ETH_ACTIONS: ReadonlySet<ActionType> = new Set([
+  "wrapETH",
+  "unwrapETH",
+  "lidoStake",
+  "rocketPoolStake",
+  "etherFiStake",
+]);
+
+/** The actions that read `actions[i]`'s output: the next one implicitly, or later ones by name. */
+function readersOf(actions: readonly Action[], i: number): number[] {
+  const readers: number[] = [];
+  const next = actions[i + 1];
+  if (next !== undefined && consumesPrevious(next)) readers.push(i + 1);
+  const name = actions[i]!.saveOutputAs;
+  if (name === undefined) return readers;
+  for (let k = i + 1; k < actions.length; k++) {
+    if (field(actions[k]!, "amountRef") === name && !readers.includes(k)) readers.push(k);
+    // A later action saving the same name reassigns it; readers after that read the new value.
+    if (actions[k]!.saveOutputAs === name) break;
+  }
+  return readers;
+}
+
+/**
+ * The rules a chain whose native coin is an ERC-20 adds (Arc: USDC, 18 decimals natively and 6
+ * through the ERC-20 at `0x3600…0000`, one balance). Empty on every other chain.
+ */
+function nativeErc20Issues(actions: readonly Action[], chainId: number): ProgramIssue[] {
+  const erc20 = nativeErc20(chainId);
+  const chain = getChain(chainId);
+  if (erc20 === undefined || chain === undefined) return [];
+  const native = chain.nativeCurrency;
+  const where = `${chain.name} (chain ${chainId})`;
+  const issues: ProgramIssue[] = [];
+
+  actions.forEach((action, i) => {
+    if (NATIVE_ETH_ACTIONS.has(action.type)) {
+      issues.push({
+        path: `actions[${i}]`,
+        message:
+          `${action.type} needs native ETH and a canonical WETH9, and ${where} has neither: ` +
+          `its native coin is ${native.symbol}, which is already the ERC-20 at ${erc20.address}. ` +
+          "Spend that token directly — there is nothing to wrap",
+      });
+    }
+    if (action.type === "balancerV3Swap" && action.wethIsEth) {
+      issues.push({
+        path: `actions[${i}].wethIsEth`,
+        message:
+          `${where} has no canonical wrapped native for the router to pay or receive as ` +
+          "native; set it to false",
+      });
+    }
+    if (action.type === "nativeBalance") {
+      for (const k of readersOf(actions, i)) {
+        const reader = actions[k]!;
+        if (ACTION_SPECS[reader.type].value === "amount") continue; // spent as native value
+        issues.push({
+          path: `actions[${i}]`,
+          message:
+            `on ${where} the native balance is ${native.symbol} at ${native.decimals} decimals, and ` +
+            `actions[${k}] (${reader.type}) spends it as a token amount — ${erc20.decimals}-decimal ` +
+            `units through ${erc20.address}, so 10^${native.decimals - erc20.decimals} times too ` +
+            `much. Read it with \`balanceOf\` on ${erc20.address} instead: the same balance, in ` +
+            "token units",
+        });
+      }
+    }
+  });
+  return issues;
+}
+
+/** Every rule `actions` breaks on `chainId`. */
+export function programIssues(actions: readonly Action[], chainId?: number): ProgramIssue[] {
   const issues: ProgramIssue[] = [];
   const at = (i: number, key?: string): string =>
     key === undefined ? `actions[${i}]` : `actions[${i}].${key}`;
@@ -104,5 +183,6 @@ export function programIssues(actions: readonly Action[]): ProgramIssue[] {
     }
   });
 
+  if (chainId !== undefined) issues.push(...nativeErc20Issues(actions, chainId));
   return issues;
 }

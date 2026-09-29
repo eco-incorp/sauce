@@ -90,6 +90,8 @@ The default approval policy is `"exact"`; `"none"` assumes an existing allowance
 
 `amount: "balance"` reads the executing Pot's balance: native ETH for native-funded templates, the WETH `target` for unwrapping, or the supplied `token` for other templates. `deposit.swapThenDepositSource(...)` composes swaps and deposits and also supports `amount: "delta"` for the increase in that balance across the swap block. Standalone deposit source cannot use `"delta"` because it lacks the pre-swap snapshot.
 
+On Arc the native coin is USDC at 18 decimals, and it is also the 6-decimal ERC-20 at `0x3600…0000`; a native-funded template's `"balance"` is that 18-decimal figure. Arc has no canonical wrapped native, so the `weth` templates have nothing to target there: `toDeposit` rejects Arc's `USDC` and its registry tokens, whose `WETH` is bridged ETH, as a `weth` target. See [Arc: USDC is the native coin](../api/coverage.md#arc-usdc-is-the-native-coin).
+
 For Aave/Spark withdrawals, use a fixed underlying-asset amount or `amount: "max"` to withdraw the full position. `"balance"` and `"delta"` read the underlying token held by the Pot, not its supplied position, and should not size a withdrawal.
 
 ## Routing actions

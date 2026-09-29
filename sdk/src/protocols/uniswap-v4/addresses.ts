@@ -2,6 +2,17 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — Uniswap V4 (developers.uniswap.org/docs/protocols/v4/deployments, "Arc: 5042").
+    // getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436): positionManager.poolManager() and universalRouter.poolManager() == poolManager.
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      poolManager: "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      universalRouter: "0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1",
+      positionManager: "0x6049c9a0e26405C0985f9E3685C87d0aE917f82B",
+    },
+  },
+  {
     // Monad (143) — Uniswap V4 (developers.uniswap.org/…/v4/deployments). Every address
     // getCode-verified on-chain 2026-08-31 (rpc-mainnet.monadinfra.com). universalRouter
     // is shared with the V3 deployment (same 0x0d97dc… on this chain).

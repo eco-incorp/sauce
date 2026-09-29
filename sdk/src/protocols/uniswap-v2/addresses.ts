@@ -2,6 +2,16 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — Uniswap V2 (developers.uniswap.org/deployments.json, v2-*-arc). getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436):
+    // factory.allPairsLength() > 0, router.factory() == factory.
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      factory: "0x89e5DB8B5aA49aA85AC63f691524311AEB649eba",
+      router: "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+    },
+  },
+  {
     chainId: 1,
     chainName: "Ethereum",
     addresses: {

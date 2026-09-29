@@ -1,0 +1,67 @@
+{
+  "abi": [
+    {
+      "name": "getAssetId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "underlying",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "isUnderlyingListed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "underlying",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,15 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — hyperlane-registry chains/arc/addresses.yaml. getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436): localDomain() == 5042.
+    // (0xeA87…4f1D, Base's mailbox in this file, is Arc's proxyAdmin — not a mailbox.)
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      mailbox: "0x7f50C5776722630a0024fAE05fDe8b47571D7B39",
+    },
+  },
+  {
     chainId: 1,
     chainName: "Ethereum",
     addresses: {

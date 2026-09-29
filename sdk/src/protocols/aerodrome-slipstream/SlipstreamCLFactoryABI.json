@@ -1,0 +1,58 @@
+{
+  "abi": [
+    {
+      "name": "getPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "allPoolsLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tickSpacingToFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ]
+    }
+  ]
+}

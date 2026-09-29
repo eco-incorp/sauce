@@ -2,7 +2,9 @@
  * Normalization core for E4.2's universal deposit adapter — `toDeposit`. See
  * `sdk/src/deposit/index.ts` for the module overview.
  */
+import { chains, getAllChainIds, nativeErc20 } from "../chains/index.js";
 import { toExactBigInt } from "../numeric.js";
+import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import type { AddressInput, AmountInput } from "../swap/types.js";
 import { depositTemplateFor } from "./templates.js";
 import type { ApprovalPolicy, DepositSpec, NormalizedDeposit } from "./types.js";
@@ -10,6 +12,38 @@ import type { ApprovalPolicy, DepositSpec, NormalizedDeposit } from "./types.js"
 function toAddressBigint(value: AddressInput, _label: string): bigint {
   if (typeof value === "bigint") return value;
   return BigInt(value);
+}
+
+/**
+ * The WETH9 templates are chain-agnostic, so they cannot see which chain they run on, but they can
+ * see a target that is certainly not a WETH9. On a chain whose native coin is itself an ERC-20
+ * (Arc) there is no canonical wrapped native, and a `deposit()`/`withdraw()` sent to its native ERC-20
+ * (`0x3600…0000`) or to a registry token there — `WETH` included, which on Arc is bridged ETH —
+ * wraps nothing. Reject those by address instead of emitting the call.
+ *
+ * Built once from the static chain and token registries: address -> why it is not a WETH9.
+ */
+const NOT_A_WRAPPER: ReadonlyMap<bigint, string> = (() => {
+  const reasons = new Map<bigint, string>();
+  for (const chainId of getAllChainIds()) {
+    const erc20 = nativeErc20(chainId);
+    if (erc20 === undefined) continue;
+    const { name, nativeCurrency } = chains[chainId]!;
+    const why = (what: string) =>
+      `${what} on ${name} (chain ${chainId}), which is not a WETH9. ${name} has no canonical ` +
+      `wrapped native: its native ${nativeCurrency.symbol} is already the ERC-20 at ` +
+      `${erc20.address}, so there is nothing to wrap or unwrap there`;
+    for (const row of TOKEN_REGISTRY[chainId] ?? [])
+      reasons.set(BigInt(row.address), why(row.symbol));
+    // Set last: the native ERC-20 is also a registry row (`USDC`), and this names it better.
+    reasons.set(BigInt(erc20.address), why(`the native ${nativeCurrency.symbol} ERC-20`));
+  }
+  return reasons;
+})();
+
+function rejectNonWrapperTarget(action: string, target: bigint): void {
+  const reason = NOT_A_WRAPPER.get(target);
+  if (reason !== undefined) throw new Error(`toDeposit: weth:${action} targets ${reason}`);
 }
 
 function toBigIntStrict(value: AmountInput, label: string): bigint {
@@ -33,8 +67,9 @@ function toBigIntStrict(value: AmountInput, label: string): bigint {
  * `beneficiary` supplied to a `beneficiary: "unsupported"` template; `amount: "max"` on a template
  * with `allowsMaxAmount: false`; an unrecognized `extra` field name; an `amount` given as a `number`
  * that is not a safe integer (past 2^53-1 pass a bigint or a string, since the double has already
- * been rounded); and whatever the field's own `ExtraFieldSpec.normalize` throws for an out-of-range
- * extra value.
+ * been rounded); a `weth` template whose `target` is known not to be a WETH9 (a chain's native
+ * ERC-20, or a registry token on a chain with no canonical wrapped native — Arc); and whatever the field's
+ * own `ExtraFieldSpec.normalize` throws for an out-of-range extra value.
  */
 export function toDeposit(
   spec: DepositSpec | (Omit<DepositSpec, "amount"> & { amount: "balance" | "delta" | "max" }),
@@ -92,10 +127,12 @@ export function toDeposit(
   }
 
   const approvalPolicy: ApprovalPolicy = spec.approvalPolicy ?? "exact";
+  const target = toAddressBigint(spec.target, "target");
+  if (spec.protocol === "weth") rejectNonWrapperTarget(spec.action, target);
 
   return {
     template,
-    target: toAddressBigint(spec.target, "target"),
+    target,
     token: template.binding === null ? null : toAddressBigint(spec.token as AddressInput, "token"),
     amount,
     beneficiary:

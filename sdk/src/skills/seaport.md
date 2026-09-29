@@ -4,7 +4,7 @@ OpenSea's decentralized NFT marketplace protocol supporting flexible order types
 
 ## Category
 
-nft-marketplace | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base
+nft-marketplace | Chains: Ethereum, Arbitrum, Optimism, Polygon, Base, Arc
 
 ## Key Operations
 

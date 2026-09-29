@@ -2,6 +2,15 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — metadata.layerzero-api.com deployments, arc-mainnet v2 (eid 30417). Not the
+    // 0x1a44…728c address older chains share. getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436): eid() == 30417.
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      endpointV2: "0x6F475642a6e85809B1c36Fa62763669b1b48DD5B",
+    },
+  },
+  {
     chainId: 1,
     chainName: "Ethereum",
     addresses: {

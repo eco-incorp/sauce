@@ -4,7 +4,7 @@ Multi-chain DEX with concentrated liquidity protocol (KyberSwap Elastic) and a m
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, BSC, Avalanche, Base
+dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, BSC, Avalanche, Base, Arc
 
 ## Key Operations
 
@@ -77,6 +77,7 @@ function main(
 | Avalanche | Elastic Router     | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` |
 | Avalanche | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
 | Base      | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
+| Arc       | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
 
 ## ABI Methods
 
@@ -91,8 +92,9 @@ function main(
 ## Notes
 
 - Elastic Router naming differs from Uniswap V3: `minAmountOut` (not `amountOutMinimum`), `limitSqrtP` (not `sqrtPriceLimitX96`)
-- Elastic Router and Meta Agg Router addresses are consistent across all 7 chains
+- The Elastic Router address is the same on its 6 chains, and the Meta Agg Router address on all 8
 - Meta Aggregation Router routes across multiple DEXes (not just KyberSwap pools) for best execution price
 - The `data` field in the Meta Agg Router swap must be pre-encoded from KyberSwap's API
 - Input token must be ERC20-approved to the Elastic Router for direct swaps
 - For Meta Agg swaps, approve to the `approveTarget` address returned by the API
+- On Arc (5042) only the Meta Aggregation Router is deployed (no Elastic), and it is a smaller build than Ethereum's at the same address: 13724 vs 18652 bytes, a different owner, and no `swapGeneric`/whitelist functions. Its `swap` has the same selector, struct and outputs (Blockscout-verified `MetaAggregationRouterV2`), and Kyber's Arc API builds calldata that decodes under this ABI. Native input uses the `0xEeee…EEeE` sentinel with `msg.value` in Arc's 18-decimal native USDC; Kyber's own routes use the ERC-20 `0x3600…0000` with 6-decimal amounts

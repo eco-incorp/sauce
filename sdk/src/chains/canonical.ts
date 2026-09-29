@@ -64,7 +64,7 @@ export const CANONICAL_CHAINS = [
   { id: 42161, slug: "arbitrum", name: "Arbitrum One", kind: "evm", aliases: ["arb"] },
   { id: 42220, slug: "celo", name: "Celo", kind: "evm", aliases: [] },
 
-  // --- EVM, present only in `chains` (26) ---
+  // --- EVM, present only in `chains` (27) ---
   { id: 25, slug: "cronos", name: "Cronos", kind: "evm", aliases: ["cro"] },
   { id: 100, slug: "gnosis", name: "Gnosis", kind: "evm", aliases: ["xdai", "gnosis-chain"] },
   { id: 122, slug: "fuse", name: "Fuse", kind: "evm", aliases: [] },
@@ -92,6 +92,10 @@ export const CANONICAL_CHAINS = [
   { id: 1329, slug: "sei", name: "Sei", kind: "evm", aliases: ["sei-evm"] },
   { id: 2222, slug: "kava", name: "Kava", kind: "evm", aliases: ["kava-evm"] },
   { id: 5000, slug: "mantle", name: "Mantle", kind: "evm", aliases: [] },
+  // Circle's Arc. Not in the legacy v12 deploy record, which predates it; the released engine,
+  // router and Kitchen from V12Deployments.json do have code on Arc (measured 2026-09-28), but no
+  // intent Pot is deployed there yet.
+  { id: 5042, slug: "arc", name: "Arc", kind: "evm", aliases: ["arc-mainnet", "arc-network"] },
   { id: 7000, slug: "zetachain", name: "ZetaChain", kind: "evm", aliases: ["zeta"] },
   { id: 8217, slug: "klaytn", name: "Klaytn", kind: "evm", aliases: ["kaia"] },
   { id: 9001, slug: "evmos", name: "Evmos", kind: "evm", aliases: [] },

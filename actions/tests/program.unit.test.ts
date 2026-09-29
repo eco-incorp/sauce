@@ -16,9 +16,9 @@ import {
   serializeProgram,
 } from "../src/index.js";
 import { ACTION_TYPES } from "../src/spec.js";
-import type { ActionProgram } from "../src/types.js";
+import type { ActionProgram, ActionType } from "../src/types.js";
 import { REPO_ROOT } from "./anvil.js";
-import { SAMPLES, sampleProgram } from "./samples.js";
+import { A, R, SAMPLES, sampleProgram } from "./samples.js";
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const ROUTER = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
@@ -263,6 +263,89 @@ describe("action programs — errors are precise and complete", () => {
         error.issues.length === 3 &&
         /invalid action program \(3 issues\)/.test(error.message),
     );
+  });
+});
+
+describe("action programs — Arc, whose native coin is USDC", () => {
+  // Arc's native USDC is 18 decimals and ALSO the 6-decimal ERC-20 at 0x3600…0000, one balance.
+  const ARC = 5042;
+  const ARC_USDC = "0x3600000000000000000000000000000000000000";
+  const ARC_WETH = "0x128cC466B61f542da60c70e3aA11c10e19B84EDB"; // bridged ETH, not a WETH9
+  const onArc = (...actions: object[]) => ({ version: 1, chainId: ARC, actions });
+  const NATIVE_ETH = ["wrapETH", "unwrapETH", "lidoStake", "rocketPoolStake", "etherFiStake"];
+
+  for (const type of NATIVE_ETH) {
+    it(`rejects ${type}: Arc has no native ETH and no wrapped native`, () => {
+      const program = { ...sampleProgram(type as ActionType), chainId: ARC };
+      assert.match(
+        issues(program).join("\n"),
+        /actions\[0\]: \w+ needs native ETH and a canonical WETH9, and Arc \(chain 5042\) has neither/,
+      );
+      assert.doesNotThrow(() => parseProgram(sampleProgram(type as ActionType, 1)));
+    });
+  }
+
+  it("rejects wrapping into the registry's Arc WETH, which is bridged ETH", () => {
+    assert.ok(rejects(onArc({ type: "wrapETH", amount: "1", weth: ARC_WETH })));
+  });
+
+  it("does not call a nativeBalance mis-scaled when its reader spends it as native value", () => {
+    // wrapETH attaches the amount as value, so the 18-decimal reading is the right unit for it:
+    // the only issue is that Arc has no wrapper, reported on the reader, not the balance.
+    const found = issues(onArc(SAMPLES.nativeBalance, { type: "wrapETH", weth: ARC_WETH }));
+    assert.equal(found.length, 1);
+    assert.match(found[0]!, /^actions\[1\]: wrapETH needs native ETH/);
+  });
+
+  it("rejects a nativeBalance spent as a token amount, which is 10^12 too large", () => {
+    const found = issues(
+      onArc(SAMPLES.nativeBalance, { type: "transfer", token: ARC_USDC, recipient: R }),
+    );
+    assert.equal(found.length, 1);
+    assert.match(
+      found[0]!,
+      /^actions\[0\]: on Arc \(chain 5042\) the native balance is USDC at 18/,
+    );
+    assert.match(found[0]!, /10\^12 times too much/);
+    assert.match(found[0]!, /`balanceOf` on 0x3600000000000000000000000000000000000000/);
+    // The same program is well formed where the native coin is separate from every token.
+    const elsewhere = onArc(SAMPLES.nativeBalance, { type: "transfer", token: A, recipient: R });
+    assert.doesNotThrow(() => parseProgram({ ...elsewhere, chainId: 1 }));
+  });
+
+  it("follows a named nativeBalance to each reader, and stops where the name is reassigned", () => {
+    const found = issues(
+      onArc(
+        { ...SAMPLES.nativeBalance, saveOutputAs: "n" },
+        { ...SAMPLES.transfer, amount: undefined, amountRef: "n" },
+        { type: "balanceOf", token: ARC_USDC, saveOutputAs: "n" },
+        { ...SAMPLES.approve, amount: undefined, amountRef: "n" },
+      ),
+    );
+    // actions[3] reads the balanceOf's `n`, in token units, so only actions[1] mis-scales.
+    assert.equal(found.length, 1);
+    assert.match(found[0]!, /^actions\[0\]: .* actions\[1\] \(transfer\) spends it as a token/);
+  });
+
+  it("rejects balancerV3Swap paying or receiving native", () => {
+    const swap = { ...SAMPLES.balancerV3Swap, wethIsEth: true };
+    assert.match(issues(onArc(swap)).join("\n"), /^actions\[0\]\.wethIsEth: Arc \(chain 5042\)/);
+    assert.doesNotThrow(() => parseProgram(onArc({ ...swap, wethIsEth: false })));
+  });
+
+  it("accepts USDC read through its ERC-20 and bridged over CCTP", () => {
+    const program = onArc(
+      { type: "balanceOf", token: ARC_USDC },
+      { ...SAMPLES.cctpBridge, amount: undefined, token: ARC_USDC },
+    );
+    assert.doesNotThrow(() => parseProgram(program));
+  });
+
+  it("changes nothing else: every other action type parses on Arc", () => {
+    for (const type of ACTION_TYPES) {
+      if (NATIVE_ETH.includes(type) || type === "nativeBalance") continue;
+      assert.doesNotThrow(() => parseProgram(sampleProgram(type, ARC)), type);
+    }
   });
 });
 

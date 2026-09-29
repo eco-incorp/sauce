@@ -1,0 +1,46 @@
+{
+  "abi": [
+    {
+      "name": "getPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "fee",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feeAmountTickSpacing",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int24"
+        }
+      ]
+    }
+  ]
+}

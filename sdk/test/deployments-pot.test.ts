@@ -37,3 +37,23 @@ describe("the intent Pot is the solver's shared Pot", () => {
     },
   );
 });
+
+describe("Arc has its own Portal, so its own Executor and Pot", () => {
+  // Read from Arc (rpc.mainnet.arc.io) on 2026-09-28: Portal.executor() at block 23293162, and the
+  // released Kitchen's predictPot(executor, 0) at block 23293350, which returned this Pot. The Pot
+  // had no code then: the solver (or anyone) must deploy it before an intent to Arc can execute.
+  const ARC_PORTAL = "0xEC002CA16cE20c2a9F3C6200EF04E7d92a3dfBD8";
+  const ARC_EXECUTOR = "0x95b2d45F49c68a54BDBa0356fc3034751A43b3D4";
+  const ARC_POT = "0xBDbbf86bC1D8afE1b382Eee56f5d733AC7bd43a5";
+
+  it("derives the Executor Arc's Portal reports", () => {
+    expect(ecoRoutesPortal("arc")).toBe(ARC_PORTAL);
+    expect(ecoRoutesExecutorOf(ARC_PORTAL)).toBe(ARC_EXECUTOR);
+  });
+
+  it("predicts the Pot Arc's Kitchen reports for that Executor", () => {
+    expect(v12PredictPot(ARC_EXECUTOR)).toBe(ARC_POT);
+    expect(destinationPot("arc")).toBe(ARC_POT);
+    expect(ARC_POT).not.toBe(SHARED_POT);
+  });
+});

@@ -58,7 +58,8 @@ engine accepts only Pots created by its own Kitchen.
 
 Every cook must send the Kitchen's current `executionFee()` as native value, even for a program that
 moves only ERC-20s. Native the program itself spends is on top of that. A balance already sitting in
-the Pot does not pay the fee.
+the Pot does not pay the fee. On Arc, native value is USDC at 18 decimals, drawn from the same
+balance as the USDC ERC-20 ([Arc: USDC is the native coin](../api/coverage.md#arc-usdc-is-the-native-coin)).
 
 One route body is one program and one cook, however many statements it contains. For a Portal-driven
 intent the Pot's owner must be the destination `Portal.executor()`, and the Pot is shared: put

@@ -149,3 +149,4 @@ function main(
 - The dominant DEX on Base by TVL and volume; preferred for most Base swaps
 - LP tokens can be staked in gauges for AERO emissions
 - Routes include both `stable` flag and `factory` address per hop
+- This module is the basic (stable/volatile) pools only. Aerodrome's concentrated-liquidity Slipstream pools are the `aerodrome-slipstream` module

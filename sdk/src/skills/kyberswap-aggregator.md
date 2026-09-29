@@ -4,7 +4,7 @@ Meta aggregator that routes through multiple aggregators and DEXes for optimal s
 
 ## Category
 
-aggregator | Chains: Ethereum, Arbitrum, BSC, Polygon, Optimism, Avalanche, Base, Fantom, Linea, Scroll, zkSync
+aggregator | Chains: Ethereum, Arbitrum, BSC, Polygon, Optimism, Avalanche, Base, Fantom, Linea, Scroll, zkSync, Arc
 
 ## Key Operations
 
@@ -64,7 +64,7 @@ function main(
 
 | Chain         | Contract              | Address                                      |
 | ------------- | --------------------- | -------------------------------------------- |
-| 10 EVM chains | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
+| 11 EVM chains | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
 | zkSync        | metaAggregationRouter | `0x3F95eF3f2eAca871858dbE20A93c01daF6C2e923` |
 
 ## ABI Methods
@@ -88,7 +88,8 @@ function main(
 
 ## Notes
 
-- TVL: $500M+. Same address on all 11 chains
+- TVL: $500M+. Same address on 11 of its 12 chains; zkSync's differs
 - Meta-aggregates across 1inch, 0x, ParaSwap, and other aggregators
 - Route computation via KyberSwap API - callTarget/targetData come from API response
 - Approve srcToken to metaAggregationRouter before swapping
+- On Arc (5042) the router at this address is a smaller build than Ethereum's (13724 vs 18652 bytes, a different owner, no `swapGeneric`/whitelist functions). Its `swap` has the same selector, struct and outputs (Blockscout-verified `MetaAggregationRouterV2`), and Kyber's Arc API builds calldata that decodes under this ABI. Native input uses the `0xEeee…EEeE` sentinel with `msg.value` in Arc's 18-decimal native USDC; Kyber's own routes use the ERC-20 `0x3600…0000` with 6-decimal amounts

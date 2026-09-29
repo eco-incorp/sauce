@@ -416,7 +416,7 @@ function check(input: unknown): Checked {
   }
 
   // The chaining rules read every action, so they run only once every action is well formed.
-  if (c.issues.length === 0) c.issues.push(...programIssues(actions));
+  if (c.issues.length === 0) c.issues.push(...programIssues(actions, value.chainId as number));
   if (c.issues.length > 0) return { issues: c.issues };
 
   return { program: { version: PROGRAM_VERSION, chainId: value.chainId as number, actions } };

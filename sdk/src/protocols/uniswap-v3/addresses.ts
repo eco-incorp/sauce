@@ -2,6 +2,20 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
+    // Arc (5042) — Uniswap V3 (developers.uniswap.org/deployments.json, v3-*-arc). getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436):
+    // factory.feeAmountTickSpacing(500) == 10; SwapRouter02, QuoterV2 and the position manager
+    // each report factory() == factory. Only SwapRouter02 is deployed (no legacy SwapRouter).
+    // The legacy Ethereum addresses (0x1F98…F984 etc.) carry UNRELATED code on Arc.
+    chainId: 5042,
+    chainName: "Arc",
+    addresses: {
+      factory: "0xf0db7b58379503491d857dB50AC9ece64c653918",
+      swapRouter02: "0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77",
+      quoterV2: "0x7DfD4F31be6814D2906BDE155c3e1B146EAc1468",
+      nonfungiblePositionManager: "0x39654A85A4C05127f5Fd6ED22CAeC077A0fB1377",
+    },
+  },
+  {
     // Monad (143) — Uniswap V3 core/periphery v1.0.0, SwapRouter02 v1.1.0
     // (developers.uniswap.org/…/v3-monad-deployments). Every address getCode-verified
     // on-chain 2026-08-31 (rpc-mainnet.monadinfra.com). Only SwapRouter02 was deployed
