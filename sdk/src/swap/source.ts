@@ -53,7 +53,9 @@ function fieldsFromParams(params: SwapParams): Omit<SwapParams, "amountSpecified
  * emitted as a runtime expression instead of a literal).
  *
  * A `"balance"` amount stays exact input at run time: the V3 path takes the balance as it is and the
- * V4 path negates it, the same signs {@link amountSpecifiedFor} gives a literal.
+ * V4 path negates it, the same signs {@link amountSpecifiedFor} gives a literal. The negation is
+ * UNARY `-`, the two's-complement NEG: subtraction is checked unsigned, so `0n - balance` reverts
+ * for every non-zero balance and the swap never reaches the Router.
  */
 export function swapCallStatement(spec: SwapSourceSpec, options: SwapRouterOptions = {}): string {
   const concreteSpec: SwapSpec = spec.amountIn === "balance" ? { ...spec, amountIn: 0n } : spec;
@@ -64,7 +66,7 @@ export function swapCallStatement(spec: SwapSourceSpec, options: SwapRouterOptio
   const amountExpr =
     spec.amountIn === "balance"
       ? spec.poolType === SwapPoolType.UniV4
-        ? `(0n - (IERC20.at(${tokenInLiteral}).balanceOf(ctx.self())))`
+        ? `-(IERC20.at(${tokenInLiteral}).balanceOf(ctx.self()))`
         : `IERC20.at(${tokenInLiteral}).balanceOf(ctx.self())`
       : formatBigint(params.amountSpecified);
 

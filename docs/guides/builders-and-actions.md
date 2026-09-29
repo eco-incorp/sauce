@@ -61,7 +61,7 @@ export function compileSwap(spec: swap.SwapSourceSpec, execution: routes.SauceEv
 }
 ```
 
-Supply the correct pool, tokens, amount, and pool-specific parameters. The generated program self-calls the Sauce Router path supported by the Pot; the execution deployment must support it. The unified builder supports `UniV2`, `UniV3`, `UniV4`, `Curve`, `BalancerV2`, `DODOV2`, `TraderJoeLB`, `MaverickV2`, and `WOOFi`. The separate Pancake Infinity CL/Bin entry points are not supported by this builder.
+Supply the correct pool, tokens, amount, and pool-specific parameters. The generated program self-calls the Sauce Router path supported by the Pot; the execution deployment must support it. The unified builder supports `UniV2`, `UniV3`, `UniV4`, `Curve`, `BalancerV2`, `DODOV2`, `TraderJoeLB`, `MaverickV2`, and `WOOFi`. The separate Pancake Infinity CL/Bin entry points are not supported by this builder. `Curve` through the Router needs a pool whose `exchange` returns the amount out: the Router decodes a `uint256` from it, and a 3pool-era pool returns nothing, so the swap reverts — call such a pool directly instead.
 
 Every swap is **exact input**: `amountIn` is what the Pot pays. The builder turns it into each pool type's sign convention (positive for `UniV3`, negative for `UniV4`, as-is for the rest) and refuses an amount of 2^255 or more, which would read as exact output. There is no exact-output form: the Router caps what a V3-family or Maverick callback may take at the exact input, and an exact-output swap names no input maximum.
 

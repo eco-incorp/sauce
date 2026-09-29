@@ -109,16 +109,15 @@ describe("exact input only — no path emits an exact-output amountSpecified", (
       ...spec({ poolType: SwapPoolType.UniV4, poolKey: {} }),
       amountIn: "balance",
     });
-    expect(v4).toMatch(
-      /amountSpecified: \(0n - \(IERC20\.at\([^)]*\)\.balanceOf\(ctx\.self\(\)\)\)\),/,
-    );
+    // Unary `-` (NEG), never `0n - x`: subtraction is checked unsigned and reverts for any x > 0.
+    expect(v4).toMatch(/amountSpecified: -\(IERC20\.at\([^)]*\)\.balanceOf\(ctx\.self\(\)\)\),/);
     for (const poolType of ALL_DISPATCHABLE) {
-      if (poolType === SwapPoolType.UniV4) continue;
       const statement = swapCallStatement({
         ...spec({ poolType, poolKey: {} }),
         amountIn: "balance",
       });
       expect(statement).not.toContain("0n - ");
+      if (poolType !== SwapPoolType.UniV4) expect(statement).not.toContain("-(");
     }
   });
 
@@ -384,11 +383,13 @@ describe("source shape", () => {
     expect(src).toContain(`IERC20.at(${BigInt(TOKEN_IN)}n).balanceOf(ctx.self())`);
   });
 
-  it("a 'balance' amountIn on UniV4 wraps the balance read in the two's-complement negation", () => {
+  it("a 'balance' amountIn on UniV4 negates the balance read with unary minus (two's-complement NEG)", () => {
     const src = swapSource(
       spec({ poolType: SwapPoolType.UniV4, poolKey: { fee: 3000n }, amountIn: "balance" as const }),
     );
-    expect(src).toContain(`(0n - (IERC20.at(${BigInt(TOKEN_IN)}n).balanceOf(ctx.self())))`);
+    expect(src).toContain(
+      `amountSpecified: -(IERC20.at(${BigInt(TOKEN_IN)}n).balanceOf(ctx.self())),`,
+    );
   });
 
   it("no 'balance' leg does NOT import IERC20", () => {
