@@ -33,5 +33,5 @@ import "./routes/source-globals.generated.js";
 export { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "./routes/globals.js";
 export { destinationExecutionFee } from "./evm/execution-fee.js";
 export type { ExecutionFeeCall } from "./evm/execution-fee.js";
-export { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "./deployments/pot.js";
+export { SAUCE_INTENT_POT_SALT, v12PredictPot } from "./deployments/pot.js";
 export { destinationPot } from "./routes/intent-pot.js";

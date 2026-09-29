@@ -6,7 +6,8 @@
  * funds. Executor addresses were read on-chain; Pot addresses use Kitchen 1.1.0 release initcode.
  * These predictions require that Kitchen implementation and are not claims of live deployment.
  */
-import { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "../src/deployments/pot.js";
+import { v12KitchenAddress } from "../src/deployments/index.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 
@@ -24,7 +25,7 @@ describe("the intent Pot is the solver's shared Pot", () => {
   });
 
   it("predicts the Pot the released Kitchen reports for that Executor", () => {
-    expect(v12GateKitchen()).toBe("0x19845b22989150E6B09dE55a661295Dd9188506b");
+    expect(v12KitchenAddress()).toBe("0x19845b22989150E6B09dE55a661295Dd9188506b");
     expect(v12PredictPot(PROD_EXECUTOR)).toBe(SHARED_POT);
   });
 
