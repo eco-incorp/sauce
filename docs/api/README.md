@@ -18,7 +18,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | `/svm/engine-artifacts`        | Node-only helpers locating packaged SVM engine/Kitchen binaries and IDL                                                                    |
 | `/svm/verify`                  | SVM program and gated engine CPI verification; separate Kitchen decoding is required                                                       |
 | `/svm/recipes/settle.sauce.ts` | SVM settlement source asset                                                                                                                |
-| `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`)                                          |
+| `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`), and `potRouterUpdate`                   |
 | `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                                    |
 | `/skills`                      | Protocol Markdown index and skill-file loaders                                                                                             |
 

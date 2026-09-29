@@ -158,8 +158,9 @@ function assertRouterAnswersVenue(spec: SwapSpec, options: SwapRouterOptions): v
         (routerGeneration === undefined
           ? "pass `routerGeneration`, the executing Pot's Router generation"
           : `the Pot's Router is generation ${routerGeneration}`) +
-        ". A Pot runs the Router it was minted with (a Pot of the pinned Kitchen starts on " +
-        "v12RouterGeneration()) until its owner moves it.",
+        ". A Pot runs the Router it was minted with until its owner moves it: when " +
+        "potRouterUpdate(client, pot) returns nothing, the Pot runs the Kitchen's Router, " +
+        "generation v12RouterGeneration(); otherwise its owner signs the update it returns first.",
     );
   }
 }

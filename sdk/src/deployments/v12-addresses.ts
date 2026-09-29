@@ -102,7 +102,8 @@ export const v12RouterAddress = (): string => v12DeployedAddresses().evm.contrac
  * The pinned Kitchen's Router generation — the Router every Pot minted from it starts on.
  *
  * A Pot minted earlier keeps its own Router until its owner moves it, so this is a Pot's generation
- * only when the Pot runs the Kitchen's Router. Pass it to the swap builders as `routerGeneration`.
+ * only once `potRouterUpdate(client, pot)` returns nothing. Pass it to the swap builders as
+ * `routerGeneration`.
  */
 export function v12RouterGeneration(): number {
   const { generation } = v12DeployedAddresses().evm.contracts.router;

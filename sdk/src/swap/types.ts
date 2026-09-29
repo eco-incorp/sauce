@@ -110,9 +110,10 @@ export const VENUE_CALLBACK: Readonly<Record<SwapVenue, string>> = {
 /**
  * Which Router the program's swaps reach — the one the executing Pot's fallback delegatecalls into.
  *
- * A Pot runs the Router it was minted with until its owner moves it, so the SDK cannot know it
- * without reading the chain, and it reads none. Pass the generation instead; a Pot minted from the
- * pinned Kitchen starts on `v12RouterGeneration()`.
+ * A Pot runs the Router it was minted with until its owner moves it (`pot.setRouter`), so the SDK
+ * cannot know it without reading the chain, and it reads none. Pass the generation instead: a Pot
+ * for which `potRouterUpdate(client, pot)` returns nothing runs the Kitchen's current Router, whose
+ * generation is `v12RouterGeneration()`.
  */
 export interface SwapRouterOptions {
   /** The executing Pot's Router generation. Required for a {@link SwapVenue} spec, which needs at
