@@ -5,11 +5,17 @@
  * released Kitchen. An SDK route cooking anywhere else would cook on a Pot nothing deploys or
  * funds. Executor addresses were read on-chain; Pot addresses use Kitchen 1.1.0 release initcode.
  * These predictions require that Kitchen implementation and are not claims of live deployment.
+ *
+ * Each pinned Pot is checked twice: `v12PredictPot` derives it from the init-code hash
+ * `addresses.json` records, and `evm/pot-address.ts` derives it again from the released `V12Pot.json`
+ * creation code itself, an independent source. A Kitchen release that moves the Pot bytecode fails
+ * both until the pins are re-read.
  */
 import { v12KitchenAddress } from "../src/deployments/index.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
+import { potFromReleasedBytecode } from "./evm/pot-address.js";
 
 const PROD_PORTAL = "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df";
 const PROD_EXECUTOR = "0x645dADD5Bf354526b68A2befd9A305F7E03b91Ca";
@@ -24,9 +30,13 @@ describe("the intent Pot is the solver's shared Pot", () => {
     expect(ecoRoutesExecutorOf(PROD_PORTAL)).toBe(PROD_EXECUTOR);
   });
 
-  it("predicts the Pot the released Kitchen reports for that Executor", () => {
+  it("predicts the Pot the released Kitchen mints for that Executor", () => {
     expect(v12KitchenAddress()).toBe("0x19845b22989150E6B09dE55a661295Dd9188506b");
     expect(v12PredictPot(PROD_EXECUTOR)).toBe(SHARED_POT);
+  });
+
+  it("is the Pot the released Pot creation code derives", () => {
+    expect(potFromReleasedBytecode(PROD_EXECUTOR)).toBe(SHARED_POT);
   });
 
   it.each(["base", "optimism", "arbitrum"])(
@@ -53,5 +63,9 @@ describe("Arc has its own Portal, so its own Executor and Pot", () => {
     expect(v12PredictPot(ARC_EXECUTOR)).toBe(ARC_POT);
     expect(destinationPot("arc")).toBe(ARC_POT);
     expect(ARC_POT).not.toBe(SHARED_POT);
+  });
+
+  it("is the Pot the released Pot creation code derives", () => {
+    expect(potFromReleasedBytecode(ARC_EXECUTOR)).toBe(ARC_POT);
   });
 });
