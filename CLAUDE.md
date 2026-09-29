@@ -98,15 +98,25 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
 ## Toolchain gotchas (why a fresh clone may fail)
 
 - **There is no engine git dep.** Every v12 artifact comes from a RELEASE of the private
-  `eco-incorp/v12` repo, pinned in `sdk/scripts/sync-engine-artifacts.mjs` by tag **and** by a
-  sha256/keccak digest committed there. The digest is the guarantee — a git tag is movable on
-  GitHub — and there is deliberately no commit pin, because FOUR components release independently:
+  `eco-incorp/v12` repo, pinned in `sdk/src/deployments/releases.json` by version **and** by a
+  sha256/keccak digest committed there — the one place every release-dependent value is written. The
+  digest is the guarantee — a git tag is movable on GitHub — and there is deliberately no commit pin,
+  because FOUR components release independently:
   `v12-svm` (engine + wire artifact), `v12-evm` (runtime creation code), `kitchen-svm` (kitchen
   program + Anchor IDL) and `kitchen-evm` (the Solidity ABIs). Do not look for `abis.json`,
   `kitchen.so` or `kitchen-idl.json` under a `v12-*` tag — they moved to the `kitchen-*` releases.
   The tags MAY be cut from different commits (`v12-evm-v0.4.0` and `v12-svm-v0.5.0` were), so a
   shared commit is not a property to rely on even while all four happen to share one after a
-  coordinated re-release. To bump: change the tag, run the script, paste the digest it reports.
+  coordinated re-release. **`releases.json` has one row per COMPILER version**, naming the four
+  releases that compiler's output pairs with: compiler output and engines are compatible by exact
+  package version in both directions (2.4.0 needs v12-evm 1.1.0 / v12-svm 1.3.0; 2.3.0 output must
+  not reach them), and the SVM ISA revision does not move between them, so nothing else can tell
+  them apart. `sync-engine-artifacts.mjs` syncs the row of the INSTALLED compiler and records it as
+  `V12Deployments.json`'s `compiler`; `deployments/releases.ts#assertEngineRunsCompiler` reads the
+  same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
+  Kitchen cook instructions) refuses an engine another row names. To bump: edit the row's versions,
+  run the sync, paste the digests and engine ids it reports — a row with a `null` digest or engine id
+  is a release not out yet, and the sync refuses it and writes nothing.
   **Fetching needs no PAT.** Each release publishes its assets as a PRIVATE npm package on GitHub
   Packages (`@eco-incorp/<package>` at `npm.pkg.github.com`, one per independently-released
   component). Read access is granted per package to the CONSUMING REPOSITORY (package settings ->
@@ -205,8 +215,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   not liveness; verify live code separately. There is no chain roster any more: the hand-maintained
   `v12.generated.ts` and its `isV12Live`/`v12ChainSlug`/`v12Deployment` helpers described the
   pre-`cook` deployment generation and were deleted. A chain's identity (slug, kind) is
-  `chains/canonical.ts`'s. The EVM engine and Kitchen are **1.1.0**, SVM engine **1.3.0**, and
-  SVM Kitchen **1.0.0**; `V12Deployments.json.releases` records each source commit/version.
+  `chains/canonical.ts`'s. Which releases are pinned is `releases.json`'s row for the installed
+  compiler; `V12Deployments.json.releases` records each source commit/version.
 - **`V12RuntimeBytecode.json` comes from a pinned release asset.**
   The engine deleted its committed `engine-v12/snapshots/` copy (`chore(v12): compile the runtime
 at deploy time`) because a second source of truth rotted — six changed `.huff` handlers once
@@ -214,7 +224,7 @@ at deploy time`) because a second source of truth rotted — six changed `.huff`
   `sync-engine-artifacts.mjs` wraps the pinned EVM release's `runtime.creation.hex` in the JSON
   shape consumers already read. No Huff toolchain is involved in producing it.
 - **A tag is not a pin.** A GitHub tag is movable, so each asset is checked against a digest
-  committed in the script itself (`keccak256` of the _decoded_ creation code; `sha256` of the
+  committed in `releases.json` (`keccak256` of the _decoded_ creation code; `sha256` of the
   `.so`), cross-checked against the release manifest's `creationCodeKeccak`/`soSha256`, **and**
   against `manifest.commit`. A moved tag throws rather than silently supplying a different engine.
   Assets cache under `node_modules/.cache/sauce-engine-releases/<tag>/`, so a warm tree needs no
@@ -249,8 +259,8 @@ compiler exactly to **2.4.0**, matching the lockfile. `CompileResult` contains `
 contract, absent on EVM. Compile-time values affect bytecode; runtime entry arguments are encoded
 and appended separately. With `compactArgs: true`, pass the returned schema and positional values
 to `encodeCompactArguments` from `@eco-incorp/sauce/compiler`; its strict inverse is
-`decodeCompactArguments`. Pair the artifact with a compatible engine; an ISA label does not query
-the deployed runtime. There is no `argsLayout` and no `staged`/`args` compile option; the SDK owns
+`decodeCompactArguments`. Pair the artifact with an engine by exact version (`releases.json`,
+above); an ISA label does not query the deployed runtime and does not distinguish engine releases. There is no `argsLayout` and no `staged`/`args` compile option; the SDK owns
 its SVM layout types (`sdk/src/svm/layout.ts`).
 
 SVM settlement execution verification defaults to `wireFormat: "gated-v1"`: raw engine CPI

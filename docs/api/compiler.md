@@ -131,9 +131,11 @@ interface CompileResult {
 
 - `bytecode` is one reusable program. Per-execution argument values have not been
   appended.
-- `isaRevision` labels the instruction set this artifact was built for. Record it
-  with the artifact and run the program on an engine built for the same one; it is
-  a label, not a check against any deployed address.
+- `isaRevision` labels the instruction set this artifact was built for. It is a
+  label, not a compatibility check: v12-svm 1.2.0 and 1.3.0 both report
+  `stack-compact-v2`, yet compiler 2.4.0 output runs only on the second. Pair a
+  program with an engine by exact package version — see
+  [Which engine runs a program](#which-engine-runs-a-program).
 - `entryEncoding` selects the argument encoder: ordinary ABI arguments by
   default, compact arguments when `compactArgs: true`. It does not describe
   [program return encoding](../guides/compiling.md#return-values-an-abi-decoder-can-read).
@@ -170,6 +172,30 @@ uses it. SVM `Account` parameters do not occupy compact argument fields.
 The subpath also exports `AccountEntry`, `AccountManifest`, `AccountRole`,
 `CompileOptions`, `CompileResult`, `ResolveModule`, `ResolvePackage`, and
 `SauceTarget` as types from the compiler package.
+
+### Which engine runs a program
+
+Compiler output and v12 engines pair by exact package version, in both
+directions: compiler 2.4.0's EVM programs need v12-evm 1.1.0 and its SVM programs
+v12-svm 1.3.0, and compiler 2.3.0 output runs only on v12-evm 1.0.1 and v12-svm
+1.2.0. The SDK pins one compiler and syncs the engines of that compiler's row of
+`V12_RELEASE_SETS` (from `@eco-incorp/sauce/deployments`), so
+`v12EngineAddress()` and `v12SvmEngineProgramId()` always name engines that run
+the SDK's own programs.
+
+Every SDK builder that names an engine — `v12Pot.encodeCook`,
+`routes.buildSauceEvmCall`, the SVM engine instructions and the Kitchen cook
+instructions — calls `assertEngineRunsCompiler(target, engine)` first. It throws
+for an engine a release set names for another compiler, saying which engine
+this compiler's output needs instead. An engine no release set names, such as
+one you deployed yourself, is not refused: the SDK cannot tell what it is.
+
+```ts
+import { assertEngineRunsCompiler, v12ReleaseSet } from "@eco-incorp/sauce/deployments";
+
+const set = v12ReleaseSet(); // this SDK's compiler and the four releases it pairs with
+assertEngineRunsCompiler("evm", set["v12-evm"].engine!); // passes: the pinned engine
+```
 
 ## Compact argument codec
 

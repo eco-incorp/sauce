@@ -13,6 +13,8 @@
 
 import { encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
 
+import { assertEngineRunsCompiler } from "../deployments/releases.js";
+
 /**
  * V12Pot — `cook()` is onlyOwner.
  *
@@ -48,9 +50,15 @@ export const v12Pot = {
    * `engine` is the interpreter this cook runs on — the Pot no longer holds one. `program` is a
    * single compiled sauce blob, where this used to take an array whose first element was the only
    * one ever executed.
+   *
+   * Throws for an engine a v12 release set names for another compiler than the SDK's
+   * (`assertEngineRunsCompiler`): that engine cannot run this SDK's programs.
    */
-  encodeCook: (engine: Address, program: Hex): Hex =>
-    encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [engine, program] }),
+  encodeCook: (engine: Address, program: Hex): Hex => {
+    assertEngineRunsCompiler("evm", engine);
+
+    return encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [engine, program] });
+  },
 } as const;
 
 /** Ready-to-use V12Kitchen handle: the viem ABI plus calldata encoders. */

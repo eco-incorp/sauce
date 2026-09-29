@@ -43,6 +43,7 @@ import {
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { keccak256, toBytes } from "viem";
 
@@ -62,104 +63,140 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 // `kitchen.so`, `kitchen-idl.json` and `abis.json` come from the kitchen-* tags while the v12-* tags
 // carry only the engine. A pin left on a v12-* tag for one of those three does not resolve at all.
 //
-// PINNED BY TAG + DIGEST. A git tag is movable on GitHub, so the tag alone is not a pin — every
-// asset is checked against a digest committed HERE, not only against the manifest downloaded beside
-// it. That digest is the whole guarantee: bytes that match it ARE the pinned artifact, whichever
-// commit produced them.
+// PINNED BY TAG + DIGEST, and both live in `src/deployments/releases.json` — the one place every
+// release-dependent value is written. A git tag is movable on GitHub, so the tag alone is not a pin:
+// every asset is checked against a digest committed THERE, not only against the manifest downloaded
+// beside it. That digest is the whole guarantee: bytes that match it ARE the pinned artifact,
+// whichever commit produced them.
+//
+// ONE ROW PER COMPILER. Compiler output and engines pair by exact package version in both
+// directions, so this syncs the row whose `compiler` is the compiler actually installed: switching
+// the compiler switches the engines with it, and no tree can hold a compiler and engines that do not
+// run each other's programs. `deployments/releases.ts` reads the same rows to refuse, at call-build
+// time, an engine another row names.
 //
 // There is deliberately no commit pin. The components release INDEPENDENTLY, so a shared commit is
 // not a property this can rely on. Requiring one shared commit made a
 // routine per-component bump fail as "the tag moved".
 //
-// To bump: change the tag, run this script, and paste the digest it reports.
+// To bump: edit the row's versions, run this script, and paste the digests and engine ids it
+// reports. A row with a `null` digest or engine id is a release that is not out yet: this script
+// downloads it, reports what to paste, and writes NOTHING, because an unpinned engine is not one to
+// run.
 
-const V12_EVM = {
-  tag: "v12-evm-v1.1.0",
-  asset: "runtime.creation.hex",
-  // keccak256 of the creation code, cross-checked against the release manifest's `creationCodeKeccak`.
-  digest: "0x6ce9ae16441f3566789c569695fbf086f6469b19122249a975eafbca129274be",
-  manifestKey: "creationCodeKeccak",
+const RELEASES_JSON = resolve(SDK_DIR, "src", "deployments", "releases.json");
+const RELEASE_SETS = JSON.parse(readFileSync(RELEASES_JSON, "utf8")).releases;
+
+/** The installed `sauce-compiler`'s version. Its `./package.json` is not in the package's
+ *  `exports`, so resolve the entry and walk up to the manifest that NAMES the package — the package
+ *  also ships a `web/package.json` that is only `{"type":"module"}`. */
+function installedCompilerVersion() {
+  let dir = dirname(createRequire(import.meta.url).resolve("sauce-compiler"));
+  for (let up = 0; up < 10; up++) {
+    const manifest = resolve(dir, "package.json");
+    if (existsSync(manifest)) {
+      const parsed = JSON.parse(readFileSync(manifest, "utf8"));
+      if (parsed.name === "@eco-incorp/sauce-compiler" && parsed.version) return parsed.version;
+    }
+    dir = dirname(dir);
+  }
+  throw new Error("could not locate the installed @eco-incorp/sauce-compiler manifest");
+}
+
+const COMPILER = installedCompilerVersion();
+const SET = RELEASE_SETS.find((row) => row.compiler === COMPILER);
+if (!SET) {
+  console.error(
+    `[sync-engine-artifacts] the installed compiler is ${COMPILER}, and releases.json pairs no ` +
+      `engines with it — it has rows for ${RELEASE_SETS.map((row) => row.compiler).join(", ")}. ` +
+      "Add the row for this compiler rather than syncing engines it cannot run on.",
+  );
+  process.exit(1);
+}
+
+const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
+
+// How each asset is hashed and where its release manifest records that digest — the SHAPE of a
+// release, which does not move with a version, unlike the digests themselves.
+const ASSET_FORMATS = {
   // The manifest hashes the DECODED creation bytecode, not the hex file's bytes.
-  hash: (buf) => keccak256(toBytes(buf.toString("utf8").trim())),
+  "runtime.creation.hex": {
+    manifestKey: "creationCodeKeccak",
+    hash: (buf) => keccak256(toBytes(buf.toString("utf8").trim())),
+  },
+  "abis.json": { manifestKey: "abis.sha256", hash: sha256 },
 };
+// `manifestKey: null` means the manifest lists its artifacts as `[{ name, sha256 }]` and the digest
+// is found by asset name — the shape v12-svm and kitchen-svm moved to once they shipped several.
+const DEFAULT_FORMAT = { manifestKey: null, hash: sha256 };
 
-// The engine is now built PER CLUSTER — `CHAIN_ID` is compiled in, because Solana exposes no chain
+/** The pin for one asset of this row's release of `component`. */
+const pin = (component, asset) => ({
+  tag: `${component}-v${SET[component].version}`,
+  asset,
+  digest: SET[component].assets[asset],
+  ...(ASSET_FORMATS[asset] ?? DEFAULT_FORMAT),
+});
+
+// The EVM runtime's CREATION code.
+const V12_EVM = pin("v12-evm", "runtime.creation.hex");
+
+// The engine is built PER CLUSTER — `CHAIN_ID` is compiled in, because Solana exposes no chain
 // identifier a program can read — so there is no longer one `engine.so`. Devnet is what the test
-// harnesses load; a mainnet consumer takes `engine-mainnet.so` from the same release.
-//
-// The manifest moved with it: `soSha256` at the top level became an `artifacts` array, so the digest
-// is looked up BY ASSET NAME rather than by a fixed key.
-const V12_SVM = {
-  tag: "v12-svm-v1.3.0",
-  asset: "engine-devnet.so",
-  digest: "728cbfff88b01dc80cd9f4b422b6f29037689ec20e09887121b5bdebf2bee0a7",
-  manifestKey: null,
-  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
-};
-
-// The MAINNET engine and its wire, pinned exactly like devnet's. Both clusters ship from one
-// release because `CHAIN_ID` is compiled in — they are genuinely different binaries, and a suite
-// that asserts the cluster id has to run each one rather than assume they differ.
-const V12_SVM_MAINNET = {
-  tag: "v12-svm-v1.3.0",
-  asset: "engine-mainnet.so",
-  digest: "78b3f0d231e0303464df87699cce68027ac07cac9cfa0a5843cc5a7f4fdc323b",
-  manifestKey: null,
-  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
-};
-
-const V12_ENGINE_WIRE_MAINNET = {
-  tag: "v12-svm-v1.3.0",
-  asset: "engine-wire-mainnet.json",
-  digest: "f9e47b4329c2cd7bae6a5624a60c48d5fe13404c03fea925048fa0ae7c76168d",
-  manifestKey: null,
-  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
-};
+// harnesses load; a mainnet consumer takes `engine-mainnet.so` from the same release. Both clusters
+// ship from one release, and they are genuinely different binaries, so a suite that asserts the
+// cluster id has to run each one rather than assume they differ.
+const V12_SVM = pin("v12-svm", "engine-devnet.so");
+const V12_SVM_MAINNET = pin("v12-svm", "engine-mainnet.so");
+const V12_ENGINE_WIRE_MAINNET = pin("v12-svm", "engine-wire-mainnet.json");
 
 // The contracts the kitchen component OWNS, as one asset. What the SDK ships under its own names is
 // a superset: `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is
 // Uniswap's, so neither appears here and neither should — see ARTIFACTS below.
-const V12_EVM_ABIS = {
-  tag: "kitchen-evm-v1.1.0",
-  asset: "abis.json",
-  digest: "0cf29af5c11222f2842f0425895f905ea8c7b4338171c8a046aff5cc13fa9b19",
-  manifestKey: "abis.sha256",
-  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
-};
+const V12_EVM_ABIS = pin("kitchen-evm", "abis.json");
 
 // The kitchen — the Anchor loader that stages bytecode and owns Pots. Fetched rather than vendored:
-// a released binary is already pinned by tag + digest here, so a second copy in the tree would be a
+// a released binary is already pinned by tag + digest, so a second copy in the tree would be a
 // second thing to keep in step.
-const V12_KITCHEN = {
-  tag: "kitchen-svm-v1.0.0",
-  asset: "kitchen.so",
-  digest: "7b6af3c5b52a56567c2617d634b7403566b4aa5d6fb5dacd958430d84a15466f",
-  manifestKey: null,
-  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
-};
+const V12_KITCHEN = pin("kitchen-svm", "kitchen.so");
 
 // The engine's own description of its wire — discriminators, fault codes, memory limits — generated
 // from its Rust constants by the same build. It is the ground truth `engine-wire-drift.test.ts`
 // checks the SDK's released-engine constants against, so it is pinned exactly like the binary: an
 // engine whose wire moved must fail the digest here, not surprise a caller at run time.
-const V12_ENGINE_WIRE = {
-  tag: "v12-svm-v1.3.0",
-  asset: "engine-wire-devnet.json",
-  digest: "316b7ea4e63d030396a475f55f76a2b46aceaac82186def44d80b6752b6fcdad",
-  manifestKey: null,
-  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
-};
+const V12_ENGINE_WIRE = pin("v12-svm", "engine-wire-devnet.json");
 
 // The kitchen's Anchor IDL — discriminators, PDA seeds, and account layouts. `svm/kitchen.ts`
 // transcribes these by hand (Anchor emits no TypeScript the SDK can vendor), which is precisely the
 // hand-copying that let BYTECODE_FORMAT_EPOCH rot. Pinned so the drift test can compare against it.
-const V12_KITCHEN_IDL = {
-  tag: "kitchen-svm-v1.0.0",
-  asset: "kitchen-idl.json",
-  digest: "17d07f64d849ec67a40c5633f58530d84af33e8918300b196b8148728517aab5",
-  manifestKey: null,
-  hash: (buf) => createHash("sha256").update(buf).digest("hex"),
-};
+const V12_KITCHEN_IDL = pin("kitchen-svm", "kitchen-idl.json");
+
+const PINS = [
+  V12_EVM,
+  V12_EVM_ABIS,
+  V12_SVM,
+  V12_SVM_MAINNET,
+  V12_ENGINE_WIRE,
+  V12_ENGINE_WIRE_MAINNET,
+  V12_KITCHEN,
+  V12_KITCHEN_IDL,
+];
+
+// Every asset the row names must be one this script fetches, and the other way round: a digest
+// nothing checks is not a pin, and an asset fetched with no row entry would be pinned to `undefined`.
+for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"]) {
+  const listed = Object.keys(SET[component]?.assets ?? {}).sort();
+  const fetched = PINS.filter((p) => p.tag.startsWith(`${component}-v`))
+    .map((p) => p.asset)
+    .sort();
+  if (listed.join() !== fetched.join()) {
+    console.error(
+      `[sync-engine-artifacts] releases.json's ${COMPILER} row lists ${component} assets ` +
+        `[${listed.join(", ")}], but this script fetches [${fetched.join(", ")}].`,
+    );
+    process.exit(1);
+  }
+}
 
 // Inside node_modules so it needs no .gitignore entry and is wiped with the install it belongs to.
 // Keyed by tag: a bump downloads afresh rather than silently reusing the old bytes.
@@ -360,6 +397,73 @@ function fetchReleaseAsset({ tag, asset, digest, manifestKey, hash }) {
   return dest;
 }
 
+/** A release's `addresses.json`, cached beside its assets. */
+function releaseAddresses(tag) {
+  const dir = resolve(CACHE_ROOT, tag);
+  const path = resolve(dir, "addresses.json");
+  if (!existsSync(path)) {
+    mkdirSync(dir, { recursive: true });
+    download(tag, "addresses.json", path);
+  }
+
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+/** Each engine's own identity as its release records it: the EVM address, the SVM program id. */
+const ENGINE_IDENTITY = {
+  "v12-evm": (addresses) => addresses.contracts?.engine?.address,
+  "v12-svm": (addresses) => addresses.programs?.engine?.programId,
+};
+
+// ---------------------------------------------------------------------------
+// A ROW THAT IS NOT RELEASED YET: report what to paste, and write nothing. An unpinned engine is not
+// one to run, and keeping the previous row's artifacts on disk would pair them with a compiler they
+// were never synced for.
+{
+  const unpinned = PINS.filter((p) => p.digest === null);
+  const unnamed = Object.keys(ENGINE_IDENTITY).filter((c) => SET[c].engine === null);
+  if (unpinned.length > 0 || unnamed.length > 0) {
+    console.error(
+      `[sync-engine-artifacts] releases.json's row for compiler ${COMPILER} is not pinned yet. From ` +
+        "the releases it names — paste these into that row, then run this again:",
+    );
+    for (const p of unpinned) {
+      const dir = resolve(CACHE_ROOT, p.tag);
+      mkdirSync(dir, { recursive: true });
+      const dest = resolve(dir, p.asset);
+      try {
+        if (!existsSync(dest)) download(p.tag, p.asset, dest);
+        console.error(`  ${p.tag} ${p.asset}: "${p.hash(readFileSync(dest))}"`);
+      } catch (e) {
+        console.error(`  ${p.tag} ${p.asset}: not available — ${e.message}`);
+      }
+    }
+    for (const component of unnamed) {
+      const tag = `${component}-v${SET[component].version}`;
+      try {
+        console.error(`  ${tag} engine: "${ENGINE_IDENTITY[component](releaseAddresses(tag))}"`);
+      } catch (e) {
+        console.error(`  ${tag} engine: not available — ${e.message}`);
+      }
+    }
+    process.exit(1);
+  }
+}
+
+// Whether artifacts a previous sync left on disk may stand in for a fetch that failed here. Only
+// when that sync was for THIS compiler: `V12Deployments.json` records which one, and artifacts from
+// another row pair with a compiler that is not the one installed.
+const onDiskIsThisRow = () =>
+  DESTS.every((d) => {
+    const path = resolve(d, "V12Deployments.json");
+    if (!existsSync(path)) return false;
+    try {
+      return JSON.parse(readFileSync(path, "utf8")).compiler === COMPILER;
+    } catch {
+      return false;
+    }
+  });
+
 // SDK artifact name -> where its ABI comes from.
 //
 // The names on the LEFT are the SDK's own and are shipped to consumers, so they do not move; v12
@@ -510,8 +614,13 @@ try {
   const present = Object.keys(RELEASE_ABIS).every((name) =>
     DESTS.every((d) => existsSync(resolve(d, `${name}.json`))),
   );
-  if (!present) {
-    console.error(`[sync-engine-artifacts] ${e.message}`);
+  if (!present || !onDiskIsThisRow()) {
+    console.error(
+      `[sync-engine-artifacts] ${e.message}` +
+        (present
+          ? ` — and the ABIs on disk were synced for another compiler than ${COMPILER}.`
+          : ""),
+    );
     process.exit(1);
   }
   console.warn(
@@ -562,6 +671,16 @@ const RUNTIME_DEST = "V12RuntimeBytecode.json";
 const GATE_DEST = "V12EngineGate.json";
 let runtimeCreationPath;
 
+/** A copy kept on disk after a failed fetch must be from this compiler's row; anything else stops. */
+const refuseAnotherRow = (present, name, e) => {
+  if (!present || onDiskIsThisRow()) return;
+  console.error(
+    `[sync-engine-artifacts] ${name}: ${e.message} — and the copy on disk was synced for another ` +
+      `compiler than ${COMPILER}, so it cannot stand in.`,
+  );
+  process.exit(1);
+};
+
 try {
   runtimeCreationPath = fetchReleaseAsset(V12_EVM);
   const creationCode = readFileSync(runtimeCreationPath, "utf8").trim();
@@ -569,6 +688,7 @@ try {
   for (const dest of DESTS) writeFileSync(resolve(dest, RUNTIME_DEST), json);
 } catch (e) {
   const present = DESTS.every((d) => existsSync(resolve(d, RUNTIME_DEST)));
+  refuseAnotherRow(present, RUNTIME_DEST, e);
   console.warn(
     `[sync-engine-artifacts] V12RuntimeBytecode: ${e.message} — ` +
       (present ? "kept the copy already on disk." : "NOT produced."),
@@ -606,6 +726,7 @@ try {
   for (const dest of DESTS) writeFileSync(resolve(dest, GATE_DEST), json);
 } catch (e) {
   const present = DESTS.every((d) => existsSync(resolve(d, GATE_DEST)));
+  refuseAnotherRow(present, GATE_DEST, e);
   console.warn(
     `[sync-engine-artifacts] V12EngineGate: ${e.message} — ` +
       (present ? "kept the copy already on disk." : "NOT produced."),
@@ -619,22 +740,18 @@ try {
 // `clusterIndependent`: one address set, not a per-chain table. Shipped in the package (files:
 // ["sdk/dist"]) and read at runtime by `src/deployments/v12-addresses.ts`.
 //
-// These are ADDRESSES (deterministic, always resolvable), NOT liveness. The deployed Kitchen does not
-// have code on every chain yet. The legacy chain roster does not attest that these pinned release
-// versions are deployed. addresses.json carries no digest in the manifest (unlike the
-// bytecode), so a moved tag is caught two other ways: the version baked into each addresses.json must
-// match its tag, and the EVM Kitchen must equal the engine gate's own Kitchen (the harness in turn
-// re-verifies that Kitchen against the live `potInitCodeHash()`).
+// These are ADDRESSES (deterministic, always resolvable), NOT liveness: the deployed Kitchen does not
+// have code on every chain yet. addresses.json carries no digest in the manifest (unlike the
+// bytecode), so a moved tag is caught other ways: the version baked into each addresses.json must
+// match its tag, the EVM Kitchen and Pot hash must equal the engine gate's own, and each engine's
+// identity must be the one releases.json records.
+//
+// `compiler` records which row of releases.json this is — the compiler every program the SDK
+// compiles comes from, and the one `deployments/releases.ts` checks engines against.
 const DEPLOYMENTS_DEST = "V12Deployments.json";
 const tagVersion = (tag) => tag.replace(/^.*-v(?=\d)/, "");
 const addressesFor = (tag) => {
-  const dir = resolve(CACHE_ROOT, tag);
-  const path = resolve(dir, "addresses.json");
-  if (!existsSync(path)) {
-    mkdirSync(dir, { recursive: true });
-    download(tag, "addresses.json", path);
-  }
-  const parsed = JSON.parse(readFileSync(path, "utf8"));
+  const parsed = releaseAddresses(tag);
   if (parsed.version !== tagVersion(tag)) {
     throw new Error(
       `${tag}/addresses.json version ${parsed.version} != tag version ${tagVersion(tag)} — the tag moved`,
@@ -648,6 +765,7 @@ try {
   const svm = addressesFor(V12_SVM.tag); // engine program
   const kitchenSvm = addressesFor(V12_KITCHEN.tag); // kitchen program
   const deployments = {
+    compiler: COMPILER,
     version: kitchenEvm.version,
     commit: kitchenEvm.commit,
     releases: Object.fromEntries(
@@ -700,13 +818,39 @@ try {
       `kitchen-evm Kitchen ${deployments.evm.contracts.kitchen.address} != engine gate Kitchen ${gateKitchen}`,
     );
   }
+  // …and the Pot init-code hash the kitchen release mints under must be the one the engine gates on:
+  // a Kitchen upgrade that moves it orphans every Pot it mints from this engine.
+  const gateHash = engineManifest.gate?.potInitCodeHash;
+  if (gateHash && deployments.evm.pot.initCodeHash !== gateHash) {
+    throw new Error(
+      `kitchen-evm Pot initCodeHash ${deployments.evm.pot.initCodeHash} != engine gate hash ${gateHash}`,
+    );
+  }
+  // The engine identities releases.json records are what `deployments/releases.ts` refuses other
+  // compilers' programs on, so they must be the ones these releases actually publish.
+  const identities = { "v12-evm": evm, "v12-svm": svm };
+  for (const [component, addresses] of Object.entries(identities)) {
+    const published = ENGINE_IDENTITY[component](addresses);
+    const recorded = SET[component].engine;
+    const same =
+      component === "v12-evm"
+        ? String(published).toLowerCase() === String(recorded).toLowerCase()
+        : published === recorded;
+    if (!same) {
+      throw new Error(
+        `releases.json records the ${component} ${SET[component].version} engine as ${recorded}, ` +
+          `but its addresses.json publishes ${published}`,
+      );
+    }
+  }
   const json = `${JSON.stringify(deployments, null, 2)}\n`;
   for (const dest of DESTS) writeFileSync(resolve(dest, DEPLOYMENTS_DEST), json);
   console.log(
-    `[sync-engine-artifacts] wrote ${DEPLOYMENTS_DEST} — release addresses: engines ${evm.version}/${svm.version}, kitchens ${kitchenEvm.version}/${kitchenSvm.version}`,
+    `[sync-engine-artifacts] wrote ${DEPLOYMENTS_DEST} — compiler ${COMPILER}: engines ${evm.version}/${svm.version}, kitchens ${kitchenEvm.version}/${kitchenSvm.version}`,
   );
 } catch (e) {
   const present = DESTS.every((d) => existsSync(resolve(d, DEPLOYMENTS_DEST)));
+  refuseAnotherRow(present, DEPLOYMENTS_DEST, e);
   console.warn(
     `[sync-engine-artifacts] V12Deployments: ${e.message} — ` +
       (present ? "kept the copy already on disk." : "NOT produced."),

@@ -44,6 +44,9 @@ export interface V12SvmProgramRef {
 
 /** The assembled `V12Deployments.json`: release addresses and per-component provenance. */
 export interface V12DeployedAddresses {
+  /** The compiler version these releases were synced for: the row of `releases.json` they come
+   *  from. Every program this SDK compiles is that compiler's output. */
+  compiler: string;
   /** Legacy EVM Kitchen version; use `releases` for per-component versions. */
   version: string;
   /** Legacy EVM Kitchen commit; use `releases` for per-component commits. */
