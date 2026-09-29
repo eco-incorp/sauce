@@ -98,6 +98,7 @@
   ],
   "scripts": {
     "docs:check": "node docs/scripts/check-docs.mjs",
+    "check:browser": "node sdk/scripts/check-browser-bundles.mjs && node sdk/scripts/check-browser-compile.mjs",
     "build": "pnpm -r --filter './sdk' --filter './actions' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
@@ -122,9 +123,11 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@uniswap/v3-core": "^1.0.1",
+    "esbuild": "0.28.0",
     "eslint": "10.10.0",
     "globals": "16.5.0",
     "hardhat": "^2.22.0",
+    "playwright-core": "1.63.0",
     "prettier": "3.9.6",
     "typescript-eslint": "8.70.0"
   },

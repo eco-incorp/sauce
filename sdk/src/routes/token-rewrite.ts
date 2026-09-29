@@ -53,7 +53,7 @@ export type TokenSymbols = ReadonlyMap<string, bigint> | ReadonlySet<string>;
 export interface TokenRewriteResult {
   readonly source: string;
   /** True if at least one site (U4 or sugar) was rewritten -- tells the caller whether to prepend
-   *  the ERC20 import line and union in `TOKEN_BASE_DIRS`. */
+   *  the ERC20 import line. */
   readonly rewrote: boolean;
   /** Count of U4 (`<Sym>.transfer/.approve/.balanceOf(...)`) call sites rewritten. */
   readonly memberSites: number;

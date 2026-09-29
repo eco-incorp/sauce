@@ -62,7 +62,6 @@ import { formatBigint } from "../deposit/format.js";
 import { toAddressBigint } from "../token/params.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import { safeApproveStatements } from "../token/safe.js";
-import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { publishAndFundTx } from "./portal.js";
 import {
   emitTemplate,
@@ -401,8 +400,8 @@ export interface DynamicNestEntry {
 /**
  * Merges every entry's `dynamicChildStatements` into ONE `function main(){...}` program, shaped
  * exactly like `nest.ts#nestedTransferProgram` so `intent-dsl.ts` slots it the same way: one extra
- * `cook()` call in the parent's `route.calls`. `imports`/`baseDirs` are surfaced separately so a
- * caller with its own `baseDirs` merges rather than re-derives them.
+ * `cook()` call in the parent's `route.calls`. `imports` is surfaced separately so a caller
+ * splicing the statements into its own program merges it rather than re-deriving it.
  *
  * WHY A SEPARATE COOK RATHER THAN APPENDED TO THE PARENT'S OWN BODY: the measurement is the Pot's
  * BALANCE, which persists across calls, so a later cook sees exactly what an earlier one earned.
@@ -414,7 +413,6 @@ export interface DynamicNestEntry {
 export function dynamicChildProgram(entries: readonly DynamicNestEntry[]): {
   readonly source: string;
   readonly imports: readonly string[];
-  readonly baseDirs: readonly string[];
 } {
   if (entries.length === 0) {
     throw new Error("dynamicChildProgram: no entries — nothing to compile");
@@ -428,5 +426,5 @@ export function dynamicChildProgram(entries: readonly DynamicNestEntry[]): {
   const imports = needsErc20 ? [ERC20_IMPORT_LINE] : [];
   const body = statements.join("\n");
   const source = `${imports.length > 0 ? `${imports.join("\n")}\n` : ""}function main() {\n${body}\n}`;
-  return { source, imports, baseDirs: needsErc20 ? [...TOKEN_BASE_DIRS] : [] };
+  return { source, imports };
 }

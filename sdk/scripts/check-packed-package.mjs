@@ -169,8 +169,8 @@ try {
     import { dirname, join, resolve } from 'node:path';
     import { fileURLToPath } from 'node:url';
     import { keccak256 } from 'viem';
-    import { compile, encodeCompactArguments, decodeCompactArguments } from '${name}/compiler';
-    import { settleSource, SAUCE_BASE_DIRS } from '${name}/recipes';
+    import { compile, encodeCompactArguments, decodeCompactArguments, resolveSdkModule } from '${name}/compiler';
+    import { settleSource } from '${name}/recipes';
     import { SETTLE_PROGRAM, SETTLE_WIRE } from '${name}/verify';
     const source = new TextEncoder().encode('function main(x: Uint256): Uint256 { return x + 1; }');
     for (const target of ['evm', 'svm']) {
@@ -186,15 +186,15 @@ try {
     // The settle recipe, compiled the way ./recipes documents it to partners, from the shipped
     // source and the shipped IERC20 artifact. A pin the tarball cannot reproduce rejects every
     // settle a consumer builds, so this is checked here and not only against src/.
+    const settleText = new TextEncoder().encode(settleSource());
     const { bytecode: settle } = compile({
       target: 'evm',
       entry: 'settle.sauce.ts',
-      resolve: (path) => {
-        if (path.endsWith('settle.sauce.ts')) return new TextEncoder().encode(settleSource());
-        const found = SAUCE_BASE_DIRS.map((dir) => join(dir, path.replace(/^\\.\\//, ''))).find(existsSync);
-        return found === undefined ? undefined : readFileSync(found);
-      },
+      resolve: (path) => (path === 'settle.sauce.ts' ? settleText : resolveSdkModule(path)),
     });
+    // The embedded source is the shipped asset, byte for byte.
+    const settleAsset = fileURLToPath(import.meta.resolve('${name}/recipes/settle.sauce.ts'));
+    assert.equal(settleSource(), readFileSync(settleAsset, 'utf8'), 'settleSource() is the shipped settle.sauce.ts');
     assert.equal(settle.length, SETTLE_WIRE.PROGRAM_BYTES, 'settle program length matches its pin');
     assert.equal(keccak256(settle), SETTLE_WIRE.PROGRAM_HASH, 'settle program hash matches its pin');
     assert.equal('0x' + Buffer.from(settle).toString('hex'), SETTLE_PROGRAM, 'settle program bytes match SETTLE_PROGRAM');
@@ -332,6 +332,18 @@ try {
     `Clean package install: all ${documented.length} exports the actions pages name typecheck ` +
       `from ./actions, the type-only ones being ${actionTypes.join(", ")}`,
   );
+
+  // The same browser gates the repository runs, against the INSTALLED package and resolved from
+  // this consumer by name, so what they prove is the shipped `exports` map: every browser-facing
+  // export bundles for the browser without Node, and compiles in headless Chromium to the bytes
+  // this installed package compiles in Node.
+  for (const script of ["check-browser-bundles.mjs", "check-browser-compile.mjs"]) {
+    execFileSync(
+      process.execPath,
+      [join(root, "sdk/scripts", script), "--package-root", installedRoot, "--consumer", work],
+      { cwd: work, stdio: "inherit", env: smokeEnv },
+    );
+  }
 } finally {
   rmSync(work, { recursive: true, force: true });
 }

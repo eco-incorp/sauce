@@ -1,11 +1,9 @@
 /**
  * SauceScript SOURCE emission for the universal token interface — pure string templating, no
  * compiler import (matches `swap/source.ts`/`deposit/source.ts`'s posture: every compile option
- * stays explicit at the call site).
+ * stays explicit at the call site). The `IERC20` ABI an EVM program imports is served by the route
+ * compiler itself (`embedded/resolve.ts`), so compiling one needs no resolver option.
  */
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import {
   evmApproveStatements,
   evmBalanceExpression,
@@ -30,13 +28,6 @@ import {
   validateTransferSpec,
 } from "./params.js";
 import type { TokenSpec, TokenTarget } from "./types.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/** `baseDirs` for compiling any program `tokenSource`/`tokenCallStatement` produces — resolves the
- *  generated `import { IERC20 } from "./artifacts/IERC20.json"` against this installed package's
- *  dist root. Same value/pattern as `swap/source.ts`'s `SWAP_BASE_DIRS`. */
-export const TOKEN_BASE_DIRS: readonly string[] = [join(__dirname, "..")];
 
 function validateSpec(spec: TokenSpec, target: TokenTarget): void {
   if (spec.op === "transfer") validateTransferSpec(spec, target);

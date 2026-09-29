@@ -143,7 +143,7 @@
  */
 import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { createHash } from "node:crypto";
+import { sha256 } from "../../../bytes.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -233,13 +233,15 @@ function withdrawAuthorityAddress(programId: Address, pool: Address, bump: numbe
   const decoder = getAddressDecoder();
   // create_program_address(seeds=[pool, "withdraw", [bump]], programId):
   // sha256(seed_1 || ... || programId || "ProgramDerivedAddress").
-  const h = createHash("sha256");
-  h.update(Buffer.from(getPubkeyBytes(pool)));
-  h.update(Buffer.from("withdraw"));
-  h.update(Buffer.from([bump]));
-  h.update(Buffer.from(getPubkeyBytes(programId)));
-  h.update(Buffer.from("ProgramDerivedAddress"));
-  return decoder.decode(new Uint8Array(h.digest()));
+  return decoder.decode(
+    sha256(
+      getPubkeyBytes(pool),
+      "withdraw",
+      Uint8Array.of(bump),
+      getPubkeyBytes(programId),
+      "ProgramDerivedAddress",
+    ),
+  );
 }
 
 // @solana/kit's Address is a branded base58 string; decoding it back to raw

@@ -30,16 +30,15 @@ import {
   derivePotPda,
   deriveProgramDataPda,
   MAX_POT_LEN,
+} from "@eco-incorp/sauce-source/svm";
+import type { AccountResolution, SignedExecuteTransaction } from "@eco-incorp/sauce-source/svm";
+import {
   svmEnginePath,
   svmKitchenIdlPath,
   svmKitchenPath,
-} from "@eco-incorp/sauce-source/svm";
-import type {
-  AccountResolution,
-  EngineCluster,
-  SignedExecuteTransaction,
-} from "@eco-incorp/sauce-source/svm";
-import type { SvmEngineArtifactPaths } from "@eco-incorp/sauce-source/svm/engine-artifacts";
+  type EngineCluster,
+  type SvmEngineArtifactPaths,
+} from "@eco-incorp/sauce-source/svm/engine-artifacts";
 import type { AccountManifest } from "sauce-compiler";
 
 /** Slot every local run sits at (must exceed a fabricated ALT's last_extended_slot 0). */

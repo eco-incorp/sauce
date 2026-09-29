@@ -3,24 +3,24 @@
 Install `@eco-incorp/sauce` and import through the package's public entry points. All paths below
 are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 
-| Import                         | Contents                                                                                                                          |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `.`                            | Chain accessors (`Base`, `Solana`, …); `routes`, `token`, `swap`, `deposit`, `contracts`, `svmVenues`; protocol and chain queries |
-| `/compiler`                    | `compile`, compiler types, `encodeCompactArguments`, and `decodeCompactArguments`                                                 |
-| `/actions`                     | JSON action programs: validation, compilation and intents; the JSON Schema is `/actions/action-program.schema.json`               |
-| `/protocols/*`                 | One protocol's `protocolInfo`, `deployments`, ABI exports, and named SauceScript templates                                        |
-| `/chains`                      | Canonical chain identities and EVM chain metadata                                                                                 |
-| `/deployments`                 | Sauce engine/Kitchen addresses, Pot derivation inputs, and recorded deployment coverage                                           |
-| `/recipes`                     | EVM settlement source and CCTP/plain-transfer recipe builders and sources                                                         |
-| `/recipes/settle.sauce.ts`     | EVM settlement source asset                                                                                                       |
-| `/svm`                         | SVM clients, account plans, resolution, staging, Kitchen instructions, recipes, and transactions                                  |
-| `/svm/engine`                  | SVM engine wire format and instruction builders                                                                                   |
-| `/svm/engine-artifacts`        | Node helpers locating packaged SVM engine/Kitchen binaries and IDL                                                                |
-| `/svm/verify`                  | SVM program and gated engine CPI verification; separate Kitchen decoding is required                                              |
-| `/svm/recipes/settle.sauce.ts` | SVM settlement source asset                                                                                                       |
-| `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`)                                 |
-| `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                           |
-| `/skills`                      | Protocol Markdown index and skill-file loaders                                                                                    |
+| Import                         | Contents                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.`                            | Chain accessors (`Base`, `Solana`, …); `routes`, `token`, `swap`, `deposit`, `contracts`, `svmVenues`; protocol and chain queries; `ready` |
+| `/compiler`                    | `compile`, `ready`, compiler types, the compact codec, and `resolveSdkModule`/`resolveSdkPackage`                                          |
+| `/actions`                     | JSON action programs: validation, compilation and intents; the JSON Schema is `/actions/action-program.schema.json`                        |
+| `/protocols/*`                 | One protocol's `protocolInfo`, `deployments`, ABI exports, and named SauceScript templates                                                 |
+| `/chains`                      | Canonical chain identities and EVM chain metadata                                                                                          |
+| `/deployments`                 | Sauce engine/Kitchen addresses, Pot derivation inputs, and recorded deployment coverage                                                    |
+| `/recipes`                     | EVM settlement source and CCTP/plain-transfer recipe builders and sources                                                                  |
+| `/recipes/settle.sauce.ts`     | EVM settlement source asset                                                                                                                |
+| `/svm`                         | SVM clients, account plans, resolution, staging, Kitchen instructions, recipes, and transactions                                           |
+| `/svm/engine`                  | SVM engine wire format and instruction builders                                                                                            |
+| `/svm/engine-artifacts`        | Node-only helpers locating packaged SVM engine/Kitchen binaries and IDL                                                                    |
+| `/svm/verify`                  | SVM program and gated engine CPI verification; separate Kitchen decoding is required                                                       |
+| `/svm/recipes/settle.sauce.ts` | SVM settlement source asset                                                                                                                |
+| `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`)                                          |
+| `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                                    |
+| `/skills`                      | Protocol Markdown index and skill-file loaders                                                                                             |
 
 The [`exports` map](../../package.json) defines this list. There is no `/routes`, `/token`,
 `/swap`, `/deposit`, or `/contracts` subpath; import these namespaces from the root:
@@ -68,9 +68,12 @@ performs no protocol operation. `getProtocolSkill` throws for a slug absent from
 
 ## Where each import runs
 
-The root import, route compilation, recipe and skill loaders and artifact resolvers use Node.js
-APIs and need Node **24 or newer**.
+Every import runs in Node **24 or newer** and in a browser, with one exception:
+`/svm/engine-artifacts` returns filesystem paths to the packaged engine binaries for a local
+LiteSVM harness, and is Node-only.
 
-`/verify` is the exception: its dependency closure is `viem` alone, so an EVM settlement payload can
-be validated in a browser or an edge runtime without loading the compiler. The compiler dependency
-has its own browser entry point, described in the [compiler reference](compiler.md).
+Anything that compiles — `/compiler`, route compilation, the builders, the recipes, `/actions`,
+`/svm/verify` — needs one `await ready()` first in a browser, while the compiler's WebAssembly
+loads; the [compiler reference](compiler.md#in-a-browser) covers it. In Node nothing needs it.
+`/verify` never loads the compiler: its dependency closure is `viem` alone, so an EVM settlement
+payload can be validated in a browser or an edge runtime without it.

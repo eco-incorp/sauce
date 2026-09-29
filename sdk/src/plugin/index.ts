@@ -1,21 +1,9 @@
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-
 import { DESCRIPTORS } from "../descriptors/registry.js";
 import type { ContractDescriptor } from "../descriptors/types.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
-
-// Read the manifest from a sibling file (same dir as this compiled JS). This works in both
-// modes without any packaging quirks:
-//   - dev (ts-jest): thisDir resolves to `<sdk>/src/plugin/`, where manifest.json lives.
-//   - published: thisDir resolves to `<sdk>/dist/plugin/`, where `copy-verify-assets.mjs`
-//     copies manifest.json alongside index.js — and `sdk/dist` IS in the root `files` list
-//     (unlike `sdk/src/plugin/`), so consumers actually receive it.
-// Read directly (not `import ... from "./manifest.json"`) because `tsc` does not copy
-// imported JSON to outDir — same reason `src/skills/*.md` are read via `readFileSync`.
-const thisDir = dirname(fileURLToPath(import.meta.url));
-const manifestPath = join(thisDir, "manifest.json");
+// A JSON import, so no filesystem is read at run time and a bundler inlines it. `manifest.json`
+// still ships beside the compiled module (`copy-verify-assets.mjs`) for tools that read it directly.
+import manifest from "./manifest.json" with { type: "json" };
 
 /**
  * Manifest for SDK route defaults and SauceScript operation-name metadata.
@@ -40,17 +28,9 @@ export interface SaucePlugin {
   nameParity: Record<string, string>;
 }
 
-// Memoize: `chainAmbient()` (routes/ambient.ts) calls this on every `openRoute` compile, which
-// is a hot path. The manifest is a bundled asset that cannot change over the life of the
-// process — one parse per process is enough.
-let cached: SaucePlugin | undefined;
-
-/** Load the plugin manifest. Cached after the first call. */
+/** Load the plugin manifest. The same object on every call. */
 export function loadPlugin(): SaucePlugin {
-  if (cached === undefined) {
-    cached = JSON.parse(readFileSync(manifestPath, "utf-8")) as SaucePlugin;
-  }
-  return cached;
+  return manifest as SaucePlugin;
 }
 
 /**

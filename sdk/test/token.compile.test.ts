@@ -9,9 +9,9 @@
  */
 import { Token } from "../src/token/api.js";
 import { compile as compileDirect } from "../src/compiler.js";
-import { TOKEN_BASE_DIRS, tokenSource } from "../src/token/source.js";
+import { tokenSource } from "../src/token/source.js";
 import type { TokenSpec } from "../src/token/types.js";
-import { compileSource } from "./helpers";
+import { compileSource, SDK_SOURCE_DIRS } from "./helpers";
 
 const TOKEN_ADDR = "0x1111111111111111111111111111111111111111" as const;
 const TO = "0x2222222222222222222222222222222222222222" as const;
@@ -56,7 +56,7 @@ describe("Token: compiles on an EVM target", () => {
       "evm",
     );
     expect(
-      compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS }).bytecode.length,
+      compileSource(src, "evm", { baseDirs: SDK_SOURCE_DIRS }).bytecode.length,
     ).toBeGreaterThan(0);
   });
 
@@ -66,7 +66,7 @@ describe("Token: compiles on an EVM target", () => {
       "evm",
     );
     expect(
-      compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS }).bytecode.length,
+      compileSource(src, "evm", { baseDirs: SDK_SOURCE_DIRS }).bytecode.length,
     ).toBeGreaterThan(0);
   });
 
@@ -75,7 +75,7 @@ describe("Token: compiles on an EVM target", () => {
       { op: "approve", token: TOKEN_ADDR, spender: SPENDER, amount: 5n },
       "evm",
     );
-    expect(compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS }).manifest).toBeUndefined();
+    expect(compileSource(src, "evm", { baseDirs: SDK_SOURCE_DIRS }).manifest).toBeUndefined();
   });
 });
 
@@ -172,7 +172,7 @@ describe("Token: SVM source compiles through the public compiler without route a
 describe("Token: E1.3 capability gate — the two arms are NOT interchangeable (negative controls)", () => {
   it("the ERC20 (evm) source is rejected on target 'svm'", () => {
     const src = tokenSource({ op: "transfer", token: TOKEN_ADDR, to: TO, amount: 5n }, "evm");
-    expect(() => compileSource(src, "svm", { baseDirs: TOKEN_BASE_DIRS })).toThrow(
+    expect(() => compileSource(src, "svm", { baseDirs: SDK_SOURCE_DIRS })).toThrow(
       /is not available on the svm target/,
     );
   });
@@ -181,7 +181,7 @@ describe("Token: E1.3 capability gate — the two arms are NOT interchangeable (
     // The role annotation (`Account<Writable>`) is the first svm-only construct in program order,
     // so it is what fires; the `svm.sload`/`svm.call` rows below it are svm-only too.
     const src = tokenSource(SVM_TRANSFER, "svm");
-    expect(() => compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS })).toThrow(
+    expect(() => compileSource(src, "evm", { baseDirs: SDK_SOURCE_DIRS })).toThrow(
       /`an Account role` is not available on the evm target/,
     );
   });
@@ -190,7 +190,7 @@ describe("Token: E1.3 capability gate — the two arms are NOT interchangeable (
     // balanceOf declares a bare `Account` (no role) and does no CPI, so the account read itself is
     // the row that rejects it — the gate holds for the plain-read arm too, not just the CPI arm.
     const src = tokenSource(SVM_BALANCE, "svm");
-    expect(() => compileSource(src, "evm", { baseDirs: TOKEN_BASE_DIRS })).toThrow(
+    expect(() => compileSource(src, "evm", { baseDirs: SDK_SOURCE_DIRS })).toThrow(
       /`svm\.sload` is not available on the evm target/,
     );
   });

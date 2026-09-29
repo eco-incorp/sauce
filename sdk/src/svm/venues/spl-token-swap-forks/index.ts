@@ -50,9 +50,9 @@
  * as `orca-legacy-token-swap` — `fetchPoolConfig` throws on any nonzero
  * `curve_type` rather than silently mis-pricing a stable pool with CP math.
  */
-import { createHash } from "node:crypto";
 import { getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { sha256 } from "../../../bytes.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -145,12 +145,12 @@ function netAmountIn(slug: string, cfg: SplTokenSwapForkPoolConfig, amountIn: bi
 function deriveSwapAuthority(programId: Address, pool: Address, bumpSeed: number): Address {
   const codec = getAddressCodec();
   return codec.decode(
-    createHash("sha256")
-      .update(new Uint8Array(codec.encode(pool)))
-      .update(Uint8Array.of(bumpSeed))
-      .update(new Uint8Array(codec.encode(programId)))
-      .update("ProgramDerivedAddress")
-      .digest(),
+    sha256(
+      new Uint8Array(codec.encode(pool)),
+      Uint8Array.of(bumpSeed),
+      new Uint8Array(codec.encode(programId)),
+      "ProgramDerivedAddress",
+    ),
   );
 }
 

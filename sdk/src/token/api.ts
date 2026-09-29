@@ -18,7 +18,6 @@ import {
 import {
   tokenAccountRefs,
   tokenExpression,
-  TOKEN_BASE_DIRS,
   tokenCallStatement,
   tokenImportLines,
   tokenSource,
@@ -41,7 +40,6 @@ export interface TokenSauceScript {
   readonly imports: readonly string[];
   readonly statement: string;
   readonly source: string;
-  readonly baseDirs: readonly string[];
   readonly accountRefs?: readonly string[];
 }
 
@@ -77,7 +75,6 @@ function makeTokenCall(spec: TokenSpec): TokenCall {
         imports,
         statement,
         source: src,
-        baseDirs: TOKEN_BASE_DIRS,
         ...(target === "svm" ? { accountRefs: tokenAccountRefsSafe(spec, target) } : {}),
       };
     },

@@ -148,6 +148,7 @@
  */
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { hexString } from "../../../bytes.js";
 import type { AccountLoader, PoolConfig, VenueAccount } from "../types.js";
 import { BINARYFI_ASSET_FLOOR_RATES } from "./asset-configs.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
@@ -237,7 +238,7 @@ export const binaryfi = {
         `binaryfi market ${pool} has unexpected size ${data.length} (want ${MARKET_ACCOUNT_SIZE})`,
       );
     }
-    const discHex = Buffer.from(data.subarray(0, 8)).toString("hex");
+    const discHex = hexString(data.subarray(0, 8));
     if (discHex !== MARKET_DISCRIMINATOR_HEX) {
       throw new Error(
         `binaryfi market ${pool} has unexpected discriminator ${discHex} (want ${MARKET_DISCRIMINATOR_HEX})`,

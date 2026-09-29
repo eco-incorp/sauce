@@ -109,8 +109,8 @@
  * note) — this adapter adds no new packet-budget mechanism, it just
  * consumes more of the existing one per slot than most families.
  */
-import { createHash } from "node:crypto";
 import { address, getAddressEncoder } from "@solana/kit";
+import { sha256 } from "../../../bytes.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
@@ -255,7 +255,7 @@ const PAIR_BY_KEY = new Map<string, { inMint: Address; outMint: Address }>();
 
 /** Mint (or re-mint, idempotently) the synthetic discovery key for a directed pair. */
 export function sanctumInfinityPoolKey(inMint: Address, outMint: Address): Address {
-  const digest = createHash("sha256").update(`${inMint}\0${outMint}`).digest();
+  const digest = sha256(`${inMint}\0${outMint}`);
   const key = address(base58Encode(digest));
   PAIR_BY_KEY.set(key as string, { inMint, outMint });
   return key;

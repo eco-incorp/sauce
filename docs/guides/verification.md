@@ -10,10 +10,10 @@ settlement can sit next to calls that are not, on a chain you did not expect, ai
 not control. Verification identifies the program and decodes its arguments. The destination, the
 execution target, the account identities and every other call in the intent remain yours to check.
 
-| Surface                        | Mechanism                                                                                          | Environment                                                            |
-| ------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `@eco-incorp/sauce/verify`     | Validate the EVM program hash and decode its canonical runtime argument tail                       | Node, browsers, and edge runtimes; depends on `viem`, not the compiler |
-| `@eco-incorp/sauce/svm/verify` | Recompile SVM settlement with expected parameters, compare bytecode, and inspect attached accounts | Node; loads the compiler                                               |
+| Surface                        | Mechanism                                                                                          | Environment                                                                |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `@eco-incorp/sauce/verify`     | Validate the EVM program hash and decode its canonical runtime argument tail                       | Node, browsers, and edge runtimes; depends on `viem`, not the compiler     |
+| `@eco-incorp/sauce/svm/verify` | Recompile SVM settlement with expected parameters, compare bytecode, and inspect attached accounts | Node and browsers; loads the compiler (`await ready()` first in a browser) |
 
 ## Settlement behavior
 
@@ -160,9 +160,27 @@ their values, and keep an older pin only for a version you have decided to accep
 
 The source is available through `settleSource()` from
 `@eco-incorp/sauce/recipes`, and as the
-`@eco-incorp/sauce/recipes/settle.sauce.ts` asset. `SAUCE_BASE_DIRS` locates its ABI
-dependencies for a reproducing resolver. The verifier itself does not load that
-source or recompile it.
+`@eco-incorp/sauce/recipes/settle.sauce.ts` asset. `resolveSdkModule` from
+`@eco-incorp/sauce/compiler` serves its ABI dependency to a reproducing resolver:
+
+```ts
+import { compile, resolveSdkModule } from "@eco-incorp/sauce/compiler";
+import { settleSource } from "@eco-incorp/sauce/recipes";
+import { SETTLE_PROGRAM } from "@eco-incorp/sauce/verify";
+import { bytesToHex } from "viem";
+
+const settle = new TextEncoder().encode(settleSource());
+const { bytecode } = compile({
+  target: "evm",
+  entry: "settle.sauce.ts",
+  resolve: (path) => (path === "settle.sauce.ts" ? settle : resolveSdkModule(path)),
+});
+if (bytesToHex(bytecode) !== SETTLE_PROGRAM.toLowerCase()) {
+  throw new Error("Did not reproduce the settle program");
+}
+```
+
+The verifier itself does not load that source or recompile it.
 
 ## SVM: verify program and accounts
 

@@ -6,7 +6,7 @@
  * Pure: hand-built `Intent`s + text assertions, plus a real `compile()` proof that the emitted
  * program actually compiles (no network, no anvil).
  */
-import { compileProgram as compile } from "./helpers";
+import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import type { Hex } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
@@ -22,7 +22,6 @@ import { intentVaultAddressCall } from "../src/routes/portal.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { predictVaultAddress } from "../src/routes/vault.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "../src/routes/normalize.js";
-import { TOKEN_BASE_DIRS } from "../src/token/source.js";
 import type { Intent, Route, UniversalAddress } from "../src/routes/types.js";
 
 const evmAddr = (byte: string): UniversalAddress =>
@@ -319,11 +318,10 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
         tokens: [{ token: TOKEN_A, amount: 500n }],
       }),
     });
-    const { source, baseDirs, imports } = nestedTransferProgram([{ child, opts: explicitOpts }]);
+    const { source, imports } = nestedTransferProgram([{ child, opts: explicitOpts }]);
     expect(imports).toEqual([expect.stringContaining("IERC20")]);
-    expect(baseDirs.length).toBeGreaterThan(0);
 
-    const result = compile(source, { baseDirs: [...baseDirs] });
+    const result = compile(source, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(result.bytecode.length).toBeGreaterThan(0);
     expect(result.bytecode[0]!.length).toBeGreaterThan(0);
   });
@@ -363,9 +361,9 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
       { child: childA, opts: explicitOpts },
       { child: childB, opts: { ...explicitOpts, clamp: false } },
     ];
-    const { source, baseDirs } = nestedTransferProgram(entries);
+    const { source } = nestedTransferProgram(entries);
 
-    const result = compile(source, { baseDirs: [...baseDirs, ...TOKEN_BASE_DIRS] });
+    const result = compile(source, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(result.bytecode.length).toBeGreaterThan(0);
     // sanity: every per-child local is namespaced by index, so no `already declared` collision.
     expect(source).toContain("n0_vault");
@@ -384,9 +382,8 @@ describe("nest.ts: nestedTransferProgram — real compile() proof", () => {
         tokens: [],
       }),
     });
-    const { source, imports, baseDirs } = nestedTransferProgram([{ child, opts: explicitOpts }]);
+    const { source, imports } = nestedTransferProgram([{ child, opts: explicitOpts }]);
     expect(imports).toEqual([]);
-    expect(baseDirs).toEqual([]);
     const result = compile(source);
     expect(result.bytecode.length).toBeGreaterThan(0);
   });

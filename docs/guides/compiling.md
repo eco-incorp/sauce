@@ -193,9 +193,30 @@ For an ABI you already hold, raw compilation takes
 `inlineContracts: [["ERC20", JSON.stringify(abi)]]`. The route API takes the parsed form,
 `contracts: { ERC20: { abi } }`, and adapts it. The two shapes are not interchangeable.
 
-Raw compilation does not find `@sauce/token`, the token library the SDK owns and ships — the route
-path resolves it itself. Serve the package's source and its neutral entry through your own resolver
-if you need it.
+Raw compilation serves nothing you do not. The route path serves the SDK's own files itself: the
+`@sauce/token` library, the ERC-20 and Sauce Router ABIs and every protocol ABI twin. For a raw
+compile that needs them, fall back to `resolveSdkModule` and `resolveSdkPackage` from
+`@eco-incorp/sauce/compiler` — the [compiler reference](../api/compiler.md#the-sdks-own-modules)
+shows how.
+
+The filesystem resolver above is the one Node-only part of this page. In a browser, serve modules
+from memory.
+
+## Compile in a browser
+
+Everything on this page runs in a browser and compiles the same bytes as Node. The compiler's
+WebAssembly loads asynchronously there, so call `ready()` once before the first compile:
+
+```ts
+import { ready } from "@eco-incorp/sauce";
+
+await ready();
+```
+
+With no argument it fetches the wasm from beside the compiler's module, which is where a bundler
+that handles `new URL(…, import.meta.url)` puts it. Otherwise pass the wasm's URL or bytes. The
+[compiler reference](../api/compiler.md#in-a-browser) covers both, and the one subpath that stays
+Node-only.
 
 ## Compile for Solana
 

@@ -61,13 +61,14 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && node scripts/sync-engine-artifacts.mjs && node scripts/copy-verify-assets.mjs",
-    "typecheck": "tsc --noEmit",
-    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
+    "build": "node scripts/gen-embedded-sources.mjs && tsc && node scripts/sync-engine-artifacts.mjs && node scripts/copy-verify-assets.mjs",
+    "typecheck": "node scripts/gen-embedded-sources.mjs && tsc --noEmit",
+    "typecheck:test": "node scripts/gen-embedded-sources.mjs && tsc -p tsconfig.test.json --noEmit",
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
     "gen-route-globals": "node scripts/gen-route-globals.mjs",
     "gen-source-globals": "node scripts/gen-source-globals.mjs",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
+    "gen-embedded-sources": "node scripts/gen-embedded-sources.mjs",
+    "test": "node scripts/gen-embedded-sources.mjs && NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
     "sync-eco-routes-addresses": "node scripts/sync-eco-routes-addresses.mjs"
   },
   "dependencies": {

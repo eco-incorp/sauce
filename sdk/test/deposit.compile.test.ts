@@ -3,9 +3,9 @@
  * compiler, no forge/fork/anvil. Same import + baseDirs pattern as
  * `swap.compile.test.ts`.
  */
-import { compileProgram as compile } from "./helpers";
+import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 
-import { DEPOSIT_BASE_DIRS, depositSource } from "../src/deposit/source.js";
+import { depositSource } from "../src/deposit/source.js";
 import type { DepositKey } from "../src/deposit/templates.js";
 import type { DepositSourceSpec } from "../src/deposit/types.js";
 import { encodeFunctionData, erc20Abi } from "viem";
@@ -44,7 +44,7 @@ describe("deposit adapter compiles for every registered template", () => {
   for (const key of ALL_KEYS) {
     it(key, () => {
       const { bytecode } = compile(depositSource(specFor(key)), {
-        baseDirs: [...DEPOSIT_BASE_DIRS],
+        baseDirs: [...SDK_SOURCE_DIRS],
       });
       expect(bytecode[0]!.length).toBeGreaterThan(0);
     });
@@ -61,7 +61,7 @@ describe("amount 'balance' variants compile", () => {
         token: TOKEN,
         amount: "balance",
       }),
-      { baseDirs: [...DEPOSIT_BASE_DIRS] },
+      { baseDirs: [...SDK_SOURCE_DIRS] },
     );
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
@@ -69,7 +69,7 @@ describe("amount 'balance' variants compile", () => {
   it("a native-value template (weth:wrap)", () => {
     const { bytecode } = compile(
       depositSource({ protocol: "weth", action: "wrap", target: TARGET, amount: "balance" }),
-      { baseDirs: [...DEPOSIT_BASE_DIRS] },
+      { baseDirs: [...SDK_SOURCE_DIRS] },
     );
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
@@ -87,7 +87,7 @@ describe("amount 'balance' variants compile", () => {
     expect(source).not.toContain("ctx.selfBalance()");
     expect(source).not.toContain(".approve(");
 
-    const { bytecode } = compile(source, { baseDirs: [...DEPOSIT_BASE_DIRS] });
+    const { bytecode } = compile(source, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 });
@@ -98,10 +98,10 @@ describe("uint256 maximum amounts compile", () => {
       const spec = { protocol, action: "withdraw", target: TARGET, token: TOKEN };
       const maximum = (1n << 256n) - 1n;
       const { bytecode } = compile(depositSource({ ...spec, amount: "max" }), {
-        baseDirs: [...DEPOSIT_BASE_DIRS],
+        baseDirs: [...SDK_SOURCE_DIRS],
       });
       const literal = compile(depositSource({ ...spec, amount: maximum }), {
-        baseDirs: [...DEPOSIT_BASE_DIRS],
+        baseDirs: [...SDK_SOURCE_DIRS],
       });
       expect(bytecode[0]!.length).toBeGreaterThan(0);
       expect(bytecode).toEqual(literal.bytecode);
@@ -127,7 +127,7 @@ describe("uint256 maximum amounts compile", () => {
     );
     expect(source).toContain(`.supply(${BigInt(TOKEN)}n, 1000n,`);
 
-    const { bytecode } = compile(source, { baseDirs: [...DEPOSIT_BASE_DIRS] });
+    const { bytecode } = compile(source, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 });
@@ -138,7 +138,7 @@ describe("a multi-deposit program (erc4626 + aave-v3, one main())", () => {
       { protocol: "erc4626", action: "deposit", target: TARGET, token: TOKEN, amount: 500n },
       { protocol: "aave-v3", action: "supply", target: TARGET, token: TOKEN, amount: 500n },
     ]);
-    const { bytecode } = compile(src, { baseDirs: [...DEPOSIT_BASE_DIRS] });
+    const { bytecode } = compile(src, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 });
@@ -160,7 +160,7 @@ describe("two deposits of the SAME kind in one main()", () => {
     expect(src).toContain("const dWrap0 = ");
     expect(src).toContain("const dWrap1 = ");
 
-    const { bytecode } = compile(src, { baseDirs: [...DEPOSIT_BASE_DIRS] });
+    const { bytecode } = compile(src, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -168,7 +168,7 @@ describe("two deposits of the SAME kind in one main()", () => {
     const src = depositSource(
       twice({ protocol: "weth", action: "unwrap", target: TARGET, amount: 1_000n }),
     );
-    const { bytecode } = compile(src, { baseDirs: [...DEPOSIT_BASE_DIRS] });
+    const { bytecode } = compile(src, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -176,7 +176,7 @@ describe("two deposits of the SAME kind in one main()", () => {
     const src = depositSource(
       twice({ protocol: "lido", action: "stake", target: TARGET, amount: 1_000n }),
     );
-    const { bytecode } = compile(src, { baseDirs: [...DEPOSIT_BASE_DIRS] });
+    const { bytecode } = compile(src, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

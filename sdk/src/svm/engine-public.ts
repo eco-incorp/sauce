@@ -6,7 +6,8 @@
 // reads a shipped `.sauce.ts` off disk). Under a CommonJS transform (ts-jest / babel-jest) that shim
 // collides with the injected module-wrapper `__dirname` and throws
 // `Identifier '__dirname' has already been declared`. Native Node 22.12+ `require()` of a synchronous
-// ESM graph is fine; jest, which wraps modules itself, is not.
+// ESM graph is fine; jest, which wraps modules itself, is not. (The SDK now embeds that text, so the
+// barrel no longer carries the shim; this subpath stays the small graph the invariant below keeps.)
 //
 // This subpath re-exports ONLY the engine wire contract — buffer/header/discriminator constants and
 // offsets (via `./engine.js`, which declares them) — and the buffer

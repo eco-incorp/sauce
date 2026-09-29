@@ -9,6 +9,7 @@ import { chainContracts, on, type ContractAccessor } from "../src/descriptors/ac
 import type { ContractCall } from "../src/descriptors/call.js";
 import { getDescriptor, methodOf, selectorOf } from "../src/descriptors/query.js";
 import { UniswapV4UniversalRouterABI } from "../src/protocols/uniswap-v4/abis.js";
+import { compileWithRs } from "../src/routes/rs-compile.js";
 
 /** Method names are typed `unknown` on `ContractAccessor` (see accessors.ts's own doc comment) —
  *  this test file's job is RUNTIME behavior, so every call site casts through this one helper
@@ -215,7 +216,10 @@ describe("descriptors accessors: toCall / toSauceScript", () => {
     const script = call.toSauceScript();
     expect(script.imports[0]).toBe('import { Pool } from "./protocols/aave-v3/PoolABI.json";');
     expect(script.statement).toMatch(/^Pool\.at\(\d+n\)\.supply\(/);
-    expect(script.baseDirs.length).toBe(2);
+    // The route compiler serves that import itself: the program compiles with no resolver option.
+    expect(
+      compileWithRs({ source: script.source, target: "v12" }).bytecode[0]!.length,
+    ).toBeGreaterThan(0);
   });
 
   it("toSauceScript() renders an unsafe number argument as no literal at all", () => {

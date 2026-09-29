@@ -290,8 +290,7 @@ export interface NestOptions {
   /** Overrides the interpreter that Pot's cook runs on. Defaults to this route's own
    *  `execution.engine`. */
   engine?: AddressInput;
-  /** Compile options for the generated transfer/dynamic program (merged with `baseDirs`/`target:
-   *  'v12'`, which this module always supplies). */
+  /** Compile options for the generated transfer/dynamic program (`target` defaults to `'v12'`). */
   compile?: SauceCompileOptions;
 
   // -- dynamic-only (throws under either other mode) ----------------------------------------------
@@ -844,7 +843,7 @@ export function openRoute(
           },
         }));
 
-        const { source: transferSource, baseDirs } = nestedTransferProgram(entries);
+        const { source: transferSource } = nestedTransferProgram(entries);
 
         const nativeValue = transferEntries
           .filter((e) => e.fundNativeFromRoute)
@@ -854,7 +853,6 @@ export function openRoute(
         const transferCompileOptions: SauceCompileOptions = {
           ...perEntryCompile,
           target: perEntryCompile?.target ?? "v12",
-          baseDirs: [...(perEntryCompile?.baseDirs ?? []), ...baseDirs],
         };
 
         const compiledTransfer = compileSauceRoute(
@@ -898,13 +896,12 @@ export function openRoute(
           return { child: e.built.intent, opts };
         });
 
-        const { source: dynamicSource, baseDirs } = dynamicChildProgram(entries);
+        const { source: dynamicSource } = dynamicChildProgram(entries);
 
         const perEntryCompile = dynamicEntries.map((e) => e.compile).find((c) => c !== undefined);
         const dynamicCompileOptions: SauceCompileOptions = {
           ...perEntryCompile,
           target: perEntryCompile?.target ?? "v12",
-          baseDirs: [...(perEntryCompile?.baseDirs ?? []), ...baseDirs],
         };
 
         const compiledDynamic = compileSauceRoute(

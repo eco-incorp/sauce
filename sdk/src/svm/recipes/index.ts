@@ -9,13 +9,14 @@
  * with an SPL `TransferChecked` CPI (no ERC20 `transfer`).
  *
  * ```ts
- * import { compile } from "@eco-incorp/sauce-compiler";
+ * import { compile } from "@eco-incorp/sauce/compiler";
  * import { svmSettleSource } from "@eco-incorp/sauce/svm";
  *
+ * const source = new TextEncoder().encode(svmSettleSource(3));
  * const { bytecode, manifest } = compile({
  *   target: "svm",
  *   entry: "main.js",
- *   resolve: (path) => (path === "main.js" ? Buffer.from(svmSettleSource(3)) : undefined),
+ *   resolve: (path) => (path === "main.js" ? source : undefined),
  *   defines: [["SETTLE_MIN_OUT", String(minOut)], ["SETTLE_SPL_COUNT", String(splCount)]],
  * });
  * // `bytecode` is a deterministic function of (escrowCount, minOut, splCount) — and ONLY those.
@@ -49,11 +50,11 @@
  * `(escrowCount, minOut, splCount)` and byte-compares — proving the logic is genuine AND pinning
  * those two scalars, since both are folded in. The resolved account identities come from the
  * executed instruction's account list, matched against these refs.
+ *
+ * The package also ships the N=1 instance as the `@eco-incorp/sauce/svm/recipes/settle.sauce.ts`
+ * asset, readable on its own; `sdk/test/svm-settle.compile.test.ts` pins it equal to
+ * `svmSettleSource(1)` so the two can never drift.
  */
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Offset of the SPL token account's u64 `amount` field (identical in classic SPL + Token-2022). */
 const SPL_AMOUNT_OFFSET = 64;
@@ -131,11 +132,6 @@ const SVM_HEADER = `// settle.sauce.ts — a STANDALONE, reusable SVM Sauce prog
 //
 // PARTNER VERIFY: recompile \`svmSettleSource(n)\` yourself with the options in
 // sdk/src/svm/recipes/index.ts and byte-compare against what you were handed. There is no golden hash.`;
-
-/** Absolute path to the checked-in N=1 instance of `svmSettleSource()`, inside THIS installed
- *  package — readable on its own, and pinned equal to the generator's output by
- *  `sdk/test/svm-settle.compile.test.ts` so the two can never drift. */
-export const SVM_SETTLE_SOURCE_PATH: string = join(__dirname, "settle.sauce.ts");
 
 function assertEscrowCount(fn: string, escrowCount: number): void {
   if (!Number.isInteger(escrowCount) || escrowCount < 1 || escrowCount > SVM_MAX_ESCROWS) {

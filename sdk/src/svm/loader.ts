@@ -28,6 +28,7 @@
  * where mint classification needs it.
  */
 import type { Address } from "@solana/kit";
+import { base64Bytes } from "../bytes.js";
 import type { AccountLoader, OwnedAccountLoader } from "./venues/types.js";
 
 /** getMultipleAccounts pubkey cap on public RPCs. */
@@ -189,9 +190,7 @@ export function kitBatchAccountLoader(rpc: GetMultipleAccountsRpc): BatchAccount
   return async (addresses: readonly Address[]): Promise<(LoadedAccount | null)[]> => {
     const { value } = await rpc.getMultipleAccounts(addresses, { encoding: "base64" }).send();
     return value.map((account) =>
-      account === null
-        ? null
-        : { data: new Uint8Array(Buffer.from(account.data[0], "base64")), owner: account.owner },
+      account === null ? null : { data: base64Bytes(account.data[0]), owner: account.owner },
     );
   };
 }
