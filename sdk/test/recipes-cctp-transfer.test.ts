@@ -14,6 +14,7 @@ import {
   buildPlainTransfer,
   type CctpTransferParams,
 } from "../src/recipes/cctp-transfer.js";
+import { CCTP_DOMAIN } from "../src/protocols/cctp/addresses.js";
 
 const RECIPIENT = "0x000000000000000000000000000000000000abcd";
 const POT = "0x1111111111111111111111111111111111111111";
@@ -101,5 +102,21 @@ describe("cctp-transfer — Base→Arbitrum, DSL-native (no hardcoded ABIs/addre
   it("rejects a non-positive amount or per-message limit", () => {
     expect(() => buildCctpSplitTransfer(params({ amount: 0n }))).toThrow(/must be > 0/);
     expect(() => buildCctpSplitTransfer(params({ perMessageLimit: 0n }))).toThrow(/must be > 0/);
+  });
+});
+
+describe("cctp-transfer — Arc, CCTP domain 26", () => {
+  it("registers Arc's domain as the one its MessageTransmitter reports", () => {
+    expect(CCTP_DOMAIN.arc).toBe(26);
+  });
+
+  it.each([
+    ["arc", "base"],
+    ["base", "arc"],
+  ])("builds a split transfer from %s to %s, resolving USDC and the TokenMessenger", (from, to) => {
+    const built = buildCctpSplitTransfer(params({ from, to }));
+    expect(built.intent.route.calls).toHaveLength(1);
+    expect(bytesToHex(built.compiled.bytecode[0]!).slice(2).includes(DEPOSIT_FOR_BURN)).toBe(true);
+    expect(built.destination.slug).toBe(from);
   });
 });
