@@ -112,6 +112,21 @@ describe("resolveSdkModule serves what is on disk", () => {
     expect(resolveSdkModule("main.js")).toBeUndefined();
   });
 
+  // Dotted segments are applied the way the filesystem join this replaced applied them: a path that
+  // stays inside the SDK tree names the file it lands on, and one that climbs out of its root —
+  // the tree's, or the standard library's — names nothing, even when it would land on a served key.
+  it("applies '..' inside the tree, and declines a path that climbs out of its root", () => {
+    const ierc20 = resolveSdkModule("./artifacts/IERC20.json");
+    const pool = resolveSdkModule("./protocols/aave-v3/PoolABI.json");
+    expect(resolveSdkModule("./protocols/../artifacts/IERC20.json")).toEqual(ierc20);
+    expect(resolveSdkModule("./protocols/aave-v3/../aave-v3/PoolABI.json")).toEqual(pool);
+
+    expect(resolveSdkModule("./protocols/../../artifacts/IERC20.json")).toBeUndefined();
+    expect(resolveSdkModule("./../artifacts/IERC20.json")).toBeUndefined();
+    expect(resolveSdkModule(`${SDK_STD_ROOT}/../artifacts/IERC20.json`)).toBeUndefined();
+    expect(resolveSdkModule(`.${SDK_STD_ROOT}/token/../../artifacts/IERC20.json`)).toBeUndefined();
+  });
+
   it("resolveSdkPackage maps @sauce/token to its neutral entry, and declines the rest", () => {
     expect(resolveSdkPackage("@sauce/token")).toBe(`${SDK_STD_ROOT}/token/token.js`);
     expect(resolveSdkPackage("@sauce/other")).toBeUndefined();
