@@ -22,6 +22,7 @@ export interface V12EvmContractRef {
   derivation?: string;
   /** Present on the Kitchen — it is a UUPS proxy. */
   proxyKind?: string;
+  /** The Kitchen proxy's and the Router's fixed-address generation. */
   generation?: number;
   note?: string;
 }
@@ -96,6 +97,23 @@ export const v12EngineAddress = (): string => v12DeployedAddresses().evm.contrac
 
 /** The current EVM Router address. */
 export const v12RouterAddress = (): string => v12DeployedAddresses().evm.contracts.router.address;
+
+/**
+ * The pinned Kitchen's Router generation — the Router every Pot minted from it starts on.
+ *
+ * A Pot minted earlier keeps its own Router until its owner moves it, so this is a Pot's generation
+ * only when the Pot runs the Kitchen's Router. Pass it to the swap builders as `routerGeneration`.
+ */
+export function v12RouterGeneration(): number {
+  const { generation } = v12DeployedAddresses().evm.contracts.router;
+  if (generation === undefined) {
+    throw new Error(
+      "V12Deployments.json records no Router generation — re-run `sync-engine-artifacts`",
+    );
+  }
+
+  return generation;
+}
 
 /** The current EVM Kitchen (UUPS proxy) address — mints Pots and gates every cook. */
 export const v12KitchenAddress = (): string => v12DeployedAddresses().evm.contracts.kitchen.address;

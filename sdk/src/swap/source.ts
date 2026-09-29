@@ -7,7 +7,13 @@
  * generated program imports.
  */
 import { toSwapParams } from "./params.js";
-import { SwapPoolType, type Hex, type SwapSourceSpec, type SwapSpec } from "./types.js";
+import {
+  SwapPoolType,
+  type Hex,
+  type SwapRouterOptions,
+  type SwapSourceSpec,
+  type SwapSpec,
+} from "./types.js";
 import type { SwapParams, PoolKey } from "./types.js";
 
 function formatBigint(value: bigint): string {
@@ -45,10 +51,13 @@ function fieldsFromParams(params: SwapParams): Omit<SwapParams, "amountSpecified
  * larger, hand-written program. Runs the FULL `toSwapParams` normalization/guard pass (a
  * `"balance"` `amountIn` reuses every other field's normalization, only the amount itself is
  * emitted as a runtime expression instead of a literal).
+ *
+ * A `"balance"` amount stays exact input at run time: the V3 path takes the balance as it is and the
+ * V4 path negates it, the same signs {@link amountSpecifiedFor} gives a literal.
  */
-export function swapCallStatement(spec: SwapSourceSpec): string {
+export function swapCallStatement(spec: SwapSourceSpec, options: SwapRouterOptions = {}): string {
   const concreteSpec: SwapSpec = spec.amountIn === "balance" ? { ...spec, amountIn: 0n } : spec;
-  const params = toSwapParams(concreteSpec);
+  const params = toSwapParams(concreteSpec, options);
   const fields = fieldsFromParams(params);
   const tokenInLiteral = formatAddressField(fields.tokenIn);
 
@@ -76,7 +85,7 @@ export function swapCallStatement(spec: SwapSourceSpec): string {
   return lines.join("\n");
 }
 
-export interface SwapSourceOptions {
+export interface SwapSourceOptions extends SwapRouterOptions {
   /** Defaults to `"main"`. */
   functionName?: string;
   /** Extra import lines spliced in verbatim, ahead of the generated `main`/`functionName` body. */
@@ -119,7 +128,7 @@ export function swapSource(
   const fnName = opts.functionName ?? "main";
   const body = specs
     .map((s) =>
-      swapCallStatement(s)
+      swapCallStatement(s, opts)
         .split("\n")
         .map((line) => `  ${line}`)
         .join("\n"),

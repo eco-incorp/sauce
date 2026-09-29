@@ -5,11 +5,14 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { swapThenDepositSource } from "../src/deposit/source.js";
+import { getProtocol } from "../src/protocols/index.js";
 import {
   amountSpecifiedFor,
   isCallbackFree,
   isCallbackVenue,
   POOL_KEY_FIELDS,
+  ROUTER_GENERATION_FOR_VENUE,
   SWAP_PARAMS_FIELDS,
   SwapPoolType,
   toSwapParams,
@@ -61,7 +64,129 @@ describe("amountSpecifiedFor — the sign matrix, exhaustive over 0..8", () => {
   });
 
   it("rejects a negative amountIn", () => {
-    expect(() => amountSpecifiedFor(SwapPoolType.UniV3, -1n)).toThrow(/positive/);
+    expect(() => amountSpecifiedFor(SwapPoolType.UniV3, -1n)).toThrow(/exact-input amount/);
+  });
+});
+
+/** `amountSpecified` as the Router reads it: an `int256`. */
+const asInt256 = (word: bigint): bigint => (word >= 2n ** 255n ? word - 2n ** 256n : word);
+
+describe("exact input only — no path emits an exact-output amountSpecified", () => {
+  // The generation-3 Router caps a V3-family or Maverick callback at the exact input and refuses an
+  // owed V4/Infinity output lane; an exact-output swap names no input maximum, so it is unbounded
+  // and may be refused. Uniswap V3 reads a POSITIVE amountSpecified as exact input, V4 a NEGATIVE
+  // one, and every other handler takes abs().
+  const AMOUNTS = [0n, 1n, 1_000n, 2n ** 128n, 2n ** 255n - 1n];
+
+  it("every pool type, every amount up to 2^255 - 1: the sign is the exact-input one", () => {
+    for (const poolType of ALL_DISPATCHABLE) {
+      for (const amountIn of AMOUNTS) {
+        const read = asInt256(
+          toSwapParams(spec({ poolType, amountIn, poolKey: {} })).amountSpecified,
+        );
+        if (poolType === SwapPoolType.UniV4)
+          expect([poolType, read]).toEqual([poolType, -amountIn]);
+        else expect([poolType, read]).toEqual([poolType, amountIn]);
+      }
+    }
+  });
+
+  it("refuses an amount that would wrap into the exact-output sign of the int256", () => {
+    for (const poolType of ALL_DISPATCHABLE) {
+      for (const amountIn of [2n ** 255n, 2n ** 256n - 1n]) {
+        expect(() => amountSpecifiedFor(poolType, amountIn)).toThrow(/exact OUTPUT/);
+        expect(() => toSwapParams(spec({ poolType, amountIn, poolKey: {} }))).toThrow(
+          /exact OUTPUT/,
+        );
+      }
+    }
+  });
+
+  it("a 'balance' amount stays exact input: the V3 path reads the balance, V4 negates it", () => {
+    const v3 = swapCallStatement({ ...spec(), amountIn: "balance" });
+    expect(v3).toMatch(/amountSpecified: IERC20\.at\([^)]*\)\.balanceOf\(ctx\.self\(\)\),/);
+    const v4 = swapCallStatement({
+      ...spec({ poolType: SwapPoolType.UniV4, poolKey: {} }),
+      amountIn: "balance",
+    });
+    expect(v4).toMatch(
+      /amountSpecified: \(0n - \(IERC20\.at\([^)]*\)\.balanceOf\(ctx\.self\(\)\)\)\),/,
+    );
+    for (const poolType of ALL_DISPATCHABLE) {
+      if (poolType === SwapPoolType.UniV4) continue;
+      const statement = swapCallStatement({
+        ...spec({ poolType, poolKey: {} }),
+        amountIn: "balance",
+      });
+      expect(statement).not.toContain("0n - ");
+    }
+  });
+
+  it("a spec has no output-amount field to ask for exact output with", () => {
+    const params = toSwapParams(spec({ amountOut: 5n, exactOutput: true } as Partial<SwapSpec>));
+    expect(Object.keys(params)).toEqual(SWAP_PARAMS_FIELDS);
+    expect(params.amountSpecified).toBe(1_000n);
+  });
+});
+
+describe("V3 forks that call back under their own name need a generation-3 Router", () => {
+  const synthra = (overrides: Partial<SwapSpec> = {}): SwapSpec =>
+    spec({ venue: "synthra-v3", ...overrides });
+
+  it("names each venue's first answering generation, and each is a registered protocol", () => {
+    expect(ROUTER_GENERATION_FOR_VENUE).toEqual({ "synthra-v3": 3, "unitflow-v3": 3 });
+    for (const slug of Object.keys(ROUTER_GENERATION_FOR_VENUE)) {
+      expect(getProtocol(slug)).toBeDefined();
+    }
+  });
+
+  it("refuses without a routerGeneration, naming the callback and the generation", () => {
+    expect(() => toSwapParams(synthra())).toThrow(
+      /synthra-v3 pool calls back synthraV3SwapCallback, which only a generation-3 Router answers; pass `routerGeneration`/,
+    );
+    expect(() => toSwapParams(spec({ venue: "unitflow-v3" }))).toThrow(/unitFlowV3SwapCallback/);
+  });
+
+  it("refuses a Pot on an older Router", () => {
+    for (const routerGeneration of [1, 2]) {
+      expect(() => toSwapParams(synthra(), { routerGeneration })).toThrow(
+        new RegExp(`the Pot's Router is generation ${routerGeneration}`),
+      );
+    }
+  });
+
+  it("builds a plain UniV3 swap on a generation-3 Router — the venue adds nothing to the call", () => {
+    for (const venue of ["synthra-v3", "unitflow-v3"] as const) {
+      expect(toSwapParams(spec({ venue }), { routerGeneration: 3 })).toEqual(toSwapParams(spec()));
+      expect(swapSource(spec({ venue }), { routerGeneration: 3 })).toBe(swapSource(spec()));
+    }
+  });
+
+  it("is only a UniV3 pool", () => {
+    expect(() =>
+      toSwapParams(synthra({ poolType: SwapPoolType.UniV4, poolKey: {} }), { routerGeneration: 3 }),
+    ).toThrow(/dispatches as poolType UniV3/);
+  });
+
+  it("carries the Router generation through every builder", () => {
+    expect(() => swapSource(synthra())).toThrow(/routerGeneration/);
+    expect(() => swapCallStatement(synthra(), { routerGeneration: 2 })).toThrow(/generation 2/);
+    const deposit = {
+      protocol: "aave-v3",
+      action: "supply",
+      target: OTHER,
+      token: TOKEN_OUT,
+      amount: "delta",
+    } as const;
+    expect(() => swapThenDepositSource(synthra(), deposit)).toThrow(/routerGeneration/);
+    expect(swapThenDepositSource(synthra(), deposit, { routerGeneration: 3 })).toBe(
+      swapThenDepositSource(spec(), deposit),
+    );
+  });
+
+  it("leaves every other UniV3 pool alone, whatever the Router", () => {
+    expect(() => toSwapParams(spec())).not.toThrow();
+    expect(() => toSwapParams(spec(), { routerGeneration: 1 })).not.toThrow();
   });
 });
 

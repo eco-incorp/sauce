@@ -86,6 +86,40 @@ export function usesPoolKey(poolType: SwapPoolType): boolean {
   return poolType === SwapPoolType.UniV4 || poolType === SwapPoolType.UniV2;
 }
 
+/**
+ * Uniswap V3 forks whose pools keep Uniswap V3's `swap` selector — so they dispatch as
+ * `SwapPoolType.UniV3` — but re-enter under their OWN callback name. Only a Router that answers that
+ * name can pay them, so each maps to the first Router generation that does: generation 3 is the first
+ * to answer `synthraV3SwapCallback` and `unitFlowV3SwapCallback`. On an older Router the pool's
+ * callback lands on nothing and the swap reverts.
+ */
+export const ROUTER_GENERATION_FOR_VENUE = {
+  "synthra-v3": 3,
+  "unitflow-v3": 3,
+} as const;
+
+/** A V3 fork that needs a minimum Router generation — see {@link ROUTER_GENERATION_FOR_VENUE}. */
+export type SwapVenue = keyof typeof ROUTER_GENERATION_FOR_VENUE;
+
+/** The callback each {@link SwapVenue}'s pools re-enter under, for the refusal's message. */
+export const VENUE_CALLBACK: Readonly<Record<SwapVenue, string>> = {
+  "synthra-v3": "synthraV3SwapCallback",
+  "unitflow-v3": "unitFlowV3SwapCallback",
+};
+
+/**
+ * Which Router the program's swaps reach — the one the executing Pot's fallback delegatecalls into.
+ *
+ * A Pot runs the Router it was minted with until its owner moves it, so the SDK cannot know it
+ * without reading the chain, and it reads none. Pass the generation instead; a Pot minted from the
+ * pinned Kitchen starts on `v12RouterGeneration()`.
+ */
+export interface SwapRouterOptions {
+  /** The executing Pot's Router generation. Required for a {@link SwapVenue} spec, which needs at
+   *  least the generation {@link ROUTER_GENERATION_FOR_VENUE} names; ignored otherwise. */
+  routerGeneration?: number;
+}
+
 /** A 20-byte EVM address, as an ordinary `0x`-prefixed hex string. */
 export type Address = `0x${string}`;
 
@@ -145,7 +179,9 @@ export interface SwapSpec {
   poolKey?: PoolKeyInput;
   tokenIn: AddressInput;
   tokenOut: AddressInput;
-  /** A positive exact-input amount. See `amountSpecifiedFor` for the per-path sign this becomes. */
+  /** A positive exact-input amount, below 2^255. See `amountSpecifiedFor` for the per-path sign
+   *  this becomes. There is no exact-output form: the Router bounds a callback's payment by the
+   *  exact input, and an exact-output swap names no input maximum. */
   amountIn: AmountInput;
   sqrtPriceLimitX96?: AmountInput;
   /** Defaults to `ctx.self()`. Overriding this while also passing a non-empty `callback` is
@@ -158,6 +194,10 @@ export interface SwapSpec {
    *  {@link isCallbackVenue} pool types; building one is out of scope here — see
    *  `sdk/src/swap/index.ts`'s scope notes. Defaults to empty (`"0x"`). */
   callback?: Hex;
+  /** The V3 fork this `UniV3` pool belongs to, when it calls back under its own name — see
+   *  {@link ROUTER_GENERATION_FOR_VENUE}. Omit for Uniswap V3 itself and for the forks every Router
+   *  answers (PancakeSwap V3, Algebra). */
+  venue?: SwapVenue;
 }
 
 /**

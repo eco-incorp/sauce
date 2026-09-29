@@ -750,6 +750,21 @@ try {
 // compiles comes from, and the one `deployments/releases.ts` checks engines against.
 const DEPLOYMENTS_DEST = "V12Deployments.json";
 const tagVersion = (tag) => tag.replace(/^.*-v(?=\d)/, "");
+
+// The Router's GENERATION, read off its CREATE3 salt: a fixed-address salt is
+// `deployer ‖ 00 ‖ "Router" NUL-padded to 8 bytes ‖ 00 00 G` (v12's `evm-create3-salt.mjs --fixed`),
+// so G is the salt's last byte. Recorded because a swap on a Synthra/UnitFlow pool needs generation 3
+// and a Pot on an older Router cannot pay one; the SDK names the generation, never a Router address.
+const ROUTER_SALT = /^0x[0-9a-f]{40}00526f7574657200000000(?<generation>[0-9a-f]{2})$/;
+const routerGeneration = (router) => {
+  const match = ROUTER_SALT.exec(String(router?.rawSalt).toLowerCase());
+  const generation = match ? Number.parseInt(match.groups.generation, 16) : 0;
+  if (router?.saltName !== "Router" || generation < 1) {
+    throw new Error(`the Router's salt ${router?.rawSalt} is not a fixed-generation Router salt`);
+  }
+
+  return generation;
+};
 const addressesFor = (tag) => {
   const parsed = releaseAddresses(tag);
   if (parsed.version !== tagVersion(tag)) {
@@ -782,7 +797,10 @@ try {
       deployer: kitchenEvm.deployer,
       contracts: {
         engine: evm.contracts.engine,
-        router: kitchenEvm.contracts.router,
+        router: {
+          ...kitchenEvm.contracts.router,
+          generation: routerGeneration(kitchenEvm.contracts.router),
+        },
         kitchen: kitchenEvm.contracts.kitchen,
         kitchenImplementation: kitchenEvm.contracts.kitchenImplementation,
       },

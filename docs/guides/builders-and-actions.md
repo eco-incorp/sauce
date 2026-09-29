@@ -63,7 +63,23 @@ export function compileSwap(spec: swap.SwapSourceSpec, execution: routes.SauceEv
 
 Supply the correct pool, tokens, amount, and pool-specific parameters. The generated program self-calls the Sauce Router path supported by the Pot; the execution deployment must support it. The unified builder supports `UniV2`, `UniV3`, `UniV4`, `Curve`, `BalancerV2`, `DODOV2`, `TraderJoeLB`, `MaverickV2`, and `WOOFi`. The separate Pancake Infinity CL/Bin entry points are not supported by this builder.
 
-The builder normalizes each pool type's amount-sign convention. It does not recover and expose a general `amountOut` value from the swap return. Enforce the intended output with an explicit balance/delta check or a settlement program. A program compiling successfully does not demonstrate correct execution against a specific live pool.
+Every swap is **exact input**: `amountIn` is what the Pot pays. The builder turns it into each pool type's sign convention (positive for `UniV3`, negative for `UniV4`, as-is for the rest) and refuses an amount of 2^255 or more, which would read as exact output. There is no exact-output form: the Router caps what a V3-family or Maverick callback may take at the exact input, and an exact-output swap names no input maximum.
+
+Synthra V3 and UnitFlow V3 pools dispatch as `UniV3`, but they call back under their own names (`synthraV3SwapCallback`, `unitFlowV3SwapCallback`), which only a generation-3 Router answers. Name such a pool with `venue` and pass the executing Pot's Router generation; the builder refuses an older Router rather than emit a swap that reverts. A Pot minted from the pinned Kitchen starts on `v12RouterGeneration()` (from `@eco-incorp/sauce/deployments`).
+
+```ts
+import { swap } from "@eco-incorp/sauce";
+import { v12RouterGeneration } from "@eco-incorp/sauce/deployments";
+
+export function synthraSwap(spec: Omit<swap.SwapSpec, "poolType" | "venue">) {
+  return swap.swapSource(
+    { ...spec, poolType: swap.SwapPoolType.UniV3, venue: "synthra-v3" },
+    { routerGeneration: v12RouterGeneration() },
+  );
+}
+```
+
+The builder does not recover and expose a general `amountOut` value from the swap return. Enforce the intended output with an explicit balance/delta check or a settlement program. A program compiling successfully does not demonstrate correct execution against a specific live pool.
 
 ## Deposits, withdrawals, staking, and wrapping
 

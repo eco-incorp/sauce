@@ -5,6 +5,7 @@
 import { toExactBigInt } from "../numeric.js";
 import {
   isCallbackVenue,
+  ROUTER_GENERATION_FOR_VENUE,
   SwapPoolType,
   UndispatchablePoolType,
   usesPoolKey,
@@ -15,7 +16,9 @@ import {
   type PoolKey,
   type PoolKeyInput,
   type SwapParams,
+  type SwapRouterOptions,
   type SwapSpec,
+  VENUE_CALLBACK,
 } from "./types.js";
 
 const DISPATCHABLE_POOL_TYPES: ReadonlySet<number> = new Set(Object.values(SwapPoolType));
@@ -25,6 +28,10 @@ const UNDISPATCHABLE_POOL_TYPES: ReadonlySet<number> = new Set(
 
 /** UniV2's pair-fee ceiling — `Router.sol#_swapV2` reverts at/above this (ppm; 1_000_000 = 100%). */
 const MAX_UNIV2_FEE_PPM = 1_000_000n;
+
+/** The largest exact input `amountSpecified` can carry: it is an `int256`, and an amount at or past
+ *  2^255 would wrap into the other sign — an exact-OUTPUT swap on V3, and on V4 too. */
+const MAX_EXACT_INPUT = 2n ** 255n - 1n;
 
 function toBigIntStrict(value: AmountInput, label: string): bigint {
   if (typeof value === "bigint") return value;
@@ -84,11 +91,18 @@ function normalizePoolKey(poolType: SwapPoolType, input: PoolKeyInput | undefine
  *   `-amountIn` — see the module doc for why the compact spelling is deliberately deferred.
  * - Every other pool type (0, 3, 4, 5, 6, 7, 8): the handler takes `abs(amountSpecified)`, so the
  *   canonical positive form is used as-is.
+ *
+ * EXACT INPUT ONLY, on every path. There is no exact-output spelling: the generation-3 Router caps a
+ * V3-family or Maverick callback's payment at the exact input and refuses an owed V4/Infinity output
+ * lane, and an exact-output swap names no input maximum, so it would be unbounded and may be
+ * refused. `amountIn` must therefore be non-negative and below 2^255 — past that it wraps into the
+ * other sign of the `int256`, which is exact output.
  */
 export function amountSpecifiedFor(poolType: SwapPoolType, amountIn: bigint): bigint {
-  if (amountIn < 0n) {
+  if (amountIn < 0n || amountIn > MAX_EXACT_INPUT) {
     throw new Error(
-      `amountSpecifiedFor: amountIn must be a positive exact-input amount, got ${amountIn}`,
+      `amountSpecifiedFor: amountIn must be an exact-input amount in [0, 2^255), got ${amountIn} ` +
+        "— an amountSpecified past that range reads as exact OUTPUT, which the SDK never emits",
     );
   }
   if (poolType === SwapPoolType.UniV4) {
@@ -119,6 +133,37 @@ function normalizeCallback(
   return value;
 }
 
+/** Refuses a V3 fork on a Router that cannot answer its callback — see `ROUTER_GENERATION_FOR_VENUE`. */
+function assertRouterAnswersVenue(spec: SwapSpec, options: SwapRouterOptions): void {
+  const { venue } = spec;
+  if (venue === undefined) return;
+  const needed = ROUTER_GENERATION_FOR_VENUE[venue];
+  if (needed === undefined) {
+    throw new Error(
+      `toSwapParams: unknown venue ${String(venue)} (expected one of ` +
+        `${Object.keys(ROUTER_GENERATION_FOR_VENUE).join(", ")})`,
+    );
+  }
+  if (spec.poolType !== SwapPoolType.UniV3) {
+    throw new Error(
+      `toSwapParams: venue ${venue} is a Uniswap V3 fork and dispatches as poolType UniV3 ` +
+        `(${SwapPoolType.UniV3}), not ${spec.poolType}`,
+    );
+  }
+  const { routerGeneration } = options;
+  if (routerGeneration === undefined || routerGeneration < needed) {
+    throw new Error(
+      `toSwapParams: a ${venue} pool calls back ${VENUE_CALLBACK[venue]}, which only a ` +
+        `generation-${needed} Router answers; ` +
+        (routerGeneration === undefined
+          ? "pass `routerGeneration`, the executing Pot's Router generation"
+          : `the Pot's Router is generation ${routerGeneration}`) +
+        ". A Pot runs the Router it was minted with (a Pot of the pinned Kitchen starts on " +
+        "v12RouterGeneration()) until its owner moves it.",
+    );
+  }
+}
+
 /**
  * The whole normalization + sign + defaulting + guard decision: lowers a chain-agnostic
  * {@link SwapSpec} into a fully normalized {@link SwapParams} — plain bigints (+ the `"self"`
@@ -128,11 +173,12 @@ function normalizeCallback(
  * Throws (never emits a program that would revert on-chain) for: poolType 9/10 (Infinity — not
  * dispatchable through `swap()`, see {@link UndispatchablePoolType}); any other out-of-range
  * poolType; UniV4 missing `poolKey`; UniV2 `poolKey.fee >= 1_000_000`; a non-empty `callback` on a
- * non-callback-driven pool type; a non-empty `callback` with an overridden `payer`/`recipient`; and
- * any numeric field given as a `number` that is not a safe integer (past 2^53-1 pass a bigint or a
+ * non-callback-driven pool type; a non-empty `callback` with an overridden `payer`/`recipient`; an
+ * `amountIn` outside `[0, 2^255)`; a `venue` on a Router generation that cannot pay it; and any
+ * numeric field given as a `number` that is not a safe integer (past 2^53-1 pass a bigint or a
  * string, since the double has already been rounded).
  */
-export function toSwapParams(spec: SwapSpec): SwapParams {
+export function toSwapParams(spec: SwapSpec, options: SwapRouterOptions = {}): SwapParams {
   const { poolType } = spec;
 
   if (UNDISPATCHABLE_POOL_TYPES.has(poolType)) {
@@ -145,6 +191,8 @@ export function toSwapParams(spec: SwapSpec): SwapParams {
       `toSwapParams: unknown poolType ${poolType} (expected one of SwapPoolType's 0..8)`,
     );
   }
+
+  assertRouterAnswersVenue(spec, options);
 
   const payerOverridden = spec.payer !== undefined;
   const recipientOverridden = spec.recipient !== undefined;

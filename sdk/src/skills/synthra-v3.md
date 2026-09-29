@@ -55,3 +55,5 @@ function main(
 - Pools call back `synthraV3SwapCallback` (`0x13abb0ca`) and `synthraV3MintCallback`, not the `uniswapV3*` callbacks, so a contract that swaps or mints against a Synthra pool directly must implement the renamed callbacks
 - On Arc there is no wrapped native token; pools pair against USDC's ERC-20 interface `0x3600…0000`
 - Addresses come from docs.synthra.org's contract-addresses page
+- Through a Pot's Sauce Router instead of the protocol's own router: the pool dispatches as `swap.SwapPoolType.UniV3`, and only a generation-3 Router answers `synthraV3SwapCallback`. Name the pool with `venue: "synthra-v3"` and pass the Pot's Router generation as `routerGeneration`; the swap builders refuse an older Router. A Pot minted from the pinned Kitchen starts on `v12RouterGeneration()`
+- Every Sauce Router swap is exact input: the Router caps what the callback may take at the exact input

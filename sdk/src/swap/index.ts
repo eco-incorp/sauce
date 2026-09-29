@@ -15,13 +15,19 @@
  * `routes.buildSauceEvmCalls({ pot, engine, cooks: [swapHex, settleHex] })`.
  *
  * The unified `swap()` path supports pool types 0..8. Pancake Infinity CL/Bin require different
- * Router entry points and are rejected here. Callback data, when supported by the pool type,
+ * Router entry points and are rejected here. Every swap is EXACT INPUT: `amountIn` is the amount
+ * paid, and no spec can produce an exact-output `amountSpecified`.
+ *
+ * Synthra V3 and UnitFlow V3 pools dispatch as `UniV3` but call back under their own names, which
+ * only a generation-3 Router answers. Name them with `venue` and pass the executing Pot's Router
+ * generation as `routerGeneration`; an older Router is refused at build time. Callback data, when supported by the pool type,
  * must be supplied as an already compiled program. This builder discards the swap's return
  * values; enforce an output requirement with an explicit balance/delta check or settlement.
  *
  * See `docs/guides/builders-and-actions.md` for public usage and composition examples.
  */
 export {
+  ROUTER_GENERATION_FOR_VENUE,
   SwapPoolType,
   UndispatchablePoolType,
   ZERO_POOL_KEY,
@@ -41,6 +47,8 @@ export type {
   SwapSpec,
   SwapSourceSpec,
   SwapParams,
+  SwapRouterOptions,
+  SwapVenue,
 } from "./types.js";
 
 export { toSwapParams, amountSpecifiedFor } from "./params.js";

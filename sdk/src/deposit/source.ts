@@ -7,7 +7,7 @@
  * both served by the route compiler, so compiling one needs no resolver option.
  */
 import { swapCallStatement, swapImportLines } from "../swap/source.js";
-import type { SwapSourceSpec } from "../swap/types.js";
+import type { SwapRouterOptions, SwapSourceSpec } from "../swap/types.js";
 import { safeApproveStatements } from "../token/safe.js";
 import { formatBigint } from "./format.js";
 import { toDeposit } from "./params.js";
@@ -164,7 +164,7 @@ export function depositSource(
   return [...importLines, "", `function ${fnName}() {`, body, "}", ""].join("\n");
 }
 
-export interface SwapThenDepositOptions {
+export interface SwapThenDepositOptions extends SwapRouterOptions {
   /** Defaults to `"main"`. */
   functionName?: string;
   /** Extra import lines spliced in verbatim, ahead of the generated `main`/`functionName` body. */
@@ -215,7 +215,7 @@ export function swapThenDepositSource(
       importLines.push(line);
     }
   }
-  const swapBlock = swapList.map(swapCallStatement).join("\n");
+  const swapBlock = swapList.map((s) => swapCallStatement(s, opts)).join("\n");
 
   const preLines: string[] = [];
   const postLines: string[] = [];
