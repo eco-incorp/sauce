@@ -2,24 +2,13 @@
  * SauceScript SOURCE emission for E4.1's universal swap adapter — pure string templating over
  * {@link toSwapParams}'s normalized output. Imports NO compiler (matches `sdk/src/recipes/index.ts`
  * and `sdk/src/svm/recipes/index.ts`'s posture: every compile option stays explicit at the call
- * site). See `sdk/src/swap/index.ts` for the full E3-composition example.
+ * site). See `sdk/src/swap/index.ts` for the full E3-composition example. The route compiler serves
+ * the `./artifacts/ISauceRouter.json` (and, for a `"balance"` leg, `./artifacts/IERC20.json`) a
+ * generated program imports.
  */
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { toSwapParams } from "./params.js";
 import { SwapPoolType, type Hex, type SwapSourceSpec, type SwapSpec } from "./types.js";
 import type { SwapParams, PoolKey } from "./types.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/**
- * `baseDirs` for compiling any program `swapSource`/`swapCallStatement` produces — resolves the
- * generated `import { ISauceRouter } from "./artifacts/ISauceRouter.json"` (and, for a `"balance"`
- * leg, `./artifacts/IERC20.json`) against this installed package's dist root. Same value/pattern as
- * `sdk/src/recipes/index.ts`'s `SAUCE_BASE_DIRS`.
- */
-export const SWAP_BASE_DIRS: readonly string[] = [join(__dirname, "..")];
 
 function formatBigint(value: bigint): string {
   return `${value.toString()}n`;

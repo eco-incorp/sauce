@@ -4,8 +4,8 @@
  *
  * The two route PROGRAMS are standalone `.sauce.ts` assets (`cctp-split.sauce.ts`,
  * `plain-transfer.sauce.ts`) — NOT strings assembled here. Each declares its inputs as module-scope
- * consts with placeholder defaults; this builder reads the asset from disk (like `settleSource()`)
- * and overrides each one with THIS intent's value via `defines`, which replace a module's own const
+ * consts with placeholder defaults; this builder takes the asset's embedded text (like
+ * `settleSource()`) and overrides each one with THIS intent's value via `defines`, which replace a module's own const
  * of that name and are constant-folded — so a given intent yields fixed bytecode.
  *
  * DSL-NATIVE BY CONSTRUCTION — the programs hardcode NO ABI and NO address. `USDC` resolves to the
@@ -13,34 +13,19 @@
  * interface + address from the CCTP protocol descriptor; the ambient define `Cctp_TokenMessenger`
  * (the approve spender) is that same address. The only inputs are this intent's config.
  */
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { requireChain, type ChainRef } from "../chains/canonical.js";
+import { recipeSource } from "../embedded/recipes.js";
 import { CCTP_DOMAIN } from "../protocols/cctp/addresses.js";
 import { openRoute, type BuiltIntent, type RewardArg } from "../routes/intent-dsl.js";
 import type { AddressInput } from "../routes/types.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/** Absolute path to the CCTP split-burn program asset inside THIS installed package. */
-export const CCTP_SPLIT_SOURCE_PATH: string = join(__dirname, "cctp-split.sauce.ts");
-/** Absolute path to the plain-transfer baseline program asset inside THIS installed package. */
-export const PLAIN_TRANSFER_SOURCE_PATH: string = join(__dirname, "plain-transfer.sauce.ts");
-
-let cctpSplitCache: string | null = null;
-let plainTransferCache: string | null = null;
-
-/** The `cctp-split.sauce.ts` program text — read once and cached. */
+/** The `cctp-split.sauce.ts` program text. */
 export function cctpSplitSource(): string {
-  if (cctpSplitCache === null) cctpSplitCache = readFileSync(CCTP_SPLIT_SOURCE_PATH, "utf-8");
-  return cctpSplitCache;
+  return recipeSource("recipes/cctp-split.sauce.ts");
 }
-/** The `plain-transfer.sauce.ts` program text — read once and cached. */
+/** The `plain-transfer.sauce.ts` program text. */
 export function plainTransferSource(): string {
-  if (plainTransferCache === null)
-    plainTransferCache = readFileSync(PLAIN_TRANSFER_SOURCE_PATH, "utf-8");
-  return plainTransferCache;
+  return recipeSource("recipes/plain-transfer.sauce.ts");
 }
 
 function toBig(a: AddressInput): bigint {

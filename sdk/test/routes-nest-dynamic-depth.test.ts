@@ -18,7 +18,7 @@
  */
 import { bytesToHex, encodeFunctionData, parseAbi, type Hex } from "viem";
 
-import { compileProgram as compile } from "./helpers";
+import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import { v12Pot } from "../src/evm/engine.js";
 import {
   AMOUNT_IN_PLACEHOLDER,
@@ -77,7 +77,7 @@ function levelIntent(level: number, calls: readonly Call[]): Intent {
 const compileLevel = (intent: Intent, measured: Hex): Uint8Array => {
   const program = dynamicChildProgram([{ child: intent, opts: optionsFor(measured) }]);
 
-  return compile(program.source, { baseDirs: [...program.baseDirs] }).bytecode[0]!;
+  return compile(program.source, { baseDirs: [...SDK_SOURCE_DIRS] }).bytecode[0]!;
 };
 
 /**

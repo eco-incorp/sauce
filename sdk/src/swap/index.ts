@@ -5,9 +5,9 @@
  * `swapSource` emits a complete program; `swapCallStatement` emits a statement for composition.
  * These helpers construct source synchronously and do not compile or send transactions.
  *
- * Compile the generated source with `routes.compileSauceRoute`, supplying both `pot` and `engine`
- * and `baseDirs: [...swap.SWAP_BASE_DIRS]`. The route compiler annotates a falling-through `main`
- * as `void` before passing it to the compiler dependency.
+ * Compile the generated source with `routes.compileSauceRoute`, supplying both `pot` and `engine`.
+ * The route compiler serves the `ISauceRouter`/`IERC20` ABIs the program imports, and annotates a
+ * falling-through `main` as `void` before passing it to the compiler dependency.
  *
  * A program calls the Router through `ctx.self()`, using the Pot's Router dispatch. Multiple
  * specifications passed to `swapSource` become sequential swaps in one program and one cook.
@@ -45,5 +45,5 @@ export type {
 
 export { toSwapParams, amountSpecifiedFor } from "./params.js";
 
-export { swapCallStatement, swapSource, swapImportLines, SWAP_BASE_DIRS } from "./source.js";
+export { swapCallStatement, swapSource, swapImportLines } from "./source.js";
 export type { SwapSourceOptions } from "./source.js";

@@ -2,10 +2,10 @@
  * The deterministic addresses of the pinned Sauce v12 releases.
  *
  * `sync-engine-artifacts` assembles these from the `addresses.json` each of the four v12 releases
- * publishes and writes `artifacts/V12Deployments.json` next to this module — `dist/artifacts` in an
- * installed package, `src/artifacts` in a from-source tree — which `files: ["sdk/dist"]` carries into
- * the tarball. It is read at runtime (like `svm/engine-artifacts.ts` reads the `.so`), not imported,
- * so a clean `tsc` never depends on a file the sync produces.
+ * publishes and writes `artifacts/V12Deployments.json` — `dist/artifacts` in an installed package,
+ * `src/artifacts` in a from-source tree — which `files: ["sdk/dist"]` carries into the tarball. It is
+ * a JSON import, like `pot.ts`'s `V12EngineGate.json`, so no filesystem is read at run time and a
+ * bundler inlines it; from a source checkout, run the sync before `tsc`.
  *
  * These are the deterministic addresses — CREATE3 on EVM, a fixed/derived keypair on SVM — so they are
  * `chainIndependent` / `clusterIndependent`: one address set, the same everywhere it is deployed. They
@@ -13,9 +13,7 @@
  * are deployed; check code/programs on the target chain before use. These supersede the legacy
  * ADDRESSES — `v12.generated.ts` records the pre-`cook` stack, and its Kitchen/Router are not these.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import deployments from "../artifacts/V12Deployments.json" with { type: "json" };
 
 /** One EVM contract as the release records it: the address plus its CREATE3 derivation metadata. */
 export interface V12EvmContractRef {
@@ -84,29 +82,9 @@ export interface V12DeployedAddresses {
   };
 }
 
-const ARTIFACT = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "artifacts",
-  "V12Deployments.json",
-);
-
-let cached: V12DeployedAddresses | undefined;
-
-/**
- * The assembled release-address record. Read lazily and memoized, so importing this module never
- * throws — only calling it without a synced artifact does, with a remedy in the message.
- */
+/** The assembled release-address record. */
 export function v12DeployedAddresses(): V12DeployedAddresses {
-  if (cached !== undefined) return cached;
-  if (!existsSync(ARTIFACT)) {
-    throw new Error(
-      `V12Deployments.json not found at ${ARTIFACT}. It ships in the published package; from a source ` +
-        `checkout run \`pnpm --filter './sdk' sync-engine-artifacts\`.`,
-    );
-  }
-  cached = JSON.parse(readFileSync(ARTIFACT, "utf8")) as V12DeployedAddresses;
-  return cached;
+  return deployments as V12DeployedAddresses;
 }
 
 /** Legacy EVM Kitchen version. Engine versions are in `v12DeployedAddresses().releases`. */

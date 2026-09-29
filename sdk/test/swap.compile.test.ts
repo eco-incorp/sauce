@@ -2,7 +2,7 @@
  * E4.1 universal swap adapter — real-compile tests. Uses the ordinary compiler,
  * no forge/fork/anvil. Same import + baseDirs pattern as `svm-settle.compile.test.ts`.
  */
-import { compileProgram as compile } from "./helpers";
+import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import { bytesToHex } from "viem";
 
 import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
@@ -11,7 +11,7 @@ import { assembleIntent } from "../src/routes/intent.js";
 import { normalizeRoute } from "../src/routes/normalize.js";
 import { v12PotAbi } from "../src/evm/engine.js";
 import { decodeFunctionData } from "viem";
-import { SWAP_BASE_DIRS, swapSource } from "../src/swap/source.js";
+import { swapSource } from "../src/swap/source.js";
 import { SwapPoolType, type SwapSpec } from "../src/swap/types.js";
 
 const POOL = "0x1111111111111111111111111111111111111111" as const;
@@ -54,7 +54,7 @@ describe("swap adapter compiles for every dispatchable poolType", () => {
   for (const poolType of Object.values(SwapPoolType) as SwapPoolType[]) {
     it(`poolType ${poolType}`, () => {
       const { bytecode } = compile(swapSource(specFor(poolType)), {
-        baseDirs: [...SWAP_BASE_DIRS],
+        baseDirs: [...SDK_SOURCE_DIRS],
       });
       expect(bytecode[0]!.length).toBeGreaterThan(0);
     });
@@ -80,7 +80,7 @@ describe("a realistic 2-leg balance-chained program (UniV3 positive -> UniV4 neg
   ]);
 
   it("compiles", () => {
-    const { bytecode } = compile(src, { baseDirs: [...SWAP_BASE_DIRS] });
+    const { bytecode } = compile(src, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 });
@@ -88,10 +88,10 @@ describe("a realistic 2-leg balance-chained program (UniV3 positive -> UniV4 neg
 describe("the sign is actually in the bytes", () => {
   it("the UniV4 leg's blob contains the 32-byte two's-complement word; the UniV3 leg's contains the minimal positive push", () => {
     const univ3 = compile(swapSource(specFor(SwapPoolType.UniV3)), {
-      baseDirs: [...SWAP_BASE_DIRS],
+      baseDirs: [...SDK_SOURCE_DIRS],
     }).bytecode[0]!;
     const univ4 = compile(swapSource(specFor(SwapPoolType.UniV4)), {
-      baseDirs: [...SWAP_BASE_DIRS],
+      baseDirs: [...SDK_SOURCE_DIRS],
     }).bytecode[0]!;
 
     // 1000n minimal-width push: 0x03e8 (2 bytes) should be present in the UniV3 blob.
@@ -119,7 +119,7 @@ function indexOfBytes(haystack: Uint8Array, needle: Uint8Array): number {
 describe("the E3 seam, end to end", () => {
   it("compile -> bytesToHex -> buildSauceEvmCall -> survives RouteInput.calls through normalizeRoute unchanged", () => {
     const { bytecode } = compile(swapSource(specFor(SwapPoolType.UniV3)), {
-      baseDirs: [...SWAP_BASE_DIRS],
+      baseDirs: [...SDK_SOURCE_DIRS],
     });
     const ingredient = bytesToHex(bytecode[0]!);
     const call = buildSauceEvmCall({

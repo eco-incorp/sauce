@@ -3,6 +3,7 @@
  * threaded into `openRoute`'s compile seam (`intent-dsl.ts`), alongside the already-landed
  * scalar-defines half (`chainDefines`, see `routes-ambient.test.ts`).
  */
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +16,12 @@ const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const AMBIENT_FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "rs-ambient");
+/** Serves the fixture directory off disk, as a caller's own `resolve` would. */
+const resolveFixture = (path: string): Uint8Array | undefined => {
+  const full = join(AMBIENT_FIXTURE_DIR, path);
+
+  return existsSync(full) ? readFileSync(full) : undefined;
+};
 /** The SPL Token program — any valid base58 program id serves as an SVM execution buffer here. */
 const SVM_BUFFER = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" as const;
 
@@ -34,8 +41,8 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
 
 describe("chainAmbient", () => {
   // `@sauce/token` ships as the default ambient MODULE: it is activated for every openRoute compile,
-  // resolvable because `rs-compile.ts` maps it to the SDK's own vendored copy (`SDK_STD_PACKAGES`)
-  // regardless of baseDirs. The default-path test at the bottom of this file proves an UNUSED
+  // resolvable because the SDK serves its own copy (`embedded/resolve.ts`) whatever the caller
+  // resolves. The default-path test at the bottom of this file proves an UNUSED
   // ambient module leaves bytecode untouched.
   it("is ['@sauce/token'] for every chain — the token stdlib is the default ambient module", () => {
     expect(chainAmbient(requireChain("base"))).toEqual(["@sauce/token"]);
@@ -51,7 +58,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
       "base",
       bareBody,
       evmOptions({
-        compile: { baseDirs: [AMBIENT_FIXTURE_DIR], ambient: ["./math-helpers.js"] },
+        compile: { resolve: resolveFixture, ambient: ["./math-helpers.js"] },
       }),
     ).reward(0n);
     expect(built.compiled.bytecode.length).toBe(1);
@@ -63,7 +70,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
       "base",
       bareBody,
       evmOptions({
-        compile: { baseDirs: [AMBIENT_FIXTURE_DIR], ambient: ["./math-helpers.js"] },
+        compile: { resolve: resolveFixture, ambient: ["./math-helpers.js"] },
       }),
     ).reward(0n);
 
@@ -72,7 +79,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
       bareBody,
       { pot: POT, engine: ENGINE },
       {
-        baseDirs: [AMBIENT_FIXTURE_DIR],
+        resolve: resolveFixture,
         // openRoute merges chainAmbient() (`@sauce/token`) with the caller's list -- match that merge
         // here so this is a true apples-to-apples bytecode comparison, not a false negative.
         ambient: ["@sauce/token", "./math-helpers.js"],

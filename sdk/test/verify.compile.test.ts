@@ -5,7 +5,7 @@
  * package that also ships the claims they support, which is only worth anything if something
  * recompiles them. This suite is that something: it compiles `settleSource()` with the published
  * `@eco-incorp/sauce-compiler` exactly as `src/recipes/index.ts` documents — same entry, same
- * resolver, same base dirs — and compares. The v1 corpus it replaces could not do this; its compiler
+ * resolver (`resolveSdkModule`) — and compares. The v1 corpus it replaces could not do this; its compiler
  * no longer exists.
  *
  * It then closes the round trip the appended-args model rests on: encode a payload from known
@@ -19,7 +19,8 @@ import { dirname, join, resolve } from "path";
 import { keccak256 } from "viem";
 import type { Hex } from "viem";
 
-import { SAUCE_BASE_DIRS, settleSource } from "../src/recipes/index.js";
+import { resolveSdkModule } from "../src/embedded/resolve.js";
+import { settleSource } from "../src/recipes/index.js";
 import {
   decodeSettleProgram,
   encodeSettleProgram,
@@ -72,16 +73,11 @@ const WORKSPACE_MANIFESTS = [
 
 /** The compile `src/recipes/index.ts` documents to partners, run for real. */
 function compileSettle(): Hex {
+  const settle = new TextEncoder().encode(settleSource());
   const { bytecode } = compile({
     target: "evm",
     entry: "settle.sauce.ts",
-    resolve: (path) => {
-      if (path.endsWith("settle.sauce.ts")) return new TextEncoder().encode(settleSource());
-      const key = path.replace(/^\.\//, "");
-      const found = SAUCE_BASE_DIRS.map((dir) => join(dir, key)).find(existsSync);
-
-      return found === undefined ? undefined : readFileSync(found);
-    },
+    resolve: (path) => (path === "settle.sauce.ts" ? settle : resolveSdkModule(path)),
   });
 
   return ("0x" + Buffer.from(bytecode).toString("hex")) as Hex;

@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// `tsc` only emits compiled .js/.d.ts — it does not copy the runtime `.sauce.ts`
-// program assets that the source getters read from disk at RUN time via
-// `readFileSync` (`settleSource()` → dist/recipes/, `svmSettleSource()`
-// → dist/svm/recipes/). `src/**/*.sauce.ts` is excluded from the tsconfig (it is
-// SauceScript, not TypeScript tsc can parse), so without this step a fresh
-// `sdk/dist` would be missing the files a partner needs to reproduce our bytecode.
+// `tsc` only emits compiled .js/.d.ts — it does not copy the `.sauce.ts` program assets the
+// package exports (`./recipes/settle.sauce.ts`, `./svm/recipes/settle.sauce.ts`) for a partner to
+// read, hash or vendor. `src/**/*.sauce.ts` is excluded from the tsconfig (it is SauceScript, not
+// TypeScript tsc can parse), so without this step a fresh `sdk/dist` would be missing them. The SDK
+// itself reads none of these files at run time: `gen-embedded-sources.mjs` embeds their text.
 // Mirrors `@eco-incorp/sauce-recipes`'s `scripts/copy-dist-assets.mjs` (same
 // problem, same shape, different package).
 //
@@ -18,7 +17,7 @@
 // separately by `sync-engine-artifacts` (which writes them into dist/artifacts as a build output),
 // not here — this script only copies the `.sauce.ts` program templates `tsc` leaves behind.
 //
-// Run as part of `sdk`'s build: `tsc && sync-engine-artifacts && node scripts/copy-verify-assets.mjs`.
+// Run as the last step of `sdk`'s `build` script.
 import { existsSync, copyFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,15 +30,11 @@ const ASSETS = [
   { subdir: "recipes", file: "cctp-split.sauce.ts" },
   { subdir: "recipes", file: "plain-transfer.sauce.ts" },
   { subdir: join("svm", "recipes"), file: "settle.sauce.ts" },
-  // Layer-C plugin manifest — `loadPlugin()` reads it via `readFileSync` from the same dir
-  // as its own compiled JS (see `src/plugin/index.ts`), so it must land in `dist/plugin/`.
-  // `tsc` only emits the compiled `.js`/`.d.ts` and doesn't copy JSON to outDir.
+  // Layer-C plugin manifest, beside its compiled module for tools that read it directly.
+  // `loadPlugin()` imports it as JSON.
   { subdir: "plugin", file: "manifest.json" },
-  // `@sauce/token` — the vendored SauceScript stdlib served on the route path (`rs-compile.ts`'s
-  // `SDK_STD_PACKAGES`, resolved relative to `dist/std` once built). SauceScript source + its ABI,
-  // never TypeScript `tsc` parses, so the four files must be copied verbatim. `dist/` is in the
-  // package `files` list, so this is what makes `@sauce/token` resolvable for a published consumer's
-  // own `openRoute` compile — not only the in-repo suites.
+  // `@sauce/token`, the SauceScript stdlib, shipped as files for a consumer resolving it off disk.
+  // The route path serves the embedded copy (`src/embedded/resolve.ts`) and reads none of these.
   { subdir: join("std", "token"), file: "token.evm.js" },
   { subdir: join("std", "token"), file: "token.svm.js" },
   { subdir: join("std", "token"), file: "erc20.abi.json" },

@@ -3,15 +3,12 @@
  *
  * Loads the SauceScript compiler (`sauce-compiler`, the published `@eco-incorp/sauce-compiler` wasm
  * package) and adapts its `compile({ resolve, resolvePackage, ... })` signature to the source-plus-
- * options shape `sauce-route.ts` calls with: a `source` string plus `baseDirs`/`defines`/`contracts`,
+ * options shape `sauce-route.ts` calls with: a `source` string plus `resolve`/`defines`/`contracts`,
  * returning a `CompileResult` (`compile-types.ts`) so `CompiledSauceRoute` never names a compiler
  * type. Every other node-side recompile in the SDK (`svm/verify.ts`) goes through here too, so the
  * wasm module is loaded in exactly one place.
  */
-import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, isAbsolute, join, resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 // The RS compiler's own option/result types, from the package this file loads at runtime -- a
@@ -19,37 +16,13 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   CompileOptions as RsCompileOptions,
   CompileResult as RsCompileResult,
+  ResolveModule,
+  ResolvePackage,
   SauceTarget as RsTarget,
 } from "sauce-compiler";
+import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
 
 const ENTRY = "main.js";
-
-/**
- * The SDK's own vendored SauceScript standard library root: `src/std` in dev, `dist/std` once built
- * (this file sits at `routes/`, one level below either). `copy-verify-assets.mjs` copies `std/` into
- * `dist/` and it is in the package `files` list, so a published consumer's route compile resolves it
- * the same way the in-repo suites do -- no `node_modules` install required, which is the whole reason
- * these ship as vendored source rather than as an npm dep the walk below would have to find.
- */
-const STD_ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), "..", "std");
-
-/** The vendored-stdlib root, exported so a test can build the `"." + <abs>` shapes
- *  `vendoredStdlibPath` decides between without restating how the root is derived. */
-export const VENDORED_STD_ROOT = STD_ROOT;
-
-/**
- * The SDK stdlib packages resolvable by their bare specifier on the route path, mapped to their
- * directory under `STD_ROOT`. These resolve to the SDK's OWN vendored copy regardless of `baseDirs`
- * (they are never installed in a `node_modules` tree the walk below could find -- see
- * `plugin/index.ts`'s note), so this override runs BEFORE the `node_modules` walk in
- * `makeResolvePackage`. `@sauce/token`'s own `package.json` `main` is the neutral base the compiler
- * suffixes per target (`token.js` -> `token.evm.js`/`token.svm.js`), so `packageEntry` reads it and
- * the arm probe + the arm's own relative `./erc20.abi.json` are served by `makeResolve`'s
- * absolute-path branch.
- */
-const SDK_STD_PACKAGES: Readonly<Record<string, string>> = {
-  "@sauce/token": "token",
-};
 
 let rsCompileFn: ((options: RsCompileOptions) => RsCompileResult) | undefined;
 
@@ -113,123 +86,32 @@ function toInlineContracts(
 }
 
 /**
- * The absolute path a `"." + <abs>` specifier names, when it names a file inside the vendored
- * stdlib — otherwise `undefined`.
+ * A `resolve` that serves `source` as the entry, then the caller's modules, then the SDK's own.
  *
- * The compiler prefixes an importer-joined specifier with ".", so a vendored package's own relative
- * import (`./erc20.abi.json`) arrives as `"."` + its absolute location under `STD_ROOT`. This is
- * **disambiguation, not containment**: `makeResolve` already serves any absolute path directly, so
- * the `STD_ROOT` test is not a sandbox and is not load-bearing for safety. What it decides is which
- * of two same-looking shapes this is — a stripped absolute stdlib path, or a genuine `./rel` from
- * an entry program, which must fall through to `baseDirs` instead of being read as a path from the
- * filesystem root.
+ * The compiler hands `resolve` a specifier already joined against its importer's directory (a
+ * relative import two hops deep arrives as `./sub/b.js`), so no importer directory is re-derived
+ * here. The SDK's standard library is never offered to the caller's `resolve`: `@sauce/token`
+ * resolves to the SDK's copy whatever the caller supplies. Every other path reaches the caller's
+ * `resolve` before the SDK's embedded ABIs, so a caller can serve its own `./artifacts/IERC20.json`.
  */
-export function vendoredStdlibPath(path: string): string | undefined {
-  if (!path.startsWith("./")) return undefined;
-  const abs = path.slice(1);
+function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
+  const entryBytes = new TextEncoder().encode(source);
 
-  return isAbsolute(abs) && abs.startsWith(STD_ROOT) ? abs : undefined;
-}
-
-/**
- * A `resolve` that serves `source` as the entry and everything else from `baseDirs` — mirroring
- * multi-root probing, but simpler: confirmed empirically that the compiler hands `resolve` a
- * specifier ALREADY joined
- * against its importing module's own directory -- a relative import two hops deep arrives
- * pre-joined (e.g. `./sub/b.js`), never the raw `./b.js` as written at the call site -- so this
- * only ever needs to try each root directly, never re-derive an importer directory itself.
- */
-function makeResolve(
-  source: string,
-  baseDirs: readonly string[],
-): (path: string) => Uint8Array | undefined {
-  const entryBytes = Buffer.from(source, "utf8");
-  const readFile = (full: string): Uint8Array | undefined => {
-    try {
-      return statSync(full).isFile() ? readFileSync(full) : undefined;
-    } catch {
-      return undefined;
-    }
-  };
-  return (path: string): Uint8Array | undefined => {
+  return (path) => {
     if (path === ENTRY) return entryBytes;
-    // An ABSOLUTE path is served directly, independent of `baseDirs`: `makeResolvePackage` returns
-    // absolute stdlib entry paths (`SDK_STD_PACKAGES`), and the arm probe (`token.evm.js`) reaches
-    // here absolute too. `openRoute` supplies no `baseDirs`, so without this branch the loop below
-    // never runs and every ambient-stdlib resolution would miss.
-    if (isAbsolute(path)) return readFile(path);
-    // The compiler prefixes an importer-joined specifier with ".": for a module at an ABSOLUTE
-    // location (the vendored stdlib under STD_ROOT), a package's own relative import
-    // (`./erc20.abi.json`) therefore arrives as "." + "/abs/path". Strip the single leading "." and
-    // serve it ONLY when the remainder is an absolute path inside STD_ROOT -- so a genuine "./rel"
-    // (an entry program's own import, served from `baseDirs` below) is never mistaken for one.
-    const vendored = vendoredStdlibPath(path);
-    if (vendored !== undefined) return readFile(vendored);
-    for (const dir of baseDirs) {
-      const bytes = readFile(resolvePath(dir, path));
-      if (bytes !== undefined) return bytes;
+    if (own !== undefined && sdkStdPath(path) === undefined) {
+      const bytes = own(path);
+      if (bytes !== undefined && bytes !== null) return bytes;
     }
-    return undefined;
+
+    return resolveSdkModule(path);
   };
 }
 
-/**
- * Walks up from each baseDir looking for `node_modules/<pkg>` -- so a bare specifier (e.g.
- * `@sauce/token`) resolves whenever a caller's baseDirs sit under a real node_modules tree. Returns an ABSOLUTE path; `makeResolve`'s
- * `resolvePath(dir, path)` returns an absolute input unchanged regardless of which `dir` is tried,
- * so this slots straight back through the same resolver.
- */
-function makeResolvePackage(
-  baseDirs: readonly string[],
-): (specifier: string) => string | undefined {
-  return (specifier: string): string | undefined => {
-    // The SDK's own vendored stdlib resolves from `STD_ROOT` regardless of `baseDirs` -- it is never
-    // in a `node_modules` tree the walk below could find, so it must be matched first.
-    const stdSubdir = SDK_STD_PACKAGES[specifier];
-    if (stdSubdir !== undefined) {
-      const pkgDir = resolvePath(STD_ROOT, stdSubdir);
-      return resolvePath(pkgDir, packageEntry(pkgDir));
-    }
-    const pkgDir = findPackageDir(specifier, baseDirs);
-    return pkgDir ? resolvePath(pkgDir, packageEntry(pkgDir)) : undefined;
-  };
-}
-
-function findPackageDir(pkg: string, baseDirs: readonly string[]): string | undefined {
-  const visited = new Set<string>();
-  for (const base of baseDirs) {
-    let dir = resolvePath(base);
-    for (;;) {
-      if (visited.has(dir)) break;
-      visited.add(dir);
-      const candidate = join(dir, "node_modules", pkg);
-      try {
-        if (statSync(candidate).isDirectory()) return candidate;
-      } catch {
-        // not here, keep climbing
-      }
-      const parent = dirname(dir);
-      if (parent === dir) break; // filesystem root
-      dir = parent;
-    }
-  }
-  return undefined;
-}
-
-/** `.`/"module"/"main" only -- a small, deliberately non-exhaustive subset of real Node
- *  resolution. Falls back to `index.js`. */
-function packageEntry(pkgDir: string): string {
-  try {
-    const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf-8")) as Record<
-      string,
-      unknown
-    >;
-    if (typeof pkg.module === "string") return pkg.module;
-    if (typeof pkg.main === "string") return pkg.main;
-  } catch {
-    // fall through to the default below
-  }
-  return "index.js";
+/** Bare specifiers: the SDK's standard library first, then the caller's `resolvePackage`. */
+function makeResolvePackage(own: ResolvePackage | undefined): ResolvePackage {
+  return (specifier, importer) =>
+    resolveSdkPackage(specifier) ?? own?.(specifier, importer) ?? undefined;
 }
 
 /**
@@ -380,7 +262,10 @@ export function ensureTypedMainParams(source: string): string {
 export interface RsCompileInput {
   source: string;
   target: CompileTarget;
-  baseDirs?: string[];
+  /** The caller's modules, consulted before the SDK's own for every path but the standard library. */
+  resolve?: ResolveModule;
+  /** The caller's bare-specifier mapping, consulted after the SDK's standard library. */
+  resolvePackage?: ResolvePackage;
   defines?: Record<string, bigint | boolean | number>;
   contracts?: ContractsConfig;
   /** Module specifiers broadcast into every module with no `import` line -- see this file's own
@@ -401,13 +286,12 @@ export interface RsCompileInput {
  */
 export function compileWithRs(input: RsCompileInput): CompileResult {
   const compile = loadRsCompile();
-  const baseDirs = input.baseDirs ?? [];
 
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
-    resolve: makeResolve(ensureVoidMain(ensureTypedMainParams(input.source)), baseDirs),
-    resolvePackage: makeResolvePackage(baseDirs),
+    resolve: makeResolve(ensureVoidMain(ensureTypedMainParams(input.source)), input.resolve),
+    resolvePackage: makeResolvePackage(input.resolvePackage),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,
     defines: toRsDefines(input.defines),

@@ -160,9 +160,27 @@ their values, and keep an older pin only for a version you have decided to accep
 
 The source is available through `settleSource()` from
 `@eco-incorp/sauce/recipes`, and as the
-`@eco-incorp/sauce/recipes/settle.sauce.ts` asset. `SAUCE_BASE_DIRS` locates its ABI
-dependencies for a reproducing resolver. The verifier itself does not load that
-source or recompile it.
+`@eco-incorp/sauce/recipes/settle.sauce.ts` asset. `resolveSdkModule` from
+`@eco-incorp/sauce/compiler` serves its ABI dependency to a reproducing resolver:
+
+```ts
+import { compile, resolveSdkModule } from "@eco-incorp/sauce/compiler";
+import { settleSource } from "@eco-incorp/sauce/recipes";
+import { SETTLE_PROGRAM } from "@eco-incorp/sauce/verify";
+import { bytesToHex } from "viem";
+
+const settle = new TextEncoder().encode(settleSource());
+const { bytecode } = compile({
+  target: "evm",
+  entry: "settle.sauce.ts",
+  resolve: (path) => (path === "settle.sauce.ts" ? settle : resolveSdkModule(path)),
+});
+if (bytesToHex(bytecode) !== SETTLE_PROGRAM.toLowerCase()) {
+  throw new Error("Did not reproduce the settle program");
+}
+```
+
+The verifier itself does not load that source or recompile it.
 
 ## SVM: verify program and accounts
 

@@ -15,6 +15,7 @@
  * by the released engine. See `docs/guides/solana.md` for the execution boundary.
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
+import type { ResolveModule, ResolvePackage } from "sauce-compiler";
 import { bytesToHex } from "viem";
 
 import type { ChainRef } from "../chains/canonical.js";
@@ -24,7 +25,6 @@ import { compileWithRs } from "./rs-compile.js";
 import { rewriteTokenFactory, rewriteTokenMembers } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
-import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
@@ -45,7 +45,16 @@ import type { AddressInput, CallInput, Hex } from "./types.js";
 export interface SauceCompileOptions {
   /** Defaults by destination `ChainKind`: `'v12'` for evm, `'svm'` for svm. */
   target?: CompileTarget;
-  baseDirs?: string[];
+  /**
+   * Serves the program's own imports, with the compiler's `resolve` contract: bytes for a path it
+   * has, `undefined` for one it does not. Consulted after the entry and before the SDK's own
+   * modules — the engine ABIs (`./artifacts/IERC20.json`, `./artifacts/ISauceRouter.json`), every
+   * protocol ABI twin (`./protocols/<slug>/<Export>.json`) and the `@sauce/token` library, which the
+   * SDK serves from memory without being asked.
+   */
+  resolve?: ResolveModule;
+  /** Maps a bare specifier to a path `resolve` serves; consulted after the SDK's `@sauce/token`. */
+  resolvePackage?: ResolvePackage;
   /**
    * Compile-time parameters, injected into every module as a module-scope `const` — a define
    * REPLACES the module's own `const` of that name and is constant-folded, so a given set of values
@@ -285,7 +294,6 @@ export function compileSauceRoute(
       compileIntentChild(destination, childSource, captures, destinationPortal, options),
   });
   source = sugar.source;
-  let baseDirs = options.baseDirs;
   let contracts: ContractsConfig | undefined = options.contracts;
   // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
   // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare
@@ -308,7 +316,7 @@ export function compileSauceRoute(
   // Two ERC20 rewrites both lower to `IERC20.at(...)`: the `<Sym>.transfer(...)` symbol sugar
   // (when the chain has resolved token symbols) and the `Token(addr)` global wrapper (always —
   // it takes an arbitrary address, not a registry symbol). Whichever fires, the `IERC20` import is
-  // injected ONCE and `TOKEN_BASE_DIRS` unioned in once; on svm either is the same EVM-only error.
+  // injected ONCE (the SDK serves its ABI); on svm either is the same EVM-only error.
   let tokenRewrote = false;
   if (tokenMap.size > 0) {
     const rewritten = rewriteTokenMembers(source, tokenMap);
@@ -331,7 +339,6 @@ export function compileSauceRoute(
       );
     }
     source = `${ERC20_IMPORT_LINE}\n${source}`;
-    baseDirs = [...(options.baseDirs ?? []), ...TOKEN_BASE_DIRS];
   }
 
   if (options.accessors !== false) {
@@ -356,7 +363,8 @@ export function compileSauceRoute(
   const compiled = compileWithRs({
     source,
     target,
-    baseDirs,
+    resolve: options.resolve,
+    resolvePackage: options.resolvePackage,
     defines,
     contracts,
     ambient: options.ambient,

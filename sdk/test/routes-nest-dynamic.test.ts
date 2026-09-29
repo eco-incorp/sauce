@@ -33,7 +33,7 @@ import {
   type Hex,
 } from "viem";
 
-import { compileProgram as compile } from "./helpers";
+import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { hashIntent, rewardHash } from "../src/routes/encode.js";
 import {
@@ -228,7 +228,7 @@ describe("the emitted program", () => {
 
   it("compiles, and every rendered segment survives VERBATIM in the bytecode", () => {
     const program = dynamicChildProgram([{ child: templated, opts: OPTS }]);
-    const { bytecode } = compile(program.source, { baseDirs: [...program.baseDirs] });
+    const { bytecode } = compile(program.source, { baseDirs: [...SDK_SOURCE_DIRS] });
     const hex = Buffer.from(bytecode[0]!).toString("hex");
 
     expect(bytecode[0]!.length).toBeGreaterThan(0);
@@ -251,7 +251,7 @@ describe("the emitted program", () => {
 
     expect(program.source).toContain("d0_in");
     expect(program.source).toContain("d1_in");
-    expect(() => compile(program.source, { baseDirs: [...program.baseDirs] })).not.toThrow();
+    expect(() => compile(program.source, { baseDirs: [...SDK_SOURCE_DIRS] })).not.toThrow();
   });
 
   it("an identity scale needs no derived local and no overflow guard", () => {
@@ -477,7 +477,7 @@ describe("an SVM-destination child: the Borsh route needs u64 little-endian sent
     expect(stmts.some((s) => s.includes("does not fit"))).toBe(true);
 
     const program = dynamicChildProgram([{ child, opts: svmOpts }]);
-    expect(() => compile(program.source, { baseDirs: [...program.baseDirs] })).not.toThrow();
+    expect(() => compile(program.source, { baseDirs: [...SDK_SOURCE_DIRS] })).not.toThrow();
   });
 
   it("the 32-byte sentinel is rejected outright in a Borsh u64 field, pointing at the u64 twin", () => {

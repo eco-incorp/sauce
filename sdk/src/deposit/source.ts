@@ -2,46 +2,18 @@
  * SauceScript SOURCE emission for E4.2's universal deposit/stake/wrap adapter — pure string
  * templating over {@link toDeposit}'s normalized output. Imports NO compiler (same posture as
  * `sdk/src/swap/source.ts`). See `sdk/src/deposit/index.ts` for the module overview and
- * `sdk/src/swap/index.ts` for the E4.1 sibling this composes with.
+ * `sdk/src/swap/index.ts` for the E4.1 sibling this composes with. A template's
+ * `./protocols/<slug>/<Export>.json` import and the `./artifacts/IERC20.json` an approval needs are
+ * both served by the route compiler, so compiling one needs no resolver option.
  */
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { SWAP_BASE_DIRS, swapCallStatement, swapImportLines } from "../swap/source.js";
+import { swapCallStatement, swapImportLines } from "../swap/source.js";
 import type { SwapSourceSpec } from "../swap/types.js";
 import { safeApproveStatements } from "../token/safe.js";
 import { formatBigint } from "./format.js";
 import { toDeposit } from "./params.js";
 import type { DepositSpec, DepositSourceSpec, NormalizedDeposit } from "./types.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const MAX_UINT256 = (1n << 256n) - 1n;
-
-/**
- * `baseDirs` for compiling a `depositSource`/`depositCallStatement` program. Two entries, because
- * (unlike `swap`, whose only import is the engine-vendored `ISauceRouter`) a deposit template's
- * import resolves against the SDK's PROTOCOL registry, which lives in `sdk/src/protocols`, not
- * `sdk/dist/artifacts`:
- *
- * 1. `join(__dirname, "..")` — the dist root, resolving `./artifacts/IERC20.json` (same artifact
- *    `swap`'s `"balance"` path already uses).
- * 2. `join(__dirname, "..", "..", "src")` — the SHIPPED `sdk/src` tree (the root `package.json`
- *    `files` list ships `sdk/src/protocols` verbatim — see `sdk/src/deposit/index.ts`'s packaging
- *    note), resolving `./protocols/<slug>/<X>ABI.json`.
- *
- * In dev (this package's own `src/`), `__dirname` is `sdk/src/deposit`, so both entries land on
- * `sdk/src`, which already has both trees.
- */
-export const DEPOSIT_BASE_DIRS: readonly string[] = [
-  join(__dirname, ".."),
-  join(__dirname, "..", "..", "src"),
-];
-
-/** `SWAP_BASE_DIRS` ∪ `DEPOSIT_BASE_DIRS`, de-duped — the `baseDirs` a `swapThenDepositSource`
- *  program needs. */
-export const COMPOSED_BASE_DIRS: readonly string[] = [
-  ...new Set([...SWAP_BASE_DIRS, ...DEPOSIT_BASE_DIRS]),
-];
 
 const IERC20_IMPORT = `import { IERC20 } from "./artifacts/IERC20.json";`;
 

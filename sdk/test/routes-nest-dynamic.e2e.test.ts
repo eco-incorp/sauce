@@ -53,7 +53,7 @@ import {
 import type { Address, Hex, Log } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { compileProgram } from "./helpers";
+import { compileProgram, SDK_SOURCE_DIRS } from "./helpers";
 import {
   gateAnchors,
   installEngineAt,
@@ -308,11 +308,11 @@ const balanceOf = (token: Address, holder: Address): Promise<bigint> =>
 const toHex = (bytes: Uint8Array): Hex => `0x${Buffer.from(bytes).toString("hex")}`;
 
 /** A `route.calls` entry that cooks `source` on the Executor-owned Pot. */
-const cookCall = (source: string, baseDirs: readonly string[] = []) => ({
+const cookCall = (source: string) => ({
   target: executorPot,
   data: v12Pot.encodeCook(
     sauce.engine,
-    toHex(compileProgram(source, { baseDirs: [...baseDirs] }).bytecode[0]!),
+    toHex(compileProgram(source, { baseDirs: [...SDK_SOURCE_DIRS] }).bytecode[0]!),
   ),
   value: 0n,
 });
@@ -580,7 +580,7 @@ describeEvm("route nesting, executed", () => {
 
       const { status, intentHash } = await fulfil([
         markerCall(before),
-        cookCall(program.source, program.baseDirs),
+        cookCall(program.source),
         markerCall(after),
       ]);
 
@@ -616,7 +616,7 @@ describeEvm("route nesting, executed", () => {
 
       const { status } = await fulfil([
         markerCall(before),
-        cookCall(program.source, program.baseDirs),
+        cookCall(program.source),
         markerCall(after),
       ]);
 
@@ -645,7 +645,7 @@ describeEvm("route nesting, executed", () => {
       const program = dynamicChildProgram([
         { child: child(AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER), opts },
       ]);
-      const { status, logs } = await fulfil([cookCall(program.source, program.baseDirs)]);
+      const { status, logs } = await fulfil([cookCall(program.source)]);
       expect(status).toBe("success");
 
       const amountIn = measured;
@@ -770,7 +770,7 @@ describeEvm("route nesting, executed", () => {
                 args: [executorPot, CHILD_YIELD],
               }),
             },
-            cookCall(grandchildProgram.source, grandchildProgram.baseDirs),
+            cookCall(grandchildProgram.source),
           ],
         }),
         reward: normalizeReward({
@@ -804,7 +804,7 @@ describeEvm("route nesting, executed", () => {
           }),
           value: 0n,
         },
-        cookCall(childProgram.source, childProgram.baseDirs),
+        cookCall(childProgram.source),
       ]);
       expect(parent.status).toBe("success");
 
@@ -895,7 +895,7 @@ describeEvm("route nesting, executed", () => {
       expect(stmts.some((s) => s.includes("does not fit"))).toBe(true);
 
       const program = dynamicChildProgram([{ child: narrow, opts }]);
-      const { status } = await fulfil([cookCall(program.source, program.baseDirs)]);
+      const { status } = await fulfil([cookCall(program.source)]);
 
       expect(status).toBe("reverted");
     }, 120_000);
@@ -943,7 +943,7 @@ describeEvm("route nesting, executed", () => {
         { child: child(AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER), opts },
       ]);
 
-      const { status } = await fulfil([cookCall(program.source, program.baseDirs)]);
+      const { status } = await fulfil([cookCall(program.source)]);
       expect(status).toBe("success");
 
       const concrete = child(USDT_MEASURED, USDT_MEASURED);
@@ -995,7 +995,7 @@ describeEvm("route nesting, executed", () => {
       const { status } = await fulfil([
         // Leave 1 wei of allowance standing, as a previous fulfilment would.
         cookCall(`evm.call(${BigInt(usdt)}n, 0n, ${approveLiteral(portal, 1n)});`),
-        cookCall(program.source, program.baseDirs),
+        cookCall(program.source),
       ]);
 
       expect(status).toBe("success");
@@ -1038,10 +1038,7 @@ describeEvm("route nesting, executed", () => {
         },
       ]);
 
-      const { status } = await fulfil([
-        markerCall(marker),
-        cookCall(program.source, program.baseDirs),
-      ]);
+      const { status } = await fulfil([markerCall(marker), cookCall(program.source)]);
 
       expect(status).toBe("reverted");
       expect(await balanceOf(markerToken, marker)).toBe(0n);
@@ -1080,7 +1077,7 @@ describeEvm("route nesting, executed", () => {
         },
       ]);
 
-      const { status } = await fulfil([cookCall(program.source, program.baseDirs)]);
+      const { status } = await fulfil([cookCall(program.source)]);
 
       expect(status).toBe("success");
       expect(await balanceOf(usdt, vault)).toBe(held);
@@ -1125,10 +1122,7 @@ describeEvm("route nesting, executed", () => {
         },
       ]);
 
-      const { status } = await fulfil([
-        markerCall(marker),
-        cookCall(program.source, program.baseDirs),
-      ]);
+      const { status } = await fulfil([markerCall(marker), cookCall(program.source)]);
 
       expect(status).toBe("reverted");
       expect(await balanceOf(markerToken, marker)).toBe(0n);
@@ -1244,8 +1238,8 @@ describeEvm("route nesting, executed", () => {
     // never sends -- and then CHECKS what came back, which is the half the first version skipped.
     // These run the emitted statements directly through a cook: no intent, so a failure here is the
     // token check and nothing else.
-    const cookStatements = (statements: readonly string[], baseDirs: readonly string[] = []) =>
-      cookCall(`function main() {\n${statements.join("\n")}\n}`, baseDirs);
+    const cookStatements = (statements: readonly string[]) =>
+      cookCall(`function main() {\n${statements.join("\n")}\n}`);
 
     it("a token that returns FALSE reverts instead of passing", async () => {
       // The case `SafeERC20` exists for. Skipping the decode accepted this as success and the value

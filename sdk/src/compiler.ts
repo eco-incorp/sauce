@@ -16,6 +16,7 @@ export {
   decodeCompactArguments,
   type CompactValue,
 } from "./compact-arguments.js";
+export { resolveSdkModule, resolveSdkPackage } from "./embedded/resolve.js";
 
 export type {
   AccountEntry,

@@ -9,10 +9,10 @@
  * native-funded templates attach value with `evm.call(target, value, calldata)`. The executing Pot
  * must hold the assets. WETH wrapping and unwrapping use their raw selectors.
  *
- * Compile generated source with `routes.compileSauceRoute`, supplying both `pot` and `engine`
- * and `baseDirs: [...deposit.DEPOSIT_BASE_DIRS]`. The route compiler supplies a `void` annotation
- * for a falling-through entry. `swapThenDepositSource` combines swaps and deposits in one program;
- * compile that form with `deposit.COMPOSED_BASE_DIRS`.
+ * Compile generated source with `routes.compileSauceRoute`, supplying both `pot` and `engine`.
+ * The route compiler serves the protocol and ERC-20 ABIs the program imports, and supplies a `void`
+ * annotation for a falling-through entry. `swapThenDepositSource` combines swaps and deposits in
+ * one program, compiled the same way.
  *
  * Query `listDepositTemplates()` for supported protocol/action pairs. Templates include Aave and
  * Spark supply/withdrawal, Compound V3 supply, Euler/ERC-4626 deposits, Lido operations, and WETH
@@ -54,7 +54,5 @@ export {
   depositImportLines,
   depositSource,
   swapThenDepositSource,
-  DEPOSIT_BASE_DIRS,
-  COMPOSED_BASE_DIRS,
 } from "./source.js";
 export type { DepositSourceOptions, SwapThenDepositOptions } from "./source.js";

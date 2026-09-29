@@ -2,13 +2,12 @@
  * ERC20 token member rewrite — U4 `USDC.transfer(to, amount)` -> `IERC20.at(USDC).transfer(to,
  * amount)`, plus the balance sugar `self.USDC` -> `IERC20.at(<addr>n).balanceOf(ctx.self())`.
  */
-import { compileProgram as compile } from "./helpers";
+import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";
 import { resolveTokenMap } from "../src/routes/token-registry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import { TOKEN_BASE_DIRS } from "../src/token/source.js";
 
 // Base USDC -- pinned fixture, matching src/verify/vectors.ts's own Base USDC constant.
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -43,10 +42,10 @@ describe("rewriteTokenMembers", () => {
     const withDefine = `import { IERC20 } from "./artifacts/IERC20.json";\n${rewritten}`;
 
     const a = compile(withDefine, {
-      baseDirs: [...TOKEN_BASE_DIRS],
+      baseDirs: [...SDK_SOURCE_DIRS],
       defines: { USDC: BigInt(USDC) },
     });
-    const b = compile(handWritten, { baseDirs: [...TOKEN_BASE_DIRS] });
+    const b = compile(handWritten, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
   });
 
@@ -132,7 +131,7 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     const handWritten =
       `import { IERC20 } from "./artifacts/IERC20.json";\n` +
       `function main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`;
-    const hand = compile(handWritten, { baseDirs: [...TOKEN_BASE_DIRS] });
+    const hand = compile(handWritten, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(Array.from(hand.bytecode[0]!));
   });
 
@@ -146,13 +145,13 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     );
     const overridden = compile(
       `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main() { IERC20.at(${OTHER}n).transfer(${TO}, 5n); }`,
-      { baseDirs: [...TOKEN_BASE_DIRS] },
+      { baseDirs: [...SDK_SOURCE_DIRS] },
     );
     expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(Array.from(overridden.bytecode[0]!));
 
     const registryDefault = compile(
       `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`,
-      { baseDirs: [...TOKEN_BASE_DIRS] },
+      { baseDirs: [...SDK_SOURCE_DIRS] },
     );
     expect(Array.from(compiled.compiled.bytecode[0]!)).not.toEqual(
       Array.from(registryDefault.bytecode[0]!),
@@ -224,11 +223,11 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     const sugarCompiled = compile(
       `import { IERC20 } from "./artifacts/IERC20.json";\n${sugar.source}`,
       {
-        baseDirs: [...TOKEN_BASE_DIRS],
+        baseDirs: [...SDK_SOURCE_DIRS],
       },
     );
     const u4Compiled = compile(`import { IERC20 } from "./artifacts/IERC20.json";\n${u4.source}`, {
-      baseDirs: [...TOKEN_BASE_DIRS],
+      baseDirs: [...SDK_SOURCE_DIRS],
       defines: { USDC: BigInt(USDC) },
     });
     expect(Array.from(sugarCompiled.bytecode[0]!)).toEqual(Array.from(u4Compiled.bytecode[0]!));
