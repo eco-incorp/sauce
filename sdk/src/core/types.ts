@@ -69,11 +69,28 @@ export interface SauceParam {
   description: string;
 }
 
+/**
+ * A native coin that is ALSO an ERC-20: one balance, read two ways. `eth_getBalance`, `msg.value`
+ * and gas use the native scale; `balanceOf` and `transfer` at `address` use `decimals`. Sending
+ * native value and calling `transfer` move the same money. Nothing needs wrapping, so such a chain
+ * has no canonical wrapped native, and a WETH9-style call has no canonical target there.
+ */
+export interface NativeErc20 {
+  address: `0x${string}`;
+  decimals: number;
+}
+
 /** EVM chain definition */
 export interface Chain {
   id: number;
   name: string;
-  nativeCurrency: { name: string; symbol: string; decimals: number };
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+    /** Present only where the native coin is itself an ERC-20 (Arc's USDC). */
+    erc20?: NativeErc20;
+  };
   rpcUrls: string[];
   blockExplorerUrls: string[];
   testnet: boolean;

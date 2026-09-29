@@ -131,6 +131,37 @@ describe("toDeposit guards", () => {
     ).toThrow(/does not support a beneficiary/);
   });
 
+  // Arc's native USDC is already an ERC-20, so Arc has no canonical wrapped native.
+  it.each<[string, `0x${string}`, RegExp]>([
+    [
+      "the native USDC ERC-20",
+      "0x3600000000000000000000000000000000000000",
+      /the native USDC ERC-20/,
+    ],
+    [
+      "the registry WETH (bridged ETH)",
+      "0x128cC466B61f542da60c70e3aA11c10e19B84EDB",
+      /WETH on Arc/,
+    ],
+  ])("rejects a weth template targeting Arc's %s", (_, target, what) => {
+    for (const action of ["wrap", "unwrap"]) {
+      expect(() => toDeposit({ protocol: "weth", action, target, amount: 1n })).toThrow(what);
+      expect(() => toDeposit({ protocol: "weth", action, target, amount: 1n })).toThrow(
+        /Arc has no canonical wrapped native/,
+      );
+    }
+  });
+
+  it("still accepts a real WETH9 target, and Arc's USDC for a typed template", () => {
+    const WETH9 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+    expect(() =>
+      toDeposit({ protocol: "weth", action: "wrap", target: WETH9, amount: 1n }),
+    ).not.toThrow();
+    expect(() =>
+      toDeposit(aaveSpec({ token: "0x3600000000000000000000000000000000000000" })),
+    ).not.toThrow();
+  });
+
   it("rejects beneficiary on weth:unwrap", () => {
     expect(() =>
       toDeposit({

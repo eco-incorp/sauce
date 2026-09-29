@@ -6,7 +6,13 @@
  * actually reconciles every `chainName` spelling used across the protocol
  * registry — the concrete motivating use case.
  */
-import { chains, getChain, getAllChainIds } from "../src/chains/index.js";
+import {
+  chains,
+  getChain,
+  getAllChainIds,
+  nativeErc20,
+  nativeToErc20Amount,
+} from "../src/chains/index.js";
 import {
   canonicalChains,
   chainById,
@@ -235,5 +241,40 @@ describe("canonical chain registry: bigint chain-ref resolution (regression)", (
   it("returns undefined for a negative or out-of-safe-range bigint (never throws here)", () => {
     expect(resolveChain(-1n)).toBeUndefined();
     expect(resolveChain(BigInt(Number.MAX_SAFE_INTEGER) + 1n)).toBeUndefined();
+  });
+});
+
+describe("Arc: the native coin is USDC, which is also an ERC-20", () => {
+  // Measured on rpc.mainnet.arc.io at block 23287436 (PR #11): eth_getBalance and balanceOf of one
+  // account. The ERC-20 reads floor(native / 1e12).
+  const NATIVE_WEI = 19396491158961599350n;
+  const BALANCE_OF = 19396491n;
+
+  it("records the 6-decimal ERC-20 over the 18-decimal native balance", () => {
+    expect(getChain(5042)?.nativeCurrency).toEqual({
+      name: "USDC",
+      symbol: "USDC",
+      decimals: 18,
+      erc20: { address: "0x3600000000000000000000000000000000000000", decimals: 6 },
+    });
+    expect(nativeErc20(5042)).toEqual({
+      address: "0x3600000000000000000000000000000000000000",
+      decimals: 6,
+    });
+  });
+
+  it("is the only chain whose native coin is an ERC-20, so the only one needing no wrapped native", () => {
+    expect(getAllChainIds().filter((id) => nativeErc20(id) !== undefined)).toEqual([5042]);
+    expect(nativeErc20(1)).toBeUndefined();
+    expect(nativeErc20(999_999)).toBeUndefined();
+  });
+
+  it("converts native wei to token units the way balanceOf reads them", () => {
+    expect(nativeToErc20Amount(5042, NATIVE_WEI)).toBe(BALANCE_OF);
+    // Dust below 1e12 wei is invisible through the ERC-20.
+    expect(nativeToErc20Amount(5042, 999_999_999_999n)).toBe(0n);
+    expect(nativeToErc20Amount(5042, 10n ** 12n)).toBe(1n);
+    expect(() => nativeToErc20Amount(1, 1n)).toThrow(/not an ERC-20/);
+    expect(() => nativeToErc20Amount(5042, -1n)).toThrow(/negative/);
   });
 });
