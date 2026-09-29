@@ -120,7 +120,7 @@ export function describeContract(
   };
 }
 
-/** Throwing sibling of describeContract, mirroring requireChain/requireV12Deployment's "here is the known set" error style. */
+/** Throwing sibling of describeContract, mirroring requireChain's "here is the known set" error style. */
 export function requireContract(
   chain: ChainRef,
   protocol: string,

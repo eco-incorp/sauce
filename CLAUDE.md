@@ -202,9 +202,10 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   program ids), and `src/deployments/v12-addresses.ts` reads it at runtime behind the `./deployments`
   export (`v12EngineAddress()`, `v12KitchenAddress()`, `v12SvmEngineProgramId()`, …). These are the
   deterministic (CREATE3 / fixed-keypair) addresses — chain/cluster-independent, so they are ADDRESSES,
-  not liveness. Legacy `v12.generated.ts` constants and the `isV12Live`/`v12LiveChainIds` roster describe the old
-  deployment generation, not proof that these release addresses are live on a chain. EVM address
-  lookup helpers use `V12Deployments.json`; verify live code separately. The EVM engine and Kitchen are **1.1.0**, SVM engine **1.3.0**, and
+  not liveness; verify live code separately. There is no chain roster any more: the hand-maintained
+  `v12.generated.ts` and its `isV12Live`/`v12ChainSlug`/`v12Deployment` helpers described the
+  pre-`cook` deployment generation and were deleted. A chain's identity (slug, kind) is
+  `chains/canonical.ts`'s. The EVM engine and Kitchen are **1.1.0**, SVM engine **1.3.0**, and
   SVM Kitchen **1.0.0**; `V12Deployments.json.releases` records each source commit/version.
 - **`V12RuntimeBytecode.json` comes from a pinned release asset.**
   The engine deleted its committed `engine-v12/snapshots/` copy (`chore(v12): compile the runtime

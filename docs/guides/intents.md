@@ -70,7 +70,7 @@ Portal. A fulfilment that cooks on a Pot that is not there reverts entirely, bec
 refuses a call with calldata to an address without code (`CallToEOA`).
 
 To deploy it yourself first, send this on the destination chain:
-`routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: executor, salt: SAUCE_INTENT_POT_SALT })`.
+`routes.sauceEvmDeployPotCall({ owner: executor, salt: SAUCE_INTENT_POT_SALT })`.
 The call is permissionless, and it returns the existing Pot when one is already there. A **Pot you
 name** instead must also exist, and be owned by that Executor, or the cook reverts with `NotOwner()`.
 Use

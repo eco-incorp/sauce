@@ -18,7 +18,6 @@ import {
 import { assembleIntent, hashIntent } from "../src/routes/index.js";
 import { requireChain } from "../src/chains/canonical.js";
 import {
-  assertSauceEvmLive,
   buildSauceEvmCall,
   buildSauceEvmCalls,
   buildSauceSvmCall,
@@ -89,24 +88,14 @@ describe("sauceEvmDeployPotCall", () => {
     expect(call.value).toBe(0n);
   });
 
-  // The deployment record's addresses predate the `cook` signature change, so reaching them without
-  // the liveness gate is refused rather than defaulted — a Pot deployed through an older-lineage
-  // Kitchen lands at an address the caller never predicted.
-  it("refuses to build without a kitchen or a chainId, rather than using the record ungated", () => {
-    expect(() => sauceEvmDeployPotCall({ owner: OWNER, salt: SALT })).toThrow(
-      /no ungated default Kitchen/,
-    );
+  it("defaults to the pinned release Kitchen", () => {
+    const call = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT });
+    expect(call.target).toBe(v12KitchenAddress());
   });
 
   it("honours an explicit kitchen override", () => {
     const call = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT, kitchen: KITCHEN });
     expect(call.target).toBe(KITCHEN);
-  });
-
-  it("uses the pinned release Kitchen for the chainId shorthand", () => {
-    const call = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT, chainId: 8453 });
-    expect(call.target).toBe(v12KitchenAddress());
-    expect(call.target.toLowerCase()).not.toBe("0xd57b452634c653d80a85160fea895bb07ac41d8f");
   });
 });
 
@@ -135,11 +124,6 @@ describe("EVM composition with the fluent builder + E3.2 encode/decode round-tri
     const h1 = hashIntent(intent!);
     const h2 = hashIntent(intent!);
     expect(h1).toEqual(h2);
-  });
-
-  it("assertSauceEvmLive throws for a non-live chain (ronin/2020) and resolves for a live one (base/8453)", () => {
-    expect(() => assertSauceEvmLive(2020)).toThrow();
-    expect(assertSauceEvmLive(8453).chainId).toBe(8453);
   });
 });
 

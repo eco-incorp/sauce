@@ -9,9 +9,7 @@
  *
  * These are the deterministic addresses — CREATE3 on EVM, a fixed/derived keypair on SVM — so they are
  * `chainIndependent` / `clusterIndependent`: one address set, the same everywhere it is deployed. They
- * are ADDRESSES, not liveness. The legacy chain roster does not attest that these release versions
- * are deployed; check code/programs on the target chain before use. These supersede the legacy
- * ADDRESSES — `v12.generated.ts` records the pre-`cook` stack, and its Kitchen/Router are not these.
+ * are ADDRESSES, not liveness: check code/programs on the target chain before use.
  */
 import deployments from "../artifacts/V12Deployments.json" with { type: "json" };
 
