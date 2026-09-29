@@ -4,19 +4,18 @@
  * This subpath used to serve the in-repo TypeScript compiler. It now serves the published Rust/wasm
  * one, which is the only compiler the SDK itself uses. The surface is different, not a superset: the
  * TS compiler exposed an opcode-level builder (`Saucer`, `CompilerContext`, `OPS`) alongside
- * `compile(source, options)`; this exposes `compile(options)` over source text and nothing else.
+ * `compile(source, options)`; this exposes `compile(options)` over source text.
  *
- * `createRequire` rather than a static import: the package's `node` condition is a CommonJS build
- * that reads its sibling `.wasm` off disk at load, which an ESM transform does not resolve.
+ * The same module runs in Node and in a browser (`wasm-compiler.ts`). In a browser, `await ready()`
+ * once before the first compile; in Node `compile` works on import.
  */
-import { createRequire } from "node:module";
-
 export {
   encodeCompactArguments,
   decodeCompactArguments,
   type CompactValue,
 } from "./compact-arguments.js";
 export { resolveSdkModule, resolveSdkPackage } from "./embedded/resolve.js";
+export { compile, ready, type WasmSource } from "./wasm-compiler.js";
 
 export type {
   AccountEntry,
@@ -28,7 +27,3 @@ export type {
   ResolvePackage,
   SauceTarget,
 } from "sauce-compiler";
-
-const mod = createRequire(import.meta.url)("sauce-compiler") as typeof import("sauce-compiler");
-
-export const { compile } = mod;

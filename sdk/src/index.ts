@@ -1,5 +1,8 @@
 // @eco-incorp/sauce - Sauce Protocol SDK for all on-chain protocols
 export * from "./core/types.js";
+// In a browser, `await ready()` once before the first compile: the compiler's WebAssembly loads
+// asynchronously there. In Node it is ready on import.
+export { ready, type WasmSource } from "./wasm-compiler.js";
 export * from "./chains/index.js";
 export {
   protocols,

@@ -16,6 +16,7 @@
  *
  * `++`/`--` and nested functions are also rejected, so generated loops write `i = i + 1n`.
  */
+import { bytesToHex } from "viem";
 
 /** A SauceScript expression. */
 export type Expr = string;
@@ -64,7 +65,7 @@ export function formatBigint(value: bigint): Expr {
 
 /** A `hex` literal. Bind it before calling anything on it — see this module's header. */
 export function bytesLiteral(bytes: Uint8Array): Expr {
-  return `hex\`${Buffer.from(bytes).toString("hex")}\``;
+  return `hex\`${bytesToHex(bytes).slice(2)}\``;
 }
 
 /** A tuple literal. Fields are positional; the names are a mnemonic the ABI encoder ignores. */

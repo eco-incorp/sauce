@@ -1,49 +1,20 @@
 /**
- * The SDK's one compiler seam.
+ * The route compiler's adapter onto the SauceScript compiler.
  *
- * Loads the SauceScript compiler (`sauce-compiler`, the published `@eco-incorp/sauce-compiler` wasm
- * package) and adapts its `compile({ resolve, resolvePackage, ... })` signature to the source-plus-
- * options shape `sauce-route.ts` calls with: a `source` string plus `resolve`/`defines`/`contracts`,
- * returning a `CompileResult` (`compile-types.ts`) so `CompiledSauceRoute` never names a compiler
- * type. Every other node-side recompile in the SDK (`svm/verify.ts`) goes through here too, so the
- * wasm module is loaded in exactly one place.
+ * Adapts the compiler's `compile({ resolve, resolvePackage, ... })` signature (through
+ * `wasm-compiler.ts`, the SDK's one import of the wasm package) to the source-plus-options shape
+ * `sauce-route.ts` calls with: a `source` string plus `resolve`/`defines`/`contracts`, returning a
+ * `CompileResult` (`compile-types.ts`) so `CompiledSauceRoute` never names a compiler type. The
+ * SDK's other recompile (`svm/verify.ts`) goes through here too.
  */
-import { createRequire } from "node:module";
-
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
-// The RS compiler's own option/result types, from the package this file loads at runtime -- a
+// The RS compiler's own option/result types, from the package `wasm-compiler.ts` loads -- a
 // hand-written mirror of them would drift with nothing to catch it.
-import type {
-  CompileOptions as RsCompileOptions,
-  CompileResult as RsCompileResult,
-  ResolveModule,
-  ResolvePackage,
-  SauceTarget as RsTarget,
-} from "sauce-compiler";
+import type { ResolveModule, ResolvePackage, SauceTarget as RsTarget } from "sauce-compiler";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
+import { compile } from "../wasm-compiler.js";
 
 const ENTRY = "main.js";
-
-let rsCompileFn: ((options: RsCompileOptions) => RsCompileResult) | undefined;
-
-/** Lazily loads the wasm module — only paid once something actually compiles. */
-function loadRsCompile(): (options: RsCompileOptions) => RsCompileResult {
-  if (rsCompileFn) return rsCompileFn;
-  // Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build
-  // that reads its sibling `.wasm` off disk at load, and Node's own CJS loader is the one that
-  // resolves that sibling -- an ESM/bundler loader does not. Mirrors `test/std/token/harness.ts`.
-  let mod: { compile: (options: RsCompileOptions) => RsCompileResult };
-  try {
-    mod = createRequire(import.meta.url)("sauce-compiler") as typeof mod;
-  } catch (cause) {
-    throw new Error(
-      "the SauceScript compiler (`sauce-compiler` -> the published @eco-incorp/sauce-compiler) failed to load.",
-      { cause },
-    );
-  }
-  rsCompileFn = mod.compile;
-  return rsCompileFn;
-}
 
 /** v1/v12 both compile through the RS compiler's single EVM backend; svm maps 1:1. */
 function mapTarget(target: CompileTarget): RsTarget {
@@ -285,8 +256,6 @@ export interface RsCompileInput {
  * attach contract compiles through `svm/` directly.
  */
 export function compileWithRs(input: RsCompileInput): CompileResult {
-  const compile = loadRsCompile();
-
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
