@@ -13,7 +13,23 @@
     },
     "aave-v4": {
       "AaveV4SpokeABI": {
-        "roles": ["mainSpoke", "forexSpoke"],
+        "roles": [
+          "mainSpoke",
+          "forexSpoke",
+          "bluechipSpoke",
+          "ethenaCorrelatedSpoke",
+          "ethenaEcosystemSpoke",
+          "goldSpoke",
+          "paxgGoldSpoke",
+          "lombardBtcSpoke",
+          "usdgPendleSpoke",
+          "etherfiESpoke",
+          "kelpESpoke",
+          "lidoESpoke",
+          "usdgMapleESpoke",
+          "mag7Spoke",
+          "avaxCorrelatedSpoke"
+        ],
         "instances": [
           {
             "chainId": 1,
@@ -23,7 +39,7 @@
         ]
       },
       "AaveV4HubABI": {
-        "roles": ["coreHub"],
+        "roles": ["coreHub", "plusHub", "primeHub", "globalDollarHub", "equitiesHub"],
         "instances": [
           {
             "chainId": 1,

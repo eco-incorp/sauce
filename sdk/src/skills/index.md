@@ -67,7 +67,7 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 | ------------- | ----------- | --------------------------------------------------------------- | -------------------------------------------------------------- |
 | `aave-v3`     | Aave V3     | ETH, POLY, ARB, OP, AVAX, BASE, BSC, SCROLL, FTM, GNOSIS, METIS | supply, withdraw, borrow, repay, flashLoanSimple               |
 | `aave-v2`     | Aave V2     | ETH, POLY, AVAX                                                 | deposit, withdraw, borrow, repay                               |
-| `aave-v4`     | Aave V4     | ARC                                                             | supply, withdraw, borrow, repay (Spoke, by reserve id)         |
+| `aave-v4`     | Aave V4     | ETH, BASE, AVAX, ARC                                            | supply, withdraw, borrow, repay (Spoke, by reserve id)         |
 | `compound-v3` | Compound V3 | ETH, ARB, BASE, POLY, OP, SCROLL                                | supply, withdraw (Comet per base asset)                        |
 | `compound-v2` | Compound V2 | ETH                                                             | mint, redeemUnderlying, borrow, repayBorrow (cToken)           |
 | `morpho-blue` | Morpho Blue | ETH, BASE, ARC                                                  | supply, withdraw, borrow, repay, supplyCollateral              |
