@@ -1,10 +1,13 @@
 // Captures the on-chain evidence `test/registry-abi.test.ts` checks the protocol registry against.
 //
-//   RECAPTURE_REGISTRY_ABI=1 node scripts/capture-registry-abi.mjs [slug ...]
+//   node scripts/capture-registry-abi.mjs --recapture --rpc-config rpc.config.json \
+//     [--chains <id>[,<id>…]] [--no-cache] [slug ...]
 //
 // Run after `pnpm build` (it reads the registry from `dist/`). With slugs, only those protocols are
-// recaptured and the rest of the fixture is kept. Nothing else reads the network: the test is
-// offline and only ever reads what this writes.
+// recaptured and the rest of the fixture is kept. `--chains` narrows that to those chains'
+// deployments, keeping every other chain's captured evidence as it is. `--no-cache` ignores the
+// response cache. Nothing else reads the network: the test is offline and only ever reads what this
+// writes.
 //
 // For every contract instance in `test/fixtures/registry-abi/targets.json` it records:
 //   - which of the relevant selectors the deployed code dispatches, after resolving proxies
@@ -18,18 +21,80 @@
 // "Relevant selectors" are the registry's own, every verified overload of the same name, and the
 // target's `probes`: signatures to ask a selector router about when the registry's are wrong.
 //
-// RPC endpoints come only from the environment (`<CHAIN>_RPC_URL`, e.g. `ETH_RPC_URL`, or
-// `RPC_URL_<chainId>`), falling back to a public endpoint. No URL is ever written to the fixture.
+// RPC endpoints come only from the file `--rpc-config` names: a JSON object mapping each chain id to
+// its URL, `{ "<chainId>": "<url>" }`. There is no default and no public fallback, and nothing is
+// read from the environment. Keep yours at `sdk/rpc.config.json`, which is gitignored; copy
+// `sdk/rpc.config.example.json` to start. Before anything is fetched, the script fails listing every
+// chain id the selected deployments need that the file does not give. No URL is ever written to the
+// fixture.
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 import { keccak256, toFunctionSelector } from "viem";
 
-if (process.env.RECAPTURE_REGISTRY_ABI !== "1") {
-  console.error(
-    "capture-registry-abi: refusing to touch the network without RECAPTURE_REGISTRY_ABI=1",
-  );
+const USAGE =
+  "usage: node scripts/capture-registry-abi.mjs --recapture --rpc-config <path> " +
+  "[--chains <id>[,<id>…]] [--no-cache] [slug ...]";
+
+function fail(message) {
+  console.error(`capture-registry-abi: ${message}`);
   process.exit(1);
+}
+
+let cli;
+try {
+  cli = parseArgs({
+    allowPositionals: true,
+    options: {
+      recapture: { type: "boolean", default: false },
+      "rpc-config": { type: "string" },
+      chains: { type: "string" },
+      "no-cache": { type: "boolean", default: false },
+    },
+  });
+} catch (err) {
+  fail(`${err.message}\n${USAGE}`);
+}
+if (!cli.values.recapture) fail(`refusing to touch the network without --recapture\n${USAGE}`);
+if (cli.values["rpc-config"] === undefined) {
+  fail(
+    "pass --rpc-config <path>, a JSON object of chain id -> RPC URL (copy " +
+      `rpc.config.example.json to the gitignored rpc.config.json)\n${USAGE}`,
+  );
+}
+const RPC_CONFIG_PATH = cli.values["rpc-config"];
+/** chainId -> URL, exactly as the developer's config gives them. */
+const RPC_URLS = readRpcConfig(RPC_CONFIG_PATH);
+const CHAINS_ONLY =
+  cli.values.chains === undefined ? null : new Set(parseChainIds(cli.values.chains));
+const NO_CACHE = cli.values["no-cache"];
+
+function parseChainIds(list) {
+  const ids = list.split(",").map((part) => part.trim());
+  const bad = ids.filter((id) => !/^[1-9][0-9]*$/.test(id));
+  if (bad.length > 0) fail(`--chains takes decimal chain ids, got: ${bad.join(", ")}`);
+  return ids.map(Number);
+}
+
+function readRpcConfig(path) {
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf-8"));
+  } catch (err) {
+    fail(`cannot read --rpc-config ${path}: ${err.message}`);
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    fail(`--rpc-config ${path} must be a JSON object of chain id -> RPC URL`);
+  }
+  const urls = new Map();
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!/^[1-9][0-9]*$/.test(key)) fail(`--rpc-config ${path}: "${key}" is not a chain id`);
+    // A value still holding the example's `<…>` placeholder is not configured.
+    if (typeof value !== "string" || !/^https?:\/\//.test(value)) continue;
+    urls.set(Number(key), value);
+  }
+  return urls;
 }
 
 const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -38,34 +103,6 @@ const TARGETS = JSON.parse(readFileSync(join(FIXTURE_DIR, "targets.json"), "utf-
 const EVIDENCE_PATH = join(FIXTURE_DIR, "evidence.json");
 const CACHE_DIR = join(SDK, "node_modules", ".cache", "registry-abi");
 mkdirSync(CACHE_DIR, { recursive: true });
-
-/** chainId -> [env var, public fallback]. */
-const CHAINS = {
-  1: ["ETH_RPC_URL", "https://ethereum-rpc.publicnode.com"],
-  10: ["OPTIMISM_RPC_URL", "https://mainnet.optimism.io"],
-  56: ["BSC_RPC_URL", "https://bsc-dataseed.bnbchain.org"],
-  100: ["GNOSIS_RPC_URL", "https://rpc.gnosischain.com"],
-  130: ["UNICHAIN_RPC_URL", "https://mainnet.unichain.org"],
-  137: ["POLYGON_RPC_URL", "https://polygon-rpc.com"],
-  143: ["MONAD_RPC_URL", "https://rpc.monad.xyz"],
-  146: ["SONIC_RPC_URL", "https://rpc.soniclabs.com"],
-  204: ["OPBNB_RPC_URL", "https://opbnb-mainnet-rpc.bnbchain.org"],
-  250: ["FANTOM_RPC_URL", "https://rpcapi.fantom.network"],
-  324: ["ZKSYNC_RPC_URL", "https://mainnet.era.zksync.io"],
-  1088: ["METIS_RPC_URL", "https://andromeda.metis.io/?owner=1088"],
-  8453: ["BASE_RPC_URL", "https://mainnet.base.org"],
-  34443: ["MODE_RPC_URL", "https://mainnet.mode.network"],
-  42161: ["ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"],
-  42220: ["CELO_RPC_URL", "https://forno.celo.org"],
-  43114: ["AVALANCHE_RPC_URL", "https://api.avax.network/ext/bc/C/rpc"],
-  59144: ["LINEA_RPC_URL", "https://rpc.linea.build"],
-  81457: ["BLAST_RPC_URL", "https://rpc.blast.io"],
-  2020: ["RONIN_RPC_URL", "https://api.roninchain.com/rpc"],
-  9745: ["PLASMA_RPC_URL", "https://rpc.plasma.to"],
-  57073: ["INK_RPC_URL", "https://rpc-gel.inkonchain.com"],
-  534352: ["SCROLL_RPC_URL", "https://rpc.scroll.io"],
-  7777777: ["ZORA_RPC_URL", "https://rpc.zora.energy"],
-};
 
 /** Blockscout v2 hosts, by chain. */
 const BLOCKSCOUT = {
@@ -102,9 +139,10 @@ const ETHERSCAN_COMPATIBLE = {
 const ERAVM = new Set([324]);
 
 function rpcUrl(chainId) {
-  const entry = CHAINS[chainId];
-  if (entry === undefined) throw new Error(`no RPC configured for chain ${chainId}`);
-  return process.env[`RPC_URL_${chainId}`] ?? process.env[entry[0]] ?? entry[1];
+  const url = RPC_URLS.get(chainId);
+  // main() checks every chain up front, so this is only reachable through a bug there.
+  if (url === undefined) throw new Error(`no RPC configured for chain ${chainId}`);
+  return url;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -180,7 +218,7 @@ function memo(key, fn) {
 function diskMemo(key, fn) {
   return memo(key, async () => {
     const path = join(CACHE_DIR, `${keccak256(new TextEncoder().encode(key)).slice(2, 18)}.json`);
-    if (existsSync(path) && process.env.REGISTRY_ABI_NO_CACHE !== "1") {
+    if (existsSync(path) && !NO_CACHE) {
       return JSON.parse(readFileSync(path, "utf-8")).value;
     }
     const value = await fn();
@@ -584,7 +622,7 @@ async function captureInstance(slug, abiExport, registryFns, target) {
 }
 
 async function main() {
-  const only = new Set(process.argv.slice(2));
+  const only = new Set(cli.positionals);
   const previous = existsSync(EVIDENCE_PATH)
     ? expand(JSON.parse(readFileSync(EVIDENCE_PATH, "utf-8")))
     : { instances: [] };
@@ -592,7 +630,10 @@ async function main() {
   // capture, and its evidence is carried over untouched until the protocol lands.
   const present = (slug) => existsSync(join(SDK, "dist", "protocols", slug, "abis.js"));
   const keep = previous.instances.filter(
-    (i) => (only.size > 0 && !only.has(i.protocol)) || !present(i.protocol),
+    (i) =>
+      (only.size > 0 && !only.has(i.protocol)) ||
+      !present(i.protocol) ||
+      (CHAINS_ONLY !== null && !CHAINS_ONLY.has(i.chainId)),
   );
   const jobs = [];
   for (const [slug, exports] of Object.entries(TARGETS.protocols)) {
@@ -623,8 +664,23 @@ async function main() {
       if (instances.length === 0 && !spec.unverifiable) {
         throw new Error(`${slug}.${abiExport}: target names no instance`);
       }
-      for (const inst of instances) jobs.push({ slug, abiExport, registryFns, inst });
+      for (const inst of instances) {
+        if (CHAINS_ONLY !== null && !CHAINS_ONLY.has(inst.chainId)) continue;
+        jobs.push({ slug, abiExport, registryFns, inst });
+      }
     }
+  }
+  // Every RPC the run needs, checked before the first request: a chain found missing mid-run would
+  // leave its instances recorded as errors in the fixture.
+  const missing = [...new Set(jobs.map((job) => job.inst.chainId))]
+    .filter((chainId) => !RPC_URLS.has(chainId))
+    .sort((a, b) => a - b);
+  if (missing.length > 0) {
+    fail(
+      `--rpc-config ${RPC_CONFIG_PATH} gives no RPC URL for chain id${missing.length > 1 ? "s" : ""} ` +
+        `${missing.join(", ")}, which the selected deployments need. Add a "<chainId>": "<url>" ` +
+        "entry for each, or narrow the run with --chains or protocol slugs.",
+    );
   }
   console.log(`capturing ${jobs.length} instances`);
   const captured = await pool(jobs, 6, async (job, i) => {
