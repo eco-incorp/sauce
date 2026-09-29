@@ -762,7 +762,9 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
         { type: "aaveV3Supply", pool: AAVE_V3_POOL, token: USDC, onBehalfOf: "self" },
       ]);
       assert.equal(await balance(USDC, env.pot), 0n);
-      assert.ok((await balance(AAVE_V3_AUSDC, env.pot)) >= USDC_100 - 1n);
+      // An aToken balance is a scaled amount read back through the liquidity index, rounded each
+      // way, so it can land up to 2 units under the supply; which depends on the block's index.
+      assert.ok((await balance(AAVE_V3_AUSDC, env.pot)) >= USDC_100 - 2n);
 
       await run([
         {
