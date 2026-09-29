@@ -6,7 +6,7 @@
  * Skips when no engine binary is resolvable (a bare checkout with neither `--fetch-v12-engines` nor an
  * installed package), so it never hard-fails a credential-less run — the same gate the SDK suites use.
  */
-import { svmEnginePath } from "@eco-incorp/sauce-source/svm";
+import { svmEnginePath } from "@eco-incorp/sauce-source/svm/engine-artifacts";
 import { runSvmProgramLocally } from "../src/svm-local";
 
 const engineAvailable = (): boolean => {
