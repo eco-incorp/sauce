@@ -164,6 +164,7 @@
  */
 import { address } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { base64Bytes } from "../../../bytes.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "alphaq";
@@ -339,7 +340,7 @@ export function primeAlphaqStatsAccounts(rpc: AlphaqStatsRpc): Promise<void> {
       .getProgramAccounts(ALPHAQ_PROGRAM_ID, { encoding: "base64", filters: [{ dataSize: 336n }] })
       .send();
     for (const acc of accounts) {
-      const data = Uint8Array.from(Buffer.from(acc.account.data[0], "base64"));
+      const data = base64Bytes(acc.account.data[0]);
       const symbol = decodeSymbol(data);
       if (symbol.length > 0) runtimeStatsBySymbol.set(symbol, acc.pubkey);
     }
@@ -366,7 +367,8 @@ function resolveAlphaqStatsAccount(symbol: string): Address | undefined {
 function decodeSymbol(data: Uint8Array): string {
   let end = 0;
   while (end < 16 && data[end] !== 0) end++;
-  return Buffer.from(data.slice(0, end)).toString("ascii");
+  // `Buffer#toString("ascii")`: each byte with its high bit cleared, read as one character.
+  return String.fromCharCode(...Array.from(data.subarray(0, end), (byte) => byte & 0x7f));
 }
 
 function readPubkey(data: Uint8Array, offset: number): Address {

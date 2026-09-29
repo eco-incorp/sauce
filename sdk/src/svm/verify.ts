@@ -1,7 +1,7 @@
 // SVM settlement identity is checked by recompiling the expected parameters. Account addresses
 // come from the instruction separately; successful verification does not authenticate execution.
-import { createHash } from "node:crypto";
 import { address, getAddressDecoder, type Address } from "@solana/kit";
+import { sha256 } from "../bytes.js";
 import { compileWithRs } from "../routes/rs-compile.js";
 import { EXECUTE_DISCRIMINATOR, EXECUTE_FROM_ACCOUNT_DISCRIMINATOR } from "./engine.js";
 import { SVM_MAX_ESCROWS, svmSettleRefs, svmSettleSource } from "./recipes/index.js";
@@ -69,10 +69,6 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
-}
-
-function sha256(bytes: Uint8Array): Uint8Array {
-  return new Uint8Array(createHash("sha256").update(bytes).digest());
 }
 
 /** The canonical settle bytecode for `escrowCount` under `expected`, recompiled from the shipped

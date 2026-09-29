@@ -195,9 +195,9 @@
  * mid-transaction), so it starts and ends at zero every trade; this
  * adapter attaches it but never reads its balance.
  */
-import { createHash } from "node:crypto";
 import { address, getAddressCodec, getBase58Decoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { sha256 } from "../../../bytes.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
@@ -240,7 +240,7 @@ const PAIR_BY_KEY = new Map<string, { inMint: Address; outMint: Address }>();
 
 /** Mint synthetic per-directed-pair discovery key (mirrors `sanctumInfinityPoolKey`). */
 export function mswapPoolKey(inMint: Address, outMint: Address): Address {
-  const digest = createHash("sha256").update(`${inMint}\0${outMint}`).digest();
+  const digest = sha256(`${inMint}\0${outMint}`);
   const key = address(b58.decode(digest));
   PAIR_BY_KEY.set(key as string, { inMint, outMint });
   return key;

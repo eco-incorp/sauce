@@ -45,9 +45,9 @@
  * quoting needs no Vault-account read for the swap MATH (only for the CPI's
  * account list: `withdrawAuthority`/`authorityBump`/`beneficiary`).
  */
-import { createHash } from "node:crypto";
 import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { sha256, utf8Bytes } from "../../bytes.js";
 import { readUintLE } from "./math.js";
 import { memoizedGetProgramDerivedAddress } from "./pda-memo.js";
 
@@ -239,11 +239,7 @@ export function decodeStabblePoolCommon(
  */
 export function createProgramAddress(seeds: Uint8Array[], programId: Address): Address {
   const encoder = getAddressEncoder();
-  const h = createHash("sha256");
-  for (const seed of seeds) h.update(seed);
-  h.update(encoder.encode(programId) as Uint8Array);
-  h.update(Buffer.from("ProgramDerivedAddress"));
-  const digest = h.digest();
+  const digest = sha256(...seeds, encoder.encode(programId) as Uint8Array, "ProgramDerivedAddress");
   const decoded = getAddressDecoder().decode(digest);
   if (!isOffCurveAddress(decoded)) {
     throw new Error(`stabble PDA seeds derive an on-curve address under ${programId}`);
@@ -256,7 +252,7 @@ export function deriveStabbleVaultAuthority(vault: Address, authorityBump: numbe
   const encoder = getAddressEncoder();
   return createProgramAddress(
     [
-      Buffer.from("vault_authority"),
+      utf8Bytes("vault_authority"),
       encoder.encode(vault) as Uint8Array,
       Uint8Array.of(authorityBump),
     ],

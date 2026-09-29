@@ -13,9 +13,9 @@
  * Original venue investigation (historical):
  * https://github.com/eco-incorp/sauce/blob/d3686430ee308994f95309a8c9b2d5930d71cf5d/docs/svm-venues.md
  */
-import { createHash } from "node:crypto";
 import { getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { sha256 } from "../../../bytes.js";
 import { readUintLE, ceilDiv } from "../math.js";
 import type {
   AccountBytesMap,
@@ -97,12 +97,12 @@ function netAmountIn(cfg: OrcaLegacyPoolConfig, amountIn: bigint): bigint {
 function deriveSwapAuthority(pool: Address, bumpSeed: number): Address {
   const codec = getAddressCodec();
   return codec.decode(
-    createHash("sha256")
-      .update(new Uint8Array(codec.encode(pool)))
-      .update(Uint8Array.of(bumpSeed))
-      .update(new Uint8Array(codec.encode(PROGRAM_ID)))
-      .update("ProgramDerivedAddress")
-      .digest(),
+    sha256(
+      new Uint8Array(codec.encode(pool)),
+      Uint8Array.of(bumpSeed),
+      new Uint8Array(codec.encode(PROGRAM_ID)),
+      "ProgramDerivedAddress",
+    ),
   );
 }
 

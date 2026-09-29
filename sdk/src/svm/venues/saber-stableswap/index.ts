@@ -17,9 +17,9 @@
  * Quote/swap direction is token A -> token B (the adapter interface carries
  * no direction; B -> A is the same math with the roles swapped).
  */
-import { createHash } from "node:crypto";
 import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { sha256 } from "../../../bytes.js";
 import { readUintLE } from "../math.js";
 import type {
   AccountBytesMap,
@@ -90,12 +90,12 @@ function assertU64AmountIn(amountIn: bigint): void {
  */
 function deriveSwapAuthority(pool: Address, nonce: number): Address {
   const encoder = getAddressEncoder();
-  const digest = createHash("sha256")
-    .update(encoder.encode(pool) as Uint8Array)
-    .update(Uint8Array.of(nonce))
-    .update(encoder.encode(SABER_STABLESWAP_PROGRAM_ID) as Uint8Array)
-    .update("ProgramDerivedAddress")
-    .digest();
+  const digest = sha256(
+    encoder.encode(pool) as Uint8Array,
+    Uint8Array.of(nonce),
+    encoder.encode(SABER_STABLESWAP_PROGRAM_ID) as Uint8Array,
+    "ProgramDerivedAddress",
+  );
   const authority = getAddressDecoder().decode(digest);
   if (!isOffCurveAddress(authority)) {
     throw new Error(

@@ -20,6 +20,7 @@ import {
   getU32Encoder,
 } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { base64Bytes, hexString } from "../bytes.js";
 import {
   verifySvmSettleExecution,
   type SvmSettleExecutionVerification,
@@ -87,8 +88,8 @@ function toBytes(input: BytesInput, label: string): Uint8Array {
     for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
     return out;
   }
-  // Not 0x-prefixed → base64 (Buffer is available; this module is node-side like the rest of svm/verify).
-  return new Uint8Array(Buffer.from(input, "base64"));
+  // Not 0x-prefixed → base64.
+  return base64Bytes(input);
 }
 
 /** Resolves any `UniversalAddressInput` to the base58 `Address` form the rest of a settle verdict reports
@@ -182,7 +183,7 @@ export function encodePortalCalldataWithAccounts(
       isWritable: a.isWritable,
     })),
   });
-  return `0x${Buffer.from(Uint8Array.from(encoded as ArrayLike<number>)).toString("hex")}`;
+  return `0x${hexString(Uint8Array.from(encoded as ArrayLike<number>))}`;
 }
 
 // ── intent extraction ──

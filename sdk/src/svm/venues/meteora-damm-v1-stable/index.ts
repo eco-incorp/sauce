@@ -28,6 +28,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { hexString } from "../../../bytes.js";
 import { readUintLE } from "../math.js";
 import type {
   AccountBytesMap,
@@ -148,8 +149,8 @@ function poolRefs(pool: Address) {
 function expectDiscriminator(data: Uint8Array, expected: Uint8Array, what: string): void {
   for (let i = 0; i < 8; i++) {
     if (data[i] !== expected[i]) {
-      const got = Buffer.from(data.subarray(0, 8)).toString("hex");
-      const want = Buffer.from(expected).toString("hex");
+      const got = hexString(data.subarray(0, 8));
+      const want = hexString(expected);
       throw new Error(`${SLUG} ${what} has discriminator ${got}, expected ${want}`);
     }
   }

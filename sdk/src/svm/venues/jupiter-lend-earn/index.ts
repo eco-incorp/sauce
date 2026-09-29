@@ -154,6 +154,7 @@
  */
 import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { utf8Bytes } from "../../../bytes.js";
 import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
@@ -269,7 +270,7 @@ async function fetchJupiterLendEarnConfig(
 /** PDA(["rate_model", mint], LIQUIDITY_PROGRAM) — verified live for all three test markets. */
 async function deriveRateModel(mint: Address): Promise<Address> {
   return memoizedGetProgramDerivedAddress(JUPITER_LEND_LIQUIDITY_PROGRAM_ID, [
-    Buffer.from("rate_model"),
+    utf8Bytes("rate_model"),
     Uint8Array.from(getAddressEncoder().encode(mint)),
   ]);
 }
