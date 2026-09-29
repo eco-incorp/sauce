@@ -1,6 +1,6 @@
 # Synthra V3
 
-Concentrated-liquidity spot DEX on Arc, running unmodified Uniswap V3 contracts.
+Concentrated-liquidity spot DEX on Arc: a Uniswap V3 fork with renamed pool callbacks.
 
 ## Category
 
@@ -51,6 +51,7 @@ function main(
 
 ## Notes
 
-- The ABIs are Uniswap V3's (`getPool`, `exactInputSingle`, `quoteExactInputSingle`, `mint`, …): Synthra deploys those contracts unmodified
+- The external ABIs are Uniswap V3's (`getPool`, `exactInputSingle`, `quoteExactInputSingle`, `mint`, …), and the Arc bytecode dispatches every one of them
+- Pools call back `synthraV3SwapCallback` (`0x13abb0ca`) and `synthraV3MintCallback`, not the `uniswapV3*` callbacks, so a contract that swaps or mints against a Synthra pool directly must implement the renamed callbacks
 - On Arc there is no wrapped native token; pools pair against USDC's ERC-20 interface `0x3600…0000`
 - Addresses come from docs.synthra.org's contract-addresses page

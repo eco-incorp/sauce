@@ -1,5 +1,6 @@
-// Synthra V3 UniswapV3Factory fork. Synthra V3 is Uniswap V3 deployed unmodified: the Arc factory, router,
-// quoter and position manager match Uniswap V3's runtime sizes and dispatch these selectors.
+// Synthra V3 UniswapV3Factory fork. A Uniswap V3 fork: its external periphery ABI is Uniswap V3's (the
+// Arc bytecode dispatches every selector here), but its pools call `synthraV3SwapCallback` /
+// `synthraV3MintCallback` instead of the `uniswapV3*` callbacks.
 export const SynthraV3FactoryABI = [
   {
     name: "getPool",
@@ -25,8 +26,9 @@ export const SynthraV3FactoryABI = [
   },
 ] as const;
 
-// Synthra V3 SwapRouter02 (params have no `deadline`). Synthra V3 is Uniswap V3 deployed unmodified: the Arc factory, router,
-// quoter and position manager match Uniswap V3's runtime sizes and dispatch these selectors.
+// Synthra V3 SwapRouter02 (params have no `deadline`). A Uniswap V3 fork: its external periphery ABI is Uniswap V3's (the
+// Arc bytecode dispatches every selector here), but its pools call `synthraV3SwapCallback` /
+// `synthraV3MintCallback` instead of the `uniswapV3*` callbacks.
 export const SynthraV3SwapRouter02ABI = [
   {
     name: "exactInputSingle",
@@ -108,8 +110,9 @@ export const SynthraV3SwapRouter02ABI = [
   },
 ] as const;
 
-// Synthra V3 QuoterV2. Synthra V3 is Uniswap V3 deployed unmodified: the Arc factory, router,
-// quoter and position manager match Uniswap V3's runtime sizes and dispatch these selectors.
+// Synthra V3 QuoterV2. A Uniswap V3 fork: its external periphery ABI is Uniswap V3's (the
+// Arc bytecode dispatches every selector here), but its pools call `synthraV3SwapCallback` /
+// `synthraV3MintCallback` instead of the `uniswapV3*` callbacks.
 export const SynthraV3QuoterV2ABI = [
   {
     name: "quoteExactInputSingle",
@@ -137,8 +140,9 @@ export const SynthraV3QuoterV2ABI = [
   },
 ] as const;
 
-// Synthra V3 NonfungiblePositionManager. Synthra V3 is Uniswap V3 deployed unmodified: the Arc factory, router,
-// quoter and position manager match Uniswap V3's runtime sizes and dispatch these selectors.
+// Synthra V3 NonfungiblePositionManager. A Uniswap V3 fork: its external periphery ABI is Uniswap V3's (the
+// Arc bytecode dispatches every selector here), but its pools call `synthraV3SwapCallback` /
+// `synthraV3MintCallback` instead of the `uniswapV3*` callbacks.
 export const SynthraV3NonfungiblePositionManagerABI = [
   {
     name: "mint",

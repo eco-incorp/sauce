@@ -1009,32 +1009,32 @@
       "SynthraV3FactoryABI": {
         "roles": ["factory"],
         "unverified": {
-          "getPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "createPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+          "getPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "createPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
         }
       },
       "SynthraV3SwapRouter02ABI": {
         "roles": ["swapRouter02"],
         "unverified": {
-          "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "exactInput((bytes,address,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "exactOutputSingle((address,address,uint24,address,uint256,uint256,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "exactOutput((bytes,address,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+          "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "exactInput((bytes,address,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "exactOutputSingle((address,address,uint24,address,uint256,uint256,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "exactOutput((bytes,address,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
         }
       },
       "SynthraV3QuoterV2ABI": {
         "roles": ["quoterV2"],
         "unverified": {
-          "quoteExactInputSingle((address,address,uint256,uint24,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+          "quoteExactInputSingle((address,address,uint256,uint24,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
         }
       },
       "SynthraV3NonfungiblePositionManagerABI": {
         "roles": ["nonfungiblePositionManager"],
         "unverified": {
-          "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "increaseLiquidity((uint256,uint256,uint256,uint256,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "decreaseLiquidity((uint256,uint128,uint256,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "collect((uint256,address,uint128,uint128))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 runs Uniswap V3's contracts unmodified, so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+          "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "increaseLiquidity((uint256,uint256,uint256,uint256,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "decreaseLiquidity((uint256,uint128,uint256,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "collect((uint256,address,uint128,uint128))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
         }
       }
     },
