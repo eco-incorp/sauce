@@ -246,8 +246,9 @@ try {
     console.log('Clean package install: ./actions resolves every runtime export its pages name: ' + documentedValues.join(', '));
   `,
   );
-  // Force the packaged path: with SAUCE_* unset the resolver must find the shipped binary, which is
-  // exactly what a credential-less consumer sees.
+  // Force the packaged path: the resolvers read no environment, and scrubbing CI's SAUCE_* paths
+  // keeps this smoke proving the shipped binary resolves (what a credential-less consumer sees) even
+  // if an env read ever crept back in.
   const smokeEnv = { ...process.env };
   for (const k of [
     "SAUCE_ENGINE_SO",

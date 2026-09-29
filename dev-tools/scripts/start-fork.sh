@@ -10,7 +10,7 @@ NC='\033[0m'
 
 if [ -z "$1" ]; then
     echo "Usage: npm run start:fork <rpc-url>"
-    echo "Example: npm run start:fork https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY"
+    echo "Example: npm run start:fork <your mainnet RPC URL>"
     exit 1
 fi
 

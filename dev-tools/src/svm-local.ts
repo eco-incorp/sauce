@@ -37,6 +37,7 @@ import {
   svmKitchenIdlPath,
   svmKitchenPath,
   type EngineCluster,
+  type SvmEngineArtifactPaths,
 } from "@eco-incorp/sauce-source/svm/engine-artifacts";
 import type { AccountManifest } from "sauce-compiler";
 
@@ -64,8 +65,10 @@ export interface RunResult {
 }
 
 /** The kitchen's declared program id, read from the release IDL (a hardcoded id rotted once before). */
-const kitchenProgramId = (): Address =>
-  address((JSON.parse(readFileSync(svmKitchenIdlPath(), "utf8")) as { address: string }).address);
+const kitchenProgramId = (idlPath?: string): Address =>
+  address(
+    (JSON.parse(readFileSync(svmKitchenIdlPath(idlPath), "utf8")) as { address: string }).address,
+  );
 
 /**
  * Makes `authority` the kitchen's upgrade authority so the fee config can be initialized. LiteSVM
@@ -138,11 +141,13 @@ const mustSucceed = (result: RunResult, what: string): void => {
 /**
  * Boots LiteSVM with the packaged engine + kitchen, a funded payer, a priced-then-freed execution
  * fee, and a Pot — the full gated set. `unixTimestamp` pins the cluster clock (venue fragments read
- * ctx.timestamp()); `cluster` picks which packaged engine `.so` to load.
+ * ctx.timestamp()); `cluster` picks which packaged engine `.so` to load; `artifacts` names binaries
+ * to load instead of the packaged ones (an unreleased engine build, say).
  */
 export const bootLocalEngine = async (
   unixTimestamp = 1_700_000_000n,
   cluster: EngineCluster = "devnet",
+  artifacts: SvmEngineArtifactPaths = {},
 ): Promise<LocalEngine> => {
   const svm = new LiteSVM()
     .withFeatureSet(FeatureSet.allEnabled())
@@ -152,10 +157,10 @@ export const bootLocalEngine = async (
     .withDefaultPrograms();
 
   const programId = (await generateKeyPairSigner()).address;
-  svm.addProgramFromFile(programId, svmEnginePath(cluster));
+  svm.addProgramFromFile(programId, svmEnginePath(cluster, artifacts.engineSo));
 
-  const kitchen = kitchenProgramId();
-  svm.addProgram(kitchen, new Uint8Array(readFileSync(svmKitchenPath())));
+  const kitchen = kitchenProgramId(artifacts.kitchenIdlJson);
+  svm.addProgram(kitchen, new Uint8Array(readFileSync(svmKitchenPath(artifacts.kitchenSo))));
 
   svm.warpToSlot(LOCAL_SLOT);
   svm.setClock(new Clock(LOCAL_SLOT, 0n, 0n, 0n, unixTimestamp));
@@ -256,6 +261,8 @@ export interface RunProgramOptions {
   cluster?: EngineCluster;
   /** Cluster clock, unix seconds (default 1_700_000_000). */
   unixTimestamp?: bigint;
+  /** Engine/kitchen binaries to load instead of the packaged ones. */
+  artifacts?: SvmEngineArtifactPaths;
 }
 
 /**
@@ -275,7 +282,11 @@ export const runSvmProgramLocally = async (
   manifest: AccountManifest,
   options: RunProgramOptions = {},
 ): Promise<{ err: string | null; logs: string[] }> => {
-  const engine = await bootLocalEngine(options.unixTimestamp ?? 1_700_000_000n, options.cluster);
+  const engine = await bootLocalEngine(
+    options.unixTimestamp ?? 1_700_000_000n,
+    options.cluster,
+    options.artifacts,
+  );
   return withLiteSvmRpc(engine, async () => {
     const client = await createSauceSvmClient({
       kitchen: engine.kitchen,
