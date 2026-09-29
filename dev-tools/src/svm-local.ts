@@ -38,8 +38,8 @@ import type {
   AccountResolution,
   EngineCluster,
   SignedExecuteTransaction,
-  SvmEngineArtifactPaths,
 } from "@eco-incorp/sauce-source/svm";
+import type { SvmEngineArtifactPaths } from "@eco-incorp/sauce-source/svm/engine-artifacts";
 import type { AccountManifest } from "sauce-compiler";
 
 /** Slot every local run sits at (must exceed a fabricated ALT's last_extended_slot 0). */
