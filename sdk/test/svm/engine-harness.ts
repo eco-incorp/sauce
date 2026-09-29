@@ -48,7 +48,8 @@ import {
 import { fixtureAccounts } from "./fixtures.js";
 import type { AccountFixture } from "./fixtures.js";
 
-/** env override (a cache path CI sets), else the packaged binary, else undefined so the suite skips. */
+/** The path CI exports (its verified cache), else the packaged binary, else undefined so the suite
+ *  skips. The SDK reads no environment: this harness reads CI's and passes the path in. */
 const resolveArtifact = (fn: () => string): string | undefined => {
   try {
     return fn();
@@ -66,15 +67,20 @@ const resolveArtifact = (fn: () => string): string | undefined => {
 // ran fine, and a developer got that silently just by not setting a variable. The binary is gone and
 // so is the split: `SAUCE_ENGINE_SO` is accepted as an override for an unreleased build, but the
 // default is the release.
-// env-then-packaged (see engine-artifacts.ts): CI still points these at its verified cache, and a
-// bare `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines` (or an installed package)
-// now supplies them from `artifacts/svm` too — so a local run executes instead of skipping.
-export const ENGINE_SO = resolveArtifact(() => svmEnginePath("devnet"));
+// env-then-packaged: CI still points these at its verified cache, which this harness reads and
+// passes to the resolvers explicitly (engine-artifacts.ts reads no environment), and a bare
+// `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines` (or an installed package)
+// supplies them from `artifacts/svm` too — so a local run executes instead of skipping.
+export const ENGINE_SO = resolveArtifact(() =>
+  svmEnginePath("devnet", process.env.SAUCE_ENGINE_SO ?? process.env.SAUCE_RUST_ENGINE_SO),
+);
 
 /** The kitchen the engine is gated to. A released engine refuses any invocation that did not arrive
  *  through a kitchen cook, so these are no longer optional for a suite that executes bytecode. */
-const KITCHEN_SO = resolveArtifact(svmKitchenPath);
-const KITCHEN_IDL_JSON = resolveArtifact(svmKitchenIdlPath);
+const KITCHEN_SO = resolveArtifact(() => svmKitchenPath(process.env.SAUCE_KITCHEN_SO));
+const KITCHEN_IDL_JSON = resolveArtifact(() =>
+  svmKitchenIdlPath(process.env.SAUCE_KITCHEN_IDL_JSON),
+);
 
 /** The salt every harness Pot is minted under. One Pot per harness is enough: suites that need
  *  distinct storage use distinct accounts in their tail, not distinct Pots. */

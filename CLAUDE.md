@@ -162,7 +162,13 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
 
 - **`SAUCE_ENGINE_SO` / `SAUCE_RUST_ENGINE_SO`** — the path to the Solana engine, fetched by
   `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines`, which digest-verifies it against
-  the pin and prints `SAUCE_RUST_ENGINE_SO=<path>`. **Nothing about the engine is source-controlled.**
+  the pin and prints `SAUCE_RUST_ENGINE_SO=<path>`. **The tests read these variables; the SDK never
+  does.** Each `svm/engine-artifacts.ts` resolver takes an optional explicit path
+  (`svmEnginePath(cluster, path)`, `svmKitchenPath(path)`, `svmKitchenIdlPath(path)`) and otherwise
+  returns the packaged binary; `sdk/test/svm/engine-harness.ts` and `dev-tools/test/svm-local.test.ts`
+  read CI's `SAUCE_*` paths and pass them in. Shipped code reads no environment at all: configuration
+  is passed by the developer, and a browser has no `process.env`. **Nothing about the engine is
+  source-controlled.**
   There used to be a vendored `artifacts/svm/engine.so` — a `release/beta` build predating every
   v12-svm release, with no `JUMP`/`JUMP_I` — and it was the DEFAULT, so anything with control flow was
   rejected with `InvalidInstructionData` while straight-line programs ran, silently, just from not
