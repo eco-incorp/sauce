@@ -15,7 +15,8 @@ executes it there. Cross-chain execution is this layer, not the runtime.
 npm install @eco-incorp/sauce
 ```
 
-Node.js **24 or newer**.
+Node.js **24 or newer**, or a browser — [one `await ready()`](docs/api/compiler.md#in-a-browser) and the
+same code compiles the same bytes.
 
 [Documentation](docs/README.md) · [Quick start](docs/guides/quick-start.md) ·
 [Examples](docs/examples/README.md) · [API reference](docs/api/README.md)

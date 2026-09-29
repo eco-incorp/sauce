@@ -10,10 +10,10 @@ settlement can sit next to calls that are not, on a chain you did not expect, ai
 not control. Verification identifies the program and decodes its arguments. The destination, the
 execution target, the account identities and every other call in the intent remain yours to check.
 
-| Surface                        | Mechanism                                                                                          | Environment                                                            |
-| ------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `@eco-incorp/sauce/verify`     | Validate the EVM program hash and decode its canonical runtime argument tail                       | Node, browsers, and edge runtimes; depends on `viem`, not the compiler |
-| `@eco-incorp/sauce/svm/verify` | Recompile SVM settlement with expected parameters, compare bytecode, and inspect attached accounts | Node; loads the compiler                                               |
+| Surface                        | Mechanism                                                                                          | Environment                                                                |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `@eco-incorp/sauce/verify`     | Validate the EVM program hash and decode its canonical runtime argument tail                       | Node, browsers, and edge runtimes; depends on `viem`, not the compiler     |
+| `@eco-incorp/sauce/svm/verify` | Recompile SVM settlement with expected parameters, compare bytecode, and inspect attached accounts | Node and browsers; loads the compiler (`await ready()` first in a browser) |
 
 ## Settlement behavior
 

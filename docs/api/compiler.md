@@ -3,13 +3,17 @@
 [Documentation](../README.md) · [Compiling programs](../guides/compiling.md)
 
 `@eco-incorp/sauce/compiler` is the SauceScript compiler and the codec for its compact
-argument format. Both ship with the SDK; there is nothing extra to install.
+argument format. Both ship with the SDK; there is nothing extra to install. It runs in
+Node and in a browser; in a browser, [`await ready()`](#in-a-browser) first.
 
 ```ts
 import {
   compile,
+  ready,
   encodeCompactArguments,
   decodeCompactArguments,
+  resolveSdkModule,
+  resolveSdkPackage,
   type CompileOptions,
   type CompileResult,
 } from "@eco-incorp/sauce/compiler";
@@ -84,6 +88,30 @@ well as source bytes: bare JSON imports denote ABIs, while
 For a package with a neutral entry such as `token.js`, resolution can probe
 `token.evm.js` or `token.svm.js` according to the target. Supply the neutral
 specifier and let the compiler select the arm.
+
+### The SDK's own modules
+
+`resolveSdkModule(path)` and `resolveSdkPackage(specifier)` serve the files the SDK
+ships, from memory, with the contracts above: the `@sauce/token` library, the
+`./artifacts/IERC20.json` and `./artifacts/ISauceRouter.json` ABIs, and every protocol
+ABI as `./protocols/<slug>/<Export>.json`. Fall back to them from your own resolver
+to compile a program the SDK's builders emit, or one that imports `@sauce/token`:
+
+```ts
+const entry = new TextEncoder().encode(`
+  import { balanceOf } from "@sauce/token";
+  function main(token: Address, account: Account): Uint256 {
+    return balanceOf(token, account);
+  }
+`);
+
+const artifact = compile({
+  target: "evm",
+  entry: "main.ts",
+  resolve: (path) => (path === "main.ts" ? entry : resolveSdkModule(path)),
+  resolvePackage: resolveSdkPackage,
+});
+```
 
 ### Result
 
@@ -213,29 +241,51 @@ Route `target: "v1"` and `"v12"` both select the EVM backend.
 
 See [routes](routes.md) for the route-specific API.
 
-## Node, browsers, and compiler-only features
+## In a browser
 
-The SDK requires Node **24 or newer**. Its `/compiler` export loads the compiler
-through Node's `createRequire`; SDK route compilation also uses filesystem and
-path APIs. These integrations are Node APIs.
-
-The underlying compiler package separately supplies Node and browser builds.
-For a browser application, install `@eco-incorp/sauce-compiler` directly and use
-its initialization API:
+The SDK compiles in a browser exactly as it does in Node: raw `compile()`, route
+compilation (`Base(...)`, `.reward(...)`, `compileSauceRoute`), the builders, the
+recipes and `/actions` produce the same bytes in both. The difference is start-up.
+Node instantiates the compiler's WebAssembly as the package loads; a browser has to
+fetch it, which cannot happen synchronously. Call `ready()` once, before the first
+compile:
 
 ```ts
-import { ready } from "@eco-incorp/sauce-compiler/ready";
+import { ready } from "@eco-incorp/sauce/compiler"; // also exported by "@eco-incorp/sauce"
 
-const { compile } = await ready();
-// Supply source/dependencies through synchronous in-memory resolvers.
+await ready();
+// compile(), compileSauceRoute(), Base(...).reward(...) and compileProgram() are now
+// synchronous, as in Node.
 ```
 
-`ready()` initializes the browser WASM build and is a no-op for the already
-initialized Node build. Arrange for the compiler's WASM asset and dependency
-bytes to be available before compiling. This does not provide the SDK's route
-rewrites or registry resolver in a browser.
+Until `ready()` resolves, every compile throws an error saying to await it. In Node
+it resolves at once and no compile needs it, so code shared by both can always call
+it. Calling it again is harmless, and a failed attempt is not remembered: calling
+again retries.
+
+With no argument, `ready()` loads the compiler package's `web/sauce_wasm_bg.wasm`
+through `new URL("sauce_wasm_bg.wasm", import.meta.url)`, relative to the compiler's
+own module. A bundler that rewrites `new URL(…, import.meta.url)` asset references
+emits the file and points the URL at it. With one that does not — esbuild, for
+example — copy the file next to your bundle, or tell `ready()` where it is: a URL,
+or the bytes themselves.
+
+```ts
+await ready(new URL("/assets/sauce_wasm_bg.wasm", location.href));
+// or
+await ready(await (await fetch("/assets/sauce_wasm_bg.wasm")).arrayBuffer());
+```
+
+The first `source` that succeeds is the one used; the compiler warns if a later call
+passes a different one.
+
+Every subpath works in a browser except `/svm/engine-artifacts`. It returns filesystem
+paths to the packaged engine binaries for a local LiteSVM harness, and is Node-only.
+In Node, the SDK requires Node **24 or newer**.
+
+## Compiler-only features
 
 The compiler package also exports `clearFunctionCache()` and `functionCacheStats()`
 for inspecting its internal lowering cache. The SDK's `/compiler` export does not
-re-export those or `ready()`; an application that wants them declares the compiler
-as a direct dependency and imports from its own package name.
+re-export those; an application that wants them declares the compiler as a direct
+dependency and imports from its own package name.

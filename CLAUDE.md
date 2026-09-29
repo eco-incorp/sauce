@@ -223,8 +223,8 @@ at deploy time`) because a second source of truth rotted — six changed `.huff`
 **SauceScript** is compiled by the published Rust/wasm compiler `@eco-incorp/sauce-compiler`,
 aliased to the short name `sauce-compiler` in every `package.json`. **There is no in-repo
 compiler**: the `compiler/` workspace was deleted, and `sdk/src/compiler.ts` re-exports the
-published one as the `./compiler` subpath (through `createRequire`, because the package's `node`
-condition is a CommonJS build that reads its sibling `.wasm` off disk).
+published one as the `./compiler` subpath (through `sdk/src/wasm-compiler.ts`, a plain ESM import
+that lets the package's `node`/`browser` conditions pick its build).
 
 The compiler entry point is one function — source text in, bytecode out, no opcode-level builder, no
 `Saucer`/`CompilerContext`/`OPS`:
@@ -257,8 +257,9 @@ locations; resolver and target-capability errors need not contain a source span.
 The route adapter is a separate contract: `compileSauceRoute` returns one program in
 `compiled.bytecode: Uint8Array[]`, an empty `warnings` array, rewritten source, and encoded calls.
 It does not expose `compactArgs` or retain the raw compiler's metadata/schema/manifest. Use the raw
-`/compiler` export for those. Both `/compiler` and route compilation are Node integrations; the
-underlying compiler package has separate browser initialization through its `/ready` export.
+`/compiler` export for those. Both `/compiler` and route compilation run in Node and in a browser
+through one code path, `sdk/src/wasm-compiler.ts`: in a browser `await ready()` (from the root or
+`/compiler`, forwarding to the compiler's `/ready`) before compiling; in Node nothing needs it.
 
 **The authoritative description of that surface is the package's own typings**
 (`node_modules/sauce-compiler/node/sauce_wasm.d.ts`), which document each option in detail —
