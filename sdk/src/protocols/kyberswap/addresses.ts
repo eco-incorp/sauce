@@ -3,7 +3,9 @@ import type { ChainDeployment } from "../../core/types.js";
 export const deployments: ChainDeployment[] = [
   {
     // Arc (5042) — only the meta-aggregation router: it is the routerAddress KyberSwap's own Arc
-    // routes API (aggregator-api.kyberswap.com/arc) returns. KyberSwap Elastic is not on Arc.
+    // routes API (aggregator-api.kyberswap.com/arc) returns. KyberSwap Elastic is not on Arc. The
+    // Arc router is a smaller build than Ethereum's at the same address (see kyberswap-aggregator's
+    // addresses.ts); its `swap` is the same function, so it shares this ABI.
     chainId: 5042,
     chainName: "Arc",
     addresses: {

@@ -13,7 +13,11 @@ export const deployments: ChainDeployment[] = [
   { chainId: 250, chainName: "Fantom", addresses: { metaAggregationRouter: META_AGG_ROUTER } },
   { chainId: 59144, chainName: "Linea", addresses: { metaAggregationRouter: META_AGG_ROUTER } },
   { chainId: 534352, chainName: "Scroll", addresses: { metaAggregationRouter: META_AGG_ROUTER } },
-  // Arc: the router KyberSwap's own Arc routes API returns (aggregator-api.kyberswap.com/arc).
+  // Arc: the router KyberSwap's own Arc routes API returns (aggregator-api.kyberswap.com/arc). A
+  // DIFFERENT build from Ethereum's at this address (13724 vs 18652 bytes, another owner, no
+  // swapGeneric/whitelist functions: its selectors are a strict subset of Ethereum's). `swap`
+  // (0xe21fd0e9) has the same struct, mutability and outputs — Blockscout-verified
+  // MetaAggregationRouterV2 — and API-built calldata decodes under this ABI (checked 2026-09-28).
   { chainId: 5042, chainName: "Arc", addresses: { metaAggregationRouter: META_AGG_ROUTER } },
   // zkSync Era addresses differ from the EVM CREATE2 ones: META_AGG_ROUTER has no code there.
   {

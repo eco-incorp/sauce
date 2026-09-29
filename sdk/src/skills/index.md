@@ -43,7 +43,7 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 | `aerodrome`            | Aerodrome            | BASE                                            | swap (stable/volatile routes), addLiquidity, removeLiquidity     |
 | `camelot`              | Camelot              | ARB                                             | swapV2, swapV3 (exactInputSingle), addLiquidity, removeLiquidity |
 | `trader-joe`           | Trader Joe           | AVAX, ARB, BSC                                  | swap (Liquidity Book path)                                       |
-| `kyberswap`            | KyberSwap            | ETH, ARB, OP, POLY, BSC, AVAX, BASE             | swap (Elastic + Meta Aggregation)                                |
+| `kyberswap`            | KyberSwap            | ETH, ARB, OP, POLY, BSC, AVAX, BASE, ARC        | swap (Elastic + Meta Aggregation)                                |
 | `quickswap`            | QuickSwap            | POLY                                            | swapV2, swapV3, addLiquidity, removeLiquidity                    |
 | `maverick`             | Maverick             | ETH, ARB, BASE                                  | swap (exactInputSingle with pool+tokenAIn)                       |
 | `ambient`              | Ambient              | ETH, SCROLL                                     | swap (CrocSwapDex)                                               |
