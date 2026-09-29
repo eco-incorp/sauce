@@ -14,26 +14,10 @@
  * API.
  */
 import { encodeFunctionData, type Address, type Hex } from "viem";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { toExactBigInt } from "../numeric.js";
 import type { ContractDescriptor, DescriptorMethod } from "./types.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/**
- * `baseDirs` for compiling a `toSauceScript()` program — same two-entry
- * shape (dist root + shipped `sdk/src`) and rationale as
- * `deposit/source.ts`'s `DEPOSIT_BASE_DIRS`: a contract's `.json` import
- * resolves against the SDK's protocol registry, not the engine-vendored
- * `dist/artifacts`.
- */
-export const CONTRACT_BASE_DIRS: readonly string[] = [
-  join(__dirname, ".."),
-  join(__dirname, "..", "..", "src"),
-];
 
 export interface EncodeOptions {
   /** Opts past the widened-selector refusal — see the module doc comment. */
@@ -64,11 +48,12 @@ export interface ContractCall {
     readonly data: Hex;
     readonly value: bigint;
   };
+  /** The call as SauceScript. Its `./protocols/<slug>/<Export>.json` import is one the route
+   *  compiler serves, so `source` compiles with no resolver option. */
   toSauceScript(opts?: SauceScriptOptions): {
     readonly imports: readonly string[];
     readonly statement: string;
     readonly source: string;
-    readonly baseDirs: readonly string[];
   };
 }
 
@@ -165,7 +150,7 @@ export function makeContractCall(
     const renderedArgs = args.map((a) => renderSauceArg(a, method.name)).join(", ");
     const statement = `${binding}.at(${address.length > 0 ? `${BigInt(address).toString()}n` : "0n"}).${method.name}(${renderedArgs});`;
     const source = [importLine, "", "function main() {", `  ${statement}`, "}", ""].join("\n");
-    return { imports: [importLine], statement, source, baseDirs: CONTRACT_BASE_DIRS };
+    return { imports: [importLine], statement, source };
   }
 
   return {

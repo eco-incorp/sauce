@@ -2,7 +2,7 @@
  * E4.1/E4.2 composition seam — real-compile tests, mirroring `swap.compile.test.ts`'s "the E3
  * seam, end to end" case, extended one leg further (swap -> deposit).
  */
-import { compileProgram as compile } from "./helpers";
+import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import { bytesToHex, decodeFunctionData } from "viem";
 
 import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
@@ -10,8 +10,8 @@ import { requireChain } from "../src/chains/canonical.js";
 import { assembleIntent } from "../src/routes/intent.js";
 import { normalizeRoute } from "../src/routes/normalize.js";
 import { v12PotAbi } from "../src/evm/engine.js";
-import { COMPOSED_BASE_DIRS, swapThenDepositSource } from "../src/deposit/source.js";
-import { SWAP_BASE_DIRS, swapSource } from "../src/swap/source.js";
+import { swapThenDepositSource } from "../src/deposit/source.js";
+import { swapSource } from "../src/swap/source.js";
 import { SwapPoolType, type SwapSpec } from "../src/swap/types.js";
 import type { DepositSpec } from "../src/deposit/types.js";
 
@@ -43,7 +43,7 @@ function aaveSupply(overrides: Partial<DepositSpec & { amount: "balance" | "delt
 describe("swapThenDepositSource — swap output feeds a deposit, one program", () => {
   it(`compiles (amount: 'balance')`, () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply());
-    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
+    const { bytecode } = compile(src, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -53,7 +53,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
     expect(src).toMatch(/const deposit0Post = IERC20\.at\(.*\)\.balanceOf\(ctx\.self\(\)\);/);
     expect(src).toMatch(/const deposit0Amt = deposit0Post - deposit0Pre;/);
 
-    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
+    const { bytecode } = compile(src, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -74,7 +74,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
     expect(source.indexOf("deposit0Pre")).toBeLessThan(source.indexOf(".swap("));
     expect(source.indexOf("deposit0Post")).toBeGreaterThan(source.indexOf(".swap("));
 
-    const { bytecode } = compile(source, { baseDirs: [...COMPOSED_BASE_DIRS] });
+    const { bytecode } = compile(source, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -89,7 +89,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
     expect(source).toContain("const deposit0Post = ctx.selfBalance();");
     expect(source).not.toContain(".balanceOf(");
 
-    const { bytecode } = compile(source, { baseDirs: [...COMPOSED_BASE_DIRS] });
+    const { bytecode } = compile(source, { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 
@@ -104,7 +104,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
 
   it("the E3 seam, end to end: compile -> bytesToHex -> buildSauceEvmCall -> normalizeRoute", () => {
     const src = swapThenDepositSource(univ3Leg, aaveSupply());
-    const { bytecode } = compile(src, { baseDirs: [...COMPOSED_BASE_DIRS] });
+    const { bytecode } = compile(src, { baseDirs: [...SDK_SOURCE_DIRS] });
     const ingredient = bytesToHex(bytecode[0]!);
     const call = buildSauceEvmCall({
       pot: POT,
@@ -136,7 +136,7 @@ describe("swapThenDepositSource — swap output feeds a deposit, one program", (
 
 describe("negative control — swapSource alone is unaffected by the swapImportLines extraction", () => {
   it("still compiles fine (regression pin for the swapImportLines extraction)", () => {
-    const { bytecode } = compile(swapSource(univ3Leg), { baseDirs: [...SWAP_BASE_DIRS] });
+    const { bytecode } = compile(swapSource(univ3Leg), { baseDirs: [...SDK_SOURCE_DIRS] });
     expect(bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

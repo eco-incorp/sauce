@@ -7,6 +7,9 @@ out/
 cache/
 artifacts/
 *.tsbuildinfo
+# Copies of the std, recipe, ABI-twin and skill files the SDK embeds, written by
+# `sdk/scripts/gen-embedded-sources.mjs` from those files on every build, typecheck and test.
+sdk/src/embedded/*.generated.ts
 
 # Local state
 .deployment.json

@@ -7,7 +7,8 @@
 
 import { existsSync, readFileSync } from "fs";
 import { createRequire } from "node:module";
-import { join } from "path";
+import { dirname, join } from "path";
+import { fileURLToPath } from "node:url";
 import { ensureVoidMain } from "../src/routes/rs-compile.js";
 import { keccak256, toBytes, toHex } from "viem";
 import type { CompileResult as RustCompileResult, SauceTarget } from "sauce-compiler";
@@ -28,6 +29,16 @@ const { compile: compileRust } = createRequire(import.meta.url)("sauce-compiler"
     inlineContracts?: Array<[name: string, abi: string]>;
   }) => RustCompileResult;
 };
+
+/**
+ * `baseDirs` that resolve every file an SDK-generated program imports OFF DISK: `sdk/src` holds
+ * `artifacts/*.json` (after the sync) and `protocols/<slug>/<Export>.json`. The SDK itself serves
+ * those from memory (`src/embedded/resolve.ts`); reading the real files here keeps these suites an
+ * independent check on what it serves.
+ */
+export const SDK_SOURCE_DIRS: readonly string[] = [
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src"),
+];
 
 /** The option surface the real-compile suites already call with. */
 export interface CompileProgramOptions extends CompileSourceOptions {

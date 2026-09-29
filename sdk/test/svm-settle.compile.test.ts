@@ -17,14 +17,9 @@
  */
 import { readFileSync } from "fs";
 import { createRequire } from "node:module";
-import { basename, resolve } from "path";
+import { resolve } from "path";
 import type { CompileOptions, CompileResult } from "sauce-compiler";
-import {
-  SVM_MAX_ESCROWS,
-  SVM_SETTLE_SOURCE_PATH,
-  svmSettleRefs,
-  svmSettleSource,
-} from "../src/svm/index.js";
+import { SVM_MAX_ESCROWS, svmSettleRefs, svmSettleSource } from "../src/svm/index.js";
 
 // Required via `createRequire`, not `import`: the package's `node` condition is a CommonJS build that
 // reads its sibling `.wasm` off disk at load, and jest's ESM transform does not resolve that sibling.
@@ -149,10 +144,5 @@ describe("svm settle — the shipped program source", () => {
   it("svmSettleSource(1) returns the exact on-disk settle.sauce.ts", () => {
     const onDisk = readFileSync(resolve(process.cwd(), "src/svm/recipes/settle.sauce.ts"), "utf-8");
     expect(svmSettleSource(1)).toBe(onDisk);
-  });
-
-  it("SVM_SETTLE_SOURCE_PATH names the right file and it exists", () => {
-    expect(basename(SVM_SETTLE_SOURCE_PATH)).toBe("settle.sauce.ts");
-    expect(readFileSync(SVM_SETTLE_SOURCE_PATH, "utf-8").length).toBeGreaterThan(0);
   });
 });

@@ -202,6 +202,20 @@ jobs:
       - name: Actions — build
         run: pnpm --filter './actions' build
 
+      # The SDK compiles in a browser. Every browser-facing export is bundled with esbuild for the
+      # browser and must reach no Node builtin (and no Node global from the SDK's own modules); then
+      # the README's route example, a raw compact compile, the settle recipe, two builders and an
+      # actions program run in headless Chromium and must produce the bytes Node does. The packed
+      # check at the end repeats both against the installed tarball.
+      - name: Browser — no Node in any browser-facing export
+        run: node sdk/scripts/check-browser-bundles.mjs
+
+      - name: Browser — install headless Chromium
+        run: pnpm exec playwright-core install --with-deps --only-shell chromium
+
+      - name: Browser — compile in headless Chromium, byte-identical to Node
+        run: node sdk/scripts/check-browser-compile.mjs
+
       - name: Documentation — links and executable examples
         run: pnpm docs:check
 

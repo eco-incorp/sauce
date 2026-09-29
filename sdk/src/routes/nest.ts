@@ -27,7 +27,6 @@ import { formatAddressField, formatBigint } from "../deposit/format.js";
 import { toAddressBigint } from "../token/params.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import { safeTransferStatements } from "../token/safe.js";
-import { TOKEN_BASE_DIRS } from "../token/source.js";
 import { denormalizeToEvm, hashIntent } from "./encode.js";
 import { approvalTxs, intentVaultAddressCall, publishAndFundTx, type PortalTx } from "./portal.js";
 import { predictVaultAddress, type VaultConfig } from "./vault.js";
@@ -418,19 +417,18 @@ export interface TransferNestEntry {
 /**
  * Merges every entry's `nestedTransferStatements` into ONE `function main(){...}` Sauce program —
  * `intent-dsl.ts` is the only caller that ever `compile()`s this text, keeping the compiler
- * dependency out of this pure module entirely. `imports`/`baseDirs` are surfaced separately so a
- * caller with its own `baseDirs`/compile options can merge them rather than re-deriving what this
+ * dependency out of this pure module entirely. `imports` is surfaced separately so a caller
+ * splicing these statements into its own program can merge them rather than re-deriving what this
  * program needs.
  */
 export function nestedTransferProgram(entries: readonly TransferNestEntry[]): {
   readonly source: string;
   readonly imports: readonly string[];
-  readonly baseDirs: readonly string[];
 } {
   const statements = entries.flatMap((e, i) => nestedTransferStatements(e.child, i, e.opts));
   const needsErc20 = entries.some((e) => e.child.reward.tokens.length > 0);
   const imports = needsErc20 ? [ERC20_IMPORT_LINE] : [];
   const body = statements.join("\n");
   const source = `${imports.length > 0 ? `${imports.join("\n")}\n` : ""}function main() {\n${body}\n}`;
-  return { source, imports, baseDirs: needsErc20 ? [...TOKEN_BASE_DIRS] : [] };
+  return { source, imports };
 }

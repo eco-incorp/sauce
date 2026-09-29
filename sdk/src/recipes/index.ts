@@ -1,9 +1,9 @@
 /**
  * @eco-incorp/sauce/recipes — reusable Sauce recipes shipped as SOURCE.
  *
- * WHAT THIS IS FOR: answering the two questions a partner genuinely cannot answer themselves —
- * "what is the program text?" and "where is this package installed?" — and then getting out of the
- * way. It ships no compile helper, so whatever options a caller passes are the ones they can audit.
+ * WHAT THIS IS FOR: answering the question a partner genuinely cannot answer themselves — "what is
+ * the program text?" — and then getting out of the way. It ships no compile helper, so whatever
+ * options a caller passes are the ones they can audit.
  *
  * BYTE-FOR-BYTE REPRODUCIBILITY, against the published Rust compiler this package depends on. The
  * program is a pure function of the source, the target and the compiler pin — nothing about a
@@ -11,18 +11,17 @@
  * arguments:
  *
  * ```ts
- * import { compile } from "@eco-incorp/sauce/compiler";
- * import { settleSource, SAUCE_BASE_DIRS } from "@eco-incorp/sauce/recipes";
+ * import { compile, resolveSdkModule } from "@eco-incorp/sauce/compiler";
+ * import { settleSource } from "@eco-incorp/sauce/recipes";
  *
  * // A raw compile is right HERE and not for the generated programs: settle's `main` declares its
  * // own return type, so it needs no annotating.
+ * const settle = new TextEncoder().encode(settleSource());
  * const { bytecode } = compile({
  *   target: "evm",
  *   entry: "settle.sauce.ts",
- *   resolve: (path) =>
- *     path.endsWith("settle.sauce.ts")
- *       ? new TextEncoder().encode(settleSource())
- *       : readFrom(SAUCE_BASE_DIRS, path),   // serves the program's `./artifacts/IERC20.json`
+ *   // `resolveSdkModule` serves the program's `./artifacts/IERC20.json`.
+ *   resolve: (path) => (path === "settle.sauce.ts" ? settle : resolveSdkModule(path)),
  * });
  * // bytecode -- 435 bytes, keccak256 === SETTLE_WIRE.PROGRAM_HASH, for every caller and every value
  * ```
@@ -48,8 +47,8 @@
  * const path = fileURLToPath(import.meta.resolve("@eco-incorp/sauce/recipes/settle.sauce.ts"));
  * ```
  *
- * A bare `readFileSync("@eco-incorp/sauce/...")` does NOT work — `readFileSync` takes a
- * filesystem path and performs no package resolution. Use either form above.
+ * `settleSource()` returns the same text, embedded at build time, so it needs no filesystem and
+ * works in a browser.
  *
  * To go the other direction — a compiled payload back to `(tokens, minOut, recipient)` — use
  * `@eco-incorp/sauce/verify`'s `validateSettleProgram`, whose dependency closure is `viem` only.
@@ -59,30 +58,12 @@
  * `@eco-incorp/sauce/svm` (`svmSettleSource` / `svmSettleRefs`); see
  * `sdk/src/svm/recipes/index.ts`.
  */
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/** Absolute path to the `settle.sauce.ts` source inside THIS installed package. */
-export const SETTLE_SOURCE_PATH: string = join(__dirname, "settle.sauce.ts");
-
-/**
- * `baseDirs` for compiling any program in this directory.
- *
- * One entry is sufficient and it is not this directory: it is the package's dist root, because what
- * needs resolving is the program's `import { IERC20 } from "./artifacts/IERC20.json"` — which lands
- * at `<dist>/artifacts/IERC20.json` (vendored from the pinned engine and shipped in this package's
- * `files` list). Measured: `[distRoot]` alone reproduces the identical bytes.
- */
-export const SAUCE_BASE_DIRS: readonly string[] = [join(__dirname, "..")];
-
-let cached: string | null = null;
+import { recipeSource } from "../embedded/recipes.js";
 
 /**
  * The `settle.sauce.ts` program text — sweep the Pot's balance of every listed token to one
- * recipient, with a minimum-output floor on `tokens[0]`. Read once and cached.
+ * recipient, with a minimum-output floor on `tokens[0]`. The shipped file's text, embedded at build
+ * time.
  *
  * Returned as the raw source (not pre-stripped, not pre-compiled) so a partner can read, hash, or
  * diff exactly what gets compiled. The compiler's own front-end handles the TypeScript annotations, so
@@ -92,8 +73,7 @@ let cached: string | null = null;
  * mirror drifts on the next compiler minor with nothing to catch it.
  */
 export function settleSource(): string {
-  if (cached === null) cached = readFileSync(SETTLE_SOURCE_PATH, "utf-8");
-  return cached;
+  return recipeSource("recipes/settle.sauce.ts");
 }
 
 /**
@@ -109,15 +89,13 @@ export function settleSource(): string {
  * amount into N sub-`perMessageLimit` `depositForBurn` chunks burned in ONE atomic cook (all-or-revert
  * on the source chain); `buildPlainTransfer` is the no-bridge baseline. Both programs read `USDC` and
  * `Cctp.TokenMessenger` from the DSL registries — no hardcoded ABIs or addresses. `cctpSplitSource()` /
- * `plainTransferSource()` return the raw program text (read once, cached), the same way `settleSource()`
- * does. See `cctp-transfer.ts`.
+ * `plainTransferSource()` return the raw program text, the same way `settleSource()` does. See
+ * `cctp-transfer.ts`.
  */
 export {
   buildCctpSplitTransfer,
   buildPlainTransfer,
   cctpSplitSource,
   plainTransferSource,
-  CCTP_SPLIT_SOURCE_PATH,
-  PLAIN_TRANSFER_SOURCE_PATH,
   type CctpTransferParams,
 } from "./cctp-transfer.js";

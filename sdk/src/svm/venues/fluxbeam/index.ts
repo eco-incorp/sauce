@@ -103,9 +103,9 @@
  * all — both are the venue-robustness "one bad pool never kills a cook"
  * self-drop class already used throughout this recipe.
  */
-import { createHash } from "node:crypto";
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { sha256 } from "../../../bytes.js";
 import { readUintLE } from "../math.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 
@@ -191,12 +191,12 @@ function getAddressEncoded(value: Address): Uint8Array {
 function deriveSwapAuthority(pool: Address, bumpSeed: number): Address {
   const codec = getAddressCodec();
   return codec.decode(
-    createHash("sha256")
-      .update(getAddressEncoded(pool))
-      .update(Uint8Array.of(bumpSeed))
-      .update(getAddressEncoded(FLUXBEAM_PROGRAM_ID))
-      .update("ProgramDerivedAddress")
-      .digest(),
+    sha256(
+      getAddressEncoded(pool),
+      Uint8Array.of(bumpSeed),
+      getAddressEncoded(FLUXBEAM_PROGRAM_ID),
+      "ProgramDerivedAddress",
+    ),
   ) as Address;
 }
 

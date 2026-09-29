@@ -46,7 +46,6 @@ export {
 export { chainContracts, on, type ChainContracts, type ContractAccessor } from "./accessors.js";
 export {
   makeContractCall,
-  CONTRACT_BASE_DIRS,
   type ContractCall,
   type EncodeOptions,
   type SauceScriptOptions,
