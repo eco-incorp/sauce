@@ -193,18 +193,28 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   own address, which `EVAL` uses: copying deployed runtime to another address leaves a dangling
   self-reference. Do not reintroduce the old deploy/read/etch flow. Some tests accept the old
   `SAUCE_RUST_V12_RUNTIME` variable as a fallback name, but the current input is creation code.
-  Released engines also enforce the Kitchen/Pot gate: use `sdk/test/evm/gated-engine.ts` or the
-  actions harness, not direct engine calls. `ctx.self()` and token ownership refer to the Pot.
+  Released engines also enforce the Kitchen/Pot gate: use `sdk/test/evm/gated-engine.ts` (the actions
+  suites use it too), not direct engine calls. `ctx.self()` and token ownership refer to the Pot.
+  **That harness deploys the whole stack from creation code AT ITS RELEASE ADDRESSES** — engine,
+  Router, Kitchen implementation, Kitchen proxy (initialized, owned by the harness account) — by
+  installing CreateX's 8-byte CREATE3 proxy child (`363d3d37363d34f0`) at each release salt's
+  CREATE2 address and sending it the creation code, so each contract CREATEs at the address
+  `V12Deployments.json` records with its real constructor. Nothing of the stack is etched, and
+  `v12EngineAddress()`/`v12RouterAddress()` are live on the anvil. It reads the Kitchen's era off its
+  ABI (a Router constructor argument up to kitchen-evm 1.0.0; `setRouter` after), as v12's deploy
+  tooling does.
 
 - **EVM engine artifacts** (`sdk/{src,dist}/artifacts/` — `Router`, `ISauceRouter`, `V12Pot`,
-  `V12Kitchen`, `V12RuntimeBytecode`, `V12EngineGate`, `IERC20`, `IUniswapV3Pool`) ship to downstream SDK consumers,
+  `V12Kitchen`, `V12KitchenProxy`, `V12RuntimeBytecode`, `V12EngineGate`, `V12Deployments`, `IERC20`,
+  `IUniswapV3Pool`) ship to downstream SDK consumers,
   which read them for local tests/deploys. **Nothing is tracked** — an `artifacts/` directory at any
   depth is gitignored, as is every `dist/` — so they exist only where a sync has run, and `tsc` does
-  not emit them: **after any repin run `pnpm --filter './sdk' sync-engine-artifacts`**. Four ABIs
+  not emit them: **after any repin run `pnpm --filter './sdk' sync-engine-artifacts`**. Five ABIs
   come from the `kitchen-evm` release's `abis.json`, `IERC20` is declared in the script (the ERC-20 standard is
   never v12's), `IUniswapV3Pool` comes from `@uniswap/v3-core`, and `V12RuntimeBytecode` wraps the
-  release's creation code. `V12EngineGate` records the released engine's Kitchen/Pot gate anchors.
-  CI asserts all 8 landed, so a broken generation fails there rather than
+  release's creation code. `V12EngineGate` records the released engine's Kitchen/Pot gate anchors —
+  the Kitchen and the Pot init-code hash, and not the Router, which no Pot hash derives from.
+  CI asserts all 10 landed, so a broken generation fails there rather than
   shipping an empty dir. No generated file is committed and drift-checked any more:
   `engine-abi.generated.ts` went with the engine that produced it.
   The RELEASE ADDRESSES ship too: the sync assembles `V12Deployments.json` from the `addresses.json`

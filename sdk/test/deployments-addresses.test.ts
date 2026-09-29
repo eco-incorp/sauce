@@ -65,17 +65,13 @@ describeAddresses("v12 deployed addresses", () => {
     expect(new Set(evm).size).toBe(evm.length);
   });
 
-  it("agrees with the engine gate anchors — Kitchen, Router, Pot initCodeHash", () => {
-    // V12EngineGate.json is assembled from the engine manifest + kitchen addresses and re-verified by
-    // the harness against the live potInitCodeHash(); if these disagree, the addresses name a
-    // different stack than the engine actually gates to.
-    const gate = JSON.parse(readFileSync(GATE, "utf8")) as {
-      kitchen: string;
-      potInitCodeHash: string;
-      router: string;
-    };
+  it("agrees with the engine gate anchors — Kitchen and Pot initCodeHash", () => {
+    // V12EngineGate.json is the engine manifest's gate, re-verified by the harness against the live
+    // potInitCodeHash(); if these disagree, the addresses name a different stack than the engine
+    // actually gates to. The Router is not an anchor: no Pot hash derives from it.
+    const gate = JSON.parse(readFileSync(GATE, "utf8")) as Record<string, string>;
+    expect(Object.keys(gate).sort()).toEqual(["kitchen", "potInitCodeHash"]);
     expect(v12KitchenAddress()).toBe(gate.kitchen);
-    expect(v12RouterAddress()).toBe(gate.router);
     expect(v12PotDerivation().initCodeHash).toBe(gate.potInitCodeHash);
     // A Pot is deployed BY the Kitchen it is gated to.
     expect(v12PotDerivation().deployer).toBe(gate.kitchen);

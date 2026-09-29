@@ -469,6 +469,8 @@ const onDiskIsThisRow = () =>
 // The names on the LEFT are the SDK's own and are shipped to consumers, so they do not move; v12
 // renamed three of the four (`ISauceRouter` -> `IRouter`, `V12Pot` -> `Pot`, `V12Kitchen` ->
 // `Kitchen`; `Router` is unchanged) and that is a remap here rather than a rename downstream.
+// `V12KitchenProxy` is the UUPS proxy every Kitchen address is: shipped so a local stack can be
+// deployed from creation code exactly as a release deploys it, proxy and initializer included.
 //
 // Two artifacts left the set entirely. `SauceRouter` was the v1 router and no release publishes it;
 // `IStateView` is Uniswap V4's. Nothing in `sdk/src` reads either — but `dev-tools` DID read
@@ -479,6 +481,7 @@ const RELEASE_ABIS = {
   ISauceRouter: "IRouter",
   V12Pot: "Pot",
   V12Kitchen: "Kitchen",
+  V12KitchenProxy: "KitchenProxy",
 };
 
 /**
@@ -701,23 +704,19 @@ try {
 // The released engine runs only when `CREATE2(KITCHEN, gateSalt(potId), POT_INITCODEHASH)` lands on
 // its caller, and both constants are baked into the artifact at release time. A harness therefore
 // has to stand up a Kitchen at exactly that address, minting Pots whose init code hashes to exactly
-// that hash — so it needs all three of these, and none of them can be guessed.
+// that hash — so it needs both of these, and neither can be guessed.
 //
-// `kitchen` and `potInitCodeHash` come from the engine release's own manifest (`gate`), already
-// fetched and cross-checked above. `router` comes from the kitchen release's `addresses.json`: it is
-// the starting Router stored by Kitchen.setRouter(). The Pot hash depends only on its creation
-// code; the harness checks it against the engine pin and initializes the Router separately.
+// Both come from the engine release's own manifest (`gate`), already fetched and cross-checked
+// above. The Router is NOT an anchor: a Pot reads its Router from the Kitchen's storage, so no Pot
+// hash and no gate derives from it (it lives in `V12Deployments.json` with the other addresses).
+// The harness asserts the deployed Kitchen's live `potInitCodeHash()` against the pinned one.
 try {
   const manifest = JSON.parse(
     readFileSync(resolve(CACHE_ROOT, V12_EVM.tag, "manifest.json"), "utf8"),
   );
-  const addressesPath = resolve(CACHE_ROOT, V12_EVM_ABIS.tag, "addresses.json");
-  if (!existsSync(addressesPath)) download(V12_EVM_ABIS.tag, "addresses.json", addressesPath);
-  const addresses = JSON.parse(readFileSync(addressesPath, "utf8"));
   const gate = {
     kitchen: manifest.gate?.kitchen,
     potInitCodeHash: manifest.gate?.potInitCodeHash,
-    router: addresses.contracts?.router?.address,
   };
   if (Object.values(gate).some((value) => value === undefined)) {
     throw new Error(`incomplete gate anchors: ${JSON.stringify(gate)}`);

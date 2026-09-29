@@ -15,6 +15,7 @@ import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  bytesToHex,
   createPublicClient,
   createTestClient,
   createWalletClient,
@@ -26,7 +27,9 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { cookData, startGatedEngine } from "./gated-engine.js";
+// The SDK's own harness, so every suite in the repository stands the stack up one way: from
+// creation code, at the release addresses.
+import { startGatedEngine } from "../../sdk/test/evm/gated-engine.js";
 import { startMainnet } from "./mainnet.js";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -130,13 +133,10 @@ export async function startAnvil(options: { mainnet?: string } = {}) {
   const walletClient = createWalletClient({ account, chain, transport: http(rpc) });
   const testClient = createTestClient({ chain, mode: "anvil", transport: http(rpc) });
 
-  const { engine, pot } = await startGatedEngine(
-    REPO_ROOT,
-    { publicClient: publicClient as never, walletClient, chain },
+  const { engine, pot, cookData } = await startGatedEngine(
+    { publicClient: publicClient as never, walletClient, testClient: testClient as never },
     account.address,
     creation,
-    (address, bytecode) => testClient.setCode({ address, bytecode }),
-    (address, index, value) => testClient.setStorageAt({ address, index, value }),
   );
 
   /** Sends `program` through the Pot's `cook`. Resolves to the receipt, reverted or not. */
@@ -149,7 +149,7 @@ export async function startAnvil(options: { mainnet?: string } = {}) {
       account,
       chain,
       to: pot,
-      data: cookData(engine, program),
+      data: cookData(bytesToHex(program)),
       value,
       gas,
     });

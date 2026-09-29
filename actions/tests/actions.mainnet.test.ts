@@ -814,7 +814,10 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
         { type: "approve", amount: `${USDC_100}`, token: USDC, spender: COMET_USDC },
         { type: "compoundV3Supply", comet: COMET_USDC, token: USDC },
       ]);
-      assert.ok((await balance(COMET_USDC, env.pot)) >= USDC_100 - 1n);
+      // Comet stores a supply as a principal and reads it back through the supply index, rounding
+      // down both ways, so a balance can land up to 2 units under the amount supplied (index > 1):
+      // which of 0, 1 or 2 depends on the index at the block the supply lands in.
+      assert.ok((await balance(COMET_USDC, env.pot)) >= USDC_100 - 2n);
       await run([
         { type: "compoundV3Withdraw", amount: "40000000", comet: COMET_USDC, token: USDC },
       ]);
