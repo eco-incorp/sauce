@@ -80,7 +80,12 @@ export interface NativeErc20 {
   decimals: number;
 }
 
-/** EVM chain definition */
+/**
+ * EVM chain definition.
+ *
+ * Carries no RPC endpoint: the SDK ships none. Whatever reads a chain takes its URL, or a client,
+ * from the caller.
+ */
 export interface Chain {
   id: number;
   name: string;
@@ -91,7 +96,6 @@ export interface Chain {
     /** Present only where the native coin is itself an ERC-20 (Arc's USDC). */
     erc20?: NativeErc20;
   };
-  rpcUrls: string[];
   blockExplorerUrls: string[];
   testnet: boolean;
 }

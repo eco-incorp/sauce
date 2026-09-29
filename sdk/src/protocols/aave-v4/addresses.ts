@@ -53,7 +53,7 @@ export const deployments: ChainDeployment[] = [
     },
   },
   {
-    // Arc (5042) — AaveV4Arc.ts. Verified on-chain 2026-09-28 (rpc.mainnet.arc.io, blocks 23287436
+    // Arc (5042) — AaveV4Arc.ts. Verified on-chain 2026-09-28 (Arc mainnet, blocks 23287436
     // and 23293327). The core hub's implementation code is byte-identical to Ethereum's.
     chainId: 5042,
     chainName: "Arc",

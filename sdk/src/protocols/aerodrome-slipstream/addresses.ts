@@ -28,7 +28,7 @@ export const deployments: ChainDeployment[] = [
     // on Arc"; code dromos-labs/metadex-public). Aero publishes no address table, so each address is
     // established on-chain: all three are Sourcify-verified from that codebase; clFactory is the
     // factory() of the Aero CL pools KyberSwap's Arc routes API returns, and positionManager.factory()
-    // == clFactory. getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436). No voter or gauges are deployed on Arc yet.
+    // == clFactory. getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436). No voter or gauges are deployed on Arc yet.
     chainId: 5042,
     chainName: "Arc",
     addresses: {

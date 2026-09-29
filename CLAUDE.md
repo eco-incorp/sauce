@@ -162,7 +162,13 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
 
 - **`SAUCE_ENGINE_SO` / `SAUCE_RUST_ENGINE_SO`** — the path to the Solana engine, fetched by
   `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines`, which digest-verifies it against
-  the pin and prints `SAUCE_RUST_ENGINE_SO=<path>`. **Nothing about the engine is source-controlled.**
+  the pin and prints `SAUCE_RUST_ENGINE_SO=<path>`. **The tests read these variables; the SDK never
+  does.** Each `svm/engine-artifacts.ts` resolver takes an optional explicit path
+  (`svmEnginePath(cluster, path)`, `svmKitchenPath(path)`, `svmKitchenIdlPath(path)`) and otherwise
+  returns the packaged binary; `sdk/test/svm/engine-harness.ts` and `dev-tools/test/svm-local.test.ts`
+  read CI's `SAUCE_*` paths and pass them in. Shipped code reads no environment at all: configuration
+  is passed by the developer, and a browser has no `process.env`. **Nothing about the engine is
+  source-controlled.**
   There used to be a vendored `artifacts/svm/engine.so` — a `release/beta` build predating every
   v12-svm release, with no `JUMP`/`JUMP_I` — and it was the DEFAULT, so anything with control flow was
   rejected with `InvalidInstructionData` while straight-line programs ran, silently, just from not
@@ -308,12 +314,17 @@ protocol does. Deployments whose address is not a 20-byte EVM address (Solana pr
 captured: no EVM ABI applies to them.
 
 Recapture only on explicit request — it reads live chains: `pnpm --filter './sdk' build` (the script
-reads `dist/`), then `RECAPTURE_REGISTRY_ABI=1 node scripts/capture-registry-abi.mjs [slug ...]` from
-`sdk/`, with no slugs for everything (about 540 deployments; responses cache under
-`node_modules/.cache/registry-abi/`). Without the flag it refuses to run. RPC endpoints come only
-from the environment — `<CHAIN>_RPC_URL` (`ETH_RPC_URL`, `BASE_RPC_URL`, `ARBITRUM_RPC_URL`, … as in
-`sdk/.env`) or `RPC_URL_<chainId>` — falling back to public endpoints; verified ABIs come from
-Sourcify, Blockscout and keyless Etherscan-compatible APIs. The fixture must never hold an endpoint
+reads `dist/`), then
+`node scripts/capture-registry-abi.mjs --recapture --rpc-config rpc.config.json [--chains <id>,…] [slug ...]`
+from `sdk/`, with no slugs for everything (about 540 deployments; responses cache under
+`node_modules/.cache/registry-abi/`, and `--no-cache` bypasses that). Without `--recapture` it
+refuses to run. `--chains` narrows the run to those chains' deployments and keeps every other
+chain's evidence as captured. RPC endpoints come only from the `--rpc-config` file, a JSON object of
+chain id to URL. Keep yours at `sdk/rpc.config.json`, which is gitignored, starting from the
+committed `sdk/rpc.config.example.json`, which holds `<…>` placeholders and never a real URL. The
+script reads nothing from the environment and has no public fallback: before its first request it
+fails, listing each chain id the selected deployments need that the file does not give. Verified
+ABIs come from Sourcify, Blockscout and keyless Etherscan-compatible APIs. The fixture must never hold an endpoint
 or key; the suite greps it. Review the fixture diff before committing it: a changed selector map is
 a contract upgrade to look at, not noise.
 

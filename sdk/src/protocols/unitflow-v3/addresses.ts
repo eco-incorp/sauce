@@ -6,7 +6,7 @@ export const deployments: ChainDeployment[] = [
     // chain. Addresses from UnitFlow's contracts page (docs.unitflow.finance/docs/dev/contracts, "Arc
     // Mainnet contract deployments"), which matches the mainnet defaults in its app build; its GitHub
     // README lists only TESTNET addresses. router and quoter are Sourcify-verified UnitFlow sources
-    // on Arc. getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block
+    // on Arc. getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block
     // 23287436): router.factory() == factory, router.USDC() == 0x3600…0000. The position manager
     // (0x300F5f2861eF0d9D3c6B812797C0A4c8b15C86a8) is not registered: this module has no ABI for it.
     chainId: 5042,

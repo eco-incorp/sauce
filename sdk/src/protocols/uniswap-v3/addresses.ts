@@ -2,7 +2,7 @@ import type { ChainDeployment } from "../../core/types.js";
 
 export const deployments: ChainDeployment[] = [
   {
-    // Arc (5042) — Uniswap V3 (developers.uniswap.org/deployments.json, v3-*-arc). getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436):
+    // Arc (5042) — Uniswap V3 (developers.uniswap.org/deployments.json, v3-*-arc). getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436):
     // factory.feeAmountTickSpacing(500) == 10; SwapRouter02, QuoterV2 and the position manager
     // each report factory() == factory. Only SwapRouter02 is deployed (no legacy SwapRouter).
     // The legacy Ethereum addresses (0x1F98…F984 etc.) carry UNRELATED code on Arc.

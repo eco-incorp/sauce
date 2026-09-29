@@ -3,7 +3,7 @@ import type { ChainDeployment } from "../../core/types.js";
 export const deployments: ChainDeployment[] = [
   {
     // Arc (5042) — Synthra V3 (docs.synthra.org/docs/contract-addresses, "Arc mainnet (5042)"). The
-    // same deterministic addresses serve Robinhood Chain, except the Universal Router. getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436):
+    // same deterministic addresses serve Robinhood Chain, except the Universal Router. getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436):
     // swapRouter02, quoterV2 and the position manager each report factory() == factory.
     chainId: 5042,
     chainName: "Arc",

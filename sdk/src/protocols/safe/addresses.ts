@@ -3,7 +3,7 @@ import type { ChainDeployment } from "../../core/types.js";
 export const deployments: ChainDeployment[] = [
   {
     // Arc (5042) — safe-global/safe-deployments lists both singletons as canonical for 5042.
-    // getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436): VERSION() == "1.4.1" / "1.3.0", and each code hash equals Ethereum's.
+    // getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436): VERSION() == "1.4.1" / "1.3.0", and each code hash equals Ethereum's.
     chainId: 5042,
     chainName: "Arc",
     addresses: {

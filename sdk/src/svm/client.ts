@@ -37,6 +37,7 @@ import { buildExecuteTransaction } from "./transaction.js";
 import type { SignedExecuteTransaction } from "./transaction.js";
 
 export interface SauceSvmClientConfig {
+  /** Your cluster's JSON-RPC URL. Required: the SDK ships no RPC endpoints and has no default. */
   rpcUrl: string;
   /** Defaults to rpcUrl with the protocol swapped to ws(s). */
   wsUrl?: string;
@@ -187,6 +188,14 @@ export async function createSauceSvmClient({
   potSalt = new Uint8Array(32),
   maxExecutionFee = 0n,
 }: SauceSvmClientConfig): Promise<SauceSvmClient> {
+  // The type already requires it; this is for callers the type does not reach (plain JS, a config
+  // object built at runtime), who would otherwise get an opaque failure from inside the RPC client.
+  if (typeof rpcUrl !== "string" || rpcUrl.trim() === "") {
+    throw new Error(
+      "createSauceSvmClient: pass `rpcUrl`, your cluster's JSON-RPC URL. The SDK ships no RPC " +
+        "endpoints and has no default.",
+    );
+  }
   const rpc = createSolanaRpc(rpcUrl);
   const rpcSubscriptions = createSolanaRpcSubscriptions(wsUrl ?? rpcUrl.replace(/^http/, "ws"));
   // Derived once: both are pure functions of the kitchen and the payer, and a cook names them on

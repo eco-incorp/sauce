@@ -3,7 +3,7 @@ import type { ChainDeployment } from "../../core/types.js";
 export const deployments: ChainDeployment[] = [
   {
     // Arc (5042) — across-protocol/contracts broadcast/deployed-addresses.json, chains[5042]
-    // SpokePool. getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436): chainId() == 5042. (0x3baD…Dd96, Mode's SpokePool in this file, is Arc's
+    // SpokePool. getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436): chainId() == 5042. (0x3baD…Dd96, Mode's SpokePool in this file, is Arc's
     // SP1Helios — not a SpokePool.)
     chainId: 5042,
     chainName: "Arc",

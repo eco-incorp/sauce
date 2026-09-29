@@ -10,6 +10,10 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Usage: npm run start:local [fork RPC URL]
+# The fork URL is an argument you pass, never read from the environment.
+FORK_URL="${1:-}"
+
 # Check for Sauce artifact
 if [ ! -f "$REPO_ROOT/artifacts/ISauceRouter.json" ]; then
     echo "Error: artifacts/ISauceRouter.json not found."
@@ -29,7 +33,7 @@ fi
 # Start hardhat node in the background
 cd "$REPO_ROOT"
 
-# Support forking via FORK_URL environment variable
+# Fork when a fork RPC URL was passed
 if [ -n "$FORK_URL" ]; then
     echo -e "${CYAN}Forking from: $FORK_URL${NC}"
     npx hardhat node --fork "$FORK_URL" > "$REPO_ROOT/.hardhat.log" 2>&1 &

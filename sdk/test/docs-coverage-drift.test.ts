@@ -44,7 +44,11 @@ describe("docs/api/coverage.md still states the registry sizes it has", () => {
       /\d+ chains: (\d+) EVM and Solana/,
       () => CANONICAL_CHAINS.filter((c) => c.kind === "evm").length,
     ],
-    ["EVM chain metadata records", /(\d+) records with RPC/, () => getAllChainIds().length],
+    [
+      "EVM chain metadata records",
+      /(\d+) records with native-currency/,
+      () => getAllChainIds().length,
+    ],
     [
       "token registry chains",
       /\d+ symbols distributed across (\d+) EVM chains/,

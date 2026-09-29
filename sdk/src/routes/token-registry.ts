@@ -153,7 +153,7 @@ export const TOKEN_REGISTRY: Readonly<Record<number, readonly TokenRegistryRow[]
     },
   ],
   // arc (5042) -- probe-verified 2026-09-28 at block 23287436 (getCode + symbol() + decimals(),
-  // via rpc.mainnet.arc.io), addresses from docs.arc.io/arc/references/contract-addresses. USDC
+  // via an Arc mainnet RPC), addresses from docs.arc.io/arc/references/contract-addresses. USDC
   // here is the 6-decimal ERC-20 INTERFACE to Arc's native gas token, not a separate token: the
   // same balance reads 18 decimals natively (see chains/index.ts). There is no wrapped USDC. WETH
   // here is BRIDGED ETH, not a wrapped native — as on Polygon (whose wrapped native is WPOL), and

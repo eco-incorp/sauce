@@ -32,7 +32,7 @@ export const deployments: ChainDeployment[] = [
   // domain 1, block 96359930
   { chainId: 43114, chainName: "Avalanche", addresses: { ...GATEWAY } },
   // Arc (5042) — docs.arc.io/arc/references/contract-addresses#gateway, domain 26. Verified at
-  // blocks 23287436 and 23293084 (rpc.mainnet.arc.io). Arc's Minter runs a different, smaller
+  // blocks 23287436 and 23293084 (Arc mainnet). Arc's Minter runs a different, smaller
   // implementation from the other chains' (11619 vs 12101 bytes) that dispatches the same
   // functions.
   { chainId: 5042, chainName: "Arc", addresses: { ...GATEWAY } },

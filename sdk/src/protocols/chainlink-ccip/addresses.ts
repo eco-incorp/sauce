@@ -3,7 +3,7 @@ import type { ChainDeployment } from "../../core/types.js";
 export const deployments: ChainDeployment[] = [
   {
     // Arc (5042) — CCIP directory (docs.chain.link/api/ccip/v1/chains, arc-mainnet, selector
-    // 6370580034781731079). getCode + view-call verified on-chain 2026-09-28 (rpc.mainnet.arc.io, block 23287436): typeAndVersion() == "Router 1.2.0".
+    // 6370580034781731079). getCode + view-call verified on-chain 2026-09-28 (Arc mainnet, block 23287436): typeAndVersion() == "Router 1.2.0".
     chainId: 5042,
     chainName: "Arc",
     addresses: {
