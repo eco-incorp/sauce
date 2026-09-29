@@ -11,7 +11,7 @@ Each of the three can be true without the others.
 | Compiled-source protocol globals | 26 singleton contract leaves across 14 protocol namespaces, plus 5 family aliases | TypeScript completion after importing `@eco-incorp/sauce`; names below |
 | Token symbols                    | 5 symbols distributed across 6 EVM chains                                         | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
 | Canonical chain identities       | 40 chains: 39 EVM and Solana                                                      | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
-| EVM chain metadata               | 33 records with RPC and explorer information                                      | `chains`, `getChain(id)`, `getAllChainIds()`                           |
+| EVM chain metadata               | 33 records with native-currency and explorer information                          | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
 The descriptor registry is the one that makes a name callable: it ties a contract name to an ABI and
 an address role. `contracts.listDescriptors()` lists them. These associations are curated rather than
@@ -110,9 +110,14 @@ Host accessors such as `Base.Uniswap.UniversalRouter` and `contracts.on(...)` bu
 signatures come from an ABI the type system never sees — so narrow one before calling it. The bare
 protocol names _inside_ a compiled program are different: those do have generated ABI method types.
 
-Use `requireChain` for route identities. `getChain` is a separate metadata lookup with RPC and
-explorer details, and it covers fewer chains: Unichain, Monad, Sonic, Ronin, Plasma and Ink are
-canonical chains with no metadata record.
+Use `requireChain` for route identities. `getChain` is a separate metadata lookup with
+native-currency and explorer details, and it covers fewer chains: Unichain, Monad, Sonic, Ronin,
+Plasma and Ink are canonical chains with no metadata record.
+
+The SDK ships no RPC endpoints; pass your own. No chain record, Solana cluster or default carries a
+URL, and nothing reads one from the environment. Whatever reads a chain takes its connection from
+you: a client you construct for the EVM reads, and `rpcUrl` for `createSauceSvmClient`, which throws
+naming that option when it is missing.
 
 Three questions, three answers: whether a chain is canonical, whether a protocol is available on it,
 and whether a Sauce engine is deployed there. The deployment helpers report recorded addresses — what
