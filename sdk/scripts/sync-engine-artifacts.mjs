@@ -2,19 +2,19 @@
 // Produce the Sauce engine artifacts the SDK ships and its tests read, from sources that live
 // OUTSIDE `compiler/`. Two provenances, deliberately different:
 //
-//   1. The v12 EVM runtime — from the eco-incorp/v12 GitHub RELEASE, pinned to an immutable tag
-//      and checked against a digest committed here. No Huff toolchain, no submodule fetch, no
-//      compile step: the release publishes the exact bytes.
-//   2. The contract ABIs — four from the `kitchen-evm` release's `abis.json` (`Router`/`IRouter`/
-//      `Pot`/`Kitchen`), a DIFFERENT component from item 1, plus `IERC20` declared below (the
-//      ERC-20 standard is
-//      OpenZeppelin's, never v12's) and `IUniswapV3Pool` read from `@uniswap/v3-core`. `SauceRouter`
-//      and `IStateView` are NOT produced: they came from the engine repo's Solidity tree, which no
-//      release ships, so anything that wanted them had to stop (see dev-tools/scripts/deploy.ts).
+//   1. The v12 EVM runtime — from the eco-incorp/v12 GitHub RELEASE, pinned by version and checked
+//      against a digest committed in `src/deployments/releases.json`. No Huff toolchain, no
+//      submodule fetch, no compile step: the release publishes the exact bytes.
+//   2. The contract ABIs — five from the `kitchen-evm` release's `abis.json` (`Router`/`IRouter`/
+//      `Pot`/`Kitchen`/`KitchenProxy`), a DIFFERENT component from item 1, plus `IERC20` declared
+//      below (the ERC-20 standard is OpenZeppelin's, never v12's) and `IUniswapV3Pool` read from
+//      `@uniswap/v3-core`. `SauceRouter` and `IStateView` are NOT produced: they came from the engine
+//      repo's Solidity tree, which no release ships, so anything that wanted them had to stop (see
+//      dev-tools/scripts/deploy.ts).
 //
 // The artifacts land in sdk/dist/artifacts (shipped to git-URL/tarball consumers) and sdk/src/artifacts
-// (gitignored, read by the drift tests). Neither is committed; CI re-runs this script and asserts all
-// seven files exist, so a broken generation fails there instead of shipping an empty dir.
+// (gitignored, read by the drift tests). Neither is committed; CI re-runs this script and asserts
+// every file exists, so a broken generation fails there instead of shipping an empty dir.
 //
 // Why the v12 runtime comes from the release rather than from the pin. The engine dropped its
 // committed snapshot (`chore(v12): compile the runtime at deploy time` — a second source of truth
@@ -206,7 +206,7 @@ const CACHE_ROOT = resolve(REPO_ROOT, "node_modules", ".cache", "sauce-engine-re
 // point is the credential: read access is granted per package to the CONSUMING REPOSITORY, so CI
 // authenticates with the `GITHUB_TOKEN` every workflow already has, and a developer with whatever
 // `gh` is already logged in as. No personal access token is minted, and nothing is published
-// publicly. The bytes are identical to the release assets, and the digest committed above still
+// publicly. The bytes are identical to the release assets, and the digest releases.json pins still
 // decides whether they are the pinned artifact — this changes the TRANSPORT, not the trust model.
 //
 // Fetched straight from the registry rather than declared as a dependency, DELIBERATELY. Installing
@@ -316,7 +316,7 @@ function download(tag, asset, dest) {
   }
 
   // The registry's own integrity field, checked before the bytes are handed on. A TRANSPORT check,
-  // NOT the guarantee — the digest committed above remains that — but a tarball that is not what its
+  // NOT the guarantee — the digest releases.json pins remains that — but a tarball that is not what its
   // own packument described should fail here rather than be reported as a bad pin.
   const integrity = release.dist.integrity ?? "";
   const [algorithm, expected] = integrity.split("-");
