@@ -136,3 +136,17 @@ describe("ensureLookupTable on an existing table", () => {
     }
   });
 });
+
+describe("createSauceSvmClient without an RPC URL", () => {
+  it.each([undefined, "", "  "])("refuses %p, naming the option to pass", async (rpcUrl) => {
+    const payer = await generateKeyPairSigner();
+    await expect(
+      createSauceSvmClient({
+        rpcUrl: rpcUrl as string,
+        programId: ENGINE_PROGRAM,
+        kitchen: KITCHEN_PROGRAM,
+        payer,
+      }),
+    ).rejects.toThrow("createSauceSvmClient: pass `rpcUrl`");
+  });
+});
