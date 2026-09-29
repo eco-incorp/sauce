@@ -23,7 +23,7 @@ everything from one name.
 
 | Workspace    | Internal name                 | Published as                                                                                                                             | Role                                                                           |
 | ------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`) | 129-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files |
+| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`) | 135-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files |
 | `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                        | JSON action programs → SauceScript, intents                                    |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools`                                                                                                                    | Local/forked hardhat env + recipe runner                                       |
 

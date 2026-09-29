@@ -233,7 +233,7 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 
 ### "I need to lend/borrow"
 
-1. **Multi-chain**: `aave-v3` (most chains), `compound-v3` (major chains)
+1. **Multi-chain**: `aave-v3` (most chains), `compound-v3` (major chains), `aave-v4` (hub-and-spoke: ETH, BASE, AVAX, ARC)
 2. **Ethereum-only**: `morpho-blue` (gas-efficient), `spark` (best DAI rates), `euler-v2` (modular)
 3. **Chain-specific**: `moonwell` (Base), `benqi` (Avalanche), `venus` (BSC), `zerolend` (zkSync)
 4. **Isolated risk**: `silo` (pair-based isolation), `morpho-blue` (market-level isolation)
@@ -244,6 +244,7 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 2. **Cheapest**: Native bridges (`arbitrum-bridge`, `optimism-bridge`, `base-bridge`) but 7-day withdrawals
 3. **Best route**: `lifi`, `socket`, or `squid` (bridge aggregators)
 4. **Arbitrary messages**: `layerzero`, `wormhole`, `axelar`, `chainlink-ccip`, `hyperlane`
+5. **USDC across chains**: `circle-gateway` (one USDC balance, minted on the destination by Circle attestation)
 
 ### "I need to stake ETH"
 
@@ -271,21 +272,22 @@ Each protocol module exports: `protocolInfo`, `deployments`, `abis`, and SauceSc
 
 ## Chain Coverage
 
-| Chain     | Chain ID | Top Protocols                                                     |
-| --------- | -------- | ----------------------------------------------------------------- |
-| Ethereum  | 1        | uniswap-v3, aave-v3, curve, balancer-v2, lido, maker, morpho-blue |
-| Arbitrum  | 42161    | uniswap-v3, aave-v3, gmx-v2, camelot, radiant, silo               |
-| Base      | 8453     | aerodrome, uniswap-v3, aave-v3, compound-v3, moonwell, seamless   |
-| Optimism  | 10       | velodrome, uniswap-v3, aave-v3, synthetix-v3, thales              |
-| Polygon   | 137      | quickswap, aave-v3, uniswap-v3, compound-v3, balancer-v2          |
-| BSC       | 56       | pancakeswap-v2, venus, thena, pancakeswap-v3, dodo                |
-| Avalanche | 43114    | trader-joe, aave-v3, benqi, curve, sushiswap-v2                   |
-| Blast     | 81457    | thruster, fenix, uniswap-v4                                       |
-| zkSync    | 324      | syncswap, zerolend                                                |
-| Scroll    | 534352   | ambient, layerbank, aave-v3                                       |
-| Fantom    | 250      | spookyswap, sushiswap-v2, aave-v3                                 |
-| Linea     | 59144    | lynex, pancakeswap-v3                                             |
-| Mode      | 34443    | kim                                                               |
+| Chain     | Chain ID | Top Protocols                                                                         |
+| --------- | -------- | ------------------------------------------------------------------------------------- |
+| Ethereum  | 1        | uniswap-v3, aave-v3, curve, balancer-v2, lido, maker, morpho-blue                     |
+| Arbitrum  | 42161    | uniswap-v3, aave-v3, gmx-v2, camelot, radiant, silo                                   |
+| Base      | 8453     | aerodrome, uniswap-v3, aave-v3, compound-v3, moonwell, seamless                       |
+| Optimism  | 10       | velodrome, uniswap-v3, aave-v3, synthetix-v3, thales                                  |
+| Polygon   | 137      | quickswap, aave-v3, uniswap-v3, compound-v3, balancer-v2                              |
+| BSC       | 56       | pancakeswap-v2, venus, thena, pancakeswap-v3, dodo                                    |
+| Avalanche | 43114    | trader-joe, aave-v3, benqi, curve, sushiswap-v2                                       |
+| Blast     | 81457    | thruster, fenix, uniswap-v4                                                           |
+| zkSync    | 324      | syncswap, zerolend                                                                    |
+| Scroll    | 534352   | ambient, layerbank, aave-v3                                                           |
+| Fantom    | 250      | spookyswap, sushiswap-v2, aave-v3                                                     |
+| Linea     | 59144    | lynex, pancakeswap-v3                                                                 |
+| Mode      | 34443    | kim                                                                                   |
+| Arc       | 5042     | uniswap-v3, uniswap-v4, aave-v4, morpho-blue, circle-gateway, synthra-v3, unitflow-v3 |
 
 ---
 
