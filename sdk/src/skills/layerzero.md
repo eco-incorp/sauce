@@ -70,3 +70,4 @@ MessagingFee tuple: `(uint256 nativeFee, uint256 lzTokenFee)`
 - Finality: depends on DVN (Decentralized Verifier Network) configuration, typically 1-5 minutes
 - Powers Stargate V2, OFT tokens, and many cross-chain dApps
 - TVL: $5B+ (across protocols built on LayerZero). Audited
+- On Arc (5042, eid 30417) the messaging fee `msg.value` is native USDC at 18 decimals, from the same balance as the USDC ERC-20 `0x3600…0000`

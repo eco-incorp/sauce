@@ -365,6 +365,31 @@ Every action below is executed in CI against the deployed Ethereum contracts it 
 - **Maverick** V2's router is `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` on Ethereum. A multi-hop `path` is, per hop, the pool's 20 bytes followed by one byte for `tokenAIn`.
 - **Fluid DEX T1** takes no native value from this action, so it sells the pool's ERC-20 side (for the wstETH/ETH pool, wstETH for ETH), pulling it by allowance.
 
+### On Arc
+
+Arc (`chainId` 5042) pays gas in USDC, which is also the ERC-20 at
+`0x3600000000000000000000000000000000000000`: one balance, 18 decimals natively and 6 through the
+ERC-20 ([details](../api/coverage.md#arc-usdc-is-the-native-coin)). Actions take every address and
+domain as a field, so nothing here is per chain, but a program on Arc is checked for what that
+changes:
+
+- `wrapETH`, `unwrapETH`, `lidoStake`, `rocketPoolStake` and `etherFiStake` are rejected: Arc has no
+  native ETH and no canonical wrapped native. Its registry `WETH` is bridged ETH. So is
+  `balancerV3Swap` with `wethIsEth: true`.
+- A `nativeBalance` that a token action spends is rejected: it is 10¹² times the same balance read
+  by `balanceOf` of `0x3600…0000`. Read that instead.
+- The Hyperlane fee is native value, so on Arc it is USDC, paid from the balance the bridged USDC
+  also comes from. A `hyperlaneBridge` of the Pot's whole USDC balance cannot also pay its fee:
+  bridge less. Hyperlane's CCTP-backed USDC warp route on Arc,
+  `0x16BF93e259ee7f7074453a2948379C35C6851b71`, quoted about 0.054 USDC to Base on 2026-09-28.
+
+What the registry has on Arc for these actions: Uniswap V2, V3 and V4 (`uniswapV2Swap`,
+`uniswapV3ExactInput`, `uniswapV4ExactInput` and their multi-hop forms), CCTP (`cctpBridge`; Arc is
+domain 26), Across (`acrossBridge`, ERC-20 deposits; Arc's SpokePool has no wrapped native token), and
+Permit2. It has no Arc deployment of Curve, Balancer, DODO, Maverick, Fluid, Carbon, Fraxswap,
+Ambient, Aave V3, Compound V3, Stargate, Lido, Rocket Pool or ether.fi. The CI runs above replay
+Ethereum; no action is executed against Arc.
+
 ## TypeScript types
 
 Every type is the JSON it describes. `ActionProgram` is the document, `Action` the union of every action, `ActionType` its `type`, and each action has its own interface (`UniswapV3ExactInputAction`, `AaveV3SupplyAction`, …), grouped as `SwapAction`, `BridgeAction`, `WrapAction`, `StakeAction`, `LendingAction`, `TokenAction` and `SourceAction`. A program typed in TypeScript is already valid input for `serializeProgram`, and `parseProgram` returns the same shape it accepts.

@@ -63,3 +63,4 @@ function main(
 - `delivered()` to check if a message has already been processed on the destination
 - Finality: depends on ISM configuration, typically 1-5 minutes
 - TVL: $200M+. Audited
+- On Arc (5042) interchain gas is paid in native USDC at 18 decimals, from the same balance as the USDC ERC-20 `0x3600…0000`. A transfer of the whole USDC balance cannot also pay its gas. Hyperlane's CCTP-backed USDC warp route on Arc is `0x16BF93e259ee7f7074453a2948379C35C6851b71` (its `quoteGasPayment(8453)` was about 0.054 USDC on 2026-09-28)

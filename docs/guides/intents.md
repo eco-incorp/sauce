@@ -44,6 +44,10 @@ Destination route assets initially arrive in the **Executor**. The Sauce program
 
 Every EVM `cook` must receive the Kitchen's current `executionFee()` in native wei, including ERC-20-only programs. Set `execution.value` to **fee + native assets the program needs**, and budget `nativeAmount` for the route's calls. The Pot remits the fee before executing; its existing balance cannot replace this payment. Nested transfer programs add another cook and fee. Read the fee before building; an increase before fulfillment can make the route revert.
 
+On Arc the native coin is USDC, so every one of these native amounts is USDC at **18 decimals**,
+while `tokens` amounts of Arc's `USDC` are 6 decimals — and both draw on one balance. See
+[Arc: USDC is the native coin](../api/coverage.md#arc-usdc-is-the-native-coin).
+
 Deadlines are absolute Unix timestamps in seconds. `route.deadline` limits destination fulfillment. `reward.deadline` allows source refunds when no valid proof exists; leave time for fulfillment and proof delivery before it.
 
 ## The destination Pot
@@ -73,6 +77,14 @@ Use
 [evm-execution.ts](../examples/evm-execution.ts) with the destination Portal and a salt — zero for
 the shared Pot — to predict the Pot and check that it is deployed, with the right `owner()` and
 `kitchen()`. Only use a result with `ready: true`.
+
+### Arc's Pot
+
+Arc's eco-routes Portal (`0xEC002CA16cE20c2a9F3C6200EF04E7d92a3dfBD8`) is not the Portal most other
+chains share, so its Executor (`0x95b2d45F49c68a54BDBa0356fc3034751A43b3D4`) and the Pot derived from
+it (`destinationPot("arc")`, `0xBDbbf86bC1D8afE1b382Eee56f5d733AC7bd43a5`) are Arc's own. The released
+Kitchen is live on Arc, but on 2026-09-28 that Pot had **no code**. An intent to Arc reverts until
+the Pot is deployed, by the solver or by you with the call above.
 
 The deployment helpers return the released addresses. They do not check that code is live at those
 addresses on your chain. The same helper confirms the Kitchen and engine have code, and reads the
