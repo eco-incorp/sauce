@@ -20,24 +20,30 @@ function toAddressBigint(value: AddressInput, _label: string): bigint {
  * (Arc) there is no canonical wrapped native, and a `deposit()`/`withdraw()` sent to its native ERC-20
  * (`0x3600…0000`) or to a registry token there — `WETH` included, which on Arc is bridged ETH —
  * wraps nothing. Reject those by address instead of emitting the call.
+ *
+ * Built once from the static chain and token registries: address -> why it is not a WETH9.
  */
-function rejectNonWrapperTarget(action: string, target: bigint): void {
+const NOT_A_WRAPPER: ReadonlyMap<bigint, string> = (() => {
+  const reasons = new Map<bigint, string>();
   for (const chainId of getAllChainIds()) {
     const erc20 = nativeErc20(chainId);
     if (erc20 === undefined) continue;
-    const rows = TOKEN_REGISTRY[chainId] ?? [];
-    const hit =
-      BigInt(erc20.address) === target
-        ? `the native ${chains[chainId]!.nativeCurrency.symbol} ERC-20`
-        : rows.find((row) => BigInt(row.address) === target)?.symbol;
-    if (hit === undefined) continue;
-    throw new Error(
-      `toDeposit: weth:${action} targets ${hit} on ${chains[chainId]!.name} (chain ${chainId}), ` +
-        `which is not a WETH9. ${chains[chainId]!.name} has no canonical wrapped native: its native ` +
-        `${chains[chainId]!.nativeCurrency.symbol} is already the ERC-20 at ${erc20.address}, so ` +
-        "there is nothing to wrap or unwrap there",
-    );
+    const { name, nativeCurrency } = chains[chainId]!;
+    const why = (what: string) =>
+      `${what} on ${name} (chain ${chainId}), which is not a WETH9. ${name} has no canonical ` +
+      `wrapped native: its native ${nativeCurrency.symbol} is already the ERC-20 at ` +
+      `${erc20.address}, so there is nothing to wrap or unwrap there`;
+    for (const row of TOKEN_REGISTRY[chainId] ?? [])
+      reasons.set(BigInt(row.address), why(row.symbol));
+    // Set last: the native ERC-20 is also a registry row (`USDC`), and this names it better.
+    reasons.set(BigInt(erc20.address), why(`the native ${nativeCurrency.symbol} ERC-20`));
   }
+  return reasons;
+})();
+
+function rejectNonWrapperTarget(action: string, target: bigint): void {
+  const reason = NOT_A_WRAPPER.get(target);
+  if (reason !== undefined) throw new Error(`toDeposit: weth:${action} targets ${reason}`);
 }
 
 function toBigIntStrict(value: AmountInput, label: string): bigint {

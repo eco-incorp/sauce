@@ -289,6 +289,14 @@ describe("action programs — Arc, whose native coin is USDC", () => {
     assert.ok(rejects(onArc({ type: "wrapETH", amount: "1", weth: ARC_WETH })));
   });
 
+  it("does not call a nativeBalance mis-scaled when its reader spends it as native value", () => {
+    // wrapETH attaches the amount as value, so the 18-decimal reading is the right unit for it:
+    // the only issue is that Arc has no wrapper, reported on the reader, not the balance.
+    const found = issues(onArc(SAMPLES.nativeBalance, { type: "wrapETH", weth: ARC_WETH }));
+    assert.equal(found.length, 1);
+    assert.match(found[0]!, /^actions\[1\]: wrapETH needs native ETH/);
+  });
+
   it("rejects a nativeBalance spent as a token amount, which is 10^12 too large", () => {
     const found = issues(
       onArc(SAMPLES.nativeBalance, { type: "transfer", token: ARC_USDC, recipient: R }),

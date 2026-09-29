@@ -143,6 +143,8 @@ describe("toDeposit guards", () => {
       "0x128cC466B61f542da60c70e3aA11c10e19B84EDB",
       /WETH on Arc/,
     ],
+    ["registry EURC", "0xbEf5f6d51CB62b58e6A8f77868681825C6fe21c1", /EURC on Arc/],
+    ["registry USYC", "0x8a5D989Bbb96929F689B0200f435f53dA42bF490", /USYC on Arc/],
   ])("rejects a weth template targeting Arc's %s", (_, target, what) => {
     for (const action of ["wrap", "unwrap"]) {
       expect(() => toDeposit({ protocol: "weth", action, target, amount: 1n })).toThrow(what);
