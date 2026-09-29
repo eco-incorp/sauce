@@ -221,12 +221,15 @@ describe("rpcShape", () => {
     ["a Solana public cluster", url("api.mainnet-beta.solana.com"), ""],
     ["a host with no rpc in it, by path", url("arb1.arbitrum.io/rpc"), ""],
     ["Avalanche's C-Chain path", url("api.avax.network/ext/bc/C/rpc"), ""],
-    ["a key path", url("eth-mainnet.g.alchemy.com/v2/abcdefghijklmnopqrstuvwxyz"), ""],
+    ["a key path on an unknown host", url("node.chain.xyz/v2/abcdefghijklmnopqrstuvwxyz"), ""],
+    ["an /rpc path on an unknown host", url("node.chain.xyz/rpc"), ""],
     ["a public endpoint with no rpc in its host", url("mainnet.base.org"), ""],
     ["an unknown host bound to rpcUrls", url("node.chain.xyz"), '    rpcUrls: ["'],
     ["an unknown host bound to an RPC variable", url("node.chain.xyz"), 'const RPC = "'],
     ["an unknown host in an env-name table", url("node.chain.xyz"), '  1: ["ETH_RPC_URL", "'],
     ["an unknown host in a Viem chain", url("node.chain.xyz"), "rpcUrls: { default: { http: ["],
+    // `rpcUrls` on an earlier line: only the `http: [` binding sees this one.
+    ["an unknown host in a Viem http list", url("node.chain.xyz"), '    default: { http: ["'],
     ["an unknown host passed to a transport", url("node.chain.xyz"), 'transport: http("'],
     ["a templated provider URL", url("${chain}.infura.io/v3/${key}"), ""],
   ])("flags %s", (_name, candidate, prefix) => {
