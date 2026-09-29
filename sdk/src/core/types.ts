@@ -69,12 +69,16 @@ export interface SauceParam {
   description: string;
 }
 
-/** EVM chain definition */
+/**
+ * EVM chain definition.
+ *
+ * Carries no RPC endpoint: the SDK ships none. Whatever reads a chain takes its URL, or a client,
+ * from the caller.
+ */
 export interface Chain {
   id: number;
   name: string;
   nativeCurrency: { name: string; symbol: string; decimals: number };
-  rpcUrls: string[];
   blockExplorerUrls: string[];
   testnet: boolean;
 }
