@@ -21,11 +21,11 @@ A **pnpm monorepo** of three workspace packages (`pnpm-workspace.yaml`: `dev-too
 bundling is the key mental model: code lives in three packages for development, consumers import
 everything from one name.
 
-| Workspace    | Internal name                 | Published as                                                                                                                             | Role                                                                           |
-| ------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`) | 135-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files |
-| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                        | JSON action programs → SauceScript, intents                                    |
-| `dev-tools/` | `@eco-incorp/sauce-dev-tools` | bin `sauce-dev-tools`                                                                                                                    | Local/forked hardhat env + recipe runner                                       |
+| Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                |
+| ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files, the `sauce` command |
+| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents                                                         |
+| `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                        |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
 which may still carry older copies of these packages. The packages here are **siblings, not
@@ -473,11 +473,24 @@ quotes and, for the split swap, the same quoter calls as SauceScript over fixed 
 `AMM_SWAP_INTERFACES.md` is third-party interface reference; only its sections marked Verified have
 been checked.
 
-**`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness. Its
-`start:local`/`start:fork` scripts and `sauce` CLI still depend on the retired `SauceRouter`
-deployment and `cook(bytes[])` execution path; they do not boot the released gated EVM stack.
-`compileScript` and its tests remain useful independently. Current EVM execution tests use
-`sdk/test/evm/gated-engine.ts`; current SVM local execution uses `dev-tools/src/svm-local.ts`.
+**The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's one
+executable: `compile`, `tx`, `pot`, `init` and `skills install`. It adds no compile path of its
+own — `compileSauceProgram` (the compile half of `compileSauceRoute`) under `withChainAmbient`
+(the chain bundle `openRoute` uses) — and no encoder: `compileSauceRoute`'s call, `v12PredictPot`,
+`sauceEvmDeployPotCall`, `destinationExecutionFee`. It is Node-only and deliberately in no
+`exports` entry and no barrel (`cli.test.ts` fails if a barrel exports it), reads no environment,
+and reaches a network only through `--rpc-url`. `cli.e2e.test.ts` sends what it prints to an
+anvil running the released gated stack, and runs its `cast send` line verbatim; the packed check
+runs the installed bin through `npx`. The agent skills `sauce skills install` copies live in the
+top-level `skills/<name>/` and ship in the package; they are distinct from `sdk/src/skills/`, the
+per-protocol documents the `/skills` export loads.
+
+**`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness, for
+developing the SDK; nothing of it ships in the package. Its `start:local`/`start:fork` scripts and
+its `sauce` npm script (`scripts/run.ts`, not the package's `sauce` bin) still depend on the retired
+`SauceRouter` deployment and `cook(bytes[])` execution path; they do not boot the released gated
+EVM stack. `compileScript` and its tests remain useful independently. Current EVM execution tests
+use `sdk/test/evm/gated-engine.ts`; current SVM local execution uses `dev-tools/src/svm-local.ts`.
 
 ## The swap Router
 
@@ -536,7 +549,7 @@ unified `swap()` does not dispatch them.
 ## Publishing
 
 Tag-driven (`.github/workflows/publish.yml`): `git tag v1.2.3 && git push origin v1.2.3` (or manual
-`workflow_dispatch`). Builds all areas, runs `prepack` (syncs artifacts), stamps the **root**
+`workflow_dispatch`). Builds all areas, fetches the SVM engine binaries, stamps the **root**
 `package.json` version, and publishes the single `@eco-incorp/sauce` to **public npmjs.com only**
 (`NPM_TOKEN`). GitHub Packages was dropped deliberately — `publish.yml:12` records why. Only the root
 version is published; workspace packages stay `private`.

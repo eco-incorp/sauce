@@ -70,7 +70,8 @@ performs no protocol operation. `getProtocolSkill` throws for a slug absent from
 
 Every import runs in Node **24 or newer** and in a browser, with one exception:
 `/svm/engine-artifacts` returns filesystem paths to the packaged engine binaries for a local
-LiteSVM harness, and is Node-only.
+LiteSVM harness, and is Node-only. The [`sauce` command](../guides/cli.md) is not an import at
+all: it is the package's executable, and Node-only too.
 
 Anything that compiles — `/compiler`, route compilation, the builders, the recipes, `/actions`,
 `/svm/verify` — needs one `await ready()` first in a browser, while the compiler's WebAssembly
