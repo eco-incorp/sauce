@@ -261,8 +261,26 @@ of hops whose amounts are each measured on arrival is written; see
 
 ### Names resolve per chain
 
-`USDC` inside the braces is _Arbitrum's_ USDC, because those calls run on Arbitrum. Resolving it
-against the enclosing chain would put one chain's address in another chain's route.
+Two chains meet in `Arbitrum(() => { ... }).reward({ ... })`, and each part belongs to one of them.
+A token symbol resolves on the chain where its part runs:
+
+| Part                                   | Runs on                       | `USDC` is    |
+| -------------------------------------- | ----------------------------- | ------------ |
+| The braces                             | Arbitrum, the destination     | Arbitrum's   |
+| The second argument, what is delivered | Arbitrum, the destination     | Arbitrum's   |
+| `.reward(...)`                         | The chain the program runs on | That chain's |
+
+The reward belongs to the enclosing chain because the program escrows it there: it approves that
+chain's Portal for the reward token and funds the intent in the same fulfillment. Resolving a name
+on the other chain names an address that is not that token where it is used. A reward token taken
+from the destination fails the approval's code check and reverts the fulfillment. A body token taken
+from the enclosing chain makes the intent unfulfillable.
+
+The rule repeats at every depth. An intent opened inside a body is funded on that body's chain, so
+its reward resolves there and its own body on its own destination. Through `Base(...)`, the same holds
+for the other values that belong to a chain, `chainId` and protocol addresses: a nested body sees its
+own chain's. A literal address or a compile-time define means exactly that address wherever it
+appears.
 
 ### A throw reverts everything
 

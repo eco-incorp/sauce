@@ -161,6 +161,61 @@ describe("the guide's refusal list is the lowering's", () => {
   });
 });
 
+describe("the guide's account of which chain a name resolves on is the lowering's", () => {
+  // A different USDC per chain, so each part's chain shows in the address it names. Executed with
+  // the real registry, across three chains, in `routes-intent-chains.e2e.test.ts`.
+  const USDC_ON = new Map([
+    [BASE.slug, 0x1111111111111111111111111111111111111111n],
+    [ARBITRUM.slug, 0x2222222222222222222222222222222222222222n],
+  ]);
+  const lowered = () =>
+    rewriteIntentSugar(
+      `function main() {
+  const amount = 5n;
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+}`,
+      context({
+        definesFor: (chain: typeof BASE) =>
+          new Map([
+            ["USDC", USDC_ON.get(chain.slug)!],
+            ["RECIPIENT", 0x9999999999999999999999999999999999999999n],
+          ]),
+      }),
+    ).intents[0]!.intent;
+  const onChain = (slug: string) => `0x${"00".repeat(12)}${USDC_ON.get(slug)!.toString(16)}`;
+  const guide = GUIDE.replace(/\s+/g, " ");
+
+  const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
+    {
+      documented: "| The braces | Arbitrum, the destination | Arbitrum's |",
+      holds: () => lowered().route.calls[0]!.target === onChain(ARBITRUM.slug),
+    },
+    {
+      documented:
+        "| The second argument, what is delivered | Arbitrum, the destination | Arbitrum's |",
+      holds: () => lowered().route.tokens[0]!.token === onChain(ARBITRUM.slug),
+    },
+    {
+      documented: "| `.reward(...)` | The chain the program runs on | That chain's |",
+      holds: () => lowered().reward.tokens[0]!.token === onChain(BASE.slug),
+    },
+  ];
+
+  it.each(CLAIMS.map((c) => [c.documented, c] as const))("the guide says %s", (_name, claim) => {
+    expect(guide).toContain(claim.documented);
+  });
+
+  it.each(CLAIMS.map((c) => [c.documented, c] as const))("and it holds: %s", (_name, claim) => {
+    expect(claim.holds()).toBe(true);
+  });
+
+  it("no longer says every name inside the intent is the destination's", () => {
+    expect(guide).not.toContain("Resolving it against the enclosing chain would put");
+  });
+});
+
 describe("the guide's account of the destination Pot is the builder's", () => {
   // Each claim is a sentence the guide must contain and a check on what the SDK builds. What the
   // chain does with it -- a missing Pot reverts, a present one cooks -- is executed in

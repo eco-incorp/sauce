@@ -391,6 +391,16 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
+`openRoute` passes the ambient defines as `RouteScope.chainDefines` (`sauce-route.ts`), a function
+of the chain beside the options, and **never folds them into `compile.defines`**. Caller defines
+hold program-wide at every depth, so a folded value reached every nested intent's compile as the
+caller's and replaced that chain's own (Base's USDC in an Arbitrum body). `compileScopedRoute`
+evaluates the scope per chain and passes it down to each nested compile; `compileSauceRoute` is
+that with an empty scope. In `Chain(() => …).reward(…)` (`intent-sugar.ts`) the body and the
+delivery argument resolve on the destination and the reward on the enclosing chain, which escrows
+and approves it. `routes-intent-chains.e2e.test.ts` runs that on three anvils whose USDC differs;
+a test that gives a symbol one address everywhere (a `tokens` override, a define) cannot see it.
+
 The **`Token(addr)` global wrapper** (`Token(addr).approve(spender, amt)` / `const t = Token(addr);
 t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** are TEXTUAL rewrites in
 `token-rewrite.ts`, run in `compileSauceRoute` before the compiler, and both lower a WRITE
