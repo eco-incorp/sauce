@@ -31,6 +31,14 @@
  * compile-time value nor an enclosing local is refused. Nothing here guesses: the failure mode this
  * exists to avoid is a plausible-looking intent carrying a number nobody chose.
  *
+ * WHICH CHAIN A NAME MEANS. Two chains are in play, and each part of the expression belongs to one.
+ * The body and the delivery argument run on the destination, so `USDC` there is the destination's.
+ * The reward is escrowed by the enclosing program, on the chain it runs on, and approved to that
+ * chain's Portal, so `USDC` in `.reward(...)` is that chain's. An intent opened inside a body is
+ * funded on the body's chain: its reward resolves there and its own body on its own destination —
+ * the same rule one level down, because the child compile re-enters this pass with `source` set to
+ * the chain it compiles for.
+ *
  * WHERE THE ADDRESSES COME FROM. The Portal on each side, and the prover for the pair, are looked up
  * in the SDK's eco-routes deployment registry (`protocols/eco-routes`). A caller supplies what has
  * no correct default — deadlines, and a creator when the refund must not go to the executing Pot.
@@ -106,7 +114,8 @@ export interface IntentSugarDefaults {
 
 /** Everything the rewrite needs that is not in the source text. */
 export interface IntentSugarContext {
-  /** The chain the ENCLOSING program runs on — the child's source chain. */
+  /** The chain the ENCLOSING program runs on — the child's source chain, where its reward is
+   *  escrowed. */
   readonly source: CanonicalChain;
   /** Chain accessor name (`Base`) -> canonical chain. Only these names open an intent. */
   readonly chains: ReadonlyMap<string, CanonicalChain>;
@@ -117,7 +126,8 @@ export interface IntentSugarContext {
    * Per chain because a symbol is not an address. `USDC` inside `Arbitrum(() => ...)` is Arbitrum's
    * USDC, and resolving it against the enclosing program's chain would put a Base address in a
    * route that executes on Arbitrum — most likely not a token at all, and a transfer to it is
-   * funds gone. The enclosing program's own names resolve against `source`.
+   * funds gone. The `.reward(...)` argument is the other way round: this program escrows it, on
+   * `source`, so its names resolve against `source`.
    */
   readonly definesFor: (chain: CanonicalChain) => ReadonlyMap<string, bigint>;
   /** Resolves the Portal for a chain, and the prover for a pair. Throws with its own diagnostic. */
@@ -587,10 +597,15 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       return captureSentinel(at);
     };
 
-    // Resolved against the DESTINATION's registry: `USDC` in this closure is the destination's
-    // USDC, because that is the chain the calls run on.
+    // TWO chains, so two resolvers. The body and the delivery argument run on the DESTINATION:
+    // `USDC` in the closure is the destination's USDC. The reward is escrowed by THIS program, on
+    // the chain it runs on, and approved to that chain's Portal a few statements below, so its
+    // `USDC` is the enclosing chain's. Crossing them names an address with no code where the call
+    // runs: a reward token from the destination fails SafeERC20's code check on the approval and
+    // reverts the whole fulfilment, and a body token from here is not a token over there.
     const defines = context.definesFor(site.chain);
     const resolve = makeResolver(defines, outerLocals);
+    const resolveFunding = makeResolver(context.definesFor(context.source), outerLocals);
 
     /**
      * What the solver delivers to the destination Executor so this intent can run.
@@ -702,7 +717,8 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       if (!captures.includes(name)) captures.push(name);
     }
 
-    const reward = lowerReward(site.reward, resolve);
+    // On the enclosing chain: see `resolveFunding` above.
+    const reward = lowerReward(site.reward, resolveFunding);
     const { defaults } = context;
     const rewardDeadline = defaults.rewardDeadline ?? requireDeadline(defaults);
     const child: Intent = {

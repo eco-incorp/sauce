@@ -151,17 +151,46 @@ function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAINS)[num
   return chainAccessorCache;
 }
 
-/** Every name the program can read as a compile-time scalar: the chain's token symbols and the
- *  caller's own defines, with the caller winning — the same precedence the compiler applies. */
+type ChainRefResolved = ReturnType<typeof requireChain>;
+
+type DefineValue = bigint | boolean | number;
+
+/**
+ * What `openRoute` adds to a compile that a direct `compileSauceRoute` call does not get. Internal to
+ * the SDK — passed beside the options rather than inside them, so the public option surface stays
+ * what `compileSauceRoute` documents.
+ */
+export interface RouteScope {
+  /**
+   * The compile-time values that belong to ONE chain: `chainId`, its protocol contracts and its
+   * token symbols (`ambient.ts#chainDefines`). Evaluated for the chain this program compiles for,
+   * and again for every chain an intent written inside it names — its body on that chain, its
+   * reward on this one — including each nested compile's own chain.
+   *
+   * A function rather than values because the values differ per chain. `openRoute` used to fold its
+   * own chain's into `defines`, which hold for the whole program at every depth, so a nested
+   * intent's body read them as the caller's: Base's USDC, and Base's `chainId`, in a program that
+   * runs on Arbitrum.
+   */
+  readonly chainDefines?: (chain: ChainRefResolved) => Readonly<Record<string, DefineValue>>;
+}
+
+/** Every name the program can read as a compile-time scalar on `chain`: the chain's token symbols,
+ *  then its chain-scoped values when a scope supplies them, then the caller's own defines, with
+ *  the caller winning — the same precedence the compiler applies. */
 function compileTimeValues(
   chain: ChainRefResolved,
   options: SauceCompileOptions,
+  scope: RouteScope,
 ): ReadonlyMap<string, bigint> {
   const values = new Map<string, bigint>();
   for (const [symbol, address] of resolveTokenMap(chain, options.tokens)) {
     values.set(symbol, address);
   }
-  for (const [name, value] of Object.entries(options.defines ?? {})) {
+  for (const [name, value] of Object.entries({
+    ...scope.chainDefines?.(chain),
+    ...options.defines,
+  })) {
     if (typeof value === "bigint") values.set(name, value);
     else if (typeof value === "number") values.set(name, BigInt(Math.trunc(value)));
     else values.set(name, value ? 1n : 0n);
@@ -169,15 +198,14 @@ function compileTimeValues(
   return values;
 }
 
-type ChainRefResolved = ReturnType<typeof requireChain>;
-
 /**
  * Compiles a closure body as a program for its own destination chain, and wraps it in the `cook`
  * the child's route will call.
  *
- * RE-ENTERS `compileSauceRoute`, which is what makes this general rather than a special case: the
+ * RE-ENTERS the route compile, which is what makes this general rather than a special case: the
  * child gets that chain's token and protocol rewrites, and the intent lowering runs again inside
- * it, so an intent opened within an intent is lowered by the same code at every depth.
+ * it, so an intent opened within an intent is lowered by the same code at every depth. The SCOPE is
+ * passed down unevaluated, so the child's chain-scoped values are its own chain's.
  *
  * Captured values arrive as compact-v1 entry arguments at a DECLARED width. Minimal encoding would
  * move the payload's length with the values, leaving nothing at a fixed offset to splice; a
@@ -190,6 +218,7 @@ function compileIntentChild(
   captures: readonly string[],
   destinationPortal: AddressInput,
   options: SauceCompileOptions,
+  scope: RouteScope,
 ): CompiledChild {
   const intents = options.intents ?? {};
   // DERIVED, not asked for. A Pot is CREATE2 from the Kitchen over its owner and a salt; the owner a
@@ -207,11 +236,12 @@ function compileIntentChild(
         `\`@eco-incorp/sauce\`, or \`Kitchen.executionFee()\` at ${v12KitchenAddress()}.`,
     );
   }
-  const compiled = compileSauceRoute(
+  const compiled = compileScopedRoute(
     destination,
     childSource,
     { pot, engine, value: intents.executionFee },
     { ...options, compactArgs: captures.length > 0 },
+    scope,
   );
 
   let program: Hex = bytesToHex(compiled.compiled.bytecode[0]!);
@@ -261,6 +291,20 @@ export function compileSauceRoute(
   execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
   options: SauceCompileOptions = {},
 ): CompiledSauceRoute {
+  return compileScopedRoute(destination, sauce, execution, options, {});
+}
+
+/**
+ * {@link compileSauceRoute} with a {@link RouteScope} — `openRoute`'s entry, and every nested
+ * intent's. Not exported from the package.
+ */
+export function compileScopedRoute(
+  destination: ChainRef,
+  sauce: string,
+  execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
+  options: SauceCompileOptions,
+  scope: RouteScope,
+): CompiledSauceRoute {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
 
@@ -291,22 +335,25 @@ export function compileSauceRoute(
   const sugar = rewriteIntentSugar(source, {
     source: chain,
     chains: chainAccessorNames(),
-    definesFor: (destination) => compileTimeValues(destination, options),
+    definesFor: (destination) => compileTimeValues(destination, options, scope),
     portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
     proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
     defaults: options.intents ?? {},
     compileChild: (destination, childSource, captures, destinationPortal) =>
-      compileIntentChild(destination, childSource, captures, destinationPortal, options),
+      compileIntentChild(destination, childSource, captures, destinationPortal, options, scope),
   });
   source = sugar.source;
   let contracts: ContractsConfig | undefined = options.contracts;
   // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
   // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
-  // token argument (the symbol, not a literal) with no `USDC` define at all. Idempotent with
-  // openRoute's own ambient-defines merge (ambient.ts#chainDefines resolves the SAME registry), so
-  // this is a no-op when reached via openRoute and a genuine fix for a direct caller.
-  const defines: Record<string, bigint | boolean | number> | undefined =
-    tokenMap.size > 0 ? { ...Object.fromEntries(tokenMap), ...options.defines } : options.defines;
+  // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
+  // scoped values, when `openRoute` supplied a scope (ambient.ts#chainDefines resolves the SAME
+  // registry, so the token symbols agree), and the caller's own defines over both.
+  const scoped = scope.chainDefines?.(chain);
+  const defines: Record<string, DefineValue> | undefined =
+    tokenMap.size > 0 || scoped !== undefined
+      ? { ...Object.fromEntries(tokenMap), ...scoped, ...options.defines }
+      : options.defines;
 
   // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
   // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
