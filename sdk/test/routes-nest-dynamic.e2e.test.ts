@@ -49,6 +49,7 @@ import {
   keccak256,
   parseAbi,
   encodePacked,
+  numberToHex,
 } from "viem";
 import type { Address, Hex, Log } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -90,6 +91,8 @@ import { openRoute } from "../src/routes/intent-dsl.js";
 import { Token as TokenCalls } from "../src/token/api.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "../src/routes/normalize.js";
+import { registryTokenAddress } from "../src/routes/token-registry.js";
+import { requireChain } from "../src/chains/canonical.js";
 import { scaleAmount, WAD } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
 
@@ -1142,14 +1145,26 @@ describeEvm("route nesting, executed", () => {
     const DELIVER_TO = "0x00000000000000000000000000000000000000a5" as Address;
 
     it("publishes an intent carrying the balance it measured", async () => {
-      const token = await deploy(MOCK_ERC20.creationCode);
+      // The example says `USDC`, and it is compiled with the SDK's own registry: Base's USDC for
+      // the program and its reward, Arbitrum's for the body. The mock goes at Base's registry
+      // address, and nothing is at Arbitrum's, as on Base itself. This test used to give `USDC` one
+      // address on every chain with a `tokens` override, which is how a reward resolved against the
+      // destination passed it; `routes-intent-chains.e2e.test.ts` runs both chains.
+      const token = numberToHex(registryTokenAddress(requireChain("base"), "USDC")!, { size: 20 });
+      const arbitrumUsdc = numberToHex(registryTokenAddress(requireChain("arbitrum"), "USDC")!, {
+        size: 20,
+      });
+      const mock = await deploy(MOCK_ERC20.creationCode);
+      await testClient.setCode({
+        address: token,
+        bytecode: (await publicClient.getCode({ address: mock }))!,
+      });
+      expect(await publicClient.getCode({ address: arbitrumUsdc })).toBeUndefined();
       const compiled = compileSauceRoute(
         "base",
         README_EXAMPLE,
         { pot: executorPot, engine: sauce.engine },
         {
-          // The example says `USDC`; on this anvil that symbol is the mock deployed above.
-          tokens: { USDC: token },
           defines: { RECIPIENT: BigInt(DELIVER_TO), MIN_AMOUNT: 1n },
           intents: {
             deadline: 4_000_000_000n,
@@ -1186,7 +1201,15 @@ describeEvm("route nesting, executed", () => {
       const published = publishedIn(logs);
       expect(published).toHaveLength(1);
       expect(published[0]!.destination).toBe(42_161n); // Arbitrum, as the example names
-      expect(published[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
+      // Escrowed here, so in this chain's USDC; delivered there, in that chain's.
+      expect(published[0]!.rewardTokens.map((t) => [t.token.toLowerCase(), t.amount])).toEqual([
+        [token.toLowerCase(), SEEDED],
+      ]);
+      const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published[0]!.route) as unknown as [
+        EvmRoute,
+      ];
+      expect(route.tokens.map((t) => t.token.toLowerCase())).toEqual([arbitrumUsdc.toLowerCase()]);
+      expect(route.calls.map((c) => c.target.toLowerCase())).toEqual([arbitrumUsdc.toLowerCase()]);
       expect(
         await publicClient.readContract({
           abi: portalAbi,
