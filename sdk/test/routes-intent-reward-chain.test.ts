@@ -1,48 +1,68 @@
 /**
- * Which chain a name inside `Chain(() => { ... }).reward({ ... })` resolves on.
+ * Which chain a name inside `Chain(() => { ... }).reward({ ... })` resolves on, at every level.
  *
  * The BODY runs on the destination, so its names — and the delivery argument's — are the
  * destination's. The REWARD is escrowed where the program runs, and the program approves the Portal
  * for it there, so its names are the enclosing chain's. A reward token resolved on the destination
  * is an address with no code where the approval runs: SafeERC20's code check reverts the whole
- * fulfilment, and the intent is never published.
+ * fulfilment. A body token resolved on the enclosing chain is not a token where the body runs, so
+ * the intent can never be fulfilled.
  *
- * Each case uses the SDK's REAL per-chain registry, where `USDC` is a different address on every
- * chain involved. A suite that gives a symbol one address everywhere — a `tokens` override, a define
- * — cannot tell the chains apart, which is how this went unnoticed. What a chain does with these
+ * Every compile the route pipeline makes is recorded — the program's, and each nested intent's
+ * program — so each level's `publishAndFund` is decoded from that level's own lowered source, with
+ * the Portal's ABI, and checked against the chain it runs on. Three paths build the same programs:
+ * a plain `compileSauceRoute`, one handed a chain's ambient defines as its `defines`, and the
+ * `Base(program, options)` builder. Each case uses the SDK's REAL registry, where `USDC` is a
+ * different address on every chain involved; a suite that gives a symbol one address everywhere
+ * cannot tell the chains apart, which is how this went unnoticed. What a chain does with these
  * bytes is `routes-intent-chains.e2e.test.ts`.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  bytesToHex,
-  decodeAbiParameters,
-  decodeFunctionData,
-  encodeAbiParameters,
-  encodeFunctionData,
-  erc20Abi,
-  hexToBytes,
-  keccak256,
-  type Hex,
-} from "viem";
+import { bytesToHex, decodeAbiParameters, decodeFunctionData, erc20Abi, type Hex } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { v12Pot } from "../src/evm/engine.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
 import { v12PredictPot } from "../src/deployments/pot.js";
+import { v12Pot } from "../src/evm/engine.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
-import {
-  ecoRoutesExecutorOf,
-  ecoRoutesPortal,
-  ecoRoutesProver,
-} from "../src/protocols/eco-routes/lookup.js";
-import { chainDefines } from "../src/routes/ambient.js";
-import { EVM_REWARD_PARAM, EVM_ROUTE_PARAM } from "../src/routes/encode.js";
-import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import { EVM_ROUTE_PARAM } from "../src/routes/encode.js";
+import type { IntentOptions } from "../src/routes/intent-dsl.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
+
+// ESM jest exposes `jest` on `import.meta`, and every module that compiles must be imported AFTER
+// the mock is registered, so those imports are dynamic.
+const { jest } = import.meta as unknown as {
+  jest: { unstable_mockModule(path: string, factory: () => unknown): void };
+};
+const real = await import("../src/routes/rs-compile.js");
+
+interface Compile {
+  readonly source: string;
+  readonly defines: Readonly<Record<string, bigint | boolean | number>>;
+  readonly bytecode: Hex;
+}
+/** Every compile since the last `record()`, in the order the pipeline made them: a nested
+ *  intent's program is compiled while its parent is being lowered, so it comes first. */
+let compiles: Compile[] = [];
+jest.unstable_mockModule("../src/routes/rs-compile.js", () => ({
+  ...real,
+  compileWithRs: (input: Parameters<typeof real.compileWithRs>[0]) => {
+    const result = real.compileWithRs(input);
+    compiles.push({
+      source: input.source,
+      defines: input.defines ?? {},
+      bytecode: bytesToHex(result.bytecode[0]!),
+    });
+    return result;
+  },
+}));
+const { compileSauceRoute } = await import("../src/routes/sauce-route.js");
+const { openRoute } = await import("../src/routes/intent-dsl.js");
+const { chainDefines } = await import("../src/routes/ambient.js");
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const example = (name: string) =>
@@ -50,14 +70,14 @@ const example = (name: string) =>
 const README_EXAMPLE = example("cross-chain-intent");
 const CASCADE_EXAMPLE = example("cross-chain-cascade");
 
+type Slug = "base" | "arbitrum" | "optimism";
 const address = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
-const usdcOf = (slug: string): Hex => address(registryTokenAddress(requireChain(slug), "USDC")!);
-const BASE_USDC = usdcOf("base");
-const ARBITRUM_USDC = usdcOf("arbitrum");
-const OPTIMISM_USDC = usdcOf("optimism");
-const USDC_BY_CHAIN = { base: BASE_USDC, arbitrum: ARBITRUM_USDC, optimism: OPTIMISM_USDC };
+const usdcOf = (slug: Slug): Hex => address(registryTokenAddress(requireChain(slug), "USDC")!);
+const idOf = (slug: Slug) => BigInt(requireChain(slug).id);
+const definesOf = (slug: Slug) => chainDefines(requireChain(slug));
 
 const CREATOR = "0x4444444444444444444444444444444444444444" as const;
+const PROVER = "0x5555555555555555555555555555555555555555" as const;
 const RECIPIENT = 0x6666666666666666666666666666666666666666n;
 const DEADLINE = 2_000_000_000n;
 const EXECUTION_FEE = 1_000n;
@@ -65,33 +85,60 @@ const EXECUTION = {
   pot: "0x2222222222222222222222222222222222222222",
   engine: "0x3333333333333333333333333333333333333333",
 } as const;
-
-/** A direct compile, for source `base`, with only what cannot be looked up. */
-const compileOnBase = (program: string) =>
-  compileSauceRoute("base", program, EXECUTION, {
-    ambient: ["@sauce/token"],
-    defines: { RECIPIENT, MIN_AMOUNT: 1n },
-    intents: { deadline: DEADLINE, creator: CREATOR, executionFee: EXECUTION_FEE },
-  });
+const INTENTS = { deadline: DEADLINE, creator: CREATOR, executionFee: EXECUTION_FEE };
 
 /** The docs examples' own `IntentOptions`: an Ethereum -> Base intent whose route runs the program. */
-const builderOptions: IntentOptions = {
+const builderOptions = (defines: IntentOptions["defines"]): IntentOptions => ({
   execution: { value: EXECUTION_FEE },
   nativeAmount: EXECUTION_FEE,
   deadline: DEADLINE,
   creator: CREATOR,
-  prover: "0x5555555555555555555555555555555555555555",
+  prover: PROVER,
   source: "ethereum",
-  defines: { RECIPIENT, MIN_AMOUNT: 1n },
+  defines,
   compile: { intents: { executionFee: EXECUTION_FEE } },
-};
-const buildOnBase = (program: string) =>
-  openRoute("base", program, builderOptions).reward({
-    creator: CREATOR,
-    prover: "0x5555555555555555555555555555555555555555",
-    deadline: DEADLINE + 3_600n,
-    nativeAmount: 0n,
-  });
+});
+
+type Defines = Record<string, bigint | boolean | number>;
+/** The three ways a program on Base gets compiled. Each takes the caller's own defines. */
+const PATHS: readonly (readonly [string, (program: string, defines: Defines) => void])[] = [
+  [
+    "compileSauceRoute",
+    (program, defines) =>
+      compileSauceRoute("base", program, EXECUTION, {
+        ambient: ["@sauce/token"],
+        defines,
+        intents: INTENTS,
+      }),
+  ],
+  [
+    "compileSauceRoute, handed chainDefines(base) as its defines",
+    (program, defines) =>
+      compileSauceRoute("base", program, EXECUTION, {
+        ambient: ["@sauce/token"],
+        defines: { ...definesOf("base"), ...defines },
+        intents: INTENTS,
+      }),
+  ],
+  [
+    "Base(program, options)",
+    (program, defines) =>
+      openRoute("base", program, builderOptions(defines)).reward({
+        creator: CREATOR,
+        prover: PROVER,
+        deadline: DEADLINE + 3_600n,
+        nativeAmount: 0n,
+      }),
+  ],
+];
+const CHAIN_DEFINE_PATHS = PATHS.slice(1);
+
+/** Runs `build` and returns every compile it made. */
+function record(build: () => void): Compile[] {
+  compiles = [];
+  build();
+  return compiles;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Reading an intent back out of a lowered program
@@ -152,302 +199,194 @@ function addressesUsedBy(source: string): { readonly kind: string; readonly targ
   return used;
 }
 
-// ---------------------------------------------------------------------------------------------
-// Finding an intent inside compiled bytecode
-// ---------------------------------------------------------------------------------------------
+/** Each compile that lowered an intent, keyed `<on>-><to>` by the chains the test knows it spans.
+ *  `on` is where the compiled program runs; the intent it publishes goes to `to`. */
+function levelsOf(recorded: readonly Compile[], topology: Readonly<Record<string, Slug>>) {
+  const levels = new Map<string, Compile & { readonly intent: ReturnType<typeof publishedBy> }>();
+  for (const compile of recorded) {
+    if (!/const i0_data = /.test(compile.source)) continue;
+    const intent = publishedBy(compile.source);
+    const to = (Object.keys(topology) as Slug[]).find((slug) => idOf(slug) === intent.destination);
+    if (to === undefined) throw new Error(`an intent to chain ${intent.destination} was lowered`);
+    levels.set(`${topology[to]}->${to}`, { ...compile, intent });
+  }
+  return levels;
+}
 
-/** Anything distinctive: it only marks where a prefix ends, and never reaches the bytecode. */
-const CUT = 0x0c0ffee0c0ffee0c0ffee0c0ffee0c0ffee0c0ffee0c0ffee0c0ffee0c0ffeen;
-const cutAt = (encoded: Hex): string => {
-  const at = encoded.indexOf(CUT.toString(16).padStart(64, "0"));
-  if (at < 0) throw new Error("the cut marker is missing from the encoding");
-  return encoded.slice(2, at);
-};
+const lower = (hex: string) => hex.toLowerCase();
 
 /**
- * The bytes a reward naming `token` begins with, through its first token address — exactly as they
- * sit, contiguous, in the literal segment the program sends. Everything before the first run-time
- * amount is literal, so a program carrying this reward carries this string.
+ * One level, on `on`, publishing an intent to `to`. The reward, its approval and the publication
+ * are `on`'s; the delivery and the body are `to`'s; and the program's own compile-time names are
+ * `on`'s, with nothing left over from the chain that opened it.
  */
-function rewardPrefix(from: string, to: string, token: Hex): string {
-  const encoded = encodeAbiParameters(
-    [EVM_REWARD_PARAM],
-    [
-      {
-        deadline: DEADLINE,
-        creator: CREATOR,
-        prover: ecoRoutesProver(from, to),
-        nativeAmount: 0n,
-        tokens: [{ token, amount: CUT }],
-      },
-    ],
+function expectLevel(
+  level: Compile & { readonly intent: ReturnType<typeof publishedBy> },
+  on: Slug,
+  to: Slug,
+  opener: Slug | undefined,
+) {
+  const { destination, route, reward } = level.intent;
+  expect(destination).toBe(idOf(to));
+
+  // Funded here: the reward token, and every address the approval touches.
+  expect(reward.tokens.map((t) => lower(t.token))).toEqual([usdcOf(on)]);
+  const used = addressesUsedBy(level.source);
+  expect(used.at(-1)).toEqual({ kind: "evm.call", target: lower(ecoRoutesPortal(on)) });
+  expect(used.slice(0, -1).map((u) => u.kind)).toEqual(
+    expect.arrayContaining(["evm.static", "evm.call", "ctx.codeSize"]),
   );
-  // The leading word is the tuple's offset, which the calldata carries elsewhere.
-  return cutAt(encoded).slice(64);
-}
+  for (const { target } of used.slice(0, -1)) expect(target).toBe(usdcOf(on));
 
-/** The same for a route delivering `token` on `to`: its head, through the first delivered token. */
-function routePrefix(to: string, token: Hex): string {
-  return cutAt(
-    encodeAbiParameters(
-      [EVM_ROUTE_PARAM],
-      [
-        {
-          salt: `0x${"00".repeat(32)}`,
-          deadline: DEADLINE,
-          portal: ecoRoutesPortal(to),
-          // A token-only body cooks nothing, so its route carries no native amount.
-          nativeAmount: 0n,
-          tokens: [{ token, amount: CUT }],
-          calls: [],
-        },
-      ],
-    ),
-  );
-}
+  // Run there: what the solver delivers, and every call the route makes on a token.
+  expect(route.tokens.map((t) => lower(t.token))).toEqual([usdcOf(to)]);
+  expect(lower(route.calls[0]!.target)).toBe(usdcOf(to));
 
-/** Which chain's USDC the intent `from -> to` carried in `bytecode` names, for the reward and for
- *  the route — `undefined` when it names none of them. Asserting the whole answer rather than one
- *  membership means a program carrying BOTH candidates fails too. */
-function tokensCarried(bytecode: Uint8Array, from: string, to: string) {
-  const hex = bytesToHex(bytecode).slice(2);
-  const which = (prefix: (token: Hex) => string) =>
-    Object.entries(USDC_BY_CHAIN)
-      .filter(([, token]) => hex.includes(prefix(token)))
-      .map(([slug]) => slug);
-
-  return {
-    reward: which((token) => rewardPrefix(from, to, token)),
-    route: which((token) => routePrefix(to, token)),
-  };
+  // The program's own names. Everything a chain defines is `on`'s value, and nothing only the
+  // opener's chain defines survived into it.
+  expect(level.defines.USDC).toBe(BigInt(usdcOf(on)));
+  const own = definesOf(on);
+  const opened = opener === undefined ? {} : definesOf(opener);
+  for (const [name, value] of Object.entries(level.defines)) {
+    if (name in own) expect([name, value]).toEqual([name, own[name]]);
+    else expect([name, name in opened]).toEqual([name, false]);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
 
-describe("the README example: a program on Base opening an intent on Arbitrum", () => {
-  it("escrows the reward in BASE's USDC and approves it there; the body uses Arbitrum's", () => {
-    const { source } = compileOnBase(README_EXAMPLE);
-    const { destination, route, reward } = publishedBy(source);
+describe.each(PATHS)("through %s", (_name, build) => {
+  const callerDefines = { RECIPIENT, MIN_AMOUNT: 1n };
 
-    expect(destination).toBe(42_161n);
-    // The reward is escrowed on Base by this program, so it is Base's USDC.
-    expect(reward.tokens.map((t) => t.token.toLowerCase())).toEqual([BASE_USDC]);
-
-    // The allowance read, the reset, the approve and their code checks all run on Base, against
-    // the reward token; the last call is the publication, to Base's Portal. None of them may name
-    // Arbitrum's USDC, which has no code on Base.
-    const used = addressesUsedBy(source);
-    const publication = used.at(-1)!;
-    expect(publication).toEqual({
-      kind: "evm.call",
-      target: ecoRoutesPortal("base").toLowerCase(),
-    });
-    expect(used.slice(0, -1).map((u) => u.kind)).toEqual(
-      expect.arrayContaining(["evm.static", "evm.call", "ctx.codeSize"]),
+  it("the README example: Base's USDC funds it, Arbitrum's is delivered and transferred", () => {
+    const levels = levelsOf(
+      record(() => build(README_EXAMPLE, callerDefines)),
+      { arbitrum: "base" },
     );
-    for (const { target } of used.slice(0, -1)) expect(target).toBe(BASE_USDC);
+    expect([...levels.keys()]).toEqual(["base->arbitrum"]);
 
-    // The body runs on Arbitrum: what the solver delivers and what the call moves are Arbitrum's.
-    expect(route.tokens.map((t) => t.token.toLowerCase())).toEqual([ARBITRUM_USDC]);
+    const level = levels.get("base->arbitrum")!;
+    expectLevel(level, "base", "arbitrum", undefined);
+    const { route } = level.intent;
     expect(route.calls).toHaveLength(1);
-    expect(route.calls[0]!.target.toLowerCase()).toBe(ARBITRUM_USDC);
     const transfer = decodeFunctionData({ abi: erc20Abi, data: route.calls[0]!.data });
     expect(transfer.functionName).toBe("transfer");
     expect(BigInt(transfer.args[0] as Hex)).toBe(RECIPIENT);
   });
 
-  it("builds the same intent from TypeScript: `Base(program, options).reward(...)`", () => {
-    const built = buildOnBase(README_EXAMPLE);
+  it("the cascade: every level funded on its own chain and run on the next", () => {
+    const recorded = record(() => build(CASCADE_EXAMPLE, callerDefines));
+    const levels = levelsOf(recorded, { arbitrum: "base", optimism: "arbitrum" });
+    expect([...levels.keys()].sort()).toEqual(["arbitrum->optimism", "base->arbitrum"]);
 
-    expect(tokensCarried(built.compiled.bytecode[0]!, "base", "arbitrum")).toEqual({
-      reward: ["base"],
-      route: ["arbitrum"],
-    });
-  });
+    // Level 1, on Base: its body is a program, so the route forwards the delivery to Arbitrum's Pot
+    // and cooks the level-2 program there.
+    const first = levels.get("base->arbitrum")!;
+    expectLevel(first, "base", "arbitrum", undefined);
+    const arbitrumPot = v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("arbitrum")));
+    expect(first.intent.route.calls).toHaveLength(2);
+    const forward = decodeFunctionData({ abi: erc20Abi, data: first.intent.route.calls[0]!.data });
+    expect([forward.functionName, lower(forward.args[0] as Hex)]).toEqual([
+      "transfer",
+      lower(arbitrumPot),
+    ]);
+    const cook = first.intent.route.calls[1]!;
+    expect(lower(cook.target)).toBe(lower(arbitrumPot));
+    const [engine, program] = decodeFunctionData({ abi: v12Pot.abi, data: cook.data })
+      .args as readonly [Hex, Hex];
+    expect(lower(engine)).toBe(lower(v12EngineAddress()));
 
-  it("compiles to the same program either way", () => {
-    // The builder adds chain-scoped defines the program does not read, and nothing else may differ.
-    expect(keccak256(buildOnBase(README_EXAMPLE).compiled.bytecode[0]!)).toBe(
-      keccak256(compileOnBase(README_EXAMPLE).compiled.bytecode[0]!),
-    );
-  });
-
-  it("a literal or a define in `.reward(...)` still means exactly that address", () => {
-    const program = (token: string) => `function main() {
-  const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
-    USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: ${token}, amount }] });
-}`;
-    const chosen = 0x7777777777777777777777777777777777777777n;
-    const viaDefine = compileSauceRoute("base", program("CHOSEN"), EXECUTION, {
-      defines: { RECIPIENT, CHOSEN: chosen },
-      intents: { deadline: DEADLINE, creator: CREATOR },
-    }).source;
-    const viaLiteral = compileOnBase(program(`${chosen}n`)).source;
-
-    for (const source of [viaDefine, viaLiteral]) {
-      expect(publishedBy(source).reward.tokens.map((t) => t.token.toLowerCase())).toEqual([
-        address(chosen),
-      ]);
-      expect(publishedBy(source).route.tokens.map((t) => t.token.toLowerCase())).toEqual([
-        ARBITRUM_USDC,
-      ]);
-    }
+    // Level 2, on Arbitrum: the program that cook runs is the recorded compile, byte for byte.
+    const second = levels.get("arbitrum->optimism")!;
+    expect(lower(program).startsWith(lower(second.bytecode))).toBe(true);
+    expectLevel(second, "arbitrum", "optimism", "base");
+    // A caller's define that no chain defines holds at every depth.
+    const payout = decodeFunctionData({ abi: erc20Abi, data: second.intent.route.calls[0]!.data });
+    expect([payout.functionName, BigInt(payout.args[0] as Hex)]).toEqual(["transfer", RECIPIENT]);
   });
 });
 
-describe("everything else that belongs to a chain, through `Base(program, options)`", () => {
-  // The builder also defines each chain's `chainId` and protocol addresses. Before it evaluated them
-  // per chain, a body on Arbitrum read Base's. A token-only body folds them into its route calls
-  // when the intent is built, so the literal calldata in the program says which chain's they were.
-  const program = `function main() {
+describe("every path lowers every level to the same source", () => {
+  it.each([
+    ["the README example", README_EXAMPLE],
+    ["the cascade", CASCADE_EXAMPLE],
+  ])("%s", (_name, program) => {
+    const sources = PATHS.map(([, build]) =>
+      record(() => build(program, { RECIPIENT, MIN_AMOUNT: 1n })).map((c) => c.source),
+    );
+    for (const other of sources.slice(1)) expect(other).toEqual(sources[0]);
+  });
+});
+
+describe.each(CHAIN_DEFINE_PATHS)(
+  "the other values that belong to a chain, through %s",
+  (_name, build) => {
+    // `chainId` and protocol addresses are chain-scoped too. A token-only body folds them into its
+    // route calls when the intent is built, so the decoded calldata says which chain's they were.
+    const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum(() => {
     USDC.transfer(RECIPIENT, chainId);
     USDC.approve(UniswapV4_UniversalRouter, amount);
   }).reward({ tokens: [{ token: USDC, amount: chainId }] });
 }`;
-  const bytecode = () => bytesToHex(buildOnBase(program).compiled.bytecode[0]!);
-  const transferOf = (value: bigint) =>
-    encodeFunctionData({
-      abi: erc20Abi,
-      functionName: "transfer",
-      args: [address(RECIPIENT), value],
-    })
-      .slice(2)
-      .toLowerCase();
-  // The reset to zero ahead of the approve is all literal; the real approve splices `amount` in.
-  const resetFor = (spender: bigint) =>
-    encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [address(spender), 0n] })
-      .slice(2)
-      .toLowerCase();
-  const routerOn = (slug: string) =>
-    BigInt(chainDefines(requireChain(slug)).UniswapV4_UniversalRouter as bigint);
+    const routerOn = (slug: Slug) => BigInt(definesOf(slug).UniswapV4_UniversalRouter as bigint);
 
-  it("a nested body reads its own chain's `chainId`", () => {
-    expect(bytecode()).toContain(transferOf(42_161n));
-    expect(bytecode()).not.toContain(transferOf(8_453n));
-  });
+    it("the body reads Arbitrum's `chainId` and router; the reward, Base's `chainId`", () => {
+      expect(routerOn("base")).not.toBe(routerOn("arbitrum"));
+      const [level] = levelsOf(
+        record(() => build(program, { RECIPIENT })),
+        { arbitrum: "base" },
+      ).values();
+      const calls = level!.intent.route.calls.map((call) => {
+        const { functionName, args } = decodeFunctionData({ abi: erc20Abi, data: call.data });
+        return [functionName, BigInt(args[0] as Hex), args[1]];
+      });
 
-  it("and its own chain's protocol addresses", () => {
-    expect(routerOn("base")).not.toBe(routerOn("arbitrum"));
-    expect(bytecode()).toContain(resetFor(routerOn("arbitrum")));
-    expect(bytecode()).not.toContain(resetFor(routerOn("base")));
-  });
+      expect(calls).toEqual([
+        ["transfer", RECIPIENT, idOf("arbitrum")],
+        ["approve", routerOn("arbitrum"), 0n],
+        ["approve", routerOn("arbitrum"), SPLICED],
+      ]);
+      expect(level!.intent.reward.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [usdcOf("base"), idOf("base")],
+      ]);
+    });
+  },
+);
 
-  it("while the reward reads the enclosing chain's", () => {
-    // `amount: chainId` is Base's id: the reward is escrowed on Base.
-    const hex = bytecode().slice(2);
-    const reward = (value: bigint) =>
-      rewardPrefix("base", "arbitrum", BASE_USDC) + value.toString(16).padStart(64, "0");
-    expect(hex).toContain(reward(8_453n));
-    expect(hex).not.toContain(reward(42_161n));
-  });
-});
-
-describe("a caller's own define holds everywhere", () => {
-  // `defines` are the caller's, for the whole program at every depth: they win over every chain's
-  // registry and scope, in the body as in the reward. Overriding a registered symbol is a choice
-  // the caller made, and it must not quietly lose to a chain's own value on either side.
-  const chosen = 0x7777777777777777777777777777777777777777n;
+describe.each(PATHS)("a caller's own defines, through %s", (_name, build) => {
   const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  }).reward({ tokens: [{ token: CHOSEN, amount }] });
 }`;
+  const chosen = 0x7777777777777777777777777777777777777777n;
 
-  it("through `compileSauceRoute`", () => {
-    const { source } = compileSauceRoute("base", program, EXECUTION, {
-      defines: { RECIPIENT, USDC: chosen },
-      intents: { deadline: DEADLINE, creator: CREATOR },
-    });
-    const { route, reward } = publishedBy(source);
+  it("a define no chain has means exactly its value, wherever it appears", () => {
+    const [level] = levelsOf(
+      record(() => build(program, { RECIPIENT, CHOSEN: chosen })),
+      { arbitrum: "base" },
+    ).values();
 
-    expect(reward.tokens.map((t) => t.token.toLowerCase())).toEqual([address(chosen)]);
-    expect(route.tokens.map((t) => t.token.toLowerCase())).toEqual([address(chosen)]);
-    expect(route.calls.map((c) => c.target.toLowerCase())).toEqual([address(chosen)]);
+    expect(level!.intent.reward.tokens.map((t) => lower(t.token))).toEqual([address(chosen)]);
+    expect(level!.intent.route.tokens.map((t) => lower(t.token))).toEqual([usdcOf("arbitrum")]);
   });
 
-  it("through `Base(program, options)`, over the chain-scoped `USDC` of both chains", () => {
-    const built = openRoute("base", program, {
-      ...builderOptions,
-      defines: { RECIPIENT, USDC: chosen },
-    }).reward({ creator: CREATOR, prover: CREATOR, deadline: DEADLINE, nativeAmount: 0n });
+  it("a define of a chain-scoped name is the compiled chain's, not the destination's", () => {
+    // `USDC: chosen` overrides Base's USDC for the program compiled for Base, and for the reward it
+    // funds there. It says nothing about Arbitrum, so the body keeps Arbitrum's.
+    const [level] = levelsOf(
+      record(() =>
+        build(program.replace("token: CHOSEN", "token: USDC"), { RECIPIENT, USDC: chosen }),
+      ),
+      { arbitrum: "base" },
+    ).values();
 
-    expect(tokensCarried(built.compiled.bytecode[0]!, "base", "arbitrum")).toEqual({
-      reward: [],
-      route: [],
-    });
-    const hex = bytesToHex(built.compiled.bytecode[0]!).slice(2);
-    expect(hex).toContain(rewardPrefix("base", "arbitrum", address(chosen)));
-    expect(hex).toContain(routePrefix("arbitrum", address(chosen)));
-  });
-});
-
-describe("a two-level cascade: Base -> Arbitrum -> Optimism", () => {
-  // Each level's reward is escrowed on that level's SOURCE chain — the chain its program runs on —
-  // and each body runs on its own destination. Arbitrum's program opens the Optimism intent, so
-  // that one is funded in Arbitrum's USDC.
-  const arbitrumPot = v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("arbitrum")));
-
-  it("level 1 (on Base) funds in Base's USDC and delivers Arbitrum's", () => {
-    const { source } = compileOnBase(CASCADE_EXAMPLE);
-    const { destination, route, reward } = publishedBy(source);
-
-    expect(destination).toBe(42_161n);
-    expect(reward.tokens.map((t) => t.token.toLowerCase())).toEqual([BASE_USDC]);
-    for (const { target } of addressesUsedBy(source).slice(0, -1)) expect(target).toBe(BASE_USDC);
-
-    // The delivery argument is the destination's, and the Executor forwards it to Arbitrum's Pot.
-    expect(route.tokens.map((t) => t.token.toLowerCase())).toEqual([ARBITRUM_USDC]);
-    expect(route.calls).toHaveLength(2);
-    expect(route.calls[0]!.target.toLowerCase()).toBe(ARBITRUM_USDC);
-    const forward = decodeFunctionData({ abi: erc20Abi, data: route.calls[0]!.data });
-    expect(forward.functionName).toBe("transfer");
-    expect((forward.args[0] as Hex).toLowerCase()).toBe(arbitrumPot.toLowerCase());
-    expect(route.calls[1]!.target.toLowerCase()).toBe(arbitrumPot.toLowerCase());
-  });
-
-  it("level 2 (on Arbitrum) funds in Arbitrum's USDC and delivers Optimism's", () => {
-    const { source } = compileOnBase(CASCADE_EXAMPLE);
-    const cook = publishedBy(source).route.calls[1]!;
-    const { args } = decodeFunctionData({ abi: v12Pot.abi, data: cook.data });
-    expect((args[0] as Hex).toLowerCase()).toBe(v12EngineAddress().toLowerCase());
-    const arbitrumProgram = args[1] as Hex;
-
-    expect(tokensCarried(hexToBytes(arbitrumProgram), "arbitrum", "optimism")).toEqual({
-      reward: ["arbitrum"],
-      route: ["optimism"],
-    });
-    // Base's USDC means nothing on Arbitrum; the program Arbitrum runs must not name it at all.
-    expect(arbitrumProgram.toLowerCase()).not.toContain(BASE_USDC.slice(2));
-  });
-
-  it("builds the same cascade from TypeScript: `Base(program, options).reward(...)`", () => {
-    // Byte for byte, so everything asserted of the direct compile above holds for the builder's.
-    // (Searching the builder's bytecode for each level's reward cannot tell the levels apart: both
-    // rewards have the same creator, deadline and — the prover being one address on every chain —
-    // prover, so only the token differs, and that is the thing under test.)
-    expect(keccak256(buildOnBase(CASCADE_EXAMPLE).compiled.bytecode[0]!)).toBe(
-      keccak256(compileOnBase(CASCADE_EXAMPLE).compiled.bytecode[0]!),
-    );
-  });
-
-  it("the builder's Arbitrum program is the direct compile's", () => {
-    const direct = publishedBy(compileOnBase(CASCADE_EXAMPLE).source).route.calls[1]!;
-    const program = (decodeFunctionData({ abi: v12Pot.abi, data: direct.data }).args[1] as Hex)
-      .slice(2)
-      .toLowerCase();
-    // Up to the first value the Base program splices in at run time: the Arbitrum bytecode itself.
-    const literal = program.split(SPLICED.toString(16).padStart(64, "0"))[0]!;
-    expect(literal.length).toBeGreaterThan(1_000);
-
-    // Before the builder recomputed chain-scoped defines per chain, Base's USDC reached this
-    // program as a define and replaced Arbitrum's in it.
-    expect(bytesToHex(buildOnBase(CASCADE_EXAMPLE).compiled.bytecode[0]!).includes(literal)).toBe(
-      true,
-    );
+    expect(level!.defines.USDC).toBe(chosen);
+    expect(level!.intent.reward.tokens.map((t) => lower(t.token))).toEqual([address(chosen)]);
+    expect(level!.intent.route.tokens.map((t) => lower(t.token))).toEqual([usdcOf("arbitrum")]);
+    expect(level!.intent.route.calls.map((c) => lower(c.target))).toEqual([usdcOf("arbitrum")]);
   });
 });

@@ -55,6 +55,7 @@ import {
   denormalizeToEvm,
   encodeRouteEvm,
 } from "../src/routes/encode.js";
+import { chainDefines } from "../src/routes/ambient.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
@@ -434,36 +435,43 @@ describeEvm("an intent created inside a program, across chains with different to
 
   /** The two ways to build the program's own intent: straight through the route compiler, and from
    *  TypeScript with the builder the docs examples use. Each returns the Base route to fulfil. */
+  /** `compileSauceRoute` on Base, with `defines` on top of the program's own two. */
+  const direct = (program: string, defines: Record<string, bigint | boolean | number>) => {
+    const options = intents();
+    const compiled = compileSauceRoute(
+      "base",
+      program,
+      { pot: base.pot, engine: v12EngineAddress() as Hex },
+      { defines: { ...defines, RECIPIENT: BigInt(RECIPIENT), MIN_AMOUNT: 1n }, intents: options },
+    );
+    const call = compiled.calls[0]!;
+    return {
+      route: {
+        salt: options.salt,
+        deadline: DEADLINE,
+        portal: base.portal,
+        nativeAmount: 0n,
+        tokens: [],
+        calls: [
+          {
+            target: denormalizeToEvm(toUniversalAddress(call.target)) as Address,
+            data: call.data,
+            value: 0n,
+          },
+        ],
+      } satisfies EvmRoute,
+      rewardHash: keccak256("0xbeef"),
+    };
+  };
+
   const BUILDS = [
+    ["compileSauceRoute", (program: string) => direct(program, {})],
     [
-      "compileSauceRoute",
-      (program: string) => {
-        const options = intents();
-        const compiled = compileSauceRoute(
-          "base",
-          program,
-          { pot: base.pot, engine: v12EngineAddress() as Hex },
-          { defines: { RECIPIENT: BigInt(RECIPIENT), MIN_AMOUNT: 1n }, intents: options },
-        );
-        const call = compiled.calls[0]!;
-        return {
-          route: {
-            salt: options.salt,
-            deadline: DEADLINE,
-            portal: base.portal,
-            nativeAmount: 0n,
-            tokens: [],
-            calls: [
-              {
-                target: denormalizeToEvm(toUniversalAddress(call.target)) as Address,
-                data: call.data,
-                value: 0n,
-              },
-            ],
-          } satisfies EvmRoute,
-          rewardHash: keccak256("0xbeef"),
-        };
-      },
+      // Base's token symbols, `chainId` and protocol addresses, as the caller's own defines. They
+      // are Base's names for the program on Base and nothing else: a nested body gets its own
+      // chain's.
+      "compileSauceRoute, handed chainDefines(base) as its defines",
+      (program: string) => direct(program, chainDefines(requireChain("base"))),
     ],
     [
       "Base(program, options).reward(...)",
@@ -516,6 +524,7 @@ describeEvm("an intent created inside a program, across chains with different to
       await arbitrum.provide(child.route);
       const onArbitrum = await arbitrum.fulfil(child.route, child.rewardHash);
       expect(onArbitrum.status).toBe("success");
+      // Paid by the body's own `USDC.transfer(RECIPIENT, amount)`, in Arbitrum's USDC.
       expect(await arbitrum.balanceOf(arbitrum.usdc, RECIPIENT)).toBe(paid + held);
       expect(child.route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(arbitrum.usdc), held],
