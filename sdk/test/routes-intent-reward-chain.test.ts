@@ -21,6 +21,7 @@ import {
   decodeAbiParameters,
   decodeFunctionData,
   encodeAbiParameters,
+  encodeFunctionData,
   erc20Abi,
   hexToBytes,
   keccak256,
@@ -37,6 +38,7 @@ import {
   ecoRoutesPortal,
   ecoRoutesProver,
 } from "../src/protocols/eco-routes/lookup.js";
+import { chainDefines } from "../src/routes/ambient.js";
 import { EVM_REWARD_PARAM, EVM_ROUTE_PARAM } from "../src/routes/encode.js";
 import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
@@ -137,10 +139,17 @@ function publishedBy(source: string, site = 0) {
 
 /** Every address the rewritten source calls, reads or code-checks, in source order. */
 function addressesUsedBy(source: string): { readonly kind: string; readonly target: Hex }[] {
-  return [...source.matchAll(/(evm\.static|evm\.call|ctx\.codeSize)\((\d+)n/g)].map((m) => ({
+  const used = [...source.matchAll(/(evm\.static|evm\.call|ctx\.codeSize)\((\d+)n/g)].map((m) => ({
     kind: m[1]!,
     target: address(BigInt(m[2]!)),
   }));
+  // Every such call, or none of them: an address spelled any other way (a hex literal, a local)
+  // would otherwise drop out of the list, and the checks over it would pass having checked nothing.
+  const calls = source.match(/(evm\.static|evm\.call|ctx\.codeSize)\(/g) ?? [];
+  if (used.length === 0 || used.length !== calls.length) {
+    throw new Error(`read ${used.length} of the ${calls.length} addresses the source calls`);
+  }
+  return used;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -285,6 +294,95 @@ describe("the README example: a program on Base opening an intent on Arbitrum", 
         ARBITRUM_USDC,
       ]);
     }
+  });
+});
+
+describe("everything else that belongs to a chain, through `Base(program, options)`", () => {
+  // The builder also defines each chain's `chainId` and protocol addresses. Before it evaluated them
+  // per chain, a body on Arbitrum read Base's. A token-only body folds them into its route calls
+  // when the intent is built, so the literal calldata in the program says which chain's they were.
+  const program = `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, chainId);
+    USDC.approve(UniswapV4_UniversalRouter, amount);
+  }).reward({ tokens: [{ token: USDC, amount: chainId }] });
+}`;
+  const bytecode = () => bytesToHex(buildOnBase(program).compiled.bytecode[0]!);
+  const transferOf = (value: bigint) =>
+    encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "transfer",
+      args: [address(RECIPIENT), value],
+    })
+      .slice(2)
+      .toLowerCase();
+  // The reset to zero ahead of the approve is all literal; the real approve splices `amount` in.
+  const resetFor = (spender: bigint) =>
+    encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [address(spender), 0n] })
+      .slice(2)
+      .toLowerCase();
+  const routerOn = (slug: string) =>
+    BigInt(chainDefines(requireChain(slug)).UniswapV4_UniversalRouter as bigint);
+
+  it("a nested body reads its own chain's `chainId`", () => {
+    expect(bytecode()).toContain(transferOf(42_161n));
+    expect(bytecode()).not.toContain(transferOf(8_453n));
+  });
+
+  it("and its own chain's protocol addresses", () => {
+    expect(routerOn("base")).not.toBe(routerOn("arbitrum"));
+    expect(bytecode()).toContain(resetFor(routerOn("arbitrum")));
+    expect(bytecode()).not.toContain(resetFor(routerOn("base")));
+  });
+
+  it("while the reward reads the enclosing chain's", () => {
+    // `amount: chainId` is Base's id: the reward is escrowed on Base.
+    const hex = bytecode().slice(2);
+    const reward = (value: bigint) =>
+      rewardPrefix("base", "arbitrum", BASE_USDC) + value.toString(16).padStart(64, "0");
+    expect(hex).toContain(reward(8_453n));
+    expect(hex).not.toContain(reward(42_161n));
+  });
+});
+
+describe("a caller's own define holds everywhere", () => {
+  // `defines` are the caller's, for the whole program at every depth: they win over every chain's
+  // registry and scope, in the body as in the reward. Overriding a registered symbol is a choice
+  // the caller made, and it must not quietly lose to a chain's own value on either side.
+  const chosen = 0x7777777777777777777777777777777777777777n;
+  const program = `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}`;
+
+  it("through `compileSauceRoute`", () => {
+    const { source } = compileSauceRoute("base", program, EXECUTION, {
+      defines: { RECIPIENT, USDC: chosen },
+      intents: { deadline: DEADLINE, creator: CREATOR },
+    });
+    const { route, reward } = publishedBy(source);
+
+    expect(reward.tokens.map((t) => t.token.toLowerCase())).toEqual([address(chosen)]);
+    expect(route.tokens.map((t) => t.token.toLowerCase())).toEqual([address(chosen)]);
+    expect(route.calls.map((c) => c.target.toLowerCase())).toEqual([address(chosen)]);
+  });
+
+  it("through `Base(program, options)`, over the chain-scoped `USDC` of both chains", () => {
+    const built = openRoute("base", program, {
+      ...builderOptions,
+      defines: { RECIPIENT, USDC: chosen },
+    }).reward({ creator: CREATOR, prover: CREATOR, deadline: DEADLINE, nativeAmount: 0n });
+
+    expect(tokensCarried(built.compiled.bytecode[0]!, "base", "arbitrum")).toEqual({
+      reward: [],
+      route: [],
+    });
+    const hex = bytesToHex(built.compiled.bytecode[0]!).slice(2);
+    expect(hex).toContain(rewardPrefix("base", "arbitrum", address(chosen)));
+    expect(hex).toContain(routePrefix("arbitrum", address(chosen)));
   });
 });
 
