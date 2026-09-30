@@ -123,6 +123,50 @@ describe("what the lowering produces", () => {
     expect(result.intents[0]!.captures).not.toContain("RECIPIENT");
   });
 
+  // The Executor runs these calls raw, and USDT refuses to move a non-zero allowance to another
+  // non-zero value. One Executor runs every intent on a chain, so the approve is reset to zero first.
+  // What that does on a chain is `routes-nest-dynamic.e2e.test.ts`'s "token-only intent bodies".
+  describe("a token-only approve is reset to zero first", () => {
+    const approveIntent = (spender: string, amount: string) =>
+      program(`  Arbitrum(() => {
+    USDC.approve(${spender}, ${amount});
+  }).reward({ tokens: [{ token: USDC, amount }] });`);
+    const callsOf = (source: string) =>
+      rewriteIntentSugar(source, context()).intents[0]!.intent.route.calls.map((call) => {
+        const { functionName, args } = decodeFunctionData({ abi: erc20Abi, data: call.data });
+        return [functionName, BigInt(args![0] as Hex), args![1]];
+      });
+
+    it("emits approve(spender, 0) before approve(spender, amount)", () => {
+      expect(callsOf(approveIntent("RECIPIENT", "7n"))).toEqual([
+        ["approve", RECIPIENT, 0n],
+        ["approve", RECIPIENT, 7n],
+      ]);
+    });
+
+    it("needs no reset to approve zero", () => {
+      expect(callsOf(approveIntent("RECIPIENT", "0n"))).toEqual([["approve", RECIPIENT, 0n]]);
+    });
+
+    it("resets before a captured amount, whose value is unknown when the intent is built", () => {
+      const calls = callsOf(approveIntent("RECIPIENT", "amount"));
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toEqual(["approve", RECIPIENT, 0n]);
+      expect(calls[1]![2]).not.toBe(0n);
+    });
+
+    it("splices a captured spender into both calls", () => {
+      const result = rewriteIntentSugar(approveIntent("amount", "7n"), context());
+      const concat = result.source.split("\n").find((line) => line.includes("_data ="))!;
+      // Both approves' spender, plus the reward amount.
+      expect(concat.match(/amount\.toBytesBe\(32\)/g)!.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("leaves a transfer one call", () => {
+      expect(callsOf(TRANSFER_INTENT).map(([name]) => name)).toEqual(["transfer"]);
+    });
+  });
+
   it("fills the Portal, the prover and the destination from the registry", () => {
     const { intent, destination } = rewriteIntentSugar(TRANSFER_INTENT, context()).intents[0]!;
 
@@ -182,7 +226,10 @@ describe("a body that is not just token writes becomes a program", () => {
   it.each([
     ["control flow", "if (amount > 1n) { USDC.transfer(RECIPIENT, amount); }"],
     ["a local and arithmetic", "const half = amount / 2n; USDC.transfer(RECIPIENT, half);"],
-    ["a method the token sugar does not lower", "USDC.transferFrom(RECIPIENT, RECIPIENT, amount);"],
+    [
+      "a method the direct-call lowering does not take",
+      "USDC.transferFrom(RECIPIENT, RECIPIENT, amount);",
+    ],
   ])("compiles a program for %s", (_name, body) => {
     const source = program(
       `  Arbitrum(() => {\n    ${body}\n  }).reward({ tokens: [{ token: USDC, amount }] });`,
