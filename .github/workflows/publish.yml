@@ -1,7 +1,8 @@
 name: Publish
 
-# Publishes the single @eco-incorp/sauce package, bundling compiler / sdk /
-# actions / dev-tools under one root package.json with subpath exports.
+# Publishes the single @eco-incorp/sauce package, bundling sdk / actions under
+# one root package.json with subpath exports, the agent skills, and the `sauce`
+# bin.
 #
 # Trigger:
 #   git tag v1.2.3 && git push origin v1.2.3

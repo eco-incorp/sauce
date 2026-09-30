@@ -52,7 +52,6 @@ if (!shipsAddresses) {
 }
 const work = mkdtempSync(join(tmpdir(), "sauce-package-check-"));
 try {
-  execFileSync("npm", ["run", "prepack"], { cwd: root, stdio: "inherit" });
   const output = execFileSync(
     "npm",
     ["pack", "--ignore-scripts", "--json", "--pack-destination", work],
@@ -331,6 +330,82 @@ try {
   console.log(
     `Clean package install: all ${documented.length} exports the actions pages name typecheck ` +
       `from ./actions, the type-only ones being ${actionTypes.join(", ")}`,
+  );
+
+  // The `sauce` bin, run the way a consumer runs it — through npx, from the install, with nothing
+  // but the tarball's files. It compiles the example its own agent skill ships, builds the Pot and
+  // the transaction, and scaffolds a project whose skills then check clean.
+  const sauce = (...args) =>
+    execFileSync("npx", ["--no", "--", "sauce", ...args], {
+      cwd: work,
+      encoding: "utf8",
+      env: smokeEnv,
+    });
+  assert.equal(
+    execFileSync("npx", ["--no", "--", name, "--version"], {
+      cwd: work,
+      encoding: "utf8",
+      env: smokeEnv,
+    }),
+    `${name} ${installedManifest.version}\n`,
+    `npx ${name} runs the package's one bin`,
+  );
+  const example = join(installedRoot, "skills/sauce-run/examples/pay.sauce.ts");
+  const recipient = "0x6666666666666666666666666666666666666666";
+  const owner = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+  const defines = ["--define", `RECIPIENT=${recipient}`, "--define", "AMOUNT=1000000"];
+  const bytecode = sauce("compile", example, ...defines).trim();
+  assert.match(bytecode, /^0x[0-9a-f]+$/, "sauce compile prints the program as hex");
+  const compiled = JSON.parse(sauce("compile", example, ...defines, "--json"));
+  const installedCompiler = JSON.parse(
+    readFileSync(join(work, "node_modules/sauce-compiler/package.json"), "utf8"),
+  );
+  assert.equal(compiled.bytecode, bytecode);
+  assert.equal(compiled.chain, "ethereum", "the example's // @chain header chose the chain");
+  assert.equal(compiled.compiler.version, installedCompiler.version);
+  assert.equal(compiled.engine.release, "v12-evm");
+  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum", "--json"));
+  assert.match(pot.cast, /^cast send 0x[0-9a-fA-F]{40} 0x[0-9a-f]+ --rpc-url <RPC_URL> /);
+  const tx = JSON.parse(
+    sauce("tx", example, ...defines, "--owner", owner, "--value", "0", "--json"),
+  );
+  assert.equal(tx.to, pot.pot, "sauce tx cooks on the Pot sauce pot predicts");
+  assert.ok(tx.data.includes(bytecode.slice(2)), "the cook carries the compiled program");
+  assert.equal(
+    tx.cast,
+    `cast send ${tx.to} ${tx.data} --value 0 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>`,
+  );
+  console.log(
+    `Clean package install: the sauce bin compiles the shipped example (${compiled.size} bytes) ` +
+      `and builds its Pot and cook transactions`,
+  );
+
+  const project = join(work, "scaffolded");
+  sauce("init", project);
+  const scaffoldedManifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
+  assert.deepEqual(
+    scaffoldedManifest.dependencies,
+    { [name]: installedManifest.version },
+    "sauce init pins the package to exactly the version that ran it",
+  );
+  for (const file of ["CLAUDE.md", ".gitignore", "sauce.config.example.json"]) {
+    assert.ok(existsSync(join(project, file)), `sauce init writes ${file}`);
+  }
+  const shippedSkills = readdirSync(join(installedRoot, "skills"), { recursive: true }).filter(
+    (file) => /\.[a-z]+$/.test(file),
+  );
+  assert.ok(shippedSkills.includes("sauce-run/SKILL.md"), "the package ships the sauce-run skill");
+  for (const file of shippedSkills) {
+    assert.equal(
+      readFileSync(join(project, ".claude/skills", file), "utf8"),
+      readFileSync(join(installedRoot, "skills", file), "utf8"),
+      `sauce init installs ${file} verbatim`,
+    );
+  }
+  sauce("skills", "install", "--dir", project, "--check");
+  console.log(
+    `Clean package install: sauce init scaffolds a project pinned to ${installedManifest.version}, ` +
+      `whose ${shippedSkills.length} skill files then check clean`,
   );
 
   // The same browser gates the repository runs, against the INSTALLED package and resolved from
