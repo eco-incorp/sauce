@@ -183,6 +183,113 @@ describe("Tier 1 selector verification", () => {
       expect(selectors).toContain(expectedSelector);
     });
   });
+
+  // Every token write in the registry is `@sauce/token`'s, which is OpenZeppelin `SafeERC20`. What
+  // that does on a chain is `test/std/token/evm.e2e.test.ts`; here, that each template really calls
+  // it: the write's own selector, and for `approve` the `allowance` read `forceApprove` resets from.
+  describe("token writes are SafeERC20", () => {
+    const TOKEN_WRITES: ReadonlyArray<readonly [slug: string, write: string]> = [
+      ["erc20", "transfer"],
+      ["erc20", "approve"],
+      ["erc20", "transferFrom"],
+      ...["gho", "frax", "crvusd", "cbeth", "liquity-v2"].flatMap((slug) => [
+        [slug, "transfer"] as const,
+        [slug, "approve"] as const,
+      ]),
+    ];
+    const SIGNATURES: Record<string, readonly string[]> = {
+      transfer: ["transfer(address,uint256)"],
+      transferFrom: ["transferFrom(address,address,uint256)"],
+      approve: ["approve(address,uint256)", "allowance(address,address)"],
+    };
+    const hexOf = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
+
+    it.each(TOKEN_WRITES)("%s.%s calls @sauce/token", (slug, write) => {
+      const protocolDir = join(PROTOCOLS_DIR, slug);
+      const template = extractFunctionsFromFile(join(protocolDir, "functions.ts"))[write]!;
+      expect(template).toContain(`import { ${write} } from "@sauce/token";`);
+      const code = hexOf(compileSauceFunctionRust(template, protocolDir).bytecode);
+      for (const signature of SIGNATURES[write]!) {
+        expect(code).toContain(computeSelector(signature).slice(2));
+      }
+    });
+
+    // The guard against the next typed write: a template that binds an ABI through `.at(...)` and
+    // calls an ERC-20 write on it decodes the ABI's `bool`, which reverts on USDT and accepts
+    // `false`. Permit2's `approve(address,address,uint160,uint48)` is not an ERC-20 write and passes.
+    const ERC20_WRITES = new Set([
+      "transfer(address,uint256)",
+      "approve(address,uint256)",
+      "transferFrom(address,address,uint256)",
+    ]);
+    type Abi = ReadonlyArray<{ name?: string; inputs?: ReadonlyArray<{ type: string }> }>;
+
+    /** `<binding>.<write>(` and `<Iface>.at(...).<write>(` calls whose ABI declares an ERC-20
+     *  write under that name, as `Iface.method`. */
+    const typedErc20Writes = (
+      script: string,
+      abis: Readonly<Record<string, unknown>>,
+    ): string[] => {
+      const imports = new Map<string, string>(); // local interface name -> ABI export
+      for (const m of script.matchAll(
+        /import\s*\{\s*(\w+)\s+as\s+(\w+)\s*\}\s*from\s*"\.\/abis"/g,
+      )) {
+        imports.set(m[2]!, m[1]!);
+      }
+      const bindings = new Map<string, string>(); // local binding -> ABI export
+      for (const m of script.matchAll(/(?:const|let)\s+(\w+)\s*=\s*(\w+)\.at\(/g)) {
+        const abi = imports.get(m[2]!);
+        if (abi) bindings.set(m[1]!, abi);
+      }
+      const calls = [
+        ...[...script.matchAll(/\b(\w+)\.(transfer|approve|transferFrom)\s*\(/g)].map(
+          (m) => [bindings.get(m[1]!), m[2]!] as const,
+        ),
+        ...[...script.matchAll(/\b(\w+)\.at\([^)]*\)\.(transfer|approve|transferFrom)\s*\(/g)].map(
+          (m) => [imports.get(m[1]!), m[2]!] as const,
+        ),
+      ];
+      return calls.flatMap(([abi, method]) => {
+        if (!abi) return [];
+        const erc20 = ((abis[abi] ?? []) as Abi).some(
+          (entry) =>
+            entry.name === method &&
+            ERC20_WRITES.has(`${method}(${(entry.inputs ?? []).map((i) => i.type).join(",")})`),
+        );
+        return erc20 ? [`${abi}.${method}`] : [];
+      });
+    };
+
+    it("the guard fires on the typed spelling it exists to catch", async () => {
+      const abis = (await import("../src/protocols/gho/abis.js")) as Record<string, unknown>;
+      const typed = `import { GhoTokenABI as IGhoToken } from "./abis";
+function main(gho: Address, to: Address, amount: Uint256): Uint256 {
+  const t = IGhoToken.at(gho);
+  t.transfer(to, amount);
+  IGhoToken.at(gho).approve(to, amount);
+  return 1;
+}`;
+      expect(typedErc20Writes(typed, abis)).toEqual([
+        "GhoTokenABI.transfer",
+        "GhoTokenABI.approve",
+      ]);
+    });
+
+    it("no template issues an ERC-20 write through a typed binding", async () => {
+      const offenders: string[] = [];
+      for (const fn of discoverAllProtocolFunctions()) {
+        if (!/\.(transfer|approve|transferFrom)\s*\(/.test(fn.sauceScript)) continue;
+        const abis = (await import(join(PROTOCOLS_DIR, fn.protocolSlug, "abis.ts"))) as Record<
+          string,
+          unknown
+        >;
+        for (const write of typedErc20Writes(fn.sauceScript, abis)) {
+          offenders.push(`${fn.protocolSlug}.${fn.functionName}: ${write}`);
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

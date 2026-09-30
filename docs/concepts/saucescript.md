@@ -153,14 +153,31 @@ A direct compiler program can bind an EVM ABI explicitly:
 ```ts
 import ERC20 from "./erc20.abi.json";
 
-function main(token: Address, spender: Address, amount: Uint256): void {
-  ERC20.at(token).approve(spender, amount);
+function main(token: Address, owner: Address): Uint256 {
+  return ERC20.at(token).balanceOf(owner);
 }
 ```
 
 A bare JSON import binds a contract ABI. A JSON data import uses
 `with { type: "json" }`. The host resolver must return the named file's bytes in
 either case.
+
+An ABI-bound call decodes what the ABI declares it returns. For an ERC-20 write
+that is a `bool`, so `ERC20.at(token).approve(...)` reverts on a token that
+returns nothing, such as USDT, and accepts one that returns `false`. Write token
+transfers and approvals with `@sauce/token` instead, which follows OpenZeppelin
+`SafeERC20`:
+
+```ts
+import { approve } from "@sauce/token";
+
+function main(token: Address, spender: Address, amount: Uint256): void {
+  approve(token, spender, amount);
+}
+```
+
+A raw compile resolves `@sauce/token` by passing `resolveSdkPackage` and
+`resolveSdkModule` from `@eco-incorp/sauce/compiler`.
 
 The compiler's `ambient` option broadcasts a SauceScript module's exports without
 explicit imports. Its `defines` option injects scalar constants into every

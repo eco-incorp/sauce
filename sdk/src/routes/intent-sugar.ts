@@ -12,9 +12,9 @@
  * ```
  *
  * WHAT THIS IS. A source rewrite, run before the compiler ever sees the program — the same class of
- * thing as `token-rewrite.ts`'s `Token(x)` -> `IERC20.at(x)`, and for the same reason: the compiler
- * has no notion of a closure, a chain, or an intent, and does not need one. By the time it runs, the
- * expression above has become ordinary statements it already supports.
+ * thing as `token-rewrite.ts`'s `Token(x).transfer(...)` -> `transfer(x, ...)`, and for the same
+ * reason: the compiler has no notion of a closure, a chain, or an intent, and does not need one.
+ * By the time it runs, the expression above has become ordinary statements it already supports.
  *
  * WHAT `amount` IS. It is a local of the ENCLOSING program, whose value exists only while that
  * program runs. So the child intent cannot be encoded with it — it is encoded with a sentinel in its
@@ -22,13 +22,14 @@
  * variable is one slot. This is the identical mechanism `nest-dynamic.ts` uses for a measured
  * balance; a capture is just a value that arrives by a different route.
  *
- * WHAT IS LOWERED, AND WHAT IS REFUSED. Each statement of the closure becomes one entry in the
- * child's `route.calls` — which is what an eco-routes route IS, a list of calls, so the mapping is
- * the natural one rather than a convention. A statement that is not one call (a loop, a balance
- * read, arithmetic) has no entry to become and is REFUSED, by name, pointing at the explicit
- * compiled-program form. An identifier that is neither a compile-time value nor an enclosing local
- * is refused the same way. Nothing here guesses: the failure mode this exists to avoid is a
- * plausible-looking intent carrying a number nobody chose.
+ * WHAT IS LOWERED, AND HOW. A body whose every statement is a token `transfer`/`approve` becomes
+ * plain `route.calls` — which is what an eco-routes route IS, a list of calls — one per transfer and
+ * two per approve (a reset to zero first, for USDT). The Portal's Executor runs those, not a Sauce
+ * program, so they get the Executor's checks rather than SafeERC20's; see the lowering loop. Any
+ * other body (a loop, a balance read, arithmetic, `transferFrom`, an intent of its own) is compiled
+ * as a program for the destination and cooked on its Pot. An identifier that is neither a
+ * compile-time value nor an enclosing local is refused. Nothing here guesses: the failure mode this
+ * exists to avoid is a plausible-looking intent carrying a number nobody chose.
  *
  * WHERE THE ADDRESSES COME FROM. The Portal on each side, and the prover for the pair, are looked up
  * in the SDK's eco-routes deployment registry (`protocols/eco-routes`). A caller supplies what has
@@ -245,7 +246,7 @@ function isDirectCallBody(body: readonly AstNode[], defines: ReadonlyMap<string,
   );
 }
 
-/** `USDC.transfer(to, amount)` or `Token(addr).transfer(to, amount)` -> one call. */
+/** `USDC.transfer(to, amount)` or `Token(addr).transfer(to, amount)` -> the token write it names. */
 function lowerStatement(
   statement: AstNode,
   resolve: Resolver,
@@ -652,24 +653,41 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       calls.push(child.call);
     }
 
+    // Each call is encoded by viem against the ERC-20 ABI, so the selector and the word layout are
+    // the encoder's rather than this file's. A captured argument goes in as its sentinel, which is
+    // address-shaped and therefore legal in either position.
+    const tokenCall = (target: bigint, method: "transfer" | "approve", args: readonly Value[]) => ({
+      target: addressHex(target),
+      data: encodeFunctionData({
+        abi: ERC20ABI,
+        functionName: method,
+        args: [addressHex(sentinelFor(args[0]!)), sentinelFor(args[1]!)] as never,
+      }),
+      value: 0n,
+    });
+
+    // These calls are not a Sauce program: the Portal's Executor runs each one raw and checks only
+    // that it did not revert and that the target has code. So they are NOT SafeERC20. What that
+    // costs, and what the lowering does about it:
+    //  - A token that returns nothing (USDT) works as it is: nothing decodes the return.
+    //  - USDT refuses to move a non-zero allowance to another non-zero value, and ONE Executor runs
+    //    every intent on a chain, so an allowance an earlier intent left behind is a realistic
+    //    state. Every approve is therefore preceded by `approve(spender, 0)` — `forceApprove`'s end
+    //    state, unconditionally, because the Executor's allowance cannot be read when the intent is
+    //    built. A literal zero amount needs no reset.
+    //  - A token that returns `false` instead of reverting is NOT detected. A body that needs that
+    //    check must take the program path, whose writes are `@sauce/token`'s SafeERC20 ones.
     for (const statement of simple ? site.body : []) {
       const lowered = lowerStatement(statement, resolve, defines);
       // A `transfer` moves tokens the Executor must have been given; an `approve` moves nothing.
       if (lowered.method === "transfer" && explicitDelivery === undefined) {
         derivedDelivery.push({ token: lowered.target, amount: lowered.args[1]! });
       }
-      calls.push({
-        target: addressHex(lowered.target),
-        // Encoded by viem against the ERC-20 ABI, so the selector and the word layout are the
-        // encoder's rather than this file's. A captured argument goes in as its sentinel, which is
-        // address-shaped and therefore legal in either position.
-        data: encodeFunctionData({
-          abi: ERC20ABI,
-          functionName: lowered.method,
-          args: [addressHex(sentinelFor(lowered.args[0]!)), sentinelFor(lowered.args[1]!)] as never,
-        }),
-        value: 0n,
-      });
+      const amount = lowered.args[1]!;
+      if (lowered.method === "approve" && !("literal" in amount && amount.literal === 0n)) {
+        calls.push(tokenCall(lowered.target, "approve", [lowered.args[0]!, { literal: 0n }]));
+      }
+      calls.push(tokenCall(lowered.target, lowered.method, lowered.args));
     }
 
     // A capture the PROGRAM reads is a slot too: its sentinel sits in the argument tail of the cook

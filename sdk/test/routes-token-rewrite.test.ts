@@ -1,10 +1,14 @@
 /**
- * ERC20 token member rewrite — U4 `USDC.transfer(to, amount)` -> `IERC20.at(USDC).transfer(to,
- * amount)`, plus the balance sugar `self.USDC` -> `IERC20.at(<addr>n).balanceOf(ctx.self())`.
+ * ERC20 token member rewrite — a symbol write `USDC.transfer(to, amount)` -> `@sauce/token`'s
+ * SafeERC20 `transfer(USDC, to, amount)` (imported as `__sauce_transfer`), the read
+ * `USDC.balanceOf(x)` -> `IERC20.at(USDC).balanceOf(x)`, plus the balance sugar `self.USDC` ->
+ * `IERC20.at(<addr>n).balanceOf(ctx.self())`.
  */
 import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
-import { rewriteTokenMembers } from "../src/routes/token-rewrite.js";
+// Through the public `routes` barrel: a caller of `rewriteTokenMembers` needs `tokenImportLines`
+// beside it to compile the result.
+import { rewriteTokenMembers, tokenImportLines } from "../src/routes/index.js";
 import { resolveTokenMap } from "../src/routes/token-registry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
@@ -15,6 +19,16 @@ const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const TO = "0x6666666666666666666666666666666666666666" as const;
+
+/** The same write, spelled as a direct `@sauce/token` call against a literal token address. */
+function libraryProgram(token: string, write: string, args: string): number[] {
+  const compiled = compileSauceRoute(
+    "base",
+    `import { ${write} } from "@sauce/token";\nfunction main() { ${write}(${token}, ${args}); }`,
+    { pot: POT, engine: ENGINE },
+  );
+  return Array.from(compiled.compiled.bytecode[0]!);
+}
 
 function evmOptions() {
   return {
@@ -30,23 +44,66 @@ function evmOptions() {
 }
 
 describe("rewriteTokenMembers", () => {
-  it("USDC.transfer(to, amount) rewrites to IERC20.at(USDC).transfer(to, amount) and compiles byte-identically", () => {
+  it("USDC.transfer(to, amount) lowers to @sauce/token's transfer(USDC, to, amount)", () => {
     const source = `function main() { USDC.transfer(${TO}, 5n); }`;
-    const { source: rewritten, rewrote } = rewriteTokenMembers(source, new Set(["USDC"]));
-    expect(rewrote).toBe(true);
-    expect(rewritten).toContain(`IERC20.at(USDC).transfer(${TO}, 5n)`);
+    const result = rewriteTokenMembers(source, new Set(["USDC"]));
+    expect(result.rewrote).toBe(true);
+    expect(result.source).toBe(`function main() { __sauce_transfer(USDC, ${TO}, 5n); }`);
+    expect([...result.writes]).toEqual(["transfer"]);
+    expect(result.erc20).toBe(false);
+    expect(tokenImportLines(result)).toEqual([
+      'import { transfer as __sauce_transfer } from "@sauce/token";',
+    ]);
+  });
 
-    const handWritten =
-      `import { IERC20 } from "./artifacts/IERC20.json";\n` +
-      `function main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`;
-    const withDefine = `import { IERC20 } from "./artifacts/IERC20.json";\n${rewritten}`;
-
-    const a = compile(withDefine, {
-      baseDirs: [...SDK_SOURCE_DIRS],
-      defines: { USDC: BigInt(USDC) },
+  it.each([
+    ["transfer", `${TO}, 5n`],
+    ["approve", `${TO}, 5n`],
+    ["transferFrom", `${TO}, ${TO}, 5n`],
+  ])("USDC.%s compiles to the same bytes as the direct @sauce/token call", (write, args) => {
+    const compiled = compileSauceRoute("base", `USDC.${write}(${args});`, {
+      pot: POT,
+      engine: ENGINE,
     });
-    const b = compile(handWritten, { baseDirs: [...SDK_SOURCE_DIRS] });
-    expect(Array.from(a.bytecode[0]!)).toEqual(Array.from(b.bytecode[0]!));
+    expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(libraryProgram(USDC, write, args));
+  });
+
+  it("a write whose result is read is refused: SafeERC20 returns nothing", () => {
+    expect(() =>
+      rewriteTokenMembers(
+        `function main() { const ok = USDC.approve(${TO}, 5n); }`,
+        new Set(["USDC"]),
+      ),
+    ).toThrow(/`USDC\.approve\(\.\.\.\)` returns nothing/);
+  });
+
+  it("a write with the wrong arguments is refused in the terms it was written", () => {
+    expect(() =>
+      rewriteTokenMembers(`function main() { USDC.transferFrom(${TO}, 5n); }`, new Set(["USDC"])),
+    ).toThrow(/`USDC\.transferFrom\(\.\.\.\)` takes 3 arguments \(from, to, amount\), got 2/);
+  });
+
+  it("a user's own `transfer` is untouched and does not collide with the lowering", () => {
+    const source = `function transfer(a) { return a; }\nfunction main() { USDC.transfer(${TO}, transfer(5n)); }`;
+    const { source: out } = rewriteTokenMembers(source, new Set(["USDC"]));
+    expect(out).toContain("function transfer(a) { return a; }");
+    expect(out).toContain(`__sauce_transfer(USDC, ${TO}, transfer(5n))`);
+    const compiled = compileSauceRoute("base", source, { pot: POT, engine: ENGINE });
+    expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  it("a program declaring the reserved import name is refused, by name", () => {
+    expect(() =>
+      rewriteTokenMembers(
+        `function main() { const __sauce_transfer = 1n; USDC.transfer(${TO}, 5n); }`,
+        new Set(["USDC"]),
+      ),
+    ).toThrow(/`__sauce_transfer` is reserved/);
+  });
+
+  it("an explicit IERC20.at(x).transfer(...) is the raw ABI call and is left alone", () => {
+    const source = `function main() { IERC20.at(USDC).transfer(${TO}, 5n); }`;
+    expect(rewriteTokenMembers(source, new Set(["USDC"])).rewrote).toBe(false);
   });
 
   it("a local `let USDC = 1n;` suppresses the rewrite", () => {
@@ -62,11 +119,13 @@ describe("rewriteTokenMembers", () => {
     expect(out).toBe(source);
   });
 
-  it("balanceOf in expression position rewrites correctly", () => {
+  it("balanceOf in expression position stays on the typed binding", () => {
     const source = `function main() { return USDC.balanceOf(${TO}); }`;
-    const { source: out, rewrote } = rewriteTokenMembers(source, new Set(["USDC"]));
-    expect(rewrote).toBe(true);
-    expect(out).toContain(`IERC20.at(USDC).balanceOf(${TO})`);
+    const result = rewriteTokenMembers(source, new Set(["USDC"]));
+    expect(result.rewrote).toBe(true);
+    expect(result.source).toContain(`IERC20.at(USDC).balanceOf(${TO})`);
+    expect(result.erc20).toBe(true);
+    expect(result.writes.size).toBe(0);
   });
 
   it("no rewrite when the token symbol set is empty", () => {
@@ -76,14 +135,12 @@ describe("rewriteTokenMembers", () => {
     expect(out).toBe(source);
   });
 
-  it("the emitted import line appears exactly once even for multiple token calls", () => {
-    const source = `function main() { USDC.transfer(${TO}, 5n); USDC.approve(${TO}, 5n); }`;
-    const { source: out } = rewriteTokenMembers(source, new Set(["USDC"]));
-    const withImport = `import { IERC20 } from "./artifacts/IERC20.json";\n${out}`;
-    const count = (
-      withImport.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []
-    ).length;
-    expect(count).toBe(1);
+  it("one import names every write used, once, in a fixed order", () => {
+    const source = `function main() { USDC.approve(${TO}, 5n); USDC.transfer(${TO}, 5n); USDC.approve(${TO}, 6n); }`;
+    const result = rewriteTokenMembers(source, new Set(["USDC"]));
+    expect(tokenImportLines(result)).toEqual([
+      'import { transfer as __sauce_transfer, approve as __sauce_approve } from "@sauce/token";',
+    ]);
   });
 });
 
@@ -120,19 +177,15 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     expect(built.intent.route.calls).toHaveLength(1);
   });
 
-  it("compileSauceRoute with NO options.tokens at all rewrites via the registry and matches the hand-written literal program", () => {
+  it("compileSauceRoute with NO options.tokens at all rewrites via the registry and matches the literal program", () => {
     const compiled = compileSauceRoute("base", `USDC.transfer(${TO}, 5n);`, {
       pot: POT,
       engine: ENGINE,
     });
-    expect(compiled.source).toContain(`IERC20.at(USDC).transfer(${TO}, 5n)`);
-    expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
-
-    const handWritten =
-      `import { IERC20 } from "./artifacts/IERC20.json";\n` +
-      `function main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`;
-    const hand = compile(handWritten, { baseDirs: [...SDK_SOURCE_DIRS] });
-    expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(Array.from(hand.bytecode[0]!));
+    expect(compiled.source).toContain(`__sauce_transfer(USDC, ${TO}, 5n)`);
+    expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(
+      libraryProgram(`${USDC}n`, "transfer", `${TO}, 5n`),
+    );
   });
 
   it("options.tokens still OVERRIDES the registry default, per-key", () => {
@@ -143,19 +196,9 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
       { pot: POT, engine: ENGINE },
       { tokens: { USDC: OTHER } },
     );
-    const overridden = compile(
-      `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main() { IERC20.at(${OTHER}n).transfer(${TO}, 5n); }`,
-      { baseDirs: [...SDK_SOURCE_DIRS] },
-    );
-    expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(Array.from(overridden.bytecode[0]!));
-
-    const registryDefault = compile(
-      `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main() { IERC20.at(${USDC}n).transfer(${TO}, 5n); }`,
-      { baseDirs: [...SDK_SOURCE_DIRS] },
-    );
-    expect(Array.from(compiled.compiled.bytecode[0]!)).not.toEqual(
-      Array.from(registryDefault.bytecode[0]!),
-    );
+    const bytecode = Array.from(compiled.compiled.bytecode[0]!);
+    expect(bytecode).toEqual(libraryProgram(`${OTHER}n`, "transfer", `${TO}, 5n`));
+    expect(bytecode).not.toEqual(libraryProgram(`${USDC}n`, "transfer", `${TO}, 5n`));
   });
 
   it("an unregistered chain (no registry rows, no tokenDefines) leaves a bare USDC untouched -- the base compiler's own error", () => {

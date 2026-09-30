@@ -11,11 +11,10 @@ const cctpSource = `
   return 1n;
 `;
 
-const tokenResultsSource = `
-  const approved = USDC.approve(Uniswap.UniversalRouter, 1n);
-  const transferred = USDC.transfer(1n, 1n);
-  if (approved && transferred) return 1n;
-  return 0n;
+const tokenWritesSource = `
+  USDC.approve(Uniswap.UniversalRouter, 1n);
+  USDC.transfer(1n, 1n);
+  return USDC.balanceOf(1n);
 `;
 
 describe("source globals match the Sauce contract model", () => {
@@ -34,8 +33,13 @@ describe("source globals match the Sauce contract model", () => {
         function body() { ${cctpSource} }
         // TokenMessengerV2.depositForBurn returns nothing.
         const burned: void = Cctp.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
-        const approved: boolean = USDC.approve(Uniswap.UniversalRouter, 1n);
-        const transferred: boolean = USDC.transfer(1n, 1n);
+        // ERC-20 writes have SafeERC20 semantics: each reverts unless the token accepted it, so
+        // there is no ABI boolean to return.
+        const approved: void = USDC.approve(Uniswap.UniversalRouter, 1n);
+        const transferred: void = USDC.transfer(1n, 1n);
+        const pulled: void = USDC.transferFrom(1n, 1n, 1n);
+        // @ts-expect-error A token write returns nothing, not the typed call's bool.
+        const ok: boolean = USDC.transfer(1n, 1n);
         // Dynamic bytes use hex string source literals.
         Uniswap.UniversalRouter.execute("0x", [], 2000n);
         const amounts = UniswapV2.Router.getAmountsOut(1n, [USDC, WETH]);
@@ -92,19 +96,18 @@ describe("source globals match the Sauce contract model", () => {
     expect(result.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
-  it("compiles token boolean results identically from a typed closure and source text", () => {
+  it("compiles token writes and reads identically from a typed closure and source text", () => {
     const body = () => {
-      const approved: boolean = USDC.approve(Uniswap.UniversalRouter, 1n);
-      const transferred: boolean = USDC.transfer(1n, 1n);
-      if (approved && transferred) return 1n;
-      return 0n;
+      USDC.approve(Uniswap.UniversalRouter, 1n);
+      USDC.transfer(1n, 1n);
+      return USDC.balanceOf(1n);
     };
     const execution = {
       pot: "0x1111111111111111111111111111111111111111" as const,
       engine: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const,
     };
     const closure = compileSauceRoute("base", sauceBodyToSource(body), execution);
-    const source = compileSauceRoute("base", tokenResultsSource, execution);
+    const source = compileSauceRoute("base", tokenWritesSource, execution);
     expect(closure.compiled.bytecode).toEqual(source.compiled.bytecode);
   });
 });

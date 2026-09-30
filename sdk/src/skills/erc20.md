@@ -24,26 +24,23 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 
 ```typescript
 // Transfer tokens
-import { ERC20ABI as IERC20 } from "./abis";
+import { transfer } from "@sauce/token";
 function main(token: Address, to: Address, amount: Uint256): Uint256 {
-  const t = IERC20.at(token);
-  t.transfer(to, amount);
+  transfer(token, to, amount);
   return 1;
 }
 
 // Approve spender
-import { ERC20ABI as IERC20 } from "./abis";
+import { approve } from "@sauce/token";
 function main(token: Address, spender: Address, amount: Uint256): Uint256 {
-  const t = IERC20.at(token);
-  t.approve(spender, amount);
+  approve(token, spender, amount);
   return 1;
 }
 
 // Transfer from (requires prior approval)
-import { ERC20ABI as IERC20 } from "./abis";
+import { transferFrom } from "@sauce/token";
 function main(token: Address, from: Address, to: Address, amount: Uint256): Uint256 {
-  const t = IERC20.at(token);
-  t.transferFrom(from, to, amount);
+  transferFrom(token, from, to, amount);
   return 1;
 }
 
@@ -97,5 +94,6 @@ function main(to: Address, amount: Uint256): Uint256 {
 - approve before transferFrom: spender must be approved by the owner first
 - Common pattern: approve max (type(uint256).max) for DeFi interactions, or use exact amounts for security
 - decimals varies: most tokens use 18, USDC/USDT use 6, WBTC uses 8
-- Some tokens (USDT) do not return bool from transfer/approve -- use SafeERC20 wrapper for compatibility
+- Some tokens (USDT) do not return bool from transfer/approve. The writes above are `@sauce/token`'s, which follow OpenZeppelin SafeERC20: empty returndata is accepted from a contract, a `false` return reverts, and `approve` resets a non-zero allowance to zero first. They return nothing, since a refused write reverts the program
+- `ERC20ABI.at(token).transfer(...)` is the raw ABI call and is NOT SafeERC20: it reverts on a token that returns nothing and accepts one that returns `false`. Use it only when that is what you mean
 - The storageTransfer example demonstrates how to implement ERC-20 logic entirely in SauceScript using storage operations

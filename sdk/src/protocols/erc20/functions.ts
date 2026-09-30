@@ -1,29 +1,26 @@
 export const transfer = `
-import { ERC20ABI as IERC20 } from "./abis";
+import { transfer } from "@sauce/token";
 
 function main(token: Address, to: Address, amount: Uint256): Uint256 {
-  const t = IERC20.at(token);
-  t.transfer(to, amount);
+  transfer(token, to, amount);
   return 1;
 }
 `;
 
 export const approve = `
-import { ERC20ABI as IERC20 } from "./abis";
+import { approve } from "@sauce/token";
 
 function main(token: Address, spender: Address, amount: Uint256): Uint256 {
-  const t = IERC20.at(token);
-  t.approve(spender, amount);
+  approve(token, spender, amount);
   return 1;
 }
 `;
 
 export const transferFrom = `
-import { ERC20ABI as IERC20 } from "./abis";
+import { transferFrom } from "@sauce/token";
 
 function main(token: Address, from: Address, to: Address, amount: Uint256): Uint256 {
-  const t = IERC20.at(token);
-  t.transferFrom(from, to, amount);
+  transferFrom(token, from, to, amount);
   return 1;
 }
 `;

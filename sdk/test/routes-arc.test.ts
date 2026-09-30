@@ -56,7 +56,7 @@ describe("Arc: chain-scoped defines", () => {
       { pot: ARC_POT, engine: ENGINE, value: ARC_EXECUTION_FEE },
       { defines: chainDefines(requireChain("arc")) },
     );
-    expect(compiled.source).toContain("IERC20.at(USDC).approve(");
+    expect(compiled.source).toContain("__sauce_approve(USDC, ");
     expect(compiled.source).toContain(decimal(ARC_SWAP_ROUTER02));
     expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
     expect(compiled.calls).toHaveLength(1);

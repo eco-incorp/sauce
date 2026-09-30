@@ -1,7 +1,7 @@
 /**
  * The ERC20 arm — statement/expression builders for the universal token interface's EVM lowering.
- * Typed-binding call against the engine-vendored `IERC20` artifact, the exact shape
- * `swap/source.ts`/`deposit/source.ts` already emit — nothing new reaches the compiler.
+ * The writes go through `safe.ts` (OpenZeppelin `SafeERC20`); the read is a typed call against the
+ * engine-vendored `IERC20` artifact, the shape `swap/source.ts`/`deposit/source.ts` already emit.
  */
 import { formatAddressField } from "../deposit/format.js";
 import { toAddressBigint, toAmountBigint } from "./params.js";

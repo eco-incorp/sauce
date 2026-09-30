@@ -37,7 +37,10 @@ returns `false` reverts rather than passing silently, and so do a write to an ad
 and a return shorter than one ABI word. `approve` adds `forceApprove`'s reset — it reads the current
 allowance and zeroes it first when it is non-zero, which USDT requires and a shared Pot makes
 likely. The `@sauce/token` functions a program calls directly (`transfer`, `transferFrom`,
-`approve`) behave the same way.
+`approve`) behave the same way, and so does the route-body syntax — `USDC.transfer(...)`,
+`Token(address).approve(...)` — which compiles to those functions. Only an ABI binding you write
+yourself, `IERC20.at(address).transfer(...)`, is the raw unchecked call; see
+[protocols and tokens](protocols-and-tokens.md#writes-follow-safeerc20).
 
 The visible consequence is that a literal amount is encoded into the calldata rather than appearing
 as a decimal in the emitted source.

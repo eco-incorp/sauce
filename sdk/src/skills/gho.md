@@ -21,18 +21,16 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 
 ```typescript
 // Transfer GHO
-import { GhoTokenABI as IGhoToken } from "./abis";
+import { transfer } from "@sauce/token";
 function main(ghoAddress: Address, to: Address, amount: Uint256): Uint256 {
-  const gho = IGhoToken.at(ghoAddress);
-  gho.transfer(to, amount);
+  transfer(ghoAddress, to, amount);
   return 1;
 }
 
 // Approve GHO spender
-import { GhoTokenABI as IGhoToken } from "./abis";
+import { approve } from "@sauce/token";
 function main(ghoAddress: Address, spender: Address, amount: Uint256): Uint256 {
-  const gho = IGhoToken.at(ghoAddress);
-  gho.approve(spender, amount);
+  approve(ghoAddress, spender, amount);
   return 1;
 }
 ```

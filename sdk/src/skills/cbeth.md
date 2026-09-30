@@ -21,18 +21,16 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 
 ```typescript
 // Transfer cbETH
-import { CbETHABI as ICbETH } from "./abis";
+import { transfer } from "@sauce/token";
 function main(cbethAddress: Address, to: Address, amount: Uint256): Uint256 {
-  const cbeth = ICbETH.at(cbethAddress);
-  cbeth.transfer(to, amount);
+  transfer(cbethAddress, to, amount);
   return 1;
 }
 
 // Approve cbETH
-import { CbETHABI as ICbETH } from "./abis";
+import { approve } from "@sauce/token";
 function main(cbethAddress: Address, spender: Address, amount: Uint256): Uint256 {
-  const cbeth = ICbETH.at(cbethAddress);
-  cbeth.approve(spender, amount);
+  approve(cbethAddress, spender, amount);
   return 1;
 }
 ```

@@ -22,7 +22,13 @@ import type { ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs } from "./rs-compile.js";
-import { rewriteTokenFactory, rewriteTokenMembers } from "./token-rewrite.js";
+import {
+  rewriteTokenFactory,
+  rewriteTokenMembers,
+  tokenImportLines,
+  type SafeWrite,
+  type TokenImports,
+} from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { pascalOfSlug } from "./accessors.js";
@@ -39,7 +45,6 @@ import {
   type EcoRoutesSelector,
 } from "../protocols/eco-routes/lookup.js";
 import { rewriteIntentSugar, type IntentSugarDefaults } from "./intent-sugar.js";
-import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -281,7 +286,7 @@ export function compileSauceRoute(
 
   // The intent sugar runs FIRST, on the source as written. It reads `USDC` and `RECIPIENT` as
   // compile-time values itself, so a token rewrite that had already turned `USDC.transfer(...)`
-  // into `IERC20.at(...).transfer(...)` would leave it nothing it recognises. What it leaves behind
+  // into `__sauce_transfer(USDC, ...)` would leave it nothing it recognises. What it leaves behind
   // is ordinary `evm.call` statements, which every later pass is free to walk over.
   const sugar = rewriteIntentSugar(source, {
     source: chain,
@@ -296,8 +301,8 @@ export function compileSauceRoute(
   source = sugar.source;
   let contracts: ContractsConfig | undefined = options.contracts;
   // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
-  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare
-  // `IERC20.at(USDC)` (the symbol, not a literal) with no `USDC` define at all. Idempotent with
+  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
+  // token argument (the symbol, not a literal) with no `USDC` define at all. Idempotent with
   // openRoute's own ambient-defines merge (ambient.ts#chainDefines resolves the SAME registry), so
   // this is a no-op when reached via openRoute and a genuine fix for a direct caller.
   const defines: Record<string, bigint | boolean | number> | undefined =
@@ -307,29 +312,30 @@ export function compileSauceRoute(
   // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
   // textually; if it ran first, `self.USDC` would become `ctx.self().USDC` and the balance
   // sugar's holder would no longer be a bare Identifier, silently losing the site. Safe in the
-  // other direction: the accessor pass cannot claim IERC20.at(...)'s output (neither a namespace
-  // nor a chain key, and its call sits mid-chain, which `decomposeMemberChain` declines), and its
+  // other direction: the accessor pass cannot claim the token pass's output (`__sauce_<write>(...)`
+  // is a bare call, and `IERC20` is neither a namespace nor a chain key and its call sits
+  // mid-chain, which `decomposeMemberChain` declines), and its
   // synthesized-binding collision check cannot trip on `IERC20` (`pascalOfSlug("erc20")` yields
   // `IErc20_*`, not `IERC20`); the sugar's own `ctx.self()` output is immune to the accessor
   // pass's self-sugar too (`self` there is a member PROPERTY, which its exclusion set already
   // covers). See routes-token-rewrite.test.ts's composition test for the regression lock.
-  // Two ERC20 rewrites both lower to `IERC20.at(...)`: the `<Sym>.transfer(...)` symbol sugar
-  // (when the chain has resolved token symbols) and the `Token(addr)` global wrapper (always —
-  // it takes an arbitrary address, not a registry symbol). Whichever fires, the `IERC20` import is
-  // injected ONCE (the SDK serves its ABI); on svm either is the same EVM-only error.
+  // Two ERC20 rewrites: the `<Sym>.transfer(...)` symbol syntax (when the chain has resolved token
+  // symbols) and the `Token(addr)` global wrapper (always — it takes an arbitrary address, not a
+  // registry symbol). Both lower a WRITE to `@sauce/token`'s SafeERC20 function and a READ to the
+  // typed `IERC20.at(...)` binding, so their imports are collected across both and injected ONCE
+  // (the SDK serves both modules itself); on svm either is the same EVM-only error.
+  const writes = new Set<SafeWrite>();
+  let erc20 = false;
   let tokenRewrote = false;
-  if (tokenMap.size > 0) {
-    const rewritten = rewriteTokenMembers(source, tokenMap);
-    if (rewritten.rewrote) {
-      source = rewritten.source;
-      tokenRewrote = true;
-    }
-  }
-  const factory = rewriteTokenFactory(source);
-  if (factory.rewrote) {
-    source = factory.source;
+  const absorb = (rewritten: TokenImports & { source: string; rewrote: boolean }): void => {
+    if (!rewritten.rewrote) return;
+    source = rewritten.source;
     tokenRewrote = true;
-  }
+    for (const write of rewritten.writes) writes.add(write);
+    erc20 ||= rewritten.erc20;
+  };
+  if (tokenMap.size > 0) absorb(rewriteTokenMembers(source, tokenMap));
+  absorb(rewriteTokenFactory(source));
   if (tokenRewrote) {
     if (chain.kind === "svm") {
       throw new Error(
@@ -338,7 +344,7 @@ export function compileSauceRoute(
           "account-plan `Token` emitter (see token/api.ts) instead.",
       );
     }
-    source = `${ERC20_IMPORT_LINE}\n${source}`;
+    source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
   }
 
   if (options.accessors !== false) {

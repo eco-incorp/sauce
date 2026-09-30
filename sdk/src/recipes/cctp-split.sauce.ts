@@ -24,7 +24,9 @@
  *     accessor works in value position, not just as a call target (equivalent to the underscore
  *     ambient define `Cctp_TokenMessenger`, just the accessor-consistent spelling).
  * One approval for the whole amount, then the burns against it — if any burn reverts (e.g. it
- * exceeds Circle's per-message cap) the entire source-chain tx reverts (all-or-nothing).
+ * exceeds Circle's per-message cap) the entire source-chain tx reverts (all-or-nothing). The
+ * approval is `@sauce/token`'s SafeERC20 `approve`: it resets an allowance a previous cook left
+ * standing to zero before setting the new one, and reverts on a `false` return.
  *
  * Declarations are intentionally UNANNOTATED: the DSL accessor rewrite that resolves `USDC`/`Cctp` is
  * acorn-based (plain JS), so a `.sauce.ts` routed through it must carry no TypeScript type syntax.

@@ -151,13 +151,16 @@ function hexAddress(value: TokenTransferSpec["token"], label: string): `0x${stri
  *
  * Route-body calls are positional (`Token(a).approve(spender, amt)`) where the runtime
  * [`TokenApi`] takes a spec object, because the body is compiled to Sauce bytecode rather than
- * executed: `token-rewrite.ts#rewriteTokenFactory` replaces the callee with `IERC20.at` before the
- * compiler sees it, and these signatures are what let a **typed closure** body typecheck on the way
- * there. Nothing calls these at run time, which is why they live here rather than on `TokenApi`.
+ * executed: `token-rewrite.ts#rewriteTokenFactory` lowers each write to `@sauce/token`'s function
+ * of the same name, which has OpenZeppelin `SafeERC20` semantics, and each read to `IERC20.at`,
+ * before the compiler sees it. These signatures are what let a **typed closure** body typecheck on
+ * the way there. The writes return nothing: they revert the program unless the token accepted
+ * them. Nothing calls these at run time, which is why they live here rather than on `TokenApi`.
  */
 export interface TokenBinding {
   transfer(to: AddressInput, amount: bigint): void;
   approve(spender: AddressInput, amount: bigint): void;
+  transferFrom(from: AddressInput, to: AddressInput, amount: bigint): void;
   balanceOf(owner: AddressInput): bigint;
 }
 
@@ -167,7 +170,7 @@ export interface TokenBinding {
  *
  * Deliberately NOT on `TokenApi` itself: the runtime `Token` value is a frozen object and is not
  * callable, so typing it as callable would promise something that throws. It describes what is
- * legal in a route BODY, where the call is rewritten to `IERC20.at(...)` and never survives to run.
+ * legal in a route BODY, where the call is rewritten before compiling and never survives to run.
  */
 export interface TokenFactory {
   (address: AddressInput): TokenBinding;

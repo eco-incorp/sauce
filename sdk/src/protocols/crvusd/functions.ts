@@ -1,17 +1,17 @@
 export const transfer = `
-import { CrvUSDERC20ABI as ICrvUSD } from "./abis";
+import { transfer } from "@sauce/token";
 
 function main(crvusdAddress: Address, to: Address, amount: Uint256): Uint256 {
-  const crvusd = ICrvUSD.at(crvusdAddress);
-  return crvusd.transfer(to, amount);
+  transfer(crvusdAddress, to, amount);
+  return 1;
 }
 `;
 
 export const approve = `
-import { CrvUSDERC20ABI as ICrvUSD } from "./abis";
+import { approve } from "@sauce/token";
 
 function main(crvusdAddress: Address, spender: Address, amount: Uint256): Uint256 {
-  const crvusd = ICrvUSD.at(crvusdAddress);
-  return crvusd.approve(spender, amount);
+  approve(crvusdAddress, spender, amount);
+  return 1;
 }
 `;

@@ -1,17 +1,17 @@
 export const transfer = `
-import { FraxERC20ABI as IFRAX } from "./abis";
+import { transfer } from "@sauce/token";
 
 function main(fraxAddress: Address, to: Address, amount: Uint256): Uint256 {
-  const frax = IFRAX.at(fraxAddress);
-  return frax.transfer(to, amount);
+  transfer(fraxAddress, to, amount);
+  return 1;
 }
 `;
 
 export const approve = `
-import { FraxERC20ABI as IFRAX } from "./abis";
+import { approve } from "@sauce/token";
 
 function main(fraxAddress: Address, spender: Address, amount: Uint256): Uint256 {
-  const frax = IFRAX.at(fraxAddress);
-  return frax.approve(spender, amount);
+  approve(fraxAddress, spender, amount);
+  return 1;
 }
 `;

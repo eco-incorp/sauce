@@ -1504,6 +1504,265 @@ describeEvm("route nesting, executed", () => {
     }, 180_000);
   });
 
+  describe("token-only intent bodies, run by the Portal's Executor", () => {
+    // A body of nothing but token transfers and approves is not a Sauce program: it lowers to plain
+    // `route.calls`, and the real `Executor.execute` below runs each one raw. It checks that the call
+    // did not revert and that the target has code, and nothing else, so these pin what that path does
+    // with the two token behaviours SafeERC20 exists for. The intents are published by a real program
+    // and fulfilled from the route bytes the Portal logged.
+    const AMOUNT = 1_234_567n;
+    const STANDING = 7n;
+    const RECIPIENT = "0x00000000000000000000000000000000000000e1" as Address;
+    const SPENDER = "0x00000000000000000000000000000000000000e2" as Address;
+    let saltByte = 0xa0;
+
+    const usdtLike = (): Promise<Address> =>
+      deploy(
+        `${NO_RETURN_ERC20.creationCode}${encodeAbiParameters(
+          [{ type: "string" }, { type: "string" }, { type: "uint8" }],
+          ["Tether USD", "USDT", 6],
+        ).slice(2)}` as Hex,
+      );
+
+    /** Publishes the intent a program opens around `body`, and returns the route and reward hash
+     *  the Portal logged — what a solver fulfils. `delivery` is the optional second argument. */
+    const publish = async (
+      body: string,
+      token: Address,
+      delivery = "",
+    ): Promise<{ route: EvmRoute; rewardHash: Hex }> => {
+      const reward = await deploy(MOCK_ERC20.creationCode);
+      const program = `function main() {
+  const amount = Token(REWARD).balanceOf(ctx.self());
+  Base(() => {
+    ${body}
+  }${delivery}).reward({ tokens: [{ token: REWARD, amount }] });
+}`;
+      const compiled = compileSauceRoute(
+        "base",
+        program,
+        { pot: executorPot, engine: sauce.engine },
+        {
+          defines: {
+            TOKEN: BigInt(token),
+            REWARD: BigInt(reward),
+            RECIPIENT: BigInt(RECIPIENT),
+            SPENDER: BigInt(SPENDER),
+            AMOUNT,
+          },
+          intents: {
+            deadline: 4_000_000_000n,
+            creator: CREATOR,
+            prover: PROVER,
+            sourcePortal: portal,
+            destinationPortal: portal,
+            salt: `0x${(saltByte++).toString(16).repeat(32)}` as Hex,
+          },
+        },
+      );
+      const parent = await fulfil([
+        {
+          target: reward,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "mint",
+            args: [executorPot, 1n],
+          }),
+          value: 0n,
+        },
+        {
+          target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+          data: compiled.calls[0]!.data,
+          value: 0n,
+        },
+      ]);
+      expect(parent.status).toBe("success");
+      const [published] = publishedIn(parent.logs);
+      const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published!.route) as unknown as [
+        EvmRoute,
+      ];
+
+      return { route, rewardHash: rewardOf(published!).rewardHash };
+    };
+
+    /** What a solver does first: hold the route's tokens and let the Portal pull them. */
+    const provide = async (route: EvmRoute): Promise<void> => {
+      for (const { token, amount } of route.tokens) {
+        await mintTo(token, DEPLOYER.address, amount);
+        const hash = await walletClient.sendTransaction({
+          account: DEPLOYER,
+          chain: null,
+          to: token,
+          data: encodeFunctionData({
+            abi: erc20ApproveAbi,
+            functionName: "approve",
+            args: [portal, amount],
+          }),
+          gas: GAS_LIMIT,
+        });
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+    };
+
+    /** An allowance the Executor already has, as an earlier intent's approve would leave it. */
+    const leaveAllowance = async (token: Address): Promise<void> => {
+      const earlier = await fulfil([
+        {
+          target: token,
+          data: encodeFunctionData({
+            abi: erc20ApproveAbi,
+            functionName: "approve",
+            args: [SPENDER, STANDING],
+          }),
+          value: 0n,
+        },
+      ]);
+      expect(earlier.status).toBe("success");
+      expect(await executorAllowance(token)).toBe(STANDING);
+    };
+
+    const executorAllowance = (token: Address): Promise<bigint> =>
+      publicClient.readContract({
+        address: token,
+        abi: erc20AllowanceAbi,
+        functionName: "allowance",
+        args: [executor, SPENDER],
+      }) as Promise<bigint>;
+
+    const approveCalls = (route: EvmRoute) =>
+      route.calls.map((call) => {
+        const { functionName, args } = decodeFunctionData({
+          abi: erc20ApproveAbi,
+          data: call.data,
+        });
+        return [functionName, (args[0] as string).toLowerCase(), args[1]];
+      });
+
+    it("(a) a USDT-style transfer fulfils, and the recipient is paid", async () => {
+      const usdtToken = await usdtLike();
+      const { route, rewardHash } = await publish(
+        "Token(TOKEN).transfer(RECIPIENT, AMOUNT);",
+        usdtToken,
+      );
+      expect(route.calls).toHaveLength(1);
+      await provide(route);
+
+      expect((await fulfilRoute(route, rewardHash)).status).toBe("success");
+      expect(await balanceOf(usdtToken, RECIPIENT)).toBe(AMOUNT);
+      expect(await balanceOf(usdtToken, executor)).toBe(0n);
+    }, 180_000);
+
+    it("(b) a USDT-style approve over a standing allowance fulfils, through the reset", async () => {
+      const usdtToken = await usdtLike();
+      await leaveAllowance(usdtToken);
+      const { route, rewardHash } = await publish(
+        "Token(TOKEN).approve(SPENDER, AMOUNT);",
+        usdtToken,
+      );
+      expect(approveCalls(route)).toEqual([
+        ["approve", SPENDER.toLowerCase(), 0n],
+        ["approve", SPENDER.toLowerCase(), AMOUNT],
+      ]);
+
+      // CONTROL: the same route without the reset — what this lowering emitted before — is the
+      // non-zero-to-non-zero change USDT refuses, and it reverts the whole fulfilment.
+      const unreset = await fulfilRoute({ ...route, calls: route.calls.slice(1) }, rewardHash);
+      expect(unreset.status).toBe("reverted");
+      expect(await executorAllowance(usdtToken)).toBe(STANDING);
+
+      expect((await fulfilRoute(route, rewardHash)).status).toBe("success");
+      expect(await executorAllowance(usdtToken)).toBe(AMOUNT);
+    }, 180_000);
+
+    it("(c) a standard token still transfers and approves", async () => {
+      const standard = await deploy(MOCK_ERC20.creationCode);
+      const transfer = await publish("Token(TOKEN).transfer(RECIPIENT, AMOUNT);", standard);
+      await provide(transfer.route);
+      expect((await fulfilRoute(transfer.route, transfer.rewardHash)).status).toBe("success");
+      expect(await balanceOf(standard, RECIPIENT)).toBe(AMOUNT);
+
+      await leaveAllowance(standard);
+      const approve = await publish("Token(TOKEN).approve(SPENDER, AMOUNT);", standard);
+      expect((await fulfilRoute(approve.route, approve.rewardHash)).status).toBe("success");
+      expect(await executorAllowance(standard)).toBe(AMOUNT);
+    }, 180_000);
+
+    it("(gas) the reset costs one extra approve call", async () => {
+      // Two fresh standard tokens from the same state, fulfilled with and without the reset: the
+      // difference is the reset call alone. Measured with nothing to reset and with a standing one.
+      const measure = async (standing: boolean, reset: boolean): Promise<bigint> => {
+        const token = await deploy(MOCK_ERC20.creationCode);
+        if (standing) await leaveAllowance(token);
+        const { route, rewardHash } = await publish(
+          "Token(TOKEN).approve(SPENDER, AMOUNT);",
+          token,
+        );
+        const run = await fulfilRoute(
+          reset ? route : { ...route, calls: route.calls.slice(1) },
+          rewardHash,
+        );
+        expect(run.status).toBe("success");
+        expect(await executorAllowance(token)).toBe(AMOUNT);
+
+        return run.gasUsed;
+      };
+      const fromZero = (await measure(false, true)) - (await measure(false, false));
+      const fromStanding = (await measure(true, true)) - (await measure(true, false));
+      expect(fromZero).toBeGreaterThan(0n);
+      expect(fromStanding).toBeGreaterThan(0n);
+      console.log(
+        `token-only approve reset — +${fromZero} gas with no allowance standing, ` +
+          `+${fromStanding} gas resetting a standing one`,
+      );
+    }, 300_000);
+
+    // THE RESIDUAL GAP, pinned rather than hidden. The Executor never decodes what a call returned,
+    // so a token that returns `false` instead of reverting is not caught on this path. A body that
+    // needs that check has to be a program, whose writes are `@sauce/token`'s SafeERC20 ones.
+    describe("a token that returns false", () => {
+      it("is refused at DELIVERY when the route pulls it: the Portal's safeTransferFrom", async () => {
+        const liarToken = await deploy(FALSE_RETURN_ERC20.creationCode);
+        const { route, rewardHash } = await publish(
+          "Token(TOKEN).transfer(RECIPIENT, AMOUNT);",
+          liarToken,
+        );
+        expect(route.tokens.map((t) => t.token.toLowerCase())).toEqual([liarToken.toLowerCase()]);
+        await mintTo(liarToken, DEPLOYER.address, AMOUNT);
+
+        expect((await fulfilRoute(route, rewardHash)).status).toBe("reverted");
+      }, 180_000);
+
+      it("but its transfer by the Executor 'succeeds', and the recipient is NOT paid", async () => {
+        // The route pulls a different token, so the liar is only ever touched by the Executor's own
+        // call — as when the Executor already holds it.
+        const liarToken = await deploy(FALSE_RETURN_ERC20.creationCode);
+        const delivered = await deploy(MOCK_ERC20.creationCode);
+        await mintTo(liarToken, executor, AMOUNT);
+        const { route, rewardHash } = await publish(
+          "Token(TOKEN).transfer(RECIPIENT, AMOUNT);",
+          liarToken,
+          `, { tokens: [{ token: ${BigInt(delivered)}n, amount: 1n }] }`,
+        );
+        await provide(route);
+
+        expect((await fulfilRoute(route, rewardHash)).status).toBe("success");
+        expect(await balanceOf(liarToken, RECIPIENT)).toBe(0n);
+        expect(await balanceOf(liarToken, executor)).toBe(AMOUNT);
+      }, 180_000);
+
+      it("and its approve 'succeeds' while setting nothing", async () => {
+        const liarToken = await deploy(FALSE_RETURN_ERC20.creationCode);
+        const { route, rewardHash } = await publish(
+          "Token(TOKEN).approve(SPENDER, AMOUNT);",
+          liarToken,
+        );
+
+        expect((await fulfilRoute(route, rewardHash)).status).toBe("success");
+        expect(await executorAllowance(liarToken)).toBe(0n);
+      }, 180_000);
+    });
+  });
+
   describe("a three-hop chain, written entirely in the native syntax", () => {
     // The headline case: every hop's amount is only known when that hop runs. The parent measures a
     // balance and offers an intent; fulfilling THAT intent delivers the amount to a Pot, where a

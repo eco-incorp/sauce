@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from "fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "path";
 import { fileURLToPath } from "node:url";
+import { resolveSdkModule, resolveSdkPackage } from "../src/embedded/resolve.js";
 import { ensureVoidMain } from "../src/routes/rs-compile.js";
 import { keccak256, toBytes, toHex } from "viem";
 import type { CompileResult as RustCompileResult, SauceTarget } from "sauce-compiler";
@@ -25,6 +26,7 @@ const { compile: compileRust } = createRequire(import.meta.url)("sauce-compiler"
     target: SauceTarget;
     entry?: string;
     resolve: (path: string) => Uint8Array | undefined;
+    resolvePackage?: (specifier: string) => string | undefined;
     defines?: Array<[name: string, value: string]>;
     inlineContracts?: Array<[name: string, abi: string]>;
   }) => RustCompileResult;
@@ -265,14 +267,16 @@ function loadProtocolAbis(protocolDir: string): Record<string, unknown> {
  *
  * A template's `import { SomeABI as IFoo } from "./abis"` is a CONTRACT import there: the
  * specifier resolves to ABI JSON rather than to a module, so the resolver serves the named export
- * of the protocol's `abis.ts` at that path. Compilation failure throws.
+ * of the protocol's `abis.ts` at that path. A token write imports `@sauce/token` instead, which is
+ * resolved the way a consumer resolves it: through the SDK's own `resolveSdkPackage` and
+ * `resolveSdkModule`, exported from `@eco-incorp/sauce/compiler`. Compilation failure throws.
  */
 export function compileSauceFunctionRust(
   sauceScript: string,
   protocolDir: string,
   target: SauceTarget = "evm",
 ): RustCompileResult {
-  const [contractImport] = parseImports(sauceScript);
+  const [contractImport] = parseImports(sauceScript).filter((spec) => spec.source.startsWith("."));
   const abi = contractImport
     ? (loadProtocolAbis(protocolDir)[contractImport.exportName] as unknown[] | undefined)
     : undefined;
@@ -293,10 +297,10 @@ export function compileSauceFunctionRust(
       return Buffer.from(JSON.stringify(abi));
     }
 
-    return undefined;
+    return resolveSdkModule(path);
   };
 
-  return compileRust({ target, entry, resolve });
+  return compileRust({ target, entry, resolve, resolvePackage: resolveSdkPackage });
 }
 
 /**
