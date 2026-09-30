@@ -12,11 +12,12 @@
  * docs examples verbatim, compiled with the SDK's real registry. An intent published on one anvil
  * is fulfilled on the next from the bytes that anvil's Portal logged.
  *
- * WHY `routes-nest-dynamic.e2e.test.ts` MISSED THIS. It runs ONE anvil as Base and names its tokens
- * through a `tokens: { USDC }` override or a define. Both give a symbol one address on every chain,
- * so a reward resolved against the destination was the same address as one resolved against the
- * source, and its intents were never fulfilled on a chain whose id differed. Nothing it did could
- * tell the two chains apart.
+ * WHY `routes-nest-dynamic.e2e.test.ts` MISSED THIS. It runs ONE anvil, as Base, and named every
+ * token through a define or — in its README test, until this suite was written — a
+ * `tokens: { USDC }` override. Both give a symbol one address on every chain, so a reward resolved
+ * against the destination was the same address as one resolved against the source, and no intent it
+ * published was ever fulfilled on a chain with another id. Nothing it did could tell two chains
+ * apart.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX, like every other executing EVM suite here.
  */
