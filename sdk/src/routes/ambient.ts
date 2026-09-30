@@ -93,9 +93,9 @@ export function chainAmbient(_chain: CanonicalChain): string[] {
  * `defines` (the caller wins a collision), and `chainAmbient` merged with the caller's `ambient`,
  * deduped — either side may name the same module.
  *
- * What `openRoute` compiles every route body with, and what the `sauce` command compiles a file
- * with, so a program means the same thing whichever of the two compiles it. `compileSauceRoute`
- * itself deliberately adds none of this.
+ * The bundle `openRoute` compiles a route body with, for `compileSauceProgram` — so a program
+ * means the same thing on a Pot as in an intent. `compileSauceRoute` itself deliberately adds none
+ * of this.
  */
 export function withChainAmbient(
   chain: CanonicalChain,
