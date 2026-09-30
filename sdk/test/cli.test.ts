@@ -1,0 +1,796 @@
+/**
+ * The `sauce` command, in process: its flags, what each command prints, and that it compiles a
+ * file exactly as `openRoute` compiles a route body. Executing what it prints is `cli.e2e.test.ts`.
+ */
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { bytesToHex, decodeFunctionData, getAddress, type Hex } from "viem";
+
+import { requireChain } from "../src/chains/canonical.js";
+import {
+  parseChain,
+  parseDefines,
+  parseDefinesFile,
+  parseHeader,
+  parseSalt,
+  UsageError,
+} from "../src/cli/args.js";
+import { castSend } from "../src/cli/commands.js";
+import { initProject, scaffold } from "../src/cli/init.js";
+import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
+import {
+  checkSkills,
+  installSkills,
+  INSTALL_RECORD,
+  PACKAGED_SKILLS,
+  planSkills,
+  SKILLS_DIR,
+  type SkillsSource,
+} from "../src/cli/skills.js";
+import { v12DeployedAddresses, v12EngineAddress } from "../src/deployments/index.js";
+import { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "../src/deployments/pot.js";
+import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
+import * as root from "../src/index.js";
+import { openRoute } from "../src/routes/intent-dsl.js";
+import { compileSauceRoute } from "../src/routes/sauce-route.js";
+
+const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+const RECIPIENT = "0x6666666666666666666666666666666666666666";
+const CREATOR = "0x3333333333333333333333333333333333333333";
+const PROVER = "0x4444444444444444444444444444444444444444";
+
+const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
+const MANIFEST = JSON.parse(readFileSync(join(SDK, "..", "package.json"), "utf8")) as {
+  name: string;
+  version: string;
+};
+
+interface Run {
+  readonly code: number;
+  readonly stdout: string;
+  readonly stderr: string;
+  /** What `io.run` was asked to execute. */
+  readonly ran: ReadonlyArray<{ command: string; args: readonly string[]; cwd: string }>;
+}
+
+async function sauce(...argv: string[]): Promise<Run> {
+  let stdout = "";
+  let stderr = "";
+  const ran: Array<{ command: string; args: readonly string[]; cwd: string }> = [];
+  const io: CliIo = {
+    ...nodeIo(),
+    stdout: (text) => void (stdout += text),
+    stderr: (text) => void (stderr += text),
+    run: (command, args, cwd) => {
+      ran.push({ command, args, cwd });
+
+      return 0;
+    },
+  };
+  const code = await runCli(argv, io);
+
+  return { code, stdout, stderr, ran };
+}
+
+const json = (run: Run): Record<string, unknown> => {
+  expect(run.stderr).toBe("");
+  expect(run.code).toBe(0);
+
+  return JSON.parse(run.stdout) as Record<string, unknown>;
+};
+
+let work: string;
+const file = (name: string, text: string): string => {
+  const path = join(work, name);
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, text);
+
+  return path;
+};
+
+beforeEach(() => {
+  work = mkdtempSync(join(tmpdir(), "sauce-cli-"));
+});
+afterEach(() => rmSync(work, { recursive: true, force: true }));
+
+const PAY = "USDC.transfer(RECIPIENT, AMOUNT);\nUSDT.transfer(RECIPIENT, AMOUNT);\n";
+const PAY_DEFINES = [`--define`, `RECIPIENT=${RECIPIENT}`, `--define`, `AMOUNT=1000`];
+
+describe("flags", () => {
+  it("parses defines as the SDK takes them, refusing what the compiler would", () => {
+    expect(parseDefines(["A=1_000n", "B=0xff", "C=true", "D=false"])).toEqual({
+      A: 1000n,
+      B: 255n,
+      C: true,
+      D: false,
+    });
+    expect(parseDefines([`R=${RECIPIENT}`])).toEqual({ R: BigInt(RECIPIENT) });
+    for (const bad of ["A", "1A=1", "A=-1", "A=1.5", "A=x", `A=0x1${"0".repeat(64)}`]) {
+      expect(() => parseDefines([bad])).toThrow(UsageError);
+    }
+    expect(() => parseDefines(["A=1", "A=2"])).toThrow(/A is given twice/);
+  });
+
+  it("reads a defines file of names to addresses, integers and booleans", () => {
+    expect(
+      parseDefinesFile(
+        JSON.stringify({ R: RECIPIENT, N: 5, BIG: "1_000_000n", ON: true }),
+        "d.json",
+      ),
+    ).toEqual({ R: BigInt(RECIPIENT), N: 5n, BIG: 1_000_000n, ON: true });
+    for (const bad of [
+      "[]",
+      "1",
+      "{",
+      '{"A": null}',
+      '{"A": 1.5}',
+      '{"A": -1}',
+      '{"A": [1]}',
+      '{"A": 9007199254740993}',
+      '{"1A": 1}',
+    ]) {
+      expect(() => parseDefinesFile(bad, "d.json")).toThrow(/--defines d\.json/);
+    }
+  });
+
+  it("left-pads a salt to 32 bytes and refuses one longer", () => {
+    expect(parseSalt("0x07")).toBe(`0x${"00".repeat(31)}07`);
+    expect(() => parseSalt(`0x${"00".repeat(33)}`)).toThrow(UsageError);
+    expect(() => parseSalt("7")).toThrow(UsageError);
+  });
+
+  it("finds a chain by slug, alias or id, and lists the chains when it cannot", () => {
+    expect(parseChain("base").id).toBe(8453);
+    expect(parseChain("8453").slug).toBe("base");
+    expect(parseChain("eth").slug).toBe("ethereum");
+    expect(() => parseChain("basee")).toThrow(/--chain: Unknown chain 'basee' \(known slugs: /);
+  });
+
+  it("reads @chain and @target from the leading comment lines only", () => {
+    expect(parseHeader("// @chain base\n// @target evm\n// prose\nx;", "f")).toEqual({
+      chain: "base",
+      target: "evm",
+    });
+    expect(parseHeader("x;\n// @chain base\n", "f")).toEqual({});
+    expect(parseHeader("// prose @chain base\n", "f")).toEqual({});
+    expect(() => parseHeader("// @chain base\n// @chain arbitrum\n", "f")).toThrow(
+      /f:2: the header gives @chain twice/,
+    );
+  });
+});
+
+describe("sauce (no command)", () => {
+  it("prints usage, and exits 2 when given nothing", async () => {
+    const bare = await sauce();
+    expect(bare.code).toBe(2);
+    expect(bare.stderr).toMatch(/Usage: sauce <command>/);
+    for (const argv of [["--help"], ["help"], ["help", "tx"], ["tx", "--help"], ["pot", "-h"]]) {
+      const run = await sauce(...argv);
+      expect(run.code).toBe(0);
+      expect(run.stdout).toMatch(/Usage: sauce/);
+    }
+    expect((await sauce("tx", "--help")).stdout).toMatch(/--rpc-url <url>/);
+  });
+
+  it("names an unknown command, and prints its own version", async () => {
+    const run = await sauce("deploy");
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(
+      /unknown command 'deploy'. Commands: compile, tx, pot, skills, init/,
+    );
+    expect((await sauce("--version")).stdout).toBe(`${MANIFEST.name} ${MANIFEST.version}\n`);
+  });
+});
+
+describe("sauce compile", () => {
+  it("compiles a file byte-for-byte as openRoute compiles the same body", async () => {
+    const run = await sauce(
+      "compile",
+      file("pay.sauce.ts", PAY),
+      "--chain",
+      "ethereum",
+      ...PAY_DEFINES,
+    );
+    expect(run.code).toBe(0);
+    const built = openRoute("ethereum", PAY, {
+      deadline: 2_000_000_000n,
+      defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT: 1000n },
+    }).reward({ source: "base", creator: CREATOR, prover: PROVER, nativeAmount: 0n });
+    expect(run.stdout).toBe(`${bytesToHex(built.compiled.bytecode[0]!)}\n`);
+  });
+
+  it("has the chain's ambient names a bare compileSauceRoute does not: chainId and @sauce/token", async () => {
+    const body = "require(chainId == 8453n);\ntransfer(USDC, RECIPIENT, 5n);\n";
+    const run = await sauce(
+      "compile",
+      file("ambient.sauce.ts", body),
+      "--chain",
+      "base",
+      ...PAY_DEFINES,
+    );
+    expect(run.stderr).toBe("");
+    expect(run.stdout).toMatch(/^0x[0-9a-f]+\n$/);
+    expect(() =>
+      compileSauceRoute(
+        "base",
+        body,
+        { pot: OWNER, engine: OWNER },
+        {
+          defines: { RECIPIENT: BigInt(RECIPIENT) },
+        },
+      ),
+    ).toThrow();
+  });
+
+  it("prints JSON with the size, the compiler and the engine the program pairs with", async () => {
+    const out = json(
+      await sauce(
+        "compile",
+        file("pay.sauce.ts", PAY),
+        "--chain",
+        "ethereum",
+        ...PAY_DEFINES,
+        "--json",
+      ),
+    );
+    const compiler = JSON.parse(
+      readFileSync(join(SDK, "node_modules/sauce-compiler/package.json"), "utf8"),
+    );
+    const release = v12DeployedAddresses().releases["v12-evm"];
+    expect(out).toEqual({
+      chain: "ethereum",
+      chainId: 1,
+      target: "evm",
+      bytecode: expect.stringMatching(/^0x[0-9a-f]+$/),
+      size: ((out.bytecode as string).length - 2) / 2,
+      compiler: { name: "@eco-incorp/sauce-compiler", version: compiler.version },
+      engine: {
+        release: "v12-evm",
+        version: release.version,
+        commit: release.commit,
+        address: getAddress(v12EngineAddress()),
+      },
+    });
+  });
+
+  it("compiles for Solana, reporting the account manifest", async () => {
+    const program = file(
+      "svm.sauce.ts",
+      "const vault = svm.remainingAccount(0);\nrequire(vault.dataLen > 0);\n",
+    );
+    for (const selector of [
+      ["--chain", "solana"],
+      ["--target", "svm"],
+    ]) {
+      const out = json(await sauce("compile", program, ...selector, "--json"));
+      expect(out.target).toBe("svm");
+      expect(out.chain).toBe("solana");
+      expect(out.manifest).toEqual({ accounts: [{ kind: "remaining", from: 0 }] });
+      expect(out.engine).toMatchObject({ release: "v12-svm", programId: expect.any(String) });
+    }
+  });
+
+  it("takes the chain and target from the file's header, and a flag over it", async () => {
+    const program = file("header.sauce.ts", `// @chain ethereum\n// @target evm\n${PAY}`);
+    const fromHeader = await sauce("compile", program, ...PAY_DEFINES, "--json");
+    expect(json(fromHeader).chain).toBe("ethereum");
+    const mismatched = await sauce("compile", program, "--chain", "solana");
+    expect(mismatched.code).toBe(2);
+    expect(mismatched.stderr).toMatch(/header\.sauce\.ts's \/\/ @target evm does not match solana/);
+    const overridden = await sauce(
+      "compile",
+      file("h2.sauce.ts", "// @chain base\nrequire(chainId == 1n);\n"),
+      "--chain",
+      "1",
+    );
+    expect(overridden.code).toBe(0);
+    const bad = await sauce("compile", file("h3.sauce.ts", "// @chain basee\nx;\n"));
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toMatch(/h3\.sauce\.ts's \/\/ @chain: Unknown chain 'basee'/);
+  });
+
+  it("layers --define over a --defines file", async () => {
+    const defines = file("defines.json", JSON.stringify({ RECIPIENT, AMOUNT: 7 }));
+    const layered = await sauce(
+      "compile",
+      file("pay.sauce.ts", PAY),
+      "--chain",
+      "ethereum",
+      "--defines",
+      defines,
+      "--define",
+      "AMOUNT=1000",
+    );
+    const direct = await sauce(
+      "compile",
+      file("pay2.sauce.ts", PAY),
+      "--chain",
+      "ethereum",
+      ...PAY_DEFINES,
+    );
+    expect(layered.stdout).toBe(direct.stdout);
+  });
+
+  it("writes to --out instead of stdout", async () => {
+    const out = join(work, "out.hex");
+    const run = await sauce(
+      "compile",
+      file("pay.sauce.ts", PAY),
+      "--chain",
+      "ethereum",
+      ...PAY_DEFINES,
+      "--out",
+      out,
+    );
+    expect(run.stdout).toBe("");
+    expect(readFileSync(out, "utf8")).toMatch(/^0x[0-9a-f]+\n$/);
+  });
+
+  it("serves the program's relative imports from beside the file", async () => {
+    file("lib/fee.js", "export function fee(amount) { return amount / 100n; }\n");
+    const program = file(
+      "main.sauce.ts",
+      'import { fee } from "./lib/fee.js";\nfunction main() {\n  require(fee(AMOUNT) > 0n);\n}\n',
+    );
+    const run = await sauce("compile", program, "--chain", "base", "--define", "AMOUNT=1000");
+    expect(run.stderr).toBe("");
+    expect(run.code).toBe(0);
+    const missing = file(
+      "lost.sauce.ts",
+      'import { fee } from "./lib/nope.js";\nfunction main() {}\n',
+    );
+    expect((await sauce("compile", missing, "--chain", "base")).code).toBe(1);
+    // A bare body cannot carry an import, since it is wrapped in `main`: say what to write instead.
+    const bare = file(
+      "bare.sauce.ts",
+      'import { fee } from "./lib/fee.js";\nrequire(fee(1n) > 0n);\n',
+    );
+    expect((await sauce("compile", bare, "--chain", "base")).stderr).toMatch(
+      /hint: a file that imports must declare function main\(\)/,
+    );
+  });
+
+  it("reports a compile error at the file's own line, even on a line the SDK rewrote", async () => {
+    const program = file("pay.sauce.ts", `// Pays.\n${PAY}`);
+    const run = await sauce("compile", program, "--chain", "ethereum", "--define", "AMOUNT=1");
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain(`--> ${program}:2:15`);
+    expect(run.stderr).toContain("2 | USDC.transfer(RECIPIENT, AMOUNT);");
+    expect(run.stderr).toMatch(/\|\s{15}\^{9}/);
+    expect(run.stderr).toContain(
+      "hint: if RECIPIENT is a value you supply, pass --define RECIPIENT=<value>",
+    );
+    expect(run.stderr).not.toContain("main.js");
+  });
+
+  it("reports a syntax error at the file's own line and column", async () => {
+    const program = file("bad.sauce.ts", "USDC.transfer(RECIPIENT, 1n);\nconst z = ;\n");
+    const run = await sauce("compile", program, "--chain", "base");
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain("error: Unexpected token");
+    expect(run.stderr).toContain(`--> ${program}:2:11`);
+    expect(run.stderr).toContain("2 | const z = ;");
+  });
+
+  it("names a token the chain does not register", async () => {
+    const run = await sauce(
+      "compile",
+      file("pay.sauce.ts", PAY),
+      "--chain",
+      "base",
+      ...PAY_DEFINES,
+    );
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(
+      /hint: USDT is not a registered token on base \(it has USDC, WETH\)/,
+    );
+  });
+
+  it("builds an intent the program opens, naming each setting it lacks", async () => {
+    const body = [
+      "const amount = USDC.balanceOf(ctx.self());",
+      "Arbitrum(() => {",
+      "  USDC.transfer(RECIPIENT, amount);",
+      "}).reward({ tokens: [{ token: USDC, amount }] });",
+      "",
+    ].join("\n");
+    const program = file("intent.sauce.ts", body);
+    const recipient = ["--define", `RECIPIENT=${RECIPIENT}`];
+    const noDeadline = await sauce("compile", program, "--chain", "base", ...recipient);
+    expect(noDeadline.code).toBe(1);
+    expect(noDeadline.stderr).toMatch(
+      /needs a `deadline`[^]*hint: pass --intent-deadline <unix seconds>/,
+    );
+    const noCreator = await sauce(
+      "compile",
+      program,
+      "--chain",
+      "base",
+      ...recipient,
+      "--intent-deadline",
+      "2000000000",
+    );
+    expect(noCreator.stderr).toMatch(/hint: pass --intent-creator <address>/);
+    const built = await sauce(
+      "compile",
+      program,
+      "--chain",
+      "base",
+      ...recipient,
+      "--intent-deadline",
+      "2000000000",
+      "--intent-creator",
+      CREATOR,
+    );
+    expect(built.code).toBe(0);
+    const viaOpenRoute = openRoute("base", body, {
+      deadline: 2_000_000_000n,
+      creator: CREATOR,
+      defines: { RECIPIENT: BigInt(RECIPIENT) },
+    }).reward({ source: "ethereum", creator: CREATOR, prover: PROVER, nativeAmount: 0n });
+    expect(built.stdout).toBe(`${bytesToHex(viaOpenRoute.compiled.bytecode[0]!)}\n`);
+  });
+
+  it("names what is wrong with the invocation, exiting 2", async () => {
+    const program = file("pay.sauce.ts", PAY);
+    const cases: Array<[string[], RegExp]> = [
+      [["compile", program], /missing --chain <slug\|id>/],
+      [["compile", "--chain", "base"], /missing <file>/],
+      [["compile", program, "extra", "--chain", "base"], /unexpected argument extra/],
+      [["compile", program, "--chain"], /--chain needs a value: <slug\|id>/],
+      [["compile", program, "--chain", "base", "--bogus"], /unknown option --bogus/],
+      [["compile", program, "--chain", "base", "--json=1"], /--json takes no value/],
+      [
+        ["compile", program, "--chain", "base", "--target", "wasm"],
+        /--target: 'wasm' is not a target/,
+      ],
+      [["compile", program, "--target", "evm"], /missing --chain/],
+      [["compile", program, "--chain", "base", "--define", "A"], /--define: 'A' is not NAME=VALUE/],
+    ];
+    for (const [argv, message] of cases) {
+      const run = await sauce(...argv);
+      expect(run.code).toBe(2);
+      expect(run.stderr).toMatch(message);
+      expect(run.stderr).toMatch(/Run `sauce compile --help` for usage\./);
+    }
+    const missing = await sauce("compile", join(work, "nope.sauce.ts"), "--chain", "base");
+    expect(missing.code).toBe(1);
+    expect(missing.stderr).toMatch(/nope\.sauce\.ts: no such file/);
+  });
+});
+
+describe("sauce tx", () => {
+  const pay = (): string => file("pay.sauce.ts", PAY);
+
+  it("builds the cook on the owner's derived Pot, and the cast line that sends it", async () => {
+    const out = json(
+      await sauce(
+        "tx",
+        pay(),
+        "--chain",
+        "ethereum",
+        "--owner",
+        OWNER,
+        ...PAY_DEFINES,
+        "--value",
+        "1234",
+        "--json",
+      ),
+    );
+    const pot = v12PredictPot(OWNER, SAUCE_INTENT_POT_SALT);
+    const program = (
+      await sauce("compile", pay(), "--chain", "ethereum", ...PAY_DEFINES)
+    ).stdout.trim();
+    const cook = decodeFunctionData({ abi: v12Pot.abi, data: out.data as Hex });
+    expect(cook.functionName).toBe("cook");
+    expect(cook.args).toEqual([getAddress(v12EngineAddress()), program]);
+    expect(out).toEqual({
+      chain: "ethereum",
+      chainId: 1,
+      to: pot,
+      data: v12Pot.encodeCook(getAddress(v12EngineAddress()), program as Hex),
+      value: "1234",
+      engine: getAddress(v12EngineAddress()),
+      pot: { address: pot, owner: OWNER, salt: SAUCE_INTENT_POT_SALT, deployed: null },
+      size: (program.length - 2) / 2,
+      cast: `cast send ${pot} ${out.data} --value 1234 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>`,
+    });
+    expect(castSend(pot as `0x${string}`, out.data as Hex, 1234n)).toBe(out.cast);
+  });
+
+  it("says what must exist on chain, and how to deploy the Pot", async () => {
+    const run = await sauce(
+      "tx",
+      pay(),
+      "--chain",
+      "ethereum",
+      "--owner",
+      OWNER,
+      "--salt",
+      "0x07",
+      ...PAY_DEFINES,
+      "--value",
+      "0",
+    );
+    expect(run.code).toBe(0);
+    const pot = v12PredictPot(OWNER, parseSalt("0x07"));
+    expect(run.stdout).toMatch(
+      new RegExp(`^to     ${pot}\ndata   0x[0-9a-f]+\nvalue  0\n\ncast send ${pot} `),
+    );
+    expect(run.stdout).toContain(
+      `It must be deployed (sauce pot --owner ${OWNER} --chain ethereum --salt ${parseSalt("0x07")})`,
+    );
+    expect(run.stdout).toContain(`Send from ${OWNER}: cook() is onlyOwner.`);
+  });
+
+  it("cooks on a Pot named outright", async () => {
+    const pot = "0x1111111111111111111111111111111111111111";
+    const out = json(
+      await sauce(
+        "tx",
+        pay(),
+        "--chain",
+        "1",
+        "--pot",
+        pot,
+        ...PAY_DEFINES,
+        "--value",
+        "0",
+        "--json",
+      ),
+    );
+    expect(out.to).toBe(pot);
+    expect(out.pot).toEqual({ address: pot, owner: null, salt: null, deployed: null });
+  });
+
+  it("names what is wrong with the invocation, exiting 2", async () => {
+    const program = pay();
+    const cases: Array<[string[], RegExp]> = [
+      [
+        ["tx", program, "--chain", "ethereum", "--value", "0"],
+        /missing --pot <address> or --owner <address>/,
+      ],
+      [
+        ["tx", program, "--chain", "ethereum", "--pot", OWNER, "--owner", OWNER, "--value", "0"],
+        /give --pot or --owner, not both/,
+      ],
+      [
+        ["tx", program, "--chain", "ethereum", "--pot", OWNER, "--salt", "0x01", "--value", "0"],
+        /--salt goes with --owner/,
+      ],
+      [
+        ["tx", program, "--chain", "ethereum", "--owner", OWNER],
+        /missing --value <wei>[^]*--rpc-url/,
+      ],
+      [
+        ["tx", program, "--chain", "ethereum", "--owner", "0x12", "--value", "0"],
+        /--owner: '0x12' is not an address/,
+      ],
+      [
+        ["tx", program, "--chain", "ethereum", "--owner", OWNER, "--value", "1e18"],
+        /--value: '1e18' is not an amount in wei/,
+      ],
+      [
+        ["tx", program, "--chain", "solana", "--owner", OWNER, "--value", "0"],
+        /solana is not an EVM chain/,
+      ],
+    ];
+    for (const [argv, message] of cases) {
+      const run = await sauce(...argv);
+      expect(run.code).toBe(2);
+      expect(run.stderr).toMatch(message);
+    }
+  });
+});
+
+describe("sauce pot", () => {
+  it("predicts the Pot and builds Kitchen.deployPot", async () => {
+    const out = json(
+      await sauce("pot", "--owner", OWNER, "--chain", "base", "--salt", "0x07", "--json"),
+    );
+    const salt = parseSalt("0x07");
+    expect(out).toEqual({
+      chain: "base",
+      chainId: 8453,
+      owner: OWNER,
+      salt,
+      pot: v12PredictPot(OWNER, salt),
+      kitchen: v12GateKitchen(),
+      to: v12GateKitchen(),
+      data: v12Kitchen.encodeDeployPot(OWNER, salt),
+      value: "0",
+      cast: `cast send ${v12GateKitchen()} ${out.data} --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>`,
+    });
+    expect(json(await sauce("pot", "--owner", OWNER, "--chain", "base", "--json")).salt).toBe(
+      SAUCE_INTENT_POT_SALT,
+    );
+  });
+
+  it("refuses a missing owner and a non-EVM chain", async () => {
+    expect((await sauce("pot", "--chain", "base")).stderr).toMatch(/missing --owner <address>/);
+    expect((await sauce("pot", "--owner", OWNER)).stderr).toMatch(/missing --chain/);
+    const svm = await sauce("pot", "--owner", OWNER, "--chain", "solana");
+    expect(svm.code).toBe(2);
+    expect(svm.stderr).toMatch(/solana is not an EVM chain/);
+  });
+});
+
+describe("sauce skills install", () => {
+  let source: SkillsSource;
+  let project: string;
+  const installed = (path: string): string => join(project, SKILLS_DIR, path);
+
+  beforeEach(() => {
+    const dir = join(work, "packaged");
+    mkdirSync(join(dir, "alpha", "examples"), { recursive: true });
+    writeFileSync(join(dir, "alpha", "SKILL.md"), "alpha v1\n");
+    writeFileSync(join(dir, "alpha", "examples", "one.sauce.ts"), "one v1\n");
+    source = { dir, packageName: "@eco-incorp/sauce", version: "9.9.9" };
+    project = join(work, "project");
+    mkdirSync(project);
+  });
+
+  it("writes every file, records it, and changes nothing on a second install", () => {
+    const first = installSkills(project, source, false);
+    expect(first.map((file) => file.state)).toEqual(["added", "added"]);
+    expect(readFileSync(installed("alpha/SKILL.md"), "utf8")).toBe("alpha v1\n");
+    const record = JSON.parse(readFileSync(installed(INSTALL_RECORD), "utf8"));
+    expect(record).toMatchObject({ package: "@eco-incorp/sauce", version: "9.9.9" });
+    expect(Object.keys(record.files)).toEqual(["alpha/SKILL.md", "alpha/examples/one.sauce.ts"]);
+    expect(installSkills(project, source, false).map((file) => file.state)).toEqual([
+      "unchanged",
+      "unchanged",
+    ]);
+    expect(checkSkills(project, source)).toEqual([]);
+  });
+
+  it("replaces an untouched older copy, and removes one the package dropped", () => {
+    installSkills(project, source, false);
+    writeFileSync(join(source.dir, "alpha", "SKILL.md"), "alpha v2\n");
+    rmSync(join(source.dir, "alpha", "examples", "one.sauce.ts"));
+    expect(checkSkills(project, source)).toEqual([
+      `differs           ${join(SKILLS_DIR, "alpha", "SKILL.md")}`,
+      `no longer shipped ${join(SKILLS_DIR, "alpha", "examples", "one.sauce.ts")}`,
+    ]);
+    const plan = installSkills(project, source, false);
+    expect(plan.map((file) => [file.state, file.shipped])).toEqual([
+      ["updated", true],
+      ["stale", false],
+    ]);
+    expect(readFileSync(installed("alpha/SKILL.md"), "utf8")).toBe("alpha v2\n");
+    expect(() => readFileSync(installed("alpha/examples/one.sauce.ts"))).toThrow();
+    expect(checkSkills(project, source)).toEqual([]);
+  });
+
+  it("refuses to overwrite an edited file, lists it, and overwrites it only with --force", () => {
+    installSkills(project, source, false);
+    writeFileSync(installed("alpha/SKILL.md"), "my notes\n");
+    writeFileSync(join(source.dir, "alpha", "SKILL.md"), "alpha v2\n");
+    expect(planSkills(project, source).find((file) => file.state === "edited")?.path).toBe(
+      join(SKILLS_DIR, "alpha", "SKILL.md"),
+    );
+    expect(() => installSkills(project, source, false)).toThrow(
+      new RegExp(`not installing[^]*${join(SKILLS_DIR, "alpha", "SKILL.md")}[^]*--force`),
+    );
+    expect(readFileSync(installed("alpha/SKILL.md"), "utf8")).toBe("my notes\n");
+    installSkills(project, source, true);
+    expect(readFileSync(installed("alpha/SKILL.md"), "utf8")).toBe("alpha v2\n");
+  });
+
+  it("treats an existing file it never installed as an edit", () => {
+    mkdirSync(join(project, SKILLS_DIR, "alpha"), { recursive: true });
+    writeFileSync(installed("alpha/SKILL.md"), "someone else's\n");
+    expect(() => installSkills(project, source, false)).toThrow(/not installing/);
+  });
+
+  it("leaves a project's own skills alone", () => {
+    mkdirSync(join(project, SKILLS_DIR, "mine"), { recursive: true });
+    writeFileSync(installed("mine/SKILL.md"), "mine\n");
+    installSkills(project, source, true);
+    expect(readFileSync(installed("mine/SKILL.md"), "utf8")).toBe("mine\n");
+  });
+
+  it("installs the package's own skills from the command, and --check fails until it has", async () => {
+    const before = await sauce("skills", "install", "--dir", project, "--check");
+    expect(before.code).toBe(1);
+    expect(before.stderr).toMatch(
+      /are not this version's[^]*missing\s+\.claude\/skills\/sauce-run\/SKILL\.md/,
+    );
+    const run = await sauce("skills", "install", "--dir", project);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(/^wrote\s+\.claude\/skills\/sauce-run\/SKILL\.md$/m);
+    expect(readFileSync(installed("sauce-run/SKILL.md"), "utf8")).toBe(
+      readFileSync(join(PACKAGED_SKILLS, "sauce-run", "SKILL.md"), "utf8"),
+    );
+    expect((await sauce("skills", "install", "--dir", project, "--check")).code).toBe(0);
+    writeFileSync(installed("sauce-run/SKILL.md"), "edited\n");
+    const check = await sauce("skills", "install", "--dir", project, "--check");
+    expect(check.code).toBe(1);
+    expect(check.stderr).toMatch(/differs\s+\.claude\/skills\/sauce-run\/SKILL\.md/);
+    const refused = await sauce("skills", "install", "--dir", project);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(/not installing/);
+    expect((await sauce("skills", "install", "--dir", project, "--force")).code).toBe(0);
+    expect((await sauce("skills")).stderr).toMatch(/missing subcommand: install/);
+    expect((await sauce("skills", "install", "--check", "--force")).code).toBe(2);
+  });
+});
+
+describe("sauce init", () => {
+  const source = (): SkillsSource => ({
+    dir: PACKAGED_SKILLS,
+    packageName: MANIFEST.name,
+    version: MANIFEST.version,
+  });
+
+  it("scaffolds a project pinning this exact version, with the skills installed", async () => {
+    const dir = join(work, "My App");
+    const run = await sauce("init", dir);
+    expect(run.code).toBe(0);
+    const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+    expect(manifest.name).toBe("my-app");
+    expect(manifest.dependencies).toEqual({ [source().packageName]: source().version });
+    expect(readFileSync(join(dir, ".gitignore"), "utf8")).toMatch(/^sauce\.config\.json$/m);
+    const config = JSON.parse(readFileSync(join(dir, "sauce.config.example.json"), "utf8"));
+    for (const url of Object.values(config.rpcUrls as Record<string, string>)) {
+      expect(url).toMatch(/^<[^<>]+>$/);
+    }
+    expect(readFileSync(join(dir, "CLAUDE.md"), "utf8")).toMatch(/\.claude\/skills\//);
+    expect(checkSkills(dir, source())).toEqual([]);
+    expect(run.stdout).toMatch(/Next:\n {2}cd .*My App\n {2}npm install\n/);
+    expect(run.ran).toEqual([]);
+  });
+
+  it("is idempotent, and overwrites nothing without --force", async () => {
+    const dir = join(work, "app");
+    await sauce("init", dir);
+    expect((await sauce("init", dir)).code).toBe(0);
+    writeFileSync(join(dir, "package.json"), "{}\n");
+    const refused = await sauce("init", dir);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(/already has files init would overwrite:\n {2}package\.json\n/);
+    expect(readFileSync(join(dir, "package.json"), "utf8")).toBe("{}\n");
+    expect((await sauce("init", dir, "--force")).code).toBe(0);
+    expect(readFileSync(join(dir, "package.json"), "utf8")).toBe(
+      scaffold(dir, source())["package.json"],
+    );
+  });
+
+  it("writes into a non-empty directory when nothing would be overwritten", () => {
+    const dir = join(work, "existing");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "README.md"), "mine\n");
+    const result = initProject(dir, source(), false);
+    expect(result.files.every((entry) => entry.state === "wrote")).toBe(true);
+    expect(readFileSync(join(dir, "README.md"), "utf8")).toBe("mine\n");
+  });
+
+  it("runs npm install only when asked", async () => {
+    const dir = join(work, "installed");
+    const run = await sauce("init", dir, "--install");
+    expect(run.ran).toEqual([{ command: "npm", args: ["install"], cwd: dir }]);
+    expect(run.stdout).toContain(`Running npm install in ${dir}`);
+    expect(run.stdout).not.toMatch(/^ {2}npm install$/m);
+  });
+});
+
+describe("the CLI stays out of the browser-facing surface", () => {
+  it("is exported by no barrel", async () => {
+    const cli = [
+      await import("../src/cli/run.js"),
+      await import("../src/cli/commands.js"),
+      await import("../src/cli/args.js"),
+      await import("../src/cli/skills.js"),
+      await import("../src/cli/init.js"),
+    ].flatMap((module) => Object.keys(module));
+    expect(cli.length).toBeGreaterThan(0);
+    const routes = root.routes as Record<string, unknown>;
+    expect(cli.filter((name) => name in root || name in routes)).toEqual([]);
+  });
+
+  it("has a chain to name for every canonical slug", () => {
+    expect(requireChain("solana").kind).toBe("svm");
+  });
+});
