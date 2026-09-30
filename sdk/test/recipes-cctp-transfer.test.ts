@@ -26,6 +26,9 @@ const PROVER = "0x4444444444444444444444444444444444444444";
 const DEPOSIT_FOR_BURN = toFunctionSelector(
   "depositForBurn(uint256,uint32,bytes32,address,bytes32,uint256,uint32)",
 ).slice(2);
+const APPROVE = toFunctionSelector("approve(address,uint256)").slice(2);
+const ALLOWANCE = toFunctionSelector("allowance(address,address)").slice(2);
+const TRANSFER = toFunctionSelector("transfer(address,uint256)").slice(2);
 
 function params(over: Partial<CctpTransferParams> = {}): CctpTransferParams {
   return {
@@ -97,6 +100,19 @@ describe("cctp-transfer — Base→Arbitrum, DSL-native (no hardcoded ABIs/addre
     const built = buildCctpSplitTransfer(params({ amount: 500_000n })); // $0.50 < $1 cap
     expect(built.intent.route.calls).toHaveLength(1);
     expect(bytesToHex(built.compiled.bytecode[0]!).slice(2).includes(DEPOSIT_FOR_BURN)).toBe(true);
+  });
+
+  it("both programs write through @sauce/token's SafeERC20, never the typed ABI call", () => {
+    // The split's approve reads the allowance first — `forceApprove`'s zero-first reset, which a
+    // shared Pot needs. What each program does against USDT's empty return and a `false` return is
+    // executed in `test/std/token/evm.e2e.test.ts`.
+    const splitHex = bytesToHex(buildCctpSplitTransfer(params()).compiled.bytecode[0]!).slice(2);
+    expect(splitHex).toContain(APPROVE);
+    expect(splitHex).toContain(ALLOWANCE);
+
+    expect(bytesToHex(buildPlainTransfer(params()).compiled.bytecode[0]!).slice(2)).toContain(
+      TRANSFER,
+    );
   });
 
   it("rejects a non-positive amount or per-message limit", () => {

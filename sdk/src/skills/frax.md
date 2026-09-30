@@ -21,17 +21,17 @@ import { protocolInfo, deployments, sauceFunctions } from "@eco-incorp/sauce/pro
 
 ```typescript
 // Transfer FRAX
-import { FraxERC20ABI as IFRAX } from "./abis";
+import { transfer } from "@sauce/token";
 function main(fraxAddress: Address, to: Address, amount: Uint256): Uint256 {
-  const frax = IFRAX.at(fraxAddress);
-  return frax.transfer(to, amount);
+  transfer(fraxAddress, to, amount);
+  return 1;
 }
 
 // Approve FRAX spender
-import { FraxERC20ABI as IFRAX } from "./abis";
+import { approve } from "@sauce/token";
 function main(fraxAddress: Address, spender: Address, amount: Uint256): Uint256 {
-  const frax = IFRAX.at(fraxAddress);
-  return frax.approve(spender, amount);
+  approve(fraxAddress, spender, amount);
+  return 1;
 }
 ```
 
