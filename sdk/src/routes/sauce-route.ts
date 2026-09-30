@@ -45,6 +45,8 @@ import {
   type EcoRoutesSelector,
 } from "../protocols/eco-routes/lookup.js";
 import { rewriteIntentSugar, type IntentSugarDefaults } from "./intent-sugar.js";
+import { withChainAmbient } from "./ambient.js";
+import { liftMainSignature, mainParams, type EntryParam } from "./entry.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -261,7 +263,7 @@ export function compileSauceRoute(
   execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
   options: SauceCompileOptions = {},
 ): CompiledSauceRoute {
-  const { chain, compiled, source } = compileSauceProgram(destination, sauce, options);
+  const { chain, compiled, source } = compileForChain(destination, sauce, options);
   const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
 
   if (chain.kind === "svm") {
@@ -292,29 +294,81 @@ export function compileSauceRoute(
   return { calls: [call], compiled, source };
 }
 
-/** What {@link compileSauceProgram} yields: the program, with nothing yet said about running it. */
+/** A standalone program, compiled for one chain: {@link compileSauceProgram}'s result. */
 export interface CompiledSauceProgram {
   readonly chain: CanonicalChain;
-  readonly compiled: CompileResult;
+  /** The program. `Pot.cook(engine, program)` runs it, with any entry arguments appended. */
+  readonly bytecode: Uint8Array;
+  /** How `main`'s arguments are encoded: `abi-v1`, or `compact-v1` under `compactArgs`. */
+  readonly entryEncoding: "abi-v1" | "compact-v1";
+  /** With compact-v1, the schema its arguments are encoded against. */
+  readonly entrySchema?: Uint8Array;
+  /** `main`'s runtime parameters, in order — on Solana without the `Account` slots, which the
+   *  manifest carries. `encodeEntryArguments` encodes values for them. */
+  readonly entryParams: readonly EntryParam[];
+  /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
+  readonly manifest?: AccountManifest;
   /** Source after SDK wrapping and rewrites, before the compiler adapter adds entry annotations. */
   readonly source: string;
-  /** The SVM account manifest — the order a caller attaches accounts in. Absent on the EVM. */
-  readonly manifest?: AccountManifest;
 }
 
 /**
- * The compile half of {@link compileSauceRoute}: every rewrite and the compile, for `destination`,
- * with no execution — no Pot, engine or staged code account, because the bytecode depends on none
- * of them. `compileSauceRoute` is this plus the one call that runs the result.
+ * Compiles a standalone program for `chain`: a program that runs directly on a Pot, rather than
+ * the destination half of an intent.
  *
- * Module-internal rather than part of the `routes` namespace: the package's `sauce` command is its
- * one other caller, compiling a file before anything about where it runs is known.
+ * It gets everything `openRoute` gives a route body except the intent around it: the chain's
+ * ambient bundle (`withChainAmbient` — `chainId`, protocol addresses and token symbols as defines,
+ * and the `@sauce/token` functions with no import), the token and protocol syntax, and intents the
+ * program itself opens (`Arbitrum(() => { ... }).reward({ ... })`, which take their deadline and
+ * creator from `options.intents`). So one source compiles, unchanged, for any chain whose names it
+ * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
+ * `encodeEntryArguments` encodes values for them.
  */
 export function compileSauceProgram(
-  destination: ChainRef,
+  chain: ChainRef,
   sauce: string,
   options: SauceCompileOptions = {},
 ): CompiledSauceProgram {
+  const resolved = requireChain(chain);
+  const program = compileForChain(
+    resolved,
+    sauce,
+    withChainAmbient(resolved, options, { tokens: options.tokens }),
+  );
+  const entryParams = mainParams(program.source).filter(
+    (param) => resolved.kind !== "svm" || !/^Account\b/.test(param.type),
+  );
+
+  return {
+    chain: resolved,
+    bytecode: program.compiled.bytecode[0]!,
+    entryEncoding: program.entryEncoding,
+    ...(program.compiled.entrySchema === undefined
+      ? {}
+      : { entrySchema: program.compiled.entrySchema }),
+    entryParams,
+    ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
+    source: program.source,
+  };
+}
+
+/**
+ * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: every rewrite and
+ * the compile, for `destination`, with no execution — no Pot, engine or staged code account,
+ * because the bytecode depends on none of them — and none of the chain's ambient bundle, which
+ * `compileSauceRoute` deliberately leaves to its caller.
+ */
+function compileForChain(
+  destination: ChainRef,
+  sauce: string,
+  options: SauceCompileOptions,
+): {
+  readonly chain: CanonicalChain;
+  readonly compiled: CompileResult;
+  readonly source: string;
+  readonly entryEncoding: "abi-v1" | "compact-v1";
+  readonly manifest?: AccountManifest;
+} {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
 
@@ -336,7 +390,10 @@ export function compileSauceProgram(
   // "only options.tokens, if any" -- preserving the existing svm-throws-on-any-rewrite behavior.
   const tokenMap = resolveTokenMap(chain, options.tokens);
 
-  let source = wrapSauceBody(sauce);
+  // `main`'s type annotations come off for the acorn-based passes below and go back on before the
+  // compiler sees the result (`entry.ts#liftMainSignature`); an untyped `main` is untouched.
+  const signature = liftMainSignature(wrapSauceBody(sauce));
+  let source = signature.source;
 
   // The intent sugar runs FIRST, on the source as written. It reads `USDC` and `RECIPIENT` as
   // compile-time values itself, so a token rewrite that had already turned `USDC.transfer(...)`
@@ -420,7 +477,8 @@ export function compileSauceProgram(
     }
   }
 
-  const { manifest, ...compiled } = compileWithRs({
+  source = signature.restore(source);
+  const { manifest, entryEncoding, ...compiled } = compileWithRs({
     source,
     target,
     resolve: options.resolve,
@@ -435,6 +493,6 @@ export function compileSauceProgram(
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
   return manifest === undefined
-    ? { chain, compiled, source }
-    : { chain, compiled, source, manifest };
+    ? { chain, compiled, source, entryEncoding }
+    : { chain, compiled, source, entryEncoding, manifest };
 }

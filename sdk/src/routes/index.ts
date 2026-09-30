@@ -91,13 +91,16 @@ export type {
 
 // --- cross-chain intent DSL (S1) ---
 
-export { compileSauceRoute, wrapSauceBody } from "./sauce-route.js";
+export { compileSauceProgram, compileSauceRoute, wrapSauceBody } from "./sauce-route.js";
 export type {
+  CompiledSauceProgram,
   CompiledSauceRoute,
   SauceCompileOptions,
   SauceEvmExecutionInput,
   SauceSvmExecutionInput,
 } from "./sauce-route.js";
+export { encodeEntryArguments } from "./entry.js";
+export type { EntryParam, EntryValue } from "./entry.js";
 
 export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
 export type { VaultConfig } from "./vault.js";

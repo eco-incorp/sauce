@@ -125,7 +125,7 @@ function endOfComment(source: string, open: number): number {
  * LENGTH-PRESERVING, so an index into the original still names the same character — which is what
  * lets the brace search in `mainBody` run on the blanked copy.
  */
-function blankLiterals(source: string): string {
+export function blankLiterals(source: string): string {
   const blank = (text: string): string => text.replace(/[^\n]/g, " ");
   const blanked: string[] = [];
 
@@ -251,8 +251,10 @@ export interface RsCompileInput {
   compactArgs?: boolean;
 }
 
-/** The seam's `CompileResult`, plus the SVM account manifest when the compiler returned one. */
+/** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
+ *  arguments are encoded, and the SVM account manifest when the compiler returned one. */
 export interface RsCompileResult extends CompileResult {
+  entryEncoding: "abi-v1" | "compact-v1";
   manifest?: AccountManifest;
 }
 
@@ -281,6 +283,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     bytecode: [result.bytecode],
     warnings: [],
     entrySchema: result.entrySchema,
+    entryEncoding: result.entryEncoding,
   };
   if (result.manifest !== undefined) compiled.manifest = result.manifest;
 
