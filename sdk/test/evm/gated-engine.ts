@@ -12,22 +12,13 @@
  * hash. No stand-in satisfies that — the hash pins the init code byte for byte, and a Pot's owner
  * and salt are constructor-set immutables, so a copied runtime answers `gateSalt()` wrongly.
  *
- * What DOES work, and is what this does: deploy the real `Kitchen` anywhere, copy its runtime to the
- * baked address, and let it mint the Pot itself. The engine never calls the Kitchen — it only hashes
- * its address — and the Kitchen's `router` and `potInitCodeHash` are immutables living in code, so a
- * copied runtime is a fully working Kitchen. It is left UNINITIALIZED on purpose: `executionFee()`
- * then reads unset ERC-7201 storage and quotes zero, so no cook needs `value`.
+ * Deploy the released Kitchen and Router, copy their code to the release addresses, then initialize
+ * the Kitchen owner, Router and zero test fee. Router is storage now; Pot reads it when minted.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  concat,
-  encodeAbiParameters,
-  encodeFunctionData,
-  getCreate2Address,
-  keccak256,
-} from "viem";
+import { encodeAbiParameters, encodeFunctionData, getCreate2Address, keccak256 } from "viem";
 import type { Address, Hex, PublicClient, TestClient, WalletClient } from "viem";
 
 const ARTIFACTS = resolve(dirname(fileURLToPath(import.meta.url)), "../../src/artifacts");
@@ -59,7 +50,7 @@ export interface GatedEngine {
   pot: Address;
   /** Wraps a program in the `cook` the Pot expects. */
   cookData: (program: Hex) => Hex;
-  /** What a cook must pay. Zero here, because the Kitchen is left uninitialized. */
+  /** What a cook must pay. Zero here, explicitly set after initialization. */
   fee: bigint;
 }
 
@@ -99,17 +90,32 @@ export const startGatedEngine = async (
   // codeless account — which SUCCEEDS with empty returndata rather than reverting.
   const engine = await deploy(runtimeCreationCode);
 
-  // The Kitchen, anywhere, then copied to the address the engine hashes. `router` is a constructor
-  // immutable and it is what `potInitCodeHash` is computed over, so it has to be the released one.
-  const built = await deploy(
-    concat([kitchenArtifact.bytecode, encodeAbiParameters([{ type: "address" }], [router]) as Hex]),
-  );
+  const built = await deploy(kitchenArtifact.bytecode);
   const code = await publicClient.getCode({ address: built });
   if (!code) throw new Error(`the Kitchen deployed at ${built} has no code`);
   await testClient.setCode({ address: gateKitchen, bytecode: code });
 
-  // The assertion that makes a wrong `router` fail HERE, naming the cause, rather than surfacing as
-  // an unexplained empty revert from the gate in whichever test runs first.
+  const routerDeployment = await deploy(artifact("Router").bytecode);
+  const routerCode = await publicClient.getCode({ address: routerDeployment });
+  if (!routerCode) throw new Error("the Router deployment has no code");
+  await testClient.setCode({ address: router, bytecode: routerCode });
+
+  // Initialize copied code at fresh storage, then configure through the owner's public API.
+  for (const [functionName, args] of [
+    ["initialize", [owner, 1n]],
+    ["setRouter", [router]],
+    ["setExecutionFee", [0n]],
+  ] as const) {
+    const hash = await walletClient.sendTransaction({
+      account: owner,
+      chain: null,
+      to: gateKitchen,
+      data: encodeFunctionData({ abi: kitchenArtifact.abi, functionName, args }),
+    });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`Kitchen.${functionName} failed`);
+  }
+
   const live = (await publicClient.readContract({
     abi: kitchenArtifact.abi,
     address: gateKitchen,
@@ -118,7 +124,7 @@ export const startGatedEngine = async (
   if (live.toLowerCase() !== potInitCodeHash.toLowerCase()) {
     throw new Error(
       `the Kitchen at ${gateKitchen} reports potInitCodeHash ${live}, but the engine was built ` +
-        `against ${potInitCodeHash}. Its router constructor argument (${router}) is wrong, and every ` +
+        `against ${potInitCodeHash}. The Kitchen and engine releases are incompatible, and every ` +
         "Pot minted from it would land at an address the gate rejects.",
     );
   }
@@ -144,6 +150,15 @@ export const startGatedEngine = async (
   });
   const deployed = await publicClient.getCode({ address: pot });
   if (!deployed) throw new Error(`no Pot was minted at the derived address ${pot}`);
+
+  const potRouter = await publicClient.readContract({
+    abi: potArtifact.abi,
+    address: pot,
+    functionName: "router",
+  });
+  if (String(potRouter).toLowerCase() !== router.toLowerCase()) {
+    throw new Error("the Pot did not inherit the Kitchen's configured Router");
+  }
 
   const fee = (await publicClient.readContract({
     abi: kitchenArtifact.abi,

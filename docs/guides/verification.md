@@ -221,7 +221,7 @@ instruction are the ones the application expects.
 
 `decodeSvmSettleExecution({ instructionData, accounts })` resolves accounts
 positionally against the canonical settlement refs. The default `wireFormat: "gated-v1"` accepts raw **engine CPI instructions** produced by Kitchen 1.0.0 for
-engine 1.2.0:
+engine 1.3.0:
 
 | Instruction            | Data                                                               | Full CPI account list                  |
 | ---------------------- | ------------------------------------------------------------------ | -------------------------------------- |

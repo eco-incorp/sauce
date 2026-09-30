@@ -3,9 +3,8 @@
  *
  * The solver deploys one Pot per Portal: owner = `Portal.executor()`, salt zero, through the
  * released Kitchen. An SDK route cooking anywhere else would cook on a Pot nothing deploys or
- * funds. The addresses below were read from the chain, not derived here: the production Portal's
- * `executor()`, and the released Kitchen's `predictPot(executor, 0)`, which returned the same Pot on
- * Base, OP Mainnet and Arbitrum One.
+ * funds. Executor addresses were read on-chain; Pot addresses use Kitchen 1.1.0 release initcode.
+ * These predictions require that Kitchen implementation and are not claims of live deployment.
  */
 import { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "../src/deployments/pot.js";
 import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
@@ -13,7 +12,7 @@ import { destinationPot } from "../src/routes/intent-pot.js";
 
 const PROD_PORTAL = "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df";
 const PROD_EXECUTOR = "0x645dADD5Bf354526b68A2befd9A305F7E03b91Ca";
-const SHARED_POT = "0x8C5eFf4e8a953AE5EA92190346985Dfa23db7e62";
+const SHARED_POT = "0x48e8316d8084Ea76098257f32C431263b171744a";
 
 describe("the intent Pot is the solver's shared Pot", () => {
   it("uses salt zero", () => {
@@ -39,19 +38,17 @@ describe("the intent Pot is the solver's shared Pot", () => {
 });
 
 describe("Arc has its own Portal, so its own Executor and Pot", () => {
-  // Read from Arc (rpc.mainnet.arc.io) on 2026-09-28: Portal.executor() at block 23293162, and the
-  // released Kitchen's predictPot(executor, 0) at block 23293350, which returned this Pot. The Pot
-  // had no code then: the solver (or anyone) must deploy it before an intent to Arc can execute.
+  // Portal.executor() was read on Arc at block 23293162. The Pot uses Kitchen 1.1.0 initcode.
   const ARC_PORTAL = "0xEC002CA16cE20c2a9F3C6200EF04E7d92a3dfBD8";
   const ARC_EXECUTOR = "0x95b2d45F49c68a54BDBa0356fc3034751A43b3D4";
-  const ARC_POT = "0xBDbbf86bC1D8afE1b382Eee56f5d733AC7bd43a5";
+  const ARC_POT = "0x4edfB4576F91A9c2fE9aA50f669B7C81E4B82955";
 
   it("derives the Executor Arc's Portal reports", () => {
     expect(ecoRoutesPortal("arc")).toBe(ARC_PORTAL);
     expect(ecoRoutesExecutorOf(ARC_PORTAL)).toBe(ARC_EXECUTOR);
   });
 
-  it("predicts the Pot Arc's Kitchen reports for that Executor", () => {
+  it("predicts the Pot for Arc's Executor under the released Kitchen", () => {
     expect(v12PredictPot(ARC_EXECUTOR)).toBe(ARC_POT);
     expect(destinationPot("arc")).toBe(ARC_POT);
     expect(ARC_POT).not.toBe(SHARED_POT);

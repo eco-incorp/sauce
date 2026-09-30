@@ -29,11 +29,12 @@ import {
 } from "./engine-harness.js";
 import type { EngineHarness } from "./engine-harness.js";
 
+import { compileSvm } from "./rs-compile.js";
+
 const RPC_URL = "http://127.0.0.1:65535/";
 
-/** `PUSH 42; STOP` — the same trivial program the kitchen cook suite runs. What it computes does not
- *  matter here; that it is allowed to run at all is the whole assertion. */
-const PROGRAM = new Uint8Array([0x01, 0x2a, 0x00]);
+/** Compile a scalar return using the current engine ABI, including its required boxing. */
+const PROGRAM = compileSvm("function main(): Uint256 { return 42n; }").bytecode;
 
 /**
  * Answers the two methods `simulate` makes, backing `simulateTransaction` with LiteSVM.

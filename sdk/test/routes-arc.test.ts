@@ -5,7 +5,8 @@
  * Arc's eco-routes Portal is not the one the other chains share, so an intent to Arc records Arc's
  * Portal and cooks on the Pot its Executor owns; an intent from Arc publishes and funds on Arc's
  * Portal, with native value in USDC at 18 decimals. Offline: every address below was read from the
- * chain (see deployments-pot.test.ts) or comes from the registries.
+ * chain or comes from the registries; Pot predictions use Kitchen 1.1.0 release initcode
+ * (see deployments-pot.test.ts), pending deployment.
  */
 import { bytesToHex, decodeFunctionData, getAddress, type Hex } from "viem";
 
@@ -18,7 +19,7 @@ import { ecoRoutesPortal, ecoRoutesProver } from "../src/protocols/eco-routes/lo
 
 const ARC_PORTAL = "0xEC002CA16cE20c2a9F3C6200EF04E7d92a3dfBD8";
 const BASE_PORTAL = "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df";
-const ARC_POT = "0xBDbbf86bC1D8afE1b382Eee56f5d733AC7bd43a5";
+const ARC_POT = "0x4edfB4576F91A9c2fE9aA50f669B7C81E4B82955";
 const ARC_USDC = "0x3600000000000000000000000000000000000000";
 const ARC_SWAP_ROUTER02 = "0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77";
 const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";

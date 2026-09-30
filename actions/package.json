@@ -35,7 +35,7 @@
     "capture-mainnet": "RECAPTURE_ANVIL_STATE=1 tsx --test --test-concurrency=1 tests/actions.mainnet.test.ts tests/quote.mainnet.test.ts tests/split-swap.mainnet.test.ts"
   },
   "dependencies": {
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.3.0",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.4.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {

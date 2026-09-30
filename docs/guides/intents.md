@@ -82,9 +82,9 @@ the shared Pot — to predict the Pot and check that it is deployed, with the ri
 
 Arc's eco-routes Portal (`0xEC002CA16cE20c2a9F3C6200EF04E7d92a3dfBD8`) is not the Portal most other
 chains share, so its Executor (`0x95b2d45F49c68a54BDBa0356fc3034751A43b3D4`) and the Pot derived from
-it (`destinationPot("arc")`, `0xBDbbf86bC1D8afE1b382Eee56f5d733AC7bd43a5`) are Arc's own. The released
-Kitchen is live on Arc, but on 2026-09-28 that Pot had **no code**. An intent to Arc reverts until
-the Pot is deployed, by the solver or by you with the call above.
+it (`destinationPot("arc")`, `0x4edfB4576F91A9c2fE9aA50f669B7C81E4B82955`) are Arc's own. This prediction
+uses Kitchen **1.1.0** initcode. Upgrade the Kitchen and deploy the matching engine and Pot before
+sending intents; the release address alone does not confirm readiness.
 
 The deployment helpers return the released addresses. They do not check that code is live at those
 addresses on your chain. The same helper confirms the Kitchen and engine have code, and reads the
