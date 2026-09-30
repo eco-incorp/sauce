@@ -6,7 +6,9 @@
  */
 import { compileProgram as compile, SDK_SOURCE_DIRS } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
-import { rewriteTokenMembers, tokenImportLines } from "../src/routes/token-rewrite.js";
+// Through the public `routes` barrel: a caller of `rewriteTokenMembers` needs `tokenImportLines`
+// beside it to compile the result.
+import { rewriteTokenMembers, tokenImportLines } from "../src/routes/index.js";
 import { resolveTokenMap } from "../src/routes/token-registry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
