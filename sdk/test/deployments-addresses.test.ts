@@ -87,18 +87,18 @@ describeAddresses("v12 deployed addresses", () => {
 
   it("preserves independent engine and Kitchen provenance", () => {
     const releases = v12DeployedAddresses().releases;
-    const evmEngine = { version: "1.0.1", commit: "9281c2eeb0e14557e6565a3a689ae31380740fa7" };
-    const kitchen = { version: "1.0.0", commit: "f2f6dfbe38809304d83ca755eb7975c19d35ceab" };
+    const evmEngine = { version: "1.1.0", commit: "42a492ac7ce3ae3c8444c97182306560b1f1e012" };
+    const kitchen = { version: "1.1.0", commit: evmEngine.commit };
     expect(releases).toEqual({
       "v12-evm": evmEngine,
-      "v12-svm": { version: "1.2.0", commit: "a65ede3f42149bfe35ff22d8765e878e849914ae" },
+      "v12-svm": { version: "1.3.0", commit: evmEngine.commit },
       "kitchen-evm": kitchen,
-      "kitchen-svm": kitchen,
+      "kitchen-svm": { version: "1.0.0", commit: "f2f6dfbe38809304d83ca755eb7975c19d35ceab" },
     });
     expect(v12DeployedVersion()).toBe(kitchen.version);
     expect(v12DeployedAddresses().commit).toBe(kitchen.commit);
-    expect(v12EngineAddress()).toBe("0x9745fdfaB1be84a0003f0472A842A0b91E5A323c");
-    expect(v12SvmEngineProgramId()).toBe("HB8b1oD5PB2ptkLH6EV56Rr9RHevutEfvG2YdA7an6rK");
+    expect(v12EngineAddress()).toBe("0x6785455AA479AA99D59357d7c9Fe14cba626F175");
+    expect(v12SvmEngineProgramId()).toBe("2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT");
   });
 
   it("carries the release provenance (version + commit)", () => {

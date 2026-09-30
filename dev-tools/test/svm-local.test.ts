@@ -6,6 +6,8 @@
  * Skips when no engine binary is resolvable (a bare checkout with neither `--fetch-v12-engines` nor an
  * installed package), so it never hard-fails a credential-less run — the same gate the SDK suites use.
  */
+import { compile } from "sauce-compiler";
+
 import { svmEnginePath } from "@eco-incorp/sauce-source/svm/engine-artifacts";
 import { runSvmProgramLocally } from "../src/svm-local";
 
@@ -34,13 +36,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  // PUSH 42; STOP — a self-contained program with no accounts (manifest `{ accounts: [] }`). What it
-  // computes does not matter here; that the gate lets a kitchen cook run it at all is the assertion.
-  const result = await runSvmProgramLocally(
-    new Uint8Array([0x01, 0x2a, 0x00]),
-    { accounts: [] },
-    { artifacts },
-  );
+  const { bytecode, manifest } = compile({
+    target: "svm",
+    entry: "main.ts",
+    resolve: (path) =>
+      path === "main.ts"
+        ? new TextEncoder().encode("function main(): Uint256 { return 42n; }")
+        : undefined,
+  });
+  if (!manifest) throw new Error("SVM compilation must include an account manifest");
+  const result = await runSvmProgramLocally(bytecode, manifest, { artifacts });
   if (result.err !== null) {
     console.error(`  ✗ local SVM cook rejected: ${result.err}\n${result.logs.join("\n")}`);
     process.exit(1);

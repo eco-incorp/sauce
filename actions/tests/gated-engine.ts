@@ -10,7 +10,7 @@
  * hand-rolled answers `gateSalt()` correctly.
  *
  * Copying the Kitchen's runtime to the baked address works because the engine only ever hashes that
- * address, and the Kitchen's `router` and `potInitCodeHash` are immutables living in code.
+ * address. The Pot hash is immutable; the Router and fee must be configured in Kitchen storage.
  *
  * `executionFee` is NOT in code — it lives in the Kitchen's ERC-7201 storage, and `setCode` replaces
  * code without touching storage. On a fork of a chain where the Kitchen is already deployed, that
@@ -21,12 +21,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  concat,
   encodeAbiParameters,
   encodeFunctionData,
   getCreate2Address,
   keccak256,
+  pad,
   parseAbi,
+  toHex,
 } from "viem";
 import type { Address, Chain, Hex, PublicClient, WalletClient } from "viem";
 
@@ -108,15 +109,24 @@ export async function startGatedEngine(
   );
   const kitchen = artifact<{ abi: readonly unknown[]; bytecode: Hex }>(repoRoot, "V12Kitchen");
 
-  const built = await deploy(
-    concat([kitchen.bytecode, encodeAbiParameters([{ type: "address" }], [gate.router]) as Hex]),
-  );
+  const built = await deploy(kitchen.bytecode);
   const kitchenCode = await publicClient.getCode({ address: built });
   if (!kitchenCode) throw new Error(`the Kitchen deployed at ${built} has no code`);
   await setCode(gate.kitchen, kitchenCode);
   await setStorage(gate.kitchen, KITCHEN_STORAGE_LOCATION, ZERO_WORD);
 
-  // Fails here naming the router, rather than as an unexplained empty revert from the gate later.
+  const routerDeployment = await deploy(artifact<{ bytecode: Hex }>(repoRoot, "Router").bytecode);
+  const routerCode = await publicClient.getCode({ address: routerDeployment });
+  if (!routerCode) throw new Error("the Router deployment has no code");
+  await setCode(gate.router, routerCode);
+  // Router follows executionFee in the Kitchen's ERC-7201 namespace.
+  await setStorage(
+    gate.kitchen,
+    toHex(BigInt(KITCHEN_STORAGE_LOCATION) + 1n, { size: 32 }),
+    pad(gate.router, { size: 32 }),
+  );
+
+  // Refuse a mismatched Kitchen/engine pair before executing any program.
   const live = (await publicClient.readContract({
     abi: kitchen.abi,
     address: gate.kitchen,
@@ -125,7 +135,7 @@ export async function startGatedEngine(
   if (live.toLowerCase() !== gate.potInitCodeHash.toLowerCase()) {
     throw new Error(
       `the Kitchen at ${gate.kitchen} reports potInitCodeHash ${live}, not the ` +
-        `${gate.potInitCodeHash} the engine was built against — its router (${gate.router}) is wrong.`,
+        `${gate.potInitCodeHash} the engine was built against.`,
     );
   }
 
@@ -151,6 +161,15 @@ export async function startGatedEngine(
   });
   if (!(await publicClient.getCode({ address: pot })))
     throw new Error(`no Pot was minted at the derived address ${pot}`);
+
+  const potRouter = await publicClient.readContract({
+    abi: parseAbi(["function router() view returns (address)"]),
+    address: pot,
+    functionName: "router",
+  });
+  if (potRouter.toLowerCase() !== gate.router.toLowerCase()) {
+    throw new Error("the Pot did not inherit the Kitchen's configured Router");
+  }
 
   return { engine, pot };
 }

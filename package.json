@@ -116,7 +116,7 @@
     "@solana/kit": "^6.10.0",
     "acorn": "^8.15.0",
     "dotenv": "^17.3.1",
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.3.0",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.4.0",
     "typescript": "^5.7.0",
     "viem": "^2.45.3"
   },

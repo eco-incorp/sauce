@@ -51,18 +51,23 @@ export const SETTLE_WIRE = {
    *  `bool` from a no-return token's empty returndata, which reverts on this engine, so USDT could not
    *  be swept; and nothing checked the `bool`, so a token answering `false` read as swept.
    *
+   *  Compiler 2.4.0 keeps the length at 435 bytes but changes the ABI encoding instructions
+   *  and therefore the program hash.
+   *
    *  Pins that shipped before this one, for `validateSettleProgram`'s `accepted` list so payloads
    *  built against them stay readable:
+   *    - `{ hash: "0x35d103dc1f3a6077d987dc2a65daed650f2ed4e2a1fdd386608373e2aa4e2b40", bytes: 435 }`
+   *      (compiler 2.3.0, SafeERC20 settlement template)
    *    - `{ hash: "0xf9fffd262b32ad0cb07f2748f813626363497e09e4f4da134bed1b8da0c5d5fe", bytes: 356 }`
    *      (0.99.2 – 0.99.4)
    *    - `{ hash: "0x2da5c63da0ed3e934f4bb09985a38723de1f2a8e9a9a97ef3993e526cb649d11", bytes: 362 }`
    *      (0.99.0 – 0.99.1) */
-  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@2.3.0",
+  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@2.4.0",
   /** `keccak256` of those `PROGRAM_BYTES` bytes — the authenticity pin `validateSettleProgram`
    *  enforces, and the reason a matching payload runs the audited program and nothing else.
    *  Whole-program, not a body slice: program and arguments are disjoint byte regions on this wire.
    *  `verify.compile.test.ts` recomputes it from source every run and fails before any consumer does. */
-  PROGRAM_HASH: "0x35d103dc1f3a6077d987dc2a65daed650f2ed4e2a1fdd386608373e2aa4e2b40",
+  PROGRAM_HASH: "0x9460111670cb654d7c56d685ef3caea67bfe90e0dca350a471d9ca9f97699ab6",
   /** Every argument word is 32 bytes, big-endian. */
   WORD_BYTES: 32,
   /** An address occupies the LOW 20 bytes of its word; the upper 12 MUST be zero (§4). */

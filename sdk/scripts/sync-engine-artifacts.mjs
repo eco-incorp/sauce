@@ -74,10 +74,10 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 // To bump: change the tag, run this script, and paste the digest it reports.
 
 const V12_EVM = {
-  tag: "v12-evm-v1.0.1",
+  tag: "v12-evm-v1.1.0",
   asset: "runtime.creation.hex",
   // keccak256 of the creation code, cross-checked against the release manifest's `creationCodeKeccak`.
-  digest: "0xac489233c18aeaacdefc8429dd3b15aa24762ed3b6aac3854dbd457ea5186972",
+  digest: "0x6ce9ae16441f3566789c569695fbf086f6469b19122249a975eafbca129274be",
   manifestKey: "creationCodeKeccak",
   // The manifest hashes the DECODED creation bytecode, not the hex file's bytes.
   hash: (buf) => keccak256(toBytes(buf.toString("utf8").trim())),
@@ -90,9 +90,9 @@ const V12_EVM = {
 // The manifest moved with it: `soSha256` at the top level became an `artifacts` array, so the digest
 // is looked up BY ASSET NAME rather than by a fixed key.
 const V12_SVM = {
-  tag: "v12-svm-v1.2.0",
+  tag: "v12-svm-v1.3.0",
   asset: "engine-devnet.so",
-  digest: "5e9a164ce9163f5a28018526053e9c78359c922671f9480b7eb730f6eef9fa01",
+  digest: "728cbfff88b01dc80cd9f4b422b6f29037689ec20e09887121b5bdebf2bee0a7",
   manifestKey: null,
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
@@ -101,15 +101,15 @@ const V12_SVM = {
 // release because `CHAIN_ID` is compiled in — they are genuinely different binaries, and a suite
 // that asserts the cluster id has to run each one rather than assume they differ.
 const V12_SVM_MAINNET = {
-  tag: "v12-svm-v1.2.0",
+  tag: "v12-svm-v1.3.0",
   asset: "engine-mainnet.so",
-  digest: "9ad752e1beb58428d66e99f00d86c24fa1c8744b2de91908ade249a90235caf9",
+  digest: "78b3f0d231e0303464df87699cce68027ac07cac9cfa0a5843cc5a7f4fdc323b",
   manifestKey: null,
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
 
 const V12_ENGINE_WIRE_MAINNET = {
-  tag: "v12-svm-v1.2.0",
+  tag: "v12-svm-v1.3.0",
   asset: "engine-wire-mainnet.json",
   digest: "f9e47b4329c2cd7bae6a5624a60c48d5fe13404c03fea925048fa0ae7c76168d",
   manifestKey: null,
@@ -120,9 +120,9 @@ const V12_ENGINE_WIRE_MAINNET = {
 // a superset: `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is
 // Uniswap's, so neither appears here and neither should — see ARTIFACTS below.
 const V12_EVM_ABIS = {
-  tag: "kitchen-evm-v1.0.0",
+  tag: "kitchen-evm-v1.1.0",
   asset: "abis.json",
-  digest: "3310065f6f4c752888ffbc351ef40f0d9dcdfbb877b8ee33c851d08bb174f912",
+  digest: "0cf29af5c11222f2842f0425895f905ea8c7b4338171c8a046aff5cc13fa9b19",
   manifestKey: "abis.sha256",
   hash: (buf) => createHash("sha256").update(buf).digest("hex"),
 };
@@ -143,7 +143,7 @@ const V12_KITCHEN = {
 // checks the SDK's released-engine constants against, so it is pinned exactly like the binary: an
 // engine whose wire moved must fail the digest here, not surprise a caller at run time.
 const V12_ENGINE_WIRE = {
-  tag: "v12-svm-v1.2.0",
+  tag: "v12-svm-v1.3.0",
   asset: "engine-wire-devnet.json",
   digest: "316b7ea4e63d030396a475f55f76a2b46aceaac82186def44d80b6752b6fcdad",
   manifestKey: null,
@@ -180,7 +180,7 @@ const CACHE_ROOT = resolve(REPO_ROOT, "node_modules", ".cache", "sauce-engine-re
 const NPM_REGISTRY = "https://npm.pkg.github.com";
 const NPM_SCOPE = "@eco-incorp";
 
-// `v12-svm-v1.2.0` -> package `@eco-incorp/v12-svm`, version `1.2.0`. The four components release
+// `v12-svm-v1.3.0` -> package `@eco-incorp/v12-svm`, version `1.3.0`. The four components release
 // independently under their own tag namespaces, so each gets its own package; there is deliberately
 // no single version spanning them.
 const RELEASE_TAG = /^(?<pkg>v12-evm|v12-svm|kitchen-evm|kitchen-svm)-v(?<version>.+)$/;
@@ -585,9 +585,8 @@ try {
 //
 // `kitchen` and `potInitCodeHash` come from the engine release's own manifest (`gate`), already
 // fetched and cross-checked above. `router` comes from the kitchen release's `addresses.json`: it is
-// the Kitchen's constructor argument, and it is what makes `potInitCodeHash` come out right. Nothing
-// here authenticates the router on its own — the harness asserts the deployed Kitchen's live
-// `potInitCodeHash()` against the pinned one, which fails loudly if it is wrong.
+// the starting Router stored by Kitchen.setRouter(). The Pot hash depends only on its creation
+// code; the harness checks it against the engine pin and initializes the Router separately.
 try {
   const manifest = JSON.parse(
     readFileSync(resolve(CACHE_ROOT, V12_EVM.tag, "manifest.json"), "utf8"),
