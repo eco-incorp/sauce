@@ -85,6 +85,27 @@ describe("compileSauceProgram", () => {
     expect(program.bytecode.length).toBeGreaterThan(0);
   });
 
+  it("compiles an intent every value of which is known now, and reports it fixed", () => {
+    const body = [
+      "Base(() => {",
+      "  USDC.transfer(RECIPIENT, 5n);",
+      "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
+    ].join("\n");
+    const program = compileSauceProgram("arbitrum", body, {
+      defines: { RECIPIENT: BigInt(RECIPIENT) },
+      intents: { deadline: 2_000_000_000n, creator: CREATOR },
+    });
+    expect(program.intents).toHaveLength(1);
+    const [lowered] = program.intents;
+    expect(lowered!.captures).toEqual([]);
+    expect(lowered!.destination.slug).toBe("base");
+    // No slot to fill: the program carries the publishAndFund calldata as it is.
+    const portal = routes.publishAndFundTx(lowered!.intent, false, {
+      portal: "0x3333333333333333333333333333333333333333",
+    });
+    expect(bytesToHex(program.bytecode)).toContain(portal.data.slice(10, 200));
+  });
+
   it("reports compact-v1 with its schema, and on Solana the accounts apart from the arguments", () => {
     const compact = compileSauceProgram("base", SPLIT, { compactArgs: true });
     expect(compact.entryEncoding).toBe("compact-v1");

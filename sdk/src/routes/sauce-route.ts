@@ -44,7 +44,11 @@ import {
   ecoRoutesProver,
   type EcoRoutesSelector,
 } from "../protocols/eco-routes/lookup.js";
-import { rewriteIntentSugar, type IntentSugarDefaults } from "./intent-sugar.js";
+import {
+  rewriteIntentSugar,
+  type IntentSugarDefaults,
+  type LoweredIntent,
+} from "./intent-sugar.js";
 import { withChainAmbient } from "./ambient.js";
 import { liftMainSignature, mainParams, type EntryParam } from "./entry.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
@@ -308,6 +312,14 @@ export interface CompiledSauceProgram {
   readonly entryParams: readonly EntryParam[];
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
+  /**
+   * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
+   * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
+   * Portal transactions that publish it, can be built without running the program. One that
+   * captures a local of the program holds a sentinel where the value will be, which only exists
+   * once the program runs.
+   */
+  readonly intents: readonly LoweredIntent[];
   /** Source after SDK wrapping and rewrites, before the compiler adapter adds entry annotations. */
   readonly source: string;
 }
@@ -348,6 +360,7 @@ export function compileSauceProgram(
       : { entrySchema: program.compiled.entrySchema }),
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
+    intents: program.intents,
     source: program.source,
   };
 }
@@ -368,6 +381,7 @@ function compileForChain(
   readonly source: string;
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
+  readonly intents: readonly LoweredIntent[];
 } {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
@@ -492,7 +506,9 @@ function compileForChain(
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
+  const { intents } = sugar;
+
   return manifest === undefined
-    ? { chain, compiled, source, entryEncoding }
-    : { chain, compiled, source, entryEncoding, manifest };
+    ? { chain, compiled, source, entryEncoding, intents }
+    : { chain, compiled, source, entryEncoding, manifest, intents };
 }
