@@ -34,6 +34,8 @@ import {
   type FlagSpecs,
   type ParsedArgs,
 } from "./args.js";
+import { blankLiterals } from "../routes/rs-compile.js";
+import { wrapSauceBody } from "../routes/sauce-route.js";
 import { endpointFor } from "./chain.js";
 import {
   compileCommand,
@@ -52,6 +54,7 @@ import {
   type ProgramInput,
 } from "./commands.js";
 import { initProject } from "./init.js";
+import { publishCommand } from "./publish.js";
 import { loadSigner, scrub, secret } from "./signer.js";
 import {
   checkSkills,
@@ -344,6 +347,26 @@ function chainOf(args: ParsedArgs, file: string, text: string): CanonicalChain {
   return chain;
 }
 
+/**
+ * Refuses a define the program would never see. A file with no `function main` is a script: its
+ * top-level statements are the entry's body, so a `const` there is the script's own local, and a
+ * define of the same name — which replaces a MODULE-level const — would be silently ignored.
+ */
+function definesReach(file: string, text: string, names: readonly string[]): void {
+  if (wrapSauceBody(text) === text) return;
+  const code = blankLiterals(text);
+  for (const name of names) {
+    if (new RegExp(`(^|[^.\\w$])(?:const|let)\\s+${name.replace(/\$/g, "\\$")}\\b`).test(code)) {
+      throw new UsageError(
+        `--define ${name} would not reach ${file}: with no \`function main\`, its top-level ` +
+          `\`const ${name}\` is the script's own, which a define does not replace. Drop the ` +
+          `declaration and read ${name} as a define, or declare function main() and keep the ` +
+          "const beside it, where a define replaces it.",
+      );
+    }
+  }
+}
+
 function programInput(args: ParsedArgs, io: CliIo): ProgramInput {
   const file = fileOperand(args);
   const text = readInput(io, file);
@@ -351,18 +374,18 @@ function programInput(args: ParsedArgs, io: CliIo): ProgramInput {
   const deadline = stringFlag(args, "intent-deadline");
   const creator = stringFlag(args, "intent-creator");
   const fee = stringFlag(args, "intent-execution-fee");
+  const defines = {
+    ...(definesFile === undefined ? {} : parseDefinesFile(readInput(io, definesFile), definesFile)),
+    ...parseDefines(repeatedFlag(args, "define")),
+  };
+  definesReach(file, text, Object.keys(defines));
 
   return {
     file,
     text,
     chain: chainOf(args, file, text),
     compactArgs: args.values["compact-args"] === true,
-    defines: {
-      ...(definesFile === undefined
-        ? {}
-        : parseDefinesFile(readInput(io, definesFile), definesFile)),
-      ...parseDefines(repeatedFlag(args, "define")),
-    },
+    defines,
     intents: {
       ...(deadline === undefined
         ? {}
@@ -622,6 +645,77 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       );
     },
   },
+  publish: {
+    usage:
+      "sauce publish <file> --chain <source> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
+    summary: "Publish a file's fixed intents from a wallet, with no Pot",
+    flags: {
+      ...PROGRAM,
+      ...ENDPOINT,
+      ...SIGNER,
+      from: {
+        type: "string",
+        value: "<address>",
+        help: "With --dry-run or --format and no signer: whose wallet",
+      },
+      "dry-run": {
+        type: "boolean",
+        help: "Rehearse the transactions together (eth_simulateV1); send nothing",
+      },
+      format: {
+        type: "string",
+        value: "<json|cast>",
+        help: "Print the unsigned transactions instead of sending them",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "For a file whose intents are fixed when it is built — every amount a define or a literal —",
+      "builds each intent off-chain (the SDK's own lowering) and sends the source chain's Portal",
+      "transactions from the signer's wallet: each reward token approved to the Portal (reset to",
+      "zero first when a smaller allowance stands, as SafeERC20 does), then publishAndFund. Prints",
+      "the intent hashes and the transactions. A file whose intent uses a value measured on",
+      "chain, or that does anything besides open its intents, is refused: use `sauce run` on a",
+      "Pot.",
+      "",
+      "Example:",
+      "  sauce publish bridge.sauce.ts --chain arbitrum --rpc-url <url> --keystore ~/.keys/me.json \\",
+      "    --intent-deadline 2000000000 --intent-creator 0x…",
+    ].join("\n"),
+    run: async (args, io) => {
+      const program = programInput(args, io);
+      const format = stringFlag(args, "format");
+      if (format !== undefined && format !== "json" && format !== "cast") {
+        throw new UsageError(`--format: '${format}' is not json or cast`);
+      }
+      const signing =
+        stringFlag(args, "keystore") !== undefined || stringFlag(args, "private-key") !== undefined;
+      const account = signing ? await signerOf(args, io) : undefined;
+      const from = stringFlag(args, "from");
+      if (from !== undefined && account !== undefined) {
+        throw new UsageError(
+          "--from is for when there is no signer: the signer's wallet publishes",
+        );
+      }
+      const rpcUrl =
+        format === undefined && args.values["dry-run"] !== true
+          ? requiredEndpoint(args, io, program.chain)
+          : endpoint(args, io, program.chain);
+
+      return publishCommand(
+        {
+          ...program,
+          ...(format === undefined ? {} : { format }),
+          dryRun: args.values["dry-run"] === true,
+          ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          ...(account === undefined ? {} : { account }),
+          ...(from === undefined ? {} : { from: parseAddress("from", from) }),
+        },
+        io,
+      );
+    },
+  },
   tx: {
     usage: "sauce tx <file> --chain <slug|id> (--pot <address> | --owner <address>) [options]",
     summary: "Print the unsigned cook transaction, for a wallet to sign",
@@ -780,15 +874,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
 /** What a command prints on stdout: tx and pot their JSON (or `--format cast`), the rest their
  *  text (or `--json`). */
 function render(command: Command, output: CommandOutput, args: ParsedArgs): string {
-  if ("format" in command.flags) {
-    const format = stringFlag(args, "format") ?? "json";
-    if (format === "cast") return output.cast ?? JSON.stringify(output.json, null, 2);
-    if (format !== "json") throw new UsageError(`--format: '${format}' is not json or cast`);
-
-    return JSON.stringify(output.json, null, 2);
+  const format = stringFlag(args, "format");
+  if (format === "cast") return output.cast ?? JSON.stringify(output.json, null, 2);
+  if (format !== undefined && format !== "json") {
+    throw new UsageError(`--format: '${format}' is not json or cast`);
   }
+  // `tx` and `pot` print a transaction, so JSON is their default; every other command a report.
+  const jsonByDefault = "format" in command.flags && !("json" in command.flags);
 
-  return args.values.json === true ? JSON.stringify(output.json, null, 2) : output.text;
+  return format === "json" || jsonByDefault || args.values.json === true
+    ? JSON.stringify(output.json, null, 2)
+    : output.text;
 }
 
 function commandHelp(command: Command): string {

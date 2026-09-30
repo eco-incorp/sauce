@@ -41,6 +41,7 @@ import {
   type PublicClient,
   type TestClient,
   type WalletClient,
+  zeroAddress,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -48,6 +49,15 @@ import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
 import { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import { denormalizeToEvm, hashIntent } from "../src/routes/encode.js";
+import {
+  intentHashCall,
+  intentVaultAddressCall,
+  isIntentFundedCall,
+} from "../src/routes/portal.js";
+import * as sauceRoute from "../src/routes/sauce-route.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import { gateAnchors, installEngineAt, startGatedEngine } from "./evm/gated-engine.js";
 
@@ -74,6 +84,12 @@ const fixture = (name: string): Hex =>
 const EXAMPLES = join(HERE, "../../skills/sauce-run/examples");
 const PAY = join(EXAMPLES, "pay.sauce.ts");
 const CLI_FIXTURES = join(HERE, "fixtures/cli");
+/** eco-routes' own Portal creation code, vendored (see routes-nest-dynamic.e2e.test.ts). */
+const PORTAL_CREATION = (
+  JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.json"), "utf8")) as { creationCode: Hex }
+).creationCode;
+/** PR #17's scoped route compile: an intent body's names resolve on its own chain. */
+const hasScopedRoutes = "compileScopedRoute" in sauceRoute;
 const SPLIT = join(EXAMPLES, "split.sauce.ts");
 
 /** Anvil's first two dev accounts: the Kitchen's owner, and the Pot's. Public keys, local only. */
@@ -81,6 +97,8 @@ const DEPLOYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7b
 const OWNER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 const DEPLOYER = privateKeyToAccount(DEPLOYER_KEY);
 const OWNER = privateKeyToAccount(OWNER_KEY);
+/** Anvil's fifth dev account, for a Pot of its own. */
+const OTHER_KEY = "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a";
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const SECOND_RECIPIENT: Address = "0x7777777777777777777777777777777777777777";
@@ -763,4 +781,197 @@ describeEvm("a typed main, compiled for Base and for Arbitrum, run with --args",
       expect(await local.balanceOf(usdc, pot)).toBe(alsoUsdc ? FUNDED - 2n * AMOUNT : FUNDED);
     }, 60_000);
   }
+});
+
+describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
+  let arbitrum: LocalChain;
+  let work: string;
+  let usdc: Address;
+  let portal: Address;
+  const REWARD = 2_000_000n;
+  const DEADLINE = "2000000000";
+  // A top-level file: no `main`, one intent, every amount a define.
+  const INTENT = [
+    "// @chain arbitrum",
+    "Base(() => {",
+    "  USDC.transfer(RECIPIENT, AMOUNT);",
+    "}).reward({ tokens: [{ token: USDC, amount: REWARD }] });",
+    "",
+  ].join("\n");
+  const DEFINES = [
+    "--define",
+    `RECIPIENT=${RECIPIENT}`,
+    "--define",
+    `AMOUNT=${AMOUNT}`,
+    "--define",
+    `REWARD=${REWARD}`,
+    "--intent-deadline",
+    DEADLINE,
+    "--intent-creator",
+    OWNER.address,
+  ];
+  let intentFile: string;
+
+  /** The one intent the file opens, as the SDK encodes it for `creator`. */
+  const theIntent = (creator: Address) =>
+    compileSauceProgram("arbitrum", INTENT, {
+      defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT, REWARD },
+      intents: { deadline: BigInt(DEADLINE), creator },
+    }).intents[0]!.intent;
+
+  const read = async <T>(call: { to: Hex; data: Hex; decode: (result: Hex) => T }): Promise<T> =>
+    call.decode((await arbitrum.publicClient.call({ to: call.to, data: call.data })).data!);
+
+  beforeAll(async () => {
+    work = mkdtempSync(join(tmpdir(), "sauce-cli-publish-"));
+    intentFile = join(work, "bridge.sauce.ts");
+    writeFileSync(intentFile, INTENT);
+    arbitrum = await startChain("arbitrum", 8600 + WORKER);
+    // The real eco-routes Portal, at the address the SDK records for Arbitrum. Publishing and
+    // funding run in IntentSource alone, which reads nothing it was constructed with.
+    portal = ecoRoutesPortal("arbitrum");
+    await arbitrum.plant(
+      `${PORTAL_CREATION}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex,
+      portal,
+    );
+    usdc = await arbitrum.plant(fixture("MockERC20"), registered(arbitrum.chain, "USDC"));
+  }, 120_000);
+
+  afterAll(async () => {
+    rmSync(work, { recursive: true, force: true });
+    await arbitrum?.stop();
+  });
+
+  it("prints the unsigned approval and publishAndFund, with no key and no endpoint", async () => {
+    const run = await sauce("publish", intentFile, ...DEFINES, "--format", "json");
+    expect(run.code).toBe(0);
+    const out = JSON.parse(run.stdout) as {
+      portal: string;
+      intents: Array<{ intentHash: Hex; transactions: Array<{ what: string; to: string }> }>;
+    };
+    expect(out.portal).toBe(portal);
+    expect(out.intents).toHaveLength(1);
+    expect(out.intents[0]!.intentHash).toBe(hashIntent(theIntent(OWNER.address)).intentHash);
+    expect(out.intents[0]!.transactions.map((tx) => [tx.what, tx.to])).toEqual([
+      [`approve ${usdc} to the Portal`, usdc],
+      ["publishAndFund", portal],
+    ]);
+  }, 60_000);
+
+  it("rehearses the transactions together, and sends nothing", async () => {
+    await arbitrum.mint(usdc, OWNER.address, REWARD);
+    const run = await sauce(
+      "publish",
+      intentFile,
+      ...DEFINES,
+      "--rpc-url",
+      arbitrum.rpcUrl,
+      "--from",
+      OWNER.address,
+      "--dry-run",
+      "--json",
+    );
+    expect(run.stderr).toBe("");
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.stdout)).toMatchObject({
+      ok: true,
+      transactions: [{ status: "success" }, { status: "success" }],
+    });
+    expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(REWARD);
+  }, 60_000);
+
+  it("publishes and funds the intent from the wallet: the Portal records it, funded", async () => {
+    const run = await sauce(
+      "publish",
+      intentFile,
+      ...DEFINES,
+      "--rpc-url",
+      arbitrum.rpcUrl,
+      "--private-key",
+      OWNER_KEY,
+    );
+    expect(run.code).toBe(0);
+    const intent = theIntent(OWNER.address);
+    const { intentHash } = hashIntent(intent);
+    expect(run.stdout).toContain(`intent ${intentHash} to base`);
+    expect(run.stdout).toMatch(/^approve .* to the Portal 0x[0-9a-f]{64}: success/m);
+    expect(run.stdout).toMatch(/^publishAndFund 0x[0-9a-f]{64}: success/m);
+    expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
+    expect((await read(intentHashCall(intent, { portal }))).intentHash).toBe(intentHash);
+    const vault = await read(intentVaultAddressCall(intent, { portal }));
+    expect(await arbitrum.balanceOf(usdc, vault)).toBe(REWARD);
+    expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(0n);
+    // The reward is escrowed in Arbitrum's USDC, the chain that funds it.
+    expect(
+      intent.reward.tokens.map((token) => denormalizeToEvm(token.token).toLowerCase()),
+    ).toEqual([usdc.toLowerCase()]);
+  }, 60_000);
+
+  // The route pays in the DESTINATION's USDC — Base's, not Arbitrum's. That is PR #17's fix to the
+  // SDK's intent scoping (a nested body's names resolve on its own chain), which this command
+  // inherits; until it has landed, `compileScopedRoute` does not exist and this waits for it.
+  (hasScopedRoutes ? it : it.skip)("names each chain's own USDC: Base's in the route", () => {
+    const intent = theIntent(OWNER.address);
+    const baseUsdc = registered(requireChain("base"), "USDC").toLowerCase();
+    const routeTokens = intent.route.tokens.map((token) =>
+      denormalizeToEvm(token.token).toLowerCase(),
+    );
+    expect(routeTokens).toEqual([baseUsdc]);
+  });
+
+  it("runs the same file on a Pot, which publishes and funds it from its own balance", async () => {
+    const creator = privateKeyToAccount(OTHER_KEY).address;
+    const pot = v12PredictPot(creator, SAUCE_INTENT_POT_SALT) as Address;
+    await arbitrum.mint(usdc, pot, REWARD);
+    const run = await sauce(
+      "run",
+      intentFile,
+      "--define",
+      `RECIPIENT=${RECIPIENT}`,
+      "--define",
+      `AMOUNT=${AMOUNT}`,
+      "--define",
+      `REWARD=${REWARD}`,
+      "--intent-deadline",
+      DEADLINE,
+      "--intent-creator",
+      creator,
+      "--rpc-url",
+      arbitrum.rpcUrl,
+      "--private-key",
+      OTHER_KEY,
+      "--yes",
+    );
+    expect(run.stderr).not.toMatch(/sauce run:/);
+    expect(run.code).toBe(0);
+    const intent = theIntent(creator);
+    expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
+    expect(await arbitrum.balanceOf(usdc, pot)).toBe(0n);
+  }, 60_000);
+
+  it("refuses to publish an amount measured on chain, or a file that does more", async () => {
+    const measured = join(work, "measured.sauce.ts");
+    writeFileSync(
+      measured,
+      [
+        "// @chain arbitrum",
+        "const amount = USDC.balanceOf(ctx.self());",
+        "Base(() => {",
+        "  USDC.transfer(RECIPIENT, amount);",
+        "}).reward({ tokens: [{ token: USDC, amount }] });",
+        "",
+      ].join("\n"),
+    );
+    const refused = await sauce("publish", measured, ...DEFINES, "--format", "json");
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(
+      /the intent to base uses `amount`, measured on chain while the program runs, so it cannot be built from a wallet: use `sauce run` on a Pot/,
+    );
+
+    const more = join(work, "more.sauce.ts");
+    writeFileSync(more, `${INTENT}USDC.transfer(RECIPIENT, 1n);\n`);
+    const extra = await sauce("publish", more, ...DEFINES, "--format", "json");
+    expect(extra.code).toBe(1);
+    expect(extra.stderr).toContain(`${more}:5 does something besides open an intent`);
+  }, 60_000);
 });

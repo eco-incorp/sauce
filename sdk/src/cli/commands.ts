@@ -127,7 +127,7 @@ function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptio
 }
 
 /** Compiles the file as a standalone program, turning a failure into one message about the file. */
-function compile(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
+export function compileProgram(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
   try {
     return compileSauceProgram(input.chain, input.text, compileOptions(input, files));
   } catch (error) {
@@ -168,7 +168,7 @@ const signatureOf = (params: readonly EntryParam[]): string =>
 
 /** `sauce compile`: the program's bytecode, and with `--json` what it pairs with and takes. */
 export function compileCommand(input: ProgramInput, files: CliFiles): CommandOutput {
-  const program = compile(input, files);
+  const program = compileProgram(input, files);
   const bytecode = bytesToHex(program.bytecode);
 
   return {
@@ -274,7 +274,7 @@ function cookOf(input: CookInput, files: CliFiles): Cook {
   const target = input.target;
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
-  const program = compile(input, files);
+  const program = compileProgram(input, files);
   // The cook `compileSauceRoute` would build, over the program with its arguments appended — the
   // way the SDK's own intent children carry theirs.
   const data = buildSauceEvmCall({ pot, engine, program: payload(program, input.args) }).data;

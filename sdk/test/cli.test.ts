@@ -46,6 +46,7 @@ import {
 } from "../src/deployments/pot.js";
 import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import * as root from "../src/index.js";
+import * as routes from "../src/routes/index.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { encodeCompactArguments } from "../src/compact-arguments.js";
@@ -876,6 +877,140 @@ describe("sauce tx", () => {
       "0",
     );
     expect(other.stderr).toMatch(/has no rpcUrls entry for base \(chain id 8453\)/);
+  });
+});
+
+describe("sauce publish, offline", () => {
+  const INTENT = [
+    "// @chain arbitrum",
+    "Base(() => {",
+    "  USDC.transfer(RECIPIENT, 5n);",
+    "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
+    "",
+  ].join("\n");
+  const FLAGS = [
+    "--define",
+    `RECIPIENT=${RECIPIENT}`,
+    "--intent-deadline",
+    "2000000000",
+    "--intent-creator",
+    CREATOR,
+  ];
+
+  it("prints each fixed intent's hash and unsigned Portal transactions", async () => {
+    const run = await sauce(
+      "publish",
+      file("bridge.sauce.ts", INTENT),
+      ...FLAGS,
+      "--format",
+      "json",
+    );
+    expect(run.code).toBe(0);
+    const out = JSON.parse(run.stdout) as {
+      chainId: number;
+      intents: Array<{ intentHash: string; destination: string; transactions: unknown[] }>;
+    };
+    const [intent] = compileSauceProgram("arbitrum", INTENT, {
+      defines: { RECIPIENT: BigInt(RECIPIENT) },
+      intents: { deadline: 2_000_000_000n, creator: CREATOR },
+    }).intents;
+    expect(out.chainId).toBe(42161);
+    expect(out.intents).toEqual([
+      {
+        intentHash: routes.hashIntent(intent!.intent).intentHash,
+        destination: "base",
+        transactions: [
+          expect.objectContaining({ what: expect.stringMatching(/^approve /) }),
+          expect.objectContaining({ what: "publishAndFund", value: "0" }),
+        ],
+      },
+    ]);
+    expect(run.stderr).toMatch(/Approvals are planned without reading the wallet's allowance/);
+    const cast = await sauce(
+      "publish",
+      file("bridge.sauce.ts", INTENT),
+      ...FLAGS,
+      "--format",
+      "cast",
+    );
+    expect(cast.stdout.trim().split("\n")).toHaveLength(2);
+    expect(cast.stdout).toMatch(
+      /^cast send 0x[0-9a-fA-F]{40} 0x[0-9a-f]+ --value 0 --rpc-url <RPC_URL>/m,
+    );
+  });
+
+  it("refuses a file with no intent, or with runtime arguments, before any network", async () => {
+    const none = await sauce(
+      "publish",
+      file("none.sauce.ts", "require(chainId == 1n);\n"),
+      "--chain",
+      "1",
+      "--format",
+      "json",
+    );
+    expect(none.code).toBe(2);
+    expect(none.stderr).toMatch(/opens no intent — there is nothing to publish/);
+    const typed = await sauce(
+      "publish",
+      file(
+        "typed.sauce.ts",
+        "function main(recipient: Address) {\n  Base(() => {\n    USDC.transfer(recipient, 5n);\n  }).reward({ tokens: [{ token: USDC, amount: 7n }] });\n}\n",
+      ),
+      "--chain",
+      "arbitrum",
+      ...FLAGS.slice(2),
+      "--format",
+      "json",
+    );
+    expect(typed.code).toBe(2);
+    expect(typed.stderr).toMatch(
+      /takes arguments at run time \(main\(recipient\)\), which only a run has/,
+    );
+  });
+
+  it("needs an endpoint to send, and a wallet to send from", async () => {
+    const run = await sauce("publish", file("bridge.sauce.ts", INTENT), ...FLAGS);
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(/missing --rpc-url <url> \(or --config <file>\)/);
+  });
+});
+
+describe("defines a script cannot see", () => {
+  it("refuses a define that a script's own top-level const would silently shadow", async () => {
+    const script = file("script.sauce.ts", "const AMOUNT = 5n;\nrequire(AMOUNT > 0n);\n");
+    const run = await sauce("compile", script, "--chain", "base", "--define", "AMOUNT=7");
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(
+      /--define AMOUNT would not reach .*script\.sauce\.ts: with no `function main`, its top-level `const AMOUNT` is the script's own/,
+    );
+    // Read as a define, or declared beside a main, it reaches the program.
+    expect(
+      (
+        await sauce(
+          "compile",
+          file("read.sauce.ts", "require(AMOUNT > 0n);\n"),
+          "--chain",
+          "base",
+          "--define",
+          "AMOUNT=7",
+        )
+      ).code,
+    ).toBe(0);
+    expect(
+      (
+        await sauce(
+          "compile",
+          file(
+            "module.sauce.ts",
+            "const AMOUNT = 5n;\nfunction main() {\n  require(AMOUNT > 0n);\n}\n",
+          ),
+          "--chain",
+          "base",
+          "--define",
+          "AMOUNT=7",
+        )
+      ).code,
+    ).toBe(0);
   });
 });
 
