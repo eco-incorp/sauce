@@ -56,7 +56,12 @@ import type { AddressInput } from "./types.js";
 // (confirmed reachable — this is not a hypothetical). Three well-known method names duplicated is
 // a far smaller cost than restructuring that import graph; token-rewrite.ts's own module doc cross-
 // references this list for anyone changing one who needs to remember the other.
-const REWRITABLE_METHODS: ReadonlySet<string> = new Set(["transfer", "approve", "balanceOf"]);
+const REWRITABLE_METHODS: ReadonlySet<string> = new Set([
+  "transfer",
+  "approve",
+  "transferFrom",
+  "balanceOf",
+]);
 
 export interface TokenRegistryRow {
   /** The ticker `symbol()` itself returns on-chain -- uppercase, e.g. "USDC", "WPOL". */

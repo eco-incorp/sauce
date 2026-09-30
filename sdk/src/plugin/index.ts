@@ -17,8 +17,9 @@ import manifest from "./manifest.json" with { type: "json" };
  * token module to the SDK's packaged `std/token` sources. New ambient modules must likewise be
  * resolvable by the SDK because a missing module causes route compilation to fail.
  *
- * The module exposes function forms such as `approve(token, spender, amount)`. Separately, SDK
- * route rewriting lowers `Token(address).approve(...)` to an ERC-20 ABI binding.
+ * The module exposes function forms such as `approve(token, spender, amount)`. SDK route rewriting
+ * lowers `Token(address).approve(...)` and `USDC.approve(...)` to those same functions, so every
+ * token write has one (`SafeERC20`) semantic.
  */
 export interface SaucePlugin {
   /** Ambient MODULE specifiers — library modules whose exports broadcast into every compile with no

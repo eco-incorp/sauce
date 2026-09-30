@@ -319,7 +319,7 @@ describe("rewriteProtocolAccessors: negative controls -- isolation", () => {
     const source = `function main() { USDC.transfer(${USDC}, 5n); }`;
     const before = rewriteTokenMembers(source, new Set(["USDC"]));
     expect(before.rewrote).toBe(true);
-    expect(before.source).toContain("IERC20.at(USDC).transfer");
+    expect(before.source).toContain(`__sauce_transfer(USDC, ${USDC}, 5n)`);
   });
 
   it("a body with zero accessor/self sites compiles byte-identically with accessors on and off", () => {

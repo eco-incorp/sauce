@@ -12,9 +12,9 @@
  * ```
  *
  * WHAT THIS IS. A source rewrite, run before the compiler ever sees the program — the same class of
- * thing as `token-rewrite.ts`'s `Token(x)` -> `IERC20.at(x)`, and for the same reason: the compiler
- * has no notion of a closure, a chain, or an intent, and does not need one. By the time it runs, the
- * expression above has become ordinary statements it already supports.
+ * thing as `token-rewrite.ts`'s `Token(x).transfer(...)` -> `transfer(x, ...)`, and for the same
+ * reason: the compiler has no notion of a closure, a chain, or an intent, and does not need one.
+ * By the time it runs, the expression above has become ordinary statements it already supports.
  *
  * WHAT `amount` IS. It is a local of the ENCLOSING program, whose value exists only while that
  * program runs. So the child intent cannot be encoded with it — it is encoded with a sentinel in its

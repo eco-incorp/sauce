@@ -36,7 +36,7 @@ export function walk(node: unknown, visit: (n: AstNode) => void): void {
 /** Every name a binding PATTERN introduces -- an identifier, or any nesting of object/array
  *  destructuring, defaults and rest. Collecting only the `Identifier` case would miss
  *  `const { Token } = x` and `function f({ Token })`, which bind the name just as plainly. */
-function collectPatternNames(pattern: unknown, names: Set<string>): void {
+function collectPatternNames(pattern: unknown, names: { add(name: string): void }): void {
   if (pattern === null || typeof pattern !== "object") return;
   const node = pattern as AstNode;
   switch (node.type) {
@@ -79,7 +79,15 @@ function collectPatternNames(pattern: unknown, names: Set<string>): void {
  *  meant their call was silently redirected to an ERC20 they never named. Fail closed on all of
  *  them: over-collecting only ever declines a rewrite, which is the safe direction. */
 export function collectDeclaredNames(program: AstNode): ReadonlySet<string> {
-  const names = new Set<string>();
+  return new Set(countDeclarations(program).keys());
+}
+
+/** How many times each name is BOUND anywhere in the program, over the same binding forms
+ *  `collectDeclaredNames` covers. A count of one is what lets a rewrite treat a name as a single
+ *  binding: two declarations of it, in any scopes, and it is not one value any more. */
+export function countDeclarations(program: AstNode): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  const names = { add: (name: string) => counts.set(name, (counts.get(name) ?? 0) + 1) };
   walk(program, (n) => {
     switch (n.type) {
       case "VariableDeclarator":
@@ -111,5 +119,5 @@ export function collectDeclaredNames(program: AstNode): ReadonlySet<string> {
         return;
     }
   });
-  return names;
+  return counts;
 }
