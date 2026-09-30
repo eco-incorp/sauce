@@ -29,6 +29,7 @@ import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { registryTokenAddress } from "../src/routes/token-registry.js";
 
 const GUIDE = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), "../../docs/guides/intents.md"),
@@ -200,6 +201,30 @@ describe("the guide's account of which chain a name resolves on is the lowering'
     {
       documented: "| `.reward(...)` | The chain the program runs on | That chain's |",
       holds: () => lowered().reward.tokens[0]!.token === onChain(BASE.slug),
+    },
+    {
+      // Through the real compile: a caller's `USDC` is Base's, so the reward's approval reads it,
+      // while the Arbitrum body keeps Arbitrum's registry USDC.
+      documented: "is a name on the chain the program is compiled for",
+      holds: () => {
+        const chosen = 0x7777777777777777777777777777777777777777n;
+        const arbitrumUsdc = registryTokenAddress(ARBITRUM, "USDC")!.toString(16);
+        const source = compileSauceRoute(
+          "base",
+          `function main() {
+  const amount = 5n;
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}`,
+          { pot: CREATOR, engine: CREATOR },
+          {
+            defines: { USDC: chosen, RECIPIENT: 1n },
+            intents: { deadline: 4_000_000_000n, creator: CREATOR },
+          },
+        ).source.toLowerCase();
+        return source.includes(`evm.static(${chosen}n`) && source.includes(arbitrumUsdc);
+      },
     },
   ];
 

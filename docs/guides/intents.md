@@ -277,10 +277,15 @@ from the destination fails the approval's code check and reverts the fulfillment
 from the enclosing chain makes the intent unfulfillable.
 
 The rule repeats at every depth. An intent opened inside a body is funded on that body's chain, so
-its reward resolves there and its own body on its own destination. Through `Base(...)`, the same holds
-for the other values that belong to a chain, `chainId` and protocol addresses: a nested body sees its
-own chain's. A literal address or a compile-time define means exactly that address wherever it
-appears.
+its reward resolves there and its own body on its own destination. The same holds for the other
+values that belong to a chain, `chainId` and protocol addresses such as `UniswapV4_UniversalRouter`:
+a body on another chain sees that chain's own.
+
+A literal address means that address wherever it appears, and so does a compile-time define whose
+name no chain uses, such as `RECIPIENT`. A define or a `tokens` override under a chain-scoped name —
+a token symbol, `chainId`, a protocol address — is a name on the chain the program is compiled for.
+It applies to that program and to the reward it funds. A body on another chain keeps that chain's
+value, whether the define came from `chainDefines(base)` or was chosen by hand.
 
 ### A throw reverts everything
 

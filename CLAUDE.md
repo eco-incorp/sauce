@@ -391,15 +391,21 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
-`openRoute` passes the ambient defines as `RouteScope.chainDefines` (`sauce-route.ts`), a function
-of the chain beside the options, and **never folds them into `compile.defines`**. Caller defines
-hold program-wide at every depth, so a folded value reached every nested intent's compile as the
-caller's and replaced that chain's own (Base's USDC in an Arbitrum body). `compileScopedRoute`
-evaluates the scope per chain and passes it down to each nested compile; `compileSauceRoute` is
-that with an empty scope. In `Chain(() => …).reward(…)` (`intent-sugar.ts`) the body and the
-delivery argument resolve on the destination and the reward on the enclosing chain, which escrows
-and approves it. `routes-intent-chains.e2e.test.ts` runs that on three anvils whose USDC differs;
-a test that gives a symbol one address everywhere (a `tokens` override, a define) cannot see it.
+**Chain-scoped names are resolved per level.** In `Chain(() => …).reward(…)` (`intent-sugar.ts`)
+the body and the delivery argument resolve on the destination and the reward on the enclosing
+chain, which escrows and approves it. `sauce-route.ts#levelOn` gives each level on another chain
+its own values (`NESTED_SCOPE`, the registry's `chainDefines`) and DROPS every caller `defines`
+entry named like a chain-scoped value of the enclosing chain or the destination, and every `tokens`
+override — by name, not value, so `defines: chainDefines(base)` and a hand-picked `USDC` are
+treated alike. Caller names no chain uses (`RECIPIENT`) hold at every depth. Protocol accessors
+never had the problem: they fold each chain's literal address in. `openRoute` passes its own
+chain's ambient defines as `RouteScope.chainDefines` beside the options rather than in
+`compile.defines`, so its `defines` stay the caller's; `compileScopedRoute` takes the scope and
+`compileSauceRoute` is that with an empty one. Two defects came from mixing these up (Arbitrum's
+USDC as a reward on Base, Base's in an Arbitrum body). `routes-intent-reward-chain.test.ts` records
+every level's compile on three paths and decodes each level's `publishAndFund`;
+`routes-intent-chains.e2e.test.ts` runs them on three anvils whose USDC differs. A test that gives a
+symbol one address everywhere (a `tokens` override, a define) cannot see either defect.
 
 The **`Token(addr)` global wrapper** (`Token(addr).approve(spender, amt)` / `const t = Token(addr);
 t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** are TEXTUAL rewrites in
