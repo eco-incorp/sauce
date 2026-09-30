@@ -13,9 +13,14 @@
  * THE WRITES ARE SafeERC20, and the matrix at the bottom is what shows it: each write against a
  * token that returns `true`, `false`, nothing, or something that is not an ABI `bool` (a word of 2,
  * one byte, 31 bytes, 64 bytes), against an address with no code, and against an honest token
- * refusing. Every cell runs three ways — through OpenZeppelin's `SafeERC20` itself, through the
- * library, and through `src/token/safe.ts`, the spelling the SDK emits into routes — and all three
- * must land it identically. The misbehaving tokens and the OpenZeppelin reference are the other
+ * refusing. Every cell runs through OpenZeppelin's `SafeERC20` itself, through the library, through
+ * `src/token/safe.ts` (the spelling the SDK emits into routes), and through each route-body syntax a
+ * program writes by hand — `USDC.transfer(...)`, `Token(addr).transfer(...)` and a bound
+ * `const t = Token(addr); t.transfer(...)`, compiled by `compileSauceRoute` — and every one must
+ * land it identically. The raw `IERC20.at(addr)` binding runs beside them as the contrast: it is
+ * what the route syntax used to lower to, and it gets the no-return and `false` cells wrong. The
+ * shipped `plain-transfer` recipe runs too, at the registry's own USDC address. The misbehaving
+ * tokens and the OpenZeppelin reference are the other
  * `fixtures/*.sol`, vendored beside them as `{ abi, creationCode }` compiled by
  * `solc 0.8.36 --optimize` (each file says how).
  *
@@ -58,6 +63,7 @@ import {
   encodeAbiParameters,
   encodeFunctionData,
   http,
+  numberToHex,
   parseAbi,
   zeroAddress,
 } from "viem";
@@ -67,6 +73,10 @@ import { compileStdToken } from "./harness.js";
 import { startGatedEngine } from "../../evm/gated-engine.js";
 import type { GatedEngine } from "../../evm/gated-engine.js";
 import { safeApproveStatements, safeTransferStatements } from "../../../src/token/safe.js";
+import { compileSauceRoute } from "../../../src/routes/sauce-route.js";
+import { registryTokenAddress } from "../../../src/routes/token-registry.js";
+import { requireChain } from "../../../src/chains/canonical.js";
+import { buildPlainTransfer } from "../../../src/recipes/cctp-transfer.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -454,6 +464,75 @@ const SAFE_TS: Spelling = {
   raw: potRaw,
 };
 
+/** Send `data` to the Pot, reporting whether it landed. */
+const attemptCall = (data: Hex): Promise<Status> =>
+  walletClient
+    .sendTransaction({ account: DEPLOYER, chain: null, to: sauce.pot, data, gas: GAS_LIMIT })
+    .then((hash) => publicClient.waitForTransactionReceipt({ hash }))
+    .then(({ status }) => status);
+
+/**
+ * `body` through `compileSauceRoute`, the path every route-body token spelling takes, returning the
+ * `cook` call it builds — the route call itself, not a re-encoding of its program. The token is
+ * handed in as the `USDC` override, so the symbol syntax resolves to the cell's own token.
+ */
+const routeCall = (body: string, token: Address): Hex => {
+  const { calls } = compileSauceRoute(
+    "base",
+    body,
+    { pot: sauce.pot, engine: sauce.engine },
+    { tokens: { USDC: token } },
+  );
+
+  return calls[0]!.data;
+};
+
+/** A cell's ERC-20 arguments as SauceScript literals. */
+const argText = (cell: Cell): string =>
+  argsOf(cell)
+    .map((arg) => (typeof arg === "bigint" ? `${arg}n` : literal(arg)))
+    .join(", ");
+
+/** A route-body spelling of every write, as `body(write, tokenLiteral, args)` writes it. */
+const routeSpelling = (
+  name: string,
+  body: (write: Write, token: string, args: string) => string,
+): Spelling => ({
+  name,
+  actor: () => sauce.pot,
+  writes: ["transfer", "transferFrom", "approve"],
+  write: (cell, token) =>
+    attemptCall(routeCall(body(cell.write, literal(token), argText(cell)), token)),
+  raw: potRaw,
+});
+
+/** `USDC.transfer(to, amount)` — the registry-symbol syntax. */
+const SYMBOL = routeSpelling("USDC.<write>(...)", (write, _, args) => `USDC.${write}(${args});`);
+
+/** `Token(addr).transfer(to, amount)` — the any-address wrapper. */
+const FACTORY = routeSpelling(
+  "Token(addr).<write>(...)",
+  (write, token, args) => `Token(${token}).${write}(${args});`,
+);
+
+/** `const t = Token(addr); t.transfer(to, amount)` — the wrapper bound once, then called. */
+const BOUND = routeSpelling(
+  "const t = Token(addr); t.<write>(...)",
+  (write, token, args) => `const t = Token(${token});\nt.${write}(${args});`,
+);
+
+/**
+ * The typed binding the sugar used to lower to, and which an explicit `IERC20.at(addr)` still is:
+ * the raw ABI call, which decodes the declared `bool`. Not a SafeERC20 spelling — it is here to
+ * show the two cells that made the sugar unsafe.
+ */
+const TYPED = routeSpelling(
+  "IERC20.at(addr).<write>(...)",
+  (write, token, args) =>
+    `import { IERC20 } from "./artifacts/IERC20.json";\n` +
+    `function main() { IERC20.at(${token}).${write}(${args}); }`,
+);
+
 /** The same write with nothing checked, for showing that a refusal is the check's, not the token's. */
 const UNCHECKED: Spelling = {
   name: "an unchecked evm.call",
@@ -646,18 +725,121 @@ describeEvm("@sauce/token e2e: the EVM arm against a real ERC20", () => {
     expect(await balanceOf(token, RECIPIENT)).toBe(TRANSFERRED * 2n);
   });
 
-  // Three spellings of one contract: OpenZeppelin's, the std library's for SauceScript that imports
-  // it, and `safe.ts`'s for what the SDK emits into a route. Each must land every cell it can spell
-  // exactly as the table says — and since the reference must too, that is `safe.ts` == std == OZ.
-  describe.each([OPENZEPPELIN, SAUCE_TOKEN, SAFE_TS])("SafeERC20 through $name", (spelling) => {
-    beforeAll(async () => {
-      reference ??= await deploy(SAFE_ERC20_REFERENCE.creationCode);
-    }, 60_000);
+  // Every spelling of one contract: OpenZeppelin's, the std library's for SauceScript that imports
+  // it, `safe.ts`'s for what the SDK emits into a route, and the three route-body syntaxes a program
+  // writes by hand, each through `compileSauceRoute`. Each must land every cell it can spell exactly
+  // as the table says — and since the reference must too, every one of them is OZ's behaviour.
+  describe.each([OPENZEPPELIN, SAUCE_TOKEN, SAFE_TS, SYMBOL, FACTORY, BOUND])(
+    "SafeERC20 through $name",
+    (spelling) => {
+      beforeAll(async () => {
+        reference ??= await deploy(SAFE_ERC20_REFERENCE.creationCode);
+      }, 60_000);
 
-    it.each(rows(CELLS.filter((cell) => spelling.writes.includes(cell.write))))(
-      "%s -> %s",
-      async (_, __, cell) => {
-        expect(await run(cell, spelling)).toEqual(expectedOutcome(cell));
+      it.each(rows(CELLS.filter((cell) => spelling.writes.includes(cell.write))))(
+        "%s -> %s",
+        async (_, __, cell) => {
+          expect(await run(cell, spelling)).toEqual(expectedOutcome(cell));
+        },
+        60_000,
+      );
+    },
+  );
+
+  // Why the route syntax had to move: the typed binding it used to lower to — which an explicit
+  // `IERC20.at(addr)` still is — gets both cells SafeERC20 exists for wrong, in opposite directions.
+  describe("the raw IERC20.at(addr) binding is not SafeERC20", () => {
+    it.each([
+      ["transfer", "noReturn", "reverted"],
+      ["approve", "noReturn", "reverted"],
+      ["transfer", "falseReturn", "success"],
+      ["approve", "falseReturn", "success"],
+    ] as const)(
+      "%s on the %s token -> %s, where every SafeERC20 spelling does the opposite",
+      async (write, token, status) => {
+        const given = READY[write];
+        const cell: Cell = { write, token, given, expected: status };
+        const safe = CELLS.find(
+          (c) => c.write === write && c.token === token && c.given === given && !c.to,
+        );
+
+        expect(safe?.expected).toBe(status === "success" ? "reverted" : "success");
+        expect((await run(cell, TYPED)).status).toBe(status);
+      },
+      60_000,
+    );
+  });
+
+  describe("a program's own names", () => {
+    // The lowering imports `@sauce/token` under reserved names, so a program that declares its own
+    // `transfer`/`approve` keeps them and the write still lands SafeERC20 — here on USDT, which the
+    // typed call reverts on.
+    it("a user-declared transfer/approve does not collide with the lowered write", async () => {
+      const token = await TOKENS.noReturn();
+      await mintTo(token, sauce.pot, AMOUNT);
+      const body =
+        "function transfer(a) { return a; }\nfunction approve(a) { return a; }\n" +
+        `function main() { USDC.transfer(${literal(RECIPIENT)}, transfer(${AMOUNT}n)); ` +
+        `Token(${literal(token)}).approve(${literal(SPENDER)}, approve(${AMOUNT}n)); }`;
+
+      expect(await attemptCall(routeCall(body, token))).toBe("success");
+      expect(await balanceOf(token, RECIPIENT)).toBe(AMOUNT);
+    }, 60_000);
+  });
+
+  // A shipped recipe, executed: `plain-transfer.sauce.ts` resolves `USDC` from the registry, so the
+  // cell's token is installed at the registry's own USDC address for the destination rather than
+  // handed in. Each cell gets a fresh recipient, since the address's storage outlives its code.
+  describe("the plain-transfer recipe at the registry's USDC address", () => {
+    const destination = requireChain("arbitrum");
+    const usdc = numberToHex(registryTokenAddress(destination, "USDC")!, { size: 20 });
+    const RECIPIENTS = {
+      standard: "0x00000000000000000000000000000000000000a1",
+      noReturn: "0x00000000000000000000000000000000000000a2",
+      falseReturn: "0x00000000000000000000000000000000000000a3",
+      noCode: "0x00000000000000000000000000000000000000a4",
+    } as const satisfies Record<string, Address>;
+
+    const install = async (kind: keyof typeof RECIPIENTS) => {
+      if (kind === "noCode") {
+        await testClient.setCode({ address: usdc, bytecode: "0x" });
+        return;
+      }
+      const deployed = await TOKENS[kind]();
+      const code = await publicClient.getCode({ address: deployed });
+      await testClient.setCode({ address: usdc, bytecode: code! });
+      await mintTo(usdc, sauce.pot, AMOUNT);
+    };
+
+    it.each([
+      ["standard", "success"],
+      ["noReturn", "success"],
+      ["falseReturn", "reverted"],
+      ["noCode", "reverted"],
+    ] as const)(
+      "on the %s token -> %s",
+      async (kind, status) => {
+        await install(kind);
+        const recipient = RECIPIENTS[kind];
+        const built = buildPlainTransfer({
+          from: "base",
+          to: destination.slug,
+          amount: AMOUNT,
+          perMessageLimit: AMOUNT,
+          recipient,
+          pot: sauce.pot,
+          engine: sauce.engine,
+          portal: "0x2222222222222222222222222222222222222222",
+          deadline: 2000n,
+          creator: DEPLOYER.address,
+          prover: "0x4444444444444444444444444444444444444444",
+          reward: 0n,
+        });
+
+        expect(await attemptCall(built.intent.route.calls[0]!.data)).toBe(status);
+        if (kind !== "noCode") {
+          expect(await balanceOf(usdc, recipient)).toBe(status === "success" ? AMOUNT : 0n);
+        }
       },
       60_000,
     );
