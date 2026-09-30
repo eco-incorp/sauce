@@ -31,14 +31,15 @@ import {
   traceTests,
 } from "./kitchen-bench.js";
 
+import { compileSvm } from "./rs-compile.js";
+
 /**
  * The two transports that actually EXECUTE, against the real `kitchen.so` CPI-ing into the real
  * `engine-devnet.so`. These are what the engine-per-call and unsigned-Pot-in-tail rules are for, and
  * a discriminator guard cannot reach them: a wrong account ORDER or ROLE in either builder still
  * emits the right eight bytes and fails only here.
  *
- * `[BYTE_1 42][STOP]` is the smallest program the engine will run — enough to prove the CPI lands and
- * the accounts line up, without depending on any opcode whose encoding differs between lineages.
+ * Compile a scalar return through the pinned compiler so the fixture follows the engine return ABI.
  */
 describeKitchen("kitchen: cook transports on the released engine", () => {
   traceTests();
@@ -52,7 +53,7 @@ describeKitchen("kitchen: cook transports on the released engine", () => {
   // Released before jest tears the module registry down. The VM is a napi handle over a BPF runtime
   // with two loaded programs, and holding one at module scope — which no other engine suite here
   // does — is the shape the intermittent teardown abort followed.
-  const PROGRAM = new Uint8Array([0x01, 0x2a, 0x00]);
+  const PROGRAM = compileSvm("function main(): Uint256 { return 42n; }").bytecode;
 
   /** Creates the Pot `cook` will sign for, and hands back the tail entry it rides in — UNSIGNED. */
   const potFor = async (salt: Uint8Array) => {

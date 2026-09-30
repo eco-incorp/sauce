@@ -19,6 +19,10 @@ import {
 } from "@eco-incorp/sauce/compiler";
 ```
 
+This SDK pins compiler **2.4.0**, EVM engine and Kitchen **1.1.0**, SVM engine **1.3.0**,
+and SVM Kitchen **1.0.0**. Release addresses identify this compatible set; they do not
+confirm it has been deployed on a chain. Check deployment readiness before using it live.
+
 Every example here is checked against the compiler version this package ships.
 
 ## `compile(options): CompileResult`

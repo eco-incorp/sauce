@@ -204,8 +204,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   deterministic (CREATE3 / fixed-keypair) addresses — chain/cluster-independent, so they are ADDRESSES,
   not liveness. Legacy `v12.generated.ts` constants and the `isV12Live`/`v12LiveChainIds` roster describe the old
   deployment generation, not proof that these release addresses are live on a chain. EVM address
-  lookup helpers use `V12Deployments.json`; verify live code separately. The EVM engine is **1.0.1**, SVM engine **1.2.0**, and
-  Kitchens **1.0.0**; `V12Deployments.json.releases` records each source commit/version.
+  lookup helpers use `V12Deployments.json`; verify live code separately. The EVM engine and Kitchen are **1.1.0**, SVM engine **1.3.0**, and
+  SVM Kitchen **1.0.0**; `V12Deployments.json.releases` records each source commit/version.
 - **`V12RuntimeBytecode.json` comes from a pinned release asset.**
   The engine deleted its committed `engine-v12/snapshots/` copy (`chore(v12): compile the runtime
 at deploy time`) because a second source of truth rotted — six changed `.huff` handlers once
@@ -242,7 +242,7 @@ compile(options: CompileOptions): CompileResult
 `target` (`'evm' | 'svm'`) and `resolve` are required; `entry` (default `"main.js"`),
 `resolvePackage`, `contracts`, `inlineContracts`, `ambient`, `defines`, `optimize` (default
 `true`), `cache` (default `true`), and `compactArgs` (default `false`) are optional. All four manifests pin the
-compiler exactly to **2.3.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
+compiler exactly to **2.4.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
 `isaRevision: "stack-compact-v2"`, `entryEncoding: "abi-v1" | "compact-v1"`, optional
 `entrySchema: Uint8Array`, and optional `manifest: AccountManifest`. `manifest` is the SVM account
 contract, absent on EVM. Compile-time values affect bytecode; runtime entry arguments are encoded

@@ -61,7 +61,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "node scripts/gen-embedded-sources.mjs && tsc && node scripts/sync-engine-artifacts.mjs && node scripts/copy-verify-assets.mjs",
+    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs",
     "typecheck": "node scripts/gen-embedded-sources.mjs && tsc --noEmit",
     "typecheck:test": "node scripts/gen-embedded-sources.mjs && tsc -p tsconfig.test.json --noEmit",
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
@@ -72,7 +72,7 @@
     "sync-eco-routes-addresses": "node scripts/sync-eco-routes-addresses.mjs"
   },
   "dependencies": {
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.3.0",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.4.0",
     "@solana-program/address-lookup-table": "^0.12.1",
     "@solana-program/compute-budget": "^0.16.0",
     "@solana-program/system": "^0.12.2",
