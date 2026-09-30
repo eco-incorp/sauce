@@ -37,6 +37,7 @@ import {
   potCommand,
   readInput,
   txCommand,
+  type ArgsInput,
   type CliFiles,
   type CommandOutput,
   type PotInput,
@@ -140,6 +141,10 @@ const PROGRAM: FlagSpecs = {
     value: "<wei>",
     help: "…the destination Kitchen's fee, when one runs a program",
   },
+  "compact-args": {
+    type: "boolean",
+    help: "Take main's arguments as compact-v1, not ABI-v1",
+  },
 };
 
 const JSON_FLAG: FlagSpecs = {
@@ -149,7 +154,7 @@ const JSON_FLAG: FlagSpecs = {
 const COMPILE_FLAGS: FlagSpecs = {
   ...PROGRAM,
   out: { type: "string", value: "<path>", help: "Write the output to a file, not stdout" },
-  json: { type: "boolean", help: "Print JSON: size, compiler, paired engine, SVM manifest" },
+  json: { type: "boolean", help: "Print JSON: size, main's parameters, compiler, engine" },
   ...HELP,
 };
 
@@ -176,8 +181,19 @@ const TX_FLAGS: FlagSpecs = {
     value: "<url>",
     help: "Read the fee if --value is absent, and check the Pot",
   },
+  "args-json": {
+    type: "string",
+    value: "<json|file>",
+    help: "main's arguments as a JSON array, inline or in a file",
+  },
   ...JSON_FLAG,
   ...HELP,
+  // Never parsed as a flag: everything after it is main's arguments (see `runCli`).
+  args: {
+    type: "boolean",
+    value: "<value>…",
+    help: "Last: main's arguments in order (JSON for an array or tuple)",
+  },
 };
 
 const POT_FLAGS: FlagSpecs = {
@@ -210,10 +226,13 @@ interface Command {
   readonly summary: string;
   readonly flags: FlagSpecs;
   readonly details: string;
+  /** A flag that ends the options: every word after it is passed to `run` as `trailing`. */
+  readonly trailing?: string;
   /** The output to print, or `undefined` when the command already wrote it (`--out`). */
   readonly run: (
     args: ParsedArgs,
     io: CliIo,
+    trailing: readonly string[] | undefined,
   ) => Promise<CommandOutput | undefined> | CommandOutput | undefined;
 }
 
@@ -276,6 +295,7 @@ function programInput(args: ParsedArgs, io: CliIo): ProgramInput {
     file,
     text,
     chain: chainOf(args, file, text),
+    compactArgs: args.values["compact-args"] === true,
     defines: {
       ...(definesFile === undefined
         ? {}
@@ -290,6 +310,33 @@ function programInput(args: ParsedArgs, io: CliIo): ProgramInput {
       ...(fee === undefined ? {} : { executionFee: parseWei("intent-execution-fee", fee) }),
     },
   };
+}
+
+/** `main`'s arguments: the words after `--args`, or `--args-json`'s array — never both. */
+function argsInput(
+  args: ParsedArgs,
+  io: CliIo,
+  trailing: readonly string[] | undefined,
+): { args?: ArgsInput } {
+  const json = stringFlag(args, "args-json");
+  if (json !== undefined && trailing !== undefined) {
+    throw new UsageError("give --args or --args-json, not both");
+  }
+  if (trailing !== undefined) return { args: { from: "--args", values: trailing } };
+  if (json === undefined) return {};
+  // Inline when it reads as JSON (an array, or the object someone meant as one); a path otherwise.
+  const text = /^\s*[[{]/.test(json) ? json : readInput(io, json);
+  let values: unknown;
+  try {
+    values = JSON.parse(text);
+  } catch (error) {
+    throw new UsageError(`--args-json: not JSON (${(error as Error).message})`);
+  }
+  if (!Array.isArray(values)) {
+    throw new UsageError("--args-json: expected a JSON array of main's arguments, in order");
+  }
+
+  return { args: { from: "--args-json", values } };
 }
 
 function potInput(args: ParsedArgs): PotInput {
@@ -347,14 +394,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     flags: TX_FLAGS,
     details: [
       "Compiles the file as `sauce compile` does and prints the transaction that runs it:",
-      "to = the Pot, data = Pot.cook(engine, program) on the released engine, and value.",
-      "Also prints it as a `cast send` line; sign it with cast or any wallet. The Pot must",
-      "exist and be funded, and the sender must be its owner.",
+      "to = the Pot, data = Pot.cook(engine, program ++ arguments) on the released engine, and",
+      "value. Also prints it as a `cast send` line; sign it with cast or any wallet. The Pot",
+      "must exist and be funded, and the sender must be its owner. A main that declares",
+      "parameters takes their values after --args, checked against the declared types.",
       "",
-      "Example:",
+      "Examples:",
       "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0",
+      "  sauce tx swap.sauce.ts --chain base --pot 0x… --value 0 --args 0x… 1000 true '[1,2]'",
     ].join("\n"),
-    run: (args, io) => {
+    trailing: "args",
+    run: (args, io, trailing) => {
       const value = stringFlag(args, "value");
       const rpcUrl = stringFlag(args, "rpc-url");
 
@@ -364,6 +414,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           target: potInput(args),
           ...(value === undefined ? {} : { value: parseWei("value", value) }),
           ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          ...argsInput(args, io, trailing),
         },
         io,
       );
@@ -544,13 +595,16 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
   }
 
   try {
-    const args = parseFlags(rest, command.flags);
+    // A trailing flag ends the options, so its words are never read as flags: a program's
+    // arguments may look like anything.
+    const at = command.trailing === undefined ? -1 : rest.indexOf(`--${command.trailing}`);
+    const args = parseFlags(at < 0 ? rest : rest.slice(0, at), command.flags);
     if (args.values.help === true) {
       io.stdout(commandHelp(command));
 
       return 0;
     }
-    const output = await command.run(args, io);
+    const output = await command.run(args, io, at < 0 ? undefined : rest.slice(at + 1));
     if (output !== undefined) io.stdout(`${render(output, args)}\n`);
 
     return 0;

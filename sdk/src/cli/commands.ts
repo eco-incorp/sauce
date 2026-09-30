@@ -2,10 +2,10 @@
  * What `sauce compile`, `sauce tx` and `sauce pot` compute. Each returns its result twice — as the
  * lines a person reads and as the object `--json` prints — and none of them signs or sends.
  *
- * Every piece is the SDK's own: `compileSauceProgram`/`compileSauceRoute` under `withChainAmbient`
- * compile the file exactly as `openRoute` compiles a route body, `v12PredictPot` and
- * `sauceEvmDeployPotCall` are the Pot, `v12Pot.encodeCook` (inside `compileSauceRoute`) is the cook,
- * and `destinationExecutionFee` is the Kitchen's fee. Nothing is reimplemented here.
+ * Every piece is the SDK's own: `compileSauceProgram` compiles the file as a standalone program with
+ * the chain's ambient names, `encodeEntryArguments` encodes `main`'s arguments, `buildSauceEvmCall`
+ * (`v12Pot.encodeCook`) is the cook, `v12PredictPot` and `sauceEvmDeployPotCall` are the Pot, and
+ * `destinationExecutionFee` is the Kitchen's fee. Nothing is reimplemented here.
  */
 import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
@@ -28,11 +28,11 @@ import {
 import { v12GateKitchen, v12PredictPot } from "../deployments/pot.js";
 import { v12Pot } from "../evm/engine.js";
 import { destinationExecutionFee } from "../evm/execution-fee.js";
-import { withChainAmbient } from "../routes/ambient.js";
-import { sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
+import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
+import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,
-  compileSauceRoute,
+  type CompiledSauceProgram,
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
 import { UsageError, type DefineValue } from "./args.js";
@@ -64,6 +64,8 @@ export interface ProgramInput {
   readonly text: string;
   readonly chain: CanonicalChain;
   readonly defines: Record<string, DefineValue>;
+  /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
+  readonly compactArgs: boolean;
   /** `Chain(() => …).reward(…)` inside the program: what the SDK cannot look up. */
   readonly intents: {
     readonly deadline?: bigint;
@@ -103,9 +105,9 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
 }
 
 /**
- * The options every compile here runs with: the chain's ambient bundle (`withChainAmbient`, the
- * one `openRoute` uses), the defines over it, the intent settings, and a resolver that serves the
- * program's own relative imports from beside the file.
+ * The options every compile here runs with, on top of the chain's ambient names that
+ * `compileSauceProgram` adds itself: the defines, the intent settings, the argument encoding, and a
+ * resolver that serves the program's own relative imports from beside the file.
  */
 function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptions {
   const dir = dirname(resolvePath(input.file));
@@ -116,17 +118,18 @@ function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptio
     ...(executionFee === undefined ? {} : { executionFee }),
   };
 
-  return withChainAmbient(input.chain, {
+  return {
     defines: input.defines,
     ...(Object.keys(intents).length === 0 ? {} : { intents }),
+    ...(input.compactArgs ? { compactArgs: true } : {}),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
-  });
+  };
 }
 
-/** Runs `compile`, turning a compile failure into one message about the file. */
-function compiling<T>(input: ProgramInput, compile: () => T): T {
+/** Compiles the file as a standalone program, turning a failure into one message about the file. */
+function compile(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
   try {
-    return compile();
+    return compileSauceProgram(input.chain, input.text, compileOptions(input, files));
   } catch (error) {
     throw new CliError(
       `${input.file} does not compile for ${input.chain.slug}\n` +
@@ -159,13 +162,14 @@ function pairedEngine(chain: CanonicalChain): Record<string, string> {
   return { release: "v12-evm", version, commit, address: getAddress(v12EngineAddress()) };
 }
 
-/** `sauce compile`: the program's bytecode, and with `--json` what it pairs with. */
+/** `main(name: Type, …)`, as the program declares its runtime parameters. */
+const signatureOf = (params: readonly EntryParam[]): string =>
+  `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")})`;
+
+/** `sauce compile`: the program's bytecode, and with `--json` what it pairs with and takes. */
 export function compileCommand(input: ProgramInput, files: CliFiles): CommandOutput {
-  const program = compiling(input, () =>
-    compileSauceProgram(input.chain, input.text, compileOptions(input, files)),
-  );
-  const bytes = program.compiled.bytecode[0]!;
-  const bytecode = bytesToHex(bytes);
+  const program = compile(input, files);
+  const bytecode = bytesToHex(program.bytecode);
 
   return {
     text: bytecode,
@@ -174,12 +178,66 @@ export function compileCommand(input: ProgramInput, files: CliFiles): CommandOut
       chainId: input.chain.id,
       target: input.chain.kind,
       bytecode,
-      size: bytes.length,
+      size: program.bytecode.length,
+      entryEncoding: program.entryEncoding,
+      entryParams: program.entryParams,
+      entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
       ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     },
   };
+}
+
+/** `main`'s arguments as `sauce tx` got them: `--args` strings, or `--args-json` values. */
+export type ArgsInput =
+  | { readonly from: "--args"; readonly values: readonly string[] }
+  | { readonly from: "--args-json"; readonly values: readonly unknown[] };
+
+/**
+ * The values to encode for `params`. A `--args` string is the value itself, except for an array or
+ * tuple parameter, which takes JSON (`[1, 2]`, `{"amount": 1}`); `--args-json` values are taken as
+ * parsed. `encodeEntryArguments` then checks every one against its declared type.
+ */
+function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryValue[] {
+  if (args.from === "--args-json") return args.values as EntryValue[];
+
+  return args.values.map((raw, index) => {
+    const param = params[index];
+    if (param === undefined || !/^\{|\[\]$/.test(param.type.trim())) return raw;
+    try {
+      return JSON.parse(raw) as EntryValue;
+    } catch {
+      throw new UsageError(
+        `--args: argument ${index + 1} (${param.name}: ${param.type}) takes JSON, such as ` +
+          `${param.type.trim().startsWith("{") ? '{"field": 1}' : "[1, 2]"}; got '${raw}'`,
+      );
+    }
+  });
+}
+
+/** The program with its encoded arguments appended: the `program` a cook runs. */
+function payload(program: CompiledSauceProgram, args: ArgsInput | undefined): Hex {
+  const params = program.entryParams;
+  if (args === undefined) {
+    if (params.length > 0) {
+      throw new UsageError(
+        `${signatureOf(params)} takes ${params.length} argument${params.length === 1 ? "" : "s"}: ` +
+          "pass them after --args, in order, or as --args-json",
+      );
+    }
+
+    return bytesToHex(program.bytecode);
+  }
+  let encoded: Uint8Array;
+  try {
+    encoded = encodeEntryArguments(program, argumentValues(params, args));
+  } catch (error) {
+    if (error instanceof UsageError) throw error;
+    throw new UsageError(`${args.from}: ${(error as Error).message}`);
+  }
+
+  return `${bytesToHex(program.bytecode)}${bytesToHex(encoded).slice(2)}` as Hex;
 }
 
 /** Where `sauce tx` cooks: a Pot named outright, or derived from its owner and salt. */
@@ -191,6 +249,8 @@ export interface TxInput extends ProgramInput {
   readonly target: PotInput;
   readonly value?: bigint;
   readonly rpcUrl?: string;
+  /** Values for `main`'s parameters; required exactly when it declares some. */
+  readonly args?: ArgsInput;
 }
 
 /** What `--rpc-url` told us, when it was given. */
@@ -292,10 +352,10 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   const target = input.target;
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
-  const route = compiling(input, () =>
-    compileSauceRoute(input.chain, input.text, { pot, engine }, compileOptions(input, files)),
-  );
-  const data = route.calls[0]!.data;
+  const program = compile(input, files);
+  // The cook `compileSauceRoute` would build, over the program with its arguments appended — the
+  // way the SDK's own intent children carry theirs.
+  const data = buildSauceEvmCall({ pot, engine, program: payload(program, input.args) }).data;
 
   const reading =
     input.rpcUrl === undefined ? undefined : await readChain(input.rpcUrl, input.chain, pot);
@@ -332,7 +392,9 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
         salt: "salt" in target ? target.salt : null,
         deployed: reading === undefined ? null : reading.deployed,
       },
-      size: route.compiled.bytecode[0]!.length,
+      size: program.bytecode.length,
+      entryEncoding: program.entryEncoding,
+      entryParams: program.entryParams,
       cast,
     },
   };

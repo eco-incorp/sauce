@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { bytesToHex, decodeFunctionData, getAddress, type Hex } from "viem";
+import { bytesToHex, decodeFunctionData, encodeAbiParameters, getAddress, type Hex } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
 import {
@@ -34,7 +34,8 @@ import { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "../src/dep
 import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import * as root from "../src/index.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
+import { encodeCompactArguments } from "../src/compact-arguments.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
@@ -245,6 +246,9 @@ describe("sauce compile", () => {
       target: "evm",
       bytecode: expect.stringMatching(/^0x[0-9a-f]+$/),
       size: ((out.bytecode as string).length - 2) / 2,
+      entryEncoding: "abi-v1",
+      entryParams: [],
+      entrySchema: null,
       compiler: { name: "@eco-incorp/sauce-compiler", version: compiler.version },
       engine: {
         release: "v12-evm",
@@ -495,6 +499,8 @@ describe("sauce tx", () => {
       engine: getAddress(v12EngineAddress()),
       pot: { address: pot, owner: OWNER, salt: SAUCE_INTENT_POT_SALT, deployed: null },
       size: (program.length - 2) / 2,
+      entryEncoding: "abi-v1",
+      entryParams: [],
       cast: `cast send ${pot} ${out.data} --value 1234 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>`,
     });
     expect(castSend(pot as `0x${string}`, out.data as Hex, 1234n)).toBe(out.cast);
@@ -523,6 +529,147 @@ describe("sauce tx", () => {
       `It must be deployed (sauce pot --owner ${OWNER} --chain ethereum --salt ${parseSalt("0x07")})`,
     );
     expect(run.stdout).toContain(`Send from ${OWNER}: cook() is onlyOwner.`);
+  });
+
+  describe("main's arguments", () => {
+    const SPLIT =
+      "function main(token: Address, recipients: Address[], amount: Uint256, alsoUsdc: bool) {\n" +
+      "  for (let i = 0; i < recipients.length; i = i + 1) {\n" +
+      "    transfer(token, recipients[i], amount);\n" +
+      "    if (alsoUsdc) {\n" +
+      "      USDC.transfer(recipients[i], amount);\n" +
+      "    }\n" +
+      "  }\n" +
+      "}\n";
+    const POT = "0x1111111111111111111111111111111111111111";
+    const ARGS = [OWNER, `["${RECIPIENT}","${CREATOR}"]`, "1000", "true"];
+    const tx = (...extra: string[]) =>
+      sauce(
+        "tx",
+        file("split.sauce.ts", SPLIT),
+        "--chain",
+        "base",
+        "--pot",
+        POT,
+        "--value",
+        "0",
+        ...extra,
+      );
+
+    it("reports main's parameters and their encoding", async () => {
+      const out = json(
+        await sauce("compile", file("split.sauce.ts", SPLIT), "--chain", "base", "--json"),
+      );
+      expect(out.entryEncoding).toBe("abi-v1");
+      expect(out.entryParams).toEqual([
+        { name: "token", type: "Address" },
+        { name: "recipients", type: "Address[]" },
+        { name: "amount", type: "Uint256" },
+        { name: "alsoUsdc", type: "bool" },
+      ]);
+      const compact = json(
+        await sauce(
+          "compile",
+          file("split.sauce.ts", SPLIT),
+          "--chain",
+          "base",
+          "--compact-args",
+          "--json",
+        ),
+      );
+      expect(compact.entryEncoding).toBe("compact-v1");
+      expect(compact.entrySchema).toMatch(/^0x94/);
+    });
+
+    it("appends the encoded values to the program the cook runs", async () => {
+      const out = json(await tx("--json", "--args", ...ARGS));
+      const program = (
+        await sauce("compile", file("split.sauce.ts", SPLIT), "--chain", "base")
+      ).stdout.trim();
+      const encoded = encodeAbiParameters(
+        [{ type: "address" }, { type: "address[]" }, { type: "uint256" }, { type: "bool" }],
+        [OWNER, [RECIPIENT, CREATOR], 1000n, true],
+      );
+      const cook = decodeFunctionData({ abi: v12Pot.abi, data: out.data as Hex });
+      expect(cook.args).toEqual([getAddress(v12EngineAddress()), `${program}${encoded.slice(2)}`]);
+      const viaJson = json(
+        await tx(
+          "--json",
+          "--args-json",
+          JSON.stringify([OWNER, [RECIPIENT, CREATOR], 1000, true]),
+        ),
+      );
+      expect(viaJson.data).toBe(out.data);
+      const argsFile = file(
+        "args.json",
+        JSON.stringify([OWNER, [RECIPIENT, CREATOR], "1000", true]),
+      );
+      expect(json(await tx("--json", "--args-json", argsFile)).data).toBe(out.data);
+    });
+
+    it("encodes compact-v1 for a program compiled for it", async () => {
+      const out = json(await tx("--compact-args", "--json", "--args", ...ARGS));
+      const program = compileSauceProgram("base", SPLIT, { compactArgs: true });
+      const cook = decodeFunctionData({ abi: v12Pot.abi, data: out.data as Hex });
+      const args = encodeCompactArguments(program.entrySchema!, [
+        OWNER,
+        [RECIPIENT, CREATOR],
+        1000n,
+        true,
+      ]);
+      expect(cook.args[1]).toBe(`${bytesToHex(program.bytecode)}${bytesToHex(args).slice(2)}`);
+    });
+
+    it("names what is wrong with them, exiting 2", async () => {
+      const cases: Array<[string[], RegExp]> = [
+        [
+          [],
+          /main\(token: Address, recipients: Address\[\], amount: Uint256, alsoUsdc: bool\) takes 4 arguments: pass them after --args/,
+        ],
+        [["--args", OWNER], /--args: main takes 4 arguments \(.*\), got 1/],
+        [
+          ["--args", "0x12", "[]", "1", "true"],
+          /argument 1 \(token: Address\): '0x12' is not an address/,
+        ],
+        [
+          ["--args", OWNER, RECIPIENT, "1", "true"],
+          /argument 2 \(recipients: Address\[\]\) takes JSON, such as \[1, 2\]/,
+        ],
+        [
+          ["--args", OWNER, "[]", "1.5", "true"],
+          /argument 3 \(amount: Uint256\): '1.5' is not an unsigned integer/,
+        ],
+        [
+          ["--args", OWNER, "[]", "1", "maybe"],
+          /argument 4 \(alsoUsdc: bool\): 'maybe' is not a bool/,
+        ],
+        [["--args-json", "{}"], /--args-json: expected a JSON array/],
+        [["--args-json", "[1]", "--args", "1"], /give --args or --args-json, not both/],
+      ];
+      for (const [extra, message] of cases) {
+        const run = await tx(...extra);
+        expect(run.stderr).toMatch(message);
+        expect(run.code).toBe(2);
+      }
+      const missing = await tx("--args-json", join(work, "nope.json"));
+      expect(missing.code).toBe(1);
+      expect(missing.stderr).toMatch(/nope\.json: no such file/);
+      const none = await sauce(
+        "tx",
+        pay(),
+        "--chain",
+        "ethereum",
+        "--pot",
+        POT,
+        ...PAY_DEFINES,
+        "--value",
+        "0",
+        "--args",
+        "1",
+      );
+      expect(none.code).toBe(2);
+      expect(none.stderr).toMatch(/main takes 0 arguments \(\), got 1/);
+    });
   });
 
   it("cooks on a Pot named outright", async () => {
