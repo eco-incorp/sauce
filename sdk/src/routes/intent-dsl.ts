@@ -528,11 +528,10 @@ export function openRoute(
   // IntentOptions.compile.defines -- caller always wins on a key collision; a user-declared local
   // inside the body wins over all of this via the compiler's own getConstant/getVar precedence.
   //
-  // The two travel SEPARATELY. The caller's defines hold for the whole program, at every depth. The
-  // chain-scoped ones belong to one chain, so the compile gets them as a function of the chain and
-  // evaluates it for each chain an intent written in the program names. Folded into `defines` they
-  // reached every nested compile as caller values and replaced that chain's own: Base's USDC in the
-  // body of an intent that runs on Arbitrum.
+  // The two travel SEPARATELY, so `defines` stays exactly what the caller wrote. The chain-scoped
+  // ones belong to one chain: they reach the compile as a scope for this program's chain, and a
+  // level on another chain — an intent's body written in the program — gets that chain's own
+  // (`sauce-route.ts#levelOn`, which also drops the caller's defines of chain-scoped names there).
   const callerDefines = { ...options.defines, ...options.compile?.defines };
   const scope: RouteScope = {
     chainDefines: (chain) => chainDefines(chain, { tokens: options.tokenDefines }),

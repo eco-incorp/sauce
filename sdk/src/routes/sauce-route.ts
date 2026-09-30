@@ -34,6 +34,7 @@ import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protoco
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
+import { chainDefines } from "./ambient.js";
 import { denormalizeToEvm } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
 import { childCaptureSentinel, type CompiledChild } from "./intent-sugar.js";
@@ -156,23 +157,62 @@ type ChainRefResolved = ReturnType<typeof requireChain>;
 type DefineValue = bigint | boolean | number;
 
 /**
- * What `openRoute` adds to a compile that a direct `compileSauceRoute` call does not get. Internal to
- * the SDK — passed beside the options rather than inside them, so the public option surface stays
- * what `compileSauceRoute` documents.
+ * The chain-scoped values a compile gets beyond the caller's options. Internal to the SDK — passed
+ * beside the options rather than inside them, so the public option surface stays what
+ * `compileSauceRoute` documents. `openRoute` supplies one for the program it compiles; every nested
+ * level gets {@link NESTED_SCOPE}.
  */
 export interface RouteScope {
   /**
    * The compile-time values that belong to ONE chain: `chainId`, its protocol contracts and its
-   * token symbols (`ambient.ts#chainDefines`). Evaluated for the chain this program compiles for,
-   * and again for every chain an intent written inside it names — its body on that chain, its
-   * reward on this one — including each nested compile's own chain.
-   *
-   * A function rather than values because the values differ per chain. `openRoute` used to fold its
-   * own chain's into `defines`, which hold for the whole program at every depth, so a nested
-   * intent's body read them as the caller's: Base's USDC, and Base's `chainId`, in a program that
-   * runs on Arbitrum.
+   * token symbols (`ambient.ts#chainDefines`). A function rather than values because the values
+   * differ per chain, and a program names more than one chain as soon as it opens an intent.
    */
   readonly chainDefines?: (chain: ChainRefResolved) => Readonly<Record<string, DefineValue>>;
+}
+
+/** What a nested level resolves its chain-scoped names with: its own chain's registry values and
+ *  nothing a caller supplied for another chain. */
+const NESTED_SCOPE: RouteScope = { chainDefines: (chain) => chainDefines(chain) };
+
+/**
+ * The options and scope a level on `destination` gets, when a program compiled for `enclosing`
+ * names it: an intent's body there, its delivery, and the program that body compiles to.
+ *
+ * NAMES ARE SCOPED PER CHAIN, the way protocol accessors already are (they fold in each chain's own
+ * literal address). A token symbol, `chainId` or a protocol define means the chain its part runs on.
+ * So everything the caller supplied under a chain-scoped name — a `defines` entry named like one of
+ * the enclosing chain's values or the destination's, and every `tokens` override — belongs to the
+ * program it was supplied for, and is dropped for the level on another chain. That level takes its
+ * own chain's values instead. What the caller named that no chain uses (`RECIPIENT`) holds at every
+ * depth.
+ *
+ * Name-based, not value-based: it does not matter whether a `USDC` define came from
+ * `chainDefines(base)` or was chosen by hand. It was a Base name in either case. This is what closes
+ * both ways Base's USDC reached an Arbitrum body: `openRoute` folding its chain's values into
+ * `defines`, and a direct caller passing them there itself.
+ *
+ * A level on the SAME chain keeps the enclosing options: its names are the ones they were given for.
+ */
+function levelOn(
+  enclosing: ChainRefResolved,
+  destination: ChainRefResolved,
+  options: SauceCompileOptions,
+  scope: RouteScope,
+): { readonly options: SauceCompileOptions; readonly scope: RouteScope } {
+  if (destination.id === enclosing.id) return { options, scope };
+  const chainScoped = new Set([
+    ...Object.keys(scope.chainDefines?.(enclosing) ?? {}),
+    ...Object.keys(chainDefines(enclosing, { tokens: options.tokens })),
+    ...Object.keys(chainDefines(destination)),
+  ]);
+  const defines =
+    options.defines === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(options.defines).filter(([name]) => !chainScoped.has(name)),
+        );
+  return { options: { ...options, defines, tokens: undefined }, scope: NESTED_SCOPE };
 }
 
 /** Every name the program can read as a compile-time scalar on `chain`: the chain's token symbols,
@@ -204,8 +244,8 @@ function compileTimeValues(
  *
  * RE-ENTERS the route compile, which is what makes this general rather than a special case: the
  * child gets that chain's token and protocol rewrites, and the intent lowering runs again inside
- * it, so an intent opened within an intent is lowered by the same code at every depth. The SCOPE is
- * passed down unevaluated, so the child's chain-scoped values are its own chain's.
+ * it, so an intent opened within an intent is lowered by the same code at every depth. It is handed
+ * the options and scope `levelOn` gives its chain, so its chain-scoped names are its own chain's.
  *
  * Captured values arrive as compact-v1 entry arguments at a DECLARED width. Minimal encoding would
  * move the payload's length with the values, leaving nothing at a fixed offset to splice; a
@@ -335,12 +375,26 @@ export function compileScopedRoute(
   const sugar = rewriteIntentSugar(source, {
     source: chain,
     chains: chainAccessorNames(),
-    definesFor: (destination) => compileTimeValues(destination, options, scope),
+    // This chain's values for this chain — the program's own names and the reward it funds — and
+    // each other chain's own for a body there: see `levelOn`.
+    definesFor: (destination) => {
+      const level = levelOn(chain, destination, options, scope);
+      return compileTimeValues(destination, level.options, level.scope);
+    },
     portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
     proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
     defaults: options.intents ?? {},
-    compileChild: (destination, childSource, captures, destinationPortal) =>
-      compileIntentChild(destination, childSource, captures, destinationPortal, options, scope),
+    compileChild: (destination, childSource, captures, destinationPortal) => {
+      const level = levelOn(chain, destination, options, scope);
+      return compileIntentChild(
+        destination,
+        childSource,
+        captures,
+        destinationPortal,
+        level.options,
+        level.scope,
+      );
+    },
   });
   source = sugar.source;
   let contracts: ContractsConfig | undefined = options.contracts;
