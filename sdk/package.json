@@ -61,7 +61,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "node scripts/gen-embedded-sources.mjs && tsc && node scripts/sync-engine-artifacts.mjs && node scripts/copy-verify-assets.mjs",
+    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs",
     "typecheck": "node scripts/gen-embedded-sources.mjs && tsc --noEmit",
     "typecheck:test": "node scripts/gen-embedded-sources.mjs && tsc -p tsconfig.test.json --noEmit",
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
