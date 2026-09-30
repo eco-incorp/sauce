@@ -18,9 +18,11 @@ execution time, a Solana account manifest, or full control over module resolutio
 | `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing — you get the compiler's own result                                                        |
 
 Bare `USDC`, `Token(address)` and protocol members only exist on the route path. There,
-`USDC.approve(Uniswap.UniversalRouter, 1_000_000n)` becomes an ERC-20 ABI import and
-`IERC20.at(USDC).approve(<the router's Base address>, 1_000_000n)`, with `USDC` defined as Base's
-USDC. Raw `compile()` expects you to write that yourself.
+`USDC.approve(Uniswap.UniversalRouter, 1_000_000n)` becomes an import of `@sauce/token`'s
+`approve` and `approve(USDC, <the router's Base address>, 1_000_000n)`, with `USDC` defined as
+Base's USDC. That is the `SafeERC20` write; see
+[protocols and tokens](protocols-and-tokens.md#writes-follow-safeerc20). Raw `compile()` expects
+you to write it yourself, resolving `@sauce/token` with `resolveSdkPackage`.
 
 ## Compile an EVM route
 

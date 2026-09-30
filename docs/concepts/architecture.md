@@ -28,8 +28,10 @@ USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
 ```
 
 The destination chain picks which `USDC` and which router that means. Before compiling, the SDK
-rewrites those names into ABI-bound contract calls, supplies the matching ABIs and injects the
-addresses. The compiler sees the equivalent `IERC20.at(...).approve(...)`.
+rewrites those names, supplies the matching ABIs and injects the addresses. A token write becomes a
+call to the `@sauce/token` library, whose writes follow OpenZeppelin `SafeERC20`, so the compiler
+sees the equivalent of `approve(USDC, <the router's address>, 1_000_000n)`. A token read and a
+protocol call become ABI-bound calls such as `IERC20.at(USDC).balanceOf(...)`.
 
 These names belong to the SDK's route path, not to the compiler. A direct `compile()` call resolves
 nothing for you: bind ABIs and supply addresses yourself. See

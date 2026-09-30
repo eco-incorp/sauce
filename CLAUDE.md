@@ -346,12 +346,21 @@ way round (this was a byte-identical copy, left unformatted to stay one); it no 
 
 The EVM arm's writes are OpenZeppelin `SafeERC20`: a raw `evm.call`, then empty returndata accepted
 only from an address with code and anything else decoded as a word that must equal 1, with `approve`
-as `forceApprove` (read the allowance, reset a non-zero one first). `src/token/safe.ts` emits the
+as `forceApprove` (read the allowance, reset a non-zero one first). **Every token write the SDK
+offers has these semantics** — a standing rule, not a default. The route-body syntax (`<Sym>.transfer(...)`,
+`Token(addr).transfer(...)`, see below) compiles to calls into this library, and the registry
+templates (`protocols/{erc20,gho,frax,crvusd,cbeth,liquity-v2}/functions.ts`) import it;
+`compile.test.ts` fails any template that issues an ERC-20 write through a typed `.at(...)` binding.
+The ONE unchecked spelling is an `IERC20.at(addr).transfer(...)` a user writes explicitly: the raw
+ABI call, which decodes the declared `bool` — reverting on USDT, accepting `false` — kept as the
+escape hatch and documented as not `SafeERC20`. `src/token/safe.ts` emits the
 same semantics INLINE into routes, deliberately not as calls into this library: the settle recipe
-is compiled by partners whose resolver serves only `./artifacts/IERC20.json`. What keeps the two
-spellings on one behaviour is `test/std/token/evm.e2e.test.ts`, which runs OpenZeppelin's own
-`SafeERC20`, this library and `safe.ts` over one matrix of tokens (false, empty, no code, a word of
-2, 1/31/64-byte returns, USDT's standing allowance, honest refusals) and requires identical outcomes.
+is compiled by partners whose resolver serves only `./artifacts/IERC20.json`. What keeps every
+spelling on one behaviour is `test/std/token/evm.e2e.test.ts`, which runs OpenZeppelin's own
+`SafeERC20`, this library, `safe.ts` and the three route-body spellings (each through
+`compileSauceRoute`) over one matrix of tokens (false, empty, no code, a word of 2, 1/31/64-byte
+returns, USDT's standing allowance, honest refusals) and requires identical outcomes, with the raw
+`IERC20.at` binding beside them as the contrast and the plain-transfer recipe executed too.
 CI also pins what a wrong digit would break silently: `test/std/token/compile.test.ts` derives the
 SPL Token program id the SVM arm guards on from its base58 address, and each selector the EVM writes
 spell out by hand from `keccak256` of its signature, and counts them in the emitted bytecode. It has
@@ -382,19 +391,31 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
-The **`Token(addr)` global wrapper** (`Token(addr).approve(spender, amt)` / `let t = Token(addr);
-t.approve(...)`, zero import) is delivered by `token-rewrite.ts#rewriteTokenFactory`, a TEXTUAL
-rewrite `Token(<expr>)` → `IERC20.at(<expr>)` run in `compileSauceRoute` before the compiler — the
-SAME mechanism as the `<Sym>.transfer(...)` symbol sugar. So the compiler only ever sees the
-supported `IERC20.at(addr)` binding, never a method call on a `Token(...)` result — no compiler
-feature needed. It fires on ANY argument (a literal, a variable, an ambient `USDC` define), so unlike
-the symbol sugar it does NOT depend on the token-symbol map and works on every EVM chain; it is
-shadow-safe and svm-rejected the same way. **This is why the earlier "`Token(addr)` needs a compiler
-feature" framing was a red herring:** it only applies to the DIFFERENT approach of making `@sauce/token`
-_export_ a real `Token` value (blocked by the M1 subset — a SauceScript function can't return a
-contract binding, no re-export, no method-on-call-result). The rewrite sidesteps all of that. The
-`@sauce/token` ambient module above still provides the FUNCTION surface (`approve(token, …)`); the two
-are complementary spellings, not competitors.
+The **`Token(addr)` global wrapper** (`Token(addr).approve(spender, amt)` / `const t = Token(addr);
+t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** are TEXTUAL rewrites in
+`token-rewrite.ts`, run in `compileSauceRoute` before the compiler, and both lower a WRITE
+(`transfer`/`approve`/`transferFrom`) to the `@sauce/token` function of the same name with the
+token first: `USDC.transfer(to, amt)` → `__sauce_transfer(USDC, to, amt)`, with
+`import { transfer as __sauce_transfer } from "@sauce/token"` prepended (`tokenImportLines`). So a
+write has ONE implementation however it is spelled, and it is the library's SafeERC20 one. The import
+is ALIASED (compiler 2.3.0 accepts `import { a as b }` and emits byte-identical code), which is what
+keeps a program's own `transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
+and a program declaring one is refused by name. It is an explicit import, not the ambient module,
+because `compileSauceRoute` never merges `chainAmbient()` in. A READ (`balanceOf`, and any other
+method on `Token(...)`) stays on the typed `IERC20.at(...)` binding — a `uint256` is always there.
+A write returns nothing, so one whose result is read (`const ok = USDC.transfer(...)`) is refused,
+and the source-global and `TokenBinding` types declare the writes `void`. A bound `Token(...)` is
+lowered only when the name is declared once in the whole program, never reassigned and only ever
+called as `t.<method>(...)`: the binding then holds the ADDRESS and each call is lowered by name.
+Any other `Token(...)` — an argument, a value, a reassigned or passed binding — is REFUSED with an
+error naming the safe spellings, never passed through as the typed call (which would be the
+unchecked write again). Both rewrites are shadow-safe (a program that binds `Token` or a symbol owns
+the name) and svm-rejected: the SVM arm's writes need SPL account slots the sugar has nowhere to put.
+The compiler therefore never sees a method call on a `Token(...)` result, and no compiler feature is
+needed — the earlier "`Token(addr)` needs a compiler feature" framing only applied to making
+`@sauce/token` _export_ a real `Token` value (blocked by the M1 subset). A token-only INTENT body
+(`Base(() => { USDC.transfer(...) })`) is different again: `intent-sugar.ts` lowers it to plain
+`route.calls` the Portal's Executor runs, not to a Sauce program.
 
 **The host surface and compiled-source declarations are separate — and only one of them is
 global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named

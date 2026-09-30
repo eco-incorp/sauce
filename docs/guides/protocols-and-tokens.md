@@ -64,7 +64,27 @@ For a token absent from the registry, use `Token(address)`:
 Token(0x1111111111111111111111111111111111111111n).approve(Uniswap.UniversalRouter, 1_000_000n);
 ```
 
-Replace that illustrative address with your ERC-20. The wrapper accepts a literal, a local variable, or a compile-time define. The token member syntax supports `transfer`, `approve`, and `balanceOf`. Use an explicit ABI binding for additional ERC-20 methods. The shorthand `self.USDC` reads the executing contract's balance; `USDC.balanceOf(self)` makes the same intent explicit. `self` refers to the executing contract, which is the Pot in the EVM route path.
+Replace that illustrative address with your ERC-20. The wrapper accepts a literal, a local variable, or a compile-time define. It can also be bound once and called, `const t = Token(address); t.approve(spender, amount);`, as long as `t` is never reassigned or used other than as `t.<method>(...)`. The token member syntax supports `transfer`, `approve`, `transferFrom`, and `balanceOf`. Use an explicit ABI binding for additional ERC-20 methods. The shorthand `self.USDC` reads the executing contract's balance; `USDC.balanceOf(self)` makes the same intent explicit. `self` refers to the executing contract, which is the Pot in the EVM route path.
+
+### Writes follow SafeERC20
+
+`transfer`, `approve` and `transferFrom` have OpenZeppelin `SafeERC20` semantics however you spell
+them: `USDC.transfer(to, amount)`, `Token(address).transfer(to, amount)`, a bound `t.transfer(...)`,
+or the `@sauce/token` function `transfer(token, to, amount)`. The first three compile to exactly the
+fourth, so they are one implementation, not four. A token that returns nothing, such as USDT, is
+accepted when it has code. A `false` return, a malformed return, or an address with no code reverts
+the program. `approve` resets a non-zero allowance to zero before setting the new one, as
+`forceApprove` does, because USDT refuses to change one non-zero allowance to another.
+
+A write returns nothing: it succeeds or reverts the program, so there is no `bool` to read, and
+`const ok = USDC.transfer(...)` does not compile. Each write lowers to `@sauce/token` imported under
+a reserved `__sauce_<method>` name, so a program's own `transfer` or `approve` function keeps its
+name.
+
+An explicit `IERC20.at(address).transfer(...)`, with the ABI imported yourself, is **not** SafeERC20.
+It is the raw ABI call: it decodes the declared `bool`, so it reverts on a token that returns nothing
+and accepts one that returns `false`. Use it only when that is the behavior you want; otherwise use
+one of the spellings above.
 
 Use `tokenDefines` on an intent to add or override symbols, or `tokens` on `compileSauceRoute`'s compile options. Overrides merge per symbol with the registry. These maps contain **addresses**; `IntentOptions.tokens` instead declares the **token amounts** a solver must deliver for the route.
 
