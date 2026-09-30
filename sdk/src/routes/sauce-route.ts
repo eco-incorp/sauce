@@ -15,10 +15,10 @@
  * by the released engine. See `docs/guides/solana.md` for the execution boundary.
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
-import type { ResolveModule, ResolvePackage } from "sauce-compiler";
+import type { AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
 import { bytesToHex } from "viem";
 
-import type { ChainRef } from "../chains/canonical.js";
+import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs } from "./rs-compile.js";
@@ -261,6 +261,60 @@ export function compileSauceRoute(
   execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
   options: SauceCompileOptions = {},
 ): CompiledSauceRoute {
+  const { chain, compiled, source } = compileSauceProgram(destination, sauce, options);
+  const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
+
+  if (chain.kind === "svm") {
+    const svmExecution = execution as SauceSvmExecutionInput;
+    if (svmExecution.code === undefined) {
+      throw new Error(
+        "compileSauceRoute: an svm route requires execution.code — a finalized code account this " +
+          "module did NOT stage. Stage it through the kitchen (create/grow/write/finalize) and pass " +
+          "the CODE account; see kitchen.ts. It must hold exactly the bytecode this call returns in " +
+          "`compiled.bytecode[0]`.",
+      );
+    }
+    // Passed through UNPINNED, and no route call can be otherwise: the released engine's
+    // `execute_from_account` has no payload to carry a pin. The kitchen's `cook_from_account` does
+    // enforce one, but the STAGING caller issues that — a different transaction, by the party that
+    // already controlled the bytes — so it is not a guarantee this call's consumer inherits.
+    const call = buildSauceSvmCall(svmExecution);
+    return { calls: [call], compiled, source };
+  }
+
+  const evmExecution = execution as SauceEvmExecutionInput;
+  const call = buildSauceEvmCall({
+    pot: evmExecution.pot,
+    engine: evmExecution.engine,
+    program: bytecodeHex,
+    value: evmExecution.value,
+  });
+  return { calls: [call], compiled, source };
+}
+
+/** What {@link compileSauceProgram} yields: the program, with nothing yet said about running it. */
+export interface CompiledSauceProgram {
+  readonly chain: CanonicalChain;
+  readonly compiled: CompileResult;
+  /** Source after SDK wrapping and rewrites, before the compiler adapter adds entry annotations. */
+  readonly source: string;
+  /** The SVM account manifest — the order a caller attaches accounts in. Absent on the EVM. */
+  readonly manifest?: AccountManifest;
+}
+
+/**
+ * The compile half of {@link compileSauceRoute}: every rewrite and the compile, for `destination`,
+ * with no execution — no Pot, engine or staged code account, because the bytecode depends on none
+ * of them. `compileSauceRoute` is this plus the one call that runs the result.
+ *
+ * Module-internal rather than part of the `routes` namespace: the package's `sauce` command is its
+ * one other caller, compiling a file before anything about where it runs is known.
+ */
+export function compileSauceProgram(
+  destination: ChainRef,
+  sauce: string,
+  options: SauceCompileOptions = {},
+): CompiledSauceProgram {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
 
@@ -366,7 +420,7 @@ export function compileSauceRoute(
     }
   }
 
-  const compiled = compileWithRs({
+  const { manifest, ...compiled } = compileWithRs({
     source,
     target,
     resolve: options.resolve,
@@ -380,32 +434,7 @@ export function compileSauceRoute(
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
-  const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
-
-  if (chain.kind === "svm") {
-    const svmExecution = execution as SauceSvmExecutionInput;
-    if (svmExecution.code === undefined) {
-      throw new Error(
-        "compileSauceRoute: an svm route requires execution.code — a finalized code account this " +
-          "module did NOT stage. Stage it through the kitchen (create/grow/write/finalize) and pass " +
-          "the CODE account; see kitchen.ts. It must hold exactly the bytecode this call returns in " +
-          "`compiled.bytecode[0]`.",
-      );
-    }
-    // Passed through UNPINNED, and no route call can be otherwise: the released engine's
-    // `execute_from_account` has no payload to carry a pin. The kitchen's `cook_from_account` does
-    // enforce one, but the STAGING caller issues that — a different transaction, by the party that
-    // already controlled the bytes — so it is not a guarantee this call's consumer inherits.
-    const call = buildSauceSvmCall(svmExecution);
-    return { calls: [call], compiled, source };
-  }
-
-  const evmExecution = execution as SauceEvmExecutionInput;
-  const call = buildSauceEvmCall({
-    pot: evmExecution.pot,
-    engine: evmExecution.engine,
-    program: bytecodeHex,
-    value: evmExecution.value,
-  });
-  return { calls: [call], compiled, source };
+  return manifest === undefined
+    ? { chain, compiled, source }
+    : { chain, compiled, source, manifest };
 }

@@ -16,7 +16,7 @@
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
-import { chainAmbient, chainDefines } from "./ambient.js";
+import { withChainAmbient } from "./ambient.js";
 import { isSauceClosure, sauceBodyToSource, type SauceBody } from "./closure.js";
 import {
   encodeRewardEvm,
@@ -521,38 +521,32 @@ export function openRoute(
   const closure = isSauceClosure(sauce);
   const sauceSource = closure ? sauceBodyToSource(sauce) : sauce;
 
-  // Chain-scoped ambient defines (chainId, protocol/contract addresses, caller token symbols) sit
-  // UNDERNEATH the caller's own IntentOptions.defines, which sits underneath the most-specific
-  // IntentOptions.compile.defines -- caller always wins on a key collision; a user-declared local
-  // inside the body wins over all of this via the compiler's own getConstant/getVar precedence.
-  const ambientDefines = chainDefines(destination, { tokens: options.tokenDefines });
-  const mergedDefines = { ...ambientDefines, ...options.defines, ...options.compile?.defines };
-
-  // P7 — the ambient-MODULE half of the chain bundle (`ambientDefines` above is the scalar half).
-  // `chainAmbient(destination)` is the plugin's chain-scoped ambient module list (`["@sauce/token"]`
-  // by default, see `ambient.ts#chainAmbient`/`plugin/index.ts`'s own notes); merged with any
-  // caller-supplied `options.compile.ambient` (deduped -- either side may legitimately name the
-  // same module).
-  const mergedAmbient = Array.from(
-    new Set([...chainAmbient(destination), ...(options.compile?.ambient ?? [])]),
-  );
-  const compileOptions: SauceCompileOptions = {
-    ...options.compile,
-    // `Chain(() => ...).reward(...)` written INSIDE the program inherits this intent's own creator,
-    // deadlines and eco-routes selection, so the common case needs no second set of options. An
-    // explicit `compile.intents` field still wins.
-    intents: {
-      deadline: toBigInt(options.deadline),
-      rewardDeadline:
-        options.rewardDeadline === undefined ? undefined : toBigInt(options.rewardDeadline),
-      creator: options.creator,
-      ...options.ecoRoutes,
-      ...options.compile?.intents,
+  // The chain's ambient bundle (`ambient.ts#withChainAmbient`): its scalar defines (chainId,
+  // protocol/contract addresses, caller token symbols) sit UNDERNEATH the caller's own
+  // IntentOptions.defines, which sits underneath the most-specific IntentOptions.compile.defines --
+  // caller always wins on a key collision; a user-declared local inside the body wins over all of
+  // this via the compiler's own getConstant/getVar precedence. Its ambient MODULES
+  // (`["@sauce/token"]` by default) are merged with any `options.compile.ambient`.
+  const compileOptions: SauceCompileOptions = withChainAmbient(
+    destination,
+    {
+      ...options.compile,
+      // `Chain(() => ...).reward(...)` written INSIDE the program inherits this intent's own creator,
+      // deadlines and eco-routes selection, so the common case needs no second set of options. An
+      // explicit `compile.intents` field still wins.
+      intents: {
+        deadline: toBigInt(options.deadline),
+        rewardDeadline:
+          options.rewardDeadline === undefined ? undefined : toBigInt(options.rewardDeadline),
+        creator: options.creator,
+        ...options.ecoRoutes,
+        ...options.compile?.intents,
+      },
+      defines: { ...options.defines, ...options.compile?.defines },
+      tokens: options.compile?.tokens ?? options.tokenDefines,
     },
-    defines: mergedDefines,
-    tokens: options.compile?.tokens ?? options.tokenDefines,
-    ambient: mergedAmbient.length > 0 ? mergedAmbient : options.compile?.ambient,
-  };
+    { tokens: options.tokenDefines },
+  );
 
   let compiledRoute: CompiledSauceRoute;
   try {
