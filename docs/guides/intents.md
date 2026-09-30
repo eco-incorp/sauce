@@ -177,11 +177,41 @@ they cost different things.
 
 | The body is…                    | Becomes…                                               | Needs                   |
 | ------------------------------- | ------------------------------------------------------ | ----------------------- |
-| only token `transfer`/`approve` | one `route.calls` entry per statement                  | nothing further         |
+| only token `transfer`/`approve` | plain `route.calls` the Portal's Executor runs         | nothing further         |
 | anything else                   | a program compiled for the destination, run on its Pot | a Pot and a Kitchen fee |
 
 The first shape is free: a route already _is_ a list of calls, so a cook would only add a fee. The
 second is strictly more general.
+
+A body takes the first shape only when **every** statement in the braces is a
+`transfer(to, amount)` or `approve(spender, amount)` call, on a registered token symbol such as
+`USDC` or on `Token(address)` with a literal or compile-time address, and each argument is a
+literal, a compile-time define, or a variable of the enclosing program. A single statement of any
+other kind — a local, a balance read, a condition, a loop, a `transferFrom`, a protocol call, an
+intent of its own — makes the whole body a program.
+
+#### Token-only bodies run on the Executor
+
+A token-only body is not a Sauce program. The Portal's Executor runs each call itself, and checks
+only that the call did not revert and that the target has code. It does not decode what a token
+returns:
+
+- **USDT is fully supported.** A token that returns nothing from `transfer` or `approve` works.
+  Every `approve` becomes two calls, `approve(spender, 0)` and then `approve(spender, amount)`,
+  because USDT refuses to change one non-zero allowance to another and one Executor runs every
+  intent on a chain, so an earlier intent's allowance may still be standing. A transfer stays one
+  call. The reset adds about 8,000 gas per approve.
+- **A token that returns `false` instead of reverting is not detected.** The tokens the solver
+  delivers are pulled by the Portal with OpenZeppelin's `safeTransferFrom`, so one that returns
+  `false` fails delivery. But when the Executor's own `transfer` or `approve` returns `false`, the
+  intent is still fulfilled, with nothing moved.
+
+For full `SafeERC20` checks, make the body a program by adding any statement that is not a token
+write, such as `const held = USDC.balanceOf(ctx.self());`. A program's token writes are
+[`SafeERC20`](protocols-and-tokens.md#writes-follow-safeerc20), and a `false` return reverts the
+fulfilment. A program needs the destination's Kitchen fee and a deployed Pot, as the table says,
+and the solver's delivery named in the second argument, because it is not derived for a program
+(see below).
 
 ```js
 function main() {

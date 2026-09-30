@@ -414,8 +414,16 @@ the name) and svm-rejected: the SVM arm's writes need SPL account slots the suga
 The compiler therefore never sees a method call on a `Token(...)` result, and no compiler feature is
 needed — the earlier "`Token(addr)` needs a compiler feature" framing only applied to making
 `@sauce/token` _export_ a real `Token` value (blocked by the M1 subset). A token-only INTENT body
-(`Base(() => { USDC.transfer(...) })`) is different again: `intent-sugar.ts` lowers it to plain
-`route.calls` the Portal's Executor runs, not to a Sauce program.
+(`Base(() => { USDC.transfer(...) })` inside a program, every statement a `transfer`/`approve` on a
+symbol or literal `Token(...)` — `intent-sugar.ts#isDirectCallBody`) is different again: it lowers
+to plain `route.calls` the Portal's Executor runs raw, not to a Sauce program, so it gets the
+Executor's checks (revert, code) and not SafeERC20's. USDT is supported there: no-return transfers
+work, and every approve is emitted as `approve(spender, 0)` then `approve(spender, amount)` (one
+Executor serves every intent, so a standing allowance is realistic). A `false`-returning token is
+caught only at delivery (the Portal's `safeTransferFrom`); the Executor's own `false` transfer or
+approve fulfils with nothing moved. `routes-nest-dynamic.e2e.test.ts` runs all of that through a
+real Portal and Executor and PINS the gap. Any non-token statement makes the body a program, whose
+writes are SafeERC20 — that is the documented way to get the checks.
 
 **The host surface and compiled-source declarations are separate — and only one of them is
 global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named

@@ -146,6 +146,19 @@ describe("the guide's refusal list is the lowering's", () => {
       expect(GUIDE).toContain(claim);
     }
   });
+
+  it("documents what the Executor path does with USDT and with a `false` return", () => {
+    // The lowering's reset and the gap it leaves are unit-tested in `routes-intent-sugar.test.ts`
+    // and executed through a real Executor in `routes-nest-dynamic.e2e.test.ts`.
+    for (const claim of [
+      "A token-only body is not a Sauce program",
+      "`approve(spender, 0)` and then `approve(spender, amount)`",
+      "A token that returns `false` instead of reverting is not detected",
+      "const held = USDC.balanceOf(ctx.self());",
+    ]) {
+      expect(GUIDE.replace(/\s+/g, " ")).toContain(claim);
+    }
+  });
 });
 
 describe("the guide's account of the destination Pot is the builder's", () => {

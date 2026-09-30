@@ -226,6 +226,11 @@ describe("a body that is not just token writes becomes a program", () => {
   it.each([
     ["control flow", "if (amount > 1n) { USDC.transfer(RECIPIENT, amount); }"],
     ["a local and arithmetic", "const half = amount / 2n; USDC.transfer(RECIPIENT, half);"],
+    // The spelling the intents guide gives for opting a token-only body into SafeERC20 checks.
+    [
+      "an unused balance read",
+      "const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, amount);",
+    ],
     [
       "a method the direct-call lowering does not take",
       "USDC.transferFrom(RECIPIENT, RECIPIENT, amount);",
