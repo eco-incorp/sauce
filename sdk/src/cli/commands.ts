@@ -1,23 +1,17 @@
 /**
- * What `sauce compile`, `sauce tx` and `sauce pot` compute. Each returns its result twice — as the
- * lines a person reads and as the object `--json` prints — and none of them signs or sends.
+ * What `sauce compile`, `tx`, `simulate`, `run` and `pot` compute. Each returns its result as the
+ * lines a person reads and as the JSON a program reads; `run.ts` picks which to print.
  *
  * Every piece is the SDK's own: `compileSauceProgram` compiles the file as a standalone program with
  * the chain's ambient names, `encodeEntryArguments` encodes `main`'s arguments, `buildSauceEvmCall`
- * (`v12Pot.encodeCook`) is the cook, `v12PredictPot` and `sauceEvmDeployPotCall` are the Pot, and
- * `destinationExecutionFee` is the Kitchen's fee. Nothing is reimplemented here.
+ * (`v12Pot.encodeCook`) is the cook, `v12PredictPot`, `potSalt` and `sauceEvmDeployPotCall` are the
+ * Pot, and `destinationExecutionFee` is the Kitchen's fee. Nothing is reimplemented here; `chain.ts`
+ * reads and sends, and `signer.ts` holds the key.
  */
 import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
-import {
-  bytesToHex,
-  createPublicClient,
-  getAddress,
-  http,
-  type Address,
-  type Hex,
-  type PublicClient,
-} from "viem";
+import { bytesToHex, getAddress, type Address, type Hex } from "viem";
+import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import {
@@ -26,8 +20,6 @@ import {
   v12SvmEngineProgramId,
 } from "../deployments/index.js";
 import { v12GateKitchen, v12PredictPot } from "../deployments/pot.js";
-import { v12Pot } from "../evm/engine.js";
-import { destinationExecutionFee } from "../evm/execution-fee.js";
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
@@ -35,12 +27,17 @@ import {
   type CompiledSauceProgram,
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
-import { UsageError, type DefineValue } from "./args.js";
+import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
+import {
+  connect,
+  kitchenFee,
+  potState,
+  sendAndWait,
+  simulate,
+  type Sent,
+  type TxRequest,
+} from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
-
-/** A failure that is not the invocation's fault: a program that does not compile, a chain that
- *  disagrees. Exit 1, where a {@link UsageError} is exit 2. */
-export class CliError extends Error {}
 
 /** The filesystem the commands read, injected so the tests can drive them without a process. */
 export interface CliFiles {
@@ -51,10 +48,16 @@ export interface CliFiles {
 }
 
 export interface CommandOutput {
-  /** For a person: what `sauce` prints without `--json`. */
+  /** For a person. */
   readonly text: string;
-  /** For a program: what `--json` prints. Amounts are decimal strings. */
+  /** For a program. Amounts are decimal strings. */
   readonly json: Record<string, unknown>;
+  /** The same transaction as a `cast send` line, for a command that prints one. */
+  readonly cast?: string;
+  /** Advice about the result, printed to stderr so stdout stays the result alone. */
+  readonly notes?: readonly string[];
+  /** Nonzero when the result is a failure worth printing in full: a revert. */
+  readonly exitCode?: number;
 }
 
 /** What every compiling command takes. */
@@ -86,9 +89,6 @@ export function readInput(files: CliFiles, file: string): string {
   }
 }
 
-const PLACEHOLDER_RPC = "<RPC_URL>";
-const PLACEHOLDER_KEY = "<PRIVATE_KEY>";
-
 /** A `cast send` of exactly `to`/`data`/`value`, with the endpoint and key left to the reader —
  *  never filled in from `--rpc-url`, whose URL often carries a provider key. */
 export function castSend(to: Address, data: Hex, value?: bigint): string {
@@ -98,9 +98,9 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
     data,
     ...(value === undefined ? [] : ["--value", value.toString()]),
     "--rpc-url",
-    PLACEHOLDER_RPC,
+    "<RPC_URL>",
     "--private-key",
-    PLACEHOLDER_KEY,
+    "<PRIVATE_KEY>",
   ].join(" ");
 }
 
@@ -189,7 +189,11 @@ export function compileCommand(input: ProgramInput, files: CliFiles): CommandOut
   };
 }
 
-/** `main`'s arguments as `sauce tx` got them: `--args` strings, or `--args-json` values. */
+// ---------------------------------------------------------------------------------------------
+// The cook: the program, its arguments, and the Pot it runs on
+// ---------------------------------------------------------------------------------------------
+
+/** `main`'s arguments as given: `--args` strings, or `--args-json` values. */
 export type ArgsInput =
   | { readonly from: "--args"; readonly values: readonly string[] }
   | { readonly from: "--args-json"; readonly values: readonly unknown[] };
@@ -240,113 +244,31 @@ function payload(program: CompiledSauceProgram, args: ArgsInput | undefined): He
   return `${bytesToHex(program.bytecode)}${bytesToHex(encoded).slice(2)}` as Hex;
 }
 
-/** Where `sauce tx` cooks: a Pot named outright, or derived from its owner and salt. */
-export type PotInput =
-  | { readonly pot: Address }
-  | { readonly owner: Address; readonly salt: Hex; readonly saltGiven: boolean };
+/** Where a cook runs: a Pot named outright, or derived from its owner and salt. */
+export type PotInput = { readonly pot: Address } | ({ readonly owner: Address } & SaltChoice);
 
-export interface TxInput extends ProgramInput {
+export interface CookInput extends ProgramInput {
   readonly target: PotInput;
-  readonly value?: bigint;
-  readonly rpcUrl?: string;
   /** Values for `main`'s parameters; required exactly when it declares some. */
   readonly args?: ArgsInput;
+  /** The cook's value; the Kitchen's fee is read when it is absent and an endpoint is given. */
+  readonly value?: bigint;
 }
 
-/** What `--rpc-url` told us, when it was given. */
-interface ChainReading {
-  readonly fee: bigint;
-  readonly deployed: boolean;
-  readonly owner?: Address;
+interface Cook {
+  readonly pot: Address;
+  readonly engine: Address;
+  readonly data: Hex;
+  readonly program: CompiledSauceProgram;
 }
 
-/** The chain id, the Kitchen's fee, and whether (and to whom) the Pot is deployed. */
-async function readChain(
-  rpcUrl: string,
-  chain: CanonicalChain,
-  pot: Address,
-): Promise<ChainReading> {
-  const client: PublicClient = createPublicClient({ transport: http(rpcUrl) });
-  const request = async <T>(what: string, read: () => Promise<T>): Promise<T> => {
-    try {
-      return await read();
-    } catch (error) {
-      // viem's short message, never its details: those repeat the URL, which often carries a key.
-      const reason = (error as { shortMessage?: string }).shortMessage ?? "the request failed";
-      throw new CliError(`--rpc-url: reading ${what} failed: ${reason}`);
-    }
-  };
-  const chainId = await request("the chain id", () => client.getChainId());
-  if (chainId !== chain.id) {
-    throw new CliError(`--rpc-url serves chain ${chainId}, but ${chain.slug} is chain ${chain.id}`);
-  }
-  const fee = destinationExecutionFee();
-  const answer = await request("the Kitchen's executionFee()", () =>
-    client.call({ to: fee.to, data: fee.data }),
-  );
-  if (answer.data === undefined || answer.data === "0x") {
-    throw new CliError(
-      `the Kitchen ${getAddress(fee.to)} has no code on ${chain.slug}: the released Sauce ` +
-        "contracts are not deployed there",
-    );
-  }
-  const code = await request("the Pot's code", () => client.getCode({ address: pot }));
-  const deployed = code !== undefined && code !== "0x";
-  const owner = deployed
-    ? await request("the Pot's owner()", () =>
-        client.readContract({ address: pot, abi: v12Pot.abi, functionName: "owner" }),
-      )
-    : undefined;
-
-  return { fee: fee.decode(answer.data), deployed, ...(owner === undefined ? {} : { owner }) };
-}
-
-/** What has to be true on chain for the transaction to land, as `sauce tx` says it. */
-function preconditions(
-  chain: CanonicalChain,
-  target: PotInput,
-  pot: Address,
-  reading: ChainReading | undefined,
-): string[] {
-  const deploy =
-    "owner" in target
-      ? `sauce pot --owner ${target.owner} --chain ${chain.slug}` +
-        (target.saltGiven ? ` --salt ${target.salt}` : "")
-      : `sauce pot --owner <its owner> --chain ${chain.slug}`;
-  const owner = reading?.owner ?? ("owner" in target ? target.owner : undefined);
-  const notes = [
-    "owner" in target
-      ? `Pot ${pot} belongs to ${target.owner} (salt ${target.salt}).`
-      : `Pot ${pot}.`,
-  ];
-  if (reading === undefined) {
-    notes.push(
-      `It must be deployed (${deploy}) and funded with what the program spends. ` +
-        "Pass --rpc-url to check.",
-    );
-  } else if (reading.deployed) {
-    notes.push("It is deployed. Fund it with what the program spends.");
-  } else {
-    notes.push(`It is NOT deployed. Deploy it first (${deploy}), then fund it.`);
-  }
-  notes.push(`Send from ${owner ?? "the Pot's owner"}: cook() is onlyOwner.`);
-
-  return notes;
-}
-
-/** `sauce tx`: the transaction that cooks the program on its Pot. */
-export async function txCommand(input: TxInput, files: CliFiles): Promise<CommandOutput> {
+/** Compiles the file and builds the cook on its Pot — what `tx`, `simulate` and `run` all send. */
+function cookOf(input: CookInput, files: CliFiles): Cook {
   if (input.chain.kind !== "evm") {
     throw new UsageError(
-      `sauce tx builds an EVM transaction, and ${input.chain.slug} is not an EVM chain. For ` +
-        "Solana, compile with `sauce compile`, then stage and execute it through the Kitchen " +
+      `a cook is an EVM transaction, and ${input.chain.slug} is not an EVM chain. For Solana, ` +
+        "compile with `sauce compile`, then stage and execute it through the Kitchen " +
         "(docs/guides/solana.md).",
-    );
-  }
-  if (input.value === undefined && input.rpcUrl === undefined) {
-    throw new UsageError(
-      "missing --value <wei>: the cook pays the Kitchen's execution fee plus any native the " +
-        "program spends. Pass it, or pass --rpc-url <url> to read the fee from the chain.",
     );
   }
   const target = input.target;
@@ -357,56 +279,222 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   // way the SDK's own intent children carry theirs.
   const data = buildSauceEvmCall({ pot, engine, program: payload(program, input.args) }).data;
 
-  const reading =
-    input.rpcUrl === undefined ? undefined : await readChain(input.rpcUrl, input.chain, pot);
-  if (reading !== undefined && input.value !== undefined && input.value < reading.fee) {
+  return { pot, engine, data, program };
+}
+
+/** The `sauce pot` that deploys `target`'s Pot. */
+function deployHint(chain: CanonicalChain, target: PotInput): string {
+  return "owner" in target
+    ? `sauce pot --deploy --owner ${target.owner} --chain ${chain.slug}${target.flag === undefined ? "" : ` ${target.flag}`}`
+    : `sauce pot --deploy --owner <its owner> --chain ${chain.slug}`;
+}
+
+/** The cook's value: as given, or the Kitchen's fee — refusing a given one below the fee. */
+function valueOf(
+  given: bigint | undefined,
+  fee: bigint | undefined,
+  chain: CanonicalChain,
+): bigint {
+  if (given !== undefined && fee !== undefined && given < fee) {
     throw new CliError(
-      `--value ${input.value} is below the Kitchen's execution fee on ${input.chain.slug}, ` +
-        `${reading.fee} wei: the cook would revert with FeeNotPaid`,
+      `--value ${given} is below the Kitchen's execution fee on ${chain.slug}, ${fee} wei: the ` +
+        "cook would revert with FeeNotPaid",
     );
   }
-  const value = input.value ?? reading!.fee;
-  const cast = castSend(pot, data, value);
-  const owner = reading?.owner ?? ("owner" in target ? target.owner : undefined);
+  const value = given ?? fee;
+  if (value === undefined) {
+    throw new UsageError(
+      "missing --value <wei>: the cook pays the Kitchen's execution fee plus any native the " +
+        "program spends. Pass it, or an RPC endpoint (--rpc-url or --config) to read the fee.",
+    );
+  }
+
+  return value;
+}
+
+export interface TxInput extends CookInput {
+  /** An endpoint, when given: it reads the fee and checks the Pot. */
+  readonly rpcUrl?: string;
+}
+
+/** `sauce tx`: the unsigned cook transaction, for any wallet to sign. */
+export async function txCommand(input: TxInput, files: CliFiles): Promise<CommandOutput> {
+  if (input.value === undefined && input.rpcUrl === undefined)
+    valueOf(undefined, undefined, input.chain);
+  const cook = cookOf(input, files);
+  const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
+  const fee = client === undefined ? undefined : await kitchenFee(client, input.chain);
+  const state = client === undefined ? undefined : await potState(client, cook.pot);
+  const value = valueOf(input.value, fee, input.chain);
+  const target = input.target;
+  const owner = state?.owner ?? ("owner" in target ? target.owner : undefined);
+  const notes = [
+    "owner" in target
+      ? `Pot ${cook.pot} belongs to ${target.owner} (salt ${target.salt}).`
+      : `Pot ${cook.pot}.`,
+    state === undefined
+      ? `It must be deployed (${deployHint(input.chain, target)}) and funded with what the ` +
+        "program spends; pass an RPC endpoint to check."
+      : state.deployed
+        ? "It is deployed. Fund it with what the program spends."
+        : `It is NOT deployed. Deploy it first (${deployHint(input.chain, target)}), then fund it.`,
+    `Send from ${owner ?? "the Pot's owner"}: cook() is onlyOwner.`,
+  ];
+  const json = { chainId: input.chain.id, to: cook.pot, data: cook.data, value: value.toString() };
 
   return {
-    text: [
-      `to     ${pot}`,
-      `data   ${data}`,
-      `value  ${value}`,
-      "",
-      cast,
-      "",
-      ...preconditions(input.chain, target, pot, reading),
-    ].join("\n"),
-    json: {
-      chain: input.chain.slug,
-      chainId: input.chain.id,
-      to: pot,
-      data,
-      value: value.toString(),
-      engine,
-      pot: {
-        address: pot,
-        owner: owner ?? null,
-        salt: "salt" in target ? target.salt : null,
-        deployed: reading === undefined ? null : reading.deployed,
-      },
-      size: program.bytecode.length,
-      entryEncoding: program.entryEncoding,
-      entryParams: program.entryParams,
-      cast,
-    },
+    text: JSON.stringify(json, null, 2),
+    json,
+    cast: castSend(cook.pot, cook.data, value),
+    notes,
   };
 }
 
-export interface PotCommandInput {
-  readonly chain: CanonicalChain;
-  readonly owner: Address;
-  readonly salt: Hex;
+/** How `simulate` and `run` reach the chain. */
+export interface ChainAccess {
+  readonly rpcUrl: string;
 }
 
-/** `sauce pot`: the Pot an owner and salt give, and the Kitchen call that deploys it. */
+/** `sauce simulate`: the cook as a dry run from the Pot's owner — no key, no transaction. */
+export async function simulateCommand(
+  input: CookInput & ChainAccess,
+  files: CliFiles,
+): Promise<CommandOutput> {
+  const cook = cookOf(input, files);
+  const client = await connect(input.rpcUrl, input.chain);
+  const state = await potState(client, cook.pot);
+  if (!state.deployed) {
+    throw new CliError(
+      `Pot ${cook.pot} is not deployed on ${input.chain.slug}, so there is nothing to simulate ` +
+        `the cook on: deploy it first (${deployHint(input.chain, input.target)})`,
+    );
+  }
+  const value = valueOf(input.value, await kitchenFee(client, input.chain), input.chain);
+  const from = state.owner!;
+  const result = await simulate(client, from, { to: cook.pot, data: cook.data, value });
+  const json = {
+    ok: result.ok,
+    chain: input.chain.slug,
+    from,
+    to: cook.pot,
+    value: value.toString(),
+    ...(result.ok
+      ? { gas: result.gas.toString(), returns: result.returns }
+      : { reason: result.reason }),
+  };
+
+  return result.ok
+    ? {
+        text: `The cook succeeds from ${from}: gas ${result.gas}, returns ${result.returns}`,
+        json,
+      }
+    : { text: `The cook reverts: ${result.reason}`, json, exitCode: 1 };
+}
+
+const sentText = (what: string, sent: Sent): string =>
+  `${what} ${sent.hash}: ${sent.status}, gas used ${sent.gasUsed}, block ${sent.blockNumber}` +
+  (sent.reason === undefined ? "" : `, reverted: ${sent.reason}`);
+
+const sentJson = (sent: Sent): Record<string, unknown> => ({
+  hash: sent.hash,
+  status: sent.status,
+  gasUsed: sent.gasUsed.toString(),
+  blockNumber: sent.blockNumber.toString(),
+  ...(sent.reason === undefined ? {} : { reason: sent.reason }),
+});
+
+/** Asks a yes/no question at the terminal; `undefined` when there is no terminal to ask on. */
+export type Confirm = (question: string) => Promise<boolean | undefined>;
+
+export interface RunInput extends CookInput, ChainAccess {
+  readonly account: PrivateKeyAccount;
+  /** `--yes`: do what the run needs first (deploying the Pot) without asking. */
+  readonly yes: boolean;
+  readonly confirm: Confirm;
+}
+
+/** `sauce run`: compile, sign, send and wait — deploying the Pot first once it is agreed to. */
+export async function runCommand(input: RunInput, files: CliFiles): Promise<CommandOutput> {
+  const signer = input.account.address;
+  const target = input.target;
+  if ("owner" in target && getAddress(target.owner) !== signer) {
+    throw new UsageError(
+      `--owner ${target.owner} is not the signer, ${signer}: cook() is onlyOwner, so the Pot a ` +
+        "run cooks on must be the signer's. Leave --owner out to use the signer's own.",
+    );
+  }
+  const cook = cookOf(input, files);
+  const client = await connect(input.rpcUrl, input.chain);
+  const state = await potState(client, cook.pot);
+  let deployed: Sent | undefined;
+  if (!state.deployed) {
+    const missing = `Pot ${cook.pot} is not deployed on ${input.chain.slug}`;
+    if (!("owner" in target)) {
+      throw new CliError(`${missing}. Deploy it first: ${deployHint(input.chain, target)}`);
+    }
+    const agreed = input.yes
+      ? true
+      : await input.confirm(
+          `Pot ${cook.pot} (owner ${target.owner}, salt ${target.salt}) is not deployed on ` +
+            `${input.chain.slug}. Deploy it now? [y/N] `,
+        );
+    if (agreed !== true) {
+      throw new CliError(
+        agreed === undefined
+          ? `${missing}. Deploy it first (${deployHint(input.chain, target)}), or pass --yes to ` +
+              "deploy it before the cook"
+          : `${missing}, so nothing was sent. Deploy it with: ${deployHint(input.chain, target)}`,
+      );
+    }
+    const deploy = sauceEvmDeployPotCall({
+      kitchen: v12GateKitchen(),
+      owner: target.owner,
+      salt: target.salt,
+    });
+    deployed = await sendAndWait(client, input.rpcUrl, input.account, {
+      to: v12GateKitchen() as Address,
+      data: deploy.data,
+      value: 0n,
+    });
+    if (deployed.status !== "success" || !(await potState(client, cook.pot)).deployed) {
+      throw new CliError(`${sentText("deploying the Pot", deployed)}; the Pot is not there`);
+    }
+  } else if (state.owner !== signer) {
+    throw new CliError(
+      `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
+    );
+  }
+  const value = valueOf(input.value, await kitchenFee(client, input.chain), input.chain);
+  const request: TxRequest = { to: cook.pot, data: cook.data, value };
+  const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
+
+  return {
+    text: [
+      ...(deployed === undefined ? [] : [sentText(`deployed Pot ${cook.pot} in`, deployed)]),
+      sentText("cook", sent),
+    ].join("\n"),
+    json: {
+      chain: input.chain.slug,
+      from: signer,
+      pot: cook.pot,
+      value: value.toString(),
+      ...(deployed === undefined ? {} : { deployPot: sentJson(deployed) }),
+      cook: sentJson(sent),
+    },
+    ...(sent.status === "success" ? {} : { exitCode: 1 }),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The Pot
+// ---------------------------------------------------------------------------------------------
+
+export interface PotCommandInput extends SaltChoice {
+  readonly chain: CanonicalChain;
+  readonly owner: Address;
+}
+
+/** `sauce pot`: the Pot an owner and salt give, and the unsigned Kitchen call that deploys it. */
 export function potCommand(input: PotCommandInput): CommandOutput {
   if (input.chain.kind !== "evm") {
     throw new UsageError(
@@ -417,31 +505,57 @@ export function potCommand(input: PotCommandInput): CommandOutput {
   const kitchen = v12GateKitchen() as Address;
   const pot = v12PredictPot(input.owner, input.salt) as Address;
   const call = sauceEvmDeployPotCall({ kitchen, owner: input.owner, salt: input.salt });
-  const cast = castSend(kitchen, call.data);
+  const json = {
+    chainId: input.chain.id,
+    pot,
+    owner: input.owner,
+    salt: input.salt,
+    kitchen,
+    to: kitchen,
+    data: call.data,
+    value: "0",
+  };
 
   return {
-    text: [
-      `pot    ${pot}`,
-      `to     ${kitchen}`,
-      `data   ${call.data}`,
-      "value  0",
-      "",
-      cast,
-      "",
-      `Kitchen.deployPot(${input.owner}, ${input.salt}), on the released Kitchen. Any account ` +
-        `may send it and the Pot is ${input.owner}'s either way; it deploys once.`,
-    ].join("\n"),
-    json: {
-      chain: input.chain.slug,
-      chainId: input.chain.id,
-      owner: input.owner,
-      salt: input.salt,
-      pot,
-      kitchen,
-      to: kitchen,
-      data: call.data,
-      value: "0",
-      cast,
-    },
+    text: JSON.stringify(json, null, 2),
+    json,
+    cast: castSend(kitchen, call.data),
+    notes: [
+      `Kitchen.deployPot on the released Kitchen. Any account may send it, the Pot is ` +
+        `${input.owner}'s either way, and it deploys once.`,
+    ],
+  };
+}
+
+/** `sauce pot --deploy`: sends the Kitchen call, unless the Pot is already there. */
+export async function potDeployCommand(
+  input: PotCommandInput & ChainAccess & { readonly account: PrivateKeyAccount },
+): Promise<CommandOutput> {
+  const predicted = potCommand(input);
+  const pot = predicted.json.pot as Address;
+  const client = await connect(input.rpcUrl, input.chain);
+  const state = await potState(client, pot);
+  if (state.deployed) {
+    const json = { ...predicted.json, deployed: true, owner: state.owner };
+    const note = `Pot ${pot} is already deployed on ${input.chain.slug}, owned by ${state.owner}.`;
+
+    return { text: JSON.stringify(json, null, 2), json, notes: [note] };
+  }
+  const sent = await sendAndWait(client, input.rpcUrl, input.account, {
+    to: predicted.json.to as Address,
+    data: predicted.json.data as Hex,
+    value: 0n,
+  });
+  const json = {
+    ...predicted.json,
+    deployed: sent.status === "success",
+    deployPot: sentJson(sent),
+  };
+
+  return {
+    text: JSON.stringify(json, null, 2),
+    json,
+    notes: [sentText(`deployed Pot ${pot} in`, sent)],
+    ...(sent.status === "success" ? {} : { exitCode: 1 }),
   };
 }

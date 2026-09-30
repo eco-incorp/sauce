@@ -1,18 +1,21 @@
 /**
- * The `sauce` command: compile SauceScript exactly as the SDK does, build the transaction that runs
- * it, and set a project up to do both. `main.ts` is the executable; this is everything it does,
+ * The `sauce` command: compile SauceScript exactly as the SDK does, and run it — simulate the cook,
+ * sign and send it, deploy the Pot it runs on — or print the unsigned transaction for a wallet;
+ * and set a project up to do all of that. `main.ts` is the executable; this is everything it does,
  * over an injected {@link CliIo} so the tests drive it without a child process.
  *
  * NODE-ONLY, and reached by nothing browser-facing: it is the package's `bin`, not an `exports`
- * entry, and no barrel imports it. It reads no environment — the network is reached only through
- * `--rpc-url`, and it never holds a key: the transaction it prints is signed by `cast` or a wallet.
+ * entry, and no barrel imports it. It reads no environment. The network is reached only through
+ * `--rpc-url` or a `--config` file named on the command line, and a key only through `--keystore`
+ * or `--private-key` — and every byte printed passes through `signer.ts#scrub` on the way out.
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
+import { createInterface } from "node:readline";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
-import { SAUCE_INTENT_POT_SALT } from "../deployments/pot.js";
 import {
+  CliError,
   describeFlags,
   parseAddress,
   parseChain,
@@ -31,19 +34,25 @@ import {
   type FlagSpecs,
   type ParsedArgs,
 } from "./args.js";
+import { endpointFor } from "./chain.js";
 import {
-  CliError,
   compileCommand,
   potCommand,
+  potDeployCommand,
   readInput,
+  runCommand,
+  simulateCommand,
   txCommand,
   type ArgsInput,
   type CliFiles,
   type CommandOutput,
+  type Confirm,
+  type CookInput,
   type PotInput,
   type ProgramInput,
 } from "./commands.js";
 import { initProject } from "./init.js";
+import { loadSigner, scrub, secret } from "./signer.js";
 import {
   checkSkills,
   describeInstall,
@@ -52,16 +61,77 @@ import {
   type SkillsSource,
 } from "./skills.js";
 
-/** Where the command writes, what it reads, and how it runs a package manager. */
+/** Where the command writes, what it reads, and how it runs a package manager or asks a question. */
 export interface CliIo extends CliFiles {
   readonly stdout: (text: string) => void;
   readonly stderr: (text: string) => void;
   readonly writeText: (path: string, text: string) => void;
   /** Runs `command` in `cwd` with the terminal attached, returning its exit status. */
   readonly run: (command: string, args: readonly string[], cwd: string) => number;
+  /** Asks for a password without echoing it. Throws where there is no terminal to ask on. */
+  readonly promptPassword: (prompt: string) => Promise<string>;
+  /** Asks a yes/no question; `undefined` where there is no terminal to ask on. */
+  readonly confirm: Confirm;
 }
 
-/** The real process's streams, filesystem and children. */
+/** A yes/no answer typed at the terminal, or `undefined` with no terminal to type it at. */
+function confirm(question: string): Promise<boolean | undefined> {
+  if (!process.stdin.isTTY) return Promise.resolve(undefined);
+  const prompt = createInterface({ input: process.stdin, output: process.stderr });
+
+  return new Promise((resolve) => {
+    prompt.question(question, (answer) => {
+      prompt.close();
+      resolve(/^\s*y(?:es)?\s*$/i.test(answer));
+    });
+  });
+}
+
+/** A password typed at the terminal, echoing nothing. */
+function promptPassword(prompt: string): Promise<string> {
+  const stdin = process.stdin;
+  if (!stdin.isTTY) {
+    return Promise.reject(
+      new UsageError(
+        "no terminal to ask for the keystore password on: pass --password-file <path>",
+      ),
+    );
+  }
+
+  return new Promise((resolve, reject) => {
+    let typed = "";
+    const finish = (): void => {
+      stdin.off("data", onData);
+      stdin.setRawMode(false);
+      stdin.pause();
+      process.stderr.write("\n");
+    };
+    const onData = (chunk: string): void => {
+      for (const ch of chunk) {
+        if (ch === "\r" || ch === "\n") {
+          finish();
+          resolve(typed);
+
+          return;
+        }
+        if (ch === "\u0003") {
+          finish();
+          reject(new CliError("cancelled"));
+
+          return;
+        }
+        typed = ch === "\u007f" || ch === "\b" ? typed.slice(0, -1) : typed + ch;
+      }
+    };
+    process.stderr.write(prompt);
+    stdin.setEncoding("utf8");
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.on("data", onData);
+  });
+}
+
+/** The real process's streams, filesystem, children and terminal. */
 export function nodeIo(): CliIo {
   return {
     stdout: (text) => void process.stdout.write(text),
@@ -86,6 +156,8 @@ export function nodeIo(): CliIo {
         // npm is `npm.cmd` on Windows, which only a shell resolves.
         shell: process.platform === "win32",
       }).status ?? 1,
+    promptPassword,
+    confirm,
   };
 }
 
@@ -101,6 +173,10 @@ const skillsSource = (): SkillsSource => {
 
   return { dir: PACKAGED_SKILLS, packageName: name, version };
 };
+
+// ---------------------------------------------------------------------------------------------
+// Flags
+// ---------------------------------------------------------------------------------------------
 
 const HELP: FlagSpecs = { help: { type: "boolean", short: "h", help: "Show this help" } };
 
@@ -147,48 +223,60 @@ const PROGRAM: FlagSpecs = {
   },
 };
 
-const JSON_FLAG: FlagSpecs = {
-  json: { type: "boolean", help: "Print one JSON object instead" },
+const SALT: FlagSpecs = {
+  salt: {
+    type: "string",
+    value: "<label>",
+    help: "Name one of the owner's Pots: salt = keccak256(label)",
+  },
+  "salt-hex": { type: "string", value: "<bytes32>", help: "…or give its salt exactly" },
 };
 
-const COMPILE_FLAGS: FlagSpecs = {
-  ...PROGRAM,
-  out: { type: "string", value: "<path>", help: "Write the output to a file, not stdout" },
-  json: { type: "boolean", help: "Print JSON: size, main's parameters, compiler, engine" },
-  ...HELP,
-};
-
-const TX_FLAGS: FlagSpecs = {
-  ...PROGRAM,
+const COOK: FlagSpecs = {
   pot: { type: "string", value: "<address>", help: "The Pot to cook on" },
   owner: {
     type: "string",
     value: "<address>",
-    help: "…or its owner, deriving the Pot from owner and --salt",
+    help: "…or its owner, deriving the Pot (default salt 0)",
   },
-  salt: {
-    type: "string",
-    value: "<hex>",
-    help: "With --owner: the Pot's salt, up to 32 bytes (default 0)",
-  },
+  ...SALT,
   value: {
     type: "string",
     value: "<wei>",
-    help: "Kitchen execution fee plus any native the program spends",
-  },
-  "rpc-url": {
-    type: "string",
-    value: "<url>",
-    help: "Read the fee if --value is absent, and check the Pot",
+    help: "Kitchen fee plus native spent (default: read the fee)",
   },
   "args-json": {
     type: "string",
     value: "<json|file>",
     help: "main's arguments as a JSON array, inline or in a file",
   },
-  ...JSON_FLAG,
-  ...HELP,
-  // Never parsed as a flag: everything after it is main's arguments (see `runCli`).
+};
+
+const ENDPOINT: FlagSpecs = {
+  "rpc-url": { type: "string", value: "<url>", help: "The chain's RPC endpoint" },
+  config: {
+    type: "string",
+    value: "<file>",
+    help: 'Or a file of { "rpcUrls": { "<chain id>": "<url>" } }',
+  },
+};
+
+const SIGNER: FlagSpecs = {
+  keystore: { type: "string", value: "<path>", help: "Sign with a JSON keystore (v3)" },
+  "password-file": {
+    type: "string",
+    value: "<path>",
+    help: "Its password, read from a file (else asked for)",
+  },
+  "private-key": {
+    type: "string",
+    value: "<hex>",
+    help: "Or sign with a raw key (lands in shell history)",
+  },
+};
+
+/** Never parsed as a flag: everything after it is main's arguments (see `runCli`). */
+const ARGS: FlagSpecs = {
   args: {
     type: "boolean",
     value: "<value>…",
@@ -196,45 +284,18 @@ const TX_FLAGS: FlagSpecs = {
   },
 };
 
-const POT_FLAGS: FlagSpecs = {
-  owner: {
+const JSON_FLAG: FlagSpecs = { json: { type: "boolean", help: "Print one JSON object instead" } };
+const FORMAT: FlagSpecs = {
+  format: {
     type: "string",
-    value: "<address>",
-    help: "Who the Pot belongs to: cook() is onlyOwner",
+    value: "<json|cast>",
+    help: "json (default), or a `cast send` line with placeholders",
   },
-  chain: { type: "string", value: "<slug|id>", help: "The EVM chain the Pot is for" },
-  salt: { type: "string", value: "<hex>", help: "Up to 32 bytes (default 0)" },
-  ...JSON_FLAG,
-  ...HELP,
 };
 
-const SKILLS_FLAGS: FlagSpecs = {
-  dir: { type: "string", value: "<project>", help: "The project to install into (default .)" },
-  force: { type: "boolean", help: "Overwrite installed files that were edited" },
-  check: { type: "boolean", help: "Write nothing; exit 1 unless the installed copies match" },
-  ...HELP,
-};
-
-const INIT_FLAGS: FlagSpecs = {
-  force: { type: "boolean", help: "Overwrite files that already exist with other content" },
-  install: { type: "boolean", help: "Run npm install in the project afterwards" },
-  ...HELP,
-};
-
-interface Command {
-  readonly usage: string;
-  readonly summary: string;
-  readonly flags: FlagSpecs;
-  readonly details: string;
-  /** A flag that ends the options: every word after it is passed to `run` as `trailing`. */
-  readonly trailing?: string;
-  /** The output to print, or `undefined` when the command already wrote it (`--out`). */
-  readonly run: (
-    args: ParsedArgs,
-    io: CliIo,
-    trailing: readonly string[] | undefined,
-  ) => Promise<CommandOutput | undefined> | CommandOutput | undefined;
-}
+// ---------------------------------------------------------------------------------------------
+// Reading the flags into command inputs
+// ---------------------------------------------------------------------------------------------
 
 /** The one `<file>` operand a compiling command takes. */
 function fileOperand(args: ParsedArgs): string {
@@ -339,27 +400,129 @@ function argsInput(
   return { args: { from: "--args-json", values } };
 }
 
-function potInput(args: ParsedArgs): PotInput {
+/** The salt `--salt`/`--salt-hex` choose (zero when neither). */
+const saltOf = (args: ParsedArgs) =>
+  parseSalt(stringFlag(args, "salt"), stringFlag(args, "salt-hex"));
+
+/**
+ * The Pot a cook runs on: `--pot`, or derived from `--owner` — or, when `signer` is given (a run),
+ * from the signer, whose Pot it must be anyway.
+ */
+function potInput(args: ParsedArgs, signer?: `0x${string}`): PotInput {
   const pot = stringFlag(args, "pot");
   const owner = stringFlag(args, "owner");
-  const salt = stringFlag(args, "salt");
   if (pot !== undefined && owner !== undefined) {
     throw new UsageError("give --pot or --owner, not both");
   }
   if (pot !== undefined) {
-    if (salt !== undefined) throw new UsageError("--salt goes with --owner: --pot names the Pot");
+    if (stringFlag(args, "salt") !== undefined || stringFlag(args, "salt-hex") !== undefined) {
+      throw new UsageError("--salt and --salt-hex go with --owner: --pot names the Pot itself");
+    }
 
     return { pot: parseAddress("pot", pot) };
   }
-  if (owner === undefined) {
+  if (owner === undefined && signer === undefined) {
     throw new UsageError("missing --pot <address> or --owner <address>: the Pot to cook on");
   }
 
+  return { owner: owner === undefined ? signer! : parseAddress("owner", owner), ...saltOf(args) };
+}
+
+/** Everything a cook command takes from its flags. */
+function cookInput(
+  args: ParsedArgs,
+  io: CliIo,
+  trailing: readonly string[] | undefined,
+  signer?: `0x${string}`,
+): CookInput {
+  const value = stringFlag(args, "value");
+
   return {
-    owner: parseAddress("owner", owner),
-    salt: salt === undefined ? SAUCE_INTENT_POT_SALT : parseSalt(salt),
-    saltGiven: salt !== undefined,
+    ...programInput(args, io),
+    target: potInput(args, signer),
+    ...(value === undefined ? {} : { value: parseWei("value", value) }),
+    ...argsInput(args, io, trailing),
   };
+}
+
+/** The RPC endpoint for `chain`, from `--rpc-url` or `--config`; `undefined` when neither. */
+function endpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string | undefined {
+  const rpcUrl = stringFlag(args, "rpc-url");
+  const config = stringFlag(args, "config");
+  if (rpcUrl !== undefined && config !== undefined) {
+    throw new UsageError("give --rpc-url or --config, not both");
+  }
+
+  return endpointFor(
+    chain,
+    rpcUrl,
+    config === undefined ? undefined : { path: config, text: readInput(io, config) },
+  );
+}
+
+function requiredEndpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string {
+  const url = endpoint(args, io, chain);
+  if (url === undefined) {
+    throw new UsageError(
+      `missing --rpc-url <url> (or --config <file>): the ${chain.slug} endpoint`,
+    );
+  }
+
+  return url;
+}
+
+const signerOf = (args: ParsedArgs, io: CliIo) =>
+  loadSigner(
+    {
+      ...(stringFlag(args, "keystore") === undefined
+        ? {}
+        : { keystore: stringFlag(args, "keystore")! }),
+      ...(stringFlag(args, "password-file") === undefined
+        ? {}
+        : { passwordFile: stringFlag(args, "password-file")! }),
+      ...(stringFlag(args, "private-key") === undefined
+        ? {}
+        : { privateKey: stringFlag(args, "private-key")! }),
+    },
+    io,
+  );
+
+/**
+ * The owner where a signer is given: the signer. `--owner` then only restates it, and one that
+ * names someone else is refused rather than silently ignored.
+ */
+function signerIsOwner(signer: `0x${string}`, owner: string | undefined): `0x${string}` {
+  if (owner !== undefined && parseAddress("owner", owner) !== signer) {
+    throw new UsageError(
+      `--owner ${owner} is not the signer, ${signer}: with a signer, the owner is the signer. ` +
+        "Leave --owner out, or sign as its owner.",
+    );
+  }
+
+  return signer;
+}
+
+/** The chain `sauce pot` is for: `--chain`, required — it has no program to say. */
+const potChain = (args: ParsedArgs): CanonicalChain =>
+  parseChain(requiredFlag(args, "chain", "<slug|id>"));
+
+// ---------------------------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------------------------
+
+interface Command {
+  readonly usage: string;
+  readonly summary: string;
+  readonly flags: FlagSpecs;
+  readonly details: string;
+  /** A flag that ends the options: every word after it is passed to `run` as `trailing`. */
+  readonly trailing?: string;
+  /** The output to print, or `undefined` when the command already wrote it (`--out`). */
+  readonly run: (
+    args: ParsedArgs,
+    io: CliIo,
+    trailing: readonly string[] | undefined,
+  ) => Promise<CommandOutput | undefined> | CommandOutput | undefined;
 }
 
 const lines = (text: readonly string[]): CommandOutput => ({ text: text.join("\n"), json: {} });
@@ -368,13 +531,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   compile: {
     usage: "sauce compile <file> --chain <slug|id> [options]",
     summary: "Compile a SauceScript program; print its bytecode",
-    flags: COMPILE_FLAGS,
+    flags: {
+      ...PROGRAM,
+      out: { type: "string", value: "<path>", help: "Write the output to a file, not stdout" },
+      json: { type: "boolean", help: "Print JSON: size, main's parameters, compiler, engine" },
+      ...HELP,
+    },
     details: [
-      "Compiles the file as the SDK compiles a route body: the chain's token symbols (USDC),",
-      "protocol namespaces (Uniswap.UniversalRouter), chainId, the zero-import @sauce/token",
-      "functions, SafeERC20 token writes (USDC.transfer, Token(addr).approve) and intents opened",
-      "inside the program all resolve against the chain. Relative imports are read from beside",
-      "the file. A file may name its chain in its header: a leading `// @chain base` line.",
+      "Compiles the file as a standalone program for the chain (routes.compileSauceProgram):",
+      "its token symbols (USDC), protocol namespaces (Uniswap.UniversalRouter), chainId, the",
+      "zero-import @sauce/token functions, SafeERC20 token writes (USDC.transfer,",
+      "Token(addr).approve) and intents opened inside the program all resolve against it, so",
+      "one file compiles for any chain whose names it uses. Relative imports are read from beside",
+      "the file. A file may name its chain in a leading `// @chain base` line.",
       "",
       "Example:",
       "  sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x…",
@@ -383,71 +552,156 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       const output = compileCommand(programInput(args, io), io);
       const out = stringFlag(args, "out");
       if (out === undefined) return output;
-      io.writeText(out, `${render(output, args)}\n`);
+      io.writeText(
+        out,
+        `${args.values.json === true ? JSON.stringify(output.json, null, 2) : output.text}\n`,
+      );
 
       return undefined;
     },
   },
-  tx: {
-    usage: "sauce tx <file> --chain <slug|id> (--pot <address> | --owner <address>) [options]",
-    summary: "Build the EVM transaction that runs a program on a Pot",
-    flags: TX_FLAGS,
+  simulate: {
+    usage:
+      "sauce simulate <file> --chain <slug|id> (--pot <address> | --owner <address>) --rpc-url <url> [options]",
+    summary: "Dry-run the cook from the Pot's owner: result, gas, or why it reverts",
+    flags: { ...PROGRAM, ...COOK, ...ENDPOINT, ...JSON_FLAG, ...HELP, ...ARGS },
     details: [
-      "Compiles the file as `sauce compile` does and prints the transaction that runs it:",
-      "to = the Pot, data = Pot.cook(engine, program ++ arguments) on the released engine, and",
-      "value. Also prints it as a `cast send` line; sign it with cast or any wallet. The Pot",
-      "must exist and be funded, and the sender must be its owner. A main that declares",
-      "parameters takes their values after --args, checked against the declared types.",
+      "Compiles the file, builds the cook, and runs it through eth_call from the Pot's owner:",
+      "no key, no transaction, no local node. Prints the gas it needs and what it returns, or",
+      "the decoded reason it reverts (exit 1). The Pot must be deployed.",
       "",
-      "Examples:",
-      "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0",
-      "  sauce tx swap.sauce.ts --chain base --pot 0x… --value 0 --args 0x… 1000 true '[1,2]'",
+      "Example:",
+      "  sauce simulate pay.sauce.ts --chain base --owner 0x… --rpc-url <url>",
     ].join("\n"),
     trailing: "args",
-    run: (args, io, trailing) => {
-      const value = stringFlag(args, "value");
-      const rpcUrl = stringFlag(args, "rpc-url");
+    run: async (args, io, trailing) => {
+      const input = cookInput(args, io, trailing);
 
-      return txCommand(
+      return simulateCommand({ ...input, rpcUrl: requiredEndpoint(args, io, input.chain) }, io);
+    },
+  },
+  run: {
+    usage:
+      "sauce run <file> --chain <slug|id> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
+    summary: "Compile, sign, send and wait for the cook on your Pot",
+    flags: {
+      ...PROGRAM,
+      ...COOK,
+      ...ENDPOINT,
+      ...SIGNER,
+      yes: { type: "boolean", short: "y", help: "Deploy a missing Pot without asking first" },
+      ...JSON_FLAG,
+      ...HELP,
+      ...ARGS,
+    },
+    details: [
+      "Compiles the file, builds the cook on the signer's Pot (or --pot), rehearses it, signs it,",
+      "sends it and waits for the receipt: prints the hash, status and gas used, and the decoded",
+      "reason when it reverts (exit 1). The signer is the owner. A Pot that is not deployed",
+      "yet is deployed first, in a transaction of its own, once you agree at the prompt — or",
+      "with --yes, which is also how to allow it with no terminal to ask on. The value",
+      "defaults to the Kitchen's execution fee, read from the chain.",
+      "",
+      "Example:",
+      "  sauce run pay.sauce.ts --chain base --rpc-url <url> --keystore ~/.keys/me.json",
+    ].join("\n"),
+    trailing: "args",
+    run: async (args, io, trailing) => {
+      const account = await signerOf(args, io);
+      const input = cookInput(args, io, trailing, account.address);
+
+      return runCommand(
         {
-          ...programInput(args, io),
-          target: potInput(args),
-          ...(value === undefined ? {} : { value: parseWei("value", value) }),
-          ...(rpcUrl === undefined ? {} : { rpcUrl }),
-          ...argsInput(args, io, trailing),
+          ...input,
+          rpcUrl: requiredEndpoint(args, io, input.chain),
+          account,
+          yes: args.values.yes === true,
+          confirm: io.confirm,
         },
         io,
       );
     },
   },
-  pot: {
-    usage: "sauce pot --owner <address> --chain <slug|id> [--salt <hex>]",
-    summary: "Predict a Pot and build its Kitchen.deployPot transaction",
-    flags: POT_FLAGS,
+  tx: {
+    usage: "sauce tx <file> --chain <slug|id> (--pot <address> | --owner <address>) [options]",
+    summary: "Print the unsigned cook transaction, for a wallet to sign",
+    flags: { ...PROGRAM, ...COOK, ...ENDPOINT, ...FORMAT, ...HELP, ...ARGS },
     details: [
-      "The Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known",
-      "before it exists. Prints it, and the deployPot transaction that creates it.",
+      "Compiles the file and prints the transaction that runs it, unsigned, as JSON:",
+      "{ chainId, to: the Pot, data: Pot.cook(engine, program ++ arguments), value }. Give the",
+      "value, or an endpoint to read the Kitchen's fee (it also checks the Pot). `--format cast`",
+      "prints the same transaction as a `cast send` line instead. What must be true for it to",
+      "land goes to stderr: the Pot deployed and funded, and sent from its owner.",
       "",
       "Example:",
-      "  sauce pot --owner 0x… --chain base",
+      "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0",
     ].join("\n"),
-    run: (args) => {
+    trailing: "args",
+    run: (args, io, trailing) => {
+      const input = cookInput(args, io, trailing);
+      const rpcUrl = endpoint(args, io, input.chain);
+
+      return txCommand({ ...input, ...(rpcUrl === undefined ? {} : { rpcUrl }) }, io);
+    },
+  },
+  pot: {
+    usage:
+      "sauce pot --chain <slug|id> --owner <address> [--salt <label> | --salt-hex <bytes32>] [--deploy …]",
+    summary: "Predict a Pot's address, and deploy it or print the transaction that does",
+    flags: {
+      owner: { type: "string", value: "<address>", help: "Whose Pot: cook() is onlyOwner" },
+      chain: { type: "string", value: "<slug|id>", help: "The EVM chain the Pot is for" },
+      ...SALT,
+      deploy: { type: "boolean", help: "Send the deployment (needs an endpoint and a signer)" },
+      ...ENDPOINT,
+      ...SIGNER,
+      ...FORMAT,
+      ...HELP,
+    },
+    details: [
+      "A Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known",
+      "before it exists. Prints it and the unsigned Kitchen.deployPot transaction as JSON; with",
+      "--deploy, sends it (the owner defaults to the signer) unless the Pot is already there.",
+      "The default salt is zero: the one Pot an owner has by default.",
+      "",
+      "Examples:",
+      "  sauce pot --owner 0x… --chain base",
+      "  sauce pot --deploy --chain base --rpc-url <url> --keystore ~/.keys/me.json --salt treasury",
+    ].join("\n"),
+    run: async (args, io) => {
       if (args.positionals.length > 0) {
         throw new UsageError(`unexpected argument ${args.positionals[0]}`);
       }
-      const salt = stringFlag(args, "salt");
+      const chain = potChain(args);
+      const owner = stringFlag(args, "owner");
+      if (args.values.deploy !== true) {
+        if (owner === undefined) throw new UsageError("missing --owner <address>: whose Pot");
 
-      return potCommand({
-        chain: parseChain(requiredFlag(args, "chain", "<slug|id>")),
-        owner: parseAddress("owner", requiredFlag(args, "owner", "<address>")),
-        salt: salt === undefined ? SAUCE_INTENT_POT_SALT : parseSalt(salt),
+        return potCommand({ chain, owner: parseAddress("owner", owner), ...saltOf(args) });
+      }
+      if (stringFlag(args, "format") === "cast") {
+        throw new UsageError("--format cast prints the unsigned transaction; --deploy sends it");
+      }
+      const account = await signerOf(args, io);
+
+      return potDeployCommand({
+        chain,
+        owner: signerIsOwner(account.address, owner),
+        ...saltOf(args),
+        rpcUrl: requiredEndpoint(args, io, chain),
+        account,
       });
     },
   },
   skills: {
     usage: "sauce skills install [--dir <project>] [--force] [--check]",
     summary: "Install this package's agent skills into a project",
-    flags: SKILLS_FLAGS,
+    flags: {
+      dir: { type: "string", value: "<project>", help: "The project to install into (default .)" },
+      force: { type: "boolean", help: "Overwrite installed files that were edited" },
+      check: { type: "boolean", help: "Write nothing; exit 1 unless the installed copies match" },
+      ...HELP,
+    },
     details: [
       "Copies the Claude Code agent skills that ship inside this package to",
       "<project>/.claude/skills/<name>/, and records what it wrote in .sauce-skills.json there.",
@@ -485,7 +739,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   init: {
     usage: "sauce init [<dir>] [--force] [--install]",
     summary: "Scaffold a project that uses this package",
-    flags: INIT_FLAGS,
+    flags: {
+      force: { type: "boolean", help: "Overwrite files that already exist with other content" },
+      install: { type: "boolean", help: "Run npm install in the project afterwards" },
+      ...HELP,
+    },
     details: [
       "Writes package.json (pinning this exact version), CLAUDE.md, a .gitignore for local",
       "config, sauce.config.example.json (placeholders only), and the agent skills. It runs no",
@@ -519,8 +777,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
 };
 
-/** What a command prints: its JSON object under `--json`, its lines otherwise. */
-function render(output: CommandOutput, args: ParsedArgs): string {
+/** What a command prints on stdout: tx and pot their JSON (or `--format cast`), the rest their
+ *  text (or `--json`). */
+function render(command: Command, output: CommandOutput, args: ParsedArgs): string {
+  if ("format" in command.flags) {
+    const format = stringFlag(args, "format") ?? "json";
+    if (format === "cast") return output.cast ?? JSON.stringify(output.json, null, 2);
+    if (format !== "json") throw new UsageError(`--format: '${format}' is not json or cast`);
+
+    return JSON.stringify(output.json, null, 2);
+  }
+
   return args.values.json === true ? JSON.stringify(output.json, null, 2) : output.text;
 }
 
@@ -542,7 +809,7 @@ function mainHelp(): string {
   const width = Math.max(...Object.keys(COMMANDS).map((name) => name.length));
 
   return [
-    "sauce: compile SauceScript and build the transactions that run it.",
+    "sauce: compile SauceScript, and run it on a chain.",
     "",
     "Usage: sauce <command> [options]",
     "",
@@ -551,8 +818,8 @@ function mainHelp(): string {
       ([name, command]) => `  ${name.padEnd(width)}  ${command.summary}`,
     ),
     "",
-    "Run `sauce <command> --help` for its options. Nothing here signs or sends a transaction,",
-    "and nothing reaches a network unless you pass --rpc-url.",
+    "Run `sauce <command> --help` for its options. Nothing reaches a network without --rpc-url",
+    "or --config, and nothing is signed without --keystore or --private-key.",
     "",
   ].join("\n");
 }
@@ -560,8 +827,23 @@ function mainHelp(): string {
 const commandNamed = (name: string | undefined): Command | undefined =>
   name !== undefined && Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : undefined;
 
+/** Registers a `--private-key` value as a secret before anything can fail and print it. */
+function rememberSecrets(argv: readonly string[]): void {
+  argv.forEach((word, index) => {
+    if (word === "--private-key" && argv[index + 1] !== undefined) secret(argv[index + 1]!);
+    if (word.startsWith("--private-key=")) secret(word.slice("--private-key=".length));
+  });
+}
+
 /** Runs `sauce <argv…>`, returning the exit code: 0, 1 for a failure, 2 for a usage error. */
-export async function runCli(argv: readonly string[], io: CliIo): Promise<number> {
+export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<number> {
+  rememberSecrets(argv);
+  // Everything printed goes through `scrub`, so no key or password can reach a terminal or a log.
+  const io: CliIo = {
+    ...rawIo,
+    stdout: (text) => rawIo.stdout(scrub(text)),
+    stderr: (text) => rawIo.stderr(scrub(text)),
+  };
   const [name, ...rest] = argv;
   if (name === undefined) {
     io.stderr(mainHelp());
@@ -605,9 +887,11 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
       return 0;
     }
     const output = await command.run(args, io, at < 0 ? undefined : rest.slice(at + 1));
-    if (output !== undefined) io.stdout(`${render(output, args)}\n`);
+    if (output === undefined) return 0;
+    for (const note of output.notes ?? []) io.stderr(`${note}\n`);
+    io.stdout(`${render(command, output, args)}\n`);
 
-    return 0;
+    return output.exitCode ?? 0;
   } catch (error) {
     if (error instanceof UsageError) {
       io.stderr(`sauce ${name}: ${error.message}\nRun \`sauce ${name} --help\` for usage.\n`);

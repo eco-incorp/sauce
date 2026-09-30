@@ -31,6 +31,8 @@ pnpm-lock.yaml
 sdk/test/svm/fixtures
 sdk/test/std/token/fixtures
 sdk/test/evm/fixtures
+# A keystore exactly as Foundry's `cast wallet import` wrote it: the cross-implementation vector.
+sdk/test/fixtures/cli/anvil-2.keystore.json
 # Captured registry-ABI evidence (scripts/capture-registry-abi.mjs), one entry per line so a
 # recapture diffs by deployment. targets.json beside it is hand-written and IS formatted.
 sdk/test/fixtures/registry-abi/evidence.json

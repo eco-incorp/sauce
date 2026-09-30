@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
-import { CliError } from "./commands.js";
+import { CliError } from "./args.js";
 import { installSkills, planSkills, type SkillFile, type SkillsSource } from "./skills.js";
 
 /** A package name npm accepts, from a directory's name. */

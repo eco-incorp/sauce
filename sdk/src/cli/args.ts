@@ -6,12 +6,17 @@
  * that does not compile or a chain that says no (exit 1).
  */
 import { parseArgs } from "node:util";
-import { getAddress, isAddress, pad, type Address, type Hex } from "viem";
+import { getAddress, isAddress, type Address, type Hex } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { potSalt, SAUCE_INTENT_POT_SALT } from "../deployments/pot.js";
 
 /** A mistyped invocation: an unknown or missing flag, or a value that is not what the flag takes. */
 export class UsageError extends Error {}
+
+/** A failure that is not the invocation's fault: a program that does not compile, a chain that
+ *  disagrees. Exit 1, where a {@link UsageError} is exit 2. */
+export class CliError extends Error {}
 
 /** A flag, as `parseArgs` takes it, plus the placeholder and sentence `--help` prints for it. */
 export interface FlagSpec {
@@ -174,13 +179,40 @@ export function parseWei(flag: string, raw: string): bigint {
   return BigInt(raw);
 }
 
-/** A Pot salt: up to 32 bytes of 0x-prefixed hex, left-padded to exactly 32. */
-export function parseSalt(raw: string): Hex {
-  if (!/^0x[0-9a-fA-F]{1,64}$/.test(raw)) {
-    throw new UsageError(`--salt: '${raw}' is not a salt (up to 32 bytes of 0x-prefixed hex)`);
+/**
+ * A Pot's salt: `--salt <label>`, hashed by the SDK's `potSalt`, or `--salt-hex <bytes32>`, exactly
+ * 32 bytes — never both. Neither is the zero salt, the one Pot an owner has by default.
+ */
+export function parseSalt(label: string | undefined, hex: string | undefined): SaltChoice {
+  if (label !== undefined && hex !== undefined) {
+    throw new UsageError(
+      "give --salt or --salt-hex, not both: --salt <label> is hashed into the salt, --salt-hex " +
+        "<bytes32> is the salt itself",
+    );
+  }
+  if (label !== undefined) {
+    if (label === "") {
+      throw new UsageError("--salt: a label cannot be empty; leave --salt out for the default Pot");
+    }
+    const shown = /^[\w.@:/-]+$/.test(label) ? label : JSON.stringify(label);
+
+    return { salt: potSalt(label), flag: `--salt ${shown}` };
+  }
+  if (hex !== undefined) {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(hex)) {
+      throw new UsageError(`--salt-hex: '${hex}' is not exactly 32 bytes of 0x-prefixed hex`);
+    }
+
+    return { salt: hex.toLowerCase() as Hex, flag: `--salt-hex ${hex.toLowerCase()}` };
   }
 
-  return pad(raw.toLowerCase() as Hex, { size: 32 });
+  return { salt: SAUCE_INTENT_POT_SALT };
+}
+
+/** A Pot's salt, and the flag that chose it, to repeat in a hint. */
+export interface SaltChoice {
+  readonly salt: Hex;
+  readonly flag?: string;
 }
 
 /** Absolute Unix seconds. */

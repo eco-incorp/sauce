@@ -364,16 +364,15 @@ try {
   assert.equal(compiled.chain, "ethereum", "the example's // @chain header chose the chain");
   assert.equal(compiled.compiler.version, installedCompiler.version);
   assert.equal(compiled.engine.release, "v12-evm");
-  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum", "--json"));
-  assert.match(pot.cast, /^cast send 0x[0-9a-fA-F]{40} 0x[0-9a-f]+ --rpc-url <RPC_URL> /);
-  const tx = JSON.parse(
-    sauce("tx", example, ...defines, "--owner", owner, "--value", "0", "--json"),
-  );
+  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum"));
+  assert.equal(pot.to, pot.kitchen, "sauce pot prints the Kitchen.deployPot transaction");
+  const tx = JSON.parse(sauce("tx", example, ...defines, "--owner", owner, "--value", "0"));
+  assert.deepEqual(Object.keys(tx), ["chainId", "to", "data", "value"], "sauce tx prints the tx");
   assert.equal(tx.to, pot.pot, "sauce tx cooks on the Pot sauce pot predicts");
   assert.ok(tx.data.includes(bytecode.slice(2)), "the cook carries the compiled program");
   assert.equal(
-    tx.cast,
-    `cast send ${tx.to} ${tx.data} --value 0 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>`,
+    sauce("tx", example, ...defines, "--owner", owner, "--value", "0", "--format", "cast"),
+    `cast send ${tx.to} ${tx.data} --value 0 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>\n`,
   );
   console.log(
     `Clean package install: the sauce bin compiles the shipped example (${compiled.size} bytes) ` +

@@ -17,7 +17,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CliError } from "./commands.js";
+import { CliError } from "./args.js";
 
 /** The agent skills in this package: `skills/` at the package root, three levels above this
  *  module in `sdk/{src,dist}/cli`. */
