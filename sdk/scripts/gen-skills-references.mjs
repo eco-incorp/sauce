@@ -155,9 +155,33 @@ export function globalsIndex(sdk, ecoRoutes) {
         }));
   });
 
+  // Interfaces: ABIs with no fixed address, the same on every EVM chain. A program binds one to an
+  // address it holds, `Namespace.Contract.at(address).method(...)`. The first method whose inputs
+  // are all scalars is the one the skills checker compiles a call of.
+  const evm = listed.find(({ chain }) => chain.kind === "evm");
+  const scalar = /^(address|bool|u?int\d*)$/;
+  const interfaces = (evm?.globals.interfaces ?? [])
+    .map((one) => {
+      const call = one.methods.find((m) =>
+        /^\w+\((.*)\)$/
+          .exec(m.signature)[1]
+          .split(",")
+          .every((type) => type === "" || scalar.test(type)),
+      );
+      return {
+        name: `${one.namespace}.${one.name}`,
+        protocol: one.protocol,
+        ...(call === undefined
+          ? {}
+          : { call: { name: call.name, inputs: /^\w+\((.*)\)$/.exec(call.signature)[1] } }),
+      };
+    })
+    .sort(byName);
+
   return {
     tokens,
     contracts: [...contracts.values()].sort(byName),
+    interfaces,
     aliases: [...aliases.values()]
       .map(({ name, targets }) => ({
         name,
@@ -585,6 +609,20 @@ function renderGlobals(data) {
     protocols.push(
       `- \`${contract.name}\` ([\`${contract.protocol}\`](../../sauce-protocols/references/registry/${contract.protocol}.md)` +
         `${contract.default ? ", default" : ""})`,
+    );
+  }
+  protocols.push(
+    "",
+    "## Interfaces",
+    "",
+    "An interface is an ABI with no fixed address, the same on every EVM chain: a program binds it to",
+    "an address it holds and calls a method in the same expression,",
+    "`Namespace.Contract.at(address).method(...)`, such as a pool its factory returned.",
+    "",
+  );
+  for (const one of globals.interfaces) {
+    protocols.push(
+      `- \`${one.name}.at(<address>)\` ([\`${one.protocol}\`](../../sauce-protocols/references/registry/${one.protocol}.md))`,
     );
   }
   protocols.push(
