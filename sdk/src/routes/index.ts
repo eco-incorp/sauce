@@ -153,16 +153,43 @@ export type {
 
 export {
   approvalTxs,
+  batchWithdrawTx,
+  CANCELLED_CLAIMANT,
+  CANCELLED_CLAIMANT_BYTES32,
+  cancelAndProveTx,
+  cancelTx,
+  fulfillAndProveTx,
   fulfillApprovalTxs,
+  fulfillmentCall,
   fulfillTx,
   fundTx,
+  hyperlaneProverData,
+  intentFromPublished,
   intentHashCall,
   intentVaultAddressCall,
   isIntentFundedCall,
+  proofMessage,
+  proofTypeCall,
+  provenIntentCall,
+  proverFeeCall,
+  proveTx,
   publishAndFundTx,
   publishTx,
+  refundTx,
+  REWARD_STATUSES,
+  rewardStatusCall,
+  withdrawTx,
 } from "./portal.js";
-export type { FulfillOptions, PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
+export type {
+  FulfillOptions,
+  PortalReadCall,
+  PortalTarget,
+  PortalTx,
+  ProveOptions,
+  ProvenPair,
+  PublishedLog,
+  RewardStatus,
+} from "./portal.js";
 
 export { assertNestingInvariants, assertStaticChild, nestedChildCalls } from "./nest.js";
 export type { AssertNestingInvariantsArgs, NestChild, NestedChildOptions } from "./nest.js";
