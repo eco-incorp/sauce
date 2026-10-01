@@ -252,6 +252,11 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     // A fill now is refused by the Portal.
     const fill = await lifecycle("fill", hash, store, "--solver", SOLVER.address);
     expect(fill.code).toBe(1);
+    // Its proof waits until the block that cancelled it is final (anvil finalizes 64 blocks back).
+    const unfinal = await lifecycle("prove", hash, store, "--private-key", OWNER_KEY, "--yes");
+    expect(unfinal.code).toBe(1);
+    expect(unfinal.stdout).toMatch(/was cancelled in block \d+ on base, which is not final yet/);
+    await base.testClient.mine({ blocks: 70 });
     const proved = await lifecycle(
       "prove",
       hash,

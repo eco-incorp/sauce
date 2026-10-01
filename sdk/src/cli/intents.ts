@@ -13,6 +13,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
+import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, sendAndWait, type Sent } from "./chain.js";
 import {
@@ -297,7 +298,16 @@ export async function proveCommand(
   context: LifecycleContext,
 ): Promise<CommandOutput> {
   const records = targets.map((target) => target.record);
-  const plan = await buildProve(records, endpointsOf(targets, context));
+  const cancelledIn = Object.fromEntries(
+    targets.flatMap((target) => {
+      const cancelled = target.stored?.events
+        .filter((event) => event.event === "cancelled" && event.block !== undefined)
+        .at(-1);
+
+      return cancelled === undefined ? [] : [[target.record.intentHash, cancelled.block!] as const];
+    }),
+  );
+  const plan = await buildProve(records, endpointsOf(targets, context), { cancelledIn });
   if (!plan.ready) {
     return {
       text: `Not proven: ${plan.why}`,
@@ -372,6 +382,7 @@ export async function claimCommand(
   remember(context, claimed, "claimed", sent!);
   const effects = await moved(context, sent!, [
     [getAddress(records[0]!.source.portal), "Portal"],
+    ...plan.claims.map((claim) => [claim.vault, "the intent's vault"] as const),
     ...plan.claims.map((claim) => [claim.claimant, "the claimant"] as const),
   ]);
 
@@ -427,6 +438,7 @@ export async function refundCommand(
     remember(context, [target.record], "refunded", sent!);
     const effects = await moved(context, sent!, [
       [getAddress(target.record.source.portal), "Portal"],
+      [plan.vault, "the intent's vault"],
       [plan.refundee, "the creator"],
     ]);
     texts.push(
@@ -540,6 +552,20 @@ const holdingText = (entry: NonNullable<IntentStatus["source"]>["vaultHolds"][nu
   return `${unit(entry.holds)} of ${unit(entry.reward)} ${entry.symbol ?? (entry.token === "native" ? "native" : entry.token)}`;
 };
 
+/** `amount` of `token` on `chainId`, in whole units with its symbol where the registry names it. */
+function tokenText(
+  chainId: number,
+  entry: { readonly token: Hex; readonly amount: string },
+): string {
+  const row = (TOKEN_REGISTRY[chainId] ?? []).find(
+    (candidate) => candidate.address.toLowerCase() === entry.token.toLowerCase(),
+  );
+
+  return row === undefined
+    ? `${entry.amount} of ${entry.token}`
+    : `${formatUnits(BigInt(entry.amount), row.decimals)} ${row.symbol}`;
+}
+
 /** An intent's record, events and live status, for a person. */
 export function statusLines(stored: Target, status: IntentStatus | undefined): string[] {
   const { record } = stored;
@@ -550,8 +576,9 @@ export function statusLines(stored: Target, status: IntentStatus | undefined): s
   const lines = [
     `Intent ${record.intentHash}: ${record.source.chain} -> ${record.destination.chain}` +
       (status === undefined ? "" : `, ${status.state}`),
-    `  delivers ${intent.route.tokens.length} token(s), ${intent.route.calls.length} call(s); ` +
-      `reward ${record.reward.tokens.map((entry) => `${entry.amount} of ${entry.token}`).join(", ") || "none"}` +
+    `  delivers ${record.route.tokens.map((entry) => tokenText(record.destination.chainId, entry)).join(", ") || "no token"} ` +
+      `in ${intent.route.calls.length} call(s); reward ` +
+      `${record.reward.tokens.map((entry) => tokenText(record.source.chainId, entry)).join(", ") || "no token"}` +
       (record.reward.nativeAmount === "0" ? "" : ` and ${record.reward.nativeAmount} wei`),
     `  route deadline:  ${when(record.route.deadline)} (fill by; cancellable after)`,
     `  reward deadline: ${when(record.reward.deadline)} (refundable from, unproven)`,

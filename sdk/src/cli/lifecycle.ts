@@ -1370,6 +1370,11 @@ export interface VaultMove {
 export async function buildProve(
   records: readonly IntentRecord[],
   endpoints: Endpoints,
+  options: {
+    /** The destination block each cancelled intent was cancelled in, by intent hash, where known:
+     *  its proof waits until that block is final, as eco-routes asks. */
+    readonly cancelledIn?: Readonly<Record<string, string>>;
+  } = {},
 ): Promise<Plan & { readonly fee?: string; readonly prover?: ReturnType<typeof proverJson> }> {
   if (records.length === 0) throw new UsageError("no intent to prove");
   const intents = records.map(intentOf);
@@ -1418,6 +1423,38 @@ export async function buildProve(
           `${intentHash} is proven on ${sourceChain.slug} already, for ${proof.claimant}: left out`,
         );
         continue;
+      }
+    }
+    if (isCancelled(recorded)) {
+      // A cancellation is proven once the destination block that recorded it is final: a reorg
+      // past the deadline that let a fill in first would leave that solver unpaid (eco-routes'
+      // proven-cancellation design, §1).
+      const block = options.cancelledIn?.[intentHash];
+      if (block === undefined) {
+        notes.push(
+          `${intentHash} was cancelled in a block this does not know: prove it once that block ` +
+            `is final on ${destinationChain.slug}`,
+        );
+      } else {
+        const finalized = await destination
+          .getBlock({ blockTag: "finalized" })
+          .then((final) => final.number)
+          .catch(() => undefined);
+        if (finalized === undefined) {
+          notes.push(
+            `${destinationChain.slug}'s endpoint reports no finalized block: make sure block ` +
+              `${block}, which cancelled ${intentHash}, is final`,
+          );
+        } else if (finalized < BigInt(block)) {
+          return {
+            ready: false,
+            why:
+              `${intentHash} was cancelled in block ${block} on ${destinationChain.slug}, which is ` +
+              `not final yet (the finalized block is ${finalized}): prove it once it is`,
+            transactions: [],
+            notes,
+          };
+        }
       }
     }
     pairs.push({ intent, intentHash, claimant: recorded });
@@ -1494,6 +1531,8 @@ export async function buildClaim(
     readonly claims: ReadonlyArray<{
       readonly intentHash: Hex;
       readonly claimant: Address;
+      /** The intent's vault on the source, which pays. */
+      readonly vault: Address;
       readonly moves: readonly VaultMove[];
     }>;
   }
@@ -1513,8 +1552,13 @@ export async function buildClaim(
   const chains = new Chains(endpoints);
   const client = await chains.get(sourceChain, "a claim");
   const notes: string[] = [];
-  const claims: Array<{ intent: Intent; intentHash: Hex; claimant: Address; moves: VaultMove[] }> =
-    [];
+  const claims: Array<{
+    intent: Intent;
+    intentHash: Hex;
+    claimant: Address;
+    vault: Address;
+    moves: VaultMove[];
+  }> = [];
   for (const intent of intents) {
     const { intentHash } = hashIntent(intent);
     const source = await readSource(client, intent, portal);
@@ -1539,6 +1583,7 @@ export async function buildClaim(
       intent,
       intentHash,
       claimant: proof!.claimant,
+      vault: source.vault,
       moves: await vaultMoves(source, intent, proof!.claimant, false),
     });
   }
@@ -1564,7 +1609,12 @@ export async function buildClaim(
           : `Portal.batchWithdraw(${claims.length} intents): pays each its claimant`,
       ),
     ],
-    claims: claims.map(({ intentHash, claimant, moves }) => ({ intentHash, claimant, moves })),
+    claims: claims.map(({ intentHash, claimant, vault, moves }) => ({
+      intentHash,
+      claimant,
+      vault,
+      moves,
+    })),
     notes,
   };
 }
@@ -1577,7 +1627,13 @@ export async function buildClaim(
 export async function buildRefund(
   record: IntentRecord,
   endpoints: Endpoints,
-): Promise<Plan & { readonly refundee: Address; readonly moves: readonly VaultMove[] }> {
+): Promise<
+  Plan & {
+    readonly refundee: Address;
+    readonly vault: Address;
+    readonly moves: readonly VaultMove[];
+  }
+> {
   const intent = intentOf(record);
   const sourceChain = requireChain(Number(intent.sourceChainId));
   const chains = new Chains(endpoints);
@@ -1605,7 +1661,15 @@ export async function buildRefund(
             : "the vault holds nothing to refund"
           : undefined;
   if (why !== undefined)
-    return { ready: false, why, transactions: [], notes: [], refundee: creator, moves };
+    return {
+      ready: false,
+      why,
+      transactions: [],
+      notes: [],
+      refundee: creator,
+      vault: source.vault,
+      moves,
+    };
   const tx = refundTx(intent, { portal });
 
   return {
@@ -1618,6 +1682,7 @@ export async function buildRefund(
       ),
     ],
     refundee: creator,
+    vault: source.vault,
     moves,
     notes: cancelProven
       ? ["the cancellation is proven: refundable before the reward's deadline"]
