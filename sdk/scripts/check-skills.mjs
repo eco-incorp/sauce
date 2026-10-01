@@ -346,6 +346,8 @@ const UNDECLARED_NAMES = {
       "@solana-program/token's ATA creation, a dependency the package re-exports none of",
   },
   "sauce-intents": {
+    CallFailed:
+      "the eco-routes Executor's error for a route call that reverted; the registry declares the Portal's errors, not the Executor's",
     CallToEOA:
       "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
   },

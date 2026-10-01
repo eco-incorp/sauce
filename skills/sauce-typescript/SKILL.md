@@ -23,14 +23,15 @@ and program plus arguments is the `program` of the owner's `Pot.cook(engine, pro
 
 ```ts
 import { readFileSync } from "node:fs";
-import { routes, v12GateKitchen, v12PredictPot } from "@eco-incorp/sauce";
+import { destinationExecutionFee, routes, v12GateKitchen, v12PredictPot } from "@eco-incorp/sauce";
 import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
-import { bytesToHex, concatHex, getAddress } from "viem";
+import { bytesToHex, concatHex, getAddress, type PublicClient } from "viem";
 
 type Address = `0x${string}`;
 
-export function cookTransactions(
+export async function cookTransactions(
+  client: PublicClient, // the chain's: the program is compiled for it and the fee read from it
   file: string,
   chain: string,
   owner: Address,
@@ -43,13 +44,24 @@ export function cookTransactions(
   const encoded = routes.encodeEntryArguments(program, args); // checked against main's types
   const engine = getAddress(v12EngineAddress());
   const payload = concatHex([bytesToHex(program.bytecode), bytesToHex(encoded)]);
-  // The owner sends the cook with value = the Kitchen's executionFee(), read at run time.
-  return { deploy, cook: { to: pot, data: v12Pot.encodeCook(engine, payload) } };
+  // The cook's value is the Kitchen's executionFee(), read just before sending: a cook paying
+  // less reverts.
+  const fee = destinationExecutionFee();
+  const { data: answer } = await client.call({ to: fee.to, data: fee.data });
+  if (answer === undefined) throw new Error("the Kitchen did not answer executionFee()");
+  const cook = {
+    chainId: await client.getChainId(),
+    to: pot,
+    data: v12Pot.encodeCook(engine, payload),
+    value: fee.decode(answer),
+  };
+
+  return { deploy, cook }; // cook is what `sauce tx` prints: { chainId, to, data, value }
 }
 ```
 
-- `destinationExecutionFee()` builds the fee read (`{ to, data, decode }`); send it as an `eth_call`
-  on the chain with your client, just before sending the cook.
+- `destinationExecutionFee()` builds the fee read (`{ to, data, decode }`) for the chain's
+  Kitchen; the example sends it as an `eth_call` with the chain's client just before the cook.
 - `routes.sauceEvmDeployPotCall` and `routes.buildSauceEvmCall` return `{ to, data, value }` to send
   as a transaction, plus `target`, the same contract as a route's `calls` entry names it.
 - `v12EngineAddress()`, `v12KitchenAddress()` and `v12GateKitchen()` are recorded release
@@ -119,7 +131,14 @@ live code on the chain.
   `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
   `fulfill`), `destinationPot(chain)` the shared Pot and
   `routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
-  its deploy; the intents runner builds a rehearsal with them.
+  its deploy; the intents runner builds a rehearsal with them. For the source side,
+  `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs`,
+  `routes.intentVaultAddressCall` and `routes.isIntentFundedCall` build the publication, funding
+  and vault calls (`{ to, data }`, with `decode` for a read) from an intent, for the source chain.
+- **Cascades from TypeScript**: `routes.openRoute(chain, body, options).nest(child, { via })`
+  attaches a child intent to a route. By default (`via: "transfer"`) the parent's route funds the
+  child by a transfer into the child's vault, with no publication of its own;
+  `via: "publishAndFund"` publishes and funds it for public discovery instead.
 
 ## Example
 

@@ -4,7 +4,8 @@
 // Portal and prover come from the eco-routes registry; the deadline, the creator, the recipient and
 // each destination Kitchen's fee are the developer's. Then builds what rehearsing the swap-on-base
 // body on a fork of Base sends: the shared Pot's deploy, and the Portal's fulfill with the Kitchen
-// fee as its value. Offline: nothing is sent.
+// fee as its value. Pins the funding by transfer (fund-by-transfer.sauce.ts) and the Portal
+// reference (references/portal.md) to the registry's Portal ABI. Offline: nothing is sent.
 //
 //   node intents.mts --creator <address> --recipient <address> --arbitrum-fee <wei> --base-fee <wei>
 //
@@ -32,7 +33,9 @@ import {
   decodeFunctionData,
   encodeFunctionData,
   getAddress,
+  toEventSelector,
   toFunctionSelector,
+  type AbiEvent,
   type Hex,
 } from "viem";
 
@@ -261,6 +264,88 @@ const rehashed = (deadlineShift: bigint, executionFee: bigint) =>
 check(rehashed(0n, fee.base) === intentHash, "the same inputs give the same intent");
 check(rehashed(1n, fee.base) !== intentHash, "a new deadline is a new intent");
 check(rehashed(0n, fee.base + 1n) !== intentHash, "a new Kitchen fee is a new intent");
+
+// Funding by transfer: the program reads the vault and publishes by the registry's selectors,
+// with the same three arguments, and compiles for a source chain.
+const byHand = readFileSync(new URL("./fund-by-transfer.sauce.ts", import.meta.url), "utf8");
+// A function's or error's selector is the hash of its bare signature, `name(types)`.
+type Param = { type: string; components?: readonly Param[] };
+type Entry = { name: string; inputs: readonly Param[] };
+const typeOf = (param: Param): string =>
+  param.type.startsWith("tuple")
+    ? `(${(param.components ?? []).map(typeOf).join(",")})${param.type.slice(5)}`
+    : param.type;
+const signature = (item: Entry) => `${item.name}(${item.inputs.map(typeOf).join(",")})`;
+const portalFunction = (name: string): Entry =>
+  PortalABI.find((item) => item.type === "function" && item.name === name) as Entry;
+for (const name of ["intentVaultAddress", "publish"]) {
+  const selector = toFunctionSelector(signature(portalFunction(name)));
+  check(
+    byHand.includes(`hex\`${selector.slice(2)}\``),
+    `fund-by-transfer calls ${name}, ${selector}`,
+  );
+}
+check(
+  JSON.stringify(portalFunction("publish").inputs) ===
+    JSON.stringify(portalFunction("intentVaultAddress").inputs),
+  "publish and intentVaultAddress take the same (destination, route, reward)",
+);
+check(
+  JSON.stringify(portalFunction("publishAndFund").inputs.slice(0, 3)) ===
+    JSON.stringify(portalFunction("publish").inputs),
+  "publish's arguments are publishAndFund's first three",
+);
+const byHandProgram = routes.compileSauceProgram("base", byHand);
+check(
+  byHandProgram.entryParams.map((param) => param.name).join() === "portal,destination,route,reward",
+  "fund-by-transfer takes the intent as publish's arguments",
+);
+
+// The Portal reference: every selector and topic it gives for something the registry declares is
+// the registry's.
+const reference = readFileSync(new URL("../references/portal.md", import.meta.url), "utf8");
+let pinned = 0;
+for (const item of PortalABI) {
+  if (item.type !== "function" && item.type !== "event" && item.type !== "error") continue;
+  // Each entry naming it, to the next list item, table row or paragraph; the one that gives a
+  // selector or topic must give the registry's.
+  const entries: string[] = [];
+  for (let at = reference.indexOf(`\`${item.name}(`); at !== -1;) {
+    const ends = ["\n- ", "\n|", "\n\n"]
+      .map((end) => reference.indexOf(end, at + 1))
+      .filter((i) => i > 0);
+    entries.push(reference.slice(at, Math.min(...ends)));
+    at = reference.indexOf(`\`${item.name}(`, at + 1);
+  }
+  const given = entries.filter((entry) => /`0x[0-9a-f]{8}(?:[0-9a-f]{56})?`/.test(entry));
+  if (given.length === 0) continue;
+  const expected =
+    item.type === "event"
+      ? toEventSelector(item as AbiEvent)
+      : toFunctionSelector(signature(item as Entry));
+  check(
+    given.every((entry) => entry.includes(expected)),
+    `references/portal.md gives ${item.name} as ${expected}`,
+  );
+  pinned++;
+}
+check(pinned >= 15, `the reference pins ${pinned} of the Portal's selectors and topics`);
+
+// The one-pool swap body compiles as an intent to Base, with the delivery the solver brings.
+const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
+const onePool =
+  /```sauce chain=arbitrum define=AMOUNT_IN,REWARD,SQRT_PRICE_LIMIT_X96,MIN_OUT,RECIPIENT,REFUND_TO\n([\s\S]*?)```/.exec(
+    skill,
+  );
+check(onePool !== null, "the skill gives the one-pool body");
+const onePoolIntent = routes.compileSauceProgram("arbitrum", onePool[1]!, {
+  defines: { ...swapDefines, MIN_OUT: 1n },
+  intents: { deadline, creator, executionFee: fee.base },
+}).intents[0]!.intent;
+check(
+  onePoolIntent.route.nativeAmount === fee.base && onePoolIntent.route.tokens.length === 1,
+  "the one-pool body is a program body: the Kitchen fee as nativeAmount, WETH delivered",
+);
 
 console.log(
   `rehearsal on a fork of Base: deploy the Pot ${pot} if it has no code, approve the Portal for ` +

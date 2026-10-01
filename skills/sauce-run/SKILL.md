@@ -66,7 +66,10 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
    - `allowance` approves the Pot for the amount (asking first), and the cook pulls it.
    - `transfer` sends the tokens to the Pot in a transaction of its own before the cook.
 
-   `simulate --fund` with the owner's key rehearses it.
+   **Units**: `--fund` and `--assume-balance` take whole tokens (`USDC:10` is 10 USDC), or base
+   units ending in `n` (`USDC:10000000n`, the same 10 USDC), and a token the chain does not register
+   as `<address>:<amount>`, in its own decimals. `--args` and defines always take base units
+   (`10000000` is 10 USDC). `simulate --fund` with the owner's key rehearses it.
 
 5. **Rehearse**:
    `npx sauce simulate pay.sauce.ts --chain ethereum --owner <address> --config sauce.config.json --assume-balance USDC:1 --assume-balance USDT:1 --args <recipient> 1000000`
@@ -142,8 +145,10 @@ arguments.
   program, `--intent-execution-fee <wei>`. `sauce run` opens them from the Pot, which is the way when
   an amount is measured on chain; `sauce publish` opens fixed ones from a wallet with no Pot, and
   `sauce publish <file> --chain <chain> --from <address> --format json` prints its unsigned approve
-  and `publishAndFund` for any wallet to send. `sauce-intents` covers writing, publishing and
-  rehearsing them.
+  and `publishAndFund` for any wallet to send. Both fund each reward by an approve and
+  `publishAndFund`. `sauce publish … --dry-run --assume-balance USDC:<amount>` rehearses it
+  from a wallet that does not hold the reward yet. `sauce-intents` covers writing, publishing,
+  funding (including a transfer into the intent's vault) and rehearsing them.
 - **On Solana** (`--chain solana`) a program declares every account it touches, a cook signs with
   `--keypair`, and the Kitchen's fee is read from the cluster with no `--value`; `--fund` and
   `sauce publish` are EVM only. `sauce-solana` covers writing and running one.
