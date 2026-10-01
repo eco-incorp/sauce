@@ -1,7 +1,8 @@
 /**
  * The `sauce` command on Solana: a Pot is a Kitchen PDA, a cook is a Kitchen `cook` the released
- * engine runs, and both go through the SDK's own pieces — `createSauceSvmClient` (with the RPC URL
- * the user gave and the program ids `/deployments` records) builds, signs and simulates every cook;
+ * engine runs — or, `--via engine`, the engine's own paid `cookAndPay`, with no Kitchen and no Pot —
+ * and both go through the SDK's own pieces — `createSauceSvmClient` (with the RPC URL the user gave
+ * and the program ids `/deployments` records) builds, signs and simulates every cook;
  * `derivePotPda`/`buildCreatePotInstruction` are the Pot; the code-buffer builders stage a program
  * too large for one transaction. Nothing here encodes an instruction of its own.
  *
@@ -51,6 +52,7 @@ import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from ".
 import {
   buildCloseCodeBufferInstruction,
   buildComputeBudgetPrepend,
+  buildCookAndPayInstruction,
   buildCookInstruction,
   buildCreateCodeBufferInstruction,
   buildCreatePotInstruction,
@@ -60,14 +62,18 @@ import {
   buildHeapFramePrepend,
   buildWriteCodeBufferInstruction,
   createSauceSvmClient,
+  decodeExecutionFeeConfig,
   deriveCodeBufferPda,
   deriveCodePda,
   deriveExecutionFeeConfigPda,
   derivePotPda,
+  engineFaultName,
   GROWTH_STEP,
   MAX_POT_LEN,
   resolveAccounts,
   type AccountResolution,
+  type CookVia,
+  type EngineFault,
   type SauceSvmClient,
   type SimulateExecuteResult,
 } from "../svm/index.js";
@@ -170,32 +176,25 @@ async function ask<T>(url: string, what: string, request: () => Promise<T>): Pro
   }
 }
 
-/** The Kitchen's execution fee in lamports, from its fee config account. */
+/**
+ * The execution fee in lamports, from the Kitchen's fee config account: what a cook pays, through
+ * the Kitchen or direct to the engine, which reads the same account.
+ */
 async function kitchenFee(rpc: Rpc, url: string): Promise<bigint> {
   const { address: config } = await deriveExecutionFeeConfigPda(kitchen());
   const { value } = await ask(url, "the Kitchen's fee config", () =>
     rpc.getAccountInfo(config, { encoding: "base64" }).send(),
   );
-  const discriminator = createHash("sha256")
-    .update("account:ExecutionFeeConfig")
-    .digest()
-    .subarray(0, 8);
-  const data =
-    value === null ? undefined : new Uint8Array(getBase64Encoder().encode(value.data[0]));
-  if (
-    value === null ||
-    value.owner !== kitchen() ||
-    data === undefined ||
-    data.length !== 16 ||
-    !discriminator.every((byte, index) => data[index] === byte)
-  ) {
+  try {
+    if (value === null || value.owner !== kitchen()) throw new Error("absent");
+
+    return decodeExecutionFeeConfig(new Uint8Array(getBase64Encoder().encode(value.data[0])));
+  } catch {
     throw new CliError(
       `the released Kitchen (${kitchen()}) has no execution-fee config on this cluster: is it ` +
-        "deployed there?",
+        "deployed there? Every cook is refused without one, through the Kitchen or direct.",
     );
   }
-
-  return new DataView(data.buffer, data.byteOffset).getBigUint64(8, true);
 }
 
 async function exists(rpc: Rpc, url: string, account: Address, what: string): Promise<boolean> {
@@ -273,11 +272,25 @@ function engineReturn(logs: readonly string[]): Uint8Array | undefined {
   return found;
 }
 
+/** What a few of the engine's refusals mean for the cook that met them. */
+const ENGINE_FAULT_HINTS: Partial<Record<EngineFault, string>> = {
+  ExecutionFeeExceedsMaximum:
+    "the execution fee is above the max_execution_fee the cook signed (it rose since it was read): run it again",
+  ExecutionFeeNotPaid: "the fee payer holds less than the execution fee",
+  InvalidFeePayer: "the fee payer must be a System-owned account that holds no data",
+  InvalidFeeConfig: "the fee config is not the released Kitchen's",
+  CodeHashMismatch: "the staged program is not the bytes the cook was pinned to",
+  NotCookedByKitchen: "the engine's legacy instructions run only from a Kitchen cook",
+  AccountNotSigner:
+    "the program wrote an account that did not sign — directly to the engine, nothing signs for a Pot",
+};
+
 /**
  * A transaction error, read: the Sauce program's thrown text when the ENGINE failed with its revert
- * code, a Kitchen error by name when the KITCHEN failed, and otherwise the code and the program it
- * came from. Custom codes collide across programs (every Anchor program numbers from 6000; System
- * and SPL Token both use 0), so a code is named only for the program the logs show failing.
+ * code, the engine's or the Kitchen's error by name when either refused, and otherwise the code and
+ * the program it came from. Custom codes collide across programs (every Anchor program numbers from
+ * 6000; System and SPL Token both use 0), so a code is named only for the program the logs show
+ * failing.
  */
 export function failureReason(
   err: unknown,
@@ -304,6 +317,12 @@ export function failureReason(
     }
     const named = program === kitchen() ? kitchenErrors().get(code) : undefined;
     if (named !== undefined) return `the Kitchen refused: ${named}`;
+    const fault = program === engine() ? engineFaultName(code) : undefined;
+    if (fault !== undefined) {
+      const hint = ENGINE_FAULT_HINTS[fault];
+
+      return `the engine refused: ${fault} (custom program error ${code})${hint === undefined ? "" : `: ${hint}`}`;
+    }
 
     return (
       `${program === undefined ? `instruction ${detail![0]}` : `program ${program}`} failed with ` +
@@ -451,7 +470,8 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
 
 /**
  * Each slot of the manifest resolved from `--account`. The Pot goes in unsigned: the Kitchen signs
- * for it. The owner signs when the slot asks for a signer — with `signer` when there is one.
+ * for it — and, cooked directly (`via` engine), nothing does, so a slot that must sign cannot be
+ * the Pot. The owner signs when the slot asks for a signer — with `signer` when there is one.
  */
 function resolution(
   manifest: AccountManifest,
@@ -459,6 +479,7 @@ function resolution(
   owner: Address,
   pot: Address,
   signer: TransactionSigner,
+  via: CookVia = "kitchen",
 ): AccountResolution {
   const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
   if (manifest.accounts.some((entry) => entry.kind === "remaining")) {
@@ -485,6 +506,13 @@ function resolution(
   const resolved: AccountResolution = {};
   for (const slot of slots) {
     const value = given[slot.name]!;
+    if (via === "engine" && value === "pot" && /signer/.test(slot.requires)) {
+      throw new UsageError(
+        `--account ${slot.name}=pot: ${slot.name} must sign (${slot.requires}), and cooked ` +
+          "directly to the engine (--via engine) nothing signs for the Pot — only a Kitchen cook " +
+          `does. Give ${slot.name} a signer (owner), or cook --via kitchen.`,
+      );
+    }
     const at = value === "pot" ? pot : value === "owner" ? owner : address(value);
     resolved[slot.name] =
       at === pot ? { address: pot, signer: false } : at === owner ? { address: owner, signer } : at;
@@ -668,10 +696,23 @@ export interface SvmCookInput extends ProgramInput, SvmTarget {
   readonly accounts: Readonly<Record<string, string>>;
   readonly args?: ArgsInput;
   readonly rpcUrl: string;
+  /**
+   * How the cook reaches the engine (`--via`): `kitchen`, the default, is the Kitchen's `cook` on
+   * the owner's Pot; `engine` is the engine's own paid `cookAndPay`, with no Kitchen and no Pot, the
+   * owner signing as the authority the program acts with.
+   */
+  readonly via?: CookVia;
+  /**
+   * The most the cook may pay in execution fee, in lamports (`--max-execution-fee`): with a fee
+   * above it the command refuses before signing or sending anything. Either way the cook signs the
+   * fee it read as its `max_execution_fee`, so it pays that or, if the fee rises first, fails.
+   */
+  readonly maxExecutionFee?: bigint;
 }
 
 interface Prepared {
   readonly rpc: Rpc;
+  readonly via: CookVia;
   readonly pot: Address;
   readonly fee: bigint;
   readonly program: CompiledSauceProgram;
@@ -687,13 +728,21 @@ async function prepare(
   files: CliFiles,
   signer: TransactionSigner,
 ): Promise<Prepared> {
+  const via = input.via ?? "kitchen";
   const program = compileProgram(input, files);
   const bytecode = svmPayload(program, input.args);
   const manifest = program.manifest ?? { accounts: [] };
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
-  const accounts = resolution(manifest, input.accounts, input.owner, pot, signer);
+  const accounts = resolution(manifest, input.accounts, input.owner, pot, signer, via);
   const fee = await kitchenFee(rpc, input.rpcUrl);
+  if (input.maxExecutionFee !== undefined && fee > input.maxExecutionFee) {
+    throw new CliError(
+      `the execution fee is ${fee} lamports, above --max-execution-fee ${input.maxExecutionFee}: ` +
+        "nothing was signed or sent",
+    );
+  }
+  // The cap the cook signs is the fee just read: it pays what is shown here, or fails.
   const client = await createSauceSvmClient({
     rpcUrl: input.rpcUrl,
     programId: engine(),
@@ -701,10 +750,21 @@ async function prepare(
     payer: signer,
     potSalt: saltBytes(input.salt),
     maxExecutionFee: fee,
+    via,
   });
 
-  return { rpc, pot, fee, program, bytecode, client, accounts, manifest };
+  return { rpc, via, pot, fee, program, bytecode, client, accounts, manifest };
 }
+
+/** A staged cook's options: directly to the engine it is pinned to the staged bytes' digest. */
+const stagedPin = (
+  prepared: Prepared,
+  staged: { readonly sha256: Uint8Array },
+): { expectedSha256?: Uint8Array } =>
+  prepared.via === "engine" ? { expectedSha256: staged.sha256 } : {};
+
+/** What a direct cook is called in what a command prints. */
+const DIRECT_COOK = "the engine's direct cook (cookAndPay)";
 
 /**
  * Whether the cook carrying `bytecode` fits in one transaction — measured as `run` sends it, with
@@ -731,6 +791,8 @@ const placeholderKey = (index: number): Address =>
 
 /** Whether a cook fits one transaction, measured without a cluster. */
 export interface SvmCookSize {
+  /** The cook measured: through the Kitchen, or direct to the engine. */
+  readonly via: CookVia;
   readonly size: number;
   readonly limit: number;
   readonly fits: boolean;
@@ -742,15 +804,16 @@ export interface SvmCookSize {
 
 /**
  * The size of the cook that carries `bytecode` inline, offline: the transaction `run` sends (heap
- * frame, compute-unit limit, the Kitchen's `cook`) for `manifest`, with each account `--account`
- * gives where it is given — `pot` and `owner` are the cook's own — and a distinct account for every
- * other slot, so a size is the most those slots can make it. The blockhash and signature are fixed
- * widths, so a placeholder of each measures the same.
+ * frame, compute-unit limit, the Kitchen's `cook` — or `via` engine, the engine's `cookAndPay`) for
+ * `manifest`, with each account `--account` gives where it is given — `pot` and `owner` are the
+ * cook's own — and a distinct account for every other slot, so a size is the most those slots can
+ * make it. The blockhash and signature are fixed widths, so a placeholder of each measures the same.
  */
 export async function svmCookSize(
   bytecode: Uint8Array,
   manifest: AccountManifest,
   given: Readonly<Record<string, string>>,
+  via: CookVia = "kitchen",
 ): Promise<SvmCookSize> {
   const owner = placeholderKey(0);
   const target: SvmTarget = { owner, salt: `0x${"00".repeat(32)}` };
@@ -776,17 +839,28 @@ export async function svmCookSize(
       : at;
   });
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen());
-  const cook = buildCookInstruction({
-    kitchen: kitchen(),
-    owner,
-    engineProgram: engine(),
-    potSalt: saltBytes(target.salt),
-    pot,
-    feeConfig,
-    bytecode,
-    maxExecutionFee: 0n,
-    tail: resolveAccounts(named, resolved, owner),
-  });
+  const tail = resolveAccounts(named, resolved, owner);
+  const cook =
+    via === "engine"
+      ? buildCookAndPayInstruction({
+          engineProgram: engine(),
+          feeConfig,
+          feePayer: owner,
+          maxExecutionFee: 0n,
+          bytecode,
+          tail,
+        })
+      : buildCookInstruction({
+          kitchen: kitchen(),
+          owner,
+          engineProgram: engine(),
+          potSalt: saltBytes(target.salt),
+          pot,
+          feeConfig,
+          bytecode,
+          maxExecutionFee: 0n,
+          tail,
+        });
   const transaction = await buildExecuteTransaction({
     payer: signer,
     instructions: [
@@ -802,6 +876,7 @@ export async function svmCookSize(
   const size = getTransactionSize(transaction);
 
   return {
+    via,
     size,
     limit: TRANSACTION_SIZE_LIMIT,
     fits: size <= TRANSACTION_SIZE_LIMIT,
@@ -857,7 +932,7 @@ async function ownerShort(
     return (
       `${input.owner} holds ${held.value} lamports, and the cook takes ${needed}: ` +
       (creating ? `${rent} in rent for the Pot, ` : "") +
-      `the Kitchen's fee of ${prepared.fee} and the transaction's. Solana's simulateTransaction ` +
+      `the execution fee of ${prepared.fee} and the transaction's. Solana's simulateTransaction ` +
       "takes no balance overrides, so the owner must hold them for a rehearsal too"
     );
   } catch {
@@ -867,17 +942,19 @@ async function ownerShort(
 
 /**
  * `sauce simulate` on Solana: the cook, simulated from the Pot's owner with no key — and, for a
- * Pot the Kitchen has not created yet, its `create_pot` first, in the same transaction.
+ * Pot the Kitchen has not created yet, its `create_pot` first, in the same transaction. Directly to
+ * the engine (`via` engine) there is no Pot to create: the owner is the signer, and pays.
  */
 export async function svmSimulateCommand(
   input: SvmCookInput,
   files: CliFiles,
 ): Promise<CommandOutput> {
   const prepared = await prepare(input, files, unsignedSigner(input.owner));
+  const direct = prepared.via === "engine";
   // The size first: it is the program's own, whatever the cluster holds.
   const alone = await fits(prepared);
   if (!alone.fits) throw tooLarge(prepared, alone.size, "a simulation, which sends nothing,");
-  const created = await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot");
+  const created = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
   const prepends = created ? [] : [createPotInstruction(input, prepared.pot)];
   let built = alone.transaction;
   if (!created) {
@@ -919,11 +996,17 @@ export async function svmSimulateCommand(
   const json = {
     ok: result.ok,
     chain: "solana",
+    via: prepared.via,
     owner: input.owner,
-    pot: prepared.pot,
+    ...(direct ? {} : { pot: prepared.pot }),
     fee: prepared.fee.toString(),
+    maxExecutionFee: prepared.fee.toString(),
     path: "simulateTransaction",
-    createPot: created ? null : { kitchen: kitchen(), owner: input.owner, salt: input.salt },
+    ...(direct
+      ? {}
+      : {
+          createPot: created ? null : { kitchen: kitchen(), owner: input.owner, salt: input.salt },
+        }),
     ...(result.unitsConsumed === undefined
       ? {}
       : { computeUnits: result.unitsConsumed.toString() }),
@@ -939,7 +1022,11 @@ export async function svmSimulateCommand(
           `  1. Kitchen create_pot: Pot ${prepared.pot} is not created on solana yet, so the ` +
             "transaction creates it first, the owner signing and paying its rent",
         ]),
-    `  ${created ? "" : "2. "}the cook, from the owner ${input.owner}`,
+    direct
+      ? `  ${DIRECT_COOK}, from ${input.owner}, which signs for the program and pays ` +
+        `the execution fee of ${prepared.fee} lamports: no Kitchen and no Pot`
+      : `  ${created ? "" : "2. "}the cook, from the owner ${input.owner}, which pays the ` +
+        `Kitchen's execution fee of ${prepared.fee} lamports`,
   ];
   if (result.ok) {
     return {
@@ -977,9 +1064,10 @@ export async function svmSimulateCommand(
 /** `sauce tx` on Solana: the cook as an unsigned, serialized transaction for a wallet. */
 export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promise<CommandOutput> {
   const prepared = await prepare(input, files, unsignedSigner(input.owner));
+  const direct = prepared.via === "engine";
   const size = await fits(prepared);
   if (!size.fits) throw tooLarge(prepared, size.size, "one unsigned transaction");
-  const deployed = await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot");
+  const deployed = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
   const transaction = await prepared.client.cookTransaction(
     prepared.bytecode,
     prepared.manifest,
@@ -988,9 +1076,11 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
   );
   const json = {
     chain: "solana",
+    via: prepared.via,
     feePayer: input.owner,
-    pot: prepared.pot,
+    ...(direct ? {} : { pot: prepared.pot }),
     fee: prepared.fee.toString(),
+    maxExecutionFee: prepared.fee.toString(),
     transaction: getBase64EncodedWireTransaction(transaction),
   };
 
@@ -998,12 +1088,16 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     text: JSON.stringify(json, null, 2),
     json,
     notes: [
-      `Pot ${prepared.pot} belongs to ${input.owner} (salt ${input.salt}). ` +
-        (deployed
-          ? "It is created. Fund its accounts with what the program spends."
-          : `It is NOT created yet: ${createHint(input)}.`),
+      direct
+        ? `${DIRECT_COOK}: no Kitchen and no Pot. ${input.owner} is the authority ` +
+          "the program acts with, so the accounts it spends from are the signer's own."
+        : `Pot ${prepared.pot} belongs to ${input.owner} (salt ${input.salt}). ` +
+          (deployed
+            ? "It is created. Fund its accounts with what the program spends."
+            : `It is NOT created yet: ${createHint(input)}.`),
       `The transaction is base64, signed by no one; ${input.owner} signs it and pays the ` +
-        `Kitchen's fee of ${prepared.fee} lamports. Its blockhash expires in about a minute.`,
+        `execution fee of ${prepared.fee} lamports (its max_execution_fee). Its blockhash ` +
+        "expires in about a minute.",
     ],
   };
 }
@@ -1177,7 +1271,9 @@ async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<Sv
 /** `sauce run` on Solana: compile, create the Pot if agreed, stage if needed, cook, confirm. */
 export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promise<CommandOutput> {
   const prepared = await prepare(input, files, input.signer);
-  const created = await ensurePot(input, prepared.rpc, prepared.pot);
+  const direct = prepared.via === "engine";
+  // Directly to the engine the program runs as no Pot: there is none to create.
+  const created = direct ? undefined : await ensurePot(input, prepared.rpc, prepared.pot);
   const size = await fits(prepared);
   // The cook's rehearsal failing: `computeUnitLimit: "auto"` simulates first, and its failure
   // carries the reason — read again, with the logs, to report it.
@@ -1217,7 +1313,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         staged.codeBuffer,
         prepared.manifest,
         prepared.accounts,
-        { computeUnitLimit: "auto" },
+        { computeUnitLimit: "auto", ...stagedPin(prepared, staged) },
       );
     } catch (error) {
       return wouldFail(error, staged);
@@ -1238,7 +1334,8 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         : [
             `staged the ${prepared.bytecode.length}-byte program in ${staged.sent.length} transactions`,
           ]),
-      sentLine("cook", cook),
+      sentLine(direct ? "cook (direct to the engine)" : "cook", cook),
+      ...(cook.ok ? [`execution fee: ${prepared.fee} lamports`] : []),
       ...(cook.ok ? [] : ["Program logs:", ...cook.logs.map((line) => `  ${line}`)]),
       ...(closed?.sent === undefined || closed.open !== undefined
         ? []
@@ -1247,9 +1344,11 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     ...(closed?.open === undefined ? {} : { notes: [`warning: ${closed.open}`] }),
     json: {
       chain: "solana",
+      via: prepared.via,
       owner: input.owner,
-      pot: prepared.pot,
+      ...(direct ? {} : { pot: prepared.pot }),
       fee: prepared.fee.toString(),
+      maxExecutionFee: prepared.fee.toString(),
       ...(created === undefined ? {} : { createPot: sentJson(created) }),
       ...(staged === undefined
         ? {}
@@ -1271,7 +1370,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
 /** The reason and logs of the cook's rehearsal, for a run that stops before sending. */
 async function rehearsalLogs(
   prepared: Prepared,
-  staged: { readonly codeBuffer: Address } | undefined,
+  staged: { readonly codeBuffer: Address; readonly sha256: Uint8Array } | undefined,
 ): Promise<{ reason?: string; lines: readonly string[] }> {
   try {
     const result =
@@ -1281,6 +1380,7 @@ async function rehearsalLogs(
             staged.codeBuffer,
             prepared.manifest,
             prepared.accounts,
+            stagedPin(prepared, staged),
           );
 
     return result.ok ? { lines: result.logs } : { reason: simulated(result), lines: result.logs };

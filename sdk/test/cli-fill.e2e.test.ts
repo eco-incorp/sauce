@@ -1,14 +1,14 @@
 /**
- * `sauce fill`: a solver's fill of a file's intent, rehearsed on the destination with no key and
+ * `sauce intent fill`: a solver's fill of a file's intent, rehearsed on the destination with no key and
  * nothing sent — on a local anvil standing in for Base, with the released gated stack
  * (`cli-anvil.ts`) and the real eco-routes Portal (`evm/fixtures/Portal.json`, its own forge
  * creation code) at the address the SDK records for Base, so the CLI runs with no override.
  *
  * THE PORTAL IS PUT IN PLACE, NOT DEPLOYED THERE (`cli-anvil.ts#placePortal`, which says why):
- * the fixture is deployed wherever it lands, then both runtimes are copied to the registry's
- * Portal and the Executor derived from it, with exactly the two immutables that name each other
- * rewritten. Its chain id (8453, anvil's), its vault implementation and its EIP-712 cache are
- * untouched. `executor()` read back through the copy is the Executor the SDK derives, and every
+ * the fixture is deployed wherever it lands, then its runtime, its Executor's and its vault
+ * implementation's are copied to the registry's Portal and the two addresses derived from it, with
+ * the addresses they name each other by rewritten. Its chain id (8453, anvil's) and its EIP-712
+ * cache are untouched. `executor()` read back through the copy is the Executor the SDK derives, and every
  * fulfill below runs the copy's real `_fulfill`: the hash check, the token pulls,
  * `Executor.execute` and its `onlyPortal`.
  *
@@ -24,7 +24,11 @@ import { getAddress, pad, parseAbi, type Address, type Hex } from "viem";
 
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { DEFAULT_SOLVER } from "../src/cli/fill.js";
-import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import {
+  ecoRoutesExecutorOf,
+  ecoRoutesPortal,
+  ecoRoutesVaultImplementationOf,
+} from "../src/protocols/eco-routes/lookup.js";
 import {
   describeEvm,
   FEE,
@@ -82,7 +86,7 @@ const MEASURED = [
   "",
 ].join("\n");
 
-describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
+describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", () => {
   let base: LocalChain;
   let work: string;
   let usdc: Address;
@@ -108,7 +112,7 @@ describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
   };
   const fill = (path: string, ...flags: string[]) =>
     sauce(
-      ...["fill", path, "--chain", "arbitrum", "--rpc-url", base.rpcUrl],
+      ...["intent", "fill", path, "--chain", "arbitrum", "--rpc-url", base.rpcUrl],
       ...["--intent-deadline", DEADLINE, "--intent-creator", CREATOR],
       ...flags,
     );
@@ -126,7 +130,11 @@ describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     // The real Portal, deployed wherever it lands, then moved to the registry's address.
     const placed = await placePortal(base);
-    expect(placed).toEqual({ portal, executor });
+    expect(placed).toEqual({
+      portal,
+      executor,
+      vaultImplementation: ecoRoutesVaultImplementationOf(portal),
+    });
     expect(
       await base.publicClient.readContract({
         address: portal,
@@ -252,7 +260,7 @@ describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
 
   it("names the Portal's own refusal: a route whose deadline has passed", async () => {
     const run = await sauce(
-      ...["fill", file("direct.sauce.ts", DIRECT), "--chain", "arbitrum"],
+      ...["intent", "fill", file("direct.sauce.ts", DIRECT), "--chain", "arbitrum"],
       ...["--rpc-url", base.rpcUrl, ...defines()],
       ...["--intent-deadline", "1000", "--intent-creator", CREATOR],
     );
@@ -367,14 +375,16 @@ describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
   it("refuses an intent with no route until its program runs", async () => {
     const run = await fill(file("measured.sauce.ts", MEASURED), ...defines());
     expect(run.code).toBe(1);
-    expect(run.stderr).toContain("uses `amount`, measured on chain while the program runs");
+    expect(run.stderr).toContain(
+      "uses `amount`, which the program measures or computes while it runs",
+    );
   }, 60_000);
 
   it("names the destination when --rpc-url serves another chain", async () => {
     const other = await startChain("arbitrum", 9350 + WORKER);
     try {
       const run = await sauce(
-        ...["fill", file("cooked.sauce.ts", COOKED), "--chain", "arbitrum"],
+        ...["intent", "fill", file("cooked.sauce.ts", COOKED), "--chain", "arbitrum"],
         ...["--rpc-url", other.rpcUrl, ...defines()],
         ...["--intent-deadline", DEADLINE, "--intent-creator", CREATOR],
         ...["--intent-execution-fee", String(FEE)],

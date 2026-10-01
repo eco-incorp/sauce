@@ -26,7 +26,9 @@ import {
   compileProgram,
   connect,
   definesReach,
+  defineLabels,
   fillCommand,
+  fillTargets,
   fundingFor,
   globalsCommand,
   inspectCommand,
@@ -36,11 +38,13 @@ import {
   parseAddress,
   parseChain,
   parseDefineMap,
+  parseLamports,
   parsePin,
   parsePriceToken,
   parsePubkey,
   parseSalt,
   parseUnixSeconds,
+  parseVia,
   parseWei,
   potCommand,
   potState,
@@ -176,6 +180,15 @@ const PROGRAM = {
     .describe(
       "For intents that run a program on their destination: that chain's Kitchen fee, in wei.",
     ),
+  intentFundVia: z
+    .enum(["transfer", "publishAndFund"])
+    .optional()
+    .describe(
+      "For intents the program opens: how their reward reaches the intent's vault. transfer " +
+        "(default) pays it into the vault, then Portal.publish; publishAndFund approves the " +
+        "Portal, then Portal.publishAndFund, which emits IntentFunded (for an intent built from " +
+        "a solver's quote).",
+    ),
 };
 
 const POT = {
@@ -232,6 +245,24 @@ const COOK = {
       "Solana only: each Account parameter main takes, by name: a base58 address, or `pot` (the " +
         "Pot, signed for by the Kitchen) or `owner`. sauce_compile's manifest lists them.",
     ),
+  via: z
+    .enum(["kitchen", "engine"])
+    .optional()
+    .describe(
+      "Solana only: how the cook reaches the engine. kitchen (the default) is the Kitchen's cook " +
+        "on the owner's Pot: the program can hold and spend what the Pot owns. engine is the " +
+        "engine's own paid cook, with no Kitchen and no Pot: the owner signs as the authority the " +
+        "program acts with (accounts `owner` where it needs one; `pot` cannot sign there) and pays " +
+        "the fee, and the program's own calls get one more level of CPI depth. Both pay the same " +
+        "execution fee.",
+    ),
+  maxExecutionFee: integer
+    .optional()
+    .describe(
+      "Solana only: the most the cook may pay in execution fee, in lamports. The fee is read from " +
+        "the cluster and returned as `fee`; above this the call refuses before building anything. " +
+        "Either way the cook signs the fee it read as its max_execution_fee.",
+    ),
   rpcUrl: RPC_URL,
 };
 
@@ -273,9 +304,12 @@ function integerText(value: string | number, name: string): string {
 
 /** The intents a program opens, as `ProgramInput.intents` takes them. */
 function intentsOf(
-  args: Pick<ProgramArgs, "intentDeadline" | "intentCreator" | "intentExecutionFee">,
+  args: Pick<
+    ProgramArgs,
+    "intentDeadline" | "intentCreator" | "intentExecutionFee" | "intentFundVia"
+  >,
 ) {
-  const { intentDeadline, intentCreator, intentExecutionFee } = args;
+  const { intentDeadline, intentCreator, intentExecutionFee, intentFundVia } = args;
 
   return {
     ...(intentDeadline === undefined
@@ -297,6 +331,7 @@ function intentsOf(
             integerText(intentExecutionFee, "intentExecutionFee"),
           ),
         }),
+    ...(intentFundVia === undefined ? {} : { fundVia: intentFundVia }),
   };
 }
 
@@ -364,6 +399,17 @@ function evmCook(args: CookArgs, program: Program): CookInput {
       `accounts names a Solana program's accounts; a program on ${program.input.chain.slug} takes none`,
     );
   }
+  for (const [name, given] of [
+    ["via", args.via],
+    ["maxExecutionFee", args.maxExecutionFee],
+  ] as const) {
+    if (given !== undefined) {
+      throw new UsageError(
+        `${name} is for a Solana cook, which can reach the engine through the Kitchen or ` +
+          `directly; on ${program.input.chain.slug} a cook is the Pot's, and value carries the fee`,
+      );
+    }
+  }
 
   if (args.owner === undefined && args.pot === undefined) {
     throw new UsageError(
@@ -412,6 +458,15 @@ function svmCook(args: CookArgs, program: Program, rpcUrl: string): SvmCookInput
     ),
     ...argsOf(args),
     rpcUrl,
+    ...(args.via === undefined ? {} : { via: parseVia(args.via, "via") }),
+    ...(args.maxExecutionFee === undefined
+      ? {}
+      : {
+          maxExecutionFee: parseLamports(
+            "maxExecutionFee",
+            integerText(args.maxExecutionFee, "maxExecutionFee"),
+          ),
+        }),
   };
 }
 
@@ -933,6 +988,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         ...PROGRAM,
         args: COOK.args,
         accounts: COOK.accounts,
+        via: COOK.via.describe(
+          "Solana only: size the Kitchen's cook (the default) or the engine's own paid cook, " +
+            "which carries no Kitchen, Pot or salt.",
+        ),
         rpcUrls: RPC_URLS.describe(
           "For a program that opens intents: each destination's endpoint by chain (slug or " +
             'id), { "base": "<url>" }, to check the Pot its cook runs on is deployed there. ' +
@@ -960,6 +1019,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           `accounts names a Solana program's accounts; a program on ${program.input.chain.slug} takes none`,
         );
       }
+      if (args.via !== undefined && program.input.chain.kind !== "svm") {
+        throw new UsageError(
+          `via chooses how a Solana cook reaches the engine; a cook on ${program.input.chain.slug} ` +
+            "is the Pot's",
+        );
+      }
       const byChain = await endpointsByChain(args.rpcUrls, reach);
 
       return compiled({
@@ -973,6 +1038,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                   Object.entries(args.accounts).map(([name, value]) => `${name}=${value}`),
                 ),
               }),
+          ...(args.via === undefined ? {} : { via: parseVia(args.via, "via") }),
           ...(byChain.size === 0
             ? {}
             : { endpoints: (chain: CanonicalChain) => byChain.get(chain.id) }),
@@ -1071,8 +1137,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "an EVM chain it returns { chainId, to: the Pot, data: Pot.cook(engine, program ++ " +
         "arguments), value }; only the owner may send it, and value (wei) is the Kitchen's fee " +
         "plus any native the program spends — give it, or an endpoint to read the fee from, " +
-        "which also says whether the Pot is deployed. On Solana it returns { chain, feePayer, " +
-        "pot, fee, transaction }: the Kitchen cook as a base64 transaction for the owner to sign, " +
+        "which also says whether the Pot is deployed. On Solana it returns { chain, via, " +
+        "feePayer, pot, fee, maxExecutionFee, transaction }: the Kitchen cook (or, via engine, " +
+        "the engine's own paid cook, with no Pot) as a base64 transaction for the owner to sign, " +
         "which needs an endpoint (its blockhash and the fee). `notes` say what must be true for " +
         `it to land: a deployed, funded Pot (sauce_pot deploys it). ${UNSIGNED}`,
       input: { ...PROGRAM, ...COOK },
@@ -1235,8 +1302,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "it reverts — a revert is a result (ok: false), not an error. assumeBalance gives the " +
         "Pot balances for the rehearsal only; fund rehearses pulling tokens from the owner into " +
         "the Pot in the cook, the Pot credited what they would bring. Solana: the Kitchen cook " +
-        "simulated from the owner (a missing Pot created first): compute units, or the reason " +
-        "and the program logs. Nothing is signed or sent.",
+        "simulated from the owner (a missing Pot created first), or via engine the engine's own " +
+        "paid cook with no Pot: compute units, the fee, or the reason and the program logs. Nothing is signed or sent.",
       input: {
         ...PROGRAM,
         ...COOK,
@@ -1306,15 +1373,20 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       title: "Build an intent's unsigned publish transactions",
       description:
         "For a program that only opens cross-chain intents whose amounts are fixed when it is " +
-        "built (every amount a define or a literal): the source chain's transactions that " +
-        "publish and fund each intent from a wallet — each reward token's approve to the " +
-        "Portal, then Portal.publishAndFund — with each intent's hash. Send them in order from " +
-        "the wallet that funds the reward. With `from` and an endpoint, the approvals are " +
-        "planned against that wallet's standing allowance (a USDT-style reset to 0 first where " +
-        "needed). dryRun rehearses them together through eth_simulateV1 from `from` instead, " +
-        "assumeBalance giving that wallet balances for the rehearsal only. A program that " +
-        "measures an amount on chain, or does anything besides open intents, is refused: run " +
-        `it on a Pot (sauce_tx) instead. ${UNSIGNED}`,
+        "built (every amount a define or a literal): the source chain's transactions that fund " +
+        "and publish each intent from a wallet — each reward token transferred to the intent's " +
+        "vault (and a native reward sent to it), then Portal.publish, with no approval — with " +
+        "each intent's hash and vault. Send them in order from the wallet that funds the " +
+        "reward, the transfers first, and publish once they have landed. The vault is the " +
+        "package's own computation; with `from` and an endpoint it is also read from the Portal " +
+        "and must agree, or the tool refuses, and only what the vault does not hold yet is " +
+        "transferred. intentFundVia publishAndFund gives each reward token's approve to the " +
+        "Portal (a USDT-style reset to 0 first where needed), then Portal.publishAndFund, " +
+        "instead. dryRun rehearses them together through eth_simulateV1 from `from` and reports " +
+        "each intent's isIntentFunded after them (intents[].funded), assumeBalance giving that " +
+        "wallet balances for the rehearsal only. A program that measures an amount on chain, or " +
+        "does anything besides open intents, is refused: run it on a Pot (sauce_tx) instead. " +
+        UNSIGNED,
       input: {
         ...PROGRAM,
         from: z
@@ -1322,8 +1394,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .max(64)
           .optional()
           .describe(
-            "The 0x wallet that publishes and funds: plans exact approvals, and is dryRun's " +
-              "sender.",
+            "The 0x wallet that funds and publishes: with an endpoint, the vault is read and " +
+              "only what it lacks is transferred (or, with intentFundVia publishAndFund, the " +
+              "approvals are planned against its allowance); dryRun's sender.",
           ),
         dryRun: z
           .boolean()
@@ -1461,21 +1534,20 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           : await reach.endpoint(program.input.chain, args.rpcUrl);
 
       return fromCommand(
-        await fillCommand(
-          {
-            ...program.input,
-            endpointOf: (chain) => {
-              const url = byChain.get(chain.id) ?? one ?? endpoints.endpoint(chain);
-              if (url === undefined) throw noEndpoint(chain, endpoints, "Rehearsing a fill");
+        await fillCommand({
+          intents: fillTargets(program.input, program.files),
+          from: program.input.file,
+          labels: defineLabels(program.input),
+          endpointOf: (chain) => {
+            const url = byChain.get(chain.id) ?? one ?? endpoints.endpoint(chain);
+            if (url === undefined) throw noEndpoint(chain, endpoints, "Rehearsing a fill");
 
-              return url;
-            },
-            endpointFlag: one === undefined ? "--config" : "--rpc-url",
-            ...(solver === undefined ? {} : { solver }),
-            ...(args.claimant === undefined ? {} : { claimant: args.claimant as Hex }),
+            return url;
           },
-          program.files,
-        ),
+          endpointFlag: one === undefined ? "--config" : "--rpc-url",
+          ...(solver === undefined ? {} : { solver }),
+          ...(args.claimant === undefined ? {} : { claimant: args.claimant as Hex }),
+        }),
       );
     },
   );

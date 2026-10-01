@@ -11,6 +11,8 @@ import { bytesToBigInt, getAddress, isAddress, type Address, type Hex } from "vi
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { potSalt, SAUCE_INTENT_POT_SALT } from "../deployments/pot.js";
+import { INTENT_FUND_VIA, type IntentFundVia } from "../routes/portal.js";
+import type { CookVia } from "../svm/client.js";
 
 /** A mistyped invocation: an unknown or missing flag, or a value that is not what the flag takes. */
 export class UsageError extends Error {}
@@ -195,6 +197,32 @@ export function parseWei(flag: string, raw: string): bigint {
 }
 
 /**
+ * `--via kitchen|engine`: how a Solana cook reaches the engine — the Kitchen's `cook` on the
+ * owner's Pot, or the engine's own paid `cookAndPay`. `from` names where the value came from.
+ */
+export function parseVia(raw: string, from = "--via"): CookVia {
+  if (raw !== "kitchen" && raw !== "engine") {
+    throw new UsageError(
+      `${from}: '${raw}' is not kitchen (the Kitchen's cook, on the owner's Pot) or engine (the ` +
+        "engine's own paid cook, with no Pot)",
+    );
+  }
+
+  return raw;
+}
+
+/** A non-negative amount of lamports that fits a u64: decimal digits, or 0x-prefixed hex. */
+export function parseLamports(flag: string, raw: string): bigint {
+  if (!/^(?:\d+|0x[0-9a-fA-F]+)$/.test(raw) || BigInt(raw) >= 1n << 64n) {
+    throw new UsageError(
+      `--${flag}: '${raw}' is not an amount in lamports (an integer below 2^64, e.g. 5000)`,
+    );
+  }
+
+  return BigInt(raw);
+}
+
+/**
  * A Pot's salt: `--salt <label>`, hashed by the SDK's `potSalt`, or `--salt-hex <bytes32>`, exactly
  * 32 bytes — never both. Neither is the zero salt, the one Pot an owner has by default.
  */
@@ -228,6 +256,18 @@ export function parseSalt(label: string | undefined, hex: string | undefined): S
 export interface SaltChoice {
   readonly salt: Hex;
   readonly flag?: string;
+}
+
+/** How an intent's reward is funded — `routes/portal.ts#IntentFundVia`, spelled the same here. */
+export function parseFundVia(raw: string, from = "--intent-fund-via"): IntentFundVia {
+  if (!(INTENT_FUND_VIA as readonly string[]).includes(raw)) {
+    throw new UsageError(
+      `${from}: '${raw}' is not ${INTENT_FUND_VIA.join(" or ")} — transfer pays the reward into ` +
+        "the intent's vault and then publishes; publishAndFund approves the Portal, which pulls it",
+    );
+  }
+
+  return raw as IntentFundVia;
 }
 
 /** Absolute Unix seconds. */

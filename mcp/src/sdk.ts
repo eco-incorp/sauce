@@ -14,8 +14,10 @@ export {
   parseAddress,
   parseChain,
   parseDefineMap,
+  parseLamports,
   parseSalt,
   parseUnixSeconds,
+  parseVia,
   parseWei,
   UsageError,
 } from "../../sdk/dist/cli/args.js";
@@ -53,7 +55,7 @@ export {
   pricedChain,
   priceGiven,
 } from "../../sdk/dist/cli/price.js";
-export { fillCommand } from "../../sdk/dist/cli/fill.js";
+export { defineLabels, fillCommand, fillTargets } from "../../sdk/dist/cli/fill.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";

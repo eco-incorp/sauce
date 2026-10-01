@@ -1,6 +1,6 @@
 ---
 name: sauce-solana
-description: Writing and running Sauce programs on Solana (the SVM target) — declaring every account as an Account parameter with Writable/Signer roles, the account manifest the compile returns, passing accounts by name with --account, the @sauce/token SPL arm (transfer, approve, balanceOf with account parameters), svm.call CPIs and svm.sload byte reads, account .owner and .dataLen checks, a 32-byte key as a define, runtime arguments without Account slots, and how a program runs through the Kitchen with sauce run --chain solana. Use when the user targets Solana, SPL tokens, Token-2022, PDAs or CPIs, account manifests, lamport fees, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
+description: Writing and running Sauce programs on Solana (the SVM target) — declaring every account as an Account parameter with Writable/Signer roles, the account manifest the compile returns, passing accounts by name with --account, the @sauce/token SPL arm (transfer, approve, balanceOf with account parameters), svm.call CPIs and svm.sload byte reads, account .owner and .dataLen checks, a 32-byte key as a define, runtime arguments without Account slots, and how a program runs with sauce run --chain solana, through the Kitchen on the owner's Pot or directly on the engine (--via engine). Use when the user targets Solana, SPL tokens, Token-2022, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
 ---
 
 # Sauce on Solana
@@ -73,27 +73,21 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 ## The Pot's key
 
 The Pot is an account the program is given: declare it as `pot: Account<Signer>`, pass it as
-`--account pot=pot`, and read `pot.address`. A `Signer` slot alone does not prove it is the Pot
-(`pot=owner` satisfies it too), and `ctx.msgSender()` does not either: it is the first signer among
-the accounts the engine receives, which, with a `pot` slot attached as the Pot, is the Pot itself.
+`--account pot=pot`, and read `pot.address`. Nothing about the slot alone proves it is the Pot:
 
-To bind the slot to the executing Pot, check its owner program: **the engine owns every Pot
-account, and `ctx.self()` on Solana is the engine's program id**. Only the Pot running this cook can
-sign (the Kitchen signs for it), so a signing account the engine owns is that Pot; the owner's
-wallet, owned by the System program, fails the check.
+- a `Signer` slot takes any signer (`pot=owner` satisfies it too);
+- `ctx.msgSender()` is only the first signer among the accounts the engine receives;
+- `pot.owner == ctx.self()` says only that the engine owns the account. **The engine owns every
+  Pot, but not only Pots**: a keypair account assigned to the engine, which the transaction signs,
+  passes the check as well. It keeps the owner's wallet out (the System program owns that) and
+  lets a lookalike in.
 
-```sauce chain=solana
-function main(pot: Account<Signer>, amount: Uint256) {
-  require(pot.owner == ctx.self(), "pot is not the Pot running this cook");
-  require(amount > 0n);
-}
-```
-
-To bind it to one owner's Pot instead, re-derive it from that owner, attached as a signer slot of
-its own (`--account wallet=owner`): the Pot is the Kitchen's program address for the seeds `"pot"`,
-the owner and the 32-byte salt (zero unless `--salt` names another). `KITCHEN` is the Kitchen
-program, as a define: `--define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` (or its
-32-byte hex, `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`). Bind an
+**To bind the slot to the Pot, re-derive the Pot's address and require the slot to be it.** The Pot
+is the Kitchen's program address for the seeds `"pot"`, its owner and the 32-byte salt (zero unless
+`--salt` names another), and only a Kitchen cook can make that address sign, so a signing slot at
+that address is the Pot. Take the owner as a signer slot of its own (`--account wallet=owner`).
+`KITCHEN` is the Kitchen program, as a define: `--define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`
+(or its 32-byte hex, `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`). Bind an
 account's key to a local before calling a method on it.
 
 ```sauce chain=solana define=KITCHEN
@@ -105,6 +99,15 @@ function main(pot: Account<Signer>, wallet: Account<Signer>) {
   require(pot.address == expected, "pot is not the wallet's Pot");
 }
 ```
+
+```sh
+npx sauce run pot.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
+  --define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot --account pot=pot --account wallet=owner
+```
+
+A Pot under another salt is the same program with `--define SALT=<the salt, as 32-byte hex>`.
+This binding is a Kitchen cook's. A direct cook (`--via engine`) runs as no Pot: nothing signs for
+one, so a slot that must sign cannot be `pot` there.
 
 ## Token accounts
 
@@ -136,15 +139,21 @@ the symbol. The Solana file in `sauce-chains` lists every registered mint, mainn
 account of its own, so a program reading it takes that account as a parameter and checks whose it
 is:
 
-```sauce chain=solana
-function main(pot: Account<Signer>, potUsdc: Account): Uint256 {
-  require(pot.owner == ctx.self(), "pot is not the Pot running this cook");
+```sauce chain=solana define=KITCHEN
+const SALT = 0n; // the Pot's salt, zero by default
+
+function main(pot: Account<Signer>, wallet: Account<Signer>, potUsdc: Account): Uint256 {
+  const owner = wallet.address;
+  const [expected] = crypto.findPDA(KITCHEN, ["pot", owner.toBytesBe(32n), SALT.toBytesBe(32n)]);
+  require(pot.address == expected, "pot is not the wallet's Pot");
   require(ownerOf(USDC, potUsdc) == pot.address, "not the Pot's USDC account");
   return balanceOf(USDC, potUsdc);
 }
 ```
 
-run with `--account pot=pot` and the Pot's USDC account in the second slot. Passing the Pot for
+run with `--account pot=pot --account wallet=owner`, the Pot's USDC account in the third slot and
+`--define KITCHEN=…` as above. The first check binds `pot` to the wallet's Pot; the second binds
+the token account to `pot`. Passing the Pot for
 that slot fails the checks with no message (the Pot is not an SPL token account), and so does an
 account that does not exist: **a Pot with no USDC account holds no USDC**.
 
@@ -159,7 +168,9 @@ project: add them to it before importing them (to build a payer, derive an ATA o
 A Solana transaction is at most **1,232 bytes**, and the cook carries the program and its
 arguments, so a program that does not fit has to be staged first, which only `sauce run` does. The
 cook adds about 404 bytes and 33 more per account (538 with four accounts), so with four accounts a
-program and its arguments have about 694 bytes. What costs bytes:
+program and its arguments have about 694 bytes. A direct cook (`--via engine`) carries no
+Kitchen, Pot or salt and adds about 100 bytes less: about 798 for the program and its arguments with
+four accounts. What costs bytes:
 
 - each `require` message, byte for byte;
 - each `@sauce/token` call, which inlines its own checks and their reasons (a second `transfer` adds
@@ -195,27 +206,44 @@ token program itself with `svm.call`, or is generated by the SDK's token builder
   `npx sauce pot --chain solana --owner <pubkey>` prints it;
   `npx sauce pot --deploy --chain solana --config sauce.config.json --keypair <keypair>` creates it.
   A cook names its Pot by `--owner` (and `--salt`), never `--pot`.
-- **The cook** pays the Kitchen's fee in lamports, read from the cluster, so there is no `--value`.
+- **The cook** pays the execution fee in lamports, read from the cluster and printed as `fee`, so
+  there is no `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it.
   `sauce simulate` runs it from `--owner` with no signature and prints the compute units, or the
   reason (a `throw` or `require` message, decoded) and the program logs. A Pot the Kitchen has not
   created yet is created in the same simulated transaction, ahead of the cook. Solana's simulation
   takes no account overrides, so the owner must hold the Pot's rent and the fees, and the accounts
   hold what they hold: there is no `--assume-balance` on Solana. `sauce run` signs with
   `--keypair`; `sauce tx` prints a base64 transaction for the owner's wallet.
+- **Through the Kitchen or directly.** `--via kitchen`, the default, is the Kitchen's cook on the
+  owner's Pot: the program holds and spends what the Pot owns and can write the Pot's storage.
+  `--via engine` calls the engine itself, with no Kitchen and no Pot: nothing is created, and the
+  signer (`--keypair`, or `--owner` for `simulate` and `tx`) pays the fee and is the authority the
+  program acts with. Spend from the signer's own token accounts and pass `NAME=owner` where an
+  authority signs. A direct cook leaves the program one more level of CPI depth, for a program that
+  calls a program that calls others. Both pay the same fee into the Kitchen's treasury:
+
+```sh
+npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
+  --via engine --define MINT=<mint> --account tokenProgram=<SPL Token program> \
+  --account source=<the signer's token account> --account destination=<token account> \
+  --account authority=owner --args 400
+```
+
 - A program too large for one transaction is staged through the Kitchen by `sauce run`. `simulate`
   and `tx` refuse it, naming how many bytes the payload (the program and its arguments) must
   shrink by to fit.
 - The engine program is `2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT` and the Kitchen
   `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` ([../sauce-chains/references/solana.md](../sauce-chains/references/solana.md));
   confirm both are deployed on the cluster (`getAccountInfo` returns an executable account).
-- `sauce publish` does not work from Solana; open an intent from an EVM chain. A failed `sauce run`
+- `sauce intent publish` does not work from Solana; open an intent from an EVM chain. A failed `sauce run`
   prints the program logs.
 - For a local run, the package ships the engine and Kitchen programs, to load into a local
   validator or LiteSVM; `sauce-typescript` says where they are. Setting one up is outside this
   skill.
-- From TypeScript, the Kitchen client builds the same cook, and venue adapters build swaps on
-  Solana venues such as Raydium (`sauce-typescript`). A venue swap they build uses a minimum output
-  of one: enforce the real minimum with a balance delta in the program.
+- From TypeScript, the SVM client (`createSauceSvmClient`) builds the same cooks: `via: "engine"`
+  for the direct one, and `executionFee()` quotes the fee to set `maxExecutionFee` from. Venue
+  adapters build swaps on Solana venues such as Raydium (`sauce-typescript`). A venue swap they
+  build uses a minimum output of one: enforce the real minimum with a balance delta in the program.
 
 ## Example
 
