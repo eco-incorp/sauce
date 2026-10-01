@@ -172,6 +172,8 @@ export interface Funding {
   readonly sent: ReadonlyArray<{ readonly what: string; readonly sent: Sent }>;
   /** What the run did or skipped, for the person. */
   readonly notes: readonly string[];
+  /** Whether the owner's key signed the pulls (a Permit2 transfer, a permit). */
+  readonly signed?: boolean;
   /**
    * A simulation with no key: the tokens its pulls would have brought, which the rehearsal credits
    * the Pot with through state overrides instead of pulling them.
@@ -612,6 +614,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     value: native,
     sent,
     notes,
+    signed: tokens.length > 0 && (input.mode === "permit2" || input.mode === "permit"),
   };
 }
 

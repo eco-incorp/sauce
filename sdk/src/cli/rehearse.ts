@@ -135,6 +135,12 @@ const intrinsicGas = (data: Hex): bigint => {
   return gas;
 };
 
+/** Why a simulated call failed, from the data it reverted with. */
+const failedWith = (data: Hex | undefined): string =>
+  data === undefined || data === "0x"
+    ? "it reverted with no data (out of gas, or a revert with no reason)"
+    : revertReason({ data });
+
 /** viem's one line for a failed request, never its details (which repeat the URL). */
 const shortReason = (error: unknown): string =>
   (error as { shortMessage?: string }).shortMessage ?? "the request failed";
@@ -171,14 +177,14 @@ async function viaSimulateV1(client: PublicClient, input: RehearsalInput): Promi
       ...base,
       ok: false,
       stage: "deploy",
-      reason: revertReason({ data: results[0]?.data }),
+      reason: failedWith(results[0]?.data),
     };
   }
   const cook = results[deploy.length];
   if (cook === undefined)
     throw new CliError("the endpoint's eth_simulateV1 answered no result for the cook");
   if (cook.status !== "success") {
-    return { ...base, ok: false, stage: "cook", reason: revertReason({ data: cook.data }) };
+    return { ...base, ok: false, stage: "cook", reason: failedWith(cook.data) };
   }
   const logs = (cook.logs ?? []).map((log) => ({
     address: getAddress(log.address),

@@ -149,11 +149,14 @@ function routeLines(
   owner: Address,
   pot: Address,
   deploy: { readonly salt: Hex } | undefined,
+  signed: boolean,
 ): string[] {
   return [
     `Rehearsed with ${rehearsal.path}` +
       (rehearsal.fallback === undefined ? "" : ` (${rehearsal.fallback})`) +
-      "; nothing was signed or sent:",
+      (signed
+        ? "; the owner's key signed the pulls, and nothing was sent:"
+        : "; nothing was signed or sent:"),
     ...(deploy === undefined
       ? []
       : [
@@ -229,7 +232,14 @@ export async function simulateCommand(
       ? await effectsOf(client, input.chain, rehearsal.logs, rehearsal.traced, labels)
       : undefined;
 
-  const how = routeLines(rehearsal, input.chain.slug, owner, cook.pot, deploy);
+  const how = routeLines(
+    rehearsal,
+    input.chain.slug,
+    owner,
+    cook.pot,
+    deploy,
+    funding?.signed === true,
+  );
   const assumedLines =
     assumed.length === 0
       ? []
