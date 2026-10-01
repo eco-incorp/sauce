@@ -28,6 +28,9 @@ pnpm-lock.yaml
 # The agent skills' index of globals, which `sdk/scripts/gen-skills-globals.mjs` writes on every
 # SDK build and CI holds to the committed copy byte for byte.
 skills/sauce-globals/references/*.md
+# The actions skill's reference, which `sdk/scripts/gen-skills-actions.mjs` renders from the actions
+# JSON Schema on every SDK build, held to the committed copy the same way.
+skills/sauce-actions/references/*.md
 
 # Captured on-chain account dumps and forge build artifacts committed as fixtures — not authored
 # source. Refreshing them re-emits compact JSON, so formatting only guarantees churn next time.

@@ -226,7 +226,9 @@ describe("sauce (no command)", () => {
   it("names an unknown command, and prints its own version", async () => {
     const run = await sauce("deploy");
     expect(run.code).toBe(2);
-    expect(run.stderr).toMatch(/unknown command 'deploy'\. Commands: compile, simulate, run, /);
+    expect(run.stderr).toMatch(
+      /unknown command 'deploy'\. Commands: compile, actions, simulate, run, /,
+    );
     expect((await sauce("--version")).stdout).toBe(`${MANIFEST.name} ${MANIFEST.version}\n`);
   });
 });

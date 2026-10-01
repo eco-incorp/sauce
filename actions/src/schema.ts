@@ -2,11 +2,12 @@
  * The action-program JSON Schema (draft 2020-12), generated from the same table the parser reads
  * (`spec.ts`), for clients that are not written in TypeScript.
  *
- * The schema is exact about shape and deliberately silent about three things it cannot express,
- * which `parseProgram` enforces and the schema's `description` states: an address's EIP-55
- * checksum, an amount's numeric range beyond its digit count, and the chaining rules across actions
- * (`semantics.ts`). A document the schema rejects is always rejected by the parser; the reverse
- * holds only for those three.
+ * The schema is exact about shape and deliberately silent about four things it cannot express,
+ * which `parseProgram` and the compile enforce and the schema's `description` states: an address's
+ * EIP-55 checksum, an amount's numeric range beyond its digit count, the chaining rules across
+ * actions (`semantics.ts`), and whether a token symbol or a namespace reference exists on the chain
+ * a program is compiled for (`names.ts`). A document the schema rejects is always rejected by the
+ * parser; the reverse holds only for those four.
  *
  * `actions/action-program.schema.json` is this function's output, committed so it can be read and
  * fetched without running anything; a unit test fails when the two drift.
@@ -19,6 +20,7 @@ import {
   type FieldKind,
   type Fields,
 } from "./spec.js";
+import { CONTRACT_NAME_RE, NATIVE, TOKEN_SYMBOL_RE } from "./names.js";
 import { actionKeys, PROGRAM_VERSION } from "./program.js";
 
 export type JsonSchema = { readonly [key: string]: unknown };
@@ -34,6 +36,47 @@ const DEFS = {
     pattern: "^0x[0-9a-fA-F]{40}$",
     description:
       "An address: 0x + 40 hex digits. A mixed-case address must carry a valid EIP-55 checksum.",
+  },
+  tokenSymbol: {
+    type: "string",
+    pattern: TOKEN_SYMBOL_RE.source,
+    description:
+      'A registry token symbol, as a Sauce program writes it: "USDC", "WETH". It resolves on the ' +
+      "chain the program is compiled for; a chain that does not register it refuses the program, " +
+      "naming the chain and the symbol. `sauce globals --chain <chain> --tokens` lists them.",
+  },
+  contractName: {
+    type: "string",
+    pattern: CONTRACT_NAME_RE.source,
+    description:
+      'A protocol contract by namespace, as a Sauce program writes it: "UniswapV3.Factory", ' +
+      '"BalancerV2.Vault", "UniswapV4.PoolManager". It resolves on the chain the program is ' +
+      "compiled for; a chain without it refuses the program. `sauce globals --chain <chain> " +
+      "--protocols` lists them.",
+  },
+  token: {
+    description: "A token: a registry symbol, or an address.",
+    oneOf: [{ $ref: "#/$defs/tokenSymbol" }, { $ref: "#/$defs/address" }],
+  },
+  tokenOrNative: {
+    description:
+      'A token: a registry symbol, an address, or "native" for the native currency, which the ' +
+      "venue keys as the zero address.",
+    oneOf: [{ $ref: "#/$defs/tokenSymbol" }, { $ref: "#/$defs/address" }, { const: NATIVE }],
+  },
+  contract: {
+    description: "A protocol contract: a namespace reference, or an address.",
+    oneOf: [{ $ref: "#/$defs/contractName" }, { $ref: "#/$defs/address" }],
+  },
+  tokenContract: {
+    description:
+      "A contract that is also a token (WETH, wstETH): a registry symbol, a namespace reference, " +
+      "or an address.",
+    oneOf: [
+      { $ref: "#/$defs/tokenSymbol" },
+      { $ref: "#/$defs/contractName" },
+      { $ref: "#/$defs/address" },
+    ],
   },
   recipient: {
     description: 'An address, or "self" for the executing Pot.',
@@ -69,7 +112,11 @@ function kindSchema(kind: FieldKind): JsonSchema {
     case "bytes":
     case "bytes32":
     case "identifier":
+    case "contract":
+    case "tokenContract":
       return { $ref: `#/$defs/${kind.k}` };
+    case "token":
+      return { $ref: kind.native === true ? "#/$defs/tokenOrNative" : "#/$defs/token" };
     case "uint":
       return {
         type: "string",
@@ -145,11 +192,52 @@ function actionSchema(spec: ActionSpec): JsonSchema {
 
   return {
     title: spec.type,
-    description: `${spec.summary} Calls ${spec.calls}.`,
+    description: `${spec.summary} Calls ${spec.calls}.${alternativesText(spec)}`,
     ...schema,
     required: ["type", ...(schema.required as string[])],
     properties: orderedProperties,
+    ...alternativesSchema(spec),
   };
+}
+
+const spelled = (fields: readonly string[]): string => fields.join(" + ");
+
+/** The action's `oneOf` and `together` rules, said in its description. */
+function alternativesText(spec: ActionSpec): string {
+  const parts: string[] = [];
+  if (spec.oneOf !== undefined) {
+    parts.push(` Give exactly one of: ${spec.oneOf.map(spelled).join("; ")}.`);
+  }
+  for (const group of spec.together ?? [])
+    parts.push(` Give ${spelled(group)} together or not at all.`);
+
+  return parts.join("");
+}
+
+/**
+ * `oneOf`: each alternative requires its own fields and forbids the other alternatives' — so a pool
+ * is named by its address or by one key, never by both. `together`: `dependentRequired` both ways.
+ */
+function alternativesSchema(spec: ActionSpec): JsonSchema {
+  const out: Record<string, unknown> = {};
+  if (spec.oneOf !== undefined) {
+    const named = [...new Set(spec.oneOf.flat())];
+    // Each alternative's own fields are `true` here (their schema is the action's), every other
+    // alternative's `false`: present, it fails the alternative.
+    out.oneOf = spec.oneOf.map((option) => ({
+      required: [...option],
+      properties: Object.fromEntries(named.map((key) => [key, option.includes(key)])),
+    }));
+  }
+  if (spec.together !== undefined) {
+    out.dependentRequired = Object.fromEntries(
+      spec.together.flatMap((group) =>
+        group.map((key) => [key, group.filter((other) => other !== key)]),
+      ),
+    );
+  }
+
+  return out;
 }
 
 /** The JSON Schema every action program satisfies. */
@@ -164,18 +252,28 @@ export function programSchema(): JsonSchema {
     title: "Sauce action program",
     description:
       "A sequence of protocol actions that compiles to one Sauce program executing on one chain. " +
-      "Amounts are base-10 strings. Beyond this schema, a program must satisfy: every address with " +
-      "mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared width; a " +
-      "first action that takes an amount sets `amount`; an amountRef names a " +
+      'Amounts are base-10 strings. A token is a registry symbol ("USDC") or an address, and a ' +
+      'protocol contract a namespace reference ("UniswapV3.Factory") or an address; a name ' +
+      "resolves on the chain the program is compiled for, so a document with no chainId compiles " +
+      "for any chain where its names exist. Beyond this schema, a program must satisfy: every " +
+      "address with mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared " +
+      "width; a first action that takes an amount sets `amount`; an amountRef names a " +
       "saveOutputAs set by an earlier action, and is not combined with `amount`; argument names " +
-      "are unique; and the value of every balanceOf/nativeBalance/argument action is read.",
+      "are unique; the value of every balanceOf/nativeBalance/argument action is read; and every " +
+      "token symbol and namespace reference exists on the chain it is compiled for.",
     type: "object",
     additionalProperties: false,
-    required: ["version", "chainId", "actions"],
+    required: ["version", "actions"],
     properties: {
       $schema: { type: "string", description: "The schema this document declares; ignored." },
       version: { const: PROGRAM_VERSION },
-      chainId: { $ref: "#/$defs/chainId", description: "The chain every action executes on." },
+      chainId: {
+        $ref: "#/$defs/chainId",
+        description:
+          "The chain the document is written for; compiling it for another is refused. Leave it " +
+          "out of a document that names its tokens and contracts: it then compiles for any chain " +
+          "where those names exist, the chain chosen when it is compiled.",
+      },
       actions: {
         type: "array",
         minItems: 1,

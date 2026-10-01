@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "actions": [
+    { "type": "argument", "name": "amount" },
+    {
+      "type": "uniswapV3Swap",
+      "tokenIn": "USDC",
+      "tokenOut": "WETH",
+      "factory": "UniswapV3.Factory",
+      "fee": 500,
+      "amountOutMin": "1",
+      "recipient": "self"
+    }
+  ]
+}
