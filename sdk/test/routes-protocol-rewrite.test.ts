@@ -323,11 +323,11 @@ describe("rewriteProtocolAccessors: negative controls -- isolation", () => {
   });
 
   it("a body with zero accessor/self sites compiles byte-identically with accessors on and off", () => {
-    const built1 = openRoute("base", `return 5n;`, {
+    const built1 = openRoute("base", `function main() { return 5n; }`, {
       ...evmOptions(),
       compile: { accessors: true },
     }).reward(0n);
-    const built2 = openRoute("base", `return 5n;`, {
+    const built2 = openRoute("base", `function main() { return 5n; }`, {
       ...evmOptions(),
       compile: { accessors: false },
     }).reward(0n);

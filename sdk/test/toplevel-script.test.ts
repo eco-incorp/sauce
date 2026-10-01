@@ -7,8 +7,8 @@
  * resolve, through the SDK's own `./compiler` subpath (`src/compiler.ts`, the published re-export
  * consumers use) — so a later compiler that regressed it fails here rather than at a consumer.
  *
- * Boundary: the route DSL still wraps a bare body via `wrapSauceBody`, since a body containing
- * `return` needs a function and a top-level `return` is still an error — see `sauce-route.ts`.
+ * The route compiler hands a script to the compiler as written (`routes-source-as-written.test.ts`),
+ * so a program that returns a value declares `main`: a top-level `return` is still an error.
  */
 import { compile } from "../src/compiler.js";
 

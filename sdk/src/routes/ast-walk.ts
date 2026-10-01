@@ -1,6 +1,6 @@
 /**
- * Shared acorn-AST plumbing for the routes/ source-rewrite passes (`token-rewrite.ts`,
- * `protocol-rewrite.ts`). Extracted verbatim from `token-rewrite.ts` (U4) so the two passes' whole-
+ * Shared AST plumbing for the routes/ source-rewrite passes (`token-rewrite.ts`,
+ * `protocol-rewrite.ts`), over the tree `parse.ts` produces. Extracted verbatim from `token-rewrite.ts` (U4) so the two passes' whole-
  * program shadow semantics can never drift apart — see `token-rewrite.ts`'s own module doc for the
  * shadowing rationale (SauceScript shares scope across `if`/`while`/bare-block bodies, so this is
  * deliberately a coarser, whole-program-conservative check, not real lexical scoping).
@@ -12,10 +12,30 @@ export interface AstNode {
   [key: string]: unknown;
 }
 
+/** The properties of a node (`parse.ts`'s TypeScript AST) that hold a TYPE rather than a value. */
+export const TYPE_KEYS: ReadonlySet<string> = new Set([
+  "typeAnnotation",
+  "returnType",
+  "typeParameters",
+  "typeArguments",
+  "superTypeParameters",
+  "superTypeArguments",
+  "implements",
+]);
+
+/** A declaration that introduces only a type — `interface Leg { ... }` — and no value. */
+export function isTypeDeclaration(type: string): boolean {
+  return type.startsWith("TS") && (type.endsWith("Declaration") || type === "TSDeclareFunction");
+}
+
 /** Generic recursive descent over every object/array-shaped property -- deliberately not a
  *  hand-maintained per-node-type visitor table, since SauceScript's supported grammar surface is
  *  itself the only thing that can appear here, and a generic walk needs no per-type maintenance as
- *  that surface grows. */
+ *  that surface grows.
+ *
+ *  Types are stepped over: an annotation (`amount: Uint256`, `): Leg`) and a type-only declaration
+ *  (`interface Leg`) name types, not values, so no rewrite may claim an identifier in one, and a
+ *  walk collecting reads must not see `Uint256` as one. */
 export function walk(node: unknown, visit: (n: AstNode) => void): void {
   if (node === null || typeof node !== "object") return;
   if (Array.isArray(node)) {
@@ -24,11 +44,13 @@ export function walk(node: unknown, visit: (n: AstNode) => void): void {
   }
   const rec = node as Record<string, unknown>;
   if (typeof rec.type === "string") {
+    if (isTypeDeclaration(rec.type)) return;
     visit(rec as unknown as AstNode);
   }
   for (const key of Object.keys(rec)) {
     if (key === "type" || key === "start" || key === "end" || key === "loc" || key === "range")
       continue;
+    if (TYPE_KEYS.has(key)) continue;
     walk(rec[key], visit);
   }
 }
@@ -36,7 +58,7 @@ export function walk(node: unknown, visit: (n: AstNode) => void): void {
 /** Every name a binding PATTERN introduces -- an identifier, or any nesting of object/array
  *  destructuring, defaults and rest. Collecting only the `Identifier` case would miss
  *  `const { Token } = x` and `function f({ Token })`, which bind the name just as plainly. */
-function collectPatternNames(pattern: unknown, names: { add(name: string): void }): void {
+export function collectPatternNames(pattern: unknown, names: { add(name: string): void }): void {
   if (pattern === null || typeof pattern !== "object") return;
   const node = pattern as AstNode;
   switch (node.type) {

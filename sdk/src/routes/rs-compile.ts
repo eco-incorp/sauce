@@ -167,10 +167,10 @@ function mainBody(code: string, from: number): string {
 /**
  * Declare `main` void when it falls off the end.
  *
- * The compiler requires a function's return type to be declared rather than inferred, but the SDK's
- * source generators must emit PLAIN JS: the token-member and protocol-accessor rewrites are
- * acorn-based and cannot parse a type annotation. So the annotation is added here, at the single
- * compile seam, after every rewrite pass has run.
+ * The compiler requires a function's return type to be declared rather than inferred. A route body
+ * and the SDK's own generated sources are allowed to leave a `main` that returns nothing
+ * unannotated, so the annotation is added here, at the single compile seam, after every rewrite
+ * pass has run.
  */
 export function ensureVoidMain(source: string): string {
   // EVERY search below runs on the blanked copy, never the raw source: an earlier string or comment
@@ -196,43 +196,6 @@ export function ensureVoidMain(source: string): string {
   if (/(^|[^.\w])return(\s|;)/.test(mainBody(code, i + 1))) return source;
 
   return `${source.slice(0, i + 1)}: void${source.slice(i + 1)}`;
-}
-
-/**
- * Give every unannotated parameter of `main` a `Uint256` type.
- *
- * Same reason `ensureVoidMain` exists, one step further: the compiler wants annotations, and the
- * SDK's rewrite passes are acorn-based, so a source carrying them cannot get through them. A child
- * program built from an intent closure takes its captured values as parameters, so it needs both —
- * the annotations added here, after every rewrite has run.
- *
- * Only parameters that have none are touched, so a hand-written typed program passes through
- * unchanged, and a `main` with no parameters is a no-op.
- */
-export function ensureTypedMainParams(source: string): string {
-  const code = blankLiterals(source);
-  const signature = /function(\s+)main(\s*)\(/.exec(code);
-  if (signature === null) return source;
-
-  const open = signature.index + signature[0].length - 1;
-  let depth = 0;
-  let close = open;
-  for (let i = open; i < code.length; i++) {
-    if (code[i] === "(") depth++;
-    else if (code[i] === ")" && --depth === 0) {
-      close = i;
-      break;
-    }
-  }
-  const params = source.slice(open + 1, close);
-  if (params.trim() === "") return source;
-
-  const annotated = params
-    .split(",")
-    .map((param) => (param.includes(":") ? param : `${param.trim()}: Uint256`))
-    .join(", ");
-
-  return `${source.slice(0, open + 1)}${annotated}${source.slice(close)}`;
 }
 
 export interface RsCompileInput {
@@ -271,7 +234,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
-    resolve: makeResolve(ensureVoidMain(ensureTypedMainParams(input.source)), input.resolve),
+    resolve: makeResolve(ensureVoidMain(input.source), input.resolve),
     resolvePackage: makeResolvePackage(input.resolvePackage),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,

@@ -187,15 +187,38 @@ describe("the funding wrapper", () => {
     expect(compileSauceProgram(base, text, { defines: {} }).bytecode.length).toBeGreaterThan(0);
   };
 
-  it("wraps a script: its statements become the program the new main calls after the pulls", () => {
-    const wrapped = wrapProgram("USDC.transfer(0x2n, 5n);\n", IMPORTS, [PULL], []);
-    expect(wrapped).toMatch(
-      /^import \{ transferFrom as __sauce_fund_pull \} from "@sauce\/token";/,
+  it("wraps a script: the pulls run before its statements and the sweeps after them", () => {
+    const wrapped = wrapProgram("USDC.transfer(0x2n, 5n);\n", IMPORTS, [PULL], ["// sweep"]);
+    expect(wrapped).toBe(
+      [
+        'import { transferFrom as __sauce_fund_pull } from "@sauce/token";',
+        PULL,
+        "USDC.transfer(0x2n, 5n);",
+        "// sweep",
+        "",
+      ].join("\n"),
     );
-    expect(wrapped).toContain("function __sauce_program()");
-    expect(wrapped).toMatch(
-      /function main\(\) \{\n {2}__sauce_fund_pull\(.*\n {2}__sauce_program\(\);\n\}/,
-    );
+    expect(wrapped).not.toContain("function main");
+    compiles(wrapped);
+  });
+
+  it("keeps a script's imports ahead of the pulls, where the compiler takes them", () => {
+    const source = [
+      'import { balanceOf } from "@sauce/token";',
+      "",
+      "function half(x: Uint256): Uint256 {",
+      "  return x / 2n;",
+      "}",
+      "",
+      "require(half(balanceOf(USDC, ctx.self())) > 0n);",
+      "",
+    ].join("\n");
+    const wrapped = wrapProgram(source, IMPORTS, [PULL], []);
+    expect(wrapped.split("\n").slice(0, 3)).toEqual([
+      'import { transferFrom as __sauce_fund_pull } from "@sauce/token";',
+      'import { balanceOf } from "@sauce/token";',
+      PULL,
+    ]);
     compiles(wrapped);
   });
 

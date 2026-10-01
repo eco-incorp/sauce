@@ -28,8 +28,8 @@
  * approval is `@sauce/token`'s SafeERC20 `approve`: it resets an allowance a previous cook left
  * standing to zero before setting the new one, and reverts on a `false` return.
  *
- * Declarations are intentionally UNANNOTATED: the DSL accessor rewrite that resolves `USDC`/`Cctp` is
- * acorn-based (plain JS), so a `.sauce.ts` routed through it must carry no TypeScript type syntax.
+ * Declarations are unannotated: every value here is a number, which is what SauceScript reads an
+ * unannotated declaration as.
  */
 const CCTP_RECIPIENT = 0n;
 const CCTP_AMOUNT = 0n;
