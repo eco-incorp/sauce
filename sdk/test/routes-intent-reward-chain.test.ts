@@ -2,14 +2,14 @@
  * Which chain a name inside `Chain(() => { ... }).reward({ ... })` resolves on, at every level.
  *
  * The BODY runs on the destination, so its names — and the delivery argument's — are the
- * destination's. The REWARD is escrowed where the program runs, and the program approves the Portal
- * for it there, so its names are the enclosing chain's. A reward token resolved on the destination
- * is an address with no code where the approval runs: SafeERC20's code check reverts the whole
- * fulfilment. A body token resolved on the enclosing chain is not a token where the body runs, so
- * the intent can never be fulfilled.
+ * destination's. The REWARD is escrowed where the program runs, and the program pays it into the
+ * intent's vault there, so its names are the enclosing chain's. A reward token resolved on the
+ * destination is an address with no code where that transfer runs: SafeERC20's code check reverts
+ * the whole fulfilment. A body token resolved on the enclosing chain is not a token where the body
+ * runs, so the intent can never be fulfilled.
  *
  * Every compile the route pipeline makes is recorded — the program's, and each nested intent's
- * program — so each level's `publishAndFund` is decoded from that level's own lowered source, with
+ * program — so each level's `publish` is decoded from that level's own lowered source, with
  * the Portal's ABI, and checked against the chain it runs on. Three paths build the same programs:
  * a plain `compileSauceRoute`, one handed a chain's ambient defines as its `defines`, and the
  * `Base(program, options)` builder. Each case uses the SDK's REAL registry, where `USDC` is a
@@ -155,7 +155,7 @@ interface DecodedRoute {
 const SPLICED = 0x5911ced5911ced5911ced5911ced5911ced5911cedn;
 
 /**
- * The `publishAndFund` a lowered site sends, rebuilt from the rewritten source: its literal hex
+ * The `publish` a lowered site sends, rebuilt from the rewritten source: its literal hex
  * segments, concatenated around a fixed word wherever the program splices a run-time value. What
  * comes back is decoded by the Portal's ABI — so it is the intent as the Portal would receive it.
  */
@@ -216,7 +216,7 @@ function levelsOf(recorded: readonly Compile[], topology: Readonly<Record<string
 const lower = (hex: string) => hex.toLowerCase();
 
 /**
- * One level, on `on`, publishing an intent to `to`. The reward, its approval and the publication
+ * One level, on `on`, publishing an intent to `to`. The reward, its funding and the publication
  * are `on`'s; the delivery and the body are `to`'s; and the program's own compile-time names are
  * `on`'s, with nothing left over from the chain that opened it.
  */
@@ -229,14 +229,17 @@ function expectLevel(
   const { destination, route, reward } = level.intent;
   expect(destination).toBe(idOf(to));
 
-  // Funded here: the reward token, and every address the approval touches.
+  // Funded here: the reward token, and every address the funding touches — `on`'s Portal, asked
+  // for the intent's vault, then the reward token's transfer into it, then the same Portal's
+  // `publish`.
   expect(reward.tokens.map((t) => lower(t.token))).toEqual([usdcOf(on)]);
   const used = addressesUsedBy(level.source);
-  expect(used.at(-1)).toEqual({ kind: "evm.call", target: lower(ecoRoutesPortal(on)) });
-  expect(used.slice(0, -1).map((u) => u.kind)).toEqual(
-    expect.arrayContaining(["evm.static", "evm.call", "ctx.codeSize"]),
-  );
-  for (const { target } of used.slice(0, -1)) expect(target).toBe(usdcOf(on));
+  const portal = lower(ecoRoutesPortal(on));
+  expect(used.at(-1)).toEqual({ kind: "evm.call", target: portal });
+  const [vaultRead, ...funding] = used.slice(0, -1);
+  expect(vaultRead).toEqual({ kind: "evm.static", target: portal });
+  expect(funding.map((u) => u.kind)).toEqual(expect.arrayContaining(["evm.call", "ctx.codeSize"]));
+  for (const { target } of funding) expect(target).toBe(usdcOf(on));
 
   // Run there: what the solver delivers, and every call the route makes on a token.
   expect(route.tokens.map((t) => lower(t.token))).toEqual([usdcOf(to)]);

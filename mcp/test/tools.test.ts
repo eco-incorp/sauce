@@ -656,25 +656,44 @@ describe("sauce_intent_publish", () => {
     intentCreator: CREATOR,
   };
 
-  it("builds the unsigned approve and publishAndFund of a fixed intent", async () => {
-    const out = ok(await mcp.call("sauce_intent_publish", args)) as {
-      chainId: number;
-      intents: Array<{
-        intentHash: string;
-        destination: string;
-        transactions: Array<{ what: string; to: string; data: string; value: string }>;
-      }>;
-      notes: string[];
-    };
+  type Published = {
+    chainId: number;
+    intents: Array<{
+      intentHash: string;
+      destination: string;
+      fundVia: string;
+      vault: string;
+      transactions: Array<{ what: string; to: string; data: string; value: string }>;
+    }>;
+    notes: string[];
+  };
+
+  it("builds the unsigned transfer into the vault and publish of a fixed intent", async () => {
+    const out = ok(await mcp.call("sauce_intent_publish", args)) as Published;
     assert.equal(out.chainId, 42161);
     assert.equal(out.intents.length, 1);
     assert.equal(out.intents[0]!.destination, "base");
     assert.match(out.intents[0]!.intentHash, /^0x[0-9a-f]{64}$/);
+    assert.equal(out.intents[0]!.fundVia, "transfer");
+    assert.match(out.intents[0]!.vault, /^0x[0-9a-fA-F]{40}$/);
+    // The transfer first, then the publication: the vault is paid before the intent is announced.
+    assert.deepEqual(
+      out.intents[0]!.transactions.map((tx) => tx.what.split(" ")[0]),
+      ["transfer", "publish"],
+    );
+    assert.ok(out.notes.some((note) => /Send them in order/.test(note)));
+    assert.ok(out.notes.some((note) => /The transfers come first/.test(note)));
+  });
+
+  it("builds the approve and publishAndFund instead with intentFundVia publishAndFund", async () => {
+    const out = ok(
+      await mcp.call("sauce_intent_publish", { ...args, intentFundVia: "publishAndFund" }),
+    ) as Published;
+    assert.equal(out.intents[0]!.fundVia, "publishAndFund");
     assert.deepEqual(
       out.intents[0]!.transactions.map((tx) => tx.what.split(" ")[0]),
       ["approve", "publishAndFund"],
     );
-    assert.ok(out.notes.some((note) => /Send them in order/.test(note)));
   });
 
   it("needs a wallet and an endpoint for a dry run, and dryRun for assumed balances", async () => {

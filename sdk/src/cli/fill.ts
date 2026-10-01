@@ -1,9 +1,10 @@
 /**
  * `sauce intent fill`: a solver's fill of the intents a file opens (or the store holds), on each intent's
  * DESTINATION chain — rehearsed with no key and nothing sent, the other half of
- * `publish --dry-run`; or, with `--send` and a signer, rehearsed and then SENT, the signer being the
- * solver. The route's body is where an intent fails (a swap, a minimum, a refund), and it runs only
- * on the destination, inside `Portal.fulfill`.
+ * `publish --dry-run`, which rehearses only the source chain's funding of the vault and `publish`;
+ * or, with `--send` and a signer, rehearsed and then SENT, the signer being the solver. The route's
+ * body is where an intent fails (a swap, a minimum, a refund), and it runs only on the destination,
+ * inside `Portal.fulfill`.
  *
  * The transactions are `lifecycle.ts#planFill`'s, the same ones `sauce mcp` returns unsigned:
  *

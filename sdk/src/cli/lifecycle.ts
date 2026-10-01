@@ -58,6 +58,7 @@ import {
   intentFromPublished,
   intentHashCall,
   intentVaultAddressCall,
+  isIntentFundedCall,
   provenIntentCall,
   proverFeeCall,
   proveTx,
@@ -1225,7 +1226,15 @@ async function readSource(
       return { token, info, holds, reward: entry.amount };
     }),
   ]);
-  const funded = status === "Funded" || holds.every((entry) => entry.holds >= entry.reward);
+  // Funded two ways: `publishAndFund` (or `fund`) records the status Funded, and a transfer into
+  // the vault leaves it Initial with the vault holding the reward, which the Portal's own
+  // `isIntentFunded` (what solvers check) counts as funded. Asked of the Portal where it answers;
+  // else the vault's balances against the reward.
+  const funded =
+    status === "Funded" ||
+    (status === "Initial" &&
+      ((await tryRead(client, isIntentFundedCall(intent, target))) ??
+        holds.every((entry) => entry.holds >= entry.reward)));
   // A prover with no code holds no proof: the Portal itself treats it so (`_validateRefund`).
   const prover = getAddress(denormalizeToEvm(intent.reward.prover));
   const proverCode = await codeAt(client, prover, "the reward's prover");
@@ -2346,7 +2355,9 @@ export interface PublishedIntent {
   readonly block: string;
   readonly time: string;
   readonly logIndex: number;
-  /** Whether the same transaction funded it completely (`IntentFunded(…, complete)`). */
+  /** Whether it was funded completely when published: the same transaction's
+   *  `IntentFunded(…, complete)`, or a vault the Portal counted funded (`isIntentFunded`) at that
+   *  block, as a transfer before `publish` leaves it. */
   readonly funded: boolean;
 }
 
@@ -2417,6 +2428,16 @@ export async function publishedIntents(
   return Promise.all(
     published.map(async ({ intent, intentHash, portal, index }) => {
       const vault = await tryRead(client, intentVaultAddressCall(intent, { portal }));
+      // Funded by a transfer into the vault before `publish`: no `IntentFunded`, so asked of the
+      // Portal as of the block that published it.
+      const logged = funded.has(`${portal}:${intentHash.toLowerCase()}`);
+      const query = isIntentFundedCall(intent, { portal });
+      const held =
+        logged ||
+        (await client
+          .call({ to: query.to, data: query.data, blockNumber: at.blockNumber })
+          .then(({ data }) => (data === undefined || data === "0x" ? false : query.decode(data)))
+          .catch(() => false));
 
       return {
         record: intentRecord(intent, {
@@ -2427,7 +2448,7 @@ export async function publishedIntents(
         block: at.blockNumber.toString(),
         time: block.timestamp.toString(),
         logIndex: index,
-        funded: funded.has(`${portal}:${intentHash.toLowerCase()}`),
+        funded: held,
       };
     }),
   );

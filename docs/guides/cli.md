@@ -593,13 +593,13 @@ check when it cannot.
 
 There are two ways to get such a file's intents onto the chain:
 
-- **`sauce run`** cooks the file on your Pot. The Pot approves the Portal and publishes and funds
-  each intent from its own balance, inside one transaction, so the intent may use a value the
-  program measures as it runs — a balance, a swap's output.
-- **`sauce intent publish`** sends the source chain's Portal transactions from your **wallet**,
-  with no Pot: for each reward token an `approve` to the Portal (reset to zero first when a smaller
-  allowance stands, as SafeERC20 does; skipped when the allowance already covers it), then
-  `publishAndFund`. It prints each intent's hash and each transaction's result.
+- **`sauce run`** cooks the file on your Pot. Inside one transaction the Pot reads each intent's
+  vault from the Portal, pays the reward into it from its own balance, and publishes the intent,
+  so the intent may use a value the program measures as it runs — a balance, a swap's output.
+- **`sauce intent publish`** sends the source chain's transactions from your **wallet**, with no Pot: for
+  each reward token a `transfer` to the intent's vault (and, for a native reward, a plain send to
+  it), then `Portal.publish`. It prints each intent's hash, its vault and each transaction's
+  result.
 
   ```sh
   npx sauce intent publish bridge.sauce.ts --chain arbitrum --config sauce.config.json \
@@ -616,11 +616,29 @@ There are two ways to get such a file's intents onto the chain:
   `simulate` gives a Pot one. `--format json` (or `cast`) prints the transactions unsigned, with
   `--from <address>` when there is no signer.
 
-  `publish` approves the Portal for exactly the reward, and `publishAndFund` spends that approval
-  in the next transaction, so no allowance stands once it lands. It does not go through Permit2:
-  the Portal's Permit2 path (`publishAndFundFor` with Permit2 as its permit contract) pulls through
-  a Permit2 _allowance_ to the intent's vault, which takes an on-chain `Permit2.approve` per intent
-  — the same number of transactions, plus a standing approval of Permit2.
+  The Portal counts an intent funded when its vault holds the reward (`isIntentFunded`), which is
+  what a solver checks once it sees `IntentPublished`, so paying the vault directly needs no
+  approval at all: nothing is left standing, and a USDT-style token needs no reset. The vault is
+  the SDK's own derivation for the Portal's address. With an endpoint it is also read from the
+  Portal (`intentVaultAddress`), and when the two disagree nothing is sent: the command says which
+  address each reported. Only what the vault does not hold yet is transferred, so running the
+  command again publishes alone. The transfers go first and `publish` is sent only once the Portal
+  counts the intent funded. A token whose `transfer` returns `false`, or keeps a fee, stops the
+  command before the intent is announced, with what was paid still in the vault: top it up and run
+  it again, or refund it after the reward deadline. A `--dry-run` reports `Portal.isIntentFunded`
+  after the rehearsed transactions, and `--format` prints each intent's `vault`, `vaultFrom` (`read`
+  when the Portal agreed, `derived` with no endpoint) and `fundVia`.
+
+  `--intent-fund-via publishAndFund` (also taken by `run`, `tx`, `simulate`, `compile` and
+  `inspect`, for intents a program opens) funds through the Portal instead: for each reward token
+  an `approve` to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20
+  does; skipped when the allowance already covers it), then `publishAndFund`, which pulls the
+  reward into the same vault, records the intent `Funded` and emits `IntentFunded`. Choose it when
+  something you rely on reads that event or status rather than the vault's balance. Neither mode
+  goes through Permit2: the Portal's Permit2 path (`publishAndFundFor` with Permit2 as its permit
+  contract) pulls through a Permit2 _allowance_ to the intent's vault, which takes an on-chain
+  `Permit2.approve` per intent — the same number of transactions, plus a standing approval of
+  Permit2.
 
 Publishing from Solana is not supported: see [Solana](#solana).
 
@@ -646,9 +664,10 @@ chains' endpoints:
 
 With no file, `publish` makes the intent, step by step: the source and destination chains (those
 with a Portal), the token delivered (a registry symbol, or an address whose decimals it reads), how
-much and to whom (you, by default), the reward, the fill and reward deadlines, and the prover (the
-ones the registry records on both chains). At a terminal it asks for each; every question has a
-flag, so it also runs with none:
+much and to whom (you, by default), the reward, the fill and reward deadlines, the prover (the ones
+the registry records on both chains), and how the reward is funded (a transfer to the vault by
+default, or `publishAndFund`). At a terminal it asks for each; every question has a flag, so it
+also runs with none:
 
 ```sh
 npx sauce intent publish --source arbitrum --destination base --token USDC --amount 1 \
@@ -656,7 +675,8 @@ npx sauce intent publish --source arbitrum --destination base --token USDC --amo
   --fill-deadline +1h --reward-deadline +1d --config sauce.config.json --keystore ~/.keys/me.json
 ```
 
-With no terminal, it names every flag still missing. The reward it suggests is what is delivered
+With no terminal, it names every flag still missing; the funding, which has a default, is not one
+(`--intent-fund-via publishAndFund` chooses the Portal's pull). The reward it suggests is what is delivered
 plus a margin over what a solver spends on the destination — the gas of a fill, the prover's fee
 (quoted from the destination's prover) and a Kitchen fee where the body cooks — priced in the
 reward token through a Uniswap V3 pool of the destination's wrapped native token, and doubled so a
@@ -672,7 +692,7 @@ once you approve (or with `--auto-approve`), storing it.
 
 ### Rehearsing the fill: `sauce intent fill`
 
-`publish --dry-run` rehearses the source side: the approval and `publishAndFund`. What the intent
+`publish --dry-run` rehearses the source side: the reward paid into the vault and `publish`. What the intent
 does — the swap, the minimum it checks, the refund — runs on the destination, when a solver fills
 it, and that is where it fails. `sauce intent fill` rehearses that fill with no key and sends
 nothing. It takes the file and the flags `publish` does (or the intent's hash), and the
@@ -906,11 +926,14 @@ npx sauce inspect bridge.sauce.ts --intent-deadline 2000000000 --intent-creator 
 takes bytes back apart into what a SauceScript author wrote:
 
 - a `Pot.cook`: the engine (and whether it is the released one) and the program — its size, hash,
-  and every intent it opens, with the route's calls, the reward and the intent hash;
+  and every intent it opens, with the route's calls, the reward, the intent hash, the vault the
+  reward is escrowed in, and how the program funds it (`fundVia`: paid into the vault then
+  `publish`, or `publishAndFund`);
 - with `--source <file>`: whether the program is that file's, and the arguments the cook appends,
   decoded against its `main`;
-- a `Kitchen.deployPot` (the Pot it makes), a `Portal.publish` or `publishAndFund` (the route and
-  the reward), an ERC-20 call, or bare program bytes;
+- a `Kitchen.deployPot` (the Pot it makes), a `Portal.publish` or `publishAndFund` (the route, the
+  reward, and the intent's vault — the address a funder's `transfer` pays), an ERC-20 call, or
+  bare program bytes;
 - a 32-byte hash with an endpoint: the transaction, fetched — its status, sender, value and call,
   what it cost (gas, an OP-stack chain's L1 data fee, the value), and the token transfers,
   approvals and net balance changes its receipt's logs record;

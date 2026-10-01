@@ -53,11 +53,14 @@ describe("making an intent: sauce intent publish with no file", () => {
           prover: "HyperProver",
           fillDeadline: "+1h",
           rewardDeadline: "+1d",
+          fundVia: "publishAndFund",
           out,
         },
       }),
     );
     expect(created.source.slug).toBe("arbitrum");
+    // Funded through the Portal, as the flag asks, and the file's republish line says so.
+    expect(created.fundVia).toBe("publishAndFund");
     expect(created.destination.slug).toBe("base");
     expect(created.deadline).toBe(NOW + 3600n);
     expect(created.rewardDeadline).toBe(NOW + 86_400n);
@@ -65,6 +68,7 @@ describe("making an intent: sauce intent publish with no file", () => {
     expect(text).toContain(`USDC.transfer(${RECIPIENT.toLowerCase()}n, 1500000n);`);
     expect(text).toContain("reward({ tokens: [{ token: USDC, amount: 1600000n }] })");
     expect(text).toContain(`sauce intent publish ${out} --chain arbitrum`);
+    expect(text).toContain("--intent-fund-via publishAndFund");
     // With no endpoint the solver's costs are not estimated, and it says so.
     expect(created.summary.join("\n")).toContain("no base endpoint");
     const program = compileProgram(
@@ -108,6 +112,7 @@ describe("making an intent: sauce intent publish with no file", () => {
       "2.1", // reward: no suggestion without an endpoint, so one is typed
       "", // fill deadline: +1h
       "", // reward deadline: +25h
+      "", // funding: a transfer to the vault, the default
     ];
     const out = join(work, "asked.sauce.ts");
     const created = await createIntent(
@@ -126,7 +131,10 @@ describe("making an intent: sauce intent publish with no file", () => {
     expect(asked.some((question) => /Recipient on base \[0x5a0Ce/.test(question))).toBe(true);
     expect(created.deadline).toBe(NOW + 3600n);
     expect(created.rewardDeadline).toBe(NOW + 25n * 3600n);
+    expect(asked.some((question) => /^Funding: how the reward reaches/.test(question))).toBe(true);
+    expect(created.fundVia).toBe("transfer");
     expect(readFileSync(out, "utf8")).toContain(`USDC.transfer(${ME.toLowerCase()}n, 2000000n);`);
+    expect(readFileSync(out, "utf8")).not.toContain("--intent-fund-via");
   });
 
   it("with no terminal, names every flag still missing", async () => {
