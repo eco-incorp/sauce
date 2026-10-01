@@ -28,7 +28,7 @@ Chain references accept canonical slugs, names/aliases supported by the registry
 
 `Base` and every other chain are **named exports of the package root**; importing the package installs nothing on `globalThis`. A root-imported accessor is the composed one, which also exposes host contract and venue accessors (`Base.Uniswap.UniversalRouter`, `Solana.RaydiumCpSwap`) and the chain's registry tokens (`Base.USDC`), described in the [contracts reference](contracts.md); `routes.chainAccessors.Base` is the bare route entry point without them. A host that wants the bare names at run time can call `installRouteGlobals()`; `uninstallRouteGlobals()` reverses it, and neither installs TypeScript declarations.
 
-`body` accepts a source string or a synchronous zero-argument callback. A string can contain a full `function main(...)` or a bare body. A callback supplies source text, with no JavaScript capture. See [callback semantics](../guides/intents.md#callbacks-are-compiled-source).
+`body` accepts a source string or a synchronous zero-argument callback. A string is a SauceScript file, compiled as written: a module declaring `function main(...)`, or a script whose top-level statements are the entry. A script cannot `return`, so a program that returns a value declares `main`. A callback supplies source text, with no JavaScript capture. See [callback semantics](../guides/intents.md#callbacks-are-compiled-source).
 
 ## Intent options
 
@@ -59,7 +59,7 @@ The compiler needs no source reward to compile a destination program. Use `compi
 import { routes } from "@eco-incorp/sauce";
 
 export function compileProgram(execution: routes.SauceEvmExecutionInput) {
-  return routes.compileSauceRoute("base", "return 7n;", execution);
+  return routes.compileSauceRoute("base", "function main() { return 7n; }", execution);
 }
 ```
 
@@ -69,7 +69,7 @@ export function compileProgram(execution: routes.SauceEvmExecutionInput) {
 | ---------- | --------------------------------------------------------------------- |
 | `calls`    | Destination call inputs, normally one call for one program            |
 | `compiled` | Route compatibility result with `bytecode: Uint8Array[]` and warnings |
-| `source`   | Source after wrapping and SDK token/protocol rewrites                 |
+| `source`   | Source after the SDK token/protocol rewrites                          |
 
 The route wrapper differs from the direct `/compiler` API, which returns one byte array plus compiler metadata and an optional SVM account manifest. Use the direct API when you need that metadata. The route target defaults to `"v12"` for EVM and `"svm"` for SVM; direct compiler targets are `"evm"` and `"svm"`.
 
@@ -80,6 +80,8 @@ The route wrapper has no runtime argument-payload parameter. Use compile-time de
 ## Already compiled programs
 
 `buildSauceEvmCall({ pot, engine, program, value? })` builds one Pot `cook` call; `program` is a hex string. `value` defaults to zero and must include the Kitchen fee. `buildSauceEvmCalls({ pot, engine, cooks, value? })` applies that value to **each** ordered cook. Multiple statements within one program need only one cook and fee.
+
+Both builders, and `sauceEvmDeployPotCall` below, return `{ to, target, data, value }`. `{ to, data, value }` is the request a wallet sends or `client.call` takes, the same shape as `destinationExecutionFee()` and the Portal transaction builders; `to` is the contract's checksummed 20-byte address. `target` names the same contract as a route's `calls` entry (the Portal's `Call` struct) records it, a 32-byte universal address for a cook, so the object goes into `RouteInput.calls` unchanged. `value` is a `bigint`.
 
 ## Deployment addresses
 

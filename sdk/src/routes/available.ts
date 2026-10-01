@@ -27,11 +27,10 @@
  * A closure body inside the program (`Arbitrum(() => { ... })`) is left alone: it is compiled for
  * its own chain, and this pass runs again there with that chain's registry.
  */
-import * as acorn from "acorn";
-
 import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
 import { collectDeclaredNames, type AstNode } from "./ast-walk.js";
+import { parseSauce } from "./parse.js";
 import { isChainKey, resolveNamespace } from "./accessor-index.js";
 import { resolveContractReference } from "./protocol-rewrite.js";
 import { TOKEN_REGISTRY } from "./token-registry.js";
@@ -143,10 +142,7 @@ export function rewriteAvailability(
   tokens: ReadonlyMap<string, bigint>,
 ): AvailabilityResult {
   if (!source.includes(NAME)) return { source, rewrote: false, sites: 0 };
-  const program = acorn.parse(source, {
-    ecmaVersion: "latest",
-    sourceType: "module",
-  }) as unknown as AstNode;
+  const program = parseSauce(source);
   if (collectDeclaredNames(program).has(NAME)) return { source, rewrote: false, sites: 0 };
 
   // Every call is decided, dead branch or not, so a typo anywhere fails.

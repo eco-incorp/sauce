@@ -855,6 +855,8 @@ export interface PendleRouterMethods {
 export interface Permit2Permit2Methods {
   "approve"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
   "transferFrom"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
+  "permitTransferFrom"(arg0: { "permitted": { "token": bigint; "amount": bigint }; "nonce": bigint; "deadline": bigint }, arg1: { "to": bigint; "requestedAmount": bigint }, arg2: bigint, arg3: (string | SauceBytes)): void;
+  "nonceBitmap"(arg0: bigint, arg1: bigint): bigint;
   "lockdown"(arg0: (readonly ({ "token": bigint; "spender": bigint })[] | SauceArray<{ "token": bigint; "spender": bigint }>)): void;
 }
 

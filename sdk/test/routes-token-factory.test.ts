@@ -154,7 +154,7 @@ describe("rewriteTokenFactory (unit)", () => {
   });
 
   it("is shadow-safe: a user-declared `Token` owns the name — nothing is rewritten", () => {
-    // acorn (plain JS) parse, same as rewriteTokenMembers — route bodies carry no type annotations.
+    // The same TypeScript parse as rewriteTokenMembers (`routes/parse.ts`).
     const src = "function Token(x) { return x; }\nlet y = Token(5n);";
     expect(rewriteTokenFactory(src)).toMatchObject({ source: src, rewrote: false, sites: 0 });
   });

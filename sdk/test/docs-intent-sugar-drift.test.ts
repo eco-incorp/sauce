@@ -106,6 +106,41 @@ const REFUSALS: readonly {
       rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);", undefined, "Zora"), context()),
     message: /eco-routes v3 is not deployed on zora/,
   },
+  {
+    documented: "A program body that calls the function opening it",
+    trigger: () =>
+      rewriteIntentSugar(
+        `function payout(amount) {
+  Arbitrum(() => {
+    if (amount > 0n) { payout(amount); }
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}
+function main() {
+  payout(5n);
+}`,
+        context(),
+      ),
+    message: /calls `payout`, the function that opens it/,
+  },
+  {
+    documented:
+      "A program body using a module variable that a local of the opening function shadows",
+    trigger: () =>
+      rewriteIntentSugar(
+        `let total = 0n;
+function half() {
+  return total / 2n;
+}
+function main() {
+  const total = 5n;
+  Arbitrum(() => {
+    if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
+  }).reward({ tokens: [{ token: USDC, amount: total }] });
+}`,
+        context(),
+      ),
+    message: /module variable `total`, which a local of the function opening the intent shadows/,
+  },
 ];
 
 describe("the guide's refusal list is the lowering's", () => {
@@ -255,7 +290,8 @@ describe("the guide's account of the destination Pot is the builder's", () => {
     ...extra,
   });
   const calls = (extra: Partial<IntentOptions> = {}) =>
-    openRoute("ethereum", "return 1n;", options(extra)).reward(0n).intent.route.calls;
+    openRoute("ethereum", "function main() { return 1n; }", options(extra)).reward(0n).intent.route
+      .calls;
   const sharedPot = v12PredictPot(ecoRoutesExecutorOf(PORTAL));
   const deploySelector = v12Kitchen
     .encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT)

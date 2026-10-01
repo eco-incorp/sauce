@@ -99,10 +99,10 @@ describe("chain accessors: the names resolve through an import, and only through
         creator: "0x3333333333333333333333333333333333333333" as const,
         prover: "0x4444444444444444444444444444444444444444" as const,
       };
-      const viaCall = Base("return 1n;", opts);
+      const viaCall = Base("function main() { return 1n; }", opts);
       const built = viaCall.reward(0n);
       const intent: unknown = built.intent;
-      const viaRoute = Base.route("return 1n;", opts);
+      const viaRoute = Base.route("function main() { return 1n; }", opts);
       const built2 = viaRoute.reward(0n);
       // type-level pin: .route carries EXACTLY the call signature's own interface.
       const _pin: (typeof Base)["route"] = Base;

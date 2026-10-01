@@ -8,8 +8,8 @@
  *
  * ```ts
  * import { Base, Solana } from "@eco-incorp/sauce";
- * const built = Base("return 1n;", { pot, engine, deadline, portal }).reward({ source: Solana.chain, creator, prover, deadline });
- * // identically: Base.route("return 1n;", {...}).reward({...})
+ * const built = Base("function main() { return 1n; }", { pot, engine, deadline, portal }).reward({ source: Solana.chain, creator, prover, deadline });
+ * // identically: Base.route("function main() { return 1n; }", {...}).reward({...})
  * ```
  */
 export { chain, chainAccessors, pascalOfSlug } from "./accessors.js";
@@ -78,6 +78,7 @@ export {
   sauceEvmDeployPotCall,
 } from "./sauce-calls.js";
 export type {
+  SauceEvmCall,
   SauceEvmCallParams,
   SauceEvmCallsParams,
   SauceEvmDeployPotCallParams,
@@ -91,13 +92,17 @@ export type {
 
 // --- cross-chain intent DSL (S1) ---
 
-export { compileSauceRoute, wrapSauceBody } from "./sauce-route.js";
+export { compileSauceProgram, compileSauceRoute } from "./sauce-route.js";
 export type {
+  CompiledSauceProgram,
   CompiledSauceRoute,
   SauceCompileOptions,
   SauceEvmExecutionInput,
   SauceSvmExecutionInput,
 } from "./sauce-route.js";
+export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
+export type { EntryParam, EntryValue } from "./entry.js";
+export type { LoweredIntent } from "./intent-sugar.js";
 
 export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
 export type { VaultConfig } from "./vault.js";
@@ -105,6 +110,16 @@ export type { VaultConfig } from "./vault.js";
 export { isSauceClosure, sauceBodyToSource } from "./closure.js";
 export { chainAmbient, chainDefines } from "./ambient.js";
 export type { AmbientDefinesOptions } from "./ambient.js";
+export { sourceGlobals } from "./source-globals.js";
+export type {
+  SourceChainName,
+  SourceContract,
+  SourceGlobals,
+  SourceMethod,
+  SourceModule,
+  SourceNamespace,
+  SourceToken,
+} from "./source-globals.js";
 export { rewriteTokenMembers, REWRITABLE_METHODS, tokenImportLines } from "./token-rewrite.js";
 export type { SafeWrite, TokenImports, TokenRewriteResult, TokenSymbols } from "./token-rewrite.js";
 export {

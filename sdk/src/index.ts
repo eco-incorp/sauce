@@ -30,8 +30,24 @@ export * from "./routes/chain-exports.generated.js";
 // dist/index.d.ts, carrying the ambient `declare global` block (`USDC`, `Uniswap`, ...)
 // into a consumer's type graph so their typed route closures check. Do not "clean it up".
 import "./routes/source-globals.generated.js";
+// The language's own builtins (`ctx`, `crypto.keccak256`, `hex`, ...) for the same typed closures,
+// generated from the SauceScript reference's builtins.json. Bare for the same reason, and installs
+// nothing either.
+import "./routes/builtins.generated.js";
 export { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "./routes/globals.js";
 export { destinationExecutionFee } from "./evm/execution-fee.js";
 export type { ExecutionFeeCall } from "./evm/execution-fee.js";
-export { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "./deployments/pot.js";
+export {
+  potSalt,
+  SAUCE_INTENT_POT_SALT,
+  v12GateKitchen,
+  v12PredictPot,
+} from "./deployments/pot.js";
 export { destinationPot } from "./routes/intent-pot.js";
+export {
+  MAX_SQRT_PRICE_X96,
+  MIN_SQRT_PRICE_X96,
+  priceFromSqrtPriceX96,
+  sqrtPriceX96FromPrice,
+  type PoolPriceTokens,
+} from "./price.js";

@@ -19,9 +19,12 @@
  * those files documents the divergence; this suite runs unconditionally because compiling needs no
  * engine at all.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { address, getAddressCodec } from "@solana/kit";
 import { toFunctionSelector } from "viem";
-import { CASES, compileStdToken, compileWith } from "./harness.js";
+import { Permit2ABI } from "../../../src/protocols/permit2/abis.js";
+import { CASES, compileStdToken, compileWith, TOKEN_DIR } from "./harness.js";
 import type { AccountEntry } from "./harness.js";
 
 // `requires` is the role the slot demands of whatever account is attached there. Every account in
@@ -137,6 +140,54 @@ describe("@sauce/token: the ERC-20 selectors the EVM writes spell out", () => {
         SIGNATURES.map((signature) => [signature, carried.includes(signature) ? 1 : 0]),
       ),
     );
+  });
+});
+
+describe("@sauce/token: the EVM pulls", () => {
+  // `permit` (EIP-2612) and `permitTransferFrom` (Permit2) move tokens INTO the program on the
+  // holder's signature. They are EVM-only: an SPL transfer is authorised by the signer of the
+  // transaction, so there is nothing for a signature to stand in for.
+  const PERMIT =
+    'import { permit } from "@sauce/token"; function main(token: Address, owner: Address, spender: Address, value: Uint256, deadline: Uint256, v: Uint256, r: Uint256, s: Uint256): void { permit(token, owner, spender, value, deadline, v, r, s); }';
+  const PERMIT2 =
+    'import { permitTransferFrom } from "@sauce/token"; function main(token: Address, owner: Address, amount: Uint256, nonce: Uint256, deadline: Uint256, signature: bytes, permit2: Address): void { permitTransferFrom(token, owner, amount, nonce, deadline, signature, permit2); }';
+  const hexOf = (entry: string): string =>
+    Buffer.from(compileStdToken(entry, "evm").bytecode).toString("hex");
+  const count = (bytecode: string, signature: string): number =>
+    bytecode.split(toFunctionSelector(signature).slice(2)).length - 1;
+
+  it("permit calls EIP-2612's permit, and reads the nonce", () => {
+    const bytecode = hexOf(PERMIT);
+    expect(count(bytecode, "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)")).toBe(
+      1,
+    );
+    // OpenZeppelin `safePermit`'s proof that the permit ran — the nonce moved by exactly one — reads
+    // it through one helper, called before and after; the e2e suite proves both reads happen.
+    expect(count(bytecode, "nonces(address)")).toBe(1);
+  });
+
+  it("permitTransferFrom binds the registry's Permit2 SignatureTransfer", () => {
+    expect(
+      count(
+        hexOf(PERMIT2),
+        "permitTransferFrom(((address,uint256),uint256,uint256),(address,uint256),address,bytes)",
+      ),
+    ).toBe(1);
+  });
+
+  it("binds the registry's Permit2 ABI, whole", () => {
+    // `permit2.abi.json` beside the module is the registry's `Permit2ABI`, not a fragment of it: the
+    // registry evidence pins every function in it against every deployed Permit2.
+    const shipped = JSON.parse(readFileSync(join(TOKEN_DIR, "permit2.abi.json"), "utf8"));
+    expect(shipped).toEqual(JSON.parse(JSON.stringify(Permit2ABI)));
+  });
+
+  it("neither exists on Solana", () => {
+    for (const entry of [PERMIT, PERMIT2]) {
+      expect(() =>
+        compileStdToken(entry.replace("permit2: Address", "permit2: Account"), "svm"),
+      ).toThrow();
+    }
   });
 });
 

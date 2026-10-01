@@ -6,9 +6,10 @@ module.exports = {
   testEnvironment: "node",
   // A process that runs many suites keeps a part of each one's module graph: measured in band, the
   // heap grows about 5 MB per suite and passes 2 GB before the last of them, which is the default
-  // heap limit on CI's 2-vCPU runner. A worker past 1 GB after a suite is replaced instead. That
-  // needs workers, and jest runs in band — with nothing to replace — when it has only one, so there
-  // are always at least two.
+  // heap limit on CI's 2-vCPU runner, and the suites that typecheck probes against the whole SDK
+  // (`routes-*-types`, `routes-source-globals*`) each build TypeScript programs of over a gigabyte.
+  // A worker past 1 GB after a suite is replaced instead. That needs workers, and jest runs in band
+  // — with nothing to replace — when it has only one, so there are always at least two.
   workerIdleMemoryLimit: "1GB",
   maxWorkers: Math.max(2, availableParallelism() - 1),
   roots: ["<rootDir>/test"],

@@ -17,10 +17,10 @@ export function buildCascade(
   childReward: Omit<routes.SauceRewardSpec, "source">,
   executionFee: bigint,
 ) {
-  return Base("return 1n;", parentOptions)
+  return Base("function main() { return 1n; }", parentOptions)
     .nest(
       (on) =>
-        Arbitrum("return 1n;", childOptions).reward({
+        Arbitrum("function main() { return 1n; }", childOptions).reward({
           ...childReward,
           source: on,
         }),
@@ -74,7 +74,7 @@ import { Arbitrum, Base, routes } from "@eco-incorp/sauce";
 
 const { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } = routes;
 
-const child = Arbitrum("return 1n;", {
+const child = Arbitrum("function main() { return 1n; }", {
   ...childOptions,
   tokens: [{ token: USDC_ARBITRUM, amount: AMOUNT_OUT_PLACEHOLDER }],
 }).reward({ ...childReward, tokens: [{ token: USDC_BASE, amount: AMOUNT_IN_PLACEHOLDER }] });
@@ -180,7 +180,7 @@ const placeholders = [
   { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut", occurrences: 1 },
 ] as const;
 
-const grandchild = Optimism("return 1n;", {
+const grandchild = Optimism("function main() { return 1n; }", {
   ...grandchildOptions,
   tokens: [{ token: USDC_OPTIMISM, amount: AMOUNT_OUT_PLACEHOLDER }],
 }).reward({

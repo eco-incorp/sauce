@@ -158,6 +158,17 @@ export interface SauceSvmClient {
     resolution: AccountResolution,
     opts?: ExecuteOpts,
   ): Promise<SendExecuteResult>;
+  /**
+   * The signed cook transaction `execute` sends, built the same way, without sending it: for a
+   * caller that sends it by its own route (polled confirmation, a relayer) or hands its wire bytes
+   * on. With `computeUnitLimit: "auto"` it simulates first, exactly as `execute` does.
+   */
+  cookTransaction(
+    bytecode: Uint8Array,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts?: ExecuteOpts,
+  ): Promise<SignedExecuteTransaction>;
   simulateStaged(
     buffer: Address | StagedBuffer,
     manifest: AccountManifest,
@@ -177,6 +188,13 @@ export interface SauceSvmClient {
     resolution: AccountResolution,
     opts?: ExecuteStagedOpts,
   ): Promise<SendExecuteResult>;
+  /** The signed `cook_from_account` transaction `executeStaged` sends, without sending it. */
+  stagedCookTransaction(
+    buffer: Address | StagedBuffer,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts?: ExecuteStagedOpts,
+  ): Promise<SignedExecuteTransaction>;
 }
 
 export async function createSauceSvmClient({
@@ -391,10 +409,50 @@ export async function createSauceSvmClient({
     return { lookupTableAddress, lookupTables: await fetchAlt(rpc, lookupTableAddress) };
   }
 
+  async function cookTransaction(
+    bytecode: Uint8Array,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts: ExecuteOpts = {},
+  ): Promise<SignedExecuteTransaction> {
+    const prepends = await autoComputeUnitPrepends(
+      () =>
+        simulate(bytecode, manifest, resolution, {
+          prepends: opts.prepends,
+          lookupTables: opts.lookupTables,
+          appendPayerSigner: opts.appendPayerSigner,
+        }),
+      opts,
+    );
+
+    return buildTransaction(bytecode, manifest, resolution, prepends, opts);
+  }
+
+  async function stagedCookTransaction(
+    buffer: Address | StagedBuffer,
+    manifest: AccountManifest,
+    resolution: AccountResolution,
+    opts: ExecuteStagedOpts = {},
+  ): Promise<SignedExecuteTransaction> {
+    const prepends = await autoComputeUnitPrepends(
+      () =>
+        simulateStaged(buffer, manifest, resolution, {
+          prepends: opts.prepends,
+          lookupTables: opts.lookupTables,
+          appendPayerSigner: opts.appendPayerSigner,
+          expectedSha256: opts.expectedSha256,
+        }),
+      opts,
+    );
+
+    return buildStagedTransaction(buffer, manifest, resolution, prepends, opts);
+  }
+
   return {
     payerAddress: payer.address,
     ensureLookupTable,
     simulate,
+    cookTransaction,
 
     async execute(
       bytecode: Uint8Array,
@@ -402,21 +460,13 @@ export async function createSauceSvmClient({
       resolution: AccountResolution,
       opts: ExecuteOpts = {},
     ): Promise<SendExecuteResult> {
-      const prepends = await autoComputeUnitPrepends(
-        () =>
-          simulate(bytecode, manifest, resolution, {
-            prepends: opts.prepends,
-            lookupTables: opts.lookupTables,
-            appendPayerSigner: opts.appendPayerSigner,
-          }),
-        opts,
-      );
-      const transaction = await buildTransaction(bytecode, manifest, resolution, prepends, opts);
+      const transaction = await cookTransaction(bytecode, manifest, resolution, opts);
 
       return sendExecute({ rpc, rpcSubscriptions, transaction });
     },
 
     simulateStaged,
+    stagedCookTransaction,
 
     async executeStaged(
       buffer: Address | StagedBuffer,
@@ -424,23 +474,7 @@ export async function createSauceSvmClient({
       resolution: AccountResolution,
       opts: ExecuteStagedOpts = {},
     ): Promise<SendExecuteResult> {
-      const prepends = await autoComputeUnitPrepends(
-        () =>
-          simulateStaged(buffer, manifest, resolution, {
-            prepends: opts.prepends,
-            lookupTables: opts.lookupTables,
-            appendPayerSigner: opts.appendPayerSigner,
-            expectedSha256: opts.expectedSha256,
-          }),
-        opts,
-      );
-      const transaction = await buildStagedTransaction(
-        buffer,
-        manifest,
-        resolution,
-        prepends,
-        opts,
-      );
+      const transaction = await stagedCookTransaction(buffer, manifest, resolution, opts);
 
       return sendExecute({ rpc, rpcSubscriptions, transaction });
     },

@@ -2331,7 +2331,7 @@ describeEvm("route nesting, executed", () => {
         const { portal: theirs, executor: theirExecutor } = await deployPortal();
         const wrongPot = await deployPotFor(ecoRoutesExecutor("base"));
 
-        const onWrongPot = openRoute("base", "return 1n;", {
+        const onWrongPot = openRoute("base", "function main() { return 1n; }", {
           portal: theirs,
           execution: { pot: wrongPot },
           deadline: DEADLINE,
@@ -2349,7 +2349,7 @@ describeEvm("route nesting, executed", () => {
         // The SDK's own derivation for the same Portal is owned by the right Executor, and runs.
         const derived = await deployPotFor(theirExecutor);
         expect(derived).not.toBe(wrongPot);
-        const right = openRoute("base", "return 1n;", {
+        const right = openRoute("base", "function main() { return 1n; }", {
           portal: theirs,
           deadline: DEADLINE,
           salt: nextSalt(),

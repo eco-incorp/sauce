@@ -132,6 +132,8 @@ requests your application submits. [Quick start](docs/guides/quick-start.md) wal
 | Chain intents together, statically or at run time   | [Nested intents](docs/guides/nested-intents.md) |
 | Generate programs from data instead of writing them | [Builders](docs/guides/builders-and-actions.md) |
 | Compile a standalone program with runtime arguments | [Compiling programs](docs/guides/compiling.md)  |
+| Compile and run a program file from a terminal      | [The sauce command](docs/guides/cli.md)         |
+| Have a coding agent write and run programs          | [Agent skills](docs/guides/cli.md#agent-skills) |
 | Execute on Solana                                   | [Solana](docs/guides/solana.md)                 |
 | Check what a settlement payload contains            | [Verification](docs/guides/verification.md)     |
 | Know which protocols, tokens and chains are wired   | [Coverage](docs/api/coverage.md)                |

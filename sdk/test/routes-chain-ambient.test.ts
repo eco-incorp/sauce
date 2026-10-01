@@ -51,7 +51,7 @@ describe("chainAmbient", () => {
 });
 
 describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
-  const bareBody = "return double(21n);"; // no `import` line anywhere
+  const bareBody = "function main() { return double(21n); }"; // no `import` line anywhere
 
   it("a program using an ambient symbol compiles via the RS path when the merged ambient list is non-empty", () => {
     const built = openRoute(
@@ -98,7 +98,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
   });
 
   it("default bundle (@sauce/token, UNUSED): bytecode is byte-identical to no ambient module at all", () => {
-    const built = openRoute("base", "return chainId;", evmOptions()).reward(0n);
+    const built = openRoute("base", "function main() { return chainId; }", evmOptions()).reward(0n);
     expect(built.compiled.bytecode.length).toBe(1);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
 
@@ -109,7 +109,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     // half of the same equivalence).
     const withoutAmbient = compileSauceRoute(
       requireChain("base"),
-      "return chainId;",
+      "function main() { return chainId; }",
       { pot: POT, engine: ENGINE },
       {
         defines: {
@@ -128,7 +128,7 @@ describe("openRoute: chain-scoped ambient bundle activation (P7)", () => {
     // returns the same list for every chain, so the SVM arm (`token.svm.js`) is broadcast into an
     // SVM compile just as unconditionally — and a treeshake regression there would be invisible to
     // the EVM assertion.
-    const body = "return chainId;";
+    const body = "function main() { return chainId; }";
     const built = openRoute("solana", body, {
       execution: { code: SVM_BUFFER, accounts: [] },
       deadline: 2000n,
