@@ -119,8 +119,8 @@ describe("available(): one program, the venue only where the chain has it", () =
     same(
       "base",
       "if (!available(PancakeswapV3.Factory) || PancakeswapV3.Factory.getPool(USDC, WETH, 500n) == 0n) { return 1n; }\nreturn 0n;",
-      // The decided operand is its literal: what `||` is left with is the right operand.
-      "if (false || PancakeswapV3.Factory.getPool(USDC, WETH, 500n) == 0n) { return 1n; }\nreturn 0n;",
+      // The decided operand is gone: what `||` is left with is the right operand.
+      "if (PancakeswapV3.Factory.getPool(USDC, WETH, 500n) == 0n) { return 1n; }\nreturn 0n;",
     );
   });
 
