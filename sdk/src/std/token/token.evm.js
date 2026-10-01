@@ -3,6 +3,11 @@
 // are OpenZeppelin `SafeERC20`, for the reasons below. `token`/`account` addresses ride calldata
 // like any other value.
 import ERC20 from "./erc20.abi.json";
+// The registry's Permit2 ABI (`protocols/permit2`), whole: `test/std/token/compile.test.ts` holds
+// this file equal to it, so what `permitTransferFrom` below binds is what the registry evidence pins
+// against every deployed Permit2. A copy beside this module rather than an import of the registry's
+// file, because a package resolved off disk cannot reach outside its own directory.
+import PERMIT2 from "./permit2.abi.json";
 
 export function balanceOf(token: Address, account: Account): Uint256 {
   return ERC20.at(token).balanceOf(account);
@@ -80,4 +85,72 @@ export function approve(token: Address, spender: Address, amount: Uint256): void
     checked(token, evm.call(token, 0n, selector.concat(spenderWord).concat(zero.toBytesBe(32))));
   }
   checked(token, evm.call(token, 0n, selector.concat(spenderWord).concat(amount.toBytesBe(32))));
+}
+
+// THE PULLS: moving tokens INTO the program from the account that holds them. Each is a SafeERC20
+// `safeTransferFrom`, however it is authorised:
+//
+//   - a standing allowance: `transferFrom(token, owner, ctx.self(), amount)`, above;
+//   - an EIP-2612 signature: `permit(...)` sets that allowance, then the same `transferFrom`;
+//   - a Permit2 signature: `permitTransferFrom(...)`, where Permit2 itself does the transfer, with
+//     Solmate's `SafeTransferLib.safeTransferFrom` (empty or `true` returndata, else revert).
+
+// `owner`'s nonce on an EIP-2612 token: `nonces(address)`, read raw (the ERC-20 ABI above has no
+// `nonces`), and decoded as the `uint256` the standard declares.
+function permitNonce(token: Address, owner: Address): Uint256 {
+  const selector = hex`7ecebe00`;
+  let [nonce] = abi.decode(evm.static(token, selector.concat(owner.toBytesBe(32))), ["Uint256"]);
+  return nonce;
+}
+
+// EIP-2612 `permit`: `owner`'s signature, `(v, r, s)` over `Permit(owner, spender, value, nonce,
+// deadline)`, setting `spender`'s allowance to `value`. `permit` returns nothing, so its returndata
+// says nothing either way; what proves it ran is OpenZeppelin `safePermit`'s check, that the token's
+// nonce for `owner` moved by exactly one. Without it a token with no `permit` but a permissive
+// fallback (WETH9's accepts any call) would pass for one that granted the allowance.
+export function permit(
+  token: Address,
+  owner: Address,
+  spender: Address,
+  value: Uint256,
+  deadline: Uint256,
+  v: Uint256,
+  r: Uint256,
+  s: Uint256,
+): void {
+  const before = permitNonce(token, owner);
+  const selector = hex`d505accf`;
+  const data = selector
+    .concat(owner.toBytesBe(32))
+    .concat(spender.toBytesBe(32))
+    .concat(value.toBytesBe(32))
+    .concat(deadline.toBytesBe(32))
+    .concat(v.toBytesBe(32))
+    .concat(r.toBytesBe(32))
+    .concat(s.toBytesBe(32));
+  evm.call(token, 0n, data);
+  require(permitNonce(token, owner) == before + 1n);
+}
+
+// Permit2 SignatureTransfer: `amount` of `token` from `owner` to this program (`ctx.self()`) on
+// `owner`'s one-time EIP-712 signature over `PermitTransferFrom(TokenPermissions(token, amount),
+// spender, nonce, deadline)`, the spender being this program — the caller Permit2 checks it
+// against. `permit2` is the Permit2 deployment (`Permit2.Permit2` in a route body). Permit2 spends
+// `nonce` and refuses a passed `deadline`, and moves the tokens with `SafeTransferLib`, so a
+// token that returns nothing (USDT) works and one that returns `false` reverts the program.
+export function permitTransferFrom(
+  token: Address,
+  owner: Address,
+  amount: Uint256,
+  nonce: Uint256,
+  deadline: Uint256,
+  signature: bytes,
+  permit2: Address,
+): void {
+  PERMIT2.at(permit2).permitTransferFrom(
+    { permitted: { token: token, amount: amount }, nonce: nonce, deadline: deadline },
+    { to: ctx.self(), requestedAmount: amount },
+    owner,
+    signature,
+  );
 }

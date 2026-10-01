@@ -38,6 +38,7 @@ const ASSETS = [
   { subdir: join("std", "token"), file: "token.evm.js" },
   { subdir: join("std", "token"), file: "token.svm.js" },
   { subdir: join("std", "token"), file: "erc20.abi.json" },
+  { subdir: join("std", "token"), file: "permit2.abi.json" },
   { subdir: join("std", "token"), file: "package.json" },
 ];
 
