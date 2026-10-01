@@ -69,6 +69,28 @@ and resolver, typed programs the way the reference writes them, and compact argu
   Node-only subpath. See [examples/compiler.mts](examples/compiler.mts) and
   `node_modules/@eco-incorp/sauce/docs/api/compiler.md`.
 
+## The protocol registry
+
+```ts
+import { contracts, getProtocol, getProtocolsByChain, listProtocolSlugs } from "@eco-incorp/sauce";
+import * as pancakeV3 from "@eco-incorp/sauce/protocols/pancakeswap-v3";
+
+export const onBase = getProtocolsByChain(8453).map((p) => p.slug); // catalogued on Base
+export const info = getProtocol("pancakeswap-v3"); // name, category, chains, website
+export const slugs = listProtocolSlugs();
+// Per-chain addresses by role, e.g. { factory, smartRouter, nonfungiblePositionManager }.
+export const pancakeOnBase = pancakeV3.deployments.find((d) => d.chainId === 8453)?.addresses;
+// Whether a namespace contract is callable by name on a chain, and where.
+export const aave = contracts.on("base").AaveV3.Pool; // { available, address, abi, methods, … }
+```
+
+Each protocol module (`@eco-incorp/sauce/protocols/<slug>`) exports `protocolInfo`, `deployments`,
+its ABIs (`…ABI`), and its SauceScript templates by name (`supply`, `swap`, `getPool`, …).
+`getProtocolSkill(slug)`, `getProtocolIndex()` and `listSkillSlugs()` from
+`@eco-incorp/sauce/skills` return the `sauce-protocols` documents. A catalogued protocol is not
+necessarily callable by name, and an address in `deployments` is a recorded address, not proof of
+live code on the chain.
+
 ## Other host tools
 
 - **JSON action programs** (`/actions`): `parseProgram`, `compileProgram` (with `argument` actions
