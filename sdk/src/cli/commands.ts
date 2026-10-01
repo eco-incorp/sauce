@@ -23,7 +23,7 @@ import {
 import { v12PredictPot } from "../deployments/pot.js";
 
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
-const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
+export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
@@ -32,15 +32,7 @@ import {
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
-import {
-  connect,
-  kitchenFee,
-  potState,
-  sendAndWait,
-  simulate,
-  type Sent,
-  type TxRequest,
-} from "./chain.js";
+import { connect, kitchenFee, potState, sendAndWait, type Sent, type TxRequest } from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
 import type { Funding } from "./funding.js";
 
@@ -225,8 +217,21 @@ function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryVa
   });
 }
 
-/** The program with its encoded arguments appended: the `program` a cook runs. */
-export function payloadOf(program: CompiledSauceProgram, args: ArgsInput | undefined): Hex {
+/** Rewrites `main`'s values, and the parameters they are encoded for, before they are encoded. */
+export type AdaptArguments = (
+  program: CompiledSauceProgram,
+  values: EntryValue[],
+) => { readonly program: CompiledSauceProgram; readonly values: EntryValue[] };
+
+/**
+ * The program with its encoded arguments appended: the `program` a cook runs. `adapt` sees the
+ * values first (on Solana it turns a public key into the word the engine reads).
+ */
+export function payloadOf(
+  program: CompiledSauceProgram,
+  args: ArgsInput | undefined,
+  adapt?: AdaptArguments,
+): Hex {
   const params = program.entryParams;
   if (args === undefined) {
     if (params.length > 0) {
@@ -240,7 +245,9 @@ export function payloadOf(program: CompiledSauceProgram, args: ArgsInput | undef
   }
   let encoded: Uint8Array;
   try {
-    encoded = encodeEntryArguments(program, argumentValues(params, args));
+    const values = argumentValues(params, args);
+    const adapted = adapt === undefined ? { program, values } : adapt(program, values);
+    encoded = encodeEntryArguments(adapted.program, adapted.values);
   } catch (error) {
     if (error instanceof UsageError) throw error;
     throw new UsageError(`${args.from}: ${(error as Error).message}`);
@@ -265,7 +272,7 @@ export interface CookInput extends ProgramInput {
   readonly fund?: (client: PublicClient, pot: Address, owner: Address) => Promise<Funding>;
 }
 
-interface Cook {
+export interface Cook {
   readonly pot: Address;
   readonly engine: Address;
   readonly data: Hex;
@@ -273,7 +280,7 @@ interface Cook {
 }
 
 /** Compiles the file and builds the cook on its Pot — what `tx`, `simulate` and `run` all send. */
-function cookOf(input: CookInput, files: CliFiles): Cook {
+export function cookOf(input: CookInput, files: CliFiles): Cook {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
@@ -297,7 +304,7 @@ function deployHint(chain: CanonicalChain, target: PotInput): string {
 }
 
 /** The cook's value: as given, or the Kitchen's fee — refusing a given one below the fee. */
-function valueOf(
+export function valueOf(
   given: bigint | undefined,
   fee: bigint | undefined,
   chain: CanonicalChain,
@@ -360,49 +367,6 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
 /** How `simulate` and `run` reach the chain. */
 export interface ChainAccess {
   readonly rpcUrl: string;
-}
-
-/** `sauce simulate`: the cook as a dry run from the Pot's owner — no key, no transaction. */
-export async function simulateCommand(
-  input: CookInput & ChainAccess,
-  files: CliFiles,
-): Promise<CommandOutput> {
-  const cook = cookOf(input, files);
-  const client = await connect(input.rpcUrl, input.chain);
-  const state = await potState(client, cook.pot);
-  if (!state.deployed) {
-    throw new CliError(
-      `Pot ${cook.pot} is not deployed on ${input.chain.slug}, so there is nothing to simulate ` +
-        `the cook on: deploy it first (${deployHint(input.chain, input.target)})`,
-    );
-  }
-  const from = state.owner!;
-  const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, from);
-  const funded =
-    funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
-  const value =
-    valueOf(input.value, await kitchenFee(client, input.chain), input.chain) +
-    (funding?.value ?? 0n);
-  const result = await simulate(client, from, { to: cook.pot, data: funded.data, value });
-  const json = {
-    ok: result.ok,
-    chain: input.chain.slug,
-    from,
-    to: cook.pot,
-    value: value.toString(),
-    ...(result.ok
-      ? { gas: result.gas.toString(), returns: result.returns }
-      : { reason: result.reason }),
-  };
-  const notes = funding?.notes ?? [];
-
-  return result.ok
-    ? {
-        text: `The cook succeeds from ${from}: gas ${result.gas}, returns ${result.returns}`,
-        json,
-        notes,
-      }
-    : { text: `The cook reverts: ${result.reason}`, json, notes, exitCode: 1 };
 }
 
 const sentText = (what: string, sent: Sent): string =>

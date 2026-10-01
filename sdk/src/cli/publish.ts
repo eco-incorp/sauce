@@ -15,11 +15,13 @@
 import { parse } from "acorn";
 import {
   encodeFunctionData,
+  formatUnits,
   getAddress,
   parseAbi,
   type Address,
   type Hex,
   type PublicClient,
+  type StateOverride,
 } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
@@ -30,6 +32,7 @@ import type { LoweredIntent } from "../routes/intent-sugar.js";
 import { approvalTxs, publishAndFundTx } from "../routes/portal.js";
 import { wrapSauceBody } from "../routes/sauce-route.js";
 import { CliError, UsageError } from "./args.js";
+import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent, type TxRequest } from "./chain.js";
 import {
   castSend,
@@ -38,6 +41,8 @@ import {
   type CommandOutput,
   type ProgramInput,
 } from "./commands.js";
+import { nativeSymbol, tokenInfo } from "./effects.js";
+import { baseUnits, type FundRequest } from "./funding.js";
 
 const ERC20 = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -197,6 +202,52 @@ export interface PublishInput extends ProgramInput {
   readonly account?: PrivateKeyAccount;
   /** Whose wallet, where no signer is given: for a dry run, or to plan exact approvals. */
   readonly from?: Address;
+  /** `--assume-balance`, with a dry run: what the wallet holds, for the rehearsal only. */
+  readonly assume?: readonly FundRequest[];
+}
+
+/** The wallet's balances `--assume-balance` sets for a dry run, as state overrides, and lines that
+ *  say so. */
+async function walletBalances(
+  client: PublicClient,
+  input: PublishInput,
+  wallet: Address,
+): Promise<{ overrides: StateOverride; lines: string[]; json: Record<string, string>[] }> {
+  const overrides: StateOverride[number][] = [];
+  const lines: string[] = [];
+  const json: Record<string, string>[] = [];
+  for (const request of input.assume ?? []) {
+    const amount = await baseUnits(client, request);
+    if (request.token === undefined) {
+      overrides.push({ address: wallet, balance: amount });
+      lines.push(`  ${wallet} holds ${formatUnits(amount, 18)} ${nativeSymbol(input.chain)}`);
+      json.push({ holder: wallet, token: "native", amount: amount.toString() });
+      continue;
+    }
+    const info = await tokenInfo(client, input.chain, request.token);
+    const symbol = info.symbol ?? request.label;
+    const found = await assumeTokenBalance(client, request.token, wallet, amount, symbol);
+    overrides.push(found.override);
+    json.push({
+      holder: wallet,
+      token: request.token,
+      symbol,
+      amount: amount.toString(),
+      slot: found.slot,
+      layout: found.layout,
+    });
+    lines.push(
+      `  ${wallet} holds ${info.decimals === undefined ? `${amount} ${symbol} (base units)` : `${formatUnits(amount, info.decimals)} ${symbol}`} ` +
+        `(its balance word ${found.slot}: ${found.layout})`,
+    );
+  }
+
+  return {
+    overrides: mergeOverrides(overrides),
+    lines:
+      lines.length === 0 ? [] : ["Assumed for this rehearsal only, by state override:", ...lines],
+    json,
+  };
 }
 
 const stepJson = (step: Step): Record<string, string> => ({
@@ -260,9 +311,14 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
       throw new UsageError("a dry run needs whose wallet: a signer, or --from <address>");
     }
     const calls = plans.flatMap((plan) => plan.steps);
+    const assumed = await walletBalances(client, input, from);
     let results: ReadonlyArray<{ status: string; error?: unknown; gasUsed?: bigint }>;
     try {
-      ({ results } = await client.simulateCalls({ account: from, calls }));
+      ({ results } = await client.simulateCalls({
+        account: from,
+        calls,
+        ...(assumed.overrides.length === 0 ? {} : { stateOverrides: assumed.overrides }),
+      }));
     } catch (error) {
       throw new CliError(
         `the endpoint could not simulate the transactions together (eth_simulateV1): ${revertReason(error)}`,
@@ -276,10 +332,11 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
     );
 
     return {
-      text: [...summary, ...lines].join("\n"),
+      text: [...summary, ...assumed.lines, ...lines].join("\n"),
       json: {
         ok: failed < 0,
         from,
+        ...(assumed.json.length === 0 ? {} : { assumed: assumed.json }),
         intents: plans.map((plan) => ({
           intentHash: plan.hash,
           destination: plan.intent.destination.slug,

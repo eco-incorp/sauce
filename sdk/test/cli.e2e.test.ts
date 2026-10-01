@@ -327,8 +327,13 @@ describeEvm("sauce, sent to a chain", () => {
       expect(ok.stderr).toBe("");
       expect(ok.code).toBe(0);
       expect(ok.stdout).toMatch(
-        new RegExp(`^The cook succeeds from ${KEYSTORE_OWNER}: gas \\d+, returns 0x`),
+        new RegExp(`^The cook succeeds from ${KEYSTORE_OWNER}: gas used \\d+, returns 0x`),
       );
+      // A deployed Pot: the cook alone, and what it moved, read from its logs.
+      expect(ok.stdout).toContain(
+        `Rehearsed with eth_simulateV1; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}\n`,
+      );
+      expect(ok.stdout).toContain(`  1 USDC: ${labelled} (the Pot) -> ${THIRD_RECIPIENT}`);
       // Nothing moved: it was an eth_call.
       expect(await ethereum.balanceOf(usdc, THIRD_RECIPIENT)).toBe(0n);
 
@@ -358,10 +363,17 @@ describeEvm("sauce, sent to a chain", () => {
         "--rpc-url",
         ethereum.rpcUrl,
       );
+      // A Pot not deployed yet is deployed in the rehearsal; this one holds nothing to pay with.
       expect(unowned.code).toBe(1);
-      expect(unowned.stderr).toMatch(
-        /is not deployed on ethereum, so there is nothing to simulate/,
+      expect(unowned.stdout).toMatch(/^The cook reverts: /);
+      expect(unowned.stdout).toContain(
+        `  1. Kitchen.deployPot(${RAW_OWNER}, 0x${"00".repeat(32)})`,
       );
+      expect(
+        await ethereum.publicClient.getCode({
+          address: v12PredictPot(RAW_OWNER, `0x${"00".repeat(32)}`) as Address,
+        }),
+      ).toBeUndefined();
     }, 60_000);
 
     it("`sauce run` signs, sends and waits for the cook on an existing Pot", async () => {
@@ -779,6 +791,38 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       transactions: [{ status: "success" }, { status: "success" }],
     });
     expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(REWARD);
+  }, 60_000);
+
+  it("rehearses for a wallet that does not hold the reward yet, with --assume-balance", async () => {
+    const empty = getAddress("0x5a0ce0000000000000000000000000000000beef");
+    const dryRun = (...flags: string[]) =>
+      sauce(
+        ...["publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+        ...["--from", empty, "--dry-run", ...flags],
+      );
+    // Without it the funding reverts: the Portal's InsufficientFunds(intentHash), decoded by name
+    // once the registry's Portal ABI declares its errors, and as its raw data until then.
+    const short = await dryRun();
+    expect(short.code).toBe(1);
+    expect(short.stdout).toMatch(
+      /^publishAndFund: reverts: (InsufficientFunds\(0x[0-9a-f]{64}\)|revert data 0x07b90620[0-9a-f]{64})$/m,
+    );
+    const run = await dryRun("--assume-balance", "USDC:2", "--json");
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.stdout)).toMatchObject({
+      ok: true,
+      from: empty,
+      assumed: [{ holder: empty, token: usdc, symbol: "USDC", amount: "2000000" }],
+      transactions: [{ status: "success" }, { status: "success" }],
+    });
+    expect(await arbitrum.balanceOf(usdc, empty)).toBe(0n);
+    // A balance is assumed only for a rehearsal.
+    const sent = await sauce(
+      ...["publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+      ...["--private-key", OWNER_KEY, "--assume-balance", "USDC:2"],
+    );
+    expect(sent.code).toBe(2);
+    expect(sent.stderr).toContain("--assume-balance goes with --dry-run");
   }, 60_000);
 
   it("publishes and funds the intent from the wallet: the Portal records it, funded", async () => {

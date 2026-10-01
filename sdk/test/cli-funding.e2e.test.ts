@@ -604,7 +604,8 @@ describeEvm(
         expect(await balance(usdc, OWNER.address)).toBe(before);
       }, 60_000);
 
-      it("with no key, skips the funding and says so", async () => {
+      it("with no key, credits the Pot what the pull would bring, says so, and sends nothing", async () => {
+        const [before, paid] = [await balance(usdc, OWNER.address), await balance(usdc, RECIPIENT)];
         const done = record(
           await sauce(
             "simulate",
@@ -615,18 +616,27 @@ describeEvm(
             local.rpcUrl,
             "--fund",
             "USDC:2",
+            "--json",
             "--args",
             usdc,
             RECIPIENT,
-            // The Pot as it is holds no USDC (the multi-token run swept it), so it pays nothing.
-            "0",
+            // The Pot as it is holds no USDC (the multi-token run swept it): it pays only what the
+            // rehearsal credits it.
+            "2000000",
           ),
         );
         expect(done.code).toBe(0);
         expect(done.stderr).toContain(
-          "funding skipped: pulling USDC needs the owner's signature (--keystore or --private-key); " +
-            "the rehearsal runs on the Pot as it is",
+          "--fund without a key: pulling USDC needs the owner's signature (--keystore or " +
+            "--private-key), so the pulls are not rehearsed; the Pot is credited what they would " +
+            "bring, for this rehearsal only",
         );
+        const out = JSON.parse(done.stdout) as { transfers: { from: Address; amount: string }[] };
+        expect(out.transfers).toEqual([
+          expect.objectContaining({ from: pot, to: RECIPIENT, amount: "2000000" }),
+        ]);
+        expect(await balance(usdc, OWNER.address)).toBe(before);
+        expect(await balance(usdc, RECIPIENT)).toBe(paid);
       }, 60_000);
 
       it("refuses a key that is not the Pot's owner's", async () => {
