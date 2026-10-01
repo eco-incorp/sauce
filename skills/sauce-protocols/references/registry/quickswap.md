@@ -34,6 +34,21 @@ function main() {
 
 ## ABI
 
+### `QuickSwapV2FactoryABI`
+
+`import QuickSwapV2FactoryABI from "./protocols/quickswap/QuickSwapV2FactoryABI.json";` Speaks for: v2Factory.
+
+- `getPair(address tokenA, address tokenB) view returns (address pair)`
+
+### `QuickSwapV2PairABI`
+
+`import QuickSwapV2PairABI from "./protocols/quickswap/QuickSwapV2PairABI.json";`
+
+- `getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+- `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
+
 ### `QuickSwapV2RouterABI`
 
 `import QuickSwapV2RouterABI from "./protocols/quickswap/QuickSwapV2RouterABI.json";` Speaks for: v2Router.
@@ -41,6 +56,22 @@ function main() {
 - `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) returns (uint256[] amounts)`
 - `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB)`
+
+### `QuickSwapV3FactoryABI`
+
+`import QuickSwapV3FactoryABI from "./protocols/quickswap/QuickSwapV3FactoryABI.json";` Speaks for: v3Factory.
+
+- `poolByPair(address tokenA, address tokenB) view returns (address pool)`
+
+### `QuickSwapV3PoolABI`
+
+`import QuickSwapV3PoolABI from "./protocols/quickswap/QuickSwapV3PoolABI.json";`
+
+- `globalState() view returns (uint160 price, int24 tick, uint16 fee, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked)`
+- `liquidity() view returns (uint128)`
+- `tickSpacing() pure returns (int24)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
 
 ### `QuickSwapV3SwapRouterABI`
 

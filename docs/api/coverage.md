@@ -7,7 +7,7 @@ Each of the three can be true without the others.
 | Registry                         | Current scope                                                                  | Inspect it                                                             |
 | -------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | Protocol catalog                 | 135 protocols with metadata, deployments, ABI fragments, and program templates | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
-| Contract descriptors             | 302 descriptors across 135 protocol namespaces                                 | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
+| Contract descriptors             | 316 descriptors across 135 protocol namespaces                                 | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
 | Compiled-source protocol globals | The same 135 protocol namespaces, plus 13 family aliases                       | TypeScript completion after importing `@eco-incorp/sauce`; names below |
 | Token symbols                    | 7 symbols distributed across 7 EVM chains                                      | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
 | Canonical chain identities       | 41 chains: 40 EVM and Solana                                                   | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
@@ -26,9 +26,9 @@ and both surfaces.
 
 | Contract kind     | Count | What it is                                                                    |
 | ----------------- | ----- | ----------------------------------------------------------------------------- |
-| Deployed contract | 222   | An address per chain and a verified ABI: callable, and its address as a value |
-| Address only      | 55    | An address per chain with no verified ABI: usable as an address, no methods   |
-| Interface         | 25    | An ABI with no fixed address: called through `.at(address)`                   |
+| Deployed contract | 226   | An address per chain and a verified ABI: callable, and its address as a value |
+| Address only      | 51    | An address per chain with no verified ABI: usable as an address, no methods   |
+| Interface         | 39    | An ABI with no fixed address: called through `.at(address)`                   |
 
 A name existing does not mean the contract is deployed on your chain: `available(...)` in a program
 and `.available` in TypeScript answer that, and naming an absent contract fails at compile or call

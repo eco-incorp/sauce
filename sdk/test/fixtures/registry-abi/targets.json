@@ -77,6 +77,20 @@
       },
       "AerodromeRouterABI": {
         "roles": ["router"]
+      },
+      "AerodromePoolABI": {
+        "instances": [
+          {
+            "chainId": 8453,
+            "address": "0xcDAC0d6c6C59727a65F871236188350531885C43",
+            "note": "WETH/USDC volatile, poolFactory.getPool(WETH, USDC, false) (an EIP-1167 clone)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0x27a8Afa3Bd49406e48a074350fB7b2020c43B2bD",
+            "note": "USDC/USDbC stable, poolFactory.getPool(USDC, USDbC, true) (an EIP-1167 clone)"
+          }
+        ]
       }
     },
     "aerodrome-slipstream": {
@@ -209,6 +223,40 @@
       },
       "CamelotV3SwapRouterABI": {
         "roles": ["v3SwapRouter"]
+      },
+      "CamelotV2FactoryABI": {
+        "roles": ["v2Factory"]
+      },
+      "CamelotV2PairABI": {
+        "instances": [
+          {
+            "chainId": 42161,
+            "address": "0x84652bb2539513BAf36e225c930Fdd8eaa63CE27",
+            "note": "WETH/USDC.e, v2Factory.getPair(WETH, USDC.e)"
+          },
+          {
+            "chainId": 42161,
+            "address": "0xa6c5C7D189fA4eB5Af8ba34E63dCDD3a635D433f",
+            "note": "WETH/ARB, v2Factory.getPair(WETH, ARB)"
+          }
+        ]
+      },
+      "CamelotV3FactoryABI": {
+        "roles": ["v3Factory"]
+      },
+      "CamelotV3PoolABI": {
+        "instances": [
+          {
+            "chainId": 42161,
+            "address": "0xB1026b8e7276e7AC75410F1fcbbe21796e8f7526",
+            "note": "WETH/USDC, v3Factory.poolByPair(WETH, USDC)"
+          },
+          {
+            "chainId": 42161,
+            "address": "0xe51635ae8136aBAc44906A8f230C2D235E9c195F",
+            "note": "WETH/ARB, v3Factory.poolByPair(WETH, ARB)"
+          }
+        ]
       }
     },
     "cbeth": {
@@ -745,6 +793,27 @@
       },
       "MaverickV2RouterABI": {
         "roles": ["v2Router"]
+      },
+      "MaverickV2PoolABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xEB1da432D5C1a9FDF52aA5D37698f34706F91397",
+            "note": "USDC/WETH, v2Factory.lookup(USDC, WETH, 0, 10)[0]"
+          },
+          {
+            "chainId": 8453,
+            "address": "0xdf033790907c60c9B81aE355F76F74f52F92114A",
+            "note": "WETH/USDC, v2Factory.lookup(USDC, WETH, 0, 10)[0]"
+          }
+        ],
+        "unverified": {
+          "getState()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
+          "fee(bool)": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
+          "tickSpacing()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
+          "tokenA()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
+          "tokenB()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode"
+        }
       }
     },
     "moonwell": {
@@ -805,6 +874,20 @@
       },
       "PancakeSwapV2RouterABI": {
         "roles": ["router"]
+      },
+      "PancakeSwapV2PairABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x2E8135bE71230c6B1B4045696d41C09Db0414226",
+            "note": "USDC/WETH, factory.getPair(USDC, WETH)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0x79474223AEdD0339780baCcE75aBDa0BE84dcBF9",
+            "note": "WETH/USDC, factory.getPair(WETH, USDC)"
+          }
+        ]
       }
     },
     "pancakeswap-v3": {
@@ -816,6 +899,20 @@
       },
       "PancakeSwapV3SmartRouterABI": {
         "roles": ["smartRouter"]
+      },
+      "PancakeSwapV3PoolABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x6CA298D2983aB03Aa1dA7679389D955A4eFEE15C",
+            "note": "WETH/USDT 0.05%, factory.getPool(WETH, USDT, 500)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0x72AB388E2E2F6FaceF59E3C3FA2C4E29011c2D38",
+            "note": "WETH/USDC 0.01%, factory.getPool(WETH, USDC, 100)"
+          }
+        ]
       }
     },
     "paraswap": {
@@ -901,6 +998,40 @@
       },
       "QuickSwapV3SwapRouterABI": {
         "roles": ["v3SwapRouter"]
+      },
+      "QuickSwapV2FactoryABI": {
+        "roles": ["v2Factory"]
+      },
+      "QuickSwapV2PairABI": {
+        "instances": [
+          {
+            "chainId": 137,
+            "address": "0x6e7a5FAFcec6BB1e78bAE2A1F0B612012BF14827",
+            "note": "WPOL/USDC.e, v2Factory.getPair(WPOL, USDC.e)"
+          },
+          {
+            "chainId": 137,
+            "address": "0xadbF1854e5883eB8aa7BAf50705338739e558E5b",
+            "note": "WPOL/WETH, v2Factory.getPair(WPOL, WETH)"
+          }
+        ]
+      },
+      "QuickSwapV3FactoryABI": {
+        "roles": ["v3Factory"]
+      },
+      "QuickSwapV3PoolABI": {
+        "instances": [
+          {
+            "chainId": 137,
+            "address": "0xAE81FAc689A1b4b1e06e7ef4a2ab4CD8aC0A087D",
+            "note": "WPOL/USDC.e, v3Factory.poolByPair(WPOL, USDC.e)"
+          },
+          {
+            "chainId": 137,
+            "address": "0x479e1B71A702a595e19b6d5932CD5c863ab57ee0",
+            "note": "WPOL/WETH, v3Factory.poolByPair(WPOL, WETH)"
+          }
+        ]
       }
     },
     "radiant": {
@@ -1043,6 +1174,20 @@
       },
       "SushiSwapV2RouterABI": {
         "roles": ["router"]
+      },
+      "SushiSwapV2PairABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x397FF1542f962076d0BFE58eA045FfA2d347ACa0",
+            "note": "USDC/WETH, factory.getPair(USDC, WETH)"
+          },
+          {
+            "chainId": 42161,
+            "address": "0x905dfCD5649217c42684f23958568e533C711Aa3",
+            "note": "WETH/USDC.e, factory.getPair(WETH, USDC.e)"
+          }
+        ]
       }
     },
     "swell": {
@@ -1102,6 +1247,28 @@
           "decreaseLiquidity((uint256,uint128,uint256,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
           "collect((uint256,address,uint128,uint128))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
         }
+      },
+      "SynthraV3PoolABI": {
+        "instances": [
+          {
+            "chainId": 5042,
+            "address": "0x7Eb79EdB12953Eda674D0B66Ecd97CC1a4036B6C",
+            "note": "USDC/EURC 0.3%, factory.getPool(USDC, EURC, 3000)"
+          },
+          {
+            "chainId": 5042,
+            "address": "0x4aDBC339E3F94Ec6bE0f126B111f21d40423fd9A",
+            "note": "USDC/EURC 1%, factory.getPool(USDC, EURC, 10000)"
+          }
+        ],
+        "unverified": {
+          "slot0()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
+          "liquidity()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
+          "fee()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
+          "tickSpacing()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
+          "token0()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
+          "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode"
+        }
       }
     },
     "thales": {
@@ -1148,6 +1315,25 @@
       },
       "LBRouterABI": {
         "roles": ["lbRouter"]
+      },
+      "LBPairABI": {
+        "instances": [
+          {
+            "chainId": 43114,
+            "address": "0x864d4e5Ee7318e97483DB7EB0912E09F161516EA",
+            "note": "WAVAX/USDC at bin step 10, lbFactory.getLBPairInformation(WAVAX, USDC, 10) (a clone of the LB v2.2 LBPair)"
+          },
+          {
+            "chainId": 42161,
+            "address": "0xb7236B927e03542AC3bE0A054F2bEa8868AF9508",
+            "note": "WETH/USDC at bin step 10, lbFactory.getLBPairInformation(WETH, USDC, 10) (a clone of the LB v2.2 LBPair)"
+          },
+          {
+            "chainId": 56,
+            "address": "0xEe5A90098b270596Ec35D637B30d908C862c86df",
+            "note": "the LB v2.1 LBPair every BSC pair clones (the v2.1 clone has no implementation() getter, so the implementation itself is captured)"
+          }
+        ]
       }
     },
     "uniswap-v2": {
@@ -1156,6 +1342,20 @@
       },
       "UniswapV2RouterABI": {
         "roles": ["router"]
+      },
+      "UniswapV2PairABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc",
+            "note": "USDC/WETH, factory.getPair(USDC, WETH)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C",
+            "note": "WETH/USDC, factory.getPair(WETH, USDC)"
+          }
+        ]
       }
     },
     "uniswap-v3": {
@@ -1216,6 +1416,28 @@
       },
       "UnitFlowV3QuoterABI": {
         "roles": ["quoter"]
+      },
+      "UnitFlowV3PoolABI": {
+        "instances": [
+          {
+            "chainId": 5042,
+            "address": "0x99a0505D58cC5d7bf3513Cc75F2A605A23F0F79F",
+            "note": "USDC/EURC 0.01%, factory.getPool(USDC, EURC, 100)"
+          },
+          {
+            "chainId": 5042,
+            "address": "0x51528dFEada7261B8f93B6b79F3c7659E2690072",
+            "note": "USDC/EURC 0.05%, factory.getPool(USDC, EURC, 500)"
+          }
+        ],
+        "unverified": {
+          "slot0()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
+          "liquidity()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
+          "fee()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
+          "tickSpacing()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
+          "token0()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
+          "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode"
+        }
       }
     },
     "velodrome": {
@@ -1224,6 +1446,20 @@
       },
       "VelodromeRouterABI": {
         "roles": ["routerV2"]
+      },
+      "VelodromePoolABI": {
+        "instances": [
+          {
+            "chainId": 10,
+            "address": "0xa0A215dE234276CAc1b844fD58901351a50fec8A",
+            "note": "VELO/USDC volatile, poolFactory.getPool(VELO, USDC, false) (an EIP-1167 clone)"
+          },
+          {
+            "chainId": 10,
+            "address": "0x36E3c209B373b861c185ecdBb8b2EbDD98587BDb",
+            "note": "USDC/USDC.e stable, poolFactory.getPool(USDC, USDC.e, true) (an EIP-1167 clone)"
+          }
+        ]
       }
     },
     "venus": {

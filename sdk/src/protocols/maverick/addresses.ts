@@ -14,6 +14,8 @@ export const deployments: ChainDeployment[] = [
     chainName: "Arbitrum",
     addresses: {
       v2Router: "0x5c3b380e5Aeec389d1014Da3Eb372FA2C9e0fc76",
+      // The same factory as Ethereum's, at the same address: v2Router.factory().
+      v2Factory: "0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e",
     },
   },
   {
@@ -21,6 +23,8 @@ export const deployments: ChainDeployment[] = [
     chainName: "Base",
     addresses: {
       v2Router: "0x5eDEd0d7E76C563FF081Ca01D9d12D6B404Df527",
+      // The same factory as Ethereum's, at the same address: v2Router.factory().
+      v2Factory: "0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e",
     },
   },
 ];

@@ -51,6 +51,15 @@ function main() {
 - `getPair(address tokenA, address tokenB) view returns (address pair)`
 - `createPair(address tokenA, address tokenB) returns (address pair)`
 
+### `PancakeSwapV2PairABI`
+
+`import PancakeSwapV2PairABI from "./protocols/pancakeswap-v2/PancakeSwapV2PairABI.json";`
+
+- `getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+- `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
+
 ### `PancakeSwapV2RouterABI`
 
 `import PancakeSwapV2RouterABI from "./protocols/pancakeswap-v2/PancakeSwapV2RouterABI.json";` Speaks for: router.

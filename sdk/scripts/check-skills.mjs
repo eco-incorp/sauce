@@ -374,11 +374,6 @@ const UNDECLARED_NAMES = {
     CallToEOA:
       "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
   },
-  "sauce-distributed-swap": {
-    globalState:
-      "an Algebra pool's price read, `globalState()`; the registry has no Algebra pool ABI",
-    poolByPair: "an Algebra factory's pool lookup; the registry has no Algebra factory ABI",
-  },
 };
 const undeclaredUsed = new Set(); // "<skill>/<name>"
 const allowed = (skill) => new Set(Object.keys(UNDECLARED_NAMES[skill.dir] ?? {}));

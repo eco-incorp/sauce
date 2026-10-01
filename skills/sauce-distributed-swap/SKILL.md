@@ -131,10 +131,10 @@ default fee, `0` when it is not.
 - **Synthra V3 and UnitFlow V3** (Arc): the same `uniswapV3` and `getPool(a, b, fee)`, through
   `SynthraV3.Factory` and `UnitflowV3.Factory`. Not in the program only to keep it to the venues of
   the chains it is checked on; add them as another venue (below).
-- **Algebra pools** (Camelot V3 on Arbitrum, QuickSwap V3 on Polygon): `Camelot.V3Factory` and
-  `Quickswap.V3Factory` are addresses only, with no verified ABI carrying Algebra's
-  `poolByPair(a, b)`, so there is no lookup to call. Pass the pool in as a `main` input; its price is
-  the first word of `globalState()`, and its fee is dynamic.
+- **Algebra pools** (Camelot V3 on Arbitrum, QuickSwap V3 on Polygon): one pool per pair, found with
+  `Camelot.V3Factory.poolByPair(a, b)` (`Quickswap.V3Factory` on Polygon), with no tier to ask for.
+  Its price is the first word of the pool's `globalState()`, and its fee is dynamic. Not in the
+  program, whose swaps were run on the four venues above only.
 - **PancakeSwap Infinity CL**: the Router's `swapInfinityCL` takes a price limit, but the registry
   records no PancakeSwap Infinity deployment on any chain, so a program has no vault or pool manager
   to name. Its key is also a different shape:

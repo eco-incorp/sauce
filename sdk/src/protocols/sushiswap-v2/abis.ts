@@ -97,3 +97,46 @@ export const SushiSwapV2FactoryABI = [
     outputs: [{ name: "pair", type: "address" }],
   },
 ] as const;
+
+// SushiSwap V2's pair, a UniswapV2Pair: the reads a program makes on a pair it looked up through the
+// factory, and `swap`, called directly once the input is transferred to the pair (0.3% fee). Pass
+// empty `data`: any other calls `uniswapV2Call` back on `to`. From the verified UniswapV2Pair source.
+export const SushiSwapV2PairABI = [
+  {
+    name: "getReserves",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "_reserve0", type: "uint112" },
+      { name: "_reserve1", type: "uint112" },
+      { name: "_blockTimestampLast", type: "uint32" },
+    ],
+  },
+  {
+    name: "token0",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "token1",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "swap",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "amount0Out", type: "uint256" },
+      { name: "amount1Out", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+] as const;

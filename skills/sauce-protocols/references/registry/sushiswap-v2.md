@@ -51,6 +51,15 @@ function main() {
 - `getPair(address tokenA, address tokenB) view returns (address pair)`
 - `createPair(address tokenA, address tokenB) returns (address pair)`
 
+### `SushiSwapV2PairABI`
+
+`import SushiSwapV2PairABI from "./protocols/sushiswap-v2/SushiSwapV2PairABI.json";`
+
+- `getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+- `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
+
 ### `SushiSwapV2RouterABI`
 
 `import SushiSwapV2RouterABI from "./protocols/sushiswap-v2/SushiSwapV2RouterABI.json";` Speaks for: router.

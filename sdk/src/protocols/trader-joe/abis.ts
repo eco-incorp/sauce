@@ -103,3 +103,105 @@ export const LBFactoryABI = [
     ],
   },
 ] as const;
+
+// LBPair — the reads a program makes on a pair it looked up through LBFactory, and `swap`, called
+// directly once the input is transferred to the pair: `swapForY` sells X for Y. `getSwapOut` quotes
+// a sale: a nonzero `amountInLeft` is more than the pair's liquidity can fill, and a `swap` of it
+// reverts. `swap` returns both amounts in one word, X in the low 128 bits and Y in the high 128;
+// `getPriceFromId` is a bin's price of X in Y, 128.128 fixed point. From the verified LBPair source
+// (v2.2, whose reads and swap are v2.1's); every pair is a clone of it.
+export const LBPairABI = [
+  {
+    name: "getTokenX",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [{ name: "tokenX", type: "address" }],
+  },
+  {
+    name: "getTokenY",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [{ name: "tokenY", type: "address" }],
+  },
+  {
+    name: "getBinStep",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [{ name: "", type: "uint16" }],
+  },
+  {
+    name: "getActiveId",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "activeId", type: "uint24" }],
+  },
+  {
+    name: "getReserves",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "reserveX", type: "uint128" },
+      { name: "reserveY", type: "uint128" },
+    ],
+  },
+  {
+    name: "getBin",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint24" }],
+    outputs: [
+      { name: "binReserveX", type: "uint128" },
+      { name: "binReserveY", type: "uint128" },
+    ],
+  },
+  {
+    name: "getPriceFromId",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "id", type: "uint24" }],
+    outputs: [{ name: "price", type: "uint256" }],
+  },
+  {
+    name: "getSwapIn",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "amountOut", type: "uint128" },
+      { name: "swapForY", type: "bool" },
+    ],
+    outputs: [
+      { name: "amountIn", type: "uint128" },
+      { name: "amountOutLeft", type: "uint128" },
+      { name: "fee", type: "uint128" },
+    ],
+  },
+  {
+    name: "getSwapOut",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "amountIn", type: "uint128" },
+      { name: "swapForY", type: "bool" },
+    ],
+    outputs: [
+      { name: "amountInLeft", type: "uint128" },
+      { name: "amountOut", type: "uint128" },
+      { name: "fee", type: "uint128" },
+    ],
+  },
+  {
+    name: "swap",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "swapForY", type: "bool" },
+      { name: "to", type: "address" },
+    ],
+    outputs: [{ name: "amountsOut", type: "bytes32" }],
+  },
+] as const;
