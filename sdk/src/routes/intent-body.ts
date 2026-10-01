@@ -23,6 +23,11 @@
  * its `main` first assigns it the value it has where the intent opens. That is the value the reward
  * and the delivery splice in, so the body and every function it calls see the same number the
  * intent was funded with, rather than the declaration's initial one.
+ *
+ * A top-level `const` of a literal (`const AMOUNT = 1000000n;`) is the opposite case: its value is
+ * fixed when the file is compiled, so it is never captured. It is a declaration of the file in a
+ * script too, where the other top-level statements are the entry: there is nothing for the entry to
+ * compute, and the intent lowering reads its value as it reads a define's.
  */
 import { collectPatternNames, isTypeDeclaration, TYPE_KEYS, type AstNode } from "./ast-walk.js";
 
@@ -35,6 +40,31 @@ interface Declaration {
   readonly mutable: boolean;
   /** The names it reads freely, types included: what carrying it carries along. */
   readonly mentions: ReadonlySet<string>;
+  /** The value of a top-level `const` of a literal: fixed when the file is compiled. */
+  readonly literal?: bigint;
+}
+
+/** The value a literal folds to — an integer, a bigint or a boolean — or `undefined`. */
+export function literalValue(node: unknown): bigint | undefined {
+  if ((node as AstNode | null | undefined)?.type !== "Literal") return undefined;
+  const value = (node as { value?: unknown }).value;
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
+  if (typeof value === "boolean") return value ? 1n : 0n;
+  return undefined;
+}
+
+/** The names a `const` statement binds to literals, each with its value; a declarator of any
+ *  other form (a pattern, a computed value) is left out. */
+function literalConsts(node: AstNode): Map<string, bigint> {
+  const values = new Map<string, bigint>();
+  if ((node as { kind?: string }).kind !== "const") return values;
+  for (const declarator of (node as { declarations?: AstNode[] }).declarations ?? []) {
+    const id = (declarator as { id?: AstNode }).id;
+    const value = literalValue((declarator as { init?: unknown }).init);
+    if (id?.type === "Identifier" && value !== undefined) values.set(nameOf(id), value);
+  }
+  return values;
 }
 
 /** One name an `import` binds. */
@@ -254,18 +284,28 @@ export function moduleScope(program: AstNode): ModuleScope {
       continue;
     }
     // A module's own top-level variable. In a script there is none: its top-level statements are
-    // the entry, so what they declare are locals of it.
-    if (!script && node.type === "VariableDeclaration") {
+    // the entry, so what they declare are locals of it — except a `const` binding only literals,
+    // which is fixed when the file is compiled wherever it stands.
+    if (node.type === "VariableDeclaration") {
       const names = new Set<string>();
       for (const declarator of (node as { declarations?: AstNode[] }).declarations ?? []) {
         collectPatternNames((declarator as { id?: unknown }).id, names);
       }
-      const mentions = new Set(freeNames([node]));
-      const mutable = (node as { kind?: string }).kind !== "const";
-      for (const name of names) {
-        declarations.set(name, { node, kind: "variable", mutable, mentions });
+      const literals = literalConsts(node);
+      if (!script || (names.size > 0 && literals.size === names.size)) {
+        const mentions = new Set(freeNames([node]));
+        const mutable = (node as { kind?: string }).kind !== "const";
+        for (const name of names) {
+          declarations.set(name, {
+            node,
+            kind: "variable",
+            mutable,
+            mentions,
+            ...(literals.has(name) ? { literal: literals.get(name)! } : {}),
+          });
+        }
+        continue;
       }
-      continue;
     }
     if (script) entry.push(node);
   }
