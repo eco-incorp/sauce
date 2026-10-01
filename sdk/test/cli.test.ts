@@ -33,16 +33,12 @@ import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   v12DeployedAddresses,
   v12EngineAddress,
+  v12KitchenAddress,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
 } from "../src/deployments/index.js";
 import { derivePotPda } from "../src/svm/kitchen.js";
-import {
-  potSalt,
-  SAUCE_INTENT_POT_SALT,
-  v12GateKitchen,
-  v12PredictPot,
-} from "../src/deployments/pot.js";
+import { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import * as root from "../src/index.js";
 import * as routes from "../src/routes/index.js";
@@ -1023,8 +1019,8 @@ describe("sauce pot", () => {
       pot: v12PredictPot(OWNER, salt),
       owner: OWNER,
       salt,
-      kitchen: v12GateKitchen(),
-      to: v12GateKitchen(),
+      kitchen: v12KitchenAddress(),
+      to: v12KitchenAddress(),
       data: v12Kitchen.encodeDeployPot(OWNER, salt),
       value: "0",
     });
@@ -1032,7 +1028,7 @@ describe("sauce pot", () => {
     const cast = await sauce("pot", "--owner", OWNER, "--chain", "base", "--format", "cast");
     expect(cast.stdout).toMatch(
       new RegExp(
-        `^cast send ${v12GateKitchen()} 0x[0-9a-f]+ --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>\n$`,
+        `^cast send ${v12KitchenAddress()} 0x[0-9a-f]+ --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>\n$`,
       ),
     );
     const byDefault = JSON.parse(

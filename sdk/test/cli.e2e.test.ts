@@ -63,7 +63,7 @@ import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import { SETTLE_VECTORS, SETTLE_WIRE, settlePayload } from "../src/verify/index.js";
 import { v12Pot } from "../src/evm/engine.js";
-import { gateAnchors, installEngineAt, startGatedEngine } from "./evm/gated-engine.js";
+import * as gated from "./evm/gated-engine.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -219,16 +219,23 @@ async function startChain(slug: string, port: number): Promise<LocalChain> {
   };
 
   const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
-  const stack = await startGatedEngine(
+  const stack = await gated.startGatedEngine(
     { publicClient, walletClient: deployer, testClient },
     DEPLOYER.address,
     creationCode,
   );
-  // The CLI names the engine the SDK records; put the deployed one there.
-  await installEngineAt({ publicClient, testClient }, stack.engine, getAddress(v12EngineAddress()));
+  // The CLI names the engine the SDK records. A harness that deploys it at that release address
+  // needs nothing more; one that deploys it elsewhere moves it there.
+  const released = getAddress(v12EngineAddress());
+  if (getAddress(stack.engine) !== released) {
+    const install = (gated as Record<string, unknown>).installEngineAt as
+      ((clients: object, from: Address, to: Address) => Promise<void>) | undefined;
+    if (install === undefined) throw new Error(`the harness put the engine at ${stack.engine}`);
+    await install({ publicClient, testClient }, stack.engine, released);
+  }
   await send(
     deployer,
-    gateAnchors().kitchen,
+    gated.gateAnchors().kitchen,
     encodeFunctionData({
       abi: parseAbi(["function setExecutionFee(uint256)"]),
       functionName: "setExecutionFee",
@@ -366,7 +373,7 @@ describeEvm("sauce, sent to a chain", () => {
       });
       expect(run.stderr).toContain("It is deployed.");
       const kitchenBefore = await ethereum.publicClient.getBalance({
-        address: gateAnchors().kitchen,
+        address: gated.gateAnchors().kitchen,
       });
 
       await ethereum.send(
@@ -380,7 +387,7 @@ describeEvm("sauce, sent to a chain", () => {
       expect(await ethereum.balanceOf(usdt, RECIPIENT)).toBe(AMOUNT);
       expect(await ethereum.balanceOf(usdc, pot)).toBe(FUNDED - AMOUNT);
       expect(await ethereum.balanceOf(usdt, pot)).toBe(FUNDED - AMOUNT);
-      expect(await ethereum.publicClient.getBalance({ address: gateAnchors().kitchen })).toBe(
+      expect(await ethereum.publicClient.getBalance({ address: gated.gateAnchors().kitchen })).toBe(
         kitchenBefore + FEE,
       );
     }, 60_000);

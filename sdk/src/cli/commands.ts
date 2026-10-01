@@ -17,9 +17,13 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import {
   v12DeployedAddresses,
   v12EngineAddress,
+  v12KitchenAddress,
   v12SvmEngineProgramId,
 } from "../deployments/index.js";
-import { v12GateKitchen, v12PredictPot } from "../deployments/pot.js";
+import { v12PredictPot } from "../deployments/pot.js";
+
+/** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
+const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
@@ -444,12 +448,12 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       );
     }
     const deploy = sauceEvmDeployPotCall({
-      kitchen: v12GateKitchen(),
+      kitchen: kitchenAddress(),
       owner: target.owner,
       salt: target.salt,
     });
     deployed = await sendAndWait(client, input.rpcUrl, input.account, {
-      to: v12GateKitchen() as Address,
+      to: kitchenAddress(),
       data: deploy.data,
       value: 0n,
     });
@@ -496,7 +500,7 @@ export function potCommand(input: PotCommandInput): CommandOutput {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s Pot is predicted by solana.ts`);
   }
-  const kitchen = v12GateKitchen() as Address;
+  const kitchen = kitchenAddress();
   const pot = v12PredictPot(input.owner, input.salt) as Address;
   const call = sauceEvmDeployPotCall({ kitchen, owner: input.owner, salt: input.salt });
   const json = {
