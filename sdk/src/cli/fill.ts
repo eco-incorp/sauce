@@ -27,6 +27,7 @@ import {
   decodeErrorResult,
   encodeFunctionData,
   formatUnits,
+  getAbiItem,
   getAddress,
   keccak256,
   numberToHex,
@@ -105,7 +106,7 @@ const ERC20 = parseAbi([
   "function approve(address, uint256) returns (bool)",
 ]);
 
-const COOK = toFunctionSelector(v12PotAbi.find((item) => item.name === "cook")!);
+const COOK = toFunctionSelector(getAbiItem({ abi: v12PotAbi, name: "cook" }));
 
 /** One call of the block, and what it is for. */
 interface Step extends TxRequest {
