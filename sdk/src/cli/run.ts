@@ -12,7 +12,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
+import type { CanonicalChain } from "../chains/canonical.js";
 import {
   CliError,
   describeFlags,
@@ -21,7 +21,6 @@ import {
   parseDefines,
   parseDefinesFile,
   parseFlags,
-  parseHeader,
   parseLamports,
   parseSalt,
   parseTarget,
@@ -36,8 +35,6 @@ import {
   type FlagSpecs,
   type ParsedArgs,
 } from "./args.js";
-import { mainSignature } from "../routes/entry.js";
-import { blankLiterals } from "../routes/rs-compile.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
 import { chainServedBy, endpointFor } from "./chain.js";
 import {
@@ -58,18 +55,11 @@ import {
   type PotInput,
   type ProgramInput,
 } from "./commands.js";
-import {
-  FUND_MODES,
-  parseFund,
-  parseTokenAmount,
-  permit2On,
-  planFunding,
-  type FundMode,
-  type FundRequest,
-} from "./funding.js";
 import { fillCommand } from "./fill.js";
+import type { FundRequest } from "./funding.js";
 import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
+import { assumedBalances, definesReach, fundingFor, potTarget, programChain } from "./inputs.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
 import {
   checkIntentPots,
@@ -79,7 +69,8 @@ import {
   uncheckedPotNote,
   type Endpoints,
 } from "./intents.js";
-import { parsePriceToken, priceCommand, pricedChain } from "./price.js";
+import { MCP_FLAGS, mcpCommand } from "./mcp.js";
+import { parsePriceToken, priceCommand, pricedChain, priceGiven } from "./price.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import { parsePin, verifyCommand } from "./verify.js";
@@ -423,13 +414,9 @@ function fileOperand(args: ParsedArgs): string {
   return file;
 }
 
-/** The one chain of kind svm, which `--target svm` alone names. */
-const svmChain = (): CanonicalChain => CANONICAL_CHAINS.find((chain) => chain.kind === "svm")!;
-
 /**
  * The chain a program runs on: `--chain`, else the file's `// @chain`, else — for `--target svm`
- * or `// @target svm` alone — the one SVM chain. A target that disagrees with the chain is an
- * error, wherever either came from.
+ * or `// @target svm` alone — the one SVM chain (`inputs.ts#programChain`).
  */
 function chainOf(
   args: ParsedArgs,
@@ -437,53 +424,15 @@ function chainOf(
   text: string,
   fallback?: CanonicalChain,
 ): CanonicalChain {
-  const header = parseHeader(text, file);
-  const chainFlag = stringFlag(args, "chain");
-  const targetFlag = stringFlag(args, "target");
-  const targetFrom = targetFlag !== undefined ? "--target" : `${file}'s // @target`;
-  const targetRaw = targetFlag ?? header.target;
-  const target = targetRaw === undefined ? undefined : parseTarget(targetRaw, targetFrom);
-  const chain =
-    chainFlag !== undefined
-      ? parseChain(chainFlag)
-      : header.chain !== undefined
-        ? parseChain(header.chain, `${file}'s // @chain`)
-        : target === "svm"
-          ? svmChain()
-          : fallback;
-  if (chain === undefined) {
-    throw new UsageError(
-      "missing --chain <slug|id>: which chain the program runs on (or head the file with a " +
-        "`// @chain <slug>` line)",
-    );
-  }
-  if (target !== undefined && target !== chain.kind) {
-    throw new UsageError(
-      `${targetFrom} ${target} does not match ${chain.slug}, an ${chain.kind.toUpperCase()} chain`,
-    );
-  }
+  const chain = stringFlag(args, "chain");
+  const target = stringFlag(args, "target");
 
-  return chain;
-}
-
-/**
- * Refuses a define the program would never see. A file with no `function main` is a script: its
- * top-level statements are the entry's body, so a `const` there is the script's own local, and a
- * define of the same name — which replaces a MODULE-level const — would be silently ignored.
- */
-function definesReach(file: string, text: string, names: readonly string[]): void {
-  if (mainSignature(text) !== undefined) return;
-  const code = blankLiterals(text);
-  for (const name of names) {
-    if (new RegExp(`(^|[^.\\w$])(?:const|let)\\s+${name.replace(/\$/g, "\\$")}\\b`).test(code)) {
-      throw new UsageError(
-        `--define ${name} would not reach ${file}: with no \`function main\`, its top-level ` +
-          `\`const ${name}\` is the script's own, which a define does not replace. Drop the ` +
-          `declaration and read ${name} as a define, or declare function main() and keep the ` +
-          "const beside it, where a define replaces it.",
-      );
-    }
-  }
+  return programChain(
+    { ...(chain === undefined ? {} : { chain }), ...(target === undefined ? {} : { target }) },
+    file,
+    text,
+    fallback,
+  );
 }
 
 /**
@@ -676,26 +625,18 @@ const saltOf = (args: ParsedArgs) =>
 
 /**
  * The Pot a cook runs on: `--pot`, or derived from `--owner` — or, when `signer` is given (a run),
- * from the signer, whose Pot it must be anyway.
+ * from the signer, whose Pot it must be anyway (`inputs.ts#potTarget`).
  */
 function potInput(args: ParsedArgs, signer?: `0x${string}`): PotInput {
-  const pot = stringFlag(args, "pot");
-  const owner = stringFlag(args, "owner");
-  if (pot !== undefined && owner !== undefined) {
-    throw new UsageError("give --pot or --owner, not both");
-  }
-  if (pot !== undefined) {
-    if (stringFlag(args, "salt") !== undefined || stringFlag(args, "salt-hex") !== undefined) {
-      throw new UsageError("--salt and --salt-hex go with --owner: --pot names the Pot itself");
-    }
-
-    return { pot: parseAddress("pot", pot) };
-  }
-  if (owner === undefined && signer === undefined) {
-    throw new UsageError("missing --pot <address> or --owner <address>: the Pot to cook on");
-  }
-
-  return { owner: owner === undefined ? signer! : parseAddress("owner", owner), ...saltOf(args) };
+  return potTarget(
+    {
+      pot: stringFlag(args, "pot"),
+      owner: stringFlag(args, "owner"),
+      salt: stringFlag(args, "salt"),
+      saltHex: stringFlag(args, "salt-hex"),
+    },
+    signer,
+  );
 }
 
 /** Everything an EVM cook command takes from its flags. */
@@ -833,82 +774,23 @@ function fundingOf(
   send: boolean,
   account: PrivateKeyAccount | undefined,
 ): CookInput["fund"] {
-  const raw = repeatedFlag(args, "fund");
   const mode = stringFlag(args, "fund-mode");
-  const sweep = args.values.sweep === true;
-  if (raw.length === 0) {
-    if (mode !== undefined) throw new UsageError("--fund-mode says how --fund pulls: give --fund");
-    if (sweep) {
-      throw new UsageError(
-        "--sweep returns what is left of the tokens --fund pulls in: give --fund",
-      );
-    }
 
-    return undefined;
-  }
-  if (chain.kind !== "evm") {
-    throw new UsageError(
-      `--fund is for EVM chains: on ${chain.slug} a program spends from the accounts it is given`,
-    );
-  }
-  if (mode !== undefined && !(FUND_MODES as readonly string[]).includes(mode)) {
-    throw new UsageError(`--fund-mode: '${mode}' is not ${FUND_MODES.join(", ")}`);
-  }
-  const requests = raw.map((value) => parseFund(value, chain));
-  const seen = new Set<string>();
-  for (const request of requests) {
-    const key = request.token ?? "native";
-    if (seen.has(key)) {
-      throw new UsageError(`--fund names ${request.label} twice: give it once, with the total`);
-    }
-    seen.add(key);
-  }
-  // Before anything is sent — a Pot deployed — rather than once the run reaches the pulls.
-  if (
-    (mode ?? "permit2") === "permit2" &&
-    requests.some((request) => request.token !== undefined)
-  ) {
-    permit2On(chain);
-  }
-
-  return async (client, pot, owner, plan = false) => {
-    if (account !== undefined && account.address !== owner) {
-      throw new UsageError(
-        `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls the ` +
-          "owner's tokens on the owner's signature",
-      );
-    }
-
-    return planFunding({
-      chain,
-      client,
-      rpcUrl,
-      owner,
-      pot,
-      mode: (mode ?? "permit2") as FundMode,
-      requests,
-      sweep,
-      ...(account === undefined ? {} : { account }),
-      send: send && !plan,
-      approver: approverOf(args, io),
-    });
-  };
+  return fundingFor({
+    chain,
+    rpcUrl,
+    fund: repeatedFlag(args, "fund"),
+    ...(mode === undefined ? {} : { mode }),
+    sweep: args.values.sweep === true,
+    send,
+    ...(account === undefined ? {} : { account }),
+    approver: approverOf(args, io),
+  });
 }
 
 /** `--assume-balance`, each named once. */
-function assumedBalances(args: ParsedArgs, chain: CanonicalChain): FundRequest[] {
-  const requests = repeatedFlag(args, "assume-balance").map((raw) =>
-    parseTokenAmount(raw, chain, "--assume-balance"),
-  );
-  const seen = new Set<string>();
-  for (const request of requests) {
-    if (seen.has(request.token ?? "native")) {
-      throw new UsageError(`--assume-balance names ${request.label} twice: give it once`);
-    }
-    seen.add(request.token ?? "native");
-  }
-
-  return requests;
+function assumedBalancesOf(args: ParsedArgs, chain: CanonicalChain): FundRequest[] {
+  return assumedBalances(repeatedFlag(args, "assume-balance"), chain);
 }
 
 // --- Solana ----------------------------------------------------------------------------------
@@ -1313,7 +1195,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         }
       }
       const input = cookInput(args, io, trailing, owner, program);
-      const assumed = assumedBalances(args, input.chain);
+      const assumed = assumedBalancesOf(args, input.chain);
       const rpcUrl = requiredEndpoint(args, io, input.chain);
       const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
 
@@ -1505,7 +1387,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ? requiredEndpoint(args, io, program.chain)
           : endpoint(args, io, program.chain);
 
-      const assume = assumedBalances(args, program.chain);
+      const assume = assumedBalancesOf(args, program.chain);
       if (assume.length > 0 && args.values["dry-run"] !== true) {
         throw new UsageError(
           "--assume-balance goes with --dry-run: it gives the wallet a balance for a rehearsal, " +
@@ -1849,25 +1731,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         throw new UsageError("missing <base> <quote>: the pair, as WETH USDC");
       }
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
-      if ((price === undefined) === (sqrt === undefined)) {
-        throw new UsageError(
-          price === undefined
-            ? "missing <price>: how many quote tokens one base token is worth (or --sqrt-price-x96)"
-            : "give <price> or --sqrt-price-x96, not both",
-        );
-      }
-      if (price !== undefined && !/^\d+(?:\.\d+)?$/.test(price)) {
-        throw new UsageError(`'${price}' is not a price: a decimal number, as 2700 or 0.00037`);
-      }
-      if (sqrt !== undefined && !/^\d+$/.test(sqrt)) {
-        throw new UsageError(`--sqrt-price-x96: '${sqrt}' is not a whole number`);
-      }
+      const given = priceGiven(price, sqrt);
 
       return priceCommand({
         chain,
         base: parsePriceToken(base, chain),
         quote: parsePriceToken(quote, chain),
-        price: price !== undefined ? { decimal: price } : { sqrtPriceX96: BigInt(sqrt!) },
+        price: given,
       });
     },
   },
@@ -2168,6 +2038,39 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         "  npx sauce --help",
       ]);
     },
+  },
+  mcp: {
+    usage: [
+      "sauce mcp [--config <file>]",
+      "sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]",
+      "sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]",
+    ],
+    summary: "Serve the read-only commands and the agent skills to coding agents over MCP",
+    flags: { ...MCP_FLAGS, ...HELP },
+    details: [
+      "The Sauce MCP server. Its tools are this command's read-only half — sauce_compile,",
+      "sauce_actions, sauce_tx, sauce_pot, sauce_simulate, sauce_intent_publish,",
+      "sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price and",
+      "sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
+      "sauce_install_skills) and as resources, at sauce://skills/<path>. Nothing it does signs,",
+      "and it takes no key: every transaction comes back unsigned, for the user's own wallet.",
+      "",
+      "Over stdio by default, what a coding agent launches. With --http, Streamable HTTP at /mcp,",
+      "stateless: on 127.0.0.1 unless --host says otherwise, answering only a loopback Host or an",
+      "--allowed-host one. It authenticates no one, so off loopback it needs --allowed-host, and",
+      "goes behind your own authentication. The chains it reads are --config's; it reads no",
+      "environment, and never shows a URL from the file.",
+      "",
+      "setup adds the server to a project for each agent, in the file its vendor documents:",
+      ".mcp.json (claude), .codex/config.toml (codex), .cursor/mcp.json (cursor),",
+      ".vscode/mcp.json (copilot) and .gemini/settings.json (gemini), keeping what else each holds.",
+      "",
+      "Examples:",
+      "  npx -y @eco-incorp/sauce mcp",
+      "  npx -y @eco-incorp/sauce mcp --http 3000 --config sauce.config.json",
+      "  npx sauce mcp setup --agent claude,cursor",
+    ].join("\n"),
+    run: (args, io) => mcpCommand(args, io),
   },
 };
 

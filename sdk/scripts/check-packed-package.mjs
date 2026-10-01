@@ -2,7 +2,8 @@
 // Exercise the published entry points from a clean consumer, without workspace
 // dependencies or a separately installed compiler hiding a broken bundle.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -351,7 +352,7 @@ try {
       env: smokeEnv,
     }),
     `${name} ${installedManifest.version}\n`,
-    `npx ${name} runs the package's one bin`,
+    `npx ${name} runs the package's sauce bin`,
   );
   // The skill's `pay.sauce.ts` names no chain and takes `main(recipient, amount)` at run time.
   const example = join(installedRoot, "skills/sauce-run/examples/pay.sauce.ts");
@@ -547,6 +548,168 @@ try {
     sauce("skills", "status", "--dir", codexProject),
     /: up to date \(/,
     "the check leaves the installed skills as they were",
+  );
+
+  // `sauce mcp`, from the install, the way the guide launches it — `npx @eco-incorp/sauce mcp`,
+  // here with `--no` so nothing is fetched — over both transports: the tools, a compile, and every
+  // shipped skill file as a resource. Nothing here reaches a chain.
+  const mcpLaunch = ["--no", "--", name, "mcp"];
+  const mcpProgram =
+    "function main(recipient: Address, amount: Uint256) {\n  USDC.transfer(recipient, amount);\n}\n";
+  writeFileSync(join(work, "mcp-check.sauce.ts"), mcpProgram);
+  const mcpRequests = [
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "check-packed", version: "0" },
+      },
+    },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    { jsonrpc: "2.0", id: 2, method: "tools/list" },
+    {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: {
+        name: "sauce_compile",
+        arguments: {
+          source: mcpProgram,
+          chain: "ethereum",
+        },
+      },
+    },
+    { jsonrpc: "2.0", id: 4, method: "resources/list" },
+  ];
+  // Each server runs in a process group of its own — npx, the shell it may start, node — so it is
+  // stopped whole: killing npx alone can leave the server running, holding this script's pipes
+  // open, and the check would never end. Every wait is bounded for the same reason.
+  const mcpServer = (args, stdio) =>
+    spawn("npx", [...mcpLaunch, ...args], { cwd: work, env: smokeEnv, stdio, detached: true });
+  const stopServer = async (child) => {
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = once(child, "exit");
+      try {
+        process.kill(-child.pid, "SIGTERM");
+      } catch {
+        // The group is gone already.
+      }
+      await exited;
+    }
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch {
+      // Nothing of it is left.
+    }
+    for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.destroy();
+  };
+  const within = (promise, what, ms = 120_000) => {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${what}: nothing within ${ms / 1000}s`)), ms);
+    });
+
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  };
+  // Over stdio: one JSON-RPC message per line in, one per line out, and EOF ends the server.
+  const stdio = mcpServer([], ["pipe", "pipe", "inherit"]);
+  let stdout = "";
+  const answers = new Map();
+  try {
+    const answered = new Promise((resolveAll, rejectAll) => {
+      stdio.stdout.on("data", (chunk) => {
+        stdout += chunk.toString();
+        for (let at = stdout.indexOf("\n"); at >= 0; at = stdout.indexOf("\n")) {
+          const message = JSON.parse(stdout.slice(0, at));
+          stdout = stdout.slice(at + 1);
+          if (message.id !== undefined) answers.set(message.id, message);
+          if (answers.size === 4) resolveAll();
+        }
+      });
+      stdio.once("exit", (code) =>
+        rejectAll(new Error(`sauce mcp exited ${code} before answering`)),
+      );
+    });
+    for (const message of mcpRequests) stdio.stdin.write(`${JSON.stringify(message)}\n`);
+    await within(answered, "sauce mcp over stdio");
+    stdio.stdin.end();
+    await within(once(stdio, "exit"), "sauce mcp ending at EOF", 30_000).catch(() => {});
+  } finally {
+    await stopServer(stdio);
+  }
+  assert.equal(answers.get(1).result.serverInfo.version, installedManifest.version);
+  const toolNames = answers.get(2).result.tools.map((tool) => tool.name);
+  for (const tool of [
+    "sauce_compile",
+    "sauce_actions",
+    "sauce_tx",
+    "sauce_pot",
+    "sauce_simulate",
+    "sauce_intent_publish",
+    "sauce_skills",
+    "sauce_skill",
+  ]) {
+    assert.ok(toolNames.includes(tool), `sauce mcp lists ${tool}`);
+  }
+  assert.equal(
+    answers.get(3).result.structuredContent.bytecode,
+    JSON.parse(sauce("compile", join(work, "mcp-check.sauce.ts"), "--chain", "ethereum", "--json"))
+      .bytecode,
+    "sauce_compile compiles what sauce compile does",
+  );
+  const resourceUris = answers.get(4).result.resources.map((resource) => resource.uri);
+  for (const file of shippedSkills) {
+    assert.ok(resourceUris.includes(`sauce://skills/${file}`), `sauce mcp serves skills/${file}`);
+  }
+  // Over Streamable HTTP, self-hosted with the same one command and a port it picks: initialize
+  // and tools/list, each a POST of its own to the stateless /mcp.
+  const http = mcpServer(["--http", "0"], ["ignore", "ignore", "pipe"]);
+  try {
+    let httpLog = "";
+    const url = await within(
+      new Promise((resolveUrl, rejectUrl) => {
+        http.stderr.on("data", (chunk) => {
+          httpLog += chunk.toString();
+          const found = /Streamable HTTP at (http:\/\/\S+)/.exec(httpLog);
+          if (found !== null) resolveUrl(found[1]);
+        });
+        http.once("exit", (code) =>
+          rejectUrl(new Error(`sauce mcp --http exited ${code}: ${httpLog}`)),
+        );
+      }),
+      "sauce mcp --http starting",
+    );
+    const post = async (message) => {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          "mcp-protocol-version": "2025-06-18",
+          connection: "close",
+        },
+        body: JSON.stringify(message),
+        signal: AbortSignal.timeout(60_000),
+      });
+      assert.equal(response.status, 200, `${message.method} over HTTP`);
+
+      return response.json();
+    };
+    assert.equal((await post(mcpRequests[0])).result.serverInfo.name, "sauce");
+    assert.deepEqual(
+      (await post(mcpRequests[2])).result.tools.map((tool) => tool.name),
+      toolNames,
+      "the same tools over HTTP as over stdio",
+    );
+  } finally {
+    await stopServer(http);
+  }
+  console.log(
+    `Clean package install: npx ${name} mcp serves its ${toolNames.length} tools and the ` +
+      `${shippedSkills.length} skill files over stdio and Streamable HTTP`,
   );
 
   // The same browser gates the repository runs, against the INSTALLED package and resolved from
