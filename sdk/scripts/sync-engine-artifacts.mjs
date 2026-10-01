@@ -82,7 +82,8 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 // To bump: edit the row's versions, run this script, and paste the digests and engine ids it
 // reports. A row with a `null` digest or engine id is a release that is not out yet: this script
 // downloads it, reports what to paste, and writes NOTHING, because an unpinned engine is not one to
-// run.
+// run. `--report <compiler>` reports any row the same way without the compiler installed — the
+// engines release before the compiler that pairs with them does.
 
 const RELEASES_JSON = resolve(SDK_DIR, "src", "deployments", "releases.json");
 const RELEASE_SETS = JSON.parse(readFileSync(RELEASES_JSON, "utf8")).releases;
@@ -103,7 +104,11 @@ function installedCompilerVersion() {
   throw new Error("could not locate the installed @eco-incorp/sauce-compiler manifest");
 }
 
-const COMPILER = installedCompilerVersion();
+/** `--report <compiler>`: only report that row's digests and engine ids (see below). */
+const REPORT = process.argv.includes("--report")
+  ? process.argv[process.argv.indexOf("--report") + 1]
+  : undefined;
+const COMPILER = REPORT ?? installedCompilerVersion();
 const SET = RELEASE_SETS.find((row) => row.compiler === COMPILER);
 if (!SET) {
   console.error(
@@ -419,19 +424,27 @@ const ENGINE_IDENTITY = {
 // A ROW THAT IS NOT RELEASED YET: report what to paste, and write nothing. An unpinned engine is not
 // one to run, and keeping the previous row's artifacts on disk would pair them with a compiler they
 // were never synced for.
+//
+// `--report <compiler>` does the same for any row, whatever compiler is installed, and reads every
+// asset fresh from the registry rather than from the cache: how a row is filled in when its
+// releases are out but the compiler that pairs with them is not installed yet. It writes nothing.
 {
-  const unpinned = PINS.filter((p) => p.digest === null);
-  const unnamed = Object.keys(ENGINE_IDENTITY).filter((c) => SET[c].engine === null);
+  const report = REPORT !== undefined;
+  const unpinned = report ? PINS : PINS.filter((p) => p.digest === null);
+  const unnamed = Object.keys(ENGINE_IDENTITY).filter((c) => report || SET[c].engine === null);
   if (unpinned.length > 0 || unnamed.length > 0) {
     console.error(
-      `[sync-engine-artifacts] releases.json's row for compiler ${COMPILER} is not pinned yet. From ` +
-        "the releases it names — paste these into that row, then run this again:",
+      report
+        ? `[sync-engine-artifacts] releases.json's row for compiler ${COMPILER}, read from its releases:`
+        : `[sync-engine-artifacts] releases.json's row for compiler ${COMPILER} is not pinned yet. From ` +
+            "the releases it names — paste these into that row, then run this again:",
     );
     for (const p of unpinned) {
-      const dir = resolve(CACHE_ROOT, p.tag);
+      const dir = resolve(CACHE_ROOT, p.tag, ...(report ? [".report"] : []));
       mkdirSync(dir, { recursive: true });
       const dest = resolve(dir, p.asset);
       try {
+        if (report) rmSync(dest, { force: true });
         if (!existsSync(dest)) download(p.tag, p.asset, dest);
         console.error(`  ${p.tag} ${p.asset}: "${p.hash(readFileSync(dest))}"`);
       } catch (e) {
@@ -441,12 +454,22 @@ const ENGINE_IDENTITY = {
     for (const component of unnamed) {
       const tag = `${component}-v${SET[component].version}`;
       try {
-        console.error(`  ${tag} engine: "${ENGINE_IDENTITY[component](releaseAddresses(tag))}"`);
+        let addresses;
+        if (report) {
+          const fresh = resolve(CACHE_ROOT, tag, ".report", "addresses.json");
+          mkdirSync(dirname(fresh), { recursive: true });
+          rmSync(fresh, { force: true });
+          download(tag, "addresses.json", fresh);
+          addresses = JSON.parse(readFileSync(fresh, "utf8"));
+        } else {
+          addresses = releaseAddresses(tag);
+        }
+        console.error(`  ${tag} engine: "${ENGINE_IDENTITY[component](addresses)}"`);
       } catch (e) {
         console.error(`  ${tag} engine: not available — ${e.message}`);
       }
     }
-    process.exit(1);
+    process.exit(report ? 0 : 1);
   }
 }
 
