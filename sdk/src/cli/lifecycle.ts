@@ -2090,9 +2090,11 @@ async function buildSvmProve(
   const notes: string[] = [];
   const pairs: Array<{ intent: Intent; intentHash: Hex; claimant: Hex }> = [];
   let portal: string | undefined;
-  for (const intent of intents) {
+  // What the destination recorded for every intent, read at once.
+  const recorded = await Promise.all(intents.map((intent) => readSvmDestination(rpc, intent)));
+  for (const [index, intent] of intents.entries()) {
     const { intentHash } = hashIntent(intent);
-    const there = await readSvmDestination(rpc, intent);
+    const there = recorded[index]!;
     portal = there.portal;
     if (there.claimant === null) {
       return {

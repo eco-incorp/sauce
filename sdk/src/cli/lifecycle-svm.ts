@@ -138,7 +138,13 @@ const portalCode = new Map<string, Uint8Array>();
 /** An upgradeable program's ELF (its ProgramData past the 45-byte header), read once per id. */
 async function programCode(rpc: SvmRpc, program: SvmAddress): Promise<Uint8Array | undefined> {
   const cached = portalCode.get(program);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    // Least recently used goes first: a hit moves to the end.
+    portalCode.delete(program);
+    portalCode.set(program, cached);
+
+    return cached;
+  }
   const head = await account(rpc, program, `the program ${program}`);
   if (head === null || !head.executable || head.data.length < 36) return undefined;
   const programData = svmKeyOf(bytesToHex(head.data.subarray(4, 36)));
@@ -338,24 +344,23 @@ export async function planSvmFill(
   options: { readonly solver: SvmAddress; readonly claimant: Hex },
 ): Promise<SvmFillPlan> {
   const portal = svmKeyOf(intent.route.portal);
-  const tokens: SvmFillToken[] = [];
-  const tokenPrograms: Record<string, SvmAddress> = {};
-  for (const entry of intent.route.tokens) {
-    const mint = svmKeyOf(entry.token);
-    const found = await account(rpc, mint, `the mint ${mint}`);
-    if (found === null) throw new CliError(`the route's mint ${mint} does not exist on Solana`);
-    const program = address(found.owner);
-    tokenPrograms[mint] = program;
-    const from = await associatedTokenAccount(options.solver, mint, program);
-    const held = await account(rpc, from, `the solver's ${mint} account`);
-    tokens.push({
-      mint,
-      program,
-      from,
-      amount: entry.amount,
-      held: tokenAccountAmount(held?.data),
-    });
-  }
+  // Each token's mint (whose owner is its token program), then the solver's account for it: two
+  // reads a token, every token at once.
+  const tokens: SvmFillToken[] = await Promise.all(
+    intent.route.tokens.map(async (entry) => {
+      const mint = svmKeyOf(entry.token);
+      const found = await account(rpc, mint, `the mint ${mint}`);
+      if (found === null) throw new CliError(`the route's mint ${mint} does not exist on Solana`);
+      const program = address(found.owner);
+      const from = await associatedTokenAccount(options.solver, mint, program);
+      const held = await account(rpc, from, `the solver's ${mint} account`);
+
+      return { mint, program, from, amount: entry.amount, held: tokenAccountAmount(held?.data) };
+    }),
+  );
+  const tokenPrograms: Record<string, SvmAddress> = Object.fromEntries(
+    tokens.map((token) => [token.mint, address(token.program)]),
+  );
   const fulfill = await buildPortalFulfillInstruction({
     intent,
     portal,
