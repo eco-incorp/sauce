@@ -1652,7 +1652,6 @@ export const STOCK_TOKENS: Readonly<Record<number, readonly StockList[]>> = {
         ["SGOVon", "0x8De5D49725550f7b318b2FA0f1B1F118E98E8D0F", "iShares 0-3 Month Treasury Bond ETF (Ondo Tokenized)", "SGOV"],
         ["SHLDon", "0xFb4Aa24c9c4E65f82d57d268dA8a65a0dE0DC43B", "Global X Defense Tech ETF (Ondo Tokenized)", "SHLD"],
         ["SHOPon", "0x908266C1192628371Cff7AD2F5Eba4dE061a0ac5", "Shopify (Ondo Tokenized)", "SHOP"],
-        ["SHVon", "0x2d8B65306a6c23dA6342CB94d4251fb4302a624F", "iShares 0-1 Year Treasury Bond (Ondo Tokenized)", "SHV"],
         ["SHYon", "0x5C424B9b60383FCE7fE7069D2a2B1047BCd04a73", "iShares 1-3 Year Treasury Bond ETF (Ondo Tokenized)", "SHY"],
         ["SILon", "0x603E505799511155A9216D37cF9e051171240b4c", "Global X Silver Miners ETF (Ondo Tokenized)", "SIL"],
         ["SKHYon", "0xc0fE36F4FFBDf1B38E192215073590a68f9A2Af7", "SK Hynix (Ondo Tokenized)", "SKHY"],

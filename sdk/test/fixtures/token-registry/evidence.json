@@ -1,7 +1,7 @@
 {
   "chains": {
     "1": {
-      "block": 26100406,
+      "block": 26100582,
       "tokens": {
         "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {"code":2186,"symbol":"USDC","decimals":6},
         "0xdAC17F958D2ee523a2206206994597C13D831ec7": {"code":11075,"symbol":"USDT","decimals":6},
@@ -1640,7 +1640,6 @@
         "0x8De5D49725550f7b318b2FA0f1B1F118E98E8D0F": {"code":824,"symbol":"SGOVon","decimals":18},
         "0xFb4Aa24c9c4E65f82d57d268dA8a65a0dE0DC43B": {"code":824,"symbol":"SHLDon","decimals":18},
         "0x908266C1192628371Cff7AD2F5Eba4dE061a0ac5": {"code":824,"symbol":"SHOPon","decimals":18},
-        "0x2d8B65306a6c23dA6342CB94d4251fb4302a624F": {"code":824,"symbol":"SHVon","decimals":18},
         "0x5C424B9b60383FCE7fE7069D2a2B1047BCd04a73": {"code":824,"symbol":"SHYon","decimals":18},
         "0x603E505799511155A9216D37cF9e051171240b4c": {"code":824,"symbol":"SILon","decimals":18},
         "0xc0fE36F4FFBDf1B38E192215073590a68f9A2Af7": {"code":824,"symbol":"SKHYon","decimals":18},
