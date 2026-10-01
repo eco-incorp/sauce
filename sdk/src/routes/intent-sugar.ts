@@ -186,6 +186,8 @@ export interface CompiledChild {
   readonly call: { readonly target: Hex; readonly data: Hex; readonly value: bigint };
   /** The sentinel each capture occupies, in the order the program declares them. */
   readonly captureSentinels: readonly bigint[];
+  /** The intents the child program opens on its own chain, as its compile lowered them. */
+  readonly intents?: readonly LoweredIntent[];
 }
 
 export interface IntentSugarResult {
@@ -206,6 +208,9 @@ export interface LoweredIntent {
   /** How the emitted program funds it: by transfer to its vault then `publish`, or
    *  `publishAndFund`. */
   readonly fundVia: IntentFundVia;
+  /** The intents its body opens on `destination`, lowered for that chain: a nested intent's, at
+   *  any depth. Empty for a body that opens none. */
+  readonly nested: readonly LoweredIntent[];
 }
 
 class SugarError extends Error {}
@@ -704,6 +709,7 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     const derivedDelivery: { token: bigint; amount: Value }[] = [];
     const calls: { target: Hex; data: Hex; value: bigint }[] = [];
     const captureWords: { name: string; sentinel: bigint }[] = [];
+    let nested: readonly LoweredIntent[] = [];
 
     if (!simple) {
       // The body as a program of its own: the file's declarations it reaches, carried as written,
@@ -735,6 +741,7 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       captured.forEach((name, i) => {
         captureWords.push({ name, sentinel: child.captureSentinels[i]! });
       });
+      nested = child.intents ?? [];
       // Delivered tokens land on the Executor; the program runs in the Pot, so move them first.
       for (const token of explicitDelivery ?? []) {
         calls.push({
@@ -927,6 +934,7 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       sentinels: placeholders.map(({ value, source }) => ({ sentinel: value, capture: source })),
       destination: site.chain,
       fundVia,
+      nested,
     });
     replacements.push({
       start: site.start,

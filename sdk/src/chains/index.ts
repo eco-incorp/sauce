@@ -302,3 +302,4 @@ export function nativeToErc20Amount(chainId: number, wei: bigint): bigint {
 }
 
 export * from "./canonical.js";
+export * from "./support.js";
