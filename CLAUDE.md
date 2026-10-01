@@ -474,15 +474,22 @@ quotes and, for the split swap, the same quoter calls as SauceScript over fixed 
 been checked.
 
 **The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's one
-executable: `compile`, `tx`, `pot`, `init` and `skills install`. It adds no compile path of its
-own — `compileSauceProgram` (the compile half of `compileSauceRoute`) under `withChainAmbient`
-(the chain bundle `openRoute` uses) — and no encoder: `compileSauceRoute`'s call, `v12PredictPot`,
-`sauceEvmDeployPotCall`, `destinationExecutionFee`. It is Node-only and deliberately in no
-`exports` entry and no barrel (`cli.test.ts` fails if a barrel exports it), reads no environment,
-and reaches a network only through `--rpc-url`. `cli.e2e.test.ts` sends what it prints to an
-anvil running the released gated stack, and runs its `cast send` line verbatim; the packed check
-runs the installed bin through `npx`. The agent skills `sauce skills install` copies live in the
-top-level `skills/<name>/` and ship in the package; they are distinct from `sdk/src/skills/`, the
+executable: `compile`, `simulate`, `run`, `publish`, `tx`, `pot`, `globals`, `inspect`, `verify`,
+`init` and `skills install|update|status`, on EVM chains and (`solana.ts`) Solana. It adds no
+compile path of its own — `compileSauceProgram` (the compile half of `compileSauceRoute`) under
+`withChainAmbient` (the chain bundle `openRoute` uses) — and no encoder or decoder: the cook is
+`buildSauceEvmCall`, the Pot `v12PredictPot`/`potSalt`/`sauceEvmDeployPotCall`, arguments
+`encodeEntryArguments`/`decodeEntryArguments`, names `sourceGlobals`, settles
+`validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
+(`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
+(`cli.test.ts` fails if a barrel exports it), reads no environment, reaches a network only through
+`--rpc-url` or a `--config` file, and signs only with `--keystore`, `--private-key` or
+`--keypair`, scrubbing any key it was given from everything it prints. `cli.e2e.test.ts` runs the
+EVM commands against anvils with the released gated stack (and one `cast send` line verbatim);
+`cli-solana.e2e.test.ts` runs the Solana ones against the released Kitchen and engine in LiteSVM
+through a JSON-RPC shim; the packed check runs the installed bin through `npx`. The agent skills
+`sauce skills` installs (to `.claude/skills/` and `.agents/skills/`) live in the top-level
+`skills/<name>/` and ship in the package; they are distinct from `sdk/src/skills/`, the
 per-protocol documents the `/skills` export loads.
 
 **`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness, for
