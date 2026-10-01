@@ -28,11 +28,11 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   ],
   // fill's: --rpc-url is one destination's endpoint; the call's rpcUrls names each.
   [/so give --config, which names each destination's/g, "so give rpcUrls, which names each one"],
-  [/`sauce fill` with the same file and flags/g, "sauce_fill with the same inputs"],
-  [
-    command("sauce (globals|compile|simulate|tx|pot|publish|fill|inspect|verify|price)"),
-    "sauce_$1",
-  ],
+  [/`sauce fill` with the same file and flags/g, "sauce_intent_fill with the same inputs"],
+  // An intent's commands are its tools under sauce_intent_, spelt either way the command line has.
+  [command("sauce (?:intent )?(publish|fill)"), "sauce_intent_$1"],
+  [command("sauce intent (status|import|prove|claim|refund|cancel)"), "sauce_intent_$1"],
+  [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price)"), "sauce_$1"],
   // A flag, as the input of the same meaning. `--config` is the operator's, and stays.
   [/pass them after --args, in order, or as --args-json/g, "pass them as args, in order"],
   [/--args-json\b|--args\b/g, "args"],
@@ -49,6 +49,7 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [/--intent-deadline\b/g, "intentDeadline"],
   [/--intent-creator\b/g, "intentCreator"],
   [/--intent-execution-fee\b/g, "intentExecutionFee"],
+  [/--intent-fund-via\b/g, "intentFundVia"],
   [/--compact-args\b/g, "compactArgs"],
   [/--defines?\b/g, "defines"],
   [/--chain\b/g, "chain"],

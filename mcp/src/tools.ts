@@ -607,8 +607,8 @@ export const TOOL_NAMES = [
   "sauce_tx",
   "sauce_pot",
   "sauce_simulate",
-  "sauce_publish",
-  "sauce_fill",
+  "sauce_intent_publish",
+  "sauce_intent_fill",
   "sauce_inspect",
   "sauce_verify",
 ] as const;
@@ -1264,7 +1264,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
   );
 
   tool(
-    "sauce_publish",
+    "sauce_intent_publish",
     {
       title: "Build an intent's unsigned publish transactions",
       description:
@@ -1349,15 +1349,16 @@ export function registerTools(server: McpServer, context: ToolContext): void {
   );
 
   tool(
-    "sauce_fill",
+    "sauce_intent_fill",
     {
       title: "Rehearse a solver filling an intent on its destination",
       description:
-        "For a program that opens cross-chain intents fixed when it is built (as sauce_publish " +
-        "takes): what happens on each intent's DESTINATION chain when a solver fills it, " +
-        "rehearsed there with no key and nothing sent — the other half of sauce_publish's " +
-        "dryRun, which rehearses the source. Give the same inputs as sauce_publish (chain is " +
-        "the SOURCE) and the destination's endpoint: rpcUrl when every intent goes to one chain, " +
+        "For a program that opens cross-chain intents fixed when it is built (as " +
+        "sauce_intent_publish takes): what happens on each intent's DESTINATION chain when a " +
+        "solver fills it, rehearsed there with no key and nothing sent — the other half of " +
+        "sauce_intent_publish's dryRun, which rehearses the source. Give the same inputs as " +
+        "sauce_intent_publish (chain is the SOURCE) and the destination's endpoint: rpcUrl when " +
+        "every intent goes to one chain, " +
         "rpcUrls by chain otherwise. One eth_simulateV1 block from the solver: the destination's " +
         "shared intent Pot deployed when the route cooks on it and it is not there yet, the " +
         "solver's approval of the Portal for each token the route delivers, then " +
