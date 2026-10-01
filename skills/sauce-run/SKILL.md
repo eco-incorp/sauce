@@ -102,6 +102,20 @@ a program; the CLI names whichever is missing.
   `publishAndFund`. Only a file whose intents are fixed when it is built qualifies; it refuses one
   with a measured amount and says to use `sauce run`. `--dry-run` rehearses without sending.
 
+## Solana
+
+The same commands take `--chain solana` (or a `// @chain solana` header), with three differences:
+
+- A program declares every account it touches as an `Account` parameter of `main`
+  (`Account<Writable>`, `Account<Signer>`). Pass each as `--account NAME=<address | pot | owner>`:
+  `pot` is the Pot, which the Kitchen signs for; `owner` is the signer. `sauce compile --json`
+  lists them in its `manifest`.
+- Sign with `--keypair <path>`, a Solana keypair file. The Pot is the Kitchen's PDA over the owner
+  and salt, so a cook names `--owner` (and `--salt`), never `--pot`.
+- The Kitchen's fee is read from the cluster; there is no `--value`. A failed `simulate` or `run`
+  prints the program logs. `sauce run` stages a program too large for one transaction. `sauce tx`
+  prints a base64 transaction for a wallet. `sauce publish` does not work from Solana.
+
 ## Rules
 
 - Never write an RPC URL or a key into a tracked file, a program or a command you commit.

@@ -145,6 +145,9 @@ export const randomAddress = (): Address =>
 export const startEngine = async (
   unixTimestamp: bigint,
   engineSo: string = ENGINE_SO as string,
+  /** Where to load the engine. Random by default (the gate keys off the kitchen); a suite driving
+   *  code that names the released engine id — the CLI — loads it there. */
+  engineProgramId?: Address,
 ): Promise<EngineHarness> => {
   // The default constructor's program runtime misses the
   // sol_remaining_compute_units syscall (the engine's GasLeft, 0x62 — the
@@ -156,7 +159,7 @@ export const startEngine = async (
     .withPrecompiles()
     .withSysvars()
     .withDefaultPrograms();
-  const programId = (await generateKeyPairSigner()).address;
+  const programId = engineProgramId ?? (await generateKeyPairSigner()).address;
   svm.addProgramFromFile(programId, engineSo);
   // The kitchen goes in at its DECLARED id, not a random one: Anchor's own `declare_id!` check
   // rejects every instruction otherwise, and the engine's gate re-derives the Pot against the

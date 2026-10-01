@@ -221,7 +221,7 @@ function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryVa
 }
 
 /** The program with its encoded arguments appended: the `program` a cook runs. */
-function payload(program: CompiledSauceProgram, args: ArgsInput | undefined): Hex {
+export function payloadOf(program: CompiledSauceProgram, args: ArgsInput | undefined): Hex {
   const params = program.entryParams;
   if (args === undefined) {
     if (params.length > 0) {
@@ -265,11 +265,7 @@ interface Cook {
 /** Compiles the file and builds the cook on its Pot — what `tx`, `simulate` and `run` all send. */
 function cookOf(input: CookInput, files: CliFiles): Cook {
   if (input.chain.kind !== "evm") {
-    throw new UsageError(
-      `a cook is an EVM transaction, and ${input.chain.slug} is not an EVM chain. For Solana, ` +
-        "compile with `sauce compile`, then stage and execute it through the Kitchen " +
-        "(docs/guides/solana.md).",
-    );
+    throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
   const target = input.target;
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
@@ -277,7 +273,7 @@ function cookOf(input: CookInput, files: CliFiles): Cook {
   const program = compileProgram(input, files);
   // The cook `compileSauceRoute` would build, over the program with its arguments appended — the
   // way the SDK's own intent children carry theirs.
-  const data = buildSauceEvmCall({ pot, engine, program: payload(program, input.args) }).data;
+  const data = buildSauceEvmCall({ pot, engine, program: payloadOf(program, input.args) }).data;
 
   return { pot, engine, data, program };
 }
@@ -497,10 +493,7 @@ export interface PotCommandInput extends SaltChoice {
 /** `sauce pot`: the Pot an owner and salt give, and the unsigned Kitchen call that deploys it. */
 export function potCommand(input: PotCommandInput): CommandOutput {
   if (input.chain.kind !== "evm") {
-    throw new UsageError(
-      `sauce pot predicts an EVM Pot, and ${input.chain.slug} is not an EVM chain. A Solana ` +
-        "Pot is a Kitchen account: see docs/guides/solana.md.",
-    );
+    throw new Error(`internal: ${input.chain.slug}'s Pot is predicted by solana.ts`);
   }
   const kitchen = v12GateKitchen() as Address;
   const pot = v12PredictPot(input.owner, input.salt) as Address;

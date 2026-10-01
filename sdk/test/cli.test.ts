@@ -6,11 +6,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { address as svmAddress } from "@solana/kit";
 import {
   bytesToHex,
   decodeFunctionData,
   encodeAbiParameters,
   getAddress,
+  hexToBytes,
   keccak256,
   stringToBytes,
   type Hex,
@@ -27,7 +29,13 @@ import {
 } from "../src/cli/args.js";
 import { castSend } from "../src/cli/commands.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
-import { v12DeployedAddresses, v12EngineAddress } from "../src/deployments/index.js";
+import {
+  v12DeployedAddresses,
+  v12EngineAddress,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../src/deployments/index.js";
+import { derivePotPda } from "../src/svm/kitchen.js";
 import {
   potSalt,
   SAUCE_INTENT_POT_SALT,
@@ -814,7 +822,7 @@ describe("sauce tx", () => {
       ],
       [
         ["tx", program, "--chain", "solana", "--owner", OWNER, "--value", "0"],
-        /solana is not an EVM chain/,
+        /--value is for EVM: on Solana the Kitchen's fee is read from the cluster/,
       ],
       [
         [
@@ -1032,12 +1040,45 @@ describe("sauce pot", () => {
     expect(byDefault.salt).toBe(SAUCE_INTENT_POT_SALT);
   });
 
-  it("refuses a missing owner and a non-EVM chain", async () => {
+  it("refuses a missing owner, and an owner that is not the chain's kind of address", async () => {
     expect((await sauce("pot", "--chain", "base")).stderr).toMatch(/missing --owner <address>/);
     expect((await sauce("pot", "--owner", OWNER)).stderr).toMatch(/missing --chain/);
     const svm = await sauce("pot", "--owner", OWNER, "--chain", "solana");
     expect(svm.code).toBe(2);
-    expect(svm.stderr).toMatch(/solana is not an EVM chain/);
+    expect(svm.stderr).toMatch(/is not a Solana address \(a base58 public key\)/);
+  });
+
+  it("derives a Solana Pot as the Kitchen's PDA over (owner, salt), offline", async () => {
+    const owner = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+    const out = JSON.parse(
+      (await sauce("pot", "--chain", "solana", "--owner", owner, "--salt", "vault")).stdout,
+    ) as Record<string, unknown>;
+    const kitchen = svmAddress(v12SvmKitchenProgramId());
+    const { address: pot } = await derivePotPda(
+      kitchen,
+      svmAddress(owner),
+      hexToBytes(potSalt("vault")),
+    );
+    expect(out).toMatchObject({
+      chain: "solana",
+      pot,
+      owner,
+      salt: potSalt("vault"),
+      kitchen,
+      engine: v12SvmEngineProgramId(),
+      instruction: {
+        programAddress: kitchen,
+        accounts: [
+          { address: owner, role: "writable signer" },
+          { address: v12SvmEngineProgramId(), role: "readonly" },
+          { address: pot, role: "writable" },
+          { address: "11111111111111111111111111111111", role: "readonly" },
+        ],
+      },
+    });
+    expect(
+      (await sauce("pot", "--chain", "solana", "--owner", owner, "--format", "cast")).stderr,
+    ).toMatch(/--format cast prints an EVM transaction/);
   });
 });
 
@@ -1055,6 +1096,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/globals.js"),
       await import("../src/cli/inspect.js"),
       await import("../src/cli/verify.js"),
+      await import("../src/cli/solana.js"),
     ].flatMap((module) => Object.keys(module));
     expect(cli.length).toBeGreaterThan(0);
     const routes = root.routes as Record<string, unknown>;

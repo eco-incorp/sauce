@@ -59,6 +59,19 @@ import { initProject } from "./init.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
 import { publishCommand } from "./publish.js";
 import { parsePin, verifyCommand } from "./verify.js";
+import {
+  loadKeypair,
+  parseAccounts,
+  parsePubkey,
+  svmPotCommand,
+  svmPotDeployCommand,
+  svmRunCommand,
+  svmSimulateCommand,
+  svmTxCommand,
+  svmVerifyCommand,
+  type SvmCookInput,
+} from "./solana.js";
+import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
 import { loadSigner, scrub, secret } from "./signer.js";
 import {
   AGENTS,
@@ -263,6 +276,12 @@ const COOK: FlagSpecs = {
     value: "<json|file>",
     help: "main's arguments as a JSON array, inline or in a file",
   },
+  account: {
+    type: "string",
+    multiple: true,
+    value: "NAME=<address>",
+    help: "Solana: an account main takes, by name (an address, pot or owner)",
+  },
 };
 
 const ENDPOINT: FlagSpecs = {
@@ -285,6 +304,11 @@ const SIGNER: FlagSpecs = {
     type: "string",
     value: "<hex>",
     help: "Or sign with a raw key (lands in shell history)",
+  },
+  keypair: {
+    type: "string",
+    value: "<path>",
+    help: "Solana: sign with a keypair file (a JSON array of 64 bytes)",
   },
 };
 
@@ -471,17 +495,23 @@ function potInput(args: ParsedArgs, signer?: `0x${string}`): PotInput {
   return { owner: owner === undefined ? signer! : parseAddress("owner", owner), ...saltOf(args) };
 }
 
-/** Everything a cook command takes from its flags. */
+/** Everything an EVM cook command takes from its flags. */
 function cookInput(
   args: ParsedArgs,
   io: CliIo,
   trailing: readonly string[] | undefined,
   signer?: `0x${string}`,
+  program: ProgramInput = programInput(args, io),
 ): CookInput {
   const value = stringFlag(args, "value");
+  if (repeatedFlag(args, "account").length > 0) {
+    throw new UsageError(
+      `--account names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
+    );
+  }
 
   return {
-    ...programInput(args, io),
+    ...program,
     target: potInput(args, signer),
     ...(value === undefined ? {} : { value: parseWei("value", value) }),
     ...argsInput(args, io, trailing),
@@ -514,8 +544,14 @@ function requiredEndpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): s
   return url;
 }
 
-const signerOf = (args: ParsedArgs, io: CliIo) =>
-  loadSigner(
+const signerOf = (args: ParsedArgs, io: CliIo) => {
+  if (stringFlag(args, "keypair") !== undefined) {
+    throw new UsageError(
+      "--keypair is a Solana keypair; an EVM transaction is signed with --keystore or --private-key",
+    );
+  }
+
+  return loadSigner(
     {
       ...(stringFlag(args, "keystore") === undefined
         ? {}
@@ -529,6 +565,7 @@ const signerOf = (args: ParsedArgs, io: CliIo) =>
     },
     io,
   );
+};
 
 /**
  * The owner where a signer is given: the signer. `--owner` then only restates it, and one that
@@ -543,6 +580,74 @@ function signerIsOwner(signer: `0x${string}`, owner: string | undefined): `0x${s
   }
 
   return signer;
+}
+
+// --- Solana ----------------------------------------------------------------------------------
+
+/** A Solana command's signer: `--keypair`, never an EVM key. */
+async function keypairOf(args: ParsedArgs, io: CliIo): Promise<KeyPairSigner> {
+  if (stringFlag(args, "keystore") !== undefined || stringFlag(args, "private-key") !== undefined) {
+    throw new UsageError(
+      "--keystore and --private-key are EVM keys: on Solana, sign with --keypair <path>",
+    );
+  }
+
+  return loadKeypair(requiredFlag(args, "keypair", "<path>"), io);
+}
+
+/** The Pot's owner on Solana: the signer when there is one (and `--owner` must agree), else
+ *  `--owner`. */
+function svmOwner(args: ParsedArgs, signer?: SvmAddress): SvmAddress {
+  const owner = stringFlag(args, "owner");
+  if (signer !== undefined) {
+    if (owner !== undefined && parsePubkey("owner", owner) !== signer) {
+      throw new UsageError(
+        `--owner ${owner} is not the signer, ${signer}: with a signer, the owner is the signer. ` +
+          "Leave --owner out, or sign as its owner.",
+      );
+    }
+
+    return signer;
+  }
+  if (owner === undefined) {
+    throw new UsageError("missing --owner <address>: whose Pot (a base58 public key)");
+  }
+
+  return parsePubkey("owner", owner);
+}
+
+/** Everything a Solana cook command takes from its flags. */
+function svmCookInput(
+  args: ParsedArgs,
+  io: CliIo,
+  trailing: readonly string[] | undefined,
+  program: ProgramInput,
+  signer?: SvmAddress,
+): SvmCookInput {
+  if (stringFlag(args, "pot") !== undefined) {
+    throw new UsageError(
+      "on Solana a cook names its Pot by owner and salt, which the Kitchen derives it from: give " +
+        "--owner (and --salt), not --pot",
+    );
+  }
+  if (stringFlag(args, "value") !== undefined) {
+    throw new UsageError(
+      "--value is for EVM: on Solana the Kitchen's fee is read from the cluster, and lamports a " +
+        "program spends come from its accounts",
+    );
+  }
+  if (stringFlag(args, "format") === "cast") {
+    throw new UsageError("--format cast prints an EVM transaction; a Solana one is base64 JSON");
+  }
+
+  return {
+    ...program,
+    owner: svmOwner(args, signer),
+    ...saltOf(args),
+    accounts: parseAccounts(repeatedFlag(args, "account")),
+    ...argsInput(args, io, trailing),
+    rpcUrl: requiredEndpoint(args, io, program.chain),
+  };
 }
 
 /**
@@ -648,12 +753,22 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "no key, no transaction, no local node. Prints the gas it needs and what it returns, or",
       "the decoded reason it reverts (exit 1). The Pot must be deployed.",
       "",
-      "Example:",
+      "On Solana: the Kitchen cook, simulated from --owner (no signature needed), with each",
+      "account main takes given as --account NAME=<address | pot | owner>. Prints the compute",
+      "units, or the reason and the program logs.",
+      "",
+      "Examples:",
       "  sauce simulate pay.sauce.ts --chain base --owner 0x… --rpc-url <url>",
+      "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> --rpc-url <url> \\",
+      "    --account source=<token account> --account authority=pot",
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const input = cookInput(args, io, trailing);
+      const program = programInput(args, io);
+      if (program.chain.kind === "svm") {
+        return svmSimulateCommand(svmCookInput(args, io, trailing, program), io);
+      }
+      const input = cookInput(args, io, trailing, undefined, program);
 
       return simulateCommand({ ...input, rpcUrl: requiredEndpoint(args, io, input.chain) }, io);
     },
@@ -680,13 +795,33 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "with --yes, which is also how to allow it with no terminal to ask on. The value",
       "defaults to the Kitchen's execution fee, read from the chain.",
       "",
-      "Example:",
+      "On Solana: sign with --keypair; the Kitchen's fee is read from the cluster, a missing Pot",
+      "is created the same way, and a program too large for one transaction is staged in a code",
+      "buffer first (closed again after the cook). A failure prints the program logs.",
+      "",
+      "Examples:",
       "  sauce run pay.sauce.ts --chain base --rpc-url <url> --keystore ~/.keys/me.json",
+      "  sauce run sweep.sauce.ts --chain solana --rpc-url <url> --keypair ~/.config/solana/id.json \\",
+      "    --account source=<token account> --account authority=pot",
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
+      const program = programInput(args, io);
+      if (program.chain.kind === "svm") {
+        const signer = await keypairOf(args, io);
+
+        return svmRunCommand(
+          {
+            ...svmCookInput(args, io, trailing, program, signer.address),
+            signer,
+            yes: args.values.yes === true,
+            confirm: io.confirm,
+          },
+          io,
+        );
+      }
       const account = await signerOf(args, io);
-      const input = cookInput(args, io, trailing, account.address);
+      const input = cookInput(args, io, trailing, account.address, program);
 
       return runCommand(
         {
@@ -740,6 +875,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     run: async (args, io) => {
       const program = programInput(args, io);
+      if (program.chain.kind === "svm") {
+        throw new UsageError(
+          "sauce publish sends a source chain's Portal transactions from an EVM wallet. " +
+            "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
+            "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
+            "EVM chain; its destination may be Solana.",
+        );
+      }
       const format = stringFlag(args, "format");
       if (format !== undefined && format !== "json" && format !== "cast") {
         throw new UsageError(`--format: '${format}' is not json or cast`);
@@ -782,12 +925,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "prints the same transaction as a `cast send` line instead. What must be true for it to",
       "land goes to stderr: the Pot deployed and funded, and sent from its owner.",
       "",
+      "On Solana: { chain, feePayer, pot, fee, transaction }, the Kitchen cook as a base64",
+      "transaction signed by no one, for --owner to sign. It needs an endpoint (for the",
+      "blockhash and the fee), and the --account flags simulate takes.",
+      "",
       "Example:",
       "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0",
     ].join("\n"),
     trailing: "args",
     run: (args, io, trailing) => {
-      const input = cookInput(args, io, trailing);
+      const program = programInput(args, io);
+      if (program.chain.kind === "svm") {
+        return svmTxCommand(svmCookInput(args, io, trailing, program), io);
+      }
+      const input = cookInput(args, io, trailing, undefined, program);
       const rpcUrl = endpoint(args, io, input.chain);
 
       return txCommand({ ...input, ...(rpcUrl === undefined ? {} : { rpcUrl }) }, io);
@@ -799,7 +950,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     summary: "Predict a Pot's address, and deploy it or print the transaction that does",
     flags: {
       owner: { type: "string", value: "<address>", help: "Whose Pot: cook() is onlyOwner" },
-      chain: { type: "string", value: "<slug|id>", help: "The EVM chain the Pot is for" },
+      chain: { type: "string", value: "<slug|id>", help: "The chain the Pot is for" },
       ...SALT,
       deploy: { type: "boolean", help: "Send the deployment (needs an endpoint and a signer)" },
       ...ENDPOINT,
@@ -813,9 +964,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "--deploy, sends it (the owner defaults to the signer) unless the Pot is already there.",
       "The default salt is zero: the one Pot an owner has by default.",
       "",
+      "On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the create_pot",
+      "instruction; --deploy (with --keypair) creates it.",
+      "",
       "Examples:",
       "  sauce pot --owner 0x… --chain base",
       "  sauce pot --deploy --chain base --rpc-url <url> --keystore ~/.keys/me.json --salt treasury",
+      "  sauce pot --deploy --chain solana --rpc-url <url> --keypair ~/.config/solana/id.json",
     ].join("\n"),
     run: async (args, io) => {
       if (args.positionals.length > 0) {
@@ -823,6 +978,22 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       }
       const chain = potChain(args);
       const owner = stringFlag(args, "owner");
+      if (chain.kind === "svm") {
+        if (stringFlag(args, "format") === "cast") {
+          throw new UsageError("--format cast prints an EVM transaction; a Solana Pot has none");
+        }
+        if (args.values.deploy !== true) {
+          return svmPotCommand({ owner: svmOwner(args), ...saltOf(args) });
+        }
+        const signer = await keypairOf(args, io);
+
+        return svmPotDeployCommand({
+          owner: svmOwner(args, signer.address),
+          ...saltOf(args),
+          rpcUrl: requiredEndpoint(args, io, chain),
+          signer,
+        });
+      }
       if (args.values.deploy !== true) {
         if (owner === undefined) throw new UsageError("missing --owner <address>: whose Pot");
 
@@ -966,6 +1137,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         help: "Also accept a cook on this engine, besides the released one",
       },
       chain: { type: "string", value: "<slug|id>", help: "The chain a transaction hash is on" },
+      "min-out": {
+        type: "string",
+        value: "<amount>",
+        help: "Solana: the floor the settle must enforce on its first escrow",
+      },
+      "spl-count": {
+        type: "string",
+        value: "<n>",
+        help: "Solana: how many escrows the settle sweeps with its first token program",
+      },
       ...ENDPOINT,
       ...JSON_FLAG,
       ...HELP,
@@ -979,11 +1160,37 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "rejection exits 1 with its code: the SDK's SettleFailureCode, or UNKNOWN_ENGINE or",
       "NO_SETTLE.",
       "",
+      "On Solana (--chain solana, a transaction signature and an endpoint): an SVM settle's",
+      "floor and split are compiled into it, so give them, --min-out and --spl-count. The",
+      "engine invocation the cook made is checked by the SDK's verifySvmSettleExecution against",
+      "the settle recompiled for those values; a rejection is NO_SETTLE or NOT_GENUINE.",
+      "",
       "Examples:",
       "  sauce verify 0x<payload>",
       "  sauce verify 0x<tx hash> --rpc-url <url> --pin 0x…:435",
+      "  sauce verify <signature> --chain solana --rpc-url <url> --min-out 0 --spl-count 1",
     ].join("\n"),
     run: async (args, io) => {
+      const chainFlag = stringFlag(args, "chain");
+      if (chainFlag !== undefined && parseChain(chainFlag).kind === "svm") {
+        const [signature, ...rest] = args.positionals;
+        if (signature === undefined)
+          throw new UsageError("missing <signature>: the cook's transaction");
+        if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
+        const amount = (flag: string): bigint => {
+          const raw = requiredFlag(args, flag, flag === "min-out" ? "<amount>" : "<n>");
+          if (!/^\d+$/.test(raw)) throw new UsageError(`--${flag}: '${raw}' is not a whole number`);
+
+          return BigInt(raw);
+        };
+
+        return svmVerifyCommand({
+          signature,
+          rpcUrl: requiredEndpoint(args, io, parseChain(chainFlag)),
+          minOut: amount("min-out"),
+          splCount: amount("spl-count"),
+        });
+      }
       const hex = hexOperand(args, "<payload | calldata | tx-hash>");
       const fetched = TX_HASH.test(hex) ? await transactionEndpoint(args, io) : undefined;
 
@@ -1169,7 +1376,8 @@ function mainHelp(): string {
     ),
     "",
     "Run `sauce <command> --help` for its options. Nothing reaches a network without --rpc-url",
-    "or --config, and nothing is signed without --keystore or --private-key.",
+    "or --config, and nothing is signed without --keystore or --private-key (on Solana,",
+    "--keypair).",
     "",
   ].join("\n");
 }
