@@ -21,6 +21,14 @@
 // "Relevant selectors" are the registry's own, every verified overload of the same name, and the
 // target's `probes`: signatures to ask a selector router about when the registry's are wrong.
 //
+// For an export that declares events or errors, it also records:
+//   - which of their topics and selectors the deployed code carries: an event's topic is a PUSH32
+//     before its LOG, a custom error's selector a PUSH4 (or a left-aligned PUSH32) before its REVERT;
+//   - the verified ABI's events and errors of the same names, `indexed` flags included — a topic
+//     cannot tell an indexed parameter from one in the data, and a wrong flag decodes no log;
+//   - one real log of each event, from the newest blocks of the first deployment that emitted one,
+//     which the test decodes with the registry's own declaration.
+//
 // RPC endpoints come only from the file `--rpc-config` names: a JSON object mapping each chain id to
 // its URL, `{ "<chainId>": "<url>" }`. There is no default and no public fallback, and nothing is
 // read from the environment. Keep yours at `sdk/rpc.config.json`, which is gitignored; copy
@@ -31,7 +39,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { keccak256, toFunctionSelector } from "viem";
+import { keccak256, toEventSelector, toFunctionSelector } from "viem";
 
 const USAGE =
   "usage: node scripts/capture-registry-abi.mjs --recapture --rpc-config <path> " +
@@ -413,6 +421,43 @@ function dispatches(code, selector, chainId) {
   return false;
 }
 
+/** Every PUSHn immediate `code` executes, lowercase hex without `0x`, memoized per code. */
+const immediatesOf = new Map();
+function immediates(code) {
+  let found = immediatesOf.get(code);
+  if (found !== undefined) return found;
+  found = new Set();
+  const hex = code.slice(2).toLowerCase();
+  for (let i = 0; i < hex.length; i += 2) {
+    const op = parseInt(hex.slice(i, i + 2), 16);
+    if (op >= 0x60 && op <= 0x7f) {
+      const n = op - 0x5f;
+      found.add(hex.slice(i + 2, i + 2 + 2 * n));
+      i += 2 * n;
+    }
+  }
+  immediatesOf.set(code, found);
+  return found;
+}
+
+/** True when `code` carries an event's 32-byte topic: the PUSH32 its LOG takes (raw on EraVM). */
+function emits(code, topic, chainId) {
+  const t = topic.slice(2).toLowerCase();
+  if (ERAVM.has(chainId)) return code.toLowerCase().includes(t);
+  return immediates(code).has(t);
+}
+
+/**
+ * True when `code` carries a custom error's selector: a PUSH4 shifted into place, or the PUSH32 of the
+ * selector already left-aligned, which is how solc's optimizer usually spells it (raw on EraVM).
+ */
+function reverts(code, selector, chainId) {
+  const s = selector.slice(2).toLowerCase();
+  if (ERAVM.has(chainId)) return code.toLowerCase().includes(s);
+  const found = immediates(code);
+  return found.has(s) || found.has(s + "0".repeat(56));
+}
+
 const SOURCIFY = "https://sourcify.dev/server/v2/contract";
 
 /**
@@ -488,6 +533,32 @@ function fragment(f) {
   };
 }
 
+/**
+ * An event or a custom error, reduced the same way, with its `type` (a function fragment has none,
+ * which keeps every function fragment id the fixture already holds). An event keeps each top-level
+ * parameter's `indexed` flag: it decides which parameters a log carries as topics.
+ */
+function eventOrErrorFragment(item) {
+  const strip = (p, top) => ({
+    name: p.name ?? "",
+    type: p.type,
+    ...(top && item.type === "event" ? { indexed: Boolean(p.indexed) } : {}),
+    ...(p.components ? { components: p.components.map((c) => strip(c, false)) } : {}),
+  });
+  const sig = signature(item);
+  return {
+    type: item.type,
+    signature: sig,
+    ...(item.type === "event"
+      ? { topic0: toEventSelector(sig) }
+      : { selector: toFunctionSelector(sig) }),
+    inputs: (item.inputs ?? []).map((p) => strip(p, true)),
+  };
+}
+
+/** The 32-byte topic or 4-byte selector a fragment is found in deployed code by. */
+const markOf = (frag) => frag.topic0 ?? frag.selector;
+
 async function registryOf(slug) {
   const abis = await import(join(SDK, "dist", "protocols", slug, "abis.js"));
   const { deployments } = await import(join(SDK, "dist", "protocols", slug, "addresses.js"));
@@ -518,9 +589,11 @@ async function lookupAbi(chainId, address, result) {
   }
 }
 
-async function captureInstance(slug, abiExport, registryFns, target) {
+async function captureInstance(slug, abiExport, registryFns, target, registryMarks = []) {
   const { chainId, address } = target;
   const names = new Set(registryFns.map((f) => f.name));
+  // Events and errors, by `<type> <name>`: an event and an error may share a name.
+  const markNames = new Set(registryMarks.map((m) => `${m.type} ${m.name}`));
   const result = {
     protocol: slug,
     abi: abiExport,
@@ -548,6 +621,15 @@ async function captureInstance(slug, abiExport, registryFns, target) {
 
   // Verified ABIs of every layer; the implementation's usually carries the functions.
   const verified = {};
+  // The verified events and errors of the registry's names, by topic or selector.
+  const verifiedMarks = {};
+  const collectMarks = (abi, from) => {
+    for (const item of abi) {
+      if (!markNames.has(`${item.type} ${item.name}`)) continue;
+      const frag = eventOrErrorFragment(item);
+      verifiedMarks[markOf(frag)] ??= { ...frag, from };
+    }
+  };
   const abiSources = [];
   for (const layer of layers) {
     if (!layer.code) continue;
@@ -559,6 +641,7 @@ async function captureInstance(slug, abiExport, registryFns, target) {
       const frag = fragment(item);
       verified[frag.selector] ??= { ...frag, from: layer.address };
     }
+    collectMarks(v.abi, layer.address);
   }
 
   // Every selector worth an answer: the registry's, the target's probes, and verified overloads.
@@ -577,6 +660,7 @@ async function captureInstance(slug, abiExport, registryFns, target) {
       verified[frag.selector] ??= { ...frag, from: facet };
       candidates.add(frag.selector);
     }
+    collectMarks(v.abi, facet);
   };
   const routed = {};
   // Routing tables live on the instance, or, for a thin proxy that asks an embedded diamond per
@@ -616,10 +700,144 @@ async function captureInstance(slug, abiExport, registryFns, target) {
     selectors[sel] = where >= 0 ? where : null;
   }
   result.selectors = selectors;
+  if (registryMarks.length > 0) {
+    // The registry's events and errors and the verified ones of the same names: where the code that
+    // runs carries each (a layer, or a facet the router named), or null.
+    const facets = [...new Set(Object.values(routed).map((r) => r.facet))];
+    const facetCode = {};
+    for (const facet of facets) facetCode[facet] = await getCode(chainId, facet);
+    const locate = (frag) => {
+      const carries = frag.type === "event" ? emits : reverts;
+      const where = layers.findIndex((l) => l.code && carries(l.code, markOf(frag), chainId));
+      if (where >= 0) return where;
+      const facet = facets.find(
+        (f) => facetCode[f] && carries(facetCode[f], markOf(frag), chainId),
+      );
+      return facet === undefined ? null : `routed:${facet}`;
+    };
+    const wanted = [
+      ...registryMarks.map((item) => eventOrErrorFragment(item)),
+      ...Object.values(verifiedMarks),
+    ];
+    for (const kind of ["event", "error"]) {
+      const marks = wanted.filter((frag) => frag.type === kind);
+      if (marks.length === 0) continue;
+      const located = {};
+      for (const frag of marks.sort((a, b) => markOf(a).localeCompare(markOf(b)))) {
+        located[markOf(frag)] ??= locate(frag);
+      }
+      result[kind === "event" ? "events" : "errors"] = located;
+    }
+  }
   result.abiSources = abiSources;
-  result.verified = Object.values(verified).sort((a, b) => a.signature.localeCompare(b.signature));
+  result.verified = [
+    ...Object.values(verified).sort((a, b) => a.signature.localeCompare(b.signature)),
+    ...Object.values(verifiedMarks).sort(
+      (a, b) => a.type.localeCompare(b.type) || a.signature.localeCompare(b.signature),
+    ),
+  ];
   return result;
 }
+
+/** One JSON-RPC request with no retry on an error the node answers: a too-wide range is an answer. */
+async function rpcAnswer(chainId, method, params) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(rpcUrl(chainId), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      const body = await res.json();
+      return body.error ? { error: body.error } : { result: body.result };
+    } catch (err) {
+      if (attempt >= 2) return { error: { message: err.message } };
+      await sleep(1000 * 2 ** attempt);
+    }
+  }
+}
+
+/**
+ * The newest log `address` emitted under `topic0`, or null when none turns up within the search: a
+ * window walked back from the head, narrowed when the node refuses its width and widened while it
+ * comes back empty. A proxy emits under its own address, so `address` is the instance's.
+ */
+async function newestLog(chainId, address, topic0) {
+  const head = await rpcAnswer(chainId, "eth_blockNumber", []);
+  if (head.error) return null;
+  let to = parseInt(head.result, 16);
+  let span = 50_000;
+  for (let requests = 0; requests < 16 && to > 0; requests++) {
+    const from = Math.max(0, to - span + 1);
+    const answer = await rpcAnswer(chainId, "eth_getLogs", [
+      {
+        address,
+        topics: [topic0],
+        fromBlock: `0x${from.toString(16)}`,
+        toBlock: `0x${to.toString(16)}`,
+      },
+    ]);
+    if (answer.error) {
+      if (span <= 500) return null;
+      span = Math.floor(span / 5);
+      continue;
+    }
+    if (answer.result.length > 0) return answer.result.at(-1);
+    to = from - 1;
+    span = Math.min(span * 2, 2_000_000);
+  }
+  return null;
+}
+
+/**
+ * One real log of every event `jobs` declares, from the first of its deployments that has one. The
+ * log is stored as the node returned it, so the test decodes exactly the bytes the chain holds.
+ */
+async function captureLogs(jobs) {
+  const wanted = new Map();
+  for (const job of jobs) {
+    for (const item of job.registryMarks.filter((m) => m.type === "event")) {
+      const sig = signature(item);
+      const key = `${job.slug}\u0000${job.abiExport}\u0000${sig}`;
+      const entry = wanted.get(key) ?? {
+        protocol: job.slug,
+        abi: job.abiExport,
+        event: sig,
+        topic0: toEventSelector(sig),
+        instances: [],
+      };
+      entry.instances.push(job.inst);
+      wanted.set(key, entry);
+    }
+  }
+  const logs = await pool([...wanted.values()], 4, async (entry) => {
+    for (const inst of entry.instances) {
+      const log = await newestLog(inst.chainId, inst.address, entry.topic0);
+      if (log === null) continue;
+      console.log(
+        `log ${entry.protocol}.${entry.abi} ${entry.event} ${inst.chainId}:${log.blockNumber}`,
+      );
+      return {
+        protocol: entry.protocol,
+        abi: entry.abi,
+        event: entry.event,
+        chainId: inst.chainId,
+        address: log.address.toLowerCase(),
+        blockNumber: parseInt(log.blockNumber, 16),
+        transactionHash: log.transactionHash,
+        logIndex: parseInt(log.logIndex, 16),
+        topics: log.topics,
+        data: log.data,
+      };
+    }
+    console.log(`log ${entry.protocol}.${entry.abi} ${entry.event}: none found`);
+    return null;
+  });
+  return { wanted: new Set(wanted.keys()), logs: logs.filter((log) => log !== null) };
+}
+
+const logKey = (log) => `${log.protocol}\u0000${log.abi}\u0000${log.event}`;
 
 async function main() {
   const only = new Set(cli.positionals);
@@ -647,6 +865,7 @@ async function main() {
       const abi = abis[abiExport];
       if (!Array.isArray(abi)) throw new Error(`${slug}: no ABI export ${abiExport}`);
       const registryFns = abi.filter((i) => i.type === "function");
+      const registryMarks = abi.filter((i) => i.type === "event" || i.type === "error");
       const instances = [];
       for (const role of spec.roles ?? []) {
         for (const d of deployments) {
@@ -666,7 +885,7 @@ async function main() {
       }
       for (const inst of instances) {
         if (CHAINS_ONLY !== null && !CHAINS_ONLY.has(inst.chainId)) continue;
-        jobs.push({ slug, abiExport, registryFns, inst });
+        jobs.push({ slug, abiExport, registryFns, registryMarks, inst });
       }
     }
   }
@@ -684,7 +903,13 @@ async function main() {
   }
   console.log(`capturing ${jobs.length} instances`);
   const captured = await pool(jobs, 6, async (job, i) => {
-    const r = await captureInstance(job.slug, job.abiExport, job.registryFns, job.inst);
+    const r = await captureInstance(
+      job.slug,
+      job.abiExport,
+      job.registryFns,
+      job.inst,
+      job.registryMarks,
+    );
     const missing = Object.values(r.selectors ?? {}).filter((v) => v === null).length;
     console.log(
       `[${i + 1}/${jobs.length}] ${job.slug}.${job.abiExport} ${job.inst.chainId}:${job.inst.address}` +
@@ -699,13 +924,30 @@ async function main() {
       a.chainId - b.chainId ||
       a.address.localeCompare(b.address),
   );
-  writeFileSync(EVIDENCE_PATH, serialize(instances));
-  console.log(`wrote ${instances.length} instances to ${EVIDENCE_PATH}`);
+  // A log is a fact about the chain, so one this run did not find again is kept while the registry
+  // still declares its event; a run's new one replaces it.
+  const found = await captureLogs(jobs);
+  const fresh = new Set(found.logs.map(logKey));
+  const ran = new Set(jobs.map((job) => `${job.slug}\u0000${job.abiExport}`));
+  const logs = [
+    ...previous.logs.filter((log) => {
+      if (fresh.has(logKey(log))) return false;
+      return !ran.has(`${log.protocol}\u0000${log.abi}`) || found.wanted.has(logKey(log));
+    }),
+    ...found.logs,
+  ].sort(
+    (a, b) =>
+      a.protocol.localeCompare(b.protocol) ||
+      a.abi.localeCompare(b.abi) ||
+      a.event.localeCompare(b.event),
+  );
+  writeFileSync(EVIDENCE_PATH, serialize(instances, logs));
+  console.log(`wrote ${instances.length} instances and ${logs.length} logs to ${EVIDENCE_PATH}`);
 }
 
 /** The fixture shares each distinct verified fragment across the deployments that declare it. */
 function fragmentId(fragment) {
-  return `${fragment.selector}-${keccak256(new TextEncoder().encode(JSON.stringify(fragment))).slice(2, 10)}`;
+  return `${markOf(fragment)}-${keccak256(new TextEncoder().encode(JSON.stringify(fragment))).slice(2, 10)}`;
 }
 
 /** The stored fixture, with each instance's fragment ids resolved back to fragments. */
@@ -716,11 +958,12 @@ function expand(stored) {
       ...i,
       verified: (i.verified ?? []).map((id) => fragments[id]),
     })),
+    logs: stored.logs ?? [],
   };
 }
 
-/** One fragment and one instance per line, so a recapture diffs by deployment. */
-function serialize(instances) {
+/** One fragment, one instance and one log per line, so a recapture diffs by deployment. */
+function serialize(instances, logs) {
   const fragments = {};
   const rows = instances.map((instance) => {
     const verified = (instance.verified ?? []).map(({ from: _from, ...fragment }) => {
@@ -743,6 +986,9 @@ function serialize(instances) {
     "},",
     '"instances": [',
     ...rows.map((row, n) => `${JSON.stringify(row)}${n < rows.length - 1 ? "," : ""}`),
+    "],",
+    '"logs": [',
+    ...logs.map((log, n) => `${JSON.stringify(log)}${n < logs.length - 1 ? "," : ""}`),
     "]",
     "}",
   ];
