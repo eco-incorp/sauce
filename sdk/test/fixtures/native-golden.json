@@ -1,27 +1,27 @@
 {
   "docs/examples/cross-chain-cascade.sauce.ts@arbitrum": {
     "defines": ["RECIPIENT"],
-    "sha256": "bb52b119c4f02f4f92394c80afa95d0581ec815596c11990eb9c1b49bda724e0"
+    "sha256": "aa3007e5937620236a04b2e0f63c1bbeb6fb743b01db84f1a95a864a46472453"
   },
   "docs/examples/cross-chain-cascade.sauce.ts@base": {
     "defines": ["RECIPIENT"],
-    "sha256": "4172c99f2823eae5546560e8487e581e5ba839d84da6eae548374be2da66589f"
+    "sha256": "791a3c01ab5956d766bbeaf59f7f9428b3c6fa43744afb5bb08feea50c19bee1"
   },
   "docs/examples/cross-chain-cascade.sauce.ts@ethereum": {
     "defines": ["RECIPIENT"],
-    "sha256": "d8ea10799b4da266763f51470e9315ef2a873af048ae992f10e43bd544d8abeb"
+    "sha256": "2857a1b4d3bb34842211bb757fb9deb125ef9799f1fc542a7f87946e1b59635b"
   },
   "docs/examples/cross-chain-intent.sauce.ts@arbitrum": {
     "defines": ["RECIPIENT", "MIN_AMOUNT"],
-    "sha256": "e23c6bd27a680bb372b1569bd712d031f8e312b34684fbf3b456c2bdab6df8f0"
+    "sha256": "a31280004321fb0ef46c7bb1521e818743045b7d78a1a2b508a8f5138e359188"
   },
   "docs/examples/cross-chain-intent.sauce.ts@base": {
     "defines": ["RECIPIENT", "MIN_AMOUNT"],
-    "sha256": "f2b6863f27c10ddcb6b2b4520ac60b935a944158df251ea58d7e8bbf5cc70bff"
+    "sha256": "91dd8e5238f373324758a4b76f179304834d371ce0b43e19260deac6c51904a2"
   },
   "docs/examples/cross-chain-intent.sauce.ts@ethereum": {
     "defines": ["RECIPIENT", "MIN_AMOUNT"],
-    "sha256": "1b5fa42dca8f1c42190383a8b3565b4efa20c5b8e8a6b3971e75c522b8baf9fa"
+    "sha256": "7ee1fca2178b3ed69ca99fb7c8e19a2a8f452bc0c8146abe3ae592a6e5859102"
   },
   "docs/examples/router-route.sauce.ts@arbitrum": {
     "defines": [],
@@ -97,15 +97,15 @@
   },
   "sdk/test/fixtures/sauce-script/demo/intent/usdc-to-weth-on-base.sauce.ts@arbitrum": {
     "defines": ["AMOUNT_IN", "SQRT_PRICE_LIMIT_X96", "MIN_OUT", "RECIPIENT", "REFUND_TO", "REWARD"],
-    "sha256": "bf4721de333f0f1a6fb690f4058d35c8c1abf3fbf4d1112a518f06cf9e6a36f5"
+    "sha256": "4189ed214c15aa30e983e92c5367a49311343227c86833d7fa8dc17ca7dad326"
   },
   "sdk/test/fixtures/sauce-script/demo/intent/usdc-to-weth-on-base.sauce.ts@base": {
     "defines": ["AMOUNT_IN", "SQRT_PRICE_LIMIT_X96", "MIN_OUT", "RECIPIENT", "REFUND_TO", "REWARD"],
-    "sha256": "18a9f10990a49d134208af3a93e43e4ec7501e5d1ecfbbb8694b8e29f038bfcf"
+    "sha256": "7094f343ee6614b28e83d686c10a5a7f23ad86da5bca43c8c9aadb2f87758b2f"
   },
   "sdk/test/fixtures/sauce-script/demo/intent/usdc-to-weth-on-base.sauce.ts@ethereum": {
     "defines": ["AMOUNT_IN", "SQRT_PRICE_LIMIT_X96", "MIN_OUT", "RECIPIENT", "REFUND_TO", "REWARD"],
-    "sha256": "bfcad8d60506783ca99fa92978d04f5c728ed7551f6bebf6359e88d16e9a60cf"
+    "sha256": "cc935fcb72f0d510aa954e7a75a80514b004a4a81ec45b831c93f21899d7f1a8"
   },
   "sdk/test/fixtures/sauce-script/demo/solana/pay-usdc-keep-minimum.sauce.ts@solana": {
     "defines": [],
@@ -431,15 +431,15 @@
   },
   "skills/sauce-intents/examples/cross-chain.sauce.ts@arbitrum": {
     "defines": ["BENEFICIARY"],
-    "sha256": "363b19455a15afa0ae4d13bda7184d7906f09441ef40355a7a76abb0333a1fce"
+    "sha256": "055f5c023ace52b74dcaedc0587fac474b311b10c9dc549db93c0740e4ec0daf"
   },
   "skills/sauce-intents/examples/cross-chain.sauce.ts@base": {
     "defines": ["BENEFICIARY"],
-    "sha256": "96008876489f369cabdf6d412dee65b1488b52dea6027e6d0b66b3e05de9f221"
+    "sha256": "623ff91fa3a98a0e6cf03146425dbe8c9fd4449c19390fd214761fe418ab27f8"
   },
   "skills/sauce-intents/examples/cross-chain.sauce.ts@ethereum": {
     "defines": ["BENEFICIARY"],
-    "sha256": "d60b613f3e22b0b79f23eef31b12c5fcad2bf839096aa5ef7fb58ed627a5d079"
+    "sha256": "31452dc4f587727665e395301280971ab90aaba945cd65175ca1c3b7fb1039a6"
   },
   "skills/sauce-intents/examples/fund-by-transfer.sauce.ts@arbitrum": {
     "defines": [],
@@ -463,7 +463,7 @@
       "MIN_AVG_PRICE",
       "REWARD"
     ],
-    "sha256": "f0eec6dbeae5aa9a539c1b5ed869e71e8ef88982fe7d4cbe02a3f8c718d7fb8f"
+    "sha256": "10dedcfa4da9856556c16b6487718c0173e76ae0d1b7ed45ea3c6c02488335a7"
   },
   "skills/sauce-intents/examples/swap-on-base.sauce.ts@base": {
     "defines": [
@@ -475,7 +475,7 @@
       "MIN_AVG_PRICE",
       "REWARD"
     ],
-    "sha256": "a71321f66b545448889a37e1e08debec0207787bd53a003ee13df4b1f1cd5659"
+    "sha256": "a47d884e2f65318e3ba746f5d49083158093ae29df1299d33466b3108b997520"
   },
   "skills/sauce-intents/examples/swap-on-base.sauce.ts@ethereum": {
     "defines": [
@@ -487,7 +487,7 @@
       "MIN_AVG_PRICE",
       "REWARD"
     ],
-    "sha256": "895fa51fc7abdd8da6e4c4bc11508d580392b72c7444ecf8714ccbb6efc8d20c"
+    "sha256": "d7e0b4248cfea5eb169ed64a4f955c6a3572c35cc1c29880ba58168cba4f8781"
   },
   "skills/sauce-protocols/examples/protocols.sauce.ts@arbitrum": {
     "defines": [],
