@@ -14,7 +14,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
 
-import { shippedSkills, SKILLS_INDEX, type Skill } from "./resources.js";
+import { shippedSkills, SKILLS_INDEX, WRITE_IT_YOURSELF, type Skill } from "./resources.js";
 import { PACKAGED_SKILLS, supportedChainNames } from "./sdk.js";
 
 export const PROMPT_NAMES = ["sauce_write_program", "sauce_open_intent"] as const;
@@ -77,7 +77,9 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               `Write a Sauce program that does this${chain === undefined ? "" : ` on ${chain}`}: ${task}`,
               "",
               `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, solana(chain) ? ["sauce-overview", "sauce-solana", "sauce-run"] : ["sauce-overview", "sauce-script", "sauce-run"])}),`,
-              "and follow them. Then, with this server's tools:",
+              "and follow them.",
+              ...WRITE_IT_YOURSELF,
+              "Then, with this server's tools:",
               "1. sauce_globals for the chain: use the token symbols and protocol namespaces it lists",
               "   rather than writing addresses. (A fixed sequence of protocol operations can be an",
               "   actions document in JSON instead: sauce_actions, and the sauce-actions skill.)",
@@ -131,7 +133,9 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
                 `: ${task}`,
               "",
               `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, ["sauce-overview", "sauce-intents"])}),`,
-              "and follow them. Then, with this server's tools:",
+              "and follow them.",
+              ...WRITE_IT_YOURSELF,
+              "Then, with this server's tools:",
               "1. sauce_globals for each chain involved, for its tokens and protocols. An intent",
               "   body names the destination's tokens by address (the skill says why).",
               "2. Price it: the reward must cover what the solver delivers on the destination, plus",

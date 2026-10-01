@@ -175,6 +175,11 @@ Every value is checked against its declared type before anything is sent: `Addre
 
 - It names no chain: `--chain` picks one, and every name in it resolves on that chain. One file
   compiles for every chain whose names it uses.
+- It starts with a header comment: what it does in one line; the `sauce` command with
+  `--chain <chain>` and `--args` naming every `main` parameter in order; one line per parameter
+  with its type, meaning and units (smallest units: `5000000000` is 5,000 USDC; arrays and records
+  as JSON); and one concrete run on a supported chain with real values (`sauce-script` has an
+  example).
 - The chain's names need no import: token symbols (`USDC`, `WETH`), protocol namespaces
   (`Uniswap.UniversalRouter`), `chainId`, and the `@sauce/token` functions
   (`transfer(token, to, amount)`, `approve`, `balanceOf`). `sauce-globals` explains them.

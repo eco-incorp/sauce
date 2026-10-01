@@ -104,6 +104,10 @@ describe("the prompts", () => {
     for (const uri of pointed(mcp.client.getInstructions() ?? "")) {
       assert.ok(served.has(uri), `the instructions name ${uri}`);
     }
+    const instructions = mcp.client.getInstructions() ?? "";
+    assert.match(instructions, /WRITE EACH PROGRAM YOURSELF/);
+    assert.match(instructions, /no helper around a single call/);
+    assert.match(instructions, /with --args naming every main parameter in order/);
     for (const name of PROMPT_NAMES) {
       const { messages } = await mcp.client.getPrompt({
         name,
@@ -114,6 +118,9 @@ describe("the prompts", () => {
       const text = (first!.content as { text: string }).text;
       assert.match(text, /pay a friend 5 USDC/);
       assert.match(text, /never ask for a private key/);
+      // The agent writes the program: the examples are idioms, never a file to start from.
+      assert.match(text, /WRITE EACH PROGRAM YOURSELF/);
+      assert.match(text, /Never ask\s+the user which example or existing file to start from/);
       for (const uri of pointed(text)) assert.ok(served.has(uri), `${name} names ${uri}`);
       for (const message of rest) {
         assert.equal(message.content.type, "resource");

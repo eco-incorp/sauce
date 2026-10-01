@@ -8,6 +8,15 @@
 //
 //   sauce run pay.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
 //     --args <recipient> <amount>
+//
+//   recipient: Address  who is paid
+//   amount: Uint256     how much of each token, in its smallest units: USDC and USDT have 6
+//                       decimals, so 1000000 is 1 USDC and 1 USDT
+//
+// On Ethereum, 1 USDC and 1 USDT to the recipient:
+//
+//   sauce run pay.sauce.ts --chain ethereum --config sauce.config.json --keystore <keystore> \
+//     --args <recipient> 1000000
 function main(recipient: Address, amount: Uint256) {
   USDC.transfer(recipient, amount);
   USDT.transfer(recipient, amount);
