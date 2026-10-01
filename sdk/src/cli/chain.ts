@@ -310,6 +310,14 @@ export interface Sent {
   readonly status: "success" | "reverted";
   readonly gasUsed: bigint;
   readonly blockNumber: bigint;
+  /** What it cost in the native currency: gas used at the price it paid. */
+  readonly cost: bigint;
+  /** The logs it emitted, as the receipt holds them. */
+  readonly logs: ReadonlyArray<{
+    readonly address: Address;
+    readonly topics: readonly Hex[];
+    readonly data: Hex;
+  }>;
   /** When it reverted: why, replayed at its block. */
   readonly reason?: string;
 }
@@ -341,6 +349,12 @@ export async function sendAndWait(
     status: receipt.status,
     gasUsed: receipt.gasUsed,
     blockNumber: receipt.blockNumber,
+    cost: receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n),
+    logs: receipt.logs.map((log) => ({
+      address: getAddress(log.address),
+      topics: log.topics as readonly Hex[],
+      data: log.data,
+    })),
   };
   if (receipt.status === "success") {
     await caughtUp(client, receipt.blockNumber);
