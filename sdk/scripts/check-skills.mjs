@@ -817,7 +817,8 @@ for (const file of runners) {
   counts.runners++;
   for (const m of read(file).matchAll(/(?:from|import\()\s*"([^"]+)"|new URL\("([^"]+)"/g)) {
     const specifier = m[1] ?? m[2];
-    if (specifier.startsWith(".") && !/^\.\/|^\.\.\/references\//.test(specifier))
+    // Its examples, its references, and its own SKILL.md, whose values a runner may pin.
+    if (specifier.startsWith(".") && !/^\.\/|^\.\.\/references\/|^\.\.\/SKILL\.md$/.test(specifier))
       fail(rel(file), `reaches ${specifier}; a runner uses only files of its own skill`);
   }
   // The developer's inputs, exactly as the runner's usage line (`//   node <file> --flag <what>`)

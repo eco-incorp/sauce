@@ -548,6 +548,13 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   intent body names destination tokens by address because a bare symbol there resolves on the
   source chain (`sauce-intents/examples/intents.mts`), and a program for a chain carries
   annotations on signatures only, with no `interface` (`sauce-script/examples/saucescript.mts`).
+  A runner may read its own skill's `SKILL.md` (and nothing else outside `examples/` and
+  `references/`) to pin a value the skill states: `distributed-swap.mts` holds the Base defines
+  file to the registry, and the selectors and worked prices to the arithmetic.
+- **Execution is verified outside the checker.** `skills:check` runs offline, so what a skill says
+  about running a program (the distributed swap's per-pool limits, a `main` return coming back from
+  the cook) was verified on anvil against real Uniswap V3/V4 contracts through the gated engine
+  (`sdk/test/evm/gated-engine.ts`) before it was written. Re-verify the same way when changing it.
 
 **`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness, for
 developing the SDK; nothing of it ships in the package. Its `start:local`/`start:fork` scripts and
