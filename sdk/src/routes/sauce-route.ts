@@ -21,17 +21,9 @@ import { bytesToHex } from "viem";
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
-import { compileWithRs, type RsCompileResult } from "./rs-compile.js";
-import {
-  rewriteTokenFactory,
-  rewriteTokenMembers,
-  tokenImportLines,
-  type SafeWrite,
-  type TokenImports,
-} from "./token-rewrite.js";
+import { compileWithRs } from "./rs-compile.js";
 import { resolveTokenMap } from "./token-registry.js";
-import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
-import { rewriteAvailability } from "./available.js";
+import type { AccessorOptions } from "./protocol-resolve.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
@@ -84,13 +76,13 @@ export interface SauceCompileOptions {
    *  with NO entry here at all. EVM destinations only -- an svm destination throws if any site
    *  actually rewrites, pointing at the SPL account-plan `Token` emitter instead. */
   tokens?: Readonly<Record<string, AddressInput>>;
-  /** Parsed ABI bindings merged with the protocol-accessor rewrite's bindings and adapted to the
-   *  compiler's inlineContracts option. A same-named binding with a different ABI throws. */
+  /** Parsed ABI bindings, adapted to the compiler's inlineContracts option. */
   contracts?: ContractsConfig;
-  /** Resolve registered protocol calls and addresses, and rewrite bare `self` to `ctx.self()`.
-   *  Enabled by default; pass false to disable this pass or an options object to configure it.
-   *  Contract accessor rewrites require an EVM destination. */
-  accessors?: boolean | ProtocolRewriteOptions;
+  /** The chain's protocol namespaces (`UniswapV3.Factory.getPool(…)`, `Cctp.TokenMessenger`) and a
+   *  bare `self`, which the compiler reads from the extensions manifest. Enabled by default; pass
+   *  false to leave both out, or an options object to configure them. Contract calls need an EVM
+   *  destination. */
+  accessors?: boolean | AccessorOptions;
   /**
    * Module specifiers whose exports are broadcast into every module with no `import` line: an
    * ambient module's exported functions and consts become callable/readable with no import. Ambient
@@ -158,28 +150,11 @@ type DefineValue = bigint | boolean | number;
  */
 export interface RouteScope {
   /**
-   * Compile natively: the compiler reads the extensions manifest (`extensions.ts`) and resolves the
-   * token, protocol and `available(…)` syntax itself, and none of the SDK's source rewrites run.
-   * Defaults to {@link useNativePipeline}'s setting.
-   */
-  readonly native?: boolean;
-  /**
    * The compile-time values that belong to ONE chain: `chainId`, its protocol contracts and its
    * token symbols (`ambient.ts#chainDefines`). A function rather than values because the values
    * differ per chain, and a program names more than one chain as soon as it opens an intent.
    */
   readonly chainDefines?: (chain: ChainRefResolved) => Readonly<Record<string, DefineValue>>;
-}
-
-/**
- * Whether compiles take the native path by default. Internal, and off: it exists so the two
- * pipelines can be compared on one corpus while the rewrites it replaces are removed one by one.
- */
-let nativePipeline = true;
-
-/** Set {@link RouteScope.native}'s default. Internal to the SDK and its tests. */
-export function useNativePipeline(on: boolean): void {
-  nativePipeline = on;
 }
 
 /** What a nested level resolves its chain-scoped names with: its own chain's registry values and
@@ -223,10 +198,7 @@ function levelOn(
       : Object.fromEntries(
           Object.entries(options.defines).filter(([name]) => !chainScoped.has(name)),
         );
-  return {
-    options: { ...options, defines, tokens: undefined },
-    scope: { ...NESTED_SCOPE, native: scope.native },
-  };
+  return { options: { ...options, defines, tokens: undefined }, scope: NESTED_SCOPE };
 }
 
 /** Every name the program can read as a compile-time scalar on `chain`: the chain's token symbols,
@@ -503,28 +475,13 @@ function compileForChain(
     );
   }
 
-  // The registry-resolved token map (registry defaults + options.tokens overrides, per-key -- see
-  // token-registry.ts#resolveTokenMap). Computed unconditionally: the registry may supply symbols
-  // with no caller options.tokens at all -- an evm chain's token addresses, an svm chain's mint keys.
-  // On svm they are values only: the token syntax below still throws there, by name.
-  const tokenMap = resolveTokenMap(chain, options.tokens);
-
   // The source is the program, as written: a module with a `main`, or a script whose top-level
   // statements are the entry. The compiler tells the two apart; nothing here has to.
   let source = sauce;
 
-  // `available(...)` FIRST: it removes the branches that name a contract or token this chain lacks,
-  // before any other pass resolves a name in them (see available.ts). A closure body is left for its
-  // own chain's compile. Natively, the compiler decides it.
-  if (!(scope.native ?? nativePipeline)) {
-    source = rewriteAvailability(source, chain, tokenMap).source;
-  }
-
-  // The intent sugar runs next, on the source as written but for decided `available(...)`
-  // branches. It reads `USDC` and `RECIPIENT` as compile-time values itself, so a token rewrite
-  // that had already turned `USDC.transfer(...)` into `__sauce_transfer(USDC, ...)` would leave it
-  // nothing it recognises. What it leaves behind is ordinary `evm.call` statements, which every
-  // later pass is free to walk over.
+  // The intent sugar lowers `Chain(() => …).reward(…)` as text until the compiler opens intents
+  // itself. It reads `USDC` and `RECIPIENT` as compile-time values; what it leaves behind is ordinary
+  // `evm.call` statements.
   const sugar = rewriteIntentSugar(source, {
     source: chain,
     chains: chainAccessorNames(),
@@ -550,118 +507,24 @@ function compileForChain(
     },
   });
   source = sugar.source;
-  if (scope.native ?? nativePipeline) {
-    // The chain's scalar spellings stay defines: a program may declare `const UniswapV3_Factory =
-    // 0n;` as the default a chain overrides, which a manifest name — losing to every declaration —
-    // could not do. Token symbols are not among them: a define has no type, and a symbol's methods
-    // are its type's.
-    const symbols = resolveTokenMap(chain, options.tokens);
-    const chainScalars = Object.fromEntries(
-      Object.entries(scope.chainDefines?.(chain) ?? {}).filter(([name]) => !symbols.has(name)),
-    );
-    const native = compileNatively(chain, source, target, {
-      ...options,
-      defines: { ...chainScalars, ...options.defines },
-    });
-    return { ...native, chain, source, intents: sugar.intents };
-  }
-  let contracts: ContractsConfig | undefined = options.contracts;
-  // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
-  // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
-  // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
-  // scoped values, when `openRoute` supplied a scope (ambient.ts#chainDefines resolves the SAME
-  // registry, so the token symbols agree), and the caller's own defines over both.
-  const scoped = scope.chainDefines?.(chain);
-  const defines: Record<string, DefineValue> | undefined =
-    tokenMap.size > 0 || scoped !== undefined
-      ? { ...Object.fromEntries(tokenMap), ...scoped, ...options.defines }
-      : options.defines;
-
-  // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
-  // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
-  // textually; if it ran first, `self.USDC` would become `ctx.self().USDC` and the balance
-  // sugar's holder would no longer be a bare Identifier, silently losing the site. Safe in the
-  // other direction: the accessor pass cannot claim the token pass's output (`__sauce_<write>(...)`
-  // is a bare call, and `IERC20` is neither a namespace nor a chain key and its call sits
-  // mid-chain, which `decomposeMemberChain` declines), and its
-  // synthesized-binding collision check cannot trip on `IERC20` (`pascalOfSlug("erc20")` yields
-  // `IErc20_*`, not `IERC20`); the sugar's own `ctx.self()` output is immune to the accessor
-  // pass's self-sugar too (`self` there is a member PROPERTY, which its exclusion set already
-  // covers). See routes-token-rewrite.test.ts's composition test for the regression lock.
-  // Two ERC20 rewrites: the `<Sym>.transfer(...)` symbol syntax (when the chain has resolved token
-  // symbols) and the `Token(addr)` global wrapper (always — it takes an arbitrary address, not a
-  // registry symbol). Both lower a WRITE to `@sauce/token`'s SafeERC20 function and a READ to the
-  // typed `IERC20.at(...)` binding, so their imports are collected across both and injected ONCE
-  // (the SDK serves both modules itself); on svm either is the same EVM-only error.
-  const writes = new Set<SafeWrite>();
-  let erc20 = false;
-  let tokenRewrote = false;
-  const absorb = (rewritten: TokenImports & { source: string; rewrote: boolean }): void => {
-    if (!rewritten.rewrote) return;
-    source = rewritten.source;
-    tokenRewrote = true;
-    for (const write of rewritten.writes) writes.add(write);
-    erc20 ||= rewritten.erc20;
-  };
-  if (tokenMap.size > 0) absorb(rewriteTokenMembers(source, tokenMap));
-  absorb(rewriteTokenFactory(source));
-  if (tokenRewrote) {
-    if (chain.kind === "svm") {
-      throw new Error(
-        `compileSauceRoute: destination '${chain.slug}' is svm — the ERC20 token rewrite ` +
-          "(`Token(addr)` / `<Sym>.transfer(...)` / `self.<Sym>`) is EVM-only. On svm a token " +
-          "symbol is the mint, a value for the @sauce/token functions with the accounts as " +
-          "Account parameters: `transfer(USDC, tokenProgram, source, dest, authority, amount)`, " +
-          "`balanceOf(USDC, account)`; or the SPL account-plan `Token` emitter (see token/api.ts).",
-      );
-    }
-    source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
-  }
-
-  if (options.accessors !== false) {
-    const accessorOpts: ProtocolRewriteOptions =
-      typeof options.accessors === "object" ? options.accessors : {};
-    const rewrittenAccessors = rewriteProtocolAccessors(source, chain, {
-      ...accessorOpts,
-      existingContracts: contracts,
-    });
-    if (rewrittenAccessors.rewrote) {
-      if (chain.kind === "svm") {
-        throw new Error(
-          `compileSauceRoute: destination '${chain.slug}' is svm — the protocol-accessor rewrite ` +
-            "(options.accessors) is EVM-only; contract bindings are not supported on target 'svm'.",
-        );
-      }
-      source = rewrittenAccessors.source;
-      contracts = { ...contracts, ...rewrittenAccessors.contracts };
-    }
-  }
-
-  const rs: RsCompileResult = compileWithRs({
-    source,
-    target,
-    resolve: options.resolve,
-    resolvePackage: options.resolvePackage,
-    defines,
-    contracts,
-    ambient: options.ambient,
-    compactArgs: options.compactArgs,
+  // The chain's scalar spellings stay defines: a program may declare `const UniswapV3_Factory = 0n;`
+  // as the default a chain overrides, which a manifest name — losing to every declaration — could
+  // not do. Token symbols are not among them: a define has no type, and a symbol's methods are its
+  // type's.
+  const symbols = resolveTokenMap(chain, options.tokens);
+  const chainScalars = Object.fromEntries(
+    Object.entries(scope.chainDefines?.(chain) ?? {}).filter(([name]) => !symbols.has(name)),
+  );
+  const native = compileNatively(chain, source, target, {
+    ...options,
+    defines: { ...chainScalars, ...options.defines },
   });
-  const { manifest, entryEncoding, entryParams, ...compiled } = rs;
-
-  if (compiled.bytecode.length === 0) {
-    throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
-  }
-  const { intents } = sugar;
-
-  return manifest === undefined
-    ? { chain, compiled, source, entryEncoding, entryParams, intents }
-    : { chain, compiled, source, entryEncoding, entryParams, manifest, intents };
+  return { ...native, chain, source, intents: sugar.intents };
 }
 
 /**
- * The native half of {@link compileForChain}: the program as written — after the intent sugar,
- * which still lowers as text — compiled with the extensions manifest for `chain`. The compiler gives
+ * The compile itself: the program as written — after the intent sugar, which still lowers as text —
+ * compiled with the extensions manifest for `chain`. The compiler gives
  * it the chain's tokens, protocols, `chainId`, `Token`, `self` and `available` itself, so no define
  * carries a chain-scoped name and no rewrite runs; `defines` is exactly the caller's.
  */
