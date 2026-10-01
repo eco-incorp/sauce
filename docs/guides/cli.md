@@ -17,6 +17,7 @@ through an endpoint you name on the command line.
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
 | `sauce pot`      | Predict a Pot's address, and deploy it or print the transaction that does         |
 | `sauce globals`  | List the tokens, protocols and other names a program on a chain can use           |
+| `sauce price`    | Turn a price into a pool's `sqrtPriceX96`, a swap's limit and average-price floor |
 | `sauce inspect`  | Take a cook, a Kitchen or Portal call, a program or a file apart                  |
 | `sauce verify`   | Check that a payload, cook, intent or transaction runs the audited settle program |
 | `sauce init`     | Scaffold a project that uses this package                                         |
@@ -299,6 +300,16 @@ another owner's Pot, which the signer sends and pays for — how the Pot every i
 cooks on, owned by that chain's Portal Executor, is deployed — and defaults the owner to the
 signer. On Solana the owner signs `create_pot`, so there the signer creates its own.
 
+Given an endpoint and no `--deploy`, `sauce pot` also reads the chain (or the Solana cluster) and
+adds what it found under `deployment`, and in a line on stderr: whether the released engine and
+Kitchen are there, the Kitchen's execution fee, and whether the Pot is deployed and whose it is.
+`--deploy` refuses a chain with no Kitchen rather than send a `deployPot` to an address without
+code, which would succeed and deploy nothing.
+
+```sh
+npx sauce pot --chain base --owner 0xYou --config sauce.config.json
+```
+
 `run` and `publish` act for the signer, so the owner is the signer: `--owner` may only restate it,
 and one that names someone else is refused. `simulate`, `tx` and plain `pot` have no signer and
 take `--owner` (or, for `simulate` and `tx`, `--pot <address>`, of a deployed Pot).
@@ -373,7 +384,24 @@ write anything larger as a string.
 A define replaces a **module-level** `const`, so in a file with `main` the constant sits beside it,
 as above. In a script, a top-level `const` is the script's own local and a define cannot replace it:
 leave the name undeclared and define it. The command refuses a define a script would never see,
-rather than ignoring it.
+rather than ignoring it, and names on stderr a define the file never reads, which changes nothing.
+For a program on Solana, a value may also be a base58 public key, as `--account` takes them: it is
+the 32-byte word an account's `address` compares to.
+
+`sauce compile --json` reports what the compile applied:
+
+- `defines`: each define the file reads, its value, and its `source`: `user` for `--define` and
+  `--defines`, or `chain` for what compiling for the chain sets, with its `kind` (a `token` symbol,
+  a protocol `contract` such as `UniswapV3_Factory`, the `chain id`). A user define that replaced a
+  chain value says what it `replaces`.
+- `contracts`: each protocol contract the program calls or reads (`UniswapV3.Factory.getPool(…)`,
+  `Cctp.TokenMessenger`), as written and as resolved, with the chain whose deployment it is — an
+  intent body's resolves on the intent's own chain.
+- `size`, the program's bytes, and `payload`, the program with `main`'s arguments appended, given
+  with `--args` or `--args-json` (`null` until they are).
+- On Solana, `cook`: the size of the cook's transaction against the 1232-byte limit, measured as
+  `sauce run` builds it, with each `--account` given and a distinct account for every other slot.
+  Past the limit, stderr says `sauce run` stages the program first.
 
 ### Values given when it runs: `main`'s arguments
 
@@ -431,6 +459,16 @@ A program can open an intent on another chain — `Base(() => { … }).reward({ 
 needs what the SDK cannot look up: `--intent-deadline <unix seconds>` and `--intent-creator
 <address>`, and, when the intent's body compiles to a program of its own,
 `--intent-execution-fee <wei>`, the destination Kitchen's fee. It names whichever is missing.
+`--intent-execution-fee auto` reads that fee from each destination's Kitchen, through `--config`
+(an `rpcUrls` entry for the destination's chain id), and says what it read.
+
+Every intent whose body runs a program cooks on one Pot on its destination: the one owned by the
+destination Portal's Executor with salt zero, which every intent through that Portal shares. No
+solver can fill the intent until that Pot is deployed. `compile` and `publish` check it on the
+destination when `--config` reaches it (`compile --json` reports each under `intentPots`) and warn
+while it is missing, naming the `sauce pot --deploy --chain <destination> --owner <Executor>` that
+deploys it; any account may send that. `publish` warns before it sends anything, and says how to
+check when it cannot.
 
 There are two ways to get such a file's intents onto the chain:
 
@@ -482,6 +520,23 @@ intents, the defines, and the `@sauce/token` functions. `--json` prints the same
 read. It is `routes.sourceGlobals(chain)`, which reads the registries the compile reads and lists
 contracts through the protocol rewrite's own resolver, so a name it lists is one the compile
 accepts, at the address the program gets.
+
+### `sauce price`
+
+```sh
+npx sauce price --chain base WETH USDC 2700                       # 2,700 USDC per WETH
+npx sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568
+```
+
+turns a price, in quote tokens per base token, into the numbers a swap program takes, for the pair's
+order on the chain (token0 is the lower address): the `sqrtPriceX96` a Uniswap V3 or V4 pool (or a
+fork) trades at, which is also the swap's `sqrtPriceLimitX96` — a floor when selling token0, a
+ceiling when selling token1 — and, for selling the base token and for buying it, the `minAvgPrice` a
+program compares a fill against, `out * 1e18 >= minAvgPrice * spent`, rounded up so the check never
+passes a worse average. A token is a symbol the chain registers, or `0x…:<decimals>`.
+`--sqrt-price-x96` reads a pool's price back. The conversion is the package's
+`sqrtPriceX96FromPrice` and `priceFromSqrtPriceX96`, which a TypeScript program imports from the
+root; nothing reaches a network.
 
 ### `sauce inspect`
 

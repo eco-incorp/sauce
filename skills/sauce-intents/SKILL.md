@@ -134,8 +134,8 @@ which chains take intents. Three values are the developer's:
 - **`--intent-creator <address>`**: who may reclaim an unearned reward. Never a Pot.
 - **`--intent-execution-fee <wei>`** for a program body: the destination Kitchen's fee. It is
   mutable on chain and lives on the destination, so read it there just before sending
-  (`destinationExecutionFee()` builds the read); an increase before the fill makes the cook, and the
-  fulfilment, revert.
+  (`destinationExecutionFee()` builds the read, and `--intent-execution-fee auto` reads it through
+  `--config`); an increase before the fill makes the cook, and the fulfilment, revert.
 
 Refused at compile time, never silently changed: a name that is neither a define nor a program
 variable, a missing deadline, creator or fee, a chain with no eco-routes deployment, a pair with no

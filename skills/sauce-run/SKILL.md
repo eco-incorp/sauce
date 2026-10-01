@@ -45,11 +45,16 @@ Run the project's own copy, `npx sauce <command> --help`, for every option.
    needs no import for. `--protocol UniswapV3` shows one namespace's methods with every parameter
    named; `--json` gives the same for a program to read. Use only names it lists.
 2. **Compile**, to check the program: `npx sauce compile pay.sauce.ts --chain ethereum`. It prints the
-   bytecode; `--json` adds the size, `main`'s parameters, the compiler and the engine it pairs with.
-   A failing compile points at the file's line and column, and its `hint:` lines name the flag or
-   define to add.
+   bytecode; `--json` adds the size, `main`'s parameters, the compiler and the engine it pairs with,
+   and what the compile applied: `defines` (each define the file reads, its value, and whether the
+   user or the chain set it), `contracts` (each protocol contract it calls, resolved on its chain),
+   and `payload`, its size with `main`'s arguments given by `--args`. On Solana, `cook` says whether
+   the cook fits one transaction. A failing compile points at the file's line and column, and its
+   `hint:` lines name the flag or define to add.
 3. **Pot**: `npx sauce pot --chain base --owner <address>` prints the Pot's address, known before it
-   exists, and its deploy transaction.
+   exists, and its deploy transaction. With `--config sauce.config.json` it also says whether the
+   chain has the released engine and Kitchen (and the Kitchen's fee) and whether the Pot is
+   deployed.
    `npx sauce pot --deploy --chain base --config sauce.config.json --keystore <keystore>` deploys the
    signer's Pot. `--salt <label>` names another Pot of the same owner (`--salt-hex <bytes32>` for an
    exact salt); use the same salt in every later command.
@@ -128,7 +133,10 @@ arguments.
 A program can open an intent to another chain: `Arbitrum(() => { … }).reward({ … })`. Pass
 `--intent-deadline <unix seconds>` and `--intent-creator <address>`, and
 `--intent-execution-fee <wei>` when the intent's body runs a program; the command names whichever
-is missing. `sauce-intents` covers writing them.
+is missing. `--intent-execution-fee auto` reads the fee from the destination through `--config`.
+With `--config`, `compile` and `publish` warn while the Pot such an intent cooks on is not deployed
+on its destination: no solver can fill it until then, and the warning names the `sauce pot --deploy`
+that deploys it. `sauce-intents` covers writing them.
 
 - `sauce run` cooks the file on the Pot, which funds the intents: use it when an amount is measured
   on chain while the program runs (a balance, a swap's output).

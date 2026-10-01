@@ -199,8 +199,10 @@ function main(tokenIn: Address, tokenOut: Address, sqrtPriceLimitX96: Uint256, r
 - `sqrtPriceLimitX96 = floor(sqrt(token1Units / token0Units) * 2^96)`, token0 the lower address of
   the pair **on that chain**, with each token's decimals from [tokens.md](../sauce-globals/references/tokens.md).
   For WETH→USDC on Base and on Arbitrum (WETH is token0 on both), 1,500 USDC per WETH is
-  3068493539683605256287027, the integer square root of 1500e6 × 2^192 / 1e18. The runner's
-  `sqrtPriceX96` helper computes it.
+  3068493539683605256287027, the integer square root of 1500e6 × 2^192 / 1e18.
+  `npx sauce price --chain base WETH USDC 1500` prints it for the chain's token order, with the
+  `minAvgPrice` for selling and for buying; `sqrtPriceX96FromPrice` from the package computes it in
+  TypeScript.
 - Selling token0 the limit is a floor below the current price; selling token1 a ceiling above it.
   The program's comparisons branch on `tokenIn < tokenOut` at run time, so the same bytecode sells
   either way.
