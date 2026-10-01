@@ -23,9 +23,10 @@ export interface AccessorOptions {
   /** Gives the program a bare `self`, the account it runs as. Default `true`. */
   selfSugar?: boolean;
   /**
-   * Told each contract reference a compile resolved, with what it resolved to. NOT CALLED YET: the
-   * compiler resolves the references itself, from the extensions manifest, and does not report them
-   * — the `sauce compile` report's `contracts` waits on it.
+   * Told each contract reference the compile resolved — a call (`UniswapV3.Factory.getPool(…)`) or
+   * a value (`Cctp.TokenMessenger`) — as written, with the deployment it names: the manifest
+   * contracts the compiler reports. A compile passes `accessors` on to the intents a program opens,
+   * so it hears about each intent body's references too, resolved for its own chain.
    */
   onContract?: (reference: string, target: AccessorTarget) => void;
 }

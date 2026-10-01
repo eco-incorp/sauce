@@ -123,6 +123,21 @@
     "defines": [],
     "sha256": "86070a358dddb36052f79f2bbf0327ca6dc165b6ceb805d82c1251a74b436e16"
   },
+  "shape: a bare self@arbitrum": {
+    "source": "function main(): Uint256 { return USDC.balanceOf(self); }",
+    "defines": [],
+    "sha256": "c34310adb74fac3f7eeeaf0300421ef19fd7795bd910449b27bc839c98b80a7f"
+  },
+  "shape: a bare self@base": {
+    "source": "function main(): Uint256 { return USDC.balanceOf(self); }",
+    "defines": [],
+    "sha256": "1c79e914c3c867a5f1d4e0426118ceb1e1fbbb8096ec8c076e40757fd4628f9d"
+  },
+  "shape: a bare self@optimism": {
+    "source": "function main(): Uint256 { return USDC.balanceOf(self); }",
+    "defines": [],
+    "sha256": "f4e7154b7f6fd1651ca05b04cd2f9438ba9481c153abeee5f70bda2a02241e2d"
+  },
   "shape: a bound Token@arbitrum": {
     "source": "function main(t: Address): Uint256 { const token = Token(t); token.transfer(t, 1n); return token.balanceOf(t); }",
     "defines": [],
@@ -152,6 +167,21 @@
     "source": "function main(): Uint256 { return Arbitrum.UniswapV3.Factory; }",
     "defines": [],
     "sha256": "7915fdd380439b9b1e4f1b9317795ea0666830a4e95f0a5f8c737c0f1349dd2f"
+  },
+  "shape: a default the chain overrides@arbitrum": {
+    "source": "const UniswapV3_Factory = 0n;\nfunction main(): Uint256 { return UniswapV3_Factory + chainId; }",
+    "defines": [],
+    "sha256": "5a5a7b26450ae7f7a07907bd86e714031843167aa212841c5c20adece4f35e86"
+  },
+  "shape: a default the chain overrides@base": {
+    "source": "const UniswapV3_Factory = 0n;\nfunction main(): Uint256 { return UniswapV3_Factory + chainId; }",
+    "defines": [],
+    "sha256": "c78ecf5af1bdbe69966f8045e686c46e3c9f4382ecc0d3795d925453b327684a"
+  },
+  "shape: a default the chain overrides@optimism": {
+    "source": "const UniswapV3_Factory = 0n;\nfunction main(): Uint256 { return UniswapV3_Factory + chainId; }",
+    "defines": [],
+    "sha256": "6733f1ef7c1b0dd07be2dbe03ec343d14e9959de038eb97cde3eeed42bea0eb9"
   },
   "shape: a family alias@arbitrum": {
     "source": "function main(): Uint256 { return Uniswap.UniversalRouter; }",
