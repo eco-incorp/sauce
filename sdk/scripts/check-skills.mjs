@@ -342,7 +342,7 @@ function parseSkill(dir) {
     runners: files.filter((f) => f.endsWith(".mts")).map((f) => join(examplesDir, f)),
     programs: files.filter((f) => f.endsWith(".sauce.ts")).map((f) => join(examplesDir, f)),
     // A `.json` example is an actions document, or — a JSON array — a contract's ABI that a
-    // program beside it imports (`import IPool from "./IPool.json"`): a module, not an example.
+    // program beside it imports (`import IOracle from "./IOracle.json"`): a module, not an example.
     documents: files
       .filter((f) => f.endsWith(".json") && !isAbi(join(examplesDir, f)))
       .map((f) => join(examplesDir, f)),

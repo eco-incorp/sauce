@@ -215,20 +215,24 @@ describe("sauce_price", () => {
 
 describe("sauce_compile", () => {
   it("compiles a program with its own ABI beside it, given in modules", async () => {
-    // The sauce-script skill's example: the factory a namespace, the pool through ./IPool.json.
+    // The sauce-script skill's example: the factory and the pool namespaces, `observe` through
+    // the program's own ./IOracle.json.
     const examples = new URL("../../skills/sauce-script/examples/", import.meta.url);
-    const source = readFileSync(new URL("pool-state.sauce.ts", examples), "utf8");
-    const abi = readFileSync(new URL("IPool.json", examples), "utf8");
+    const source = readFileSync(new URL("twap.sauce.ts", examples), "utf8");
+    const abi = readFileSync(new URL("IOracle.json", examples), "utf8");
     const out = ok(
-      await mcp.call("sauce_compile", { source, chain: "base", modules: { "IPool.json": abi } }),
+      await mcp.call("sauce_compile", { source, chain: "base", modules: { "IOracle.json": abi } }),
     );
     assert.match(out.bytecode as string, /^0x[0-9a-f]+$/);
     assert.deepEqual(
       (out.entryParams as Array<{ name: string }>).map((param) => param.name),
-      ["tokenA", "tokenB", "fee"],
+      ["tokenA", "tokenB", "fee", "window"],
     );
     // Without the module, the import has nothing to resolve to.
-    assert.match(failed(await mcp.call("sauce_compile", { source, chain: "base" })), /IPool\.json/);
+    assert.match(
+      failed(await mcp.call("sauce_compile", { source, chain: "base" })),
+      /IOracle\.json/,
+    );
   });
 
   it("compiles a program file that starts with a #! line as the file without it", async () => {

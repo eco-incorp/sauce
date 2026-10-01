@@ -631,7 +631,7 @@ TypeScript leaves them to their own project. The file it writes is this, `<packa
 }
 ```
 
-A contract ABI beside a program is typed by its default import, `import IPool from "./IPool.json"`,
+A contract ABI beside a program is typed by its default import, `import IOracle from "./IOracle.json"`,
 as a contract whose methods the editor does not check; the compile checks them against the ABI.
 
 ## An actions document instead of a program

@@ -186,32 +186,38 @@ Call a contract by name, in this order of preference:
 
 1. **A namespace**, for a protocol contract the chain's registry records:
    `UniswapV3.Factory.getPool(...)`, `AaveV3.Pool.supply(...)`, typed by the registry's ABI, its
-   address the chain's. `AaveV3.Pool.at(address)` calls the same contract at another address. The
-   chain's file in `sauce-chains`, or `sauce globals --chain <chain> --protocol <namespace>`, lists
-   each namespace's contracts and methods.
+   address the chain's. `.at(address)` calls the same kind of contract at another address: a
+   pool the factory returned is `UniswapV3.Pool.at(pool)`, as in `UniswapV3.Pool.at(pool).slot0()`.
+   The chain's file in `sauce-chains`, or `sauce globals --chain <chain> --protocol <namespace>`,
+   lists each namespace's contracts and methods.
 2. **A registry ABI import**, for a contract the registry has an ABI of but no namespace on the
    chain, such as any ERC-4626 vault: `import VaultABI from "./protocols/erc4626/VaultABI.json"`,
    then `VaultABI.at(vault).convertToAssets(shares)`. Each protocol's registry page in
    `sauce-protocols` gives its import line.
-3. **The program's own ABI**, for a contract no registry knows: a JSON ABI file beside the program,
-   holding only the functions the program calls, with the deployed contract's types from its
-   verified source, imported by relative path: `import IPool from "./IPool.json"`, then
-   `IPool.at(pool).slot0()`. The `sauce` command reads it from beside the file; through the MCP
-   server, pass it in `modules` with the program (`{ "IPool.json": "<its JSON>" }`).
-   [examples/pool-state.sauce.ts](examples/pool-state.sauce.ts) reads a pool through
-   [examples/IPool.json](examples/IPool.json).
+3. **The program's own ABI**, for a contract no registry knows, or a function its registry ABI
+   does not declare: a JSON ABI file beside the program, holding only the functions the program
+   calls, with the deployed contract's types from its verified source, imported by relative path
+   as the file's default export: `import IOracle from "./IOracle.json"`, then
+   `IOracle.at(pool).observe(...)`. The `sauce` command reads it from beside the file; through the
+   MCP server, pass it in `modules` with the program (`{ "IOracle.json": "<its JSON>" }`).
+   [examples/twap.sauce.ts](examples/twap.sauce.ts) finds a pool through `UniswapV3.Factory` and
+   reads its price history through [examples/IOracle.json](examples/IOracle.json), which declares
+   the one function the registry's pool ABI lacks, `observe`.
 
 Never call through `evm.static` (or `evm.call`) with a hex selector where one of these is
 possible: the typed call encodes the arguments, decodes the result and names its fields. Take only
-what you need from a result: `const [sqrtPriceX96] = IPool.at(pool).slot0();` and
-`IPool.at(pool).slot0().sqrtPriceX96` both read the first field alone.
+what you need from a result: `const [sqrtPriceX96] = UniswapV3.Pool.at(pool).slot0();` and
+`UniswapV3.Pool.at(pool).slot0().sqrtPriceX96` both read the first field alone.
 
 ```sauce chain=base,ethereum
 import VaultABI from "./protocols/erc4626/VaultABI.json";
 
 function main(vault: Address, shares: Uint256): Uint256 {
-  // A namespace: the factory the chain's registry records.
-  require(UniswapV3.Factory.getPool(WETH, USDC, 500n) != 0n, "no WETH/USDC 0.05% pool");
+  // A namespace: the factory the chain's registry records, and a pool it returns.
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
+  require(pool != 0n, "no WETH/USDC 0.05% pool");
+  const [sqrtPriceX96] = UniswapV3.Pool.at(pool).slot0();
+  require(sqrtPriceX96 > 0n, "the pool is not initialized");
   // A registry ABI, for a vault the registry does not name.
   return VaultABI.at(vault).convertToAssets(shares);
 }
