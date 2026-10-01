@@ -373,6 +373,25 @@ describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
     }
   }, 120_000);
 
+  it("says when a delivered token's balance cannot be given to the solver", async () => {
+    // A token whose balanceOf is computed (always 7): no storage word to write.
+    const computed: Address = "0x5a0Ce00000000000000000000000000000000007";
+    await base.testClient.setCode({ address: computed, bytecode: "0x600760005260206000f3" });
+    const run = await fill(
+      file(
+        "computed.sauce.ts",
+        `Base(() => {\n  Token(${computed.toLowerCase()}n).transfer(RECIPIENT, AMOUNT_IN);\n}).reward({ tokens: [{ token: USDC, amount: 6000000n }] });\n`,
+      ),
+      ...defines(),
+    );
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain(
+      `the solver delivers ${computed}, and the rehearsal cannot give it a balance: no storage ` +
+        `slot of ${computed} holds the balance its balanceOf reports`,
+    );
+    expect(run.stderr).toContain("Pass --solver <an address that holds it>.");
+  }, 60_000);
+
   it("refuses an intent with no route until its program runs", async () => {
     const run = await fill(file("measured.sauce.ts", MEASURED), ...defines());
     expect(run.code).toBe(1);

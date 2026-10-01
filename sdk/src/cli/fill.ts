@@ -400,7 +400,20 @@ async function rehearseFill(
       ),
     ]);
     if (held < amount) {
-      const found = await assumeTokenBalance(client, token, solver, amount, symbol);
+      const found = await assumeTokenBalance(client, token, solver, amount, symbol).catch(
+        (error: unknown) => {
+          if (!(error instanceof CliError)) throw error;
+          // `assume.ts` words its refusals for `--assume-balance`; here the balance is the solver's.
+          const why = error.message
+            .replace(/^--assume-balance [^:]+: /, "")
+            .replace(/ Fund the Pot instead\.$/, "")
+            .replace(/\.$/, "");
+          throw new CliError(
+            `the solver delivers ${symbol}, and the rehearsal cannot give it a balance: ${why}. ` +
+              "Pass --solver <an address that holds it>.",
+          );
+        },
+      );
       overrides.push(found.override);
       assumed.push({
         token,
