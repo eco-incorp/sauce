@@ -64,6 +64,11 @@ the one Pot the solver deploys per Portal and every intent through that Portal s
 overrides. `destinationPot(Base.chain, { portal })` returns that address, for a `precalls`
 transfer into it.
 
+The address also follows the pinned Kitchen release's Pot bytecode, whose hash is part of every Pot
+address. A Kitchen release that changes that bytecode starts a new family: the shared Pot for the
+same Executor moves to a new address, and a Pot of the earlier family keeps running on the engine
+built for it. `destinationPot` always answers for the family this SDK pins.
+
 **The destination Pot must exist before the intent is fulfilled.** The SDK derives its address and
 deploys nothing: the route contains no deployment call. The solver deploys the shared Pot for each
 Portal. A fulfilment that cooks on a Pot that is not there reverts entirely, because the Executor
