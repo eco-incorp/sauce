@@ -719,6 +719,15 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     const unknown = await rehearse("pot:USDX");
     expect(unknown.code).toBe(2);
     expect(unknown.stderr).toContain("USDX is not a mint solana registers (USDC, USDT, WSOL)");
+    // Cooked directly, there is no Pot, so no Pot's token account either.
+    const direct = await sauce(
+      ...["simulate", reads, "--chain", "solana", "--owner", owner.signer.address],
+      ...["--rpc-url", RPC_URL, "--via", "engine", "--account", "held=pot:USDC"],
+    );
+    expect(direct.code).toBe(2);
+    expect(direct.stderr).toContain(
+      "--account held=pot:USDC: --via engine cooks with no Pot, so there is no Pot's token account",
+    );
   }, 60_000);
 
   it("`sauce simulate` reads a revert's message from the engine's return data in the logs", async () => {
