@@ -47,6 +47,8 @@ import type {
   Rpc,
 } from "@solana/kit";
 
+import { assertEngineRunsCompiler } from "../deployments/releases.js";
+
 /** One entry of a program's own account tail, in the shape a kit `Instruction` carries. */
 export type TailAccount = AccountLookupMeta | AccountMeta;
 
@@ -408,6 +410,7 @@ export function buildCookInstruction({
   tail = [],
 }: CookInput): Instruction {
   assertLength(potSalt, SALT_BYTES, "a pot salt");
+  assertEngineRunsCompiler("svm", engineProgram);
 
   return {
     programAddress: kitchen,
@@ -458,6 +461,7 @@ export function buildCookFromAccountInstruction({
   tail = [],
 }: CookFromAccountInput): Instruction {
   assertLength(potSalt, SALT_BYTES, "a pot salt");
+  assertEngineRunsCompiler("svm", engineProgram);
 
   return {
     programAddress: kitchen,

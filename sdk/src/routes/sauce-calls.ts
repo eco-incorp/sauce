@@ -62,11 +62,7 @@ import type { Address } from "@solana/kit";
 import { bytesToHex, getAddress, type Hex } from "viem";
 
 import { v12Kitchen, v12Pot } from "../evm/engine.js";
-import {
-  requireV12Deployment,
-  v12SvmEngineProgramId,
-  type V12Deployment,
-} from "../deployments/index.js";
+import { v12KitchenAddress, v12SvmEngineProgramId } from "../deployments/index.js";
 import { encodePortalCalldataWithAccounts, type PortalAccountMeta } from "../svm/intent.js";
 import { assertNoExecutePin, buildExecuteFromAccountInstruction } from "../svm/instructions.js";
 import type { ResolvedAccountMeta } from "../svm/resolve.js";
@@ -147,39 +143,25 @@ export interface SauceEvmDeployPotCallParams {
   /** Bakes into the Pot's CREATE2 address; `cook()` on the resulting Pot is `onlyOwner`. */
   owner: AddressInput;
   salt: Hex;
-  /** The Kitchen to deploy through. Give this, or a `chainId` — there is no bare default. */
+  /** The Kitchen to deploy through. Defaults to the pinned release's Kitchen proxy,
+   *  `v12KitchenAddress()` — one CREATE3 address on every chain it is deployed to. */
   kitchen?: AddressInput;
-  /** When `kitchen` is omitted, selects the pinned release Kitchen for a chain in the historical
-   *  successful-deployment roster. The caller must still verify current on-chain code. */
-  chainId?: number;
 }
 
 /**
  * The leading `deployPot(owner, salt)` call a solver issues before its first `cook()` on a Pot that
  * may not exist yet.
  *
- * Supply `kitchen` explicitly or use `chainId` to select the pinned release Kitchen. The chain
- * roster is historical; this helper does no RPC or current deployment verification.
+ * The Kitchen defaults to the pinned release's. This helper reads no chain, so it does not know
+ * whether that Kitchen has code where the call is sent: check the chain first.
  *
  * Send it as `{ to, data, value }`, or put it in a route's `calls` as `{ target, data, value }`:
  * both fields are there ({@link SauceEvmCall}).
  */
 export function sauceEvmDeployPotCall(params: SauceEvmDeployPotCallParams): SauceEvmCall {
-  if (params.kitchen === undefined && params.chainId === undefined) {
-    throw new Error(
-      "sauceEvmDeployPotCall: pass `kitchen`, or a `chainId` to take it from the gated deployment " +
-        "record — there is no ungated default Kitchen address.",
-    );
-  }
-  const kitchen: AddressInput =
-    params.kitchen ?? (requireV12Deployment(params.chainId!).v12Kitchen as Hex);
+  const kitchen: AddressInput = params.kitchen ?? (v12KitchenAddress() as Hex);
   const ownerAddress = denormalizeToEvm(toUniversalAddress(params.owner));
   return evmCall(kitchen, v12Kitchen.encodeDeployPot(ownerAddress, params.salt), 0n);
-}
-
-/** @deprecated This checks the historical roster only. Verify pinned release code on chain. */
-export function assertSauceEvmLive(chainId: number): V12Deployment {
-  return requireV12Deployment(chainId);
 }
 
 // ---------------------------------------------------------------------------

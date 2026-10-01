@@ -17,16 +17,12 @@ import {
   encodeFunctionData,
   decodeAbiParameters,
   getAddress,
+  parseAbiItem,
   type AbiFunction,
 } from "viem";
 
 import { registryFunction } from "./abis.js";
-import {
-  CurveRouterNGABI,
-  CurveThreePoolABI,
-  UniswapV2RouterABI,
-  UniswapV3QuoterV2ABI,
-} from "./registry.js";
+import { CurveRouterNGABI, CurveThreePoolABI } from "./registry.js";
 import {
   bindBytes,
   bindConst,
@@ -42,19 +38,20 @@ import {
 import { parseActions } from "./program.js";
 import type {
   SwapAction,
-  UniswapV3ExactInputAction,
-  UniswapV3ExactInputMultiHopAction,
-  UniswapV4ExactInputAction,
-  UniswapV4ExactInputMultiHopAction,
+  UniswapV2SwapAction,
+  UniswapV3SwapAction,
+  UniswapV4SwapAction,
   CurveSwapAction,
-  CurveRouterNGSwapAction,
   BalancerV2SwapAction,
+  DodoV2SwapAction,
+  TraderJoeLBSwapAction,
+  WoofiSwapAction,
+  MaverickV2SwapAction,
+  CurveRouterNGSwapAction,
   BalancerV2BatchSwapAction,
   BalancerV3SwapAction,
   AmbientSwapAction,
-  DODOSwapAction,
-  MaverickSwapAction,
-  MaverickMultiHopSwapAction,
+  DodoV1SwapAction,
   CarbonSwapAction,
   FluidDexT1SwapAction,
 } from "./types.js";
@@ -89,11 +86,14 @@ export interface QuoteCall extends Quote {
  * the action names.
  */
 export interface QuoteOptions {
-  /** Uniswap's QuoterV2, for `uniswapV3ExactInput` and `uniswapV3ExactInputMultiHop`. */
-  readonly uniswapV3Quoter?: Address;
-  /** Uniswap's V4Quoter, for `uniswapV4ExactInput` and `uniswapV4ExactInputMultiHop`. */
-  readonly uniswapV4Quoter?: Address;
-  /** The MaverickV2Quoter, for `maverickSwap` and `maverickMultiHopSwap`. */
+  /**
+   * The Sauce Router, for `uniswapV3Swap` and `uniswapV4Swap`: the contract that swaps them prices
+   * them, with its own `quote`, which needs no tokens. A Pot's Router is the Kitchen's Router until
+   * the Pot's owner moves it; `v12RouterAddress()` from `@eco-incorp/sauce/deployments` is the
+   * release's.
+   */
+  readonly router?: Address;
+  /** The MaverickV2Quoter, for `maverickV2Swap`. */
   readonly maverickQuoter?: Address;
   /** Ambient's CrocImpact, for `ambientSwap`. */
   readonly ambientImpact?: Address;
@@ -158,13 +158,13 @@ function shapeLiteral(shape: Shape): string {
  * Two ways to invoke a quoter on-chain:
  *
  * - `'static'` — STATICCALL (`evm.static`). Use for pure-view quoters that make no state
- *   changes (Curve `get_dy`, Carbon, DODO, the UniV2 router's `getAmountsOut`, Ambient
- *   `calcImpact`). Blocking state writes is exactly the safety property we want — the quoter
- *   target may be caller-supplied (the action's own `pool`/`controller`/`router` field), so
- *   STATICCALL keeps a malicious or buggy target from re-entering or mutating state.
+ *   changes (Curve `get_dy`, Carbon, DODO, a V2 pair's `getReserves`, LB `getSwapOut`, WooPPV2
+ *   `query`, Ambient `calcImpact`). Blocking state writes is exactly the safety property we want —
+ *   the quoter target may be caller-supplied (the action's own `pool`/`controller`/`router`
+ *   field), so STATICCALL keeps a malicious or buggy target from re-entering or mutating state.
  *
  * - `'call'` — regular CALL with `value=0` (`evm.call`). Use for revert-simulation
- *   quoters (UniV3 QuoterV2, UniV4 V4Quoter, MaverickV2Quoter, Fluid
+ *   quoters (the Sauce Router's `quote` for UniV3/UniV4, MaverickV2Quoter, Fluid
  *   resolvers). They trigger `pool.swap(...)` internally — a state-writing
  *   function that reverts after the callback. STATICCALL would block those
  *   writes and produce an unparseable revert; the pool's own revert at the
@@ -365,38 +365,40 @@ export function quoteCall(
 ): QuoteCall {
   switch (action.type) {
     // --- On the same contract as the action ---
+    case "uniswapV2Swap":
+      return quoteUniswapV2(action, amountIn);
     case "curveSwap":
       return quoteCurve(action, amountIn);
-    case "curveRouterNGSwap":
-      return quoteCurveRouterNG(action, amountIn);
-    case "uniswapV2Swap":
-      return quoteV2Router(action.router, action.path, amountIn);
-    case "fraxswapSwap":
-      return quoteFraxswap(action.router, action.path, amountIn);
     case "balancerV2Swap":
       return quoteBalV2Single(action, amountIn);
+    case "dodoV2Swap":
+      return quoteDodoV2(action, amountIn);
+    case "traderJoeLBSwap":
+      return quoteTraderJoeLB(action, amountIn);
+    case "woofiSwap":
+      return quoteWoofi(action, amountIn);
+    case "curveRouterNGSwap":
+      return quoteCurveRouterNG(action, amountIn);
+    case "fraxswapSwap":
+      return quoteFraxswap(action.router, action.path, amountIn);
     case "balancerV2BatchSwap":
       return quoteBalV2Batch(action);
     case "balancerV3Swap":
       return quoteBalV3(action, amountIn);
     case "carbonSwap":
       return quoteCarbon(action);
-    case "dodoSwap":
-      return quoteDODO(action, amountIn);
+    case "dodoV1Swap":
+      return quoteDodoV1(action, amountIn);
+
+    // --- The Sauce Router, which swaps them ---
+    case "uniswapV3Swap":
+      return quoteThroughRouter(action, amountIn, required(opts, "router"));
+    case "uniswapV4Swap":
+      return quoteThroughRouter(action, amountIn, required(opts, "router"));
 
     // --- Separate quoter / resolver contract ---
-    case "uniswapV3ExactInput":
-      return quoteUniV3Single(action, amountIn, required(opts, "uniswapV3Quoter"));
-    case "uniswapV3ExactInputMultiHop":
-      return quoteUniV3Multi(action, amountIn, required(opts, "uniswapV3Quoter"));
-    case "uniswapV4ExactInput":
-      return quoteUniV4Single(action, amountIn, required(opts, "uniswapV4Quoter"));
-    case "uniswapV4ExactInputMultiHop":
-      return quoteUniV4Multi(action, amountIn, required(opts, "uniswapV4Quoter"));
-    case "maverickSwap":
-      return quoteMaverick(action, amountIn, required(opts, "maverickQuoter"));
-    case "maverickMultiHopSwap":
-      return quoteMaverickMulti(action, amountIn, required(opts, "maverickQuoter"));
+    case "maverickV2Swap":
+      return quoteMaverickV2(action, amountIn, required(opts, "maverickQuoter"));
     case "ambientSwap":
       return quoteAmbient(action, amountIn, required(opts, "ambientImpact"));
     case "fluidDexT1Swap":
@@ -414,16 +416,22 @@ export function quoteCall(
 // ---------------------------------------------------------------------------
 
 /**
- * Curve StableSwap / CryptoSwap pool — `get_dy(int128,int128,uint256)`, from the same 3pool ABI
- * the `curveSwap` binding uses; every 4-argument pool declares it the same way.
+ * Curve pool — `get_dy(i, j, dx)` in the pool's own index type: `int128` from the registry's 3pool
+ * ABI for a StableSwap or NG pool, `uint256` for a CryptoSwap pool (its selector differs, and the
+ * registry has no CryptoSwap ABI). Either way the arguments are three words.
  */
 function quoteCurve(action: CurveSwapAction, amountIn: bigint): QuoteCall {
-  const fn = registryFunction(
-    "curve",
-    "CurveThreePoolABI",
-    CurveThreePoolABI,
-    "get_dy(int128,int128,uint256)",
-  );
+  const fn =
+    action.indexType === "uint256"
+      ? (parseAbiItem(
+          "function get_dy(uint256 i, uint256 j, uint256 dx) view returns (uint256)",
+        ) as AbiFunction)
+      : registryFunction(
+          "curve",
+          "CurveThreePoolABI",
+          CurveThreePoolABI,
+          "get_dy(int128,int128,uint256)",
+        );
   const to = action.pool;
   const data = callData(fn, [BigInt(action.i), BigInt(action.j), amountIn]);
   return {
@@ -431,7 +439,7 @@ function quoteCurve(action: CurveSwapAction, amountIn: bigint): QuoteCall {
     data,
     decode: (result: Hex) => returned(fn, result)[0] as bigint,
     toSauce: asUint256("static", to, data),
-    // selector(4) + int128 i(32) + int128 j(32) = 68
+    // selector(4) + i(32) + j(32) = 68
     toSauceDynamic: makeDynamic("static", to, data, 68, OUT_UINT256, firstWord),
   };
 }
@@ -468,26 +476,45 @@ function quoteCurveRouterNG(action: CurveRouterNGSwapAction, amountIn: bigint): 
   };
 }
 
-/** UniswapV2 / SushiSwap / Fraxswap router — `getAmountsOut(uint256,address[])`. */
-function quoteV2Router(router: Address, path: Address[], amountIn: bigint): QuoteCall {
-  const fn = registryFunction(
-    "uniswap-v2",
-    "UniswapV2RouterABI",
-    UniswapV2RouterABI,
-    "getAmountsOut(uint256,address[])",
-  );
-  const to = router;
-  const data = callData(fn, [amountIn, path]);
+/**
+ * Uniswap V2 pair — `getReserves()` (view), priced exactly as `@sauce/router`'s `uniswapV2` prices
+ * it: the Router's constant-product math, the fee in ppm (absent or 0 is 3000), the direction from
+ * the sort order. The amount is not in the calldata, so the on-chain form applies it after the read.
+ */
+function quoteUniswapV2(action: UniswapV2SwapAction, amountIn: bigint): QuoteCall {
+  const fee = BigInt(action.feePpm === undefined || action.feePpm === 0 ? 3000 : action.feePpm);
+  const zeroForOne = BigInt(action.tokenIn) < BigInt(action.tokenOut);
+  const [inIndex, outIndex] = zeroForOne ? [0, 1] : [1, 0];
+  const to = action.pool;
+  const data = sel("getReserves()");
+  const price = (reserveIn: bigint, reserveOut: bigint): bigint => {
+    const inWithFee = amountIn * (1_000_000n - fee);
+    return (inWithFee * reserveOut) / (reserveIn * 1_000_000n + inWithFee);
+  };
+  const onChain = (emit: Emitter, amountExpr: Expr): Fragment => {
+    const cd = bindBytes(emit, "qcd", hexToBytes(data));
+    const decoded = decodeCall(emit, "static", to, cd, words(3));
+    const inWithFee = bindConst(emit, "qw", `${amountExpr} * ${formatBigint(1_000_000n - fee)}`);
+    return {
+      stmts: [...decoded.stmts, ...inWithFee.stmts],
+      expr:
+        `Math.mulDiv(${inWithFee.expr}, ${decoded.expr}[${outIndex}], ` +
+        `${decoded.expr}[${inIndex}] * 1000000n + ${inWithFee.expr})`,
+    };
+  };
+
   return {
     to,
     data,
     decode: (result: Hex) => {
-      const [amounts] = returned(fn, result) as [readonly bigint[]];
-      return amounts[amounts.length - 1]!;
+      const reserves = decodeAbiParameters(
+        [{ type: "uint112" }, { type: "uint112" }, { type: "uint32" }],
+        result,
+      );
+      return price(reserves[inIndex] as bigint, reserves[outIndex] as bigint);
     },
-    toSauce: asUint256ArrayLast("static", to, data),
-    // selector(4), then amountIn is the first head slot.
-    toSauceDynamic: makeDynamic("static", to, data, 4, OUT_UINT256_ARRAY, arrayLast),
+    toSauce: (emit) => onChain(emit, formatBigint(amountIn)),
+    toSauceDynamic: onChain,
   };
 }
 
@@ -672,30 +699,21 @@ function quoteCarbon(action: CarbonSwapAction): QuoteCall {
 }
 
 /**
- * DODO V2 — `querySellBase` / `querySellQuote` (view) on the pool.
- *
- * The `directions` bitmask in the action encodes the swap direction:
- * bit 0 = 0 → selling base (querySellBase), bit 0 = 1 → selling quote (querySellQuote).
- * Only single-hop is supported via view; multi-hop falls back to first pool.
+ * DODO V2 — `querySellBase` / `querySellQuote` (view) on the pool, the side `@sauce/router`'s `dodoV2`
+ * takes: selling base when `tokenIn` is the base token. Every DODO V2 pool returns the amount first.
  */
-function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
-  const pool = getAddress(action.pairs[0]!);
-  const sellingBase = (action.directions & 1) === 0;
-  if (action.version === "v1") return quoteDODOV1(pool, sellingBase, amountIn);
-  const fnSel = sellingBase
-    ? sel("querySellBase(address,uint256)")
-    : sel("querySellQuote(address,uint256)");
-
-  const to = pool;
+function quoteDodoV2(action: DodoV2SwapAction, amountIn: bigint): QuoteCall {
+  const sellingBase = BigInt(action.tokenIn) === BigInt(action.baseToken);
+  const to = action.pool;
   const data = concatHex(
-    fnSel,
+    sel(sellingBase ? "querySellBase(address,uint256)" : "querySellQuote(address,uint256)"),
     encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [ZERO_ADDR, amountIn]),
   );
   return {
     to,
     data,
     decode: (result: Hex) => {
-      // Returns (uint256 receiveAmount, uint256 mtFee)
+      // DVM returns (receiveAmount, mtFee); DPP and DSP append more words.
       const [receiveAmount] = decodeAbiParameters(
         [{ type: "uint256" }, { type: "uint256" }],
         result,
@@ -703,8 +721,69 @@ function quoteDODO(action: DODOSwapAction, amountIn: bigint): QuoteCall {
       return receiveAmount;
     },
     toSauce: asUint256("static", to, data),
-    // selector(4) + sender/zero(32) = 36
+    // selector(4) + trader(32) = 36
     toSauceDynamic: makeDynamic("static", to, data, 36, OUT_UINT256, firstWord),
+  };
+}
+
+/** DODO V1 — the first pair of the route, quoted by `quoteDODOV1`. */
+function quoteDodoV1(action: DodoV1SwapAction, amountIn: bigint): QuoteCall {
+  return quoteDODOV1(getAddress(action.pairs[0]!), (action.directions & 1) === 0, amountIn);
+}
+
+/**
+ * Trader Joe LB — `getSwapOut(amountIn, swapForY)` (view) on the pair. A pair that would leave part
+ * of the input unspent quotes zero: `@sauce/router`'s `traderJoeLB` swap reverts there
+ * (`LBPair__OutOfLiquidity`) rather than fill it partly.
+ */
+function quoteTraderJoeLB(action: TraderJoeLBSwapAction, amountIn: bigint): QuoteCall {
+  const swapForY = BigInt(action.tokenIn) === BigInt(action.tokenX);
+  const to = action.pool;
+  const data = concatHex(
+    sel("getSwapOut(uint128,bool)"),
+    encodeAbiParameters([{ type: "uint128" }, { type: "bool" }], [amountIn, swapForY]),
+  );
+  // (uint128 amountInLeft, uint128 amountOut, uint128 fee): the output, or 0 when input is left.
+  const filled: Extract = (emit, decoded) => {
+    const left = bindConst(emit, "qleft", `${decoded.expr}[0]`);
+    return {
+      stmts: [...decoded.stmts, ...left.stmts],
+      expr: `${left.expr} == 0n ? ${decoded.expr}[1] : 0n`,
+    };
+  };
+  return {
+    to,
+    data,
+    decode: (result: Hex) => {
+      const [left, out] = decodeAbiParameters(
+        [{ type: "uint128" }, { type: "uint128" }, { type: "uint128" }],
+        result,
+      );
+      return left === 0n ? out : 0n;
+    },
+    toSauce: staticQuote("static", to, data, words(3), filled),
+    // selector(4), then the amount is the first head slot.
+    toSauceDynamic: makeDynamic("static", to, data, 4, words(3), filled),
+  };
+}
+
+/** WOOFi — the WooPPV2's own `query(fromToken, toToken, fromAmount)` (view). */
+function quoteWoofi(action: WoofiSwapAction, amountIn: bigint): QuoteCall {
+  const to = action.pool;
+  const data = concatHex(
+    sel("query(address,address,uint256)"),
+    encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
+      [action.tokenIn, action.tokenOut, amountIn],
+    ),
+  );
+  return {
+    to,
+    data,
+    decode: decodeUint256,
+    toSauce: asUint256("static", to, data),
+    // selector(4) + fromToken(32) + toToken(32) = 68
+    toSauceDynamic: makeDynamic("static", to, data, 68, OUT_UINT256, firstWord),
   };
 }
 
@@ -739,218 +818,88 @@ function quoteDODOV1(pool: Address, sellingBase: boolean, amountIn: bigint): Quo
 // Separate quoter / resolver contracts
 // ---------------------------------------------------------------------------
 
-/** UniswapV3 single-pool — QuoterV2 `quoteExactInputSingle` (revert-sim). */
-function quoteUniV3Single(
-  action: UniswapV3ExactInputAction,
-  amountIn: bigint,
-  quoter: Address,
-): QuoteCall {
-  const fn = registryFunction(
-    "uniswap-v3",
-    "UniswapV3QuoterV2ABI",
-    UniswapV3QuoterV2ABI,
-    "quoteExactInputSingle((address,address,uint256,uint24,uint160))",
-  );
-  const to = quoter;
-  const data = callData(fn, [
-    {
-      tokenIn: action.tokenIn,
-      tokenOut: action.tokenOut,
-      amountIn,
-      fee: action.fee,
-      sqrtPriceLimitX96: BigInt(action.sqrtPriceLimitX96 ?? 0),
-    },
-  ]);
-  return {
-    to,
-    data,
-    // (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
-    decode: (result: Hex) => returned(fn, result)[0] as bigint,
-    toSauce: asUint256("call", to, data),
-    // Struct args: selector(4) + tokenIn(32) + tokenOut(32) = 68
-    toSauceDynamic: makeDynamic("call", to, data, 68, OUT_UINT256, firstWord),
-  };
-}
+/** The Sauce Router's `quote(QuoteParams)`: a swap it simulates and reverts, needing no tokens. */
+const ROUTER_QUOTE = parseAbiItem(
+  "function quote((uint8 poolType, address pool, (address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, address stateView, address tokenIn, address tokenOut, int256 amountSpecified, uint160 sqrtPriceLimitX96) params) returns ((uint256 amountIn, uint256 amountOut, uint160 sqrtPriceAfter, uint256 gasEstimate) result)",
+) as AbiFunction;
 
-/** UniswapV3 multi-hop — QuoterV2 `quoteExactInput` (revert-sim). */
-function quoteUniV3Multi(
-  action: UniswapV3ExactInputMultiHopAction,
-  amountIn: bigint,
-  quoter: Address,
-): QuoteCall {
-  const to = quoter;
-  const data = concatHex(
-    sel("quoteExactInput(bytes,uint256)"),
-    encodeAbiParameters([{ type: "bytes" }, { type: "uint256" }], [action.path, amountIn]),
-  );
-  return {
-    to,
-    data,
-    decode: (result: Hex) => {
-      // (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)
-      const [amountOut] = decodeAbiParameters(
-        [{ type: "uint256" }, { type: "uint160[]" }, { type: "uint32[]" }, { type: "uint256" }],
-        result,
-      );
-      return amountOut;
-    },
-    toSauce: asUint256("call", to, data),
-    // selector(4) + path_offset_pointer(32) = 36 (amount is the 2nd head slot; path tail follows)
-    toSauceDynamic: makeDynamic("call", to, data, 36, OUT_UINT256, firstWord),
-  };
-}
+/** A sentinel amount, planted to find where the amount word sits in the encoded quote. */
+const AMOUNT_SENTINEL = (1n << 254n) + 0x5a0cen;
 
 /**
- * UniswapV4 single-pool — V4Quoter `quoteExactInputSingle` (revert-sim).
- *
- * QuoteExactSingleParams: { PoolKey poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData }
- * PoolKey: { Currency currency0, Currency currency1, uint24 fee, int24 tickSpacing, address hooks }
+ * Uniswap V3 and V4 — the Router's own `quote`, which runs the swap the action's `@sauce/router`
+ * call runs (`swapV3`, `swapV4`) and reverts it, without tokens. V3 takes the exact input positive
+ * and V4 negative, the signs the swap passes; the V4 pool key is the action's tokens in sort order.
  */
-function quoteUniV4Single(
-  action: UniswapV4ExactInputAction,
+function quoteThroughRouter(
+  action: UniswapV3SwapAction | UniswapV4SwapAction,
   amountIn: bigint,
-  quoter: Address,
+  router: Address,
 ): QuoteCall {
-  const to = quoter;
-  const data = concatHex(
-    // One struct parameter: `quoteExactInputSingle(((address,address,uint24,int24,address),bool,
-    // uint128,bytes))`. An extra pair of parentheses here hashed a different signature, and every
-    // V4 quote reverted.
-    sel("quoteExactInputSingle(((address,address,uint24,int24,address),bool,uint128,bytes))"),
-    encodeAbiParameters(
-      [
-        {
-          type: "tuple",
-          components: [
-            {
-              type: "tuple",
-              name: "poolKey",
-              components: [
-                { type: "address", name: "currency0" },
-                { type: "address", name: "currency1" },
-                { type: "uint24", name: "fee" },
-                { type: "int24", name: "tickSpacing" },
-                { type: "address", name: "hooks" },
-              ],
+  const v4 = action.type === "uniswapV4Swap";
+  const [c0, c1] =
+    BigInt(action.tokenIn) < BigInt(action.tokenOut)
+      ? [action.tokenIn, action.tokenOut]
+      : [action.tokenOut, action.tokenIn];
+  const encode = (amountSpecified: bigint): Hex =>
+    callData(ROUTER_QUOTE, [
+      {
+        poolType: v4 ? 2 : 1,
+        pool: v4 ? action.poolManager : action.pool,
+        poolKey: v4
+          ? {
+              currency0: c0,
+              currency1: c1,
+              fee: action.fee,
+              tickSpacing: action.tickSpacing,
+              hooks: action.hooks,
+            }
+          : {
+              currency0: ZERO_ADDR,
+              currency1: ZERO_ADDR,
+              fee: 0,
+              tickSpacing: 0,
+              hooks: ZERO_ADDR,
             },
-            {
-              type: "bool",
-              name: "zeroForOne",
-            },
-            {
-              type: "uint128",
-              name: "exactAmount",
-            },
-            {
-              type: "bytes",
-              name: "hookData",
-            },
-          ],
-        },
-      ],
-      [
-        {
-          poolKey: {
-            currency0: action.poolKey.currency0,
-            currency1: action.poolKey.currency1,
-            fee: action.poolKey.fee,
-            tickSpacing: action.poolKey.tickSpacing,
-            hooks: action.poolKey.hooks,
-          },
-          zeroForOne: action.zeroForOne,
-          exactAmount: amountIn,
-          hookData: "0x" as Hex,
-        },
-      ],
-    ),
-  );
+        stateView: ZERO_ADDR,
+        tokenIn: action.tokenIn,
+        tokenOut: action.tokenOut,
+        amountSpecified,
+        sqrtPriceLimitX96: BigInt(action.sqrtPriceLimitX96 ?? 0),
+      },
+    ]);
+  const data = encode(v4 ? -amountIn : amountIn);
+  // The amount's word, found rather than counted: a static struct, so it has a fixed offset.
+  const probe = encode(AMOUNT_SENTINEL).slice(2);
+  const at = probe.indexOf(AMOUNT_SENTINEL.toString(16).padStart(64, "0"));
+  if (at < 0 || at % 2 !== 0) throw new Error("quote: the Router quote's amount word moved");
+  const offset = at / 2;
+  const dynamic = makeDynamic("call", router, data, offset, words(4), nthWord(1));
+
   return {
-    to,
+    to: router,
     data,
-    decode: (result: Hex) => {
-      // (uint256 amountOut, uint256 gasEstimate)
-      const [amountOut] = decodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], result);
-      return amountOut;
-    },
-    toSauce: asUint256("call", to, data),
+    // SwapQuoteResult (amountIn, amountOut, sqrtPriceAfter, gasEstimate): the output is the second.
+    decode: (result: Hex) => (returned(ROUTER_QUOTE, result)[0] as { amountOut: bigint }).amountOut,
+    toSauce: asTupleFieldUint256("call", router, data, 4, 1),
+    toSauceDynamic: v4 ? (emit, amountExpr) => dynamic(emit, `-(${amountExpr})`) : dynamic,
   };
 }
 
 /**
- * UniswapV4 multi-hop — V4Quoter `quoteExactInput` (revert-sim).
- *
- * QuoteExactParams: { Currency exactCurrency, PathKey[] path, uint128 exactAmount }
- * PathKey: { address intermediateCurrency, uint24 fee, int24 tickSpacing, address hooks, bytes hookData }
- */
-function quoteUniV4Multi(
-  action: UniswapV4ExactInputMultiHopAction,
-  amountIn: bigint,
-  quoter: Address,
-): QuoteCall {
-  const to = quoter;
-  const data = concatHex(
-    sel("quoteExactInput((address,(address,uint24,int24,address,bytes)[],uint128))"),
-    encodeAbiParameters(
-      [
-        {
-          type: "tuple",
-          components: [
-            {
-              type: "address",
-              name: "exactCurrency",
-            },
-            {
-              type: "tuple[]",
-              name: "path",
-              components: [
-                { type: "address", name: "intermediateCurrency" },
-                { type: "uint24", name: "fee" },
-                { type: "int24", name: "tickSpacing" },
-                { type: "address", name: "hooks" },
-                { type: "bytes", name: "hookData" },
-              ],
-            },
-            {
-              type: "uint128",
-              name: "exactAmount",
-            },
-          ],
-        },
-      ],
-      [
-        {
-          exactCurrency: action.currencyIn,
-          path: action.path.map((step) => ({
-            intermediateCurrency: step.intermediateCurrency,
-            fee: step.fee,
-            tickSpacing: step.tickSpacing,
-            hooks: step.hooks,
-            hookData: "0x" as Hex,
-          })),
-          exactAmount: amountIn,
-        },
-      ],
-    ),
-  );
-  return {
-    to,
-    data,
-    decode: (result: Hex) => {
-      // (uint256 amountOut, uint256 gasEstimate)
-      const [amountOut] = decodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], result);
-      return amountOut;
-    },
-    toSauce: asUint256("call", to, data),
-  };
-}
-
-/**
- * Maverick V2 single swap — MaverickV2Quoter `calculateSwap` (revert-sim).
+ * Maverick V2 — MaverickV2Quoter `calculateSwap` (revert-sim), over the full tick range the
+ * Router's swap uses. A Maverick V2 pool's token A is its lower-addressed token, so selling A is
+ * `tokenIn < tokenOut`.
  *
  * calculateSwap(IMaverickV2Pool pool, uint128 amount, bool tokenAIn, bool exactOutput, int32 tickLimit)
  *   → (uint256 amountIn, uint256 amountOut, uint256 gasEstimate)
  */
-function quoteMaverick(action: MaverickSwapAction, amountIn: bigint, quoter: Address): QuoteCall {
+function quoteMaverickV2(
+  action: MaverickV2SwapAction,
+  amountIn: bigint,
+  quoter: Address,
+): QuoteCall {
+  const tokenAIn = BigInt(action.tokenIn) < BigInt(action.tokenOut);
   const to = quoter;
   const data = concatHex(
     sel("calculateSwap(address,uint128,bool,bool,int32)"),
@@ -962,17 +911,15 @@ function quoteMaverick(action: MaverickSwapAction, amountIn: bigint, quoter: Add
         { type: "bool" },
         { type: "int32" },
       ],
-      // No tick limit, as the router's own swap applies none: the extreme tick in the swap's
-      // direction (up when selling token A). A limit of 0 cut a quote short on any pool whose
-      // active tick was not straddling 0, and reverted it on the far side.
-      [action.pool, amountIn, action.tokenAIn, false, action.tokenAIn ? 2 ** 31 - 1 : -(2 ** 31)],
+      // No tick limit, as the Router's swap applies none: the extreme tick in the swap's direction
+      // (up when selling token A).
+      [action.pool, amountIn, tokenAIn, false, tokenAIn ? 2 ** 31 - 1 : -(2 ** 31)],
     ),
   );
   return {
     to,
     data,
     decode: (result: Hex) => {
-      // (uint256 amountIn, uint256 amountOut, uint256 gasEstimate)
       const [, amountOut] = decodeAbiParameters(
         [{ type: "uint256" }, { type: "uint256" }, { type: "uint256" }],
         result,
@@ -982,37 +929,6 @@ function quoteMaverick(action: MaverickSwapAction, amountIn: bigint, quoter: Add
     toSauce: asTupleFieldUint256("call", to, data, 3, 1),
     // selector(4) + pool(32) = 36; output = (uint256, uint256, uint256), take index 1.
     toSauceDynamic: makeDynamic("call", to, data, 36, words(3), nthWord(1)),
-  };
-}
-
-/** Maverick V2 multi-hop — MaverickV2Quoter `calculateMultiHopSwap` (revert-sim). */
-function quoteMaverickMulti(
-  action: MaverickMultiHopSwapAction,
-  amountIn: bigint,
-  quoter: Address,
-): QuoteCall {
-  const to = quoter;
-  const data = concatHex(
-    sel("calculateMultiHopSwap(bytes,uint256,bool)"),
-    encodeAbiParameters(
-      [{ type: "bytes" }, { type: "uint256" }, { type: "bool" }],
-      [action.path, amountIn, false],
-    ),
-  );
-  return {
-    to,
-    data,
-    decode: (result: Hex) => {
-      // (uint256 returnAmount, uint256 gasEstimate)
-      const [returnAmount] = decodeAbiParameters(
-        [{ type: "uint256" }, { type: "uint256" }],
-        result,
-      );
-      return returnAmount;
-    },
-    toSauce: asUint256("call", to, data),
-    // selector(4) + path_offset_pointer(32) = 36 (2nd head slot is amount)
-    toSauceDynamic: makeDynamic("call", to, data, 36, OUT_UINT256, firstWord),
   };
 }
 

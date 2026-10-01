@@ -8,6 +8,7 @@ import {
   EXECUTE_FROM_ACCOUNT_DISCRIMINATOR,
 } from "./engine.js";
 import type { ResolvedAccountMeta } from "./resolve.js";
+import { assertEngineRunsCompiler } from "../deployments/releases.js";
 
 function withDiscriminator(
   discriminator: Uint8Array,
@@ -45,6 +46,8 @@ export function buildExecuteInstruction({
   bytecode,
   accounts,
 }: ExecuteInstructionInput): Instruction {
+  assertEngineRunsCompiler("svm", programId);
+
   return {
     programAddress: programId,
     accounts: [...accounts],
@@ -73,6 +76,8 @@ export function buildExecuteFromAccountInstruction({
   code,
   accounts,
 }: ExecuteFromAccountInstructionInput): Instruction {
+  assertEngineRunsCompiler("svm", programId);
+
   return {
     programAddress: programId,
     accounts: [{ address: code, role: AccountRole.READONLY }, ...accounts],

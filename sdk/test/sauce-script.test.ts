@@ -201,6 +201,16 @@ describe("SauceScript in an editor", () => {
       ],
       ["lowercase", "function main() { require(recipent != 0n); }\n", [2304, 2552]],
       ["require", "function main() { require(); }\n", [2554]],
+      [
+        "router",
+        'import { uniswapV3 } from "@sauce/router";\nfunction main() { uniswapV3(1n, 2n); }\n',
+        [2554],
+      ],
+      [
+        "routerName",
+        'import { uniswapV9 } from "@sauce/router";\nfunction main() { uniswapV9(); }\n',
+        [2305, 2724],
+      ],
       ["reward", "Base(() => {}).rewards({ tokens: [] });\n", missing],
     ];
     for (const [name, body, codes] of cases) {

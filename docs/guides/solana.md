@@ -86,10 +86,9 @@ cook pays the fee its config sets.
 
 Use `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from
 `@eco-incorp/sauce/deployments` for the released program identities, and confirm
-they are deployed on your cluster. `v12SvmProgramId` names an earlier engine
-generation, not these. Through the Kitchen the client derives a Pot owned by its `payer` signer;
-choose it with `potSalt` when you configure the client. Direct, `payer` signs and pays the fee, and
-`potSalt` means nothing.
+they are deployed on your cluster. Through the Kitchen the client derives a Pot owned by its
+`payer` signer; choose it with `potSalt` when you configure the client. Direct, `payer` signs and
+pays the fee, and `potSalt` means nothing.
 
 ```ts
 import {

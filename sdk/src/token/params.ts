@@ -1,5 +1,5 @@
 /**
- * Normalization + guards for the universal token interface. Mirrors `swap/params.ts`'s posture:
+ * Normalization + guards for the universal token interface. Mirrors `deposit/params.ts`'s posture:
  * throws (never emits a program that would revert on-chain) rather than guessing.
  */
 import { toExactBigInt } from "../numeric.js";

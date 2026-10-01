@@ -11,8 +11,9 @@
  *
  * Compile generated source with `routes.compileSauceRoute`, supplying both `pot` and `engine`.
  * The route compiler serves the protocol and ERC-20 ABIs the program imports, and supplies a `void`
- * annotation for a falling-through entry. `swapThenDepositSource` combines swaps and deposits in
- * one program, compiled the same way.
+ * annotation for a falling-through entry. To deposit what a swap delivered, compile an action
+ * program (`@eco-incorp/sauce/actions`), whose swap output feeds the next action, or splice
+ * `depositCallStatement` with `amount: "balance"` after a call into `@sauce/router`.
  *
  * Query `listDepositTemplates()` for supported protocol/action pairs. Templates include Aave and
  * Spark supply/withdrawal, Compound V3 supply, Euler/ERC-4626 deposits, Lido operations, and WETH
@@ -21,8 +22,7 @@
  * The default approval policy is `exact`; `none` skips the approval and `max` grants the maximum
  * allowance. Approvals persist after the cook. The default beneficiary is `ctx.self()` when the
  * template supports a beneficiary. Runtime `balance` reads native ETH for native-funded templates,
- * WETH at `target` for unwrapping, or the supplied `token` otherwise. `delta` measures that same
- * balance against the pre-swap snapshot provided by `swapThenDepositSource`.
+ * WETH at `target` for unwrapping, or the supplied `token` otherwise.
  * For Aave/Spark withdrawals, use fixed amounts or `amount: "max"`: the runtime balance is the
  * underlying token held by the Pot, not its supplied position.
  *
@@ -49,10 +49,5 @@ export type { DepositKey } from "./templates.js";
 
 export { toDeposit } from "./params.js";
 
-export {
-  depositCallStatement,
-  depositImportLines,
-  depositSource,
-  swapThenDepositSource,
-} from "./source.js";
-export type { DepositSourceOptions, SwapThenDepositOptions } from "./source.js";
+export { depositCallStatement, depositImportLines, depositSource } from "./source.js";
+export type { DepositSourceOptions } from "./source.js";

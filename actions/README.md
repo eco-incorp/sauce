@@ -44,21 +44,25 @@ const { bytecode, source } = compileProgram(program); // Pot.cook(engine, byteco
   with `saveOutputAs`/`amountRef`, or the previous action's output. A `balanceOf` action spends what
   the Pot actually holds, which is how a child of a dynamic `.nest()` spends exactly what its parent
   delivered; an `argument` action makes an amount a runtime parameter of one compiled program.
-- **Verified on mainnet.** Every action type executes in CI against the deployed Ethereum contracts
-  it names, replayed offline from mainnet state at a pinned block. Each protocol call is an ABI
-  binding, with ABIs from the SDK protocol registry where it has the exact function; ERC-20
-  `transfer`/`approve` follow OpenZeppelin `SafeERC20`, so a token that returns nothing (USDT) works,
-  one that returns `false` reverts, and a standing allowance is reset before it is changed.
+- **One swap implementation.** A swap at one of [`@sauce/router`](../docs/api/router.md)'s nine
+  venues is a call into that SauceScript library, so an action program and a hand-written Sauce
+  program trade a venue through the same code.
+- **Verified on mainnet.** Every action type executes in CI against the deployed contracts it names
+  (on Ethereum, and on Avalanche and Base for the two venues Ethereum lacks), replayed offline from
+  chain state at a pinned block. Each other protocol call is an ABI binding, with ABIs from the SDK
+  protocol registry where it has the exact function; ERC-20 `transfer`/`approve` follow OpenZeppelin
+  `SafeERC20`, so a token that returns nothing (USDT) works, one that returns `false` reverts, and a
+  standing allowance is reset before it is changed.
 
 ## Supported actions
 
 The guide's [reference](../docs/guides/actions.md#supported-actions) says what each action calls and
 what a later action can spend from it.
 
-- **Swaps:** `uniswapV3ExactInput`, `uniswapV3ExactInputMultiHop`, `uniswapV4ExactInput`,
-  `uniswapV4ExactInputMultiHop`, `curveSwap`, `curveRouterNGSwap`, `balancerV2Swap`,
-  `balancerV2BatchSwap`, `balancerV3Swap`, `uniswapV2Swap`, `ambientSwap`, `dodoSwap`,
-  `maverickSwap`, `maverickMultiHopSwap`, `carbonSwap`, `fraxswapSwap`, `fluidDexT1Swap`
+- **Swaps through @sauce/router:** `uniswapV2Swap`, `uniswapV3Swap`, `uniswapV4Swap`,
+  `curveSwap`, `balancerV2Swap`, `dodoV2Swap`, `traderJoeLBSwap`, `woofiSwap`, `maverickV2Swap`
+- **Other swaps:** `curveRouterNGSwap`, `balancerV2BatchSwap`, `balancerV3Swap`, `ambientSwap`,
+  `dodoV1Swap`, `carbonSwap`, `fraxswapSwap`, `fluidDexT1Swap`
 - **Bridges:** `acrossBridge`, `stargateBridge`, `cctpBridge`, `hyperlaneBridge`
 - **Wrapping and staking:** `wrapETH`, `unwrapETH`, `wrapStETH`, `unwrapStETH`, `lidoStake`,
   `lidoUnstake`, `rocketPoolStake`, `rocketPoolUnstake`, `etherFiStake`

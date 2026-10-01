@@ -7,10 +7,9 @@
  * named in its `source` field; `sdk/test/deposit.test.ts`'s "registry drift" suite re-derives that
  * signature from the ABI itself and fails if the two ever disagree.
  */
-import type { AmountInput } from "../swap/types.js";
 import { toExactBigInt } from "../numeric.js";
 import { formatAddressField, formatBigint } from "./format.js";
-import type { DepositTemplate, ExtraFieldSpec, NormalizedDeposit } from "./types.js";
+import type { AmountInput, DepositTemplate, ExtraFieldSpec, NormalizedDeposit } from "./types.js";
 
 function uintExtra(bits: number, defaultValue = 0n): ExtraFieldSpec {
   const max = 2n ** BigInt(bits);
@@ -290,8 +289,7 @@ export const DEPOSIT_TEMPLATES: Readonly<Record<DepositKey, DepositTemplate>> = 
 };
 
 /** Looks up a template by `protocol:action`, throwing (and listing every registered key) rather
- *  than letting a caller emit a program that would misbehave on-chain — same posture as
- *  `toSwapParams`'s guard on `UndispatchablePoolType`. */
+ *  than letting a caller emit a program that would misbehave on-chain. */
 export function depositTemplateFor(protocol: string, action: string): DepositTemplate {
   const key = `${protocol}:${action}` as DepositKey;
   const template = DEPOSIT_TEMPLATES[key];
