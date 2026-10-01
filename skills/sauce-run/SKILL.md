@@ -57,8 +57,17 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
 4. **Fund** the Pot with what the program spends: send its address the tokens from any wallet, or
    pass `--fund USDC:1.5` (repeatable; `USDC:1500000n` in base units, `ETH:0.01` as value) to `run`,
    which pulls it from the signer into the Pot in the same cook; `--sweep` returns what is left.
-   The default `--fund-mode permit2` signs a one-time Permit2 transfer, and the first time per token
-   asks to approve Permit2. `simulate --fund` with the owner's key rehearses it.
+   `--fund-mode` picks how:
+   - `permit2` (the default) signs a one-time Permit2 transfer; the first time per token it asks to
+     approve Permit2, a standing approval to Permit2 (not to the Pot).
+   - `permit` signs the token's own EIP-2612 permit for exactly the amount: no approval transaction,
+     no prompt and nothing left standing. It needs a token that implements it, such as USDC, and is
+     refused for one that does not. Prefer it for such tokens.
+   - `allowance` approves the Pot for the amount (asking first), and the cook pulls it.
+   - `transfer` sends the tokens to the Pot in a transaction of its own before the cook.
+
+   `simulate --fund` with the owner's key rehearses it.
+
 5. **Rehearse**:
    `npx sauce simulate pay.sauce.ts --chain ethereum --owner <address> --config sauce.config.json --assume-balance USDC:1 --assume-balance USDT:1 --args <recipient> 1000000`
    runs the cook from the owner with no key and nothing sent, and needs neither a deployed Pot nor
