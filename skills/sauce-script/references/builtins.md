@@ -35,7 +35,8 @@ example program each, is `builtins.json`.
 
 - Accounts are `main` parameters with roles: `Account` in §1, account properties in §12, and the
   `svm` calls in §11, which only SVM has.
-- `ctx` (§6): `ctx.self()` is the executing program's id, `ctx.msgSender()` the first signer, and
+- `ctx` (§6): `ctx.self()` is the engine's program id (it owns every Pot account),
+  `ctx.msgSender()` the first signer among the accounts the engine receives, and
   `ctx.msgValue`, `gasLeft`, `codeSize`, `codeHash`, `isContract` and `isEOA` do not exist.
 - `log` takes no topics (§5).
 - `abi`, `evm` and contract bindings with `.catch()` (§9, §10, §13) are EVM only: a call to another
@@ -263,11 +264,13 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 
 - `ctx.msgSender()` → number, **Both**
   - On EVM: the immediate caller (`msg.sender`)
-  - On SVM: the transaction's first signer
+  - On SVM: the first signer among the accounts the engine receives: the Pot, when a slot is
+    attached as the Pot. Not proof of who sent the transaction.
   - Example: `require(ctx.msgSender() == OWNER);`
 - `ctx.self()` → number, **Both**
   - On EVM: the executing contract: the Pot, which holds the program's balances and allowances
-  - On SVM: the executing Sauce program's id
+  - On SVM: the engine's program id, which owns every Pot account: `pot.owner == ctx.self()`
+    holds for a Pot
   - Example: `log(ctx.self().toBytesBe(32n));`
 - `ctx.chainId()` → number, **Both**
   - On EVM: the chain id

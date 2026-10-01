@@ -108,15 +108,23 @@ fill safe and bounded. The program covers four, the price-limit venues whose nam
 factory or a pool manager a program can call as it is; the chains each namespace contract is on are
 in [../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md):
 
-| Venue                | Swap        | Pool lookup                                                                                        | Fee                                      | Namespace                                                                                        |
-| -------------------- | ----------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Uniswap V3           | `uniswapV3` | `getPool(a, b, fee)`, fees `100n`, `500n`, `3000n`, `10000n`                                       | the tier                                 | `UniswapV3.Factory`                                                                              |
-| PancakeSwap V3       | `uniswapV3` | `getPool(a, b, fee)`, fees `100n`, `500n`, `2500n`, `10000n`                                       | the tier                                 | `PancakeswapV3.Factory`                                                                          |
-| Aerodrome Slipstream | `uniswapV3` | `getPool(a, b, tickSpacing)` on **every** factory, spacings `1n`, `50n`, `100n`, `200n`, `2000n`   | per pool, and it changes: read `fee()`   | `AerodromeSlipstream.CLFactory`, and on Base also `.CLFactoryGaugeCaps` and `.CLFactoryGaugesV3` |
-| Uniswap V4, hookless | `uniswapV4` | none: the keys in `v4Keys`, each built into `{ currency0, currency1, fee, tickSpacing, hooks: 0 }` | the LP fee plus any protocol fee (below) | `UniswapV4.PoolManager` (the swap), `UniswapV4.StateView` (the reads)                            |
+| Venue                | Swap        | Pool lookup                                                                                                                    | Fee                                      | Namespace                                                                                        |
+| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Uniswap V3           | `uniswapV3` | `getPool(a, b, fee)`, fees `100n`, `200n`, `300n`, `400n`, `500n`, `3000n`, `10000n`                                           | the tier                                 | `UniswapV3.Factory`                                                                              |
+| PancakeSwap V3       | `uniswapV3` | `getPool(a, b, fee)`, fees `100n`, `500n`, `2500n`, `10000n`                                                                   | the tier                                 | `PancakeswapV3.Factory`                                                                          |
+| Aerodrome Slipstream | `uniswapV3` | `getPool(a, b, tickSpacing)` on **every** factory, spacings `1n`, `10n`, `50n`, `80n`, `100n`, `150n`, `200n`, `500n`, `2000n` | per pool, and it changes: read `fee()`   | `AerodromeSlipstream.CLFactory`, and on Base also `.CLFactoryGaugeCaps` and `.CLFactoryGaugesV3` |
+| Uniswap V4, hookless | `uniswapV4` | none: the keys in `v4Keys`, each built into `{ currency0, currency1, fee, tickSpacing, hooks: 0 }`                             | the LP fee plus any protocol fee (below) | `UniswapV4.PoolManager` (the swap), `UniswapV4.StateView` (the reads)                            |
 
 A pair can have a Slipstream pool at the same tick spacing under more than one factory, each with its
 own fee, so the program asks every factory for every spacing.
+
+**The tiers are a chain's, not a fixed list.** A factory enables fee tiers or tick spacings over
+time, and a lookup for one it does not enable returns `0`. Base's Uniswap V3 factory enables 200,
+300 and 400 besides the four standard tiers, and its Slipstream factories spacings 10, 80, 150 and
+500, all of which have WETH/USDC pools; the program asks for all of them. On another chain, ask the
+factory: Uniswap V3's `feeAmountTickSpacing(uint24 fee)` returns the tier's tick spacing, `0` when
+the tier is not enabled, and Slipstream's `tickSpacingToFee(int24 tickSpacing)` the spacing's
+default fee, `0` when it is not.
 
 **Price-limit venues it leaves out, and why:**
 
@@ -286,9 +294,15 @@ the best starting price.
 The limit is the one number that protects the trade: the ranking only decides which pool gets the
 input first, and each pool is filled down (or up) to the limit. Set it from the market, close to it.
 
-- **The reference is the best price a taker gets, fee included, among pools with liquidity.** Do
-  what the program does: drop the pools with no in-range liquidity (or less than the order needs),
-  work out each remaining pool's taker price, and take the best. Read `liquidity()`, `slot0()` and
+- **The reference is the best price a taker gets, fee included, among pools deep enough for the
+  order.** Do what the program does: drop the pools with no in-range liquidity, then the ones too
+  thin to matter, work out each remaining pool's taker price, and take the best. A pool's in-range
+  liquidity `L` says how much it takes before its price moves by a fraction `X`: about
+  `L × X ÷ (2√P)` of token0, or `L × √P × X ÷ 2` of token1, with `√P = sqrtPriceX96 ÷ 2^96` in
+  base units. Count a pool only when that covers a real share of the order, a quarter of it, say.
+  On Base, at 0.5%, the Uniswap V3 0.05% WETH/USDC pool takes about 68 WETH, while its 0.02% and
+  0.04% pools (liquidity about 5 × 10^11 and 4 × 10^11) take about 0.00002 WETH each. **A fill of dust
+  means the reference was a dust pool.** Read `liquidity()`, `slot0()` and
   `fee()` (the selectors under "Reading a pool") with any client;
   `sauce price --chain base WETH USDC --sqrt-price-x96 <value>` turns a `sqrtPriceX96` back into
   USDC per WETH. A pool with no
@@ -384,11 +398,11 @@ Net balance changes:
 - **The average** is `bought ÷ spent` in whole tokens (2,685.07 USDC per WETH here), to compare
   with the reference and the limit before sending.
 
-**Gas.** Rehearsed on Base: about 2.1 million gas to sell 1 WETH or to buy with 3,000 USDC (two to
-four pools swapped), 4.5 million to sell 100 WETH (four pools, each crossing many ticks); a real
-cook of the same design on Base used 3.17 million. The reads are the small part: discovery is one
-lookup per factory and fee tier or tick spacing (23 on Base), then up to three reads per pool found
-and two per V4 key; the four standard keys cost about 0.2 million there. The swaps, each crossing
+**Gas.** Rehearsed on Base: about 2.4 to 3.1 million gas to sell 1 WETH or to buy with 3,000 USDC
+(two to four pools swapped), 4.5 million to sell 100 WETH (four pools, each crossing many ticks); a
+real cook of the same design on Base used 3.17 million. The reads are the smaller part: discovery
+is one lookup per factory and fee tier or tick spacing (38 on Base), then up to three reads per
+pool found and two per V4 key; the four standard keys add up to about 0.3 million there. The swaps, each crossing
 ticks, are the rest. The gas is the same on any chain; what it costs is the chain's gas price, so
 the same program costs far more on Ethereum than on Base.
 

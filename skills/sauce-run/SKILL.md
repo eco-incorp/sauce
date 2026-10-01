@@ -26,6 +26,7 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
 | `sauce publish`  | Publishes a file's fixed intents from a wallet, with no Pot                       |
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
 | `sauce verify`   | Checks that a payload, cook or transaction runs the audited settle program        |
+| `sauce price`    | Turns a price into a pool's `sqrtPriceX96`, a swap's limit and its average floor  |
 
 ## Endpoints and signers
 

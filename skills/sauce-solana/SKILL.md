@@ -49,7 +49,9 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 - Each slot is passed by its name: `--account NAME=<address>`, `NAME=pot` for the Pot, which the
   Kitchen signs for, or `NAME=owner` for the signer. `sauce compile --json` lists the slots in its
   `manifest`, and a missing one is named with the role it needs.
-- An `Account` compares by identity (`tokenProgram == SPL_TOKEN_PROGRAM`) and exposes `.owner` and
+- An `Account` compares by identity (`tokenProgram == SPL_TOKEN_PROGRAM`, with the SPL Token
+  program `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` as a define, in base58 or as
+  `0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9`) and exposes `.owner` and
   `.dataLen`. Check the owner before trusting bytes: a hand-made account can carry any layout.
 - `svm.sload(account, offset, length)` reads bytes; `.toLe()`/`.toBe()` make a number.
   `svm.call(program, [accounts...], data)` is a CPI to an attached program account.
@@ -60,8 +62,10 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
   does not, since the symbol is itself a define and a define wins. A key that changes per call is
   an `Address` argument of `main`, passed as a base58 public key and encoded as one ABI word (not
   with `--compact-args`), or an `Account` parameter when the program reads or writes that account.
-- On Solana `ctx.self()` is the executing Sauce program's id, **not the Pot**, `ctx.msgSender()`
-  the transaction's first signer, and `ctx.balance(acct.address)` an attached account's lamports.
+- On Solana `ctx.self()` is the engine's program id, which owns every Pot account, **not the
+  Pot**; `ctx.msgSender()` is the first signer among the accounts the engine receives (the Pot,
+  when a `pot` slot is attached as the Pot), not proof of who sent the transaction; and
+  `ctx.balance(acct.address)` is an attached account's lamports.
   `ctx.msgValue`, `ctx.gasLeft`, `ctx.codeSize` and the other EVM reads are rejected; move lamports with a
   system-program CPI through `svm.call`. Every read, per target, is in
   [../sauce-script/references/builtins.md](../sauce-script/references/builtins.md).
@@ -70,21 +74,35 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 
 The Pot is an account the program is given: declare it as `pot: Account<Signer>`, pass it as
 `--account pot=pot`, and read `pot.address`. A `Signer` slot alone does not prove it is the Pot
-(`pot=owner` satisfies it too). To bind it, re-derive the Pot: it is the Kitchen's program address
-for the seeds `"pot"`, the owner and the 32-byte salt (zero unless `--salt` names another), and the
-owner is `ctx.msgSender()` when the owner signs the cook, as `sauce run` does. `KITCHEN` is the
-Kitchen program, `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`, as a define:
-`--define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` (or its 32-byte hex,
-`0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`).
+(`pot=owner` satisfies it too), and `ctx.msgSender()` does not either: it is the first signer among
+the accounts the engine receives, which, with a `pot` slot attached as the Pot, is the Pot itself.
+
+To bind the slot to the executing Pot, check its owner program: **the engine owns every Pot
+account, and `ctx.self()` on Solana is the engine's program id**. Only the Pot running this cook can
+sign (the Kitchen signs for it), so a signing account the engine owns is that Pot; the owner's
+wallet, owned by the System program, fails the check.
+
+```sauce chain=solana
+function main(pot: Account<Signer>, amount: Uint256) {
+  require(pot.owner == ctx.self(), "pot is not the Pot running this cook");
+  require(amount > 0n);
+}
+```
+
+To bind it to one owner's Pot instead, re-derive it from that owner, attached as a signer slot of
+its own (`--account wallet=owner`): the Pot is the Kitchen's program address for the seeds `"pot"`,
+the owner and the 32-byte salt (zero unless `--salt` names another). `KITCHEN` is the Kitchen
+program, as a define: `--define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` (or its
+32-byte hex, `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`). Bind an
+account's key to a local before calling a method on it.
 
 ```sauce chain=solana define=KITCHEN
 const SALT = 0n; // the Pot's salt, zero by default
 
-function main(pot: Account<Signer>, amount: Uint256) {
-  const owner = ctx.msgSender();
+function main(pot: Account<Signer>, wallet: Account<Signer>) {
+  const owner = wallet.address;
   const [expected] = crypto.findPDA(KITCHEN, ["pot", owner.toBytesBe(32n), SALT.toBytesBe(32n)]);
-  require(pot.address == expected, "pot is not the signer's Pot");
-  require(amount > 0n);
+  require(pot.address == expected, "pot is not the wallet's Pot");
 }
 ```
 
@@ -120,6 +138,7 @@ is:
 
 ```sauce chain=solana
 function main(pot: Account<Signer>, potUsdc: Account): Uint256 {
+  require(pot.owner == ctx.self(), "pot is not the Pot running this cook");
   require(ownerOf(USDC, potUsdc) == pot.address, "not the Pot's USDC account");
   return balanceOf(USDC, potUsdc);
 }

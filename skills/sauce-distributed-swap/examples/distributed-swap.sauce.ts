@@ -163,12 +163,13 @@ function main(
   require(Token(tokenIn).balanceOf(self) >= amountIn, "amountIn is not in the Pot");
 
   // 1. Discover. Each venue the chain has gives a pool per fee tier or tick spacing (0 where there
-  //    is none); a venue the chain lacks is left out when the program is compiled. A pair can have
-  //    a Slipstream pool at the same tick spacing under each of its three factories.
-  let found = new Array(23); // 4 + 4 + 3 * 5
+  //    is none, or where the factory does not enable it); a venue the chain lacks is left out when
+  //    the program is compiled. A pair can have a Slipstream pool at the same tick spacing under
+  //    each of its three factories. The tiers are the ones Base's factories enable.
+  let found = new Array(38); // 7 + 4 + 3 * 9
   let m = 0n;
   if (available(UniswapV3.Factory)) {
-    for (const fee of [100n, 500n, 3000n, 10000n]) {
+    for (const fee of [100n, 200n, 300n, 400n, 500n, 3000n, 10000n]) {
       found[m] = UniswapV3.Factory.getPool(tokenIn, tokenOut, fee);
       m++;
     }
@@ -179,7 +180,7 @@ function main(
       m++;
     }
   }
-  const tickSpacings = [1n, 50n, 100n, 200n, 2000n];
+  const tickSpacings = [1n, 10n, 50n, 80n, 100n, 150n, 200n, 500n, 2000n];
   if (available(AerodromeSlipstream.CLFactory)) {
     for (const tickSpacing of tickSpacings) {
       found[m] = AerodromeSlipstream.CLFactory.getPool(tokenIn, tokenOut, tickSpacing);

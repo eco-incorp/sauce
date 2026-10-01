@@ -69,6 +69,10 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
   ([../sauce-chains/references/arbitrum.md](../sauce-chains/references/arbitrum.md) for Arbitrum).
 - **The rule repeats at every depth.** An intent opened inside a body is funded on that body's
   chain, so its reward resolves there and its own body on its own destination.
+- **Name a token by a symbol, a literal or a define, never by a top-level `const`.** A top-level
+  `const` holding a token's address, used in the reward or the delivery, counts as a value the file
+  computes, so the compile refuses it ("a reward token address must be known when the intent is
+  built"), and so does `sauce publish`. A `const` inside the braces is fine.
 - A literal address means that address everywhere, and so does a define whose name no chain uses
   (`RECIPIENT`). A define under a chain-scoped name (`USDC`, `chainId`, a protocol address) is a
   name on the source chain: it applies to the file's own statements and the reward, and a body on
@@ -220,7 +224,9 @@ Base(
 ).reward({ tokens: [{ token: WETH, amount: REWARD }] }); // the source chain's WETH
 ```
 
-`REWARD` must exceed what the solver delivers, `AMOUNT_IN`, by what filling costs it (below).
+`REWARD` must exceed what the solver delivers, `AMOUNT_IN`, by what filling costs it (below). To buy
+WETH instead, swap `USDC` for `WETH` and deliver USDC: USDC is token1 on Base, so the limit is then
+a ceiling, the `buy` block of `sauce price`.
 [examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the same with the distributed
 swap (`sauce-distributed-swap`) as the body: every Uniswap V3 and V4 pool with liquidity, best taker
 price first, each up to its own fee-adjusted limit. It swaps through `@sauce/router` and reads each

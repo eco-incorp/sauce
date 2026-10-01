@@ -52,8 +52,19 @@ function main(recipient: Address, floor: Uint256) {
 **`main` may return a value**, which the cook returns to whoever called it, so an `eth_call` of
 the cook reads it before anything is sent (`sauce simulate` prints it after `returns`). Declare
 the type: `main(): Address`, `: Uint256` or `: bool` comes back as one 32-byte word, a record as its
-fields one word each, and `: bytes` as the bytes themselves, unwrapped, so
-`return abi.encode(spent, bought)` gives two words. A `void` `main` returns nothing.
+fields one word each, an array as its elements one word each, with no length or offset in front,
+and `: bytes` as the bytes themselves, unwrapped, so `return abi.encode(spent, bought)` gives two
+words. A `void` `main` returns nothing.
+
+That makes a rehearsal a way to read a chain: a program that only looks something up and returns
+it, rehearsed with `sauce simulate`, prints the answer and sends nothing.
+
+```sauce chain=base,arbitrum
+// The Uniswap V3 WETH/USDC pool at the 0.05% tier (500 millionths), or 0 where there is none.
+function main(): Address {
+  return UniswapV3.Factory.getPool(WETH, USDC, 500n);
+}
+```
 
 A top-level script runs its statements in order, after its imports, and may declare helper
 functions beside them. Every value it does not compute is a define: the name stays undeclared in
