@@ -4,7 +4,7 @@ Liquidity routing protocol with Autopilot Autopools that automatically deploy an
 
 ## Category
 
-yield | Chains: Ethereum
+yield | Chains and addresses: [registry/tokemak.md](registry/tokemak.md)
 
 ## Key Operations
 
@@ -12,19 +12,12 @@ yield | Chains: Ethereum
 - **withdraw**: Withdraw assets from Autopool
 - **redeem**: Redeem Autopool shares
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  withdraw,
-  redeem,
-} from "@eco-incorp/sauce/protocols/tokemak";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit into Tokemak Autopool
@@ -36,18 +29,11 @@ function main(autopoolAddress: Address, assets: Uint256, receiver: Address): Uin
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract         | Address                                      |
-| -------- | ---------------- | -------------------------------------------- |
-| Ethereum | toke             | `0x2e9d63788249371f1DFC918a52f8d799F4a38C94` |
-| Ethereum | autopoolRegistry | `0x7E5828a3A6Ae75426d739E798140513A2E2964E4` |
-
-## ABI Methods
-
-- `deposit(uint256,address)` - Deposit assets
-- `withdraw(uint256,address,address)` - Withdraw assets
-- `redeem(uint256,address,address)` - Redeem shares
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/tokemak.md](registry/tokemak.md).
 
 ## Notes
 

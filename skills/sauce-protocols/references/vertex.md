@@ -4,19 +4,18 @@ Vertically integrated DEX combining spot, perpetuals, and money markets with an 
 
 ## Category
 
-perpetuals | Chains: Arbitrum
+perpetuals | Chains and addresses: [registry/vertex.md](registry/vertex.md)
 
 ## Key Operations
 
 - **depositCollateral**: Deposit collateral into Vertex endpoint
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, depositCollateral } from "@eco-incorp/sauce/protocols/vertex";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit collateral
@@ -28,23 +27,11 @@ function main(endpointAddress: Address, productId: Uint256, amount: Uint256): Ui
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract      | Address                                      |
-| -------- | ------------- | -------------------------------------------- |
-| Arbitrum | endpoint      | `0x73eab16c88b9f38d3f2661c9e5875ec0eeee2965` |
-| Arbitrum | clearinghouse | `0x773bb71b0108b060b76746422ee810bfec9a963d` |
-
-## ABI Methods
-
-### EndpointABI
-
-- `depositCollateral(bytes12,uint32,uint128)` - Deposit collateral. Params: subaccountName (bytes12), productId (uint32), amount (uint128)
-- `submitSlowModeTransaction(bytes)` - Submit slow-mode tx (fallback when sequencer is down)
-
-### ClearinghouseABI
-
-- `withdrawCollateral((bytes32 sender, uint32 productId, uint128 amount, uint64 nonce))` - Apply a sequenced WithdrawCollateral transaction; users submit withdrawals through the Endpoint's `submitSlowModeTransaction`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/vertex.md](registry/vertex.md).
 
 ## Notes
 

@@ -1,22 +1,23 @@
 # Kim
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Mode-native DEX. Its V2 router is a Camelot fork: swaps take a plain token path and a referrer, and support fee-on-transfer tokens. The primary trading venue on Mode Network with farming incentives.
 
 ## Category
 
-dex | Chains: Mode
+dex | Chains and addresses: [registry/kim.md](registry/kim.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens along a token path
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/kim";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -51,18 +52,11 @@ function main(
 - `recipient`: Address to receive output tokens
 - The swap returns nothing: measure the output as the recipient's balance change
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain | Contract  | Address                                      |
-| ----- | --------- | -------------------------------------------- |
-| Mode  | V2 Router | `0x5D61c537393cf21893BE619E36fC94cd73C77DD3` |
-
-## ABI Methods
-
-### KimRouterABI
-
-- `swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, address referrer, uint256 deadline)` - Swap along a token path. `referrer` may be the zero address
-- `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a pair
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/kim.md](registry/kim.md).
 
 ## Notes
 

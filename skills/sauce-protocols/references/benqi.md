@@ -4,9 +4,14 @@ Leading lending and borrowing protocol on Avalanche. Compound V2 fork with addit
 
 ## Category
 
-lending | Chains: Avalanche (43114)
+lending | Chains and addresses: [registry/benqi.md](registry/benqi.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### supply
 
@@ -68,26 +73,11 @@ function main(qiTokenAddress: Address, amount: Uint256): Uint256 {
 
 - Requires ERC-20 approval of underlying to the qiToken
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain     | Contract    | Address                                      |
-| --------- | ----------- | -------------------------------------------- |
-| Avalanche | comptroller | `0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4` |
-
-## ABI Reference
-
-### QiTokenABI
-
-- `mint(uint256 mintAmount) returns (uint256)` - Supply underlying, receive qiTokens
-- `redeem(uint256 redeemTokens) returns (uint256)` - Redeem qiTokens for underlying
-- `redeemUnderlying(uint256 redeemAmount) returns (uint256)` - Redeem exact underlying amount
-- `borrow(uint256 borrowAmount) returns (uint256)` - Borrow underlying
-- `repayBorrow(uint256 repayAmount) returns (uint256)` - Repay borrow debt
-
-### BenqiComptrollerABI
-
-- `enterMarkets(address[] qiTokens) returns (uint256[])` - Enable qiTokens as collateral
-- `exitMarket(address qiToken) returns (uint256)` - Remove qiToken from collateral
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/benqi.md](registry/benqi.md).
 
 ## Notes
 

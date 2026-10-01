@@ -1,46 +1,34 @@
 # 0x Protocol
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 DEX aggregation protocol powering swaps across the DeFi ecosystem. Exchange Proxy provides a single entry point for token swaps across multiple sources.
 
 ## Category
 
-aggregator | Chains: Ethereum, Arbitrum, Optimism, Polygon, BSC, Avalanche, Base
+aggregator | Chains and addresses: [registry/zerox.md](registry/zerox.md)
 
 ## Key Operations
 
 - **transformERC20**: Execute a token swap via the Exchange Proxy transformer pipeline
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, transformERC20 } from "@eco-incorp/sauce/protocols/zerox";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Note: 0x requires off-chain route computation via 0x API before on-chain execution.
 // The transformERC20 function uses transformations array populated from API response.
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract      | Address                                      |
-| --------- | ------------- | -------------------------------------------- |
-| Ethereum  | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| Arbitrum  | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| Optimism  | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` |
-| Polygon   | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| BSC       | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| Avalanche | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| Base      | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-
-## ABI Methods
-
-### ExchangeProxyABI
-
-- `transformERC20(address,address,uint256,uint256,tuple[])` - Execute token swap via transformer pipeline. Payable. Params: inputToken, outputToken, inputTokenAmount, minOutputTokenAmount, transformations (array of Transformation tuples). Returns outputTokenAmount
-  - Transformation tuple: `{ deploymentNonce (uint32), data (bytes) }` - Each transformation specifies a deployed transformer and its calldata
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/zerox.md](registry/zerox.md).
 
 ## Notes
 

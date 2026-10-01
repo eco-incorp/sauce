@@ -1,12 +1,19 @@
 # UnitFlow V3
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Concentrated-liquidity AMM on Arc, forked from Uniswap V3 with native USDC in place of WETH9.
 
 ## Category
 
-dex | Chains: Arc (5042)
+dex | Chains and addresses: [registry/unitflow-v3.md](registry/unitflow-v3.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -42,19 +49,11 @@ function main(
 - The router has Uniswap V3 SwapRouter's shape: its params include `deadline`
 - `tokenIn` must be `approve`d to the router
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain | Contract          | Address                                      |
-| ----- | ----------------- | -------------------------------------------- |
-| Arc   | UnitFlowV3Factory | `0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6d` |
-| Arc   | UnitFlowV3Router  | `0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410` |
-| Arc   | Quoter            | `0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34` |
-
-## ABI Reference
-
-- `UnitFlowV3FactoryABI`: `getPool(address tokenA, address tokenB, uint24 fee) returns (address)`, `feeAmountTickSpacing(uint24 fee) returns (int24)`
-- `UnitFlowV3RouterABI`: `exactInputSingle(ExactInputSingleParams) returns (uint256 amountOut)`, `factory() returns (address)`
-- `UnitFlowV3QuoterABI`: `quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) returns (uint256 amountOut)`; call it with `eth_call`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/unitflow-v3.md](registry/unitflow-v3.md).
 
 ## Notes
 

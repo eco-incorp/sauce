@@ -5,8 +5,6 @@ description: Write a Sauce program as a JSON actions document instead of SauceSc
 
 # Write an actions document
 
-<!-- check:allow sauce_actions -->
-
 An **actions document** is JSON: an ordered list of protocol operations — swap on a pool, approve,
 supply to a lending pool, bridge, wrap, stake — that compiles to one Sauce program. The program
 runs every action in order, atomically, in one transaction on the Pot (`sauce-run`), exactly as a

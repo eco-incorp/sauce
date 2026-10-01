@@ -3,8 +3,6 @@ name: sauce-script
 description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...) with runtime arguments, and a file of top-level statements whose values are defines, the form for intent files), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants as overridable defaults, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
 ---
 
-<!-- check:allow arr -->
-
 # Writing SauceScript
 
 A Sauce program is SauceScript: it looks like TypeScript, compiles to bytecode, and a Sauce engine
@@ -28,7 +26,9 @@ what every registry name means. A file takes one of two forms:
 | **`function main(…)`** | `main`'s parameters, passed at run time (`--args`); module constants for choices made per compile    | reusable programs: one bytecode serves every input, such as a swap's tokens, amount and limit |
 | **Top-level script**   | names the file leaves undeclared, each set by a define (`--define NAME=VALUE`); no runtime arguments | intent files (`sauce-intents`), which are only statements, and one-off programs               |
 
-A program with runtime inputs declares `main`, and may declare helper functions and import ABIs:
+A program with runtime inputs declares `main`, and may declare helper functions and import ABIs.
+(The `chain=…` after an example's opening fence here only says which chains it is checked on; it
+is not part of the file.)
 
 ```sauce chain=base,arbitrum
 // A compile-time choice: a module constant, which a define of the same name replaces.
@@ -46,6 +46,23 @@ function main(recipient: Address, floor: Uint256) {
     throw "below floor";
   }
   USDC.transfer(recipient, afterFee(held, FEE_BPS));
+}
+```
+
+**`main` may return a value**, which the cook returns to whoever called it, so an `eth_call` of
+the cook reads it before anything is sent (`sauce simulate` prints it after `returns`). Declare
+the type: `main(): Address`, `: Uint256` or `: bool` comes back as one 32-byte word, a record as its
+fields one word each, an array as its elements one word each, with no length or offset in front,
+and `: bytes` as the bytes themselves, unwrapped, so `return abi.encode(spent, bought)` gives two
+words. A `void` `main` returns nothing.
+
+That makes a rehearsal a way to read a chain: a program that only looks something up and returns
+it, rehearsed with `sauce simulate`, prints the answer and sends nothing.
+
+```sauce chain=base,arbitrum
+// The Uniswap V3 WETH/USDC pool at the 0.05% tier (500 millionths), or 0 where there is none.
+function main(): Address {
+  return UniswapV3.Factory.getPool(WETH, USDC, 500n);
 }
 ```
 
@@ -78,9 +95,10 @@ than ignore it. Declare `main` to share a module constant with helpers, or to re
 | A value of a script, or of an intent file                                | an **undeclared name**, set by a define                                      | folded into the bytecode                                           |
 | A value the chain supplies                                               | a global (`sauce-globals`)                                                   | resolved when compiling for that chain                             |
 
-`main`'s parameters are taken in declaration order and encoded after the program: `--args` and
-`--args-json` of `sauce run`, `simulate` and `tx` (`sauce-run`), or `routes.encodeEntryArguments`
-from TypeScript (`sauce-typescript`).
+`main`'s parameters are taken in declaration order, ABI-encoded by default, and appended to the
+program's bytecode: that is the payload a cook runs. `--args` and `--args-json` of `sauce run`,
+`simulate` and `tx` encode them (`sauce-run`); `sauce-typescript` covers encoding them from
+TypeScript.
 
 ## Compiling for a chain
 
@@ -93,8 +111,8 @@ removed:
   local's `let total: Uint256 = 0n;`. A parameter with no annotation is a `Uint256`, and a local
   without one takes its type from its initializer.
 - A record is an `interface` or an inline object type, `orders: Order[]` or
-  `orders: { amount: Uint256, to: Address }[]`; `main`'s arguments are encoded the same way for
-  either.
+  `orders: { amount: Uint256, to: Address }[]` (`;` between the fields works too, as a formatter
+  writes them); `main`'s arguments are encoded the same way for either.
 - Trailing commas are fine, after `main`'s last parameter as anywhere else.
 
 ## Values
@@ -119,12 +137,51 @@ removed:
   address.
 - A module-level `let` is scratch, reset on every run. Persistent state is `evm.sstore`/`evm.sload`
   (or `svm.sstore`/`svm.sload`).
+- **At module level, only scalar literals.** A `let` there starts as a number, address or boolean
+  literal; anything else (`[1n, 2n]`, `new Array(n)`, `-1n`, `1n << 160n`, a call) is refused with
+  "must be initialized with a literal". A `const` array there is a lookup table, read only at a
+  literal index (`FEES[0]`), never looped over. Declare arrays and computed values inside a function.
+
+## Functions
+
+- Helpers are top-level `function` declarations, annotated on the signature. They may call each
+  other and recurse; `main` is never called.
+- **Arrays and records are passed by reference**: a helper that writes `xs[i] = v` changes the
+  caller's array, so a helper can fill an array it is given. Numbers, bools and bytes are copies.
+- **A comparison is a `bool`, but a function with no return annotation returns a number**, even
+  `return a > b` (1 or 0). `if`, `while` and `&&` take either; a `: bool` function cannot return the
+  number. Give a helper that answers yes or no a `: bool` return type:
+
+```sauce chain=base,arbitrum
+// Selling token0 (the lower address) pushes a pool's price down, so a higher price is better.
+function isBetter(price: Uint256, than: Uint256, sellsToken0: bool): bool {
+  if (sellsToken0) {
+    return price > than;
+  }
+  return price < than;
+}
+
+// Fills `best` in place: an array goes to a helper by reference.
+function keepBest(best: Uint256[], price: Uint256, sellsToken0: bool): void {
+  if (best[0] == 0n || isBetter(price, best[0], sellsToken0)) {
+    best[0] = price;
+  }
+}
+
+function main(prices: Uint256[], tokenIn: Address, tokenOut: Address): Uint256 {
+  let best = new Array(1);
+  for (const price of prices) {
+    keepBest(best, price, tokenIn < tokenOut);
+  }
+  return best[0];
+}
+```
 
 ## Syntax that compiles, and what to write instead
 
 Compiles: `let`/`const`, `if`/`else if`/`else`, `while`, C-style `for`, `for...of` over an array,
 `break`/`continue`, `i++` and `+=` as statements, ternaries, `&&`/`||`/`!`, `**`, bit operators,
-`/` and `%`, helper functions calling helpers, recursion, `Math.mulDiv(a, b, c)`, `Math.sqrt(x)`.
+`/` and `%`, helper functions, `Math.mulDiv(a, b, c)`, `Math.sqrt(x)`.
 The full list, with what each rejection says, is section 14 of
 [references/builtins.md](references/builtins.md).
 
@@ -172,15 +229,74 @@ function main(pool: Address, amount: Uint256, sqrtPriceLimitX96: Uint256) {
 }
 ```
 
+The value form, `const v = <call>.catch(() => { return <constant>; });`, gives the constant when
+the call fails. It takes a call that returns one value: a bound method with one output, such as
+a namespace contract's or an imported ABI's. A raw `evm.call`, `evm.static` or `evm.delegate`
+returns bytes, which no constant can stand in for ("a `.catch()` fallback: expected a bytes value,
+found a number"). For a raw read that may fail, test it with the statement form, then read again
+only when it worked. A read changes nothing, so the second call is safe; never repeat a write
+that way.
+
+`.catch()` catches a call that reverts, not a call to an address with no code. That call succeeds
+and returns nothing, and decoding nothing reverts the cook, `.catch()` or not. When an address may
+have no code, check `ctx.codeSize(address) > 0n` first:
+
+```sauce chain=base,arbitrum
+// One word from a read that may fail, or 0: an address with no code, or a read that reverts.
+function readWord(target: Address, query: bytes): Uint256 {
+  if (ctx.codeSize(target) == 0n) {
+    return 0n;
+  }
+  let readable = true;
+  evm.static(target, query).catch(() => {
+    readable = false;
+  });
+  if (!readable) {
+    return 0n;
+  }
+  return abi.decode(evm.static(target, query), ["Uint256"])[0];
+}
+
+function main(target: Address, query: bytes): Uint256 {
+  return readWord(target, query);
+}
+```
+
+## What a program costs
+
+On an EVM chain, a cook's gas is the transaction's own, the Kitchen's and the Pot's, plus the
+program's, which the engine interprets step by step. Measured on a local chain through the engine
+and a Kitchen-made Pot:
+
+| What                                                | Gas, about                                   |
+| --------------------------------------------------- | -------------------------------------------- |
+| A cook whose program does almost nothing            | 43,000, the transaction's 21,000 included    |
+| One loop iteration that adds two numbers            | 1,000                                        |
+| Writing an array element, or reading one            | 500, or 300, on top                          |
+| A call to a contract the transaction already called | 2,000 on top, plus what that contract spends |
+| `.catch()` on that call                             | 100 more                                     |
+| `crypto.keccak256(abi.encode(a, b))`                | 2,000                                        |
+
+The first call to a contract in a transaction costs 2,600 more than later ones, as on any EVM
+chain. A loop is what adds up in the program itself: a hundred iterations of a little arithmetic
+cost about 100,000 gas. Read a value once and keep it in a local rather than calling for it twice,
+and bound each loop by its input. The real figure is the rehearsal's:
+`sauce simulate` prints it, and `sauce run` and most signers set the gas limit from an estimate.
+Leave headroom when the chain can move between the rehearsal and the send; a swap that crosses more
+ticks spends more.
+
 ## Reading a compile error
 
 Compile errors fail the command; there is no warning channel. `sauce compile` points at the file's
 line and column, including on a line the package rewrote, and a `hint:` line names the flag or
 define to add. `X is not a declared variable` usually means a missing define or `main` parameter.
-`Unexpected token` is a syntax error at the line and column it names. For any other message, find
-it in [references/builtins.md](references/builtins.md). `a nested function declaration is not
-supported` means a function declared inside another function or a block: declare it at the top
-level. `X is called but never declared` means a function that is not in scope, usually a typo.
+`Unexpected token` is a syntax error at the line and column it names.
+`a function argument: expected a number, found a bool` at a call usually means the called
+function's parameter has no annotation, so it is a number: annotate it, `first: bool`. For any
+other message, find it in [references/builtins.md](references/builtins.md). `a nested function
+declaration is not supported` means a function declared inside another function or a block:
+declare it at the top level. `X is called but never declared` means a function that is not in
+scope, usually a typo.
 
 ## Example
 

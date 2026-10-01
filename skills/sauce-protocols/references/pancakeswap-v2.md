@@ -1,10 +1,38 @@
 # PancakeSwap V2
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 The most popular DEX on BNB Chain using the constant product AMM model (x*y=k). Forked from Uniswap V2 with additional features like yield farming and lottery. Expanded to 6 chains.
+
+## When to use it
+
+- A Uniswap V2 fork with a 0.25% fee, deepest on BNB Chain; the same Router interface.
+
+## Pitfalls for a program
+
+- As Uniswap V2: `amountOutMin` is the only bound, approve exactly `amountIn`, pass a deadline.
+- The 0.25% fee differs from Uniswap V2's 0.3%: quote with this protocol's Router
+  (`getAmountsOut`), not Uniswap's formula.
+
+## In a Sauce program
+
+Sell the Pot's USDC for WETH through the Router:
+
+```sauce chain=base,arbitrum
+function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
+  const self = ctx.self();
+  const before = WETH.balanceOf(self);
+  USDC.approve(PancakeswapV2.Router, amountIn);
+  PancakeswapV2.Router.swapExactTokensForTokens(amountIn, minOut, [USDC, WETH], self, ctx.timestamp());
+  const out = WETH.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  WETH.transfer(recipient, out);
+}
+```
 
 ## Category
 
-dex | Chains: BSC, Ethereum, Arbitrum, Base, Linea, opBNB
+dex | Chains and addresses: [registry/pancakeswap-v2.md](registry/pancakeswap-v2.md)
 
 ## Key Operations
 
@@ -12,19 +40,12 @@ dex | Chains: BSC, Ethereum, Arbitrum, Base, Linea, opBNB
 - **addLiquidity**: Deposit two tokens to mint CAKE-LP tokens
 - **removeLiquidity**: Burn LP tokens to withdraw underlying tokens
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swap,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/pancakeswap-v2";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -112,37 +133,11 @@ function main(
 - `liquidity`: Amount of LP tokens to burn
 - LP token must be approved to the router
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| BSC      | Factory  | `0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73` |
-| BSC      | Router   | `0x10ED43C718714eb63d5aA57B78B54704E256024E` |
-| Ethereum | Factory  | `0x1097053Fd2ea711dad45caCcc45EfF7548fCB362` |
-| Ethereum | Router   | `0xEfF92A263d31888d860bD50809A8D171709b7b1c` |
-| Arbitrum | Factory  | `0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E` |
-| Arbitrum | Router   | `0x8cFe327CEc66d1C090Dd72bd0FF11d690C33a2Eb` |
-| Base     | Factory  | `0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E` |
-| Base     | Router   | `0x8cFe327CEc66d1C090Dd72bd0FF11d690C33a2Eb` |
-| Linea    | Factory  | `0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E` |
-| Linea    | Router   | `0x8cFe327CEc66d1C090Dd72bd0FF11d690C33a2Eb` |
-| opBNB    | Factory  | `0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E` |
-| opBNB    | Router   | `0x8cFe327CEc66d1C090Dd72bd0FF11d690C33a2Eb` |
-
-## ABI Methods
-
-### PancakeSwapV2RouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) -> uint256[] amounts` - Swap exact input along path
-- `swapTokensForExactTokens(uint256 amountOut, uint256 amountInMax, address[] path, address to, uint256 deadline) -> uint256[] amounts` - Swap to get exact output
-- `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity and mint LP tokens
-- `removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB)` - Burn LP tokens for underlying
-- `getAmountsOut(uint256 amountIn, address[] path) -> uint256[] amounts` - Quote output amounts (view)
-
-### PancakeSwapV2FactoryABI
-
-- `getPair(address tokenA, address tokenB) -> address pair` - Look up pair address (view)
-- `createPair(address tokenA, address tokenB) -> address pair` - Create a new pair
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/pancakeswap-v2.md](registry/pancakeswap-v2.md).
 
 ## Notes
 

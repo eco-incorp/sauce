@@ -90,15 +90,65 @@ the two addresses, so one number means the same price on every V3-style pool of 
 pools of the same two currencies. Selling token0 moves the price down, so the limit is a floor;
 selling token1 moves it up, so it is a ceiling. It must lie strictly between `4295128739` and
 `1461446703485210103287273052203988822378723970342` and on the far side of the pool's current
-price, or the pool reverts. A limit of `0n` means none.
+price, or the pool reverts `SPL`. A limit of `0n` means none, which leaves `minOut` as the only
+bound: set a real limit.
+
+**Convert a price with `sauce price`**, which reads no network:
+`npx sauce price --chain base WETH USDC 2686.5`. The price is **quote per base**: the first token
+is the one priced, the second what it is priced in, so this is 2,686.5 USDC per WETH. Swapped,
+`USDC WETH 2686.5` would mean 2,686.5 WETH per USDC, a limit nowhere near any pool. It prints the
+pair's order on the chain (on Base WETH is token0, the lower address, and USDC token1) and two
+blocks:
+
+- **`sell`** (the base token in: WETH → USDC): its `sqrtPriceLimitX96` is a **floor**;
+- **`buy`** (the base token out: USDC → WETH): its `sqrtPriceLimitX96` is a **ceiling**.
+
+Each block also gives `minAvgPrice` for that direction. Take the limit from the block of the
+direction you trade.
+
+**Put the limit near the current price, on the far side of it.** A limit far beyond the price, such
+as the bound itself, is no limit at all: the pool fills down (or up) to it at any price. One on the
+wrong side fills nothing: a single swap reverts `SPL`, and a distributed swap skips every pool and
+refunds everything, which is not a success. In a real run never pass `minOut` as `0`.
+
+**Build the limit from the best price a taker gets among pools with liquidity**: drop the pools
+with no in-range liquidity (`liquidity()`, or less than the order needs), take the best price after
+each pool's fee, and move it by the slippage you accept. Never a pool's price alone: a pool with no
+liquidity at its price keeps a stale price that can be far from the market. Nor the deepest pool's
+mid price: a pool's mid sits up to its fee away from the cheap pools, so a 0.3% pool's price is a
+loose reference. `sauce-distributed-swap` works this through on Base.
+
+**It bounds the pool's price after the swap, not the price paid.** One number is the same pool price
+on every V3-style pool of the pair, but the fee comes on top, and it differs per pool: under one
+limit, the last unit a 1% pool fills costs about 1% more than the limit, a 0.05% pool's about
+0.05%. To bound the price paid, give each pool its own limit: `limit ÷ √(1 − fee)` selling token0,
+`limit × √(1 − fee)` selling token1 (`sauce-distributed-swap` computes it and reads each pool's
+fee).
 
 A pool offered more than it can fill before its price reaches the limit **takes only what it
 can**: the Router pays exactly the pool's delta, and the rest of the input stays in the Pot. That
 is what a limit is for (the remainder can go to another venue or back to the user), and why a leg
-must never end with input left in the Pot.
+must never end with any of its input left in the Pot.
 
 A V4 pool priced in native ETH has `currency0` = `0x0`: it is a different pair from the WETH pools,
 and it needs native ETH in the Pot.
+
+## When a swap reverts
+
+A V3-style pool reverts with a short string, and the Router with a custom error:
+
+| Revert                                   | From       | Means                                                                                           |
+| ---------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------- |
+| `SPL`                                    | the pool   | the price limit is on the wrong side of the pool's current price, or at or past a bound (above) |
+| `AS`                                     | the pool   | the amount is zero                                                                              |
+| `LOK`                                    | the pool   | the pool is not initialized (or is mid-swap)                                                    |
+| `IIA`                                    | the pool   | its callback paid less input than it asked for                                                  |
+| `TF`                                     | the pool   | its transfer of the output token failed                                                         |
+| `InvalidPool()`, `0x2083cd40`            | the Router | the pool's `token0`/`token1` are not the pair passed                                            |
+| `InputExceedsAuthorized()`, `0x510db218` | the Router | the pool asked for more input than the exact input offered                                      |
+
+A revert inside the program (a `require`, the library's `minOut` check) is the program's own; the
+cook reverts as a whole either way.
 
 ## PancakeSwap Infinity
 
@@ -119,7 +169,10 @@ The library checks `minOut`; what is left is the input a price limit left unspen
 
 1. Pass a `minOut` that is a `main` input, so a short fill reverts the whole transaction.
 2. Pay the output to its recipient (`recipient` does it), or keep it in the Pot for the next step.
-3. Send whatever input is still in the Pot back to the user or a refund address.
+3. Send the rest of the input back to the user or a refund address: `amountIn` less what the
+   swap took (the input balance before minus after), not the Pot's whole balance of the token,
+   which on an owner's Pot may hold more of it for other uses. A full sweep is only for an intent
+   body on the shared intent Pot, which holds nothing of anyone's (`sauce-intents`).
 
 [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts) is exactly this for one Uniswap V3 pool.
 Rehearse it, then run it, with the input in the Pot (or pulled in with `--fund`):

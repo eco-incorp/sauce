@@ -4,20 +4,19 @@ Coinbase's liquid staking token for Ethereum. cbETH represents staked ETH plus a
 
 ## Category
 
-liquid-staking | Chains: Ethereum, Base
+liquid-staking | Chains and addresses: [registry/cbeth.md](registry/cbeth.md)
 
 ## Key Operations
 
 - **transfer**: Transfer cbETH tokens
 - **approve**: Approve spender for cbETH
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, transfer, approve } from "@eco-incorp/sauce/protocols/cbeth";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Transfer cbETH
@@ -35,22 +34,11 @@ function main(cbethAddress: Address, spender: Address, amount: Uint256): Uint256
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | cbETH    | `0xBe9895146f7AF43049ca1c1AE358B0541Ea49704` |
-| Base     | cbETH    | `0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22` |
-
-## ABI Methods
-
-### CbETHABI
-
-- `mint(address to, uint256 amount) returns (bool)` - Mint cbETH (restricted to Coinbase's minters)
-- `exchangeRate()` - Current cbETH/ETH exchange rate (Ethereum only; Base cbETH is a bridged token without it)
-- `balanceOf(address)` - Query cbETH balance
-- `approve(address,uint256)` - Approve spender
-- `transfer(address,uint256)` - Transfer cbETH
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/cbeth.md](registry/cbeth.md).
 
 ## Notes
 

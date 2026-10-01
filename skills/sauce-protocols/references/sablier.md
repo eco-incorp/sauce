@@ -4,7 +4,7 @@ Token streaming protocol for continuous payments. Supports linear, cliff, and dy
 
 ## Category
 
-payments | Chains: Ethereum
+payments | Chains and addresses: [registry/sablier.md](registry/sablier.md)
 
 ## Key Operations
 
@@ -12,18 +12,12 @@ payments | Chains: Ethereum
 - **cancelStream**: Cancel a stream and return remaining tokens to sender
 - **createWithDurations**: Create a new linear stream with cliff and total duration
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  withdrawFromStream,
-  cancelStream,
-} from "@eco-incorp/sauce/protocols/sablier";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Withdraw from stream
@@ -48,27 +42,11 @@ function main(lockupLinearAddress: Address, streamId: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract     | Address                                      |
-| -------- | ------------ | -------------------------------------------- |
-| Ethereum | lockupLinear | `0xAFb979d9afAd1aD27C5eFf4E27226E3AB9e5dCC9` |
-
-## ABI Methods
-
-### LockupLinearABI
-
-- `createWithDurations(tuple)` - Create linear stream. Returns streamId. Params tuple:
-  - `sender` (address) - Who funds the stream
-  - `recipient` (address) - Who receives tokens
-  - `totalAmount` (uint128) - Total tokens to stream
-  - `asset` (address) - ERC-20 token to stream
-  - `cancelable` (bool) - Whether sender can cancel
-  - `transferable` (bool) - Whether stream NFT is transferable
-  - `durations` (tuple) - `{ cliff (uint40), total (uint40) }` in seconds
-  - `broker` (tuple) - `{ account (address), fee (uint256) }` - referral fee
-- `withdraw(uint256,address,uint128)` - Withdraw accrued tokens. Params: streamId, to (recipient), amount (tokens to withdraw, uint128)
-- `cancel(uint256)` - Cancel stream. Params: streamId. Returns unstreamed tokens to sender, accrued to recipient
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/sablier.md](registry/sablier.md).
 
 ## Notes
 

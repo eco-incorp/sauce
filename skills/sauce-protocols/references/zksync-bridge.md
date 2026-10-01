@@ -4,9 +4,14 @@ Official zkSync Era bridge via DiamondProxy. Deposits ETH and executes L2 transa
 
 ## Category
 
-native L2 bridge | Direction: L1 to L2 (Ethereum to zkSync Era) | Chains: Ethereum (1), zkSync Era (324)
+native L2 bridge | Direction: L1 to L2 (Ethereum to zkSync Era) | Chains and addresses: [registry/zksync-bridge.md](registry/zksync-bridge.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### depositETH
 
@@ -38,19 +43,11 @@ function main(diamondProxyAddress: Address, recipient: Address, l2GasLimit: Uint
 - `_refundRecipient`: Address to receive excess gas refund on L2 (use `msg.sender`)
 - `msg.value` must cover: L2 value + L2 gas costs. Use `l2TransactionBaseCost()` to estimate
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract     | Address                                      |
-| -------- | ------------ | -------------------------------------------- |
-| Ethereum | diamondProxy | `0x32400084C286CF3E17e7B677ea9583e60a000324` |
-| zkSync   | l2Bridge     | `0x11f943b2c77b743AB90f4A0Ae7d5A4e7FCA3E102` |
-
-## ABI Reference
-
-### ZkSyncDiamondProxyABI
-
-- `requestL2Transaction(address _contractL2, uint256 _l2Value, bytes _calldata, uint256 _l2GasLimit, uint256 _l2GasPerPubdataByteLimit, bytes[] _factoryDeps, address _refundRecipient) returns (bytes32 canonicalTxHash)` [payable] - Request an L2 transaction from L1. Used for ETH deposits, contract calls, and contract deployments
-- `l2TransactionBaseCost(uint256 _gasPrice, uint256 _l2GasLimit, uint256 _l2GasPerPubdataByteLimit) returns (uint256)` - Estimate the base cost of an L2 transaction (view). Use to calculate required msg.value
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/zksync-bridge.md](registry/zksync-bridge.md).
 
 ## Notes
 
