@@ -642,22 +642,36 @@ through a JSON-RPC shim; the packed check runs the installed bin through `npx`. 
 
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`
 copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauce-globals`,
-`sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`, `sauce-solana`,
-`sauce-run`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index. Each is a
-`SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents and `.mts` runners)
-and, for four of them, `references/`.
+`sauce-chains`, `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`,
+`sauce-solana`, `sauce-run`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index.
+Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents and `.mts`
+runners) and, for six of them, `references/`.
 
 - **One set of protocol documents.** `skills/sauce-protocols/references/*.md` is the only copy of
-  the per-protocol documents. `gen-embedded-sources.mjs` embeds them for `src/skills/loader.ts`, so
-  the `/skills` export (`getProtocolSkill`, unchanged API) returns exactly what an agent reads.
-  Edit them there; `skills-loader.test.ts` pins the count.
-- **The index of globals is generated.** `sdk/scripts/gen-skills-globals.mjs` writes
-  `skills/sauce-globals/references/{tokens,protocols,chains}.md` from `routes.sourceGlobals` — the
-  function `sauce globals` prints, never a second derivation — at the end of every SDK `build`. It
-  leaves out the `EcoRoutes` namespace (the Portal and its provers): a program opens an intent with
-  the chain syntax, never by calling them, and the skills keep the Portal to `sauce-intents`. The
-  files are committed and prettier-ignored; CI fails when the build changed `skills/`, so commit
-  the regenerated files with any registry change (`pnpm --filter './sdk' gen-skills-globals`).
+  the per-protocol documents. `gen-embedded-sources.mjs` embeds them (top-level `*.md` only) for
+  `src/skills/loader.ts`, so the `/skills` export (`getProtocolSkill`, unchanged API) returns
+  exactly what an agent reads. Edit them there; `skills-loader.test.ts` pins the count. Every
+  document whose protocol swaps (a `dex` or `aggregator`, or a template named for a swap) opens
+  with the one line `SWAP_POINTER` in `check-skills.mjs`, leading a Sauce program to `sauce-swaps`,
+  and a zero price limit in one must say the minimum output is then the only bound; the checker
+  requires both.
+- **The registry views are generated, by one generator.** `sdk/scripts/gen-skills-references.mjs`
+  writes, at the end of every SDK `build`: the globals index
+  (`sauce-globals/references/{tokens,protocols,chains}.md`: the NAMES a program uses, no addresses,
+  from `routes.sourceGlobals`, the function `sauce globals` prints, leaving out the `EcoRoutes`
+  namespace: a program opens an intent with the chain syntax, never by calling the Portal or its
+  provers, and the skills keep the Portal to `sauce-intents`); `sauce-chains/references/`
+  (an index and one file per chain: ids, native coin, the Sauce release, eco-routes and the shared
+  intent Pot, CCTP domain, tokens with addresses, and every protocol deployment with how a program
+  names it); and `sauce-protocols/references/index.md` (every protocol by category, with the
+  hand-written "Choosing between them" prose that lives in the generator) plus
+  `sauce-protocols/references/registry/<slug>.md` (deployments per chain, namespace or ABI-import
+  spelling, ABI functions). A deployment role's ABI export comes from the registry's own evidence
+  map, `test/fixtures/registry-abi/targets.json`, offered only where the compile serves the export
+  as `./protocols/<slug>/<Export>.json`. The files are committed and prettier-ignored, and each
+  carries compiled examples; CI fails when the build changed `skills/`, and `skills:check` fails a
+  stale or orphaned generated file, so commit the regenerated files with any registry change
+  (`pnpm --filter './sdk' gen-skills-references`). Change their prose in the generator.
 - **The actions reference is generated too.** `sdk/scripts/gen-skills-actions.mjs` renders
   `skills/sauce-actions/references/actions.md` (every action and field) from the committed
   `actions/action-program.schema.json`, in the same `build` step; regenerate the schema after a
@@ -678,13 +692,28 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `skills-check/offline-guard.mjs` preloaded; the globals index fresh, compilable and covering
   every name a program uses; the SauceScript reference
   (`sauce-script/references/builtins.{md,json}`, with `skills-check/builtins*.mjs`) to the
-  compiler; and the wording rules below.
+  compiler; every ```sauce block in a skill's `references/` compiled like its own; every relative
+  link resolving to a file inside the skills directory; and the wording rules below. Its exceptions
+  live in the checker, never as markers in a
+  shipped skill (they mean nothing to the agent reading it): a name inline code may use although
+  the package never declares it (an external contract's function) is an `UNDECLARED_NAMES` entry,
+  per skill and with its reason, and an entry the skill no longer needs fails the check.
 - **Wording rules, enforced.** No version numbers or release talk; no agent's name, install path or
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
   SDK records; developer inputs are `<placeholders>`); the Portal and provers only in
-  `sauce-intents`; no RPC endpoint; Sauce never described as a multicall. The protocol documents
-  are third-party facts and are exempt from the address, Portal and multicall rules only.
+  `sauce-intents`; no RPC endpoint; Sauce never described as a multicall; no pointer into the
+  package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
+  `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
+  `references/`. The protocol documents are third-party facts and are exempt from the address,
+  Portal and multicall rules only; the generated references are exempt from the Portal rule (a
+  chain's file records its eco-routes deployment).
+- **Execution-agnostic.** Not every agent has the SDK installed: some have only the `sauce` CLI, or a
+  remote compiler, and sign by local means. Every skill but `sauce-run` (the CLI) and
+  `sauce-typescript` (the SDK) teaches the program, what compiling for a chain produces (bytecode,
+  and the cook transaction: `to`, `data`, `value`), the CLI as one way to compile and send, and
+  `sauce tx`'s unsigned JSON as the hand-off to any signer. Runners may use the SDK to pin facts;
+  the `SKILL.md` must not depend on them.
 - **Program conventions.** A program names no chain (`--chain <chain>` in its usage line, no
   `// @chain` header): runtime inputs are typed `main(...)` parameters passed with `--args`, and an
   intent file is top-level statements whose values are defines left undeclared.
@@ -694,7 +723,15 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   which chain each part of an intent resolves its names, the body and delivery on the destination
   and the reward on the source (`sauce-intents/examples/intents.mts`), and that a program for a
   chain compiles as written — annotations anywhere, `interface`, a script's helpers and imports
-  (`sauce-script/examples/saucescript.mts`).
+  (`sauce-script/examples/saucescript.mts`). A runner may read its own skill's `SKILL.md` (and
+  nothing else outside `examples/` and `references/`) to pin a value the skill states:
+  `distributed-swap.mts` holds the selectors, the worked prices and the commands' arguments to the
+  arithmetic, and `intents.mts` the Portal reference's selectors and topics to the registry ABI.
+- **Execution is verified outside the checker.** `skills:check` runs offline, so what a skill says
+  about running a program (the distributed swap's per-pool limits, a `main` return coming back from
+  the cook, an intent funded by a transfer into its vault) was verified on anvil against real
+  Uniswap V3/V4 contracts and eco-routes' Portal through the gated engine
+  (`sdk/test/evm/gated-engine.ts`) before it was written. Re-verify the same way when changing it.
 
 **`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness, for
 developing the SDK; nothing of it ships in the package. Its `start:local`/`start:fork` scripts and

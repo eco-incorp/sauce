@@ -4,9 +4,14 @@ Cross-chain bridge aggregator that finds optimal routes across multiple bridges 
 
 ## Category
 
-bridge aggregator | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114)
+bridge aggregator | Direction: any-to-any | Chains and addresses: [registry/socket.md](registry/socket.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### bridge
 
@@ -27,23 +32,11 @@ function main(gatewayAddress: Address, routeId: Uint256, bridgeData: bytes): Uin
 - Socket requires off-chain route computation via their API before on-chain execution
 - Requires ERC-20 approval to the Socket Gateway
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain     | Contract      | Address                                      |
-| --------- | ------------- | -------------------------------------------- |
-| Ethereum  | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| Arbitrum  | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| Optimism  | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| Base      | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| Polygon   | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| BSC       | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-| Avalanche | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` |
-
-## ABI Reference
-
-### SocketGatewayABI
-
-- `executeRoute(uint32 routeId, bytes routeData) returns (bytes result)` [payable] - Execute a route (bridge, swap, or combined). Returns result data
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/socket.md](registry/socket.md).
 
 ## Notes
 

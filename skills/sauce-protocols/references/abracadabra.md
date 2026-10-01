@@ -4,7 +4,7 @@ Lending protocol that lets users borrow MIM stablecoin against yield-bearing col
 
 ## Category
 
-cdp | Chains: Ethereum, Arbitrum
+cdp | Chains and addresses: [registry/abracadabra.md](registry/abracadabra.md)
 
 ## Key Operations
 
@@ -13,20 +13,12 @@ cdp | Chains: Ethereum, Arbitrum
 - **addCollateral**: Add collateral to a Cauldron position
 - **removeCollateral**: Remove collateral from a Cauldron position
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  borrow,
-  repay,
-  addCollateral,
-  removeCollateral,
-} from "@eco-incorp/sauce/protocols/abracadabra";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Borrow MIM from Cauldron
@@ -64,31 +56,11 @@ function main(cauldronAddress: Address, to: Address, share: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | degenBox | `0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce` |
-| Ethereum | mim      | `0x99D8a9C45b2ecA8864373A26D1459e3Dff1e17F3` |
-| Arbitrum | degenBox | `0x7C8FeF8eA9b1fE46A7689bfb8149341C90431D38` |
-| Arbitrum | mim      | `0xFEa7a6a0B346362BF88A9e4A88416B77a57D6c2A` |
-
-## ABI Methods
-
-### CauldronABI
-
-- `borrow(address,uint256)` - Borrow MIM. Params: to (recipient), amount (MIM to borrow). Returns (part, share) - part is debt units, share is DegenBox shares
-- `repay(address,bool,uint256)` - Repay MIM debt. Params: to (whose debt to repay), skim (true=use DegenBox balance), part (debt part to repay). Returns amount repaid
-- `addCollateral(address,bool,uint256)` - Add collateral. Params: to (position owner), skim (true=use DegenBox balance), share (collateral shares to add)
-- `removeCollateral(address,uint256)` - Remove collateral. Params: to (recipient), share (collateral shares to remove)
-- `userCollateralShare(address)` - Query user's collateral. Params: user. Returns share amount
-- `userBorrowPart(address)` - Query user's debt. Params: user. Returns borrow part
-
-### DegenBoxABI
-
-- `deposit(address,address,address,uint256,uint256)` - Deposit tokens into DegenBox. Payable. Params: token, from, to, amount (0 if using share), share (0 if using amount). Returns (amountOut, shareOut)
-- `withdraw(address,address,address,uint256,uint256)` - Withdraw from DegenBox. Params: token, from, to, amount (0 if using share), share (0 if using amount). Returns (amountOut, shareOut)
-- `balanceOf(address,address)` - Query balance. Params: token, user. Returns share amount
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/abracadabra.md](registry/abracadabra.md).
 
 ## Notes
 

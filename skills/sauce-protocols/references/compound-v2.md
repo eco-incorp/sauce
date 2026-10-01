@@ -4,9 +4,14 @@ Legacy algorithmic money market protocol on Ethereum. Pioneered cToken model whe
 
 ## Category
 
-lending | Chains: Ethereum (1)
+lending | Chains and addresses: [registry/compound-v2.md](registry/compound-v2.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### supply
 
@@ -74,30 +79,11 @@ function main(cTokenAddress: Address, amount: Uint256): Uint256 {
 - `amount`: Amount to repay. Use `type(uint256).max` to repay full debt
 - Requires ERC-20 approval of the underlying token to the cToken
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract    | Address                                      |
-| -------- | ----------- | -------------------------------------------- |
-| Ethereum | comptroller | `0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B` |
-| Ethereum | cETH        | `0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5` |
-| Ethereum | cUSDC       | `0x39AA39c021dfbaE8faC545936693aC917d5E7563` |
-
-## ABI Reference
-
-### CErc20ABI
-
-- `mint(uint256 mintAmount) returns (uint256)` - Supply underlying, receive cTokens. Returns 0 on success
-- `redeem(uint256 redeemTokens) returns (uint256)` - Redeem cTokens for underlying (specify cToken amount)
-- `redeemUnderlying(uint256 redeemAmount) returns (uint256)` - Redeem for exact underlying amount
-- `borrow(uint256 borrowAmount) returns (uint256)` - Borrow underlying tokens
-- `repayBorrow(uint256 repayAmount) returns (uint256)` - Repay borrow debt
-- `balanceOfUnderlying(address owner) returns (uint256)` - Get underlying balance including accrued interest. Not a view: it accrues interest first, so it cannot be STATICCALLed
-- `borrowBalanceCurrent(address account) returns (uint256)` - Get current borrow balance with interest. Not a view: it accrues interest first
-
-### ComptrollerABI
-
-- `enterMarkets(address[] cTokens) returns (uint256[])` - Enable cTokens as collateral. Must call before borrowing
-- `exitMarket(address cToken) returns (uint256)` - Remove cToken from collateral (fails if would cause shortfall)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/compound-v2.md](registry/compound-v2.md).
 
 ## Notes
 

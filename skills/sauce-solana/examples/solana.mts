@@ -1,14 +1,36 @@
 // Compiles solana.sauce.ts the way `sauce compile --chain solana` does and checks what the
 // sauce-solana skill says about it: the manifest lists the Account parameters in order with their
-// roles, the mint is a define, only the scalar parameters are arguments, and execution needs an
-// rpcUrl the caller supplies. Offline: nothing is sent.
+// roles, the mint is a module constant a define replaces, only the scalar parameters are
+// arguments, execution needs an rpcUrl the caller supplies, the USDC mint's hex is the skill's, the
+// Pot is the Kitchen's address for its seeds, and a cook's size is what the skill budgets. Offline:
+// nothing is sent.
 //
 //   node solana.mts
 import { readFileSync } from "node:fs";
 
 import { routes } from "@eco-incorp/sauce";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "@eco-incorp/sauce/deployments";
-import { USDC_MINT, createSauceSvmClient } from "@eco-incorp/sauce/svm";
+import {
+  POT_SEED,
+  USDC_MINT,
+  buildCookInstruction,
+  buildExecuteTransaction,
+  buildHeapFramePrepend,
+  createSauceSvmClient,
+  deriveExecutionFeeConfigPda,
+  derivePotPda,
+  getTransactionSize,
+} from "@eco-incorp/sauce/svm";
+import { getSetComputeUnitLimitInstruction } from "@solana-program/compute-budget";
+import {
+  AccountRole,
+  TRANSACTION_SIZE_LIMIT,
+  address,
+  blockhash,
+  generateKeyPairSigner,
+  getAddressEncoder,
+  getProgramDerivedAddress,
+} from "@solana/kit";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -46,6 +68,68 @@ try {
   message = (error as Error).message;
 }
 check(message.includes("rpcUrl"), "createSauceSvmClient requires rpcUrl");
+
+const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
+// The mint is a module constant: without the define it is 0 and the program refuses to run, with
+// it the value is folded in. The skill quotes the USDC mint's 32-byte hex.
+const unset = routes.compileSauceProgram("solana", source);
+check(Buffer.compare(unset.bytecode, program.bytecode) !== 0, "a define replaces MINT");
+const mintHex = `0x${usdcMint.toString(16).padStart(64, "0")}`;
+check(skill.includes(USDC_MINT) && skill.includes(mintHex), `the skill quotes ${mintHex}`);
+
+// The Pot is the Kitchen's program address for ["pot", owner, salt], the seeds the skill gives.
+const kitchen = address(v12SvmKitchenProgramId());
+const owner = await generateKeyPairSigner();
+const salt = new Uint8Array(32);
+const pot = await derivePotPda(kitchen, owner.address, salt);
+const [byHand] = await getProgramDerivedAddress({
+  programAddress: kitchen,
+  seeds: ["pot", getAddressEncoder().encode(owner.address), salt],
+});
+check(POT_SEED === "pot" && pot.address === byHand, "the Pot's seeds are pot, owner, salt");
+// The skill gives the Kitchen and engine program ids, and the Kitchen's 32-byte hex for the define.
+const kitchenHex = `0x${Buffer.from(getAddressEncoder().encode(kitchen)).toString("hex")}`;
+for (const value of [v12SvmKitchenProgramId(), v12SvmEngineProgramId(), kitchenHex])
+  check(skill.includes(value), `the skill quotes ${value}`);
+
+// A cook as `sauce run` builds it: the heap frame, a compute-unit limit, the Kitchen's cook.
+async function cookSize(accounts: number): Promise<number> {
+  const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen);
+  const tail = await Promise.all(
+    Array.from({ length: accounts }, async () => ({
+      address: (await generateKeyPairSigner()).address,
+      role: AccountRole.WRITABLE,
+    })),
+  );
+  const transaction = await buildExecuteTransaction({
+    payer: owner,
+    instructions: [
+      buildHeapFramePrepend(),
+      getSetComputeUnitLimitInstruction({ units: 1_400_000 }),
+      buildCookInstruction({
+        kitchen,
+        owner: owner.address,
+        engineProgram: address(v12SvmEngineProgramId()),
+        potSalt: salt,
+        pot: pot.address,
+        feeConfig,
+        bytecode: new Uint8Array([...program.bytecode, ...args]),
+        maxExecutionFee: 1_000_000n,
+        tail,
+      }),
+    ],
+    latestBlockhash: {
+      blockhash: blockhash("11111111111111111111111111111111"),
+      lastValidBlockHeight: 0n,
+    },
+  });
+  return getTransactionSize(transaction) - program.bytecode.length - args.length;
+}
+check(TRANSACTION_SIZE_LIMIT === 1232, "a Solana transaction is at most 1,232 bytes");
+const four = await cookSize(4);
+const five = await cookSize(5);
+check(four === 538, `with four accounts the cook adds 538 bytes, not ${four}`);
+check(five - four === 33, `an account costs 33 bytes, not ${five - four}`);
 
 console.log(
   `SVM program ${program.bytecode.length} bytes, ${slots.length} account slots, ${args.length}-byte arguments`,

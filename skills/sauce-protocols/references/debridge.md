@@ -4,9 +4,14 @@ Cross-chain trading infrastructure with DLN (DeBridge Liquidity Network). Suppor
 
 ## Category
 
-bridge + cross-chain trading | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114), Arc (5042)
+bridge + cross-chain trading | Direction: any-to-any | Chains and addresses: [registry/debridge.md](registry/debridge.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### bridge
 
@@ -59,38 +64,11 @@ function main(
 - `allowedCancelBeneficiarySrc`: Restrict who receives refund on cancellation (empty `0x00` = order creator)
 - Requires ERC-20 approval to DlnSource
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain     | Contract       | Address                                      |
-| --------- | -------------- | -------------------------------------------- |
-| Ethereum  | dlnSource      | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` |
-| Ethereum  | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` |
-| Arbitrum  | dlnSource      | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` |
-| Arbitrum  | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` |
-| Optimism  | dlnSource      | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` |
-| Optimism  | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` |
-| Base      | dlnSource      | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` |
-| Base      | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` |
-| Polygon   | dlnSource      | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` |
-| Polygon   | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` |
-| BSC       | dlnSource      | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` |
-| BSC       | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` |
-| Avalanche | dlnSource      | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` |
-| Avalanche | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` |
-
-## ABI Reference
-
-### DlnSourceABI
-
-- `createOrder(OrderCreation _orderCreation, bytes _affiliateFee, uint32 _referralCode, bytes _permitEnvelope) returns (bytes32 orderId)` [payable] - Create a cross-chain limit order. Market makers compete to fill on destination
-
-OrderCreation tuple: `(address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc)`
-
-### DlnDestinationABI
-
-- `fulfillOrder(Order _order, uint256 _fulFillAmount, bytes32 _orderId, bytes _permitEnvelope, address _unlockAuthority)` [payable] - Fill an order on the destination chain (called by market makers/solvers)
-
-Order tuple: `(uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes receiverDst, address takeTokenAddress, uint256 takeAmount, bytes givePatchAuthoritySrc, address orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall)`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/debridge.md](registry/debridge.md).
 
 ## Notes
 

@@ -4,9 +4,14 @@ Official Arbitrum L1-L2 gateway bridge. Routes tokens through the canonical Arbi
 
 ## Category
 
-native L2 bridge | Direction: L1 to L2 (Ethereum to Arbitrum) | Chains: Ethereum (1), Arbitrum (42161)
+native L2 bridge | Direction: L1 to L2 (Ethereum to Arbitrum) | Chains and addresses: [registry/arbitrum-bridge.md](registry/arbitrum-bridge.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### depositToL2
 
@@ -37,19 +42,11 @@ function main(
 - Requires ERC-20 approval to the appropriate gateway (use `getGateway(token)` to find it)
 - Requires ETH as msg.value to cover L2 execution costs (`maxGas * gasPriceBid + maxSubmissionCost`)
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract        | Address                                      |
-| -------- | --------------- | -------------------------------------------- |
-| Ethereum | l1GatewayRouter | `0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef` |
-| Arbitrum | l2GatewayRouter | `0x5288c571Fd7aD117beA99bF60FE0846C4E84F933` |
-
-## ABI Reference
-
-### ArbitrumL1GatewayRouterABI
-
-- `outboundTransfer(address _token, address _to, uint256 _amount, uint256 _maxGas, uint256 _gasPriceBid, bytes _data) returns (bytes)` [payable] - Deposit tokens from L1 to L2. Routes to the correct gateway automatically based on the token
-- `getGateway(address _token) returns (address)` - Look up the gateway contract for a specific token (view). Approve tokens to this address, not the router
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/arbitrum-bridge.md](registry/arbitrum-bridge.md).
 
 ## Notes
 

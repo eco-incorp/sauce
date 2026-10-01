@@ -1,10 +1,12 @@
 # Balancer V2
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Generalized AMM with weighted pools, single Vault architecture, and flash loans. Supports custom pool types (weighted, stable, linear, composable stable) and multi-token pools with up to 8 tokens per pool.
 
 ## Category
 
-dex | Chains: Ethereum, Polygon, Arbitrum, Optimism, Gnosis, Avalanche, Base, BSC
+dex | Chains and addresses: [registry/balancer-v2.md](registry/balancer-v2.md)
 
 ## Key Operations
 
@@ -12,19 +14,12 @@ dex | Chains: Ethereum, Polygon, Arbitrum, Optimism, Gnosis, Avalanche, Base, BS
 - **addLiquidity**: Join a pool by depositing tokens via the Vault
 - **removeLiquidity**: Exit a pool by withdrawing tokens via the Vault
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swap,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/balancer-v2";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -121,29 +116,11 @@ function main(
 - `userData`: ABI-encoded exit type and amounts. Exit types: EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT
 - `minAmountsOut`: Minimum amounts to receive per token (slippage protection)
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract | Address                                      |
-| --------- | -------- | -------------------------------------------- |
-| Ethereum  | Vault    | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` |
-| Polygon   | Vault    | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` |
-| Arbitrum  | Vault    | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` |
-| Optimism  | Vault    | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` |
-| Gnosis    | Vault    | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` |
-| Avalanche | Vault    | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` |
-| Base      | Vault    | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` |
-| BSC       | Vault    | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` |
-
-## ABI Methods
-
-### BalancerV2VaultABI
-
-- `swap(tuple(bytes32 poolId, uint8 kind, address assetIn, address assetOut, uint256 amount, bytes userData), tuple(address sender, bool fromInternalBalance, address recipient, bool toInternalBalance), uint256 limit, uint256 deadline) -> uint256 amountCalculated` - Execute a single swap. `kind`: 0=GIVEN_IN, 1=GIVEN_OUT
-- `batchSwap(uint8 kind, tuple[](bytes32 poolId, uint256 assetInIndex, uint256 assetOutIndex, uint256 amount, bytes userData), address[] assets, tuple(address sender, bool fromInternalBalance, address recipient, bool toInternalBalance), int256[] limits, uint256 deadline) -> int256[] assetDeltas` - Execute multi-hop swap through multiple pools in one transaction
-- `joinPool(bytes32 poolId, address sender, address recipient, tuple(address[] assets, uint256[] maxAmountsIn, bytes userData, bool fromInternalBalance))` - Deposit tokens into a pool
-- `exitPool(bytes32 poolId, address sender, address recipient, tuple(address[] assets, uint256[] minAmountsOut, bytes userData, bool toInternalBalance))` - Withdraw tokens from a pool
-- `flashLoan(address recipient, address[] tokens, uint256[] amounts, bytes userData)` - Flash loan from the Vault (zero fee for Balancer pools)
-- `getPoolTokens(bytes32 poolId) -> (address[] tokens, uint256[] balances, uint256 lastChangeBlock)` - Query pool token composition and balances (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/balancer-v2.md](registry/balancer-v2.md).
 
 ## Notes
 

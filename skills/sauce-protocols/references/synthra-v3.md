@@ -1,12 +1,19 @@
 # Synthra V3
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Concentrated-liquidity spot DEX on Arc: a Uniswap V3 fork with renamed pool callbacks.
 
 ## Category
 
-dex | Chains: Arc (5042)
+dex | Chains and addresses: [registry/synthra-v3.md](registry/synthra-v3.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -40,14 +47,11 @@ function main(
 - SwapRouter02's params have no `deadline`
 - `tokenIn` must be `approve`d to the router
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain | Contract                   | Address                                      |
-| ----- | -------------------------- | -------------------------------------------- |
-| Arc   | Factory                    | `0x6307fc239C7964942c1BfFE51930E55606619c74` |
-| Arc   | SwapRouter02               | `0xa50eDe66a573eE5bB37E28AF5789B76aE5FEb828` |
-| Arc   | QuoterV2                   | `0x9c179A7335B3fc841F59Aa6a62daf6d5c61b65D7` |
-| Arc   | NonfungiblePositionManager | `0x2743b771659fD9CE13970d7367e7e84AF6a31049` |
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/synthra-v3.md](registry/synthra-v3.md).
 
 ## Notes
 
