@@ -31,6 +31,7 @@ import {
   intentStatus,
   parseAddress,
   parseChain,
+  parsePubkey,
   requireChain,
   UsageError,
   type CanonicalChain,
@@ -259,29 +260,57 @@ async function located(
   return { records, endpoints };
 }
 
+/** Whether a plan's transaction is Solana's: a base64 wire transaction, not `to` and `data`. */
+const isSolana = (tx: object): boolean => "transaction" in tx;
+
+/** What a Solana transaction's signer is told: who signs it, and how soon. */
+const SOLANA_SIGNING = (feePayer: string): string =>
+  `Each Solana transaction is base64, with every signature in it but the fee payer's: sign it ` +
+  `with ${feePayer} (the fee payer, last) and send it within about a minute, before its ` +
+  "blockhash expires; build it again after that.";
+
 /**
- * The core's plan as a tool result. No one in particular signs it — every step after the fill is
- * permissionless — so `from` is null, and a ready plan's notes say who may send it.
+ * The core's plan as a tool result. On an EVM chain no one in particular signs it — every step
+ * after the fill is permissionless — so `from` is null; on Solana the fee payer the call named
+ * signs it, so `from` is that key. A ready plan's notes say who may send it.
  */
 function anyone(
-  plan: { readonly ready: boolean; readonly notes: readonly string[] },
+  plan: {
+    readonly ready: boolean;
+    readonly notes: readonly string[];
+    readonly transactions: readonly object[];
+  },
   what: string,
+  feePayer?: string,
 ): ToolOutput {
   const { notes, ...rest } = plan;
+  const solana = plan.transactions.some(isSolana);
 
   return {
-    json: { from: null, ...rest },
+    json: { from: solana ? (feePayer ?? null) : null, ...rest },
     notes: [
       ...notes,
-      ...(plan.ready
-        ? [
-            `Any account may send ${what}, in order, on the chain each transaction names; the ` +
-              "sender pays the gas and its value, and receives nothing.",
-          ]
-        : []),
+      ...(!plan.ready
+        ? []
+        : solana && feePayer !== undefined
+          ? [SOLANA_SIGNING(feePayer)]
+          : [
+              `Any account may send ${what}, in order, on the chain each transaction names; the ` +
+                "sender pays the gas and its value, and receives nothing.",
+            ]),
     ],
   };
 }
+
+/** `from` as a Solana fee payer's key, for the steps a Solana destination takes. */
+const FEE_PAYER = z
+  .string()
+  .max(64)
+  .optional()
+  .describe(
+    "On a Solana destination: the fee payer's base58 key, which signs the transaction last; " +
+      "required there. On an EVM destination any account may send it, and from is not needed.",
+  );
 
 // ---------------------------------------------------------------------------------------------
 // The tools
@@ -295,10 +324,14 @@ const PLAN_OUTPUT = {
   transactions: z.array(
     z.looseObject({
       chainId: z.number(),
-      to: z.string(),
-      data: z.string(),
       value: z.string(),
       what: z.string(),
+      // EVM: what any wallet signs.
+      to: z.string().optional(),
+      data: z.string().optional(),
+      // Solana: a base64 wire transaction, every signature in but the fee payer's.
+      feePayer: z.string().optional(),
+      transaction: z.string().optional(),
     }),
   ),
 };
@@ -408,6 +441,9 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "delivers (reset to 0 first where an allowance stands, for USDT), then " +
         "Portal.fulfillAndProve with the prover's fee quoted into its value — or Portal.fulfill " +
         "with prove false, or where this server cannot drive the reward's prover (notes say). " +
+        "On a Solana destination: the Portal's fulfill as a base64 transaction, the solver its " +
+        "fee payer, then the proof to send once it lands, with claimant (the EVM source address " +
+        "the reward pays) required. " +
         "Name the intent by its record or txHash, or give the program that opens it (source " +
         "and the sauce_intent_publish inputs, chain the SOURCE). With dryRun, instead rehearse " +
         "the fill there in one eth_simulateV1 block, from any solver (no from needed): per " +
@@ -436,8 +472,9 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           .max(64)
           .optional()
           .describe(
-            "The solver's 0x address, which signs these: its balances and standing allowances " +
-              "plan them. Needed unless dryRun.",
+            "The solver, which signs these. Needed unless dryRun. On an EVM destination its 0x " +
+              "address: its balances and standing allowances plan them. On Solana its base58 " +
+              "key, the transactions' fee payer.",
           ),
         claimant: z
           .string()
@@ -506,6 +543,16 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       const claimant = args.claimant as Hex | undefined;
 
       if (args.dryRun === true) {
+        const solana = records.find(
+          (record) => requireChain(record.destination.chainId).kind === "svm",
+        );
+        if (solana !== undefined) {
+          throw new UsageError(
+            `dryRun rehearses a fill on an EVM destination, and ${solana.intentHash} goes to ` +
+              "Solana: build its fill instead (from your Solana key), which rehearses the " +
+              "transaction as it builds it and says what it spends",
+          );
+        }
         const targets: FillTarget[] = records.map((record) => ({
           intent: intentOf(record),
           source: requireChain(record.source.chainId),
@@ -537,11 +584,16 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
             "them), or dryRun to rehearse the fill with no account",
         );
       }
-      const solver = parseAddress("from", args.from);
       const fills = [];
       const notes: string[] = [];
+      let solana = false;
       for (const record of records) {
         const destination = requireChain(record.destination.chainId);
+        const solver =
+          destination.kind === "svm"
+            ? parsePubkey("from", args.from)
+            : parseAddress("from", args.from);
+        solana ||= destination.kind === "svm";
         if (endpoints[String(destination.id)] === undefined) {
           throw noEndpoint(destination, serverEndpoints, "Building a fill");
         }
@@ -555,11 +607,12 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         notes.push(...said);
       }
       notes.push(
-        `Only ${solver} may send these, in order, on each intent's destination: the Portal pulls ` +
-          "what the route delivers from the account that calls fulfill.",
+        `Only ${args.from} may send these, in order, on each intent's destination: the Portal ` +
+          "pulls what the route delivers from the account that calls fulfill.",
+        ...(solana ? [SOLANA_SIGNING(args.from)] : []),
       );
 
-      return { json: { from: solver, intents: fills }, notes };
+      return { json: { from: fills[0]?.from ?? args.from, intents: fills }, notes };
     },
   );
 
@@ -583,8 +636,9 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           .optional()
           .describe(
             "For a cancelled intent: the destination block its cancel landed in, by intent " +
-              "hash; the proof waits until that block is final (eco-routes asks so).",
+              "hash (on Solana, the slot); the proof waits until it is final (eco-routes asks so).",
           ),
+        from: FEE_PAYER,
         ...endpointInputs("The destination chain"),
       },
       output: PLAN_OUTPUT,
@@ -597,9 +651,10 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       });
       const plan = await buildProve(records, endpoints, {
         ...(args.cancelledIn === undefined ? {} : { cancelledIn: args.cancelledIn }),
+        ...(args.from === undefined ? {} : { from: args.from }),
       });
 
-      return anyone(plan, "the proof (its value pays the bridge)");
+      return anyone(plan, "the proof (its value pays the bridge)", args.from);
     },
   );
 
@@ -674,6 +729,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
             "true: cancelAndProve, the proof sent at once (before finality; the result warns). " +
               "Default false: cancel only.",
           ),
+        from: FEE_PAYER,
         ...endpointInputs("The destination chain"),
       },
       output: PLAN_OUTPUT,
@@ -686,11 +742,13 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       });
       const plan = await buildCancel(records[0]!, endpoints, {
         ...(args.prove === undefined ? {} : { prove: args.prove }),
+        ...(args.from === undefined ? {} : { from: args.from }),
       });
 
       return anyone(
         plan,
         args.prove === true ? "the cancellation (its value pays the bridge)" : "the cancellation",
+        args.from,
       );
     },
   );
