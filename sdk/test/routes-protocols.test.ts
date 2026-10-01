@@ -181,12 +181,26 @@ describe("what the registry cannot honour is refused where it is written", () =>
   });
 
   it("a contract this chain does not deploy, with the chains that do", () => {
-    expect(
-      refusal("linea", "function main() { AaveV3.getUserAccountData(ctx.self()); }").message,
-    ).toBeDefined();
+    const { message, covers } = refusal(
+      "optimism",
+      "function main(): Uint256 { return PancakeswapV3.Factory.getPool(USDC, WETH, 500n); }",
+    );
+    expect(message).toMatch(
+      /^Contract 'Factory' \(pancakeswap-v3\) is not deployed on 'optimism' \(available: /,
+    );
+    expect(covers).toBe("PancakeswapV3.Factory");
     expect(
       refusal("optimism", "function main(): Uint256 { return PancakeswapV3.Factory; }").message,
     ).toMatch(/^Contract 'Factory' \(pancakeswap-v3\) is not deployed on 'optimism' \(available: /);
+  });
+
+  // FAILING until a namespace's default may name a member this chain lacks: Linea has no Aave V3
+  // Pool, so `AaveV3` has no default there, and the call is refused as a method `AaveV3` lacks
+  // rather than with the Pool's own message.
+  it.failing("a default contract this chain does not deploy", () => {
+    expect(
+      refusal("linea", "function main() { AaveV3.getUserAccountData(ctx.self()); }").message,
+    ).toMatch(/^Contract 'Pool' \(aave-v3\) is not deployed on 'linea'/);
   });
 
   it("an ambiguous family name", () => {
@@ -196,9 +210,10 @@ describe("what the registry cannot honour is refused where it is written", () =>
   });
 
   it("a method the vendored ABI does not have", () => {
-    expect(() => bytecode("base", "function main() { AaveV3.Pool.nope(1n); }")).toThrow(
-      /`AaveV3.Pool` has no method named `nope`/,
-    );
+    expect(refusal("base", "function main() { AaveV3.Pool.nope(1n); }")).toEqual({
+      message: "`AaveV3.Pool` has no method named `nope`",
+      covers: "AaveV3.Pool.nope(1n)",
+    });
   });
 
   it("a protocol on an svm destination", () => {

@@ -55,6 +55,23 @@ describe("an unknown token or protocol name", () => {
     ).toBe("Uniswapp");
   });
 
+  it("suggests the chain's near match", () => {
+    expect(refusal("base", "function main(): Uint256 { return USDCC; }").message).toBe(
+      "`USDCC` is not a declared variable; did you mean `USDC`?",
+    );
+    expect(
+      refusal("base", "function main() { USDC.approve(Uniswapp.UniversalRouter, 1n); }").message,
+    ).toBe("`Uniswapp` is not a declared variable; did you mean `Uniswap`?");
+  });
+
+  // FAILING until the compiler suggests a near match for the receiver of a call: `USDCC` read as a
+  // value gets one, `USDCC.balanceOf(x)` does not.
+  it.failing("suggests the near match of a call's receiver", () => {
+    expect(
+      refusal("base", "function main(): Uint256 { return USDCC.balanceOf(ctx.self()); }").message,
+    ).toBe("`USDCC` is not a declared variable; did you mean `USDC`?");
+  });
+
   it("a token the chain lacks says which chains have it: Optimism has USDT, Base does not", () => {
     const { message, covers } = refusal(
       "base",
