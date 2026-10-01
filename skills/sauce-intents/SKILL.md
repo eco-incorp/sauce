@@ -297,8 +297,10 @@ prover deployed on both sides.
   body reverts (`CallToEOA`). `npx sauce pot --chain <destination> --owner <Executor>` prints its
   address and deploy transaction; with `--deploy --config sauce.config.json --keystore <keystore>`
   any signer deploys it (the Pot is the Executor's either way), and an existing one is reported, not
-  redeployed. Anything left in the Pot after the program, token or allowance, belongs to the next
-  intent through that Portal: approve exactly what is spent and move every remainder out.
+  redeployed; `sauce fill` says whether it is deployed on the destination, and deploys it in its
+  rehearsal when it is not. Anything left in the Pot after the program, token or allowance, belongs
+  to the next intent through that Portal: approve exactly what is spent and move every remainder
+  out.
 - **What the solver pays.** The Kitchen fee becomes the route's `nativeAmount`: the solver sends it,
   in the destination's native coin, as the value of `fulfill`, and pays the destination gas too.
   Nothing in the reward pays either back, so the margin (the reward minus what the solver delivers)
@@ -311,7 +313,30 @@ prover deployed on both sides.
 
 - **The source side**: `sauce publish --dry-run --assume-balance …` (above) rehearses the approve and
   `publishAndFund`; `sauce simulate` rehearses a file run from a Pot.
-- **The body, with only the CLI**: copy the body (what is inside the braces) into a file of its own,
+- **The fill, on the destination**: the body runs there, when a solver fills the intent, and that is
+  where a swap misses its minimum or a refund fails. Rehearse it with `sauce fill`, the same file
+  and flags, before publishing; it signs nothing and sends nothing:
+
+```sh
+npx sauce fill swap-on-base.sauce.ts --chain <chain> --config sauce.config.json \
+  --defines <defines.json> --intent-deadline <unix seconds> --intent-creator <address> \
+  --intent-execution-fee <Base Kitchen fee in wei>
+```
+
+On each intent's destination it runs, in one simulated block, what a solver sends: the shared
+Pot's deployment when the body cooks on it and nobody has deployed it yet, the solver's approval
+of the destination Portal for the delivered tokens, then `Portal.fulfill` with the Kitchen's fee
+as its value. The solver is given the delivered tokens for the rehearsal only. It prints each
+transfer, each address's net change (an address a define holds is named by the define) and what
+the shared Pot and the Executor were left holding, which must be nothing; or why the fill
+reverts, down to the body's own `require` message. It warns when the shared Pot is not deployed,
+and when `--intent-execution-fee` is below the destination Kitchen's fee, naming the fee to pass.
+`--config` must name the destination chain's endpoint (`--rpc-url` works when every intent goes
+to one chain, and is then that chain's endpoint). An intent that uses a value measured on chain
+cannot be rehearsed this way: its route exists only once the program runs. Fix what it reports
+and rehearse again before `sauce publish` or `sauce run`.
+
+- **The body alone, as a program**: copy the body (what is inside the braces) into a file of its own,
   top-level statements with the same defines, and rehearse it as a program for the destination,
   with the delivered tokens assumed in the Pot. It runs on your Pot instead of the shared one, but
   executes the same calls, shows what moves, and gives the gas:
@@ -323,8 +348,8 @@ npx sauce simulate one-pool-body.sauce.ts --chain base --owner <address> \
   --define RECIPIENT=<address> --define REFUND_TO=<address>
 ```
 
-- **The fill itself**, as a solver sends it, on a fork of the destination
-  (`anvil --fork-url <destination endpoint>`):
+- **The fill by hand**, as a solver sends it, on a fork of the destination
+  (`anvil --fork-url <destination endpoint>`), with any client:
   1. Get the intent: `sauce inspect <file> --chain <source> --json`, with the same defines and
      intent flags, prints each intent's `intentHash`, `routeHash`, `rewardHash`, route and reward;
      the raw route bytes are the `route` argument of the `publishAndFund` that
