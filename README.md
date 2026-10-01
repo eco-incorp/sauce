@@ -66,9 +66,9 @@ That is the whole program. What you did not have to do:
 - **Roll back by hand.** Below `MIN_AMOUNT` the `throw` reverts the whole fulfilment: nothing is
   published, and no earlier call in the route survives.
 
-Without Sauce, this hop is either a contract you write and deploy (read the balance, approve the
-Portal, encode the intent around the amount, call `publishAndFund`) or a second intent you publish
-yourself after the first lands and you have read what it produced.
+Without Sauce, this hop is either a contract you write and deploy (read the balance, encode the
+intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
+a second intent you publish yourself after the first lands and you have read what it produced.
 
 `USDC` is a registered token symbol, and inside the braces it means **Arbitrum's** USDC, because
 that is where those calls run. In `.reward(...)` it means the USDC of the chain the program runs

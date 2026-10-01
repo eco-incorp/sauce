@@ -93,23 +93,26 @@ Every address helper here returns a **recorded** address, never a verified one. 
 
 ## Built intents
 
-| Member                                      | Behavior                                                            |
-| ------------------------------------------- | ------------------------------------------------------------------- |
-| `intent`, `root()`                          | Normalized head intent                                              |
-| `source`, `destination`                     | Canonical chain records                                             |
-| `compiled`                                  | Head destination program's compilation result                       |
-| `children`                                  | Direct nested children                                              |
-| `intents()`                                 | Root-first preorder traversal of all intents                        |
-| `hash()`                                    | Intent, route, and reward hashes                                    |
-| `encodeEVM()`, `encodeSVM()`                | Explicit codec serialization of route and reward                    |
-| `approvals()`                               | EVM approval requests for the head reward                           |
-| `publishCalldata()`                         | Source Portal publication request                                   |
-| `publishAndFundCalldata(allowPartial)`      | Publication and funding request                                     |
-| `fundCalldata(allowPartial)`                | Funding request                                                     |
-| `vaultCall()`, `hashCall()`, `fundedCall()` | Source Portal read request plus result decoder                      |
-| `predictVault(config)`                      | Offline CREATE2 prediction with caller-provided vault configuration |
+| Member                                        | Behavior                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------ |
+| `intent`, `root()`                            | Normalized head intent                                             |
+| `source`, `destination`                       | Canonical chain records                                            |
+| `compiled`                                    | Head destination program's compilation result                      |
+| `children`                                    | Direct nested children                                             |
+| `intents()`                                   | Root-first preorder traversal of all intents                       |
+| `hash()`                                      | Intent, route, and reward hashes                                   |
+| `encodeEVM()`, `encodeSVM()`                  | Explicit codec serialization of route and reward                   |
+| `sourceTxs({ fundVia, vault, allowPartial })` | The head reward's funding and publication, in order                |
+| `approvals()`                                 | EVM approval requests for the head reward                          |
+| `publishCalldata()`                           | Source Portal publication request                                  |
+| `publishAndFundCalldata(allowPartial)`        | Publication and funding request                                    |
+| `fundCalldata(allowPartial)`                  | Funding request                                                    |
+| `vaultCall()`, `hashCall()`, `fundedCall()`   | Source Portal read request plus result decoder                     |
+| `predictVault(config?)`                       | Offline CREATE2 prediction; eco-routes' derivation unless `config` |
 
 Submission and read helpers take an optional `{ portal }` override; without one they use `sourcePortal`, which itself defaults to the eco-routes Portal for the reward's source chain. They build EVM requests, require an EVM source, and perform no RPC — you send them. The codec represents an SVM destination fine; building that execution is the separate matter above. `encodeEVM()`/`encodeSVM()` force a codec for inspection; they do not change an intent's chain kinds.
+
+`sourceTxs()` funds by transfer by default: a `transfer` of each reward token to the intent's vault, a plain send of the native amount, then `publish`. Pass `vault` as `vaultCall()` read it; it must equal `predictVault()` or `IntentVaultMismatchError` is thrown. `fundVia: "publishAndFund"` (or `IntentOptions.fundVia`, which also selects it for the intents the route's own program opens) returns `approvals()` then `publishAndFundCalldata(allowPartial)`. The same choice is `intentSourceTxs(intent, { portal }, options)` for an `Intent` built some other way, over `vaultTransferTxs`, `rewardVaultLegs`, `predictIntentVault` and `assertIntentVault`; `ecoRoutesVaultConfig(portal)` is the vault configuration behind the prediction. [Intents](../guides/intents.md#submit-the-source-reward) covers the order and the checks.
 
 ## Composition and lower-level encoding
 
