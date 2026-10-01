@@ -209,9 +209,10 @@ export function fillTargets(input: ProgramInput, files: CliFiles): readonly Fill
     if (intent.captures.length > 0) {
       throw new CliError(
         `the intent to ${intent.destination.slug} uses ` +
-          `${intent.captures.map((name) => `\`${name}\``).join(", ")}, measured on chain while the ` +
-          "program runs: its route exists only once the program has run, so it cannot be " +
-          "rehearsed from the file",
+          `${intent.captures.map((name) => `\`${name}\``).join(", ")}, which the program measures ` +
+          "or computes while it runs: its route exists only once the program has run, so it " +
+          "cannot be rehearsed from the file. Name it by its hash once `sauce run` has published " +
+          "it, or make the value a literal, a define or a top-level `const` of a literal",
       );
     }
   }

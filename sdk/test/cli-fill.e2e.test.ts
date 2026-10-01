@@ -408,7 +408,9 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
   it("refuses an intent with no route until its program runs", async () => {
     const run = await fill(file("measured.sauce.ts", MEASURED), ...defines());
     expect(run.code).toBe(1);
-    expect(run.stderr).toContain("uses `amount`, measured on chain while the program runs");
+    expect(run.stderr).toContain(
+      "uses `amount`, which the program measures or computes while it runs",
+    );
   }, 60_000);
 
   it("names the destination when --rpc-url serves another chain", async () => {

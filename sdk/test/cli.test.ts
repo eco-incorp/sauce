@@ -1285,7 +1285,15 @@ describe("sauce intent publish, offline", () => {
         `}).reward({ tokens: [{ token: USDC, amount: ${amount} }] });`,
       ].join("\n");
     const hashes = async (name: string, text: string, ...flags: string[]) => {
-      const run = await sauce("publish", file(name, text), ...FLAGS, ...flags, "--format", "json");
+      const run = await sauce(
+        "intent",
+        "publish",
+        file(name, text),
+        ...FLAGS,
+        ...flags,
+        "--format",
+        "json",
+      );
       expect(run.code).toBe(0);
       return (JSON.parse(run.stdout) as { intents: Array<{ intentHash: string }> }).intents.map(
         (intent) => intent.intentHash,
@@ -1316,13 +1324,13 @@ describe("sauce intent publish, offline", () => {
 
     it("still refuses a value the program measures or computes, naming it", async () => {
       const refused = (text: string) =>
-        sauce("publish", file("refused.sauce.ts", text), ...FLAGS, "--format", "json");
+        sauce("intent", "publish", file("refused.sauce.ts", text), ...FLAGS, "--format", "json");
       const measured = await refused(
         `// @chain arbitrum\nconst amount = USDC.balanceOf(ctx.self());\n${body("amount")}\n`,
       );
       expect(measured.code).toBe(1);
       expect(measured.stderr).toBe(
-        "sauce publish: the intent to base uses `amount`, which the program measures or computes " +
+        "sauce intent publish: the intent to base uses `amount`, which the program measures or computes " +
           "while it runs, so it cannot be built from a wallet: use `sauce run` on a Pot, or make " +
           "it a literal, a define or a top-level `const` of a literal\n",
       );

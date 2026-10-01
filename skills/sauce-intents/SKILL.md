@@ -113,8 +113,8 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
 
 - **In `.reward(...)`**, names are the source chain's, which funds and escrows the reward: `USDC`
   there is the source chain's USDC. A reward token must be known when the file is compiled: a
-  symbol, or a token's address on the source chain as a literal or a define. Its amount may be a
-  measured value.
+  symbol, or a token's address on the source chain as a literal, a define or a top-level `const` of
+  a literal. Its amount may be a measured value.
 - **Inside the braces, and in the delivery argument**, the code runs on the destination, and every
   name a chain supplies resolves there: in an `Arbitrum(...)` body, `USDC` is Arbitrum's USDC,
   `AaveV3.Pool` is Arbitrum's pool, and `chainId` and a `Namespace_Contract` define are Arbitrum's.
@@ -124,10 +124,11 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
   ([../sauce-chains/references/arbitrum.md](../sauce-chains/references/arbitrum.md) for Arbitrum).
 - **The rule repeats at every depth.** An intent opened inside a body is funded on that body's
   chain, so its reward resolves there and its own body on its own destination.
-- **Name a token by a symbol, a literal or a define, never by a top-level `const`.** A top-level
-  `const` holding a token's address, used in the reward or the delivery, counts as a value the file
-  computes, so the compile refuses the intent, saying the token's address must be known when the
-  intent is built, and so does `sauce intent publish`. A `const` inside the braces is fine.
+- **Name a token by a symbol, a literal, a define or a top-level `const` of a literal.** Any other
+  top-level `const` holding a token's address (`const TOKEN = USDC;`), used in the reward or the
+  delivery, counts as a value the program computes, so the compile refuses the intent, saying the
+  token's address must be known when the intent is built, and so does `sauce intent publish`. A
+  `const` inside the braces is fine.
 - A literal address means that address everywhere, and so does a define whose name no chain uses
   (`RECIPIENT`). A define under a chain-scoped name (`USDC`, `chainId`, a protocol address) is a
   name on the source chain: it applies to the file's own statements and the reward, and a body on
@@ -142,8 +143,9 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
 | (c) Transfer into the vault, then publish | a token transfer to `intentVaultAddress(...)`, then `publish`: no approval | `IntentPublished`                 | an intent solvers discover from its publication; no allowance, USDT needs nothing   |
 
 **(a) From a wallet.** `sauce intent publish` builds each intent before anything runs, so every amount
-must be a literal or a define, and the file may do nothing but open intents (a file with a measured
-amount is refused, with `sauce run` named instead). The wallet approves each reward token to the
+must be a literal, a define or a top-level `const` of a literal, and the file may do nothing but
+open intents (a file with an amount measured or computed on chain is refused, with `sauce run` named
+instead). The wallet approves each reward token to the
 **Portal** for exactly the reward (with an endpoint, a smaller allowance already standing is reset
 to zero first, as USDT requires) and calls `publishAndFund(destination, route, reward, false)`,
 which pulls the reward into the vault and marks the intent Funded.

@@ -170,7 +170,7 @@ describe("what the lowering produces", () => {
 
   describe("a top-level `const` of a literal is baked in, as a define is", () => {
     // Known when the file is compiled, so nothing is spliced at run time and the intent is fixed:
-    // `sauce publish` can build it from a wallet.
+    // `sauce intent publish` can build it from a wallet.
     const site = `Arbitrum(() => {
     USDC.transfer(RECIPIENT, AMOUNT);
   }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });`;

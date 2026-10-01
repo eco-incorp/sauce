@@ -99,9 +99,9 @@ export function fileTargets(input: ProgramInput, files: CliFiles, store: IntentS
   if (measured !== undefined) {
     throw new CliError(
       `the intent to ${measured.destination.slug} uses ` +
-        `${measured.captures.map((name) => `\`${name}\``).join(", ")}, measured on chain while the ` +
-        "program runs, so the file does not say what it is: name it by its hash, which `sauce " +
-        "run` stored when it published it",
+        `${measured.captures.map((name) => `\`${name}\``).join(", ")}, which the program measures ` +
+        "or computes while it runs, so the file does not say what it is: name it by its hash, " +
+        "which `sauce run` stored when it published it",
     );
   }
 
