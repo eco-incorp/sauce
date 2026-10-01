@@ -138,4 +138,28 @@ Arbitrum(() => {
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
+
+  // A `const` of a literal is fixed when the file is compiled, so it is not a value the script
+  // hands over at run time: the body's program declares it, as it would a module's.
+  const WITH_CONSTANT = `const FEE = 30n;\n${SCRIPT.replaceAll("fee", "FEE").replace(
+    'const [FEE] = abi.decode(ctx.msgData(), ["Uint256"]);\n',
+    "",
+  )}`;
+
+  it("carries a top-level `const` of a literal rather than capturing it", () => {
+    const { context, children } = recording();
+    rewriteIntentSugar(WITH_CONSTANT, context);
+
+    expect(children[0]!.captures).toEqual(["amount"]);
+    expect(children[0]!.source).toMatch(/^const FEE = 30n;\n/);
+  });
+
+  it("compiles that on the real path", () => {
+    const out = compileSauceRoute("base", WITH_CONSTANT, EXECUTION, {
+      defines: { RECIPIENT },
+      intents: INTENTS,
+    });
+
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
 });

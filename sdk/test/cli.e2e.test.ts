@@ -1023,7 +1023,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     const refused = await sauce("publish", measured, ...DEFINES, "--format", "json");
     expect(refused.code).toBe(1);
     expect(refused.stderr).toMatch(
-      /the intent to base uses `amount`, measured on chain while the program runs, so it cannot be built from a wallet: use `sauce run` on a Pot/,
+      /the intent to base uses `amount`, which the program measures or computes while it runs, so it cannot be built from a wallet: use `sauce run` on a Pot/,
     );
 
     const more = join(work, "more.sauce.ts");

@@ -14,6 +14,12 @@
 // allowed to write them, and only the owning program may. Without it a hand-assembled account with the
 // right bytes at the right offsets reads exactly like a genuine one.
 //
+// Each check reverts with a reason, so a refused account is named rather than failing in silence:
+// "not a token account" (an owner other than legacy SPL Token, Token-2022 included), "wrong mint",
+// "not a mint", "uninitialized mint", "not the token program" (the CPI callee) and "amount over u64".
+// They are short on purpose: a reason is compiled into the program byte for byte, and on Solana the
+// program rides in a transaction of at most 1,232 bytes (`transfer`'s four add 65).
+//
 // SPL token-account layout (`spl_token::state::Account`, `LEN` = 165): mint@0 (pubkey), owner@32
 // (pubkey: whose balance it is, a wallet or a PDA such as a Pot), amount@64 (u64 LE), delegate
 // COption tag@72 (u32 LE: 0 = None, 1 = Some), delegate@76 (pubkey), state@108 (u8), is_native
@@ -36,8 +42,8 @@ const SPL_TOKEN_PROGRAM = 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8c
 const SPL_MINT_LEN = 82;
 
 export function balanceOf(token: Address, account: Account): Uint256 {
-  require(account.owner == SPL_TOKEN_PROGRAM);
-  require(svm.sload(account, 0, 32).toBe() == token);
+  require(account.owner == SPL_TOKEN_PROGRAM, "not a token account");
+  require(svm.sload(account, 0, 32).toBe() == token, "wrong mint");
   return svm.sload(account, 64, 8).toLe();
 }
 
@@ -49,8 +55,8 @@ export function balanceOf(token: Address, account: Account): Uint256 {
 // `ownerOf(token, account) == authority` first. There is no EVM counterpart: an ERC-20 balance has no
 // account apart from its holder, so the holder is already the address a program passes.
 export function ownerOf(token: Address, account: Account): Address {
-  require(account.owner == SPL_TOKEN_PROGRAM);
-  require(svm.sload(account, 0, 32).toBe() == token);
+  require(account.owner == SPL_TOKEN_PROGRAM, "not a token account");
+  require(svm.sload(account, 0, 32).toBe() == token, "wrong mint");
   return svm.sload(account, 32, 32).toBe();
 }
 
@@ -58,22 +64,22 @@ export function ownerOf(token: Address, account: Account): Address {
 // before size to reject Token-2022. Size alone also admits permissionlessly allocated but
 // uninitialized accounts, so require the mint's initialization byte before reading its fields.
 export function totalSupply(token: Account): Uint256 {
-  require(token.owner == SPL_TOKEN_PROGRAM);
-  require(token.dataLen == SPL_MINT_LEN);
-  require(svm.sload(token, 45, 1).toLe() == 1);
+  require(token.owner == SPL_TOKEN_PROGRAM, "not a mint");
+  require(token.dataLen == SPL_MINT_LEN, "not a mint");
+  require(svm.sload(token, 45, 1).toLe() == 1, "uninitialized mint");
   return svm.sload(token, 36, 8).toLe();
 }
 
 export function decimals(token: Account): Uint256 {
-  require(token.owner == SPL_TOKEN_PROGRAM);
-  require(token.dataLen == SPL_MINT_LEN);
-  require(svm.sload(token, 45, 1).toLe() == 1);
+  require(token.owner == SPL_TOKEN_PROGRAM, "not a mint");
+  require(token.dataLen == SPL_MINT_LEN, "not a mint");
+  require(svm.sload(token, 45, 1).toLe() == 1, "uninitialized mint");
   return svm.sload(token, 44, 1).toLe();
 }
 
 export function allowance(token: Address, account: Account, spender: Address): Uint256 {
-  require(account.owner == SPL_TOKEN_PROGRAM);
-  require(svm.sload(account, 0, 32).toBe() == token);
+  require(account.owner == SPL_TOKEN_PROGRAM, "not a token account");
+  require(svm.sload(account, 0, 32).toBe() == token, "wrong mint");
   // The delegate is a `COption<Pubkey>`: read `delegated_amount` only when the tag is `Some` (1)
   // *and* the delegate matches `spender`. spl-token leaves the delegate bytes stale after `Revoke`,
   // so the tag must gate the pubkey compare — else a revoked delegate would still match.
@@ -98,10 +104,10 @@ export function transfer(
   authority: Account,
   amount: Uint256,
 ): void {
-  require(tokenProgram == SPL_TOKEN_PROGRAM);
-  require(source.owner == SPL_TOKEN_PROGRAM);
-  require(svm.sload(source, 0, 32).toBe() == token);
-  require(amount <= 0xffffffffffffffff);
+  require(tokenProgram == SPL_TOKEN_PROGRAM, "not the token program");
+  require(source.owner == SPL_TOKEN_PROGRAM, "not a token account");
+  require(svm.sload(source, 0, 32).toBe() == token, "wrong mint");
+  require(amount <= 0xffffffffffffffff, "amount over u64");
   let data = hex`03`;
   svm.call(tokenProgram, [source, dest, authority], data.concat(amount.toBytesLe(8)));
 }
@@ -133,10 +139,10 @@ export function approve(
   authority: Account,
   amount: Uint256,
 ): void {
-  require(tokenProgram == SPL_TOKEN_PROGRAM);
-  require(source.owner == SPL_TOKEN_PROGRAM);
-  require(svm.sload(source, 0, 32).toBe() == token);
-  require(amount <= 0xffffffffffffffff);
+  require(tokenProgram == SPL_TOKEN_PROGRAM, "not the token program");
+  require(source.owner == SPL_TOKEN_PROGRAM, "not a token account");
+  require(svm.sload(source, 0, 32).toBe() == token, "wrong mint");
+  require(amount <= 0xffffffffffffffff, "amount over u64");
   let data = hex`04`;
   svm.call(tokenProgram, [source, delegate, authority], data.concat(amount.toBytesLe(8)));
 }
