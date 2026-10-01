@@ -215,6 +215,14 @@ jobs:
       - name: Actions — build
         run: pnpm --filter './actions' build
 
+      # The MCP server reads the SDK's dist/ (the sauce command's own modules), so it comes after
+      # the SDK build, as actions does.
+      - name: MCP — typecheck
+        run: pnpm --filter './mcp' typecheck
+
+      - name: MCP — build
+        run: pnpm --filter './mcp' build
+
       # The SDK compiles in a browser. Every browser-facing export is bundled with esbuild for the
       # browser and must reach no Node builtin (and no Node global from the SDK's own modules); then
       # the README's route example, a raw compact compile, the settle recipe, two builders and an
@@ -257,6 +265,12 @@ jobs:
 
       - name: Dev Tools — test
         run: pnpm --filter './dev-tools' test
+
+      # Every tool in process, the bin over stdio and Streamable HTTP, and the tools against a
+      # local anvil with the released gated stack (the CLI suites' harness, which throws under CI
+      # without SAUCE_V12_RUNTIME_CREATION_HEX rather than skip). No live RPC.
+      - name: MCP — test
+        run: pnpm --filter './mcp' test
 
       # A consumer install, from the packed tarball into an empty directory — which is the only way
       # to catch a workspace dependency that every in-repo test resolves for free.
