@@ -272,6 +272,15 @@ describe("refused on a preview chain, before any network call", () => {
       ),
       "arbitrum",
     );
+    // Before the key: a keystore that is not there would fail first if it were read.
+    expectRefused(
+      await sauce(
+        ...["run", file("run-to-arbitrum.sauce.ts", TO_ARBITRUM), "--chain", "base"],
+        ...["--config", config, ...INTENT_FLAGS, "--keystore", join(work, "missing.json")],
+      ),
+      "arbitrum",
+      /^sauce run: sending the cook is refused/,
+    );
     expectRefused(
       await sauce("tx", file("cascade.sauce.ts", CASCADE), ...flags, "--intent-execution-fee", "0"),
       "arbitrum",
