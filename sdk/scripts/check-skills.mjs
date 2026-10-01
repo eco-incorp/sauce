@@ -360,10 +360,6 @@ const UNDECLARED_NAMES = {
     CallToEOA:
       "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
   },
-  "sauce-actions": {
-    sauce_actions:
-      "the MCP server's tool that lowers an actions document; a tool name, not a package export",
-  },
   "sauce-distributed-swap": {
     globalState:
       "an Algebra pool's price read, `globalState()`; the registry has no Algebra pool ABI",
