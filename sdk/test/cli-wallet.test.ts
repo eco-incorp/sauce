@@ -332,6 +332,14 @@ describe("the wallet directory", () => {
     expect(unlocked.kind === "evm" && unlocked.account.address).toBe(info.address);
   }, 60_000);
 
+  it("creates no wallet under a password shorter than 8 characters, whoever asks", async () => {
+    const store = new WalletStore(work);
+    await expect(store.create("agent", "evm", "short")).rejects.toThrow(
+      /a wallet's password is 8 characters at least/,
+    );
+    expect(readdirSync(work)).toEqual([]);
+  });
+
   it("names a wallet with lowercase letters, digits, - and _", async () => {
     const store = new WalletStore(work);
     for (const name of ["Agent", "../escape", "a.b", "", "-lead", "x".repeat(65)]) {

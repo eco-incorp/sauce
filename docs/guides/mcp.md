@@ -432,8 +432,9 @@ the environment it runs in, and VS Code also reads an `envFile` (the project's `
 
 The wallet tools, besides every other tool:
 
-- `sauce_wallet_create` `{ name, kind }` makes a wallet (`kind` `evm`, the default, or `solana`)
-  and returns its address. Its key never leaves the wallet's file except to sign, in the server's
+- `sauce_wallet_create` `{ name, kind }` makes a wallet (`kind` `evm`, the default, or `solana`),
+  encrypted under the server's password (8 characters at least, as for `sauce wallet new`), and
+  returns its address. Its key never leaves the wallet's file except to sign, in the server's
   process.
 - `sauce_wallet_list` names each wallet with its kind, address and policy.
 - `sauce_wallet_send` `{ wallet, transaction, chain?, rpcUrl? }` sends. `transaction` is the

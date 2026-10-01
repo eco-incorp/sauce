@@ -35,6 +35,30 @@ describe("a server without wallets", () => {
   });
 });
 
+describe("a server whose password is too short to create a wallet with", () => {
+  let dir: string;
+  let mcp: Connected;
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), "sauce-mcp-wallets-short-"));
+    mcp = await connect(undefined, undefined, {
+      store: new WalletStore(join(dir, "wallets")),
+      password: "short",
+      source: "--password-env SAUCE_TEST_WALLET_PASSWORD",
+    });
+  });
+  after(async () => {
+    await mcp.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("refuses to create one, as the command does", async () => {
+    assert.match(
+      failed(await mcp.call("sauce_wallet_create", { name: "agent" })),
+      /a wallet's password is 8 characters at least/,
+    );
+  });
+});
+
 describe("a server with wallets", () => {
   let dir: string;
   let mcp: Connected;

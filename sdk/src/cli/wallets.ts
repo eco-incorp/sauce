@@ -46,6 +46,7 @@ import { bytesToHex, getAddress, hexToBytes, isAddress, type Address, type Hex }
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
 import { CliError, UsageError } from "./args.js";
+import { MIN_PASSWORD } from "./password.js";
 import {
   decryptKeystoreBytes,
   encryptKeystore,
@@ -316,6 +317,13 @@ export class WalletStore {
     password: string,
   ): Promise<{ readonly info: WalletInfo; readonly warnings: string[] }> {
     walletName(name);
+    // Held here, where every wallet is created — the CLI and the MCP server alike.
+    if ([...password].length < MIN_PASSWORD) {
+      throw new UsageError(
+        `a wallet's password is ${MIN_PASSWORD} characters at least: its key is encrypted under it ` +
+          "on disk",
+      );
+    }
     if (kind === "evm" && bytes.length !== 32) throw new CliError("an EVM key is 32 bytes");
     if (kind === "solana") {
       secretKeypair(bytes);
