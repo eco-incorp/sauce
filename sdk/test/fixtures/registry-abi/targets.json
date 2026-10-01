@@ -1137,10 +1137,7 @@
         "roles": ["positionManager"]
       },
       "UniswapV4UniversalRouterABI": {
-        "roles": ["universalRouter"],
-        "required": {
-          "execute(bytes,bytes[])": "actions' uniswapV4ExactInput and uniswapV4ExactInputMultiHop, which call the deadline-free execute"
-        }
+        "roles": ["universalRouter"]
       }
     },
     "unitflow-v3": {

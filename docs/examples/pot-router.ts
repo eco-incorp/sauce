@@ -8,7 +8,8 @@ export async function potRouter(client: PublicClient, pot: Address) {
   // which has no setRouter and keeps its Router for good.
   const update = await potRouterUpdate(client, pot);
   if (update === undefined) {
-    // The Pot runs its Kitchen's current Router: pass this to the swap builders.
+    // The Pot runs its Kitchen's current Router. Its generation decides which pools' callbacks it
+    // answers: Synthra V3 and UnitFlow V3 swaps need generation 3.
     return { current: true as const, routerGeneration: v12RouterGeneration() };
   }
 

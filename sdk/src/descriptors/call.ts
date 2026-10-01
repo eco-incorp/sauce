@@ -1,7 +1,7 @@
 /**
  * `ContractCall` — the inert value a `Base.<Proto>.<Contract>.<method>(...)`
  * leaf produces. Synchronous, no RPC, no compiler import: the same posture
- * as `swap/source.ts`/`deposit/source.ts`'s pure param-templating call
+ * as `deposit/source.ts`'s pure param-templating call
  * builders, which `toSauceScript` below deliberately mirrors.
  *
  * The `typeFidelity: "widened"` gate lives here, not in accessors.ts: every

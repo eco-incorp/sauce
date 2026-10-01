@@ -1,6 +1,6 @@
 /**
  * SauceScript SOURCE emission for the universal token interface — pure string templating, no
- * compiler import (matches `swap/source.ts`/`deposit/source.ts`'s posture: every compile option
+ * compiler import (matches `deposit/source.ts`'s posture: every compile option
  * stays explicit at the call site). The `IERC20` ABI an EVM program imports is served by the route
  * compiler itself (`embedded/resolve.ts`), so compiling one needs no resolver option.
  */

@@ -98,10 +98,11 @@ specifier and let the compiler select the arm.
 ### The SDK's own modules
 
 `resolveSdkModule(path)` and `resolveSdkPackage(specifier)` serve the files the SDK
-ships, from memory, with the contracts above: the `@sauce/token` library, the
-`./artifacts/IERC20.json` and `./artifacts/ISauceRouter.json` ABIs, and every protocol
-ABI as `./protocols/<slug>/<Export>.json`. Fall back to them from your own resolver
-to compile a program the SDK's builders emit, or one that imports `@sauce/token`:
+ships, from memory, with the contracts above: the `@sauce/token` and
+[`@sauce/router`](router.md) libraries, the `./artifacts/IERC20.json` and
+`./artifacts/ISauceRouter.json` ABIs, and every protocol ABI as
+`./protocols/<slug>/<Export>.json`. Fall back to them from your own resolver to compile
+a program the SDK's builders emit, or one that imports either library:
 
 ```ts
 const entry = new TextEncoder().encode(`

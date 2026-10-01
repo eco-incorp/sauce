@@ -3,8 +3,8 @@
 [Documentation](../README.md) · [Protocol calls](protocols-and-tokens.md) · [Compiler](../api/compiler.md)
 
 Sometimes a program is not something you write — it is something your application assembles from
-data it already has: a token and an amount, a pool and a direction, a vault and a deposit. The
-builders on this page take that data and emit SauceScript source you compile like any other program.
+data it already has: a token and an amount, a vault and a deposit. The builders on this page take
+that data and emit SauceScript source you compile like any other program.
 
 They emit source. They do not pick a market route, quote a price, or send anything. The ABIs that
 source imports ship inside the SDK, and route compilation serves them itself, so the output compiles
@@ -51,37 +51,22 @@ Use `Token.approve({ token, spender, amount })` for approvals and `Token.balance
 
 ## Swaps
 
-`swap.swapSource(spec)` generates a program calling the Sauce Router's unified swap entry point. `swap.swapSource([legA, legB])` emits multiple swaps in one program. `swap.toSwapParams(spec)` exposes the normalized parameters, and `swap.swapCallStatement(spec)` produces a statement for composition.
+A swap is not a builder: it is a call into [`@sauce/router`](../api/router.md), the SauceScript
+library with one function per venue — Uniswap V2, V3 and V4, Curve, Balancer V2, DODO V2, Trader Joe
+LB, WOOFi and Maverick V2. Its functions take the pool, tokens and amount as run-time arguments, so
+a program can spend what an earlier call returned, or choose the venue while it runs, and each
+returns what it received. Write the call into your program:
 
-```ts
-import { routes, swap } from "@eco-incorp/sauce";
+```js
+import { uniswapV3 } from "@sauce/router";
 
-export function compileSwap(spec: swap.SwapSourceSpec, execution: routes.SauceEvmExecutionInput) {
-  return routes.compileSauceRoute("base", swap.swapSource(spec), execution);
+function main() {
+  uniswapV3(POOL, WETH, USDC, AMOUNT_IN, 0n, MIN_OUT, ctx.self());
 }
 ```
 
-Supply the correct pool, tokens, amount, and pool-specific parameters. The generated program self-calls the Sauce Router path supported by the Pot; the execution deployment must support it. The unified builder supports `UniV2`, `UniV3`, `UniV4`, `Curve`, `BalancerV2`, `DODOV2`, `TraderJoeLB`, `MaverickV2`, and `WOOFi`. The separate Pancake Infinity CL/Bin entry points are not supported by this builder. `Curve` through the Router needs a pool whose `exchange` returns the amount out: the Router decodes a `uint256` from it, and a 3pool-era pool returns nothing, so the swap reverts — call such a pool directly instead.
-
-Every swap is **exact input**: `amountIn` is what the Pot pays. The builder turns it into each pool type's sign convention (positive for `UniV3`, negative for `UniV4`, as-is for the rest) and refuses an amount of 2^255 or more, which would read as exact output. There is no exact-output form: the Router caps what a V3-family or Maverick callback may take at the exact input, and an exact-output swap names no input maximum. `amountIn: "balance"` swaps the Pot's whole `tokenIn` balance, read when the swap runs, under the same convention — negated for `UniV4` — on every pool type.
-
-Synthra V3 and UnitFlow V3 pools dispatch as `UniV3`, but they call back under their own names (`synthraV3SwapCallback`, `unitFlowV3SwapCallback`), which only a generation-3 Router answers. Name such a pool with `venue` and pass the executing Pot's Router generation as `routerGeneration`; the builder refuses an older or unstated Router rather than emit a swap that reverts.
-
-A Pot runs the Router it was minted with until its owner moves it, so its generation is a property of the Pot, not of the chain. When `potRouterUpdate(client, pot)` from `@eco-incorp/sauce/evm/engine` returns nothing, the Pot runs its Kitchen's current Router, whose generation is `v12RouterGeneration()` from `@eco-incorp/sauce/deployments`. Otherwise it returns the Pot's `setRouter` call, which only the Pot's owner can send; see [pot-router.ts](../examples/pot-router.ts) and [the Pot's Router](../concepts/architecture.md#a-pots-router).
-
-```ts
-import { swap } from "@eco-incorp/sauce";
-import { v12RouterGeneration } from "@eco-incorp/sauce/deployments";
-
-export function synthraSwap(spec: Omit<swap.SwapSpec, "poolType" | "venue">) {
-  return swap.swapSource(
-    { ...spec, poolType: swap.SwapPoolType.UniV3, venue: "synthra-v3" },
-    { routerGeneration: v12RouterGeneration() },
-  );
-}
-```
-
-The builder does not recover and expose a general `amountOut` value from the swap return. Enforce the intended output with an explicit balance/delta check or a settlement program. A program compiling successfully does not demonstrate correct execution against a specific live pool.
+From data, write the swap as a [JSON action](actions.md#swaps) instead — `uniswapV3Swap`,
+`curveSwap`, … — which compiles to the same call.
 
 ## Deposits, withdrawals, staking, and wrapping
 
@@ -109,11 +94,11 @@ export function compileSupply(
 
 The default approval policy is `"exact"`; `"none"` assumes an existing allowance, and `"max"` grants the maximum allowance. The default beneficiary is the executing contract where the protocol supports it. Native-funded templates require value in the executing Pot and use a call carrying native value.
 
-`amount: "balance"` reads the executing Pot's balance: native ETH for native-funded templates, the WETH `target` for unwrapping, or the supplied `token` for other templates. `deposit.swapThenDepositSource(...)` composes swaps and deposits and also supports `amount: "delta"` for the increase in that balance across the swap block. Standalone deposit source cannot use `"delta"` because it lacks the pre-swap snapshot.
+`amount: "balance"` reads the executing Pot's balance: native ETH for native-funded templates, the WETH `target` for unwrapping, or the supplied `token` for other templates — which is how a deposit spends what a swap before it delivered. To swap and then supply in one program from data, write an [action program](actions.md): a swap action's output is what the next action spends.
 
 On Arc the native coin is USDC at 18 decimals, and it is also the 6-decimal ERC-20 at `0x3600…0000`; a native-funded template's `"balance"` is that 18-decimal figure. Arc has no canonical wrapped native, so the `weth` templates have nothing to target there: `toDeposit` rejects Arc's `USDC` and its registry tokens, whose `WETH` is bridged ETH, as a `weth` target. See [Arc: USDC is the native coin](../api/coverage.md#arc-usdc-is-the-native-coin).
 
-For Aave/Spark withdrawals, use a fixed underlying-asset amount or `amount: "max"` to withdraw the full position. `"balance"` and `"delta"` read the underlying token held by the Pot, not its supplied position, and should not size a withdrawal.
+For Aave/Spark withdrawals, use a fixed underlying-asset amount or `amount: "max"` to withdraw the full position. `"balance"` reads the underlying token held by the Pot, not its supplied position, and should not size a withdrawal.
 
 ## Routing actions
 

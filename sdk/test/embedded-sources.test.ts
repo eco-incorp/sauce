@@ -22,8 +22,6 @@ import type { DepositKey } from "../src/deposit/templates.js";
 import { chainContracts } from "../src/descriptors/accessors.js";
 import type { ContractCall } from "../src/descriptors/call.js";
 import { compileWithRs } from "../src/routes/rs-compile.js";
-import { swapSource } from "../src/swap/source.js";
-import { SwapPoolType } from "../src/swap/types.js";
 import { Token } from "../src/token/api.js";
 import { compileProgram, SDK_SOURCE_DIRS } from "./helpers";
 import { compileStdRouter, programCalling } from "./std/router/harness.js";
@@ -149,19 +147,6 @@ describe("compiling from memory gives the same bytes as compiling from disk", ()
   it.each(tokenCases)("@sauce/token $method on $target", ({ target, entry }) => {
     const fromMemory = compileWithRs({ source: entry, target: target === "evm" ? "v12" : "svm" });
     expect(hex(fromMemory.bytecode[0]!)).toBe(hex(compileStdToken(entry, target).bytecode));
-  });
-
-  it("a swap program (./artifacts/ISauceRouter.json, ./artifacts/IERC20.json)", () => {
-    const source = swapSource({
-      poolType: SwapPoolType.UniV3,
-      pool: "0x1111111111111111111111111111111111111111",
-      tokenIn: "0x2222222222222222222222222222222222222222",
-      tokenOut: "0x3333333333333333333333333333333333333333",
-      amountIn: "balance",
-    });
-    expect(source).toContain("./artifacts/ISauceRouter.json");
-    expect(source).toContain("./artifacts/IERC20.json");
-    expect(evm(source)).toBe(fromDisk(source));
   });
 
   it("a program calling @sauce/router, which imports its pool ABIs and @sauce/token", () => {

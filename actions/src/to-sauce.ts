@@ -18,6 +18,12 @@
  * A binding method's output is declared, and so decoded, only when an action reads it — see
  * `abis.ts`.
  *
+ * ONE SWAP IMPLEMENTATION. A swap action at one of `@sauce/router`'s nine venues is a call into
+ * that library — `uniswapV2Swap` is `uniswapV2(...)`, `curveSwap` is `curve(...)` — with the
+ * action's fields as its arguments, so an action program and a hand-written Sauce program trade a
+ * venue through the same code. The program imports what it calls from `@sauce/router`, which the
+ * SDK serves from memory (`compile.ts`). Only the venues the library does not cover lower here.
+ *
  * AMOUNTS AND OUTPUTS. An action's amount is its `amount`, the local an earlier action saved under
  * its `amountRef`, or the previous action's output. Its output is what it delivered to the Pot
  * (`ctx.self()`) for a swap, a wrap or a stake and for an Aave withdrawal — the venue's return value
@@ -53,20 +59,20 @@ import type {
   Action,
   Recipient,
   RemoteRecipient,
-  UniswapV3ExactInputAction,
-  UniswapV3ExactInputMultiHopAction,
-  UniswapV4ExactInputAction,
-  UniswapV4ExactInputMultiHopAction,
+  UniswapV2SwapAction,
+  UniswapV3SwapAction,
+  UniswapV4SwapAction,
   CurveSwapAction,
-  CurveRouterNGSwapAction,
   BalancerV2SwapAction,
+  DodoV2SwapAction,
+  TraderJoeLBSwapAction,
+  WoofiSwapAction,
+  MaverickV2SwapAction,
+  CurveRouterNGSwapAction,
   BalancerV2BatchSwapAction,
   BalancerV3SwapAction,
-  UniswapV2SwapAction,
   AmbientSwapAction,
-  DODOSwapAction,
-  MaverickSwapAction,
-  MaverickMultiHopSwapAction,
+  DodoV1SwapAction,
   CarbonSwapAction,
   FraxswapSwapAction,
   FluidDexT1SwapAction,
@@ -95,15 +101,6 @@ import type {
   BalanceOfAction,
   ArgumentAction,
 } from "./types.js";
-
-/** V4 ActionConstants.CONTRACT_BALANCE — signals the router to use its own token balance. */
-const V4_CONTRACT_BALANCE = 1n << 255n;
-
-/**
- * V4 ActionConstants.OPEN_DELTA — a TAKE of this amount takes everything owed. It is ZERO: the
- * all-ones word this used to be overflows the router's `uint128` cast and reverts every swap.
- */
-const V4_OPEN_DELTA = 0n;
 
 /** type(int256).max — Balancer's "no limit" for an asset the Vault may take. */
 const MAX_INT256 = (1n << 255n) - 1n;
@@ -171,12 +168,27 @@ export interface ActionResult {
   readonly output: Expr;
   /** The ABI bindings `stmts` call through. */
   readonly bindings: readonly BindingName[];
+  /** The `@sauce/router` functions `stmts` call. */
+  readonly router: readonly RouterFunction[];
 }
+
+/** A function of `@sauce/router`, the one implementation of a swap at its venue. */
+export type RouterFunction =
+  | "uniswapV2"
+  | "uniswapV3"
+  | "uniswapV4"
+  | "curve"
+  | "balancerV2"
+  | "dodoV2"
+  | "traderJoeLB"
+  | "woofi"
+  | "maverickV2";
 
 /** Collects one action's statements and the bindings they name. */
 class Lowering {
   readonly stmts: Stmt[] = [];
   private readonly used = new Set<BindingName>();
+  private readonly library = new Set<RouterFunction>();
 
   constructor(readonly emit: Emitter) {}
 
@@ -260,8 +272,15 @@ class Lowering {
     return this.bind("nat", "ctx.selfBalance()");
   }
 
+  /** `fn(args)`, a call into `@sauce/router` — the expression, not yet a statement. */
+  router(fn: RouterFunction, args: readonly Expr[]): Expr {
+    this.library.add(fn);
+
+    return `${fn}(${args.join(", ")})`;
+  }
+
   result(output: Expr): ActionResult {
-    return { stmts: this.stmts, output, bindings: [...this.used] };
+    return { stmts: this.stmts, output, bindings: [...this.used], router: [...this.library] };
   }
 }
 
@@ -307,6 +326,8 @@ function balanceDelta(
 export interface Lowered {
   readonly body: readonly Stmt[];
   readonly contracts: ActionContracts;
+  /** The `@sauce/router` functions the body calls, which the program imports. */
+  readonly router: readonly RouterFunction[];
   /** Runtime arguments (`argument` actions), in the order `main` declares them. */
   readonly parameters: readonly string[];
 }
@@ -321,6 +342,7 @@ export function lowerActions(actions: readonly Action[]): Lowered {
   const emit = newEmitter();
   const body: Stmt[] = [];
   const bindings = new Set<BindingName>();
+  const router = new Set<RouterFunction>();
   const parameters: string[] = [];
   const declared = new Set<string>();
   let previous: string | undefined;
@@ -335,6 +357,7 @@ export function lowerActions(actions: readonly Action[]): Lowered {
     const result = lowerAction(emit, action, amountOf(action, previous), needsOutput);
     body.push(...result.stmts);
     for (const b of result.bindings) bindings.add(b);
+    for (const f of result.router) router.add(f);
 
     if (needsOutput) {
       const slot = action.saveOutputAs === undefined ? `t_out${i}` : slotVar(action.saveOutputAs);
@@ -346,7 +369,12 @@ export function lowerActions(actions: readonly Action[]): Lowered {
     }
   });
 
-  return { body, contracts: contractsFor(bindings), parameters };
+  return { body, contracts: contractsFor(bindings), router: [...router].sort(), parameters };
+}
+
+/** The line importing what the program calls from `@sauce/router`, or nothing. */
+export function routerImport(router: readonly RouterFunction[]): string {
+  return router.length === 0 ? "" : `import { ${router.join(", ")} } from "@sauce/router";\n\n`;
 }
 
 /** The amount an action spends: its `amount`, the output it references, or the previous output. */
@@ -363,7 +391,7 @@ function amountOf(action: Action, previous: string | undefined): Expr {
 export function renderProgram(lowered: Lowered): string {
   const params = lowered.parameters.map((name) => `${argumentVar(name)}: Uint256`);
 
-  return `${fn("main", params, "void", lowered.body)}\n`;
+  return `${routerImport(lowered.router)}${fn("main", params, "void", lowered.body)}\n`;
 }
 
 /**
@@ -379,7 +407,7 @@ export function renderRouteBody(lowered: Lowered): string {
         `(a \`balanceOf\` action), or compile it standalone with \`compileProgram\`.`,
     );
   }
-  return `function main() {\n${indent(lowered.body)}\n}\n`;
+  return `${routerImport(lowered.router)}function main() {\n${indent(lowered.body)}\n}\n`;
 }
 
 /**
@@ -394,34 +422,34 @@ export function lowerAction(
 ): ActionResult {
   const l = new Lowering(emit);
   switch (action.type) {
-    case "uniswapV3ExactInput":
-      return uniswapV3ExactInput(l, action, amount, needsOutput);
-    case "uniswapV3ExactInputMultiHop":
-      return uniswapV3ExactInputMultiHop(l, action, amount, needsOutput);
-    case "uniswapV4ExactInput":
-      return uniswapV4ExactInput(l, action, amount, needsOutput);
-    case "uniswapV4ExactInputMultiHop":
-      return uniswapV4ExactInputMultiHop(l, action, amount, needsOutput);
+    case "uniswapV2Swap":
+      return uniswapV2Swap(l, action, amount, needsOutput);
+    case "uniswapV3Swap":
+      return uniswapV3Swap(l, action, amount, needsOutput);
+    case "uniswapV4Swap":
+      return uniswapV4Swap(l, action, amount, needsOutput);
     case "curveSwap":
       return curveSwap(l, action, amount, needsOutput);
-    case "curveRouterNGSwap":
-      return curveRouterNGSwap(l, action, amount, needsOutput);
     case "balancerV2Swap":
       return balancerV2Swap(l, action, amount, needsOutput);
+    case "dodoV2Swap":
+      return dodoV2Swap(l, action, amount, needsOutput);
+    case "traderJoeLBSwap":
+      return traderJoeLBSwap(l, action, amount, needsOutput);
+    case "woofiSwap":
+      return woofiSwap(l, action, amount, needsOutput);
+    case "maverickV2Swap":
+      return maverickV2Swap(l, action, amount, needsOutput);
+    case "curveRouterNGSwap":
+      return curveRouterNGSwap(l, action, amount, needsOutput);
     case "balancerV2BatchSwap":
       return balancerV2BatchSwap(l, action, amount, needsOutput);
     case "balancerV3Swap":
       return balancerV3Swap(l, action, amount, needsOutput);
-    case "uniswapV2Swap":
-      return uniswapV2Swap(l, action, amount, needsOutput);
     case "ambientSwap":
       return ambientSwap(l, action, amount, needsOutput);
-    case "dodoSwap":
-      return dodoSwap(l, action, amount, needsOutput);
-    case "maverickSwap":
-      return maverickSwap(l, action, amount, needsOutput);
-    case "maverickMultiHopSwap":
-      return maverickMultiHopSwap(l, action, amount, needsOutput);
+    case "dodoV1Swap":
+      return dodoV1Swap(l, action, amount, needsOutput);
     case "carbonSwap":
       return carbonSwap(l, action, amount, needsOutput);
     case "fraxswapSwap":
@@ -486,168 +514,75 @@ export function lowerAction(
 }
 
 // ---------------------------------------------------------------------------
-// Swap actions
+// Swap actions — through `@sauce/router`
 // ---------------------------------------------------------------------------
 
-function uniswapV3ExactInput(
-  l: Lowering,
-  action: UniswapV3ExactInputAction,
-  amountIn: Expr,
-  needsOutput: boolean,
-): ActionResult {
-  const params = record({
-    tokenIn: addr(action.tokenIn),
-    tokenOut: addr(action.tokenOut),
-    fee: word(action.fee),
-    recipient: needsOutput ? SELF : recipient(action.recipient),
-    amountIn,
-    amountOutMinimum: word(action.amountOutMin),
-    sqrtPriceLimitX96: word(action.sqrtPriceLimitX96 ?? "0"),
-  });
-  const call = l.call("ISwapRouter02", addr(action.router), "exactInputSingle", [params]);
-
-  return captured(l, needsOutput, call, amountIn);
-}
-
-function uniswapV3ExactInputMultiHop(
-  l: Lowering,
-  action: UniswapV3ExactInputMultiHopAction,
-  amountIn: Expr,
-  needsOutput: boolean,
-): ActionResult {
-  const path = l.bytes("path", hexToBytes(action.path));
-  const params = record({
-    path,
-    recipient: needsOutput ? SELF : recipient(action.recipient),
-    amountIn,
-    amountOutMinimum: word(action.amountOutMin),
-  });
-  const call = l.call("ISwapRouter02", addr(action.router), "exactInput", [params]);
-
-  return captured(l, needsOutput, call, amountIn);
-}
-
 /**
- * Uniswap V4 through the Universal Router's `V4_SWAP` command (0x10): the input token is
- * transferred to the router, which swaps (`SWAP_EXACT_IN_SINGLE` 0x06 / `SWAP_EXACT_IN` 0x07),
- * settles from its own balance (`SETTLE` 0x0b, `payerIsUser = false`, `CONTRACT_BALANCE`) and takes
- * everything owed to the recipient (`TAKE` 0x0e, `OPEN_DELTA`).
- *
- * The router input is encoded in the program — `abi.encode(actions, params[])` inside the
- * `bytes[]` of `execute` — so the amount is a runtime value, and the TAKE recipient can be
- * `ctx.self()` when the output is chained, like every other swap. The swap parameters are ONE
- * ABI-encoded struct, head offset included, which is what the V4 router's calldata decoder reads;
- * the multi-hop struct has no `maxHopSlippage` field. Both were checked against the deployed
- * mainnet Universal Router (`v4.mainnet.test.ts`), where the flattened encoding this replaced reverts.
+ * Where a swap action's output goes: the Pot when a later action spends it, else its recipient.
+ * Every `@sauce/router` function returns what the recipient received, which is the action's output.
  */
-function v4Execute(
-  l: Lowering,
-  router: string,
-  currencyIn: string,
-  currencyOut: string,
-  amountIn: Expr,
-  swapAction: 0x06 | 0x07,
-  swapParams: Expr,
-  to: Expr,
-): void {
-  l.erc20Write("transfer", addr(currencyIn), addr(router), amountIn);
-  const settle = l.bind(
-    "settle",
-    encodeArgs([addr(currencyIn), word(V4_CONTRACT_BALANCE), flag(false)]),
-  );
-  const take = l.bind("take", encodeArgs([addr(currencyOut), to, word(V4_OPEN_DELTA)]));
-  const actions = l.bytes("v4actions", Uint8Array.of(swapAction, 0x0b, 0x0e));
-  const input = l.bind("v4input", encodeArgs([actions, list([swapParams, settle, take])]));
-  const commands = l.bytes("v4cmd", Uint8Array.of(0x10));
-  l.exec("IUniversalRouter", addr(router), "execute", [commands, list([input])]);
+function swapRecipient(action: { recipient: Recipient }, needsOutput: boolean): Expr {
+  return needsOutput ? SELF : recipient(action.recipient);
 }
 
-function uniswapV4ExactInput(
+function uniswapV2Swap(
   l: Lowering,
-  action: UniswapV4ExactInputAction,
+  action: UniswapV2SwapAction,
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
-  const { poolKey } = action;
-  const currencyIn = action.zeroForOne ? poolKey.currency0 : poolKey.currency1;
-  const currencyOut = action.zeroForOne ? poolKey.currency1 : poolKey.currency0;
-  const to = needsOutput ? SELF : recipient(action.recipient);
-
-  return balanceDelta(
-    l,
-    needsOutput,
-    () => l.selfBalance(addr(currencyOut)),
-    () => {
-      const hookData = l.bytes("hook", new Uint8Array());
-      // ExactInputSingleParams { PoolKey poolKey; bool zeroForOne; uint128 amountIn;
-      //                          uint128 amountOutMinimum; bytes hookData; }
-      const params = l.bind(
-        "v4swap",
-        encodeArgs([
-          record({
-            poolKey: record({
-              currency0: addr(poolKey.currency0),
-              currency1: addr(poolKey.currency1),
-              fee: word(poolKey.fee),
-              tickSpacing: word(poolKey.tickSpacing),
-              hooks: addr(poolKey.hooks),
-            }),
-            zeroForOne: flag(action.zeroForOne),
-            amountIn,
-            amountOutMinimum: word(action.amountOutMin),
-            hookData,
-          }),
-        ]),
-      );
-      v4Execute(l, action.router, currencyIn, currencyOut, amountIn, 0x06, params, to);
-    },
+  const call = l.router("uniswapV2", [
+    addr(action.pool),
+    addr(action.tokenIn),
+    addr(action.tokenOut),
     amountIn,
-  );
+    word(action.feePpm ?? 0),
+    word(action.amountOutMin),
+    swapRecipient(action, needsOutput),
+  ]);
+
+  return captured(l, needsOutput, call, amountIn);
 }
 
-function uniswapV4ExactInputMultiHop(
+function uniswapV3Swap(
   l: Lowering,
-  action: UniswapV4ExactInputMultiHopAction,
+  action: UniswapV3SwapAction,
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
-  const currencyOut = action.path[action.path.length - 1]!.intermediateCurrency;
-  const to = needsOutput ? SELF : recipient(action.recipient);
-
-  return balanceDelta(
-    l,
-    needsOutput,
-    () => l.selfBalance(addr(currencyOut)),
-    () => {
-      const hookData = l.bytes("hook", new Uint8Array());
-      // ExactInputParams { Currency currencyIn; PathKey[] path; uint128 amountIn;
-      //                    uint128 amountOutMinimum; }
-      const path = list(
-        action.path.map((hop) =>
-          record({
-            intermediateCurrency: addr(hop.intermediateCurrency),
-            fee: word(hop.fee),
-            tickSpacing: word(hop.tickSpacing),
-            hooks: addr(hop.hooks),
-            hookData,
-          }),
-        ),
-      );
-      const params = l.bind(
-        "v4swap",
-        encodeArgs([
-          record({
-            currencyIn: addr(action.currencyIn),
-            path,
-            amountIn,
-            amountOutMinimum: word(action.amountOutMin),
-          }),
-        ]),
-      );
-      v4Execute(l, action.router, action.currencyIn, currencyOut, amountIn, 0x07, params, to);
-    },
+  const call = l.router("uniswapV3", [
+    addr(action.pool),
+    addr(action.tokenIn),
+    addr(action.tokenOut),
     amountIn,
-  );
+    word(action.sqrtPriceLimitX96 ?? "0"),
+    word(action.amountOutMin),
+    swapRecipient(action, needsOutput),
+  ]);
+
+  return captured(l, needsOutput, call, amountIn);
+}
+
+function uniswapV4Swap(
+  l: Lowering,
+  action: UniswapV4SwapAction,
+  amountIn: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  const call = l.router("uniswapV4", [
+    addr(action.poolManager),
+    addr(action.tokenIn),
+    addr(action.tokenOut),
+    amountIn,
+    word(action.fee),
+    word(action.tickSpacing),
+    addr(action.hooks),
+    word(action.sqrtPriceLimitX96 ?? "0"),
+    word(action.amountOutMin),
+    swapRecipient(action, needsOutput),
+  ]);
+
+  return captured(l, needsOutput, call, amountIn);
 }
 
 function curveSwap(
@@ -656,26 +591,19 @@ function curveSwap(
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
-  // 3pool-era pools (e.g. 0xbEbc44…) expose only the 4-argument `exchange`, which returns nothing
-  // and pays msg.sender — the executing account. The output is the `tokenOut` balance delta around
-  // the call, which excludes whatever an earlier action left behind.
-  const tokenOut = addr(action.tokenOut);
-  const pre = l.selfBalance(tokenOut);
-  l.exec("ICurvePool", addr(action.pool), "exchange", [
+  const call = l.router("curve", [
+    addr(action.pool),
+    addr(action.tokenIn),
+    addr(action.tokenOut),
+    amountIn,
     word(action.i),
     word(action.j),
-    amountIn,
+    flag(action.indexType === "uint256"),
     word(action.amountOutMin),
+    swapRecipient(action, needsOutput),
   ]);
-  const post = l.selfBalance(tokenOut);
-  const delta = l.bind("delta", `${post} - ${pre}`);
 
-  // Not chained, and not asked to keep it: forward the delta to the recipient.
-  if (!needsOutput && action.recipient !== "self") {
-    l.erc20Write("transfer", tokenOut, recipient(action.recipient), delta);
-  }
-
-  return l.result(delta);
+  return captured(l, needsOutput, call, amountIn);
 }
 
 function balancerV2Swap(
@@ -684,30 +612,98 @@ function balancerV2Swap(
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
-  const userData = l.bytes("ud", new Uint8Array());
-  const singleSwap = record({
-    poolId: b32(action.poolId),
-    kind: ZERO, // GIVEN_IN
-    assetIn: addr(action.tokenIn),
-    assetOut: addr(action.tokenOut),
-    amount: amountIn,
-    userData,
-  });
-  const funds = record({
-    sender: SELF, // must be msg.sender for the Vault to pull from it
-    fromInternalBalance: flag(false),
-    recipient: needsOutput ? SELF : recipient(action.recipient),
-    toInternalBalance: flag(false),
-  });
-  const call = l.call("IBalancerV2Vault", addr(action.vault), "swap", [
-    singleSwap,
-    funds,
+  const call = l.router("balancerV2", [
+    addr(action.vault),
+    addr(action.tokenIn),
+    addr(action.tokenOut),
+    amountIn,
+    b32(action.poolId),
     word(action.amountOutMin),
-    word(action.deadline),
+    swapRecipient(action, needsOutput),
   ]);
 
   return captured(l, needsOutput, call, amountIn);
 }
+
+function dodoV2Swap(
+  l: Lowering,
+  action: DodoV2SwapAction,
+  amountIn: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  const call = l.router("dodoV2", [
+    addr(action.pool),
+    addr(action.tokenIn),
+    addr(action.tokenOut),
+    amountIn,
+    addr(action.baseToken),
+    addr(action.quoteToken),
+    word(action.amountOutMin),
+    swapRecipient(action, needsOutput),
+  ]);
+
+  return captured(l, needsOutput, call, amountIn);
+}
+
+function traderJoeLBSwap(
+  l: Lowering,
+  action: TraderJoeLBSwapAction,
+  amountIn: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  const call = l.router("traderJoeLB", [
+    addr(action.pool),
+    addr(action.tokenIn),
+    addr(action.tokenOut),
+    amountIn,
+    addr(action.tokenX),
+    addr(action.tokenY),
+    word(action.amountOutMin),
+    swapRecipient(action, needsOutput),
+  ]);
+
+  return captured(l, needsOutput, call, amountIn);
+}
+
+function woofiSwap(
+  l: Lowering,
+  action: WoofiSwapAction,
+  amountIn: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  const call = l.router("woofi", [
+    addr(action.pool),
+    addr(action.tokenIn),
+    addr(action.tokenOut),
+    amountIn,
+    word(action.amountOutMin),
+    swapRecipient(action, needsOutput),
+  ]);
+
+  return captured(l, needsOutput, call, amountIn);
+}
+
+function maverickV2Swap(
+  l: Lowering,
+  action: MaverickV2SwapAction,
+  amountIn: Expr,
+  needsOutput: boolean,
+): ActionResult {
+  const call = l.router("maverickV2", [
+    addr(action.pool),
+    addr(action.tokenIn),
+    addr(action.tokenOut),
+    amountIn,
+    word(action.amountOutMin),
+    swapRecipient(action, needsOutput),
+  ]);
+
+  return captured(l, needsOutput, call, amountIn);
+}
+
+// ---------------------------------------------------------------------------
+// Swap actions — venues `@sauce/router` does not cover
+// ---------------------------------------------------------------------------
 
 function balancerV2BatchSwap(
   l: Lowering,
@@ -757,30 +753,6 @@ function balancerV2BatchSwap(
         list(action.assets.map(addr)),
         funds,
         limits,
-        word(action.deadline),
-      ]),
-    amountIn,
-  );
-}
-
-function uniswapV2Swap(
-  l: Lowering,
-  action: UniswapV2SwapAction,
-  amountIn: Expr,
-  needsOutput: boolean,
-): ActionResult {
-  // `swapExactTokensForTokens` returns `uint256[] amounts`; the output is the balance delta on the
-  // last path token instead, which is what actually arrived.
-  return balanceDelta(
-    l,
-    needsOutput,
-    () => l.selfBalance(addr(action.path[action.path.length - 1]!)),
-    () =>
-      l.exec("IUniswapV2Router", addr(action.router), "swapExactTokensForTokens", [
-        amountIn,
-        word(action.amountOutMin),
-        list(action.path.map(addr)),
-        needsOutput ? SELF : recipient(action.recipient),
         word(action.deadline),
       ]),
     amountIn,
@@ -873,61 +845,23 @@ function ambientSwap(
   );
 }
 
-function dodoSwap(
+function dodoV1Swap(
   l: Lowering,
-  action: DODOSwapAction,
+  action: DodoV1SwapAction,
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
-  // The proxy pays msg.sender and returns the amount it paid. `version: "v1"` routes legacy
-  // Classical pairs through `dodoSwapV1`; allowances go to DODOApprove, not to the proxy.
-  const args = [
-    addr(action.fromToken),
-    addr(action.toToken),
+  // The proxy pays msg.sender and returns the amount it paid. Allowances go to DODOApprove, not to
+  // the proxy.
+  const call = l.call("IDodoProxy", addr(action.proxy), "dodoSwapV1", [
+    addr(action.tokenIn),
+    addr(action.tokenOut),
     amountIn,
     word(action.amountOutMin),
     list(action.pairs.map(addr)),
     word(action.directions),
     flag(false), // isIncentive
     word(action.deadline),
-  ];
-  const call =
-    action.version === "v1"
-      ? l.call("IDodoProxy", addr(action.proxy), "dodoSwapV1", args)
-      : l.call("IDodoProxy", addr(action.proxy), "dodoSwapV2TokenToToken", args);
-
-  return captured(l, needsOutput, call, amountIn);
-}
-
-function maverickSwap(
-  l: Lowering,
-  action: MaverickSwapAction,
-  amountIn: Expr,
-  needsOutput: boolean,
-): ActionResult {
-  const call = l.call("IMaverickV2Router", addr(action.router), "exactInputSingle", [
-    needsOutput ? SELF : recipient(action.recipient),
-    addr(action.pool),
-    flag(action.tokenAIn),
-    amountIn,
-    word(action.amountOutMin),
-  ]);
-
-  return captured(l, needsOutput, call, amountIn);
-}
-
-function maverickMultiHopSwap(
-  l: Lowering,
-  action: MaverickMultiHopSwapAction,
-  amountIn: Expr,
-  needsOutput: boolean,
-): ActionResult {
-  const path = l.bytes("path", hexToBytes(action.path));
-  const call = l.call("IMaverickV2Router", addr(action.router), "exactInputMultiHop", [
-    needsOutput ? SELF : recipient(action.recipient),
-    path,
-    amountIn,
-    word(action.amountOutMin),
   ]);
 
   return captured(l, needsOutput, call, amountIn);

@@ -102,8 +102,9 @@ export const v12RouterAddress = (): string => v12DeployedAddresses().evm.contrac
  * The pinned Kitchen's Router generation — the Router every Pot minted from it starts on.
  *
  * A Pot minted earlier keeps its own Router until its owner moves it, so this is a Pot's generation
- * only once `potRouterUpdate(client, pot)` returns nothing. Pass it to the swap builders as
- * `routerGeneration`.
+ * only once `potRouterUpdate(client, pot)` returns nothing. The generation decides which pools'
+ * callbacks a Pot's Router answers: a `@sauce/router` swap on a Synthra V3 or UnitFlow V3 pool needs
+ * generation 3, and reverts on an earlier one.
  */
 export function v12RouterGeneration(): number {
   const { generation } = v12DeployedAddresses().evm.contracts.router;

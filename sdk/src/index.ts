@@ -14,7 +14,6 @@ export {
 } from "./protocols/index.js";
 export { getProtocolIndex, getProtocolSkill, listSkillSlugs } from "./skills/loader.js";
 export * as routes from "./routes/index.js";
-export * as swap from "./swap/index.js";
 export * as deposit from "./deposit/index.js";
 export * as token from "./token/index.js";
 export * as contracts from "./descriptors/index.js";

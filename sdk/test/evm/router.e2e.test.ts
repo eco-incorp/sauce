@@ -4,7 +4,7 @@
  *
  *   1. `potRouterUpdate` — a Pot left on an old Router gets the `setRouter` call back, only its owner
  *      can make it, and afterwards the Pot is current. The Kitchen cannot move an existing Pot.
- *   2. A Synthra-V3-style swap through `swap.swapSource` — a pool that re-enters under
+ *   2. A Synthra-V3-style swap through `@sauce/router`'s `uniswapV3` — a pool that re-enters under
  *      `synthraV3SwapCallback` is paid by the generation-3 Router, a callback name the Router does
  *      not answer reverts (what a pre-generation-3 Router does with Synthra's), and a pool asking
  *      for more than the exact input is refused with `InputExceedsAuthorized`.
@@ -38,8 +38,6 @@ import { v12RouterGeneration } from "../../src/deployments/index.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12KitchenAbi, v12PotAbi } from "../../src/evm/engine.js";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
-import { swapSource } from "../../src/swap/source.js";
-import { SwapPoolType } from "../../src/swap/types.js";
 import { POT_SALT, startGatedEngine } from "./gated-engine.js";
 import { potFromReleasedBytecode } from "./pot-address.js";
 import type { GatedEngine } from "./gated-engine.js";
@@ -302,19 +300,14 @@ describeEvm("the Pot's Router, and swaps a generation-3 Router pays", () => {
         functionName: "balanceOf",
       });
 
-    /** The route call `swap.swapSource` compiles to for a `synthra-v3` pool. */
+    /** The route call a program calling `@sauce/router`'s `uniswapV3` on the pool compiles to. */
     const swapCall = (at: Address): { to: Address; data: Hex } => {
-      const source = swapSource(
-        {
-          amountIn: AMOUNT_IN,
-          pool: at,
-          poolType: SwapPoolType.UniV3,
-          tokenIn: token0,
-          tokenOut: token1,
-          venue: "synthra-v3",
-        },
-        { routerGeneration: v12RouterGeneration() },
-      );
+      const source = [
+        'import { uniswapV3 } from "@sauce/router";',
+        "function main() {",
+        `  uniswapV3(${BigInt(at)}n, ${BigInt(token0)}n, ${BigInt(token1)}n, ${AMOUNT_IN}n, 0n, 0n, ctx.self());`,
+        "}",
+      ].join("\n");
       const { calls } = compileSauceRoute("base", source, { engine: sauce.engine, pot: sauce.pot });
 
       return { data: calls[0]!.data, to: sauce.pot };

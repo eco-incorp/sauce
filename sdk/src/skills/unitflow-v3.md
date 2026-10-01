@@ -60,5 +60,5 @@ function main(
 
 - Pools call back `unitFlowV3SwapCallback`, not `uniswapV3SwapCallback`, so a contract that swaps against a pool directly must implement the renamed callback
 - The GitHub README lists testnet addresses; these mainnet addresses are the defaults in UnitFlow's own app build
-- Through a Pot's Sauce Router instead of the protocol's own router: the pool dispatches as `swap.SwapPoolType.UniV3`, and only a generation-3 Router answers `unitFlowV3SwapCallback`. Name the pool with `venue: "unitflow-v3"` and pass the Pot's Router generation as `routerGeneration`; the swap builders refuse an older Router. A Pot for which `potRouterUpdate(client, pot)` returns nothing runs `v12RouterGeneration()`; otherwise its owner signs the update it returns
+- Through a Pot's Sauce Router instead of the protocol's own router: `@sauce/router`'s `uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient)` calls the Router's `swapV3`, and only a generation-3 Router answers `unitFlowV3SwapCallback`; on an older one the swap reverts. A Pot for which `potRouterUpdate(client, pot)` returns nothing runs the Kitchen's Router, generation `v12RouterGeneration()`; otherwise its owner signs the update it returns
 - Every Sauce Router swap is exact input: the Router caps what the callback may take at the exact input

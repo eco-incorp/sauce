@@ -196,10 +196,10 @@ For an ABI you already hold, raw compilation takes
 `contracts: { ERC20: { abi } }`, and adapts it. The two shapes are not interchangeable.
 
 Raw compilation serves nothing you do not. The route path serves the SDK's own files itself: the
-`@sauce/token` library, the ERC-20 and Sauce Router ABIs and every protocol ABI twin. For a raw
-compile that needs them, fall back to `resolveSdkModule` and `resolveSdkPackage` from
-`@eco-incorp/sauce/compiler` — the [compiler reference](../api/compiler.md#the-sdks-own-modules)
-shows how.
+`@sauce/token` and [`@sauce/router`](../api/router.md) libraries, the ERC-20 and Sauce Router ABIs
+and every protocol ABI twin. For a raw compile that needs them, fall back to `resolveSdkModule` and
+`resolveSdkPackage` from `@eco-incorp/sauce/compiler` — the
+[compiler reference](../api/compiler.md#the-sdks-own-modules) shows how.
 
 The filesystem resolver above is the one Node-only part of this page. In a browser, serve modules
 from memory.

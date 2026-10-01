@@ -177,7 +177,9 @@ function main(token: Address, spender: Address, amount: Uint256): void {
 ```
 
 A raw compile resolves `@sauce/token` by passing `resolveSdkPackage` and
-`resolveSdkModule` from `@eco-incorp/sauce/compiler`.
+`resolveSdkModule` from `@eco-incorp/sauce/compiler`. Swaps have a library of their
+own, [`@sauce/router`](../api/router.md): one function per venue, taking its pool and
+amount as run-time arguments, resolved the same way.
 
 The compiler's `ambient` option broadcasts a SauceScript module's exports without
 explicit imports. Its `defines` option injects scalar constants into every

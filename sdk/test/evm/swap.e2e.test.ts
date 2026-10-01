@@ -1,12 +1,12 @@
 /**
- * The swap builders' programs, EXECUTED through the released Router on a local anvil — the stack
+ * `@sauce/router`'s `uniswapV4`, EXECUTED through the released Router on a local anvil — the stack
  * deployed from creation code at its release addresses (`gated-engine.ts`), nothing forked.
  *
- * A Uniswap V4 leg reads a NEGATIVE `amountSpecified` as exact input. With `amountIn: "balance"` the
- * builder computes it at run time from the Pot's balance, and that negation has to be unary `-`
- * (two's-complement NEG): subtraction is checked unsigned, so the `0n - balance` this used to emit
- * reverted inside the engine for every non-zero balance and the swap never reached the Router.
- * Compiling that path proved nothing; this runs it.
+ * Uniswap V4 reads a NEGATIVE `amountSpecified` as exact input, so `uniswapV4` passes `-amountIn`,
+ * and with an amount only known at run time — the Pot's balance — that negation has to be unary `-`
+ * (two's-complement NEG): subtraction is checked unsigned, so `0n - balance` reverts inside the
+ * engine for every non-zero balance and the swap never reaches the Router. Compiling that path
+ * proves nothing; this runs it.
  *
  * The PoolManager is `fixtures/MockPoolManager.sol`: the slice of V4's PoolManager the Router's V4
  * path drives (`unlock`/`swap`/`take`/`sync`/`settle`) over one fixed-rate pool. It refuses anything
@@ -31,8 +31,6 @@ import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
-import { swapSource } from "../../src/swap/source.js";
-import { SwapPoolType, type SwapSourceSpec } from "../../src/swap/types.js";
 import { startGatedEngine } from "./gated-engine.js";
 import type { GatedEngine } from "./gated-engine.js";
 
@@ -121,27 +119,29 @@ let sauce: GatedEngine;
 let token0: Address;
 let token1: Address;
 
-/** A funded PoolManager for the token0/token1 pool, and the V4 spec that swaps through it. */
-const v4Leg = async (
-  amountIn: SwapSourceSpec["amountIn"],
-): Promise<{ manager: Address; spec: SwapSourceSpec }> => {
+/** A funded PoolManager for the token0/token1 pool. */
+const poolManager = async (): Promise<Address> => {
   const manager = await deploy(
     `${MOCK_POOL_MANAGER.creationCode}${encodeAbiParameters([{ type: "uint256" }], [RATE]).slice(2)}` as Hex,
   );
   await mint(token1, manager, 10n ** 24n);
 
-  return {
-    manager,
-    spec: {
-      amountIn,
-      pool: manager,
-      poolKey: { currency0: token0, currency1: token1, fee: 3000n, tickSpacing: 60n, hooks: 0n },
-      poolType: SwapPoolType.UniV4,
-      tokenIn: token0,
-      tokenOut: token1,
-    } as SwapSourceSpec,
-  };
+  return manager;
 };
+
+/**
+ * A program selling token0 for token1 at `manager`'s pool through `uniswapV4`, spending `amount` (a
+ * SauceScript expression), with `minOut` as its floor on what the PoolManager paid.
+ */
+const v4Program = (manager: Address, amount: string, minOut = 0n): string =>
+  [
+    'import { uniswapV4 } from "@sauce/router";',
+    'import { balanceOf } from "@sauce/token";',
+    "function main() {",
+    `  uniswapV4(${BigInt(manager)}n, ${BigInt(token0)}n, ${BigInt(token1)}n, ${amount}, ` +
+      `3000n, 60n, 0n, 0n, ${minOut}n, ctx.self());`,
+    "}",
+  ].join("\n");
 
 const cookCall = (source: string): Hex =>
   compileSauceRoute("base", source, { engine: sauce.engine, pot: sauce.pot }).calls[0]!.data;
@@ -153,7 +153,7 @@ const lastAmountSpecified = (manager: Address): Promise<bigint> =>
     functionName: "lastAmountSpecified",
   }) as Promise<bigint>;
 
-describeEvm("swap builders, executed through the released Router", () => {
+describeEvm("@sauce/router's uniswapV4, executed through the released Router", () => {
   beforeAll(async () => {
     anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
     await waitForRpc(Date.now() + 20_000);
@@ -175,13 +175,14 @@ describeEvm("swap builders, executed through the released Router", () => {
     }
   });
 
-  it("a UniV4 leg with amountIn 'balance' swaps the Pot's whole balance, exact input", async () => {
+  it("uniswapV4 with the Pot's balance as a run-time amount swaps all of it, exact input", async () => {
     const held = 12_345n;
     await mint(token0, sauce.pot, held);
-    const { manager, spec } = await v4Leg("balance");
+    const manager = await poolManager();
     const before = await balance(token1, sauce.pot);
+    const program = v4Program(manager, `balanceOf(${BigInt(token0)}n, ctx.self())`);
 
-    expect((await send(sauce.pot, cookCall(swapSource(spec)))).status).toBe("success");
+    expect((await send(sauce.pot, cookCall(program))).status).toBe("success");
     // The Router handed V4 the negated balance: exact input, the whole of it.
     expect(await lastAmountSpecified(manager)).toBe(-held);
     expect(await balance(token0, sauce.pot)).toBe(0n);
@@ -189,25 +190,45 @@ describeEvm("swap builders, executed through the released Router", () => {
     expect(await balance(token1, sauce.pot)).toBe(before + (held * RATE) / 10n ** 18n);
   });
 
-  it("the '0n - balance' spelling it replaces reverts before the Router is reached", async () => {
+  it("the '0n - balance' spelling reverts before the Router is reached", async () => {
     await mint(token0, sauce.pot, 777n);
-    const { manager, spec } = await v4Leg("balance");
-    const source = swapSource(spec);
-    const replaced = source.replace(
-      /amountSpecified: -\((IERC20\.at\([^)]*\)\.balanceOf\(ctx\.self\(\)\))\),/,
-      "amountSpecified: (0n - ($1)),",
-    );
-    expect(replaced).not.toBe(source);
+    const manager = await poolManager();
+    // The Router's swapV4 called by hand, the amount negated by subtraction.
+    const subtracted = [
+      'import { ISauceRouter } from "./artifacts/ISauceRouter.json";',
+      'import { balanceOf } from "@sauce/token";',
+      "function main() {",
+      `  const amount = balanceOf(${BigInt(token0)}n, ctx.self());`,
+      `  ISauceRouter.at(ctx.self()).swapV4(${BigInt(manager)}n, ` +
+        `{ currency0: ${BigInt(token0)}n, currency1: ${BigInt(token1)}n, fee: 3000n, tickSpacing: 60n, hooks: 0n }, ` +
+        "true, 0n - amount, 0n, ctx.self(), ctx.self());",
+      "}",
+    ].join("\n");
 
-    expect((await send(sauce.pot, cookCall(replaced))).status).toBe("reverted");
+    expect((await send(sauce.pot, cookCall(subtracted))).status).toBe("reverted");
     expect(await lastAmountSpecified(manager)).toBe(0n);
     expect(await balance(token0, sauce.pot)).toBe(777n);
   });
 
-  it("a UniV4 leg with a literal amount passes V4 the negative exact input", async () => {
-    const { manager, spec } = await v4Leg(500n);
-    expect((await send(sauce.pot, cookCall(swapSource(spec)))).status).toBe("success");
+  it("uniswapV4 with a literal amount passes V4 the negative exact input, and returns the output", async () => {
+    await mint(token0, sauce.pot, 500n);
+    const manager = await poolManager();
+    const out = (500n * RATE) / 10n ** 18n;
+    expect((await send(sauce.pot, cookCall(v4Program(manager, "500n", out)))).status).toBe(
+      "success",
+    );
     expect(await lastAmountSpecified(manager)).toBe(-500n);
     expect(await balance(token0, manager)).toBe(500n);
+  });
+
+  it("uniswapV4's floor is what the PoolManager paid: one above it reverts the cook", async () => {
+    await mint(token0, sauce.pot, 500n);
+    const held = await balance(token0, sauce.pot);
+    const manager = await poolManager();
+    const out = (500n * RATE) / 10n ** 18n;
+    expect((await send(sauce.pot, cookCall(v4Program(manager, "500n", out + 1n)))).status).toBe(
+      "reverted",
+    );
+    expect(await balance(token0, sauce.pot)).toBe(held);
   });
 });
