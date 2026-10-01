@@ -297,9 +297,22 @@ export function parseDefinesFile(text: string, file: string): Record<string, Def
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new UsageError(`--defines ${file}: expected one JSON object of NAME to value`);
   }
+
+  return parseDefineMap(parsed as Record<string, unknown>, `--defines ${file}`);
+}
+
+/**
+ * Defines given as one object of NAME to value, each value as `--defines` takes it: a string in
+ * `--define`'s syntax, a non-negative safe-integer number, or a boolean. `where` names where they
+ * were given, for the errors.
+ */
+export function parseDefineMap(
+  entries: Readonly<Record<string, unknown>>,
+  where: string,
+): Record<string, DefineValue> {
   const defines: Record<string, DefineValue> = {};
-  for (const [name, raw] of Object.entries(parsed)) {
-    defines[defineName(name, `--defines ${file}`)] = defineValue(raw, `--defines ${file}: ${name}`);
+  for (const [name, raw] of Object.entries(entries)) {
+    defines[defineName(name, where)] = defineValue(raw, `${where}: ${name}`);
   }
 
   return defines;

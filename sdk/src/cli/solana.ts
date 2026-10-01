@@ -459,6 +459,11 @@ const saltBytes = (salt: Hex): Uint8Array => hexToBytes(salt);
 const potOf = async (target: SvmTarget): Promise<Address> =>
   (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).address;
 
+/** Whether the Kitchen has created `target`'s Pot on the cluster `rpcUrl` serves. */
+export async function svmPotExists(target: SvmTarget, rpcUrl: string): Promise<boolean> {
+  return exists(createSolanaRpc(rpcUrl), rpcUrl, await potOf(target), "the Pot");
+}
+
 /** The `sauce pot` that creates `target`'s Pot. */
 const createHint = (target: SvmTarget): string =>
   `sauce pot --deploy --chain solana --keypair <the owner's keypair>${target.flag === undefined ? "" : ` ${target.flag}`}`;
