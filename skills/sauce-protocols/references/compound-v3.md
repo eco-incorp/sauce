@@ -2,6 +2,37 @@
 
 Single-asset lending protocol (Comet) with isolated markets per base asset. Each market has one borrowable asset and multiple collateral assets.
 
+## When to use it
+
+- Each market (a Comet) has one base asset you can supply for interest or borrow, and a list of
+  collateral assets you supply to borrow it. The namespace names each Comet by its base asset
+  (`CometUSDC`, `CometWETH`).
+- Choose it when you only need to borrow the base asset; for several borrowable assets against
+  shared collateral, Aave V3.
+
+## Pitfalls for a program
+
+- Approve the Comet before `supply`.
+- Supplying the base asset while you have a borrow repays the borrow first.
+- Withdrawing more base asset than you supplied **borrows** the rest, if your collateral allows:
+  check `balanceOf` and `borrowBalanceOf` before and after.
+- Collateral earns no interest, and each collateral asset has a supply cap.
+- `balanceOf` is the base supply with interest: it grows on its own.
+
+## In a Sauce program
+
+Supply the Pot's USDC to the USDC market and check it was credited:
+
+```sauce chain=base,arbitrum
+function main(amount: Uint256) {
+  const self = ctx.self();
+  const before = CompoundV3.CometUSDC.balanceOf(self);
+  USDC.approve(CompoundV3.CometUSDC, amount);
+  CompoundV3.CometUSDC.supply(USDC, amount);
+  require(CompoundV3.CometUSDC.balanceOf(self) > before, "supply not credited");
+}
+```
+
 ## Category
 
 lending | Chains and addresses: [registry/compound-v3.md](registry/compound-v3.md)

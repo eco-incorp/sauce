@@ -10,7 +10,7 @@ Circle's Cross-Chain Transfer Protocol (v2) — permissionless native USDC bridg
 | Family | none |
 | Namespace | `Cctp` on ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
 | Chains | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
-| Document | none |
+| Document | [cctp.md](../cctp.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 

@@ -4,6 +4,36 @@
 
 Yield trading protocol that tokenizes future yield. Split yield-bearing assets into principal tokens (PT) and yield tokens (YT) for trading. PT = discounted principal (fixed yield), YT = future variable yield.
 
+## When to use it
+
+- Splits a yield-bearing asset into PT (the principal, redeemable for the underlying at the
+  market's expiry: a fixed yield) and YT (the yield until then), each traded in a market per
+  expiry.
+- Choose PT to lock a fixed yield to a date, YT to speculate on the yield.
+
+## Pitfalls for a program
+
+- Each market has an expiry: PT trades below the underlying before it, and redeems at it.
+- Router calls take approximation and routing structs that Pendle's own API usually builds:
+  take that calldata as `main`'s input, approve the input, forward it, and check the PT you
+  got as a delta.
+- PT and YT are separate tokens per market: name the right one.
+
+## In a Sauce program
+
+Buy PT with calldata from Pendle's API, checked by the PT received:
+
+```sauce chain=arbitrum,ethereum
+function main(tokenIn: Address, amountIn: Uint256, pt: Address, minPtOut: Uint256, call: bytes) {
+  const self = ctx.self();
+  const before = Token(pt).balanceOf(self);
+  Token(tokenIn).approve(Pendle.Router, amountIn);
+  evm.call(Pendle.Router, 0n, call);
+  const out = Token(pt).balanceOf(self) - before;
+  require(out >= minPtOut, "below minPtOut");
+}
+```
+
 ## Category
 
 yield | Chains and addresses: [registry/pendle.md](registry/pendle.md)

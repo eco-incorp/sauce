@@ -4,6 +4,36 @@
 
 Leading DEX aggregator that finds optimal swap routes across multiple liquidity sources. Supports limit orders and Fusion mode for gasless swaps.
 
+## When to use it
+
+- An aggregator: its router fills a swap across many venues along a route its off-chain API
+  quotes. Use it for a route the program does not want to choose itself.
+
+## Pitfalls for a program
+
+- The calldata is quoted for one sender, amount and moment: quote it for the Pot (the swap's
+  sender) and send it soon.
+- Approve the router for exactly `amountIn`, and clear the allowance after.
+- The calldata's own minimum is not yours: check the output as a balance delta against your
+  `minOut`.
+
+## In a Sauce program
+
+Forward a 1inch quote for the Pot, checked by the WETH received:
+
+```sauce chain=base,arbitrum
+function main(amountIn: Uint256, minOut: Uint256, call: bytes, recipient: Address) {
+  const self = ctx.self();
+  const before = WETH.balanceOf(self);
+  USDC.approve(Oneinch.AggregationRouterV6, amountIn);
+  evm.call(Oneinch.AggregationRouterV6, 0n, call);
+  const out = WETH.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  USDC.approve(Oneinch.AggregationRouterV6, 0n);
+  WETH.transfer(recipient, out);
+}
+```
+
 ## Category
 
 aggregator | Chains and addresses: [registry/oneinch.md](registry/oneinch.md)

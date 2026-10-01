@@ -2,6 +2,39 @@
 
 Non-custodial liquidity protocol for earning interest on deposits and borrowing assets. The most widely deployed lending protocol in DeFi.
 
+## When to use it
+
+- Earn interest on an asset the market lists, or borrow one against everything you supplied in
+  that market. One Pool per market holds every reserve.
+- Choose it over Compound V3 when you need to borrow more than one asset against shared
+  collateral, and over Morpho Blue when you want one shared market rather than isolated ones.
+
+## Pitfalls for a program
+
+- `supply` pulls the asset with `transferFrom`: approve the Pool for exactly the amount first.
+- The aToken minted to `onBehalfOf` is rebasing: its balance grows with interest, so measure it
+  as a delta, not as the amount supplied.
+- A reserve can be frozen, paused or at its supply cap, and then `supply` reverts.
+- Borrowing needs collateral and keeps the position's health factor (from
+  `getUserAccountData`, scaled by 1e18) above 1; below it, anyone may liquidate.
+- `withdraw` with `~0n` withdraws everything; it reverts if that would leave a borrow
+  undercollateralized.
+- `flashLoanSimple` calls back a receiver contract, which a Sauce program cannot be.
+
+## In a Sauce program
+
+Supply the Pot's USDC and check the position now has collateral:
+
+```sauce chain=base,arbitrum
+function main(amount: Uint256) {
+  const self = ctx.self();
+  USDC.approve(AaveV3.Pool, amount);
+  AaveV3.Pool.supply(USDC, amount, self, 0n);
+  const account = AaveV3.Pool.getUserAccountData(self);
+  require(account.totalCollateralBase > 0n, "nothing supplied");
+}
+```
+
 ## Category
 
 lending | Chains and addresses: [registry/aave-v3.md](registry/aave-v3.md)

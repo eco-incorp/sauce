@@ -153,7 +153,7 @@ program on another chain, not only move a token, open a Sauce intent (`sauce-int
 | [Across](across.md) ([registry](registry/across.md)) | — | — | ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll |
 | [Arbitrum Native Bridge](arbitrum-bridge.md) ([registry](registry/arbitrum-bridge.md)) | — | — | ethereum, arbitrum |
 | [Base Native Bridge](base-bridge.md) ([registry](registry/base-bridge.md)) | — | — | ethereum, base |
-| CCTP ([registry](registry/cctp.md)) | — | `Cctp`: ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
+| [CCTP](cctp.md) ([registry](registry/cctp.md)) | — | `Cctp`: ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
 | [Celer Network](celer.md) ([registry](registry/celer.md)) | — | — | ethereum, optimism, bsc, polygon, arbitrum, avalanche |
 | [Connext (Everclear)](connext.md) ([registry](registry/connext.md)) | — | — | ethereum, optimism, base, arbitrum |
 | [deBridge](debridge.md) ([registry](registry/debridge.md)) | — | — | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |

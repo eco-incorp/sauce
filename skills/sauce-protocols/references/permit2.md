@@ -2,6 +2,43 @@
 
 Universal token approval infrastructure by Uniswap. Provides a single approval contract for all DeFi protocols, improving security and UX.
 
+## When to use it
+
+- Uniswap's token-approval contract at one address on every chain it is on. A signature transfer
+  (`permitTransferFrom`) moves a user's tokens with a one-time signed permit; an allowance
+  transfer (`approve` with an expiry, then `transferFrom`) works like an expiring ERC-20
+  allowance.
+- `sauce run --fund` pulls with Permit2 by default: the owner signs, the Pot receives.
+
+## Pitfalls for a program
+
+- The user approves Permit2 itself once per token, by an ordinary ERC-20 `approve`.
+- A signed permit names the spender (the contract calling Permit2: the Pot), the amount, a
+  nonce and a deadline; nonces are unordered bits, each usable once.
+- Allowance amounts are `uint160` and expiries `uint48`.
+
+## In a Sauce program
+
+Pull a user's tokens into the Pot with their signed permit:
+
+```sauce chain=base,arbitrum
+function main(
+  owner: Address,
+  token: Address,
+  amount: Uint256,
+  nonce: Uint256,
+  deadline: Uint256,
+  signature: bytes
+) {
+  const self = ctx.self();
+  const permit = { permitted: { token: token, amount: amount }, nonce: nonce, deadline: deadline };
+  const details = { to: self, requestedAmount: amount };
+  const before = Token(token).balanceOf(self);
+  Permit2.Permit2.permitTransferFrom(permit, details, owner, signature);
+  require(Token(token).balanceOf(self) - before == amount, "the permit moved another amount");
+}
+```
+
 ## Category
 
 infrastructure | Chains and addresses: [registry/permit2.md](registry/permit2.md)

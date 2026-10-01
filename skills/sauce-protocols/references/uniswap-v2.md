@@ -4,6 +4,38 @@
 
 Constant product AMM (x*y=k) with permissionless pair creation. The most forked DEX protocol in DeFi, deployed across 9 chains with identical interfaces.
 
+## When to use it
+
+- Constant-product pairs, one per token pair, with a 0.3% fee. Simple and everywhere, but with
+  more price impact than a V3 pool for the same trade.
+- The pair fills in full or reverts, so its Router, with an exact approval and `amountOutMin`,
+  strands nothing. The Sauce Router's unified `swap` also serves V2 pairs.
+
+## Pitfalls for a program
+
+- `amountOutMin` is the only bound: there is no price limit.
+- Approve the Router for exactly `amountIn`, and give a `deadline` (`ctx.timestamp()` is this
+  block).
+- A fee-on-transfer token needs the `...SupportingFeeOnTransferTokens` variants, which the
+  registry ABI does not declare.
+- The pair must exist: `Factory.getPair` returns `0` where it does not.
+
+## In a Sauce program
+
+Sell the Pot's USDC for WETH through the Router:
+
+```sauce chain=base,arbitrum
+function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
+  const self = ctx.self();
+  const before = WETH.balanceOf(self);
+  USDC.approve(UniswapV2.Router, amountIn);
+  UniswapV2.Router.swapExactTokensForTokens(amountIn, minOut, [USDC, WETH], self, ctx.timestamp());
+  const out = WETH.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  WETH.transfer(recipient, out);
+}
+```
+
 ## Category
 
 dex | Chains and addresses: [registry/uniswap-v2.md](registry/uniswap-v2.md)

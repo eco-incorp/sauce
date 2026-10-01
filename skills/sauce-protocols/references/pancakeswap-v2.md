@@ -4,6 +4,32 @@
 
 The most popular DEX on BNB Chain using the constant product AMM model (x*y=k). Forked from Uniswap V2 with additional features like yield farming and lottery. Expanded to 6 chains.
 
+## When to use it
+
+- A Uniswap V2 fork with a 0.25% fee, deepest on BNB Chain; the same Router interface.
+
+## Pitfalls for a program
+
+- As Uniswap V2: `amountOutMin` is the only bound, approve exactly `amountIn`, pass a deadline.
+- The 0.25% fee differs from Uniswap V2's 0.3%: quote with this protocol's Router
+  (`getAmountsOut`), not Uniswap's formula.
+
+## In a Sauce program
+
+Sell the Pot's USDC for WETH through the Router:
+
+```sauce chain=base,arbitrum
+function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
+  const self = ctx.self();
+  const before = WETH.balanceOf(self);
+  USDC.approve(PancakeswapV2.Router, amountIn);
+  PancakeswapV2.Router.swapExactTokensForTokens(amountIn, minOut, [USDC, WETH], self, ctx.timestamp());
+  const out = WETH.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  WETH.transfer(recipient, out);
+}
+```
+
 ## Category
 
 dex | Chains and addresses: [registry/pancakeswap-v2.md](registry/pancakeswap-v2.md)

@@ -4,6 +4,37 @@
 
 The central trading and liquidity marketplace on Base. Fork of Velodrome with ve(3,3) tokenomics, the largest DEX on Base by TVL ($1B+). Supports both stable and volatile pool types.
 
+## When to use it
+
+- Solidly-style pools on Base, two per pair: **volatile** (constant product) and **stable** (a
+  curve for assets meant to trade near 1:1). Its concentrated-liquidity pools are Aerodrome
+  Slipstream (`aerodrome-slipstream`).
+
+## Pitfalls for a program
+
+- Pick the pool type: `getPool(a, b, stable)` and each route's `stable` flag must agree.
+- Each route names the factory (`Aerodrome.PoolFactory`).
+- `amountOutMin` is the only bound; approve exactly `amountIn` and pass a deadline.
+- Fees are set per pool by the factory, not fixed by the pool type.
+
+## In a Sauce program
+
+Sell the Pot's USDC for WETH on the volatile pool:
+
+```sauce chain=base
+function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
+  const self = ctx.self();
+  require(Aerodrome.PoolFactory.getPool(USDC, WETH, false) != 0n, "no volatile USDC/WETH pool");
+  const routes = [{ from: USDC, to: WETH, stable: false, factory: Aerodrome.PoolFactory }];
+  const before = WETH.balanceOf(self);
+  USDC.approve(Aerodrome.Router, amountIn);
+  Aerodrome.Router.swapExactTokensForTokens(amountIn, minOut, routes, self, ctx.timestamp());
+  const out = WETH.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  WETH.transfer(recipient, out);
+}
+```
+
 ## Category
 
 dex | Chains and addresses: [registry/aerodrome.md](registry/aerodrome.md)

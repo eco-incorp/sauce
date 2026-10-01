@@ -4,6 +4,54 @@
 
 Singleton AMM with hooks architecture enabling custom pool logic, flash accounting, and native ETH support. All pools share a single PoolManager contract for gas savings on multi-hop swaps.
 
+## When to use it
+
+- Every pool lives in one PoolManager, keyed by `(currency0, currency1, fee, tickSpacing,
+hooks)`. A pool can attach a hook contract that runs around swaps and liquidity changes, and a
+  currency of `0x0` is the native coin.
+- A Sauce program swaps through the Sauce Router's `swapV4`, with a price limit; no
+  UniversalRouter commands are needed.
+
+## Pitfalls for a program
+
+- Exact input is a **negative** `amountSpecified` (`-amount`), the reverse of V3's pool.
+- A hook can change a pool's behaviour and fee: use hookless keys (`hooks: 0n`) unless you have
+  reviewed the hook.
+- A protocol fee can apply on top of the LP fee; both are in the pool's state
+  (`sauce-distributed-swap` reads them).
+- Anyone can initialize a key: a pool can exist with no liquidity at a stale price. Read its
+  liquidity before trusting its price.
+- A native-coin pool (`currency0` of `0x0`) is a different pair from the WETH pools.
+
+## In a Sauce program
+
+One guarded swap on the hookless 0.05% WETH/USDC pool:
+
+```sauce chain=base,arbitrum
+import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+
+function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
+  const self = ctx.self();
+  const zeroForOne = WETH < USDC;
+  const key = {
+    currency0: zeroForOne ? WETH : USDC,
+    currency1: zeroForOne ? USDC : WETH,
+    fee: 500n,
+    tickSpacing: 10n,
+    hooks: 0n
+  };
+  const before = USDC.balanceOf(self);
+  ISauceRouter.at(self).swapV4(UniswapV4.PoolManager, key, zeroForOne, -amountIn, sqrtPriceLimitX96, self, self);
+  const out = USDC.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  USDC.transfer(recipient, out);
+  const unspent = WETH.balanceOf(self);
+  if (unspent > 0n) {
+    WETH.transfer(recipient, unspent);
+  }
+}
+```
+
 ## Category
 
 dex | Chains and addresses: [registry/uniswap-v4.md](registry/uniswap-v4.md)

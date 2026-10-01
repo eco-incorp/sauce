@@ -2,6 +2,30 @@
 
 Legacy version of Aave lending protocol. Still holds significant TVL on Ethereum, Polygon, and Avalanche.
 
+## When to use it
+
+- The previous Aave generation, where a chain still runs its market. Where a chain has both,
+  Aave V3 is the current market (`aave-v3`).
+
+## Pitfalls for a program
+
+- The supply call is `deposit`, not `supply`; approve the LendingPool first.
+- aTokens are rebasing: measure balances as deltas.
+- A frozen reserve refuses new deposits: check the reserve accepts them before relying on it.
+- Borrowing and liquidation work as in Aave V3, by health factor.
+
+## In a Sauce program
+
+Deposit the Pot's USDC:
+
+```sauce chain=ethereum
+function main(amount: Uint256) {
+  const self = ctx.self();
+  USDC.approve(AaveV2.LendingPool, amount);
+  AaveV2.LendingPool.deposit(USDC, amount, self, 0n);
+}
+```
+
 ## Category
 
 lending | Chains and addresses: [registry/aave-v2.md](registry/aave-v2.md)

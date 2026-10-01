@@ -2,6 +2,39 @@
 
 Minimal and gas-efficient lending primitive with permissionless market creation. Markets are defined by a unique (loanToken, collateralToken, oracle, IRM, LLTV) tuple.
 
+## When to use it
+
+- Isolated markets: each pairs one loan asset with one collateral, its own oracle, interest
+  rate model and liquidation LTV (`lltv`), named by those five `MarketParams`. One market's bad
+  debt does not reach another.
+- Choose it to lend or borrow in a specific pair with a specific oracle, or to build on a market
+  someone created; for shared liquidity across many assets, Aave V3.
+
+## Pitfalls for a program
+
+- A market exists only for exactly the `MarketParams` it was created with: pass all five.
+- Give exactly one of `assets` and `shares`, the other `0n`.
+- Vet the market's oracle: it alone decides liquidations there.
+- `supplyCollateral` earns nothing; only `supply` of the loan asset earns interest.
+- Approve Morpho for the amount; `data` is empty bytes unless you want its callback, which a
+  Sauce program cannot receive.
+
+## In a Sauce program
+
+Supply the loan asset to a market given as `main`'s input:
+
+```sauce chain=base,ethereum
+function main(
+  market: { loanToken: Address, collateralToken: Address, oracle: Address, irm: Address, lltv: Uint256 },
+  assets: Uint256
+) {
+  const self = ctx.self();
+  Token(market.loanToken).approve(MorphoBlue.Morpho, assets);
+  const empty = hex``;
+  MorphoBlue.Morpho.supply(market, assets, 0n, self, empty);
+}
+```
+
 ## Category
 
 lending | Chains and addresses: [registry/morpho-blue.md](registry/morpho-blue.md)

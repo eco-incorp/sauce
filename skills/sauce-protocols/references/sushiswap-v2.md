@@ -4,6 +4,31 @@
 
 Community-driven fork of Uniswap V2 with additional yield farming features and multi-chain deployment. Identical AMM interface to Uniswap V2 (x*y=k constant product) with broader L2 and alt-chain coverage.
 
+## When to use it
+
+- A Uniswap V2 fork: constant-product pairs, 0.3% fee, the same Router interface. Use it where
+  its pair is deeper than Uniswap V2's on the chain.
+
+## Pitfalls for a program
+
+- As Uniswap V2: `amountOutMin` is the only bound, approve exactly `amountIn`, pass a deadline.
+
+## In a Sauce program
+
+Sell the Pot's USDC for WETH through the Router:
+
+```sauce chain=arbitrum
+function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
+  const self = ctx.self();
+  const before = WETH.balanceOf(self);
+  USDC.approve(SushiswapV2.Router, amountIn);
+  SushiswapV2.Router.swapExactTokensForTokens(amountIn, minOut, [USDC, WETH], self, ctx.timestamp());
+  const out = WETH.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  WETH.transfer(recipient, out);
+}
+```
+
 ## Category
 
 dex | Chains and addresses: [registry/sushiswap-v2.md](registry/sushiswap-v2.md)

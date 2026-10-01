@@ -4,6 +4,45 @@
 
 Concentrated liquidity AMM allowing LPs to allocate capital within custom price ranges for higher capital efficiency. Supports multiple fee tiers per pair and NFT-based liquidity positions.
 
+## When to use it
+
+- Concentrated-liquidity pools in fee tiers of 0.01%, 0.05%, 0.3% and 1% (`100n`, `500n`,
+  `3000n`, `10000n`): usually the deepest pools for liquid pairs.
+- A Sauce program swaps a pool through the Sauce Router's `swapV3`, with a price limit; the
+  Factory finds the pool, the position manager manages liquidity positions.
+
+## Pitfalls for a program
+
+- A pool pays out first and then calls back for its input: only the Sauce Router can pay that
+  callback from a program, so do not call `pool.swap` yourself.
+- Each fee tier is a separate pool, with its own price and depth.
+- The price limit bounds the pool's price, not the price paid: the fee comes on top
+  (`sauce-swaps`).
+- Uniswap's own SwapRouter takes a `deadline` in its params; SwapRouter02 does not.
+
+## In a Sauce program
+
+One guarded swap on the 0.05% WETH/USDC pool:
+
+```sauce chain=base,arbitrum
+import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+
+function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
+  const self = ctx.self();
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
+  require(pool != 0n, "no WETH/USDC pool at 0.05%");
+  const before = USDC.balanceOf(self);
+  ISauceRouter.at(self).swapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, self, self);
+  const out = USDC.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  USDC.transfer(recipient, out);
+  const unspent = WETH.balanceOf(self);
+  if (unspent > 0n) {
+    WETH.transfer(recipient, unspent);
+  }
+}
+```
+
 ## Category
 
 dex | Chains and addresses: [registry/uniswap-v3.md](registry/uniswap-v3.md)
