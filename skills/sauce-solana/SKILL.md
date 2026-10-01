@@ -8,8 +8,10 @@ description: Writing and running Sauce programs on Solana (the SVM target) — d
 A Solana program must declare every account it touches before it runs. In SauceScript those are
 `Account` parameters of `main`; the compile returns them, in order and with their roles, as the
 **account manifest**, and each is attached by name when the program runs. A program for Solana is
-compiled with `--chain solana`. Its signatures are annotated, and the EVM registry names (`USDC`,
-protocol namespaces) do not exist there; the `@sauce/token` functions do, with no import.
+compiled with `--chain solana`. Its signatures are annotated. Protocol namespaces and the token
+methods (`USDC.transfer(...)`) do not exist there; the `@sauce/token` functions do, with no import,
+and a registered token symbol (`USDC`, `USDT`, `WSOL`) is its mint's 32-byte key, a value they take:
+`balanceOf(USDC, account)`. `sauce globals --chain solana` lists the mints, and devnet's.
 
 ```sauce chain=solana define=MINT
 function main(
@@ -49,7 +51,8 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 - `svm.sload(account, offset, length)` reads bytes; `.toLe()`/`.toBe()` make a number.
   `svm.call(program, [accounts...], data)` is a CPI to an attached program account.
 - Scalar parameters are runtime arguments (`--args`); `Account` parameters are not encoded. A
-  32-byte key the program needs as a value, such as a mint, is a define: `--define MINT=<hex>`.
+  32-byte key the program needs as a value, such as a mint, is a define: `--define MINT=<hex>`. A
+  define also overrides a registered symbol, which is how a devnet program names devnet's USDC.
 - On Solana `ctx.self()` is the executing Sauce program's id, `ctx.msgSender()` the transaction's
   first signer, and `ctx.balance(acct.address)` an attached account's lamports. `ctx.msgValue`,
   `ctx.gasLeft`, `ctx.codeSize` and the other EVM reads are rejected; move lamports with a
