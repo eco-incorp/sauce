@@ -56,8 +56,15 @@ export {
 export {
   makeContractCall,
   type ContractCall,
+  type ContractCallBase,
   type EncodeOptions,
+  type ReadActions,
+  type ReadResult,
   type SauceScriptOptions,
+  type SimulateOptions,
+  type SimulateResult,
+  type WriteActions,
+  type WriteOptions,
 } from "./call.js";
 export type {
   ContractNameOf,

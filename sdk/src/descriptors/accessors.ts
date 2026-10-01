@@ -59,12 +59,12 @@ export type FunctionNameOf<
   M extends AbiStateMutability = AbiStateMutability,
 > = Extract<TAbi[number], { readonly type: "function"; readonly stateMutability: M }>["name"];
 
-/** One ABI method: takes the ABI's arguments, typed from the ABI, and returns the call. */
+/** One ABI method: takes the ABI's arguments and returns the call, typed from the ABI. */
 export type ContractMethod<TAbi extends Abi, TName extends ContractFunctionName<TAbi>> = <
   const TArgs extends ContractFunctionArgs<TAbi, AbiStateMutability, TName> & readonly unknown[],
 >(
   ...args: TArgs
-) => ContractCall;
+) => ContractCall<TAbi, TName, TArgs>;
 
 /** Every function of `TAbi`, by its ABI name. An untyped ABI has an index of `unknown` instead. */
 export type ContractMethods<TAbi extends Abi> = Abi extends TAbi
