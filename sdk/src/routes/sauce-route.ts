@@ -31,6 +31,7 @@ import {
 } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
+import { assertKnownGlobals } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
@@ -440,6 +441,15 @@ export function compileScopedRoute(
     }
     source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
   }
+
+  // A token or protocol name the chain does not have, reported as one rather than left for the
+  // compiler to fail on as a call it cannot lower. After the token pass, whose symbols are defines
+  // by now; before the protocol pass, which resolves or refuses every namespace it knows.
+  assertKnownGlobals(source, chain, {
+    defines: Object.keys(defines ?? {}),
+    contracts: Object.keys(contracts ?? {}),
+    tokens: tokenMap.keys(),
+  });
 
   if (options.accessors !== false) {
     const accessorOpts: ProtocolRewriteOptions =

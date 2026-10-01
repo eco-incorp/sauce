@@ -201,13 +201,13 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     expect(bytecode).not.toEqual(libraryProgram(`${USDC}n`, "transfer", `${TO}, 5n`));
   });
 
-  it("an unregistered chain (no registry rows, no tokenDefines) leaves a bare USDC untouched -- the base compiler's own error", () => {
+  it("an unregistered chain (no registry rows, no tokenDefines) leaves a bare USDC untouched, and the compile names it", () => {
     // The point is that the rewrite declines and the compile FAILS CLOSED rather than emitting a
-    // program with an unbound symbol. The compiler reports a member call on an undeclared name as an
-    // un-lowerable call expression rather than naming the identifier, so match either shape.
+    // program with an unbound symbol -- and says which name the chain does not have, rather than
+    // leaving the compiler to report an un-lowerable call expression.
     expect(() =>
       compileSauceRoute("ronin", `USDC.transfer(${TO}, 5n);`, { pot: POT, engine: ENGINE }),
-    ).toThrow(/`USDC` is not a declared variable|cannot be lowered to IR yet/);
+    ).toThrow("`USDC` is not a token or protocol on ronin");
   });
 });
 
