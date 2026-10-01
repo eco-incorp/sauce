@@ -4,9 +4,14 @@ Omnichain lending protocol on Arbitrum. Aave V2 fork with cross-chain lending ca
 
 ## Category
 
-lending | Chains: Arbitrum (42161)
+lending | Chains and addresses: [registry/radiant.md](registry/radiant.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### deposit
 
@@ -90,20 +95,11 @@ function main(
 - `rateMode`: Must match existing debt type (1 = stable, 2 = variable)
 - Requires ERC-20 approval to the LendingPool
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract    | Address                                      |
-| -------- | ----------- | -------------------------------------------- |
-| Arbitrum | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` |
-
-## ABI Reference
-
-### RadiantLendingPoolABI
-
-- `deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)` - Deposit asset to earn interest
-- `withdraw(address asset, uint256 amount, address to) returns (uint256)` - Withdraw deposited asset
-- `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)` - Borrow against collateral
-- `repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) returns (uint256)` - Repay borrowed debt
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/radiant.md](registry/radiant.md).
 
 ## Notes
 

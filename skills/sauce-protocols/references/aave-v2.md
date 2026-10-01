@@ -2,11 +2,40 @@
 
 Legacy version of Aave lending protocol. Still holds significant TVL on Ethereum, Polygon, and Avalanche.
 
+## When to use it
+
+- The previous Aave generation, where a chain still runs its market. Where a chain has both,
+  Aave V3 is the current market (`aave-v3`).
+
+## Pitfalls for a program
+
+- The supply call is `deposit`, not `supply`; approve the LendingPool first.
+- aTokens are rebasing: measure balances as deltas.
+- A frozen reserve refuses new deposits: check the reserve accepts them before relying on it.
+- Borrowing and liquidation work as in Aave V3, by health factor.
+
+## In a Sauce program
+
+Deposit the Pot's USDC:
+
+```sauce chain=ethereum
+function main(amount: Uint256) {
+  const self = ctx.self();
+  USDC.approve(AaveV2.LendingPool, amount);
+  AaveV2.LendingPool.deposit(USDC, amount, self, 0n);
+}
+```
+
 ## Category
 
-lending | Chains: Ethereum (1), Polygon (137), Avalanche (43114)
+lending | Chains and addresses: [registry/aave-v2.md](registry/aave-v2.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### deposit
 
@@ -98,22 +127,11 @@ function main(
 - Requires ERC-20 approval to the LendingPool
 - Returns the actual repaid amount
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain     | Contract    | Address                                      |
-| --------- | ----------- | -------------------------------------------- |
-| Ethereum  | lendingPool | `0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9` |
-| Polygon   | lendingPool | `0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf` |
-| Avalanche | lendingPool | `0x4F01AeD16D97E3aB5ab2B501154DC9bb0F1A5A2C` |
-
-## ABI Reference
-
-### LendingPoolABI
-
-- `deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)` - Deposit asset into pool
-- `withdraw(address asset, uint256 amount, address to) returns (uint256)` - Withdraw asset from pool
-- `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)` - Borrow asset
-- `repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) returns (uint256)` - Repay borrowed asset
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/aave-v2.md](registry/aave-v2.md).
 
 ## Notes
 

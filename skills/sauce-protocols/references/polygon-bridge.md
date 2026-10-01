@@ -4,9 +4,14 @@ Official Polygon PoS bridge via RootChainManager. Supports ETH, ERC-20, ERC-721,
 
 ## Category
 
-native L2 bridge | Direction: L1 to L2 (Ethereum to Polygon) | Chains: Ethereum (1), Polygon (137)
+native L2 bridge | Direction: L1 to L2 (Ethereum to Polygon) | Chains and addresses: [registry/polygon-bridge.md](registry/polygon-bridge.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### depositETH
 
@@ -50,22 +55,11 @@ function main(
 - `depositData`: ABI-encoded amount as bytes. Encode via `abi.encode(uint256 amount)`
 - Requires ERC-20 approval to the **ERC20Predicate** contract (NOT the RootChainManager)
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract          | Address                                      |
-| -------- | ----------------- | -------------------------------------------- |
-| Ethereum | rootChainManager  | `0xA0c68C638235ee32657e8f720a23ceC1bFc77C77` |
-| Ethereum | erc20Predicate    | `0x40ec5B33f54e0E8A33A975908C5BA1c14e5BbbDf` |
-| Ethereum | etherPredicate    | `0x8484Ef722627bf18ca5Ae6BcF031c23E6e922B30` |
-| Polygon  | childChainManager | `0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa` |
-
-## ABI Reference
-
-### PolygonRootChainManagerABI
-
-- `depositEtherFor(address user)` [payable] - Deposit ETH to Polygon for a specified user. Received as WETH
-- `depositFor(address user, address rootToken, bytes depositData)` - Deposit ERC-20 tokens to Polygon. `depositData` = ABI-encoded amount
-- `exit(bytes inputData)` - Process a withdrawal on L1 using a burn proof from Polygon (checkpoint-based)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/polygon-bridge.md](registry/polygon-bridge.md).
 
 ## Notes
 

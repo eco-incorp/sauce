@@ -4,7 +4,7 @@ Decentralized, non-custodial liquid restaking protocol. Stake ETH to receive eET
 
 ## Category
 
-restaking | Chains: Ethereum
+restaking | Chains and addresses: [registry/etherfi.md](registry/etherfi.md)
 
 ## Key Operations
 
@@ -12,19 +12,12 @@ restaking | Chains: Ethereum
 - **wrap**: Wrap eETH into weETH (non-rebasing)
 - **unwrap**: Unwrap weETH back to eETH
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  wrap,
-  unwrap,
-} from "@eco-incorp/sauce/protocols/etherfi";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit ETH for eETH
@@ -49,32 +42,11 @@ function main(weethAddress: Address, amount: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract      | Address                                      |
-| -------- | ------------- | -------------------------------------------- |
-| Ethereum | eETH          | `0x35fA164735182de50811E8e2E824cFb9B6118ac2` |
-| Ethereum | weETH         | `0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee` |
-| Ethereum | liquidityPool | `0x308861A430be4cce5502d0A12724771Fc6DaF216` |
-
-## ABI Methods
-
-### LiquidityPoolABI
-
-- `deposit()` - Stake ETH (payable), receive eETH. Returns shares minted
-
-### WeETHABI
-
-- `wrap(uint256)` - Wrap eETH amount into weETH. Requires eETH approval
-- `unwrap(uint256)` - Unwrap weETH back to eETH
-- `getEETHByWeETH(uint256)` - Preview eETH for weETH amount
-- `getWeETHByeETH(uint256)` - Preview weETH for eETH amount (note the lower-case `e`)
-- `balanceOf(address)` - Query weETH balance
-
-### EETHABI
-
-- `balanceOf(address)` - Query eETH balance
-- `approve(address,uint256)` - Approve eETH spending
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/etherfi.md](registry/etherfi.md).
 
 ## Notes
 

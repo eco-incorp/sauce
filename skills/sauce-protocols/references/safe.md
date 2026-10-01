@@ -4,20 +4,19 @@ The most trusted multi-signature smart contract wallet, securing billions in dig
 
 ## Category
 
-infrastructure | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, Arc
+infrastructure | Chains and addresses: [registry/safe.md](registry/safe.md)
 
 ## Key Operations
 
 - **getThreshold**: Query the signing threshold of a Safe multisig
 - **execTransaction**: Execute a transaction with collected signatures
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, getThreshold } from "@eco-incorp/sauce/protocols/safe";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Get Safe threshold
@@ -28,24 +27,11 @@ function main(safeAddress: Address): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract   | Address                                      |
-| -------- | ---------- | -------------------------------------------- |
-| Ethereum | safeV141   | `0x41675C099F32341bf84BFc5382aF534df5C7461a` |
-| Ethereum | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` |
-| Arbitrum | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` |
-| Optimism | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` |
-| Base     | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` |
-| Polygon  | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` |
-
-## ABI Methods
-
-### SafeABI
-
-- `execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes)` - Execute signed transaction. Payable. Params: to (target), value (ETH), data (calldata), operation (0=call, 1=delegatecall), safeTxGas, baseGas, gasPrice, gasToken (address(0) for ETH), refundReceiver, signatures (packed owner signatures). Returns success bool
-- `getOwners()` - List all Safe owners. Returns address[] of current owners
-- `getThreshold()` - Get signing threshold. Returns uint256 (M in M-of-N)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/safe.md](registry/safe.md).
 
 ## Notes
 

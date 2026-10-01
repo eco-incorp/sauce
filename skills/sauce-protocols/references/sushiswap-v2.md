@@ -1,10 +1,37 @@
 # SushiSwap V2
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Community-driven fork of Uniswap V2 with additional yield farming features and multi-chain deployment. Identical AMM interface to Uniswap V2 (x*y=k constant product) with broader L2 and alt-chain coverage.
+
+## When to use it
+
+- A Uniswap V2 fork: constant-product pairs, 0.3% fee, the same Router interface. Use it where
+  its pair is deeper than Uniswap V2's on the chain.
+
+## Pitfalls for a program
+
+- As Uniswap V2: `amountOutMin` is the only bound, approve exactly `amountIn`, pass a deadline.
+
+## In a Sauce program
+
+Sell the Pot's USDC for WETH through the Router:
+
+```sauce chain=arbitrum
+function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
+  const self = ctx.self();
+  const before = WETH.balanceOf(self);
+  USDC.approve(SushiswapV2.Router, amountIn);
+  SushiswapV2.Router.swapExactTokensForTokens(amountIn, minOut, [USDC, WETH], self, ctx.timestamp());
+  const out = WETH.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  WETH.transfer(recipient, out);
+}
+```
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Polygon, BSC, Avalanche, Fantom, Optimism
+dex | Chains and addresses: [registry/sushiswap-v2.md](registry/sushiswap-v2.md)
 
 ## Key Operations
 
@@ -12,19 +39,12 @@ dex | Chains: Ethereum, Arbitrum, Polygon, BSC, Avalanche, Fantom, Optimism
 - **addLiquidity**: Deposit two tokens to mint SLP (SushiSwap LP) tokens
 - **removeLiquidity**: Burn SLP tokens to withdraw underlying tokens
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swap,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/sushiswap-v2";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -113,39 +133,11 @@ function main(
 - `liquidity`: Amount of SLP tokens to burn
 - SLP token must be approved to the router
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract | Address                                      |
-| --------- | -------- | -------------------------------------------- |
-| Ethereum  | Factory  | `0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac` |
-| Ethereum  | Router   | `0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F` |
-| Arbitrum  | Factory  | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` |
-| Arbitrum  | Router   | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` |
-| Polygon   | Factory  | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` |
-| Polygon   | Router   | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` |
-| BSC       | Factory  | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` |
-| BSC       | Router   | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` |
-| Avalanche | Factory  | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` |
-| Avalanche | Router   | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` |
-| Fantom    | Factory  | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` |
-| Fantom    | Router   | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` |
-| Optimism  | Factory  | `0xFbc12984689e5f15626Bad03Ad60160Fe98B303C` |
-| Optimism  | Router   | `0x2ABf469074dc0b54d793850807E6eb5Faf2625b1` |
-
-## ABI Methods
-
-### SushiSwapV2RouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) -> uint256[] amounts` - Swap exact input along path, returns amounts at each hop
-- `swapTokensForExactTokens(uint256 amountOut, uint256 amountInMax, address[] path, address to, uint256 deadline) -> uint256[] amounts` - Swap to get exact output amount
-- `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity and mint SLP tokens
-- `removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB)` - Burn SLP tokens for underlying tokens
-- `getAmountsOut(uint256 amountIn, address[] path) -> uint256[] amounts` - Quote output amounts along path (view)
-
-### SushiSwapV2FactoryABI
-
-- `getPair(address tokenA, address tokenB) -> address pair` - Look up pair address (view)
-- `createPair(address tokenA, address tokenB) -> address pair` - Create a new pair
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/sushiswap-v2.md](registry/sushiswap-v2.md).
 
 ## Notes
 

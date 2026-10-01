@@ -1,22 +1,23 @@
 # KyberSwap
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Multi-chain DEX with concentrated liquidity protocol (KyberSwap Elastic) and a meta-aggregation router that routes across multiple DEXes for best execution. Features dynamic fees and anti-sniping protection.
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Optimism, Polygon, BSC, Avalanche, Base, Arc
+dex | Chains and addresses: [registry/kyberswap.md](registry/kyberswap.md)
 
 ## Key Operations
 
 - **swap**: Exact input single swap via Elastic Router (concentrated liquidity)
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/kyberswap";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -52,42 +53,13 @@ function main(
 - `amountIn`: Exact input amount (in wei)
 - `amountOutMin`: Minimum output for slippage protection (named `minAmountOut` not `amountOutMinimum`)
 - `recipient`: Address to receive output tokens
-- `limitSqrtP`: Price limit (set to `0` for no limit; named `limitSqrtP` not `sqrtPriceLimitX96`)
+- `limitSqrtP`: Price limit (`0` is no limit, which leaves `amountOutMin` as the only bound; named `limitSqrtP` not `sqrtPriceLimitX96`)
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract           | Address                                      |
-| --------- | ------------------ | -------------------------------------------- |
-| Ethereum  | Elastic Factory    | `0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A` |
-| Ethereum  | Elastic Router     | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` |
-| Ethereum  | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-| Arbitrum  | Elastic Factory    | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` |
-| Arbitrum  | Elastic Router     | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` |
-| Arbitrum  | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-| Optimism  | Elastic Factory    | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` |
-| Optimism  | Elastic Router     | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` |
-| Optimism  | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-| Polygon   | Elastic Factory    | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` |
-| Polygon   | Elastic Router     | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` |
-| Polygon   | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-| BSC       | Elastic Factory    | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` |
-| BSC       | Elastic Router     | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` |
-| BSC       | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-| Avalanche | Elastic Factory    | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` |
-| Avalanche | Elastic Router     | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` |
-| Avalanche | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-| Base      | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-| Arc       | Meta Agg Router V2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-
-## ABI Methods
-
-### KyberSwapElasticRouterABI
-
-- `swapExactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 minAmountOut, uint160 limitSqrtP)) -> uint256 amountOut` - Single-hop exact input swap via Elastic pools
-
-### KyberSwapMetaAggregationRouterABI
-
-- `swap(tuple(address callTarget, address approveTarget, bytes targetData, tuple(address srcToken, address dstToken, address[] srcReceivers, uint256[] srcAmounts, address[] feeReceivers, uint256[] feeAmounts, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags, bytes permit) desc, bytes clientData)) -> (uint256 returnAmount, uint256 gasUsed)` - Execute a swap via the meta-aggregation router (routes across multiple DEXes for best price). The execution struct comes from the KyberSwap API
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/kyberswap.md](registry/kyberswap.md).
 
 ## Notes
 

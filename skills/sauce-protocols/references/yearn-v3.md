@@ -4,7 +4,7 @@ Yield aggregator protocol. V3 vaults follow the ERC-4626 standard for automated 
 
 ## Category
 
-yield | Chains: Ethereum
+yield | Chains and addresses: [registry/yearn-v3.md](registry/yearn-v3.md)
 
 ## Key Operations
 
@@ -12,19 +12,12 @@ yield | Chains: Ethereum
 - **withdraw**: Withdraw assets by specifying asset amount
 - **redeem**: Withdraw by specifying share amount
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  withdraw,
-  redeem,
-} from "@eco-incorp/sauce/protocols/yearn-v3";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit into Yearn V3 vault
@@ -49,25 +42,11 @@ function main(vaultAddress: Address, shares: Uint256, receiver: Address, owner: 
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract     | Address                                      |
-| -------- | ------------ | -------------------------------------------- |
-| Ethereum | vaultFactory | `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F` |
-
-## ABI Methods
-
-### YearnV3VaultABI (ERC-4626)
-
-- `deposit(uint256,address)` - Deposit assets, receive shares. Returns shares minted
-- `withdraw(uint256,address,address)` - Withdraw by asset amount. Params: assets, receiver, owner
-- `redeem(uint256,address,address)` - Redeem by share amount. Returns assets
-- `convertToShares(uint256)` - Preview shares for asset amount
-- `convertToAssets(uint256)` - Preview assets for share amount
-- `totalAssets()` - Total assets managed by vault
-- `pricePerShare()` - Current share price (Yearn-specific, equivalent to convertToAssets(1e18))
-- `balanceOf(address)` - Query vault share balance
-- `approve(address,uint256)` - Approve share spending
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/yearn-v3.md](registry/yearn-v3.md).
 
 ## Notes
 
