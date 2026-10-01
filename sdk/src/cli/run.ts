@@ -268,17 +268,18 @@ const SALT: FlagSpecs = {
 };
 
 const COOK: FlagSpecs = {
-  pot: { type: "string", value: "<address>", help: "The Pot to cook on" },
   owner: {
     type: "string",
     value: "<address>",
-    help: "…or its owner, deriving the Pot (default salt 0)",
+    help: "The Pot's owner, which derives the Pot with the salt (default 0)",
   },
+  pot: { type: "string", value: "<address>", help: "Or the Pot itself, by address", only: "evm" },
   ...SALT,
   value: {
     type: "string",
     value: "<wei>",
     help: "Kitchen fee plus native spent (default: read the fee)",
+    only: "evm",
   },
   "args-json": {
     type: "string",
@@ -289,7 +290,8 @@ const COOK: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=<address>",
-    help: "Solana: an account main takes, by name (an address, pot or owner)",
+    help: "An account main takes, by name: an address, pot or owner",
+    only: "svm",
   },
 };
 
@@ -303,21 +305,29 @@ const ENDPOINT: FlagSpecs = {
 };
 
 const SIGNER: FlagSpecs = {
-  keystore: { type: "string", value: "<path>", help: "Sign with a JSON keystore (v3)" },
+  keystore: {
+    type: "string",
+    value: "<path>",
+    help: "Sign with a JSON keystore (v3)",
+    only: "evm",
+  },
   "password-file": {
     type: "string",
     value: "<path>",
     help: "Its password, read from a file (else asked for)",
+    only: "evm",
   },
   "private-key": {
     type: "string",
     value: "<hex>",
     help: "Or sign with a raw key (lands in shell history)",
+    only: "evm",
   },
   keypair: {
     type: "string",
     value: "<path>",
-    help: "Solana: sign with a keypair file (a JSON array of 64 bytes)",
+    help: "Sign with a keypair file (a JSON array of 64 bytes)",
+    only: "svm",
   },
 };
 
@@ -327,13 +337,19 @@ const FUND: FlagSpecs = {
     multiple: true,
     value: "<TOKEN:amount>",
     help: "Pull tokens into the Pot in the cook: USDC:1.5, USDC:1500000n, ETH:0.01",
+    only: "evm",
   },
   "fund-mode": {
     type: "string",
     value: "<mode>",
     help: "permit2 (default), permit, allowance or transfer",
+    only: "evm",
   },
-  sweep: { type: "boolean", help: "Return what is left of each funded token afterwards" },
+  sweep: {
+    type: "boolean",
+    help: "Return what is left of each funded token afterwards",
+    only: "evm",
+  },
 };
 
 /** Never parsed as a flag: everything after it is main's arguments (see `runCli`). */
@@ -804,7 +820,8 @@ const potChain = (args: ParsedArgs): CanonicalChain =>
 // ---------------------------------------------------------------------------------------------
 
 interface Command {
-  readonly usage: string;
+  /** One line, or one per kind of chain where they take different flags. */
+  readonly usage: string | readonly string[];
   readonly summary: string;
   readonly flags: FlagSpecs;
   readonly details: string;
@@ -854,8 +871,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   simulate: {
-    usage:
-      "sauce simulate <file> --chain <slug|id> (--pot <address> | --owner <address>) --rpc-url <url> [options]",
+    usage: [
+      "sauce simulate <file> --chain <slug|id> (--owner <address> | --pot <address>) --rpc-url <url> [options]",
+      "sauce simulate <file> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
+    ],
     summary: "Rehearse the cook from the Pot's owner, with no key: what it did, or why it reverts",
     flags: {
       ...PROGRAM,
@@ -866,6 +885,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         multiple: true,
         value: "<TOKEN:amount>",
         help: "Give the Pot this balance, for the rehearsal only: USDC:2, ETH:0.1",
+        only: "evm",
       },
       ...FUND,
       keystore: SIGNER.keystore!,
@@ -900,9 +920,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "is reported, not made. With no key the pulls cannot be signed, so the Pot is credited what",
       "they would bring, by state override, and --sweep still runs.",
       "",
-      "On Solana: the Kitchen cook, simulated from --owner (no signature needed), with each",
-      "account main takes given as --account NAME=<address | pot | owner>. Prints the compute",
-      "units, or the reason and the program logs.",
+      "On Solana: the Kitchen cook, simulated from --owner with signatures unchecked, with each",
+      "account main takes given as --account NAME=<address | pot | owner> and an Address",
+      "argument as a base58 public key. A Pot the Kitchen has not created is created first, in the",
+      "same transaction. Prints the compute units, or the reason (a program's revert message",
+      "decoded) and the program logs. Solana's simulateTransaction takes no account overrides, so",
+      "the owner must hold the Pot's rent and the fees, and --assume-balance is refused there. A",
+      "cook too large for one transaction is refused with the bytes to shrink: staging it writes",
+      "a code buffer on chain, which only `sauce run` does.",
       "",
       "Examples:",
       "  sauce simulate pay.sauce.ts --chain base --owner 0x… --rpc-url <url> \\",
@@ -952,8 +977,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   run: {
-    usage:
+    usage: [
       "sauce run <file> --chain <slug|id> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
+      "sauce run <file> --chain solana --rpc-url <url> --keypair <path> [--account NAME=<value>]… [options]",
+    ],
     summary: "Compile, sign, send and wait for the cook on your Pot",
     flags: {
       ...PROGRAM,
@@ -1117,7 +1144,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   tx: {
-    usage: "sauce tx <file> --chain <slug|id> (--pot <address> | --owner <address>) [options]",
+    usage: [
+      "sauce tx <file> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
+      "sauce tx <file> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
+    ],
     summary: "Print the unsigned cook transaction, for a wallet to sign",
     flags: { ...PROGRAM, ...COOK, ...ENDPOINT, ...FORMAT, ...HELP, ...ARGS },
     details: [
@@ -1550,15 +1580,30 @@ function render(command: Command, output: CommandOutput, args: ParsedArgs): stri
     : output.text;
 }
 
+/** The flags of `command` that `only` names (`undefined`: those every chain takes). */
+const flagsFor = (command: Command, only?: "evm" | "svm"): FlagSpecs =>
+  Object.fromEntries(Object.entries(command.flags).filter(([, spec]) => spec.only === only));
+
 function commandHelp(command: Command): string {
+  const usage = typeof command.usage === "string" ? [command.usage] : command.usage;
+  const sections = (
+    [
+      ["Options:", undefined],
+      ["EVM chains only:", "evm"],
+      ["Solana only:", "svm"],
+    ] as const
+  ).flatMap(([heading, only]) => {
+    const flags = flagsFor(command, only);
+
+    return Object.keys(flags).length === 0 ? [] : [heading, describeFlags(flags), ""];
+  });
+
   return [
     `${command.summary}.`,
     "",
-    `Usage: ${command.usage}`,
+    `Usage: ${usage.join("\n       ")}`,
     "",
-    "Options:",
-    describeFlags(command.flags),
-    "",
+    ...sections,
     command.details,
     "",
   ].join("\n");

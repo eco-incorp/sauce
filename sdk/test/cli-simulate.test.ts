@@ -340,4 +340,26 @@ describe("sauce simulate --assume-balance, offline", () => {
     expect(run.code).toBe(2);
     expect(run.stderr).toContain("--assume-balance is for EVM chains");
   });
+
+  it("lists the flags one kind of chain takes under their own heading in --help", async () => {
+    let help = "";
+    const io: CliIo = {
+      ...nodeIo(),
+      stdout: (text) => void (help += text),
+      stderr: () => undefined,
+    };
+    expect(await runCli(["simulate", "--help"], io)).toBe(0);
+    const section = (heading: string): string =>
+      help.slice(help.indexOf(heading)).split("\n\n")[0]!;
+    expect(help).toContain(
+      "Usage: sauce simulate <file> --chain <slug|id> (--owner <address> | --pot <address>)",
+    );
+    expect(help).toContain("       sauce simulate <file> --chain solana --owner <pubkey>");
+    for (const flag of ["--pot", "--value", "--assume-balance", "--fund-mode", "--keystore"]) {
+      expect(section("EVM chains only:")).toContain(`${flag} `);
+      expect(section("Options:")).not.toContain(`${flag} `);
+    }
+    expect(section("Solana only:")).toContain("--account NAME=<address>");
+    expect(section("Options:")).toContain("--owner <address>");
+  });
 });
