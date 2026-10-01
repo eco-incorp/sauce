@@ -18,15 +18,23 @@
 //   2. every file reads the same for every agent and every release: no version numbers or release
 //      talk, no agent's name or install path, no engine internals (opcodes, mnemonics, stack
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
-//      the intents skill, no RPC endpoint, and no description of Sauce as a multicall; and every
-//      protocol document with a swap template opens with the one pointer to `sauce-swaps`;
+//      the intents skill, no RPC endpoint, no description of Sauce as a multicall, and nothing that
+//      tells the reader to copy, adapt or start from an example (the agent writes each program
+//      itself: COPY_FRAMING); and every protocol document with a swap template opens with the one
+//      pointer to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program and actions document names the chains it
-//      is checked on there;
-//   4. every program compiles through the `sauce` command on each chain its index row names, run
-//      exactly as its usage line says (defines, intent flags, `main`'s arguments), offline; every
-//      actions document (`.json`) names no chain and lowers through `sauce actions` on each chain
-//      its row names, with its cook built by `sauce tx`;
+//      is checked on there, one of them at least a chain the release supports;
+//   4. every program's header says how to run it: a usage line (`--chain <chain>`) whose `--args`
+//      are `main`'s parameters by name, `<name>` each, in order; a line per parameter
+//      (`//   name: Type  meaning and units`); and an example line on a supported chain with real
+//      values. The program compiles through the `sauce` command on each chain its index row names,
+//      run exactly as its usage line says (defines, intent flags, `main`'s arguments), and on its
+//      example's chain as the example says, offline; every actions document (`.json`) names no
+//      chain and lowers through `sauce actions` on each chain its row names; and the cook either
+//      builds through `sauce tx`, on a chain the release supports (`chainSupport`), or — on a
+//      preview chain — is refused, with that chain's chain-support request in the refusal, as the
+//      skills tell an agent it will be;
 //   5. every `sauce …` command line in a skill names a real command and only flags it takes;
 //   6. every ```sauce block compiles (```sauce chain=a,b through the command, ```sauce target=evm|svm
 //      raw) or, as ```sauce fails, does not; every ```json chain=a,b block is an actions document
@@ -108,6 +116,7 @@ const counts = {
   subpaths: 0,
   identifiers: 0,
   addresses: 0,
+  refusals: 0,
 };
 
 function walk(dir, predicate, out = []) {
@@ -142,6 +151,9 @@ const compilerApi = await load(`${PKG}/compiler`);
 const deploymentsApi = await load(`${PKG}/deployments`);
 const ecoRoutes = await load(`${PKG}/protocols/eco-routes`);
 const { runCli } = await import(pathToFileURL(join(SDK_DIR, "sdk/dist/cli/run.js")).href);
+// Which chains the command builds transactions on: the CLI's own policy, which the package exports
+// none of, read from the bin's module as `runCli` is.
+const support = await import(pathToFileURL(join(SDK_DIR, "sdk/dist/cli/support.js")).href);
 // TypeScript and Node's typings: the package's own TypeScript, and the first @types/node found
 // beside it, in the SDK workspace, or in the directory the check runs from.
 const ts = createRequire(join(SDK_DIR, "package.json"))("typescript");
@@ -461,6 +473,23 @@ const PLACEHOLDERS = [
 const RPC_HOST =
   /(alchemy|infura|quiknode|quicknode|helius|ankr|llamarpc|drpc|blastapi|chainstack|publicnode|getblock|tenderly|solana\.com|rpc\.|\.rpc|-rpc)/i;
 const NOT_PORTABLE = [[/(?:^|[\s`("'])(?:\/Users\/|\/home\/|~\/)/, "an absolute or home path"]];
+// The agent writes each program itself, in SauceScript, for the task as asked: a skill teaches the
+// language, the names and the patterns, and an example shows an idiom. Nothing tells the reader to
+// copy an example, adapt one, start from one or choose between them. (A protocol document's
+// SauceScript "templates" are a registry API, and the word alone is not this.)
+const COPY_FRAMING = [
+  /\bcopy (?:the closest|an? (?:example|program)|the example|this (?:example|program|file)|it)\b/i,
+  /\bstart(?:ing)? from (?:it|this|the (?:closest|example)|an? example|one of the examples)\b/i,
+  /\badapt(?:ing)? (?:it|this|the (?:closest|example|program)|an? (?:example|program))\b/i,
+  /\bstarting point to copy\b/i,
+  /\b(?:use|take) (?:it|this|one) as a template\b/i,
+];
+// Skills a change of their own rewrites, with the reason; an exemption no longer needed fails.
+const COPY_FRAMING_EXEMPT = {
+  "sauce-distributed-swap":
+    "its own change rewrites the skill and its example, and removes this exemption",
+};
+const copyFramingUsed = new Set();
 // Docs inside the installed package are not the skills': a skill carries every fact it needs in its
 // SKILL.md and references/, which install with it. Only the TypeScript skill points into the package.
 const PACKAGE_DOCS =
@@ -512,6 +541,7 @@ const REFERENCES = await skillsReferences(
     deployments: deploymentsApi,
     cctp: await load(`${PKG}/protocols/cctp`),
     compiler: compilerApi,
+    support,
     loadProtocol: (slug) => load(`${PKG}/protocols/${slug}`),
   },
   (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
@@ -565,6 +595,15 @@ function wording(skill, file) {
         fail(where(i), `looks like an RPC endpoint (${m[0]}); endpoints come from the developer`);
     }
     if (!handWritten(file)) return;
+    if (file.endsWith(".md") && COPY_FRAMING.some((pattern) => pattern.test(line))) {
+      if (Object.hasOwn(COPY_FRAMING_EXEMPT, skill.dir)) copyFramingUsed.add(skill.dir);
+      else
+        fail(
+          where(i),
+          "tells the reader to copy, adapt or start from an example; an example shows an idiom, " +
+            "and the agent writes the program the task needs",
+        );
+    }
     if (/multicall|magic header/i.test(line) && !/\b(never|not|don't|do not|isn't)\b/i.test(line))
       fail(where(i), "describes Sauce as a multicall or with a magic header");
     if (
@@ -587,6 +626,13 @@ for (const skill of skills) {
     counts.files++;
     wording(skill, file);
   }
+}
+for (const [dir, why] of Object.entries(COPY_FRAMING_EXEMPT)) {
+  if (skills.some((skill) => skill.dir === dir) && !copyFramingUsed.has(dir))
+    fail(
+      `check-skills.mjs COPY_FRAMING_EXEMPT`,
+      `exempts ${dir} (${why}), which no longer needs it: remove the exemption`,
+    );
 }
 
 // ---- 2b. A protocol document with a swap template leads a Sauce program to the Router --------------
@@ -684,6 +730,10 @@ if (index !== undefined) {
     if (entry.endsWith(".sauce.ts") || entry.endsWith(".json")) {
       const chains = [...m[3].matchAll(/`([\w-]+)`/g)].map((c) => c[1]);
       if (chains.length === 0) fail(rel(index.path), `gives ${entry} no chain to check it on`);
+      // Its cook is built where the release supports the chain: one of those at least, so the
+      // example's transaction is checked as well as its refusal.
+      else if (!chains.some((chain) => support.isSupportedChain(chain)))
+        fail(rel(index.path), `gives ${entry} no supported chain, where its cook would build`);
       programChains.set(entry, chains);
     }
   }
@@ -736,8 +786,62 @@ async function compileJson(file, chain, extra) {
   return { json: JSON.parse(run.stdout) };
 }
 
-/** Runs a program's usage line offline on `chain`: compiles it, and on an EVM chain builds the cook. */
-async function runUsage(where, file, argv, chain) {
+/**
+ * `sauce tx` with `argv` on `chain`, offline: on a chain the release supports it builds the cook; on
+ * a preview chain it is refused before anything is read, naming the chain as one and carrying its
+ * chain-support request (`chainSupportRequest`), which is what the skills say happens there.
+ */
+async function txOn(where, chain, argv) {
+  const tx = await sauce(argv);
+  if (support.chainSupport(chain) === "supported") {
+    if (tx.code !== 0) fail(where, `sauce tx on ${chain} fails: ${diagnostic(tx.stderr)}`);
+    else if (JSON.parse(tx.stdout).data === undefined)
+      fail(where, `sauce tx on ${chain} built no cook`);
+    return;
+  }
+  counts.refusals++;
+  const request = support.chainSupportRequest(chain).newIssueUrl;
+  if (
+    tx.code !== 1 ||
+    tx.stdout !== "" ||
+    !/is refused: it involves [^\n]*\ba preview chain\b/.test(tx.stderr) ||
+    !tx.stderr.includes(request)
+  )
+    fail(
+      where,
+      `sauce tx on ${chain}, a preview chain, is not refused with its chain-support request ` +
+        `(exit ${tx.code}): ${diagnostic(tx.stderr || tx.stdout)}`,
+    );
+}
+
+/** A program whose header predates the header rules, with the reason; an unneeded one fails. */
+const HEADER_EXEMPT = {
+  "sauce-distributed-swap/examples/distributed-swap.sauce.ts":
+    "its own change rewrites it with the header convention, and removes this exemption",
+};
+const headerExemptUsed = new Set();
+/** Fails each of `problems`, unless the program is exempt, which then counts as needed. */
+const headerProblems = (where, file, problems) => {
+  const entry = relative(SKILLS_DIR, file).split("\\").join("/");
+  if (problems.length === 0) return;
+  if (Object.hasOwn(HEADER_EXEMPT, entry)) headerExemptUsed.add(entry);
+  else for (const problem of problems) fail(where, problem);
+};
+
+/** The leading comment block of a program: its header. */
+const headerOf = (file) => {
+  const lines = read(file).split("\n");
+  const end = lines.findIndex((line) => !line.startsWith("//"));
+  return lines.slice(0, end < 0 ? lines.length : end);
+};
+
+/**
+ * Runs a program's command line offline on `chain`: compiles it, and on an EVM chain builds the
+ * cook (refused on a preview chain: `txOn`). `header` (once per program, on its usage line) also
+ * holds the header to `main`: the usage line's `--args` are `<name>` for each of its parameters,
+ * in order, and the header has a line per parameter, `//   name: Type …`.
+ */
+async function runUsage(where, file, argv, chain, header = false) {
   const [name, , ...rest] = argv;
   const at = rest.indexOf("--args");
   const options = at < 0 ? rest : rest.slice(0, at);
@@ -747,7 +851,12 @@ async function runUsage(where, file, argv, chain) {
   for (let i = 0; i < options.length; i++) {
     const flag = options[i];
     const value = options[i + 1];
-    if (flag === "--define" || /^--intent-/.test(flag) || flag === "--defines") {
+    if (flag === "--intent-execution-fee" && value === "auto") {
+      // `auto` reads the destination's Kitchen fee through --config; offline there is no endpoint,
+      // and the fee changes only the cook's value, so the run takes 0.
+      kept.push(flag, "0");
+      i++;
+    } else if (flag === "--define" || /^--intent-/.test(flag) || flag === "--defines") {
       kept.push(flag, fill(value));
       i++;
     } else if (flag === "--account") {
@@ -776,6 +885,24 @@ async function runUsage(where, file, argv, chain) {
     fail(where, `main takes ${entryParams.length} arguments, and the usage passes no --args`);
     return;
   }
+  if (header) {
+    const problems = [];
+    const names = entryParams.map((param) => `<${param.name}>`);
+    if ((args ?? []).join(" ") !== names.join(" "))
+      problems.push(
+        `its usage line passes --args ${(args ?? []).join(" ")}; it names main's parameters, in ` +
+          `order: --args ${names.join(" ")}`,
+      );
+    const lines = headerOf(file);
+    for (const param of entryParams) {
+      if (!lines.some((line) => new RegExp(`^//\\s+${param.name}: \\S`).test(line)))
+        problems.push(
+          `its header says nothing of \`${param.name}\`: give a line \`//   ${param.name}: ` +
+            `${param.type}  what it is, and its units\``,
+        );
+    }
+    headerProblems(where, file, problems);
+  }
   if (target === "svm") {
     const slots = (manifest?.accounts ?? []).filter((a) => a.kind === "slot").map((a) => a.name);
     if (["run", "simulate", "tx"].includes(name) && slots.join() !== accounts.join())
@@ -786,7 +913,7 @@ async function runUsage(where, file, argv, chain) {
   const values = (args ?? []).map((word, i) =>
     /<[^>]+>/.test(word) ? sample(entryParams[i].type) : word,
   );
-  const tx = await sauce([
+  await txOn(where, chain, [
     "tx",
     file,
     "--chain",
@@ -798,15 +925,13 @@ async function runUsage(where, file, argv, chain) {
     "0",
     ...(values.length === 0 ? [] : ["--args-json", JSON.stringify(values)]),
   ]);
-  if (tx.code !== 0) fail(where, `sauce tx on ${chain} fails: ${diagnostic(tx.stderr)}`);
-  else if (JSON.parse(tx.stdout).data === undefined)
-    fail(where, `sauce tx on ${chain} built no cook`);
 }
 
 /**
  * An actions document, lowered through `sauce actions` on each of `chains`, and its cook built by
  * `sauce tx` with `main`'s arguments (its `argument` actions) sampled — as the skill tells an agent
- * to run it. A document names no chain: `--chain` picks one.
+ * to run it, and refused on a preview chain (`txOn`). A document names no chain: `--chain` picks
+ * one.
  */
 async function runDocument(where, file, chains) {
   let document;
@@ -831,7 +956,7 @@ async function runDocument(where, file, chains) {
     counts.programRuns++;
     const { entryParams = [] } = JSON.parse(lowered.stdout);
     const args = entryParams.map((param) => sample(param.type));
-    const tx = await sauce([
+    await txOn(where, chain, [
       "tx",
       file,
       "--chain",
@@ -842,9 +967,6 @@ async function runDocument(where, file, chains) {
       "0",
       ...(args.length === 0 ? [] : ["--args-json", JSON.stringify(args)]),
     ]);
-    if (tx.code !== 0) fail(where, `sauce tx on ${chain} fails: ${diagnostic(tx.stderr)}`);
-    else if (JSON.parse(tx.stdout).data === undefined)
-      fail(where, `sauce tx on ${chain} built no cook`);
   }
 }
 
@@ -861,20 +983,40 @@ for (const skill of skills) {
       fail(where, "has no usage line: a `//   sauce <command> <this file> …` comment");
       continue;
     }
+    // The usage line takes `--chain <chain>`, and is run on every chain the index names; an
+    // example line names a supported chain, with real values, and is run there.
+    const usageLines = [];
+    const examples = [];
     for (const given of usage) {
       if (!checkCommand(where, given)) continue;
       const argv = joinVerb(given);
       if (argv[1] !== basename(file))
         fail(where, `its usage line runs ${argv[1]}, not ${basename(file)}`);
       const chainAt = argv.indexOf("--chain");
-      if (chainAt < 0 || argv[chainAt + 1] !== "<chain>")
-        fail(where, "its usage line takes the chain as `--chain <chain>`: a program names none");
+      const named = chainAt < 0 ? undefined : argv[chainAt + 1];
+      if (named === "<chain>") usageLines.push(argv);
+      else if (named !== undefined && support.isSupportedChain(named))
+        examples.push({ argv, chain: named });
+      else
+        fail(
+          where,
+          `its command line names --chain ${named ?? "nothing"}: the usage line takes ` +
+            "`--chain <chain>` (a program names none), and an example a supported chain",
+        );
     }
+    if (usageLines.length === 0)
+      fail(where, "has no usage line: `//   sauce <command> <this file> --chain <chain> …`");
+    if (examples.length === 0)
+      headerProblems(where, file, [
+        "has no example line: the command again, on a supported chain with real values " +
+          "(addresses the SDK records, the developer's own inputs as <placeholders>)",
+      ]);
     if (/^\s*\/\/\s*@(?:chain|target)\b/m.test(read(file)))
       fail(where, "names its chain in a header; a program takes it from --chain");
-    for (const chain of programChains.get(entry) ?? []) {
-      for (const argv of usage) await runUsage(where, file, joinVerb(argv), chain);
+    for (const [n, chain] of (programChains.get(entry) ?? []).entries()) {
+      for (const argv of usageLines) await runUsage(where, file, argv, chain, n === 0);
     }
+    for (const { argv, chain } of examples) await runUsage(where, file, argv, chain);
   }
   for (const file of skill.documents) {
     const entry = `${skill.dir}/examples/${basename(file)}`;
@@ -896,6 +1038,14 @@ for (const skill of skills) {
     ))
       checkCommand(rel(file), argv);
   }
+}
+
+for (const [entry, why] of Object.entries(HEADER_EXEMPT)) {
+  if (allExamples.has(entry) && !headerExemptUsed.has(entry))
+    fail(
+      "check-skills.mjs HEADER_EXEMPT",
+      `exempts ${entry} (${why}), whose header now follows the rules: remove the exemption`,
+    );
 }
 
 // ---- 6. SauceScript blocks ---------------------------------------------------------------------------
@@ -1381,7 +1531,8 @@ else {
 
 // ---- Report ----------------------------------------------------------------------------------------------
 const summary =
-  `${counts.skills} skills, ${counts.files} files read; ${counts.programRuns} program runs through sauce, ` +
+  `${counts.skills} skills, ${counts.files} files read; ${counts.programRuns} program runs through sauce ` +
+  `(${counts.refusals} cooks refused on preview chains), ` +
   `${counts.commands} sauce command lines checked; ${counts.sauce} sauce blocks compiled, ` +
   `${counts.sauceFails} refused as documented; ${counts.ts} ts blocks typechecked; ${counts.runners} runners ` +
   `executed offline; ${counts.indexed} indexed globals compiled on their chains; ${builtinExamples} ` +

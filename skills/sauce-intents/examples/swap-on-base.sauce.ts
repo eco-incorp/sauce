@@ -17,6 +17,30 @@
 //     --define MIN_AVG_PRICE=<price> --define RECIPIENT=<address> --define REFUND_TO=<address> \
 //     --intent-deadline <unix seconds> --intent-creator <address> \
 //     --intent-execution-fee <Base Kitchen fee in wei>
+//
+//   AMOUNT_IN: Uint256             Base WETH the solver delivers and the body sells, in its
+//                                  smallest units (18 decimals): 1000000000000000000 is 1 WETH
+//   REWARD: Uint256                the source chain's WETH the solver earns, in its smallest units:
+//                                  above AMOUNT_IN by the solver's margin
+//   SQRT_PRICE_LIMIT_X96: Uint256  Base's WETH/USDC pool price below which no pool sells (`sauce
+//                                  price --chain base 2500 USDC per WETH` gives it)
+//   MIN_OUT: Uint256               the least USDC out, in its smallest units (6 decimals):
+//                                  2490000000 is 2,490 USDC
+//   MIN_AVG_PRICE: Uint256         the least USDC per WETH sold, as USDC units per WETH unit times
+//                                  1e18: 2490000000 is 2,490 USDC per WETH
+//   RECIPIENT: Address             who receives the USDC on Base
+//   REFUND_TO: Address             who receives the unsold WETH on Base
+//   --intent-execution-fee: wei    Base's Kitchen fee for the body's cook; `auto` reads it through
+//                                  --config
+//
+// From Ethereum, selling 1 WETH on Base no lower than 2,500 USDC per WETH, for 1.002 WETH:
+//
+//   sauce run swap-on-base.sauce.ts --chain ethereum --config sauce.config.json \
+//     --keystore <keystore> --define AMOUNT_IN=1000000000000000000 \
+//     --define REWARD=1002000000000000000 --define SQRT_PRICE_LIMIT_X96=3961408125713216879677197 \
+//     --define MIN_OUT=2490000000 --define MIN_AVG_PRICE=2490000000 \
+//     --define RECIPIENT=<address> --define REFUND_TO=<address> \
+//     --intent-deadline <unix seconds> --intent-creator <address> --intent-execution-fee auto
 import { uniswapV3, uniswapV4 } from "@sauce/router";
 
 Base(

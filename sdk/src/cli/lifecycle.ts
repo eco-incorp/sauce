@@ -74,6 +74,7 @@ import { CliError, UsageError } from "./args.js";
 import { connect, kitchenFee, potState, type TxRequest } from "./chain.js";
 import { kitchenAddress } from "./commands.js";
 import { formatAmount, tokenInfo, type TokenInfo } from "./effects.js";
+import { requireSupported } from "./support.js";
 import {
   planSvmFill,
   readSvmDestination,
@@ -1042,6 +1043,7 @@ export async function buildFill(
   const intent = intentOf(record);
   const chains = new Chains(endpoints);
   const destination = requireChain(Number(intent.destination));
+  requireSupported("building a fill", [destination]);
   if (destination.kind === "svm") return buildSvmFill(intent, chains, options);
   const client = await chains.get(destination, "a fill");
   const plan = await planFill(client, intent, {
@@ -1548,6 +1550,10 @@ export async function buildProve(
   const chains = new Chains(endpoints);
   const destinationChain = requireChain(Number(intents[0]!.destination));
   const sourceChain = requireChain(Number(intents[0]!.sourceChainId));
+  requireSupported(
+    "building a proof",
+    intents.map((intent) => requireChain(Number(intent.destination))),
+  );
   for (const intent of intents) {
     if (
       intent.destination !== intents[0]!.destination ||
@@ -1713,6 +1719,10 @@ export async function buildClaim(
   if (records.length === 0) throw new UsageError("no intent to claim");
   const intents = records.map(intentOf);
   const sourceChain = requireChain(Number(intents[0]!.sourceChainId));
+  requireSupported(
+    "building a claim",
+    intents.map((intent) => requireChain(Number(intent.sourceChainId))),
+  );
   const portal = getAddress(records[0]!.source.portal);
   if (
     records.some(
@@ -1810,6 +1820,7 @@ export async function buildRefund(
 > {
   const intent = intentOf(record);
   const sourceChain = requireChain(Number(intent.sourceChainId));
+  requireSupported("building a refund", [sourceChain]);
   const chains = new Chains(endpoints);
   const client = await chains.get(sourceChain, "a refund");
   const portal = getAddress(record.source.portal);
@@ -1882,6 +1893,7 @@ export async function buildCancel(
   const intent = intentOf(record);
   const sourceChain = requireChain(Number(intent.sourceChainId));
   const destinationChain = requireChain(Number(intent.destination));
+  requireSupported("building a cancellation", [destinationChain]);
   const chains = new Chains(endpoints);
   if (destinationChain.kind === "svm") return buildSvmCancel(record, intent, chains, options);
   const destination = await chains.get(destinationChain, "a cancellation");

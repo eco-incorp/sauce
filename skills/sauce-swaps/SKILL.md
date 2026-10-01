@@ -184,6 +184,10 @@ npx sauce run swap-leg.sauce.ts --chain base --config sauce.config.json --keysto
   --fund WETH:0.5 --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
 ```
 
+A swap is sent on a chain the initial release supports, Ethereum or Base here; on a preview chain
+the leg compiles and simulates, and `sauce tx` and `sauce run` refuse it with the chain-support
+request for that chain (`sauce-chains`).
+
 For several venues under one price limit, use `sauce-distributed-swap`.
 
 ## Example

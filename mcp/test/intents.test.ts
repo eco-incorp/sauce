@@ -13,7 +13,7 @@ const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const TX = `0x${"ab".repeat(32)}`;
 
-/** Base USDC to RECIPIENT for Arbitrum USDC: an intent fixed when it is built. */
+/** Base USDC to RECIPIENT for Ethereum USDC: an intent fixed when it is built. */
 const PROGRAM = {
   source: [
     "Base(() => {",
@@ -21,7 +21,7 @@ const PROGRAM = {
     "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
     "",
   ].join("\n"),
-  chain: "arbitrum",
+  chain: "ethereum",
   defines: { RECIPIENT },
   intentDeadline: 2_000_000_000,
   intentCreator: OWNER,
@@ -50,7 +50,7 @@ after(() => mcp.close());
 describe("sauce_intent_publish", () => {
   it("returns each intent's record, the input every intent tool takes", () => {
     assert.equal(record.schema, "sauce.intent/1");
-    assert.deepEqual([record.source.chain, record.destination.chain], ["arbitrum", "base"]);
+    assert.deepEqual([record.source.chain, record.destination.chain], ["ethereum", "base"]);
     assert.match(record.intentHash, /^0x[0-9a-f]{64}$/);
   });
 });
@@ -60,7 +60,7 @@ describe("naming an intent", () => {
     for (const tool of ["sauce_intent_status", "sauce_intent_refund", "sauce_intent_cancel"]) {
       assert.match(failed(await mcp.call(tool, {})), /give intent .* or txHash with chain/);
       assert.match(
-        failed(await mcp.call(tool, { intent: record, txHash: TX, chain: "arbitrum" })),
+        failed(await mcp.call(tool, { intent: record, txHash: TX, chain: "ethereum" })),
         /not both/,
       );
     }
@@ -98,7 +98,7 @@ describe("naming an intent", () => {
     // As its JSON text, the same record: refused here only for want of an endpoint.
     assert.match(
       failed(await mcp.call("sauce_intent_refund", { intent: JSON.stringify(record) })),
-      /a refund needs arbitrum's endpoint \(chain id 42161\): pass rpcUrls \{ "arbitrum": "<url>" \}/,
+      /a refund needs ethereum's endpoint \(chain id 1\): pass rpcUrls \{ "ethereum": "<url>" \}/,
     );
   });
 });
@@ -108,21 +108,21 @@ describe("with no endpoint", () => {
     const expected: Array<[string, Record<string, unknown>, RegExp]> = [
       [
         "sauce_intent_import",
-        { txHash: TX, chain: "arbitrum" },
-        /Reading the transaction that published it needs an RPC endpoint for arbitrum .*Pass rpcUrl with the call/,
+        { txHash: TX, chain: "ethereum" },
+        /Reading the transaction that published it needs an RPC endpoint for ethereum .*Pass rpcUrl with the call/,
       ],
       [
         "sauce_intent_status",
         { intent: record },
-        /Reading where an intent stands needs an endpoint for arbitrum or base: pass rpcUrls/,
+        /Reading where an intent stands needs an endpoint for ethereum or base: pass rpcUrls/,
       ],
       [
         "sauce_intent_status",
-        { txHash: TX, chain: "arbitrum" },
-        /Reading the transaction that published it needs an RPC endpoint for arbitrum/,
+        { txHash: TX, chain: "ethereum" },
+        /Reading the transaction that published it needs an RPC endpoint for ethereum/,
       ],
-      ["sauce_intent_claim", { intent: [record, record] }, /a claim needs arbitrum's endpoint/],
-      ["sauce_intent_refund", { intent: record }, /a refund needs arbitrum's endpoint/],
+      ["sauce_intent_claim", { intent: [record, record] }, /a claim needs ethereum's endpoint/],
+      ["sauce_intent_refund", { intent: record }, /a refund needs ethereum's endpoint/],
       ["sauce_intent_prove", { intent: record }, /needs base's endpoint \(chain id 8453\)/],
       ["sauce_intent_cancel", { intent: record }, /needs base's endpoint \(chain id 8453\)/],
       [

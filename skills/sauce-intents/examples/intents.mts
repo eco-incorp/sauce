@@ -7,7 +7,7 @@
 // fee as its value. Pins the funding by transfer (fund-by-transfer.sauce.ts) and the Portal
 // reference (references/portal.md) to the registry's Portal ABI. Offline: nothing is sent.
 //
-//   node intents.mts --creator <address> --recipient <address> --arbitrum-fee <wei> --base-fee <wei>
+//   node intents.mts --creator <address> --recipient <address> --ethereum-fee <wei> --base-fee <wei>
 //
 // Each fee is that chain's Kitchen executionFee(), read there just before sending with
 // destinationExecutionFee(); it is compiled into the child's cook.
@@ -51,7 +51,7 @@ function check(condition: unknown, message: string): asserts condition {
 
 const creator = getAddress(flag("creator")); // may reclaim an unearned reward; never a Pot
 const recipient = BigInt(getAddress(flag("recipient")));
-const fee = { arbitrum: BigInt(flag("arbitrum-fee")), base: BigInt(flag("base-fee")) };
+const fee = { ethereum: BigInt(flag("ethereum-fee")), base: BigInt(flag("base-fee")) };
 const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // filled within the hour or not at all
 const feeRead = destinationExecutionFee(); // { to, data, decode }: eth_call it on each destination
 
@@ -87,7 +87,7 @@ function intentOf(program: ReturnType<typeof compileFor>) {
   };
 }
 
-// ---- cross-chain.sauce.ts: from Base, a program child on Arbitrum.
+// ---- cross-chain.sauce.ts: from Base, a program child on Ethereum.
 const forward = readFileSync(new URL("./cross-chain.sauce.ts", import.meta.url), "utf8");
 check(!/function main\b/.test(forward), "an intent file is top-level statements");
 let missingFee = "";
@@ -97,21 +97,21 @@ try {
   missingFee = (error as Error).message;
 }
 check(missingFee.includes("executionFee"), "a program child needs the destination's Kitchen fee");
-const forwarded = intentOf(compileFor("base", forward, { BENEFICIARY: recipient }, fee.arbitrum));
+const forwarded = intentOf(compileFor("base", forward, { BENEFICIARY: recipient }, fee.ethereum));
 check(
-  forwarded.delivered.join() === word(token("arbitrum", "USDC")),
-  "the solver delivers Arbitrum's USDC",
+  forwarded.delivered.join() === word(token("ethereum", "USDC")),
+  "the solver delivers Ethereum's USDC",
 );
-check(forwarded.calls.includes(word(contract("arbitrum", "AaveV3_Pool"))), "Arbitrum's Aave pool");
+check(forwarded.calls.includes(word(contract("ethereum", "AaveV3_Pool"))), "Ethereum's Aave pool");
 check(!forwarded.calls.includes(word(contract("base", "AaveV3_Pool"))), "and not Base's");
 check(forwarded.rewarded.join() === word(token("base", "USDC")), "the reward is Base's USDC");
 
-// ---- swap-on-base.sauce.ts: from Arbitrum, the distributed swap as a program child on Base.
+// ---- swap-on-base.sauce.ts: from Ethereum, the distributed swap as a program child on Base.
 const swap = readFileSync(new URL("./swap-on-base.sauce.ts", import.meta.url), "utf8");
 check(!/function main\b/.test(swap), "an intent file is top-level statements");
 const swapped = intentOf(
   compileFor(
-    "arbitrum",
+    "ethereum",
     swap,
     {
       AMOUNT_IN: 10n ** 18n,
@@ -134,7 +134,7 @@ for (const [what, value] of [
 ] as const) {
   check(swapped.calls.includes(word(value)), `the child uses ${what}`);
 }
-check(swapped.rewarded.join() === word(token("arbitrum", "WETH")), "the reward is Arbitrum's WETH");
+check(swapped.rewarded.join() === word(token("ethereum", "WETH")), "the reward is Ethereum's WETH");
 // The body swaps through @sauce/router and reads a pool's own state by selector, with
 // evm.static. These are the selectors sauce-intents tabulates.
 for (const [signature, selector] of [
@@ -155,25 +155,25 @@ check(
 
 // ---- A token-only child is plain route calls for the destination's Executor: no Pot, no fee.
 // Inside the body, and in the delivery, a token symbol is the destination's: `USDC` here is
-// Arbitrum's, while the one in `.reward(...)` is Base's, which the program escrows.
+// Ethereum's, while the one in `.reward(...)` is Base's, which the program escrows.
 const direct = intentOf(
   compileFor(
     "base",
-    "Arbitrum(() => { USDC.transfer(RECIPIENT, AMOUNT); }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });",
+    "Ethereum(() => { USDC.transfer(RECIPIENT, AMOUNT); }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });",
     { RECIPIENT: recipient, AMOUNT: 1_000_000n },
   ),
 );
-check(direct.calls.startsWith(word(token("arbitrum", "USDC"))), "Arbitrum's USDC, called directly");
+check(direct.calls.startsWith(word(token("ethereum", "USDC"))), "Ethereum's USDC, called directly");
 check(!direct.calls.includes(" "), "and nothing else: no cook");
 check(direct.rewarded.join() === word(token("base", "USDC")), "the reward is Base's USDC");
-check(contracts.on("arbitrum").AaveV3.Pool.available, "Arbitrum has AaveV3.Pool");
+check(contracts.on("ethereum").AaveV3.Pool.available, "Ethereum has AaveV3.Pool");
 
 // ---- Inside a body, a decoded result is read by position or destructured, as anywhere else.
 const decodeIn = (statement: string) =>
   `Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0n); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: 1n }] }).reward({ tokens: [{ token: WETH, amount: 1n }] });`;
 const refused = (source: string) => {
   try {
-    compileFor("arbitrum", source, { RECIPIENT: recipient }, fee.base);
+    compileFor("ethereum", source, { RECIPIENT: recipient }, fee.base);
     return "";
   } catch (error) {
     return (error as Error).message;
@@ -198,7 +198,7 @@ const swapDefines = {
   RECIPIENT: recipient,
   REFUND_TO: recipient,
 };
-const { intent } = compileFor("arbitrum", swap, swapDefines, fee.base).intents[0]!;
+const { intent } = compileFor("ethereum", swap, swapDefines, fee.base).intents[0]!;
 // The Kitchen fee is the route's native amount: the solver pays it, in Base's native coin, as the
 // value of fulfill. Nothing in the reward pays it back.
 check(intent.route.nativeAmount === fee.base, "route.nativeAmount is Base's Kitchen fee");
@@ -237,7 +237,7 @@ check(decoded.functionName === "fulfill" && decoded.args[0] === intentHash, "ful
 // every transaction (and any unsigned one printed earlier) after changing one.
 const rehashed = (deadlineShift: bigint, executionFee: bigint) =>
   routes.hashIntent(
-    routes.compileSauceProgram("arbitrum", swap, {
+    routes.compileSauceProgram("ethereum", swap, {
       defines: swapDefines,
       intents: { deadline: deadline + deadlineShift, creator, executionFee },
     }).intents[0]!.intent,
@@ -315,11 +315,11 @@ check(pinned >= 15, `the reference pins ${pinned} of the Portal's selectors and 
 // The one-pool swap body compiles as an intent to Base, with the delivery the solver brings.
 const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
 const onePool =
-  /```sauce chain=arbitrum define=AMOUNT_IN,REWARD,SQRT_PRICE_LIMIT_X96,MIN_OUT,RECIPIENT,REFUND_TO\n([\s\S]*?)```/.exec(
+  /```sauce chain=ethereum define=AMOUNT_IN,REWARD,SQRT_PRICE_LIMIT_X96,MIN_OUT,RECIPIENT,REFUND_TO\n([\s\S]*?)```/.exec(
     skill,
   );
 check(onePool !== null, "the skill gives the one-pool body");
-const onePoolIntent = routes.compileSauceProgram("arbitrum", onePool[1]!, {
+const onePoolIntent = routes.compileSauceProgram("ethereum", onePool[1]!, {
   defines: { ...swapDefines, MIN_OUT: 1n },
   intents: { deadline, creator, executionFee: fee.base },
 }).intents[0]!.intent;
@@ -333,11 +333,11 @@ console.log(
     `the WETH, then fulfill ${intentHash.slice(0, 10)}… with value ${fulfill.value}`,
 );
 console.log(
-  `cross-chain.sauce.ts on Base -> Arbitrum Portal ${ecoRoutesPortal("arbitrum")}, ` +
-    `prover ${ecoRoutesProver("base", "arbitrum")}`,
+  `cross-chain.sauce.ts on Base -> Ethereum Portal ${ecoRoutesPortal("ethereum")}, ` +
+    `prover ${ecoRoutesProver("base", "ethereum")}`,
 );
 console.log(
-  `swap-on-base.sauce.ts on Arbitrum -> Base Portal ${ecoRoutesPortal("base")}, ` +
-    `prover ${ecoRoutesProver("arbitrum", "base")}`,
+  `swap-on-base.sauce.ts on Ethereum -> Base Portal ${ecoRoutesPortal("base")}, ` +
+    `prover ${ecoRoutesProver("ethereum", "base")}`,
 );
 console.log(`each destination fee is read at ${feeRead.to}`);

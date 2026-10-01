@@ -34,6 +34,7 @@ import {
   parsePubkey,
   pastDeadline,
   requireChain,
+  requireSupported,
   UsageError,
   type CanonicalChain,
   type FillTarget,
@@ -49,7 +50,9 @@ import {
   PROGRAM,
   programOf,
   READS_CHAIN,
+  refusable,
   RPC_URLS,
+  SUPPORTED_ONLY,
   toolRegistrar,
   TX_HASH,
   UNSIGNED,
@@ -138,7 +141,7 @@ const endpointInputs = (which: string) => ({
         "gives each chain's.",
     ),
   rpcUrls: RPC_URLS.describe(
-    'Endpoints by chain, slug or id: { "arbitrum": "<url>", "base": "<url>" }, for a call ' +
+    'Endpoints by chain, slug or id: { "base": "<url>", "ethereum": "<url>" }, for a call ' +
       "that reads both the intent's chains. Used for this call only; the server's own " +
       "endpoints fill the gaps.",
   ),
@@ -182,21 +185,53 @@ function recordOf(value: unknown, where: string): IntentRecord {
 /** Which of an intent's chains a tool's `rpcUrl` is for. */
 type Side = "source" | "destination";
 
+/** A step that builds a transaction: refused when the chain it is sent on is a preview chain. */
+interface Gate {
+  /** What is refused, as the refusal says it. */
+  readonly action: string;
+  /** The chain the step's transaction is sent on: the intent's source or its destination. */
+  readonly side: Side;
+}
+
+/** Refuses `gate`'s step for `records` on a preview chain (`sdk/src/cli/support.ts`). */
+const refuseOn = (gate: Gate | undefined, records: readonly IntentRecord[]): void => {
+  if (gate === undefined) return;
+  requireSupported(
+    gate.action,
+    records.map((record) =>
+      requireChain(gate.side === "source" ? record.source.chainId : record.destination.chainId),
+    ),
+  );
+};
+
 /**
  * The intents a call names, and the endpoint of every chain they touch: the call's (`rpcUrls`
  * by chain, `rpcUrl` for `side`), else the server's. An imported intent is read from its source
- * transaction first, through the source chain's endpoint.
+ * transaction first, through the source chain's endpoint. With `gate`, a step refused on the
+ * chain it is sent on is refused before any endpoint is reached — for an intent named by txHash
+ * whose destination it is sent on, once its transaction is read.
  */
 async function located(
   args: RefArgs,
   reach: Reach,
-  options: { readonly side?: Side; readonly many: boolean },
+  options: { readonly side?: Side; readonly many: boolean; readonly gate?: Gate },
 ): Promise<{ readonly records: IntentRecord[]; readonly endpoints: Record<string, string> }> {
   if ((args.intent === undefined) === (args.txHash === undefined)) {
     throw new UsageError(
       "give intent (its record, as sauce_intent_import or sauce_intent_publish returns it) or " +
         "txHash with chain (the transaction that published it), not both",
     );
+  }
+  let given: IntentRecord[] | undefined;
+  if (args.intent !== undefined) {
+    if (args.chain !== undefined || args.index !== undefined) {
+      throw new UsageError("chain and index go with txHash: a record names its own chains");
+    }
+    const each = Array.isArray(args.intent) ? args.intent : [args.intent];
+    given = each.map((one, at) => recordOf(one, each.length === 1 ? "intent" : `intent[${at}]`));
+    refuseOn(options.gate, given);
+  } else if (options.gate?.side === "source" && args.chain !== undefined) {
+    requireSupported(options.gate.action, [parseChain(String(args.chain), "chain")]);
   }
   const byChain = await endpointsByChain(args.rpcUrls, reach);
   const prepared = new Map<number, string | undefined>();
@@ -214,14 +249,8 @@ async function located(
   };
 
   let records: IntentRecord[];
-  if (args.intent !== undefined) {
-    if (args.chain !== undefined || args.index !== undefined) {
-      throw new UsageError("chain and index go with txHash: a record names its own chains");
-    }
-    const given = Array.isArray(args.intent) ? args.intent : [args.intent];
-    records = given.map((each, at) =>
-      recordOf(each, given.length === 1 ? "intent" : `intent[${at}]`),
-    );
+  if (given !== undefined) {
+    records = given;
   } else {
     if (args.chain === undefined) {
       throw new UsageError("txHash needs chain: the source chain the transaction was sent on");
@@ -239,6 +268,7 @@ async function located(
       { [String(source.id)]: url },
     );
     records = imported.intents.map((each) => each.record);
+    refuseOn(options.gate, records);
   }
   if (!options.many && records.length > 1) {
     throw new UsageError(
@@ -449,8 +479,9 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "and the sauce_intent_publish inputs, chain the SOURCE). With dryRun, instead rehearse " +
         "the fill there in one eth_simulateV1 block, from any solver (no from needed): per " +
         "intent ok with gas and what moved, or the decoded reason it reverts. Needs the " +
-        "destination's endpoint, and the source's to check the prover. " +
-        UNSIGNED,
+        "destination's endpoint, and the source's to check the prover. The rehearsal works on " +
+        "every chain; the fill is built only for a supported destination. " +
+        `${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         ...PROGRAM,
         source: PROGRAM.source
@@ -499,9 +530,9 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           .describe("Rehearse the fill (eth_simulateV1) instead of building it; nothing signed."),
         ...endpointInputs("The destination chain"),
       },
-      output: {
+      output: refusable({
         intents: z.array(z.looseObject({ intentHash: z.string() })),
-      },
+      }),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
@@ -523,6 +554,9 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       let from = "the call's intent";
       // A program whose deadline has passed is filled anyway, so the Portal's own refusal shows.
       let past: string | undefined;
+      // A rehearsal fills nothing, on any chain; a fill is built only for a supported destination.
+      const gate: Gate | undefined =
+        args.dryRun === true ? undefined : { action: "building a fill", side: "destination" };
       if (args.source !== undefined) {
         const program = programOf(args as ProgramArgs);
         past = pastDeadline(program.input);
@@ -536,12 +570,13 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         ({ endpoints } = await located(
           { intent: records, rpcUrl: args.rpcUrl, rpcUrls: args.rpcUrls },
           reach,
-          { side: "destination", many: true },
+          { side: "destination", many: true, ...(gate === undefined ? {} : { gate }) },
         ));
       } else {
         ({ records, endpoints } = await located(args, reach, {
           side: "destination",
           many: true,
+          ...(gate === undefined ? {} : { gate }),
         }));
       }
       const claimant = args.claimant as Hex | undefined;
@@ -643,7 +678,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "share their chains and prover; one the source has proven already is left out, saying " +
         "so. Needed after a fill with prove false or a cancel without it; a fulfillAndProve " +
         "proved already. The proof arrives after the bridge delivers it: sauce_intent_status " +
-        `then says proven. ${NOT_YET} Any account may send it. ${UNSIGNED}`,
+        `then says proven. ${NOT_YET} Any account may send it. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         ...MANY,
         cancelledIn: z
@@ -656,13 +691,14 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         from: FEE_PAYER,
         ...endpointInputs("The destination chain"),
       },
-      output: PLAN_OUTPUT,
+      output: refusable(PLAN_OUTPUT),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
       const { records, endpoints } = await located(args, reach, {
         side: "destination",
         many: true,
+        gate: { action: "building a proof", side: "destination" },
       });
       const plan = await buildProve(records, endpoints, {
         ...(args.cancelledIn === undefined ? {} : { cancelledIn: args.cancelledIn }),
@@ -683,13 +719,17 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "(same source chain). Returns what each claim moves. An intent not proven yet, already " +
         "claimed, refunded, or proven cancelled (which pays no claimant) is refused or left " +
         `out, saying why. ${NOT_YET} Any account may send it: the reward goes to the claimant, ` +
-        `not the sender. Needs the source chain's endpoint. ${UNSIGNED}`,
+        `not the sender. Needs the source chain's endpoint. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: { ...MANY, ...endpointInputs("The source chain") },
-      output: { ...PLAN_OUTPUT, claims: z.array(z.looseObject({})).optional() },
+      output: refusable({ ...PLAN_OUTPUT, claims: z.array(z.looseObject({})) }),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const { records, endpoints } = await located(args, reach, { side: "source", many: true });
+      const { records, endpoints } = await located(args, reach, {
+        side: "source",
+        many: true,
+        gate: { action: "building a claim", side: "source" },
+      });
 
       return anyone(await buildClaim(records, endpoints), "the claim");
     },
@@ -705,17 +745,22 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "proved, or EARLIER once a proven cancellation is recorded on the source (a source " +
         "Portal that predates proven cancellation is never refunded early), and for a claimed " +
         `one only what is left. Returns the refundee and what moves. ${NOT_YET} Any account ` +
-        `may send it: the reward goes to the creator. Needs the source chain's endpoint. ${UNSIGNED}`,
+        `may send it: the reward goes to the creator. Needs the source chain's endpoint. ${UNSIGNED} ` +
+        SUPPORTED_ONLY,
       input: { ...ONE, ...endpointInputs("The source chain") },
-      output: {
+      output: refusable({
         ...PLAN_OUTPUT,
-        refundee: z.string().optional(),
-        moves: z.array(z.unknown()).optional(),
-      },
+        refundee: z.string(),
+        moves: z.array(z.unknown()),
+      }),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const { records, endpoints } = await located(args, reach, { side: "source", many: false });
+      const { records, endpoints } = await located(args, reach, {
+        side: "source",
+        many: false,
+        gate: { action: "building a refund", side: "source" },
+      });
 
       return anyone(await buildRefund(records[0]!, endpoints), "the refund");
     },
@@ -734,7 +779,8 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "once final, then sauce_intent_refund). Permissionless, and only after the route's " +
         "deadline has passed with the intent unfilled; refused on a destination Portal that " +
         "cannot cancel, or a source Portal that would pay a proven cancellation to no one, " +
-        `saying when the refund is instead. ${NOT_YET} Any account may send it. ${UNSIGNED}`,
+        `saying when the refund is instead. ${NOT_YET} Any account may send it. ${UNSIGNED} ` +
+        SUPPORTED_ONLY,
       input: {
         ...ONE,
         prove: z
@@ -747,13 +793,14 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         from: FEE_PAYER,
         ...endpointInputs("The destination chain"),
       },
-      output: PLAN_OUTPUT,
+      output: refusable(PLAN_OUTPUT),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
       const { records, endpoints } = await located(args, reach, {
         side: "destination",
         many: false,
+        gate: { action: "building a cancellation", side: "destination" },
       });
       const plan = await buildCancel(records[0]!, endpoints, {
         ...(args.prove === undefined ? {} : { prove: args.prove }),

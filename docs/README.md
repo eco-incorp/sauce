@@ -8,6 +8,37 @@ tokens and protocols a program calls by name; you write the program, not a contr
 **Routes** are the layer above: a route packages a program as an Eco intent, so it can be executed
 on another chain in exchange for a reward escrowed on this one. Everything cross-chain lives there.
 
+## Supported chains
+
+For the initial release, Sauce supports transactions on three chains: **Ethereum**, **Base** and
+**Solana**.
+
+Every other chain in the registry is a **preview chain**. Programs compile for it, and the
+[`sauce` command](guides/cli.md#supported-and-preview-chains) and the
+[MCP server](guides/mcp.md#supported-and-preview-chains) rehearse and read there as anywhere:
+`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and every
+read. What they do not do on a preview chain is build or send a transaction. `tx`, `run`,
+`pot --deploy` (and the deployment `pot` prints), `intent publish`, `intent fill --send`, `prove`,
+`claim`, `refund` and `cancel` are refused there before any endpoint is reached or any key is read,
+with the supported chains and a link to request the chain. An intent publishes only when its source
+and every destination it opens are supported; the later levels of a cascade (an intent opened inside
+another's body) are not checked, so keep every level on a supported chain. Each step after
+publishing is refused by the chain it is sent on: a fill, a proof or a cancellation by the
+destination, a claim or a refund by the source.
+
+The TypeScript SDK is not gated. Its builders take every registry chain and build its
+transactions, and an integrator who submits one on a preview chain does so at their own risk.
+The MCP server's `sauce_chains` gives each chain's support, and every refusal names the supported
+chains.
+
+To ask for a chain, first
+[search the existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support)
+and add your use case to the one for that chain as a comment. If there is none,
+[open a chain-support request](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml):
+the chain and its id, what you want to run there, the protocols and tokens it needs, the volume you
+expect and from when, and optionally how to reach you. A refusal links both, prefilled for the chain
+it refused.
+
 ## First program in five minutes
 
 1. [Install](guides/quick-start.md) the package. The compiler is inside it.

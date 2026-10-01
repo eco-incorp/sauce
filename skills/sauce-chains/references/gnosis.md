@@ -2,8 +2,18 @@
 
 # Gnosis
 
+**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
+On Gnosis a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
+runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
+`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
+refused, naming the supported chains and how to request this one.
+
+To request Gnosis, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Gnosis%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Gnosis+%28100%29&chain=Gnosis&chain-id=100) with the chain-support issue form.
+
 | Fact | Value |
 | --- | --- |
+| Support | preview: compile and simulate; no transaction is built or sent |
 | Slug (`--chain`) | `gnosis`; also `xdai`, `gnosis-chain` |
 | Chain id | 100 |
 | Kind | EVM |
