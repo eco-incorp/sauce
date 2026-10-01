@@ -48,6 +48,8 @@ import { svmTokenRows } from "../src/routes/token-registry.js";
 import { requireChain } from "../src/chains/canonical.js";
 import {
   buildSetExecutionFeeInstruction,
+  COOK_AND_PAY_DISCRIMINATOR,
+  COOK_AND_PAY_FROM_ACCOUNT_PINNED_DISCRIMINATOR,
   createSauceSvmClient,
   deriveProgramDataPda,
   derivePotPda,
@@ -191,6 +193,8 @@ function shim(harness: EngineHarness): {
   restore: () => void;
   sent: string[];
   faults: Faults;
+  /** The transaction a signature `sent` names, as it was sent. */
+  sentTransaction: (signature: string) => Transaction | undefined;
 } {
   const original = globalThis.fetch;
   const landed = new Map<string, Landed>();
@@ -441,7 +445,19 @@ function shim(harness: EngineHarness): {
     },
     sent,
     faults,
+    sentTransaction: (signature) => landed.get(signature)?.transaction,
   };
+}
+
+/** The program each top-level instruction of `transaction` calls, and the data it is given. */
+function topLevel(transaction: Transaction): { program: Address; data: Uint8Array }[] {
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
+  if (!("instructions" in message)) return [];
+
+  return message.instructions.map((instruction) => ({
+    program: message.staticAccounts[instruction.programAddressIndex]!,
+    data: new Uint8Array(instruction.data ?? new Uint8Array()),
+  }));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1305,4 +1321,211 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(keypair.stderr).toMatch(/not a Solana keypair file/);
     expect(keypair.stderr).not.toContain("[1, 2, 3]");
   }, 60_000);
+
+  describe("--via engine: the engine's own paid cook, with no Kitchen and no Pot", () => {
+    const ENGINE = address(v12SvmEngineProgramId());
+    /** A sweep from a token account the OWNER holds, the owner signing as its authority. */
+    const ownersAccounts = (held: bigint) => {
+      const source = setTokenAccount(harness, randomAddress(), mint, owner.signer.address, held);
+      const dest = setTokenAccount(harness, randomAddress(), mint, randomAddress(), 0n);
+
+      return {
+        source,
+        dest,
+        flags: [
+          ...["--account", `tokenProgram=${TOKEN_PROGRAM}`, "--account", `source=${source}`],
+          ...["--account", `dest=${dest}`, "--account", "authority=owner"],
+        ],
+      };
+    };
+    const startsWith = (data: Uint8Array, prefix: Uint8Array): boolean =>
+      prefix.every((byte, index) => data[index] === byte);
+
+    it("`simulate` rehearses it from the owner, showing the fee and what it moved, and sends nothing", async () => {
+      const { source, dest, flags } = ownersAccounts(1_000n);
+      const before = rpc.sent.length;
+      const argv = [
+        ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+        ...["--via", "engine", "--rpc-url", RPC_URL, ...flags],
+      ];
+      const rehearsed = json(await sauce(...argv, "--json", "--args", "400"));
+      expect(rehearsed).toMatchObject({
+        ok: true,
+        chain: "solana",
+        via: "engine",
+        owner: owner.signer.address,
+        fee: FEE.toString(),
+        maxExecutionFee: FEE.toString(),
+      });
+      expect(rehearsed).not.toHaveProperty("pot");
+      expect(rehearsed).not.toHaveProperty("createPot");
+      // What it moved: the signer's tokens, and the fee into the Kitchen's treasury, as the
+      // engine pays it there itself.
+      const { tokenChanges, lamportChanges } = rehearsed as {
+        tokenChanges: { account: string; delta: string }[];
+        lamportChanges: { account: string; label?: string; delta: string }[];
+      };
+      expect(tokenChanges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ account: source, delta: "-400" }),
+          expect.objectContaining({ account: dest, delta: "400" }),
+        ]),
+      );
+      expect(lamportChanges).toContainEqual(
+        expect.objectContaining({
+          account: harness.feeConfig,
+          label: "the Kitchen's fee config",
+          delta: FEE.toString(),
+        }),
+      );
+      const text = await sauce(...argv, "--args", "400");
+      expect(text.stdout).toContain(
+        `the engine's direct cook (cookAndPay), from ${owner.signer.address}, which signs for ` +
+          `the program and pays the execution fee of ${FEE} lamports: no Kitchen and no Pot`,
+      );
+      expect(rpc.sent.length).toBe(before);
+    }, 60_000);
+
+    it("`run` signs as the program's authority, pays the fee into the Kitchen's treasury, and creates no Pot", async () => {
+      const { source, dest, flags } = ownersAccounts(1_000n);
+      const pot = await potOf(hexToBytes(potSalt("direct")));
+      const feeConfig = harness.feeConfig;
+      const treasury = harness.svm.getBalance(feeConfig) ?? 0n;
+      const run = await sauce(
+        ...["run", sweep, "--define", mintDefine, "--salt", "direct", "--via", "engine"],
+        ...["--max-execution-fee", FEE.toString(), "--rpc-url", RPC_URL, "--keypair", owner.path],
+        ...flags,
+        ...["--json", "--args", "400"],
+      );
+      const out = json(run);
+      expect(out).toMatchObject({
+        chain: "solana",
+        via: "engine",
+        owner: owner.signer.address,
+        fee: FEE.toString(),
+        cook: { status: "success" },
+      });
+      expect(out).not.toHaveProperty("pot");
+      expect(out).not.toHaveProperty("createPot");
+      expect(tokenAmount(harness, source)).toBe(600n);
+      expect(tokenAmount(harness, dest)).toBe(400n);
+      expect((harness.svm.getBalance(feeConfig) ?? 0n) - treasury).toBe(FEE);
+      expect(harness.svm.getAccount(pot).exists).toBe(false);
+      // What it sent calls the engine itself: no Kitchen instruction, a cookAndPay.
+      const sent = rpc.sentTransaction((out.cook as { signature: string }).signature)!;
+      const calls = topLevel(sent);
+      expect(calls.some((call) => call.program === KITCHEN)).toBe(false);
+      const cook = calls.find((call) => call.program === ENGINE)!;
+      expect(startsWith(cook.data, COOK_AND_PAY_DISCRIMINATOR)).toBe(true);
+    }, 60_000);
+
+    it("refuses the Pot as a signer it cannot be, before reading the cluster", async () => {
+      const pot = await potOf(new Uint8Array(32));
+      const { flags } = accountsFor(pot, 1n);
+      const refused = await sauce(
+        ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+        ...["--via", "engine", "--rpc-url", RPC_URL, ...flags, "--args", "1"],
+      );
+      expect(refused.code).toBe(2);
+      expect(refused.stderr).toMatch(
+        /--account authority=pot: authority must sign \(readonly_signer\), and cooked directly to the engine \(--via engine\) nothing signs for the Pot/,
+      );
+      const bogus = await sauce(
+        ...["simulate", sweep, "--owner", owner.signer.address, "--via", "pot"],
+        ...["--rpc-url", RPC_URL],
+      );
+      expect(bogus.code).toBe(2);
+      expect(bogus.stderr).toMatch(/--via: 'pot' is not kitchen .* or engine/);
+    }, 60_000);
+
+    it.each(["kitchen", "engine"])(
+      "--via %s refuses a fee above --max-execution-fee, sending nothing",
+      async (via) => {
+        const { flags } = ownersAccounts(10n);
+        const before = rpc.sent.length;
+        const run = await sauce(
+          ...["run", sweep, "--define", mintDefine, "--via", via, "--rpc-url", RPC_URL],
+          ...["--keypair", owner.path, "--max-execution-fee", (FEE - 1n).toString(), ...flags],
+          ...["--args", "1"],
+        );
+        expect(run.code).toBe(1);
+        expect(run.stderr).toContain(
+          `the execution fee is ${FEE} lamports, above --max-execution-fee ${FEE - 1n}: ` +
+            "nothing was signed or sent",
+        );
+        expect(rpc.sent.length).toBe(before);
+      },
+      60_000,
+    );
+
+    it("`tx` prints the direct cook unsigned; signed by the owner, it lands", async () => {
+      const { dest, flags } = ownersAccounts(90n);
+      const out = await sauce(
+        ...[
+          "tx",
+          sweep,
+          "--define",
+          mintDefine,
+          "--owner",
+          owner.signer.address,
+          "--via",
+          "engine",
+        ],
+        ...["--rpc-url", RPC_URL, ...flags, "--args", "90"],
+      );
+      const printed = json(out);
+      expect(printed).toMatchObject({
+        chain: "solana",
+        via: "engine",
+        feePayer: owner.signer.address,
+        fee: FEE.toString(),
+        maxExecutionFee: FEE.toString(),
+      });
+      expect(printed).not.toHaveProperty("pot");
+      expect(out.stderr).toMatch(/no Kitchen and no Pot/);
+      const unsigned = getTransactionDecoder().decode(
+        new Uint8Array(getBase64Encoder().encode(printed.transaction as string)),
+      );
+      const signed = await signTransaction([owner.signer.keyPair], unsigned);
+      const result = harness.svm.sendTransaction(signed);
+      harness.svm.expireBlockhash();
+      expect(result instanceof FailedTransactionMetadata ? result.meta().logs() : "ok").toBe("ok");
+      expect(tokenAmount(harness, dest)).toBe(90n);
+    }, 60_000);
+
+    it("stages a program too large for one transaction and runs it pinned to the staged bytes", async () => {
+      const big = blobProgram("direct-big.sauce.ts", 1500);
+      const out = json(
+        await sauce(
+          ...["run", big, "--via", "engine", "--rpc-url", RPC_URL, "--keypair", owner.path],
+          "--json",
+        ),
+      );
+      expect(out).toMatchObject({
+        via: "engine",
+        cook: { status: "success" },
+        closeCodeBuffer: { status: "success" },
+        staged: { codeBuffer: expect.any(String), sha256: expect.any(String) },
+      });
+      const cook = topLevel(
+        rpc.sentTransaction((out.cook as { signature: string }).signature)!,
+      ).find((call) => call.program === ENGINE)!;
+      expect(startsWith(cook.data, COOK_AND_PAY_FROM_ACCOUNT_PINNED_DISCRIMINATOR)).toBe(true);
+      // The pin is the staged bytes' digest, after the discriminator and the fee cap.
+      expect(bytesToHex(cook.data.subarray(16, 48))).toBe(
+        (out.staged as { sha256: string }).sha256,
+      );
+    }, 120_000);
+
+    it("`compile --via engine` sizes the direct cook, which carries no Kitchen, Pot or salt", async () => {
+      const program = blobProgram("direct-size.sauce.ts", 400);
+      const kitchen = json(await sauce("compile", program, "--json")).cook as { size: number };
+      const direct = json(await sauce("compile", program, "--via", "engine", "--json")).cook as {
+        size: number;
+        via: string;
+      };
+      expect(direct.via).toBe("engine");
+      expect(direct.size).toBeLessThan(kitchen.size);
+    }, 60_000);
+  });
 });

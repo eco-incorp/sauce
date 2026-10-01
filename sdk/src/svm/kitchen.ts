@@ -26,9 +26,26 @@
  * enter the engine's account list, so bytecode indices and `MSG_SENDER` keep their meanings. A zero
  * configured fee performs no transfer at all; the config must still exist and be writable, because
  * an absent one is a failure rather than a free cook.
+ *
+ * The same config prices the engine's DIRECT cooks (`buildCookAndPayInstruction` and the staged
+ * pair, in `instructions.ts`): the engine reads this account itself, re-derived against the Kitchen
+ * id it bakes in, and pays the fee into it. One fee and one treasury, whichever way a program runs;
+ * `fetchExecutionFee` reads it for either.
  */
-import { getAddressEncoder, getProgramDerivedAddress, AccountRole } from "@solana/kit";
-import type { AccountLookupMeta, AccountMeta, Address, Instruction } from "@solana/kit";
+import {
+  getAddressEncoder,
+  getBase64Encoder,
+  getProgramDerivedAddress,
+  AccountRole,
+} from "@solana/kit";
+import type {
+  AccountLookupMeta,
+  AccountMeta,
+  Address,
+  GetAccountInfoApi,
+  Instruction,
+  Rpc,
+} from "@solana/kit";
 
 import { assertEngineRunsCompiler } from "../deployments/releases.js";
 
@@ -172,6 +189,60 @@ export async function deriveExecutionFeeConfigPda(kitchen: Address): Promise<Kit
   });
 
   return { address, bump };
+}
+
+/**
+ * The Anchor account discriminator of `ExecutionFeeConfig`, `sha256("account:ExecutionFeeConfig")
+ * [..8]` — the release IDL's own, which `engine-wire-drift.test.ts` asserts, and the bytes the
+ * engine's direct cooks check before trusting the account.
+ */
+export const EXECUTION_FEE_CONFIG_DISCRIMINATOR = new Uint8Array([
+  60, 73, 184, 44, 4, 104, 241, 138,
+]);
+
+/**
+ * The fee in an `ExecutionFeeConfig` account's data: 8 discriminator bytes, then the fee as a u64
+ * LE — exactly 16 bytes, the length the engine requires too. Anything else throws: a lookalike
+ * account is not a fee of zero.
+ */
+export function decodeExecutionFeeConfig(data: Uint8Array): bigint {
+  if (
+    data.length !== 16 ||
+    !EXECUTION_FEE_CONFIG_DISCRIMINATOR.every((byte, index) => data[index] === byte)
+  ) {
+    throw new Error(
+      `not a Kitchen ExecutionFeeConfig: expected 16 bytes starting with its discriminator, got ${data.length} bytes`,
+    );
+  }
+
+  return new DataView(data.buffer, data.byteOffset, data.byteLength).getBigUint64(8, true);
+}
+
+/**
+ * The Kitchen's execution fee in lamports, read from its `["execution_fee"]` config — what a cook
+ * through the Kitchen and a direct engine cook both pay. Throws when the config is absent, is not
+ * owned by `kitchen`, or does not decode: every cook is refused on chain then, so there is no fee to
+ * report.
+ */
+export async function fetchExecutionFee(
+  rpc: Rpc<GetAccountInfoApi>,
+  kitchen: Address,
+): Promise<bigint> {
+  const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen);
+  const { value } = await rpc.getAccountInfo(feeConfig, { encoding: "base64" }).send();
+  if (value === null) {
+    throw new Error(
+      `the Kitchen ${kitchen} has no execution-fee config (${feeConfig}) on this cluster, so every ` +
+        "cook there is refused: is the Kitchen deployed and initialized?",
+    );
+  }
+  if (value.owner !== kitchen) {
+    throw new Error(
+      `the execution-fee config ${feeConfig} is owned by ${value.owner}, not the Kitchen ${kitchen}`,
+    );
+  }
+
+  return decodeExecutionFeeConfig(new Uint8Array(getBase64Encoder().encode(value.data[0])));
 }
 
 /**

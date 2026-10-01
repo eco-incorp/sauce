@@ -24,7 +24,12 @@ import {
 } from "../src/deployments/index.js";
 import { v12Pot } from "../src/evm/engine.js";
 import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
-import { buildExecuteFromAccountInstruction } from "../src/svm/instructions.js";
+import {
+  buildCookAndPayFromAccountInstruction,
+  buildCookAndPayFromAccountPinnedInstruction,
+  buildCookAndPayInstruction,
+  buildExecuteFromAccountInstruction,
+} from "../src/svm/instructions.js";
 import { buildCookInstruction } from "../src/svm/kitchen.js";
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
@@ -225,5 +230,35 @@ describe("every builder that names an engine refuses another compiler's", () => 
     }
     expect(() => cook(v12SvmEngineProgramId())).not.toThrow();
     expect(() => execute(v12SvmEngineProgramId())).not.toThrow();
+  });
+
+  it("the engine's direct paid cooks refuse it, and take this SDK's own", () => {
+    const account = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    const payment = { feeConfig: account, feePayer: account, maxExecutionFee: 0n };
+    const direct = (engine: string) => [
+      () =>
+        buildCookAndPayInstruction({
+          engineProgram: address(engine),
+          bytecode: new Uint8Array([0]),
+          ...payment,
+        }),
+      () =>
+        buildCookAndPayFromAccountInstruction({
+          engineProgram: address(engine),
+          code: account,
+          ...payment,
+        }),
+      () =>
+        buildCookAndPayFromAccountPinnedInstruction({
+          engineProgram: address(engine),
+          code: account,
+          expectedSha256: new Uint8Array(32),
+          ...payment,
+        }),
+    ];
+    for (const engine of foreign("v12-svm")) {
+      for (const build of direct(engine)) expect(build).toThrow(/runs compiler/);
+    }
+    for (const build of direct(v12SvmEngineProgramId())) expect(build).not.toThrow();
   });
 });
