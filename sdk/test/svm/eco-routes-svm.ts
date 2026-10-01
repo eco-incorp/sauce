@@ -71,18 +71,8 @@ export const accountAddress = (name: string): Address => {
   return address(found.address);
 };
 
-/**
- * A LiteSVM bank with every dumped program at its mainnet id and every dumped account as mainnet
- * held it, its clock at `unixTimestamp`. SPL Token, Token-2022 and the Associated Token Account
- * program are LiteSVM's own, as on any cluster.
- */
-export function ecoRoutesSvm(unixTimestamp: bigint): LiteSVM {
-  const svm = new LiteSVM()
-    .withFeatureSet(FeatureSet.allEnabled())
-    .withBuiltins()
-    .withPrecompiles()
-    .withSysvars()
-    .withDefaultPrograms();
+/** Every dumped program into `svm` at its mainnet id, and every dumped account as mainnet held it. */
+export function loadEcoRoutes(svm: LiteSVM): void {
   for (const entry of MANIFEST.programs) {
     svm.addProgram(address(entry.programId), fixtureBytes(entry.file));
   }
@@ -97,6 +87,21 @@ export function ecoRoutesSvm(unixTimestamp: bigint): LiteSVM {
       space: BigInt(data.length),
     });
   }
+}
+
+/**
+ * A LiteSVM bank with every dumped program at its mainnet id and every dumped account as mainnet
+ * held it, its clock at `unixTimestamp`. SPL Token, Token-2022 and the Associated Token Account
+ * program are LiteSVM's own, as on any cluster.
+ */
+export function ecoRoutesSvm(unixTimestamp: bigint): LiteSVM {
+  const svm = new LiteSVM()
+    .withFeatureSet(FeatureSet.allEnabled())
+    .withBuiltins()
+    .withPrecompiles()
+    .withSysvars()
+    .withDefaultPrograms();
+  loadEcoRoutes(svm);
   setTime(svm, unixTimestamp);
 
   return svm;

@@ -37,6 +37,7 @@ import {
   type TransactionSigner,
 } from "@solana/kit";
 import { bytesToHex, hexToBytes, type Hex } from "viem";
+import type { AccountManifest } from "sauce-compiler";
 
 import { encodeRouteSvm, hashIntent } from "../routes/encode.js";
 import type { Intent, Route, UniversalAddress } from "../routes/types.js";
@@ -46,6 +47,14 @@ import {
   type PortalAccountMeta,
 } from "./intent.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "./token-program.js";
+import {
+  buildCookInstruction,
+  buildCreatePotInstruction,
+  deriveExecutionFeeConfigPda,
+  derivePotPda,
+  MAX_POT_LEN,
+} from "./kitchen.js";
+import { resolveAccounts, type AccountResolution } from "./resolve.js";
 
 // ---------------------------------------------------------------------------------------------
 // Programs and accounts
@@ -559,6 +568,134 @@ export async function svmTokenTransferCall(input: {
     }),
     value: 0n,
   };
+}
+
+/** A token a route delivers to the executor, whose associated token account the fill writes. */
+export interface SvmRouteToken {
+  readonly mint: Address;
+  readonly tokenProgram?: Address;
+}
+
+/**
+ * Route calls that run `instructions` as the Portal's executor, in order, each committed with the
+ * flags the fill transaction will give its accounts.
+ *
+ * `fulfill` hashes each call account's flags as the TRANSACTION has them, and a transaction gives
+ * an account one set of flags however many instructions name it: an account writable anywhere is
+ * writable everywhere. So each account is committed writable if any call writes it, or if the fill
+ * writes it itself (the executor's token account for each of `tokens`), and as a signer only where
+ * a call needs its signature — never the executor's, which no transaction can carry: the Portal
+ * signs each call for it. A route committing different flags hashes to another intent and can
+ * never be filled.
+ */
+export async function svmRouteCalls(
+  portal: Address,
+  instructions: readonly Instruction[],
+  tokens: readonly SvmRouteToken[] = [],
+): Promise<Array<{ target: UniversalAddress; data: Hex; value: bigint }>> {
+  const executor = await svmExecutorPda(portal);
+  const writable = new Set<string>();
+  const signers = new Set<string>();
+  for (const token of tokens) {
+    writable.add(
+      await associatedTokenAccount(executor, token.mint, token.tokenProgram ?? TOKEN_PROGRAM_ID),
+    );
+  }
+  for (const instruction of instructions) {
+    for (const meta of instruction.accounts ?? []) {
+      if (!("address" in meta)) throw new Error("a route call cannot use a lookup table");
+      if (meta.role === AccountRole.WRITABLE || meta.role === AccountRole.WRITABLE_SIGNER) {
+        writable.add(meta.address);
+      }
+      if (
+        (meta.role === AccountRole.READONLY_SIGNER || meta.role === AccountRole.WRITABLE_SIGNER) &&
+        meta.address !== executor
+      ) {
+        signers.add(meta.address);
+      }
+    }
+  }
+
+  return instructions.map((instruction) => ({
+    target: universalOfSvmKey(instruction.programAddress),
+    data: encodePortalCalldataWithAccounts({
+      instructionData: new Uint8Array(instruction.data ?? new Uint8Array()),
+      accounts: (instruction.accounts ?? []).map((meta) => ({
+        pubkey: meta.address,
+        isSigner: signers.has(meta.address),
+        isWritable: writable.has(meta.address),
+      })),
+    }),
+    value: 0n,
+  }));
+}
+
+/** The Kitchen Pot the Portal's executor owns under `salt`, which every intent's cook through
+ *  that Portal shares (the zero salt by convention, as on an EVM chain). */
+export async function svmIntentPot(input: {
+  readonly portal: Address;
+  readonly kitchen: Address;
+  readonly salt?: Uint8Array;
+}): Promise<Address> {
+  const executor = await svmExecutorPda(input.portal);
+
+  return (await derivePotPda(input.kitchen, executor, input.salt ?? new Uint8Array(32))).address;
+}
+
+/**
+ * The Kitchen's `create_pot` for the executor's Pot: the executor its owner and its rent's payer,
+ * so the route carrying it delivers the rent as its native amount. Created once, by the first
+ * intent whose route carries it; a later one would fail, the Pot existing.
+ */
+export async function svmIntentPotInstruction(input: {
+  readonly portal: Address;
+  readonly kitchen: Address;
+  readonly engineProgram: Address;
+  readonly salt?: Uint8Array;
+}): Promise<Instruction> {
+  const salt = input.salt ?? new Uint8Array(32);
+
+  return buildCreatePotInstruction({
+    kitchen: input.kitchen,
+    owner: await svmExecutorPda(input.portal),
+    engineProgram: input.engineProgram,
+    pot: await svmIntentPot({ ...input, salt }),
+    salt,
+    space: MAX_POT_LEN,
+  });
+}
+
+/**
+ * The Kitchen's `cook` of `bytecode` on the executor's Pot: the executor the Pot's owner and the
+ * Kitchen fee's payer (the route delivers the fee as its native amount), the program's accounts
+ * resolved from its manifest as for any cook. The fill's transaction must request the engine's
+ * heap frame, as every cook does; `planSvmFill` adds it when a route call is the Kitchen's.
+ */
+export async function svmIntentCookInstruction(input: {
+  readonly portal: Address;
+  readonly kitchen: Address;
+  readonly engineProgram: Address;
+  readonly salt?: Uint8Array;
+  readonly bytecode: Uint8Array;
+  readonly manifest: AccountManifest;
+  readonly resolution: AccountResolution;
+  readonly maxExecutionFee: bigint;
+}): Promise<Instruction> {
+  const executor = await svmExecutorPda(input.portal);
+  const salt = input.salt ?? new Uint8Array(32);
+
+  return buildCookInstruction({
+    kitchen: input.kitchen,
+    owner: executor,
+    engineProgram: input.engineProgram,
+    potSalt: salt,
+    pot: await svmIntentPot({ ...input, salt }),
+    feeConfig: (await deriveExecutionFeeConfigPda(input.kitchen)).address,
+    bytecode: input.bytecode,
+    maxExecutionFee: input.maxExecutionFee,
+    feePayer: executor,
+    tail: resolveAccounts(input.manifest, input.resolution, executor),
+  });
 }
 
 function concat(...parts: Uint8Array[]): Uint8Array {

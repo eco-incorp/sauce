@@ -43,6 +43,8 @@ import {
   svmFulfillMarkerPda,
   svmKeyOf,
 } from "../svm/portal.js";
+import { v12SvmKitchenProgramId } from "../deployments/index.js";
+import { buildHeapFramePrepend } from "../svm/prepends.js";
 import { CliError } from "./args.js";
 
 export type SvmRpc = ReturnType<typeof createSolanaRpc>;
@@ -358,6 +360,8 @@ export async function planSvmFill(
     claimant: options.claimant,
     tokenPrograms,
   });
+  const kitchen = v12SvmKitchenProgramId();
+  const cooks = intent.route.calls.some((call) => svmKeyOf(call.target) === kitchen);
   const notes: string[] = [];
   for (const token of tokens) {
     if (token.held < token.amount) {
@@ -383,7 +387,15 @@ export async function planSvmFill(
       rpc,
       chain,
       options.solver,
-      [getSetComputeUnitLimitInstruction({ units: 400_000 }), fulfill],
+      // A route that cooks on the executor's Pot runs the engine, whose memory is the
+      // transaction's heap frame: the fill requests it, as every cook does.
+      cooks
+        ? [
+            buildHeapFramePrepend(),
+            getSetComputeUnitLimitInstruction({ units: 1_400_000 }),
+            fulfill,
+          ]
+        : [getSetComputeUnitLimitInstruction({ units: 400_000 }), fulfill],
       `Portal.fulfill(${hashIntent(intent).intentHash}, route, rewardHash, ${options.claimant}) on ${chain.slug}`,
     ),
     tokens,
