@@ -11,6 +11,7 @@ Each of the three can be true without the others.
 | Compiled-source protocol globals | The same 135 protocol namespaces, plus 13 family aliases                       | TypeScript completion after importing `@eco-incorp/sauce`; names below |
 | Token symbols                    | 7 symbols distributed across 7 EVM chains                                      | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
 | Canonical chain identities       | 41 chains: 40 EVM and Solana                                                   | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
+| Supported chains                 | 3 supported for transactions (Ethereum, Base, Solana); 38 preview              | `chainSupport(ref)`, `supportedChains()`, `previewChains()`            |
 | EVM chain metadata               | 34 records with native-currency and explorer information                       | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
 Every catalog protocol is a namespace, in a program and in TypeScript: the descriptor registry is
@@ -128,6 +129,50 @@ Arc (chain 5042) pays gas in USDC, and it has **one USDC balance with two decima
 An intent to Arc uses the same Portal, Executor and derived Pot as every other chain; see
 [One Portal, one Pot](../guides/intents.md#one-portal-one-pot).
 
+## Supported and preview chains
+
+For the initial release, Sauce supports transactions on Ethereum, Base and Solana. Every other
+canonical chain is a preview chain: programs compile and simulate there, and the `sauce` command and
+the MCP server refuse to build or send a transaction on it
+([Supported chains](../README.md#supported-chains)). The SDK's own builders are not gated: they take
+every canonical chain, and a transaction you build and submit on a preview chain is at your own
+risk. The list is one table, exported from `@eco-incorp/sauce/chains` and the root:
+
+```ts
+import {
+  chainSupport,
+  chainSupportRequest,
+  isSupportedChain,
+  previewChains,
+  supportedChains,
+} from "@eco-incorp/sauce/chains";
+
+chainSupport("base"); // "supported"
+chainSupport(42161); // "preview"
+isSupportedChain("solana"); // true
+supportedChains().map((chain) => chain.slug); // ["ethereum", "base", "solana"]
+previewChains().length; // 38
+
+const request = chainSupportRequest("arbitrum", { useCase: "Swap and supply on Aave" });
+request.title; // "Chain support: Arbitrum One (42161)"
+request.searchUrl; // the chain-support requests already filed for Arbitrum One
+request.newIssueUrl; // the issue form, its title, chain, chain id and use case filled in
+```
+
+- `chainSupport(ref)` is `"supported"` or `"preview"`, and throws for a chain the registry does not
+  have; `isSupportedChain(ref)` is `false` for one. `SUPPORTED_CHAIN_SLUGS` lists the supported
+  slugs, in that order.
+- `chainSupportRequest(chain, details?)` builds the request for a canonical chain, or for
+  `{ name, id }` the registry does not have yet: its `title`, `searchUrl`, `newIssueUrl` (the
+  [issue form](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml),
+  prefilled), the `body` the form would write and a `comment` that adds a use case to an existing
+  request. `details` — `useCase`, `protocols`, `volume`, `contact` — fill in what is known; the
+  rest are `<placeholders>`.
+- `CHAIN_SUPPORT_NEW_ISSUE_URL` is the empty form, and `CHAIN_SUPPORT_ISSUES_URL` every request.
+  `CHAIN_SUPPORT_REPOSITORY`, `CHAIN_SUPPORT_LABEL` (`chain-support`), `CHAIN_SUPPORT_TEMPLATE`,
+  `CHAIN_SUPPORT_TITLE_PREFIX` and `CHAIN_SUPPORT_FIELDS` (the form's field ids, which are the
+  new-issue URL's query parameters) are its parts.
+
 ## Host discovery and chain coverage
 
 ```ts
@@ -156,6 +201,7 @@ URL, and nothing reads one from the environment. Whatever reads a chain takes it
 you: a client you construct for the EVM reads, and `rpcUrl` for `createSauceSvmClient`, which throws
 naming that option when it is missing.
 
-Three questions, three answers: whether a chain is canonical, whether a protocol is available on it,
-and whether a Sauce engine is deployed there. The deployment helpers report recorded addresses — what
+Four questions, four answers: whether a chain is canonical, whether the release supports
+transactions on it, whether a protocol is available on it, and whether a Sauce engine is deployed
+there. The deployment helpers report recorded addresses — what
 your execution path needs is code that is live, which is a read you make.
