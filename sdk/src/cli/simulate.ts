@@ -19,11 +19,13 @@ import {
 
 import { v12EngineAddress } from "../deployments/index.js";
 import { CliError } from "./args.js";
+import { mainReturnType } from "../routes/entry.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
-import { connect, kitchenFee, potState } from "./chain.js";
+import { connectAt, kitchenFee, potState } from "./chain.js";
 import {
   cookOf,
   kitchenAddress,
+  priceLimitNotes,
   valueOf,
   type ChainAccess,
   type CliFiles,
@@ -41,10 +43,13 @@ import {
 } from "./effects.js";
 import { baseUnits, type Funding, type FundRequest } from "./funding.js";
 import { rehearse, type Rehearsal } from "./rehearse.js";
+import { decodeReturned, returnedLine } from "./returned.js";
 
 export interface SimulateInput extends CookInput, ChainAccess {
   /** `--assume-balance`: what the Pot holds, for this rehearsal only. */
   readonly assume: readonly FundRequest[];
+  /** `--block`: the block to rehearse on (a number or a tag); the latest when absent. */
+  readonly block?: string;
 }
 
 /** One balance the rehearsal sets by state override. */
@@ -148,13 +153,14 @@ async function potBalances(
 function routeLines(
   rehearsal: Rehearsal,
   chain: string,
+  block: bigint,
   owner: Address,
   pot: Address,
   deploy: { readonly salt: Hex } | undefined,
   signed: boolean,
 ): string[] {
   return [
-    `Rehearsed with ${rehearsal.path}` +
+    `Rehearsed with ${rehearsal.path} on the state of block ${block}` +
       (rehearsal.fallback === undefined ? "" : ` (${rehearsal.fallback})`) +
       (signed
         ? "; the owner's key signed the pulls, and nothing was sent:"
@@ -178,7 +184,8 @@ export async function simulateCommand(
   files: CliFiles,
 ): Promise<CommandOutput> {
   const cook = cookOf(input, files);
-  const client = await connect(input.rpcUrl, input.chain);
+  // Every read and the rehearsal itself on one block: what it saw is what it says it saw.
+  const { client, block } = await connectAt(input.rpcUrl, input.chain, input.block);
   const state = await potState(client, cook.pot);
   const target = input.target;
   if (!state.deployed && !("owner" in target)) {
@@ -237,6 +244,7 @@ export async function simulateCommand(
   const how = routeLines(
     rehearsal,
     input.chain.slug,
+    block,
     owner,
     cook.pot,
     deploy,
@@ -255,9 +263,16 @@ export async function simulateCommand(
                 : ` (its balance word ${balance.slot.slot}: ${balance.slot.layout})`),
           ),
         ];
+  // What main returned, read as the type it declares.
+  const returnType = mainReturnType(input.text);
+  const returned =
+    rehearsal.ok && returnType !== undefined
+      ? decodeReturned(returnType, rehearsal.returns, input.chain)
+      : undefined;
   const json: Record<string, unknown> = {
     ok: rehearsal.ok,
     chain: input.chain.slug,
+    block: block.toString(),
     from: owner,
     to: cook.pot,
     value: value.toString(),
@@ -282,11 +297,16 @@ export async function simulateCommand(
           gas: rehearsal.gas === undefined ? null : rehearsal.gas.toString(),
           gasKind: rehearsal.gasKind,
           returns: rehearsal.returns,
+          ...(returnType === undefined ? {} : { returnType, returned: returned ?? null }),
           ...(effects === undefined ? {} : effectsJson(effects)),
         }
       : { stage: rehearsal.stage, reason: rehearsal.reason }),
   };
-  const notes = [...(funding?.notes ?? []), ...rehearsal.notes];
+  const notes = [
+    ...priceLimitNotes(input, cook.program.entryParams, input.args),
+    ...(funding?.notes ?? []),
+    ...rehearsal.notes,
+  ];
 
   if (!rehearsal.ok) {
     return {
@@ -312,6 +332,9 @@ export async function simulateCommand(
   return {
     text: [
       `The cook succeeds from ${owner}: ${gas}, returns ${rehearsal.returns}`,
+      ...(returnType === undefined
+        ? []
+        : [returnedLine(returnType, rehearsal.returns, input.chain)]),
       ...how,
       ...assumedLines,
       ...(effects === undefined ? [] : effectLines(effects)),

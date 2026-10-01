@@ -19,7 +19,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { canonicalChains } from "../src/chains/canonical.js";
-import { TOKEN_REGISTRY } from "../src/routes/token-registry.js";
+import { TOKEN_REGISTRY, svmTokenRows } from "../src/routes/token-registry.js";
 import { pascalOfSlug } from "../src/routes/index.js";
 
 const SDK_DIR = resolve(process.cwd());
@@ -76,8 +76,10 @@ describe("chain-accessor exports drift guard", () => {
       // svm-kind chains ALSO carry `& SvmVenueAccessors` -- see the dedicated assertion below,
       // which pins that suffix to exactly the svm chains and no others.
       const svm = c.kind === "svm" ? " & SvmVenueAccessors" : "";
-      // ...and a chain with registry tokens `& Tokens<"USDC" | ...>`, pinned below.
-      const symbols = (TOKEN_REGISTRY[c.id] ?? []).map((row) => JSON.stringify(row.symbol));
+      // ...and a chain with registry tokens `& Tokens<"USDC" | ...>`, pinned below: an EVM
+      // chain's tokens, a Solana chain's registered mints.
+      const rows = c.kind === "svm" ? svmTokenRows(c) : (TOKEN_REGISTRY[c.id] ?? []);
+      const symbols = rows.map((row) => JSON.stringify(row.symbol));
       const tokens = symbols.length > 0 ? ` & Tokens<${symbols.join(" | ")}>` : "";
       expect(committed).toContain(
         `export const ${name} = composedChainGlobal("${name}") as Composed<"${name}">${svm}${tokens};`,
@@ -91,7 +93,7 @@ describe("chain-accessor exports drift guard", () => {
 
   it("the `& SvmVenueAccessors` intersection appears exactly once per svm-kind chain, and on no other", () => {
     const svmChains = canonicalChains.filter((c) => c.kind === "svm");
-    const matches = committed.match(/& SvmVenueAccessors[;&]/g) ?? [];
+    const matches = committed.match(/& SvmVenueAccessors[; ]/g) ?? [];
     expect(matches).toHaveLength(svmChains.length);
   });
 

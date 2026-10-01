@@ -98,7 +98,11 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
    what the program returns and what the cook did — token transfers and approvals, native
    transfers, each address's net change — or the decoded reason it reverts, and names the route
    it took: `eth_simulateV1`, or `eth_call` where the endpoint lacks it, which shows no transfers.
-   `--json` gives the same for a program to read.
+   It reads everything on one block, the latest or the one `--block <number>` names, and says
+   which. Where `main` declares a return type, the return is read as that type
+   (`main returns Address: …`). A pool's short revert string says what it checks (`"SPL"`, a price
+   limit on the wrong side of the pool's price or at a bound). `--json` gives the same for a
+   program to read.
 6. **Run**:
    `npx sauce run pay.sauce.ts --chain ethereum --config sauce.config.json --keystore <keystore> --args <recipient> 1000000`
    compiles, rehearses, signs, sends and waits, then prints the hash, status and gas used, what the

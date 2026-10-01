@@ -107,6 +107,22 @@ export interface SourceNamespace {
   readonly contracts: readonly SourceContract[];
 }
 
+/**
+ * A contract the registry knows only by its ABI — an interface, with no fixed address — which a
+ * program binds to an address it gives: `Erc4626.Vault.at(vault).totalAssets()`.
+ */
+export interface SourceInterface {
+  /** The namespace a program writes: `Erc4626`. */
+  readonly namespace: string;
+  /** The contract: `Vault`. */
+  readonly name: string;
+  /** The protocol slug it belongs to. */
+  readonly protocol: string;
+  /** The protocol's display name. */
+  readonly protocolName: string;
+  readonly methods: readonly SourceMethod[];
+}
+
 export interface SourceChainName {
   /** What a program writes: `Base`, `Arbitrum`. */
   readonly key: string;
@@ -126,6 +142,8 @@ export interface SourceGlobals {
   readonly chain: SourceChainName;
   readonly tokens: readonly SourceToken[];
   readonly protocols: readonly SourceNamespace[];
+  /** The interfaces a program binds to an address of its own (EVM chains): the same on each. */
+  readonly interfaces: readonly SourceInterface[];
   readonly chains: readonly SourceChainName[];
   readonly defines: Readonly<Record<string, bigint | boolean | number>>;
   readonly modules: readonly SourceModule[];
@@ -157,13 +175,41 @@ function contractOn(
     address: target.address,
     protocol: target.protocol,
     default: isDefault,
-    methods: target.descriptor.methods.map((method) => ({
-      name: method.name,
-      signature: method.signature,
-      declaration: declarationOf(method),
-      stateMutability: method.stateMutability,
-    })),
+    methods: methodsOf(target.descriptor.methods),
   };
+}
+
+const methodsOf = (methods: readonly DescriptorMethod[]): SourceMethod[] =>
+  methods.map((method) => ({
+    name: method.name,
+    signature: method.signature,
+    declaration: declarationOf(method),
+    stateMutability: method.stateMutability,
+  }));
+
+/** Every interface descriptor a program can bind on `chain`: each protocol namespace's contracts
+ *  with an ABI and no fixed address, whose selectors match the deployed contracts. */
+function interfacesOn(chain: CanonicalChain): SourceInterface[] {
+  if (chain.kind !== "evm") return [];
+  const interfaces: SourceInterface[] = [];
+  for (const key of [...NAMESPACE_KEYS].sort()) {
+    const ns = resolveNamespace(key)!;
+    if (ns.kind !== "protocol") continue;
+    for (const [name, descriptor] of [...ns.contracts].sort(([a], [b]) => (a < b ? -1 : 1))) {
+      if (descriptor.kind !== "interface" || descriptor.coverage.typeFidelity === "widened") {
+        continue;
+      }
+      interfaces.push({
+        namespace: key,
+        name,
+        protocol: ns.protocol,
+        protocolName: descriptor.protocolName,
+        methods: methodsOf(descriptor.methods),
+      });
+    }
+  }
+
+  return interfaces;
 }
 
 function namespacesOn(chain: CanonicalChain): SourceNamespace[] {
@@ -233,6 +279,7 @@ export function sourceGlobals(chain: ChainRef): SourceGlobals {
       })),
     ].sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0)),
     protocols: namespacesOn(resolved),
+    interfaces: interfacesOn(resolved),
     chains: CANONICAL_CHAINS.map((other) => chainName(other as CanonicalChain)),
     defines: chainDefines(resolved),
     modules: chainAmbient(resolved).map((specifier) => ({

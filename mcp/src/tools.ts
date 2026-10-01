@@ -20,6 +20,7 @@ import { toolTerms } from "./terms.js";
 import {
   actionsCommand,
   actionsProgram,
+  addressDefinesOf,
   assumedBalances,
   CANONICAL_CHAINS,
   compileCommand,
@@ -31,6 +32,7 @@ import {
   fillTargets,
   fundingFor,
   globalsCommand,
+  pastDeadline,
   inspectCommand,
   inspectFile,
   kitchenFee,
@@ -358,6 +360,9 @@ function programOf(args: ProgramArgs, fallback?: CanonicalChain): Program {
   );
   const defines = parseDefineMap(args.defines ?? {}, "defines", chain.kind);
   definesReach(file, args.source, Object.keys(defines));
+  // The defines written as addresses, which the compile report shows as one; any other value is the
+  // integer it is.
+  const addresses = addressDefinesOf(args.defines ?? {}, chain.kind);
 
   return {
     input: {
@@ -365,6 +370,7 @@ function programOf(args: ProgramArgs, fallback?: CanonicalChain): Program {
       text: args.source,
       chain,
       defines,
+      ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
       compactArgs: args.compactArgs === true,
       intents: intentsOf(args),
     },
@@ -1533,7 +1539,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ? undefined
           : await reach.endpoint(program.input.chain, args.rpcUrl);
 
-      return fromCommand(
+      // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows; say so.
+      const past = pastDeadline(program.input);
+      const filled = fromCommand(
         await fillCommand({
           intents: fillTargets(program.input, program.files),
           from: program.input.file,
@@ -1549,6 +1557,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ...(args.claimant === undefined ? {} : { claimant: args.claimant as Hex }),
         }),
       );
+
+      return past === undefined
+        ? filled
+        : {
+            ...filled,
+            notes: [`${past}: the rehearsal shows the Portal refusing it`, ...(filled.notes ?? [])],
+          };
     },
   );
 

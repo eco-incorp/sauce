@@ -220,6 +220,23 @@ export function mainParams(source: string): EntryParam[] {
   }));
 }
 
+/**
+ * The type `main` declares it returns (`Address`, `Uint256[]`, `{ out: Uint256 }`), with a record an
+ * `interface` names spelled out inline as `mainParams` does — `undefined` when `main` declares none
+ * or `void`, or there is no `main`.
+ */
+export function mainReturnType(source: string): string | undefined {
+  const main = locateMain(source);
+  if (main === undefined) return undefined;
+  const annotation = source
+    .slice(main.close + 1, main.returnEnd)
+    .replace(/^\s*:/, "")
+    .trim();
+  if (annotation === "" || annotation === "void") return undefined;
+
+  return inlineRecords(annotation, interfaces(source));
+}
+
 /** Each `interface` the module declares, as the inline object type it names. */
 function interfaces(source: string): ReadonlyMap<string, string> {
   const records = new Map<string, string>();

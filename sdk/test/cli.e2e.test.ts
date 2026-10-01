@@ -344,8 +344,11 @@ describeEvm("sauce, sent to a chain", () => {
         new RegExp(`^The cook succeeds from ${KEYSTORE_OWNER}: gas used \\d+, returns 0x`),
       );
       // A deployed Pot: the cook alone, and what it moved, read from its logs.
-      expect(ok.stdout).toContain(
-        `Rehearsed with eth_simulateV1; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}\n`,
+      expect(ok.stdout).toMatch(
+        new RegExp(
+          `^Rehearsed with eth_simulateV1 on the state of block \\d+; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}$`,
+          "m",
+        ),
       );
       expect(ok.stdout).toContain(`  1 USDC: ${labelled} (the Pot) -> ${THIRD_RECIPIENT}`);
       // Nothing moved: it was an eth_call.
@@ -963,11 +966,16 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
         "endpoint, rehearses that.\n",
     );
     expect(run.code).toBe(0);
+    // Each with its gas, as the text gives it.
+    const gas = expect.stringMatching(/^[1-9]\d*$/);
     expect(JSON.parse(run.stdout)).toMatchObject({
       ok: true,
       // After the transfer and the publish, the Portal counts it funded — what a solver checks.
       intents: [{ fundVia: "transfer", vault: vaultOf(theIntent(OWNER.address)), funded: true }],
-      transactions: [{ status: "success" }, { status: "success" }],
+      transactions: [
+        { status: "success", gasUsed: gas },
+        { status: "success", gasUsed: gas },
+      ],
     });
     expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(REWARD);
     expect(await arbitrum.balanceOf(usdc, vaultOf(theIntent(OWNER.address)))).toBe(0n);
@@ -984,6 +992,14 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     const short = await dryRun();
     expect(short.code).toBe(1);
     expect(short.stdout).toMatch(new RegExp(`^transfer ${usdc} to the vault: reverts: `, "m"));
+    // And in JSON, the same reason beside the transaction.
+    const shortJson = JSON.parse((await dryRun("--json")).stdout) as {
+      transactions: Array<{ reason?: string }>;
+    };
+    const said = new RegExp(`^transfer ${usdc} to the vault: reverts: (.+)$`, "m").exec(
+      short.stdout,
+    )![1];
+    expect(shortJson.transactions[0]!.reason).toBe(said);
     const run = await dryRun("--assume-balance", "USDC:2", "--json");
     expect(run.code).toBe(0);
     expect(JSON.parse(run.stdout)).toMatchObject({
