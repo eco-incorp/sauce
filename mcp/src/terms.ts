@@ -50,6 +50,8 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [/--intent-creator\b/g, "intentCreator"],
   [/--intent-execution-fee\b/g, "intentExecutionFee"],
   [/--intent-fund-via\b/g, "intentFundVia"],
+  [/--max-execution-fee\b/g, "maxExecutionFee"],
+  [/--via\b/g, "via"],
   [/--compact-args\b/g, "compactArgs"],
   [/--defines?\b/g, "defines"],
   [/--chain\b/g, "chain"],
