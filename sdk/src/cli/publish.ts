@@ -69,7 +69,7 @@ import {
 } from "./commands.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
 import { baseUnits, type FundRequest } from "./funding.js";
-import { intentChains, requireSupported } from "./support.js";
+import { intentDestinations, requireSupported } from "./support.js";
 
 const ERC20 = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -447,7 +447,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
   // A dry run only rehearses; the transactions, printed or sent, go only where every chain is
   // supported.
   if (input.format !== undefined || !input.dryRun) {
-    requireSupported("publishing intents", [input.chain, ...intentChains(intents)]);
+    requireSupported("publishing intents", [input.chain, ...intentDestinations(intents)]);
   }
   const portal = ecoRoutesPortal(input.chain);
   const from = input.account?.address ?? input.from;

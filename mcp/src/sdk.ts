@@ -80,7 +80,10 @@ export {
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export {
-  intentChains,
+  CHAIN_SUPPORT_ISSUES_URL,
+  CHAIN_SUPPORT_NEW_ISSUE_URL,
+  chainSupport,
+  chainSupportRequest,
   previewRefusal,
   PreviewChainError,
   requireSupported,
@@ -106,9 +109,3 @@ export {
   requireChain,
   type CanonicalChain,
 } from "../../sdk/dist/chains/canonical.js";
-export {
-  CHAIN_SUPPORT_ISSUES_URL,
-  CHAIN_SUPPORT_NEW_ISSUE_URL,
-  chainSupport,
-  chainSupportRequest,
-} from "../../sdk/dist/chains/support.js";

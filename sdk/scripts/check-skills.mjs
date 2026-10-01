@@ -145,6 +145,9 @@ const compilerApi = await load(`${PKG}/compiler`);
 const deploymentsApi = await load(`${PKG}/deployments`);
 const ecoRoutes = await load(`${PKG}/protocols/eco-routes`);
 const { runCli } = await import(pathToFileURL(join(SDK_DIR, "sdk/dist/cli/run.js")).href);
+// Which chains the command builds transactions on: the CLI's own policy, which the package exports
+// none of, read from the bin's module as `runCli` is.
+const support = await import(pathToFileURL(join(SDK_DIR, "sdk/dist/cli/support.js")).href);
 // TypeScript and Node's typings: the package's own TypeScript, and the first @types/node found
 // beside it, in the SDK workspace, or in the directory the check runs from.
 const ts = createRequire(join(SDK_DIR, "package.json"))("typescript");
@@ -515,6 +518,7 @@ const REFERENCES = await skillsReferences(
     deployments: deploymentsApi,
     cctp: await load(`${PKG}/protocols/cctp`),
     compiler: compilerApi,
+    support,
     loadProtocol: (slug) => load(`${PKG}/protocols/${slug}`),
   },
   (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
@@ -689,7 +693,7 @@ if (index !== undefined) {
       if (chains.length === 0) fail(rel(index.path), `gives ${entry} no chain to check it on`);
       // Its cook is built where the release supports the chain: one of those at least, so the
       // example's transaction is checked as well as its refusal.
-      else if (!chains.some((chain) => sdk.isSupportedChain(chain)))
+      else if (!chains.some((chain) => support.isSupportedChain(chain)))
         fail(rel(index.path), `gives ${entry} no supported chain, where its cook would build`);
       programChains.set(entry, chains);
     }
@@ -750,14 +754,14 @@ async function compileJson(file, chain, extra) {
  */
 async function txOn(where, chain, argv) {
   const tx = await sauce(argv);
-  if (sdk.chainSupport(chain) === "supported") {
+  if (support.chainSupport(chain) === "supported") {
     if (tx.code !== 0) fail(where, `sauce tx on ${chain} fails: ${diagnostic(tx.stderr)}`);
     else if (JSON.parse(tx.stdout).data === undefined)
       fail(where, `sauce tx on ${chain} built no cook`);
     return;
   }
   counts.refusals++;
-  const request = sdk.chainSupportRequest(chain).newIssueUrl;
+  const request = support.chainSupportRequest(chain).newIssueUrl;
   if (
     tx.code !== 1 ||
     tx.stdout !== "" ||

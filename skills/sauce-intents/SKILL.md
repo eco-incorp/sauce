@@ -29,8 +29,9 @@ the `sauce` command and its MCP server build and send none of its transactions. 
 anything is built, signed or sent:
 
 - **Publishing** — `sauce intent publish` (sent, or printed with `--format`), and `sauce run` or
-  `sauce tx` of a file that opens the intent — is refused unless the source and every destination,
-  a nested intent's too, are supported.
+  `sauce tx` of a file that opens the intent — is refused unless the source and every destination
+  it opens are supported. The later levels of a cascade are not checked: keep every level on a
+  supported chain.
 - **Each later step** is refused by the chain it is sent on: `fill --send`, `prove` and `cancel` by
   the destination; `claim` and `refund` by the source.
 
@@ -378,8 +379,9 @@ Each level is a separate fulfilment by a solver, later, on its own chain: a fail
 does not undo an earlier one. The child is published and funded **by the parent's body**, as (b)
 above: when the Ethereum level runs, the shared Pot there pays the next level's reward into its
 vault on Ethereum's Portal from what it holds, in Ethereum's USDC, and calls `publish`, so the child
-is published like any other intent and any solver can discover it. Every level's chain must be
-supported for the first one to publish: here Base, Ethereum, then Base again. Each level's deadline must be no
+is published like any other intent and any solver can discover it. Keep every level on a supported
+chain, as here (Base, Ethereum, then Base again): the command checks the first level's chains only.
+Each level's deadline must be no
 earlier than its parent's. (The TypeScript cascade builder, `.nest()` in `sauce-typescript`, also
 funds a child by a transfer into its vault by default, but with no publication of its own, and
 takes `publishAndFund` as an option.)

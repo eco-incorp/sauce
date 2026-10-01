@@ -711,25 +711,30 @@ built `sauce mcp`); `chain.e2e.test.ts` runs the tools against an anvil with the
 through `sdk/test/cli-anvil.ts`, gated on `SAUCE_V12_RUNTIME_CREATION_HEX` like the CLI's chain
 suites. The consumer guide is `docs/guides/mcp.md`.
 
-**Which chains execute.** `sdk/src/chains/support.ts` is the one list of the chains the release
-supports — Ethereum, Base and Solana (`SUPPORTED_CHAIN_SLUGS`) — and every other canonical chain is
-a PREVIEW chain; it also builds the chain-support request (`chainSupportRequest`: the GitHub search,
-the prefilled issue-form URL, the title, body and comment). The TypeScript builders take every chain:
-only the CLI and the MCP server are gated, by ONE function, `sdk/src/cli/support.ts#requireSupported`.
-It is called from the command functions both front ends share (`txCommand`, `runCommand`,
-`potDeployCommand` and `potCommand`'s deployment, `publishCommand` outside a dry run, `fillCommand`
-with `send`, the lifecycle `build*`, the Solana cook and Pot creation) and again wherever `run.ts` or
-a tool reaches a network or a key first, so the refusal always comes before either. A cook or a
-publish is refused when any chain it involves is preview: its own, and every intent destination at
-any depth (`LoweredIntent.nested`, `intentChains`); a lifecycle step by the chain it is sent on.
-Compiling, simulating, dry runs and reads are never gated, and no flag lifts the gate. A refusal is
-`PreviewChainError` with a `PreviewChainRefusal`: exit 1 from the command, `{ refused }` from a tool
-(`refusedResult`). The issue form is `.github/ISSUE_TEMPLATE/chain-support.yml`, its field ids held
-to `CHAIN_SUPPORT_FIELDS` by `chains-support.test.ts`; `cli-support.test.ts` and
-`mcp/test/support.test.ts` hold every gated path to its refusal before any request. To support a
-chain, add its slug, rebuild (the skills' chain references regenerate from the list), and update
-`docs/README.md#supported-chains` and the skills that name the three. A test that builds or sends a
-transaction through the CLI or MCP uses a supported chain.
+**Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
+`sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
+and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command
+builds transactions on — Ethereum, Base and Solana (`SUPPORTED_CHAIN_SLUGS`); every other
+canonical chain is a PREVIEW chain — the chain-support request (`chainSupportRequest`: the GitHub
+search, the prefilled issue-form URL, the title, body and comment), and the ONE gate,
+`requireSupported`. The MCP server imports them from there (`mcp/src/sdk.ts`), and the skills'
+generator and checker read the built `cli/support.js`. The gate is called from the command
+functions both front ends share (`txCommand`, `runCommand`, `potDeployCommand` and `potCommand`'s
+deployment, `publishCommand` outside a dry run, `fillCommand` with `send`, the lifecycle `build*`,
+the Solana cook and Pot creation) and again wherever `run.ts` or a tool reaches a network or a key
+first, so the refusal always comes before either. A cook or a publish is refused by its own chain
+and the destination of each intent it opens (`intentDestinations`; a cascade's later levels are not
+seen, the lowering reporting only a program's own intents); a lifecycle step by the chain it is
+sent on. Compiling, simulating, dry runs and reads are never gated, and no flag lifts the gate. A
+refusal is `PreviewChainError` with a `PreviewChainRefusal`: exit 1 from the command, `{ refused }`
+from a tool (`refusedResult`), whose output schema is `refusable(...)` — every field optional
+beside `refused`, because a client validates an error's structured content too. The issue form is
+`.github/ISSUE_TEMPLATE/chain-support.yml`, its field ids held to `CHAIN_SUPPORT_FIELDS` by
+`cli-chain-support.test.ts`; `cli-support.test.ts` and `mcp/test/support.test.ts` hold every gated
+path to its refusal before any request. To support a chain, add its slug, rebuild (the skills'
+chain references regenerate from the list), and update `docs/README.md#supported-chains` and the
+skills that name the three. A test that builds or sends a transaction through the CLI or MCP uses a
+supported chain.
 
 ## Agent skills
 

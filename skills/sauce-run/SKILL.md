@@ -40,7 +40,8 @@ Everything that leaves a transaction ready to sign, unsigned JSON included, or s
 there before anything is read or signed: `tx`, `run`, `pot --deploy`, `pot --format cast`,
 `sauce intent publish` and the intent steps sent there (`sauce intent fill --send`, `prove`,
 `claim`, `refund`, `cancel`). An intent publishes only when its source and every destination it
-opens, nested ones too, are supported; each later step is refused by the chain it is sent on.
+opens are supported; each later step is refused by the chain it is sent on. A cascade's later
+levels are not checked: keep them on supported chains too.
 There is no flag that overrides it.
 
 The refusal exits 1 and names the supported chains and the chain-support request for the chain:
