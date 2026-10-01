@@ -40,7 +40,6 @@ import { chainServedBy, connect, endpointFor } from "./chain.js";
 import {
   compileCommand,
   pastDeadline,
-  priceLimitNotes,
   compileProgram,
   potCommand,
   potDeployCommand,
@@ -1348,10 +1347,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     run: async (args, io) => {
       const program = await programInput(args, io);
-      // An intent's price limit at a bound fills nothing on its destination: say so before sending.
-      for (const note of priceLimitNotes(program, [], undefined))
-        io.stderr(`${note}
-`);
       if (program.chain.kind === "svm") {
         throw new UsageError(
           "sauce publish sends a source chain's Portal transactions from an EVM wallet. " +

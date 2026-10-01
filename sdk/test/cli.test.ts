@@ -404,6 +404,20 @@ describe("sauce compile", () => {
         "strictly between 4295128739 and",
     );
     expect(run.stderr).toContain("sqrtPriceLimitX96 = 4295128739 is MIN_SQRT_RATIO");
+    // An intent's limit, named before it is published, whichever way its reward is paid.
+    const intent = file(
+      "limit-intent.sauce.ts",
+      "// @chain arbitrum\nBase(() => {\n  require(SQRT_PRICE_LIMIT_X96 > 0n);\n" +
+        "  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n",
+    );
+    const published = await sauce(
+      ...["publish", intent, "--define", `SQRT_PRICE_LIMIT_X96=${max}`],
+      ...["--define", `RECIPIENT=${RECIPIENT}`, "--intent-deadline", "2000000000"],
+      ...["--intent-creator", CREATOR, "--intent-execution-fee", "0"],
+      ...["--from", CREATOR, "--format", "json"],
+    );
+    expect(published.code).toBe(0);
+    expect(published.stderr).toContain(`SQRT_PRICE_LIMIT_X96 = ${max} is MAX_SQRT_RATIO`);
     // 0 (no limit) and a limit inside the bounds pass quietly.
     const fine = await sauce(
       ...["compile", program, "--chain", "base", "--define", "SQRT_PRICE_LIMIT_X96=0"],
