@@ -37,11 +37,19 @@ import {
   type TransactionPartialSigner,
   type TransactionSigner,
 } from "@solana/kit";
+import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import type { AccountManifest } from "sauce-compiler";
-import { bytesToHex, hexToBytes, type Hex } from "viem";
+import { bytesToHex, formatUnits, hexToBytes, type Hex } from "viem";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
-import { parseEntryType, type EntryType, type EntryValue } from "../routes/entry.js";
+import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import {
+  mainReturnType,
+  parseEntryType,
+  type EntryType,
+  type EntryValue,
+} from "../routes/entry.js";
+import { svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
@@ -79,6 +87,7 @@ import {
   type CommandOutput,
   type ProgramInput,
 } from "./commands.js";
+import { decodeReturned, returnedLine } from "./returned.js";
 import { secret } from "./signer.js";
 import {
   accountsNow,
@@ -426,7 +435,11 @@ async function sendInstructions(
 // Accounts, the Pot, the cook
 // ---------------------------------------------------------------------------------------------
 
-/** `--account name=<pubkey | pot | owner>`, parsed. */
+/** `pot:<token>` or `owner:<token>`: that one's associated token account for a mint, named by a
+ *  registered symbol (`USDC`) or its base58 address. */
+const TOKEN_ACCOUNT = /^(pot|owner):([A-Za-z0-9]+)$/;
+
+/** `--account name=<pubkey | pot | owner | pot:<token> | owner:<token>>`, parsed. */
 export function parseAccounts(raws: readonly string[]): Record<string, string> {
   const accounts: Record<string, string> = {};
   for (const raw of raws) {
@@ -434,16 +447,76 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
     const name = raw.slice(0, at).trim();
     const value = raw.slice(at + 1).trim();
     if (at <= 0 || value === "") {
-      throw new UsageError(`--account: expected NAME=<address | pot | owner>, got '${raw}'`);
+      throw new UsageError(
+        `--account: expected NAME=<address | pot | owner | pot:<token>>, got '${raw}'`,
+      );
     }
     if (Object.hasOwn(accounts, name)) throw new UsageError(`--account: ${name} given twice`);
-    if (value !== "pot" && value !== "owner" && !isAddress(value)) {
-      throw new UsageError(`--account ${name}: '${value}' is not an address, pot or owner`);
+    if (value !== "pot" && value !== "owner" && !isAddress(value) && !TOKEN_ACCOUNT.test(value)) {
+      throw new UsageError(
+        `--account ${name}: '${value}' is not an address, pot, owner, or a token account: ` +
+          "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the owner's",
+      );
     }
     accounts[name] = value;
   }
 
   return accounts;
+}
+
+/** One `pot:<token>`/`owner:<token>` resolved: the account, and what it is for a person. */
+interface TokenAccountNamed {
+  readonly address: Address;
+  readonly label: string;
+}
+
+/**
+ * Each `--account` value that names a token account (`pot:USDC`, `owner:<mint>`) as that
+ * account: the associated token account of the Pot (or the owner) for the mint, under the classic
+ * SPL Token program — the one `@sauce/token` takes. A symbol is one of the cluster's registered
+ * mints; any other mint is given by its base58 address. Every other value is left as it is.
+ */
+export async function resolveTokenAccounts(
+  given: Readonly<Record<string, string>>,
+  owner: Address,
+  pot: Address,
+  chain: CanonicalChain,
+): Promise<{
+  readonly accounts: Record<string, string>;
+  readonly named: ReadonlyMap<string, TokenAccountNamed>;
+}> {
+  const accounts: Record<string, string> = {};
+  const named = new Map<string, TokenAccountNamed>();
+  const rows = svmTokenRows(chain);
+  for (const [name, value] of Object.entries(given)) {
+    const match = TOKEN_ACCOUNT.exec(value);
+    if (match === null) {
+      accounts[name] = value;
+      continue;
+    }
+    const [, whose, token] = match as unknown as [string, "pot" | "owner", string];
+    const row = rows.find((candidate) => candidate.symbol === token);
+    if (row === undefined && !isAddress(token)) {
+      throw new UsageError(
+        `--account ${name}=${value}: ${token} is not a mint ${chain.slug} registers ` +
+          `(${rows.map((candidate) => candidate.symbol).join(", ") || "none"}): give the mint's ` +
+          `base58 address, ${whose}:<mint>`,
+      );
+    }
+    const mint = address(row?.mint ?? token);
+    const [account] = await findAssociatedTokenPda({
+      owner: whose === "pot" ? pot : owner,
+      mint,
+      tokenProgram: TOKEN_PROGRAM_ADDRESS,
+    });
+    accounts[name] = account;
+    named.set(name, {
+      address: account,
+      label: `${whose === "pot" ? "the Pot" : "the owner"}'s ${row?.symbol ?? `mint ${mint}`} account`,
+    });
+  }
+
+  return { accounts, named };
 }
 
 /**
@@ -500,19 +573,53 @@ const potOf = async (target: SvmTarget): Promise<Address> =>
   (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).address;
 
 /** Names for the accounts a cook writes: the owner, the Pot, the Kitchen's fee config (where its
- *  fee goes), and each `--account` by its name. */
-async function accountLabels(input: SvmCookInput, pot: Address): Promise<Map<string, string>> {
+ *  fee goes), and each `--account` by its name (a token account named `pot:USDC` as what it is). */
+async function accountLabels(
+  input: SvmCookInput,
+  pot: Address,
+  given: Prepared["given"],
+): Promise<Map<string, string>> {
   const labels = new Map<string, string[]>();
   const add = (account: string, name: string) =>
     labels.set(account, [...(labels.get(account) ?? []), name]);
   add(input.owner, "the owner");
   add(pot, "the Pot");
   add((await deriveExecutionFeeConfigPda(kitchen())).address, "the Kitchen's fee config");
-  for (const [name, value] of Object.entries(input.accounts)) {
-    if (value !== "pot" && value !== "owner") add(value, name);
+  for (const [name, value] of Object.entries(given.accounts)) {
+    const token = given.named.get(name);
+    if (value !== "pot" && value !== "owner")
+      add(value, token === undefined ? name : `${name}, ${token.label}`);
   }
 
   return new Map([...labels].map(([account, names]) => [account, names.join(", ")]));
+}
+
+/**
+ * A note for each account `--account` names that the cluster does not have: a program reading it
+ * fails, and SVM guards fail with no message, so this says which. A token account the Pot or the
+ * owner has not had created yet says how one comes to be.
+ */
+async function missingAccounts(rpc: Rpc, url: string, given: Prepared["given"]): Promise<string[]> {
+  const named = Object.entries(given.accounts).filter(
+    ([, value]) => value !== "pot" && value !== "owner",
+  );
+  const there = await Promise.all(
+    named.map(([name, value]) => exists(rpc, url, address(value), `the account ${name}`)),
+  );
+
+  return named.flatMap(([name, value], index) => {
+    if (there[index]) return [];
+    const token = given.named.get(name);
+
+    return [
+      `--account ${name}: ${value} does not exist on solana` +
+        (token === undefined
+          ? ""
+          : ` (${token.label}: nothing has created it yet; a wallet's SPL transfer to the ` +
+            "account's owner creates it, or create it with an associated-token-account " +
+            "instruction)"),
+    ];
+  });
 }
 
 /** The `sauce pot` that creates `target`'s Pot. */
@@ -627,6 +734,8 @@ interface Prepared {
   readonly client: SauceSvmClient;
   readonly accounts: AccountResolution;
   readonly manifest: AccountManifest;
+  /** `--account`'s values with every `pot:<token>` resolved to its account. */
+  readonly given: Awaited<ReturnType<typeof resolveTokenAccounts>>;
 }
 
 /** Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`. */
@@ -640,7 +749,8 @@ async function prepare(
   const manifest = program.manifest ?? { accounts: [] };
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
-  const accounts = resolution(manifest, input.accounts, input.owner, pot, signer);
+  const given = await resolveTokenAccounts(input.accounts, input.owner, pot, input.chain);
+  const accounts = resolution(manifest, given.accounts, input.owner, pot, signer);
   const fee = await kitchenFee(rpc, input.rpcUrl);
   const client = await createSauceSvmClient({
     rpcUrl: input.rpcUrl,
@@ -651,7 +761,7 @@ async function prepare(
     maxExecutionFee: fee,
   });
 
-  return { rpc, pot, fee, program, bytecode, client, accounts, manifest };
+  return { rpc, pot, fee, program, bytecode, client, accounts, manifest, given };
 }
 
 /**
@@ -703,6 +813,9 @@ export async function svmCookSize(
   const owner = placeholderKey(0);
   const target: SvmTarget = { owner, salt: `0x${"00".repeat(32)}` };
   const pot = await potOf(target);
+  // A token account (`pot:USDC`) is a distinct account of its own, as it is in a real cook.
+  const accountsGiven = (await resolveTokenAccounts(given, owner, pot, requireChain("solana")))
+    .accounts;
   const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
   const assumed = slots.filter((slot) => !Object.hasOwn(given, slot.name)).map((s) => s.name);
   const named: AccountManifest = { accounts: slots };
@@ -711,7 +824,7 @@ export async function svmCookSize(
   // for itself where the slot asks for a signer.
   const resolved: AccountResolution = resolution(
     named,
-    Object.fromEntries(slots.map((slot) => [slot.name, given[slot.name] ?? "pot"])),
+    Object.fromEntries(slots.map((slot) => [slot.name, accountsGiven[slot.name] ?? "pot"])),
     owner,
     pot,
     signer,
@@ -860,10 +973,14 @@ export async function svmSimulateCommand(
           tracked,
           before,
           result.accounts,
-          await accountLabels(input, prepared.pot),
+          await accountLabels(input, prepared.pot, prepared.given),
           input.owner,
         )
       : undefined;
+  const missing = await missingAccounts(prepared.rpc, input.rpcUrl, prepared.given);
+  // What main returned: the engine's return data, read as the type main declares.
+  const returns = result.ok ? bytesToHex(result.returnData ?? new Uint8Array()) : undefined;
+  const returnType = mainReturnType(input.text);
   const json = {
     ok: result.ok,
     chain: "solana",
@@ -871,6 +988,11 @@ export async function svmSimulateCommand(
     pot: prepared.pot,
     fee: prepared.fee.toString(),
     path: "simulateTransaction",
+    ...(returns === undefined ? {} : { returns }),
+    ...(returns === undefined || returnType === undefined
+      ? {}
+      : { returnType, returned: decodeReturned(returnType, returns, input.chain) ?? null }),
+    ...(missing.length === 0 ? {} : { missingAccounts: missing }),
     createPot: created ? null : { kitchen: kitchen(), owner: input.owner, salt: input.salt },
     ...(result.unitsConsumed === undefined
       ? {}
@@ -892,16 +1014,25 @@ export async function svmSimulateCommand(
   if (result.ok) {
     return {
       text: [
-        `The cook succeeds from ${input.owner}: ${result.unitsConsumed ?? "?"} compute units`,
+        `The cook succeeds from ${input.owner}: ${result.unitsConsumed ?? "?"} compute units` +
+          (returns === undefined || returns === "0x" ? "" : `, returns ${returns}`),
+        ...(returns === undefined || returnType === undefined
+          ? []
+          : [returnedLine(returnType, returns, input.chain)]),
         ...how,
         ...(moved === undefined ? [] : svmMovedLines(moved)),
       ].join("\n"),
       json,
-      ...(moved === undefined
+      ...(moved === undefined || missing.length > 0
         ? {
             notes: [
-              "the endpoint returned no account states from simulateTransaction, so what the " +
-                "cook moved is not shown",
+              ...missing,
+              ...(moved === undefined
+                ? [
+                    "the endpoint returned no account states from simulateTransaction, so what " +
+                      "the cook moved is not shown",
+                  ]
+                : []),
             ],
           }
         : {}),
@@ -917,7 +1048,9 @@ export async function svmSimulateCommand(
       ...result.logs.map((l) => `  ${l}`),
     ].join("\n"),
     json,
-    ...(short === undefined ? {} : { notes: [short] }),
+    ...(short === undefined && missing.length === 0
+      ? {}
+      : { notes: [...missing, ...(short === undefined ? [] : [short])] }),
     exitCode: 1,
   };
 }
@@ -1417,6 +1550,53 @@ async function deployment(
   };
 }
 
+/** The Pot's associated token account for one registered mint, and what it holds. */
+export interface SvmPotTokenAccount {
+  readonly symbol: string;
+  readonly mint: string;
+  readonly decimals: number;
+  /** The associated token account of the Pot for the mint (classic SPL Token). */
+  readonly account: Address;
+  readonly exists: boolean;
+  /** Base units, as a decimal string; `null` while the account does not exist. */
+  readonly balance: string | null;
+}
+
+/**
+ * The Pot's associated token account for every mint the chain's cluster registers — each one a
+ * classic SPL Token mint (the registry's own gate) — whether it exists, and its balance: the
+ * account `--account NAME=pot:<symbol>` passes.
+ */
+export async function svmPotTokenAccounts(
+  target: SvmTarget,
+  rpcUrl: string,
+  chain: CanonicalChain,
+): Promise<readonly SvmPotTokenAccount[]> {
+  const pot = await potOf(target);
+  const rpc = createSolanaRpc(rpcUrl);
+
+  return Promise.all(
+    svmTokenRows(chain).map(async (row) => {
+      const [account] = await findAssociatedTokenPda({
+        owner: pot,
+        mint: address(row.mint),
+        tokenProgram: TOKEN_PROGRAM_ADDRESS,
+      });
+      const base = { symbol: row.symbol, mint: row.mint, decimals: row.decimals, account };
+      const { value } = await ask(rpcUrl, `the Pot's ${row.symbol} account`, () =>
+        rpc.getAccountInfo(account, { encoding: "base64" }).send(),
+      );
+      if (value === null) return { ...base, exists: false, balance: null };
+      // An SPL token account's amount: a u64, little-endian, at byte 64.
+      const data = new Uint8Array(getBase64Encoder().encode(value.data[0]));
+      const balance =
+        data.length >= 72 ? new DataView(data.buffer, data.byteOffset).getBigUint64(64, true) : 0n;
+
+      return { ...base, exists: true, balance: balance.toString() };
+    }),
+  );
+}
+
 /** `sauce pot --chain solana` with an endpoint: the prediction, and what the cluster has. */
 export async function svmPotStatusCommand(
   target: SvmTarget & { readonly rpcUrl: string },
@@ -1424,9 +1604,21 @@ export async function svmPotStatusCommand(
   const predicted = await svmPotCommand(target);
   const pot = predicted.json.pot as Address;
   const found = await deployment(createSolanaRpc(target.rpcUrl), target.rpcUrl, pot);
-  const json = { ...predicted.json, deployment: found.json };
+  const tokenAccounts = await svmPotTokenAccounts(target, target.rpcUrl, requireChain("solana"));
+  const json = { ...predicted.json, deployment: found.json, tokenAccounts };
+  const accountNotes = tokenAccounts.map(
+    (one) =>
+      `The Pot's ${one.symbol} account, --account NAME=pot:${one.symbol}: ${one.account}, ` +
+      (one.balance === null
+        ? "not created yet (a wallet's SPL transfer to the Pot creates it)"
+        : `holding ${formatUnits(BigInt(one.balance), one.decimals)} ${one.symbol}`),
+  );
 
-  return { text: JSON.stringify(json, null, 2), json, notes: found.notes };
+  return {
+    text: JSON.stringify(json, null, 2),
+    json,
+    notes: [...found.notes, ...accountNotes],
+  };
 }
 
 /** `sauce pot --deploy --chain solana`: creates the signer's Pot unless it is already there. */
