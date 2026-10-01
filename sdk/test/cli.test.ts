@@ -1052,6 +1052,9 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/signer.js"),
       await import("../src/cli/chain.js"),
       await import("../src/cli/publish.js"),
+      await import("../src/cli/globals.js"),
+      await import("../src/cli/inspect.js"),
+      await import("../src/cli/verify.js"),
     ].flatMap((module) => Object.keys(module));
     expect(cli.length).toBeGreaterThan(0);
     const routes = root.routes as Record<string, unknown>;

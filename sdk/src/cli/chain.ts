@@ -22,7 +22,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import kitchenArtifact from "../artifacts/V12Kitchen.json" with { type: "json" };
 import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
-import type { CanonicalChain } from "../chains/canonical.js";
+import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12Pot } from "../evm/engine.js";
 import { destinationExecutionFee } from "../evm/execution-fee.js";
 import { UsageError } from "./args.js";
@@ -96,6 +96,20 @@ export async function connect(url: string, chain: CanonicalChain): Promise<Publi
   }
 
   return client;
+}
+
+/** The canonical chain `url` serves, for a command given an endpoint and no `--chain`. */
+export async function chainServedBy(url: string): Promise<CanonicalChain> {
+  const client: PublicClient = createPublicClient({ transport: http(url) });
+  const chainId = await request("the chain id", () => client.getChainId());
+  const chain = resolveChain(chainId);
+  if (chain === undefined) {
+    throw new CliError(
+      `the RPC endpoint serves chain ${chainId}, which is not a chain Sauce knows`,
+    );
+  }
+
+  return chain;
 }
 
 /** The released Kitchen's current execution fee on the connected chain. */

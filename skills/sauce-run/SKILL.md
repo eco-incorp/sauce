@@ -24,21 +24,31 @@ Run the project's pinned copy, `npx sauce <command> --help`, for every option.
 
 ## Steps
 
-1. **Compile**, to check the program: `npx sauce compile pay.sauce.ts --chain base`. It prints the
+1. **Look up the chain's names** before writing: `npx sauce globals --chain base` lists the token
+   symbols with their addresses, the protocol contracts a program can call, and the functions it
+   needs no import for. `--protocol UniswapV3` shows one namespace's methods with every parameter
+   named. Use only names it lists; `--json` gives the same for a program to read.
+2. **Compile**, to check the program: `npx sauce compile pay.sauce.ts --chain base`. It prints the
    bytecode; `--json` adds the size, `main`'s parameters, the compiler and the engine it pairs with.
    A failing compile's `hint:` lines name the flag or define to add.
-2. **Pot**: `npx sauce pot --chain base --owner <address>` prints the Pot's address, known before it
+3. **Pot**: `npx sauce pot --chain base --owner <address>` prints the Pot's address, known before it
    exists. `npx sauce pot --deploy --chain base --config sauce.config.json --keystore <path>`
    deploys the signer's Pot. `--salt <label>` names another Pot of the same owner (`--salt-hex` for
    an exact 32-byte salt); use the same salt in every later command.
-3. **Fund** the Pot with what the program spends: send its address the tokens, from any wallet.
-4. **Rehearse**: `npx sauce simulate pay.sauce.ts --chain base --owner <address> --config
-sauce.config.json` runs the cook as an `eth_call` from the owner — no key, nothing sent — and
-   prints the gas it needs or the decoded reason it reverts.
-5. **Run**: `npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore <path>`
+4. **Fund** the Pot with what the program spends: send its address the tokens, from any wallet.
+5. **Rehearse**: `npx sauce simulate pay.sauce.ts --chain base --owner <address>`, with the
+   endpoint, runs the cook as an `eth_call` from the owner — no key, nothing sent — and prints the
+   gas it needs or the decoded reason it reverts.
+6. **Run**: `npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore <path>`
    compiles, rehearses, signs, sends and waits, then prints the hash, status and gas used. A Pot
    not deployed yet is deployed first once the user agrees at the prompt; `--yes` agrees in
    advance, and without a terminal it is required. Ask the user before passing `--yes`.
+7. **Check** what was sent: `npx sauce inspect <tx hash> --source pay.sauce.ts`, with the
+   endpoint, reads the transaction back — the Pot, the engine, the arguments the program got, and
+   the route and reward of every intent it opens. It also reads calldata, and a file (its intents,
+   with every value measured at run time named).
+
+"With the endpoint" means `--rpc-url <url>`, or `--config sauce.config.json` beside `--chain`.
 
 The transaction's value defaults to the Kitchen's execution fee, read from the chain; pass
 `--value <wei>` when the program also spends native currency.
@@ -70,9 +80,9 @@ Types are checked before anything is sent: `Address`, `Uint256` (or `number`, `b
   (`transfer(token, to, amount)`, `approve`, `balanceOf`).
 - `USDC.transfer(...)`, `USDC.approve(...)` and `Token(address).transfer(...)` are SafeERC20 writes,
   so USDT works. A symbol the chain does not register needs `Token(address)`.
-- A compile-time value is a module-level `const` that `--define NAME=VALUE` (or `--defines
-file.json`) replaces in a file with a `main`; in a file of top-level statements (no `main`), leave
-  the name undeclared and define it. An address is written as its `0x…` integer.
+- A compile-time value is a module-level `const` that `--define NAME=VALUE` replaces in a file with
+  a `main` (`--defines file.json` gives several); in a file of top-level statements (no `main`),
+  leave the name undeclared and define it. An address is written as its `0x…` integer.
 - A leading `// @chain base` line makes `--chain` optional; the flag still wins.
 
 [examples/pay.sauce.ts](examples/pay.sauce.ts) pays one recipient in USDC and USDT, from defines.

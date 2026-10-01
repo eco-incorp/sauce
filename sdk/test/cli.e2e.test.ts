@@ -15,7 +15,9 @@
  *
  * Base and Arbitrum, the skill's `split.sauce.ts`: ONE source with a typed `main(token: Address,
  * recipients: Address[], amount: Uint256, alsoUsdc: bool)`, compiled for each chain (so `USDC` is
- * each chain's own), its arguments encoded by `sauce tx --args`, executed on each chain's anvil.
+ * each chain's own), its arguments encoded by `sauce tx --args`, executed on each chain's anvil —
+ * and read back off the chain by `sauce inspect <hash>` against the source. A settle cook sent there
+ * is read back by `sauce verify <hash>`, and a cook that is not one is rejected.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md), and a hard
  * failure without it — or without `cast` — in CI.
@@ -59,6 +61,8 @@ import {
 import * as sauceRoute from "../src/routes/sauce-route.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
+import { SETTLE_VECTORS, SETTLE_WIRE, settlePayload } from "../src/verify/index.js";
+import { v12Pot } from "../src/evm/engine.js";
 import { gateAnchors, installEngineAt, startGatedEngine } from "./evm/gated-engine.js";
 
 const RUNTIME_HEX_PATH =
@@ -154,8 +158,8 @@ interface LocalChain {
   readonly deployer: WalletClient;
   readonly owner: WalletClient;
   readonly testClient: TestClient;
-  /** Sends `data` to `to` from `from`, and waits for it to succeed. */
-  send(from: WalletClient, to: Address, data: Hex, value?: bigint): Promise<void>;
+  /** Sends `data` to `to` from `from`, waits for it to succeed, and returns its hash. */
+  send(from: WalletClient, to: Address, data: Hex, value?: bigint): Promise<Hex>;
   /** Deploys `creationCode` and moves its runtime to `at` (a registry token address), or leaves it. */
   plant(creationCode: Hex, at?: Address): Promise<Address>;
   mint(token: Address, to: Address, amount: bigint): Promise<void>;
@@ -187,7 +191,7 @@ async function startChain(slug: string, port: number): Promise<LocalChain> {
     }
   }
 
-  const send = async (from: WalletClient, to: Address, data: Hex, value = 0n): Promise<void> => {
+  const send = async (from: WalletClient, to: Address, data: Hex, value = 0n): Promise<Hex> => {
     const hash = await from.sendTransaction({
       account: from.account!,
       chain: null,
@@ -197,6 +201,8 @@ async function startChain(slug: string, port: number): Promise<LocalChain> {
     });
     const { status } = await publicClient.waitForTransactionReceipt({ hash });
     if (status !== "success") throw new Error(`a transaction to ${to} reverted`);
+
+    return hash;
   };
   const plant = async (creationCode: Hex, at?: Address): Promise<Address> => {
     const hash = await deployer.sendTransaction({
@@ -239,12 +245,13 @@ async function startChain(slug: string, port: number): Promise<LocalChain> {
     testClient,
     send,
     plant,
-    mint: (token, to, amount) =>
-      send(
+    mint: async (token, to, amount) => {
+      await send(
         deployer,
         token,
         encodeFunctionData({ abi: erc20, functionName: "mint", args: [to, amount] }),
-      ),
+      );
+    },
     balanceOf: (token, holder) =>
       publicClient.readContract({
         address: token,
@@ -771,7 +778,7 @@ describeEvm("a typed main, compiled for Base and for Arbitrum, run with --args",
         ),
       );
       expect(out).toMatchObject({ chainId: local.chain.id, to: pot, value: FEE.toString() });
-      await local.send(local.owner, pot, out.data as Hex, FEE);
+      const hash = await local.send(local.owner, pot, out.data as Hex, FEE);
 
       for (const recipient of RECIPIENTS) {
         expect(await local.balanceOf(token, recipient)).toBe(AMOUNT);
@@ -779,8 +786,94 @@ describeEvm("a typed main, compiled for Base and for Arbitrum, run with --args",
       }
       expect(await local.balanceOf(token, pot)).toBe(FUNDED - 2n * AMOUNT);
       expect(await local.balanceOf(usdc, pot)).toBe(alsoUsdc ? FUNDED - 2n * AMOUNT : FUNDED);
+
+      // `sauce inspect` reads the cook back off the chain — the chain from the endpoint itself —
+      // and, against the source, finds split.sauce.ts's program and the arguments it was sent.
+      const inspected = jsonOf(
+        await sauce("inspect", hash, "--rpc-url", local.rpcUrl, "--source", SPLIT, "--json"),
+      );
+      expect(inspected).toMatchObject({
+        chain: slug,
+        status: "success",
+        from: OWNER.address,
+        to: pot,
+        value: FEE.toString(),
+        call: "Pot.cook",
+        engine: { address: getAddress(v12EngineAddress()), released: true },
+        program: {
+          source: {
+            file: SPLIT,
+            matches: true,
+            arguments: [
+              { name: "token", type: "Address", value: getAddress(token) },
+              { name: "recipients", type: "Address[]", value: RECIPIENTS },
+              { name: "amount", type: "Uint256", value: AMOUNT.toString() },
+              { name: "alsoUsdc", type: "bool", value: alsoUsdc },
+            ],
+          },
+        },
+      });
     }, 60_000);
   }
+
+  it("`sauce verify` reads a settle cook back off the chain, and rejects a cook that is not one", async () => {
+    const local = chains.base!;
+    const usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
+    const pot = v12PredictPot(OWNER.address) as Address;
+    if ((await local.publicClient.getCode({ address: pot })) === undefined) await deployPot(local);
+    await local.mint(usdc, pot, FUNDED);
+    // The conformance corpus's single-token settle: sweep the Pot's USDC, no floor.
+    const vector = SETTLE_VECTORS[0]!;
+    const before = await local.balanceOf(usdc, getAddress(vector.recipient));
+    const swept = await local.balanceOf(usdc, pot);
+    const engine = getAddress(v12EngineAddress());
+    const hash = await local.send(
+      local.owner,
+      pot,
+      v12Pot.encodeCook(engine, settlePayload(vector.args)),
+      FEE,
+    );
+    expect(await local.balanceOf(usdc, getAddress(vector.recipient))).toBe(before + swept);
+
+    expect(jsonOf(await sauce("verify", hash, "--rpc-url", local.rpcUrl, "--json"))).toEqual({
+      hash,
+      chain: "base",
+      to: pot,
+      valid: true,
+      tokens: vector.tokens.map((token) => token.toLowerCase()),
+      floorToken: vector.tokens[0]!.toLowerCase(),
+      minOut: vector.minOut.toString(),
+      recipient: vector.recipient.toLowerCase(),
+      programHash: SETTLE_WIRE.PROGRAM_HASH,
+      engine,
+    });
+    // The split cook above is a program, not the settle: rejected, with the SDK's code.
+    const split = jsonOf(
+      await sauce(
+        "tx",
+        SPLIT,
+        "--chain",
+        "base",
+        "--owner",
+        OWNER.address,
+        "--value",
+        "0",
+        "--args",
+        usdc,
+        "[]",
+        "1",
+        "false",
+      ),
+    );
+    const notSettle = await local.send(local.owner, pot, split.data as Hex, FEE);
+    const rejected = await sauce("verify", notSettle, "--rpc-url", local.rpcUrl);
+    expect(rejected.code).toBe(1);
+    // Split at the settle's 435 bytes, its tail is not a settle's arguments, or its program not
+    // the settle's: either way one of the SDK's codes.
+    expect(rejected.stdout).toMatch(
+      /^rejected \((?:PROGRAM_HASH|TOKENS_OFFSET|TOKENS_EMPTY|ARGS_TRUNCATED|ARGS_OVERLONG|DIRTY_ADDRESS_WORD|ZERO_RECIPIENT)\): /,
+    );
+  }, 60_000);
 });
 
 describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
@@ -898,6 +991,21 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     expect(run.stdout).toMatch(/^publishAndFund 0x[0-9a-f]{64}: success/m);
     expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
     expect((await read(intentHashCall(intent, { portal }))).intentHash).toBe(intentHash);
+    // `sauce inspect` takes the publishAndFund transaction back apart into the same intent.
+    const published = /^publishAndFund (0x[0-9a-f]{64}): success/m.exec(run.stdout)![1]!;
+    expect(
+      jsonOf(await sauce("inspect", published, "--rpc-url", arbitrum.rpcUrl, "--json")),
+    ).toMatchObject({
+      status: "success",
+      from: OWNER.address,
+      to: portal,
+      call: "Portal.publishAndFund",
+      intent: {
+        intentHash,
+        destination: { id: "8453", chain: "base" },
+        reward: { creator: OWNER.address, tokens: [{ token: usdc, amount: REWARD.toString() }] },
+      },
+    });
     const vault = await read(intentVaultAddressCall(intent, { portal }));
     expect(await arbitrum.balanceOf(usdc, vault)).toBe(REWARD);
     expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(0n);

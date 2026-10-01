@@ -36,9 +36,10 @@ import {
 } from "./args.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import { wrapSauceBody } from "../routes/sauce-route.js";
-import { endpointFor } from "./chain.js";
+import { chainServedBy, endpointFor } from "./chain.js";
 import {
   compileCommand,
+  compileProgram,
   potCommand,
   potDeployCommand,
   readInput,
@@ -53,8 +54,11 @@ import {
   type PotInput,
   type ProgramInput,
 } from "./commands.js";
+import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
+import { inspectCommand, inspectFile } from "./inspect.js";
 import { publishCommand } from "./publish.js";
+import { parsePin, verifyCommand } from "./verify.js";
 import { loadSigner, scrub, secret } from "./signer.js";
 import {
   AGENTS,
@@ -323,7 +327,12 @@ const svmChain = (): CanonicalChain => CANONICAL_CHAINS.find((chain) => chain.ki
  * or `// @target svm` alone — the one SVM chain. A target that disagrees with the chain is an
  * error, wherever either came from.
  */
-function chainOf(args: ParsedArgs, file: string, text: string): CanonicalChain {
+function chainOf(
+  args: ParsedArgs,
+  file: string,
+  text: string,
+  fallback?: CanonicalChain,
+): CanonicalChain {
   const header = parseHeader(text, file);
   const chainFlag = stringFlag(args, "chain");
   const targetFlag = stringFlag(args, "target");
@@ -337,7 +346,7 @@ function chainOf(args: ParsedArgs, file: string, text: string): CanonicalChain {
         ? parseChain(header.chain, `${file}'s // @chain`)
         : target === "svm"
           ? svmChain()
-          : undefined;
+          : fallback;
   if (chain === undefined) {
     throw new UsageError(
       "missing --chain <slug|id>: which chain the program runs on (or head the file with a " +
@@ -373,8 +382,13 @@ function definesReach(file: string, text: string, names: readonly string[]): voi
   }
 }
 
-function programInput(args: ParsedArgs, io: CliIo): ProgramInput {
-  const file = fileOperand(args);
+/** A program operand's input; `fallback` is its chain when neither `--chain` nor its header says. */
+function programInput(
+  args: ParsedArgs,
+  io: CliIo,
+  file = fileOperand(args),
+  fallback?: CanonicalChain,
+): ProgramInput {
   const text = readInput(io, file);
   const definesFile = stringFlag(args, "defines");
   const deadline = stringFlag(args, "intent-deadline");
@@ -389,7 +403,7 @@ function programInput(args: ParsedArgs, io: CliIo): ProgramInput {
   return {
     file,
     text,
-    chain: chainOf(args, file, text),
+    chain: chainOf(args, file, text, fallback),
     compactArgs: args.values["compact-args"] === true,
     defines,
     intents: {
@@ -530,6 +544,41 @@ function signerIsOwner(signer: `0x${string}`, owner: string | undefined): `0x${s
 
   return signer;
 }
+
+/**
+ * The endpoint and chain to fetch a transaction from: `--rpc-url` (its chain from `--chain`, else
+ * from the endpoint itself) or `--config` with `--chain`; `undefined` when neither is given.
+ */
+async function transactionEndpoint(
+  args: ParsedArgs,
+  io: CliIo,
+): Promise<{ readonly rpcUrl: string; readonly chain: CanonicalChain } | undefined> {
+  const rpcUrl = stringFlag(args, "rpc-url");
+  const chainFlag = stringFlag(args, "chain");
+  if (rpcUrl === undefined && stringFlag(args, "config") === undefined) return undefined;
+  if (rpcUrl === undefined) {
+    const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
+
+    return { rpcUrl: requiredEndpoint(args, io, chain), chain };
+  }
+  const chain = chainFlag === undefined ? await chainServedBy(rpcUrl) : parseChain(chainFlag);
+
+  return { rpcUrl: requiredEndpoint(args, io, chain), chain };
+}
+
+/** A `0x…` operand: calldata, a payload, or (32 bytes, with an endpoint) a transaction hash. */
+function hexOperand(args: ParsedArgs, what: string): `0x${string}` {
+  const [operand, ...rest] = args.positionals;
+  if (operand === undefined) throw new UsageError(`missing ${what}`);
+  if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
+  if (!/^0x(?:[0-9a-fA-F]{2})*$/.test(operand)) {
+    throw new UsageError(`'${operand.slice(0, 20)}…' is not 0x-prefixed hex bytes`);
+  }
+
+  return operand as `0x${string}`;
+}
+
+const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
 /** The chain `sauce pot` is for: `--chain`, required — it has no program to say. */
 const potChain = (args: ParsedArgs): CanonicalChain =>
@@ -790,6 +839,159 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         ...saltOf(args),
         rpcUrl: requiredEndpoint(args, io, chain),
         account,
+      });
+    },
+  },
+  globals: {
+    usage: "sauce globals --chain <slug|id> [--tokens] [--protocols] [--protocol <name>] [--json]",
+    summary: "List the tokens, protocols and other names a program on a chain can use",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain whose names to list" },
+      tokens: { type: "boolean", help: "Only the token symbols" },
+      protocols: { type: "boolean", help: "Only the protocol namespaces" },
+      protocol: {
+        type: "string",
+        value: "<name>",
+        help: "One namespace (UniswapV4, or its slug) with its methods",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Every name a program compiled for the chain may use without declaring it, from the SDK's",
+      "registries (routes.sourceGlobals) — the ones the compile resolves: token symbols with",
+      "their addresses and decimals, protocol namespaces with each contract's address (and,",
+      "with --protocol, its methods), the chain names that open intents, the defines, and the",
+      "zero-import @sauce/token functions. With no filter it lists everything.",
+      "",
+      "Examples:",
+      "  sauce globals --chain base",
+      "  sauce globals --chain base --protocol UniswapV3 --json",
+    ].join("\n"),
+    run: (args) => {
+      if (args.positionals.length > 0) {
+        throw new UsageError(`unexpected argument ${args.positionals[0]}`);
+      }
+      const protocol = stringFlag(args, "protocol");
+
+      return globalsCommand({
+        chain: parseChain(requiredFlag(args, "chain", "<slug|id>")),
+        tokens: args.values.tokens === true,
+        protocols: args.values.protocols === true,
+        ...(protocol === undefined ? {} : { protocol }),
+      });
+    },
+  },
+  inspect: {
+    usage: "sauce inspect <hex | tx-hash | file> [--chain <slug|id>] [--source <file>] [options]",
+    summary: "Take a cook, a Portal or Kitchen call, a program or a file apart",
+    flags: {
+      ...PROGRAM,
+      source: {
+        type: "string",
+        value: "<file>",
+        help: "The program a cook was compiled from: decode its arguments",
+      },
+      ...ENDPOINT,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Reads what a SauceScript author wrote back out of bytes: a Pot.cook (its engine, its",
+      "program, the intents the program opens), a Kitchen.deployPot (the Pot it makes), a Portal",
+      "publish or publishAndFund (the route and the reward), an ERC-20 call, or a bare program.",
+      "A 32-byte hash with --rpc-url (or --config and --chain) is a transaction, fetched first.",
+      "With --source, a cook's program is checked against that file's and the arguments after it",
+      "are decoded against its main. A file operand is compiled and its intents listed, with",
+      "each value it measures at run time named. No opcode listing: programs are reported by",
+      "size, hash and what they open.",
+      "",
+      "Examples:",
+      "  sauce inspect 0x… --chain base --source split.sauce.ts",
+      "  sauce inspect 0x<tx hash> --rpc-url <url>",
+      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x…",
+    ].join("\n"),
+    run: async (args, io) => {
+      const [operand] = args.positionals;
+      if (operand === undefined || !operand.startsWith("0x")) {
+        if (stringFlag(args, "source") !== undefined) {
+          throw new UsageError("--source goes with hex: a file operand is its own source");
+        }
+        const input = programInput(args, io);
+
+        return inspectFile(input.file, compileProgram(input, io));
+      }
+      const hex = hexOperand(args, "<hex | tx-hash | file>");
+      const sourceFile = stringFlag(args, "source");
+      const fetched = TX_HASH.test(hex) ? await transactionEndpoint(args, io) : undefined;
+      if (TX_HASH.test(hex) && fetched === undefined) {
+        throw new UsageError(
+          "32 bytes of hex is a transaction hash: give --rpc-url <url> (or --config <file> with " +
+            "--chain) to fetch it",
+        );
+      }
+      const source =
+        sourceFile === undefined ? undefined : programInput(args, io, sourceFile, fetched?.chain);
+      const chainFlag = stringFlag(args, "chain");
+      const chain =
+        fetched?.chain ??
+        source?.chain ??
+        (chainFlag === undefined ? undefined : parseChain(chainFlag));
+
+      return inspectCommand({
+        hex,
+        ...(chain === undefined ? {} : { chain }),
+        ...(fetched === undefined ? {} : { rpcUrl: fetched.rpcUrl }),
+        ...(source === undefined
+          ? {}
+          : { source: { file: source.file, program: compileProgram(source, io) } }),
+      });
+    },
+  },
+  verify: {
+    usage:
+      "sauce verify <payload | calldata | tx-hash> [--pin <hash:bytes>]… [--engine <address>]… [--rpc-url <url>]",
+    summary: "Check that a payload, cook or intent runs the audited settle program",
+    flags: {
+      pin: {
+        type: "string",
+        multiple: true,
+        value: "<hash:bytes>",
+        help: "Also accept this historical settle program (keccak256:length)",
+      },
+      engine: {
+        type: "string",
+        multiple: true,
+        value: "<address>",
+        help: "Also accept a cook on this engine, besides the released one",
+      },
+      chain: { type: "string", value: "<slug|id>", help: "The chain a transaction hash is on" },
+      ...ENDPOINT,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Takes a settle payload, Pot.cook calldata, Portal.publish[AndFund] calldata, or — with an",
+      "endpoint — a transaction hash, and checks the settle it carries with the SDK's",
+      "validateSettleProgram: the program must hash to the current pin (or a --pin), and its",
+      "arguments must be the one canonical encoding. Prints tokens, minOut and recipient. A cook",
+      "must name the released engine (or an --engine); an intent must carry a settle cook. A",
+      "rejection exits 1 with its code: the SDK's SettleFailureCode, or UNKNOWN_ENGINE or",
+      "NO_SETTLE.",
+      "",
+      "Examples:",
+      "  sauce verify 0x<payload>",
+      "  sauce verify 0x<tx hash> --rpc-url <url> --pin 0x…:435",
+    ].join("\n"),
+    run: async (args, io) => {
+      const hex = hexOperand(args, "<payload | calldata | tx-hash>");
+      const fetched = TX_HASH.test(hex) ? await transactionEndpoint(args, io) : undefined;
+
+      return verifyCommand({
+        hex,
+        pins: repeatedFlag(args, "pin").map(parsePin),
+        engines: repeatedFlag(args, "engine").map((engine) => parseAddress("engine", engine)),
+        ...(fetched === undefined ? {} : fetched),
       });
     },
   },
