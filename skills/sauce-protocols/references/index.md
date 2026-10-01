@@ -344,7 +344,7 @@ ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intent
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| Eco Routes ([registry](registry/eco-routes.md)) | — | `EcoRoutes`: ethereum, optimism, bsc, unichain, polygon, sonic, ronin, arc, base, plasma, arbitrum, celo, ink | none recorded |
+| Eco Routes ([registry](registry/eco-routes.md)) | — | `EcoRoutes`: ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum | none recorded |
 | [ENS](ens.md) ([registry](registry/ens.md)) | — | `Ens`: ethereum | ethereum |
 | [ERC20](erc20.md) ([registry](registry/erc20.md)) | — | — | none recorded |
 | [ERC-3156](erc3156.md) ([registry](registry/erc3156.md)) | — | — | none recorded |
