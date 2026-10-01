@@ -17,15 +17,21 @@
  */
 import {
   bytesToHex,
+  decodeAbiParameters,
   encodeAbiParameters,
   getAddress,
   hexToBytes,
   isAddress,
   isHex,
+  numberToHex,
   type Hex,
 } from "viem";
 
-import { encodeCompactArguments, type CompactValue } from "../compact-arguments.js";
+import {
+  decodeCompactArguments,
+  encodeCompactArguments,
+  type CompactValue,
+} from "../compact-arguments.js";
 import { blankLiterals } from "./rs-compile.js";
 import type { CompiledSauceProgram } from "./sauce-route.js";
 
@@ -408,4 +414,73 @@ export function encodeEntryArguments(
       types.map((type, index) => forAbi(type, normalized[index]!)) as never,
     ),
   );
+}
+
+/** A decoded value in the shape `encodeEntryArguments` takes back: scalars as bigints, addresses
+ *  checksummed, `bytes` as hex, tuples as objects naming their fields. */
+function typed(type: EntryType, value: unknown): EntryValue {
+  switch (type.kind) {
+    case "uint":
+      return value as bigint;
+    case "address":
+    case "account":
+      return getAddress(
+        typeof value === "bigint" ? numberToHex(value, { size: 20 }) : (value as string),
+      );
+    case "bool":
+      return value as boolean;
+    case "bytes":
+      return value instanceof Uint8Array ? bytesToHex(value) : (value as Hex);
+    case "string":
+      return value instanceof Uint8Array ? new TextDecoder().decode(value) : (value as string);
+    case "array":
+      return (value as readonly unknown[]).map((item) => typed(type.of, item));
+    case "tuple":
+      return Object.fromEntries(
+        type.fields.map((field, index) => [
+          field.name,
+          typed(
+            field.type,
+            Array.isArray(value) ? value[index] : (value as Record<string, unknown>)[field.name],
+          ),
+        ]),
+      );
+  }
+}
+
+/**
+ * The strict inverse of `encodeEntryArguments`: `main`'s arguments read back from the bytes a cook
+ * appended to `program`'s bytecode, one value per declared parameter. Throws when `encoded` is not
+ * exactly the encoding `encodeEntryArguments` produces for the values it decodes to — a truncated,
+ * padded or otherwise non-canonical tail — so a decoded value is the only one those bytes carry.
+ */
+export function decodeEntryArguments(program: ProgramEntry, encoded: Uint8Array): EntryValue[] {
+  const params = program.entryParams;
+  const types = params.map((param) => parseEntryType(param.type));
+  let raw: readonly unknown[];
+  if (program.entryEncoding === "compact-v1") {
+    if (program.entrySchema === undefined) {
+      throw new Error("decodeEntryArguments: a compact-v1 program carries its entrySchema");
+    }
+    // Strict already: minimal scalars, canonical booleans, no trailing bytes.
+    raw = decodeCompactArguments(program.entrySchema, encoded) as readonly unknown[];
+  } else {
+    raw =
+      params.length === 0 && encoded.length === 0
+        ? []
+        : decodeAbiParameters(
+            types.map((type, index) => abiParam(type, params[index]!.name)) as never,
+            encoded,
+          );
+  }
+  const values = types.map((type, index) => typed(type, raw[index]));
+  const again = encodeEntryArguments(program, values);
+  if (again.length !== encoded.length || again.some((byte, index) => byte !== encoded[index])) {
+    throw new RangeError(
+      `decodeEntryArguments: ${encoded.length} bytes are not the canonical encoding of main's ` +
+        `arguments (they re-encode to ${again.length} bytes)`,
+    );
+  }
+
+  return values;
 }

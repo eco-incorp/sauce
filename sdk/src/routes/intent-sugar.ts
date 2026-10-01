@@ -159,6 +159,8 @@ export interface LoweredIntent {
   readonly intent: Intent;
   /** Enclosing locals spliced into it, in slot order. */
   readonly captures: readonly string[];
+  /** Each sentinel the encoded child carries, and the local whose value replaces it on chain. */
+  readonly sentinels: readonly { readonly sentinel: bigint; readonly capture: string }[];
   readonly destination: CanonicalChain;
 }
 
@@ -792,7 +794,12 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       `evm.call(${BigInt(denormalizeToEvm(toUniversalAddress(sourcePortal)))}n, 0n, ${emitted.dataVar});`,
     );
 
-    intents.push({ intent: child, captures, destination: site.chain });
+    intents.push({
+      intent: child,
+      captures,
+      sentinels: placeholders.map(({ value, source }) => ({ sentinel: value, capture: source })),
+      destination: site.chain,
+    });
     replacements.push({
       start: site.start,
       end: site.end,

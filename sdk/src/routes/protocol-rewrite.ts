@@ -269,7 +269,7 @@ interface ResolvedSite extends Splice {
   readonly descriptor: ContractDescriptor;
 }
 
-interface AccessorTarget {
+export interface AccessorTarget {
   readonly chain: CanonicalChain;
   readonly protocol: string;
   readonly contract: string;
@@ -362,6 +362,27 @@ function resolveAccessorTarget(
   }
 
   return { chain, protocol, contract, descriptor, address };
+}
+
+/**
+ * The deployed contract `<namespace>[.<contract>]` names on `chain`, by exactly the rules the
+ * rewrite applies to that reference in a program — or the error it would raise there. A name this
+ * resolves is one a program compiled for `chain` may use; `sourceGlobals` lists a chain's
+ * contracts through it, so the listing and the rewrite cannot disagree.
+ */
+export function resolveProtocolContract(
+  namespace: string,
+  contract: string | undefined,
+  chain: CanonicalChain,
+): AccessorTarget {
+  return resolveAccessorTarget(
+    namespace,
+    contract === undefined ? [] : [contract],
+    false,
+    chain,
+    undefined,
+    false,
+  );
 }
 
 function resolveCandidate(

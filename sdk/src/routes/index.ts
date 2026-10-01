@@ -99,7 +99,7 @@ export type {
   SauceEvmExecutionInput,
   SauceSvmExecutionInput,
 } from "./sauce-route.js";
-export { encodeEntryArguments } from "./entry.js";
+export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";
 export type { LoweredIntent } from "./intent-sugar.js";
 
@@ -109,6 +109,16 @@ export type { VaultConfig } from "./vault.js";
 export { isSauceClosure, sauceBodyToSource } from "./closure.js";
 export { chainAmbient, chainDefines } from "./ambient.js";
 export type { AmbientDefinesOptions } from "./ambient.js";
+export { sourceGlobals } from "./source-globals.js";
+export type {
+  SourceChainName,
+  SourceContract,
+  SourceGlobals,
+  SourceMethod,
+  SourceModule,
+  SourceNamespace,
+  SourceToken,
+} from "./source-globals.js";
 export { rewriteTokenMembers, REWRITABLE_METHODS, tokenImportLines } from "./token-rewrite.js";
 export type { SafeWrite, TokenImports, TokenRewriteResult, TokenSymbols } from "./token-rewrite.js";
 export {
