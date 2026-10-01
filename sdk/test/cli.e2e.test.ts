@@ -327,8 +327,13 @@ describeEvm("sauce, sent to a chain", () => {
       expect(ok.stderr).toBe("");
       expect(ok.code).toBe(0);
       expect(ok.stdout).toMatch(
-        new RegExp(`^The cook succeeds from ${KEYSTORE_OWNER}: gas \\d+, returns 0x`),
+        new RegExp(`^The cook succeeds from ${KEYSTORE_OWNER}: gas used \\d+, returns 0x`),
       );
+      // A deployed Pot: the cook alone, and what it moved, read from its logs.
+      expect(ok.stdout).toContain(
+        `Rehearsed with eth_simulateV1; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}\n`,
+      );
+      expect(ok.stdout).toContain(`  1 USDC: ${labelled} (the Pot) -> ${THIRD_RECIPIENT}`);
       // Nothing moved: it was an eth_call.
       expect(await ethereum.balanceOf(usdc, THIRD_RECIPIENT)).toBe(0n);
 
@@ -358,10 +363,17 @@ describeEvm("sauce, sent to a chain", () => {
         "--rpc-url",
         ethereum.rpcUrl,
       );
+      // A Pot not deployed yet is deployed in the rehearsal; this one holds nothing to pay with.
       expect(unowned.code).toBe(1);
-      expect(unowned.stderr).toMatch(
-        /is not deployed on ethereum, so there is nothing to simulate/,
+      expect(unowned.stdout).toMatch(/^The cook reverts: /);
+      expect(unowned.stdout).toContain(
+        `  1. Kitchen.deployPot(${RAW_OWNER}, 0x${"00".repeat(32)})`,
       );
+      expect(
+        await ethereum.publicClient.getCode({
+          address: v12PredictPot(RAW_OWNER, `0x${"00".repeat(32)}`) as Address,
+        }),
+      ).toBeUndefined();
     }, 60_000);
 
     it("`sauce run` signs, sends and waits for the cook on an existing Pot", async () => {
