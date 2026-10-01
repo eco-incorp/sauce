@@ -78,8 +78,7 @@
     }
   },
   "bin": {
-    "sauce": "./sdk/dist/cli/main.js",
-    "sauce-mcp": "./mcp/dist/main.js"
+    "sauce": "./sdk/dist/cli/main.js"
   },
   "files": [
     "LICENSE.md",

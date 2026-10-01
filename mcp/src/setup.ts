@@ -10,8 +10,8 @@
  *   (code.visualstudio.com/docs/agent-customization/mcp-servers).
  * - `gemini`: `.gemini/settings.json`, `mcpServers` (geminicli.com/docs/tools/mcp-server).
  *
- * Every entry launches the same thing: `npx -y -p <this package>@<this version> sauce-mcp`, pinned
- * to the version that wrote it, as `sauce init` pins the package. It never overwrites: an existing
+ * Every entry launches the same thing: `npx -y <this package>@<this version> mcp`, the package's
+ * `sauce mcp`, pinned to the version that wrote it, as `sauce init` pins the package. It never overwrites: an existing
  * `sauce` entry that differs is left alone and reported, unless `force`. The rest of each file is
  * kept, and a file that is not plain JSON (a comment in it, say) is refused rather than rewritten.
  */
@@ -43,7 +43,7 @@ export interface SetupFile {
   readonly state: "wrote" | "added" | "unchanged" | "kept" | "overwrote";
 }
 
-/** The command an agent runs: the package's own bin, at this version. */
+/** The command an agent runs: the package's `sauce mcp`, at this version, through npx. */
 export function launch(input: Pick<SetupInput, "config" | "packageName" | "version">): {
   readonly command: string;
   readonly args: readonly string[];
@@ -52,9 +52,8 @@ export function launch(input: Pick<SetupInput, "config" | "packageName" | "versi
     command: "npx",
     args: [
       "-y",
-      "-p",
       `${input.packageName}@${input.version}`,
-      "sauce-mcp",
+      "mcp",
       ...(input.config === undefined ? [] : ["--config", input.config]),
     ],
   };

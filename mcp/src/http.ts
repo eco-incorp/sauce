@@ -3,11 +3,11 @@
  * of its own, answered with JSON, and nothing is kept between requests — no session, so any
  * replica can answer any request. There is no GET stream and no DELETE (405).
  *
- * It authenticates NO ONE. It binds to the loopback interface unless told otherwise, and there it
- * answers only requests whose Host (and Origin, when sent) is a loopback name, which is what stops
- * a web page from reaching it through DNS rebinding. A deployment others can reach goes behind the
- * operator's own authentication — a reverse proxy that checks a token — and names the host it is
- * served as with `--allowed-host`.
+ * It authenticates NO ONE. It binds to the loopback interface unless told otherwise, and answers
+ * only requests whose Host (and Origin, when sent) is a loopback name or one `--allowed-host`
+ * names, which is what stops a web page from reaching it through DNS rebinding. A deployment others
+ * can reach goes behind the operator's own authentication — a reverse proxy that checks a token —
+ * and must name the host it is served as (`entry.ts` refuses to bind beyond loopback without one).
  *
  * A request body past `maxBody` bytes is refused (413) before it is parsed; each tool bounds its
  * own inputs besides (`tools.ts#LIMITS`).
@@ -17,6 +17,8 @@ import type { AddressInfo } from "node:net";
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+
+import { scrub } from "./sdk.js";
 
 /** The default bound on a request body: 2 MiB, room for the largest program a tool takes. */
 export const DEFAULT_MAX_BODY = 2 * 1024 * 1024;
@@ -32,6 +34,8 @@ export interface HttpOptions {
   readonly maxBody: number;
   /** A fresh server for one request. */
   readonly server: () => McpServer;
+  /** Where a request that fails is reported, scrubbed: stderr. */
+  readonly log?: (text: string) => void;
 }
 
 export const isLoopback = (host: string): boolean =>
@@ -52,11 +56,11 @@ function refuse(res: ServerResponse, status: number, message: string): void {
 }
 
 /**
- * Which hosts a request may name: the loopback ones and `allowedHosts`, when the server is on
- * loopback or was given any; `undefined` (any) only for a server bound elsewhere with none named.
+ * Which hosts a request may name: the loopback ones and `allowedHosts`; `undefined` (any) only
+ * when `allowedHosts` says `*` — for an operator whose proxy checks the Host itself.
  */
 function hostsAllowed(options: HttpOptions): readonly string[] | undefined {
-  if (isLoopback(options.host) || options.allowedHosts.length > 0) {
+  if (!options.allowedHosts.includes("*")) {
     // A name given with a port is the name: the Host check compares hostnames, port dropped.
     return [
       ...LOOPBACK,
@@ -107,7 +111,10 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: HttpOp
 /** Starts listening; resolves once it is, with the server (its address has the port taken). */
 export async function serveHttp(options: HttpOptions): Promise<Server> {
   const http = createServer((req, res) => {
-    handle(req, res, options).catch(() => {
+    handle(req, res, options).catch((error: unknown) => {
+      options.log?.(
+        `sauce mcp: a request failed: ${scrub(error instanceof Error ? error.message : String(error))}\n`,
+      );
       if (!res.headersSent) refuse(res, 500, "internal error");
       else res.end();
     });

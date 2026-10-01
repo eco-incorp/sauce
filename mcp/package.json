@@ -10,16 +10,13 @@
   },
   "homepage": "https://github.com/eco-incorp/sauce#readme",
   "bugs": "https://github.com/eco-incorp/sauce/issues",
-  "bin": {
-    "sauce-mcp": "./dist/main.js"
-  },
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test --test-concurrency=1 test/*.test.ts"
+    "test": "tsc -p tsconfig.build.json && tsx --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",

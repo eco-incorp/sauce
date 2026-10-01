@@ -499,17 +499,10 @@ try {
     "the check leaves the installed skills as they were",
   );
 
-  // The `sauce-mcp` bin, from the install, over both transports, as an agent reaches it: the
-  // tools, a compile, and every shipped skill file as a resource. Nothing here reaches a chain.
-  assert.equal(
-    execFileSync("npx", ["--no", "--", "sauce-mcp", "--version"], {
-      cwd: work,
-      encoding: "utf8",
-      env: smokeEnv,
-    }),
-    `${name} ${installedManifest.version}\n`,
-    "npx sauce-mcp runs the package's MCP bin",
-  );
+  // `sauce mcp`, from the install, the way the guide launches it — `npx @eco-incorp/sauce mcp`,
+  // here with `--no` so nothing is fetched — over both transports: the tools, a compile, and every
+  // shipped skill file as a resource. Nothing here reaches a chain.
+  const mcpLaunch = ["--no", "--", name, "mcp"];
   const mcpProgram =
     "function main(recipient: Address, amount: Uint256) {\n  USDC.transfer(recipient, amount);\n}\n";
   writeFileSync(join(work, "mcp-check.sauce.ts"), mcpProgram);
@@ -541,7 +534,7 @@ try {
     { jsonrpc: "2.0", id: 4, method: "resources/list" },
   ];
   // Over stdio: one JSON-RPC message per line in, one per line out, and EOF ends the server.
-  const stdio = spawn("npx", ["--no", "--", "sauce-mcp"], {
+  const stdio = spawn("npx", mcpLaunch, {
     cwd: work,
     env: smokeEnv,
     stdio: ["pipe", "pipe", "inherit"],
@@ -558,7 +551,7 @@ try {
         if (answers.size === 4) resolveAll();
       }
     });
-    stdio.once("exit", (code) => rejectAll(new Error(`sauce-mcp exited ${code} before answering`)));
+    stdio.once("exit", (code) => rejectAll(new Error(`sauce mcp exited ${code} before answering`)));
   });
   for (const message of mcpRequests) stdio.stdin.write(`${JSON.stringify(message)}\n`);
   await answered;
@@ -573,7 +566,7 @@ try {
     "sauce_simulate",
     "sauce_publish",
   ]) {
-    assert.ok(toolNames.includes(tool), `sauce-mcp lists ${tool}`);
+    assert.ok(toolNames.includes(tool), `sauce mcp lists ${tool}`);
   }
   assert.equal(
     answers.get(3).result.structuredContent.bytecode,
@@ -583,10 +576,11 @@ try {
   );
   const resourceUris = answers.get(4).result.resources.map((resource) => resource.uri);
   for (const file of shippedSkills) {
-    assert.ok(resourceUris.includes(`sauce://skills/${file}`), `sauce-mcp serves skills/${file}`);
+    assert.ok(resourceUris.includes(`sauce://skills/${file}`), `sauce mcp serves skills/${file}`);
   }
-  // Over Streamable HTTP: the same bin on a port it picks, answering a POST to /mcp.
-  const http = spawn("npx", ["--no", "--", "sauce-mcp", "--http", "0"], {
+  // Over Streamable HTTP, self-hosted with the same one command and a port it picks: initialize
+  // and tools/list, each a POST of its own to the stateless /mcp.
+  const http = spawn("npx", [...mcpLaunch, "--http", "0"], {
     cwd: work,
     env: smokeEnv,
     stdio: ["ignore", "ignore", "pipe"],
@@ -599,27 +593,37 @@ try {
       if (found !== null) resolveUrl(found[1]);
     });
     http.once("exit", (code) =>
-      rejectUrl(new Error(`sauce-mcp --http exited ${code}: ${httpLog}`)),
+      rejectUrl(new Error(`sauce mcp --http exited ${code}: ${httpLog}`)),
     );
   });
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json, text/event-stream",
-      },
-      body: JSON.stringify(mcpRequests[0]),
-    });
-    assert.equal(response.status, 200);
-    assert.equal((await response.json()).result.serverInfo.name, "sauce");
+    const post = async (message) => {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          "mcp-protocol-version": "2025-06-18",
+        },
+        body: JSON.stringify(message),
+      });
+      assert.equal(response.status, 200, `${message.method} over HTTP`);
+
+      return response.json();
+    };
+    assert.equal((await post(mcpRequests[0])).result.serverInfo.name, "sauce");
+    assert.deepEqual(
+      (await post(mcpRequests[2])).result.tools.map((tool) => tool.name),
+      toolNames,
+      "the same tools over HTTP as over stdio",
+    );
   } finally {
     const exited = once(http, "exit");
     http.kill("SIGTERM");
     await exited;
   }
   console.log(
-    `Clean package install: sauce-mcp serves its ${toolNames.length} tools and the ` +
+    `Clean package install: npx ${name} mcp serves its ${toolNames.length} tools and the ` +
       `${shippedSkills.length} skill files over stdio and Streamable HTTP`,
   );
 

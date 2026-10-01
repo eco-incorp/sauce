@@ -55,6 +55,7 @@ import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
 import { assumedBalances, definesReach, fundingFor, potTarget, programChain } from "./inputs.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
+import { MCP_FLAGS, mcpCommand } from "./mcp.js";
 import { parsePriceToken, priceCommand, pricedChain, priceGiven } from "./price.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
@@ -1526,6 +1527,38 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         "  npx sauce --help",
       ]);
     },
+  },
+  mcp: {
+    usage: [
+      "sauce mcp [--config <file>]",
+      "sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]",
+      "sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]",
+    ],
+    summary: "Serve the read-only commands and the agent skills to coding agents over MCP",
+    flags: { ...MCP_FLAGS, ...HELP },
+    details: [
+      "The Sauce MCP server. Its tools are this command's read-only half — sauce_compile,",
+      "sauce_tx, sauce_pot, sauce_simulate, sauce_publish, sauce_inspect, sauce_verify,",
+      "sauce_globals, sauce_price and sauce_chains — and its resources are the agent skills, at",
+      "sauce://skills/<path>. Nothing it does signs, and it takes no key: every transaction comes",
+      "back unsigned, for the user's own wallet.",
+      "",
+      "Over stdio by default, what a coding agent launches. With --http, Streamable HTTP at /mcp,",
+      "stateless: on 127.0.0.1 unless --host says otherwise, answering only a loopback Host or an",
+      "--allowed-host one. It authenticates no one, so off loopback it needs --allowed-host, and",
+      "goes behind your own authentication. The chains it reads are --config's; it reads no",
+      "environment, and never shows a URL from the file.",
+      "",
+      "setup adds the server to a project for each agent, in the file its vendor documents:",
+      ".mcp.json (claude), .codex/config.toml (codex), .cursor/mcp.json (cursor),",
+      ".vscode/mcp.json (copilot) and .gemini/settings.json (gemini), keeping what else each holds.",
+      "",
+      "Examples:",
+      "  npx -y @eco-incorp/sauce mcp",
+      "  npx -y @eco-incorp/sauce mcp --http 3000 --config sauce.config.json",
+      "  npx sauce mcp setup --agent claude,cursor",
+    ].join("\n"),
+    run: (args, io) => mcpCommand(args, io),
   },
 };
 

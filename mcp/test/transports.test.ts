@@ -1,7 +1,8 @@
 /**
- * The two transports, end to end: the `sauce-mcp` bin over stdio as an agent launches it, and over
- * Streamable HTTP — the bin on a port it picks, and the HTTP server in process for what it refuses
- * (another Host or Origin, a body past the bound, anything but a POST to /mcp).
+ * The two transports, end to end: `sauce mcp` — the package's own command, built, as `npx
+ * @eco-incorp/sauce mcp` runs it — over stdio as an agent launches it, and over Streamable HTTP on
+ * a port it picks; and the HTTP server in process for what it refuses (another Host or Origin, a
+ * body past the bound, anything but a POST to /mcp). The SDK and this workspace must be built.
  */
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -24,13 +25,8 @@ import { createSauceServer } from "../src/server.js";
 import { TOOL_NAMES } from "../src/tools.js";
 
 const MCP = dirname(dirname(fileURLToPath(import.meta.url)));
-/** The bin, from source: node with tsx's loader, resolved here so any working directory works. */
-const BIN = [
-  process.execPath,
-  "--import",
-  import.meta.resolve("tsx"),
-  join(MCP, "src/main.ts"),
-] as const;
+/** `sauce mcp`, from the build: the `sauce` bin, which loads this workspace's `dist/entry.js`. */
+const BIN = [process.execPath, join(MCP, "../sdk/dist/cli/main.js"), "mcp"] as const;
 const SECRET = "stdio-provider-key-1a2b3c";
 const PROGRAM = "function main(): Uint256 {\n  return chainId;\n}\n";
 
@@ -50,7 +46,7 @@ async function exercise(client: Client): Promise<void> {
   assert.ok(resources.some((resource) => resource.uri === "sauce://skills/index"));
 }
 
-describe("stdio: the bin as an agent launches it", () => {
+describe("stdio: sauce mcp as an agent launches it", () => {
   let dir: string;
   before(() => {
     dir = mkdtempSync(join(tmpdir(), "sauce-mcp-stdio-"));
@@ -99,8 +95,32 @@ describe("stdio: the bin as an agent launches it", () => {
     child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
     const [code] = (await once(child, "exit")) as [number];
     assert.equal(code, 2);
-    assert.match(stderr, /rpcUrls key 'base' is not a chain id/);
+    assert.match(stderr, /^sauce mcp: --config \S+: rpcUrls key 'base' is not a chain id/);
     assert.ok(!stderr.includes(SECRET));
+  });
+
+  it("prints its help from the CLI, loading nothing, and refuses a flag of another mode", async () => {
+    const help = spawn(BIN[0], [...BIN.slice(1), "--help"], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    help.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
+    assert.deepEqual(await once(help, "exit"), [0, null]);
+    assert.match(stdout, /^Serve the read-only commands and the agent skills/);
+    assert.match(stdout, /--allowed-host <name>/);
+    for (const [argv, message] of [
+      [["--agent", "claude"], /--agent goes with sauce mcp setup/],
+      [["setup", "--http", "0"], /--http is for serving, not setup/],
+      [["--host", "127.0.0.1"], /--host goes with --http/],
+      [["--http", "0", "--host", "0.0.0.0"], /beyond loopback: name the host/],
+    ] as const) {
+      const child = spawn(BIN[0], [...BIN.slice(1), ...argv], {
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+      let stderr = "";
+      child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+      const [code] = (await once(child, "exit")) as [number];
+      assert.equal(code, 2, argv.join(" "));
+      assert.match(stderr, message);
+    }
   });
 });
 
@@ -185,6 +205,22 @@ describe("Streamable HTTP, in process", () => {
     }
   });
 
+  it("answers any Host only when told to with *, for a proxy that checks it", async () => {
+    const open = await serveHttp({
+      port: 0,
+      host: "127.0.0.1",
+      allowedHosts: ["*"],
+      maxBody: 64 * 1024,
+      server: () => createSauceServer({ endpoints: NO_ENDPOINTS }),
+    });
+    try {
+      const at = (open.address() as { port: number }).port;
+      assert.equal((await raw(at, { host: "anything.example", body: INITIALIZE })).status, 200);
+    } finally {
+      await new Promise<void>((resolve) => open.close(() => resolve()));
+    }
+  });
+
   it("refuses another Host or Origin: what a DNS-rebinding page would send", async () => {
     assert.equal((await raw(port, { host: "evil.example", body: INITIALIZE })).status, 403);
     assert.equal(
@@ -211,7 +247,7 @@ describe("Streamable HTTP, in process", () => {
   });
 });
 
-describe("Streamable HTTP: the bin with --http", () => {
+describe("Streamable HTTP: sauce mcp --http", () => {
   let child: ChildProcess;
   let url: string;
   before(async () => {
@@ -225,7 +261,7 @@ describe("Streamable HTTP: the bin with --http", () => {
         const at = /Streamable HTTP at (http:\/\/\S+)/.exec(stderr);
         if (at !== null) resolve(at[1]!);
       });
-      child.once("exit", (code) => reject(new Error(`sauce-mcp exited ${code}: ${stderr}`)));
+      child.once("exit", (code) => reject(new Error(`sauce mcp exited ${code}: ${stderr}`)));
     });
   });
   after(async () => {

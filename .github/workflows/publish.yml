@@ -137,10 +137,11 @@ jobs:
           # exports["./compiler"] points here. It exists only if the sdk build ran, and a missing file
           # would ship a package whose /compiler subpath cannot resolve -- the 0.7.0 failure shape.
           test -s sdk/dist/compiler.js || { echo "::error::missing sdk/dist/compiler.js — the ./compiler subpath would not resolve"; exit 1; }
-          # The two bins. A missing one ships a package whose `bin` entry cannot run.
+          # The bin, and the MCP server `sauce mcp` loads from mcp/dist: a missing one ships a package
+          # whose command, or whose `sauce mcp`, cannot run.
           test -s sdk/dist/cli/main.js || { echo "::error::missing sdk/dist/cli/main.js — the sauce bin would not run"; exit 1; }
-          test -s mcp/dist/main.js || { echo "::error::missing mcp/dist/main.js — the sauce-mcp bin would not run"; exit 1; }
-          echo "verified: 8 engine artifacts + deployed addresses + 3 SVM binaries + both settle templates + the ./compiler entry point + both bins"
+          test -s mcp/dist/entry.js || { echo "::error::missing mcp/dist/entry.js — sauce mcp would not run"; exit 1; }
+          echo "verified: 8 engine artifacts + deployed addresses + 3 SVM binaries + both settle templates + the ./compiler entry point + the bin and the MCP server"
 
       - name: Resolve version
         id: version

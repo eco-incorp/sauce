@@ -1,5 +1,5 @@
 /**
- * `sauce-mcp setup`: each agent's project file, in the shape its vendor documents, written once,
+ * `sauce mcp setup`: each agent's project file, in the shape its vendor documents, written once,
  * merged into what a file already holds, never overwritten without `force`, and left alone when it
  * is not plain JSON.
  */
@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { launch, parseSetupAgents, SETUP_AGENTS, setupProject } from "../src/setup.js";
 
 const PACKAGE = { packageName: "@eco-incorp/sauce", version: "9.9.9" };
-const ARGS = ["-y", "-p", "@eco-incorp/sauce@9.9.9", "sauce-mcp"];
+const ARGS = ["-y", "@eco-incorp/sauce@9.9.9", "mcp"];
 
 let project: string;
 beforeEach(() => {
@@ -24,7 +24,7 @@ const json = (path: string) => JSON.parse(readFileSync(join(project, path), "utf
 const run = (overrides: Partial<Parameters<typeof setupProject>[0]> = {}) =>
   setupProject({ project, agents: [...SETUP_AGENTS], force: false, ...PACKAGE, ...overrides });
 
-describe("sauce-mcp setup", () => {
+describe("sauce mcp setup", () => {
   it("writes each agent's file, launching this package's bin at this version", () => {
     const files = run({ config: "sauce.config.json" });
     assert.deepEqual(
@@ -104,6 +104,24 @@ describe("sauce-mcp setup", () => {
     );
     assert.deepEqual(json(".mcp.json").mcpServers.sauce.args, ARGS);
     assert.doesNotMatch(readFileSync(join(project, ".codex/config.toml"), "utf8"), /old\.json/);
+  });
+
+  it("replaces its own Codex table with --force, and keeps the tables around it", () => {
+    mkdirSync(join(project, ".codex"));
+    const file = join(project, ".codex/config.toml");
+    writeFileSync(
+      file,
+      'model = "x"\n\n[mcp_servers.sauce]\ncommand = "old"\n\n[mcp_servers.other]\ncommand = "o"\n',
+    );
+    assert.deepEqual(
+      run({ agents: ["codex"], force: true }).map((each) => each.state),
+      ["overwrote"],
+    );
+    const toml = readFileSync(file, "utf8");
+    assert.ok(toml.startsWith('model = "x"\n\n[mcp_servers.sauce]\ncommand = "npx"\n'));
+    assert.ok(toml.endsWith('\n\n[mcp_servers.other]\ncommand = "o"\n'), toml);
+    assert.doesNotMatch(toml, /"old"/);
+    assert.equal(toml.match(/\[mcp_servers\.sauce\]/g)?.length, 1);
   });
 
   it("leaves a sauce server Codex's file already names another way alone", () => {

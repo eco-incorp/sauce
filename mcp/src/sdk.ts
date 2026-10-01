@@ -9,19 +9,14 @@
  */
 export {
   CliError,
-  describeFlags,
   parseAddress,
   parseChain,
   parseDefineMap,
-  parseFlags,
   parseSalt,
   parseUnixSeconds,
   parseWei,
-  repeatedFlag,
-  stringFlag,
   UsageError,
   type DefineValue,
-  type FlagSpecs,
 } from "../../sdk/dist/cli/args.js";
 export { connect, endpointFor, potState } from "../../sdk/dist/cli/chain.js";
 export {
@@ -43,6 +38,7 @@ export {
   programChain,
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
+export type { McpEntry, McpServeOptions, McpSetupOptions } from "../../sdk/dist/cli/mcp.js";
 export {
   parsePriceToken,
   priceCommand,
