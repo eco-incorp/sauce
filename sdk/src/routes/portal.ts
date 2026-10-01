@@ -54,6 +54,7 @@ import { PortalABI } from "../protocols/eco-routes/abis.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { denormalizeToEvm, encodeRoute, evmRouteTuple, hashIntent, kindOf } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
+import { assertRewardAssetsDistinct } from "./intent.js";
 import { toUniversalAddress } from "./normalize.js";
 import type { AddressInput, Intent } from "./types.js";
 
@@ -113,6 +114,7 @@ function portalAddress(target: PortalTarget): Hex {
 /** `Portal.publish(destination, routeBytes, reward)`. `value` is always `0n`. */
 export function publishTx(intent: Intent, target: PortalTarget): PortalTx {
   assertEvmSource(intent, "publishTx");
+  assertRewardAssetsDistinct(intent.sourceChainId, intent.reward);
   return {
     to: portalAddress(target),
     data: encodeFunctionData({
@@ -131,6 +133,7 @@ export function publishAndFundTx(
   target: PortalTarget,
 ): PortalTx {
   assertEvmSource(intent, "publishAndFundTx");
+  assertRewardAssetsDistinct(intent.sourceChainId, intent.reward);
   return {
     to: portalAddress(target),
     data: encodeFunctionData({
@@ -145,6 +148,7 @@ export function publishAndFundTx(
 /** `Portal.fund(destination, routeHash, reward, allowPartial)`. `value = reward.nativeAmount`. */
 export function fundTx(intent: Intent, allowPartial: boolean, target: PortalTarget): PortalTx {
   assertEvmSource(intent, "fundTx");
+  assertRewardAssetsDistinct(intent.sourceChainId, intent.reward);
   const rHash = hashIntent(intent).routeHash;
   return {
     to: portalAddress(target),
@@ -170,6 +174,7 @@ export function fundTx(intent: Intent, allowPartial: boolean, target: PortalTarg
  */
 export function approvalTxs(intent: Intent, target: PortalTarget): readonly PortalTx[] {
   assertEvmSource(intent, "approvalTxs");
+  assertRewardAssetsDistinct(intent.sourceChainId, intent.reward);
   const portal = portalAddress(target);
   const maxByToken = new Map<Hex, bigint>();
   for (const { token, amount } of intent.reward.tokens) {

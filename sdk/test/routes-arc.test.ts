@@ -173,3 +173,71 @@ describe("Arc: intents", () => {
     expect(ecoRoutesProver("base", "arc")).toBe(ecoRoutesProver("arc", "base"));
   });
 });
+
+describe("Arc: a reward cannot offer native value and USDC together", () => {
+  const amount = 1_000_000n;
+  const oneUsdcNative = 10n ** 18n;
+  const BASE_ROUTE = "USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);";
+  const REFUSAL =
+    /arc \(chain 5042\) offers both a nativeAmount and a USDC token leg \(0x3600000000000000000000000000000000000000\)[\s\S]*RewardTokensNotUnique[\s\S]*Fold them into one leg/;
+  const route = { deadline: 2_000_000_000n, execution: { value: 1n }, nativeAmount: 1n } as const;
+  const reward = (source: typeof Arc.chain, destination: string, token: Hex) => ({
+    source,
+    creator: CREATOR as Hex,
+    prover: ecoRoutesProver(source.slug, destination),
+    deadline: 2_000_003_600n,
+    nativeAmount: oneUsdcNative,
+    tokens: [{ token, amount }],
+  });
+  /** A program that opens an intent to `destination`, rewarded in native value AND its own chain's
+   *  USDC. */
+  const program = (destination: string) => `
+    function main() {
+      const amount = USDC.balanceOf(ctx.self());
+      ${destination}(() => {
+        USDC.transfer(RECIPIENT, amount);
+      }).reward({ nativeAmount: 1n, tokens: [{ token: USDC, amount }] });
+    }
+  `;
+  const compileOn = (chain: string, destination: string) =>
+    routes.compileSauceRoute(
+      chain,
+      program(destination),
+      { pot: SHARED_POT, engine: ENGINE },
+      {
+        ambient: ["@sauce/token"],
+        defines: { RECIPIENT: 0x2222222222222222222222222222222222222222n },
+        intents: { deadline: 2_000_000_000n, creator: CREATOR, executionFee: 1n },
+      },
+    );
+
+  it("the builder refuses it at .reward(), naming the chain, the token and the remedy", () => {
+    expect(() => Base(BASE_ROUTE, route).reward(reward(Arc.chain, "base", ARC_USDC))).toThrow(
+      REFUSAL,
+    );
+  });
+
+  it("the Portal helpers refuse a hand-built one before encoding anything", () => {
+    const built = Base(BASE_ROUTE, route).reward({
+      ...reward(Arc.chain, "base", ARC_USDC),
+      nativeAmount: 0n,
+    });
+    const intent = {
+      ...built.intent,
+      reward: { ...built.intent.reward, nativeAmount: oneUsdcNative },
+    };
+    expect(() => routes.publishAndFundTx(intent, false, { portal: PORTAL })).toThrow(REFUSAL);
+    expect(() => routes.approvalTxs(intent, { portal: PORTAL })).toThrow(REFUSAL);
+  });
+
+  it("an intent a program opens on Arc is refused when it is compiled", () => {
+    expect(() => compileOn("arc", "Base")).toThrow(REFUSAL);
+  });
+
+  it("the same shape is fine on Base, whose native coin is not a token", () => {
+    const built = Arc(BASE_ROUTE, route).reward(reward(Base.chain, "arc", BASE_USDC));
+    expect(built.publishAndFundCalldata(false).value).toBe(oneUsdcNative);
+    expect(built.approvals()).toHaveLength(1);
+    expect(compileOn("base", "Arbitrum").compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+});

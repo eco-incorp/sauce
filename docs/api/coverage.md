@@ -122,7 +122,8 @@ Arc (chain 5042) pays gas in USDC, and it has **one USDC balance with two decima
   blocklisted address, or to a self-destructed account reverts, including one a contract forwards.
 - **A reward offers native value or `USDC`, not both.** Arc's eco-routes Portal treats the native
   coin and the `USDC` ERC-20 as one asset, so an intent reward with a `nativeAmount` and a `USDC`
-  token leg reverts `RewardTokensNotUnique(USDC)` when it is published or funded. Offer one of them.
+  token leg reverts `RewardTokensNotUnique(USDC)` when it is published or funded. The SDK refuses
+  such a reward when it is built, before anything is signed: fold the two into one leg.
 
 An intent to Arc uses the same Portal, Executor and derived Pot as every other chain; see
 [One Portal, one Pot](../guides/intents.md#one-portal-one-pot).
