@@ -184,6 +184,8 @@ export function buildCookAndPayInstruction({
   tail = [],
   ...payment
 }: CookAndPayInput): Instruction {
+  assertEngineRunsCompiler("svm", engineProgram);
+
   return {
     programAddress: engineProgram,
     accounts: directAccounts([], tail, payment),
@@ -214,6 +216,8 @@ export function buildCookAndPayFromAccountInstruction({
   tail = [],
   ...payment
 }: CookAndPayFromAccountInput): Instruction {
+  assertEngineRunsCompiler("svm", engineProgram);
+
   return {
     programAddress: engineProgram,
     accounts: directAccounts([{ address: code, role: AccountRole.READONLY }], tail, payment),
@@ -249,6 +253,7 @@ export function buildCookAndPayFromAccountPinnedInstruction({
   if (!(expectedSha256 instanceof Uint8Array) || expectedSha256.length !== 32) {
     throw new Error("expectedSha256 must be exactly 32 bytes");
   }
+  assertEngineRunsCompiler("svm", engineProgram);
 
   return {
     programAddress: engineProgram,
