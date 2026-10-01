@@ -204,7 +204,7 @@ export const ACCOUNT_WAIT = { tries: 60, delayMs: 1000 };
  * simulation reads the same way: cooking straight after creating its Pot would fail on a Pot that
  * is there.
  */
-async function awaitAccount(
+export async function awaitAccount(
   rpc: Rpc,
   url: string,
   account: Address,

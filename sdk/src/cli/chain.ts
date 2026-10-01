@@ -213,7 +213,7 @@ export async function potState(
  * the transaction in it. It never fails: a node that stays behind is caught by the read that
  * depends on it (`awaitPot`), or by the rehearsal of the transaction after it.
  */
-async function caughtUp(
+export async function caughtUp(
   client: PublicClient,
   block: bigint,
   wait: { readonly tries: number; readonly delayMs: number } = POT_WAIT,

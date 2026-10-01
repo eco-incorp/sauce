@@ -292,18 +292,24 @@ export async function laggingEndpoint(
 
     return forward(request);
   };
+  // The CLI's clients send one request at a time (viem's http transport does not batch unless
+  // asked to), so a batch is refused rather than relayed unlagged.
   const server = createServer((req, res) => {
-    let body = "";
-    req.on("data", (chunk: Buffer) => (body += chunk.toString()));
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
     req.on("end", () => {
-      const parsed = JSON.parse(body) as
-        { id: unknown; method: string } | Array<{ id: unknown; method: string }>;
-      void (Array.isArray(parsed) ? Promise.all(parsed.map(answer)) : answer(parsed)).then(
-        (out) => {
-          res.setHeader("content-type", "application/json");
-          res.end(JSON.stringify(out));
-        },
-      );
+      const parsed = JSON.parse(Buffer.concat(chunks).toString()) as
+        { id: unknown; method: string } | unknown[];
+      if (Array.isArray(parsed)) {
+        res.statusCode = 400;
+        res.end("laggingEndpoint relays one request at a time");
+
+        return;
+      }
+      void answer(parsed).then((out) => {
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(out));
+      });
     });
   });
   server.listen(0, "127.0.0.1");

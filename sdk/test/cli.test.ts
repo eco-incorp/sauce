@@ -28,9 +28,9 @@ import {
   parseSalt,
   UsageError,
 } from "../src/cli/args.js";
-import { awaitPot } from "../src/cli/chain.js";
+import { awaitPot, caughtUp } from "../src/cli/chain.js";
 import { castSend } from "../src/cli/commands.js";
-import { failureReason } from "../src/cli/solana.js";
+import { awaitAccount, failureReason } from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   v12DeployedAddresses,
@@ -1399,6 +1399,10 @@ describe("flags in any order", () => {
         ["globals", "--chain", "base", "--rpc-url", "http://x"],
         /globals reads nothing from a chain/,
       ],
+      [
+        ["compile", program, "--chain", "base", "--keystore", "k.json"],
+        /--keystore is not an option of sauce compile: compile signs nothing \(sauce simulate, sauce run/,
+      ],
       [["compile", program, "--chain", "base", "--nope"], /unknown option --nope/],
     ];
     for (const [argv, message] of cases) {
@@ -1458,6 +1462,48 @@ describe("waiting for a deployed Pot", () => {
     await expect(awaitPot(client, POT, 7n, { tries: 3, delayMs: 1 })).rejects.toThrow(
       /deployed in block 7, but the endpoint still shows no code there/,
     );
+  });
+
+  it("waits for the endpoint to reach a transaction's block, and gives up quietly", async () => {
+    const heights: Array<bigint | Error> = [5n, new Error("timeout"), 6n, 7n];
+    let asked = 0;
+    const client = {
+      getBlockNumber: async () => {
+        asked++;
+        const next = heights.shift() ?? 6n;
+        if (next instanceof Error) throw next;
+
+        return next;
+      },
+    } as unknown as PublicClient;
+    await caughtUp(client, 7n, { tries: 10, delayMs: 1 });
+    expect(asked).toBe(4);
+    // Never there: it returns rather than fail a transaction that did succeed.
+    asked = 0;
+    await caughtUp(client, 100n, { tries: 3, delayMs: 1 });
+    expect(asked).toBe(3);
+  });
+
+  it("waits on Solana for a created account to show, reading a failed request as not yet", async () => {
+    const answers: Array<null | Error | object> = [null, new Error("503"), {}];
+    let asked = 0;
+    const rpc = {
+      getAccountInfo: () => ({
+        send: async () => {
+          asked++;
+          const next = answers.shift() ?? null;
+          if (next instanceof Error) throw next;
+
+          return { value: next };
+        },
+      }),
+    } as unknown as Parameters<typeof awaitAccount>[0];
+    const pot = svmAddress("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+    await awaitAccount(rpc, "http://rpc", pot, "the Pot", { tries: 5, delayMs: 1 });
+    expect(asked).toBe(3);
+    await expect(
+      awaitAccount(rpc, "http://rpc", pot, "the Pot", { tries: 2, delayMs: 1 }),
+    ).rejects.toThrow(/the Pot 9WzD\w+ was created, but the cluster still does not show it/);
   });
 });
 
