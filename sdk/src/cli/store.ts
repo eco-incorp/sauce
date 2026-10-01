@@ -20,8 +20,10 @@
  * the chains (`lifecycle.ts#intentStatus`), every time. No key, password or endpoint is ever
  * written: the record and the events hold only public chain data.
  *
- * NODE-ONLY (the filesystem), like the rest of `cli/` that touches it; the default directory is
- * `~/.sauce/intents` (`os.homedir()`), and `--store <dir>` names another.
+ * A record is checked (its hashes against its route and reward, `lifecycle.ts#intentOf`) by
+ * whoever builds or reads it; the store keeps it as given. NODE-ONLY (the filesystem), like the
+ * rest of `cli/` that touches it; the default directory is `~/.sauce/intents` (`os.homedir()`),
+ * and `--store <dir>` names another.
  */
 import {
   closeSync,
@@ -40,8 +42,11 @@ import { join } from "node:path";
 
 import type { Hex } from "viem";
 
-import { CliError } from "./args.js";
-import { INTENT_SCHEMA, intentOf, type IntentRecord } from "./lifecycle.js";
+import type { IntentRecord } from "./lifecycle.js";
+
+/** The record schema this store reads (`lifecycle.ts#INTENT_SCHEMA`). The store imports nothing at
+ *  run time but Node's own modules, so a test runs it in processes of its own. */
+const INTENT_SCHEMA: IntentRecord["schema"] = "sauce.intent/1";
 
 /** Where intents are kept unless `--store` says otherwise. */
 export const defaultStoreDir = (): string => join(homedir(), ".sauce", "intents");
@@ -97,12 +102,16 @@ const comparable = (record: IntentRecord): string =>
   JSON.stringify({ ...record, vault: undefined });
 
 export class IntentStore {
-  constructor(readonly dir: string) {}
+  readonly dir: string;
+
+  constructor(dir: string) {
+    this.dir = dir;
+  }
 
   private intentDir(intentHash: Hex): string {
     const hash = intentHash.toLowerCase();
     if (!HASH.test(hash))
-      throw new CliError(`'${intentHash}' is not an intent hash (32 bytes of hex)`);
+      throw new Error(`'${intentHash}' is not an intent hash (32 bytes of hex)`);
 
     return join(this.dir, hash);
   }
@@ -113,7 +122,7 @@ export class IntentStore {
    * was edited — is an error, and the file is left as it was.
    */
   save(record: IntentRecord): "created" | "exists" {
-    intentOf(record);
+    if (record.schema !== INTENT_SCHEMA) throw new Error(`not a ${INTENT_SCHEMA} record`);
     const dir = this.intentDir(record.intentHash);
     mkdirSync(dir, { recursive: true });
     const final = join(dir, "intent.json");
@@ -131,9 +140,10 @@ export class IntentStore {
       if ((error as { code?: string }).code !== "EEXIST") throw error;
       const existing = this.readRecord(record.intentHash);
       if (comparable(existing) !== comparable(record)) {
-        throw new CliError(
+        throw new Error(
           `${final} holds a different intent under the same hash: it was edited, so it is left ` +
             "as it is",
+          { cause: error },
         );
       }
 
@@ -150,7 +160,7 @@ export class IntentStore {
     const line = `${JSON.stringify({ v: 1, ...event })}\n`;
     const bytes = new TextEncoder().encode(line);
     if (bytes.length > MAX_LINE) {
-      throw new CliError(`an event line of ${bytes.length} bytes is too long to append atomically`);
+      throw new Error(`an event line of ${bytes.length} bytes is too long to append atomically`);
     }
     const fd = openSync(join(dir, "events.jsonl"), "a");
     try {
@@ -166,17 +176,16 @@ export class IntentStore {
     try {
       parsed = JSON.parse(readFileSync(path, "utf8"));
     } catch (error) {
-      throw new CliError(
+      throw new Error(
         (error as { code?: string }).code === "ENOENT"
           ? `no intent ${intentHash.toLowerCase()} in ${this.dir}`
           : `${path} is not JSON`,
+        { cause: error },
       );
     }
     const record = parsed as IntentRecord;
     if (record.schema !== INTENT_SCHEMA) {
-      throw new CliError(
-        `${path}: schema ${JSON.stringify(record.schema)} is not ${INTENT_SCHEMA}`,
-      );
+      throw new Error(`${path}: schema ${JSON.stringify(record.schema)} is not ${INTENT_SCHEMA}`);
     }
 
     return record;
