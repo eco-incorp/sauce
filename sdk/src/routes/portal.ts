@@ -43,10 +43,10 @@
  *     approval is SUFFICIENT but not always CONSUMED — approving the full amount is never wrong.
  *
  * EVM-SOURCE GUARD: every helper here throws a named error when `intent.sourceChainId`'s kind isn't
- * `"evm"` — these are EVM Portal calldata, and the Solana Portal *program* is not in eco-routes on
- * `main` (zero `.rs` — design doc openQuestions 4/5). The DESTINATION may be `svm` and is fully
- * supported: an EVM-sourced reward with Borsh route bytes is exactly the
- * `DepositAddress_USDCTransfer_Solana.sol` shape.
+ * `"evm"` — these are EVM Portal calldata. The Solana Portal is a separate Anchor program, in
+ * `eco/eco-routes-svm`, with its own instructions and accounts, which these helpers do not build.
+ * The DESTINATION may be `svm` and is fully supported: an EVM-sourced reward with Borsh route bytes
+ * is exactly the `DepositAddress_USDCTransfer_Solana.sol` shape.
  */
 import { decodeAbiParameters, encodeFunctionData, type Hex } from "viem";
 
@@ -80,8 +80,9 @@ function assertEvmSource(intent: Intent, helper: string): void {
   if (kindOf(intent.sourceChainId) !== "evm") {
     throw new Error(
       `portal.ts#${helper}: intent.sourceChainId (${intent.sourceChainId}) is not an EVM chain — ` +
-        `these are EVM Portal calldata helpers, and eco-routes has no Solana Portal PROGRAM on ` +
-        `\`main\` (zero .rs). The DESTINATION may be svm; only the SOURCE must be evm.`,
+        `these are EVM Portal calldata helpers, and the Solana Portal is a separate program ` +
+        `(eco/eco-routes-svm) whose instructions they do not build. The DESTINATION may be svm; ` +
+        `only the SOURCE must be evm.`,
     );
   }
 }
