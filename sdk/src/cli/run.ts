@@ -199,16 +199,30 @@ export function nodeIo(): CliIo {
 }
 
 /** This package's name and version, from the manifest three levels above `sdk/{src,dist}/cli`. */
-function packageInfo(): { name: string; version: string } {
+function packageInfo(): {
+  name: string;
+  version: string;
+  dependencies?: Record<string, string>;
+} {
   const manifest = new URL("../../../package.json", import.meta.url);
 
-  return JSON.parse(readFileSync(manifest, "utf8")) as { name: string; version: string };
+  return JSON.parse(readFileSync(manifest, "utf8")) as {
+    name: string;
+    version: string;
+    dependencies?: Record<string, string>;
+  };
 }
 
 const skillsSource = (): SkillsSource => {
-  const { name, version } = packageInfo();
+  const { name, version, dependencies } = packageInfo();
+  const typescript = dependencies?.typescript;
 
-  return { dir: PACKAGED_SKILLS, packageName: name, version };
+  return {
+    dir: PACKAGED_SKILLS,
+    packageName: name,
+    version,
+    ...(typescript === undefined ? {} : { typescript }),
+  };
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1889,7 +1903,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     details: [
       "Writes package.json (pinning this exact version), AGENTS.md (the project's instructions,",
       "which coding agents read), CLAUDE.md and GEMINI.md importing it for those agents, a",
-      ".gitignore for local config, sauce.config.example.json (placeholders only), and then",
+      ".gitignore for local config, sauce.config.example.json (placeholders only),",
+      "programs/tsconfig.json (SauceScript's names, and a plugin, for an editor checking the",
+      "programs there: kept apart from the project's other TypeScript), and then",
       "installs the agent skills (`sauce skills install`), for every agent unless --agent names",
       "some. It runs no package manager unless --install, which runs npm install.",
     ].join("\n"),

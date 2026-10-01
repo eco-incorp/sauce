@@ -404,6 +404,7 @@ try {
     "GEMINI.md",
     ".gitignore",
     "sauce.config.example.json",
+    "programs/tsconfig.json",
   ]) {
     assert.ok(existsSync(join(project, file)), `sauce init writes ${file}`);
   }
@@ -454,6 +455,31 @@ try {
   console.log(
     `Clean package install: sauce init scaffolds a project pinned to ${installedManifest.version}, ` +
       `whose ${shippedSkills.length} skill files then check clean for every agent`,
+  );
+
+  // An editor on that project, asked through its own tsserver from the installed TypeScript: the
+  // programs in programs/ — an agent's three, as it wrote them, and every one the skills ship —
+  // show no error, a real mistake does, and the project's other TypeScript is untouched.
+  const { checkEditor } = await import(
+    pathToFileURL(join(root, "sdk/scripts/check-editor.mjs")).href
+  );
+  const demo = join(root, "sdk/test/fixtures/sauce-script/demo");
+  const editorPrograms = [
+    join(demo, "usdc-to-weth.sauce.ts"),
+    join(demo, "intent/usdc-to-weth-on-base.sauce.ts"),
+    join(demo, "solana/pay-usdc-keep-minimum.sauce.ts"),
+    ...shippedSkills
+      .filter((file) => file.endsWith(".sauce.ts"))
+      .map((file) => join(project, ".claude/skills", file)),
+  ];
+  const shown = await checkEditor({
+    project,
+    tsserverPath: join(work, "node_modules/typescript/lib/tsserver.js"),
+    programs: editorPrograms,
+  });
+  console.log(
+    `Clean package install: in the project sauce init wrote, an editor's tsserver shows the ` +
+      `${shown} programs in programs/ no error, a mistake one, and a Node file beside them none`,
   );
 
   // `sauce skills install` on its own, for one agent: only the directory that agent reads, every

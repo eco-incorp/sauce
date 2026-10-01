@@ -75,6 +75,9 @@
     "./verify": {
       "types": "./sdk/dist/verify/index.d.ts",
       "default": "./sdk/dist/verify/index.js"
+    },
+    "./sauce-script": {
+      "types": "./sdk/dist/sauce-script/index.d.ts"
     }
   },
   "bin": {

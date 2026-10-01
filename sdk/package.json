@@ -60,7 +60,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs && node scripts/gen-skills-globals.mjs",
+    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs && node scripts/gen-sauce-script-types.mjs && node scripts/gen-skills-globals.mjs",
+    "gen-sauce-script-types": "node scripts/gen-sauce-script-types.mjs",
     "typecheck": "node scripts/gen-embedded-sources.mjs && tsc --noEmit",
     "typecheck:test": "node scripts/gen-embedded-sources.mjs && tsc -p tsconfig.test.json --noEmit",
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
