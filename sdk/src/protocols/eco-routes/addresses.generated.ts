@@ -5,16 +5,16 @@
 // that is absent here is a role with no deployment rather than one pointing at nothing.
 export const ECO_ROUTES_ADDRESSES = {
   v3: {
-    version: "3.2.22",
-    sha256: "be8bf2ff1507aa146735ae837cb368b706f0dcfa3e72ec28d72b5919c031c6e1",
+    version: "3.2.24",
+    sha256: "fbb3ff79dbc75bb9783c77138960787e43e6b898be486accd6ae6cf8f6017153",
     summary: "single Portal, with Hyper/Meta/Polymer/LayerZero provers",
     roles: ["HyperProver","MetaProver","Portal","PolymerProver","LayerZeroProver"],
     chains: {
           "1": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df",
-                      "PolymerProver": "0xE3e4e6F284f1c8E17bafE4268EB98c36886B4d8B"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
@@ -24,8 +24,9 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "10": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
@@ -34,9 +35,6 @@ export const ECO_ROUTES_ADDRESSES = {
                 }
           },
           "56": {
-                "default": {
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
-                },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
                       "Portal": "0xfD12115CD8F37C7667050eD8499EDa6B9d9c03bA"
@@ -44,8 +42,9 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "130": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
@@ -54,8 +53,9 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "137": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
@@ -63,11 +63,14 @@ export const ECO_ROUTES_ADDRESSES = {
                       "LayerZeroProver": "0x3a572CfA867691e4D8bD19B80294f3c744a384E9"
                 }
           },
-          "146": {
+          "143": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
-                },
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
+                }
+          },
+          "146": {
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
                       "Portal": "0xfD12115CD8F37C7667050eD8499EDa6B9d9c03bA"
@@ -75,8 +78,9 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "480": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
@@ -85,8 +89,9 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "999": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
@@ -95,7 +100,7 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "2020": {
                 "default": {
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85"
                 },
                 "staging": {
                       "Portal": "0xfD12115CD8F37C7667050eD8499EDa6B9d9c03bA"
@@ -103,15 +108,16 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "5042": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC002CA16cE20c2a9F3C6200EF04E7d92a3dfBD8"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 }
           },
           "8453": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df",
-                      "PolymerProver": "0xE3e4e6F284f1c8E17bafE4268EB98c36886B4d8B"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
@@ -121,8 +127,9 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "9745": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 },
                 "staging": {
                       "Portal": "0xfD12115CD8F37C7667050eD8499EDa6B9d9c03bA"
@@ -130,8 +137,9 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "42161": {
                 "default": {
-                      "HyperProver": "0xec004Ab4870c4e177c66949329dCdb503CE41022",
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
+                      "HyperProver": "0xEC08fb4647f3f50d1162a578d481266687C60fc5",
+                      "Portal": "0xEC000769A73b70e16f361a442292500b3BCf4A85",
+                      "PolymerProver": "0xEC0DeD087Ee6C55991Bb4D4567ca1134c5353Ed6"
                 },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
@@ -140,42 +148,21 @@ export const ECO_ROUTES_ADDRESSES = {
                 }
           },
           "42220": {
-                "default": {
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
-                },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
                       "Portal": "0xfD12115CD8F37C7667050eD8499EDa6B9d9c03bA"
                 }
           },
           "57073": {
-                "default": {
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
-                },
                 "staging": {
                       "HyperProver": "0x7cE7467adDCffB7E547826317c38C99D7F9F49fF",
                       "Portal": "0xfD12115CD8F37C7667050eD8499EDa6B9d9c03bA"
                 }
           },
-          "84532": {
-                "default": {
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
-                }
-          },
-          "11155111": {
-                "default": {
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
-                }
-          },
-          "11155420": {
-                "default": {
-                      "Portal": "0xEC000064576f9C95a8623Bc0eff3db6d296ea6df"
-                }
-          },
           "728126428": {
                 "default": {
-                      "Portal": "0xbbe65c636a745ccb12fb0a8376f5ed089a86983a",
-                      "PolymerProver": "0x7825bbbd1ebaba04d772a250fb4b314030b62181"
+                      "Portal": "0x27262594c6088865ac3e7ac20f401af3bd379b1b",
+                      "PolymerProver": "0xc65bdb3a1a97a1a60eeeff84d816a76183b43547"
                 },
                 "staging": {
                       "Portal": "0x82d83b1d44cc7c4a08594be9d0c8e6acd376c53a"
@@ -183,13 +170,9 @@ export const ECO_ROUTES_ADDRESSES = {
           },
           "1399811149": {
                 "default": {
-                      "HyperProver": "0xca53988725dacbdb86ac39da51a416f6eec28d571ccc45beff99b7c29bef3af2",
-                      "Portal": "0xca542f42f1d9649f69c3e971b2301e76a3f63663154e37bd351ffef8ed0ba2ca"
-                }
-          },
-          "2494104990": {
-                "default": {
-                      "Portal": "0xc1168fd9e51b9fdd00bd29747dc9c37584b4a4df"
+                      "HyperProver": "0xca5398d9f300d010fb96a40ade32fb32a0d9ca803e77cd2d8eaa9a53052e9ef8",
+                      "Portal": "0xca542f97103ea70daa48b4a15f9fd1c0a21a50bfac60a57717fc305f495f5245",
+                      "PolymerProver": "0xca53b5510539b36b8d3d9e3042a70a9950a763fada634b24cc19ba96b924c58c"
                 }
           }
     },

@@ -8,7 +8,7 @@ import { v12KitchenAddress } from "../../src/deployments/index.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12PotAbi, type PotRouterClient } from "../../src/evm/engine.js";
 
-const OWNER = "0x645dADD5Bf354526b68A2befd9A305F7E03b91Ca" as Address;
+const OWNER = "0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082" as Address;
 const OLD_ROUTER = "0x1111111111111111111111111111111111111111" as Address;
 const NEW_ROUTER = "0x2222222222222222222222222222222222222222" as Address;
 
