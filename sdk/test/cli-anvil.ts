@@ -36,7 +36,11 @@ import { privateKeyToAccount } from "viem/accounts";
 import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
-import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import {
+  ecoRoutesExecutorOf,
+  ecoRoutesPortal,
+  ecoRoutesVaultImplementationOf,
+} from "../src/protocols/eco-routes/lookup.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import * as gated from "./evm/gated-engine.js";
 
@@ -250,35 +254,32 @@ export const potOwner = (local: LocalChain, pot: Address): Promise<Address> =>
 export const registered = (chain: CanonicalChain, symbol: string): Address =>
   getAddress(numberToHex(registryTokenAddress(chain, symbol)!, { size: 20 }));
 
-/** `code` with every copy of the 20-byte immutable `from` replaced by `to`: a runtime holds one
- *  per place it reads the immutable. */
-function rewriteImmutable(code: Hex, from: Address, to: Address): Hex {
-  const needle = from.slice(2).toLowerCase();
-  const parts = code.toLowerCase().split(needle);
-  if (parts.length < 2) throw new Error(`the runtime holds no copy of ${from}`);
-
-  return parts.join(to.slice(2).toLowerCase()) as Hex;
-}
-
 /**
  * The real eco-routes Portal (`evm/fixtures/Portal.json`, its own forge creation code) at the
- * address the SDK records for `local`'s chain, with its Executor where the SDK derives it, so a
- * fill runs the Portal's real `_fulfill` with no override.
+ * address the SDK records for `local`'s chain, deployed there IN EFFECT: its Executor and its vault
+ * implementation where a Portal deployed at that address would have created them. So a fill runs
+ * the Portal's real `_fulfill`, and its vaults are the ones the SDK derives, with no override.
  *
  * THE PORTAL IS PUT IN PLACE, NOT DEPLOYED THERE. A Portal's address is its deployer's, and its
- * Executor is the Portal's own second CREATE (`ECO_ROUTES_EXECUTOR_NONCE`), with each holding the
- * other's address as an immutable: the Portal's `executor`, the Executor's `portal` (its
- * `onlyPortal` check). So this deploys the fixture wherever it lands, then copies both runtimes to
- * the registry's Portal and the Executor derived from it, with exactly those two immutables
- * rewritten to the new addresses. The Portal's other immutables are untouched: its chain id
- * (anvil's, which `startChain` sets to the chain's), its vault implementation, and its EIP-712
- * cache, which recomputes the domain for an address that is not the cached one.
+ * constructor CREATEs two contracts: the vault implementation (`ECO_ROUTES_VAULT_IMPLEMENTATION_NONCE`)
+ * and the Executor (`ECO_ROUTES_EXECUTOR_NONCE`). The Portal holds both addresses as immutables (its
+ * `executor`, and the implementation its vaults are clones of), and the two hold the Portal's (the
+ * Executor's `onlyPortal` check). So this deploys the fixture wherever it lands, then copies all three
+ * runtimes to the registry's Portal and the two addresses derived from it, with every copy of those
+ * three addresses rewritten. Copied alone, the Portal would derive its vaults from the
+ * implementation of the address it really landed at, which no deployed Portal does and the SDK does
+ * not predict. Its other immutables are untouched: its chain id (anvil's, which `startChain` sets
+ * to the chain's) and its EIP-712 cache, which recomputes the domain for an address that is not the
+ * cached one.
  */
-export async function placePortal(
-  local: LocalChain,
-): Promise<{ readonly portal: Address; readonly executor: Address }> {
+export async function placePortal(local: LocalChain): Promise<{
+  readonly portal: Address;
+  readonly executor: Address;
+  readonly vaultImplementation: Address;
+}> {
   const portal = getAddress(ecoRoutesPortal(local.chain.slug));
   const executor = getAddress(ecoRoutesExecutorOf(portal));
+  const vaultImplementation = getAddress(ecoRoutesVaultImplementationOf(portal));
   const creation = (
     JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.json"), "utf8")) as {
       creationCode: Hex;
@@ -287,21 +288,21 @@ export async function placePortal(
   const deployed = await local.plant(
     `${creation}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex,
   );
-  const itsExecutor = await local.publicClient.readContract({
-    address: deployed,
-    abi: PORTAL_EXECUTOR,
-    functionName: "executor",
-  });
-  const portalCode = await local.publicClient.getCode({ address: deployed });
-  const executorCode = await local.publicClient.getCode({ address: itsExecutor });
-  await local.testClient.setCode({
-    address: portal,
-    bytecode: rewriteImmutable(portalCode!, itsExecutor, executor),
-  });
-  await local.testClient.setCode({
-    address: executor,
-    bytecode: rewriteImmutable(executorCode!, deployed, portal),
-  });
+  const moves = [
+    [deployed, portal],
+    [getAddress(ecoRoutesVaultImplementationOf(deployed)), vaultImplementation],
+    [getAddress(ecoRoutesExecutorOf(deployed)), executor],
+  ] as const;
+  const relocated = (code: Hex): Hex =>
+    moves.reduce(
+      (text, [from, to]) => text.split(from.slice(2).toLowerCase()).join(to.slice(2).toLowerCase()),
+      code.toLowerCase(),
+    ) as Hex;
+  for (const [from, to] of moves) {
+    const code = await local.publicClient.getCode({ address: from });
+    if (code === undefined) throw new Error(`the Portal's deployment left no contract at ${from}`);
+    await local.testClient.setCode({ address: to, bytecode: relocated(code) });
+  }
   const placed = await local.publicClient.readContract({
     address: portal,
     abi: PORTAL_EXECUTOR,
@@ -311,7 +312,7 @@ export async function placePortal(
     throw new Error(`the placed Portal's executor is ${placed}, not ${executor}`);
   }
 
-  return { portal, executor };
+  return { portal, executor, vaultImplementation };
 }
 
 const PORTAL_EXECUTOR = parseAbi(["function executor() view returns (address)"]);

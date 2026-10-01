@@ -172,6 +172,24 @@ export function ecoRoutesExecutorOf(portal: Hex): Hex {
 }
 
 /**
+ * The implementation every intent vault of a Portal delegates to: `Portal`'s constructor passes
+ * `address(new Vault())` to `IntentSource`, before `Inbox` creates the Executor, so it is the
+ * Portal's FIRST `CREATE`. Like the Executor, a pure function of the Portal address.
+ *
+ * `routes/vault.ts#ecoRoutesVaultConfig` builds the vault's CREATE2 init code from it.
+ * `routes-nest-dynamic.e2e.test.ts` deploys the real Portal and checks the vault it reports.
+ */
+export const ECO_ROUTES_VAULT_IMPLEMENTATION_NONCE = 1n;
+
+export function ecoRoutesVaultImplementationOf(portal: Hex): Hex {
+  return getContractAddress({
+    from: portal,
+    nonce: ECO_ROUTES_VAULT_IMPLEMENTATION_NONCE,
+    opcode: "CREATE",
+  });
+}
+
+/**
  * The prover to record in a reward for a `source` -> `destination` route.
  *
  * A prover is a pair property, not a chain property: the reward names a prover on the SOURCE chain,

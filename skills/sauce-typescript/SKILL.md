@@ -140,9 +140,12 @@ a recorded address, not proof of live code on the chain.
   `fulfill`), `destinationPot(chain)` the shared Pot and
   `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
   its deploy; the intents runner builds a rehearsal with them. For the source side,
-  `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs`,
-  `routes.intentVaultAddressCall` and `routes.isIntentFundedCall` build the publication, funding
-  and vault calls (`{ to, data }`, with `decode` for a read) from an intent, for the source chain.
+  `built.sourceTxs()` (`routes.intentSourceTxs` for an intent built some other way) is the
+  funding and publication in order: a transfer of each reward token to the vault, then `publish`
+  (`{ fundVia: "publishAndFund" }` for the approvals and `publishAndFund`). Pass `{ vault }` read with
+  `routes.intentVaultAddressCall`: it is checked against `routes.predictIntentVault`, the package's
+  own computation. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs` and
+  `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
 - **Cascades from TypeScript**: `routes.openRoute(chain, body, options).nest(child, { via })`
   attaches a child intent to a route. By default (`via: "transfer"`) the parent's route funds the
   child by a transfer into the child's vault, with no publication of its own;

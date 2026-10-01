@@ -1,7 +1,7 @@
 /**
  * `sauce fill`: a solver's fill of the intents a file opens, rehearsed on each intent's DESTINATION
  * chain with no key and nothing sent — the other half of `publish --dry-run`, which rehearses only
- * the source chain's approve and `publishAndFund`. The route's body is where an intent fails (a
+ * the source chain's funding of the vault and `publish`. The route's body is where an intent fails (a
  * swap, a minimum, a refund), and it runs only on the destination, inside `Portal.fulfill`.
  *
  * One `eth_simulateV1` block, every call from the solver, state carried from one to the next:
