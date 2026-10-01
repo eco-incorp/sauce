@@ -1,16 +1,14 @@
-// @chain ethereum
+// Pays `recipient`, from the Pot, `amount` of USDC and `amount` of USDT.
 //
-// Pays RECIPIENT, from the Pot, AMOUNT of USDC and AMOUNT of USDT.
+// It names no chain: `--chain` picks one, and `USDC` and `USDT` are that chain's registered tokens,
+// so the same file runs on every chain that registers both. `recipient` and `amount` arrive with
+// the transaction, so one compiled program serves every call. Each `.transfer` is a SafeERC20
+// transfer: USDT, which returns nothing, works like any other token, and a token that answers
+// `false` reverts the whole transaction.
 //
-// `USDC` and `USDT` are the chain's registered tokens, so there is no address to look up. Each
-// `.transfer` is a SafeERC20 transfer: USDT, which returns nothing, works like any other token, and
-// a token that answers `false` reverts the whole transaction. RECIPIENT and AMOUNT are defaults a
-// define replaces: `--define RECIPIENT=0x… --define AMOUNT=1000000`.
-const RECIPIENT = 0n;
-const AMOUNT = 0n;
-
-function main() {
-  require(RECIPIENT != 0n);
-  USDC.transfer(RECIPIENT, AMOUNT);
-  USDT.transfer(RECIPIENT, AMOUNT);
+//   sauce run pay.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//     --args <recipient> <amount>
+function main(recipient: Address, amount: Uint256) {
+  USDC.transfer(recipient, amount);
+  USDT.transfer(recipient, amount);
 }

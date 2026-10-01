@@ -112,11 +112,13 @@ describeEvm("sauce, sent to a chain", () => {
     await ethereum?.stop();
   });
 
+  // `pay.sauce.ts` names no chain and takes `main(recipient: Address, amount: Uint256)` at run
+  // time: `--args-json` is the one argument flag that need not come last.
   const defines = (recipient: Address, amount = AMOUNT): string[] => [
-    "--define",
-    `RECIPIENT=${recipient}`,
-    "--define",
-    `AMOUNT=${amount}`,
+    "--chain",
+    "ethereum",
+    "--args-json",
+    JSON.stringify([recipient, amount.toString()]),
   ];
 
   describe("the unsigned transactions, sent by a wallet", () => {
@@ -217,7 +219,11 @@ describeEvm("sauce, sent to a chain", () => {
           program,
           "--pot",
           pot,
-          ...defines(SECOND_RECIPIENT),
+          // A script: its values are defines, not `main`'s arguments.
+          "--define",
+          `RECIPIENT=${SECOND_RECIPIENT}`,
+          "--define",
+          `AMOUNT=${AMOUNT}`,
           "--value",
           String(FEE),
           "--format",

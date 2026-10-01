@@ -54,7 +54,6 @@
   },
   "files": [
     "dist",
-    "src/skills",
     "src/protocols"
   ],
   "publishConfig": {

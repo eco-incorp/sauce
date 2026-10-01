@@ -85,7 +85,6 @@
     "sdk/dist",
     "actions/dist",
     "actions/action-program.schema.json",
-    "sdk/src/skills",
     "sdk/src/protocols",
     "skills",
     "docs/**/*.md",

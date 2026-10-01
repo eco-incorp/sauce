@@ -350,28 +350,39 @@ try {
     `${name} ${installedManifest.version}\n`,
     `npx ${name} runs the package's one bin`,
   );
+  // The skill's `pay.sauce.ts` names no chain and takes `main(recipient, amount)` at run time.
   const example = join(installedRoot, "skills/sauce-run/examples/pay.sauce.ts");
   const recipient = "0x6666666666666666666666666666666666666666";
   const owner = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-  const defines = ["--define", `RECIPIENT=${recipient}`, "--define", "AMOUNT=1000000"];
-  const bytecode = sauce("compile", example, ...defines).trim();
+  const chain = ["--chain", "ethereum"];
+  const args = ["--args", recipient, "1000000"];
+  const bytecode = sauce("compile", example, ...chain).trim();
   assert.match(bytecode, /^0x[0-9a-f]+$/, "sauce compile prints the program as hex");
-  const compiled = JSON.parse(sauce("compile", example, ...defines, "--json"));
+  const compiled = JSON.parse(sauce("compile", example, ...chain, "--json"));
   const installedCompiler = JSON.parse(
     readFileSync(join(work, "node_modules/sauce-compiler/package.json"), "utf8"),
   );
   assert.equal(compiled.bytecode, bytecode);
-  assert.equal(compiled.chain, "ethereum", "the example's // @chain header chose the chain");
+  assert.equal(compiled.chain, "ethereum", "--chain chose the chain");
+  assert.deepEqual(
+    compiled.entryParams,
+    [
+      { name: "recipient", type: "Address" },
+      { name: "amount", type: "Uint256" },
+    ],
+    "main's parameters, as --args takes them",
+  );
   assert.equal(compiled.compiler.version, installedCompiler.version);
   assert.equal(compiled.engine.release, "v12-evm");
   const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum"));
   assert.equal(pot.to, pot.kitchen, "sauce pot prints the Kitchen.deployPot transaction");
-  const tx = JSON.parse(sauce("tx", example, ...defines, "--owner", owner, "--value", "0"));
+  const tx = JSON.parse(sauce("tx", example, ...chain, "--owner", owner, "--value", "0", ...args));
   assert.deepEqual(Object.keys(tx), ["chainId", "to", "data", "value"], "sauce tx prints the tx");
   assert.equal(tx.to, pot.pot, "sauce tx cooks on the Pot sauce pot predicts");
   assert.ok(tx.data.includes(bytecode.slice(2)), "the cook carries the compiled program");
+  assert.ok(tx.data.includes(recipient.slice(2)), "and main's arguments after it");
   assert.equal(
-    sauce("tx", example, ...defines, "--owner", owner, "--value", "0", "--format", "cast"),
+    sauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--format", "cast", ...args),
     `cast send ${tx.to} ${tx.data} --value 0 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>\n`,
   );
   console.log(
