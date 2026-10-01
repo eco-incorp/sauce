@@ -8,7 +8,7 @@
  * (`sauce-route.ts#levelOn`): each part of the program reads its own chain's values — an intent's
  * body and delivery the destination's, its reward the enclosing chain's — and a user define named
  * like a chain-scoped value stays on the chain it was given for, while any other holds at every
- * depth. The contracts are the ones the protocol rewrite resolved (`accessors.onContract`).
+ * depth. The contracts are the ones the compile resolved (`accessors.onContract`).
  */
 import { getAddressDecoder } from "@solana/kit";
 import { getAddress, hexToBytes, numberToHex } from "viem";

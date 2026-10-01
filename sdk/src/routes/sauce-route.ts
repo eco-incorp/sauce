@@ -16,14 +16,14 @@
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import type { AbiParameter, AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
-import { bytesToHex } from "viem";
+import { bytesToHex, getAddress } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs } from "./rs-compile.js";
 import { resolveTokenMap } from "./token-registry.js";
-import type { AccessorOptions } from "./protocol-resolve.js";
+import { resolveContractReference, type AccessorOptions } from "./protocol-resolve.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
@@ -514,18 +514,11 @@ function compileForChain(
     },
   });
   source = sugar.source;
-  // The chain's scalar spellings stay defines: a program may declare `const UniswapV3_Factory = 0n;`
-  // as the default a chain overrides, which a manifest name — losing to every declaration — could
-  // not do. Token symbols are not among them: a define has no type, and a symbol's methods are its
-  // type's.
-  const symbols = resolveTokenMap(chain, options.tokens);
-  const chainScalars = Object.fromEntries(
-    Object.entries(scope.chainDefines?.(chain) ?? {}).filter(([name]) => !symbols.has(name)),
-  );
-  const native = compileNatively(chain, source, target, {
-    ...options,
-    defines: { ...chainScalars, ...options.defines },
-  });
+  // A scope's chain-scoped values are the manifest's chain defines: a program may declare `const
+  // UniswapV3_Factory = 0n;` as the default a chain overrides, which a manifest name — losing to
+  // every declaration — could not do. Token symbols are not among them: a define has no type, and a
+  // symbol's methods are its type's.
+  const native = compileNatively(chain, source, target, options, scope.chainDefines !== undefined);
   return { ...native, chain, source, intents: sugar.intents };
 }
 
@@ -533,13 +526,15 @@ function compileForChain(
  * The compile itself: the program as written — after the intent sugar, which still lowers as text —
  * compiled with the extensions manifest for `chain`. The compiler gives
  * it the chain's tokens, protocols, `chainId`, `Token`, `self` and `available` itself, so no define
- * carries a chain-scoped name and no rewrite runs; `defines` is exactly the caller's.
+ * carries a chain-scoped name and no rewrite runs; `defines` is exactly the caller's. With
+ * `chainDefines`, the chain's scalar spellings are its manifest defines as well (`extensions.ts`).
  */
 function compileNatively(
   chain: CanonicalChain,
   source: string,
   target: CompileTarget,
   options: SauceCompileOptions,
+  chainDefines: boolean,
 ): {
   readonly compiled: CompileResult;
   readonly entryEncoding: "abi-v1" | "compact-v1";
@@ -558,7 +553,7 @@ function compileNatively(
       tokens[name] ??= `0x${value.toString(16)}`;
     else defines[name] = value;
   }
-  const { manifest, entryEncoding, entryParams, ...compiled } = compileWithRs({
+  const { manifest, entryEncoding, entryParams, contracts, ...compiled } = compileWithRs({
     source,
     target,
     resolve: options.resolve,
@@ -574,10 +569,22 @@ function compileNatively(
       allowWidenedSelectors: accessors.allowWidenedSelectors,
       protocols: options.accessors !== false,
       self: options.accessors !== false && accessors.selfSugar !== false,
+      chainDefines,
     },
   });
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
+  }
+  // The manifest contracts the compile reports, told to `onContract` as the protocol rewrite told
+  // it the references it resolved: each as spelled, with the deployment it names.
+  const onContract = accessors.onContract;
+  for (const { path, address } of onContract === undefined ? [] : contracts) {
+    const [head, ...rest] = path.split(".");
+    const reference = resolveContractReference(head!, rest, chain, undefined, `'${path}'`, "");
+    onContract?.(path, {
+      ...reference,
+      address: getAddress(`0x${BigInt(address).toString(16).padStart(40, "0")}`),
+    });
   }
 
   return manifest === undefined
