@@ -606,9 +606,10 @@ There are two ways to get such a file's intents onto the chain:
     --keystore ~/.keys/me.json --intent-deadline 2000000000 --intent-creator 0xYou
   ```
 
-  Only a file whose intents are fixed when it is built qualifies: every amount a define or a
-  literal, and nothing but intents. A file whose intent uses a value measured on chain is refused,
-  naming the value and pointing at `sauce run`, and so is one that does anything else.
+  Only a file whose intents are fixed when it is built qualifies: every amount a literal, a define
+  or a top-level `const` of a literal, and nothing but intents. A file whose intent uses a value
+  measured or computed on chain is refused, naming the value and pointing at `sauce run`, and so is
+  one that does anything else.
   `--dry-run` rehearses the transactions together (`eth_simulateV1`) and sends nothing, from the
   signer's wallet or `--from <address>`'s; `--assume-balance USDC:2` (repeatable, `ETH:` for the
   native currency) gives that wallet the reward for the rehearsal only, by state override, as

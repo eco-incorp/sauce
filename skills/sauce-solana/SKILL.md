@@ -173,8 +173,8 @@ Kitchen, Pot or salt and adds about 100 bytes less: about 798 for the program an
 four accounts. What costs bytes:
 
 - each `require` message, byte for byte;
-- each `@sauce/token` call, which inlines its own checks (a second `transfer` adds about 40 bytes, a
-  `balanceOf` about 110);
+- each `@sauce/token` call, which inlines its own checks and their reasons (a second `transfer` adds
+  about 50 bytes, a `balanceOf` about 140);
 - each account, about 33 bytes;
 - arguments: `--compact-args` encodes them compactly (a `Uint256` takes 7 bytes instead of 32).
 
@@ -186,8 +186,10 @@ authority, amount)`, `approve(mint, tokenProgram, source, delegate, authority, a
 `balanceOf(mint, account)`, `allowance(mint, account, spender)`, `ownerOf(mint, account)`,
 `totalSupply(mintAccount)`, `decimals(mintAccount)`. Every function requires the classic SPL Token
 program as the account owner and callee, checks the mint, and rejects amounts above `u64`; a
-Token-2022 account is refused. SPL tracks one delegate per account, so a second `approve` replaces
-the first.
+Token-2022 account is refused. Each check reverts with its reason, which `sauce simulate` prints:
+`not a token account` (Token-2022's too), `wrong mint`, `not a mint`, `uninitialized mint`,
+`not the token program` and `amount over u64`. SPL tracks one delegate per account, so a second
+`approve` replaces the first.
 
 A transfer's `authority` may be the source's owner or its delegate, so a transfer that succeeds does
 not show whose account `source` is. `ownerOf(mint, account)` reads the token account's owner (the
