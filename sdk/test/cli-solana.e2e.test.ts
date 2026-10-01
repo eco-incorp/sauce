@@ -1229,8 +1229,8 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     const startsWith = (data: Uint8Array, prefix: Uint8Array): boolean =>
       prefix.every((byte, index) => data[index] === byte);
 
-    it("`simulate` rehearses it from the owner, showing the fee, and sends nothing", async () => {
-      const { flags } = ownersAccounts(1_000n);
+    it("`simulate` rehearses it from the owner, showing the fee and what it moved, and sends nothing", async () => {
+      const { source, dest, flags } = ownersAccounts(1_000n);
       const before = rpc.sent.length;
       const argv = [
         ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
@@ -1247,6 +1247,25 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       });
       expect(rehearsed).not.toHaveProperty("pot");
       expect(rehearsed).not.toHaveProperty("createPot");
+      // What it moved: the signer's tokens, and the fee into the Kitchen's treasury, as the
+      // engine pays it there itself.
+      const { tokenChanges, lamportChanges } = rehearsed as {
+        tokenChanges: { account: string; delta: string }[];
+        lamportChanges: { account: string; label?: string; delta: string }[];
+      };
+      expect(tokenChanges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ account: source, delta: "-400" }),
+          expect.objectContaining({ account: dest, delta: "400" }),
+        ]),
+      );
+      expect(lamportChanges).toContainEqual(
+        expect.objectContaining({
+          account: harness.feeConfig,
+          label: "the Kitchen's fee config",
+          delta: FEE.toString(),
+        }),
+      );
       const text = await sauce(...argv, "--args", "400");
       expect(text.stdout).toContain(
         `the engine's direct cook (cookAndPay), from ${owner.signer.address}, which signs for ` +
