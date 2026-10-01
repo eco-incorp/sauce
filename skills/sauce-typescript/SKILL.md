@@ -92,7 +92,10 @@ executionFee }` (`sauce-intents`).
 for you: no registry names, no chain defines, no token syntax. Reach for it for full control of the
 source and resolver, and for compact arguments.
 
-- ABI-v1 arguments by default; `compactArgs: true` returns an `entrySchema` for
+- ABI-v1 arguments by default: `abi.encode` of `main`'s parameters, except that a tuple parameter
+  is always behind an offset word, even one whose fields are all fixed-size. `encodeAbiParameters`
+  inlines that tuple instead; `routes.encodeEntryArguments` writes the layout `main` reads.
+- `compactArgs: true` returns an `entrySchema` for
   `encodeCompactArguments`/`decodeCompactArguments` (`scalarWidth` keeps offsets fixed).
 - `resolveSdkModule` and `resolveSdkPackage` serve `@sauce/token`, the package's artifact ABIs and
   every `./protocols/<slug>/<Export>.json` to your resolver.

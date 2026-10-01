@@ -2,10 +2,18 @@
  * `compileSauceProgram` — a standalone program for a chain, with the chain's ambient names and no
  * intent around it — and `encodeEntryArguments`, the values for its `main(...)`.
  */
-import { bytesToHex, encodeAbiParameters, hexToBytes } from "viem";
+import {
+  bytesToHex,
+  concatHex,
+  encodeAbiParameters,
+  hexToBytes,
+  numberToHex,
+  pad,
+  type Hex,
+} from "viem";
 
 import { encodeCompactArguments } from "../src/compact-arguments.js";
-import { encodeEntryArguments, mainParams } from "../src/routes/entry.js";
+import { decodeEntryArguments, encodeEntryArguments, mainParams } from "../src/routes/entry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
@@ -213,30 +221,61 @@ describe("encodeEntryArguments", () => {
   ];
 
   it("encodes ABI-v1 as abi.encode of the parameters, with no selector", () => {
-    const encoded = encodeEntryArguments({ entryEncoding: "abi-v1", entryParams: params }, values);
+    const untupled = params.filter((param) => param.name !== "leg");
+    const encoded = encodeEntryArguments(
+      { entryEncoding: "abi-v1", entryParams: untupled },
+      values.filter((_, index) => params[index]!.name !== "leg"),
+    );
     const expected = encodeAbiParameters(
       [
         { type: "address" },
         { type: "address[]" },
         { type: "uint256" },
         { type: "bool" },
-        {
-          type: "tuple",
-          components: [
-            { name: "amount", type: "uint256" },
-            { name: "to", type: "address" },
-          ],
-        },
         { type: "bytes" },
       ],
-      [RECIPIENT, [RECIPIENT, CREATOR], 1000n, true, { amount: 5n, to: PROVER }, "0xbeef"],
+      [RECIPIENT, [RECIPIENT, CREATOR], 1000n, true, "0xbeef"],
     );
     expect(bytesToHex(encoded)).toBe(expected);
+  });
+
+  it("puts a tuple parameter behind an offset, though abi.encode inlines one of fixed-size fields", () => {
+    const LEG = [
+      { name: "amount", type: "uint256" },
+      { name: "to", type: "address" },
+    ];
+    const word = (value: bigint): Hex => numberToHex(value, { size: 32 });
+    const program = {
+      entryEncoding: "abi-v1" as const,
+      entryParams: [
+        { name: "amount", type: "Uint256" },
+        { name: "leg", type: "{ amount: Uint256, to: Address }" },
+      ],
+    };
+    const encoded = encodeEntryArguments(program, [1000n, { amount: 5n, to: PROVER }]);
+    // One head word per parameter, as main reads them: the amount, then where the leg's fields are.
+    expect(bytesToHex(encoded)).toBe(concatHex([word(1000n), word(0x40n), word(5n), pad(PROVER)]));
+    const inline = encodeAbiParameters(
+      [{ type: "uint256" }, { type: "tuple", components: LEG }],
+      [1000n, { amount: 5n, to: PROVER }],
+    );
+    expect(bytesToHex(encoded)).not.toBe(inline);
     // A tuple given positionally encodes the same.
-    const positional = [...values.slice(0, 4), [5, PROVER], "0xbeef"];
-    expect(
-      encodeEntryArguments({ entryEncoding: "abi-v1", entryParams: params }, positional),
-    ).toEqual(encoded);
+    expect(encodeEntryArguments(program, [1000n, [5, PROVER]])).toEqual(encoded);
+    // Read back, strictly: abi.encode's inline layout is not one main reads.
+    expect(decodeEntryArguments(program, encoded)).toEqual([1000n, { amount: 5n, to: PROVER }]);
+    expect(() => decodeEntryArguments(program, hexToBytes(inline))).toThrow(
+      /not the canonical encoding/,
+    );
+
+    // Inside an array, as inside another tuple, such a tuple is inline, as abi.encode writes it.
+    const legs = {
+      entryEncoding: "abi-v1" as const,
+      entryParams: [{ name: "legs", type: "{ amount: Uint256, to: Address }[]" }],
+    };
+    expect(bytesToHex(encodeEntryArguments(legs, [[{ amount: 5n, to: PROVER }]]))).toBe(
+      encodeAbiParameters([{ type: "tuple[]", components: LEG }], [[{ amount: 5n, to: PROVER }]]),
+    );
   });
 
   it("encodes compact-v1 against the program's own schema", () => {

@@ -334,7 +334,8 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
           ...["--rpc-url", local.rpcUrl, "--json", ...flags, "--args", holder],
         ),
       );
-    const before = await local.publicClient.getBlockNumber();
+    // Uncached: viem serves a block number up to 4 s old, which can predate the suite's setup.
+    const before = await local.publicClient.getBlockNumber({ cacheTime: 0 });
     await local.mint(usdc, holder, 5_000_000n);
     const now = await at();
     expect(now).toMatchObject({ returned: "5000000" });
