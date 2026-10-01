@@ -12,6 +12,7 @@ import { sourceGlobals } from "../../sdk/dist/routes/index.js";
 import {
   ProgramError,
   compileProgram,
+  compileSplitSwap,
   parseProgram,
   programIntent,
   programSchema,
@@ -406,6 +407,11 @@ describe("names — refused on the chain that lacks them", () => {
     for (const chain of ["ethereum", "base", "arbitrum", "optimism"]) {
       assert.ok(compileProgram(wrap, { chain }).bytecode.length > 0, chain);
     }
+    // By symbol or address, the wrapped native itself is taken as given.
+    for (const weth of ["WPOL", addressOf("polygon", "WPOL")]) {
+      const program = doc({ type: "wrapETH", amount: "1", weth });
+      assert.ok(compileProgram(program, { chain: "polygon" }).bytecode.length > 0, weth);
+    }
   });
 
   it("checks the rules a name decides once it is resolved: a token swapped for itself", () => {
@@ -504,6 +510,39 @@ describe("names — quotes", () => {
     assert.throws(
       () => quoteAction(JSON.parse(JSON.stringify(lb))),
       /quoting a traderJoeLBSwap needs its tokenX and tokenY/,
+    );
+  });
+
+  it("resolves a contract by namespace for a quote too, to the address it names", () => {
+    const named = {
+      ...SAMPLES.balancerV2Swap,
+      vault: "BalancerV2.Vault",
+      tokenIn: "USDC",
+      tokenOut: "WETH",
+    };
+    const addressed = {
+      ...named,
+      vault: addressOf("ethereum", "BalancerV2.Vault"),
+      tokenIn: addressOf("ethereum", "USDC"),
+      tokenOut: addressOf("ethereum", "WETH"),
+    };
+    const quote = quoteAction(named as never, { chain: "ethereum" });
+    assert.deepEqual(quote, { ...quoteAction(addressed as never), decode: quote.decode });
+    assert.equal(quote.to.toLowerCase(), addressOf("ethereum", "BalancerV2.Vault").toLowerCase());
+  });
+
+  it("a split swap refuses a candidate whose pool is named by its key", () => {
+    const { amount: _, ...candidate } = V3_BY_KEY;
+    assert.throws(
+      () =>
+        compileSplitSwap({
+          candidates: [candidate as never],
+          amount: "1000",
+          buckets: 1,
+          amountOutMin: "0",
+          chain: "ethereum",
+        }),
+      /candidates\[0\]\.factory: a split quotes each candidate at its pool's address/,
     );
   });
 
