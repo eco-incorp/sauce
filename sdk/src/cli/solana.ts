@@ -197,6 +197,33 @@ async function exists(rpc: Rpc, url: string, account: Address, what: string): Pr
   return value !== null;
 }
 
+/** How long {@link awaitAccount} waits for an account to show, and how often it asks. */
+export const ACCOUNT_WAIT = { tries: 60, delayMs: 1000 };
+
+/**
+ * Waits until the cluster shows `account`, just created in a confirmed transaction. A read with no
+ * commitment is a finalized read, which trails a confirmation by several seconds, and the cook's
+ * simulation reads the same way: cooking straight after creating its Pot would fail on a Pot that
+ * is there.
+ */
+async function awaitAccount(
+  rpc: Rpc,
+  url: string,
+  account: Address,
+  what: string,
+  wait: { readonly tries: number; readonly delayMs: number } = ACCOUNT_WAIT,
+): Promise<void> {
+  for (let attempt = 0; attempt < wait.tries; attempt++) {
+    if (await exists(rpc, url, account, what).catch(() => false)) return;
+    await new Promise((resolve) => setTimeout(resolve, wait.delayMs));
+  }
+  throw new CliError(
+    `${what} ${account} was created, but the cluster still does not show it after ` +
+      `${(wait.tries * wait.delayMs) / 1000}s: run the command again once it has caught up; the ` +
+      "creation is not repeated.",
+  );
+}
+
 /** The Kitchen's error names, from the release IDL that ships beside its binary. */
 function kitchenErrors(): ReadonlyMap<number, string> {
   try {
@@ -997,6 +1024,7 @@ async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<Sv
     "creating the Pot",
   );
   if (!created.ok) throw new CliError(sentLine("creating the Pot", created));
+  await awaitAccount(rpc, input.rpcUrl, pot, "the Pot");
 
   return created;
 }
@@ -1276,6 +1304,7 @@ export async function svmPotDeployCommand(
     [createPotInstruction(target, pot)],
     "creating the Pot",
   );
+  if (sent.ok) await awaitAccount(rpc, target.rpcUrl, pot, "the Pot");
   const json = { ...predicted.json, deployed: sent.ok, createPot: sentJson(sent) };
 
   return {
