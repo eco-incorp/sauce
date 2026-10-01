@@ -40,6 +40,9 @@ skills/sauce-actions/references/*.md
 sdk/test/svm/fixtures
 sdk/test/std/token/fixtures
 sdk/test/evm/fixtures
+# eco-routes' Solana programs and accounts as mainnet holds them, and the manifest
+# scripts/dump-eco-routes-svm.mjs writes beside them.
+sdk/test/fixtures/eco-routes-svm
 # A keystore exactly as Foundry's `cast wallet import` wrote it: the cross-implementation vector.
 sdk/test/fixtures/cli/anvil-2.keystore.json
 # Captured registry-ABI evidence (scripts/capture-registry-abi.mjs), one entry per line so a
