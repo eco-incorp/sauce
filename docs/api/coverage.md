@@ -9,7 +9,7 @@ Each of the three can be true without the others.
 | Protocol catalog                 | 135 protocols with metadata, deployments, ABI fragments, and program templates | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
 | Contract descriptors             | 300 descriptors across 135 protocol namespaces                                 | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
 | Compiled-source protocol globals | The same 135 protocol namespaces, plus 13 family aliases                       | TypeScript completion after importing `@eco-incorp/sauce`; names below |
-| Token symbols                    | 1795 symbols distributed across 7 EVM chains, 1788 of them tokenized stocks    | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
+| Token symbols                    | 1796 symbols distributed across 7 EVM chains, 1789 of them tokenized stocks    | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
 | Canonical chain identities       | 41 chains: 40 EVM and Solana                                                   | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
 | EVM chain metadata               | 34 records with native-currency and explorer information                       | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
@@ -79,6 +79,7 @@ list and every row is checked on chain; a stock row carries `stock`, its issuer,
 | -------- | ---- | --------------------------------- | ------ | --------------------------- |
 | Ethereum | 1    | Backed (xStocks, and its bTokens) | 1280   | `TSLAx`, `SPCXx`, `bTSLA`   |
 | Ethereum | 1    | Ondo Global Markets               | 450    | `TSLAon`, `SPCXon`, `SPYon` |
+| Ethereum | 1    | Mt Pelerin (its own shares)       | 1      | `MPS`                       |
 | Base     | 8453 | Coinbase                          | 58     | `TSLAc`, `SPCXc`, `NVDAc`   |
 | Base     | 8453 | Backed (its bTokens)              | 9      | `bTSLA`, `bNVDA`, `bCOIN`   |
 

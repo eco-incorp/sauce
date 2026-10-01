@@ -44,7 +44,7 @@ function main() {
 | `USDT` | `0xdAC17F958D2ee523a2206206994597C13D831ec7` | 6 |
 | `WETH` | `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2` | 18 |
 
-And 1730 tokenized stocks, each named by its symbol in the same way: they are in
+And 1731 tokenized stocks, each named by its symbol in the same way: they are in
 [ethereum-stocks.md](ethereum-stocks.md), with their addresses.
 
 ## Protocols

@@ -3329,6 +3329,7 @@ declare global {
   const MOSx: bigint & SauceTokenSource;
   const MOx: bigint & SauceTokenSource;
   const MPCx: bigint & SauceTokenSource;
+  const MPS: bigint & SauceTokenSource;
   const MPWRx: bigint & SauceTokenSource;
   const MPon: bigint & SauceTokenSource;
   const MPx: bigint & SauceTokenSource;
@@ -3713,7 +3714,6 @@ declare global {
   const SHLx: bigint & SauceTokenSource;
   const SHOPon: bigint & SauceTokenSource;
   const SHOPx: bigint & SauceTokenSource;
-  const SHVon: bigint & SauceTokenSource;
   const SHWx: bigint & SauceTokenSource;
   const SHYon: bigint & SauceTokenSource;
   const SIEx: bigint & SauceTokenSource;

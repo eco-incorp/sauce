@@ -1010,6 +1010,7 @@ address. [ethereum.md](ethereum.md) has the chain's other tokens and its contrac
 | `MOSx` | The Mosaic xStock | Backed | `0xFde26C3bc4882cc99b56C6279f713d6FbEdE0b1c` | 18 |
 | `MOx` | Altria xStock | Backed | `0x933f92c009009f0aE2912Bd8F42A2FE8d04dBA6b` | 18 |
 | `MPCx` | Marathon Petroleum xStock | Backed | `0x358AAd57A91C3b78e6b07fE4d0f0f03D0F6Ac7e1` | 18 |
+| `MPS` | Mt Pelerin Shares | Mt Pelerin | `0x96c645D3D3706f793Ef52C19bBACe441900eD47D` | 0 |
 | `MPWRx` | Monolithic Power Systems xStock | Backed | `0xF78E8b9441FBBfB674d35101dF0658D88B3bb33F` | 18 |
 | `MPon` | MP Materials (Ondo Tokenized) | Ondo Global Markets | `0x75846A2b2Eeee6575Ac775f9984be54fd1D08189` | 18 |
 | `MPx` | MP Materials xStock | Backed | `0x75D3C07dCe9F1424Dce574f78242e7eF1696B8A2` | 18 |

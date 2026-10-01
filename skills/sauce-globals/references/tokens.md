@@ -6,7 +6,7 @@ A program compiled for a chain names these symbols with no import; each is that 
 and amounts are in its smallest units (its decimals). Their addresses are in the chain's file in
 `sauce-chains`. Any other ERC-20 is `Token(<address>)`.
 
-- **Ethereum** (`ethereum`, [addresses](../../sauce-chains/references/ethereum.md)): `USDC` (6), `USDT` (6), `WETH` (18); and 1730 tokenized stocks ([stocks](stocks.md))
+- **Ethereum** (`ethereum`, [addresses](../../sauce-chains/references/ethereum.md)): `USDC` (6), `USDT` (6), `WETH` (18); and 1731 tokenized stocks ([stocks](stocks.md))
 - **Optimism** (`optimism`, [addresses](../../sauce-chains/references/optimism.md)): `USDC` (6), `USDT` (6), `WETH` (18)
 - **Polygon** (`polygon`, [addresses](../../sauce-chains/references/polygon.md)): `USDC` (6), `WETH` (18), `WPOL` (18)
 - **Monad** (`monad`, [addresses](../../sauce-chains/references/monad.md)): `USDC` (6), `WMON` (18)

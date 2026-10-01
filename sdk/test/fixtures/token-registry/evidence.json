@@ -1,7 +1,7 @@
 {
   "chains": {
     "1": {
-      "block": 26100582,
+      "block": 26100656,
       "tokens": {
         "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {"code":2186,"symbol":"USDC","decimals":6},
         "0xdAC17F958D2ee523a2206206994597C13D831ec7": {"code":11075,"symbol":"USDT","decimals":6},
@@ -1735,7 +1735,8 @@
         "0xF05Ad9840924EA6f977EBccb3b1da87e31DcD0B4": {"code":824,"symbol":"XOMon","decimals":18},
         "0x034c9ffeC64597E0a0622ca5B9eAF00839052e0a": {"code":824,"symbol":"XYLDon","decimals":18},
         "0x6cC41275ef02B4EecCC04fC4424849A96f3272aa": {"code":824,"symbol":"XYZon","decimals":18},
-        "0x5f24DD5DDb74bFe2BFE592aD91DBA09347031afd": {"code":824,"symbol":"YEARon","decimals":18}
+        "0x5f24DD5DDb74bFe2BFE592aD91DBA09347031afd": {"code":824,"symbol":"YEARon","decimals":18},
+        "0x96c645D3D3706f793Ef52C19bBACe441900eD47D": {"code":16552,"symbol":"MPS","decimals":0}
       }
     },
     "10": {

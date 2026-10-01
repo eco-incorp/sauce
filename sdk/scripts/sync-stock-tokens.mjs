@@ -15,8 +15,11 @@
 //     Ondo's app lists (ONDO_LIVE): the page also carries tokens not launched yet. Its portfolio
 //     tokens and USDon are not stocks.
 //   - Coinbase: every token the API lists. Each is a B20 token on Base.
+//   - Mt Pelerin: its own shares' token, MPS, on Ethereum, at the address its shareholder page
+//     gives (MT_PELERIN). The page is prose, not a list, so the address is written here and the
+//     sync only proves the page still gives it.
 // Decimals are each list's: Coinbase's API gives them; Backed and Ondo publish none, and all of
-// their tokens have 18, which the evidence holds.
+// their tokens have 18, which the evidence holds; MPS has none (0), as Mt Pelerin's page says.
 //
 // Review the diff before committing it: a changed address is a token the issuer moved.
 //
@@ -36,6 +39,13 @@ const { STOCK_ISSUERS, stockSymbol } = createTsLoader(SDK)("src/routes/stock-tok
 const BACKED_NETWORKS = { Ethereum: 1, Base: 8453 };
 /** Ondo's app's asset list: the tokens it trades, which a token not launched yet is not in. */
 const ONDO_LIVE = "https://app.ondo.finance/api/v2/assets";
+/** Mt Pelerin's own shares on Ethereum, as its shareholder page gives them. */
+const MT_PELERIN = {
+  symbol: "MPS",
+  address: "0x96c645d3d3706f793ef52c19bbace441900ed47d",
+  name: "Mt Pelerin Shares",
+  ticker: "MPS",
+};
 /** The equity bTokens: a share, or an equity index fund (bCSPX). */
 const BTOKENS = ["bCOIN", "bCSPX", "bGME", "bGOOGL", "bMSFT", "bMSTR", "bNIU", "bNVDA", "bTSLA"];
 
@@ -139,8 +149,18 @@ const coinbaseDecimals = new Set();
 }
 if (coinbaseDecimals.size !== 1) fail(`Coinbase's tokens have decimals ${[...coinbaseDecimals]}`);
 
-const DECIMALS = { backed: 18, ondo: 18, coinbase: [...coinbaseDecimals][0] };
-const ORDER = { 1: ["backed", "ondo"], 8453: ["coinbase", "backed"] };
+// Mt Pelerin: the one token its shareholder page gives, which the page must still give.
+{
+  const page = await get(STOCK_ISSUERS.mtpelerin.source, "text");
+  if (!page.toLowerCase().includes(MT_PELERIN.address)) {
+    fail(`${STOCK_ISSUERS.mtpelerin.source} no longer gives ${MT_PELERIN.address} for MPS`);
+  }
+  const { symbol, address, name, ticker } = MT_PELERIN;
+  add(1, "mtpelerin", symbol, address, name, ticker);
+}
+
+const DECIMALS = { backed: 18, ondo: 18, coinbase: [...coinbaseDecimals][0], mtpelerin: 0 };
+const ORDER = { 1: ["backed", "ondo", "mtpelerin"], 8453: ["coinbase", "backed"] };
 const byCode = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
 
 let body = "";

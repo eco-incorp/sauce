@@ -413,7 +413,7 @@ issuers.** `test/token-registry-evidence.test.ts` checks each EVM row of `TOKEN_
 `node scripts/capture-token-registry.mjs --recapture --rpc-config rpc.config.json [--chains <id>,…]`
 (from `sdk/`, no build needed) writes it, reading endpoints only from that file, as the registry-ABI
 capture does. A row added without recapturing fails the test. The tokenized stocks (Backed's
-xStocks and bTokens and Ondo's on Ethereum, Coinbase's on Base) are
+xStocks and bTokens, Ondo's and Mt Pelerin's MPS on Ethereum, Coinbase's on Base) are
 `src/routes/stock-tokens.generated.ts`, written by `pnpm --filter './sdk' sync-stock-tokens` from
 each issuer's own list (`STOCK_ISSUERS` in `stock-tokens.ts`, never an aggregator), and merged into
 `TOKEN_REGISTRY` as rows with `stock`. Sync, then recapture, and review the address diff. A stock's symbol is its issuer's ticker with "." as "_"

@@ -1750,6 +1750,13 @@ export const STOCK_TOKENS: Readonly<Record<number, readonly StockList[]>> = {
         ["YEARon", "0x5f24DD5DDb74bFe2BFE592aD91DBA09347031afd", "AB Ultra Short Income ETF (Ondo Tokenized)", "YEAR"],
       ],
     },
+    {
+      issuer: "mtpelerin",
+      decimals: 0,
+      tokens: [
+        ["MPS", "0x96c645D3D3706f793Ef52C19bBACe441900eD47D", "Mt Pelerin Shares", "MPS"],
+      ],
+    },
   ],
   8453: [
     {

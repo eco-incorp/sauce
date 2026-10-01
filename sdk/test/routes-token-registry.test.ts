@@ -105,7 +105,10 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
         ])
         .filter(([, list]) => list.length > 0),
     );
-    expect(issuers).toEqual({ ethereum: ["backed", "ondo"], base: ["coinbase", "backed"] });
+    expect(issuers).toEqual({
+      ethereum: ["backed", "ondo", "mtpelerin"],
+      base: ["coinbase", "backed"],
+    });
     expect(registryTokenAddress(requireChain("base"), "SPCXc")).toBe(
       BigInt("0xb2000000000000000000007b9fcbd005511aCBd5"),
     );

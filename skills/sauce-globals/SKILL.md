@@ -76,8 +76,8 @@ A tokenized stock is a token like any other, named by its symbol with no import:
 `SPCXc.balanceOf(ctx.self())`, `SPCXc.transfer(to, amount)`, a value for `@sauce/token`'s
 functions, a token a swap buys or sells.
 
-- **Ethereum**: Backed's xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), and Ondo Global Markets'
-  (`TSLAon`, `SPCXon`).
+- **Ethereum**: Backed's xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), Ondo Global Markets'
+  (`TSLAon`, `SPCXon`), and Mt Pelerin's own shares (`MPS`).
 - **Base**: Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens.
 - On Solana a tokenized stock is not a symbol.
 

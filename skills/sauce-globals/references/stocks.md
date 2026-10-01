@@ -1021,6 +1021,7 @@ not in a local copy of the chain. The rest is in the skill's
 | `MOSx` | The Mosaic xStock | MOS | Backed | 18 |
 | `MOx` | Altria xStock | MO | Backed | 18 |
 | `MPCx` | Marathon Petroleum xStock | MPC | Backed | 18 |
+| `MPS` | Mt Pelerin Shares | MPS | Mt Pelerin | 0 |
 | `MPWRx` | Monolithic Power Systems xStock | MPWR | Backed | 18 |
 | `MPon` | MP Materials (Ondo Tokenized) | MP | Ondo Global Markets | 18 |
 | `MPx` | MP Materials xStock | MP | Backed | 18 |
