@@ -1593,6 +1593,32 @@ describe("sauce pot", () => {
     expect(failureReason(at(6012), logs([anchor, 6012], [kitchen, 6012]))).toBe(
       `program ${anchor} failed with custom program error 6012 (0x177c); the logs say why`,
     );
+    // The engine's own refusal, by name — a direct cook's fee cap, a pin that does not match.
+    expect(failureReason(at(84), logs([engine, 84]))).toMatch(
+      /^the engine refused: ExecutionFeeExceedsMaximum \(custom program error 84\): the execution fee is above/,
+    );
+    expect(failureReason(at(72), logs([engine, 72], [kitchen, 72]))).toMatch(
+      /^the engine refused: CodeHashMismatch/,
+    );
+    // A code the engine does not use stays a code.
+    expect(failureReason(at(999), logs([engine, 999]))).toBe(
+      `program ${engine} failed with custom program error 999 (0x3e7); the logs say why`,
+    );
+  });
+
+  it("refuses --via and --max-execution-fee on an EVM chain, whose cook is the Pot's", async () => {
+    const program = file("evm-via.sauce.ts", "function main() {}\n");
+    for (const flag of [
+      ["--via", "engine"],
+      ["--max-execution-fee", "5000"],
+    ]) {
+      const refused = await sauce("tx", program, "--chain", "base", "--owner", OWNER, ...flag);
+      expect(refused.code).toBe(2);
+      expect(refused.stderr).toMatch(new RegExp(`${flag[0]} is for a Solana cook`));
+    }
+    const compiled = await sauce("compile", program, "--chain", "base", "--via", "engine");
+    expect(compiled.code).toBe(2);
+    expect(compiled.stderr).toMatch(/--via chooses how a Solana cook reaches the engine/);
   });
 
   it("derives a Solana Pot as the Kitchen's PDA over (owner, salt), offline", async () => {

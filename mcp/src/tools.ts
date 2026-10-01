@@ -38,11 +38,13 @@ import {
   parseAddress,
   parseChain,
   parseDefineMap,
+  parseLamports,
   parsePin,
   parsePriceToken,
   parsePubkey,
   parseSalt,
   parseUnixSeconds,
+  parseVia,
   parseWei,
   potCommand,
   potState,
@@ -243,6 +245,24 @@ const COOK = {
       "Solana only: each Account parameter main takes, by name: a base58 address, or `pot` (the " +
         "Pot, signed for by the Kitchen) or `owner`. sauce_compile's manifest lists them.",
     ),
+  via: z
+    .enum(["kitchen", "engine"])
+    .optional()
+    .describe(
+      "Solana only: how the cook reaches the engine. kitchen (the default) is the Kitchen's cook " +
+        "on the owner's Pot: the program can hold and spend what the Pot owns. engine is the " +
+        "engine's own paid cook, with no Kitchen and no Pot: the owner signs as the authority the " +
+        "program acts with (accounts `owner` where it needs one; `pot` cannot sign there) and pays " +
+        "the fee, and the program's own calls get one more level of CPI depth. Both pay the same " +
+        "execution fee.",
+    ),
+  maxExecutionFee: integer
+    .optional()
+    .describe(
+      "Solana only: the most the cook may pay in execution fee, in lamports. The fee is read from " +
+        "the cluster and returned as `fee`; above this the call refuses before building anything. " +
+        "Either way the cook signs the fee it read as its max_execution_fee.",
+    ),
   rpcUrl: RPC_URL,
 };
 
@@ -379,6 +399,17 @@ function evmCook(args: CookArgs, program: Program): CookInput {
       `accounts names a Solana program's accounts; a program on ${program.input.chain.slug} takes none`,
     );
   }
+  for (const [name, given] of [
+    ["via", args.via],
+    ["maxExecutionFee", args.maxExecutionFee],
+  ] as const) {
+    if (given !== undefined) {
+      throw new UsageError(
+        `${name} is for a Solana cook, which can reach the engine through the Kitchen or ` +
+          `directly; on ${program.input.chain.slug} a cook is the Pot's, and value carries the fee`,
+      );
+    }
+  }
 
   if (args.owner === undefined && args.pot === undefined) {
     throw new UsageError(
@@ -427,6 +458,15 @@ function svmCook(args: CookArgs, program: Program, rpcUrl: string): SvmCookInput
     ),
     ...argsOf(args),
     rpcUrl,
+    ...(args.via === undefined ? {} : { via: parseVia(args.via, "via") }),
+    ...(args.maxExecutionFee === undefined
+      ? {}
+      : {
+          maxExecutionFee: parseLamports(
+            "maxExecutionFee",
+            integerText(args.maxExecutionFee, "maxExecutionFee"),
+          ),
+        }),
   };
 }
 
@@ -948,6 +988,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         ...PROGRAM,
         args: COOK.args,
         accounts: COOK.accounts,
+        via: COOK.via.describe(
+          "Solana only: size the Kitchen's cook (the default) or the engine's own paid cook, " +
+            "which carries no Kitchen, Pot or salt.",
+        ),
         rpcUrls: RPC_URLS.describe(
           "For a program that opens intents: each destination's endpoint by chain (slug or " +
             'id), { "base": "<url>" }, to check the Pot its cook runs on is deployed there. ' +
@@ -975,6 +1019,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           `accounts names a Solana program's accounts; a program on ${program.input.chain.slug} takes none`,
         );
       }
+      if (args.via !== undefined && program.input.chain.kind !== "svm") {
+        throw new UsageError(
+          `via chooses how a Solana cook reaches the engine; a cook on ${program.input.chain.slug} ` +
+            "is the Pot's",
+        );
+      }
       const byChain = await endpointsByChain(args.rpcUrls, reach);
 
       return compiled({
@@ -988,6 +1038,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                   Object.entries(args.accounts).map(([name, value]) => `${name}=${value}`),
                 ),
               }),
+          ...(args.via === undefined ? {} : { via: parseVia(args.via, "via") }),
           ...(byChain.size === 0
             ? {}
             : { endpoints: (chain: CanonicalChain) => byChain.get(chain.id) }),
@@ -1086,8 +1137,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "an EVM chain it returns { chainId, to: the Pot, data: Pot.cook(engine, program ++ " +
         "arguments), value }; only the owner may send it, and value (wei) is the Kitchen's fee " +
         "plus any native the program spends — give it, or an endpoint to read the fee from, " +
-        "which also says whether the Pot is deployed. On Solana it returns { chain, feePayer, " +
-        "pot, fee, transaction }: the Kitchen cook as a base64 transaction for the owner to sign, " +
+        "which also says whether the Pot is deployed. On Solana it returns { chain, via, " +
+        "feePayer, pot, fee, maxExecutionFee, transaction }: the Kitchen cook (or, via engine, " +
+        "the engine's own paid cook, with no Pot) as a base64 transaction for the owner to sign, " +
         "which needs an endpoint (its blockhash and the fee). `notes` say what must be true for " +
         `it to land: a deployed, funded Pot (sauce_pot deploys it). ${UNSIGNED}`,
       input: { ...PROGRAM, ...COOK },
@@ -1250,8 +1302,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "it reverts — a revert is a result (ok: false), not an error. assumeBalance gives the " +
         "Pot balances for the rehearsal only; fund rehearses pulling tokens from the owner into " +
         "the Pot in the cook, the Pot credited what they would bring. Solana: the Kitchen cook " +
-        "simulated from the owner (a missing Pot created first): compute units, or the reason " +
-        "and the program logs. Nothing is signed or sent.",
+        "simulated from the owner (a missing Pot created first), or via engine the engine's own " +
+        "paid cook with no Pot: compute units, the fee, or the reason and the program logs. Nothing is signed or sent.",
       input: {
         ...PROGRAM,
         ...COOK,
