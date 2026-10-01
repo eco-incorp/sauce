@@ -381,7 +381,7 @@ describe("sauce inspect", () => {
     expect(sourced.stdout).toMatch(/reward: <amount> of 0x/);
   });
 
-  it("reads a Kitchen.deployPot, a Portal publishAndFund and an ERC-20 approve", async () => {
+  it("reads a Kitchen.deployPot, a transfer to a vault and the Portal publish after it", async () => {
     const pot = printed(
       await sauce("pot", "--chain", "base", "--owner", OWNER, "--salt", "treasury"),
     );
@@ -392,21 +392,32 @@ describe("sauce inspect", () => {
       pot: v12PredictPot(OWNER, potSalt("treasury")),
     });
     const fixed = file("fixed.sauce.ts", FIXED);
-    const published = printed(
-      await sauce(
-        "publish",
-        fixed,
-        "--define",
-        `RECIPIENT=${RECIPIENT}`,
-        ...INTENT_FLAGS,
-        "--format",
-        "json",
-      ),
-    ) as { intents: Array<{ intentHash: string; transactions: Array<{ data: Hex }> }> };
-    const [{ intentHash, transactions }] = published.intents as [
-      (typeof published.intents)[number],
-    ];
-    const [approve, publishAndFund] = transactions.map((tx) => tx.data);
+    const publishing = (...flags: string[]) =>
+      sauce(
+        ...["publish", fixed, "--define", `RECIPIENT=${RECIPIENT}`, ...INTENT_FLAGS],
+        ...["--format", "json", ...flags],
+      );
+    type Printed = {
+      intents: Array<{ intentHash: string; vault: Hex; transactions: Array<{ data: Hex }> }>;
+    };
+    const published = printed(await publishing()) as Printed;
+    const [{ intentHash, vault, transactions }] = published.intents as [Printed["intents"][number]];
+    const [transfer, publish] = transactions.map((tx) => tx.data);
+    // The transfer pays the vault the publish below names: the address inspect derives for it.
+    expect(json(await sauce("inspect", transfer!, "--json"))).toMatchObject({
+      call: "ERC20.transfer",
+      args: { to: vault, amount: "2000" },
+    });
+    const text = await sauce("inspect", publish!, "--chain", "arbitrum");
+    expect(text.stdout).toContain(`vault: ${vault}, funded once it holds the reward`);
+    expect(json(await sauce("inspect", publish!, "--chain", "arbitrum", "--json"))).toMatchObject({
+      call: "Portal.publish",
+      intent: { intentHash, vault, destination: { chain: "base" } },
+    });
+
+    // Opted out: an approve to the Portal, then publishAndFund of the same intent.
+    const optedOut = printed(await publishing("--intent-fund-via", "publishAndFund")) as Printed;
+    const [approve, publishAndFund] = optedOut.intents[0]!.transactions.map((tx) => tx.data);
     expect(json(await sauce("inspect", approve!, "--json"))).toMatchObject({
       call: "ERC20.approve",
       args: { amount: "2000" },
@@ -415,7 +426,7 @@ describe("sauce inspect", () => {
       json(await sauce("inspect", publishAndFund!, "--chain", "arbitrum", "--json")),
     ).toMatchObject({
       call: "Portal.publishAndFund",
-      intent: { intentHash, destination: { chain: "base" } },
+      intent: { intentHash, vault, destination: { chain: "base" } },
     });
   });
 

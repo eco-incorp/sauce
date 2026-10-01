@@ -20,6 +20,7 @@ import {
   createWalletClient,
   encodeFunctionData,
   getAddress,
+  getContractAddress,
   http,
   numberToHex,
   parseAbi,
@@ -224,6 +225,44 @@ export async function startChain(slug: string, port: number): Promise<LocalChain
       await exited;
     },
   };
+}
+
+/**
+ * The eco-routes Portal at `at` — deployed there in effect, not just its code copied there.
+ *
+ * `plant` moves a contract's runtime, and a Portal's runtime names the two contracts its
+ * constructor created — the vault implementation (its first `CREATE`) and the Executor (its second)
+ * — which in turn name the address that created them. Copied alone, the Portal at `at` would derive
+ * its vaults from the implementation of the address it was really deployed at, which is not what
+ * any deployed Portal does and not what the SDK predicts. So this deploys it, then moves all three
+ * runtimes to where a Portal deployed at `at` would have put them, rewriting each address they
+ * embed to match.
+ */
+export async function plantPortal(
+  local: LocalChain,
+  creationCode: Hex,
+  at: Address,
+): Promise<Address> {
+  const deployed = await local.plant(creationCode);
+  const created = (from: Address, nonce: bigint): Address =>
+    getContractAddress({ from, nonce, opcode: "CREATE" });
+  const moves: readonly (readonly [Address, Address])[] = [
+    [deployed, getAddress(at)],
+    [created(deployed, 1n), created(at, 1n)],
+    [created(deployed, 2n), created(at, 2n)],
+  ];
+  const relocated = (code: Hex): Hex =>
+    moves.reduce(
+      (text, [from, to]) => text.split(from.slice(2).toLowerCase()).join(to.slice(2).toLowerCase()),
+      code.toLowerCase(),
+    ) as Hex;
+  for (const [from, to] of moves) {
+    const code = await local.publicClient.getCode({ address: from });
+    if (code === undefined) throw new Error(`the Portal deployment left no contract at ${from}`);
+    await local.testClient.setCode({ address: to, bytecode: relocated(code) });
+  }
+
+  return getAddress(at);
 }
 
 /** The Pot's owner, as the Pot itself reports it. */
