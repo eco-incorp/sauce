@@ -27,6 +27,7 @@ import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12Pot } from "../evm/engine.js";
 import { destinationExecutionFee } from "../evm/execution-fee.js";
+import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { UsageError } from "./args.js";
 import { CliError } from "./args.js";
 
@@ -160,7 +161,9 @@ export async function potState(
   return { deployed: true, owner };
 }
 
-const ERRORS = [...potArtifact.abi, ...kitchenArtifact.abi].filter(
+/** The errors a cook can revert with by name: the Pot's, the Kitchen's, and Permit2's, which
+ *  `--fund` pulls through. */
+const ERRORS = [...potArtifact.abi, ...kitchenArtifact.abi, ...Permit2ABI].filter(
   (item) => item.type === "error",
 ) as Abi;
 
@@ -194,8 +197,8 @@ function thrownText(data: Hex): string | undefined {
 }
 
 /**
- * Why a call reverted: the Pot's and Kitchen's own errors by name (`FeeNotPaid(1234, 0)`,
- * `NotOwner()`), a contract's `require` message, a panic as its code, the message a program
+ * Why a call reverted: the Pot's, Kitchen's and Permit2's errors by name (`FeeNotPaid(1234, 0)`,
+ * `NotOwner()`, `InvalidNonce()`), a contract's `require` message, a panic as its code, the message a program
  * `throw`s — else the raw data, else viem's own one line.
  */
 export function revertReason(error: unknown): string {

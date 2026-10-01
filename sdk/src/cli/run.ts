@@ -54,6 +54,7 @@ import {
   type PotInput,
   type ProgramInput,
 } from "./commands.js";
+import { FUND_MODES, parseFund, permit2On, planFunding, type FundMode } from "./funding.js";
 import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
@@ -72,6 +73,7 @@ import {
   type SvmCookInput,
 } from "./solana.js";
 import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
+import type { PrivateKeyAccount } from "viem/accounts";
 import { loadSigner, scrub, secret } from "./signer.js";
 import {
   AGENTS,
@@ -310,6 +312,21 @@ const SIGNER: FlagSpecs = {
     value: "<path>",
     help: "Solana: sign with a keypair file (a JSON array of 64 bytes)",
   },
+};
+
+const FUND: FlagSpecs = {
+  fund: {
+    type: "string",
+    multiple: true,
+    value: "<TOKEN:amount>",
+    help: "Pull tokens into the Pot in the cook: USDC:1.5, USDC:1500000n, ETH:0.01",
+  },
+  "fund-mode": {
+    type: "string",
+    value: "<mode>",
+    help: "permit2 (default), permit, allowance or transfer",
+  },
+  sweep: { type: "boolean", help: "Return what is left of each funded token afterwards" },
 };
 
 /** Never parsed as a flag: everything after it is main's arguments (see `runCli`). */
@@ -587,6 +604,86 @@ function signerIsOwner(signer: `0x${string}`, owner: string | undefined): `0x${s
   return signer;
 }
 
+/** Whether `simulate` was given a key: it signs `--fund`'s pulls, and nothing else there. */
+const hasSigner = (args: ParsedArgs): boolean =>
+  stringFlag(args, "keystore") !== undefined || stringFlag(args, "private-key") !== undefined;
+
+/**
+ * `--fund`, `--fund-mode` and `--sweep`, read into the callback `runCommand`/`simulateCommand` call
+ * once the Pot is there; `undefined` with no `--fund`. `send` is whether the run may approve and
+ * transfer first (`run`) or only say it would (`simulate`).
+ */
+function fundingOf(
+  args: ParsedArgs,
+  io: CliIo,
+  chain: CanonicalChain,
+  rpcUrl: string,
+  send: boolean,
+  account: PrivateKeyAccount | undefined,
+): CookInput["fund"] {
+  const raw = repeatedFlag(args, "fund");
+  const mode = stringFlag(args, "fund-mode");
+  const sweep = args.values.sweep === true;
+  if (raw.length === 0) {
+    if (mode !== undefined) throw new UsageError("--fund-mode says how --fund pulls: give --fund");
+    if (sweep) {
+      throw new UsageError(
+        "--sweep returns what is left of the tokens --fund pulls in: give --fund",
+      );
+    }
+
+    return undefined;
+  }
+  if (chain.kind !== "evm") {
+    throw new UsageError(
+      `--fund is for EVM chains: on ${chain.slug} a program spends from the accounts it is given`,
+    );
+  }
+  if (mode !== undefined && !(FUND_MODES as readonly string[]).includes(mode)) {
+    throw new UsageError(`--fund-mode: '${mode}' is not ${FUND_MODES.join(", ")}`);
+  }
+  const requests = raw.map((value) => parseFund(value, chain));
+  const seen = new Set<string>();
+  for (const request of requests) {
+    const key = request.token ?? "native";
+    if (seen.has(key)) {
+      throw new UsageError(`--fund names ${request.label} twice: give it once, with the total`);
+    }
+    seen.add(key);
+  }
+  // Before anything is sent — a Pot deployed — rather than once the run reaches the pulls.
+  if (
+    (mode ?? "permit2") === "permit2" &&
+    requests.some((request) => request.token !== undefined)
+  ) {
+    permit2On(chain);
+  }
+
+  return async (client, pot, owner) => {
+    if (account !== undefined && account.address !== owner) {
+      throw new UsageError(
+        `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls the ` +
+          "owner's tokens on the owner's signature",
+      );
+    }
+
+    return planFunding({
+      chain,
+      client,
+      rpcUrl,
+      owner,
+      pot,
+      mode: (mode ?? "permit2") as FundMode,
+      requests,
+      sweep,
+      ...(account === undefined ? {} : { account }),
+      send,
+      yes: args.values.yes === true,
+      confirm: io.confirm,
+    });
+  };
+}
+
 // --- Solana ----------------------------------------------------------------------------------
 
 /** A Solana command's signer: `--keypair`, never an EVM key. */
@@ -753,11 +850,27 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     usage:
       "sauce simulate <file> --chain <slug|id> (--pot <address> | --owner <address>) --rpc-url <url> [options]",
     summary: "Dry-run the cook from the Pot's owner: result, gas, or why it reverts",
-    flags: { ...PROGRAM, ...COOK, ...ENDPOINT, ...JSON_FLAG, ...HELP, ...ARGS },
+    flags: {
+      ...PROGRAM,
+      ...COOK,
+      ...ENDPOINT,
+      ...FUND,
+      keystore: SIGNER.keystore!,
+      "password-file": SIGNER["password-file"]!,
+      "private-key": SIGNER["private-key"]!,
+      ...JSON_FLAG,
+      ...HELP,
+      ...ARGS,
+    },
     details: [
       "Compiles the file, builds the cook, and runs it through eth_call from the Pot's owner:",
       "no key, no transaction, no local node. Prints the gas it needs and what it returns, or",
       "the decoded reason it reverts (exit 1). The Pot must be deployed.",
+      "",
+      "With --fund, the rehearsal includes the pulls `sauce run --fund` would make. They carry the",
+      "owner's signature, so give the owner's key (--keystore or --private-key) to sign them;",
+      "nothing is sent. Without a key the funding is skipped, and a note says so. An approval",
+      "the run would ask for is reported, not made.",
       "",
       "On Solana: the Kitchen cook, simulated from --owner (no signature needed), with each",
       "account main takes given as --account NAME=<address | pot | owner>. Prints the compute",
@@ -771,12 +884,24 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     trailing: "args",
     run: async (args, io, trailing) => {
       const program = programInput(args, io);
+      const funds = repeatedFlag(args, "fund").length > 0;
+      if (hasSigner(args) && !funds) {
+        throw new UsageError(
+          "simulate signs nothing but --fund's pulls: give --fund, or drop the key (the rehearsal " +
+            "runs from the Pot's owner without one)",
+        );
+      }
       if (program.chain.kind === "svm") {
+        fundingOf(args, io, program.chain, "", false, undefined);
+
         return svmSimulateCommand(svmCookInput(args, io, trailing, program), io);
       }
       const input = cookInput(args, io, trailing, undefined, program);
+      const rpcUrl = requiredEndpoint(args, io, input.chain);
+      const account = funds && hasSigner(args) ? await signerOf(args, io) : undefined;
+      const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
 
-      return simulateCommand({ ...input, rpcUrl: requiredEndpoint(args, io, input.chain) }, io);
+      return simulateCommand({ ...input, rpcUrl, ...(fund === undefined ? {} : { fund }) }, io);
     },
   },
   run: {
@@ -788,7 +913,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...COOK,
       ...ENDPOINT,
       ...SIGNER,
-      yes: { type: "boolean", short: "y", help: "Deploy a missing Pot without asking first" },
+      ...FUND,
+      yes: {
+        type: "boolean",
+        short: "y",
+        help: "Deploy a missing Pot, or approve for --fund, without asking",
+      },
       ...JSON_FLAG,
       ...HELP,
       ...ARGS,
@@ -800,6 +930,21 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "yet is deployed first, in a transaction of its own, once you agree at the prompt — or",
       "with --yes, which is also how to allow it with no terminal to ask on. The value",
       "defaults to the Kitchen's execution fee, read from the chain.",
+      "",
+      "--fund TOKEN:amount gets tokens into the Pot in the same cook: the program is wrapped so",
+      "it first pulls each amount from you, then runs, then (--sweep) returns what is left. The",
+      "amount is whole units (USDC:1.5) or base units ending in n (USDC:1500000n); ETH:<amount>",
+      "rides as the cook's value. Every pull is a safeTransferFrom: @sauce/token's SafeERC20",
+      "one, or Permit2's own (Solmate's SafeTransferLib). --fund-mode:",
+      "  permit2    (default) you sign a Permit2 transfer of exactly this amount to this Pot, once;",
+      "             works for every ERC-20, USDT included, and leaves the Pot no allowance. The",
+      "             first time, Permit2 needs your approval for the token: asked for, like the Pot.",
+      "  permit     the token's own EIP-2612 permit, signed for the Pot (tokens that have one)",
+      "  allowance  an approval of the Pot for the amount (asked for), sent first: it stands",
+      "             until a cook spends it",
+      "  transfer   a plain transfer to the Pot first, in a transaction of its own",
+      "--sweep sends the Pot's whole balance of each funded token back to you (and of the",
+      "native currency, when ETH is funded), not only what this run brought.",
       "",
       "On Solana: sign with --keypair; the Kitchen's fee is read from the cluster, a missing Pot",
       "is created the same way, and a program too large for one transaction is staged in a code",
@@ -814,6 +959,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     run: async (args, io, trailing) => {
       const program = programInput(args, io);
       if (program.chain.kind === "svm") {
+        fundingOf(args, io, program.chain, "", true, undefined);
         const signer = await keypairOf(args, io);
 
         return svmRunCommand(
@@ -828,11 +974,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       }
       const account = await signerOf(args, io);
       const input = cookInput(args, io, trailing, account.address, program);
+      const rpcUrl = requiredEndpoint(args, io, input.chain);
+      const fund = fundingOf(args, io, input.chain, rpcUrl, true, account);
 
       return runCommand(
         {
           ...input,
-          rpcUrl: requiredEndpoint(args, io, input.chain),
+          ...(fund === undefined ? {} : { fund }),
+          rpcUrl,
           account,
           yes: args.values.yes === true,
           confirm: io.confirm,

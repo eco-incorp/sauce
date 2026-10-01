@@ -10,7 +10,7 @@
  */
 import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
-import { bytesToHex, getAddress, type Address, type Hex } from "viem";
+import { bytesToHex, getAddress, type Address, type Hex, type PublicClient } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
@@ -42,6 +42,7 @@ import {
   type TxRequest,
 } from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
+import type { Funding } from "./funding.js";
 
 /** The filesystem the commands read, injected so the tests can drive them without a process. */
 export interface CliFiles {
@@ -257,6 +258,11 @@ export interface CookInput extends ProgramInput {
   readonly args?: ArgsInput;
   /** The cook's value; the Kitchen's fee is read when it is absent and an endpoint is given. */
   readonly value?: bigint;
+  /**
+   * `--fund`: called once the Pot is known to be there, with its owner, it makes what funding the
+   * cook needs and returns how to wrap the program (`funding.ts`).
+   */
+  readonly fund?: (client: PublicClient, pot: Address, owner: Address) => Promise<Funding>;
 }
 
 interface Cook {
@@ -370,9 +376,14 @@ export async function simulateCommand(
         `the cook on: deploy it first (${deployHint(input.chain, input.target)})`,
     );
   }
-  const value = valueOf(input.value, await kitchenFee(client, input.chain), input.chain);
   const from = state.owner!;
-  const result = await simulate(client, from, { to: cook.pot, data: cook.data, value });
+  const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, from);
+  const funded =
+    funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
+  const value =
+    valueOf(input.value, await kitchenFee(client, input.chain), input.chain) +
+    (funding?.value ?? 0n);
+  const result = await simulate(client, from, { to: cook.pot, data: funded.data, value });
   const json = {
     ok: result.ok,
     chain: input.chain.slug,
@@ -383,13 +394,15 @@ export async function simulateCommand(
       ? { gas: result.gas.toString(), returns: result.returns }
       : { reason: result.reason }),
   };
+  const notes = funding?.notes ?? [];
 
   return result.ok
     ? {
         text: `The cook succeeds from ${from}: gas ${result.gas}, returns ${result.returns}`,
         json,
+        notes,
       }
-    : { text: `The cook reverts: ${result.reason}`, json, exitCode: 1 };
+    : { text: `The cook reverts: ${result.reason}`, json, notes, exitCode: 1 };
 }
 
 const sentText = (what: string, sent: Sent): string =>
@@ -465,13 +478,21 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
     );
   }
-  const value = valueOf(input.value, await kitchenFee(client, input.chain), input.chain);
-  const request: TxRequest = { to: cook.pot, data: cook.data, value };
+  // Funding, once the Pot is there: approvals and transfers it needs first, the signatures the pulls
+  // carry, and the program wrapped to pull, run and sweep.
+  const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, signer);
+  const funded =
+    funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
+  const value =
+    valueOf(input.value, await kitchenFee(client, input.chain), input.chain) +
+    (funding?.value ?? 0n);
+  const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
 
   return {
     text: [
       ...(deployed === undefined ? [] : [sentText(`deployed Pot ${cook.pot} in`, deployed)]),
+      ...(funding?.sent ?? []).map((step) => sentText(step.what, step.sent)),
       sentText("cook", sent),
     ].join("\n"),
     json: {
@@ -480,8 +501,12 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       pot: cook.pot,
       value: value.toString(),
       ...(deployed === undefined ? {} : { deployPot: sentJson(deployed) }),
+      ...(funding === undefined
+        ? {}
+        : { funding: funding.sent.map((step) => ({ what: step.what, ...sentJson(step.sent) })) }),
       cook: sentJson(sent),
     },
+    ...(funding === undefined || funding.notes.length === 0 ? {} : { notes: funding.notes }),
     ...(sent.status === "success" ? {} : { exitCode: 1 }),
   };
 }
