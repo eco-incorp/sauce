@@ -174,6 +174,7 @@ const SHAPES: readonly (readonly [string, string])[] = [
     "function main(a: Address): void { USDC.transferFrom(a, 0x1111111111111111111111111111111111111111, 5n); }",
   ],
   ["a token read", "function main(): Uint256 { return USDC.balanceOf(ctx.self()); }"],
+  ["a bare self", "function main(): Uint256 { return USDC.balanceOf(self); }"],
   ["a holder's balance", "function main(pool: Address): Uint256 { return pool.WETH; }"],
   [
     "Token(address)",

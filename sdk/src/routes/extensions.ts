@@ -41,7 +41,7 @@ const SPL_TOKEN_TYPE = "SplToken";
 type Entry =
   | { kind: "const"; value: string; type?: string }
   | { kind: "constructor"; type: string }
-  | { kind: "lazy"; fn: string; type?: string }
+  | { kind: "context"; read: "self" }
   | { kind: "namespace"; members: Record<string, Entry>; default?: string }
   | { kind: "contract"; address?: string; abi?: string; refuse?: string }
   | { kind: "intrinsic"; name: "available" }
@@ -207,7 +207,7 @@ function body(
   globals.chainId = { kind: "const", value: word(BigInt(chain.id)) };
   globals.CHAIN_ID = { kind: "const", value: word(BigInt(chain.id)) };
   globals.available = { kind: "intrinsic", name: "available" };
-  globals.self = { kind: "lazy", fn: "@sauce/context#self" };
+  globals.self = { kind: "context", read: "self" };
   globals.Token = evm
     ? { kind: "constructor", type: TOKEN_TYPE }
     : {
