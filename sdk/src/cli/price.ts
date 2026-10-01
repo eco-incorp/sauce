@@ -96,6 +96,35 @@ export interface PriceInput {
   readonly price: { readonly decimal: string } | { readonly sqrtPriceX96: bigint };
 }
 
+/**
+ * The price as given: a decimal number of quote tokens per base token, or a pool's `sqrtPriceX96`
+ * to read back as one — exactly one of the two.
+ */
+export function priceGiven(
+  price: string | undefined,
+  sqrtPriceX96: string | undefined,
+): PriceInput["price"] {
+  if ((price === undefined) === (sqrtPriceX96 === undefined)) {
+    throw new UsageError(
+      price === undefined
+        ? "missing <price>: how many quote tokens one base token is worth (or --sqrt-price-x96)"
+        : "give <price> or --sqrt-price-x96, not both",
+    );
+  }
+  if (price !== undefined) {
+    if (!/^\d+(?:\.\d+)?$/.test(price)) {
+      throw new UsageError(`'${price}' is not a price: a decimal number, as 2700 or 0.00037`);
+    }
+
+    return { decimal: price };
+  }
+  if (!/^\d+$/.test(sqrtPriceX96!)) {
+    throw new UsageError(`--sqrt-price-x96: '${sqrtPriceX96}' is not a whole number`);
+  }
+
+  return { sqrtPriceX96: BigInt(sqrtPriceX96!) };
+}
+
 const ceilDiv = (numerator: bigint, denominator: bigint): bigint =>
   (numerator + denominator - 1n) / denominator;
 

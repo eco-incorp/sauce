@@ -55,7 +55,7 @@ import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
 import { assumedBalances, definesReach, fundingFor, potTarget, programChain } from "./inputs.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
-import { parsePriceToken, priceCommand, pricedChain } from "./price.js";
+import { parsePriceToken, priceCommand, pricedChain, priceGiven } from "./price.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import { parsePin, verifyCommand } from "./verify.js";
@@ -1240,25 +1240,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         throw new UsageError("missing <base> <quote>: the pair, as WETH USDC");
       }
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
-      if ((price === undefined) === (sqrt === undefined)) {
-        throw new UsageError(
-          price === undefined
-            ? "missing <price>: how many quote tokens one base token is worth (or --sqrt-price-x96)"
-            : "give <price> or --sqrt-price-x96, not both",
-        );
-      }
-      if (price !== undefined && !/^\d+(?:\.\d+)?$/.test(price)) {
-        throw new UsageError(`'${price}' is not a price: a decimal number, as 2700 or 0.00037`);
-      }
-      if (sqrt !== undefined && !/^\d+$/.test(sqrt)) {
-        throw new UsageError(`--sqrt-price-x96: '${sqrt}' is not a whole number`);
-      }
+      const given = priceGiven(price, sqrt);
 
       return priceCommand({
         chain,
         base: parsePriceToken(base, chain),
         quote: parsePriceToken(quote, chain),
-        price: price !== undefined ? { decimal: price } : { sqrtPriceX96: BigInt(sqrt!) },
+        price: given,
       });
     },
   },
