@@ -84,20 +84,20 @@ export interface FillInput extends ProgramInput {
   readonly claimant?: Hex;
 }
 
-/** The Inbox's refusals (`IInbox.sol`) and the Executor's (`IExecutor.sol`), from eco-routes
- *  `main`, with OpenZeppelin SafeERC20's: what `fulfill` reverts with by name. */
-const FULFILL_ERRORS = parseAbi([
-  "error IntentAlreadyFulfilled(bytes32 intentHash)",
-  "error InvalidPortal(address portal)",
-  "error IntentExpired()",
-  "error InvalidHash(bytes32 expectedHash)",
-  "error ZeroClaimant()",
-  "error InsufficientNativeAmount(uint256 sent, uint256 required)",
+/** The Executor's refusals (`IExecutor.sol`, eco-routes `main`), which a failed route call reverts
+ *  `fulfill` with: the Executor is a contract of its own, so the Portal's ABI does not declare them. */
+const EXECUTOR_ERRORS = parseAbi([
   "error CallFailed((address target, bytes data, uint256 value) call, bytes reason)",
   "error CallToEOA(address target)",
   "error NonPortalCaller(address caller)",
-  "error SafeERC20FailedOperation(address token)",
 ]);
+
+/** What `fulfill` reverts with by name: the Portal's own errors (the Inbox's refusals among them,
+ *  and SafeERC20's on a route token pull), and the Executor's. */
+const FULFILL_ERRORS = [
+  ...PortalABI.filter((item) => item.type === "error"),
+  ...EXECUTOR_ERRORS,
+] as const;
 
 const ERC20 = parseAbi([
   "function balanceOf(address) view returns (uint256)",

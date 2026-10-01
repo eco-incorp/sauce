@@ -291,6 +291,19 @@ describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
     await untouched(block);
   }, 120_000);
 
+  it("names the Portal's own refusal: a route whose deadline has passed", async () => {
+    const run = await sauce(
+      ...["fill", file("direct.sauce.ts", DIRECT), "--chain", "arbitrum"],
+      ...["--rpc-url", base.rpcUrl, ...defines()],
+      ...["--intent-deadline", "1000", "--intent-creator", CREATOR],
+    );
+    expect(run.code).toBe(1);
+    expect(run.stdout).toContain(
+      "the fill reverts: IntentExpired(): the route's deadline, 1000 (1970-01-01T00:16:40.000Z), " +
+        "has passed",
+    );
+  }, 60_000);
+
   it("names a Kitchen fee the route underpays, and the revert it causes", async () => {
     const run = await fill(
       file("cooked.sauce.ts", COOKED),
