@@ -51,9 +51,9 @@ With default `requireCap: false`, a short Pot balance can leave the child underf
 
 Read the current Kitchen fee and supply `executionFee` for every transfer child. Children merged into one position share one fee and must specify the same value; separate `"before"` and `"after"` cooks each pay. The generated call adds this fee to any `fundNativeFromRoute` reward amounts, so the fee does not reduce the child's funding. Zero works only on a fee-free Kitchen. When a nonzero fee is supplied, the builder checks that `nativeAmount` covers the calls' combined value, excluding publication funding explicitly marked `fundedByBody`.
 
-The default vault resolution calls the Portal from the generated program. Alternatively, pass `vault` after verifying it with `child.vaultCall()`, or pass `vaultConfig` containing the verified `vaultInitCodeHash` for an offline prediction. Explicit `vault` takes precedence over `vaultConfig`.
+The default vault resolution calls the Portal from the generated program. Alternatively, pass `vault` after verifying it with `child.vaultCall()`, or pass `vaultConfig` for an offline prediction: `routes.ecoRoutesVaultConfig(portal)` is the configuration of an eco-routes Portal, the one `child.predictVault()` uses. Explicit `vault` takes precedence over `vaultConfig`.
 
-Transfer funding does not emit a child `IntentPublished` event. Share the built child with your solver or intent-distribution system; an indexer relying only on publication events cannot discover it from such an event.
+Transfer funding does not emit a child `IntentPublished` event. Share the built child with your solver or intent-distribution system; an indexer relying only on publication events cannot discover it from such an event. That is the one difference from an intent a program opens with `Chain(() => …).reward(…)`, which is also funded by transfer to its vault by default but is then published, in the same transaction — see [intents](intents.md#how-the-reward-is-funded).
 
 ## Opt in to publication and Portal funding
 

@@ -9,9 +9,10 @@
  *
  * `routes-intent-sugar.e2e.test.ts` runs the result against a real Portal.
  */
-import { decodeFunctionData, erc20Abi, type Hex } from "viem";
+import { decodeFunctionData, erc20Abi, toFunctionSelector, type AbiFunction, type Hex } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
 import {
@@ -169,7 +170,7 @@ describe("what the lowering produces", () => {
 
   describe("a top-level `const` of a literal is baked in, as a define is", () => {
     // Known when the file is compiled, so nothing is spliced at run time and the intent is fixed:
-    // `sauce publish` can build it from a wallet.
+    // `sauce intent publish` can build it from a wallet.
     const site = `Arbitrum(() => {
     USDC.transfer(RECIPIENT, AMOUNT);
   }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });`;
@@ -232,8 +233,116 @@ describe("what the lowering produces", () => {
     );
   });
 
-  it("approves the source Portal for the reward with SafeERC20 semantics", () => {
-    const result = rewriteIntentSugar(TRANSFER_INTENT, context());
+  describe("funds the reward by transfer to its vault, then publishes — the default", () => {
+    const portal = ecoRoutesPortal("base").slice(2).toLowerCase();
+    const selector = (name: string) =>
+      toFunctionSelector(
+        PortalABI.find((item) => item.type === "function" && item.name === name) as AbiFunction,
+      ).slice(2);
+    const linesOf = (source: string) => source.split("\n").map((line) => line.trim());
+
+    it("reads the vault from the Portal over the bytes it publishes, and approves nothing", () => {
+      const result = rewriteIntentSugar(TRANSFER_INTENT, context());
+      const lines = linesOf(result.source);
+
+      expect(result.intents[0]!.fundVia).toBe("transfer");
+      // The payload is `publish`'s, and the vault query is that payload under the other selector:
+      // one copy of the intent, so the vault read and the published intent cannot differ.
+      expect(lines.find((line) => line.startsWith("const i0_s0 ="))).toContain(selector("publish"));
+      expect(lines).toContain(`const i0_vsel = hex\`${selector("intentVaultAddress")}\`;`);
+      expect(lines).toContain("const i0_vq = i0_vsel.concat(i0_data.slice(4n, i0_data.length));");
+      expect(lines).toContain(
+        `const [i0_vault] = abi.decode(evm.static(${BigInt(`0x${portal}`)}n, i0_vq), ["Address"]);`,
+      );
+      // No approval of anything: nothing for USDT to refuse, no allowance left on the shared Pot.
+      expect(result.source).not.toContain("095ea7b3");
+      expect(result.source).not.toContain(selector("publishAndFund"));
+      // The publish is last, after the transfer, and sends no value.
+      expect(lines.filter((line) => line.includes("evm.call(")).at(-1)).toBe(
+        `evm.call(${BigInt(`0x${portal}`)}n, 0n, i0_data);`,
+      );
+    });
+
+    it("transfers the captured reward to that vault with SafeERC20 semantics", () => {
+      const lines = linesOf(rewriteIntentSugar(TRANSFER_INTENT, context()).source);
+      const transfer = lines.find((line) => line.startsWith("const i0_f0_tr0 ="))!;
+
+      expect(transfer).toContain("a9059cbb");
+      // The vault and the amount are run-time words, spliced in that order.
+      const call = lines.find((line) => line.includes("evm.call(") && line.includes("i0_f0_"))!;
+      expect(call).toContain("i0_vault.toBytesBe(32)");
+      expect(call).toContain("amount.toBytesBe(32)");
+      // A captured zero transfers nothing; the call and its check sit behind the guard.
+      expect(call.startsWith("if (amount > 0n) {")).toBe(true);
+      expect(call).toContain("ctx.codeSize(");
+    });
+
+    it("sends a native reward to the vault, and only a literal one unguarded", () => {
+      const literal = rewriteIntentSugar(
+        program(`  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ nativeAmount: 9n });`),
+        context(),
+      );
+      expect(linesOf(literal.source)).toContain("evm.call(i0_vault, 9n, i0_fnd);");
+
+      const captured = rewriteIntentSugar(
+        program(`  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount: 3n }], nativeAmount: amount });`),
+        context(),
+      );
+      const lines = linesOf(captured.source);
+      expect(lines).toContain("if (amount > 0n) { evm.call(i0_vault, amount, i0_fnd); }");
+      // A literal token amount needs no guard.
+      expect(lines.some((line) => line.startsWith("const i0_f0_tr = evm.call("))).toBe(true);
+    });
+
+    it("pays a token listed twice once, for the larger amount", () => {
+      const result = rewriteIntentSugar(
+        program(`  const more = 9n;
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount }, { token: USDC, amount: more }, { token: USDC, amount: 4n }] });`),
+        context(),
+      );
+      const lines = linesOf(result.source);
+
+      // One transfer to the vault (the other `a9059cbb` is the route's own call, inside the intent).
+      expect(
+        lines.filter((line) => line.startsWith("const i0_f") && line.includes("a9059cbb")),
+      ).toHaveLength(1);
+      expect(lines).toContain("const i0_f0m0 = amount > more ? amount : more;");
+      expect(lines).toContain("const i0_f0m1 = i0_f0m0 > 4n ? i0_f0m0 : 4n;");
+    });
+
+    it("refuses allowPartial, which only publishAndFund takes", () => {
+      expect(() =>
+        rewriteIntentSugar(
+          TRANSFER_INTENT,
+          context({ defaults: { deadline: 4_000_000_000n, creator: CREATOR, allowPartial: true } }),
+        ),
+      ).toThrow(/`intents.allowPartial` goes with `fundVia: "publishAndFund"`/);
+    });
+
+    it("refuses a fundVia it does not know", () => {
+      expect(() =>
+        rewriteIntentSugar(
+          TRANSFER_INTENT,
+          context({ defaults: { deadline: 4_000_000_000n, creator: CREATOR, fundVia: "permit" } }),
+        ),
+      ).toThrow(/`intents.fundVia` is 'permit'/);
+    });
+  });
+
+  it("opted into publishAndFund: approves the source Portal for the reward with SafeERC20 semantics", () => {
+    const result = rewriteIntentSugar(
+      TRANSFER_INTENT,
+      context({
+        defaults: { deadline: 4_000_000_000n, creator: CREATOR, fundVia: "publishAndFund" },
+      }),
+    );
+    expect(result.intents[0]!.fundVia).toBe("publishAndFund");
     const portal = ecoRoutesPortal("base").slice(2).toLowerCase();
     const lines = result.source.split("\n").map((line) => line.trim());
     const approvals = lines.filter((line) => line.includes("095ea7b3"));
@@ -254,6 +363,48 @@ describe("what the lowering produces", () => {
     expect(lines.some((line) => line.startsWith("if (") && line.includes("cur > 0n"))).toBe(true);
     // Both writes are judged: empty returndata only from an address with code, anything else true.
     expect(lines.filter((line) => line.includes("ctx.codeSize("))).toHaveLength(2);
+    // No vault read: the Portal pulls the reward into the vault it derives itself.
+    expect(result.source).not.toContain("i0_vault");
+  });
+
+  it("opted into publishAndFund: approves a token listed twice once, for the larger amount", () => {
+    const result = rewriteIntentSugar(
+      program(`  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount: 3n }, { token: USDC, amount }] });`),
+      context({
+        defaults: { deadline: 4_000_000_000n, creator: CREATOR, fundVia: "publishAndFund" },
+      }),
+    );
+    const lines = result.source.split("\n").map((line) => line.trim());
+
+    // The Portal pulls each entry up to the vault's whole balance of the token, so the larger
+    // entry is the allowance it needs — the first one listed could be the smaller.
+    expect(lines).toContain("const i0_a0m0 = amount > 3n ? amount : 3n;");
+    const approves = lines.filter(
+      (line) =>
+        line.includes("evm.call(") && line.includes(".toBytesBe(32)") && line.includes("_0"),
+    );
+    expect(approves.some((line) => line.includes("i0_a0m0.toBytesBe(32)"))).toBe(true);
+    expect(lines.filter((line) => line.includes("dd62ed3e"))).toHaveLength(1);
+  });
+
+  it("opted into publishAndFund: forwards a native reward as the call's value", () => {
+    const result = rewriteIntentSugar(
+      program(`  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ nativeAmount: amount });`),
+      context({
+        defaults: { deadline: 4_000_000_000n, creator: CREATOR, fundVia: "publishAndFund" },
+      }),
+    );
+    const portal = BigInt(ecoRoutesPortal("base"));
+
+    const calls = result.source
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.includes("evm.call("));
+    expect(calls.at(-1)).toBe(`evm.call(${portal}n, amount, i0_data);`);
   });
 
   it("lowers several intents in one program without colliding", () => {
@@ -488,7 +639,8 @@ describe("what it refuses, and how clearly", () => {
     const DELIVERY =
       "The delivery — the intent's second argument, `{ tokens: [...] }` — is what the solver " +
       "brings to arbitrum, so its symbols are arbitrum's: fix it there, not in `.reward(...)`. " +
-      "Use a symbol arbitrum registers, or the token's arbitrum address as a literal or a define.";
+      "Use a symbol arbitrum registers, or the token's arbitrum address as a literal, a define or " +
+      "a top-level `const` of a literal.";
 
     it("a delivery token the destination does not register", () => {
       expect(messageOf(intent("USDT0"))).toBe(
@@ -516,7 +668,7 @@ describe("what it refuses, and how clearly", () => {
         "intent sugar: the reward token 'USDT0' is not a token base registers, nor a define. The " +
           "reward — `.reward({ tokens: [...] })` — is escrowed on base, where the program opening " +
           "the intent runs, so its symbols are base's. Use a symbol base registers, or the token's " +
-          "base address as a literal or a define.",
+          "base address as a literal, a define or a top-level `const` of a literal.",
       );
     });
   });
@@ -611,10 +763,36 @@ describe("through the real compile path", () => {
     );
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
-    // No slot to fill, so the whole publishAndFund calldata is one literal.
+    // No slot to fill, so the whole publish calldata is one literal.
     expect(out.source).toMatch(/const i0_data = hex`[0-9a-f]+`;/);
     expect(out.source).not.toContain("5acecab7");
   });
+
+  it.each(["transfer", "publishAndFund"] as const)(
+    "compiles a captured native reward and a token listed twice, funded via %s",
+    (fundVia) => {
+      const out = compileSauceRoute(
+        "base",
+        `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  const native = ctx.selfBalance();
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, 5n);
+  }).reward({ tokens: [{ token: USDC, amount }, { token: USDC, amount: 7n }], nativeAmount: native });
+}`,
+        {
+          pot: "0x1111111111111111111111111111111111111111",
+          engine: "0x2222222222222222222222222222222222222222",
+        },
+        {
+          defines: { RECIPIENT },
+          intents: { deadline: 4_000_000_000n, creator: CREATOR, fundVia },
+        },
+      );
+
+      expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    },
+  );
 
   it("the enclosing program's own token sugar still works alongside it", () => {
     const out = compileSauceRoute(

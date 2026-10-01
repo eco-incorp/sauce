@@ -383,10 +383,24 @@ export interface EcoRoutesPortalMethods {
   "getRewardStatus"(arg0: bigint): bigint;
   "executor"(): bigint;
   "claimants"(arg0: bigint): bigint;
+  "fulfillAndProve"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: (string | SauceBytes)): SauceArray<SauceBytes>;
+  "prove"(arg0: bigint, arg1: bigint, arg2: (readonly (bigint)[] | SauceArray<bigint>), arg3: (string | SauceBytes)): void;
+  "withdraw"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): void;
+  "batchWithdraw"(arg0: (readonly (bigint)[] | SauceArray<bigint>), arg1: (readonly (bigint)[] | SauceArray<bigint>), arg2: (readonly ({ "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) })[] | SauceArray<{ "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }>)): void;
+  "refund"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }): void;
+  "refundTo"(arg0: bigint, arg1: bigint, arg2: { "deadline": bigint; "creator": bigint; "prover": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>) }, arg3: bigint): void;
+  "cancel"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint): void;
+  "cancelAndProve"(arg0: bigint, arg1: { "salt": bigint; "deadline": bigint; "portal": bigint; "nativeAmount": bigint; "tokens": (readonly ({ "token": bigint; "amount": bigint })[] | SauceArray<{ "token": bigint; "amount": bigint }>); "calls": (readonly ({ "target": bigint; "data": (string | SauceBytes); "value": bigint })[] | SauceArray<{ "target": bigint; "data": (string | SauceBytes); "value": bigint }>) }, arg2: bigint, arg3: bigint, arg4: bigint, arg5: (string | SauceBytes)): void;
+  "version"(): SauceBytes;
 }
 
 export interface EcoRoutesProverMethods {
   "provenIntents"(arg0: bigint): { "claimant": bigint; "destination": bigint };
+  "getProofType"(): SauceBytes;
+  "version"(): SauceBytes;
+  "PORTAL"(): bigint;
+  "isWhitelisted"(arg0: bigint): boolean;
+  "fetchFee"(arg0: bigint, arg1: (string | SauceBytes), arg2: (string | SauceBytes)): bigint;
 }
 
 export interface EigenlayerDelegationManagerMethods {

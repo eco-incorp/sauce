@@ -32,6 +32,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
+import type { IntentFundVia } from "../routes/portal.js";
 import type { AccessorTarget } from "../routes/protocol-resolve.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
@@ -62,6 +63,7 @@ import {
 } from "./intents.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 import { appliedDefines, contractCollector } from "./report.js";
+import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
 
@@ -103,8 +105,15 @@ export interface ProgramInput {
   /** `Chain(() => …).reward(…)` inside the program: what the SDK cannot look up. */
   readonly intents: {
     readonly deadline?: bigint;
+    /** From when an unproven intent's reward may be refunded; the route's deadline by default. */
+    readonly rewardDeadline?: bigint;
     readonly creator?: Address;
+    /** The reward's prover; the registry's for the pair by default. */
+    readonly prover?: Address;
     readonly executionFee?: bigint;
+    /** How their reward is funded, by the program a Pot runs or by `sauce intent publish`'s wallet:
+     *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
+    readonly fundVia?: IntentFundVia;
   };
   /**
    * ABI bindings the program calls through without declaring them — an actions document's
@@ -151,11 +160,14 @@ function compileOptions(
   onContract?: (reference: string, target: AccessorTarget) => void,
 ): SauceCompileOptions {
   const dir = sourceDirOf(input);
-  const { deadline, creator, executionFee } = input.intents;
+  const { deadline, rewardDeadline, creator, prover, executionFee, fundVia } = input.intents;
   const intents = {
     ...(deadline === undefined ? {} : { deadline }),
+    ...(rewardDeadline === undefined ? {} : { rewardDeadline }),
     ...(creator === undefined ? {} : { creator }),
+    ...(prover === undefined ? {} : { prover }),
     ...(executionFee === undefined ? {} : { executionFee }),
+    ...(fundVia === undefined ? {} : { fundVia }),
   };
 
   return {
@@ -231,6 +243,8 @@ export interface CompileInput extends ProgramInput {
   readonly args?: ArgsInput;
   /** Solana: accounts by slot name, as `--account` gives them, for sizing the cook. */
   readonly accounts?: Readonly<Record<string, string>>;
+  /** Solana: size the Kitchen's cook (the default) or the engine's direct one. */
+  readonly via?: CookVia;
   /** Endpoints for the intents' destinations: where given, each intent's Pot is checked. */
   readonly endpoints?: Endpoints;
 }
@@ -253,7 +267,12 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       : hexToBytes(payloadOf(program, input.args));
   const cook =
     input.chain.kind === "svm" && payload !== undefined
-      ? await svmCookSize(payload, program.manifest ?? { accounts: [] }, input.accounts ?? {})
+      ? await svmCookSize(
+          payload,
+          program.manifest ?? { accounts: [] },
+          input.accounts ?? {},
+          input.via,
+        )
       : undefined;
   const cooks = intentCooks(program.intents);
   const pots: readonly PotCheck[] =
@@ -539,6 +558,8 @@ export function unapproved(actions: readonly string[]): CliError {
 export interface RunInput extends CookInput, ChainAccess {
   readonly account: PrivateKeyAccount;
   readonly approver: Approver;
+  /** Called with the cook once it is sent, for what it published (the store); returns notes. */
+  readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
 }
 
 /** `sauce run`: compile, sign, send and wait — deploying the Pot first once it is agreed to. */
@@ -615,6 +636,8 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     (funding?.value ?? 0n);
   const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
+  const stored = input.onSent === undefined ? [] : await input.onSent(sent);
+  const notes = [...(funding?.notes ?? []), ...stored];
   // What the cook cost, and what it moved, from its receipt.
   const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
   const effects =
@@ -652,7 +675,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
         ...(effects === undefined ? {} : { effects: effects.json }),
       },
     },
-    ...(funding === undefined || funding.notes.length === 0 ? {} : { notes: funding.notes }),
+    ...(notes.length === 0 ? {} : { notes }),
     ...(sent.status === "success" ? {} : { exitCode: 1 }),
   };
 }
