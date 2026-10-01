@@ -7,8 +7,8 @@
 // from a wallet (sauce publish).
 //
 // `--chain` is the source chain: `WETH` in `.reward(...)` is its WETH. Inside the braces, and in
-// the delivery argument after them, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory` and
-// `UniswapV4.PoolManager` there are Base's.
+// the delivery argument after them, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
+// `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's.
 //
 //   sauce run swap-on-base.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --define AMOUNT_IN=<amount> --define REWARD=<amount> \
@@ -26,9 +26,8 @@ Base(
     const outBefore = USDC.balanceOf(self);
 
     // 1. Discover the pools and their prices: Uniswap V3 from its factory (slot0), hookless V4 by
-    //    key (extsload of the pool's state in the PoolManager; 0 where there is no pool).
+    //    key from the StateView (0 where there is no pool).
     const slot0 = hex`3850c7bd`;
-    const extsload = hex`1e2eaeaf`;
     let pools = new Array(8); // a V3 pool, or 0 for a V4 key
     let fees = new Array(8);
     let tickSpacings = new Array(8);
@@ -49,12 +48,11 @@ Base(
       const id = crypto.keccak256(
         abi.encode(currency0, currency1, v4Fees[k], v4TickSpacings[k], 0n),
       );
-      const state = extsload.concat(abi.encode(crypto.keccak256(abi.encode(id, 6n))));
-      const [word] = abi.decode(evm.static(UniswapV4.PoolManager, state), ["Uint256"]);
+      const [sqrtPriceX96] = UniswapV4.StateView.getSlot0(id);
       pools[n] = 0n;
       fees[n] = v4Fees[k];
       tickSpacings[n] = v4TickSpacings[k];
-      prices[n] = word & ((1n << 160n) - 1n);
+      prices[n] = sqrtPriceX96;
       n++;
     }
 
