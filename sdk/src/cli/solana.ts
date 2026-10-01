@@ -18,6 +18,7 @@ import {
   address,
   createKeyPairSignerFromBytes,
   createSolanaRpc,
+  getAddressEncoder,
   getBase58Decoder,
   getBase58Encoder,
   getBase64EncodedWireTransaction,
@@ -39,6 +40,7 @@ import type { AccountManifest } from "sauce-compiler";
 import { bytesToHex, hexToBytes, type Hex } from "viem";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
+import { parseEntryType, type EntryType, type EntryValue } from "../routes/entry.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
@@ -242,6 +244,19 @@ function failedProgram(logs: readonly string[]): string | undefined {
   return undefined;
 }
 
+/** The return data the engine logged (`Program return: <engine> <base64>`), the last it set. */
+function engineReturn(logs: readonly string[]): Uint8Array | undefined {
+  let found: Uint8Array | undefined;
+  for (const line of logs) {
+    const match = /^Program return: (\w+) ([A-Za-z0-9+/=]*)$/.exec(line);
+    if (match !== null && match[1] === engine()) {
+      found = new Uint8Array(getBase64Encoder().encode(match[2]!));
+    }
+  }
+
+  return found;
+}
+
 /**
  * A transaction error, read: the Sauce program's thrown text when the ENGINE failed with its revert
  * code, a Kitchen error by name when the KITCHEN failed, and otherwise the code and the program it
@@ -259,14 +274,17 @@ export function failureReason(
   if (custom !== undefined) {
     const code = Number(custom);
     if (program === engine() && code === 0) {
+      // A revert's payload is the engine's return data, which the node may leave out of a failed
+      // simulation's answer; its log line carries it too.
+      const payload = returnData?.length ? returnData : engineReturn(logs);
       const text =
-        returnData === undefined || returnData.length === 0
+        payload === undefined || payload.length === 0
           ? ""
-          : new TextDecoder("utf-8", { fatal: false }).decode(returnData);
+          : new TextDecoder("utf-8", { fatal: false }).decode(payload);
 
       return /^[\x20-\x7e]+$/.test(text)
         ? `the program threw "${text}"`
-        : `the program reverted${returnData?.length ? ` with ${bytesToHex(returnData)}` : ""}`;
+        : `the program reverted${payload?.length ? ` with ${bytesToHex(payload)}` : ""}`;
     }
     const named = program === kitchen() ? kitchenErrors().get(code) : undefined;
     if (named !== undefined) return `the Kitchen refused: ${named}`;
@@ -482,18 +500,87 @@ const createPotInstruction = (target: SvmTarget, pot: Address): Instruction =>
     space: MAX_POT_LEN,
   });
 
-/** The program and its arguments, checked for what the CLI can encode on Solana. */
+/**
+ * A value of `type` with every `Address` in it as the word the engine reads on Solana: the public
+ * key's 32 bytes, whole. A key is given in base58, or as 32 bytes of hex.
+ */
+function keyWords(type: EntryType, value: EntryValue, at: string): EntryValue {
+  switch (type.kind) {
+    case "address": {
+      if (typeof value === "string" && isAddress(value)) {
+        return bytesToHex(new Uint8Array(getAddressEncoder().encode(address(value))));
+      }
+      if (typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value)) return value;
+      throw new TypeError(
+        `${at}: ${JSON.stringify(value)} is not a Solana public key (base58, or 32 bytes of hex)`,
+      );
+    }
+    case "array":
+      return Array.isArray(value)
+        ? value.map((item, index) => keyWords(type.of, item, `${at}[${index}]`))
+        : value;
+    case "tuple": {
+      if (Array.isArray(value)) {
+        return value.map((item, index) =>
+          index < type.fields.length
+            ? keyWords(type.fields[index]!.type, item, `${at}.${type.fields[index]!.name}`)
+            : item,
+        );
+      }
+      if (value === null || typeof value !== "object" || value instanceof Uint8Array) return value;
+      const record = value as { readonly [field: string]: EntryValue };
+
+      return Object.fromEntries(
+        Object.entries(record).map(([name, item]) => {
+          const field = type.fields.find((candidate) => candidate.name === name);
+
+          return [name, field === undefined ? item : keyWords(field.type, item, `${at}.${name}`)];
+        }),
+      );
+    }
+    default:
+      return value;
+  }
+}
+
+/**
+ * The program and its arguments. On Solana the engine reads an `Address` argument as a whole
+ * 32-byte word, a public key, where the EVM's ABI encoding keeps 20 bytes: each is encoded as that
+ * word, from base58 (or 32 bytes of hex).
+ */
 function svmPayload(program: CompiledSauceProgram, args: ArgsInput | undefined): Uint8Array {
-  const address = program.entryParams.find((param) => /\bAddress\b/.test(param.type));
-  if (address !== undefined) {
+  const keyed = program.entryParams.some((param) => /\bAddress\b/.test(param.type));
+  if (keyed && program.entryEncoding === "compact-v1") {
     throw new UsageError(
-      `main's ${address.name}: ${address.type} is a 32-byte public key on Solana, which the CLI ` +
-        "does not encode as an argument: take it as an Account parameter (passed with --account) " +
-        "or a define",
+      "--compact-args: an Address argument on Solana is encoded as an ABI-v1 word only; compile " +
+        "without --compact-args, or take the key as an Account parameter or a define",
     );
   }
 
-  return hexToBytes(payloadOf(program, args));
+  return hexToBytes(
+    payloadOf(
+      program,
+      args,
+      keyed
+        ? (compiled, values) => ({
+            program: {
+              ...compiled,
+              entryParams: compiled.entryParams.map((param) => ({
+                ...param,
+                type: param.type.replace(/\bAddress\b/g, "Uint256"),
+              })),
+            },
+            values: values.map((value, index) => {
+              const param = compiled.entryParams[index];
+
+              return param === undefined
+                ? value
+                : keyWords(parseEntryType(param.type), value, `${param.name}`);
+            }),
+          })
+        : undefined,
+    ),
+  );
 }
 
 export interface SvmCookInput extends ProgramInput, SvmTarget {
@@ -542,46 +629,107 @@ async function prepare(
  * Whether the cook carrying `bytecode` fits in one transaction — measured as `run` sends it, with
  * the SetComputeUnitLimit instruction its rehearsal adds (any limit encodes to the same size).
  */
-async function fits(prepared: Prepared): Promise<{ fits: boolean; size: number }> {
+async function fits(
+  prepared: Prepared,
+  prepends: readonly Instruction[] = [],
+): Promise<{ fits: boolean; size: number }> {
   const transaction = await prepared.client.cookTransaction(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    { computeUnitLimit: 1_400_000 },
+    { computeUnitLimit: 1_400_000, prepends },
   );
   const size = getTransactionSize(transaction);
 
   return { fits: size <= TRANSACTION_SIZE_LIMIT, size };
 }
 
-const tooLarge = (bytes: number, size: number, what: string): CliError =>
-  new CliError(
-    `the program is ${bytes} bytes, so its cook is a ${size}-byte transaction, past Solana's ` +
-      `${TRANSACTION_SIZE_LIMIT}: it has to be staged first, which ${what} cannot do. ` +
-      "`sauce run` stages it.",
+/** The payload a cook carries — the program, and the arguments appended to it — in bytes. */
+const payloadSize = (prepared: Prepared): string => {
+  const program = prepared.program.bytecode.length;
+  const payload = prepared.bytecode.length;
+
+  return payload === program
+    ? `the payload (the program, with no arguments) is ${payload} bytes`
+    : `the payload (the program's ${program} bytes and its arguments' ${payload - program}) is ` +
+        `${payload} bytes`;
+};
+
+/** A cook too large for one transaction, for `what` (a simulation, an unsigned transaction). */
+const tooLarge = (prepared: Prepared, size: number, what: string): CliError => {
+  const over = size - TRANSACTION_SIZE_LIMIT;
+
+  return new CliError(
+    `${payloadSize(prepared)}, so its cook is a ${size}-byte transaction, ${over} past Solana's ` +
+      `${TRANSACTION_SIZE_LIMIT}. A cook that large runs from a code buffer the program is staged ` +
+      `into first, in transactions the owner signs and sends, which ${what} cannot do. Shrink the ` +
+      `payload by at least ${over} bytes to fit, or let \`sauce run\` stage it (with the owner's ` +
+      "--keypair; it rehearses the staged cook before sending it).",
   );
+};
 
 const simulated = (result: SimulateExecuteResult): string =>
   failureReason(result.err, result.logs, result.revert?.payload);
 
-/** `sauce simulate` on Solana: the cook, simulated from the Pot's owner — no key. */
+/** The lamports a cook takes from its owner, and what the owner holds, when it holds less. */
+async function ownerShort(
+  prepared: Prepared,
+  input: SvmCookInput,
+  creating: boolean,
+): Promise<string | undefined> {
+  try {
+    const [held, rent] = await Promise.all([
+      prepared.rpc.getBalance(input.owner).send(),
+      creating
+        ? prepared.rpc.getMinimumBalanceForRentExemption(BigInt(MAX_POT_LEN)).send()
+        : Promise.resolve(0n),
+    ]);
+    // One signature's fee on top: the owner pays the transaction's too.
+    const needed = BigInt(rent) + prepared.fee + 5_000n;
+    if (BigInt(held.value) >= needed) return undefined;
+
+    return (
+      `${input.owner} holds ${held.value} lamports, and the cook takes ${needed}: ` +
+      (creating ? `${rent} in rent for the Pot, ` : "") +
+      `the Kitchen's fee of ${prepared.fee} and the transaction's. Solana's simulateTransaction ` +
+      "takes no balance overrides, so the owner must hold them for a rehearsal too"
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `sauce simulate` on Solana: the cook, simulated from the Pot's owner with no key — and, for a
+ * Pot the Kitchen has not created yet, its `create_pot` first, in the same transaction.
+ */
 export async function svmSimulateCommand(
   input: SvmCookInput,
   files: CliFiles,
 ): Promise<CommandOutput> {
   const prepared = await prepare(input, files, unsignedSigner(input.owner));
-  if (!(await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"))) {
-    throw new CliError(
-      `Pot ${prepared.pot} is not deployed on solana, so there is nothing to simulate the cook ` +
-        `on: create it first (${createHint(input)})`,
-    );
+  // The size first: it is the program's own, whatever the cluster holds.
+  const alone = await fits(prepared);
+  if (!alone.fits) throw tooLarge(prepared, alone.size, "a simulation, which sends nothing,");
+  const created = await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot");
+  const prepends = created ? [] : [createPotInstruction(input, prepared.pot)];
+  if (!created) {
+    const together = await fits(prepared, prepends);
+    if (!together.fits) {
+      const over = together.size - TRANSACTION_SIZE_LIMIT;
+      throw new CliError(
+        `Pot ${prepared.pot} is not created on solana yet, and its create_pot ahead of the cook ` +
+          `makes a ${together.size}-byte transaction, ${over} past Solana's ` +
+          `${TRANSACTION_SIZE_LIMIT}: create the Pot first (${createHint(input)}), or shrink the ` +
+          `payload by at least ${over} bytes`,
+      );
+    }
   }
-  const size = await fits(prepared);
-  if (!size.fits) throw tooLarge(prepared.bytecode.length, size.size, "a simulation");
   const result = await prepared.client.simulate(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
+    { prepends },
   );
   const json = {
     ok: result.ok,
@@ -589,34 +737,53 @@ export async function svmSimulateCommand(
     owner: input.owner,
     pot: prepared.pot,
     fee: prepared.fee.toString(),
+    path: "simulateTransaction",
+    createPot: created ? null : { kitchen: kitchen(), owner: input.owner, salt: input.salt },
     ...(result.unitsConsumed === undefined
       ? {}
       : { computeUnits: result.unitsConsumed.toString() }),
     ...(result.ok ? {} : { reason: simulated(result) }),
     logs: result.logs,
   };
+  const how = [
+    "Rehearsed with simulateTransaction, signatures unchecked; nothing was signed or sent:",
+    ...(created
+      ? []
+      : [
+          `  1. Kitchen create_pot: Pot ${prepared.pot} is not created on solana yet, so the ` +
+            "transaction creates it first, the owner signing and paying its rent",
+        ]),
+    `  ${created ? "" : "2. "}the cook, from the owner ${input.owner}`,
+  ];
+  if (result.ok) {
+    return {
+      text: [
+        `The cook succeeds from ${input.owner}: ${result.unitsConsumed ?? "?"} compute units`,
+        ...how,
+      ].join("\n"),
+      json,
+    };
+  }
+  const short = await ownerShort(prepared, input, !created);
 
-  return result.ok
-    ? {
-        text: `The cook succeeds from ${input.owner}: ${result.unitsConsumed ?? "?"} compute units`,
-        json,
-      }
-    : {
-        text: [
-          `The cook fails: ${simulated(result)}`,
-          "Program logs:",
-          ...result.logs.map((l) => `  ${l}`),
-        ].join("\n"),
-        json,
-        exitCode: 1,
-      };
+  return {
+    text: [
+      `The cook fails: ${simulated(result)}`,
+      ...how,
+      "Program logs:",
+      ...result.logs.map((l) => `  ${l}`),
+    ].join("\n"),
+    json,
+    ...(short === undefined ? {} : { notes: [short] }),
+    exitCode: 1,
+  };
 }
 
 /** `sauce tx` on Solana: the cook as an unsigned, serialized transaction for a wallet. */
 export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promise<CommandOutput> {
   const prepared = await prepare(input, files, unsignedSigner(input.owner));
   const size = await fits(prepared);
-  if (!size.fits) throw tooLarge(prepared.bytecode.length, size.size, "one unsigned transaction");
+  if (!size.fits) throw tooLarge(prepared, size.size, "one unsigned transaction");
   const deployed = await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot");
   const transaction = await prepared.client.cookTransaction(
     prepared.bytecode,

@@ -27,6 +27,8 @@ export interface FlagSpec {
   /** The value's placeholder in `--help`, e.g. `<address>`. Absent for a boolean flag. */
   readonly value?: string;
   readonly help: string;
+  /** A flag one kind of chain takes and the other refuses, listed under its own heading. */
+  readonly only?: "evm" | "svm";
 }
 
 export type FlagSpecs = Readonly<Record<string, FlagSpec>>;

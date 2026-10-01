@@ -11,7 +11,7 @@ through an endpoint you name on the command line.
 | Command          | What it does                                                                      |
 | ---------------- | --------------------------------------------------------------------------------- |
 | `sauce compile`  | Compile a program file; print its bytecode, or with `--json` what it takes        |
-| `sauce simulate` | Rehearse the cook from the Pot's owner, with no key: gas, or why it fails         |
+| `sauce simulate` | Rehearse the cook with no key, no deployed Pot and assumed balances: what it did  |
 | `sauce run`      | Compile, sign, send and wait for the cook on your Pot                             |
 | `sauce publish`  | Publish a file's fixed intents from your wallet, with no Pot                      |
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
@@ -95,9 +95,10 @@ npx sauce pot --deploy --chain base --config sauce.config.json --keystore ~/.key
 # 4. Fund the Pot with what the program spends: send its address the tokens, from any wallet —
 #    or let `sauce run --fund` pull them in with the cook (see "Funding a run" below).
 
-# 5. Rehearse the cook from the Pot's owner: no key, nothing sent.
+# 5. Rehearse the cook from the Pot's owner: no key, nothing sent. It can come first: a Pot not
+#    deployed yet is deployed in the rehearsal, and --assume-balance gives it what it spends.
 npx sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
-  --define RECIPIENT=0x… --define AMOUNT=1000000
+  --assume-balance USDC:1 --assume-balance USDT:1 --define RECIPIENT=0x… --define AMOUNT=1000000
 
 # 6. Run it.
 npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
@@ -127,8 +128,79 @@ Pot 0x8a… (owner 0xYou, salt 0x00…00) is not deployed on base. Deploy it now
 terminal to ask on (CI, a pipe), the run fails and says so, unless you pass `--yes`, which agrees in
 advance.
 
-`simulate` prints `The cook succeeds from 0x…: gas …, returns 0x…`, or `The cook reverts: <reason>`
-and exits 1. It needs the Pot deployed.
+### Rehearsing: `sauce simulate`
+
+`sauce simulate` runs the cook as a rehearsal from the Pot's owner: no key, no transaction, and
+nothing on chain changes. It needs neither a deployed Pot nor the tokens the program spends:
+
+```sh
+npx sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
+  --assume-balance USDC:2 --assume-balance USDT:2 --define RECIPIENT=0x… --define AMOUNT=1000000
+```
+
+- **A Pot that is not deployed** is deployed in the rehearsal first. Anyone may send a Pot's
+  `Kitchen.deployPot(owner, salt)`, and the Pot is the owner's whoever sends it, so the rehearsal
+  sends it ahead of the cook. Name such a Pot by `--owner` (and `--salt`): a `--pot` address alone
+  does not say whose it is.
+- **`--assume-balance <TOKEN|address>:<amount>`**, repeatable, with the amount as `--fund` takes
+  it, gives the Pot that balance for this rehearsal only, by state override. `ETH:<amount>` sets
+  the Pot's native balance. A token keeps balances in its own storage (a proxy's, behind one), and
+  the command finds the word with `eth_call` and state overrides alone — Solidity mappings at slots
+  0–255, Vyper's at 0–31, OpenZeppelin's namespaced ERC-20 and Solady's — then confirms it with
+  `balanceOf`. A token whose balance is computed rather than stored (rebasing, shares) is refused.
+- **The cook's value**: an owner holding less than it (the Kitchen's fee, plus whatever `--value`
+  or `--fund ETH:` adds) is given it for the rehearsal, and told.
+- **`--fund`**: with the owner's key the rehearsal includes the signed pulls (see
+  [Funding a run](#funding-a-run---fund)). With no key the pulls cannot be signed, so the Pot is
+  credited what they would bring — its balance plus each amount, or the amount on top of an
+  `--assume-balance` of the same token — `--sweep` still runs, and a shortfall in your wallet is
+  reported rather than refused.
+
+It rehearses through `eth_simulateV1` where the endpoint serves it: one simulated block holding
+the deployment and the cook, state carried from one to the next, with the cook's logs. On success
+it prints the gas used and what the program returned, then what the cook did:
+
+```text
+The cook succeeds from 0xYou: gas used 128999, returns 0x
+Rehearsed with eth_simulateV1; nothing was signed or sent:
+  1. Kitchen.deployPot(0xYou, 0x00…00): Pot 0x8a… is not deployed on base yet. Any account may send this; the Pot is the owner's either way.
+  2. the cook, from the owner 0xYou
+Assumed for this rehearsal only, by state override:
+  the Pot holds 2 USDC: --assume-balance (its balance word 0x1d39…: Solidity mapping at slot 9)
+  the owner holds 0.00000374478538635 ETH: the cook's value; it holds 0, and a real cook needs the value and gas
+Token transfers:
+  1 USDC: 0x8a… (the Pot) -> 0x66…
+  1 USDT: 0x8a… (the Pot) -> 0x66…
+Native transfers:
+  0.00000374478538635 ETH: 0xYou (owner) -> 0x8a… (the Pot)
+  0.00000374478538635 ETH: 0x8a… (the Pot) -> 0x1984… (Kitchen)
+Net balance changes:
+  0x8a… (the Pot): -1 USDC, -1 USDT
+  0x66…: +1 USDC, +1 USDT
+  0xYou (owner): -0.00000374478538635 ETH
+  0x1984… (Kitchen): +0.00000374478538635 ETH
+```
+
+ERC-20 `Transfer` and `Approval` logs are decoded with the registry's symbols and whole units (a
+token the registry does not record is named by its own `symbol()` and `decimals()`), native
+transfers come from the node's `traceTransfers`, wrapping and unwrapping the wrapped native token
+count as moves, and every other log is counted, and listed in full under `--json`. Addresses the
+registry records are named, as are the Pot, its owner and the Kitchen.
+
+An endpoint without `eth_simulateV1` falls back to `eth_call` with state overrides. A Pot that is
+not deployed is then put in place as its deployment would leave it: an `eth_call` creation runs
+the real `Kitchen.deployPot` and returns the Pot's code, and the cook runs from the owner against
+that code, set at the Pot's address by override with its Router's storage word and a new
+contract's nonce. That route reports the result and an estimated gas but no logs, so not what
+moved. The `Rehearsed with …` line names the route taken, and why it fell back.
+
+A revert prints `The cook reverts: <reason>` (or `Deploying the Pot reverts: …`) and exits 1: a
+Pot, Kitchen, Permit2 or Portal error by name, ERC-20's standard errors, `Error(string)`, or
+`the program threw "…"` for a SauceScript `throw` or `require` message. `--json` carries the same
+as fields: `path`, `fallback`, `deployPot`, `assumed`, `gas` and `gasKind` (`used` or
+`estimated`), `returns`, `transfers`, `approvals`, `nativeTransfers`, `balanceChanges` and
+`otherLogs`, amounts as decimal strings in base units with `formatted` whole units beside them —
+or `stage` and `reason` for a revert.
 
 ### Funding a run: `--fund`
 
@@ -203,8 +275,9 @@ Security notes:
   the cook, and the tokens stay in the Pot if the cook fails.
 
 `sauce simulate --fund` rehearses the same wrapped cook, with nothing sent. The pulls carry your
-signature, so give the owner's key (`--keystore` or `--private-key`) to sign them; without a key
-the funding is skipped and a note says so. An approval `run` would ask for is reported, not made,
+signature, so give the owner's key (`--keystore` or `--private-key`) to sign them. Without a key
+the Pot is credited what the pulls would bring instead, by state override
+([Rehearsing](#rehearsing-sauce-simulate)). An approval `run` would ask for is reported, not made,
 and `transfer` mode's transfer is not rehearsed.
 
 ### Pots and salts
@@ -228,7 +301,7 @@ signer. On Solana the owner signs `create_pot`, so there the signer creates its 
 
 `run` and `publish` act for the signer, so the owner is the signer: `--owner` may only restate it,
 and one that names someone else is refused. `simulate`, `tx` and plain `pot` have no signer and
-take `--owner` (or, for `simulate` and `tx`, `--pot <address>`).
+take `--owner` (or, for `simulate` and `tx`, `--pot <address>`, of a deployed Pot).
 
 ### For a wallet: `sauce tx`
 
@@ -377,9 +450,11 @@ There are two ways to get such a file's intents onto the chain:
   Only a file whose intents are fixed when it is built qualifies: every amount a define or a
   literal, and nothing but intents. A file whose intent uses a value measured on chain is refused,
   naming the value and pointing at `sauce run`, and so is one that does anything else.
-  `--dry-run` rehearses the transactions together (`eth_simulateV1`) and sends nothing;
-  `--format json` (or `cast`) prints them unsigned, with `--from <address>` when there is no
-  signer.
+  `--dry-run` rehearses the transactions together (`eth_simulateV1`) and sends nothing, from the
+  signer's wallet or `--from <address>`'s; `--assume-balance USDC:2` (repeatable, `ETH:` for the
+  native currency) gives that wallet the reward for the rehearsal only, by state override, as
+  `simulate` gives a Pot one. `--format json` (or `cast`) prints the transactions unsigned, with
+  `--from <address>` when there is no signer.
 
   `publish` approves the Portal for exactly the reward, and `publishAndFund` spends that approval
   in the next transaction, so no allowance stands once it lands. It does not go through Permit2:
@@ -487,8 +562,14 @@ it. A cook names its Pot by `--owner` and `--salt`, never `--pot`, and `run` ask
 missing one, as on an EVM chain.
 
 **The cook.** The Kitchen's fee is read from the cluster, so there is no `--value`. `simulate`
-simulates the cook from `--owner` with no signature and prints the compute units, or the reason and
-the program logs. `run` signs with `--keypair`, confirms by polling the endpoint (no websocket to
+simulates the cook from `--owner` with signatures unchecked; a Pot the Kitchen has not created yet
+is created by its `create_pot` ahead of the cook, in the same transaction. It prints the compute
+units, or the reason — a program's `throw` or `require` message, decoded from the engine's return
+data — and the program logs. Solana's `simulateTransaction` takes no account overrides, so there
+is no `--assume-balance`: the rehearsal runs on the accounts as they are, and the owner must hold
+the Pot's rent and the fees (a shortfall is named). A cook too large for one transaction is refused
+with the bytes to shrink the payload (the program and its arguments) by, since staging it writes a
+code buffer on chain, which only `run` does. `run` signs with `--keypair`, confirms by polling the endpoint (no websocket to
 configure), and prints the signature, status and compute units — and the logs when it fails. A
 program too large for one transaction is staged in a Kitchen code buffer first and the buffer is
 closed again after the cook — or when staging or the cook's rehearsal fails; if closing it fails,
@@ -505,7 +586,8 @@ engine invocation it made, against the SDK's settle program recompiled for that 
 `sauce publish` does not work from Solana: the SDK has no Kitchen-built path for an intent that
 Solana's Portal runs ([Solana guide](solana.md#svm-destinations-in-eco-intents)). Open the intent
 from an EVM chain; its destination may be Solana. A `main` argument of type `Address` is a 32-byte
-key on Solana, which the command does not encode: take it as an `Account`, or a define.
+public key on Solana: pass it in base58 (or as 32 bytes of hex), and the command encodes the whole
+key as the word the engine reads (ABI-v1 only, not under `--compact-args`).
 
 ## Agent skills
 

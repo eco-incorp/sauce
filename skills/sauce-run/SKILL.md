@@ -59,9 +59,17 @@ Run the project's own copy, `npx sauce <command> --help`, for every option.
    The default `--fund-mode permit2` signs a one-time Permit2 transfer, and the first time per token
    asks to approve Permit2. `simulate --fund` with the owner's key rehearses it.
 5. **Rehearse**:
-   `npx sauce simulate pay.sauce.ts --chain ethereum --owner <address> --config sauce.config.json --args <recipient> 1000000`
-   runs the cook as an `eth_call` from the owner (no key, nothing sent) and prints the gas it needs
-   or the decoded reason it reverts.
+   `npx sauce simulate pay.sauce.ts --chain ethereum --owner <address> --config sauce.config.json --assume-balance USDC:1 --assume-balance USDT:1 --args <recipient> 1000000`
+   runs the cook from the owner with no key and nothing sent, and needs neither a deployed Pot nor
+   a funded one, so it can come before steps 3 and 4. A Pot not deployed yet is deployed in the
+   same rehearsal first: anyone may send a Pot's deployment, and the Pot is the owner's either way.
+   `--assume-balance TOKEN:amount` (repeatable; `ETH:<amount>` for the native currency) gives the
+   Pot that balance for the rehearsal only; a token that keeps no stored balance (rebasing, shares)
+   is refused. `--fund` with no key credits the Pot what its pull would bring. It prints the gas,
+   what the program returns and what the cook did — token transfers and approvals, native
+   transfers, each address's net change — or the decoded reason it reverts, and names the route
+   it took: `eth_simulateV1`, or `eth_call` where the endpoint lacks it, which shows no transfers.
+   `--json` gives the same for a program to read.
 6. **Run**:
    `npx sauce run pay.sauce.ts --chain ethereum --config sauce.config.json --keystore <keystore> --args <recipient> 1000000`
    compiles, rehearses, signs, sends and waits, then prints the hash, status and gas used. A Pot not
