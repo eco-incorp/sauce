@@ -10,6 +10,11 @@
  *   (B) `<Protocol>.<method>(...)`                   — enclosing chain, single default contract
  *   (C) `<Chain>.<Protocol>.<Contract>.<method>(...)` — explicitly named chain
  *   (D) `<Chain>.<Protocol>.<method>(...)`            — named chain, single default contract
+ *   (E) `<Protocol>.<Contract>.at(<address>).<method>(...)` — the contract's ABI at another
+ *       address: how an interface (an ABI with no fixed address, `Erc4626.Vault`) is called, and
+ *       how a deployed contract's ABI reaches another deployment
+ * and, in value position, `<Protocol>.<Contract>` / `<Chain>.<Protocol>.<Contract>` is the
+ * contract's address on that chain — an address-only contract included.
  *
  * Chain qualification chooses an address; it does not change the execution chain or establish
  * ancestry between intents. `chainScope` optionally restricts the chains that may be named.
@@ -130,7 +135,70 @@ function collectAccessorCandidates(
     // head is left completely untouched (isolation).
     if (!isChainKey(head) && resolveNamespace(head) === undefined) return;
     if (path.length < 1 || path.length > 3) return;
+    // `<…>.<Contract>.at(<address>)`: shape E, which `collectBoundCandidates` owns.
+    if (path.length >= 2 && path[path.length - 1] === "at") return;
     out.push({ calleeStart: callee.start, calleeEnd: callee.end, head, path });
+  });
+  return out;
+}
+
+interface BoundCandidate {
+  /** The `<…>.<Contract>.at` callee of the binding call, which the rewrite replaces. */
+  readonly calleeStart: number;
+  readonly calleeEnd: number;
+  readonly head: string;
+  /** The contract path, without the trailing `at`. */
+  readonly path: readonly string[];
+  /** The method called on the bound contract. */
+  readonly method: string;
+}
+
+/**
+ * Collects shape E: `<…>.<Contract>.at(<address>).<method>(...)`. The binding call has to be the
+ * object of a method call, because a bound contract is not a value Sauce can hold: anything else
+ * spelled `<…>.<Contract>.at(...)` on a recognized namespace is refused by name.
+ */
+function collectBoundCandidates(program: AstNode, shadowed: ReadonlySet<string>): BoundCandidate[] {
+  const calledOn = new Map<AstNode, string>();
+  walk(program, (n) => {
+    if (n.type !== "CallExpression") return;
+    const callee = (n as { callee?: AstNode }).callee;
+    if (callee?.type !== "MemberExpression" || (callee as { computed?: boolean }).computed) return;
+    const object = (callee as { object?: AstNode }).object;
+    const property = (callee as { property?: AstNode }).property;
+    if (object?.type === "CallExpression" && property?.type === "Identifier") {
+      calledOn.set(object, (property as unknown as { name: string }).name);
+    }
+  });
+
+  const out: BoundCandidate[] = [];
+  walk(program, (n) => {
+    if (n.type !== "CallExpression") return;
+    const callee = (n as { callee?: AstNode }).callee;
+    if (!callee || callee.type !== "MemberExpression") return;
+    const decomposed = decomposeMemberChain(callee);
+    if (decomposed === undefined) return;
+    const { head, path } = decomposed;
+    if (path.length < 2 || path[path.length - 1] !== "at" || shadowed.has(head)) return;
+    if (!isChainKey(head) && resolveNamespace(head) === undefined) return;
+    const shown = `${head}.${path.join(".")}(...)`;
+    const method = calledOn.get(n);
+    if (method === undefined) {
+      fail(
+        `'${shown}' binds a contract to an address, which is not a value — call a method on it in ` +
+          `the same expression: '${shown}.<method>(...)'`,
+      );
+    }
+    if ((n as { arguments?: unknown[] }).arguments?.length !== 1) {
+      fail(`'${shown}' takes exactly one argument, the address to bind`);
+    }
+    out.push({
+      calleeStart: callee.start,
+      calleeEnd: callee.end,
+      head,
+      path: path.slice(0, -1),
+      method,
+    });
   });
   return out;
 }
@@ -304,7 +372,69 @@ function resolveAccessorTarget(
   const contractSegs = hasMethod ? path.slice(0, path.length - 1) : path; // strip a trailing method
   const shown = hasMethod ? `${head}.${path.join(".")}(...)` : `${head}.${path.join(".")}`;
   const suffix = hasMethod ? ".<method>(...)" : "";
+  const { chain, namespaceHead, protocol, contract, descriptor } = resolveContractReference(
+    head,
+    contractSegs,
+    enclosingChain,
+    chainScope,
+    `'${shown}'`,
+    suffix,
+  );
 
+  if (descriptor.kind === "address-only" && hasMethod) {
+    fail(
+      `${protocol}.${contract} has an address but no ABI vendored for this role (kind: "address-only") — ` +
+        `its address is '${namespaceHead}.${contract}'; see descriptor.coverage.caveats`,
+    );
+  }
+  if (descriptor.kind === "interface") {
+    fail(
+      `${protocol}.${contract} is an interface descriptor (no fixed address) — bind the deployment ` +
+        `to ${hasMethod ? "call" : "use"}: '${namespaceHead}.${contract}.at(<address>).<method>(...)'`,
+    );
+  }
+  if (descriptor.coverage.typeFidelity === "widened" && !allowWidenedSelectors) {
+    fail(
+      `${protocol}.${contract}'s vendored ABI is "widened" (computed selectors do NOT match the deployed ` +
+        `contract) — ${descriptor.coverage.caveats.join("; ")} — pass accessors: { allowWidenedSelectors: true } ` +
+        "to rewrite it anyway",
+    );
+  }
+
+  const address: Address | undefined = addressOn(descriptor, chain);
+  if (address === undefined) {
+    const known = descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)";
+    fail(
+      `Contract '${contract}' (${protocol}) is not deployed on '${chain.slug}' (available: ${known})`,
+    );
+  }
+
+  return { chain, protocol, contract, descriptor, address };
+}
+
+/** A contract reference resolved to its descriptor and the chain it is read on. */
+export interface ContractReference {
+  readonly chain: CanonicalChain;
+  /** The namespace the reference names (`Uniswap`, `UniswapV4`), for messages. */
+  readonly namespaceHead: string;
+  readonly protocol: string;
+  readonly contract: string;
+  readonly descriptor: ContractDescriptor;
+}
+
+/**
+ * Resolves `<Protocol|Family>[.<Contract>]` (`head` and `contractSegs`), or
+ * `<Chain>.<Protocol>[.<Contract>]`, to its descriptor and chain — whether or not the contract is
+ * deployed there, which is the caller's question. `shown` and `suffix` word the shape error.
+ */
+export function resolveContractReference(
+  head: string,
+  contractSegs: readonly string[],
+  enclosingChain: CanonicalChain,
+  chainScope: ReadonlySet<number> | undefined,
+  shown: string,
+  suffix: string,
+): ContractReference {
   let chain: CanonicalChain;
   let nsSegments: readonly string[];
   let namespaceHead: string;
@@ -318,7 +448,7 @@ function resolveAccessorTarget(
       fail(`chain '${chain.slug}' (referenced as '${head}....') is outside the allowed chainScope`);
     }
     if (contractSegs.length < 1 || contractSegs.length > 2) {
-      fail(`'${shown}' -- expected '${head}.<Protocol>[.<Contract>]${suffix}'`);
+      fail(`${shown} -- expected '${head}.<Protocol>[.<Contract>]${suffix}'`);
     }
     namespaceHead = contractSegs[0]!;
     nsSegments = contractSegs.slice(1); // [] (default contract) or [Contract]
@@ -340,18 +470,35 @@ function resolveAccessorTarget(
     contractName,
     namespaceHead,
   );
+  return { chain, namespaceHead, protocol, contract, descriptor };
+}
 
+/** Resolves shape E: the ABI of the named contract, bound to the address the program supplies.
+ *  An interface is allowed here, and a contract need not be deployed on the chain: the address is
+ *  the program's. */
+function resolveBound(
+  candidate: BoundCandidate,
+  enclosingChain: CanonicalChain,
+  chainScope: ReadonlySet<number> | undefined,
+  allowWidenedSelectors: boolean,
+): ResolvedSite {
+  const { head, path, method } = candidate;
+  const shown = `'${head}.${path.join(".")}.at(...).${method}(...)'`;
+  // A bound contract is always named: `<Protocol>.<Contract>`, never a protocol's default.
+  if (path.length !== (isChainKey(head) ? 2 : 1)) {
+    fail(`${shown} -- expected '<Protocol>.<Contract>.at(<address>).<method>(...)'`);
+  }
+  const { protocol, contract, descriptor } = resolveContractReference(
+    head,
+    path,
+    enclosingChain,
+    chainScope,
+    shown,
+    ".at(<address>).<method>(...)",
+  );
   if (descriptor.kind === "address-only") {
     fail(
-      `${protocol}.${contract} has an address but no ABI vendored for this role (kind: "address-only") — ` +
-        `see descriptor.coverage.caveats`,
-    );
-  }
-  if (descriptor.kind === "interface") {
-    fail(
-      `${protocol}.${contract} is an interface descriptor (no fixed address) — this is what the ERC20 ` +
-        "token-member rewrite (options.tokens / token-rewrite.ts) already covers; a protocol-accessor " +
-        `${hasMethod ? "call" : "reference"} needs a concrete deployed instance, not a bare interface`,
+      `${protocol}.${contract} has no ABI vendored (kind: "address-only") — there is nothing to bind`,
     );
   }
   if (descriptor.coverage.typeFidelity === "widened" && !allowWidenedSelectors) {
@@ -361,16 +508,19 @@ function resolveAccessorTarget(
         "to rewrite it anyway",
     );
   }
-
-  const address: Address | undefined = addressOn(descriptor, chain);
-  if (address === undefined) {
-    const known = descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)";
-    fail(
-      `Contract '${contract}' (${protocol}) is not deployed on '${chain.slug}' (available: ${known})`,
-    );
+  const methodDescriptor = methodByName(descriptor, method);
+  if (methodDescriptor === undefined) {
+    const known = descriptor.methods.map((m) => m.name).join(", ");
+    fail(`'${method}' is not in ${protocol}.${contract}'s vendored ABI (known methods: ${known})`);
   }
-
-  return { chain, protocol, contract, descriptor, address };
+  const bindingName = `I${pascalOfSlug(protocol)}_${contract}`;
+  return {
+    start: candidate.calleeStart,
+    end: candidate.calleeEnd,
+    replacement: `${bindingName}.${bindingOpFor(methodDescriptor)}`,
+    bindingName,
+    descriptor,
+  };
 }
 
 /**
@@ -519,9 +669,16 @@ export function rewriteProtocolAccessors(
 
   const candidates = collectAccessorCandidates(program, shadowed);
   const allowWidenedSelectors = opts.allowWidenedSelectors ?? false;
-  const resolved = candidates.map((c) =>
-    resolveCandidate(c, chain, chainScope, allowWidenedSelectors, opts.onContract),
-  );
+  // A bound contract (`.at(<address>)`) is the program's own address with a registry ABI, not a
+  // deployment, so `onContract` hears only the accessors that resolve to one.
+  const resolved = [
+    ...candidates.map((c) =>
+      resolveCandidate(c, chain, chainScope, allowWidenedSelectors, opts.onContract),
+    ),
+    ...collectBoundCandidates(program, shadowed).map((c) =>
+      resolveBound(c, chain, chainScope, allowWidenedSelectors),
+    ),
+  ];
 
   const contracts: ContractsConfig = { ...(opts.existingContracts ?? {}) };
   for (const site of resolved) {

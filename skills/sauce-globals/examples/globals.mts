@@ -75,8 +75,8 @@ check(
   ),
   "Cctp.depositForBurn calls Cctp.TokenMessenger",
 );
-// A namespace absent on the chain is a compile error; its define is simply not set there, so a
-// module constant of that name keeps its default.
+// A namespace absent on the chain is a compile error, unless `available(...)` rules its branch out;
+// a name no chain has is an error either way.
 check(
   rejects("linea", "function main() { require(UniswapV3.Factory != 0n); }"),
   "absent namespace",
@@ -84,9 +84,19 @@ check(
 check(
   !rejects(
     "linea",
-    "const UniswapV3_Factory = 0n; function main() { require(UniswapV3_Factory == 0n); }",
+    "function main() { if (available(UniswapV3.Factory)) { require(UniswapV3.Factory != 0n); } }",
   ),
-  "define default",
+  "available() removes the branch where the chain lacks the contract",
+);
+// It takes a token symbol too: Base registers no USDT, so the guarded transfer is removed there.
+check(rejects("base", "function main() { USDT.transfer(ctx.self(), 1n); }"), "no USDT on Base");
+check(
+  !rejects("base", "function main() { if (available(USDT)) { USDT.transfer(ctx.self(), 1n); } }"),
+  "available(USDT) removes the branch on Base",
+);
+check(
+  rejects("base", "function main() { if (available(UniswapV9.Factory)) { require(false); } }"),
+  "available() of a name no chain has is an error",
 );
 // The Pot's own balance of a symbol, and the chain's id.
 check(

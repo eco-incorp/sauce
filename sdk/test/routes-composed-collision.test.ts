@@ -27,7 +27,9 @@ const names = Object.entries(
   chainAccessors as unknown as Record<string, { chain: { kind: string } }>,
 )
   .filter(([, origin]) => origin.chain.kind === "evm")
-  .map(([name]) => name);
+  .map(([name]) => name)
+  // Monad is kept for the token case below: it has registry tokens (USDC, WMON).
+  .filter((name) => name !== "Monad");
 let next = 0;
 function composeWith(key: string): { name: string; compose: () => unknown } {
   const name = names[next++]!;
@@ -39,7 +41,7 @@ describe("composedChainGlobal: a namespace that collides with the accessor is re
   it.each(["route", "chain"])("an eco-routes accessor key: %s", (key) => {
     const { name, compose } = composeWith(key);
     expect(compose).toThrow(
-      `routes/composed: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`,
+      `routes/composed: '${key}' collides with another name on the '${name}' accessor`,
     );
   });
 
@@ -57,7 +59,14 @@ describe("composedChainGlobal: a namespace that collides with the accessor is re
   ])("a function intrinsic: %s", (key) => {
     const { name, compose } = composeWith(key);
     expect(compose).toThrow(
-      `routes/composed: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`,
+      `routes/composed: '${key}' collides with another name on the '${name}' accessor`,
+    );
+  });
+
+  it("a namespace named like one of the chain's registry tokens", () => {
+    planted = { USDC: { contract: "planted" } };
+    expect(() => composedChainGlobal("Monad")).toThrow(
+      "routes/composed: 'USDC' collides with another name on the 'Monad' accessor",
     );
   });
 

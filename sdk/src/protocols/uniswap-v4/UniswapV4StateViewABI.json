@@ -1,0 +1,307 @@
+{
+  "abi": [
+    {
+      "name": "getSlot0",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sqrtPriceX96",
+          "type": "uint160"
+        },
+        {
+          "name": "tick",
+          "type": "int24"
+        },
+        {
+          "name": "protocolFee",
+          "type": "uint24"
+        },
+        {
+          "name": "lpFee",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "getLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "liquidity",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getTickInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        },
+        {
+          "name": "tick",
+          "type": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "liquidityGross",
+          "type": "uint128"
+        },
+        {
+          "name": "liquidityNet",
+          "type": "int128"
+        },
+        {
+          "name": "feeGrowthOutside0X128",
+          "type": "uint256"
+        },
+        {
+          "name": "feeGrowthOutside1X128",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTickLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        },
+        {
+          "name": "tick",
+          "type": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "liquidityGross",
+          "type": "uint128"
+        },
+        {
+          "name": "liquidityNet",
+          "type": "int128"
+        }
+      ]
+    },
+    {
+      "name": "getTickFeeGrowthOutside",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        },
+        {
+          "name": "tick",
+          "type": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "feeGrowthOutside0X128",
+          "type": "uint256"
+        },
+        {
+          "name": "feeGrowthOutside1X128",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTickBitmap",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        },
+        {
+          "name": "tick",
+          "type": "int16"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tickBitmap",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getFeeGrowthGlobals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "feeGrowthGlobal0",
+          "type": "uint256"
+        },
+        {
+          "name": "feeGrowthGlobal1",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getFeeGrowthInside",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        },
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "feeGrowthInside0X128",
+          "type": "uint256"
+        },
+        {
+          "name": "feeGrowthInside1X128",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPositionInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        },
+        {
+          "name": "positionId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "liquidity",
+          "type": "uint128"
+        },
+        {
+          "name": "feeGrowthInside0LastX128",
+          "type": "uint256"
+        },
+        {
+          "name": "feeGrowthInside1LastX128",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPositionInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "name": "salt",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "liquidity",
+          "type": "uint128"
+        },
+        {
+          "name": "feeGrowthInside0LastX128",
+          "type": "uint256"
+        },
+        {
+          "name": "feeGrowthInside1LastX128",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPositionLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32"
+        },
+        {
+          "name": "positionId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "liquidity",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "poolManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    }
+  ]
+}
