@@ -25,8 +25,10 @@ import {
   getBase64EncodedWireTransaction,
   getBase64Encoder,
   getSignatureFromTransaction,
+  getTransactionDecoder,
   getTransactionSize,
   isAddress,
+  signTransaction,
   TRANSACTION_SIZE_LIMIT,
   type Address,
   type Blockhash,
@@ -344,17 +346,25 @@ export interface SvmSent {
   readonly reason?: string;
   readonly computeUnits?: bigint;
   readonly logs: readonly string[];
+  /** The slot it landed in, where the status said. */
+  readonly slot?: bigint;
+  /** The fee it paid, in lamports, where the node said. */
+  readonly fee?: bigint;
 }
 
-/** Polls until `signature` is confirmed (or a minute passes); its error, or null. */
-async function confirmed(rpc: Rpc, url: string, signature: string): Promise<unknown> {
+/** Polls until `signature` is confirmed (or a minute passes); its error, or null, and its slot. */
+async function confirmed(
+  rpc: Rpc,
+  url: string,
+  signature: string,
+): Promise<{ err: unknown; slot: bigint }> {
   for (let tries = 0; tries < 120; tries++) {
     const { value } = await ask(url, "the transaction's status", () =>
       rpc.getSignatureStatuses([signature as Signature]).send(),
     );
     const status = value[0];
     if (status !== null && status !== undefined && status.confirmationStatus !== "processed") {
-      return status.err;
+      return { err: status.err, slot: BigInt(status.slot) };
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -374,7 +384,7 @@ async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): 
       .send(),
   );
   // The status is the verdict: it is what confirmed, and it carries the error.
-  const statusErr = await confirmed(rpc, url, signature);
+  const { err: statusErr, slot } = await confirmed(rpc, url, signature);
   // The transaction itself — its logs, units and return data — can lag its status on a node.
   let response;
   for (let tries = 0; ; tries++) {
@@ -406,7 +416,43 @@ async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): 
       ? {}
       : { computeUnits: meta.computeUnitsConsumed }),
     logs,
+    slot,
+    ...(meta?.fee === undefined ? {} : { fee: BigInt(meta.fee) }),
   };
+}
+
+/**
+ * Signs a plan's Solana transaction (`lifecycle-svm.ts`: base64, its fresh keys' signatures in, the
+ * fee payer's out) with `signer`, the fee payer, rehearses it as signed and refuses it if it would
+ * fail, then sends it and waits until it is confirmed.
+ */
+export async function sendPlannedSvm(
+  url: string,
+  signer: KeyPairSigner,
+  tx: { readonly feePayer: string; readonly transaction: string; readonly what: string },
+): Promise<SvmSent> {
+  if (tx.feePayer !== signer.address) {
+    throw new CliError(
+      `${tx.what} is paid by ${tx.feePayer}, and the signer is ${signer.address}: build it for the signer`,
+    );
+  }
+  const rpc = createSolanaRpc(url);
+  const decoded = getTransactionDecoder().decode(
+    new Uint8Array(getBase64Encoder().encode(tx.transaction)),
+  );
+  const signed = await signTransaction([signer.keyPair], decoded);
+  const wire = getBase64EncodedWireTransaction(signed);
+  const { value } = await ask(url, `a simulation of ${tx.what}`, () =>
+    rpc.simulateTransaction(wire, { encoding: "base64", sigVerify: true }).send(),
+  );
+  if (value.err !== null) {
+    const logs = value.logs ?? [];
+    throw new CliError(
+      `${tx.what} would fail, so nothing was sent: ${failureReason(value.err, logs)}\n${logs.join("\n")}`,
+    );
+  }
+
+  return sendAndConfirm(rpc, url, signed);
 }
 
 /** Builds, rehearses and sends `instructions` from `signer`, failing with the logs if the

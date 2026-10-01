@@ -8,6 +8,7 @@
  * hash the store holds), the signer and the approval of what it spends, sending, and the store.
  * Given no signer, a command prints the transactions it would send, unsigned, for a wallet.
  */
+import type { KeyPairSigner } from "@solana/kit";
 import { formatUnits, getAddress, type Address, type Hex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
@@ -40,12 +41,16 @@ import {
   publishedIntents,
   txRequest,
   type Ability,
+  type AnyTxJson,
   type Endpoints,
   type IntentRecord,
   type IntentStatus,
   type TxJson,
   type VaultMove,
 } from "./lifecycle.js";
+import { isSvmTx, type SvmTxJson } from "./lifecycle-svm.js";
+import { sendPlannedSvm, type SvmSent } from "./solana.js";
+import { SOLANA_HYPERLANE } from "../svm/portal.js";
 import type { IntentStore, StoreEvent, StoreEventName, StoredIntent } from "./store.js";
 
 const HASH = /^0x[0-9a-fA-F]{64}$/;
@@ -60,6 +65,8 @@ export interface LifecycleContext {
   readonly endpoint: (chain: CanonicalChain) => string | undefined;
   /** The signer, which sends; without one, the transactions are printed unsigned. */
   readonly account?: PrivateKeyAccount;
+  /** `--keypair`: the Solana signer, for a step on Solana (it pays that transaction's fee). */
+  readonly svmSigner?: KeyPairSigner;
   /** Who approves what the command spends beyond gas: `--auto-approve`, or the person asked. */
   readonly approver: Approver;
   /** `--api`: the Eco API gateway, an optional second source of status (and its key). */
@@ -145,17 +152,40 @@ function relative(seconds: string, now: bigint): string {
   return delta < 0n ? `${words} ago` : `in ${words}`;
 }
 
-/** One transaction sent, and what for. */
-interface SentTx {
-  readonly tx: TxJson;
-  readonly result: Sent;
-  readonly time: bigint;
+/** One transaction sent, and what for: an EVM chain's, with its receipt, or Solana's. */
+type SentTx =
+  | { readonly tx: TxJson; readonly result: Sent; readonly time: bigint }
+  | { readonly tx: SvmTxJson; readonly svm: SvmSent; readonly time: bigint };
+
+/** An EVM transaction sent: where the step is on an EVM chain (a claim, a refund). */
+function onEvm(sent: SentTx | undefined): Extract<SentTx, { result: Sent }> {
+  if (sent === undefined || !("result" in sent))
+    throw new Error("internal: not an EVM transaction");
+
+  return sent;
 }
 
-/** Sends `transactions` in order from the signer, each rehearsed first and refused if it would
- *  revert (`sendAndWait`). */
+/** The hash (on Solana the signature) of a sent transaction, and the block (slot) it landed in. */
+const sentHash = (sent: SentTx): string => ("svm" in sent ? sent.svm.signature : sent.result.hash);
+const sentBlock = (sent: SentTx): string =>
+  "svm" in sent ? (sent.svm.slot ?? 0n).toString() : sent.result.blockNumber.toString();
+
+/** The Hyperlane messages a sent transaction dispatched: from an EVM Mailbox's `DispatchId`
+ *  events, or Solana's Mailbox's log line. */
+function messagesOf(sent: SentTx): Array<{ readonly mailbox: string; readonly id: Hex }> {
+  if ("result" in sent) return dispatchedMessages(sent.result.logs);
+
+  return sent.svm.logs.flatMap((line) => {
+    const found = /Dispatched message to \d+, ID (0x[0-9a-f]{64})/.exec(line);
+
+    return found === null ? [] : [{ mailbox: SOLANA_HYPERLANE.mailbox, id: found[1] as Hex }];
+  });
+}
+
+/** Sends `transactions` in order, each rehearsed first and refused if it would fail: an EVM one
+ *  from the signer (`sendAndWait`), a Solana one signed by `--keypair` (`sendPlannedSvm`). */
 async function sendAll(
-  transactions: readonly TxJson[],
+  transactions: readonly AnyTxJson[],
   context: LifecycleContext,
 ): Promise<SentTx[]> {
   const sent: SentTx[] = [];
@@ -163,6 +193,19 @@ async function sendAll(
     const chain = requireChain(tx.chainId);
     const url = context.endpoint(chain);
     if (url === undefined) throw new UsageError(`sending needs ${chain.slug}'s endpoint`);
+    if (isSvmTx(tx)) {
+      if (context.svmSigner === undefined) {
+        throw new UsageError(`${tx.what} is a Solana transaction: sign it with --keypair <path>`);
+      }
+      const result = await sendPlannedSvm(url, context.svmSigner, tx);
+      if (!result.ok) {
+        throw new CliError(
+          `${tx.what}: ${result.signature} failed: ${result.reason ?? "no reason"}`,
+        );
+      }
+      sent.push({ tx, svm: result, time: BigInt(Math.floor(Date.now() / 1000)) });
+      continue;
+    }
     const client = await connect(url, chain);
     const result = await sendAndWait(client, url, context.account!, txRequest(tx));
     if (result.status !== "success") {
@@ -179,31 +222,33 @@ async function sendAll(
 async function approveSpend(
   context: LifecycleContext,
   what: string,
-  transactions: readonly TxJson[],
+  transactions: readonly AnyTxJson[],
 ): Promise<string[]> {
   const spend = transactions.filter((tx) => BigInt(tx.value) > 0n);
   if (spend.length === 0) return [];
+  const from = isSvmTx(transactions[0]!) ? transactions[0].feePayer : context.account!.address;
   const lines = [
-    `${what} sends ${transactions.length} transaction(s) from ${context.account!.address}:`,
+    `${what} sends ${transactions.length} transaction(s) from ${from}:`,
     ...transactions.map((tx, index) => `  ${index + 1}. ${tx.what}`),
-    `It spends ${spend
-      .map(
-        (tx) =>
-          `${formatUnits(BigInt(tx.value), 18)} ${nativeSymbol(requireChain(tx.chainId))} on ${tx.chain}`,
-      )
-      .join(" and ")}, plus gas.`,
+    `It spends ${spend.map(valueText).join(" and ")}, plus ${isSvmTx(spend[0]!) ? "the fee" : "gas"}.`,
   ];
-  const action = `${what.toLowerCase()}: spend ${spend
-    .map(
-      (tx) =>
-        `${formatUnits(BigInt(tx.value), 18)} ${nativeSymbol(requireChain(tx.chainId))} on ${tx.chain}`,
-    )
-    .join(" and ")}`;
+  const action = `${what.toLowerCase()}: spend ${spend.map(valueText).join(" and ")}`;
   const answer = await context.approver.approve(action, `${lines.join("\n")}\nSend them? [y/N] `);
   if (answer === undefined) throw unapproved([action]);
   if (!answer) throw new CliError("not sent: you declined");
 
   return context.approver.auto ? lines : [];
+}
+
+/** What a transaction spends beyond its fee, in its chain's native coin (SOL's 9 decimals on
+ *  Solana), and where. */
+function valueText(tx: AnyTxJson): string {
+  const chain = requireChain(tx.chainId);
+
+  return (
+    `${formatUnits(BigInt(tx.value), chain.kind === "svm" ? 9 : 18)} ${nativeSymbol(chain)} on ` +
+    `${tx.chain}${isSvmTx(tx) ? " (the IGP's gas and the message accounts' rent, as rehearsed)" : ""}`
+  );
 }
 
 /**
@@ -214,23 +259,31 @@ async function approveSpend(
  */
 async function rebuilt(
   context: LifecycleContext,
-  approved: readonly TxJson[],
+  approved: readonly AnyTxJson[],
   build: () => Promise<{
     readonly ready: boolean;
     readonly why?: string;
-    readonly transactions: readonly TxJson[];
+    readonly transactions: readonly AnyTxJson[];
   }>,
-): Promise<readonly TxJson[]> {
-  const total = (transactions: readonly TxJson[]): bigint =>
+): Promise<readonly AnyTxJson[]> {
+  const total = (transactions: readonly AnyTxJson[]): bigint =>
     transactions.reduce((sum, tx) => sum + BigInt(tx.value), 0n);
   if (context.approver.auto || total(approved) === 0n) return approved;
+  // Built again: the fee can move while the question stands, and a Solana blockhash expires.
   const fresh = await build();
   if (!fresh.ready) throw new CliError(`not sent: ${fresh.why ?? "it is no longer ready"}`);
-  if (total(fresh.transactions) > total(approved)) {
-    const native = nativeSymbol(requireChain(approved[0]!.chainId));
+  // A Solana transaction's value is a rehearsal's measure, which moves by a few lamports with the
+  // accounts it creates: within a hundredth, it is the spend approved.
+  const allowed = approved.some(isSvmTx)
+    ? total(approved) + total(approved) / 100n
+    : total(approved);
+  if (total(fresh.transactions) > allowed) {
+    const chain = requireChain(approved[0]!.chainId);
+    const decimals = chain.kind === "svm" ? 9 : 18;
+    const native = nativeSymbol(chain);
     throw new CliError(
-      `not sent: it now takes ${formatUnits(total(fresh.transactions), 18)} ${native} of value, ` +
-        `more than the ${formatUnits(total(approved), 18)} ${native} you approved (the prover's ` +
+      `not sent: it now takes ${formatUnits(total(fresh.transactions), decimals)} ${native} of value, ` +
+        `more than the ${formatUnits(total(approved), decimals)} ${native} you approved (the prover's ` +
         "fee rose): run it again",
     );
   }
@@ -239,7 +292,7 @@ async function rebuilt(
 }
 
 /** The transactions printed for a wallet to sign, when the command has no signer. */
-function unsigned(transactions: readonly TxJson[], what: string): CommandOutput {
+function unsigned(transactions: readonly AnyTxJson[], what: string): CommandOutput {
   return {
     text: JSON.stringify({ transactions }, null, 2),
     json: { sent: false, transactions },
@@ -248,6 +301,20 @@ function unsigned(transactions: readonly TxJson[], what: string): CommandOutput 
         "may), or pass --keystore or --private-key.",
     ],
   };
+}
+
+/** The account that pays a step on `chain`'s Solana side, where it is Solana: the `--keypair`
+ *  signer, which a Solana plan is built for. */
+function svmFrom(chain: CanonicalChain, context: LifecycleContext): { readonly from?: string } {
+  if (chain.kind !== "svm") return {};
+  if (context.svmSigner === undefined) {
+    throw new UsageError(
+      `this step is a transaction on ${chain.slug}, built for the account that pays its fee: ` +
+        "pass --keypair <path>",
+    );
+  }
+
+  return { from: context.svmSigner.address };
 }
 
 /** Records `event` for every intent of `targets`, saving each record first. */
@@ -264,10 +331,14 @@ function remember(
       event,
       chain: sent.tx.chain,
       chainId: sent.tx.chainId,
-      tx: sent.result.hash,
-      block: sent.result.blockNumber.toString(),
+      tx: sentHash(sent),
+      block: sentBlock(sent),
       time: iso(sent.time),
-      ...(context.account === undefined ? {} : { from: context.account.address }),
+      ...("svm" in sent
+        ? { from: sent.tx.feePayer }
+        : context.account === undefined
+          ? {}
+          : { from: context.account.address }),
       ...extra,
     });
   }
@@ -276,7 +347,7 @@ function remember(
 /** What a sent transaction moved, decoded from its logs. */
 async function moved(
   context: LifecycleContext,
-  sent: SentTx,
+  sent: Extract<SentTx, { result: Sent }>,
   known: ReadonlyArray<readonly [Address, string]>,
 ) {
   const chain = requireChain(sent.tx.chainId);
@@ -286,12 +357,21 @@ async function moved(
 }
 
 /** What a sent transaction cost: its receipt's gas (and an OP-stack chain's L1 fee) and value. */
-const costOfSent = (sent: SentTx): Cost | undefined =>
+const costOfSent = (sent: Extract<SentTx, { result: Sent }>): Cost | undefined =>
   sent.result.receipt === undefined
     ? undefined
     : costOf(sent.result.receipt, BigInt(sent.tx.value));
 
 const sentLine = (sent: SentTx): string => {
+  if ("svm" in sent) {
+    return (
+      `${sent.tx.what}: ${sent.svm.signature} on ${sent.tx.chain}, slot ${sent.svm.slot ?? "?"}` +
+      (sent.svm.fee === undefined ? "" : `; fee ${formatUnits(sent.svm.fee, 9)} SOL`) +
+      (BigInt(sent.tx.value) > 0n
+        ? `, and ${formatUnits(BigInt(sent.tx.value), 9)} SOL the IGP's gas and rent`
+        : "")
+    );
+  }
   const cost = costOfSent(sent);
 
   return (
@@ -302,14 +382,25 @@ const sentLine = (sent: SentTx): string => {
   );
 };
 
-const sentJson = (sent: SentTx) => ({
-  ...sent.tx,
-  hash: sent.result.hash,
-  status: sent.result.status,
-  block: sent.result.blockNumber.toString(),
-  gasUsed: sent.result.gasUsed.toString(),
-  ...(costOfSent(sent) === undefined ? {} : { cost: costJson(costOfSent(sent)!) }),
-});
+const sentJson = (sent: SentTx) =>
+  "svm" in sent
+    ? {
+        ...sent.tx,
+        signature: sent.svm.signature,
+        slot: (sent.svm.slot ?? 0n).toString(),
+        ...(sent.svm.fee === undefined ? {} : { fee: sent.svm.fee.toString() }),
+        ...(sent.svm.computeUnits === undefined
+          ? {}
+          : { computeUnits: sent.svm.computeUnits.toString() }),
+      }
+    : {
+        ...sent.tx,
+        hash: sent.result.hash,
+        status: sent.result.status,
+        block: sent.result.blockNumber.toString(),
+        gasUsed: sent.result.gasUsed.toString(),
+        ...(costOfSent(sent) === undefined ? {} : { cost: costJson(costOfSent(sent)!) }),
+      };
 
 const moveText = (move: VaultMove): string =>
   `${move.decimals === undefined ? `${move.amount} (base units)` : formatUnits(BigInt(move.amount), move.decimals)} ` +
@@ -354,7 +445,8 @@ export async function proveCommand(
     }),
   );
   const endpoints = endpointsOf(targets, context);
-  const plan = await buildProve(records, endpoints, { cancelledIn });
+  const payer = svmFrom(requireChain(records[0]!.destination.chainId), context);
+  const plan = await buildProve(records, endpoints, { cancelledIn, ...payer });
   if (!plan.ready) {
     return {
       text: `Not proven: ${plan.why}`,
@@ -367,15 +459,17 @@ export async function proveCommand(
       exitCode: 1,
     };
   }
-  if (context.account === undefined) return unsigned(plan.transactions, "prove");
+  if (context.account === undefined && payer.from === undefined) {
+    return unsigned(plan.transactions, "prove");
+  }
   const shown = await approveSpend(context, "Proving", plan.transactions);
   const [sent] = await sendAll(
     await rebuilt(context, plan.transactions, () =>
-      buildProve(records, endpoints, { cancelledIn }),
+      buildProve(records, endpoints, { cancelledIn, ...payer }),
     ),
     context,
   );
-  const messages = dispatchedMessages(sent!.result.logs);
+  const messages = messagesOf(sent!);
   for (const message of messages)
     remember(context, records, "proving", sent!, { message: message.id });
   if (messages.length === 0) remember(context, records, "proving", sent!);
@@ -427,12 +521,12 @@ export async function claimCommand(
     };
   }
   if (context.account === undefined) return unsigned(plan.transactions, "claim");
-  const [sent] = await sendAll(plan.transactions, context);
+  const sent = onEvm((await sendAll(plan.transactions, context))[0]);
   const claimed = records.filter((record) =>
     plan.claims.some((claim) => claim.intentHash === record.intentHash),
   );
-  remember(context, claimed, "claimed", sent!);
-  const effects = await moved(context, sent!, [
+  remember(context, claimed, "claimed", sent);
+  const effects = await moved(context, sent, [
     [getAddress(records[0]!.source.portal), "Portal"],
     ...plan.claims.map((claim) => [claim.vault, "the intent's vault"] as const),
     ...plan.claims.map((claim) => [claim.claimant, "the claimant"] as const),
@@ -440,7 +534,7 @@ export async function claimCommand(
 
   return {
     text: [
-      sentLine(sent!),
+      sentLine(sent),
       ...plan.claims.flatMap((claim) => [
         `Claimed ${claim.intentHash} for ${claim.claimant}:`,
         ...claim.moves.map((move) => `  ${moveText(move)}`),
@@ -450,7 +544,7 @@ export async function claimCommand(
     json: {
       ready: true,
       sent: true,
-      transactions: [sentJson(sent!)],
+      transactions: [sentJson(sent)],
       claims: plan.claims,
       ...effectsJson(effects),
     },
@@ -486,15 +580,15 @@ export async function refundCommand(
       });
       continue;
     }
-    const [sent] = await sendAll(plan.transactions, context);
-    remember(context, [target.record], "refunded", sent!);
-    const effects = await moved(context, sent!, [
+    const sent = onEvm((await sendAll(plan.transactions, context))[0]);
+    remember(context, [target.record], "refunded", sent);
+    const effects = await moved(context, sent, [
       [getAddress(target.record.source.portal), "Portal"],
       [plan.vault, "the intent's vault"],
       [plan.refundee, "the creator"],
     ]);
     texts.push(
-      sentLine(sent!),
+      sentLine(sent),
       `Refunded ${target.record.intentHash} to its creator ${plan.refundee}:`,
       ...plan.moves.map((move) => `  ${moveText(move)}`),
       ...effectLines(effects),
@@ -503,7 +597,7 @@ export async function refundCommand(
       intentHash: target.record.intentHash,
       ready: true,
       sent: true,
-      transactions: [sentJson(sent!)],
+      transactions: [sentJson(sent)],
       refundee: plan.refundee,
       moves: plan.moves,
       ...effectsJson(effects),
@@ -536,14 +630,15 @@ export async function cancelCommand(
   const notes: string[] = [];
   let failed = false;
   for (const target of targets) {
-    const plan = await buildCancel(target.record, endpoints, { prove: options.prove });
+    const payer = svmFrom(requireChain(target.record.destination.chainId), context);
+    const plan = await buildCancel(target.record, endpoints, { prove: options.prove, ...payer });
     if (!plan.ready) {
       failed = true;
       texts.push(`${target.record.intentHash}: not cancelled: ${plan.why}`);
       json.push({ intentHash: target.record.intentHash, ready: false, why: plan.why });
       continue;
     }
-    if (context.account === undefined) {
+    if (context.account === undefined && payer.from === undefined) {
       texts.push(JSON.stringify({ transactions: plan.transactions }, null, 2));
       json.push({
         intentHash: target.record.intentHash,
@@ -557,12 +652,12 @@ export async function cancelCommand(
     texts.push(...(await approveSpend(context, "Cancelling", plan.transactions)));
     const [sent] = await sendAll(
       await rebuilt(context, plan.transactions, () =>
-        buildCancel(target.record, endpoints, { prove: options.prove }),
+        buildCancel(target.record, endpoints, { prove: options.prove, ...payer }),
       ),
       context,
     );
     remember(context, [target.record], "cancelled", sent!);
-    const messages = dispatchedMessages(sent!.result.logs);
+    const messages = messagesOf(sent!);
     for (const message of messages) {
       remember(context, [target.record], "proving", sent!, { message: message.id });
     }
