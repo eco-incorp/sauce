@@ -148,9 +148,14 @@ For Token-2022 and `TransferChecked`, generate the program from TypeScript with 
   A cook names its Pot by `--owner` (and `--salt`), never `--pot`.
 - **The cook** pays the Kitchen's fee in lamports, read from the cluster, so there is no `--value`.
   `sauce simulate` runs it from `--owner` with no signature and prints the compute units, or the
-  reason and the program logs; `sauce run` signs with `--keypair`; `sauce tx` prints a base64
-  transaction for the owner's wallet.
-- A program too large for one transaction is staged through the Kitchen by `sauce run`.
+  reason (a `throw` or `require` message, decoded) and the program logs. A Pot the Kitchen has not
+  created yet is created in the same simulated transaction, ahead of the cook. Solana's simulation
+  takes no account overrides, so the owner must hold the Pot's rent and the fees, and the accounts
+  hold what they hold: there is no `--assume-balance` on Solana. `sauce run` signs with
+  `--keypair`; `sauce tx` prints a base64 transaction for the owner's wallet.
+- A program too large for one transaction is staged through the Kitchen by `sauce run`. `simulate`
+  and `tx` refuse it, naming how many bytes the payload (the program and its arguments) must
+  shrink by to fit.
 - The engine and Kitchen program ids come from `v12SvmEngineProgramId()` and
   `v12SvmKitchenProgramId()` in `/deployments`; confirm both are deployed on the cluster.
 - `sauce publish` does not work from Solana; open an intent from an EVM chain. A failed `sauce run`

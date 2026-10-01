@@ -210,6 +210,16 @@ function shim(harness: EngineHarness): {
           context,
           value: { blockhash: harness.svm.latestBlockhash(), lastValidBlockHeight: 1_000_000 },
         });
+      case "getBalance":
+        return answer(id, {
+          context,
+          value: Number(harness.svm.getBalance(address(params[0] as string)) ?? 0n),
+        });
+      case "getMinimumBalanceForRentExemption":
+        return answer(
+          id,
+          Number(harness.svm.minimumBalanceForRentExemption(BigInt(params[0] as number))),
+        );
       case "getAccountInfo": {
         const account = harness.svm.getAccount(address(params[0] as string));
 
@@ -542,6 +552,104 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(other.stderr).toMatch(/is not the signer/);
   }, 60_000);
 
+  it("`sauce simulate` reads a revert's message from the engine's return data in the logs", async () => {
+    const keeps = join(work, "keeps.sauce.ts");
+    writeFileSync(
+      keeps,
+      'function main(amount: Uint256) {\n  require(amount < 10n, "Pot would keep under the minimum");\n}\n',
+    );
+    const failed = await sauce(
+      ...["simulate", keeps, "--chain", "solana", "--owner", owner.signer.address],
+      ...["--salt", "vault", "--rpc-url", RPC_URL, "--json", "--args", "50"],
+    );
+    expect(failed.code).toBe(1);
+    expect(JSON.parse(failed.stdout)).toMatchObject({
+      ok: false,
+      reason: 'the program threw "Pot would keep under the minimum"',
+    });
+  }, 60_000);
+
+  it("`sauce simulate` creates a missing Pot in the same transaction as the cook, sending nothing", async () => {
+    const salt = hexToBytes(potSalt("rehearsed"));
+    const pot = await potOf(salt);
+    const { flags } = accountsFor(pot, 1_000n);
+    const before = rpc.sent.length;
+    const run = await sauce(
+      ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+      ...["--salt", "rehearsed", "--rpc-url", RPC_URL, ...flags, "--args", "400"],
+    );
+    expect(run.stderr).toBe("");
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(
+      new RegExp(`^The cook succeeds from ${owner.signer.address}: \\d+ compute units\n`),
+    );
+    expect(run.stdout).toContain(
+      `  1. Kitchen create_pot: Pot ${pot} is not created on solana yet, so the transaction ` +
+        "creates it first, the owner signing and paying its rent\n" +
+        `  2. the cook, from the owner ${owner.signer.address}`,
+    );
+    expect(harness.svm.getAccount(pot).exists).toBe(false);
+    expect(rpc.sent.length).toBe(before);
+
+    // An owner with no lamports cannot pay the rent, and no override can give it any: it is told.
+    const broke = randomAddress();
+    const poor = await sauce(
+      ...["simulate", sweep, "--define", mintDefine, "--owner", broke, "--rpc-url", RPC_URL],
+      ...accountsFor(await (await derivePotPda(KITCHEN, broke, new Uint8Array(32))).address, 1n)
+        .flags,
+      ...["--json", "--args", "1"],
+    );
+    expect(poor.code).toBe(1);
+    expect(JSON.parse(poor.stdout)).toMatchObject({ ok: false, createPot: { owner: broke } });
+    expect(poor.stderr).toMatch(
+      new RegExp(`^${broke} holds 0 lamports, and the cook takes \\d+: \\d+ in rent for the Pot`),
+    );
+    expect(poor.stderr).toContain("Solana's simulateTransaction takes no balance overrides");
+  }, 60_000);
+
+  it("takes a public key for an Address argument, in base58, as the 32-byte word the engine reads", async () => {
+    const key = randomAddress();
+    const hex = bytesToHex(new Uint8Array(getAddressCodec().encode(key)));
+    const checks = join(work, "checks-key.sauce.ts");
+    writeFileSync(
+      checks,
+      `function main(key: Address, keys: Address[]) {\n  require(key == ${hex}n, "not the key");\n  require(keys[1] == ${hex}n, "not the key at 1");\n}\n`,
+    );
+    const base = ["simulate", checks, "--chain", "solana", "--owner", owner.signer.address];
+    const flags = ["--salt", "vault", "--rpc-url", RPC_URL];
+    const ok = await sauce(
+      ...base,
+      ...flags,
+      "--args",
+      key,
+      JSON.stringify([owner.signer.address, key]),
+    );
+    expect(ok.stderr).toBe("");
+    expect(ok.code).toBe(0);
+    // 32 bytes of hex is the same key.
+    const asHex = await sauce(...base, ...flags, "--args-json", JSON.stringify([hex, [hex, hex]]));
+    expect(asHex.code).toBe(0);
+    const other = await sauce(
+      ...base,
+      ...flags,
+      "--args",
+      owner.signer.address,
+      `["${key}","${key}"]`,
+    );
+    expect(other.stdout).toMatch(/^The cook fails: the program threw "not the key"/);
+    const evm = await sauce(
+      ...base,
+      ...flags,
+      "--args",
+      "0x6666666666666666666666666666666666666666",
+      "[]",
+    );
+    expect(evm.code).toBe(2);
+    expect(evm.stderr).toContain(
+      `--args: key: "0x6666666666666666666666666666666666666666" is not a Solana public key (base58, or 32 bytes of hex)`,
+    );
+  }, 60_000);
+
   it("`sauce simulate` rehearses the cook with no key; a failure prints the program logs", async () => {
     const pot = await potOf(hexToBytes(potSalt("vault")));
     const { flags } = accountsFor(pot, 1_000n);
@@ -700,18 +808,23 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     });
     const { codeBuffer } = out.staged as { codeBuffer: Address };
     expect(harness.svm.getAccount(codeBuffer).exists).toBe(false);
-    // Too large for a single unsigned transaction or a simulation: both say to `sauce run`.
-    const tx = await sauce(
-      "tx",
-      big,
-      "--owner",
-      owner.signer.address,
-      "--salt",
-      "vault",
-      "--rpc-url",
-      RPC_URL,
-    );
-    expect(tx.stderr).toMatch(/has to be staged first, which one unsigned transaction cannot do/);
+    // Too large for a single unsigned transaction or a simulation: both say by how much, and that
+    // `sauce run` stages it. A simulation says so before it looks for the Pot.
+    const program = compileSauceProgram("solana", readFileSync(big, "utf8"), {}).bytecode.length;
+    for (const command of ["tx", "simulate"]) {
+      const refused = await sauce(
+        ...[command, big, "--owner", owner.signer.address, "--salt", "absent"],
+        ...["--rpc-url", RPC_URL],
+      );
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toMatch(
+        new RegExp(
+          `the payload \\(the program, with no arguments\\) is ${program} bytes, so its cook is ` +
+            "a (\\d+)-byte transaction, (\\d+) past Solana's 1232\\. .* Shrink the payload by at " +
+            "least \\2 bytes to fit, or let `sauce run` stage it",
+        ),
+      );
+    }
   }, 120_000);
 
   it("`sauce tx` prints the cook unsigned; signed by the owner as printed, it lands", async () => {
