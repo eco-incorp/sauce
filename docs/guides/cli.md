@@ -149,7 +149,8 @@ approved and stops, until it is given `--auto-approve`.
 
 ### A program from stdin
 
-Any command that takes a program file takes `-` for one read from stdin:
+Any command that takes a program file takes `-` for one read from stdin, and so does every command
+that takes an [actions document](#an-actions-document-instead-of-a-program):
 
 ```sh
 cat pay.sauce.ts | npx sauce compile - --chain base --define RECIPIENT=0x… --define AMOUNT=1
