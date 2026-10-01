@@ -17,6 +17,7 @@ import {
   SETTLE_WIRE,
   settlePayload,
 } from "../../sdk/dist/verify/index.js";
+import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES } from "../src/tools.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
@@ -67,7 +68,7 @@ describe("the tool list", () => {
     const { tools } = await mcp.client.listTools();
     assert.deepEqual(
       tools.map((tool) => tool.name),
-      [...TOOL_NAMES],
+      [...TOOL_NAMES, ...SKILL_TOOL_NAMES],
     );
     for (const tool of tools) {
       assert.equal(tool.inputSchema.type, "object", `${tool.name} takes an object`);
@@ -87,7 +88,8 @@ describe("the tool list", () => {
     const instructions = mcp.client.getInstructions() ?? "";
     assert.match(instructions, /NOTHING HERE SIGNS OR SENDS/);
     assert.match(instructions, /sauce:\/\/skills\/index/);
-    assert.match(instructions, /reads no chain/);
+    assert.match(instructions, /has no endpoint of its own/);
+    assert.match(instructions, /rpcUrl/);
   });
 });
 
@@ -310,6 +312,72 @@ describe("sauce_compile", () => {
   });
 });
 
+describe("sauce_actions", () => {
+  const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+  const ROUTER = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
+  const DOCUMENT = {
+    version: 1,
+    chainId: 1,
+    actions: [
+      { type: "argument", name: "amount" },
+      { type: "wrapETH", weth: WETH },
+      { type: "approve", token: WETH, spender: ROUTER },
+    ],
+  };
+
+  it("lowers the document with the shared function, and compiles that source as sauce_compile would", async () => {
+    const out = ok(await mcp.call("sauce_actions", { program: DOCUMENT })) as {
+      source: string;
+      compile: { bytecode: string; chain: string; entryParams: unknown[] };
+      transaction?: unknown;
+    };
+    const { actionSource } = await import("../../actions/dist/source.js");
+    const lowered = actionSource(DOCUMENT);
+    assert.equal(out.source, lowered.source);
+    assert.equal(out.compile.chain, "ethereum");
+    assert.deepEqual(out.compile.entryParams, [{ name: "a_amount", type: "Uint256" }]);
+    assert.equal(out.transaction, undefined, "no Pot given, no transaction");
+    // The same document as JSON text is the same program.
+    const text = ok(await mcp.call("sauce_actions", { program: JSON.stringify(DOCUMENT) }));
+    assert.equal((text.compile as { bytecode: string }).bytecode, out.compile.bytecode);
+  });
+
+  it("builds the unsigned cook for a Pot, with the argument actions as main's arguments", async () => {
+    const out = ok(
+      await mcp.call("sauce_actions", {
+        program: DOCUMENT,
+        owner: OWNER,
+        value: "0",
+        args: ["1000"],
+      }),
+    ) as {
+      compile: { bytecode: string };
+      transaction: { to: string; data: string; value: string };
+    };
+    assert.equal(out.transaction.to, v12PredictPot(OWNER, `0x${"00".repeat(32)}`));
+    assert.equal(out.transaction.value, "0");
+    const cook = decodeFunctionData({ abi: v12PotAbi, data: out.transaction.data as Hex });
+    assert.ok((cook.args[1] as string).startsWith(out.compile.bytecode));
+    assert.ok((cook.args[1] as string).endsWith((1000).toString(16).padStart(64, "0")));
+  });
+
+  it("names each problem in a document, and a chain that is not its chainId", async () => {
+    assert.match(
+      failed(
+        await mcp.call("sauce_actions", {
+          program: { version: 1, chainId: 1, actions: [{ type: "approve", token: "nope" }] },
+        }),
+      ),
+      /actions\[0\]/,
+    );
+    assert.match(
+      failed(await mcp.call("sauce_actions", { program: DOCUMENT, chain: "base" })),
+      /is not the program's chainId 1 \(ethereum\)/,
+    );
+    assert.match(failed(await mcp.call("sauce_actions", { program: "{not json" })), /not JSON/);
+  });
+});
+
 describe("sauce_tx", () => {
   it("builds the unsigned EVM cook on the owner's Pot, with main's arguments", async () => {
     const out = ok(
@@ -378,7 +446,7 @@ describe("sauce_tx", () => {
       }),
     );
     assert.match(solana, /needs an RPC endpoint for solana/);
-    assert.match(solana, /started without one/);
+    assert.match(solana, /Pass rpcUrl with the call/);
   });
 
   it("refuses arguments main does not take, and the wrong kind of Pot input", async () => {
@@ -436,7 +504,7 @@ describe("sauce_simulate", () => {
       }),
     );
     assert.match(message, /Simulating needs an RPC endpoint for base \(chain id 8453\)/);
-    assert.match(message, /--config <file>/);
+    assert.match(message, /Pass rpcUrl with the call/);
   });
 });
 

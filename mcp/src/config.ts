@@ -77,9 +77,10 @@ export function noEndpoint(chain: CanonicalChain, endpoints: Endpoints, what: st
   return new UsageError(
     `${what} needs an RPC endpoint for ${chain.slug} (chain id ${chain.id}), and this server ` +
       (endpoints.chainIds.length === 0
-        ? "was started without one: it reads no chain. Its operator starts it with --config <file>, "
-        : `has none for that chain (it has ${endpoints.chainIds.join(", ")}). Its operator adds one to its --config file, `) +
-      `a JSON object { "rpcUrls": { "${chain.id}": "<url>" } }.`,
+        ? "has none of its own. "
+        : `has none of its own for that chain (it has ${endpoints.chainIds.join(", ")}). `) +
+      "Pass rpcUrl with the call. (Or the server's operator adds the chain to its --config " +
+      `file: { "rpcUrls": { "${chain.id}": "<url>" } }.)`,
   );
 }
 

@@ -4,9 +4,11 @@
  * tx, simulate, pot, globals, inspect, verify, publish — with the same inputs, so the two front
  * ends cannot drift. Nothing here is reimplemented.
  *
- * By relative path into `sdk/dist`, the one spelling that resolves in the repository and in the
- * published tarball, where `mcp/dist` and `sdk/dist` are siblings (as `actions` does).
+ * By relative path into `sdk/dist` (and `actions/dist`), the one spelling that resolves in the
+ * repository and in the published tarball, where `mcp/dist`, `sdk/dist` and `actions/dist` are
+ * siblings (as `actions` reaches the SDK).
  */
+export { actionSource, type ActionSource } from "../../actions/dist/source.js";
 export {
   CliError,
   parseAddress,
@@ -48,7 +50,7 @@ export {
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
-export { PACKAGED_SKILLS } from "../../sdk/dist/cli/skills.js";
+export { PACKAGED_SKILLS, targetsFor as skillTargets } from "../../sdk/dist/cli/skills.js";
 export {
   parseAccounts,
   parsePubkey,
@@ -60,4 +62,8 @@ export {
   type SvmCookInput,
 } from "../../sdk/dist/cli/solana.js";
 export { parsePin, verifyCommand } from "../../sdk/dist/cli/verify.js";
-export { CANONICAL_CHAINS, type CanonicalChain } from "../../sdk/dist/chains/canonical.js";
+export {
+  CANONICAL_CHAINS,
+  chainById,
+  type CanonicalChain,
+} from "../../sdk/dist/chains/canonical.js";

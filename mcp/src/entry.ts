@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "./config.js";
+import { createRpcGuard } from "./guard.js";
 import { DEFAULT_MAX_BODY, endpointUrl, isLoopback, serveHttp } from "./http.js";
 import { UsageError, type McpEntry, type McpServeOptions, type McpSetupOptions } from "./sdk.js";
 import { createSauceServer, packageInfo } from "./server.js";
@@ -40,7 +41,6 @@ function wholeNumber(flag: string, raw: string, min: number, max: number): numbe
 
 async function serve(options: McpServeOptions): Promise<void> {
   const endpoints = readConfig(options.config);
-  const server = () => createSauceServer({ endpoints });
   const maxBody =
     options.maxBody === undefined
       ? DEFAULT_MAX_BODY
@@ -48,8 +48,14 @@ async function serve(options: McpServeOptions): Promise<void> {
   if (options.http === undefined) {
     if (options.host !== undefined) throw new UsageError("--host goes with --http");
     if (options.allowedHosts.length > 0) throw new UsageError("--allowed-host goes with --http");
-    // A message past the bound closes the connection: the stdio transport's own refusal.
-    await server().connect(
+    if (options.allowPrivateRpc) {
+      throw new UsageError(
+        "--allow-private-rpc goes with --http: over stdio a caller's rpcUrl is not guarded at all",
+      );
+    }
+    // Over stdio the caller is the server's own user, on the same machine: its endpoints, local
+    // nodes included, are used as given. A message past the bound closes the connection.
+    await createSauceServer({ endpoints }).connect(
       new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }),
     );
 
@@ -65,12 +71,15 @@ async function serve(options: McpServeOptions): Promise<void> {
         "--allowed-host <name> (or --allowed-host '*' behind a proxy that checks the Host itself)",
     );
   }
+  // One guard for the process: every caller's rpcUrl is reached through it, checked again at
+  // each connection.
+  const guard = createRpcGuard({ allowPrivate: options.allowPrivateRpc });
   const http = await serveHttp({
     port,
     host,
     allowedHosts: options.allowedHosts,
     maxBody,
-    server,
+    server: () => createSauceServer({ endpoints, guard }),
     log: options.log,
   });
   options.log(

@@ -32,6 +32,9 @@ export interface McpServeOptions {
   readonly host?: string;
   readonly allowedHosts: readonly string[];
   readonly maxBody?: string;
+  /** `--allow-private-rpc`: a caller's rpcUrl may be http: or a private address (never link-local
+   *  or a metadata service). Over HTTP only: over stdio a caller's endpoint is not guarded. */
+  readonly allowPrivateRpc: boolean;
   /** Where the server says what it is doing: stderr, never stdout, which stdio's protocol owns. */
   readonly log: (text: string) => void;
 }
@@ -79,6 +82,10 @@ export const MCP_FLAGS: FlagSpecs = {
     value: "<bytes>",
     help: "The largest message it reads, over either transport (default 2 MiB)",
   },
+  "allow-private-rpc": {
+    type: "boolean",
+    help: "With --http: let a caller's rpcUrl be http: or a private address (a private deployment)",
+  },
   agent: {
     type: "string",
     multiple: true,
@@ -110,7 +117,7 @@ async function loadMcp(): Promise<McpEntry> {
   return module.mcpEntry;
 }
 
-const SERVE_ONLY = ["http", "host", "allowed-host", "max-body"] as const;
+const SERVE_ONLY = ["http", "host", "allowed-host", "max-body", "allow-private-rpc"] as const;
 const SETUP_ONLY = ["agent", "dir", "force"] as const;
 
 /** `sauce mcp [setup]`. Prints nothing on stdout while it serves: stdio's protocol owns it. */
@@ -150,6 +157,7 @@ export async function mcpCommand(
     ...(host === undefined ? {} : { host }),
     allowedHosts: repeatedFlag(args, "allowed-host"),
     ...(maxBody === undefined ? {} : { maxBody }),
+    allowPrivateRpc: args.values["allow-private-rpc"] === true,
     log: io.stderr,
   });
 

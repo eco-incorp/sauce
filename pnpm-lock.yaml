@@ -153,6 +153,9 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@eco-incorp/sauce-actions':
+        specifier: workspace:*
+        version: link:../actions
       '@eco-incorp/sauce-source':
         specifier: workspace:*
         version: link:../sdk

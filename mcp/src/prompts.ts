@@ -52,10 +52,11 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
   server.registerPrompt(
     "sauce_write_program",
     {
-      title: "Write and compile a Sauce program",
+      title: "Write, compile and run a Sauce program",
       description:
-        "Write a SauceScript program for a task, compile it, rehearse it, and build the unsigned " +
-        "transaction that runs it.",
+        "Walks an agent through a Sauce program for a task, end to end with this server's " +
+        "tools: read the skills, look up the chain's names, compile, rehearse, and build the " +
+        "unsigned Pot deployment and cook for the user to sign.",
       argsSchema: {
         task: z.string().min(1).max(4000).describe("What the program should do, in plain words."),
         chain: z.string().max(64).optional().describe("The chain it runs on (base, solana, 8453)."),
@@ -71,12 +72,13 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
             text: [
               `Write a Sauce program that does this${chain === undefined ? "" : ` on ${chain}`}: ${task}`,
               "",
-              `Read the Sauce skills first (${readList(skills, ["sauce-overview", "sauce-script", "sauce-run"])}),`,
+              `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, ["sauce-overview", "sauce-script", "sauce-run"])}),`,
               "and follow them. Then, with this server's tools:",
               "1. sauce_globals for the chain: use the token symbols and protocol namespaces it lists",
-              "   rather than writing addresses.",
+              "   rather than writing addresses. (A fixed list of protocol calls can be an action",
+              "   program in JSON instead: sauce_actions.)",
               "2. sauce_compile until the program compiles; read any error and fix the line it names.",
-              "3. sauce_simulate, when sauce_chains shows an endpoint for the chain, to rehearse the",
+              "3. sauce_simulate, with an endpoint (rpcUrl, or the server's own), to rehearse the",
               "   cook from the Pot's owner: check what it moved (or why it reverts) before going on.",
               "4. sauce_pot for the owner's Pot, and its deploy transaction if it is not deployed.",
               "5. sauce_tx for the unsigned cook transaction.",
@@ -95,8 +97,9 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
     {
       title: "Open a cross-chain intent",
       description:
-        "Write a Sauce program that opens a cross-chain intent, and build the unsigned " +
-        "transactions that publish and fund it.",
+        "Walks an agent through a Sauce program that opens a cross-chain intent: read the " +
+        "intents skill, compile with the intent's deadline and creator, and build the unsigned " +
+        "transactions that publish and fund it (or the cook that opens it from a Pot).",
       argsSchema: {
         task: z
           .string()
@@ -120,7 +123,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
                 (destination === undefined ? "" : ` to ${destination}`) +
                 `: ${task}`,
               "",
-              `Read the Sauce skills first (${readList(skills, ["sauce-overview", "sauce-intents"])}),`,
+              `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, ["sauce-overview", "sauce-intents"])}),`,
               "and follow them. Then, with this server's tools:",
               "1. sauce_globals for each chain involved, for its tokens and protocols.",
               "2. sauce_compile with the intent's deadline and creator (intentDeadline,",
@@ -128,7 +131,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   the source alone.",
               "3. For an intent fixed when it is built: sauce_publish for the unsigned approvals and",
               "   Portal.publishAndFund, from the wallet that funds the reward (dryRun to rehearse",
-              "   them where the server has an endpoint). For one that measures a value on chain:",
+              "   them, with an endpoint). For one that measures a value on chain:",
               "   run the program on a Pot with sauce_tx.",
               "Nothing here signs: hand the wallet's owner the unsigned transactions, in order, and",
               "never ask for a private key.",

@@ -103,7 +103,8 @@ export function callReach(endpoints: Endpoints, guard: RpcGuard | undefined): Re
     },
     scrub: (text) => {
       let out = scrub(text);
-      for (const secret of secrets) out = out.replace(new RegExp(escape(secret), "gi"), "[redacted]");
+      for (const secret of secrets)
+        out = out.replace(new RegExp(escape(secret), "gi"), "[redacted]");
 
       return out;
     },

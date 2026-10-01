@@ -5,9 +5,13 @@
  * connection, which is where a URL would surface — in the failure.
  */
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import { createServer, type Server } from "node:http";
 import { after, before, describe, it } from "node:test";
 
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
+import { NO_ENDPOINTS } from "../src/config.js";
+import { callReach } from "../src/reach.js";
 import { errorText } from "../src/tools.js";
 import { connect, endpointsFor, failed, ok, type Connected } from "./harness.js";
 
@@ -40,7 +44,7 @@ describe("a server with endpoints", () => {
       chains.filter((chain) => chain.endpoint).map((chain) => chain.slug),
       ["base", "solana"].sort((a, b) => (a === "base" ? -1 : b === "base" ? 1 : 0)),
     );
-    assert.match(mcp.client.getInstructions() ?? "", /reads chains 8453/);
+    assert.match(mcp.client.getInstructions() ?? "", /own endpoints for chains 8453/);
   });
 
   it("fails every chain read without the URL in the failure", async () => {
@@ -111,5 +115,91 @@ describe("a server with endpoints", () => {
     const text = errorText(new Error(`request to ${EVM_URL} failed; also ${SVM_URL}`));
     assert.ok(!text.includes(SECRET));
     assert.match(text, /\[redacted\]/);
+  });
+});
+
+describe("a caller's own rpcUrl", () => {
+  const KEY = "callers-own-key-0f1e2d3c4b5a69788796";
+  let echo: Server;
+  let url: string;
+  let caller: Connected;
+  before(async () => {
+    // An endpoint that answers every request with an error quoting the URL it was reached at, as
+    // some providers do: the one place an upstream message carries the key back.
+    echo = createServer((req, res) => {
+      let body = "";
+      req.on("data", (chunk: Buffer) => (body += chunk.toString()));
+      req.on("end", () => {
+        const parsed = JSON.parse(body) as { id?: unknown } | Array<{ id?: unknown }>;
+        const id = (Array.isArray(parsed) ? parsed[0]?.id : parsed.id) ?? 1;
+        res.setHeader("content-type", "application/json");
+        res.end(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: { code: -32000, message: `invalid key at ${req.url}` },
+          }),
+        );
+      });
+    });
+    echo.listen(0, "127.0.0.1");
+    await once(echo, "listening");
+    url = `http://127.0.0.1:${(echo.address() as { port: number }).port}/v2/${KEY}`;
+    // The server's own endpoint for base is unreachable: the call's rpcUrl must win.
+    caller = await connect(endpointsFor({ "8453": EVM_URL }));
+  });
+  after(async () => {
+    await caller.close();
+    echo.close();
+  });
+
+  it("is used for the call over the server's own, and never comes back, even quoted upstream", async () => {
+    // The endpoint answered — so the call reached it, not the server's dead one: the server's
+    // endpoint refuses connections, and this one returns an error.
+    assert.match(
+      failed(await caller.call("sauce_pot", { chain: "base", owner: OWNER, rpcUrl: url })),
+      /reading the chain id failed: Missing or invalid parameters/,
+    );
+    failed(await caller.call("sauce_pot", { chain: "solana", owner: SOLANA_OWNER, rpcUrl: url }));
+    for (const name of ["sauce_tx", "sauce_simulate"]) {
+      failed(
+        await caller.call(name, {
+          source: PAY,
+          chain: "base",
+          owner: OWNER,
+          args: [1],
+          rpcUrl: url,
+        }),
+      );
+    }
+    const everything = caller.received.join("\n");
+    assert.ok(!everything.includes(KEY), "the caller's key in no output");
+    assert.ok(!everything.includes(url));
+  });
+
+  it("is taken out of any message that quotes it, whole, normalized, or as its key alone", async () => {
+    const reach = callReach(NO_ENDPOINTS, undefined);
+    const given = `https://Base-Mainnet.example.org/v2/${KEY}?tag=latest`;
+    await reach.endpoint(requireChain("base"), given);
+    const upstream = [
+      `request to ${given} failed`,
+      `POST ${new URL(given).href} 401`,
+      `host base-mainnet.example.org refused key ${KEY}`,
+      `encoded ${encodeURIComponent(KEY)}`,
+    ].join("; ");
+    const scrubbed = reach.scrub(upstream);
+    assert.ok(!scrubbed.toLowerCase().includes(KEY.toLowerCase()), scrubbed);
+    assert.ok(!scrubbed.toLowerCase().includes("base-mainnet.example.org"), scrubbed);
+    // What is not the URL stays: a message still says what failed.
+    assert.match(scrubbed, /^request to \[redacted\] failed; POST \[redacted\] 401/);
+    assert.match(reach.scrub("on solana and base-mainnet"), /on solana and base-mainnet/);
+  });
+
+  it("is refused when it is not an http(s) URL, naming nothing of it", async () => {
+    const message = failed(
+      await caller.call("sauce_pot", { chain: "base", owner: OWNER, rpcUrl: `file:///etc/${KEY}` }),
+    );
+    assert.match(message, /rpcUrl must be an http\(s\) URL/);
+    assert.ok(!message.includes(KEY));
   });
 });

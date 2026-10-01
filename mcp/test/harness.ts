@@ -9,6 +9,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "../src/config.js";
+import type { RpcGuard } from "../src/guard.js";
 import { createSauceServer } from "../src/server.js";
 
 export interface Connected {
@@ -24,8 +25,11 @@ export interface Connected {
 export const endpointsFor = (urls: Record<string, string>): Endpoints =>
   readEndpoints(JSON.stringify({ rpcUrls: urls }), "test.config.json");
 
-export async function connect(endpoints: Endpoints = NO_ENDPOINTS): Promise<Connected> {
-  const server = createSauceServer({ endpoints });
+export async function connect(
+  endpoints: Endpoints = NO_ENDPOINTS,
+  guard?: RpcGuard,
+): Promise<Connected> {
+  const server = createSauceServer({ endpoints, ...(guard === undefined ? {} : { guard }) });
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "sauce-mcp-test", version: "0.0.0" });
   await Promise.all([server.connect(serverSide), client.connect(clientSide)]);

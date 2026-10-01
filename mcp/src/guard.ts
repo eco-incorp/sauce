@@ -87,7 +87,10 @@ function mappedV4(address: string): string | undefined {
 /** Why the guard refuses `address`, or `undefined` when it may be reached. */
 export function blockedAddress(address: string, allowPrivate: boolean): string | undefined {
   const v4 = mappedV4(address);
-  const [ip, family] = v4 !== undefined ? [v4, "ipv4" as const] : [address, isIP(address) === 6 ? ("ipv6" as const) : ("ipv4" as const)];
+  const [ip, family] =
+    v4 !== undefined
+      ? [v4, "ipv4" as const]
+      : [address, isIP(address) === 6 ? ("ipv6" as const) : ("ipv4" as const)];
   if (isIP(ip) === 0) return "is not an IP address";
   if (ALWAYS.check(ip, family)) return "is link-local or a cloud metadata address";
   if (!allowPrivate && PRIVATE.check(ip, family)) {

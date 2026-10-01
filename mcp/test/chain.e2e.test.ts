@@ -166,6 +166,42 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.match(JSON.stringify(out), new RegExp(unsigned.pot as string, "i"));
   });
 
+  it("reaches the chain through the call's rpcUrl, over a server's own endpoint or with none", async () => {
+    // A server whose own endpoint for the chain refuses connections, and one with none at all.
+    for (const endpoints of [
+      endpointsFor({ [String(local.chain.id)]: "http://127.0.0.1:9/dead" }),
+      endpointsFor({}),
+    ]) {
+      const caller = await connect(endpoints);
+      try {
+        const pot = ok(
+          await caller.call("sauce_pot", {
+            chain: "arbitrum",
+            owner: NOBODY,
+            rpcUrl: local.rpcUrl,
+          }),
+        );
+        assert.equal(pot.deployed, false);
+        const rehearsal = ok(
+          await caller.call("sauce_simulate", {
+            ...pay,
+            owner: NOBODY,
+            assumeBalance: ["USDC:2"],
+            rpcUrl: local.rpcUrl,
+          }),
+        );
+        assert.equal(rehearsal.ok, true);
+        const tx = ok(
+          await caller.call("sauce_tx", { ...pay, owner: NOBODY, rpcUrl: local.rpcUrl }),
+        );
+        assert.equal(tx.value, FEE.toString(), "the fee read through the call's endpoint");
+        assert.ok(!caller.received.join("\n").includes(local.rpcUrl.replace("http://", "")));
+      } finally {
+        await caller.close();
+      }
+    }
+  });
+
   it("rehearses an intent's publish from a wallet that does not hold the reward yet", async () => {
     const args = {
       source: INTENT,

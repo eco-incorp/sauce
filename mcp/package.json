@@ -24,6 +24,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@eco-incorp/sauce-actions": "workspace:*",
     "@eco-incorp/sauce-source": "workspace:*",
     "@types/node": "^22.0.0",
     "tsx": "^4.7.0",

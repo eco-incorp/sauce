@@ -7,6 +7,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
@@ -14,6 +15,11 @@ import { PACKAGED_SKILLS } from "./sdk.js";
 
 export const SKILLS_SCHEME = "sauce://skills/";
 export const SKILLS_INDEX = `${SKILLS_SCHEME}index`;
+export const ACTIONS_SCHEMA = "sauce://actions/schema.json";
+/** The schema the package ships beside `actions/dist`, two levels above this module. */
+const ACTIONS_SCHEMA_FILE = fileURLToPath(
+  new URL("../../actions/action-program.schema.json", import.meta.url),
+);
 
 /** One shipped file, as a resource. */
 export interface SkillFile {
@@ -127,12 +133,32 @@ export function registerResources(server: McpServer, dir: string = PACKAGED_SKIL
     {
       title: "Sauce agent skills: index",
       description:
-        "Every Sauce agent skill, what it is for, and the resources it holds. Read it first, " +
-        "then the SKILL.md of the skill a task needs.",
+        "Every Sauce agent skill, when to use it, and the files it holds. Read it first, then " +
+        "the SKILL.md of the skill the task needs (sauce-overview to begin).",
       mimeType: "text/markdown",
     },
     (uri) => ({
       contents: [{ uri: uri.href, mimeType: "text/markdown", text: index() }],
+    }),
+  );
+  server.registerResource(
+    "action-program-schema",
+    ACTIONS_SCHEMA,
+    {
+      title: "Action program JSON Schema",
+      description:
+        "The JSON Schema an action program (the document sauce_actions takes) is validated " +
+        "against: every action type and its fields.",
+      mimeType: "application/schema+json",
+    },
+    (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "application/schema+json",
+          text: readFileSync(ACTIONS_SCHEMA_FILE, "utf8"),
+        },
+      ],
     }),
   );
   for (const skill of skills) {

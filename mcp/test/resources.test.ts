@@ -11,7 +11,7 @@ import { after, before, describe, it } from "node:test";
 
 import { PACKAGED_SKILLS } from "../../sdk/dist/cli/skills.js";
 import { PROMPT_NAMES } from "../src/prompts.js";
-import { SKILLS_INDEX } from "../src/resources.js";
+import { ACTIONS_SCHEMA, SKILLS_INDEX } from "../src/resources.js";
 import { connect, type Connected } from "./harness.js";
 
 /** Every file under the package's skills/, as the package ships it. */
@@ -44,10 +44,11 @@ describe("the skills as resources", () => {
     const uris = resources.map((resource) => resource.uri);
     assert.ok(shipped.length > 0, "the package ships skills");
     assert.deepEqual(
-      uris.filter((uri) => uri !== SKILLS_INDEX).sort(),
+      uris.filter((uri) => uri !== SKILLS_INDEX && uri !== ACTIONS_SCHEMA).sort(),
       shipped.map((path) => `sauce://skills/${path}`),
     );
     assert.ok(uris.includes(SKILLS_INDEX));
+    assert.ok(uris.includes(ACTIONS_SCHEMA), "and the action-program schema");
     for (const resource of resources) {
       assert.ok(resource.mimeType, `${resource.uri} has a type`);
       assert.ok((resource.description ?? "").length > 0, `${resource.uri} is described`);

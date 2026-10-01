@@ -43,8 +43,11 @@ export interface SetupFile {
   readonly state: "wrote" | "added" | "unchanged" | "kept" | "overwrote";
 }
 
-/** The command an agent runs: the package's `sauce mcp`, at this version, through npx. */
-export function launch(input: Pick<SetupInput, "config" | "packageName" | "version">): {
+/** The command an agent runs: the package's `sauce mcp` through npx, at `version` when given
+ *  (else the project's own install, or the latest). */
+export function launch(
+  input: Pick<SetupInput, "config" | "packageName"> & { readonly version?: string },
+): {
   readonly command: string;
   readonly args: readonly string[];
 } {
@@ -52,7 +55,7 @@ export function launch(input: Pick<SetupInput, "config" | "packageName" | "versi
     command: "npx",
     args: [
       "-y",
-      `${input.packageName}@${input.version}`,
+      input.version === undefined ? input.packageName : `${input.packageName}@${input.version}`,
       "mcp",
       ...(input.config === undefined ? [] : ["--config", input.config]),
     ],
@@ -107,6 +110,33 @@ const TARGETS: Readonly<Record<SetupAgent, JsonTarget | TomlTarget>> = {
   },
 };
 
+/** `agent`'s project configuration for the server, as the text `setup` would add: the file,
+ *  and the JSON document or TOML table that names it. */
+export function configSnippet(
+  agent: SetupAgent,
+  launched: ReturnType<typeof launch>,
+): { readonly path: string; readonly text: string } {
+  const target = TARGETS[agent];
+  if (target.kind === "toml") {
+    const quoted = (text: string) => JSON.stringify(text);
+
+    return {
+      path: target.path.split("\\").join("/"),
+      text: [
+        `[mcp_servers.${SERVER_NAME}]`,
+        `command = ${quoted(launched.command)}`,
+        `args = [${launched.args.map(quoted).join(", ")}]`,
+        "",
+      ].join("\n"),
+    };
+  }
+
+  return {
+    path: target.path.split("\\").join("/"),
+    text: `${JSON.stringify({ [target.key]: { [SERVER_NAME]: target.entry(launched) } }, null, 2)}\n`,
+  };
+}
+
 const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 function writeJson(project: string, target: JsonTarget, input: SetupInput): SetupFile["state"] {
@@ -142,17 +172,7 @@ function writeJson(project: string, target: JsonTarget, input: SetupInput): Setu
 }
 
 /** The `[mcp_servers.sauce]` table, as TOML. */
-function tomlBlock(input: SetupInput): string {
-  const launched = launch(input);
-  const quoted = (text: string) => JSON.stringify(text);
-
-  return [
-    `[mcp_servers.${SERVER_NAME}]`,
-    `command = ${quoted(launched.command)}`,
-    `args = [${launched.args.map(quoted).join(", ")}]`,
-    "",
-  ].join("\n");
-}
+const tomlBlock = (input: SetupInput): string => configSnippet("codex", launch(input)).text;
 
 const TABLE = new RegExp(`^\\[mcp_servers\\.${SERVER_NAME}\\]\\s*$`, "m");
 /** The same server written another way TOML allows — a quoted or spaced header, a comment after
