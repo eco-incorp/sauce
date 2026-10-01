@@ -17,7 +17,10 @@ import type { LoweredIntent } from "../routes/intent-sugar.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, kitchenFee, potState } from "./chain.js";
 
-const COOK = toFunctionSelector(v12PotAbi.find((item) => item.name === "cook")!);
+type PotFunction = Extract<(typeof v12PotAbi)[number], { type: "function" }>;
+const COOK = toFunctionSelector(
+  v12PotAbi.find((item): item is PotFunction => item.type === "function" && item.name === "cook")!,
+);
 
 /** An intent whose route runs a program: the cook its route calls, and on what. */
 export interface IntentCook {
