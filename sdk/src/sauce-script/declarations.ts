@@ -7,6 +7,8 @@
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;
+ * - every `@sauce/` library the SDK serves but `@sauce/token` (`@sauce/router`), as a module of
+ *   its exported functions, typed from their own SauceScript annotations;
  * - then the catch-alls: another JSON ABI, another `@sauce/` library.
  *
  * The language itself — types, builtins, value methods, `@sauce/token` — is the hand-written
@@ -20,7 +22,9 @@
 import IERC20 from "../artifacts/IERC20.json" with { type: "json" };
 import ISauceRouter from "../artifacts/ISauceRouter.json" with { type: "json" };
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
-import { PROTOCOL_ABIS } from "../embedded/sources.generated.js";
+import { PROTOCOL_ABIS, STD_SOURCES } from "../embedded/sources.generated.js";
+import type { AstNode } from "../routes/ast-walk.js";
+import { parseSauce } from "../routes/parse.js";
 import { sourceGlobals } from "../routes/source-globals.js";
 
 interface AbiParameter {
@@ -107,6 +111,70 @@ function bindingType(abi: unknown): string {
   return `{\n${methods.join("\n")}\n    }`;
 }
 
+/** A SauceScript annotation (`Address`, `Uint256[]`, `Account<Writable>`) as the declared type of a
+ *  library function's parameter (`input`) or result. An unannotated parameter is a number. */
+function annotatedType(annotation: string | undefined, input: boolean): string {
+  if (annotation === undefined) return input ? "SauceInt" : "any";
+  const type = annotation.trim();
+  const array = /^(.*)\[\]$/.exec(type);
+  if (array) {
+    const element = annotatedType(array[1], input);
+
+    return input
+      ? `(ReadonlyArray<${element}> | SauceArray<${element}>)`
+      : `SauceArray<${element}>`;
+  }
+  if (/^(Address|Uint256|u?int\d*|number|bigint)$/.test(type)) return input ? "SauceInt" : "bigint";
+  if (/^(bool|boolean)$/.test(type)) return "boolean";
+  if (/^(bytes|string)$/.test(type)) return input ? "SauceData" : "SauceBytes";
+  if (/^Account\b/.test(type) || type === "void") return type;
+
+  return "any";
+}
+
+/**
+ * The `@sauce/<name>` libraries the SDK serves, each as a module of its exported functions, every
+ * target's arm merged (a function whose arms differ is overloaded). `@sauce/token` is left to
+ * builtins.d.ts, which declares its functions as the globals a program calls with no import.
+ */
+function libraryModules(): string[] {
+  const libraries = new Map<string, Set<string>>();
+  for (const [path, source] of Object.entries(STD_SOURCES)) {
+    const arm = /^([\w-]+)\/\1\.(evm|svm)\.js$/.exec(path);
+    if (arm === null || arm[1] === "token") continue;
+    const functions = libraries.get(arm[1]!) ?? new Set<string>();
+    libraries.set(arm[1]!, functions);
+    const annotation = (node: unknown): string | undefined => {
+      const type = (node as { typeAnnotation?: AstNode } | undefined)?.typeAnnotation;
+
+      return type === undefined ? undefined : source.slice(type.start, type.end);
+    };
+    for (const statement of (parseSauce(source) as unknown as { body: AstNode[] }).body) {
+      const declared = statement.declaration as AstNode | undefined;
+      if (statement.type !== "ExportNamedDeclaration" || declared?.type !== "FunctionDeclaration") {
+        continue;
+      }
+      const params = (declared.params as AstNode[]).map(
+        (param, index) =>
+          `${typeof param.name === "string" ? param.name : `arg${index}`}: ` +
+          annotatedType(annotation(param.typeAnnotation), true),
+      );
+      const result = annotatedType(annotation(declared.returnType), false);
+      functions.add(
+        `  export function ${(declared.id as AstNode).name as string}(${params.join(", ")}): ${result};`,
+      );
+    }
+  }
+
+  return [...libraries].flatMap(([name, functions]) => [
+    `/** \`@sauce/${name}\`, a SauceScript library the package serves. */`,
+    `declare module "@sauce/${name}" {`,
+    ...[...functions].sort(),
+    "}",
+    "",
+  ]);
+}
+
 /** The generated `index.d.ts`. */
 export function sauceScriptDeclarations(): string {
   const namespaces = new Set<string>();
@@ -177,6 +245,7 @@ export function sauceScriptDeclarations(): string {
       ];
     }),
     "",
+    ...libraryModules(),
     // Last: of the patterns a specifier matches TypeScript takes the first declared, so these
     // catch only what no module above names.
     '/** A JSON ABI beside the program, imported as a contract: `import ERC20 from "./ERC20.json"`. */',
@@ -185,12 +254,8 @@ export function sauceScriptDeclarations(): string {
     "  export default contract;",
     "}",
     "",
-    "/** A SauceScript library the package serves (`@sauce/<name>`) these declarations do not",
-    " *  describe. */",
-    'declare module "@sauce/*" {',
-    "  const library: any;",
-    "  export = library;",
-    "}",
+    "/** A `@sauce/<name>` library these declarations do not describe: any import from it. */",
+    'declare module "@sauce/*";',
     "",
   ].join("\n");
 }
