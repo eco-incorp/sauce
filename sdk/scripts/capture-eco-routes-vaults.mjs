@@ -11,7 +11,8 @@
 // see; the test fails on an uncovered Portal it is not told about.
 //
 // RPC endpoints come only from the file `--rpc-config` names: a JSON object mapping each chain id to
-// its URL, `{ "<chainId>": "<url>" }`, the same file `capture-registry-abi.mjs` takes. There is no
+// its URL, `{ "<chainId>": "<url>" }`, the same file `capture-registry-abi.mjs` takes (or the
+// `sauce` command's `--config` file, `{ "rpcUrls": { "<chainId>": "<url>" } }`). There is no
 // default and no public fallback, and nothing is read from the environment. No URL is ever written to
 // the fixture, and a failed request's message is reported without it.
 import { readFileSync, writeFileSync } from "node:fs";
@@ -52,8 +53,11 @@ const RPC_URLS = (() => {
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     fail(`--rpc-config ${RPC_CONFIG_PATH} must be a JSON object of chain id -> RPC URL`);
   }
+  // The `sauce` command's `--config` shape, `{ "rpcUrls": { … } }`, is taken as well.
+  const table =
+    parsed.rpcUrls !== null && typeof parsed.rpcUrls === "object" ? parsed.rpcUrls : parsed;
   const urls = new Map();
-  for (const [key, value] of Object.entries(parsed)) {
+  for (const [key, value] of Object.entries(table)) {
     if (!/^[1-9][0-9]*$/.test(key)) fail(`--rpc-config: "${key}" is not a chain id`);
     // A value still holding the example's `<…>` placeholder is not configured.
     if (typeof value === "string" && /^https?:\/\//.test(value)) urls.set(Number(key), value);
