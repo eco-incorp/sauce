@@ -806,6 +806,36 @@ npx sauce intent cancel 0x<intent hash> --config sauce.config.json --keystore ~/
   sends `cancelAndProve` instead, proving at once.
 
 With no signer, each prints its transactions unsigned, for a wallet to send in order.
+
+### An intent to Solana
+
+An intent an EVM chain publishes for Solana (eco-routes' Solana deposit addresses publish one per
+deposit) is filled, proven and cancelled through Solana's Portal program, and claimed or refunded on
+its source like any other. Store it from the transaction that published it, then:
+
+```sh
+npx sauce intent import 0x<tx hash> --chain arbitrum --config sauce.config.json
+npx sauce intent fill 0x<intent hash> --config sauce.config.json --solver <solana key> --claimant 0xYou
+npx sauce intent fill 0x<intent hash> --config sauce.config.json --claimant 0xYou \
+  --send --keypair ~/.config/solana/id.json
+npx sauce intent claim 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
+```
+
+- The config names Solana's endpoint under its chain id, `1399811149`, beside the source's.
+- **`fill`** sends `Portal.fulfill` from the solver: its token accounts pay the route's tokens into
+  the Portal's executor, which runs the route's calls. The rehearsal runs on the accounts as they
+  are (Solana's simulation takes no overrides, so `--solver` names a Solana key whose accounts
+  hold the tokens) and prints the token accounts the fill moves. `--claimant`, the address on the
+  source chain the reward pays, is required: a Solana key is not one. With `--send` and
+  `--keypair` the fill is sent, then its proof: the Portal's `prove` through the HyperProver, with
+  eco-routes' proof_helper paying Hyperlane's Interchain Gas Paymaster for the message's delivery in
+  the same transaction. What the proof spends (the gas paymaster's quote and the message accounts'
+  rent) is measured by a rehearsal and approved. `--no-prove` leaves it to `prove`.
+- **`prove`** and **`cancel`** sign with `--keypair`, which pays their fee: their transactions are
+  built for it, so on Solana they need it. A cancellation's proof waits until the slot that
+  cancelled it is finalized; `--and-prove` sends the cancellation and its proof in one transaction.
+- **`claim`** and **`refund`** are the source chain's, as for any intent.
+
 `sauce intent status <file | hash>` reads the intent on both chains and prints its state —
 `unfunded`, `funded`, `filled`, `cancelled`, `proven`, `cancelProven`, `claimed` or `refunded` —
 its deadlines, and for fill, prove, claim, refund and cancel whether it can be done now, why not,
@@ -974,9 +1004,9 @@ engine invocation it made, against the SDK's settle program recompiled for that 
 (`svm.verifySvmSettleExecution`). It rejects with `TX_FAILED` (the transaction failed),
 `NO_SETTLE` or `NOT_GENUINE`.
 
-`sauce intent publish` does not work from Solana: the SDK has no Kitchen-built path for an intent that
-Solana's Portal runs ([Solana guide](solana.md#svm-destinations-in-eco-intents)). Open the intent
-from an EVM chain; its destination may be Solana. A `main` argument of type `Address` is a 32-byte
+`sauce intent publish` does not work from Solana: open the intent from an EVM chain; its
+destination may be Solana, and `sauce intent fill`, `prove` and `cancel` act on it there
+([An intent to Solana](#an-intent-to-solana)). A `main` argument of type `Address` is a 32-byte
 public key on Solana: pass it in base58 (or as 32 bytes of hex), and the command encodes the whole
 key as the word the engine reads (ABI-v1 only, not under `--compact-args`).
 

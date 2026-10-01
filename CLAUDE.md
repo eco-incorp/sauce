@@ -627,6 +627,19 @@ it imports only Node's modules, so `cli-store.test.ts` runs it in child processe
 `cli-lifecycle.e2e.test.ts` runs a whole intent on two anvils with eco-routes' own Portal and
 HyperProver (`eco-routes-anvil.ts`, immutables rewritten where the Portal, its Executor and vault
 implementation name each other); only Hyperlane's relay is mocked (`evm/fixtures/MockMailbox.sol`).
+An intent to Solana goes the same way, its Solana steps in `lifecycle-svm.ts` (the fulfill
+marker read, each fill, proof or cancellation built as an `SvmTxJson`: a base64 transaction, the
+fee payer's signature empty, the fresh Hyperlane keys a proof needs already signed; `buildFill`,
+`buildProve` and `buildCancel` take the Solana key as `from`) over `svm/portal.ts`'s pure
+instructions, and `intent-svm.ts` for the fill's rehearsal and `--keypair` sending. A route
+can cook on the Portal executor's Kitchen Pot (`svmIntentCookInstruction`); its calls must be
+committed with the flags the fill TRANSACTION gives each account (`svmRouteCalls`), which the
+Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from the pinned dump
+`test/fixtures/eco-routes-svm/` (`scripts/dump-eco-routes-svm.mjs --redump|--check
+--rpc-config <file>`, the sha256 of each program and account in its `manifest.json`, held by
+`eco-routes-svm-fixture.test.ts`; `--check` fails on a program upgrade and reports the Mailbox's
+and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
+it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
 `actions.ts` takes an actions document as a program operand: `sauce actions` prints what it lowers
 to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as an ordinary
 `ProgramInput` (the generated source, plus its ABI bindings in `contracts`). It loads
