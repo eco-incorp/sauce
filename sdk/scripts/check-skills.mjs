@@ -451,11 +451,10 @@ const KNOWN_ADDRESSES = new Set();
     if (typeof value === "object") for (const v of Object.values(value)) collect(v, depth + 1);
   };
   collect(sdk.routes.TOKEN_REGISTRY);
-  for (const slug of sdk.listProtocolSlugs()) {
-    try {
-      collect((await load(`${PKG}/protocols/${slug}`)).deployments);
-    } catch {}
-  }
+  const modules = await Promise.all(
+    sdk.listProtocolSlugs().map((slug) => load(`${PKG}/protocols/${slug}`).catch(() => ({}))),
+  );
+  for (const module of modules) collect(module.deployments);
   collect(deploymentsApi.v12DeployedAddresses());
   for (const chain of sdk.CANONICAL_CHAINS) {
     for (const lookup of ["ecoRoutesPortal", "ecoRoutesExecutor"]) {
@@ -474,16 +473,31 @@ const KNOWN_ADDRESSES = new Set();
 // recorded-address rule hold for what this package writes itself, not for those documents.
 const PROTOCOL_DOCUMENTS = join(SKILLS_DIR, "sauce-protocols", "references");
 const handWritten = (file) => !file.startsWith(PROTOCOL_DOCUMENTS + "/");
-// The generated references record what the registries hold, a Portal included.
-const GENERATED = new Set(
-  [
-    "sauce-globals/references/tokens.md",
-    "sauce-globals/references/protocols.md",
-    "sauce-globals/references/chains.md",
-  ].map((name) => join(SKILLS_DIR, name)),
+// Every generated reference, rendered from the package the skills resolve, once: section 8 holds
+// the files on disk to it, and the wording rules exempt exactly these files from the Portal rule
+// (they record what the registries hold, a chain's eco-routes deployment included).
+const REFERENCES = await skillsReferences(
+  {
+    sdk,
+    ecoRoutes,
+    deployments: deploymentsApi,
+    cctp: await load(`${PKG}/protocols/cctp`),
+    compiler: compilerApi,
+    loadProtocol: (slug) => load(`${PKG}/protocols/${slug}`),
+  },
+  (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
 );
-const isGenerated = (file) =>
-  GENERATED.has(file) || GENERATED_DIRS.some((sub) => file.startsWith(join(SKILLS_DIR, sub) + "/"));
+const RENDERED = renderSkillsReferences(REFERENCES);
+const GENERATED = new Set(Object.keys(RENDERED).map((name) => join(SKILLS_DIR, name)));
+const isGenerated = (file) => GENERATED.has(file);
+// A heading's anchor, as GitHub and the docs check derive it.
+const anchors = (file) =>
+  [...read(file).matchAll(/^#{1,6}\s+(.+)$/gm)].map((heading) =>
+    heading[1]
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+      .replace(/\s/g, "-"),
+  );
 
 function wording(skill, file) {
   const text = read(file);
@@ -504,10 +518,13 @@ function wording(skill, file) {
       if (!resolve(dirname(file), m[0]).startsWith(SKILLS_DIR + "/"))
         fail(where(i), `names ${m[0]}, a path that leaves the skills directory`);
     }
-    for (const m of line.matchAll(/\]\(([^)\s#]+)(?:#[^)\s]*)?\)/g)) {
-      if (/^[a-z]+:/i.test(m[1])) continue;
-      if (!existsSync(resolve(dirname(file), m[1])))
-        fail(where(i), `links ${m[1]}, which does not exist`);
+    for (const m of line.matchAll(/\]\(([^)\s#]*)(?:#([^)\s]*))?\)/g)) {
+      const [, path, fragment] = m;
+      if (/^[a-z]+:/i.test(path)) continue;
+      const target = path ? resolve(dirname(file), path) : file;
+      if (!existsSync(target)) fail(where(i), `links ${path}, which does not exist`);
+      else if (fragment && target.endsWith(".md") && !anchors(target).includes(fragment))
+        fail(where(i), `links ${path}#${fragment}, a heading ${rel(target)} does not have`);
     }
     if (skill.dir !== PACKAGE_SKILL && PACKAGE_DOCS.test(line))
       fail(
@@ -551,13 +568,14 @@ const SWAP_POINTER =
   "price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools " +
   "under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.";
 const swapDocuments = [];
-for (const info of sdk.listProtocols()) {
+const protocolList = sdk.listProtocols();
+const protocolModules = await Promise.all(
+  protocolList.map((info) => load(`${PKG}/protocols/${info.slug}`).catch(() => ({}))),
+);
+for (const [index, info] of protocolList.entries()) {
   const path = join(PROTOCOL_DOCUMENTS, `${info.slug}.md`);
   if (!existsSync(path)) continue;
-  let module = {};
-  try {
-    module = await load(`${PKG}/protocols/${info.slug}`);
-  } catch {}
+  const module = protocolModules[index];
   const templates = Object.entries(module)
     .filter(([, value]) => typeof value === "string")
     .map(([name]) => name);
@@ -1052,21 +1070,10 @@ for (const [dir, names] of Object.entries(UNDECLARED_NAMES)) {
 }
 
 // ---- 8. The index of globals: fresh, compilable, and covering every use ---------------------------------
-const REFERENCES = await skillsReferences(
-  {
-    sdk,
-    ecoRoutes,
-    deployments: deploymentsApi,
-    cctp: await load(`${PKG}/protocols/cctp`),
-    compiler: compilerApi,
-    loadProtocol: (slug) => load(`${PKG}/protocols/${slug}`),
-  },
-  (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
-);
 const GLOBALS = REFERENCES.globals;
 const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
 {
-  const files = renderSkillsReferences(REFERENCES);
+  const files = RENDERED;
   for (const [name, text] of Object.entries(files)) {
     const path = join(SKILLS_DIR, name);
     if (!existsSync(path) || read(path) !== text)

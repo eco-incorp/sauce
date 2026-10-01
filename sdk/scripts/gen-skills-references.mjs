@@ -222,11 +222,12 @@ export async function skillsReferences(api, documented) {
     familyMembers.set(name, [...(familyMembers.get(name) ?? []), slug].sort());
 
   const protocols = [];
-  for (const info of sdk.listProtocols()) {
-    let module = {};
-    try {
-      module = await loadProtocol(info.slug);
-    } catch {}
+  const listed = sdk.listProtocols();
+  const modules = await Promise.all(
+    listed.map((info) => loadProtocol(info.slug).catch(() => ({}))),
+  );
+  for (const [index, info] of listed.entries()) {
+    const module = modules[index];
     const exports = abiExports(module).map((e) => ({ ...e, served: served(info.slug, e.name) }));
     const evidence = targets[info.slug] ?? {};
     const exportFor = (role, chainId) =>
