@@ -29,7 +29,7 @@ const owner = address("owner");
 const salt = `0x${"00".repeat(32)}` as const; // one Pot per owner and salt
 const pot = v12PredictPot(owner, salt);
 const deploy = routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner, salt });
-// Send deploy ({ to: deploy.target, data: deploy.data }) where the chain has no code at `pot`.
+// Send deploy ({ to, data, value }) where the chain has no code at `pot`.
 
 // 2. The program, compiled for its chain with that chain's names, as `sauce compile` does.
 const source = `function main(recipient: Address, floor: Uint256) {
@@ -52,10 +52,7 @@ check(
   decoded.functionName === "cook" && decoded.args?.[1] === payload,
   "the cook carries program and arguments",
 );
-check(
-  getAddress(deploy.target) === getAddress(v12GateKitchen()),
-  "the Pot is deployed through the Kitchen",
-);
+check(deploy.to === getAddress(v12GateKitchen()), "the Pot is deployed through the Kitchen");
 
 // 5. Solana: the packaged engine and Kitchen binaries a local harness loads (Node-only paths).
 const artifacts = svmEngineArtifacts("devnet");

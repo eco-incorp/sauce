@@ -78,6 +78,7 @@ export {
   sauceEvmDeployPotCall,
 } from "./sauce-calls.js";
 export type {
+  SauceEvmCall,
   SauceEvmCallParams,
   SauceEvmCallsParams,
   SauceEvmDeployPotCallParams,
