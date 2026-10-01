@@ -48,6 +48,22 @@ Native coin: USDC is also the ERC-20 `USDC`, one balance: 18 decimals natively, 
 - `USDC`: `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`, 6 decimals
 - `WETH`: `0x82aF49447D8a07e3bd95BD0d56f35241523fBab1`, 18 decimals
 
+## Solana (`solana`, 1399811149)
+
+A symbol is the mint's 32-byte key, a value for the `@sauce/token` functions
+(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token
+methods (`USDC.transfer(...)`) are EVM-only.
+
+- `USDC`: mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, key `0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`, 6 decimals
+- `USDT`: mint `Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`, key `0xce010e60afedb22717bd63192f54145a3f965a33bb82d2c7029eb2ce1e208264`, 6 decimals
+- `WSOL`: mint `So11111111111111111111111111111111111111112`, key `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001`, 9 decimals
+
+On devnet, pass a mint that differs as a define, which wins over the symbol
+(`--define USDC=<key>`):
+
+- `USDC`: mint `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`, key `0x3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7`, 6 decimals
+- `WSOL`: mint `So11111111111111111111111111111111111111112`, key `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001`, 9 decimals
+
 ## Token functions
 
 Every program can call these `@sauce/token` functions with no import. The EVM writes are
@@ -68,6 +84,7 @@ On EVM chains:
 On Solana:
 
 - `balanceOf(token: Address, account: Account): Uint256`
+- `ownerOf(token: Address, account: Account): Address`
 - `totalSupply(token: Account): Uint256`
 - `decimals(token: Account): Uint256`
 - `allowance(token: Address, account: Account, spender: Address): Uint256`

@@ -4,9 +4,21 @@
  * encodes it with this ABI's tuple, while `hashIntent` hashes it with `encode.ts`'s
  * `EVM_REWARD_PARAM`. Two tuples that disagree give calldata that encodes cleanly, sends cleanly,
  * and publishes an intent under a hash nobody computed.
+ *
+ * Its events and errors are pinned against the deployed Portal by `registry-abi.test.ts`; what is
+ * here is the one consumer the SDK has of them, the `sauce` CLI's revert reasons.
  */
-import { encodeAbiParameters, getAbiItem, type Abi, type AbiFunction } from "viem";
+import {
+  encodeAbiParameters,
+  encodeErrorResult,
+  getAbiItem,
+  keccak256,
+  toFunctionSelector,
+  type Abi,
+  type AbiFunction,
+} from "viem";
 
+import { revertReason } from "../src/cli/chain.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { ecoRoutesGenerations } from "../src/protocols/eco-routes/lookup.js";
 import { EVM_REWARD_PARAM } from "../src/routes/encode.js";
@@ -59,6 +71,29 @@ describe("the registered Portal ABI is the one the SDK encodes against", () => {
       const item = getAbiItem({ abi: PortalABI as unknown as Abi, name }) as AbiFunction;
       expect(item.inputs.map((input) => input.type)).toContain("bytes");
     }
+  });
+});
+
+describe("a Portal revert reads by name", () => {
+  // `publishAndFund(..., allowPartial = false)` with the reward not fully funded: what an agent's
+  // `sauce publish --dry-run` met as bare revert data while the ABI declared no errors.
+  const intentHash = keccak256("0x01");
+  const data = encodeErrorResult({
+    abi: PortalABI,
+    errorName: "InsufficientFunds",
+    args: [intentHash],
+  });
+
+  it("InsufficientFunds is the selector the deployed Portal reverts with", () => {
+    expect(data.slice(0, 10)).toBe(toFunctionSelector("InsufficientFunds(bytes32)"));
+    expect(data.slice(0, 10)).toBe("0x07b90620");
+  });
+
+  it("the CLI names it, with its argument", () => {
+    // viem's error chain carries the node's revert data as `data`; `revertReason` walks to it.
+    expect(revertReason({ message: "execution reverted", data })).toBe(
+      `InsufficientFunds(${intentHash})`,
+    );
   });
 });
 

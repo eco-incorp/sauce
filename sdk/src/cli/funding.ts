@@ -75,6 +75,12 @@ const NATIVE = /^(eth|native)$/i;
  * decimals.
  */
 export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: string): FundRequest {
+  // Solana registers mints by symbol too, but nothing here can pull one: say so, not "unknown".
+  if (chain.kind !== "evm") {
+    throw new UsageError(
+      `${flag} is for EVM chains: on ${chain.slug} a program spends from the accounts it is given`,
+    );
+  }
   const at = raw.lastIndexOf(":");
   const what = raw.slice(0, at).trim();
   const amount = raw.slice(at + 1).trim();
@@ -98,9 +104,7 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
   if (isAddress(what, { strict: false })) {
     return { raw, token: getAddress(what), label: getAddress(what), amount: parsed };
   }
-  const row = (chain.kind === "evm" ? (TOKEN_REGISTRY[chain.id] ?? []) : []).find(
-    (entry) => entry.symbol === what.toUpperCase(),
-  );
+  const row = (TOKEN_REGISTRY[chain.id] ?? []).find((entry) => entry.symbol === what.toUpperCase());
   if (row === undefined) {
     throw new UsageError(
       `${flag} ${raw}: ${what} is not a token ${chain.slug} registers` +
