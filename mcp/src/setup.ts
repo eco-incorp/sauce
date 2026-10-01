@@ -1,5 +1,5 @@
 /**
- * `sauce-mcp setup`: this server added to a project for the coding agents that read a
+ * `sauce mcp setup`: this server added to a project for the coding agents that read a
  * project-scoped MCP configuration, each in the file and shape its vendor documents:
  *
  * - `claude`: `.mcp.json`, `mcpServers` (code.claude.com/docs/en/mcp, project scope).

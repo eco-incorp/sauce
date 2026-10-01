@@ -2,7 +2,7 @@
  * What a command's input means, given as plain values: the chain a program runs on, whether its
  * defines reach it, the Pot a cook runs on, and the funding and assumed balances a cook carries.
  *
- * `run.ts` reads these values from the command line and `sauce-mcp` (`mcp/`) from a tool's
+ * `run.ts` reads these values from the command line and `sauce mcp` (`mcp/`) from a tool's
  * arguments; both hand them here, so the rules are one set whichever front end a program comes
  * through. The messages name the CLI's flags, which the MCP tools mirror by name.
  */

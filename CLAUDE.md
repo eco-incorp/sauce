@@ -25,7 +25,7 @@ everything from one name.
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
 | `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents                                                               |
-| `mcp/`       | `@eco-incorp/sauce-mcp`       | bin `sauce-mcp`                                                                                                                                       | The Sauce MCP server: the `sauce` command's read-only tools, the agent skills as resources                |
+| `mcp/`       | `@eco-incorp/sauce-mcp`       | `sauce mcp` (loaded by the `sauce` bin)                                                                                                               | The Sauce MCP server: the `sauce` command's read-only tools, the agent skills as resources                |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                              |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
@@ -510,24 +510,36 @@ cook names, its funding and assumed balances — lives in `inputs.ts`, taking pl
 second front end applies the same rules: `run.ts` reads flags into it, and the MCP server reads
 tool arguments into it.
 
-**The `sauce-mcp` bin** (`mcp/`, built to `mcp/dist/main.js`) is the MCP server: the `sauce`
-command's read-only half as tools (`sauce_compile`, `sauce_tx`, `sauce_pot`, `sauce_simulate`,
-`sauce_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`, `sauce_price`,
-`sauce_chains`), over stdio by default or stateless Streamable HTTP with `--http`. Each tool calls the function the matching
-command calls (`compileCommand`, `txCommand`, `simulateCommand`, …) and returns its JSON as
-structured content, so a change to a command reaches its tool with no edit in `mcp/`; do not
-reimplement command logic there. It never signs and takes no key under any name (`tools.test.ts`
-fails a tool input that looks like one). It reads no environment and ships no endpoint: chains come
-only from `--config`, whose URLs are registered with `signer.ts#secret` at start and scrubbed from
-every result, error and log (`secrets.test.ts`). A program's relative imports are served only from
-the call's `modules`, never from the server's disk. The agent skills are resources at
-`sauce://skills/<path>` read from `skills/` as shipped, with an index; nothing in `mcp/` names a
-particular skill except the two prompts, which embed one only when it exists. `sauce-mcp setup`
-writes each coding agent's documented project config (`.mcp.json`, `.codex/config.toml`,
-`.cursor/mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`). Its tests use the node test
-runner (`pnpm --filter './mcp' test`); `chain.e2e.test.ts` runs the tools against an anvil with the
-released stack through `sdk/test/cli-anvil.ts`, gated on `SAUCE_V12_RUNTIME_CREATION_HEX` like the
-CLI's chain suites. The consumer guide is `docs/guides/mcp.md`.
+**`sauce mcp`** is the MCP server (`mcp/`, built to `mcp/dist`). It is a CLI command, not a bin
+of its own, so `npx -y @eco-incorp/sauce mcp` self-hosts it in one command. `sdk/src/cli/mcp.ts`
+owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript does not follow
+(so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
+MCP SDK); `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
+Its tools are the `sauce` command's read-only half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
+`sauce_pot`, `sauce_simulate`, `sauce_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
+`sauce_price`, `sauce_chains` — plus the skills as tools (`sauce_skills`, `sauce_skill`,
+`sauce_dev`, `sauce_install_skills`), because many clients never read resources. Each command tool
+calls the function the matching command calls (`compileCommand`, `txCommand`, `simulateCommand`, …)
+and returns its JSON as structured content, so a change to a command reaches its tool with no edit
+in `mcp/`; do not reimplement command logic there. `sauce_actions` lowers a document with
+`actions/src/source.ts#actionSource`, the one function a CLI command for actions should share.
+
+It never signs and takes no key under any name (`tools.test.ts` fails a tool input that looks like
+one), and reads no environment. A tool reads a chain through the call's own `rpcUrl`, else the
+`--config` endpoint, else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
+the server's are registered with `signer.ts#secret` at start — all scrubbed from every result,
+error and log (`secrets.test.ts`). Over HTTP a caller's URL goes only through `guard.ts`: https,
+no private/ULA/link-local/CGNAT/metadata address, checked again at each connection (rebinding),
+no redirects, bounded; `--allow-private-rpc` relaxes it. Over stdio there is no guard. A program's
+relative imports are served only from the call's `modules`, never from the server's disk; skill
+files only by exact match against what `skills/` ships. Nothing in `mcp/` names a particular skill
+except the prompts and `sauce_dev` (sauce-typescript), which degrade when it is missing. `sauce mcp
+setup` writes each coding agent's documented project config (`.mcp.json`, `.codex/config.toml`,
+`.cursor/mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`). Its tests use the node test runner
+(`pnpm --filter './mcp' test`, which builds `mcp/dist` first, since `transports.test.ts` runs the
+built `sauce mcp`); `chain.e2e.test.ts` runs the tools against an anvil with the released stack
+through `sdk/test/cli-anvil.ts`, gated on `SAUCE_V12_RUNTIME_CREATION_HEX` like the CLI's chain
+suites. The consumer guide is `docs/guides/mcp.md`.
 
 ## Agent skills
 
