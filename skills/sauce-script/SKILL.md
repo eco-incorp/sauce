@@ -180,6 +180,43 @@ removed:
   "must be initialized with a literal". A `const` array there is a lookup table, read only at a
   literal index (`FEES[0]`), never looped over. Declare arrays and computed values inside a function.
 
+## Calling a contract
+
+Call a contract by name, in this order of preference:
+
+1. **A namespace**, for a protocol contract the chain's registry records:
+   `UniswapV3.Factory.getPool(...)`, `AaveV3.Pool.supply(...)`, typed by the registry's ABI, its
+   address the chain's. `AaveV3.Pool.at(address)` calls the same contract at another address. The
+   chain's file in `sauce-chains`, or `sauce globals --chain <chain> --protocol <namespace>`, lists
+   each namespace's contracts and methods.
+2. **A registry ABI import**, for a contract the registry has an ABI of but no namespace on the
+   chain, such as any ERC-4626 vault: `import VaultABI from "./protocols/erc4626/VaultABI.json"`,
+   then `VaultABI.at(vault).convertToAssets(shares)`. Each protocol's registry page in
+   `sauce-protocols` gives its import line.
+3. **The program's own ABI**, for a contract no registry knows: a JSON ABI file beside the program,
+   holding only the functions the program calls, with the deployed contract's types from its
+   verified source, imported by relative path: `import IPool from "./IPool.json"`, then
+   `IPool.at(pool).slot0()`. The `sauce` command reads it from beside the file; through the MCP
+   server, pass it in `modules` with the program (`{ "IPool.json": "<its JSON>" }`).
+   [examples/pool-state.sauce.ts](examples/pool-state.sauce.ts) reads a pool through
+   [examples/IPool.json](examples/IPool.json).
+
+Never call through `evm.static` (or `evm.call`) with a hex selector where one of these is
+possible: the typed call encodes the arguments, decodes the result and names its fields. Take only
+what you need from a result: `const [sqrtPriceX96] = IPool.at(pool).slot0();` and
+`IPool.at(pool).slot0().sqrtPriceX96` both read the first field alone.
+
+```sauce chain=base,ethereum
+import VaultABI from "./protocols/erc4626/VaultABI.json";
+
+function main(vault: Address, shares: Uint256): Uint256 {
+  // A namespace: the factory the chain's registry records.
+  require(UniswapV3.Factory.getPool(WETH, USDC, 500n) != 0n, "no WETH/USDC 0.05% pool");
+  // A registry ABI, for a vault the registry does not name.
+  return VaultABI.at(vault).convertToAssets(shares);
+}
+```
+
 ## Functions
 
 - **Call what exists directly.** Typed bindings, namespaces and library functions are called as
@@ -189,6 +226,22 @@ removed:
   real logic used more than once.
 - Helpers are top-level `function` declarations, annotated on the signature. They may call each
   other and recurse; `main` is never called.
+- **A helper that returns a value returns it on every path**: an `if` with a `return` and no
+  `else`, or a loop that may end without one, fails the compile with "does not return on every
+  path". End the helper with a `return`.
+
+```sauce fails chain=base
+function larger(a: Uint256, b: Uint256): Uint256 {
+  if (a > b) {
+    return a;
+  }
+}
+
+function main(a: Uint256, b: Uint256): Uint256 {
+  return larger(a, b);
+}
+```
+
 - **Arrays and records are passed by reference**: a helper that writes `xs[i] = v` changes the
   caller's array, so a helper can fill an array it is given. Numbers, bools and bytes are copies.
 - **A comparison is a `bool`, but a function with no return annotation returns a number**, even

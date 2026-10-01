@@ -4,6 +4,7 @@
  * the tools are the command's functions, and a tool that drifted from its command would show here.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, before, describe, it } from "node:test";
 
 import { decodeFunctionData, getAddress, type Hex } from "viem";
@@ -213,6 +214,23 @@ describe("sauce_price", () => {
 });
 
 describe("sauce_compile", () => {
+  it("compiles a program with its own ABI beside it, given in modules", async () => {
+    // The sauce-script skill's example: the factory a namespace, the pool through ./IPool.json.
+    const examples = new URL("../../skills/sauce-script/examples/", import.meta.url);
+    const source = readFileSync(new URL("pool-state.sauce.ts", examples), "utf8");
+    const abi = readFileSync(new URL("IPool.json", examples), "utf8");
+    const out = ok(
+      await mcp.call("sauce_compile", { source, chain: "base", modules: { "IPool.json": abi } }),
+    );
+    assert.match(out.bytecode as string, /^0x[0-9a-f]+$/);
+    assert.deepEqual(
+      (out.entryParams as Array<{ name: string }>).map((param) => param.name),
+      ["tokenA", "tokenB", "fee"],
+    );
+    // Without the module, the import has nothing to resolve to.
+    assert.match(failed(await mcp.call("sauce_compile", { source, chain: "base" })), /IPool\.json/);
+  });
+
   it("compiles a program file that starts with a #! line as the file without it", async () => {
     const program = "function main(to: Address) {\n  USDC.transfer(to, 1n);\n}\n";
     const plain = ok(await mcp.call("sauce_compile", { source: program, chain: "base" }));

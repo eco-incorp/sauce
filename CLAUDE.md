@@ -742,8 +742,9 @@ supported chain.
 copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauce-globals`,
 `sauce-chains`, `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`,
 `sauce-solana`, `sauce-cli`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index.
-Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents and `.mts`
-runners) and, for six of them, `references/`.
+Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents — or a
+contract ABI, a JSON array, that a program beside it imports — and `.mts` runners) and, for six of
+them, `references/`.
 
 - **One set of protocol documents.** `skills/sauce-protocols/references/*.md` is the only copy of
   the per-protocol documents. `gen-embedded-sources.mjs` embeds them (top-level `*.md` only) for

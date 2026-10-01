@@ -25,7 +25,8 @@
 //      pointer to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program and actions document names the chains it
-//      is checked on there, one of them at least a chain the release supports;
+//      is checked on there, one of them at least a chain the release supports; a contract's ABI
+//      (`.json`, a JSON array) is a module a program beside it imports, not an example of its own;
 //   4. every program's header says how to run it: a usage line (`--chain <chain>`) whose `--args`
 //      are `main`'s parameters by name, `<name>` each, in order; a line per parameter
 //      (`//   name: Type  meaning and units`); and an example line on a supported chain with real
@@ -340,9 +341,25 @@ function parseSkill(dir) {
     examples: files.map((f) => join(examplesDir, f)),
     runners: files.filter((f) => f.endsWith(".mts")).map((f) => join(examplesDir, f)),
     programs: files.filter((f) => f.endsWith(".sauce.ts")).map((f) => join(examplesDir, f)),
-    documents: files.filter((f) => f.endsWith(".json")).map((f) => join(examplesDir, f)),
+    // A `.json` example is an actions document, or — a JSON array — a contract's ABI that a
+    // program beside it imports (`import IPool from "./IPool.json"`): a module, not an example.
+    documents: files
+      .filter((f) => f.endsWith(".json") && !isAbi(join(examplesDir, f)))
+      .map((f) => join(examplesDir, f)),
+    abis: files
+      .filter((f) => f.endsWith(".json") && isAbi(join(examplesDir, f)))
+      .map((f) => join(examplesDir, f)),
   };
 }
+/** Whether a `.json` file is a contract's ABI: a JSON array, which is no actions document. */
+function isAbi(file) {
+  try {
+    return Array.isArray(JSON.parse(read(file)));
+  } catch {
+    return false;
+  }
+}
+
 const skills = readdirSync(SKILLS_DIR)
   .filter((d) => statSync(join(SKILLS_DIR, d)).isDirectory())
   .sort()
@@ -704,6 +721,12 @@ for (const skill of skills) {
         "an example is a program (.sauce.ts), an actions document (.json) or a runner (.mts)",
       );
   }
+  // An ABI is a module: a program beside it imports it, by the relative path that resolves to it.
+  for (const abi of skill.abis) {
+    const name = basename(abi);
+    if (!skill.programs.some((file) => read(file).includes(`from "./${name}"`)))
+      fail(rel(abi), `is a contract's ABI that no program beside it imports ("./${name}")`);
+  }
   // References: `examples/<file>` (its own) or `../<skill>/examples/<file>` (another skill's).
   const refs = [
     ...skill.text.matchAll(
@@ -745,8 +768,13 @@ if (index !== undefined) {
       programChains.set(entry, chains);
     }
   }
+  // An ABI is listed with the program that imports it, not as an example of its own.
+  const abis = new Set(
+    skills.flatMap((skill) => skill.abis.map((f) => relative(SKILLS_DIR, f).split("\\").join("/"))),
+  );
   for (const example of allExamples)
-    if (!listed.has(example)) fail(rel(index.path), `does not list ${example}`);
+    if (!listed.has(example) && !abis.has(example))
+      fail(rel(index.path), `does not list ${example}`);
   for (const entry of listed)
     if (!allExamples.has(entry)) fail(rel(index.path), `lists ${entry}, which does not exist`);
 }
