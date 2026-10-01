@@ -1,6 +1,6 @@
 /**
  * Shared AST plumbing for the routes/ source-rewrite passes still left (`intent-sugar.ts`,
- * `intent-body.ts`, `available.ts`), over the tree `parse.ts` produces. Its shadow check is
+ * `intent-body.ts`), over the tree `parse.ts` produces. Its shadow check is
  * deliberately coarse — whole-program and conservative, not real lexical scoping.
  */
 export interface AstNode {
