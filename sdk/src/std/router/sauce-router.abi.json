@@ -1,0 +1,202 @@
+{
+  "$comment": "The Sauce Router's swapV3, swapV4 and unified swap, copied from the ISauceRouter ABI the kitchen-evm release publishes (sdk/src/artifacts/ISauceRouter.json after a sync). A Pot's fallback delegatecalls its Router, so a program calls these on ctx.self(). test/std/router/compile.test.ts holds each fragment equal to the released ABI's.",
+  "abi": [
+    {
+      "name": "swapV3",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        },
+        {
+          "name": "tokenIn",
+          "type": "address"
+        },
+        {
+          "name": "tokenOut",
+          "type": "address"
+        },
+        {
+          "name": "amountSpecified",
+          "type": "int256"
+        },
+        {
+          "name": "sqrtPriceLimitX96",
+          "type": "uint160"
+        },
+        {
+          "name": "payer",
+          "type": "address"
+        },
+        {
+          "name": "recipient",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "int256"
+        },
+        {
+          "name": "amount1",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "swapV4",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolManager",
+          "type": "address"
+        },
+        {
+          "name": "key",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "currency0",
+              "type": "address"
+            },
+            {
+              "name": "currency1",
+              "type": "address"
+            },
+            {
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "name": "tickSpacing",
+              "type": "int24"
+            },
+            {
+              "name": "hooks",
+              "type": "address"
+            }
+          ]
+        },
+        {
+          "name": "zeroForOne",
+          "type": "bool"
+        },
+        {
+          "name": "amountSpecified",
+          "type": "int256"
+        },
+        {
+          "name": "sqrtPriceLimitX96",
+          "type": "uint160"
+        },
+        {
+          "name": "payer",
+          "type": "address"
+        },
+        {
+          "name": "recipient",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "int256"
+        },
+        {
+          "name": "amount1",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "poolType",
+              "type": "uint8"
+            },
+            {
+              "name": "pool",
+              "type": "address"
+            },
+            {
+              "name": "poolKey",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "currency0",
+                  "type": "address"
+                },
+                {
+                  "name": "currency1",
+                  "type": "address"
+                },
+                {
+                  "name": "fee",
+                  "type": "uint24"
+                },
+                {
+                  "name": "tickSpacing",
+                  "type": "int24"
+                },
+                {
+                  "name": "hooks",
+                  "type": "address"
+                }
+              ]
+            },
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "name": "amountSpecified",
+              "type": "int256"
+            },
+            {
+              "name": "sqrtPriceLimitX96",
+              "type": "uint160"
+            },
+            {
+              "name": "payer",
+              "type": "address"
+            },
+            {
+              "name": "recipient",
+              "type": "address"
+            },
+            {
+              "name": "callback",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "int256"
+        },
+        {
+          "name": "amount1",
+          "type": "int256"
+        }
+      ]
+    }
+  ]
+}

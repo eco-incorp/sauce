@@ -1,7 +1,11 @@
 /**
  * Every action type, EXECUTED against the deployed mainnet contracts it names, through the released
  * engine and a real Pot — on a local anvil holding Ethereum mainnet state captured at the pinned
- * block (`mainnet.ts`). No RPC is reached; the last test fails if any action type did not run.
+ * block (`mainnet.ts`). No RPC is reached; the last test fails if any action type did not run here
+ * or, for the venues Ethereum does not have, in the suite on the chain that does.
+ *
+ * The Router venues `@sauce/router` serves — Uniswap V3 and V4, Maverick V2 — are also called
+ * straight from a Sauce program here, on the same pools, and must deliver what their actions do.
  *
  * Each test funds the Pot (native ETH is preset; an ERC-20 is written into its balance slot, or
  * produced by an earlier action in the same program) and checks what the action changed on-chain.
@@ -9,12 +13,14 @@
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  concat,
   decodeEventLog,
   encodeAbiParameters,
   keccak256,
   pad,
   parseAbi,
   parseEther,
+  toBytes,
   toHex,
   type Abi,
   type Address,
@@ -26,6 +32,7 @@ import { ACTION_TYPES } from "../src/spec.js";
 import type { Action, ActionType } from "../src/types.js";
 import { skipReason, startAnvil, type Anvil } from "./anvil.js";
 import { capturing, DEADLINE, PINNED_TIMESTAMP } from "./mainnet.js";
+import { call, compileSource, compileStandalone, routerProgram } from "./swap-venues.js";
 
 // ---- Ethereum mainnet, at the pinned block ----------------------------------------------------
 
@@ -38,9 +45,13 @@ const WSTETH = "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0";
 const RETH = "0xae78736Cd615f374D3085123A210448E74Fc6393";
 const EETH = "0x35fA164735182de50811E8e2E824cFb9B6118ac2";
 
-const SWAP_ROUTER_02 = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
-const UNIVERSAL_ROUTER = "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af";
-const UNISWAP_V2_ROUTER = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
+/** Uniswap V3's USDC/WETH 0.05% pool, and its USDC/USDT 0.01% pool. */
+const UNIV3_USDC_WETH_500 = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640";
+const UNIV3_USDC_USDT_100 = "0x3416cF6C708Da44DB2624D63ea0AAef7113527C6";
+/** Uniswap V4's PoolManager. */
+const POOL_MANAGER = "0x000000000004444c5dc75cB358380D2e3dE08A90";
+/** Uniswap V2's USDC/WETH pair. */
+const UNIV2_USDC_WETH = "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc";
 const CURVE_3POOL = "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7";
 const CURVE_ROUTER_NG = "0xF0d4c12A5768D806021F80a262B4d39d26C58b8D";
 const BALANCER_V2_VAULT = "0xBA12222222228d8Ba445958a75a0704d566BF2C8";
@@ -56,7 +67,6 @@ const DODO_APPROVE = "0xCB859eA579b28e02B87A1FDE08d087ab9dbE5149";
 /** A DODO V1 Classical WETH/USDC pair, and a DODO V2 WETH/USDC pool (base WETH). */
 const DODO_V1_WETH_USDC = "0x75c23271661d9d143DCb617222BC4BEc783eff34";
 const DODO_V2_WETH_USDC = "0x8B2F062d112aE1ac6Ccc6C358cc40C9518c847Dc";
-const MAVERICK_V2_ROUTER = "0x62e31802c6145A2D5E842EeD8efe01fC224422fA";
 /** A Maverick V2 USDC/USDT pool; token A is USDC. */
 const MAVERICK_USDC_USDT = "0x31373595F40Ea48a7aAb6CBCB0d377C6066E2dCA";
 const CARBON_CONTROLLER = "0xC537e898CD774e2dCBa3B14Ea6f34C93d5eA45e1";
@@ -86,7 +96,26 @@ const AAVE_V3_AUSDC = "0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c";
 const COMET_USDC = "0xc3d688B66703497DAA19211EEdff47f25384cdc3";
 
 /** The storage slot of each funded token's `balances` mapping. */
-const BALANCE_SLOT: Record<string, bigint> = { [USDC]: 9n, [USDT]: 2n, [WSTETH]: 0n };
+const BALANCE_SLOT: Record<string, bigint> = {
+  [WETH]: 3n,
+  [USDC]: 9n,
+  [USDT]: 2n,
+  [WSTETH]: 0n,
+};
+
+/** Uniswap V4's USDC/USDT pool at 0.001%: its PoolManager and its key, less the two currencies. */
+const V4_USDC_USDT = {
+  poolManager: POOL_MANAGER,
+  fee: 10,
+  tickSpacing: 1,
+  hooks: "0x0000000000000000000000000000000000000000",
+} as const;
+
+/** Action types whose venue Ethereum lacks, and the suite that executes each on its own chain. */
+const EXECUTED_ELSEWHERE: Partial<Record<ActionType, string>> = {
+  traderJoeLBSwap: "swap-avalanche.mainnet.test.ts",
+  woofiSwap: "swap-base.mainnet.test.ts",
+};
 
 /** Receives outputs a test checks: an address nothing else touches. */
 const RECEIVER = "0x000000000000000000000000000000000000c0DE";
@@ -230,54 +259,56 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
   // ---- swaps --------------------------------------------------------------------------------
 
   describe("swaps", () => {
-    it("uniswapV3ExactInput sells WETH for USDC, paid to the recipient", async () => {
+    it("uniswapV3Swap sells WETH for USDC through the Pot's Router, paid to the recipient", async () => {
       await run([
-        ...wrapAndApprove(ONE_ETH, SWAP_ROUTER_02),
+        { type: "wrapETH", amount: `${ONE_ETH}`, weth: WETH },
         {
-          type: "uniswapV3ExactInput",
-          router: SWAP_ROUTER_02,
+          type: "uniswapV3Swap",
+          pool: UNIV3_USDC_WETH_500,
           tokenIn: WETH,
           tokenOut: USDC,
-          fee: 500,
           amountOutMin: "1000000000",
           recipient: RECEIVER,
         },
       ]);
       assert.ok((await balance(USDC, RECEIVER)) > 1_000_000_000n);
+      assert.equal(await balance(WETH, env.pot), 0n, "the Router paid the whole input");
     });
 
-    it("uniswapV3ExactInputMultiHop sells along a packed path", async () => {
+    it("two chained uniswapV3Swap actions are a path: WETH to USDC to USDT", async () => {
       await run([
-        ...wrapAndApprove(ONE_ETH, SWAP_ROUTER_02),
+        { type: "wrapETH", amount: `${ONE_ETH}`, weth: WETH },
         {
-          type: "uniswapV3ExactInputMultiHop",
-          router: SWAP_ROUTER_02,
-          // WETH -0.05%-> USDC -0.01%-> USDT
-          path: `${WETH}0001f4${USDC.slice(2)}000064${USDT.slice(2)}` as `0x${string}`,
+          type: "uniswapV3Swap",
+          pool: UNIV3_USDC_WETH_500,
+          tokenIn: WETH,
+          tokenOut: USDC,
+          amountOutMin: "1",
+          recipient: RECEIVER,
+        },
+        {
+          type: "uniswapV3Swap",
+          pool: UNIV3_USDC_USDT_100,
+          tokenIn: USDC,
+          tokenOut: USDT,
           amountOutMin: "1000000000",
           recipient: RECEIVER,
         },
       ]);
       assert.ok((await balance(USDT, RECEIVER)) > 1_000_000_000n);
+      assert.equal(await balance(USDC, RECEIVER), 0n, "the first leg delivered to the Pot");
+      assert.equal(await balance(USDC, env.pot), 0n, "and the second spent all of it");
     });
 
-    const V4_USDC_USDT = {
-      currency0: USDC,
-      currency1: USDT,
-      fee: 10,
-      tickSpacing: 1,
-      hooks: "0x0000000000000000000000000000000000000000",
-    } as const;
-
-    it("uniswapV4ExactInput swaps USDC for USDT, and the saved output pays for a transfer", async () => {
+    it("uniswapV4Swap swaps USDC for USDT, and the saved output pays for a transfer", async () => {
       await fund(USDC, USDC_100);
       await run([
         {
-          type: "uniswapV4ExactInput",
+          type: "uniswapV4Swap",
           amount: "10000000",
-          router: UNIVERSAL_ROUTER,
-          poolKey: V4_USDC_USDT,
-          zeroForOne: true,
+          ...V4_USDC_USDT,
+          tokenIn: USDC,
+          tokenOut: USDT,
           amountOutMin: "9900000",
           recipient: RECEIVER,
           saveOutputAs: "usdt",
@@ -288,17 +319,15 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.equal(await balance(USDT, env.pot), 0n, "the transfer spends exactly the output");
     });
 
-    it("uniswapV4ExactInputMultiHop swaps the Pot's whole balance, read by a balanceOf", async () => {
+    it("uniswapV4Swap swaps the Pot's whole balance, read by a balanceOf", async () => {
       await fund(USDC, USDC_100);
       await run([
         { type: "balanceOf", token: USDC },
         {
-          type: "uniswapV4ExactInputMultiHop",
-          router: UNIVERSAL_ROUTER,
-          currencyIn: USDC,
-          path: [
-            { intermediateCurrency: USDT, fee: 10, tickSpacing: 1, hooks: V4_USDC_USDT.hooks },
-          ],
+          type: "uniswapV4Swap",
+          ...V4_USDC_USDT,
+          tokenIn: USDC,
+          tokenOut: USDT,
           amountOutMin: "99000000",
           recipient: "self",
         },
@@ -307,22 +336,25 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.ok((await balance(USDT, env.pot)) >= 99_000_000n);
     });
 
-    it("curveSwap sells USDC for USDT in 3pool, and forwards the delta to the recipient", async () => {
+    it("curveSwap sells USDC for USDT in 3pool, approving exactly, and forwards the delta", async () => {
       await fund(USDC, USDC_100);
       await run([
-        { type: "approve", amount: `${USDC_100}`, token: USDC, spender: CURVE_3POOL },
         {
           type: "curveSwap",
+          amount: `${USDC_100}`,
           pool: CURVE_3POOL,
+          tokenIn: USDC,
           tokenOut: USDT,
           i: 1,
           j: 2,
+          indexType: "int128",
           amountOutMin: "99000000",
           recipient: RECEIVER,
         },
       ]);
       assert.ok((await balance(USDT, RECEIVER)) >= 99_000_000n);
       assert.equal(await balance(USDT, env.pot), 0n);
+      assert.equal(await allowance(USDC, env.pot, CURVE_3POOL), 0n, "the approval was exact");
     });
 
     it("curveRouterNGSwap routes USDC to USDT through 3pool", async () => {
@@ -343,9 +375,9 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.ok((await balance(USDT, RECEIVER)) >= 99_000_000n);
     });
 
-    it("balancerV2Swap sells WETH for USDC through one pool", async () => {
+    it("balancerV2Swap sells WETH for USDC through one pool, approving the Vault exactly", async () => {
       await run([
-        ...wrapAndApprove(ONE_ETH, BALANCER_V2_VAULT),
+        { type: "wrapETH", amount: `${ONE_ETH}`, weth: WETH },
         {
           type: "balancerV2Swap",
           vault: BALANCER_V2_VAULT,
@@ -354,10 +386,10 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
           tokenOut: USDC,
           amountOutMin: "1",
           recipient: RECEIVER,
-          deadline: DEADLINE,
         },
       ]);
       assert.ok((await balance(USDC, RECEIVER)) > 0n);
+      assert.equal(await allowance(WETH, env.pot, BALANCER_V2_VAULT), 0n, "the approval was exact");
     });
 
     it("balancerV2BatchSwap's output is its balance delta, spent by the next action", async () => {
@@ -413,22 +445,23 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.equal(await balance(WETH, env.pot), 0n, "the transfer spends exactly the output");
     });
 
-    it("uniswapV2Swap sells WETH for USDC, and its delta output pays an approval", async () => {
+    it("uniswapV2Swap sells WETH at the pair directly, and its output pays an approval", async () => {
       await run([
-        ...wrapAndApprove(ONE_ETH, UNISWAP_V2_ROUTER),
+        { type: "wrapETH", amount: `${ONE_ETH}`, weth: WETH },
         {
           type: "uniswapV2Swap",
-          router: UNISWAP_V2_ROUTER,
-          path: [WETH, USDC],
+          pool: UNIV2_USDC_WETH,
+          tokenIn: WETH,
+          tokenOut: USDC,
           amountOutMin: "1",
           recipient: RECEIVER,
-          deadline: DEADLINE,
         },
         { type: "approve", token: USDC, spender: RECEIVER },
       ]);
       const received = await balance(USDC, env.pot);
       assert.ok(received > 1_000_000_000n, "a spent output is delivered to the Pot");
       assert.equal(await allowance(USDC, env.pot, RECEIVER), received);
+      assert.equal(await balance(WETH, env.pot), 0n, "the pair took the whole push");
     });
 
     it("ambientSwap sells WETH for USDC", async () => {
@@ -452,51 +485,66 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.ok((await balance(USDC, env.pot)) > 0n);
     });
 
-    it("dodoSwap sells WETH for USDC through a V1 pair and a V2 pool", async () => {
-      const dodo = (version: "v1" | "v2", pair: string): Action => ({
-        type: "dodoSwap",
-        proxy: DODO_PROXY,
-        fromToken: WETH,
-        toToken: USDC,
-        pairs: [pair as Address],
-        directions: 0, // sells base (WETH)
-        amountOutMin: "1",
-        deadline: DEADLINE,
-        version,
-      });
+    it("dodoV1Swap sells WETH through a V1 pair, dodoV2Swap at a V2 pool directly", async () => {
       const amount = ONE_ETH / 100n;
-      await run([...wrapAndApprove(amount, DODO_APPROVE), dodo("v1", DODO_V1_WETH_USDC)]);
+      await run([
+        ...wrapAndApprove(amount, DODO_APPROVE),
+        {
+          type: "dodoV1Swap",
+          proxy: DODO_PROXY,
+          tokenIn: WETH,
+          tokenOut: USDC,
+          pairs: [DODO_V1_WETH_USDC],
+          directions: 0, // sells base (WETH)
+          amountOutMin: "1",
+          deadline: DEADLINE,
+        },
+      ]);
       const afterV1 = await balance(USDC, env.pot);
       assert.ok(afterV1 > 0n);
-      await run([...wrapAndApprove(amount, DODO_APPROVE), dodo("v2", DODO_V2_WETH_USDC)]);
+      await run([
+        { type: "wrapETH", amount: `${amount}`, weth: WETH },
+        {
+          type: "dodoV2Swap",
+          pool: DODO_V2_WETH_USDC,
+          tokenIn: WETH,
+          tokenOut: USDC,
+          baseToken: WETH,
+          quoteToken: USDC,
+          amountOutMin: "1",
+          recipient: "self",
+        },
+      ]);
       assert.ok((await balance(USDC, env.pot)) > afterV1);
+      assert.equal(await balance(WETH, env.pot), 0n, "the pool took the whole push");
     });
 
-    it("maverickSwap sells USDC for USDT", async () => {
+    it("maverickV2Swap sells USDC for USDT through the Pot's Router", async () => {
       await fund(USDC, USDC_100);
       await run([
-        { type: "approve", amount: "10000000", token: USDC, spender: MAVERICK_V2_ROUTER },
         {
-          type: "maverickSwap",
-          router: MAVERICK_V2_ROUTER,
+          type: "maverickV2Swap",
+          amount: "10000000",
           pool: MAVERICK_USDC_USDT,
-          tokenAIn: true,
+          tokenIn: USDC,
+          tokenOut: USDT,
           amountOutMin: "9900000",
           recipient: RECEIVER,
         },
       ]);
       assert.ok((await balance(USDT, RECEIVER)) >= 9_900_000n);
+      assert.equal(await balance(USDC, env.pot), USDC_100 - 10_000_000n);
     });
 
-    it("maverickMultiHopSwap sells along a packed path, and its output pays an approval", async () => {
+    it("maverickV2Swap's output pays an approval", async () => {
       await fund(USDC, USDC_100);
       await run([
-        { type: "approve", amount: "10000000", token: USDC, spender: MAVERICK_V2_ROUTER },
         {
-          type: "maverickMultiHopSwap",
-          router: MAVERICK_V2_ROUTER,
-          // One hop: the pool's 20 bytes, then 01 — it sells token A.
-          path: `${MAVERICK_USDC_USDT}01` as `0x${string}`,
+          type: "maverickV2Swap",
+          amount: "10000000",
+          pool: MAVERICK_USDC_USDT,
+          tokenIn: USDC,
+          tokenOut: USDT,
           amountOutMin: "9900000",
           recipient: RECEIVER,
           saveOutputAs: "usdt",
@@ -559,6 +607,168 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       ]);
       // wstETH is worth more than ETH.
       assert.ok((await ether(RECEIVER)) - before > amount);
+    });
+  });
+
+  // ---- @sauce/router, called from a Sauce program ------------------------------------------
+
+  describe("@sauce/router's Router venues, called from a Sauce program", () => {
+    const CHAIN = "ethereum";
+    /** Back to the snapshot, and a fresh one to return to. */
+    const fresh = async () => {
+      await env.testClient.revert({ id: snapshot });
+      snapshot = await env.testClient.snapshot();
+    };
+    const cookSource = async (source: string) => {
+      const receipt = await env.cook(compileSource(env, CHAIN, source));
+      assert.equal(receipt.status, "success", source);
+      return receipt;
+    };
+
+    it("uniswapV3 delivers what the uniswapV3Swap action delivers, from the same state", async () => {
+      await run([
+        { type: "wrapETH", amount: `${ONE_ETH}`, weth: WETH },
+        {
+          type: "uniswapV3Swap",
+          pool: UNIV3_USDC_WETH_500,
+          tokenIn: WETH,
+          tokenOut: USDC,
+          amountOutMin: "1000000000",
+          recipient: RECEIVER,
+        },
+      ]);
+      const viaAction = await balance(USDC, RECEIVER);
+      await fresh();
+      await fund(WETH, ONE_ETH);
+      await cookSource(
+        routerProgram([
+          call("uniswapV3", [
+            UNIV3_USDC_WETH_500,
+            WETH,
+            USDC,
+            ONE_ETH,
+            0n,
+            1_000_000_000n,
+            RECEIVER,
+          ]),
+        ]),
+      );
+      assert.equal(await balance(USDC, RECEIVER), viaAction);
+      assert.equal(await balance(WETH, env.pot), 0n);
+    });
+
+    it("uniswapV3 with every argument chosen at run time, in one precompiled program", async () => {
+      const source = [
+        'import { uniswapV3 } from "@sauce/router";',
+        "function main(pool: Address, tokenIn: Address, tokenOut: Address, amount: Uint256): void {",
+        "  uniswapV3(pool, tokenIn, tokenOut, amount, 0n, 1n, ctx.self());",
+        "}",
+      ].join("\n");
+      const bytecode = compileStandalone(source);
+      await fund(WETH, ONE_ETH);
+      const args = encodeAbiParameters(
+        [{ type: "address" }, { type: "address" }, { type: "address" }, { type: "uint256" }],
+        [UNIV3_USDC_WETH_500, WETH, USDC, ONE_ETH],
+      );
+      const receipt = await env.cook(toBytes(concat([toHex(bytecode), args])));
+      assert.equal(receipt.status, "success");
+      assert.ok((await balance(USDC, env.pot)) > 1_000_000_000n);
+    });
+
+    it("uniswapV4 with the Pot's balance as a run-time amount: exact input, negated for V4", async () => {
+      await fund(USDC, USDC_100);
+      await run([
+        { type: "balanceOf", token: USDC },
+        {
+          type: "uniswapV4Swap",
+          ...V4_USDC_USDT,
+          tokenIn: USDC,
+          tokenOut: USDT,
+          amountOutMin: "99000000",
+          recipient: "self",
+        },
+      ]);
+      const viaAction = await balance(USDT, env.pot);
+      await fresh();
+      await fund(USDC, USDC_100);
+      await cookSource(
+        routerProgram(
+          [
+            `uniswapV4(${BigInt(POOL_MANAGER)}n, ${BigInt(USDC)}n, ${BigInt(USDT)}n, ` +
+              `balanceOf(${BigInt(USDC)}n, ctx.self()), 10n, 1n, 0n, 0n, 99000000n, ctx.self())`,
+          ],
+          ['import { balanceOf } from "@sauce/token";'],
+        ),
+      );
+      assert.equal(await balance(USDC, env.pot), 0n, "the whole balance was the exact input");
+      assert.equal(await balance(USDT, env.pot), viaAction);
+    });
+
+    it("uniswapV4 with a literal amount, and a floor above the output reverts the cook", async () => {
+      await fund(USDC, USDC_100);
+      const swap = (minOut: bigint) =>
+        routerProgram([
+          call("uniswapV4", [
+            POOL_MANAGER,
+            USDC,
+            USDT,
+            10_000_000n,
+            10n,
+            1n,
+            0n,
+            0n,
+            minOut,
+            "self",
+          ]),
+        ]);
+      await cookSource(swap(9_900_000n));
+      const out = await balance(USDT, env.pot);
+      assert.ok(out >= 9_900_000n);
+      await fresh();
+      await fund(USDC, USDC_100);
+      const receipt = await env.cook(compileSource(env, CHAIN, swap(out + 1n)));
+      assert.equal(receipt.status, "reverted");
+      assert.equal(await balance(USDC, env.pot), USDC_100, "nothing moved");
+    });
+
+    it("maverickV2 delivers what the maverickV2Swap action delivers", async () => {
+      await fund(USDC, USDC_100);
+      await run([
+        {
+          type: "maverickV2Swap",
+          amount: "10000000",
+          pool: MAVERICK_USDC_USDT,
+          tokenIn: USDC,
+          tokenOut: USDT,
+          amountOutMin: "9900000",
+          recipient: RECEIVER,
+        },
+      ]);
+      const viaAction = await balance(USDT, RECEIVER);
+      await fresh();
+      await fund(USDC, USDC_100);
+      await cookSource(
+        routerProgram([
+          call("maverickV2", [MAVERICK_USDC_USDT, USDC, USDT, 10_000_000n, 9_900_000n, RECEIVER]),
+        ]),
+      );
+      assert.equal(await balance(USDT, RECEIVER), viaAction);
+    });
+
+    it("a pool the Router finds does not hold tokenIn and tokenOut reverts the cook", async () => {
+      await fund(USDC, USDC_100);
+      // The USDC/USDT pool, asked for WETH: the Router checks the pool's own tokens first.
+      const receipt = await env.cook(
+        compileSource(
+          env,
+          CHAIN,
+          routerProgram([
+            call("uniswapV3", [UNIV3_USDC_USDT_100, USDC, WETH, 1_000_000n, 0n, 0n, "self"]),
+          ]),
+        ),
+      );
+      assert.equal(receipt.status, "reverted");
+      assert.equal(await balance(USDC, env.pot), USDC_100);
     });
   });
 
@@ -762,7 +972,9 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
         { type: "aaveV3Supply", pool: AAVE_V3_POOL, token: USDC, onBehalfOf: "self" },
       ]);
       assert.equal(await balance(USDC, env.pot), 0n);
-      assert.ok((await balance(AAVE_V3_AUSDC, env.pot)) >= USDC_100 - 1n);
+      // An aToken balance is a scaled amount read back through the liquidity index, rounded each
+      // way, so it can land up to 2 units under the supply; which depends on the block's index.
+      assert.ok((await balance(AAVE_V3_AUSDC, env.pot)) >= USDC_100 - 2n);
 
       await run([
         {
@@ -814,7 +1026,10 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
         { type: "approve", amount: `${USDC_100}`, token: USDC, spender: COMET_USDC },
         { type: "compoundV3Supply", comet: COMET_USDC, token: USDC },
       ]);
-      assert.ok((await balance(COMET_USDC, env.pot)) >= USDC_100 - 1n);
+      // Comet stores a supply as a principal and reads it back through the supply index, rounding
+      // down both ways, so a balance can land up to 2 units under the amount supplied (index > 1):
+      // which of 0, 1 or 2 depends on the index at the block the supply lands in.
+      assert.ok((await balance(COMET_USDC, env.pot)) >= USDC_100 - 2n);
       await run([
         { type: "compoundV3Withdraw", amount: "40000000", comet: COMET_USDC, token: USDC },
       ]);
@@ -839,13 +1054,14 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
         chainId: 1,
         actions: [
           { type: "argument", name: "amount" },
-          { type: "approve", token: USDC, spender: CURVE_3POOL },
           {
             type: "curveSwap",
             pool: CURVE_3POOL,
+            tokenIn: USDC,
             tokenOut: USDT,
             i: 1,
             j: 2,
+            indexType: "int128",
             amountOutMin: "1",
             recipient: RECEIVER,
           },
@@ -862,11 +1078,14 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
     });
   });
 
-  it("every action type executed", () => {
+  it("every action type executed, here or on the chain its venue is on", () => {
     assert.deepEqual(
-      ACTION_TYPES.filter((type) => !executed.has(type)),
+      ACTION_TYPES.filter((type) => !executed.has(type) && EXECUTED_ELSEWHERE[type] === undefined),
       [],
       "an action type no test executed",
     );
+    for (const type of Object.keys(EXECUTED_ELSEWHERE)) {
+      assert.ok(!executed.has(type as ActionType), `${type} runs here now: drop it from the list`);
+    }
   });
 });

@@ -2,9 +2,9 @@
  * Where a Sauce Pot lives, without asking a chain.
  *
  * A Pot is CREATE2 from the Kitchen, so its address is a pure function of its OWNER and a salt —
- * `V12Deployments.json` ships the deployer and init-code hash that complete the formula, and
- * `V12EngineGate.json` records the Kitchen the released engine will accept Pots from. Nothing here
- * reads the network.
+ * `V12Deployments.json` ships the deployer (the Kitchen proxy) and the init-code hash that complete
+ * the formula, both from the kitchen release's own `addresses.json`; the sync refuses a Kitchen or a
+ * hash that is not the one the released engine gates on. Nothing here reads the network.
  *
  * DERIVING IS NOT DEPLOYING. The address exists as arithmetic the moment you know the owner; the
  * contract exists once somebody has called the Kitchen's `deployPot`, a permissionless call per
@@ -20,7 +20,6 @@ import {
   type Hex,
 } from "viem";
 
-import gate from "../artifacts/V12EngineGate.json" with { type: "json" };
 import { v12PotDerivation } from "./v12-addresses.js";
 
 /**
@@ -58,20 +57,19 @@ export function potSalt(label: string): Hex {
   return keccak256(stringToBytes(label));
 }
 
-/** The Kitchen the released engine accepts Pots from — the one its gate re-derives against. */
-export const v12GateKitchen = (): Hex => getAddress((gate as { kitchen: string }).kitchen) as Hex;
-
 /**
  * `CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)` — the formula
- * `V12Deployments.json` records, applied.
+ * `V12Deployments.json` records, applied. `kitchen` defaults to the pinned release's Kitchen proxy,
+ * the Pots' deployer; the init-code hash is always the pinned release's, never a constant here.
  *
  * Chain-independent, like every CREATE2 address: the same owner and salt give the same Pot on every
- * chain the Kitchen is deployed at that address on.
+ * chain the Kitchen is deployed at that address on. A Kitchen upgrade that moves the init-code hash
+ * moves every Pot minted after it — the reason this reads the hash from the release.
  */
 export function v12PredictPot(
   owner: Hex,
   salt: Hex = SAUCE_INTENT_POT_SALT,
-  kitchen: Hex = v12GateKitchen(),
+  kitchen: Hex = getAddress(v12PotDerivation().deployer) as Hex,
 ): Hex {
   const derivation = v12PotDerivation();
 

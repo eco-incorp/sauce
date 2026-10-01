@@ -114,95 +114,73 @@ const token = spec("token", { output: "passThrough" });
 const source = spec("source", { output: "value" });
 
 const SPECS: readonly ActionSpec[] = [
-  // -- swaps ----------------------------------------------------------------------------------
+  // -- swaps through @sauce/router ------------------------------------------------------------
   swap(
-    "uniswapV3ExactInput",
-    "Swaps an exact input through one Uniswap V3 pool.",
-    "SwapRouter02.exactInputSingle",
+    "uniswapV2Swap",
+    "Swaps through one Uniswap V2 pair (or a fork's), priced from its reserves and paid by a push.",
+    "@sauce/router uniswapV2: pair.getReserves, an ERC-20 transfer to the pair, pair.swap",
     {
-      router: f(address, "the SwapRouter02"),
+      pool: f(address, "the pair"),
+      tokenIn: f(address, "the token sold, pushed to the pair"),
+      tokenOut: f(address, "the token bought; the direction is the pair's sort order"),
+      feePpm: opt(
+        int(0, 999_999),
+        "the pair's LP fee in parts per million; absent or 0 is 3000 (0.30%), PancakeSwap V2 is 2500",
+      ),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
+    },
+  ),
+  swap(
+    "uniswapV3Swap",
+    "Swaps through one Uniswap V3 pool (or a fork's), through the Pot's Router, which answers its callback.",
+    "@sauce/router uniswapV3: Router.swapV3",
+    {
+      pool: f(address, "the pool"),
       tokenIn: f(address, "the token sold"),
       tokenOut: f(address, "the token bought"),
-      fee: f(
-        { k: "enum", values: [100, 500, 3000, 10000] },
-        "the pool's fee tier, in hundredths of a bip",
+      sqrtPriceLimitX96: opt(
+        uint160,
+        "a price at which the swap stops, leaving the rest of the input in the Pot; absent or 0 for none",
       ),
       amountOutMin: MIN_OUT,
-      sqrtPriceLimitX96: opt(uint160, "a price limit; absent or 0 for none"),
       recipient: RECIPIENT,
     },
   ),
   swap(
-    "uniswapV3ExactInputMultiHop",
-    "Swaps an exact input along a packed Uniswap V3 path.",
-    "SwapRouter02.exactInput",
+    "uniswapV4Swap",
+    "Swaps through one Uniswap V4 pool, through the Pot's Router, which settles with the PoolManager.",
+    "@sauce/router uniswapV4: Router.swapV4",
     {
-      router: f(address, "the SwapRouter02"),
-      path: f(bytes, "the packed path: token ++ fee (3 bytes) ++ token ++ …"),
+      poolManager: f(address, "the PoolManager"),
+      tokenIn: f(address, "the token sold; the zero address is native ETH"),
+      tokenOut: f(address, "the token bought; the zero address is native ETH"),
+      fee: f(uintN(24), "the pool fee, in hundredths of a bip"),
+      tickSpacing: f(int(1, 32767), "the pool's tick spacing"),
+      hooks: f(address, "the pool's hooks contract, or the zero address"),
+      sqrtPriceLimitX96: opt(
+        uint160,
+        "a price at which the swap stops, leaving the rest of the input in the Pot; absent or 0 for none",
+      ),
       amountOutMin: MIN_OUT,
-      recipient: RECIPIENT,
-    },
-  ),
-  swap(
-    "uniswapV4ExactInput",
-    "Swaps an exact ERC-20 input through one Uniswap V4 pool via the Universal Router.",
-    "an ERC-20 transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take)",
-    {
-      router: f(address, "the Universal Router"),
-      poolKey: f(
-        {
-          k: "object",
-          fields: {
-            currency0: f(address, "the pool's lower currency"),
-            currency1: f(address, "the pool's higher currency"),
-            fee: f(uintN(24), "the pool fee, in hundredths of a bip"),
-            tickSpacing: f(int(1, 32767), "the pool's tick spacing"),
-            hooks: f(address, "the pool's hooks contract, or the zero address"),
-          },
-        },
-        "the V4 pool key",
-      ),
-      zeroForOne: f(bool, "true sells currency0 for currency1"),
-      amountOutMin: f(uint128, "the least output accepted; the router reverts below it"),
-      recipient: RECIPIENT,
-    },
-  ),
-  swap(
-    "uniswapV4ExactInputMultiHop",
-    "Swaps an exact ERC-20 input along a Uniswap V4 path via the Universal Router.",
-    "an ERC-20 transfer to the router, then UniversalRouter.execute (V4_SWAP: swap, settle, take)",
-    {
-      router: f(address, "the Universal Router"),
-      currencyIn: f(address, "the currency sold"),
-      path: f(
-        {
-          k: "array",
-          min: 1,
-          of: {
-            k: "object",
-            fields: {
-              intermediateCurrency: f(address, "the currency this hop buys"),
-              fee: f(uintN(24), "the hop's pool fee"),
-              tickSpacing: f(int(1, 32767), "the hop's pool tick spacing"),
-              hooks: f(address, "the hop's pool hooks, or the zero address"),
-            },
-          },
-        },
-        "the hops, in order; the last hop's currency is the output",
-      ),
-      amountOutMin: f(uint128, "the least output accepted; the router reverts below it"),
       recipient: RECIPIENT,
     },
   ),
   swap(
     "curveSwap",
-    "Swaps through a Curve pool's 4-argument `exchange`; the output is a balance delta.",
-    "pool.exchange(int128,int128,uint256,uint256)",
+    "Swaps through a Curve pool's 4-argument `exchange`, approving exactly the input; the output " +
+      "is a balance delta.",
+    "@sauce/router curve: an exact ERC-20 approval, then pool.exchange(int128|uint256 i, j, dx, min_dy)",
     {
       pool: f(address, "the Curve pool"),
+      tokenIn: f(address, "the token sold, approved to the pool for exactly the amount"),
       tokenOut: f(address, "the token bought, whose balance delta is the output"),
       i: f(int(0, 7), "the pool index of the coin sold"),
       j: f(int(0, 7), "the pool index of the coin bought"),
+      indexType: f(
+        { k: "enum", values: ["int128", "uint256"] },
+        "the pool's index type: int128 for StableSwap and NG pools, uint256 for CryptoSwap",
+      ),
       amountOutMin: MIN_OUT,
       recipient: f(
         recipient,
@@ -210,6 +188,76 @@ const SPECS: readonly ActionSpec[] = [
       ),
     },
   ),
+  swap(
+    "balancerV2Swap",
+    "Swaps through one Balancer V2 pool, approving the Vault for exactly the input.",
+    "@sauce/router balancerV2: an exact ERC-20 approval, then Vault.swap (GIVEN_IN)",
+    {
+      vault: f(address, "the Balancer V2 Vault"),
+      poolId: f(bytes32, "the pool id"),
+      tokenIn: f(address, "the token sold, approved to the Vault for exactly the amount"),
+      tokenOut: f(address, "the token bought"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
+    },
+  ),
+  swap(
+    "dodoV2Swap",
+    "Swaps through one DODO V2 pool (DVM, DPP or DSP), paid by a push.",
+    "@sauce/router dodoV2: an ERC-20 transfer to the pool, then sellBase(to) or sellQuote(to)",
+    {
+      pool: f(address, "the pool"),
+      tokenIn: f(address, "the token sold, pushed to the pool"),
+      tokenOut: f(address, "the token bought"),
+      baseToken: f(address, "the pool's base token; tokenIn and tokenOut must be base and quote"),
+      quoteToken: f(address, "the pool's quote token"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
+    },
+  ),
+  swap(
+    "traderJoeLBSwap",
+    "Swaps through one Trader Joe Liquidity Book pair, paid by a push.",
+    "@sauce/router traderJoeLB: an ERC-20 transfer to the pair, then pair.swap(swapForY, to)",
+    {
+      pool: f(address, "the pair"),
+      tokenIn: f(address, "the token sold, pushed to the pair"),
+      tokenOut: f(address, "the token bought"),
+      tokenX: f(address, "the pair's token X; tokenIn and tokenOut must be X and Y"),
+      tokenY: f(address, "the pair's token Y"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
+    },
+  ),
+  swap(
+    "woofiSwap",
+    "Swaps through WOOFi's WooPPV2, paid by a push.",
+    "@sauce/router woofi: an ERC-20 transfer to the pool, then WooPPV2.swap",
+    {
+      pool: f(address, "the WooPPV2 itself, not the WooRouterV2"),
+      tokenIn: f(address, "the token sold, pushed to the pool"),
+      tokenOut: f(address, "the token bought"),
+      amountOutMin: f(
+        uint256,
+        "the least output accepted, as the pool's own minToAmount; required and positive, because the pool prices from an oracle",
+      ),
+      recipient: RECIPIENT,
+    },
+  ),
+  swap(
+    "maverickV2Swap",
+    "Swaps through one Maverick V2 pool, through the Pot's Router, which pays what the pool asks for.",
+    "@sauce/router maverickV2: Router.swap",
+    {
+      pool: f(address, "the pool"),
+      tokenIn: f(address, "the token sold"),
+      tokenOut: f(address, "the token bought"),
+      amountOutMin: MIN_OUT,
+      recipient: RECIPIENT,
+    },
+  ),
+
+  // -- swaps at venues @sauce/router does not cover -------------------------------------------
   swap(
     "curveRouterNGSwap",
     "Swaps along a Curve RouterNG route of up to five hops.",
@@ -237,15 +285,6 @@ const SPECS: readonly ActionSpec[] = [
       recipient: RECIPIENT,
     },
   ),
-  swap("balancerV2Swap", "Swaps through one Balancer V2 pool.", "Vault.swap", {
-    vault: f(address, "the Balancer V2 Vault"),
-    poolId: f(bytes32, "the pool id"),
-    tokenIn: f(address, "the token sold"),
-    tokenOut: f(address, "the token bought"),
-    amountOutMin: MIN_OUT,
-    recipient: RECIPIENT,
-    deadline: DEADLINE,
-  }),
   swap(
     "balancerV2BatchSwap",
     "Swaps along Balancer V2 pools in one batch; the output is a balance delta.",
@@ -290,18 +329,7 @@ const SPECS: readonly ActionSpec[] = [
       wethIsEth: f(bool, "true to pay or receive native ETH for WETH"),
     },
   ),
-  swap(
-    "uniswapV2Swap",
-    "Swaps an exact input along a Uniswap V2 path; the output is a balance delta.",
-    "UniswapV2Router.swapExactTokensForTokens",
-    {
-      router: f(address, "the V2 router"),
-      path: f({ k: "array", of: address, min: 2 }, "the token path; the last token is the output"),
-      amountOutMin: MIN_OUT,
-      recipient: RECIPIENT,
-      deadline: DEADLINE,
-    },
-  ),
+
   swap(
     "ambientSwap",
     "Swaps through an Ambient (CrocSwap) pool; the dex pays the Pot, and the output is a balance delta.",
@@ -320,46 +348,20 @@ const SPECS: readonly ActionSpec[] = [
     },
   ),
   swap(
-    "dodoSwap",
-    "Swaps through DODO pairs via the DODO proxy, which pays the Pot.",
-    "DODOProxy.dodoSwapV2TokenToToken (or dodoSwapV1)",
+    "dodoV1Swap",
+    "Swaps through legacy DODO V1 (Classical) pairs via the DODO proxy, which pays the Pot.",
+    "DODOProxy.dodoSwapV1",
     {
       proxy: f(address, "the DODO proxy; approvals go to DODOApprove, not to it"),
-      fromToken: f(address, "the token sold"),
-      toToken: f(address, "the token bought"),
-      pairs: f({ k: "array", of: address, min: 1 }, "the pairs to route through"),
+      tokenIn: f(address, "the token sold"),
+      tokenOut: f(address, "the token bought"),
+      pairs: f({ k: "array", of: address, min: 1 }, "the V1 pairs to route through"),
       directions: f(uintN(53), "a bit per pair: 0 sells base, 1 sells quote"),
       amountOutMin: MIN_OUT,
       deadline: DEADLINE,
-      version: opt(
-        { k: "enum", values: ["v1", "v2"] },
-        '"v1" routes legacy Classical pairs through `dodoSwapV1`; default "v2"',
-      ),
     },
   ),
-  swap(
-    "maverickSwap",
-    "Swaps an exact input through one Maverick V2 pool.",
-    "MaverickV2Router.exactInputSingle",
-    {
-      router: f(address, "the Maverick V2 router"),
-      pool: f(address, "the pool"),
-      tokenAIn: f(bool, "true sells the pool's token A"),
-      amountOutMin: MIN_OUT,
-      recipient: RECIPIENT,
-    },
-  ),
-  swap(
-    "maverickMultiHopSwap",
-    "Swaps an exact input along a packed Maverick V2 path.",
-    "MaverickV2Router.exactInputMultiHop",
-    {
-      router: f(address, "the Maverick V2 router"),
-      path: f(bytes, "per hop, the pool's 20 bytes then one byte: 1 sells token A, 0 token B"),
-      amountOutMin: MIN_OUT,
-      recipient: RECIPIENT,
-    },
-  ),
+
   swap(
     "carbonSwap",
     "Trades against Carbon strategies by source amount; the controller pays the Pot.",

@@ -10,6 +10,12 @@
  * cannot log), so a balance delta shows only the call between its reads. The expected encodings below are written from the
  * protocols' Solidity signatures, not from `abis.ts`, so a wrong fragment there fails here.
  *
+ * A swap at one of `@sauce/router`'s pay-first venues is recorded like any other action: the
+ * library calls the recorders directly. The three Router venues (`uniswapV3Swap`, `uniswapV4Swap`,
+ * `maverickV2Swap`) are not: their call goes to the Pot's own Router, which then expects a real
+ * pool to call it back — `actions.mainnet.test.ts` executes them against real pools, and
+ * `sdk/test/evm/{swap,router}.e2e.test.ts` against the Router on mock pools.
+ *
  * It runs in `test:unit`; it skips locally without the engine artifact and fails in CI.
  */
 import { after, before, describe, it } from "node:test";
@@ -42,6 +48,7 @@ const TRUE = pad("0x01");
 /** What a fee quote answers: 42 — twice for Stargate's (nativeFee, lzTokenFee). */
 const FEE = pad("0x2a");
 const MAX_INT256 = (1n << 255n) - 1n;
+const MAX_UINT256 = (1n << 256n) - 1n;
 
 const call = (abi: string, name: string, args: readonly unknown[]): Hex =>
   encodeFunctionData({ abi: parseAbi([abi]) as Abi, functionName: name, args });
@@ -55,138 +62,40 @@ interface Expected {
 /** The calls an action makes, in order, given the executing Pot's address. */
 type Expect = (pot: Address) => readonly Expected[];
 
-const V4_KEY = { currency0: A, currency1: B, fee: 500, tickSpacing: 10, hooks: ZERO } as const;
-
-/** The Universal Router input of a V4 swap: swap, settle from the router's own balance, take all. */
-function v4Execute(swapAction: number, swapParams: Hex, to: string): Hex {
-  const settle = encodeAbiParameters(
-    [{ type: "address" }, { type: "uint256" }, { type: "bool" }],
-    [A, 1n << 255n, false],
-  );
-  const take = encodeAbiParameters(
-    [{ type: "address" }, { type: "address" }, { type: "uint256" }],
-    [B, to as Address, 0n], // OPEN_DELTA is 0
-  );
-  const input = encodeAbiParameters(
-    [{ type: "bytes" }, { type: "bytes[]" }],
-    [`0x${swapAction.toString(16).padStart(2, "0")}0b0e`, [swapParams, settle, take]],
-  );
-
-  return call("function execute(bytes, bytes[])", "execute", ["0x10", [input]]);
-}
-
-const POOL_KEY_ABI = {
-  type: "tuple",
-  components: [
-    { name: "currency0", type: "address" },
-    { name: "currency1", type: "address" },
-    { name: "fee", type: "uint24" },
-    { name: "tickSpacing", type: "int24" },
-    { name: "hooks", type: "address" },
-  ],
-} as const;
+/** What a recorded pair answers `getReserves()` with: equal reserves, 1e18 each. */
+const RESERVE = 10n ** 18n;
+const RESERVES = encodeAbiParameters(
+  [{ type: "uint112" }, { type: "uint112" }, { type: "uint32" }],
+  [RESERVE, RESERVE, 0],
+);
+/** `@sauce/router`'s Uniswap V2 price for AMOUNT against RESERVES, at the default 0.30%. */
+const V2_OUT = (AMOUNT * 997_000n * RESERVE) / (RESERVE * 1_000_000n + AMOUNT * 997_000n);
 
 const SEND_PARAM = "(uint32,bytes32,uint256,uint256,bytes,bytes,bytes)";
 
+/** The swap actions whose call goes to the Pot's Router, which a recorder cannot stand in for. */
+type RouterVenue = "uniswapV3Swap" | "uniswapV4Swap" | "maverickV2Swap";
+
 /** Each sample's calls; the source actions call nothing. */
-const EXPECT: Record<Exclude<ActionType, "balanceOf" | "nativeBalance" | "argument">, Expect> = {
-  uniswapV3ExactInput: () => [
-    {
-      to: T,
-      data: call(
-        "function exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))",
-        "exactInputSingle",
-        [[A, B, 500, R, AMOUNT, MIN, 0n]],
-      ),
-    },
-  ],
-  uniswapV3ExactInputMultiHop: (pot) => [
-    {
-      to: T,
-      data: call("function exactInput((bytes,address,uint256,uint256))", "exactInput", [
-        [`${A}0001f4${B.slice(2)}`, pot, AMOUNT, MIN],
-      ]),
-    },
-  ],
-  uniswapV4ExactInput: () => [
+const EXPECT: Record<
+  Exclude<ActionType, "balanceOf" | "nativeBalance" | "argument" | RouterVenue>,
+  Expect
+> = {
+  // `@sauce/router`'s uniswapV2: the reserves are read (a view, unrecorded), the input pushed to the
+  // pair, and the price taken on the lane the sort order names (A < B, so amount1Out).
+  uniswapV2Swap: () => [
     { to: A, data: call("function transfer(address,uint256)", "transfer", [T, AMOUNT]) },
     {
       to: T,
-      data: v4Execute(
-        0x06,
-        encodeAbiParameters(
-          [
-            {
-              type: "tuple",
-              components: [
-                { ...POOL_KEY_ABI, name: "poolKey" },
-                { name: "zeroForOne", type: "bool" },
-                { name: "amountIn", type: "uint128" },
-                { name: "amountOutMinimum", type: "uint128" },
-                { name: "hookData", type: "bytes" },
-              ],
-            },
-          ],
-          [
-            {
-              poolKey: V4_KEY,
-              zeroForOne: true,
-              amountIn: AMOUNT,
-              amountOutMinimum: MIN,
-              hookData: "0x",
-            },
-          ],
-        ),
-        R,
-      ),
+      data: call("function swap(uint256,uint256,address,bytes)", "swap", [0n, V2_OUT, R, "0x"]),
     },
   ],
-  uniswapV4ExactInputMultiHop: () => [
-    { to: A, data: call("function transfer(address,uint256)", "transfer", [T, AMOUNT]) },
-    {
-      to: T,
-      data: v4Execute(
-        0x07,
-        encodeAbiParameters(
-          [
-            {
-              type: "tuple",
-              components: [
-                { name: "currencyIn", type: "address" },
-                {
-                  name: "path",
-                  type: "tuple[]",
-                  components: [
-                    { name: "intermediateCurrency", type: "address" },
-                    { name: "fee", type: "uint24" },
-                    { name: "tickSpacing", type: "int24" },
-                    { name: "hooks", type: "address" },
-                    { name: "hookData", type: "bytes" },
-                  ],
-                },
-                { name: "amountIn", type: "uint128" },
-                { name: "amountOutMinimum", type: "uint128" },
-              ],
-            },
-          ],
-          [
-            {
-              currencyIn: A,
-              path: [
-                { intermediateCurrency: B, fee: 500, tickSpacing: 10, hooks: ZERO, hookData: "0x" },
-              ],
-              amountIn: AMOUNT,
-              amountOutMinimum: MIN,
-            },
-          ],
-        ),
-        R,
-      ),
-    },
-  ],
-  // Unrecorded balance reads bracket the swap (both answer 0 here, so the delta is 0), then the
-  // delta is forwarded to the recipient. The delta test below makes the reads differ.
+  // `@sauce/router`'s curve: an exact approval (after an unrecorded allowance read, which answers
+  // 0, so there is no reset), then unrecorded balance reads bracket the swap (both answer 0 here, so
+  // the delta is 0), then the delta is forwarded to the recipient. The delta test below makes the
+  // reads differ.
   curveSwap: () => [
+    { to: A, data: call("function approve(address,uint256)", "approve", [T, AMOUNT]) },
     {
       to: T,
       data: call("function exchange(int128,int128,uint256,uint256)", "exchange", [
@@ -197,6 +106,45 @@ const EXPECT: Record<Exclude<ActionType, "balanceOf" | "nativeBalance" | "argume
       ]),
     },
     { to: B, data: call("function transfer(address,uint256)", "transfer", [R, 0n]) },
+  ],
+  // `@sauce/router`'s balancerV2: an exact approval of the Vault, then its `swap` with the floor as
+  // its limit and no deadline (the program runs now, in one transaction).
+  balancerV2Swap: (pot) => [
+    { to: A, data: call("function approve(address,uint256)", "approve", [T, AMOUNT]) },
+    {
+      to: T,
+      data: call(
+        "function swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
+        "swap",
+        [[B32, 0, A, B, AMOUNT, "0x"], [pot, false, R, false], MIN, MAX_UINT256],
+      ),
+    },
+  ],
+  // `@sauce/router`'s dodoV2: the input pushed, then the side `tokenIn` is — base here.
+  dodoV2Swap: () => [
+    { to: A, data: call("function transfer(address,uint256)", "transfer", [T, AMOUNT]) },
+    { to: T, data: call("function sellBase(address)", "sellBase", [R]) },
+  ],
+  // `@sauce/router`'s traderJoeLB: the input pushed, then `swap(swapForY, to)` — A is the pair's Y.
+  traderJoeLBSwap: () => [
+    { to: A, data: call("function transfer(address,uint256)", "transfer", [T, AMOUNT]) },
+    { to: T, data: call("function swap(bool,address)", "swap", [false, R]) },
+  ],
+  // `@sauce/router`'s woofi: the input pushed, then WooPPV2's `swap` with the floor as its own
+  // minToAmount and no rebate.
+  woofiSwap: () => [
+    { to: A, data: call("function transfer(address,uint256)", "transfer", [T, AMOUNT]) },
+    {
+      to: T,
+      data: call("function swap(address,address,uint256,uint256,address,address)", "swap", [
+        A,
+        B,
+        AMOUNT,
+        MIN,
+        R,
+        ZERO,
+      ]),
+    },
   ],
   curveRouterNGSwap: () => [
     {
@@ -212,16 +160,6 @@ const EXPECT: Record<Exclude<ActionType, "balanceOf" | "nativeBalance" | "argume
           Array(5).fill(ZERO),
           R,
         ],
-      ),
-    },
-  ],
-  balancerV2Swap: (pot) => [
-    {
-      to: T,
-      data: call(
-        "function swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
-        "swap",
-        [[B32, 0, A, B, AMOUNT, "0x"], [pot, false, R, false], MIN, DEADLINE],
       ),
     },
   ],
@@ -252,16 +190,6 @@ const EXPECT: Record<Exclude<ActionType, "balanceOf" | "nativeBalance" | "argume
       ),
     },
   ],
-  uniswapV2Swap: () => [
-    {
-      to: T,
-      data: call(
-        "function swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
-        "swapExactTokensForTokens",
-        [AMOUNT, MIN, [A, B], R, DEADLINE],
-      ),
-    },
-  ],
   ambientSwap: () => [
     {
       to: T,
@@ -285,33 +213,13 @@ const EXPECT: Record<Exclude<ActionType, "balanceOf" | "nativeBalance" | "argume
       ]),
     },
   ],
-  dodoSwap: () => [
+  dodoV1Swap: () => [
     {
       to: T,
       data: call(
         "function dodoSwapV1(address,address,uint256,uint256,address[],uint256,bool,uint256)",
         "dodoSwapV1",
         [A, B, AMOUNT, MIN, [T], 0n, false, DEADLINE],
-      ),
-    },
-  ],
-  maverickSwap: () => [
-    {
-      to: T,
-      data: call(
-        "function exactInputSingle(address,address,bool,uint256,uint256)",
-        "exactInputSingle",
-        [R, A, true, AMOUNT, MIN],
-      ),
-    },
-  ],
-  maverickMultiHopSwap: () => [
-    {
-      to: T,
-      data: call(
-        "function exactInputMultiHop(address,bytes,uint256,uint256)",
-        "exactInputMultiHop",
-        [R, "0xabcd", AMOUNT, MIN],
       ),
     },
   ],
@@ -498,6 +406,7 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
         bytecode: recorderCode(TRUE, {
           [toFunctionSelector(`quoteSend(${SEND_PARAM},bool)`)]: concat([FEE, FEE]),
           [toFunctionSelector("quoteGasPayment(uint32)")]: FEE,
+          [toFunctionSelector("getReserves()")]: RESERVES,
           ...views,
         }),
       });
@@ -531,51 +440,34 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
     });
   }
 
-  it("DODO's default version calls the proxy's V2 entry point", async () => {
-    const { version: _, ...v2 } = SAMPLES.dodoSwap;
-    const calls = recordedCalls(await env.cook(compiled(v2)), RECORDERS);
-    assert.equal(
-      calls[0]!.data,
-      call(
-        "function dodoSwapV2TokenToToken(address,address,uint256,uint256,address[],uint256,bool,uint256)",
-        "dodoSwapV2TokenToToken",
-        [A, B, AMOUNT, MIN, [T], 0n, false, DEADLINE],
-      ).toLowerCase(),
-    );
-  });
-
-  it("a saved output is delivered to the Pot, and read as a balance delta where the return is not an amount", async () => {
+  it("a saved output is delivered to the Pot: the amount @sauce/router returns, or a balance delta", async () => {
     const saved = (type: ActionType): Uint8Array =>
       compiled({ ...SAMPLES[type], saveOutputAs: "out" } as Action);
 
-    // A captured return: the router pays the Pot, and nothing else is called.
-    const v3 = recordedCalls(await env.cook(saved("uniswapV3ExactInput")), RECORDERS);
-    assert.equal(v3.length, 1);
+    // `@sauce/router` returns what the recipient received, and the recipient is the Pot.
+    const v2 = recordedCalls(await env.cook(saved("uniswapV2Swap")), RECORDERS);
+    assert.equal(v2.length, 2); // transfer, swap
     assert.equal(
-      v3[0]!.data,
-      call(
-        "function exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))",
-        "exactInputSingle",
-        [[A, B, 500, env.pot, AMOUNT, MIN, 0n]],
-      ).toLowerCase(),
+      v2[1]!.data,
+      call("function swap(uint256,uint256,address,bytes)", "swap", [
+        0n,
+        V2_OUT,
+        env.pot,
+        "0x",
+      ]).toLowerCase(),
     );
 
     // A balance delta: the swap pays the Pot, between two (unrecorded) balance reads.
-    const v2 = recordedCalls(await env.cook(saved("uniswapV2Swap")), RECORDERS);
-    assert.equal(v2.length, 1);
+    const frax = recordedCalls(await env.cook(saved("fraxswapSwap")), RECORDERS);
+    assert.equal(frax.length, 1);
     assert.equal(
-      v2[0]!.data,
+      frax[0]!.data,
       call(
         "function swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
         "swapExactTokensForTokens",
         [AMOUNT, MIN, [A, B], env.pot, DEADLINE],
       ).toLowerCase(),
     );
-
-    // V4's TAKE pays the Pot.
-    const v4 = recordedCalls(await env.cook(saved("uniswapV4ExactInput")), RECORDERS);
-    assert.equal(v4.length, 2); // transfer, execute
-    assert.ok(v4[1]!.data.includes(env.pot.slice(2).toLowerCase()));
   });
 
   it("curveSwap forwards the balance the swap delivered: post minus pre, not a constant", async () => {
@@ -592,6 +484,10 @@ describe("every action's calldata, executed", { skip, timeout: 120_000 }, () => 
       assert.deepEqual(
         recordedCalls(receipt, RECORDERS).map((c) => [c.to.toLowerCase(), c.data]),
         [
+          [
+            A.toLowerCase(),
+            call("function approve(address,uint256)", "approve", [T, AMOUNT]).toLowerCase(),
+          ],
           [
             T.toLowerCase(),
             call("function exchange(int128,int128,uint256,uint256)", "exchange", [

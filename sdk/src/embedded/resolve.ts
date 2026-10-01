@@ -3,9 +3,10 @@
  *
  * A program the SDK emits imports files the SDK ships: the ERC-20 and Sauce Router ABIs
  * (`./artifacts/IERC20.json`, `./artifacts/ISauceRouter.json`), a protocol's ABI twin
- * (`./protocols/<slug>/<Export>.json`), and the `@sauce/token` standard library. None of them is
- * read from a filesystem: the ABIs are JSON imports and the rest is embedded at build time
- * (`sources.generated.ts`), so the same resolution runs in Node and in a browser.
+ * (`./protocols/<slug>/<Export>.json`), and the `@sauce/token` and `@sauce/router` standard
+ * libraries. None of them is read from a filesystem: the ABIs are JSON imports and the rest is
+ * embedded at build time (`sources.generated.ts`), so the same resolution runs in Node and in a
+ * browser.
  *
  * `resolveSdkModule` and `resolveSdkPackage` have the compiler's own `resolve` and `resolvePackage`
  * contracts, so a raw `compile()` can fall back to them for anything its own resolver does not
@@ -22,7 +23,10 @@ import { PROTOCOL_ABIS, STD_SOURCES } from "./sources.generated.js";
 export const SDK_STD_ROOT = "/@eco-incorp/sauce/std";
 
 /** Bare specifiers the SDK resolves itself, mapped to their directory under `std/`. */
-const STD_PACKAGES: Readonly<Record<string, string>> = { "@sauce/token": "token" };
+const STD_PACKAGES: Readonly<Record<string, string>> = {
+  "@sauce/token": "token",
+  "@sauce/router": "router",
+};
 
 /** The engine ABIs the SDK's generated programs import, by path under the SDK root. */
 const ARTIFACTS: Readonly<Record<string, string>> = {
@@ -86,11 +90,11 @@ export function resolveSdkModule(path: string): Uint8Array | undefined {
 }
 
 /**
- * The entry path of a standard-library package (`@sauce/token`), under `SDK_STD_ROOT`, or
- * `undefined` to decline any other specifier.
+ * The entry path of a standard-library package (`@sauce/token`, `@sauce/router`), under
+ * `SDK_STD_ROOT`, or `undefined` to decline any other specifier.
  *
- * The entry is the package's `module`, else `main`, else `index.js`. `@sauce/token`'s `main` is
- * the neutral base `token.js`, which the compiler suffixes per target (`token.evm.js`).
+ * The entry is the package's `module`, else `main`, else `index.js`. Each package's `main` is a
+ * neutral base (`token.js`, `router.js`) the compiler suffixes per target (`token.evm.js`).
  */
 export function resolveSdkPackage(specifier: string): string | undefined {
   const dir = STD_PACKAGES[specifier];

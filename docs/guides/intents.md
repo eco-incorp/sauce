@@ -64,13 +64,18 @@ the one Pot the solver deploys per Portal and every intent through that Portal s
 overrides. `destinationPot(Base.chain, { portal })` returns that address, for a `precalls`
 transfer into it.
 
+The address also follows the pinned Kitchen release's Pot bytecode, whose hash is part of every Pot
+address. A Kitchen release that changes that bytecode starts a new family: the shared Pot for the
+same Executor moves to a new address, and a Pot of the earlier family keeps running on the engine
+built for it. `destinationPot` always answers for the family this SDK pins.
+
 **The destination Pot must exist before the intent is fulfilled.** The SDK derives its address and
 deploys nothing: the route contains no deployment call. The solver deploys the shared Pot for each
 Portal. A fulfilment that cooks on a Pot that is not there reverts entirely, because the Executor
 refuses a call with calldata to an address without code (`CallToEOA`).
 
 To deploy it yourself first, send this on the destination chain:
-`routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: executor, salt: SAUCE_INTENT_POT_SALT })`.
+`routes.sauceEvmDeployPotCall({ owner: executor, salt: SAUCE_INTENT_POT_SALT })`.
 The call is permissionless, and it returns the existing Pot when one is already there. A **Pot you
 name** instead must also exist, and be owned by that Executor, or the cook reverts with `NotOwner()`.
 Use
@@ -83,8 +88,9 @@ the shared Pot — to predict the Pot and check that it is deployed, with the ri
 Arc's eco-routes Portal (`0xEC002CA16cE20c2a9F3C6200EF04E7d92a3dfBD8`) is not the Portal most other
 chains share, so its Executor (`0x95b2d45F49c68a54BDBa0356fc3034751A43b3D4`) and the Pot derived from
 it (`destinationPot("arc")`, `0x4edfB4576F91A9c2fE9aA50f669B7C81E4B82955`) are Arc's own. This prediction
-uses Kitchen **1.1.0** initcode. Upgrade the Kitchen and deploy the matching engine and Pot before
-sending intents; the release address alone does not confirm readiness.
+uses the pinned Kitchen release's Pot bytecode. The Kitchen, the matching engine and that Pot must be
+deployed on Arc before an intent to it can run; the release address alone does not confirm
+readiness.
 
 The deployment helpers return the released addresses. They do not check that code is live at those
 addresses on your chain. The same helper confirms the Kitchen and engine have code, and reads the

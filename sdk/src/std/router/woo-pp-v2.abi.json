@@ -1,0 +1,42 @@
+{
+  "$comment": "WOOFi WooPPV2.swap, copied from the verified WooPPV2 on Arbitrum, 0xEd9e3f98bBed560e66B89AaC922E29D4596A9642 (solc 0.8.14). The Base deployment's implementation is not verified on any explorer; its dispatch table carries the same selector, 0x7dc20382.",
+  "abi": [
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "fromToken",
+          "type": "address"
+        },
+        {
+          "name": "toToken",
+          "type": "address"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "minToAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "rebateTo",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "realToAmount",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

@@ -113,9 +113,9 @@ function main(tokenA: Address, tokenB: Address) {
 
 There is no read for the transaction origin.
 
-- **Imports the package serves** to a program with `main`: `./artifacts/IERC20.json`,
-  `./artifacts/ISauceRouter.json` (the swap Router, `sauce-swaps`), every protocol ABI as
-  `./protocols/<slug>/<Export>.json`, and `@sauce/token`.
+- **Imports the package serves** to a program: `@sauce/router` (the swap library, `sauce-swaps`),
+  `@sauce/token`, `./artifacts/IERC20.json`, `./artifacts/ISauceRouter.json` (the Router itself),
+  and every protocol ABI as `./protocols/<slug>/<Export>.json`.
 
 ## Example
 

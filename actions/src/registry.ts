@@ -1,6 +1,6 @@
 /**
- * The SDK modules the actions build on: protocol-registry ABIs for the bindings and the quotes, and
- * the SDK's `SafeERC20` ERC-20 write lowering.
+ * The SDK modules the actions build on: protocol-registry ABIs for the bindings and the quotes, the
+ * SDK's `SafeERC20` ERC-20 write lowering, and the resolver that serves `@sauce/router`.
  *
  * Imported by RELATIVE path into the SDK's build output, not by package name, and that is the one
  * spelling that resolves in both layouts this code runs in: in the repository `actions/src/` and
@@ -13,7 +13,9 @@
  * Each registry module is a protocol's public entry (`@eco-incorp/sauce/protocols/<slug>`), not a
  * file inside it. `token/safe` is the SDK's own lowering of `approve`/`transfer` with OpenZeppelin
  * `SafeERC20` semantics (a USDT `approve` returns no `bool`, and a stale allowance is reset first);
- * every SDK token write uses the same one, so the SDK has one ERC-20 write path.
+ * every SDK token write uses the same one, so the SDK has one ERC-20 write path. `embedded/resolve`
+ * serves the SDK's standard library from memory: a swap action at one of `@sauce/router`'s venues
+ * is a call into that library, which a program imports by name.
  */
 export { ERC20ABI } from "../../sdk/dist/protocols/erc20/index.js";
 export { PoolABI as AaveV3PoolABI } from "../../sdk/dist/protocols/aave-v3/index.js";
@@ -22,22 +24,16 @@ export { AcrossSpokePoolABI } from "../../sdk/dist/protocols/across/index.js";
 export { CrocSwapDexABI } from "../../sdk/dist/protocols/ambient/index.js";
 export { BalancerV2VaultABI } from "../../sdk/dist/protocols/balancer-v2/index.js";
 export { CurveRouterNGABI, CurveThreePoolABI } from "../../sdk/dist/protocols/curve/index.js";
-export { DODOV2ProxyABI } from "../../sdk/dist/protocols/dodo/index.js";
 export { LidoABI, WstETHABI } from "../../sdk/dist/protocols/lido/index.js";
 export { LiquidityPoolABI } from "../../sdk/dist/protocols/etherfi/index.js";
-export { MaverickV2RouterABI } from "../../sdk/dist/protocols/maverick/index.js";
 export { Permit2ABI } from "../../sdk/dist/protocols/permit2/index.js";
 export { RETHABI, RocketDepositPoolABI } from "../../sdk/dist/protocols/rocket-pool/index.js";
 export { StargatePoolABI } from "../../sdk/dist/protocols/stargate/index.js";
 export { TokenMessengerABI } from "../../sdk/dist/protocols/cctp/index.js";
 export { UniswapV2RouterABI } from "../../sdk/dist/protocols/uniswap-v2/index.js";
 export {
-  UniswapV3QuoterV2ABI,
-  UniswapV3SwapRouter02ABI,
-} from "../../sdk/dist/protocols/uniswap-v3/index.js";
-export { UniswapV4UniversalRouterABI } from "../../sdk/dist/protocols/uniswap-v4/index.js";
-export {
   safeApproveStatements,
   safeTransferStatements,
   type WordArg,
 } from "../../sdk/dist/token/safe.js";
+export { resolveSdkModule, resolveSdkPackage } from "../../sdk/dist/embedded/resolve.js";

@@ -17,7 +17,8 @@ import { fileURLToPath } from "node:url";
 import { getAddress } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "../src/deployments/pot.js";
+import { v12KitchenAddress } from "../src/deployments/index.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { v12Kitchen } from "../src/evm/engine.js";
 import {
   ecoRoutesExecutorOf,
@@ -320,7 +321,7 @@ describe("the guide's account of the destination Pot is the builder's", () => {
         calls().length === 1 &&
         calls().every(
           (c) =>
-            denormalizeToEvm(c.target) !== v12GateKitchen().toLowerCase() &&
+            denormalizeToEvm(c.target) !== v12KitchenAddress().toLowerCase() &&
             !c.data.startsWith(`0x${deploySelector}`),
         ),
     },

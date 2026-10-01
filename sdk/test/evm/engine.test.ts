@@ -7,16 +7,20 @@
  * salt-only deployPot foot-gun) the hand-written mirror would silently drift and consumers would
  * encode calldata against a selector the deployed contract no longer answers to.
  *
- * For every declared function this recomputes viem `toFunctionSelector` from BOTH sides — the
- * exported parseAbi entry and the corresponding entry read fresh from src/artifacts/*.json — and
- * asserts they agree. A JSON change that isn't mirrored in engine.ts fails here, forcing the two
- * to be updated together. It additionally pins the load-bearing shapes: deployPot(address,bytes32)
- * inputs, and that encodeCook / encodeDeployPot emit the matching 4-byte selector.
+ * The exported ABI is the release's COMPLETE ABI, in both directions: every entry it declares —
+ * function, event, error, constructor, fallback, receive — appears in the artifact read fresh from
+ * src/artifacts/*.json with the same signature, the same outputs and mutability for a function, and
+ * the same `indexed` flags for an event; and every entry of the artifact appears in the export. A
+ * mirrored entry the release dropped or changed fails here, and so does one the release added that
+ * the export lacks (a consumer once had to read the artifact for the Kitchen's `initialize`). It
+ * additionally pins the load-bearing shapes: deployPot(address,bytes32) inputs, and that
+ * encodeCook / encodeDeployPot emit the matching 4-byte selector.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAbiItem, toFunctionSelector, type Abi, type AbiFunction } from "viem";
+import { formatAbiItem } from "viem/utils";
 import { v12Pot, v12PotAbi, v12Kitchen, v12KitchenAbi } from "../../src/evm/engine.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -26,41 +30,93 @@ const ARTIFACTS = resolve(HERE, "../../src/artifacts");
 const loadArtifactAbi = (name: string): Abi =>
   JSON.parse(readFileSync(resolve(ARTIFACTS, `${name}.json`), "utf8")).abi as Abi;
 
-/** Every function whose signature the exported viem ABI is contracted to mirror, per artifact. */
-const CONTRACTS: { artifact: string; exportedAbi: Abi; fns: string[] }[] = [
-  {
-    artifact: "V12Pot",
-    exportedAbi: v12PotAbi,
-    fns: ["cook", "owner", "kitchen", "router", "inFlightEngine"],
-  },
-  {
-    artifact: "V12Kitchen",
-    exportedAbi: v12KitchenAbi,
-    fns: ["deployPot", "predictPot", "executionFee", "router"],
-  },
-];
+type Item = Abi[number];
+
+const named = (item: Item): item is Extract<Item, { name: string }> => "name" in item;
+
+/** What an entry must agree on with its release counterpart: kind, signature, and for a function
+ *  its outputs and mutability, for an event which inputs are indexed. A constructor, fallback or
+ *  receive has no name, so its signature is its kind, its inputs and its mutability. */
+const shape = (item: Item): unknown => ({
+  type: item.type,
+  signature: named(item)
+    ? formatAbiItem(item as never)
+    : `${item.type}(${("inputs" in item ? item.inputs : []).map((i) => i.type).join(",")})`,
+  ...(item.type === "function"
+    ? { outputs: item.outputs.map((o) => o.type), stateMutability: item.stateMutability }
+    : {}),
+  ...(item.type === "constructor" || item.type === "fallback" || item.type === "receive"
+    ? { stateMutability: item.stateMutability }
+    : {}),
+  ...(item.type === "event" ? { indexed: item.inputs.map((i) => i.indexed ?? false) } : {}),
+});
+
+/** A stable key for a shape, so two ABIs compare as multisets regardless of order. */
+const key = (item: Item): string => JSON.stringify(shape(item));
+
+describe("evm/engine ABI drift guard", () => {
+  for (const [artifact, exportedAbi] of [
+    ["V12Pot", v12PotAbi],
+    ["V12Kitchen", v12KitchenAbi],
+  ] as const) {
+    describe(artifact, () => {
+      const released = loadArtifactAbi(artifact).filter(named);
+
+      for (const item of (exportedAbi as Abi).filter(named)) {
+        it(`${item.type} ${item.name}: matches the released ${artifact}.json entry`, () => {
+          const counterpart = released.filter((r) => r.type === item.type && r.name === item.name);
+          // A mirrored entry the release no longer carries is drift too.
+          expect(counterpart.map(shape)).toContainEqual(shape(item));
+        });
+      }
+
+      it(`exports every entry of the released ${artifact}.json, and nothing else`, () => {
+        const all = loadArtifactAbi(artifact);
+        expect([...(exportedAbi as Abi)].map(key).sort()).toEqual(all.map(key).sort());
+      });
+    });
+  }
+
+  it("v12KitchenAbi carries the Kitchen's administration: initialize, setRouter, setExecutionFee", () => {
+    const names = (v12KitchenAbi as Abi).filter(named).map((i) => `${i.type} ${i.name}`);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "function initialize",
+        "function setRouter",
+        "function setExecutionFee",
+        "function potInitCodeHash",
+        "function owner",
+      ]),
+    );
+  });
+
+  // The Router is the Pot's own since kitchen-evm put it in Pot storage: pinned by name so a
+  // release that dropped the switch fails here, not in an owner's transaction.
+  it("mirrors the Router switch on both contracts", () => {
+    const names = (abi: Abi) => abi.filter(named).map((i) => `${i.type} ${i.name}`);
+    expect(names(v12PotAbi)).toEqual(
+      expect.arrayContaining([
+        "function router",
+        "function setRouter",
+        "event RouterSet",
+        "error RouterHasNoCode",
+        "error RouterUnset",
+        "error NotOwner",
+      ]),
+    );
+    expect(names(v12KitchenAbi)).toEqual(
+      expect.arrayContaining([
+        "function router",
+        "function setRouter",
+        "event RouterSet",
+        "error RouterHasNoCode",
+      ]),
+    );
+  });
+});
 
 /** 4-byte selector prefix of encoded calldata (`0x` + 8 hex chars). */
 const selectorOf = (calldata: string): string => calldata.slice(0, 10);
-
-describe("evm/engine ABI drift guard", () => {
-  for (const { artifact, exportedAbi, fns } of CONTRACTS) {
-    describe(`${artifact}`, () => {
-      const jsonAbi = loadArtifactAbi(artifact);
-
-      for (const name of fns) {
-        it(`${name}: exported selector matches the vendored ${artifact}.json entry`, () => {
-          const exported = getAbiItem({ abi: exportedAbi, name }) as AbiFunction | undefined;
-          const fromJson = getAbiItem({ abi: jsonAbi, name }) as AbiFunction | undefined;
-          // Both sides must actually declare the function — a dropped entry is drift too.
-          expect(exported).toBeDefined();
-          expect(fromJson).toBeDefined();
-          expect(toFunctionSelector(exported!)).toBe(toFunctionSelector(fromJson!));
-        });
-      }
-    });
-  }
-});
 
 describe("evm/engine load-bearing shapes", () => {
   it("v12KitchenAbi deployPot inputs are exactly [address, bytes32] (canonical form)", () => {

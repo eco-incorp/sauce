@@ -15,7 +15,6 @@ import {
 import { CHAIN_KEY_SET, NAMESPACE_KEYS } from "../../sdk/dist/routes/accessor-index.js";
 import { BalancerV2VaultABI } from "../../sdk/dist/protocols/balancer-v2/index.js";
 import { DODOV2ProxyABI } from "../../sdk/dist/protocols/dodo/index.js";
-import { MaverickV2RouterABI } from "../../sdk/dist/protocols/maverick/index.js";
 import { StargatePoolABI } from "../../sdk/dist/protocols/stargate/index.js";
 
 describe("action ABI bindings", () => {
@@ -49,8 +48,18 @@ describe("action ABI bindings", () => {
     );
   });
 
-  it("the Curve 4-argument exchange is output-free — 3pool-era pools return nothing", () => {
-    assert.deepEqual(bindingMethods("ICurvePool").exchange!.fn.outputs, []);
+  it("binds nothing at a venue @sauce/router implements: those actions call the library", () => {
+    for (const name of [
+      "ISwapRouter02",
+      "IUniversalRouter",
+      "ICurvePool",
+      "IMaverickV2Router",
+      "IUniswapV2Pair",
+    ]) {
+      assert.ok(!(BINDING_NAMES as string[]).includes(name), name);
+    }
+    assert.deepEqual(Object.keys(bindingMethods("IBalancerV2Vault")), ["batchSwap"]);
+    assert.deepEqual(Object.keys(bindingMethods("IDodoProxy")), ["dodoSwapV1"]);
   });
 
   it("the quotes a bridge pays are view calls, so the program issues them as static calls", () => {
@@ -70,22 +79,15 @@ describe("action ABI bindings", () => {
         }
       }
     }
-    assert.equal(fromSdk, 28, "a registry-sourced method was added or dropped — update this count");
+    assert.equal(fromSdk, 21, "a registry-sourced method was added or dropped — update this count");
   });
 
   it("the methods the registry declares with their deployed types come from it, selector unchanged", () => {
-    // Each was a local fragment while the registry spelled it differently or lacked it —
-    // SwapRouter02 and the deadline-free Universal Router / six-argument RouterNG overloads
-    // missing, Curve indices `uint128`, Balancer's `poolId` a `uint256`, Stargate's `to` a
-    // `uint256`, Permit2's expiration a `uint64`. The selectors are the deployed ones, dispatched
-    // in `sdk/test/fixtures/registry-abi`.
+    // Each was a local fragment while the registry spelled it differently or lacked it — the
+    // six-argument RouterNG overload missing, Stargate's `to` a `uint256`, Permit2's expiration a
+    // `uint64`. The selectors are the deployed ones, dispatched in `sdk/test/fixtures/registry-abi`.
     const fromRegistry: [BindingName, string, string, string, string][] = [
-      ["ISwapRouter02", "exactInputSingle", "uniswap-v3", "UniswapV3SwapRouter02ABI", "0x04e45aaf"],
-      ["ISwapRouter02", "exactInput", "uniswap-v3", "UniswapV3SwapRouter02ABI", "0xb858183f"],
-      ["IUniversalRouter", "execute", "uniswap-v4", "UniswapV4UniversalRouterABI", "0x24856bc3"],
-      ["ICurvePool", "exchange", "curve", "CurveThreePoolABI", "0x3df02124"],
       ["ICurveRouterNG", "exchange", "curve", "CurveRouterNGABI", "0xc872a3c5"],
-      ["IBalancerV2Vault", "swap", "balancer-v2", "BalancerV2VaultABI", "0x52bbbe29"],
       ["IBalancerV2Vault", "batchSwap", "balancer-v2", "BalancerV2VaultABI", "0x945bcec9"],
       ["IStargatePool", "send", "stargate", "StargatePoolABI", "0xc7c7f5b3"],
       ["IPermit2", "approve", "permit2", "Permit2ABI", "0x87517c45"],
@@ -97,12 +99,9 @@ describe("action ABI bindings", () => {
     }
   });
 
-  it("the router overloads are bound with their deployed mutability and outputs", () => {
-    // Both are payable on-chain; the local RouterNG fragment said nonpayable. A binding never
-    // attaches value, so the mutability changes no bytecode — but it is now the deployed one.
-    const execute = bindingMethods("IUniversalRouter").execute!.fn;
-    assert.equal(execute.stateMutability, "payable");
-    assert.deepEqual(execute.outputs, []);
+  it("the RouterNG overload is bound with its deployed mutability and output", () => {
+    // Payable on-chain; the local fragment said nonpayable. A binding never attaches value, so the
+    // mutability changes no bytecode — but it is now the deployed one.
     const exchange = bindingMethods("ICurveRouterNG").exchange!.fn;
     assert.equal(exchange.stateMutability, "payable");
     assert.deepEqual(
@@ -138,7 +137,6 @@ describe("action ABI bindings", () => {
     // When one of these starts passing the check, the registry gained the function: bind it there.
     const registryAbiFor: [BindingName, string, readonly unknown[]][] = [
       ["IDodoProxy", "dodoSwapV1", DODOV2ProxyABI],
-      ["IMaverickV2Router", "exactInputMultiHop", MaverickV2RouterABI],
       ["IStargatePool", "quoteSend", StargatePoolABI],
     ];
     for (const [binding, method, abi] of registryAbiFor) {
