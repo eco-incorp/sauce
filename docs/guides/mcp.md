@@ -165,7 +165,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_price`          | `sauce price`    | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`                                                                       |
 | `sauce_compile`        | `sauce compile`  | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, each define it reads and where it came from, the `contracts` it calls, `compiler`, `engine`, on Solana the `manifest`; with `args` the `payload`, and with `rpcUrls` each intent's Pot checked |
 | `sauce_actions`        | `sauce actions`  | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction`                                                                           |
-| `sauce_tx`             | `sauce tx`       | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, feePayer, pot, fee, transaction }`, base64 and signed by no one                                                                      |
+| `sauce_tx`             | `sauce tx`       | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, via, feePayer, pot, fee, maxExecutionFee, transaction }`, base64 and signed by no one                                                |
 | `sauce_pot`            | `sauce pot`      | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                           |
 | `sauce_simulate`       | `sauce simulate` | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                            |
 | `sauce_intent_publish` | `sauce publish`  | Each fixed intent's `intentHash`, its `vault` and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded`         |
@@ -192,7 +192,7 @@ The compiling tools take the program as text:
 | `intentFundVia`                                         | How their reward reaches the vault: `transfer` (default: paid into it, then `publish`) or `publishAndFund`                         |
 
 `sauce_compile` also takes a cook's `args` and `accounts`, to size the payload and, on Solana, the
-cook's transaction; and `rpcUrls`, each intent destination's endpoint by chain, to check that the
+cook's transaction (with `via`, the Kitchen's or the engine's direct one); and `rpcUrls`, each intent destination's endpoint by chain, to check that the
 Pot an intent's cook runs on is deployed there.
 
 A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
@@ -203,6 +203,12 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
 - `args`: `main`'s arguments as JSON values, in order. Integers are in base units, as decimal
   strings.
 - `accounts`, on Solana: each account `main` takes, by name. Each is an address, `pot` or `owner`.
+- `via`, on Solana: `kitchen` (the default), the Kitchen's cook on the owner's Pot, or `engine`,
+  the engine's own paid cook with no Kitchen and no Pot: the owner signs as the authority the
+  program acts with and pays the fee, and the program's own calls get one more level of CPI depth
+  ([Solana guide](solana.md#two-ways-to-run-a-program)).
+- `maxExecutionFee` in lamports, on Solana: a cook whose execution fee, read from the cluster, is
+  above it is refused before anything is built.
 - `rpcUrl`.
 
 `sauce_simulate` also takes:

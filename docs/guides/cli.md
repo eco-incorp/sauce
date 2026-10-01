@@ -67,7 +67,8 @@ Nothing reaches a network without one of these:
 The command checks that an EVM endpoint serves the chain you named. It never prints the URL: a
 provider URL often carries a key.
 
-Nothing is signed without one of these, and the signer is always the Pot's owner:
+Nothing is signed without one of these, and the signer is always the Pot's owner (on Solana with
+`--via engine`, which uses no Pot, the signer is the program's authority):
 
 - `--keystore <path>`: a JSON keystore (Web3 Secret Storage v3, scrypt or PBKDF2, as `cast wallet`
   and geth write). The password is asked for at the terminal without echo, or read from
@@ -457,8 +458,9 @@ the 32-byte word an account's `address` compares to.
 - `size`, the program's bytes, and `payload`, the program with `main`'s arguments appended, given
   with `--args` or `--args-json` (`null` until they are).
 - On Solana, `cook`: the size of the cook's transaction against the 1232-byte limit, measured as
-  `sauce run` builds it, with each `--account` given and a distinct account for every other slot.
-  Past the limit, stderr says `sauce run` stages the program first.
+  `sauce run` builds it, with each `--account` given and a distinct account for every other slot —
+  the Kitchen's cook, or with `--via engine` the engine's direct one, which is smaller (no Kitchen,
+  Pot or salt). Past the limit, stderr says `sauce run` stages the program first.
 
 ### Values given when it runs: `main`'s arguments
 
@@ -799,7 +801,7 @@ an intent without a settle cook, `TX_FAILED` or `TX_PENDING`.
 
 The same commands take `--chain solana`, through the SDK's Solana client
 (`svm.createSauceSvmClient`, with the endpoint you give and the program ids `/deployments` records).
-Three things differ.
+Three things differ, and a fourth is Solana's alone: how the cook reaches the engine.
 
 **Accounts.** A Solana program declares every account it touches as an `Account` parameter of
 `main` — `Account<Writable>`, `Account<Signer>` — and `sauce compile --json` reports them in its
@@ -833,7 +835,10 @@ npx sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/sola
 it. A cook names its Pot by `--owner` and `--salt`, never `--pot`, and `run` asks before creating a
 missing one, as on an EVM chain.
 
-**The cook.** The Kitchen's fee is read from the cluster, so there is no `--value`. `simulate`
+**The cook.** The execution fee is read from the cluster, so there is no `--value`: every output
+prints it as `fee`, and the cook signs it as its `max_execution_fee`, so it pays what was printed
+or, if the fee rises before it lands, fails. `--max-execution-fee <lamports>` refuses a cook whose
+fee is above it, before anything is signed or sent. `simulate`
 simulates the cook from `--owner` with signatures unchecked; a Pot the Kitchen has not created yet
 is created by its `create_pot` ahead of the cook, in the same transaction. It prints the compute
 units and what the cook moved, or the reason — a program's `throw` or `require` message, decoded
@@ -853,14 +858,43 @@ configure), and prints the signature, status and compute units — and the logs 
 program too large for one transaction is staged in a Kitchen code buffer first and the buffer is
 closed again after the cook — or when staging or the cook's rehearsal fails; if closing it fails,
 the run still prints the cook and warns with the buffer's address. A failure is named for the
-program the logs show failing. `tx` prints the cook as a base64 transaction signed by no one,
-`{ chain, feePayer, pot, fee, transaction }`, for the owner's wallet to sign; its blockhash expires
-in about a minute.
+program the logs show failing — the Kitchen's or the engine's refusals by name. `tx` prints the
+cook as a base64 transaction signed by no one, `{ chain, via, feePayer, pot, fee, maxExecutionFee,
+transaction }`, for the owner's wallet to sign; its blockhash expires in about a minute.
+
+**Through the Kitchen or direct: `--via`.** `run`, `simulate` and `tx` take
+`--via kitchen|engine` (and `compile --json` sizes either cook with it):
+
+- `--via kitchen`, the default, is everything above: the Kitchen's `cook` on the owner's Pot, which
+  the Kitchen signs for. Use it when the program holds or spends what the Pot owns, or writes the
+  Pot's storage.
+- `--via engine` calls the engine's own paid cook (`cookAndPay`) with no Kitchen and no Pot: nothing
+  is created, `--owner` (or the `--keypair`'s key) signs and pays the fee, and the program acts with
+  that signature — give `--account NAME=owner` where it needs an authority, such as the owner of the
+  token account it spends from. `NAME=pot` for a slot that must sign is refused, since nothing signs
+  for a Pot here. The program's own calls get one more level of CPI depth, as no Kitchen frame sits
+  under the engine. A staged program runs pinned to the staged bytes' digest.
+
+The fee is the same either way, read from the Kitchen's config and paid into it.
+
+```sh
+npx sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/solana/id.json \
+  --via engine --max-execution-fee 10000 --define MINT=0x<mint, as 32 bytes of hex> \
+  --account tokenProgram=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
+  --account source=<your token account> --account dest=<token account> \
+  --account authority=owner --args 400
+```
+
+The flag is `--via` rather than `--entry` because "entry" is already the compiler's word for a
+program's entry module and the arguments `main` takes (`--compact-args`, `entryEncoding`); `--via`
+names what the transaction calls. The [Solana guide](solana.md#two-ways-to-run-a-program) sets the
+two side by side.
 
 `sauce verify --chain solana <signature> --min-out <n> --spl-count <n>` checks a settle cook: the
 engine invocation it made, against the SDK's settle program recompiled for that floor and split
 (`svm.verifySvmSettleExecution`). It rejects with `TX_FAILED` (the transaction failed),
-`NO_SETTLE` or `NOT_GENUINE`.
+`NO_SETTLE` or `NOT_GENUINE`. It reads a cook through the Kitchen: a settle cooked `--via engine`
+is not one it checks.
 
 `sauce publish` does not work from Solana: the SDK has no Kitchen-built path for an intent that
 Solana's Portal runs ([Solana guide](solana.md#svm-destinations-in-eco-intents)). Open the intent

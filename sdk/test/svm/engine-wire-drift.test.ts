@@ -20,6 +20,11 @@ import { AccountRole, type Address, type Instruction } from "@solana/kit";
 import {
   buildCloseCodeBufferInstruction,
   buildClosePotInstruction,
+  buildCookAndPayFromAccountInstruction,
+  buildCookAndPayFromAccountPinnedInstruction,
+  buildCookAndPayInstruction,
+  ENGINE_FAULTS,
+  EXECUTION_FEE_CONFIG_DISCRIMINATOR,
   buildCookFromAccountInstruction,
   buildCookInstruction,
   buildInitializeExecutionFeeInstruction,
@@ -141,6 +146,51 @@ describeWire("released engine wire drift guard", () => {
     expect(hex(EXECUTE_FROM_ACCOUNT_DISCRIMINATOR)).toBe(
       wire().instructions.executeFromAccount!.discriminator,
     );
+  });
+
+  // Through the builders, as the kitchen's are below: the first eight bytes each one emits.
+  it.each([
+    [
+      "cookAndPay",
+      buildCookAndPayInstruction({
+        engineProgram: ENGINE,
+        bytecode: new Uint8Array([1]),
+        feeConfig: FEE_CONFIG,
+        feePayer: OWNER,
+        maxExecutionFee: 0n,
+      }),
+    ],
+    [
+      "cookAndPayFromAccount",
+      buildCookAndPayFromAccountInstruction({
+        engineProgram: ENGINE,
+        code: CODE,
+        feeConfig: FEE_CONFIG,
+        feePayer: OWNER,
+        maxExecutionFee: 0n,
+      }),
+    ],
+    [
+      "cookAndPayFromAccountPinned",
+      buildCookAndPayFromAccountPinnedInstruction({
+        engineProgram: ENGINE,
+        code: CODE,
+        expectedSha256: SHA,
+        feeConfig: FEE_CONFIG,
+        feePayer: OWNER,
+        maxExecutionFee: 0n,
+      }),
+    ],
+  ] as const)("the %s builder emits the released engine's discriminator", (name, built) => {
+    expect(hex(Uint8Array.from(built.data!).slice(0, 8))).toBe(
+      wire().instructions[name]!.discriminator,
+    );
+  });
+
+  // `ENGINE_FAULTS` is what names an engine refusal (a cook's fee above its cap, a pin that is not
+  // the staged bytes) without the artifact, so it has to be the release's table exactly.
+  it("ENGINE_FAULTS is the released engine's fault table", () => {
+    expect(ENGINE_FAULTS).toEqual(wire().faults);
   });
 
   it("declares the legacy and direct paid instructions, without staging", () => {
@@ -291,6 +341,19 @@ describeIdl("kitchen IDL drift guard", () => {
     ["MAX_POT_LEN", MAX_POT_LEN],
   ])("%s matches the IDL's declared bound", (name, value) => {
     expect(constantOf(name)).toBe(String(value));
+  });
+
+  // The fee config's account discriminator: what `decodeExecutionFeeConfig` (and the engine's direct
+  // cooks) check before trusting the account.
+  it("EXECUTION_FEE_CONFIG_DISCRIMINATOR is the IDL's ExecutionFeeConfig discriminator", () => {
+    const accounts = (idl() as unknown as { accounts: { name: string; discriminator: number[] }[] })
+      .accounts;
+    const config = accounts.find((account) => account.name === "ExecutionFeeConfig");
+
+    expect(config).toBeDefined();
+    expect(hex(EXECUTION_FEE_CONFIG_DISCRIMINATOR)).toBe(
+      hex(new Uint8Array(config!.discriminator)),
+    );
   });
 
   // The e2e suites assert failures by Anchor error CODE (`kitchen-bench.ts#KITCHEN_ERROR`) rather
