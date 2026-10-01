@@ -15,16 +15,17 @@ runtime **engine** it _targets_ lives in the separate private **`eco-incorp/v12`
 from `eco-incorp/sauce`**; the engine, not this package, is what took the `v12` name — often checked
 out at `../v12`).
 
-A **pnpm monorepo** of three workspace packages (`pnpm-workspace.yaml`: `dev-tools`, `sdk`,
-`actions`), all `private: true`, bundled and published as a **single npm package
-`@eco-incorp/sauce`** via subpath exports — only the root `package.json` publishes. This
-bundling is the key mental model: code lives in three packages for development, consumers import
+A **pnpm monorepo** of four workspace packages (`pnpm-workspace.yaml`: `dev-tools`, `sdk`,
+`actions`, `mcp`), all `private: true`, bundled and published as a **single npm package
+`@eco-incorp/sauce`** via subpath exports and bins — only the root `package.json` publishes. This
+bundling is the key mental model: code lives in four packages for development, consumers import
 everything from one name.
 
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
 | `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents                                                               |
+| `mcp/`       | `@eco-incorp/sauce-mcp`       | bin `sauce-mcp`                                                                                                                                       | The Sauce MCP server: the `sauce` command's read-only tools, the agent skills as resources                |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                              |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
@@ -35,18 +36,19 @@ generations**: `dev-tools` is a dev harness, not a legacy `sdk`.
 
 Use Node.js **24 or newer**, matching the Solana dependencies and CI.
 
-Run from the repo root. `build` is `pnpm -r --filter './sdk' --filter './actions' build`, and
-**`actions` reads the SDK's `dist/`**: `actions/src/registry.ts` and `compose.ts` import
-`../../sdk/dist/...` by relative path, the one spelling that resolves both in the repo and in the
+Run from the repo root. `build` is `pnpm -r --filter './sdk' --filter './actions' --filter
+'./mcp' build`, and **`actions` and `mcp` read the SDK's `dist/`**: `actions/src/registry.ts` and
+`compose.ts` import `../../sdk/dist/...` by relative path, the one spelling that resolves both in the repo and in the
 published tarball (where `actions/dist` and `sdk/dist` are siblings; the workspace name
-`@eco-incorp/sauce-source` is not published). So build the SDK before typechecking, building or
-testing `actions`. `pnpm build` orders them — `actions` declares `@eco-incorp/sauce-source` as a
+`@eco-incorp/sauce-source` is not published). `mcp/src/sdk.ts` does the same, the one module
+through which the MCP server reaches the SDK. So build the SDK before typechecking, building or
+testing `actions` or `mcp`. `pnpm build` orders them — both declare `@eco-incorp/sauce-source` as a
 workspace devDependency for exactly that — and CI builds the SDK first. The compiler is an ordinary
 npm dependency, already built; nothing in this repo builds it.
 
 ```sh
 pnpm install
-pnpm build          # sdk + actions
+pnpm build          # sdk + actions + mcp
 pnpm typecheck      # all workspaces
 pnpm test           # all workspaces
 pnpm lint           # eslint, whole repo
@@ -475,8 +477,8 @@ quotes and, for the split swap, the same quoter calls as SauceScript over fixed 
 `AMM_SWAP_INTERFACES.md` is third-party interface reference; only its sections marked Verified have
 been checked.
 
-**The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's one
-executable: `compile`, `simulate`, `run`, `publish`, `tx`, `pot`, `globals`, `inspect`, `verify`,
+**The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's command
+line: `compile`, `simulate`, `run`, `publish`, `tx`, `pot`, `globals`, `inspect`, `verify`,
 `init` and `skills install|update|status`, on EVM chains and (`solana.ts`) Solana. It adds no
 compile path of its own — `compileSauceProgram` (the compile half of `compileSauceRoute`) under
 `withChainAmbient` (the chain bundle `openRoute` uses) — and no encoder or decoder: the cook is
@@ -496,6 +498,30 @@ EVM commands against anvils with the released gated stack (and one `cast send` l
 through a JSON-RPC shim; the packed check runs the installed bin through `npx`. The agent skills
 `sauce skills` installs (to `.claude/skills/` and `.agents/skills/`) live in the top-level
 `skills/<name>/` and ship in the package (see "Agent skills" below).
+
+What a command's input MEANS — the chain a program runs on, whether its defines reach it, the Pot a
+cook names, its funding and assumed balances — lives in `inputs.ts`, taking plain values, so a
+second front end applies the same rules: `run.ts` reads flags into it, and the MCP server reads
+tool arguments into it.
+
+**The `sauce-mcp` bin** (`mcp/`, built to `mcp/dist/main.js`) is the MCP server: the `sauce`
+command's read-only half as tools (`sauce_compile`, `sauce_tx`, `sauce_pot`, `sauce_simulate`,
+`sauce_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`, `sauce_chains`), over stdio by
+default or stateless Streamable HTTP with `--http`. Each tool calls the function the matching
+command calls (`compileCommand`, `txCommand`, `simulateCommand`, …) and returns its JSON as
+structured content, so a change to a command reaches its tool with no edit in `mcp/`; do not
+reimplement command logic there. It never signs and takes no key under any name (`tools.test.ts`
+fails a tool input that looks like one). It reads no environment and ships no endpoint: chains come
+only from `--config`, whose URLs are registered with `signer.ts#secret` at start and scrubbed from
+every result, error and log (`secrets.test.ts`). A program's relative imports are served only from
+the call's `modules`, never from the server's disk. The agent skills are resources at
+`sauce://skills/<path>` read from `skills/` as shipped, with an index; nothing in `mcp/` names a
+particular skill except the two prompts, which embed one only when it exists. `sauce-mcp setup`
+writes each coding agent's documented project config (`.mcp.json`, `.codex/config.toml`,
+`.cursor/mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`). Its tests use the node test
+runner (`pnpm --filter './mcp' test`); `chain.e2e.test.ts` runs the tools against an anvil with the
+released stack through `sdk/test/cli-anvil.ts`, gated on `SAUCE_V12_RUNTIME_CREATION_HEX` like the
+CLI's chain suites. The consumer guide is `docs/guides/mcp.md`.
 
 ## Agent skills
 
