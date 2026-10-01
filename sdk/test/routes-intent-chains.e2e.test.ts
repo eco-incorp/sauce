@@ -35,6 +35,7 @@ import {
   encodeAbiParameters,
   encodeFunctionData,
   encodePacked,
+  getAddress,
   http,
   keccak256,
   parseAbi,
@@ -225,8 +226,12 @@ class Chain {
       testClient: this.testClient,
       walletClient: this.walletClient,
     };
-    // The stack at its release addresses: a route built with no `engine` cooks on this one.
+    // The harness deploys the engine at its release address, which a route built with no `engine`
+    // cooks on.
     this.engine = await startGatedEngine(clients, DEPLOYER.address, runtimeCreationCode);
+    if (getAddress(this.engine.engine) !== getAddress(v12EngineAddress())) {
+      throw new Error(`the harness put the engine at ${this.engine.engine}`);
+    }
 
     this.portal = await this.deploy(
       `${PORTAL_FIXTURE.creationCode}${encodeAbiParameters([{ type: "address" }], ["0x0000000000000000000000000000000000000000"]).slice(2)}` as Hex,

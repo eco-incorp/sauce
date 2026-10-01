@@ -24,7 +24,7 @@ and program plus arguments is the `program` of the owner's `Pot.cook(engine, pro
 ```ts
 import { readFileSync } from "node:fs";
 import { routes, v12PredictPot } from "@eco-incorp/sauce";
-import { v12EngineAddress, v12KitchenAddress } from "@eco-incorp/sauce/deployments";
+import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
 import { bytesToHex, concatHex, getAddress } from "viem";
 
@@ -38,11 +38,7 @@ export function cookTransactions(
 ) {
   const salt = `0x${"00".repeat(32)}` as const;
   const pot = v12PredictPot(owner, salt); // the owner's Pot, derived through the released Kitchen
-  const deploy = routes.sauceEvmDeployPotCall({
-    kitchen: getAddress(v12KitchenAddress()),
-    owner,
-    salt,
-  }); // once
+  const deploy = routes.sauceEvmDeployPotCall({ owner, salt }); // once, through the Kitchen
   const program = routes.compileSauceProgram(chain, readFileSync(file, "utf8"));
   const encoded = routes.encodeEntryArguments(program, args); // checked against main's types
   const engine = getAddress(v12EngineAddress());
@@ -56,8 +52,12 @@ export function cookTransactions(
   on the chain with your client, just before sending the cook.
 - `routes.sauceEvmDeployPotCall` and `routes.buildSauceEvmCall` return `{ to, data, value }` to send
   as a transaction, plus `target`, the same contract as a route's `calls` entry names it.
-- `v12EngineAddress()` and `v12KitchenAddress()` are recorded release
-  addresses: check the chain has code at them. Deploy the Pot only where it has no code yet.
+- `v12EngineAddress()` and `v12KitchenAddress()` are recorded release addresses, and the deploy
+  call goes to the Kitchen unless you pass `kitchen`: check the chain has code at them. Deploy the
+  Pot only where it has no code yet.
+- A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
+pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
+  when the Kitchen has a newer one.
 - A program that opens an intent also needs `options.intents`, `{ deadline, creator,
 executionFee }` (`sauce-intents`).
 

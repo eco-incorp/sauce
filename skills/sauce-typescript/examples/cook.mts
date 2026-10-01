@@ -28,11 +28,7 @@ function check(condition: unknown, message: string): asserts condition {
 const owner = address("owner");
 const salt = `0x${"00".repeat(32)}` as const; // one Pot per owner and salt
 const pot = v12PredictPot(owner, salt);
-const deploy = routes.sauceEvmDeployPotCall({
-  kitchen: getAddress(v12KitchenAddress()),
-  owner,
-  salt,
-});
+const deploy = routes.sauceEvmDeployPotCall({ owner, salt }); // through the released Kitchen
 // Send deploy ({ to, data, value }) where the chain has no code at `pot`.
 
 // 2. The program, compiled for its chain with that chain's names, as `sauce compile` does.
