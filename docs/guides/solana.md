@@ -255,6 +255,12 @@ token account into the Pot's is a route call before the cook (an SPL
 engine's heap frame, as every cook does; `sauce intent fill` adds it when a route
 call is the Kitchen's.
 
+A route's program runs through the Kitchen, on the executor's Pot: that is what
+these builders make, and the `sauce intent` commands take no `--via`. The direct
+entry ([Two ways to run a program](#two-ways-to-run-a-program), `via: "engine"`)
+is for a cook a wallet sends with its own authority. An executor issuing one is
+not something this package builds or tests.
+
 The Portal's own instructions are `buildPortalFulfillInstruction`,
 `buildPortalHyperProveInstructions` (the proof through the HyperProver, with the
 gas for Hyperlane's delivery paid in the same transaction) and
