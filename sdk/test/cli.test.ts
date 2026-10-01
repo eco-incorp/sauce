@@ -418,118 +418,112 @@ describe("sauce compile", () => {
     );
   });
 
-  // FAILING until the compiler reports the manifest contracts a program read: the native pipeline
-  // runs no protocol rewrite, so nothing calls `accessors.onContract` and `contracts` is empty.
-  // (The defines half of this report still holds.)
-  it.failing(
-    "reports the defines it applied and where each came from, and the contracts it resolved",
-    async () => {
-      // A venue the chain sets (UniswapV3_Factory), one the user sets, one the user sets and never
-      // reads, and a namespace call and a token — at the top and inside an intent body, which reads
-      // its own chain's.
-      const program = file(
-        "venues.sauce.ts",
-        [
-          "const UniswapV3_Factory = 0n;",
-          "const PANCAKE = 0n;",
-          "function main(amount: Uint256) {",
-          "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
-          "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
-          "  require(pool != 0n);",
-          "  Arbitrum(() => {",
-          "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
-          "    require(there != 0n);",
-          "  }).reward({ tokens: [{ token: USDC, amount: amount }] });",
-          "}",
-          "",
-        ].join("\n"),
-      );
-      const pancake = "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865";
-      const run = await sauce(
-        "compile",
-        program,
-        "--chain",
-        "base",
-        "--define",
-        `PANCAKE=${pancake}`,
-        "--define",
-        "UNUSED=5",
-        "--intent-deadline",
-        "2000000000",
-        "--intent-creator",
-        CREATOR,
-        "--intent-execution-fee",
-        "0",
-        "--json",
-        "--args",
-        "1000",
-      );
-      expect(run.code).toBe(0);
-      expect(run.stderr).toContain("--define UNUSED: ");
-      expect(run.stderr).toContain("never reads UNUSED, so the define changes nothing");
-      const out = JSON.parse(run.stdout) as Record<string, unknown>;
-      const base = routes.chainDefines(requireChain("base"));
-      const address = (value: unknown) =>
-        getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
-      const arbitrum = routes.chainDefines(requireChain("arbitrum"));
-      expect(out.defines).toEqual([
-        { name: "PANCAKE", value: pancake, source: "user", chain: "base" },
-        {
-          name: "USDC",
-          value: address(arbitrum.USDC),
-          source: "chain",
-          kind: "token",
-          chain: "arbitrum",
-        },
-        { name: "USDC", value: address(base.USDC), source: "chain", kind: "token", chain: "base" },
-        {
-          name: "UniswapV3_Factory",
-          value: address(base.UniswapV3_Factory),
-          source: "chain",
-          kind: "contract",
-          chain: "base",
-        },
-        { name: "WETH", value: address(base.WETH), source: "chain", kind: "token", chain: "base" },
-      ]);
-      expect(out.contracts).toEqual([
-        {
-          reference: "UniswapV3.Factory",
-          contract: "UniswapV3.Factory",
-          chain: "arbitrum",
-          address: address(arbitrum.UniswapV3_Factory),
-        },
-        {
-          reference: "UniswapV3.Factory",
-          contract: "UniswapV3.Factory",
-          chain: "base",
-          address: address(base.UniswapV3_Factory),
-        },
-      ]);
-      // main(amount): one ABI-v1 word after the program.
-      expect(out.payload).toEqual({ size: (out.size as number) + 32, argumentsSize: 32 });
-      // Without its arguments the payload is not known.
-      const bare = JSON.parse(
-        (
-          await sauce(
-            "compile",
-            program,
-            "--chain",
-            "base",
-            "--define",
-            `PANCAKE=${pancake}`,
-            "--intent-deadline",
-            "2000000000",
-            "--intent-creator",
-            CREATOR,
-            "--intent-execution-fee",
-            "0",
-            "--json",
-          )
-        ).stdout,
-      ) as Record<string, unknown>;
-      expect(bare.payload).toBeNull();
-    },
-  );
+  it("reports the defines it applied and where each came from, and the contracts it resolved", async () => {
+    // A venue the chain sets (UniswapV3_Factory), one the user sets, one the user sets and never
+    // reads, and a namespace call and a token — at the top and inside an intent body, which reads
+    // its own chain's.
+    const program = file(
+      "venues.sauce.ts",
+      [
+        "const UniswapV3_Factory = 0n;",
+        "const PANCAKE = 0n;",
+        "function main(amount: Uint256) {",
+        "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
+        "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
+        "  require(pool != 0n);",
+        "  Arbitrum(() => {",
+        "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
+        "    require(there != 0n);",
+        "  }).reward({ tokens: [{ token: USDC, amount: amount }] });",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const pancake = "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865";
+    const run = await sauce(
+      "compile",
+      program,
+      "--chain",
+      "base",
+      "--define",
+      `PANCAKE=${pancake}`,
+      "--define",
+      "UNUSED=5",
+      "--intent-deadline",
+      "2000000000",
+      "--intent-creator",
+      CREATOR,
+      "--intent-execution-fee",
+      "0",
+      "--json",
+      "--args",
+      "1000",
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain("--define UNUSED: ");
+    expect(run.stderr).toContain("never reads UNUSED, so the define changes nothing");
+    const out = JSON.parse(run.stdout) as Record<string, unknown>;
+    const base = routes.chainDefines(requireChain("base"));
+    const address = (value: unknown) =>
+      getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    const arbitrum = routes.chainDefines(requireChain("arbitrum"));
+    expect(out.defines).toEqual([
+      { name: "PANCAKE", value: pancake, source: "user", chain: "base" },
+      {
+        name: "USDC",
+        value: address(arbitrum.USDC),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
+      { name: "USDC", value: address(base.USDC), source: "chain", kind: "token", chain: "base" },
+      {
+        name: "UniswapV3_Factory",
+        value: address(base.UniswapV3_Factory),
+        source: "chain",
+        kind: "contract",
+        chain: "base",
+      },
+      { name: "WETH", value: address(base.WETH), source: "chain", kind: "token", chain: "base" },
+    ]);
+    expect(out.contracts).toEqual([
+      {
+        reference: "UniswapV3.Factory",
+        contract: "UniswapV3.Factory",
+        chain: "arbitrum",
+        address: address(arbitrum.UniswapV3_Factory),
+      },
+      {
+        reference: "UniswapV3.Factory",
+        contract: "UniswapV3.Factory",
+        chain: "base",
+        address: address(base.UniswapV3_Factory),
+      },
+    ]);
+    // main(amount): one ABI-v1 word after the program.
+    expect(out.payload).toEqual({ size: (out.size as number) + 32, argumentsSize: 32 });
+    // Without its arguments the payload is not known.
+    const bare = JSON.parse(
+      (
+        await sauce(
+          "compile",
+          program,
+          "--chain",
+          "base",
+          "--define",
+          `PANCAKE=${pancake}`,
+          "--intent-deadline",
+          "2000000000",
+          "--intent-creator",
+          CREATOR,
+          "--intent-execution-fee",
+          "0",
+          "--json",
+        )
+      ).stdout,
+    ) as Record<string, unknown>;
+    expect(bare.payload).toBeNull();
+  });
 
   it("says whether a Solana cook fits one transaction, for its accounts", async () => {
     const program = file(
