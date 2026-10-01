@@ -200,6 +200,33 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
   account's balance change and each account's lamports, read from the accounts as the simulation
   leaves them. `sauce-solana` covers writing and running one.
 
+## Without the CLI: the MCP tools
+
+The same steps are tools of the Sauce MCP server, for an agent with no local install but Node.js:
+`npx -y @eco-incorp/sauce mcp` starts it over stdio. A tool takes the program as text (`source`)
+and the command's flags as inputs of the same name in camelCase; `args` is `main`'s arguments as a
+JSON array. A tool that reads a chain takes `rpcUrl`, an endpoint for that one call, which is never
+returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` and
+`sauce_intent_publish` return, with their own wallet.
+
+| Command                | Tool                                                                   |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `sauce globals`        | `sauce_globals`                                                        |
+| `sauce compile`        | `sauce_compile`                                                        |
+| `sauce actions`        | `sauce_actions`, and with owner or pot the cook                        |
+| `sauce pot`            | `sauce_pot`: the address, the deploy, whether it exists, what it holds |
+| `sauce simulate`       | `sauce_simulate`                                                       |
+| `sauce tx`             | `sauce_tx`                                                             |
+| `sauce intent publish` | `sauce_intent_publish`, unsigned or as a dry run                       |
+| `sauce intent fill`    | `sauce_intent_fill`: the destination's side, rehearsed                 |
+| `sauce inspect`        | `sauce_inspect`                                                        |
+| `sauce verify`         | `sauce_verify`                                                         |
+| `sauce price`          | `sauce_price`, also from a pool read now                               |
+| `sauce run`            | none: it signs                                                         |
+
+`sauce_skills` and `sauce_skill` read these skills, and `sauce_install_skills` says how to install
+them locally.
+
 ## Rules
 
 - Never write an RPC URL or a key into a tracked file, a program or a command you commit.

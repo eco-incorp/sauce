@@ -134,6 +134,7 @@ requests your application submits. [Quick start](docs/guides/quick-start.md) wal
 | Compile a standalone program with runtime arguments | [Compiling programs](docs/guides/compiling.md)  |
 | Compile and run a program file from a terminal      | [The sauce command](docs/guides/cli.md)         |
 | Have a coding agent write and run programs          | [Agent skills](docs/guides/cli.md#agent-skills) |
+| Give a coding agent Sauce's tools over MCP          | [The MCP server](docs/guides/mcp.md)            |
 | Execute on Solana                                   | [Solana](docs/guides/solana.md)                 |
 | Check what a settlement payload contains            | [Verification](docs/guides/verification.md)     |
 | Know which protocols, tokens and chains are wired   | [Coverage](docs/api/coverage.md)                |

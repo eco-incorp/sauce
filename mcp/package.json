@@ -1,0 +1,33 @@
+{
+  "name": "@eco-incorp/sauce-mcp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eco-incorp/sauce.git",
+    "directory": "mcp"
+  },
+  "homepage": "https://github.com/eco-incorp/sauce#readme",
+  "bugs": "https://github.com/eco-incorp/sauce/issues",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.build.json && tsx --test --test-concurrency=1 test/*.test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "viem": "^2.45.3",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@eco-incorp/sauce-actions": "workspace:*",
+    "@eco-incorp/sauce-source": "workspace:*",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.8.0"
+  }
+}

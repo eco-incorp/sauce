@@ -76,7 +76,8 @@ owner's Pot, `cook(engine, program)` with `main`'s arguments appended to the pro
 Kitchen's fee. `sauce tx` prints that transaction unsigned, `{ chainId, to, data, value }`, for
 any wallet or signer to send; `sauce run` signs and sends it itself, deploying the Pot first if it
 is not there. `sauce-run` covers each command. Endpoints come from a config file the developer passes, never
-from the program or the environment.
+from the program or the environment. Without the CLI, the same steps are tools of the Sauce MCP
+server (`npx -y @eco-incorp/sauce mcp`); `sauce-run` maps each command to its tool.
 
 ## Pick the next skill
 

@@ -15,16 +15,17 @@ runtime **engine** it _targets_ lives in the separate private **`eco-incorp/v12`
 from `eco-incorp/sauce`**; the engine, not this package, is what took the `v12` name — often checked
 out at `../v12`).
 
-A **pnpm monorepo** of three workspace packages (`pnpm-workspace.yaml`: `dev-tools`, `sdk`,
-`actions`), all `private: true`, bundled and published as a **single npm package
-`@eco-incorp/sauce`** via subpath exports — only the root `package.json` publishes. This
-bundling is the key mental model: code lives in three packages for development, consumers import
+A **pnpm monorepo** of four workspace packages (`pnpm-workspace.yaml`: `dev-tools`, `sdk`,
+`actions`, `mcp`), all `private: true`, bundled and published as a **single npm package
+`@eco-incorp/sauce`** via subpath exports and bins — only the root `package.json` publishes. This
+bundling is the key mental model: code lives in four packages for development, consumers import
 everything from one name.
 
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
 | `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents; `sauce actions` lowers them                                  |
+| `mcp/`       | `@eco-incorp/sauce-mcp`       | `sauce mcp` (loaded by the `sauce` bin)                                                                                                               | The Sauce MCP server: the `sauce` command's read-only tools, the agent skills as resources                |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                              |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
@@ -35,18 +36,19 @@ generations**: `dev-tools` is a dev harness, not a legacy `sdk`.
 
 Use Node.js **24 or newer**, matching the Solana dependencies and CI.
 
-Run from the repo root. `build` is `pnpm -r --filter './sdk' --filter './actions' build`, and
-**`actions` reads the SDK's `dist/`**: `actions/src/registry.ts` and `compose.ts` import
-`../../sdk/dist/...` by relative path, the one spelling that resolves both in the repo and in the
+Run from the repo root. `build` is `pnpm -r --filter './sdk' --filter './actions' --filter
+'./mcp' build`, and **`actions` and `mcp` read the SDK's `dist/`**: `actions/src/registry.ts` and
+`compose.ts` import `../../sdk/dist/...` by relative path, the one spelling that resolves both in the repo and in the
 published tarball (where `actions/dist` and `sdk/dist` are siblings; the workspace name
-`@eco-incorp/sauce-source` is not published). So build the SDK before typechecking, building or
-testing `actions`. `pnpm build` orders them — `actions` declares `@eco-incorp/sauce-source` as a
+`@eco-incorp/sauce-source` is not published). `mcp/src/sdk.ts` does the same, the one module
+through which the MCP server reaches the SDK. So build the SDK before typechecking, building or
+testing `actions` or `mcp`. `pnpm build` orders them — both declare `@eco-incorp/sauce-source` as a
 workspace devDependency for exactly that — and CI builds the SDK first. The compiler is an ordinary
 npm dependency, already built; nothing in this repo builds it.
 
 ```sh
 pnpm install
-pnpm build          # sdk + actions
+pnpm build          # sdk + actions + mcp
 pnpm typecheck      # all workspaces
 pnpm test           # all workspaces
 pnpm lint           # eslint, whole repo
@@ -651,6 +653,43 @@ EVM commands against anvils with the released gated stack (and one `cast send` l
 through a JSON-RPC shim; the packed check runs the installed bin through `npx`. The agent skills
 `sauce skills` installs (to `.claude/skills/` and `.agents/skills/`) live in the top-level
 `skills/<name>/` and ship in the package (see "Agent skills" below).
+
+What a command's input MEANS — the chain a program runs on, whether its defines reach it, the Pot a
+cook names, its funding and assumed balances — lives in `inputs.ts`, taking plain values, so a
+second front end applies the same rules: `run.ts` reads flags into it, and the MCP server reads
+tool arguments into it.
+
+**`sauce mcp`** is the MCP server (`mcp/`, built to `mcp/dist`). It is a CLI command, not a bin
+of its own, so `npx -y @eco-incorp/sauce mcp` self-hosts it in one command. `sdk/src/cli/mcp.ts`
+owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript does not follow
+(so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
+MCP SDK); `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
+Its tools are the `sauce` command's read-only half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
+`sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_intent_fill`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
+`sauce_price`, `sauce_chains` — plus the skills as tools (`sauce_skills`, `sauce_skill`,
+`sauce_dev`, `sauce_install_skills`), because many clients never read resources. Each command tool
+calls the function the matching command calls (`compileCommand`, `txCommand`, `simulateCommand`, …)
+and returns its JSON as structured content, so a change to a command reaches its tool with no edit
+in `mcp/`; do not reimplement command logic there. `sauce_actions` calls `actions.ts`'s
+`actionsCommand` (and `actionsProgram` for its cook), what `sauce actions` and the program commands
+use.
+
+It never signs and takes no key under any name (`tools.test.ts` fails a tool input that looks like
+one), and reads no environment. A tool reads a chain through the call's own `rpcUrl`, else the
+`--config` endpoint, else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
+the server's are registered with `signer.ts#secret` at start — all scrubbed from every result,
+error and log (`secrets.test.ts`). Over HTTP a caller's URL goes only through `guard.ts`: https,
+no private/ULA/link-local/CGNAT/metadata address, checked again at each connection (rebinding),
+no redirects, bounded; `--allow-private-rpc` relaxes it. Over stdio there is no guard. A program's
+relative imports are served only from the call's `modules`, never from the server's disk; skill
+files only by exact match against what `skills/` ships. Nothing in `mcp/` names a particular skill
+except the prompts and `sauce_dev` (sauce-typescript), which degrade when it is missing. `sauce mcp
+setup` writes each coding agent's documented project config (`.mcp.json`, `.codex/config.toml`,
+`.cursor/mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`). Its tests use the node test runner
+(`pnpm --filter './mcp' test`, which builds `mcp/dist` first, since `transports.test.ts` runs the
+built `sauce mcp`); `chain.e2e.test.ts` runs the tools against an anvil with the released stack
+through `sdk/test/cli-anvil.ts`, gated on `SAUCE_V12_RUNTIME_CREATION_HEX` like the CLI's chain
+suites. The consumer guide is `docs/guides/mcp.md`.
 
 ## Agent skills
 
