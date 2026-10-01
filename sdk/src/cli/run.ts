@@ -62,6 +62,7 @@ import {
   type FundMode,
   type FundRequest,
 } from "./funding.js";
+import { fillCommand } from "./fill.js";
 import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
@@ -1169,6 +1170,90 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ...(rpcUrl === undefined ? {} : { rpcUrl }),
           ...(account === undefined ? {} : { account }),
           ...(from === undefined ? {} : { from: parseAddress("from", from) }),
+        },
+        io,
+      );
+    },
+  },
+  fill: {
+    usage: "sauce fill <file> --chain <source> (--config <file> | --rpc-url <url>) [options]",
+    summary: "Rehearse a solver filling a file's intents on their destination, with no key",
+    flags: {
+      ...PROGRAM,
+      "rpc-url": {
+        type: "string",
+        value: "<url>",
+        help: "The destination chain's endpoint (one destination only)",
+      },
+      config: {
+        type: "string",
+        value: "<file>",
+        help: 'Or a file of { "rpcUrls": { "<chain id>": "<url>" } }: each destination\'s',
+      },
+      solver: {
+        type: "string",
+        value: "<address>",
+        help: "Fill from this account (default: one nobody holds the key of)",
+      },
+      claimant: {
+        type: "string",
+        value: "<address|bytes32>",
+        help: "Who claims the reward, as fulfill records it (default: the solver)",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Builds each intent the file opens, as `sauce publish` does, and rehearses on its",
+      "destination chain what a solver sends to fill it: no key, nothing sent. One",
+      "eth_simulateV1 block, every call from the solver: Kitchen.deployPot for the destination's",
+      "shared intent Pot when the route cooks on it and it is not deployed yet (any account may",
+      "send it), the solver's approval of the Portal for each token the route delivers, then",
+      "Portal.fulfill(intentHash, route, rewardHash, claimant) with the route's native amount —",
+      "the Kitchen's fee for its cook — as the value. The solver is given the route's tokens and",
+      "the value by state override, where a token keeps the balance found as simulate's",
+      "--assume-balance finds it.",
+      "",
+      "Prints the gas and what the fill moved — the transfers, each address's net change, labelled",
+      "with the defines that name it (RECIPIENT, REFUND_TO) — and what it left in the shared Pot",
+      "and the Portal's Executor, which every intent through that Portal shares; or the decoded",
+      "reason it reverts (exit 1), a failed route call unwrapped to the program's own message.",
+      "",
+      "The endpoint is the DESTINATION's: --config names each one, and --rpc-url serves a file",
+      "whose intents all go to one chain. The intent must be fixed when it is built, as for",
+      "publish: one using a value the program measures on chain has no route until it runs. A",
+      "Solana destination is not rehearsed. Needs an endpoint that serves eth_simulateV1.",
+      "",
+      "Example:",
+      "  sauce fill swap-on-base.sauce.ts --chain arbitrum --config sauce.config.json \\",
+      "    --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0x… \\",
+      "    --intent-execution-fee 1000000000000",
+    ].join("\n"),
+    run: (args, io) => {
+      const program = programInput(args, io);
+      const rpcUrl = stringFlag(args, "rpc-url");
+      const config = stringFlag(args, "config");
+      if (rpcUrl === undefined && config === undefined) {
+        throw new UsageError(
+          "missing --config <file> (or --rpc-url <url>): the endpoint of each intent's " +
+            "destination chain, where the fill runs",
+        );
+      }
+      const solver = stringFlag(args, "solver");
+      const claimant = stringFlag(args, "claimant");
+      if (claimant !== undefined && !/^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(claimant)) {
+        throw new UsageError(
+          `--claimant: '${claimant}' is neither an address (20 bytes) nor 32 bytes of hex`,
+        );
+      }
+
+      return fillCommand(
+        {
+          ...program,
+          endpointOf: (chain) => requiredEndpoint(args, io, chain),
+          endpointFlag: rpcUrl === undefined ? "--config" : "--rpc-url",
+          ...(solver === undefined ? {} : { solver: parseAddress("solver", solver) }),
+          ...(claimant === undefined ? {} : { claimant: claimant as `0x${string}` }),
         },
         io,
       );
