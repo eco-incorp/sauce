@@ -55,6 +55,15 @@ const fee = { ethereum: BigInt(flag("ethereum-fee")), base: BigInt(flag("base-fe
 const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // filled within the hour or not at all
 const feeRead = destinationExecutionFee(); // { to, data, decode }: eth_call it on each destination
 
+/** A file the program imports by relative path (`./IPool.json`), read from beside this runner, as
+ *  the `sauce` command reads it from beside the program; `undefined` where there is none. */
+const besideThis = (path: string): Uint8Array | undefined => {
+  try {
+    return readFileSync(new URL(path, import.meta.url));
+  } catch {
+    return undefined;
+  }
+};
 const compileFor = (
   slug: string,
   source: string,
@@ -64,6 +73,7 @@ const compileFor = (
   routes.compileSauceProgram(slug, source, {
     defines,
     intents: { deadline, creator, ...(executionFee === undefined ? {} : { executionFee }) },
+    resolve: besideThis,
   });
 const word = (value: bigint | string) => BigInt(value).toString(16).padStart(40, "0");
 const token = (slug: string, symbol: string) => {
@@ -135,19 +145,35 @@ for (const [what, value] of [
   check(swapped.calls.includes(word(value)), `the child uses ${what}`);
 }
 check(swapped.rewarded.join() === word(token("ethereum", "WETH")), "the reward is Ethereum's WETH");
-// The body swaps through @sauce/router and reads a pool's own state by selector, with
-// evm.static. These are the selectors sauce-intents tabulates.
-for (const [signature, selector] of [
-  ["getPool(address,address,uint24)", "1698ee82"],
-  ["getPool(address,address,int24)", "28af8d0b"],
-  ["slot0()", "3850c7bd"],
-  ["liquidity()", "1a686502"],
-  ["fee()", "ddca3f43"],
+// The body swaps through @sauce/router and reads a V3 pool through the file's own ABI beside it,
+// IPool.json: the three view functions the pool dispatches, by these selectors, and no raw
+// selector of its own.
+const poolAbi = JSON.parse(
+  readFileSync(new URL("./IPool.json", import.meta.url), "utf8"),
+) as Array<{
+  type: string;
+  name: string;
+  inputs: Array<{ type: string }>;
+}>;
+const poolSelectors = Object.fromEntries(
+  poolAbi.map((f) => [
+    f.name,
+    toFunctionSelector(`${f.name}(${f.inputs.map((i) => i.type).join(",")})`),
+  ]),
+);
+for (const [name, selector] of [
+  ["slot0", "3850c7bd"],
+  ["liquidity", "1a686502"],
+  ["fee", "ddca3f43"],
 ] as const) {
-  check(toFunctionSelector(signature) === `0x${selector}`, `${signature} is 0x${selector}`);
+  check(poolSelectors[name] === `0x${selector}`, `IPool.json's ${name}() is 0x${selector}`);
 }
-for (const selector of ["3850c7bd", "1a686502", "ddca3f43"])
-  check(swap.includes(`hex\`${selector}\``), `the body uses 0x${selector}`);
+check(
+  Object.keys(poolSelectors).length === 3,
+  "IPool.json holds only the functions the body calls",
+);
+check(/import IPool from "\.\/IPool\.json"/.test(swap), "the body reads a pool through IPool.json");
+check(!/hex`[0-9a-f]{8}`/.test(swap), "and calls no raw selector");
 check(
   /import \{ uniswapV3, uniswapV4 \} from "@sauce\/router"/.test(swap),
   "the body swaps through @sauce/router",
@@ -240,6 +266,7 @@ const rehashed = (deadlineShift: bigint, executionFee: bigint) =>
     routes.compileSauceProgram("ethereum", swap, {
       defines: swapDefines,
       intents: { deadline: deadline + deadlineShift, creator, executionFee },
+      resolve: besideThis,
     }).intents[0]!.intent,
   ).intentHash;
 check(rehashed(0n, fee.base) === intentHash, "the same inputs give the same intent");
