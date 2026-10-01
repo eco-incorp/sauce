@@ -21,6 +21,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`)                                                                                           |
 | `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                                                                                     |
 | `/skills`                      | The per-protocol documents (the `sauce-protocols` agent skill's references) and their index, as text                                                                                        |
+| `/sauce-script`                | Types only: SauceScript's builtins, chains and ABI modules, for an editor checking `*.sauce.ts` programs ([In an editor](../guides/cli.md#in-an-editor))                                    |
 
 The [`exports` map](../../package.json) defines this list. There is no `/routes`, `/token`,
 `/swap`, `/deposit`, or `/contracts` subpath; import these namespaces from the root:

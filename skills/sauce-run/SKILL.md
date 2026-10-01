@@ -131,6 +131,10 @@ Every value is checked against its declared type before anything is sent: `Addre
   statements with no `main`, such as an intent file, leaves the name undeclared and takes it from
   the define. An address in a program is a hex integer with an `n`, as Base's USDC is
   `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n`; on the command line it is plain hex.
+- In a project `sauce init` wrote, put programs in `programs/`: its `tsconfig.json` types them as
+  SauceScript, so an editor's TypeScript errors there are real ones (with the project's own
+  TypeScript running the editor). Elsewhere a program shows TypeScript errors that the compile
+  does not have; `sauce compile` is what decides.
 - `sauce-script` covers the language and what compiling for a chain adds to it.
 
 [examples/pay.sauce.ts](examples/pay.sauce.ts) pays a recipient in USDC and USDT, on any chain that registers both.

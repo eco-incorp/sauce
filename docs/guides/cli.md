@@ -43,8 +43,8 @@ npm install
 
 `sauce init` writes a `package.json` that pins `@eco-incorp/sauce` to exactly the version that ran
 it, an `AGENTS.md` with the project's instructions for coding agents, a `.gitignore` that keeps
-local configuration out of git, and `sauce.config.example.json`, and then installs the agent skills
-([Agent skills](#agent-skills)). `init` refuses to overwrite a file that already has other content,
+local configuration out of git, `sauce.config.example.json`, and `programs/tsconfig.json`
+([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](#agent-skills)). `init` refuses to overwrite a file that already has other content,
 and lists it, unless you pass `--force`. It runs no package manager unless you pass `--install`.
 
 ## Endpoints and signers
@@ -500,6 +500,28 @@ sauce compile: pay.sauce.ts does not compile for base
         |               ^^^^^^^^^
 hint: if RECIPIENT is a value you supply, pass --define RECIPIENT=<value>
 ```
+
+### In an editor
+
+A program file is checked by an editor as TypeScript, which does not know SauceScript's names.
+`sauce init` writes `programs/tsconfig.json`, a TypeScript project of the `*.sauce.ts` files in
+`programs/` alone, typed by the package's `@eco-incorp/sauce/sauce-script` declarations: the
+builtins (`ctx`, `abi`, `evm`, `svm`, `crypto`, `require`, `revert`), `Token` and the
+`@sauce/token` functions, every chain with its tokens and protocol namespaces, the protocol
+defines, and the ABI a program imports (`import IERC20 from "./artifacts/IERC20.json"`). The
+project's other TypeScript is not in it, so a Node file keeps Node's `crypto` and `require`.
+
+Some valid SauceScript is not valid TypeScript: every SauceScript number is one 256-bit integer, so
+`xs[i]` with a `bigint` index, `n + 1` with `n` a `bigint`, and `f(500)` where `f` takes a `bigint`
+are all fine, and a define the file leaves undeclared for `--define` is not an error until the
+compile. The tsconfig names a TypeScript plugin from the package that drops exactly those
+diagnostics, in `*.sauce.ts` files only; a misspelled builtin, a wrong argument count or a method a
+contract does not have still shows. An editor loads the plugin only when it runs the project's own
+TypeScript (in VS Code, "TypeScript: Select TypeScript Version", then "Use Workspace Version"), and
+`init` adds `typescript` to `devDependencies` for it. Without the plugin, those diagnostics show
+and nothing else changes: whether a program compiles is the compiler's to say, not the editor's.
+
+In a project `init` did not write, copy that `programs/tsconfig.json` beside your programs.
 
 ## Intents: `run` or `publish`
 
