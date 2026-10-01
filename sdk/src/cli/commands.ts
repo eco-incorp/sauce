@@ -110,9 +110,13 @@ export interface ProgramInput {
   /** `Chain(() => …).reward(…)` inside the program: what the SDK cannot look up. */
   readonly intents: {
     readonly deadline?: bigint;
+    /** From when an unproven intent's reward may be refunded; the route's deadline by default. */
+    readonly rewardDeadline?: bigint;
     readonly creator?: Address;
+    /** The reward's prover; the registry's for the pair by default. */
+    readonly prover?: Address;
     readonly executionFee?: bigint;
-    /** How their reward is funded, by the program a Pot runs or by `sauce publish`'s wallet:
+    /** How their reward is funded, by the program a Pot runs or by `sauce intent publish`'s wallet:
      *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
     readonly fundVia?: IntentFundVia;
   };
@@ -195,10 +199,12 @@ function compileOptions(
   onContract?: (reference: string, target: AccessorTarget) => void,
 ): SauceCompileOptions {
   const dir = sourceDirOf(input);
-  const { deadline, creator, executionFee, fundVia } = input.intents;
+  const { deadline, rewardDeadline, creator, prover, executionFee, fundVia } = input.intents;
   const intents = {
     ...(deadline === undefined ? {} : { deadline }),
+    ...(rewardDeadline === undefined ? {} : { rewardDeadline }),
     ...(creator === undefined ? {} : { creator }),
+    ...(prover === undefined ? {} : { prover }),
     ...(executionFee === undefined ? {} : { executionFee }),
     ...(fundVia === undefined ? {} : { fundVia }),
   };
@@ -650,6 +656,8 @@ export function unapproved(actions: readonly string[]): CliError {
 export interface RunInput extends CookInput, ChainAccess {
   readonly account: PrivateKeyAccount;
   readonly approver: Approver;
+  /** Called with the cook once it is sent, for what it published (the store); returns notes. */
+  readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
 }
 
 /** `sauce run`: compile, sign, send and wait — deploying the Pot first once it is agreed to. */
@@ -726,6 +734,8 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     (funding?.value ?? 0n);
   const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
+  const stored = input.onSent === undefined ? [] : await input.onSent(sent);
+  const notes = [...(funding?.notes ?? []), ...stored];
   // What the cook cost, and what it moved, from its receipt.
   const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
   const effects =
@@ -763,7 +773,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
         ...(effects === undefined ? {} : { effects: effects.json }),
       },
     },
-    ...(funding === undefined || funding.notes.length === 0 ? {} : { notes: funding.notes }),
+    ...(notes.length === 0 ? {} : { notes }),
     ...(sent.status === "success" ? {} : { exitCode: 1 }),
   };
 }

@@ -11,7 +11,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -95,12 +96,16 @@ export interface Run {
   readonly stderr: string;
 }
 
+/** The intent store the suites' commands write to: never the real `~/.sauce`. */
+export const TEST_STORE = mkdtempSync(join(tmpdir(), "sauce-store-"));
+
 /** Runs the command in process with `overrides` on the real io — a scripted answer to a prompt. */
 export async function sauceWith(overrides: Partial<CliIo>, ...argv: string[]): Promise<Run> {
   let stdout = "";
   let stderr = "";
   const io: CliIo = {
     ...nodeIo(),
+    storeDir: TEST_STORE,
     ...overrides,
     stdout: (text) => void (stdout += text),
     stderr: (text) => void (stderr += text),

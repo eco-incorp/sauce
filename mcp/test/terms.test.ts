@@ -51,12 +51,14 @@ describe("toolTerms", () => {
       ),
       "swap.sauce.ts's intents go to base and optimism: rpcUrl names one endpoint, so give rpcUrls, which names each one",
     );
-    assert.equal(
-      toolTerms(
-        "This rehearses publishing on arbitrum only. `sauce fill` with the same file and flags, and the destination's endpoint, rehearses that.",
-      ),
-      "This rehearses publishing on arbitrum only. sauce_intent_fill with the same inputs, and the destination's endpoint, rehearses that.",
-    );
+    for (const command of ["sauce fill", "sauce intent fill"]) {
+      assert.equal(
+        toolTerms(
+          `This rehearses publishing on arbitrum only. \`${command}\` with the same file and flags, and the destination's endpoint, rehearses that.`,
+        ),
+        "This rehearses publishing on arbitrum only. sauce_intent_fill with the same inputs, and the destination's endpoint, rehearses that.",
+      );
+    }
     // An intent's commands, as main spells them and grouped under `sauce intent`.
     for (const line of ["sauce publish --chain base", "sauce intent publish --dry-run"]) {
       assert.equal(toolTerms(`run ${line} first`), "run sauce_intent_publish first");

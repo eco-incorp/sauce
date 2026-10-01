@@ -374,7 +374,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     // The other side is the destination's, and its tool is named.
     const notes = (out.notes as string[]).join(" ");
     assert.match(notes, /sauce_intent_fill with the same inputs/);
-    assert.doesNotMatch(notes, /sauce fill|--/);
+    assert.doesNotMatch(notes, /sauce (intent )?fill|--/);
   });
 
   it("checks the Pot an intent's cook needs on its destination, through rpcUrls", async () => {

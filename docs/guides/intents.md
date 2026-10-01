@@ -478,7 +478,7 @@ Each request is `{ to, data, value }`. Send them from the intended funder on `bu
 
 **Pass the vault you read.** `vault` is checked against `predictVault()`, the SDK's own derivation, and a mismatch throws `IntentVaultMismatchError` before anything is built: a transfer is final, so an address two sources disagree on is not paid. Without `vault`, the derivation alone is used. It is held to the `intentVaultAddress` of every eco-routes Portal the SDK records.
 
-**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. [`sauce publish`](cli.md#intents-run-or-publish) does all of this for you.
+**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. [`sauce intent publish`](cli.md#intents-sauce-run-or-sauce-intent) does all of this for you.
 
 `sourceTxs({ fundVia: "publishAndFund" })`, or `IntentOptions.fundVia: "publishAndFund"`, returns `[...approvals(), publishAndFundCalldata(allowPartial)]` instead. ERC-20 approvals authorize the **source Portal**, which pulls tokens into the vault, records the intent `Funded` and emits `IntentFunded`. Native rewards are included as transaction `value`. Wait for successful approvals before funding. `allowPartial` defaults to `false`; use partial funding only when the application deliberately supports it. Choose this mode when something you rely on reads the `IntentFunded` event or the `Funded` status rather than the vault's balance.
 
@@ -511,11 +511,80 @@ export function solverTransactions(built: routes.BuiltIntent, claimant: routes.H
 Rehearse them before publishing. A route that cooks needs the shared Pot deployed first, so a
 rehearsal on a chain where nobody has deployed it yet puts `Kitchen.deployPot(executor, 0)` ahead
 of the fill, in the same simulated block. From the command line,
-[`sauce fill`](cli.md#rehearsing-the-fill-sauce-fill) does all of it with no key: it builds the
-file's intents as `sauce publish` does, gives a solver the route's tokens by state override, runs
-the deployment, the approvals and the fulfill in one `eth_simulateV1` block on the destination, and
-prints what moved, what the shared Pot and the Executor were left holding, and the decoded reason
-when it reverts.
+[`sauce intent fill`](cli.md#rehearsing-the-fill-sauce-intent-fill) does all of it with no key: it
+builds the file's intents as `sauce intent publish` does, gives a solver the route's tokens by
+state override, runs the deployment, the approvals and the fill in one `eth_simulateV1` block on
+the destination, and prints what moved, what the shared Pot and the Executor were left holding, and
+the decoded reason when it reverts. With `--send` and a signer it then sends them, the signer being
+the solver ([`fill --send`](cli.md#filling-it-for-real-sauce-intent-fill---send)).
+
+## After the fill: prove, claim, refund, cancel
+
+The fill is recorded on the destination; the reward is on the source. What carries one to the other,
+and what happens when nobody fills, is the Portal's, on eco-routes' own terms:
+
+1. **Prove.** The destination Portal's `prove(prover, sourceDomain, intentHashes, data)` hands what
+   it recorded for each intent (the claimant, or a cancellation) to the destination's prover, which
+   sends it to the reward's prover on the source for a fee it quotes. `fulfillAndProve` is the fill
+   and the proof in one transaction, its value the route's native amount plus that fee. Through
+   Hyperlane, `data` is `abi.encode((bytes32 sourceChainProver, bytes metadata, address hook))` — the
+   source prover, empty metadata and no hook take the Mailbox's defaults — and the source domain
+   is an EVM source's chain id. The Portal forwards its whole balance to the prover, which keeps its
+   fee and refunds the rest to the sender, so overpaying is safe.
+2. **Claim.** Once the bridge delivers it, the source prover's `provenIntents(intentHash)` returns
+   the claimant, and the source Portal's `withdraw(destination, routeHash, reward)`, sent by anyone,
+   pays that claimant the reward from the vault (`batchWithdraw` for several).
+3. **Refund.** `refund(destination, routeHash, reward)`, sent by anyone, returns everything the
+   vault holds of the reward to its creator: from the reward's deadline when no fill is proven,
+   only the leftovers once the claimant has withdrawn, and never while a proven claimant has not.
+4. **Cancel.** A destination Portal with `cancel` lets anyone cancel an unfilled intent strictly
+   after the route's deadline; no fill can land after it, and proving the cancellation lets the
+   creator refund at once. The cancellation travels as a claimant nobody controls, so the source
+   Portal must refuse to pay it (its `withdraw` reverting `CancelledIntent`): prove one only to a
+   source whose Portal does, and only once the cancel is final on the destination.
+
+`routes` builds each as calldata, and the reads that decide them:
+
+```ts
+import { routes } from "@eco-incorp/sauce";
+
+export function afterTheFill(
+  intent: routes.Intent,
+  sourcePortal: routes.Hex,
+  prover: routes.Hex,
+  fee: bigint,
+) {
+  const data = routes.hyperlaneProverData({ sourceProver: intent.reward.prover });
+  const proof = { prover, sourceDomain: intent.sourceChainId, data, fee };
+
+  return {
+    prove: routes.proveTx([intent], proof), // on the destination; value: the fee
+    claim: routes.withdrawTx(intent, { portal: sourcePortal }), // on the source
+    refund: routes.refundTx(intent, { portal: sourcePortal }), // on the source
+    cancel: routes.cancelTx(intent), // on the destination, after the route's deadline
+    proven: routes.provenIntentCall(intent), // the source prover's record: claimant, destination
+    recorded: routes.fulfillmentCall(intent), // the destination's claimants[intentHash]
+    status: routes.rewardStatusCall(intent, { portal: sourcePortal }), // Initial … Refunded
+    fee: routes.proverFeeCall({
+      prover,
+      sourceDomain: intent.sourceChainId,
+      destinationChainId: intent.destination,
+      pairs: [
+        { intentHash: routes.hashIntent(intent).intentHash, claimant: intent.reward.creator },
+      ],
+      data,
+    }),
+  };
+}
+```
+
+`routes.fulfillAndProveTx(intent, { claimant, ...proof })` is the fill and its proof in one, and
+`routes.cancelAndProveTx(intent, proof)` the cancellation and its. From the command line,
+[`sauce intent prove, claim, refund and cancel`](cli.md#after-the-fill-prove-claim-refund-cancel)
+send them, reading the state first and saying why not, and
+[`sauce intent status`](cli.md#after-the-fill-prove-claim-refund-cancel) reads where an intent
+stands on both chains. `routes.intentFromPublished(log, sourceChainId)` rebuilds an intent from its
+`IntentPublished` log, which `sauce intent import` stores.
 
 ## Inspect hashes, vaults, and status
 

@@ -1,5 +1,5 @@
 /**
- * `sauce publish`: the intents a file opens, published from a wallet on the source chain — no Pot.
+ * `sauce intent publish`: the intents a file opens, published from a wallet on the source chain — no Pot.
  *
  * For a file whose intents are FIXED when it is built: every amount a literal, a define or a
  * top-level `const` of a literal. Then the SDK's own lowering (`compileSauceProgram(...).intents`)
@@ -139,7 +139,7 @@ function otherStatement(file: string, text: string): string | undefined {
 function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredIntent[] {
   if (input.chain.kind !== "evm") {
     throw new UsageError(
-      `sauce publish sends source-chain Portal transactions, and ${input.chain.slug} is not an ` +
+      `sauce intent publish sends source-chain Portal transactions, and ${input.chain.slug} is not an ` +
         "EVM chain: the eco-routes Portal this SDK addresses is EVM only.",
     );
   }
@@ -352,6 +352,8 @@ export interface PublishInput extends ProgramInput {
   readonly from?: Address;
   /** `--assume-balance`, with a dry run: what the wallet holds, for the rehearsal only. */
   readonly assume?: readonly FundRequest[];
+  /** Called with each transaction sent, for what it published (the store); returns notes. */
+  readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
 }
 
 /** The wallet's balances `--assume-balance` sets for a dry run, as state overrides, and lines that
@@ -427,7 +429,7 @@ async function fundedNow(client: PublicClient, plan: Plan, portal: Hex): Promise
   return query.decode((await client.call({ to: query.to, data: query.data })).data ?? "0x");
 }
 
-/** `sauce publish`: send, rehearse or print the Portal transactions of a file's fixed intents. */
+/** `sauce intent publish`: send, rehearse or print the Portal transactions of a file's fixed intents. */
 export async function publishCommand(input: PublishInput, files: CliFiles): Promise<CommandOutput> {
   // What no funding path can fix, refused or named first, for every front end: a deadline that has
   // passed, and a price limit at a bound, which fills nothing on the destination.
@@ -576,7 +578,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
       notes: [
         `This rehearses publishing on ${input.chain.slug} only. What the intent does runs on ` +
           `${[...new Set(plans.map((plan) => plan.intent.destination.slug))].join(" and ")}, when ` +
-          "a solver fills it: `sauce fill` with the same file and flags, and the destination's " +
+          "a solver fills it: `sauce intent fill` with the same file and flags, and the destination's " +
           "endpoint, rehearses that.",
       ],
       ...(ok ? {} : { exitCode: 1 }),
@@ -589,6 +591,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
     );
   }
   const sent: Array<{ readonly step: Step; readonly result: Sent }> = [];
+  const stored: string[] = [];
   const sentSoFar = (): string =>
     sent.length === 0
       ? "nothing was sent"
@@ -601,7 +604,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
         throw new CliError(
           `the vault ${plan.vault} does not hold intent ${plan.hash}'s reward after the ` +
             "transfers — a token that returned false, or kept a fee — so it is not published " +
-            `(${sentSoFar()}). What was paid stays in the vault: top it up and run sauce publish ` +
+            `(${sentSoFar()}). What was paid stays in the vault: top it up and run sauce intent publish ` +
             "again, which sends only what is missing, or refund it after the reward deadline.",
         );
       }
@@ -612,6 +615,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
           `${step.what} ${result.hash} reverted: ${result.reason ?? "no reason"} (${sentSoFar()})`,
         );
       }
+      if (input.onSent !== undefined) stored.push(...(await input.onSent(result)));
     }
   }
 
@@ -634,5 +638,6 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
         gasUsed: result.gasUsed.toString(),
       })),
     },
+    ...(stored.length === 0 ? {} : { notes: stored }),
   };
 }
