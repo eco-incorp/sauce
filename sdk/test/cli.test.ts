@@ -407,7 +407,7 @@ describe("sauce compile", () => {
     // An intent's limit, named before it is published, whichever way its reward is paid.
     const intent = file(
       "limit-intent.sauce.ts",
-      "// @chain arbitrum\nBase(() => {\n  require(SQRT_PRICE_LIMIT_X96 > 0n);\n" +
+      "// @chain ethereum\nBase(() => {\n  require(SQRT_PRICE_LIMIT_X96 > 0n);\n" +
         "  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n",
     );
     const published = await sauce(
@@ -1300,7 +1300,7 @@ describe("sauce tx", () => {
 
 describe("sauce intent publish, offline", () => {
   const INTENT = [
-    "// @chain arbitrum",
+    "// @chain ethereum",
     "Base(() => {",
     "  USDC.transfer(RECIPIENT, 5n);",
     "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
@@ -1329,12 +1329,12 @@ describe("sauce intent publish, offline", () => {
       chainId: number;
       intents: Array<{ intentHash: string; destination: string; transactions: unknown[] }>;
     };
-    const [intent] = compileSauceProgram("arbitrum", INTENT, {
+    const [intent] = compileSauceProgram("ethereum", INTENT, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
       intents: { deadline: 2_000_000_000n, creator: CREATOR },
     }).intents;
-    expect(out.chainId).toBe(42161);
-    const portal = ecoRoutesPortal("arbitrum");
+    expect(out.chainId).toBe(1);
+    const portal = ecoRoutesPortal("ethereum");
     const vault = routes.predictIntentVault(intent!.intent, { portal });
     expect(out.intents).toEqual([
       {
@@ -1409,7 +1409,7 @@ describe("sauce intent publish, offline", () => {
         "function main(recipient: Address) {\n  Base(() => {\n    USDC.transfer(recipient, 5n);\n  }).reward({ tokens: [{ token: USDC, amount: 7n }] });\n}\n",
       ),
       "--chain",
-      "arbitrum",
+      "ethereum",
       ...FLAGS.slice(2),
       "--format",
       "json",
@@ -1449,7 +1449,7 @@ describe("sauce intent publish, offline", () => {
     it("in a script and in a module, publishing the intent the define would", async () => {
       const defined = await hashes(
         "defined.sauce.ts",
-        `// @chain arbitrum\n${body("AMOUNT")}\n`,
+        `// @chain ethereum\n${body("AMOUNT")}\n`,
         "--define",
         `AMOUNT=${AMOUNT}`,
       );
@@ -1457,13 +1457,13 @@ describe("sauce intent publish, offline", () => {
       expect(
         await hashes(
           "script.sauce.ts",
-          `// @chain arbitrum\nconst AMOUNT = 1_000_000n;\n${body("AMOUNT")}\n`,
+          `// @chain ethereum\nconst AMOUNT = 1_000_000n;\n${body("AMOUNT")}\n`,
         ),
       ).toEqual(defined);
       expect(
         await hashes(
           "module.sauce.ts",
-          `// @chain arbitrum\nconst AMOUNT = 1_000_000n;\nfunction main() {\n${body("AMOUNT")}\n}\n`,
+          `// @chain ethereum\nconst AMOUNT = 1_000_000n;\nfunction main() {\n${body("AMOUNT")}\n}\n`,
         ),
       ).toEqual(defined);
     });
@@ -1472,7 +1472,7 @@ describe("sauce intent publish, offline", () => {
       const refused = (text: string) =>
         sauce("intent", "publish", file("refused.sauce.ts", text), ...FLAGS, "--format", "json");
       const measured = await refused(
-        `// @chain arbitrum\nconst amount = USDC.balanceOf(ctx.self());\n${body("amount")}\n`,
+        `// @chain ethereum\nconst amount = USDC.balanceOf(ctx.self());\n${body("amount")}\n`,
       );
       expect(measured.code).toBe(1);
       expect(measured.stderr).toBe(
@@ -1481,13 +1481,13 @@ describe("sauce intent publish, offline", () => {
           "it a literal, a define or a top-level `const` of a literal\n",
       );
       const computed = await refused(
-        `// @chain arbitrum\nconst AMOUNT = 1000n * 1000n;\n${body("AMOUNT")}\n`,
+        `// @chain ethereum\nconst AMOUNT = 1000n * 1000n;\n${body("AMOUNT")}\n`,
       );
       expect(computed.code).toBe(1);
       expect(computed.stderr).toMatch(/uses `AMOUNT`, which the program measures or computes/);
       // A local of `main` shadows the file's constant, and it is the local the intent reads.
       const shadowed = await refused(
-        `// @chain arbitrum\nconst AMOUNT = 5n;\nfunction main() {\n  const AMOUNT = USDC.balanceOf(ctx.self());\n${body("AMOUNT")}\n}\n`,
+        `// @chain ethereum\nconst AMOUNT = 5n;\nfunction main() {\n  const AMOUNT = USDC.balanceOf(ctx.self());\n${body("AMOUNT")}\n}\n`,
       );
       expect(shadowed.code).toBe(1);
       expect(shadowed.stderr).toMatch(/uses `AMOUNT`, which the program measures or computes/);

@@ -12,7 +12,14 @@ import { getAddress, type Hex } from "viem";
 
 import { UsageError } from "../src/cli/args.js";
 import { compileProgram } from "../src/cli/commands.js";
-import { createIntent, parseWhen, portalChains, type CreateInput } from "../src/cli/create.js";
+import {
+  createIntent,
+  parseWhen,
+  portalChains,
+  publishableChains,
+  type CreateInput,
+} from "../src/cli/create.js";
+import { PreviewChainError } from "../src/cli/support.js";
 import { interactiveIntents } from "../src/cli/interactive.js";
 import { intentRecord } from "../src/cli/lifecycle.js";
 import { IntentStore } from "../src/cli/store.js";
@@ -43,7 +50,7 @@ describe("making an intent: sauce intent publish with no file", () => {
     const created = await createIntent(
       input({
         given: {
-          source: "arbitrum",
+          source: "ethereum",
           destination: "base",
           token: "USDC",
           amount: "1.5",
@@ -58,7 +65,7 @@ describe("making an intent: sauce intent publish with no file", () => {
         },
       }),
     );
-    expect(created.source.slug).toBe("arbitrum");
+    expect(created.source.slug).toBe("ethereum");
     // Funded through the Portal, as the flag asks, and the file's republish line says so.
     expect(created.fundVia).toBe("publishAndFund");
     expect(created.destination.slug).toBe("base");
@@ -67,7 +74,7 @@ describe("making an intent: sauce intent publish with no file", () => {
     const text = readFileSync(out, "utf8");
     expect(text).toContain(`USDC.transfer(${RECIPIENT.toLowerCase()}n, 1500000n);`);
     expect(text).toContain("reward({ tokens: [{ token: USDC, amount: 1600000n }] })");
-    expect(text).toContain(`sauce intent publish ${out} --chain arbitrum`);
+    expect(text).toContain(`sauce intent publish ${out} --chain ethereum`);
     expect(text).toContain("--intent-fund-via publishAndFund");
     // With no endpoint the solver's costs are not estimated, and it says so.
     expect(created.summary.join("\n")).toContain("no base endpoint");
@@ -97,10 +104,10 @@ describe("making an intent: sauce intent publish with no file", () => {
   it("asks what no flag gave, at a terminal, with the defaults it says", async () => {
     const asked: string[] = [];
     const answers = [
-      String(portalChains().findIndex((chain) => chain.slug === "arbitrum") + 1), // source
+      String(publishableChains().findIndex((chain) => chain.slug === "ethereum") + 1), // source
       "", // destination: prompt shown, then answered below
     ];
-    const destinations = portalChains().filter((chain) => chain.slug !== "arbitrum");
+    const destinations = publishableChains().filter((chain) => chain.slug !== "ethereum");
     answers[1] = String(destinations.findIndex((chain) => chain.slug === "base") + 1);
     const script = [
       ...answers,
@@ -127,6 +134,12 @@ describe("making an intent: sauce intent publish with no file", () => {
     );
     expect(script).toEqual([]);
     expect(asked[0]).toMatch(/^Source chain/);
+    // Only the supported chains with a Portal are offered: every other one is a preview chain.
+    expect(publishableChains().map((chain) => chain.slug)).toEqual(["ethereum", "base"]);
+    expect(portalChains().length).toBeGreaterThan(2);
+    expect(asked[0]).toContain("Ethereum (1)");
+    expect(asked[0]).toContain("Base (8453)");
+    expect(asked[0]).not.toContain("Arbitrum");
     expect(asked.some((question) => /Token to deliver on base/.test(question))).toBe(true);
     expect(asked.some((question) => /Recipient on base \[0x5a0Ce/.test(question))).toBe(true);
     expect(created.deadline).toBe(NOW + 3600n);
@@ -138,7 +151,7 @@ describe("making an intent: sauce intent publish with no file", () => {
   });
 
   it("with no terminal, names every flag still missing", async () => {
-    await expect(createIntent(input({ given: { source: "arbitrum" } }))).rejects.toThrow(
+    await expect(createIntent(input({ given: { source: "ethereum" } }))).rejects.toThrow(
       new UsageError(
         "sauce intent publish has no terminal to ask on, and needs --destination, --token, " +
           "--amount, --recipient, --prover, --reward-token, --reward, --fill-deadline, " +
@@ -166,7 +179,7 @@ describe("making an intent: sauce intent publish with no file", () => {
     await expect(
       createIntent(
         input({
-          given: { ...given, source: "arbitrum", fillDeadline: "+2h", rewardDeadline: "+1h" },
+          given: { ...given, source: "ethereum", fillDeadline: "+2h", rewardDeadline: "+1h" },
         }),
       ),
     ).rejects.toThrow(/the reward deadline is before the fill deadline/);
@@ -177,6 +190,21 @@ describe("making an intent: sauce intent publish with no file", () => {
         }),
       ),
     ).rejects.toThrow(/solana has no eco-routes Portal recorded/);
+    // A preview chain is refused before anything is asked of it or read from it.
+    let read = false;
+    await expect(
+      createIntent(
+        input({
+          given: { ...given, source: "arbitrum", fillDeadline: "+1h", rewardDeadline: "+2h" },
+          endpoint: () => {
+            read = true;
+
+            return undefined;
+          },
+        }),
+      ),
+    ).rejects.toThrow(PreviewChainError);
+    expect(read).toBe(false);
   });
 
   it("reads a deadline as a unix second or a span from now", () => {

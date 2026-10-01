@@ -1,7 +1,7 @@
 /**
- * An intent's whole life through the `sauce` command, on two anvils standing in for Arbitrum (the
- * source) and Base (the destination): published and funded on Arbitrum, filled and proven on Base
- * as a solver does it (`fill --send`), the proof carried back, claimed on Arbitrum — and the
+ * An intent's whole life through the `sauce` command, on two anvils standing in for Ethereum (the
+ * source) and Base (the destination): published and funded on Ethereum, filled and proven on Base
+ * as a solver does it (`fill --send`), the proof carried back, claimed on Ethereum — and the
  * creator's side, refunded after the reward's deadline, or cancelled on Base after the route's
  * deadline, the cancellation proven and refunded before the reward's.
  *
@@ -69,7 +69,7 @@ const HYPERLANE_FEE = 7_777n;
 
 const APPROVE = parseAbi(["function approve(address, uint256)"]);
 
-/** Base USDC to RECIPIENT, for Arbitrum USDC: a body of plain transfers, run by the Executor. */
+/** Base USDC to RECIPIENT, for Ethereum USDC: a body of plain transfers, run by the Executor. */
 const INTENT = [
   "Base(() => {",
   "  USDC.transfer(RECIPIENT, AMOUNT);",
@@ -78,19 +78,19 @@ const INTENT = [
 ].join("\n");
 
 describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cancel", () => {
-  let arbitrum: LocalChain;
+  let ethereum: LocalChain;
   let base: LocalChain;
   let work: string;
   let config: string;
   let file: string;
-  let arbitrumUsdc: Address;
+  let ethereumUsdc: Address;
   let baseUsdc: Address;
-  let arbitrumMailbox: Address;
+  let ethereumMailbox: Address;
   let baseMailbox: Address;
 
   /** The flags every intent here is built with, its deadlines given. */
   const intentFlags = (route: bigint, reward: bigint): string[] => [
-    ...["--chain", "arbitrum", "--define", `RECIPIENT=${RECIPIENT}`],
+    ...["--chain", "ethereum", "--define", `RECIPIENT=${RECIPIENT}`],
     ...["--define", `AMOUNT=${AMOUNT}`, "--define", `REWARD=${REWARD}`],
     ...["--intent-deadline", String(route), "--intent-reward-deadline", String(reward)],
     ...["--intent-creator", OWNER.address],
@@ -110,7 +110,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         "publish",
         file,
         ...intentFlags(route, reward),
-        ...["--rpc-url", arbitrum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+        ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
       ),
     );
 
@@ -121,24 +121,24 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-lifecycle-e2e-"));
-    [arbitrum, base] = await Promise.all([
-      startChain("arbitrum", 9400 + WORKER),
+    [ethereum, base] = await Promise.all([
+      startChain("ethereum", 9400 + WORKER),
       startChain("base", 9450 + WORKER),
     ]);
-    arbitrumUsdc = await arbitrum.plant(fixture("MockERC20"), registered(arbitrum.chain, "USDC"));
+    ethereumUsdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
     baseUsdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
-    for (const local of [arbitrum, base]) await plantPortal(local, PORTAL_FIXTURES.v2_12);
-    arbitrumMailbox = await deployMailbox(arbitrum, HYPERLANE_FEE);
+    for (const local of [ethereum, base]) await plantPortal(local, PORTAL_FIXTURES.v2_12);
+    ethereumMailbox = await deployMailbox(ethereum, HYPERLANE_FEE);
     baseMailbox = await deployMailbox(base, HYPERLANE_FEE);
-    await plantHyperProver(arbitrum, arbitrumMailbox);
+    await plantHyperProver(ethereum, ethereumMailbox);
     await plantHyperProver(base, baseMailbox);
     // The creator holds the rewards; the solver what it delivers, and gas on Base.
-    await arbitrum.mint(arbitrumUsdc, OWNER.address, 20n * REWARD);
+    await ethereum.mint(ethereumUsdc, OWNER.address, 20n * REWARD);
     await base.mint(baseUsdc, SOLVER.address, 10n * AMOUNT);
     config = join(work, "sauce.config.json");
     writeFileSync(
       config,
-      JSON.stringify({ rpcUrls: { "42161": arbitrum.rpcUrl, "8453": base.rpcUrl } }),
+      JSON.stringify({ rpcUrls: { "1": ethereum.rpcUrl, "8453": base.rpcUrl } }),
     );
     file = join(work, "bridge.sauce.ts");
     writeFileSync(file, INTENT);
@@ -146,7 +146,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
 
   afterAll(async () => {
     rmSync(work, { recursive: true, force: true });
-    await Promise.all([arbitrum?.stop(), base?.stop()]);
+    await Promise.all([ethereum?.stop(), base?.stop()]);
   });
 
   it("publishes, fills and proves, carries the proof, and claims", async () => {
@@ -215,7 +215,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(early.stderr).toContain("Hyperlane message 0x");
 
     // Hyperlane's delivery, mocked; the provers on both sides are real.
-    expect(await relay(base, baseMailbox, transactions[1]!.hash, arbitrum, arbitrumMailbox)).toBe(
+    expect(await relay(base, baseMailbox, transactions[1]!.hash, ethereum, ethereumMailbox)).toBe(
       1,
     );
     const shown = jsonOf(
@@ -223,10 +223,10 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     );
     expect((shown.status as { state: string }).state).toBe("proven");
 
-    const before = await arbitrum.balanceOf(arbitrumUsdc, SOLVER.address);
+    const before = await ethereum.balanceOf(ethereumUsdc, SOLVER.address);
     const claimed = await lifecycle("claim", hash, store, "--private-key", SOLVER_KEY, "--json");
     expect(claimed.code).toBe(0);
-    expect(await arbitrum.balanceOf(arbitrumUsdc, SOLVER.address)).toBe(before + REWARD);
+    expect(await ethereum.balanceOf(ethereumUsdc, SOLVER.address)).toBe(before + REWARD);
     expect(events()).toEqual(["published", "funded", "filled", "proving", "claimed"]);
 
     // Nothing is left for the creator: refund says why.
@@ -242,7 +242,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       await sauce(
         ...["intent", "publish", file, ...intentFlags(start + 3605n, start + 7200n)],
         ...["--intent-fund-via", "publishAndFund"],
-        ...["--rpc-url", arbitrum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+        ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
       ),
     );
     expect((out.transactions as Array<{ what: string }>).at(-1)!.what).toBe("publishAndFund");
@@ -258,16 +258,16 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
 
   it("refunds an unfilled intent from the reward's deadline, not before", async () => {
     const store = mkdtempSync(join(work, "store-"));
-    const start = await now(arbitrum);
+    const start = await now(ethereum);
     const hash = await publish(store, start + 60n, start + 600n);
     const early = await lifecycle("refund", hash, store, "--private-key", OWNER_KEY);
     expect(early.code).toBe(1);
     expect(early.stdout).toContain("not before the reward's deadline");
-    await warp(arbitrum, 700);
-    const before = await arbitrum.balanceOf(arbitrumUsdc, OWNER.address);
+    await warp(ethereum, 700);
+    const before = await ethereum.balanceOf(ethereumUsdc, OWNER.address);
     const refunded = await lifecycle("refund", hash, store, "--private-key", OWNER_KEY, "--json");
     expect(refunded.code).toBe(0);
-    expect(await arbitrum.balanceOf(arbitrumUsdc, OWNER.address)).toBe(before + REWARD);
+    expect(await ethereum.balanceOf(ethereumUsdc, OWNER.address)).toBe(before + REWARD);
   }, 240_000);
 
   it("cancels after the route's deadline, proves it, and refunds before the reward's", async () => {
@@ -308,16 +308,16 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(proved.code).toBe(0);
     const proof = JSON.parse(proved.stdout) as { transactions: Array<{ hash: Hex }> };
     expect(
-      await relay(base, baseMailbox, proof.transactions[0]!.hash, arbitrum, arbitrumMailbox),
+      await relay(base, baseMailbox, proof.transactions[0]!.hash, ethereum, ethereumMailbox),
     ).toBe(1);
     // The sentinel is recorded on the source, and pays no claimant.
     const claim = await lifecycle("claim", hash, store, "--private-key", SOLVER_KEY);
     expect(claim.code).toBe(1);
     expect(claim.stdout).toContain("pays no claimant");
-    const before = await arbitrum.balanceOf(arbitrumUsdc, OWNER.address);
+    const before = await ethereum.balanceOf(ethereumUsdc, OWNER.address);
     const refunded = await lifecycle("refund", hash, store, "--private-key", SOLVER_KEY);
     expect(refunded.code).toBe(0);
-    expect(await arbitrum.balanceOf(arbitrumUsdc, OWNER.address)).toBe(before + REWARD);
+    expect(await ethereum.balanceOf(ethereumUsdc, OWNER.address)).toBe(before + REWARD);
     expect(getAddress(CANCELLED_CLAIMANT)).toBe("0xe685056aEc77686A83E2a6bDf37c6f71dD2fdB5f");
   }, 240_000);
 
@@ -337,7 +337,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const fulfill = (
       third.intents as Array<{ transactions: Array<{ kind: string; hash: Hex }> }>
     )[0]!.transactions.find((tx) => tx.kind === "fulfill")!.hash;
-    expect(await relay(base, baseMailbox, fulfill, arbitrum, arbitrumMailbox)).toBe(1);
+    expect(await relay(base, baseMailbox, fulfill, ethereum, ethereumMailbox)).toBe(1);
 
     // One proof for the two left unproven, the third left out with a note.
     const proved = await sauce(
@@ -345,7 +345,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       ...["--private-key", SOLVER_KEY, "--auto-approve", "--json"],
     );
     expect(proved.code).toBe(0);
-    expect(proved.stderr).toContain(`${three} is proven on arbitrum already`);
+    expect(proved.stderr).toContain(`${three} is proven on ethereum already`);
     const proof = JSON.parse(proved.stdout) as {
       transactions: Array<{ hash: Hex; value: string }>;
       messages: unknown[];
@@ -354,11 +354,11 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(proof.transactions[0]!.value).toBe(String(HYPERLANE_FEE));
     expect(proof.messages).toHaveLength(1);
     expect(
-      await relay(base, baseMailbox, proof.transactions[0]!.hash, arbitrum, arbitrumMailbox),
+      await relay(base, baseMailbox, proof.transactions[0]!.hash, ethereum, ethereumMailbox),
     ).toBe(1);
 
     // Both claimed in one transaction.
-    const before = await arbitrum.balanceOf(arbitrumUsdc, SOLVER.address);
+    const before = await ethereum.balanceOf(ethereumUsdc, SOLVER.address);
     const claimed = await sauce(
       ...["intent", "claim", one, two, "--config", config, "--store", store],
       ...["--private-key", SOLVER_KEY, "--json"],
@@ -371,7 +371,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(claim.transactions).toHaveLength(1);
     expect(claim.transactions[0]!.what).toContain("Portal.batchWithdraw(2 intents)");
     expect(claim.claims).toHaveLength(2);
-    expect(await arbitrum.balanceOf(arbitrumUsdc, SOLVER.address)).toBe(before + 2n * REWARD);
+    expect(await ethereum.balanceOf(ethereumUsdc, SOLVER.address)).toBe(before + 2n * REWARD);
   }, 240_000);
 
   it("cancels and proves in one transaction with --and-prove, paying the fee", async () => {
@@ -399,12 +399,12 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(entry!.transactions[0]!.value).toBe(String(HYPERLANE_FEE));
     expect(entry!.messages).toHaveLength(1);
     expect(
-      await relay(base, baseMailbox, entry!.transactions[0]!.hash, arbitrum, arbitrumMailbox),
+      await relay(base, baseMailbox, entry!.transactions[0]!.hash, ethereum, ethereumMailbox),
     ).toBe(1);
-    const before = await arbitrum.balanceOf(arbitrumUsdc, OWNER.address);
+    const before = await ethereum.balanceOf(ethereumUsdc, OWNER.address);
     const refunded = await lifecycle("refund", hash, store, "--private-key", OWNER_KEY);
     expect(refunded.code).toBe(0);
-    expect(await arbitrum.balanceOf(arbitrumUsdc, OWNER.address)).toBe(before + REWARD);
+    expect(await ethereum.balanceOf(ethereumUsdc, OWNER.address)).toBe(before + REWARD);
   }, 240_000);
 
   it("sends nothing when the prover's fee rises while the person is deciding", async () => {
@@ -477,14 +477,14 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     }
     // The source without `CancelledIntent`: a proven cancellation there would pay an address no
     // key controls, so it is not cancelled even though the destination can.
-    await plantPortal(arbitrum, PORTAL_FIXTURES.pre);
+    await plantPortal(ethereum, PORTAL_FIXTURES.pre);
     try {
       const run = await lifecycle("cancel", hash, store, "--private-key", OWNER_KEY);
       expect(run.code).toBe(1);
       expect(run.stdout).toContain("would pay a proven cancellation to");
       expect(run.stdout).toContain("an address nobody controls");
     } finally {
-      await plantPortal(arbitrum, PORTAL_FIXTURES.v2_12);
+      await plantPortal(ethereum, PORTAL_FIXTURES.v2_12);
     }
   }, 240_000);
 
@@ -513,7 +513,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const out = jsonOf(
       await sauce(
         ...["intent", "publish", usdtFile, ...intentFlags(start + 3600n, start + 7200n)],
-        ...["--rpc-url", arbitrum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+        ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
       ),
     );
     const hash = (out.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
@@ -538,7 +538,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const store = mkdtempSync(join(work, "store-"));
     const out = join(work, "made.sauce.ts");
     const run = await sauce(
-      ...["intent", "publish", "--source", "arbitrum", "--destination", "base"],
+      ...["intent", "publish", "--source", "ethereum", "--destination", "base"],
       // Amounts no other test publishes: an intent equal to one already claimed is refused.
       ...["--token", "USDC", "--amount", "1.25", "--recipient", RECIPIENT],
       ...["--reward-token", "USDC", "--reward", "1.3", "--prover", "HyperProver"],
@@ -557,7 +557,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(run.code).toBe(0);
     // What it made and rehearsed, before anything was sent.
     expect(run.stderr).toContain(`Wrote ${out}:`);
-    expect(run.stderr).toContain("Publishing, rehearsed on arbitrum:");
+    expect(run.stderr).toContain("Publishing, rehearsed on ethereum:");
     expect(run.stderr).toContain("Filling, rehearsed on base (as a solver will):");
     expect(run.stderr).toMatch(/the solver's costs on base: ~250000 gas/);
     expect(readFileSync(out, "utf8")).toContain(
@@ -578,14 +578,14 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
 
   it("prints the transactions unsigned with no signer, and imports a published intent", async () => {
     const store = mkdtempSync(join(work, "store-"));
-    const start = await now(arbitrum);
+    const start = await now(ethereum);
     const out = jsonOf(
       await sauce(
         "intent",
         "publish",
         file,
         ...intentFlags(start + 3600n, start + 7200n),
-        ...["--rpc-url", arbitrum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+        ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
       ),
     );
     const hash = (out.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
@@ -596,7 +596,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const fresh = mkdtempSync(join(work, "store-"));
     const imported = jsonOf(
       await sauce(
-        ...["intent", "import", publishTx, "--chain", "arbitrum"],
+        ...["intent", "import", publishTx, "--chain", "ethereum"],
         ...["--config", config, "--store", fresh, "--json"],
       ),
     );

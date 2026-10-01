@@ -53,6 +53,11 @@ by hand:
 What stays yours: the deadlines, the creator and prover, the Kitchen fee, and a reward that pays a
 solver to fill the intent. The SDK sends nothing, and it does not price the reward.
 
+Ethereum and Base are two of the three chains the initial release supports, with Solana. Every
+other chain in the registry is a preview chain: the SDK builds for it at your own risk, and the
+`sauce` command and MCP server compile and simulate there but build no transaction
+([Supported chains](../README.md#supported-chains)).
+
 ## The three things that trip people up
 
 **The callback is source, not a function.** It is read with `Function.prototype.toString()`, parsed

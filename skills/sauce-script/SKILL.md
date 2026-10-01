@@ -14,7 +14,7 @@ builtin, the methods on values, account properties, contract bindings and limits
 targets, an example and the exact error a misuse gives. Every example in it compiles and every
 rejection it lists is refused. [references/builtins.json](references/builtins.json) is the same list
 for a program to read. The names a chain supplies (`USDC`, `Token(...)`, `UniswapV3.Factory`,
-`Arbitrum(...)`) are in `sauce-globals`.
+`Ethereum(...)`) are in `sauce-globals`.
 
 ## Two program forms
 
@@ -98,7 +98,9 @@ than ignore it. Declare `main` to share a module constant with helpers, or to re
 `main`'s parameters are taken in declaration order, ABI-encoded by default, and appended to the
 program's bytecode: that is the payload a cook runs. `--args` and `--args-json` of `sauce run`,
 `simulate` and `tx` encode them (`sauce-run`); `sauce-typescript` covers encoding them from
-TypeScript.
+TypeScript. A program compiles for every chain the SDK knows; for the initial release its cook is
+built and sent only on Ethereum, Base and Solana, and on every other chain (a preview chain) it is
+compiled and simulated (`sauce-chains`).
 
 ## Compiling for a chain
 

@@ -34,6 +34,7 @@ export {
   compileProgram,
   pastDeadline,
   potCommand,
+  programChains,
   txCommand,
   type CliFiles,
   type CommandOutput,
@@ -83,6 +84,14 @@ export {
 } from "../../sdk/dist/cli/lifecycle.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
+export {
+  intentChains,
+  previewRefusal,
+  PreviewChainError,
+  requireSupported,
+  supportedChainNames,
+  type PreviewChainRefusal,
+} from "../../sdk/dist/cli/support.js";
 export { HOT_WALLET, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
 export {
   checkPlan,
@@ -111,3 +120,9 @@ export {
   requireChain,
   type CanonicalChain,
 } from "../../sdk/dist/chains/canonical.js";
+export {
+  CHAIN_SUPPORT_ISSUES_URL,
+  CHAIN_SUPPORT_NEW_ISSUE_URL,
+  chainSupport,
+  chainSupportRequest,
+} from "../../sdk/dist/chains/support.js";

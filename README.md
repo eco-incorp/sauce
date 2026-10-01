@@ -21,6 +21,18 @@ same code compiles the same bytes.
 [Documentation](docs/README.md) · [Quick start](docs/guides/quick-start.md) ·
 [Examples](docs/examples/README.md) · [API reference](docs/api/README.md)
 
+## Supported chains
+
+For the initial release, Sauce supports transactions on **Ethereum**, **Base** and **Solana**.
+Every other chain in the registry is a preview chain: programs compile for it and the `sauce`
+command and MCP server simulate and rehearse them there, but they build and send no transaction on
+it. The TypeScript SDK is not gated — its builders still build transactions for every registry
+chain, at the integrator's own risk. To ask for another chain,
+[search the existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support)
+and add your use case, or
+[open a chain-support request](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml).
+[Supported chains](docs/README.md#supported-chains) has the details.
+
 ## A program that creates a cross-chain intent
 
 A program can spend an intent's funds, and it can also create the next intent. That is where the
@@ -78,7 +90,10 @@ from the JavaScript around it, so defines are how application values reach one.
 
 You supply what the SDK cannot know once, on the enclosing intent, and every intent the program
 creates inherits it: a deadline, and the creator who may reclaim the reward if nobody earns it. The
-intent is an offer; a solver still decides to fill it.
+intent is an offer; a solver still decides to fill it. Arbitrum is a
+[preview chain](docs/README.md#supported-chains) for the initial release: the SDK builds this
+intent, and the `sauce` command and MCP server compile and rehearse it, but they publish intents
+only between Ethereum, Base and Solana.
 [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts) is the caller, run on
 every release; [nested intents](docs/guides/nested-intents.md) covers cascades several hops deep.
 

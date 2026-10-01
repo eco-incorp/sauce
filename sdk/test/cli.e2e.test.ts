@@ -13,9 +13,10 @@
  *   5. the `cast send` line `sauce tx` prints is run VERBATIM through a shell — only its two
  *      `<…>` placeholders filled — and its effect asserted too.
  *
- * Base and Arbitrum, the skill's `split.sauce.ts`: ONE source with a typed `main(token: Address,
+ * Base and Ethereum, the skill's `split.sauce.ts`: ONE source with a typed `main(token: Address,
  * recipients: Address[], amount: Uint256, alsoUsdc: bool)`, compiled for each chain (so `USDC` is
- * each chain's own), its arguments encoded by `sauce tx --args`, executed on each chain's anvil —
+ * each chain's own; on Arbitrum too, a preview chain, where its cook is refused), its arguments
+ * encoded by `sauce tx --args`, executed on each chain's anvil —
  * and read back off the chain by `sauce inspect <hash>` against the source. A settle cook sent there
  * is read back by `sauce verify <hash>`, and a cook that is not one is rejected.
  *
@@ -633,13 +634,13 @@ describeEvm("sauce, sent to a chain", () => {
   });
 });
 
-describeEvm("a typed main, compiled for Base and for Arbitrum, run with --args", () => {
+describeEvm("a typed main, compiled for Base and for Ethereum, run with --args", () => {
   const chains: Record<string, LocalChain> = {};
   const RECIPIENTS: Address[] = [RECIPIENT, SECOND_RECIPIENT];
 
   beforeAll(async () => {
     chains.base = await startChain("base", 8800 + WORKER);
-    chains.arbitrum = await startChain("arbitrum", 8900 + WORKER);
+    chains.ethereum = await startChain("ethereum", 8900 + WORKER);
   }, 120_000);
 
   afterAll(async () => {
@@ -648,12 +649,23 @@ describeEvm("a typed main, compiled for Base and for Arbitrum, run with --args",
 
   it("compiles one source into a program per chain, each naming its own USDC", async () => {
     const base = jsonOf(await sauce("compile", SPLIT, "--chain", "base", "--json"));
+    const ethereum = jsonOf(await sauce("compile", SPLIT, "--chain", "ethereum", "--json"));
+    // A preview chain compiles the same source, and only its cook is refused.
     const arbitrum = jsonOf(await sauce("compile", SPLIT, "--chain", "arbitrum", "--json"));
     const usdcOf = (slug: string) => registered(requireChain(slug), "USDC").slice(2).toLowerCase();
     expect(base.bytecode).toContain(usdcOf("base"));
+    expect(ethereum.bytecode).toContain(usdcOf("ethereum"));
     expect(arbitrum.bytecode).toContain(usdcOf("arbitrum"));
-    expect(base.bytecode).not.toContain(usdcOf("arbitrum"));
-    for (const out of [base, arbitrum]) {
+    expect(base.bytecode).not.toContain(usdcOf("ethereum"));
+    const refused = await sauce(
+      ...["tx", SPLIT, "--chain", "arbitrum", "--owner", OWNER.address, "--value", "0"],
+      ...["--args", RECIPIENT, JSON.stringify(RECIPIENTS), String(AMOUNT), "true"],
+    );
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(
+      /building the cook transaction is refused: it involves arbitrum/,
+    );
+    for (const out of [base, ethereum, arbitrum]) {
       expect(out.entryEncoding).toBe("abi-v1");
       expect(out.entryParams).toEqual([
         { name: "token", type: "Address" },
@@ -666,7 +678,7 @@ describeEvm("a typed main, compiled for Base and for Arbitrum, run with --args",
 
   for (const [slug, alsoUsdc] of [
     ["base", true],
-    ["arbitrum", false],
+    ["ethereum", false],
   ] as const) {
     it(`on ${slug}, pays each recipient as the arguments say (alsoUsdc: ${alsoUsdc})`, async () => {
       const local = chains[slug]!;
@@ -810,7 +822,7 @@ describeEvm("a typed main, compiled for Base and for Arbitrum, run with --args",
 });
 
 describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
-  let arbitrum: LocalChain;
+  let ethereum: LocalChain;
   let work: string;
   let usdc: Address;
   let portal: Address;
@@ -818,7 +830,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
   const DEADLINE = "2000000000";
   // A top-level file: no `main`, one intent, every amount a define.
   const INTENT = [
-    "// @chain arbitrum",
+    "// @chain ethereum",
     "Base(() => {",
     "  USDC.transfer(RECIPIENT, AMOUNT);",
     "}).reward({ tokens: [{ token: USDC, amount: REWARD }] });",
@@ -841,29 +853,29 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
 
   /** The one intent the file opens, as the SDK encodes it for `creator`. */
   const theIntent = (creator: Address) =>
-    compileSauceProgram("arbitrum", INTENT, {
+    compileSauceProgram("ethereum", INTENT, {
       defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT, REWARD },
       intents: { deadline: BigInt(DEADLINE), creator },
     }).intents[0]!.intent;
 
   const read = async <T>(call: { to: Hex; data: Hex; decode: (result: Hex) => T }): Promise<T> =>
-    call.decode((await arbitrum.publicClient.call({ to: call.to, data: call.data })).data!);
+    call.decode((await ethereum.publicClient.call({ to: call.to, data: call.data })).data!);
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-cli-publish-"));
     intentFile = join(work, "bridge.sauce.ts");
     writeFileSync(intentFile, INTENT);
-    arbitrum = await startChain("arbitrum", 8600 + WORKER);
-    // The real eco-routes Portal, at the address the SDK records for Arbitrum — with the vault
+    ethereum = await startChain("ethereum", 8600 + WORKER);
+    // The real eco-routes Portal, at the address the SDK records for Ethereum — with the vault
     // implementation and Executor a Portal deployed there would have, so its vaults are the ones
     // the SDK derives for that address, as every deployed Portal's are.
-    ({ portal } = await placePortal(arbitrum));
-    usdc = await arbitrum.plant(fixture("MockERC20"), registered(arbitrum.chain, "USDC"));
+    ({ portal } = await placePortal(ethereum));
+    usdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
   }, 120_000);
 
   afterAll(async () => {
     rmSync(work, { recursive: true, force: true });
-    await arbitrum?.stop();
+    await ethereum?.stop();
   });
 
   /** The vault the SDK derives for `intent` on this anvil's Portal. */
@@ -872,7 +884,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
 
   /** `Portal.getRewardStatus`: 0 published (or never), 1 Funded — only `publishAndFund` sets it. */
   const statusOf = (intentHash: Hex): Promise<number> =>
-    arbitrum.publicClient.readContract({
+    ethereum.publicClient.readContract({
       address: portal,
       abi: PortalABI,
       functionName: "getRewardStatus",
@@ -947,14 +959,14 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
   }, 60_000);
 
   it("rehearses the transactions together, and sends nothing", async () => {
-    await arbitrum.mint(usdc, OWNER.address, REWARD);
+    await ethereum.mint(usdc, OWNER.address, REWARD);
     const run = await sauce(
       "intent",
       "publish",
       intentFile,
       ...DEFINES,
       "--rpc-url",
-      arbitrum.rpcUrl,
+      ethereum.rpcUrl,
       "--from",
       OWNER.address,
       "--dry-run",
@@ -962,7 +974,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     );
     // The one note: the destination side is `sauce intent fill`'s.
     expect(run.stderr).toBe(
-      "This rehearses publishing on arbitrum only. What the intent does runs on base, when a " +
+      "This rehearses publishing on ethereum only. What the intent does runs on base, when a " +
         "solver fills it: `sauce intent fill` with the same file and flags, and the destination's " +
         "endpoint, rehearses that.\n",
     );
@@ -978,15 +990,15 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
         { status: "success", gasUsed: gas },
       ],
     });
-    expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(REWARD);
-    expect(await arbitrum.balanceOf(usdc, vaultOf(theIntent(OWNER.address)))).toBe(0n);
+    expect(await ethereum.balanceOf(usdc, OWNER.address)).toBe(REWARD);
+    expect(await ethereum.balanceOf(usdc, vaultOf(theIntent(OWNER.address)))).toBe(0n);
   }, 60_000);
 
   it("rehearses for a wallet that does not hold the reward yet, with --assume-balance", async () => {
     const empty = getAddress("0x5a0ce0000000000000000000000000000000beef");
     const dryRun = (...flags: string[]) =>
       sauce(
-        ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+        ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
         ...["--from", empty, "--dry-run", ...flags],
       );
     // Without it the transfer into the vault reverts: the wallet holds nothing to send.
@@ -1010,10 +1022,10 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       intents: [{ funded: true }],
       transactions: [{ status: "success" }, { status: "success" }],
     });
-    expect(await arbitrum.balanceOf(usdc, empty)).toBe(0n);
+    expect(await ethereum.balanceOf(usdc, empty)).toBe(0n);
     // A balance is assumed only for a rehearsal.
     const sent = await sauce(
-      ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+      ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
       ...["--private-key", OWNER_KEY, "--assume-balance", "USDC:2"],
     );
     expect(sent.code).toBe(2);
@@ -1024,32 +1036,32 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     // A Portal whose code was copied to the registry address, not deployed there: it derives its
     // vaults from another implementation, as a Portal built some other way — or an endpoint
     // answering for another chain — would. The two sources disagree, so neither address is paid.
-    const relocated = (await arbitrum.publicClient.getCode({ address: portal }))!;
-    const elsewhere = await arbitrum.plant(PORTAL_DEPLOYMENT);
-    await arbitrum.testClient.setCode({
+    const relocated = (await ethereum.publicClient.getCode({ address: portal }))!;
+    const elsewhere = await ethereum.plant(PORTAL_DEPLOYMENT);
+    await ethereum.testClient.setCode({
       address: portal,
-      bytecode: (await arbitrum.publicClient.getCode({ address: elsewhere }))!,
+      bytecode: (await ethereum.publicClient.getCode({ address: elsewhere }))!,
     });
     try {
       const reported = await read(intentVaultAddressCall(theIntent(OWNER.address), { portal }));
       expect(reported).not.toBe(vaultOf(theIntent(OWNER.address)));
-      const held = await arbitrum.balanceOf(usdc, OWNER.address);
+      const held = await ethereum.balanceOf(usdc, OWNER.address);
       for (const flags of [
         ["--private-key", OWNER_KEY],
         ["--from", OWNER.address, "--format", "json"],
       ]) {
         const run = await sauce(
-          ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+          ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
           ...flags,
         );
         expect(run.code).toBe(1);
         expect(run.stderr).toContain(`reports the intent's vault as ${reported}`);
         expect(run.stderr).toContain("refusing to send the reward to either, and nothing was sent");
       }
-      expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(held);
-      expect(await arbitrum.balanceOf(usdc, reported)).toBe(0n);
+      expect(await ethereum.balanceOf(usdc, OWNER.address)).toBe(held);
+      expect(await ethereum.balanceOf(usdc, reported)).toBe(0n);
     } finally {
-      await arbitrum.testClient.setCode({ address: portal, bytecode: relocated });
+      await ethereum.testClient.setCode({ address: portal, bytecode: relocated });
     }
   }, 60_000);
 
@@ -1060,7 +1072,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       intentFile,
       ...DEFINES,
       "--rpc-url",
-      arbitrum.rpcUrl,
+      ethereum.rpcUrl,
       "--private-key",
       OWNER_KEY,
     );
@@ -1075,11 +1087,11 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     expect((await read(intentHashCall(intent, { portal }))).intentHash).toBe(intentHash);
     // The Portal's own vault, and the SDK's, are one address — and it holds the reward.
     expect(await read(intentVaultAddressCall(intent, { portal }))).toBe(vault);
-    expect(await arbitrum.balanceOf(usdc, vault)).toBe(REWARD);
-    expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(0n);
+    expect(await ethereum.balanceOf(usdc, vault)).toBe(REWARD);
+    expect(await ethereum.balanceOf(usdc, OWNER.address)).toBe(0n);
     // No approval was asked for, and `publish` records the publication, not a `Funded` status.
     expect(
-      await arbitrum.publicClient.readContract({
+      await ethereum.publicClient.readContract({
         address: usdc,
         abi: erc20,
         functionName: "allowance",
@@ -1092,7 +1104,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     // publish of the same intent, naming its vault.
     const transfer = /^transfer .* to the vault (0x[0-9a-f]{64}): success/m.exec(run.stdout)![1]!;
     expect(
-      jsonOf(await sauce("inspect", transfer, "--rpc-url", arbitrum.rpcUrl, "--json")),
+      jsonOf(await sauce("inspect", transfer, "--rpc-url", ethereum.rpcUrl, "--json")),
     ).toMatchObject({
       status: "success",
       to: usdc,
@@ -1101,7 +1113,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     });
     const published = /^publish (0x[0-9a-f]{64}): success/m.exec(run.stdout)![1]!;
     expect(
-      jsonOf(await sauce("inspect", published, "--rpc-url", arbitrum.rpcUrl, "--json")),
+      jsonOf(await sauce("inspect", published, "--rpc-url", ethereum.rpcUrl, "--json")),
     ).toMatchObject({
       status: "success",
       from: OWNER.address,
@@ -1114,39 +1126,39 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
         reward: { creator: OWNER.address, tokens: [{ token: usdc, amount: REWARD.toString() }] },
       },
     });
-    // The reward is escrowed in Arbitrum's USDC, the chain that funds it.
+    // The reward is escrowed in Ethereum's USDC, the chain that funds it.
     expect(
       intent.reward.tokens.map((token) => denormalizeToEvm(token.token).toLowerCase()),
     ).toEqual([usdc.toLowerCase()]);
 
     // Run again, it pays nothing more: the vault holds the reward, so only `publish` is sent.
     const again = await sauce(
-      ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+      ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
       ...["--private-key", OWNER_KEY, "--json"],
     );
     expect(jsonOf(again)).toMatchObject({ transactions: [{ what: "publish", status: "success" }] });
-    expect(await arbitrum.balanceOf(usdc, vault)).toBe(REWARD);
+    expect(await ethereum.balanceOf(usdc, vault)).toBe(REWARD);
   }, 60_000);
 
   it("publishes through publishAndFund with --intent-fund-via publishAndFund", async () => {
     // Another reward, so another intent: the one above is already funded.
     const other = 3_000_000n;
     const defines = definesFor(other);
-    await arbitrum.mint(usdc, OWNER.address, other);
+    await ethereum.mint(usdc, OWNER.address, other);
     const run = await sauce(
       ...["intent", "publish", intentFile, ...defines, "--intent-fund-via", "publishAndFund"],
-      ...["--rpc-url", arbitrum.rpcUrl, "--private-key", OWNER_KEY],
+      ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY],
     );
     expect(run.code).toBe(0);
     expect(run.stdout).toMatch(/^approve .* to the Portal 0x[0-9a-f]{64}: success/m);
     expect(run.stdout).toMatch(/^publishAndFund 0x[0-9a-f]{64}: success/m);
-    const intent = compileSauceProgram("arbitrum", INTENT, {
+    const intent = compileSauceProgram("ethereum", INTENT, {
       defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT, REWARD: other },
       intents: { deadline: BigInt(DEADLINE), creator: OWNER.address },
     }).intents[0]!.intent;
     expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
     // The Portal pulled it, into the same vault the SDK derives, and recorded it Funded.
-    expect(await arbitrum.balanceOf(usdc, vaultOf(intent))).toBe(other);
+    expect(await ethereum.balanceOf(usdc, vaultOf(intent))).toBe(other);
     expect(await statusOf(hashIntent(intent).intentHash)).toBe(1);
   }, 60_000);
 
@@ -1157,7 +1169,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       writeFileSync(
         path,
         [
-          "// @chain arbitrum",
+          "// @chain ethereum",
           "Base(() => {",
           "  USDC.transfer(RECIPIENT, AMOUNT);",
           `}).reward(${reward});`,
@@ -1169,25 +1181,25 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     };
     const publishFile = (file: string, ...flags: string[]) =>
       sauce(
-        ...["intent", "publish", file, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+        ...["intent", "publish", file, ...DEFINES, "--rpc-url", ethereum.rpcUrl],
         ...["--private-key", OWNER_KEY, ...flags],
       );
     const intentOf = (file: string, defines: Record<string, bigint>) =>
-      compileSauceProgram("arbitrum", readFileSync(file, "utf8"), {
+      compileSauceProgram("ethereum", readFileSync(file, "utf8"), {
         defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT, REWARD, ...defines },
         intents: { deadline: BigInt(DEADLINE), creator: OWNER.address },
       }).intents[0]!.intent;
 
     it("a USDT-style token, whose transfer returns nothing, funds its vault", async () => {
-      const usdt = await arbitrum.plant(USDT_CREATION);
-      await arbitrum.mint(usdt, OWNER.address, REWARD);
+      const usdt = await ethereum.plant(USDT_CREATION);
+      await ethereum.mint(usdt, OWNER.address, REWARD);
       const file = rewardFile("usdt", "{ tokens: [{ token: TOKEN, amount: REWARD }] }");
       const run = await publishFile(file, "--define", `TOKEN=${usdt}`);
 
       expect(run.code).toBe(0);
       const intent = intentOf(file, { TOKEN: BigInt(usdt) });
       expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
-      expect(await arbitrum.balanceOf(usdt, vaultOf(intent))).toBe(REWARD);
+      expect(await ethereum.balanceOf(usdt, vaultOf(intent))).toBe(REWARD);
     }, 60_000);
 
     it("a native reward is sent to the vault", async () => {
@@ -1199,13 +1211,13 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       expect(run.stdout).toMatch(/^send ETH to the vault 0x[0-9a-f]{64}: success/m);
       const intent = intentOf(file, {});
       expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
-      expect(await arbitrum.publicClient.getBalance({ address: vaultOf(intent) })).toBe(NATIVE);
+      expect(await ethereum.publicClient.getBalance({ address: vaultOf(intent) })).toBe(NATIVE);
     }, 60_000);
 
     it("a token whose transfer returns false is caught before the intent is published", async () => {
       // Its transfer "succeeds" and moves nothing: the Portal, asked before `publish` is sent, does
       // not count the intent funded, and the command stops there.
-      const liar = await arbitrum.plant(fixture("FalseReturnERC20"));
+      const liar = await ethereum.plant(fixture("FalseReturnERC20"));
       const file = rewardFile("liar", "{ tokens: [{ token: TOKEN, amount: REWARD }] }");
       const run = await publishFile(file, "--define", `TOKEN=${liar}`);
 
@@ -1219,7 +1231,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     }, 60_000);
   });
 
-  // The route pays in the DESTINATION's USDC — Base's, not Arbitrum's: a nested body's names
+  // The route pays in the DESTINATION's USDC — Base's, not Ethereum's: a nested body's names
   // resolve on its own chain, and the command compiles through that scoping.
   it("names each chain's own USDC: Base's in the route", () => {
     const intent = theIntent(OWNER.address);
@@ -1233,7 +1245,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
   it("runs the same file on a Pot, which publishes and funds it from its own balance", async () => {
     const creator = privateKeyToAccount(OTHER_KEY).address;
     const pot = v12PredictPot(creator, SAUCE_INTENT_POT_SALT) as Address;
-    await arbitrum.mint(usdc, pot, REWARD);
+    await ethereum.mint(usdc, pot, REWARD);
     const run = await sauce(
       "run",
       intentFile,
@@ -1248,7 +1260,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       "--intent-creator",
       creator,
       "--rpc-url",
-      arbitrum.rpcUrl,
+      ethereum.rpcUrl,
       "--private-key",
       OTHER_KEY,
       "--auto-approve",
@@ -1257,7 +1269,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     expect(run.code).toBe(0);
     const intent = theIntent(creator);
     expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
-    expect(await arbitrum.balanceOf(usdc, pot)).toBe(0n);
+    expect(await ethereum.balanceOf(usdc, pot)).toBe(0n);
   }, 60_000);
 
   it("refuses to publish an amount measured on chain, or a file that does more", async () => {
@@ -1265,7 +1277,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     writeFileSync(
       measured,
       [
-        "// @chain arbitrum",
+        "// @chain ethereum",
         "const amount = USDC.balanceOf(ctx.self());",
         "Base(() => {",
         "  USDC.transfer(RECIPIENT, amount);",
@@ -1294,10 +1306,10 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   let config: string;
   const BARE = `http://127.0.0.1:${9400 + WORKER}`;
   const REWARD = 2_000_000n;
-  // An intent from Arbitrum whose body is a program on Base: its cook pays Base's Kitchen fee, on
+  // An intent from Ethereum whose body is a program on Base: its cook pays Base's Kitchen fee, on
   // the Pot every intent through Base's Portal shares.
   const INTENT = [
-    "// @chain arbitrum",
+    "// @chain ethereum",
     "Base(() => {",
     "  require(AMOUNT > 0n);",
     "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT);",

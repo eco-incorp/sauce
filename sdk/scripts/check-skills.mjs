@@ -22,11 +22,13 @@
 //      protocol document with a swap template opens with the one pointer to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program and actions document names the chains it
-//      is checked on there;
+//      is checked on there, one of them at least a chain the release supports;
 //   4. every program compiles through the `sauce` command on each chain its index row names, run
 //      exactly as its usage line says (defines, intent flags, `main`'s arguments), offline; every
 //      actions document (`.json`) names no chain and lowers through `sauce actions` on each chain
-//      its row names, with its cook built by `sauce tx`;
+//      its row names; and the cook either builds through `sauce tx`, on a chain the release
+//      supports (`chainSupport`), or — on a preview chain — is refused, with that chain's
+//      chain-support request in the refusal, as the skills tell an agent it will be;
 //   5. every `sauce …` command line in a skill names a real command and only flags it takes;
 //   6. every ```sauce block compiles (```sauce chain=a,b through the command, ```sauce target=evm|svm
 //      raw) or, as ```sauce fails, does not; every ```json chain=a,b block is an actions document
@@ -108,6 +110,7 @@ const counts = {
   subpaths: 0,
   identifiers: 0,
   addresses: 0,
+  refusals: 0,
 };
 
 function walk(dir, predicate, out = []) {
@@ -684,6 +687,10 @@ if (index !== undefined) {
     if (entry.endsWith(".sauce.ts") || entry.endsWith(".json")) {
       const chains = [...m[3].matchAll(/`([\w-]+)`/g)].map((c) => c[1]);
       if (chains.length === 0) fail(rel(index.path), `gives ${entry} no chain to check it on`);
+      // Its cook is built where the release supports the chain: one of those at least, so the
+      // example's transaction is checked as well as its refusal.
+      else if (!chains.some((chain) => sdk.isSupportedChain(chain)))
+        fail(rel(index.path), `gives ${entry} no supported chain, where its cook would build`);
       programChains.set(entry, chains);
     }
   }
@@ -736,7 +743,36 @@ async function compileJson(file, chain, extra) {
   return { json: JSON.parse(run.stdout) };
 }
 
-/** Runs a program's usage line offline on `chain`: compiles it, and on an EVM chain builds the cook. */
+/**
+ * `sauce tx` with `argv` on `chain`, offline: on a chain the release supports it builds the cook; on
+ * a preview chain it is refused before anything is read, naming the chain as one and carrying its
+ * chain-support request (`chainSupportRequest`), which is what the skills say happens there.
+ */
+async function txOn(where, chain, argv) {
+  const tx = await sauce(argv);
+  if (sdk.chainSupport(chain) === "supported") {
+    if (tx.code !== 0) fail(where, `sauce tx on ${chain} fails: ${diagnostic(tx.stderr)}`);
+    else if (JSON.parse(tx.stdout).data === undefined)
+      fail(where, `sauce tx on ${chain} built no cook`);
+    return;
+  }
+  counts.refusals++;
+  const request = sdk.chainSupportRequest(chain).newIssueUrl;
+  if (
+    tx.code !== 1 ||
+    tx.stdout !== "" ||
+    !/is refused: it involves [^\n]*\ba preview chain\b/.test(tx.stderr) ||
+    !tx.stderr.includes(request)
+  )
+    fail(
+      where,
+      `sauce tx on ${chain}, a preview chain, is not refused with its chain-support request ` +
+        `(exit ${tx.code}): ${diagnostic(tx.stderr || tx.stdout)}`,
+    );
+}
+
+/** Runs a program's usage line offline on `chain`: compiles it, and on an EVM chain builds the cook
+ *  (refused on a preview chain: `txOn`). */
 async function runUsage(where, file, argv, chain) {
   const [name, , ...rest] = argv;
   const at = rest.indexOf("--args");
@@ -786,7 +822,7 @@ async function runUsage(where, file, argv, chain) {
   const values = (args ?? []).map((word, i) =>
     /<[^>]+>/.test(word) ? sample(entryParams[i].type) : word,
   );
-  const tx = await sauce([
+  await txOn(where, chain, [
     "tx",
     file,
     "--chain",
@@ -798,15 +834,13 @@ async function runUsage(where, file, argv, chain) {
     "0",
     ...(values.length === 0 ? [] : ["--args-json", JSON.stringify(values)]),
   ]);
-  if (tx.code !== 0) fail(where, `sauce tx on ${chain} fails: ${diagnostic(tx.stderr)}`);
-  else if (JSON.parse(tx.stdout).data === undefined)
-    fail(where, `sauce tx on ${chain} built no cook`);
 }
 
 /**
  * An actions document, lowered through `sauce actions` on each of `chains`, and its cook built by
  * `sauce tx` with `main`'s arguments (its `argument` actions) sampled — as the skill tells an agent
- * to run it. A document names no chain: `--chain` picks one.
+ * to run it, and refused on a preview chain (`txOn`). A document names no chain: `--chain` picks
+ * one.
  */
 async function runDocument(where, file, chains) {
   let document;
@@ -831,7 +865,7 @@ async function runDocument(where, file, chains) {
     counts.programRuns++;
     const { entryParams = [] } = JSON.parse(lowered.stdout);
     const args = entryParams.map((param) => sample(param.type));
-    const tx = await sauce([
+    await txOn(where, chain, [
       "tx",
       file,
       "--chain",
@@ -842,9 +876,6 @@ async function runDocument(where, file, chains) {
       "0",
       ...(args.length === 0 ? [] : ["--args-json", JSON.stringify(args)]),
     ]);
-    if (tx.code !== 0) fail(where, `sauce tx on ${chain} fails: ${diagnostic(tx.stderr)}`);
-    else if (JSON.parse(tx.stdout).data === undefined)
-      fail(where, `sauce tx on ${chain} built no cook`);
   }
 }
 
@@ -1359,7 +1390,8 @@ else {
 
 // ---- Report ----------------------------------------------------------------------------------------------
 const summary =
-  `${counts.skills} skills, ${counts.files} files read; ${counts.programRuns} program runs through sauce, ` +
+  `${counts.skills} skills, ${counts.files} files read; ${counts.programRuns} program runs through sauce ` +
+  `(${counts.refusals} cooks refused on preview chains), ` +
   `${counts.commands} sauce command lines checked; ${counts.sauce} sauce blocks compiled, ` +
   `${counts.sauceFails} refused as documented; ${counts.ts} ts blocks typechecked; ${counts.runners} runners ` +
   `executed offline; ${counts.indexed} indexed globals compiled on their chains; ${builtinExamples} ` +

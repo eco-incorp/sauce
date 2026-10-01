@@ -2,8 +2,13 @@
 
 # Ethereum
 
+**Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
+Ethereum a program compiles and simulates, and the `sauce` command and the MCP server build
+its transactions and send them.
+
 | Fact | Value |
 | --- | --- |
+| Support | supported: transactions are built and sent |
 | Slug (`--chain`) | `ethereum`; also `mainnet`, `eth` |
 | Chain id | 1 |
 | Kind | EVM |

@@ -15,7 +15,7 @@ import type { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
 
 import { shippedSkills, SKILLS_INDEX, type Skill } from "./resources.js";
-import { PACKAGED_SKILLS } from "./sdk.js";
+import { PACKAGED_SKILLS, supportedChainNames } from "./sdk.js";
 
 export const PROMPT_NAMES = ["sauce_write_program", "sauce_open_intent"] as const;
 
@@ -86,6 +86,9 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   cook from the Pot's owner: check what it moved (or why it reverts) before going on.",
               "4. sauce_pot for the owner's Pot, and its deploy transaction if it is not deployed.",
               "5. sauce_tx for the unsigned cook transaction.",
+              `Transactions are built only on ${supportedChainNames()}: on any other chain (a`,
+              "preview chain) steps 1-3 work, and steps 4-5 return `refused` with the chain-support",
+              "request to offer the user instead.",
               "Nothing here signs: hand the owner the unsigned transactions to sign and send with",
               "their own wallet, and never ask for a private key.",
             ].join("\n"),
@@ -152,6 +155,10 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   says where it stands and what can happen next. If no solver fills it before its",
               "   deadline, sauce_intent_refund (from the reward's deadline) or sauce_intent_cancel",
               "   then sauce_intent_prove then sauce_intent_refund (sooner) returns the reward.",
+              `Intents publish only between ${supportedChainNames()}, the chains this release`,
+              "supports: an intent that involves a preview chain compiles and rehearses, and the",
+              "tools that build its transactions return `refused` with the chain-support request to",
+              "offer the user instead.",
               "Nothing here signs: hand the wallet's owner the unsigned transactions, in order, and",
               "never ask for a private key.",
             ].join("\n"),
