@@ -19,7 +19,7 @@ function main(
     prover: Address;
     nativeAmount: Uint256;
     tokens: { token: Address; amount: Uint256 }[];
-  }
+  },
 ): bytes {
   // A native reward is sent to the vault with the cook's value; this program funds tokens only.
   require(reward.nativeAmount == 0n, "a native reward is not funded here");
