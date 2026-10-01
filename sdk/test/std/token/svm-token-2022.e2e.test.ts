@@ -17,8 +17,8 @@
  *   - none, ScaledUiAmount, MetadataPointer/TokenMetadata, PermanentDelegate, ConfidentialTransferMint,
  *     a TransferHook with no program, DefaultAccountState initialized: reads and checked writes work
  *     as on a legacy mint, in raw base units;
- *   - TransferFee: the destination receives the amount less the fee, exactly as `token-extensions.ts`
- *     computes it, so a program measures what arrived;
+ *   - TransferFee: the destination receives the amount less the fee, exactly as the SDK's
+ *     `svmTokenReceived` computes it, so a program measures what arrived;
  *   - Pausable (paused) and DefaultAccountState (frozen): the token program refuses the write, with
  *     its own error;
  *   - a TransferHook that names a program: the library refuses the transfer, "transfer hook".
@@ -37,7 +37,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileSauceProgram } from "../../../src/routes/sauce-route.js";
 import { SVM_TOKEN_REGISTRY } from "../../../src/routes/token-registry.js";
-import { calcTransferFee, parseMintExtensions } from "../../../src/svm/token-extensions.js";
+import {
+  resolveSvmToken,
+  svmTokenAccount,
+  svmTokenReceived,
+  svmTokenToSend,
+} from "../../../src/svm/token-accounts.js";
+import { parseMintExtensions } from "../../../src/svm/token-extensions.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
 import {
   expectOk,
   randomAddress,
@@ -224,6 +231,17 @@ const dataOf = (harness: EngineHarness, address: Address): Uint8Array => {
 
   return new Uint8Array(account.data);
 };
+
+/** The bank as an RPC answers for it: an account's data and owner, or null. */
+const bankLoader =
+  (harness: EngineHarness): OwnedAccountLoader =>
+  async (address) => {
+    const account = harness.svm.getAccount(address);
+
+    return account.exists
+      ? { data: new Uint8Array(account.data), owner: account.programAddress }
+      : null;
+  };
 
 const send = async (harness: EngineHarness, instructions: Instruction[]): Promise<void> => {
   expectOk(await sendInstructions(harness, instructions));
@@ -563,13 +581,17 @@ describeToken2022("@sauce/token e2e: Token-2022 on the real token program", () =
       expect(toBigInt(received)).toBe(MOVED);
     });
 
-    it("TransferFee: the destination receives the amount less the fee token-extensions computes", async () => {
-      const image = mintImage(harness.payer.address, [transferFee(150, 9_000n)]);
-      const { mint, source, dest } = await withAccounts(image);
-      const config = parseMintExtensions(image).transferFee!;
-      // The harness runs at epoch 0; both schedules start there.
-      const fee = calcTransferFee(MOVED, config, 0n);
-      expect(fee).toBeGreaterThan(0n);
+    it("TransferFee: the destination receives the amount less the fee, which the SDK nets exactly", async () => {
+      const { mint, source, dest } = await withAccounts(
+        mintImage(harness.payer.address, [transferFee(150, 9_000n)]),
+      );
+      // The SDK's own resolution of the mint, read from the bank as an RPC would answer.
+      const token = await resolveSvmToken(bankLoader(harness), mint);
+      expect(token).toMatchObject({ tokenProgram: TOKEN_2022_PROGRAM, decimals: DECIMALS });
+      expect(await svmTokenAccount(token, harness.payer.address)).toBe(source);
+      // The harness runs at epoch 0, where both schedules start. MOVED meets the fee's maximum.
+      const fee = MOVED - svmTokenReceived(token, MOVED, 0n);
+      expect(fee).toBe(9_000n);
 
       const received = await run(
         harness,
@@ -581,6 +603,21 @@ describeToken2022("@sauce/token e2e: Token-2022 on the real token program", () =
       expect(toBigInt(received)).toBe(MOVED - fee);
       expect(tokenAmount(harness, dest)).toBe(MOVED - fee);
       expect(tokenAmount(harness, source)).toBe(MINTED - MOVED);
+
+      // Below the maximum the fee is a share, rounded up: sending what the SDK says to send delivers
+      // exactly the amount asked for.
+      const wanted = 100_000n;
+      const send = svmTokenToSend(token, wanted, 0n);
+      expect(send).toBeGreaterThan(wanted);
+      expect(
+        toBigInt(
+          await run(
+            harness,
+            transferEntry(mint, send),
+            transferSlots(harness, { source, mint, dest }),
+          ),
+        ),
+      ).toBe(wanted);
     });
 
     it("PYUSD, by its registered symbol: a fee config at zero, a hook with no program", async () => {
