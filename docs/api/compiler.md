@@ -139,8 +139,10 @@ interface CompileResult {
   revision while only one of them runs a given compiler's output. Pair a program
   with an engine by exact package version — see
   [Which engine runs a program](#which-engine-runs-a-program).
-- `entryEncoding` selects the argument encoder: ordinary ABI arguments by
-  default, compact arguments when `compactArgs: true`. It does not describe
+- `entryEncoding` selects the argument encoder: ABI arguments by default, with
+  every tuple parameter behind an offset
+  ([Pass arguments with ABI-v1](../guides/compiling.md#pass-arguments-with-abi-v1)),
+  compact arguments when `compactArgs: true`. It does not describe
   [program return encoding](../guides/compiling.md#return-values-an-abi-decoder-can-read).
 - `entrySchema` describes compact argument structure. Pass this exact schema to
   the compact codec; do not infer or rebuild it from example bytes.

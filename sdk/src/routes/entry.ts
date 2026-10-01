@@ -6,13 +6,17 @@
  * the compiler exactly as written; this only reads it.
  *
  * ENTRY ARGUMENTS. A value for a parameter arrives at run time, appended to the program: ABI-v1
- * (`abi.encode` of the parameters in order, no selector) by default, compact-v1 under `compactArgs`.
+ * (`abi.encode` of the parameters in order, no selector, except that a tuple parameter is always
+ * behind an offset — `encodeAbiEntry`) by default, compact-v1 under `compactArgs`.
  * `encodeEntryArguments` checks each value against the type the program declares and encodes it in
  * the encoding the program was compiled for. Only annotations are types here: a parameter without
  * one is a `Uint256`, as the compiler reads it.
  */
 import {
+  bytesToBigInt,
   bytesToHex,
+  concatBytes,
+  concatHex,
   decodeAbiParameters,
   encodeAbiParameters,
   getAddress,
@@ -20,6 +24,8 @@ import {
   isAddress,
   isHex,
   numberToHex,
+  size,
+  sliceHex,
   type Hex,
 } from "viem";
 
@@ -449,6 +455,80 @@ function forAbi(type: EntryType, value: Normalized): unknown {
   return value;
 }
 
+/** Whether a value of `type` has no fixed size, which ABI encoding puts behind an offset. */
+function isDynamic(type: EntryType): boolean {
+  if (type.kind === "tuple") return type.fields.some((field) => isDynamic(field.type));
+
+  return type.kind === "bytes" || type.kind === "string" || type.kind === "array";
+}
+
+/** Whether `main` reads its parameter of `type` behind an offset word: a dynamic one, and a tuple
+ *  of fixed-size fields too, which `abi.encode` would write inline. */
+const behindOffset = (type: EntryType): boolean => type.kind === "tuple" || isDynamic(type);
+
+const WORD = 32;
+
+/**
+ * ABI-v1 entry arguments: one head word per parameter — its value, or the offset of its encoding
+ * after the heads — then those encodings in order.
+ *
+ * That is `abi.encode` of the parameters for every parameter but a tuple of fixed-size fields. The
+ * compiler gives each of `main`'s parameters exactly one head word, so it reads such a tuple behind
+ * an offset, where `abi.encode` writes its fields inline in the head. Inside a parameter the
+ * encoding is `abi.encode`'s: a tuple of fixed-size fields nested in a tuple or an array is inline.
+ */
+function encodeAbiEntry(
+  abi: readonly AbiParam[],
+  types: readonly EntryType[],
+  values: readonly unknown[],
+): Hex {
+  const heads: Hex[] = [];
+  const tails: Hex[] = [];
+  let next = WORD * types.length;
+  types.forEach((type, index) => {
+    const encoded = encodeAbiParameters([abi[index]!] as never, [values[index]] as never);
+    if (!behindOffset(type)) {
+      heads.push(encoded);
+
+      return;
+    }
+    // A dynamic value's encoding opens with its own offset word; a fixed-size tuple's is its fields.
+    const tail = isDynamic(type) ? sliceHex(encoded, WORD) : encoded;
+    heads.push(numberToHex(next, { size: WORD }));
+    tails.push(tail);
+    next += size(tail);
+  });
+
+  return concatHex([...heads, ...tails]);
+}
+
+/** `encodeAbiEntry` read back, as leniently as viem reads; the caller re-encodes what this returns
+ *  to hold `encoded` to the one canonical form. */
+function decodeAbiEntry(
+  abi: readonly AbiParam[],
+  types: readonly EntryType[],
+  encoded: Uint8Array,
+): unknown[] {
+  if (encoded.length < WORD * types.length) {
+    throw new RangeError(
+      `decodeEntryArguments: ${encoded.length} bytes are not the canonical encoding of main's ` +
+        `arguments (its ${types.length} parameters take at least ${WORD * types.length})`,
+    );
+  }
+
+  return types.map((type, index) => {
+    const head = encoded.subarray(WORD * index, WORD * (index + 1));
+    if (!behindOffset(type)) return decodeAbiParameters([abi[index]!] as never, head)[0];
+    const tail = encoded.subarray(Number(bytesToBigInt(head)));
+    // viem reads a dynamic value through an offset word of its own, so it is given one.
+    const read = isDynamic(type)
+      ? concatBytes([hexToBytes(numberToHex(WORD, { size: WORD })), tail])
+      : tail;
+
+    return decodeAbiParameters([abi[index]!] as never, read)[0];
+  });
+}
+
 /**
  * The encoded entry arguments for `program`: `values` checked against `main`'s declared parameters,
  * in their order, and encoded as the program was compiled to read them. Append them to the program's
@@ -488,9 +568,10 @@ export function encodeEntryArguments(
   if (params.length === 0) return new Uint8Array();
 
   return hexToBytes(
-    encodeAbiParameters(
-      types.map((type, index) => abiParam(type, params[index]!.name)) as never,
-      types.map((type, index) => forAbi(type, normalized[index]!)) as never,
+    encodeAbiEntry(
+      types.map((type, index) => abiParam(type, params[index]!.name)),
+      types,
+      types.map((type, index) => forAbi(type, normalized[index]!)),
     ),
   );
 }
@@ -544,13 +625,11 @@ export function decodeEntryArguments(program: ProgramEntry, encoded: Uint8Array)
     // Strict already: minimal scalars, canonical booleans, no trailing bytes.
     raw = decodeCompactArguments(program.entrySchema, encoded) as readonly unknown[];
   } else {
-    raw =
-      params.length === 0 && encoded.length === 0
-        ? []
-        : decodeAbiParameters(
-            types.map((type, index) => abiParam(type, params[index]!.name)) as never,
-            encoded,
-          );
+    raw = decodeAbiEntry(
+      types.map((type, index) => abiParam(type, params[index]!.name)),
+      types,
+      encoded,
+    );
   }
   const values = types.map((type, index) => typed(type, raw[index]));
   const again = encodeEntryArguments(program, values);

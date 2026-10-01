@@ -117,7 +117,8 @@ export async function sauceWith(overrides: Partial<CliIo>, ...argv: string[]): P
 export const sauce = (...argv: string[]): Promise<Run> => sauceWith({}, ...argv);
 
 export const jsonOf = (run: Run): Record<string, unknown> => {
-  if (run.code !== 0) throw new Error(`sauce exited ${run.code}: ${run.stderr}`);
+  // `--json` puts a failure on stdout, so both streams are shown.
+  if (run.code !== 0) throw new Error(`sauce exited ${run.code}: ${run.stderr}${run.stdout}`);
 
   return JSON.parse(run.stdout) as Record<string, unknown>;
 };

@@ -110,6 +110,14 @@ That whole payload is the `program` argument to `Pot.cook(engine, program)`; the
 an ordinary contract call with its own ABI encoding. Passing those same values as `defines` instead
 would produce a _different_ program — one specialised to them.
 
+One parameter type differs from `abi.encode`. `main` reads each parameter from one 32-byte head
+word, so a tuple parameter, such as `leg: { amount: Uint256, to: Address }`, sits behind an offset
+word even when all its fields are fixed-size. `encodeAbiParameters` writes such a tuple's fields
+inline instead, and `main` would read the wrong values. Inside a parameter, as an array element or a
+field of another tuple, a fixed-size tuple is inline, as `abi.encode` writes it.
+`routes.encodeEntryArguments` encodes arguments in the layout `main` reads, from the parameters
+`main` declares, and `routes.decodeEntryArguments` reads them back.
+
 ### Pass arguments with compact-v1
 
 Compile with `compactArgs: true` and use the schema that comes back with it. The schema and the
