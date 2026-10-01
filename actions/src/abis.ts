@@ -37,6 +37,12 @@ import { AaveV3PoolABI, AcrossSpokePoolABI, BalancerV2VaultABI, CometABI } from 
 import { CrocSwapDexABI, CurveRouterNGABI, ERC20ABI, LidoABI } from "./registry.js";
 import { LiquidityPoolABI, Permit2ABI, RETHABI, RocketDepositPoolABI } from "./registry.js";
 import { StargatePoolABI, TokenMessengerABI, UniswapV2RouterABI, WstETHABI } from "./registry.js";
+import {
+  LBFactoryABI,
+  SlipstreamCLFactoryABI,
+  UniswapV2FactoryABI,
+  UniswapV3FactoryABI,
+} from "./registry.js";
 
 /** A parsed ABI in the shape the compiler's `inlineContracts` and the SDK's `compile.contracts` take. */
 export interface ActionContract {
@@ -291,6 +297,51 @@ const CATALOG = {
         "function transferRemote(uint32 destination, bytes32 recipient, uint256 amountOrId) payable",
         `${reason}; the message id it returns is never read`,
       ),
+    };
+  },
+  // A pool given by its key: the factory's lookup, called at a factory given by address. A factory
+  // given by name is called through its namespace instead, with the registry's own ABI for it.
+  IUniswapV2Factory: () => ({
+    getPair: sdk(
+      "uniswap-v2",
+      "UniswapV2FactoryABI",
+      UniswapV2FactoryABI,
+      "getPair(address,address)",
+      "keep",
+    ),
+  }),
+  IUniswapV3Factory: () => ({
+    getPool: sdk(
+      "uniswap-v3",
+      "UniswapV3FactoryABI",
+      UniswapV3FactoryABI,
+      "getPool(address,address,uint24)",
+      "keep",
+    ),
+  }),
+  ISlipstreamFactory: () => ({
+    getPool: sdk(
+      "aerodrome-slipstream",
+      "SlipstreamCLFactoryABI",
+      SlipstreamCLFactoryABI,
+      "getPool(address,address,int24)",
+      "keep",
+    ),
+  }),
+  ILBFactory: () => ({
+    getLBPairInformation: sdk(
+      "trader-joe",
+      "LBFactoryABI",
+      LBFactoryABI,
+      "getLBPairInformation(address,address,uint256)",
+      "keep",
+    ),
+  }),
+  ILBPair: () => {
+    const reason = "the registry carries Trader Joe's router and factory, not the LB pair";
+    return {
+      getTokenX: local("function getTokenX() view returns (address tokenX)", reason),
+      getTokenY: local("function getTokenY() view returns (address tokenY)", reason),
     };
   },
   IPermit2: () => ({

@@ -23,6 +23,7 @@ import {
   parseDefinesFile,
   parseFlags,
   parseSalt,
+  parseTarget,
   parseUnixSeconds,
   parseWei,
   repeatedFlag,
@@ -33,6 +34,7 @@ import {
   type FlagSpecs,
   type ParsedArgs,
 } from "./args.js";
+import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
 import { chainServedBy, endpointFor } from "./chain.js";
 import {
   compileCommand,
@@ -436,6 +438,42 @@ function programInput(
   };
 }
 
+/**
+ * A compiling command's operand: a SauceScript file, or an actions document (a JSON object with
+ * `actions`), which `actions.ts` lowers into the same `ProgramInput` — so its compile, cook, Pot,
+ * arguments and funding are every program's.
+ */
+async function programOperand(args: ParsedArgs, io: CliIo): Promise<ProgramInput> {
+  const file = fileOperand(args);
+  const text = readInput(io, file);
+
+  return isActionsDocument(text)
+    ? actionsProgram(actionsOperand(args, file, text))
+    : programInput(args, io, file);
+}
+
+/** An actions document's input, from the flags a program command takes. */
+function actionsOperand(args: ParsedArgs, file: string, text: string): ActionsInput {
+  if (repeatedFlag(args, "define").length > 0 || stringFlag(args, "defines") !== undefined) {
+    throw new UsageError(
+      "--define and --defines give a SauceScript program its defines; an actions document's " +
+        "values are its own fields",
+    );
+  }
+  const target = stringFlag(args, "target");
+  if (target !== undefined && parseTarget(target) !== "evm") {
+    throw new UsageError(`${file} is an actions document, and actions run on EVM chains`);
+  }
+  const chain = stringFlag(args, "chain");
+
+  return {
+    file,
+    text,
+    ...(chain === undefined ? {} : { chain }),
+    compactArgs: args.values["compact-args"] === true,
+  };
+}
+
 /** `main`'s arguments: the words after `--args`, or `--args-json`'s array — never both. */
 function argsInput(
   args: ParsedArgs,
@@ -747,13 +785,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "zero-import @sauce/token functions, SafeERC20 token writes (USDC.transfer,",
       "Token(addr).approve) and intents opened inside the program all resolve against it, so",
       "one file compiles for any chain whose names it uses. Relative imports are read from beside",
-      "the file. A file may name its chain in a leading `// @chain base` line.",
+      "the file. A file may name its chain in a leading `// @chain base` line. An actions",
+      "document compiles too (`sauce actions`).",
       "",
       "Example:",
       "  sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x…",
     ].join("\n"),
-    run: (args, io) => {
-      const output = compileCommand(programInput(args, io), io);
+    run: async (args, io) => {
+      const output = compileCommand(await programOperand(args, io), io);
       const out = stringFlag(args, "out");
       if (out === undefined) return output;
       io.writeText(
@@ -762,6 +801,52 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       );
 
       return undefined;
+    },
+  },
+  actions: {
+    usage: "sauce actions <file> [--chain <slug|id>] [--compact-args] [--json]",
+    summary: "Lower an actions document to SauceScript for a chain; print the source and bytecode",
+    flags: {
+      chain: {
+        type: "string",
+        value: "<slug|id>",
+        help: "The chain to compile for (default: the document's chainId)",
+      },
+      "compact-args": PROGRAM["compact-args"]!,
+      json: {
+        type: "boolean",
+        help: "Print JSON: the document, source, bytecode and main's parameters",
+      },
+      ...HELP,
+    },
+    details: [
+      'An actions document is JSON: { "version": 1, "actions": [ … ] }, each action one',
+      "protocol operation (actions/action-program.schema.json lists them). Tokens are registry",
+      "symbols (USDC) and contracts namespace references (UniswapV3.Factory), or addresses; a pool",
+      "may be given by its factory's key (factory and fee). Lowered for the chain, every name is",
+      "the program's global of that name, so a document with no chainId compiles for any chain",
+      "where its names exist, and a name the chain lacks is refused with its path.",
+      "",
+      "Prints the SauceScript the document lowers to, then main's parameters and the bytecode.",
+      "compile, tx, simulate and run take an actions document wherever they take a .sauce.ts",
+      "file, with the same flags: its argument actions are main's parameters (--args), and its",
+      "cook runs on the Pot --owner or --pot names.",
+      "",
+      "Examples:",
+      "  sauce actions swap.json --chain base",
+      "  sauce simulate swap.json --chain base --owner 0x… --rpc-url <url> --args 1000000",
+    ].join("\n"),
+    run: (args, io) => {
+      const file = fileOperand(args);
+      const text = readInput(io, file);
+      if (!isActionsDocument(text)) {
+        throw new UsageError(
+          `${file} is not an actions document (a JSON object with "actions"); compile a ` +
+            "SauceScript file with `sauce compile`",
+        );
+      }
+
+      return actionsCommand(actionsOperand(args, file, text), io);
     },
   },
   simulate: {
@@ -833,7 +918,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const program = programInput(args, io);
+      const program = await programOperand(args, io);
       const funds = repeatedFlag(args, "fund").length > 0;
       if (hasSigner(args) && !funds) {
         throw new UsageError(
@@ -920,7 +1005,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const program = programInput(args, io);
+      const program = await programOperand(args, io);
       if (program.chain.kind === "svm") {
         fundingOf(args, io, program.chain, "", true, undefined);
         const signer = await keypairOf(args, io);
@@ -1159,8 +1244,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0",
     ].join("\n"),
     trailing: "args",
-    run: (args, io, trailing) => {
-      const program = programInput(args, io);
+    run: async (args, io, trailing) => {
+      const program = await programOperand(args, io);
       if (program.chain.kind === "svm") {
         return svmTxCommand(svmCookInput(args, io, trailing, program), io);
       }

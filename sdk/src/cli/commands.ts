@@ -80,8 +80,10 @@ export interface ProgramInput {
     readonly creator?: Address;
     readonly executionFee?: bigint;
   };
-  /** ABI bindings the program calls through by name: what an action program's lowering declares
-   *  (`actions/src/source.ts`); a file names its own with `import`. */
+  /**
+   * ABI bindings the program calls through without declaring them — an actions document's
+   * (`actions.ts`), whose generated source names `IErc20` and the like. Absent for a file.
+   */
   readonly contracts?: SauceCompileOptions["contracts"];
 }
 

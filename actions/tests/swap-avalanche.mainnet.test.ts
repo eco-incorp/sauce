@@ -247,7 +247,7 @@ describe("@sauce/router on Avalanche state", { skip: skipReason(), timeout: 600_
     const { to, data, decode } = quoteAction({
       ...lbAction(WAVAX, USDC, ONE_AVAX),
       pool: LB_THIN,
-    });
+    } as TraderJoeLBSwapAction);
     const { data: result } = await env.publicClient.call({ to, data });
     assert.equal(decode(result!), 0n);
   });

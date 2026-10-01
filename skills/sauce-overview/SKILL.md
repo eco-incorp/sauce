@@ -75,6 +75,7 @@ server (`npx -y @eco-incorp/sauce mcp`); `sauce-run` maps each command to its to
 | Any protocol's contracts; factories, routers and pools; the per-protocol documents      | `sauce-protocols`        |
 | Any swap: `@sauce/router`, price limits, the Pot's Router, the guard every leg needs    | `sauce-swaps`            |
 | One swap split across every price-limit venue on a chain                                | `sauce-distributed-swap` |
+| Protocol operations as JSON data, not a program: actions documents                      | `sauce-actions`          |
 | Continuing on another chain: intents, cascades, rewards                                 | `sauce-intents`          |
 | Solana programs: accounts, SPL, the Kitchen                                             | `sauce-solana`           |
 | Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing   | `sauce-run`              |

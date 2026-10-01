@@ -103,7 +103,10 @@ describe("ERC-20 writes, checked like SafeERC20", { skip, timeout: 120_000 }, ()
     });
 
   const run = async (actions: Action[]) =>
-    (await env.cook(compileProgram({ version: 1, chainId: 31337, actions }).bytecode)).status;
+    // The anvil is chain 31337, which no registry names: the program has only addresses, so any
+    // canonical chain compiles it to the same bytes.
+    (await env.cook(compileProgram({ version: 1, actions }, { chain: "ethereum" }).bytecode))
+      .status;
 
   it("approve and transfer succeed on a token that returns nothing, and move exactly what they say", async () => {
     const status = await run([
