@@ -96,9 +96,14 @@ export const ENGINE_FAULTS = {
 
 export type EngineFault = keyof typeof ENGINE_FAULTS;
 
+/** `ENGINE_FAULTS` inverted, once. Each code names one fault (`instructions.test.ts` asserts it). */
+const FAULT_BY_CODE: ReadonlyMap<number, EngineFault> = new Map(
+  (Object.keys(ENGINE_FAULTS) as EngineFault[]).map((name) => [ENGINE_FAULTS[name], name]),
+);
+
 /** The fault a `Custom(code)` from the engine names, or `undefined` for a code it does not use. */
 export function engineFaultName(code: number): EngineFault | undefined {
-  return (Object.keys(ENGINE_FAULTS) as EngineFault[]).find((name) => ENGINE_FAULTS[name] === code);
+  return FAULT_BY_CODE.get(code);
 }
 
 // ── interpreter memory (BPF heap frame) ──

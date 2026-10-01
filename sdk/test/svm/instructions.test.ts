@@ -229,4 +229,13 @@ describe("engineFaultName", () => {
     expect(engineFaultName(0)).toBe("Revert");
     expect(engineFaultName(9999)).toBeUndefined();
   });
+
+  it("names each code once, so a code reads back as the one fault it is", () => {
+    const codes = Object.values(ENGINE_FAULTS);
+
+    expect(new Set(codes).size).toBe(codes.length);
+    for (const [name, code] of Object.entries(ENGINE_FAULTS)) {
+      expect(engineFaultName(code)).toBe(name);
+    }
+  });
 });
