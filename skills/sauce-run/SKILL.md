@@ -184,10 +184,11 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
   is not deployed on its destination: no solver can fill it until then, and the warning names the
   `sauce pot --deploy` that deploys it. `sauce run` opens them from the Pot, which is the way when
   an amount is measured on chain; `sauce publish` opens fixed ones from a wallet with no Pot, and
-  `sauce publish <file> --chain <chain> --from <address> --format json` prints its unsigned approve
-  and `publishAndFund` for any wallet to send. Both fund each reward by an approve and
-  `publishAndFund`. `sauce publish … --dry-run --assume-balance USDC:<amount>` rehearses it
-  from a wallet that does not hold the reward yet.
+  `sauce publish <file> --chain <chain> --from <address> --format json` prints its unsigned
+  transfers and `publish` for any wallet to send, in that order. Both fund each reward by a transfer
+  into the intent's vault, then `publish`: no approval. `--intent-fund-via publishAndFund` switches
+  either to an approve and `publishAndFund`. `sauce publish … --dry-run --assume-balance
+USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
   `sauce fill <file> --chain <chain> --config sauce.config.json` rehearses each intent where its
   body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
   `publish --dry-run` covers only the source chain. `fill` prints what the body moved, what it left
