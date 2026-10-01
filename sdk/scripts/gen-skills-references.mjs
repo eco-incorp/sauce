@@ -646,8 +646,11 @@ function renderGlobals(data) {
     "",
     "Any contract can hold, receive and send them, a program's Pot included; an issuer can pause its",
     "token or refuse a sanctioned address. Backed's (its xStocks, and bTokens such as `bTSLA`)",
-    "rebase: a balance can change between transactions, never within one. Coinbase's are B20",
-    "tokens, built into the Base node: they run on Base, and not in a local copy of the chain.",
+    "rebase: a balance can change between transactions, never within one, and a transfer can credit",
+    "one unit less than sent, so paying one into a pool that checks what it received can fail (buying",
+    "one is unaffected). Coinbase's are B20 tokens, built into the Base node: they run on Base, and",
+    "not in a local copy of the chain. The rest is in the skill's",
+    "[Tokenized stocks](../SKILL.md#tokenized-stocks).",
     "",
   ];
   for (const entry of globals.tokens) {

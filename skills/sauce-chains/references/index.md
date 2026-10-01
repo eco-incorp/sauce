@@ -7,7 +7,7 @@ tokens and every protocol recorded there with its addresses.
 
 | Chain | Slug | Id | Kind | Intents | CCTP | Tokens | Protocols |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| [Ethereum](ethereum.md) | `ethereum` | 1 | EVM | yes | 0 | 1734 | 96 |
+| [Ethereum](ethereum.md) | `ethereum` | 1 | EVM | yes | 0 | 1733 | 96 |
 | [Optimism](optimism.md) | `optimism` | 10 | EVM | yes | 2 | 3 | 40 |
 | [Cronos](cronos.md) | `cronos` | 25 | EVM | no | — | 0 | 0 |
 | [BNB Chain](bsc.md) | `bsc` | 56 | EVM | no | — | 0 | 29 |

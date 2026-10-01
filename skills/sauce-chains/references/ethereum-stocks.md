@@ -1375,7 +1375,6 @@ address. [ethereum.md](ethereum.md) has the chain's other tokens and its contrac
 | `SHLx` | Siemens Healthineers xStock | Backed | `0x068C49aB098337BEA542431E142063880d3Fdf70` | 18 |
 | `SHOPon` | Shopify (Ondo Tokenized) | Ondo Global Markets | `0x908266C1192628371Cff7AD2F5Eba4dE061a0ac5` | 18 |
 | `SHOPx` | Shopify xStock | Backed | `0xD3F90F9f3C67052578508EC08Da683F4332a7C3C` | 18 |
-| `SHVon` | iShares 0-1 Year Treasury Bond (Ondo Tokenized) | Ondo Global Markets | `0x2d8B65306a6c23dA6342CB94d4251fb4302a624F` | 18 |
 | `SHWx` | Sherwin-Williams xStock | Backed | `0xdFf1d0B8570df76e4fC8EfB87F3B6661159ac4D8` | 18 |
 | `SHYon` | iShares 1-3 Year Treasury Bond ETF (Ondo Tokenized) | Ondo Global Markets | `0x5C424B9b60383FCE7fE7069D2a2B1047BCd04a73` | 18 |
 | `SIEx` | Siemens xStock | Backed | `0xe72BC89D4d30e77fE6a628708e7c3AA0928EA250` | 18 |
