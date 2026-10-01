@@ -111,6 +111,47 @@ export function compileCustomTokenApproval(
 
 Custom symbol names work in source strings. The package's generated TypeScript declarations cover registered names; applications authoring callbacks with additional names must supply their own declarations. A declaration provides a type, while the token map provides the address used by the compiler.
 
+### Pulling tokens in
+
+A program that spends tokens its Pot does not hold yet can pull them from the account that does,
+with three more `@sauce/token` functions (EVM). Each pull is a `safeTransferFrom`, however it is
+authorised:
+
+- `transferFrom(token, owner, ctx.self(), amount)`, on an allowance `owner` gave the Pot: the
+  SafeERC20 write above.
+- `permit(token, owner, spender, value, deadline, v, r, s)` sets that allowance from `owner`'s
+  EIP-2612 signature; the same `transferFrom` then pulls. As OpenZeppelin's `safePermit` does, it
+  requires the token's nonce for `owner` to move by exactly one, so a token with no `permit` whose
+  fallback accepts any call (WETH9's does) is refused rather than taken for one that granted the
+  allowance.
+- `permitTransferFrom(token, owner, amount, nonce, deadline, signature, permit2)` spends `owner`'s
+  Permit2 signature for `amount` of `token` to the program. The program (`ctx.self()`) is the
+  spender the signature must name, and `permit2` is the Permit2 deployment, `Permit2.Permit2` in a
+  route body. Permit2 spends the nonce, refuses a passed deadline, and moves the tokens with
+  Solmate's `SafeTransferLib.safeTransferFrom`: a token that returns nothing works, and one that
+  returns `false` reverts the program.
+
+```ts
+import { permitTransferFrom } from "@sauce/token";
+
+function main(
+  owner: Address,
+  amount: Uint256,
+  nonce: Uint256,
+  deadline: Uint256,
+  signature: bytes,
+) {
+  permitTransferFrom(USDC, owner, amount, nonce, deadline, signature, Permit2.Permit2);
+  USDC.transfer(0x6666666666666666666666666666666666666666n, amount);
+}
+```
+
+The Permit2 signature is EIP-712 over `PermitTransferFrom(TokenPermissions permitted, address
+spender, uint256 nonce, uint256 deadline)`, with `TokenPermissions(address token, uint256 amount)`,
+in Permit2's domain: name `Permit2`, the chain id, and Permit2's address. Permit2's nonces are
+unordered: any unused one will do. The `sauce` command's `run --fund` makes the signature and the
+pull for you ([Funding a run](cli.md#funding-a-run---fund)).
+
 ## Route source and host JavaScript
 
 Two different mechanisms share the look of a bare name, and the difference is what you import.

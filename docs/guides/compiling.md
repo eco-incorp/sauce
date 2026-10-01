@@ -17,6 +17,9 @@ execution time, a Solana account manifest, or full control over module resolutio
 | `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | Registry rewrites, token defines, one encoded route call                                           |
 | `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing — you get the compiler's own result                                                        |
 
+From a terminal, [`sauce compile`](cli.md) compiles a program file with everything the first row
+supplies except the intent, and `sauce tx` builds the call that runs it on your own Pot.
+
 Bare `USDC`, `Token(address)` and protocol members only exist on the route path. There,
 `USDC.approve(Uniswap.UniversalRouter, 1_000_000n)` becomes an import of `@sauce/token`'s
 `approve` and `approve(USDC, <the router's Base address>, 1_000_000n)`, with `USDC` defined as

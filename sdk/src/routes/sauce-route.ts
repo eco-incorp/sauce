@@ -15,13 +15,13 @@
  * by the released engine. See `docs/guides/solana.md` for the execution boundary.
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
-import type { ResolveModule, ResolvePackage } from "sauce-compiler";
+import type { AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
 import { bytesToHex } from "viem";
 
-import type { ChainRef } from "../chains/canonical.js";
+import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
-import { compileWithRs } from "./rs-compile.js";
+import { compileWithRs, type RsCompileResult } from "./rs-compile.js";
 import {
   rewriteTokenFactory,
   rewriteTokenMembers,
@@ -35,7 +35,7 @@ import { unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
-import { chainDefines } from "./ambient.js";
+import { chainAmbient, chainDefines } from "./ambient.js";
 import { denormalizeToEvm } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
 import { childCaptureSentinel, type CompiledChild } from "./intent-sugar.js";
@@ -46,7 +46,12 @@ import {
   ecoRoutesProver,
   type EcoRoutesSelector,
 } from "../protocols/eco-routes/lookup.js";
-import { rewriteIntentSugar, type IntentSugarDefaults } from "./intent-sugar.js";
+import {
+  rewriteIntentSugar,
+  type IntentSugarDefaults,
+  type LoweredIntent,
+} from "./intent-sugar.js";
+import { mainParams, type EntryParam } from "./entry.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -337,6 +342,132 @@ export function compileScopedRoute(
   options: SauceCompileOptions,
   scope: RouteScope,
 ): CompiledSauceRoute {
+  const { chain, compiled, source } = compileForChain(destination, sauce, options, scope);
+  const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
+
+  if (chain.kind === "svm") {
+    const svmExecution = execution as SauceSvmExecutionInput;
+    if (svmExecution.code === undefined) {
+      throw new Error(
+        "compileSauceRoute: an svm route requires execution.code — a finalized code account this " +
+          "module did NOT stage. Stage it through the kitchen (create/grow/write/finalize) and pass " +
+          "the CODE account; see kitchen.ts. It must hold exactly the bytecode this call returns in " +
+          "`compiled.bytecode[0]`.",
+      );
+    }
+    // Passed through UNPINNED, and no route call can be otherwise: the released engine's
+    // `execute_from_account` has no payload to carry a pin. The kitchen's `cook_from_account` does
+    // enforce one, but the STAGING caller issues that — a different transaction, by the party that
+    // already controlled the bytes — so it is not a guarantee this call's consumer inherits.
+    const call = buildSauceSvmCall(svmExecution);
+    return { calls: [call], compiled, source };
+  }
+
+  const evmExecution = execution as SauceEvmExecutionInput;
+  const call = buildSauceEvmCall({
+    pot: evmExecution.pot,
+    engine: evmExecution.engine,
+    program: bytecodeHex,
+    value: evmExecution.value,
+  });
+  return { calls: [call], compiled, source };
+}
+
+/** A standalone program, compiled for one chain: {@link compileSauceProgram}'s result. */
+export interface CompiledSauceProgram {
+  readonly chain: CanonicalChain;
+  /** The program. `Pot.cook(engine, program)` runs it, with any entry arguments appended. */
+  readonly bytecode: Uint8Array;
+  /** How `main`'s arguments are encoded: `abi-v1`, or `compact-v1` under `compactArgs`. */
+  readonly entryEncoding: "abi-v1" | "compact-v1";
+  /** With compact-v1, the schema its arguments are encoded against. */
+  readonly entrySchema?: Uint8Array;
+  /** `main`'s runtime parameters, in order — on Solana without the `Account` slots, which the
+   *  manifest carries. `encodeEntryArguments` encodes values for them. */
+  readonly entryParams: readonly EntryParam[];
+  /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
+  readonly manifest?: AccountManifest;
+  /**
+   * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
+   * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
+   * Portal transactions that publish it, can be built without running the program. One that
+   * captures a local of the program holds a sentinel where the value will be, which only exists
+   * once the program runs.
+   */
+  readonly intents: readonly LoweredIntent[];
+  /** Source after the SDK's rewrites, before the compiler adapter adds entry annotations. */
+  readonly source: string;
+}
+
+/**
+ * Compiles a standalone program for `chain`: a program that runs directly on a Pot, rather than
+ * the destination half of an intent.
+ *
+ * It gets everything `openRoute` gives a route body except the intent around it: the chain's
+ * ambient bundle (`chainId`, protocol addresses and token symbols as compile-time values scoped to
+ * this chain, and the `@sauce/token` functions with no import), the token and protocol syntax, and
+ * intents the program itself opens (`Arbitrum(() => { ... }).reward({ ... })`, which take their deadline and
+ * creator from `options.intents`). So one source compiles, unchanged, for any chain whose names it
+ * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
+ * `encodeEntryArguments` encodes values for them.
+ */
+export function compileSauceProgram(
+  chain: ChainRef,
+  sauce: string,
+  options: SauceCompileOptions = {},
+): CompiledSauceProgram {
+  const resolved = requireChain(chain);
+  // The bundle `openRoute` compiles a route body with, in the same two halves. The ambient MODULES
+  // join the caller's. The chain-scoped NAMES travel as a scope for this program's chain, never in
+  // `defines`, so an intent the program opens on another chain gets that chain's own (`levelOn`),
+  // and `defines` stays exactly what the caller wrote.
+  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(options.ambient ?? [])]));
+  const scope: RouteScope = {
+    chainDefines: (on) => chainDefines(on, { tokens: options.tokens }),
+  };
+  const program = compileForChain(
+    resolved,
+    sauce,
+    { ...options, ambient: ambient.length > 0 ? ambient : options.ambient },
+    scope,
+  );
+  const entryParams = mainParams(program.source).filter(
+    (param) => resolved.kind !== "svm" || !/^Account\b/.test(param.type),
+  );
+
+  return {
+    chain: resolved,
+    bytecode: program.compiled.bytecode[0]!,
+    entryEncoding: program.entryEncoding,
+    ...(program.compiled.entrySchema === undefined
+      ? {}
+      : { entrySchema: program.compiled.entrySchema }),
+    entryParams,
+    ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
+    intents: program.intents,
+    source: program.source,
+  };
+}
+
+/**
+ * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: every rewrite and
+ * the compile, for `destination`, with no execution — no Pot, engine or staged code account,
+ * because the bytecode depends on none of them — and none of the chain's ambient bundle beyond what
+ * `scope` supplies, which `compileSauceRoute` deliberately leaves to its caller.
+ */
+function compileForChain(
+  destination: ChainRef,
+  sauce: string,
+  options: SauceCompileOptions,
+  scope: RouteScope,
+): {
+  readonly chain: CanonicalChain;
+  readonly compiled: CompileResult;
+  readonly source: string;
+  readonly entryEncoding: "abi-v1" | "compact-v1";
+  readonly manifest?: AccountManifest;
+  readonly intents: readonly LoweredIntent[];
+} {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
 
@@ -461,9 +592,9 @@ export function compileScopedRoute(
     }
   }
 
-  let compiled: CompileResult;
+  let rs: RsCompileResult;
   try {
-    compiled = compileWithRs({
+    rs = compileWithRs({
       source,
       target,
       resolve: options.resolve,
@@ -489,36 +620,14 @@ export function compileScopedRoute(
       ) ?? error
     );
   }
+  const { manifest, entryEncoding, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
-  const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
+  const { intents } = sugar;
 
-  if (chain.kind === "svm") {
-    const svmExecution = execution as SauceSvmExecutionInput;
-    if (svmExecution.code === undefined) {
-      throw new Error(
-        "compileSauceRoute: an svm route requires execution.code — a finalized code account this " +
-          "module did NOT stage. Stage it through the kitchen (create/grow/write/finalize) and pass " +
-          "the CODE account; see kitchen.ts. It must hold exactly the bytecode this call returns in " +
-          "`compiled.bytecode[0]`.",
-      );
-    }
-    // Passed through UNPINNED, and no route call can be otherwise: the released engine's
-    // `execute_from_account` has no payload to carry a pin. The kitchen's `cook_from_account` does
-    // enforce one, but the STAGING caller issues that — a different transaction, by the party that
-    // already controlled the bytes — so it is not a guarantee this call's consumer inherits.
-    const call = buildSauceSvmCall(svmExecution);
-    return { calls: [call], compiled, source };
-  }
-
-  const evmExecution = execution as SauceEvmExecutionInput;
-  const call = buildSauceEvmCall({
-    pot: evmExecution.pot,
-    engine: evmExecution.engine,
-    program: bytecodeHex,
-    value: evmExecution.value,
-  });
-  return { calls: [call], compiled, source };
+  return manifest === undefined
+    ? { chain, compiled, source, entryEncoding, intents }
+    : { chain, compiled, source, entryEncoding, manifest, intents };
 }

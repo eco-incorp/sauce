@@ -10,7 +10,12 @@
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 // The RS compiler's own option/result types, from the package `wasm-compiler.ts` loads -- a
 // hand-written mirror of them would drift with nothing to catch it.
-import type { ResolveModule, ResolvePackage, SauceTarget as RsTarget } from "sauce-compiler";
+import type {
+  AccountManifest,
+  ResolveModule,
+  ResolvePackage,
+  SauceTarget as RsTarget,
+} from "sauce-compiler";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
 import { compile } from "../wasm-compiler.js";
 
@@ -120,7 +125,7 @@ function endOfComment(source: string, open: number): number {
  * LENGTH-PRESERVING, so an index into the original still names the same character — which is what
  * lets the brace search in `mainBody` run on the blanked copy.
  */
-function blankLiterals(source: string): string {
+export function blankLiterals(source: string): string {
   const blank = (text: string): string => text.replace(/[^\n]/g, " ");
   const blanked: string[] = [];
 
@@ -209,16 +214,23 @@ export interface RsCompileInput {
   compactArgs?: boolean;
 }
 
+/** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
+ *  arguments are encoded, and the SVM account manifest when the compiler returned one. */
+export interface RsCompileResult extends CompileResult {
+  entryEncoding: "abi-v1" | "compact-v1";
+  manifest?: AccountManifest;
+}
+
 /**
  * Compiles `input.source` and adapts the result to the seam's own `CompileResult`, so
  * `compileSauceRoute` can slot it into `CompiledSauceRoute`.
  *
  * `bytecode` is a one-element list because a cook runs exactly one program; `warnings` is always
- * empty, since a real problem throws rather than being reported. The SVM account `manifest` is not
- * carried through -- nothing `compileSauceRoute` returns reads it, and an SVM caller that needs the
- * attach contract compiles through `svm/` directly.
+ * empty, since a real problem throws rather than being reported. The SVM account `manifest` rides
+ * alongside for `compileSauceProgram`, which hands it to the `sauce` command; `compileSauceRoute`
+ * returns none, and an SVM caller that needs the attach contract compiles through `svm/` directly.
  */
-export function compileWithRs(input: RsCompileInput): CompileResult {
+export function compileWithRs(input: RsCompileInput): RsCompileResult {
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
@@ -230,5 +242,13 @@ export function compileWithRs(input: RsCompileInput): CompileResult {
     compactArgs: input.compactArgs,
   });
 
-  return { bytecode: [result.bytecode], warnings: [], entrySchema: result.entrySchema };
+  const compiled: RsCompileResult = {
+    bytecode: [result.bytecode],
+    warnings: [],
+    entrySchema: result.entrySchema,
+    entryEncoding: result.entryEncoding,
+  };
+  if (result.manifest !== undefined) compiled.manifest = result.manifest;
+
+  return compiled;
 }

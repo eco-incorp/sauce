@@ -3,8 +3,9 @@
  * needs a network connection takes its URL, or a client, from the developer — as an argument or a
  * config value, never a default, a public fallback or `process.env` (a browser has none).
  *
- * This guard scans the TRACKED source that ships or that a developer copies from — `sdk/src`,
- * `sdk/scripts`, `actions/src`, `dev-tools/src`, `dev-tools/scripts`, `docs/`, the workflows, and
+ * This guard scans the TRACKED source that ships or that a developer copies from — `sdk/src` (the
+ * `sauce` command in `sdk/src/cli` included), `sdk/scripts`, `actions/src`, `dev-tools/src`,
+ * `dev-tools/scripts`, `docs/`, the agent skills in `skills/`, the workflows, and
  * every file at the top of the repo and of each workspace (the READMEs, `CLAUDE.md`, manifests,
  * `sdk/rpc.config.example.json`) — for a URL shaped like an RPC endpoint:
  *
@@ -34,6 +35,7 @@ const ROOTS = [
   "dev-tools/src",
   "dev-tools/scripts",
   "docs",
+  "skills",
   ".github",
 ];
 /** Directories whose own files (not their subdirectories) are scanned. */
@@ -46,11 +48,16 @@ const REQUIRED = [
   "actions/README.md",
   "dev-tools/README.md",
   "sdk/rpc.config.example.json",
+  // The `sauce` command, whose network access is `--rpc-url` alone.
+  "sdk/src/cli/run.ts",
+  "sdk/src/cli/commands.ts",
 ];
 /** Generated, not authored: its URLs are package tarballs. */
 const SKIP = new Set(["pnpm-lock.yaml"]);
-/** Shipped code: must not read the environment at all. */
+/** Shipped code, the `sauce` command included: must not read the environment at all. */
 const SHIPPED_ROOTS = ["sdk/src", "actions/src", "dev-tools/src"];
+/** Shipped files the environment scan must include, so a move cannot take the command out of it. */
+const SHIPPED_REQUIRED = ["sdk/src/cli/main.ts", "sdk/src/cli/run.ts", "sdk/src/cli/commands.ts"];
 
 const URL_PATTERN = /\b(?:https?|wss?):\/\/[^\s"'`<>()[\]{}\\,]+/gi;
 
@@ -186,7 +193,9 @@ describe("the SDK ships no RPC endpoints", () => {
   });
 
   it("shipped code reads nothing from the environment", () => {
-    const found = [...scanned(SHIPPED_ROOTS)].flatMap(([file, text]) =>
+    const shipped = scanned(SHIPPED_ROOTS);
+    for (const file of SHIPPED_REQUIRED) expect(shipped.has(file)).toBe(true);
+    const found = [...shipped].flatMap(([file, text]) =>
       text
         .split("\n")
         .flatMap((line, index) =>

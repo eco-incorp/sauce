@@ -454,6 +454,27 @@ describe("through the real compile path", () => {
     expect(out.source.toLowerCase()).toContain(ecoRoutesPortal("base").slice(2).toLowerCase());
   });
 
+  it("compiles an intent that captures nothing: every value a define or a literal", () => {
+    const out = compileSauceRoute(
+      "base",
+      `function main() {
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, 5n);
+  }).reward({ tokens: [{ token: USDC, amount: 7n }] });
+}`,
+      {
+        pot: "0x1111111111111111111111111111111111111111",
+        engine: "0x2222222222222222222222222222222222222222",
+      },
+      { defines: { RECIPIENT }, intents: { deadline: 4_000_000_000n, creator: CREATOR } },
+    );
+
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    // No slot to fill, so the whole publishAndFund calldata is one literal.
+    expect(out.source).toMatch(/const i0_data = hex`[0-9a-f]+`;/);
+    expect(out.source).not.toContain("5acecab7");
+  });
+
   it("the enclosing program's own token sugar still works alongside it", () => {
     const out = compileSauceRoute(
       "base",

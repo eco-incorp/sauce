@@ -44,7 +44,7 @@ const { compile } = createRequire(import.meta.url)("sauce-compiler") as {
   compile: (options: CompileOptions) => CompileResult;
 };
 
-const TOKEN_DIR = join(
+export const TOKEN_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "..",
