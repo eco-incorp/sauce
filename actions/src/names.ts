@@ -51,6 +51,8 @@ interface NamedContract {
 interface ChainNames {
   readonly chain: CanonicalChain;
   readonly tokens: ReadonlyMap<string, Address>;
+  /** Its tokenized stocks' symbols, which a refusal counts rather than lists. */
+  readonly stocks: ReadonlySet<string>;
   /** `Namespace.Contract` -> the contract. */
   readonly contracts: ReadonlyMap<string, NamedContract>;
   /** Namespace -> its contracts on this chain. */
@@ -81,6 +83,7 @@ export function chainNames(chain: CanonicalChain): ChainNames {
   const names: ChainNames = {
     chain,
     tokens: new Map(globals.tokens.map((t) => [t.symbol, t.address])),
+    stocks: new Set(globals.tokens.filter((t) => t.stock !== undefined).map((t) => t.symbol)),
     contracts,
     namespaces,
   };
@@ -148,9 +151,13 @@ function closest(word: string, candidates: readonly string[]): string | undefine
 
 /** Why `symbol` is not a token on `names.chain`. */
 function missingToken(symbol: string, names: ChainNames): string {
-  const known = [...names.tokens.keys()].sort();
+  // Its other tokens by name, its stock tokens by count: Ethereum has over a thousand.
+  const known = [...names.tokens.keys()].filter((name) => !names.stocks.has(name)).sort();
+  const stocks = names.stocks.size > 0 ? ` and ${names.stocks.size} stock tokens` : "";
   const listed =
-    known.length === 0 ? "which registers no token symbols" : `whose tokens are ${list(known)}`;
+    names.tokens.size === 0
+      ? "which registers no token symbols"
+      : `whose tokens are ${list(known)}${stocks}`;
   const hint =
     symbol === "ETH"
       ? '; the native currency is "native" where an action trades it, and wrapped ETH is "WETH"'
