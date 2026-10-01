@@ -35,13 +35,19 @@ Importing the package puts nothing on `globalThis`. `chain(ref)` and the host `T
 named exports too.
 
 Bare names such as `USDC` and `Uniswap` are different: they are _program syntax_, resolved by the
-compiler inside a route body, with no host JavaScript object behind them. See
+compiler inside a route body, with no host JavaScript object behind them. The same registry entries
+are on the chain export in TypeScript (`Base.USDC`, `Base.Uniswap`). See
 [protocols and tokens](../guides/protocols-and-tokens.md).
 
 ## Detailed references
 
+- [SauceScript reference](../../skills/sauce-script/references/builtins.md): every type, operator,
+  statement, builtin and limit, per target, checked against the compiler;
+  [`builtins.json`](../../skills/sauce-script/references/builtins.json) lists the builtins with an
+  example program each. It is the `sauce-script` agent skill's reference, shipped in the package.
 - [Compiler](compiler.md): direct compilation, result metadata, compact argument encoding.
 - [Routes](routes.md): compile options, intent construction, nested execution, and submission helpers.
+- [Contracts and tokens](contracts.md): every protocol namespace and token, in a program and in TypeScript, and running a call through viem.
 - [Coverage](coverage.md): distinguish catalog entries, callable descriptors, and available deployments.
 
 For programs assembled from data rather than written, see [builders](../guides/builders-and-actions.md).

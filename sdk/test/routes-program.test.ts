@@ -5,7 +5,7 @@
 import { bytesToHex, encodeAbiParameters, hexToBytes } from "viem";
 
 import { encodeCompactArguments } from "../src/compact-arguments.js";
-import { encodeEntryArguments, liftSignatures, mainParams } from "../src/routes/entry.js";
+import { encodeEntryArguments, mainParams } from "../src/routes/entry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
@@ -122,28 +122,8 @@ describe("compileSauceProgram", () => {
   });
 });
 
-describe("liftSignatures", () => {
-  it("leaves an untyped main exactly as written", () => {
-    for (const source of ["function main(a, b) {}", "x;", "function main() { return 1n; }"]) {
-      const lifted = liftSignatures(source);
-      expect(lifted.source).toBe(source);
-      expect(lifted.restore(source)).toBe(source);
-    }
-  });
-
-  it("lifts a typed signature for the rewrites and puts it back after them", () => {
-    const source =
-      'import "./x.js";\nfunction main(a: { amount: Uint256, to: Address }[], b: Account<Writable, Signer>): { ok: bool } {\n  return { ok: true };\n}\n';
-    const lifted = liftSignatures(source);
-    expect(lifted.source).toContain("function main(a, b) {");
-    const rewritten = `// prepended\n${lifted.source}`;
-    expect(lifted.restore(rewritten)).toBe(`// prepended\n${source}`);
-    expect(() => lifted.restore(lifted.source.replace("(a, b)", "(a)"))).toThrow(
-      /main's parameters changed/,
-    );
-  });
-
-  it("lifts every function's signature, so a typed helper compiles beside main", () => {
+describe("main's signature", () => {
+  it("compiles a typed helper beside main, with every annotation as written", () => {
     const source = [
       "function pay(token: Address, to: Address[], amount: Uint256): void {",
       "  for (let i = 0; i < to.length; i = i + 1) {",
@@ -158,11 +138,7 @@ describe("liftSignatures", () => {
       "  USDC.transfer(to[0], amount);",
       "}",
     ].join("\n");
-    const lifted = liftSignatures(source);
-    expect(lifted.source).toContain("function pay(token, to, amount) {");
-    expect(lifted.source).toContain("function owed(amount) {");
-    expect(lifted.restore(lifted.source)).toBe(source);
-    // Through the token rewrite, which acorn has to parse.
+    // Through the token rewrite, which parses the annotations with the program.
     const program = compileSauceProgram("ethereum", source, {});
     expect(program.entryParams).toEqual([
       { name: "token", type: "Address" },
@@ -178,6 +154,34 @@ describe("liftSignatures", () => {
       { name: "c", type: "Uint256[]" },
     ]);
     expect(mainParams("USDC.transfer(x, 1n);")).toEqual([]);
+  });
+
+  it("spells out a record an interface names, so a value for it can be encoded", () => {
+    const source = [
+      "interface Leg {",
+      "  pool: Address;",
+      "  fee: Uint256;",
+      "}",
+      "interface Route {",
+      "  legs: Leg[];",
+      "  to: Address;",
+      "}",
+      "function main(route: Route, extra: Leg, amount: Uint256): void {",
+      "  require(route.legs.length > 0n && extra.fee < amount);",
+      "}",
+    ].join("\n");
+    const program = compileSauceProgram("base", source, {});
+    expect(program.entryParams).toEqual([
+      { name: "route", type: "{ legs: { pool: Address, fee: Uint256 }[], to: Address }" },
+      { name: "extra", type: "{ pool: Address, fee: Uint256 }" },
+      { name: "amount", type: "Uint256" },
+    ]);
+    const encoded = encodeEntryArguments(program, [
+      { legs: [{ pool: RECIPIENT, fee: 500n }], to: RECIPIENT },
+      { pool: RECIPIENT, fee: 3000n },
+      1n,
+    ]);
+    expect(encoded.length).toBeGreaterThan(0);
   });
 });
 

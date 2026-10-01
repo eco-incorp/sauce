@@ -13,6 +13,7 @@ import * as sauce from "../src/index.js";
 import { Base, Ethereum, Solana, Token, chain, canonicalChains } from "../src/index.js";
 import { chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 import { requireChain } from "../src/chains/canonical.js";
+import { TOKEN_REGISTRY, resolveTokenMap } from "../src/routes/token-registry.js";
 import { venueAdapter } from "../src/svm/venues/registry.js";
 import type { IntentOptions } from "../src/routes/index.js";
 
@@ -54,9 +55,9 @@ describe("chain accessors: one named export per canonical chain", () => {
 
   it("the export is CALLABLE and `Base(...)` === `Base.route(...)` in behavior", () => {
     const opts = evmOptions();
-    const viaCall = Base("return 1n;", opts).reward(0n);
-    const viaRoute = Base.route("return 1n;", opts).reward(0n);
-    const viaAccessor = chainAccessors.Base("return 1n;", opts).reward(0n);
+    const viaCall = Base("function main() { return 1n; }", opts).reward(0n);
+    const viaRoute = Base.route("function main() { return 1n; }", opts).reward(0n);
+    const viaAccessor = chainAccessors.Base("function main() { return 1n; }", opts).reward(0n);
     expect(viaCall.intent).toEqual(viaAccessor.intent);
     expect(viaRoute.intent).toEqual(viaAccessor.intent);
   });
@@ -86,6 +87,45 @@ describe("chain accessors: one named export per canonical chain", () => {
   it("composition is memoised: the same export object every time, on both spellings", () => {
     expect(sdk.Base).toBe(Base);
     expect(sdk.Solana).toBe(Solana);
+  });
+});
+
+describe("chain accessors: the chain's registry tokens", () => {
+  it("Base.USDC is the registry row a compiled program's USDC resolves to on Base", () => {
+    expect(Base.USDC).toEqual({
+      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      decimals: 6,
+      symbol: "USDC",
+      chain: requireChain("base"),
+    });
+    expect(BigInt(Base.USDC.address)).toBe(resolveTokenMap(requireChain("base")).get("USDC"));
+  });
+
+  it("every registered token on every chain, and nothing else", () => {
+    for (const c of canonicalChains) {
+      const exported = sdk[pascalOfSlug(c.slug)] as Record<string, unknown>;
+      const rows = TOKEN_REGISTRY[c.id] ?? [];
+      for (const row of rows) {
+        expect(exported[row.symbol]).toEqual({
+          address: row.address,
+          decimals: row.decimals,
+          symbol: row.symbol,
+          chain: c,
+        });
+      }
+      const symbols = new Set(Object.values(TOKEN_REGISTRY).flatMap((r) => r.map((t) => t.symbol)));
+      for (const symbol of symbols) {
+        if (!rows.some((row) => row.symbol === symbol)) expect(exported[symbol]).toBeUndefined();
+      }
+    }
+  });
+
+  it("a token is one frozen object per chain, and its property cannot be reassigned", () => {
+    expect(Base.USDC).toBe(Base.USDC);
+    expect(Object.isFrozen(Base.USDC)).toBe(true);
+    expect(() => {
+      (Base as unknown as Record<string, unknown>).USDC = 1;
+    }).toThrow(TypeError);
   });
 });
 

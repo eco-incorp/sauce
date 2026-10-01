@@ -172,6 +172,44 @@
           "type": "int256"
         }
       ]
+    },
+    {
+      "name": "extsload",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "extsload",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "startSlot",
+          "type": "bytes32"
+        },
+        {
+          "name": "nSlots",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32[]"
+        }
+      ]
     }
   ]
 }

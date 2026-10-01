@@ -1,7 +1,7 @@
 /**
  * ERC-20 token syntax in a route body, lowered before the compiler sees it.
  *
- * Two passes, each one acorn parse and one reverse-ordered textual splice over its input:
+ * Two passes, each one parse (`parse.ts`) and one reverse-ordered textual splice over its input:
  *
  *   `rewriteTokenMembers` — a registry token SYMBOL:
  *     writes (call position):  `<Sym>.transfer/.approve/.transferFrom(...)` -> `@sauce/token`'s function
@@ -49,11 +49,11 @@
  * error naming the spellings that work — never passed through as the typed binding, which would
  * quietly be the unchecked write again.
  */
-import * as acorn from "acorn";
 import { walk, collectDeclaredNames, countDeclarations, type AstNode } from "./ast-walk.js";
 import { formatBigint } from "../deposit/format.js";
 import { ERC20_IMPORT_LINE } from "../token/evm.js";
 import { isChainKey, resolveNamespace } from "./accessor-index.js";
+import { parseSauce } from "./parse.js";
 
 /**
  * The ERC-20 writes the token syntax offers: each lowers to the `@sauce/token` function of the same
@@ -135,11 +135,6 @@ function applySplices(source: string, splices: readonly Splice[]): string {
   }
 
   return out;
-}
-
-function parse(source: string): AstNode {
-  // sourceType "module": a source may already carry its own `import` lines.
-  return acorn.parse(source, { ecmaVersion: "latest", sourceType: "module" }) as unknown as AstNode;
 }
 
 /** A child node the node's type guarantees is there (`id` on a declarator, `left` on an
@@ -505,7 +500,7 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
   // Cheap bail before parsing: no `Token` token, nothing to do (a mention in a comment/string still
   // parses, but that is rare and the parse is cheap).
   if (!source.includes(TOKEN_FACTORY_NAME)) return none;
-  const program = parse(source);
+  const program = parseSauce(source);
   const declarations = countDeclarations(program);
   if (declarations.has(TOKEN_FACTORY_NAME)) return none;
 
@@ -606,7 +601,7 @@ export function rewriteTokenFactory(source: string): TokenFactoryResult {
  * Rewrites every `<Sym>.<method>(...)` call and every `<holder>.<Sym>` value-position read whose
  * `<Sym>` is in `tokens` (and not shadowed anywhere in `source`) — see the module doc for the
  * lowering and the disjointness argument. Purely textual surgery over the ORIGINAL source, driven by
- * acorn ranges — never a re-print of the AST, so everything else (formatting, comments, unrelated
+ * parser ranges — never a re-print of the AST, so everything else (formatting, comments, unrelated
  * code) survives byte-for-byte. Prepend `tokenImportLines(result)` before compiling the result.
  */
 export function rewriteTokenMembers(source: string, tokens: TokenSymbols): TokenRewriteResult {
@@ -620,7 +615,7 @@ export function rewriteTokenMembers(source: string, tokens: TokenSymbols): Token
   };
   if (tokens.size === 0) return none;
 
-  const program = parse(source);
+  const program = parseSauce(source);
   const shadowed = collectDeclaredNames(program);
 
   const writes = new Set<SafeWrite>();

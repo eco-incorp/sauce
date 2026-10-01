@@ -18,7 +18,7 @@ function main(
   source: Account<Writable>,
   destination: Account<Writable>,
   authority: Account<Signer>,
-  amount: Uint256
+  amount: Uint256,
 ): Uint256 {
   require(MINT != 0n, "set MINT");
   const before = balanceOf(MINT, destination);

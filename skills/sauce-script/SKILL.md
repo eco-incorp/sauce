@@ -1,6 +1,6 @@
 ---
 name: sauce-script
-description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...) with runtime arguments, and a file of top-level statements whose values are defines, the form for intent files), what compiling a file for a chain adds (annotations on signatures only), module constants as overridable defaults, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
+description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...) with runtime arguments, and a file of top-level statements whose values are defines, the form for intent files), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants as overridable defaults, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
 ---
 
 # Writing SauceScript
@@ -55,19 +55,25 @@ the type: `main(): Address`, `: Uint256` or `: bool` comes back as one 32-byte w
 fields one word each, and `: bytes` as the bytes themselves, unwrapped, so
 `return abi.encode(spent, bought)` gives two words. A `void` `main` returns nothing.
 
-A top-level script runs its statements in order. It declares no function and imports nothing, and
-every value it does not compute is a define: the name stays undeclared in the file, and
-`--define RECIPIENT=<address> --define FLOOR=1000000` sets it.
+A top-level script runs its statements in order, after its imports, and may declare helper
+functions beside them. Every value it does not compute is a define: the name stays undeclared in
+the file, and `--define RECIPIENT=<address> --define FLOOR=1000000` sets it.
 
 ```sauce chain=base,arbitrum define=RECIPIENT,FLOOR
+// A helper takes what it needs as parameters.
+function afterFee(amount: Uint256): Uint256 {
+  return amount - amount / 1000n;
+}
+
 require(RECIPIENT != 0n, "set RECIPIENT");
 const held = USDC.balanceOf(ctx.self());
 require(held >= FLOOR, "below floor");
-USDC.transfer(RECIPIENT, held);
+USDC.transfer(RECIPIENT, afterFee(held));
 ```
 
-A `const` at the top of a script is the script's own local: a define of the same name does not
-reach it, and the `sauce` command refuses such a define rather than ignore it.
+A `const` at the top of a script is the script's own local: a helper cannot read it (pass it in),
+a define of the same name does not reach it, and the `sauce` command refuses such a define rather
+than ignore it. Declare `main` to share a module constant with helpers, or to return a value.
 
 ## Runtime inputs and compile-time values
 
@@ -85,21 +91,18 @@ TypeScript.
 
 ## Compiling for a chain
 
-The package reads a file compiled for a chain as JavaScript before the compiler sees it, which adds
-rules of its own on top of the language:
+Compiling a file for a chain lowers the names the chain supplies (`sauce-globals`), the token
+syntax and the intents the file opens; everything else reaches the compiler as written. A program
+for a chain is the language of [references/builtins.md](references/builtins.md), with nothing
+removed:
 
-- **Annotations go on function signatures only.** `function main(token: Address, amounts: Uint256[])`
-  and `function half(x: Uint256): Uint256` compile; a parameter with no annotation is a `Uint256`.
-  A local takes its type from its initializer: `let total = 0n;`, never `let total: Uint256 = 0n;`.
-- **Records are inline object types** in a signature, `orders: { amount: Uint256, to: Address }[]`
-  (`;` between the fields works too, as a formatter writes them); there is no `interface`
-  declaration.
-- **No trailing comma** after `main`'s last parameter.
-- **A script declares no function and imports nothing**; a program with helper functions or an
-  imported ABI declares `main`.
-
-The reference's typed examples (`interface`, annotated locals) are the language as the compiler
-takes it directly; a program for a chain writes them as above.
+- Annotations go wherever the language takes them: `function half(x: Uint256): Uint256`, and a
+  local's `let total: Uint256 = 0n;`. A parameter with no annotation is a `Uint256`, and a local
+  without one takes its type from its initializer.
+- A record is an `interface` or an inline object type, `orders: Order[]` or
+  `orders: { amount: Uint256, to: Address }[]` (`;` between the fields works too, as a formatter
+  writes them); `main`'s arguments are encoded the same way for either.
+- Trailing commas are fine, after `main`'s last parameter as anywhere else.
 
 ## Values
 
@@ -220,13 +223,13 @@ function main(pool: Address, amount: Uint256, sqrtPriceLimitX96: Uint256) {
 Compile errors fail the command; there is no warning channel. `sauce compile` points at the file's
 line and column, including on a line the package rewrote, and a `hint:` line names the flag or
 define to add. `X is not a declared variable` usually means a missing define or `main` parameter.
-`Unexpected token` usually means an annotation outside a signature, an `interface`, or a trailing
-comma after `main`'s last parameter. `a function argument: expected a number, found a bool` at a
-call usually means the called function's parameter has no annotation, so it is a number: annotate
-it, `first: bool`. For any other message, find it in
-[references/builtins.md](references/builtins.md). `a nested function declaration is not supported`
-means a helper declared in a script: declare `main` beside it. `X is called but never declared`
-means a function that is not in scope, usually a typo.
+`Unexpected token` is a syntax error at the line and column it names.
+`a function argument: expected a number, found a bool` at a call usually means the called
+function's parameter has no annotation, so it is a number: annotate it, `first: bool`. For any
+other message, find it in [references/builtins.md](references/builtins.md). `a nested function
+declaration is not supported` means a function declared inside another function or a block:
+declare it at the top level. `X is called but never declared` means a function that is not in
+scope, usually a typo.
 
 ## Example
 

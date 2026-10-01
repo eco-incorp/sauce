@@ -9,7 +9,7 @@ The reference program is
 [examples/distributed-swap.sauce.ts](examples/distributed-swap.sauce.ts). It names no chain, so one
 file compiles for every chain, with the venues that chain has;
 [examples/distributed-swap.mts](examples/distributed-swap.mts) compiles it for Base, Arbitrum and
-Ethereum with every venue those chains have and builds the cook with its inputs. Start from it; this
+Optimism, each with the venues it has, and builds the cook with its inputs. Start from it; this
 skill explains its design and gives every value a run on Base needs. The same swap as the body of a
 cross-chain intent, paid for on another chain, is
 [../sauce-intents/examples/swap-on-base.sauce.ts](../sauce-intents/examples/swap-on-base.sauce.ts).
@@ -58,26 +58,8 @@ Everything that changes per trade is a `main` input, passed with the transaction
 `main(tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, minAvgPrice, recipient, refundTo, v4Keys)`
 
 `v4Keys` is `{ fee: Uint256; tickSpacing: Uint256 }[]`, the hookless V4 pools to try (below). The
-only compile-time choices are the venues, as module constants that default to `0n`:
-
-- `UniswapV3_Factory` and `UniswapV4_PoolManager` are set by the chain itself, on chains where the
-  namespace contract is deployed (`sauce-globals`); elsewhere they stay `0n`.
-- `PANCAKE_V3_FACTORY` and the three `SLIPSTREAM_*` factories are not namespace contracts, so the
-  chain does not set them: pass them as defines. Left out, a venue is left out.
-
-On Base, which has all of them, save the venues the chain does not set as `base-venues.json`. These
-are the addresses the registry records (`pancakeswap-v3` role `factory`; `aerodrome-slipstream`
-roles `clFactory`, `clFactoryGaugeCaps` and `clFactoryGaugesV3`). Each value is an address as a hex
-string; give any large number as a string too, since a JSON number loses precision past 2^53:
-
-```json
-{
-  "PANCAKE_V3_FACTORY": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",
-  "SLIPSTREAM_INITIAL": "0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A",
-  "SLIPSTREAM_GAUGE_CAPS": "0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a",
-  "SLIPSTREAM_GAUGES_V3": "0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef"
-}
-```
+venues need no input: each is a protocol namespace (`sauce-globals`), used only where the chain the
+program is compiled for has it.
 
 Then, with a reference price of 2,700 USDC per WETH and a limit 0.5% from it (the numbers are worked
 out under "Getting the limit right" and "Prices"), rehearse selling all of 1 WETH, with nothing
@@ -87,12 +69,12 @@ market, no pool trades and `minOut` reverts the cook.
 
 ```sh
 npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
-  --config sauce.config.json --defines base-venues.json --assume-balance WETH:1 \
+  --config sauce.config.json --assume-balance WETH:1 \
   --args 0x4200000000000000000000000000000000000006 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
   1000000000000000000 4106511148422261116904015 2686500000 2686500000 <recipient> <refundTo> \
   '[{"fee":100,"tickSpacing":1},{"fee":500,"tickSpacing":10},{"fee":3000,"tickSpacing":60},{"fee":10000,"tickSpacing":200}]'
 npx sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json \
-  --keystore <keystore> --defines base-venues.json --fund WETH:1 \
+  --keystore <keystore> --fund WETH:1 \
   --args 0x4200000000000000000000000000000000000006 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
   1000000000000000000 4106511148422261116904015 2686500000 2686500000 <recipient> <refundTo> \
   '[{"fee":100,"tickSpacing":1},{"fee":500,"tickSpacing":10},{"fee":3000,"tickSpacing":60},{"fee":10000,"tickSpacing":200}]'
@@ -103,50 +85,48 @@ rest refunded), with USDC pulled in by its own permit:
 
 ```sh
 npx sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json \
-  --keystore <keystore> --defines base-venues.json --fund USDC:3000 --fund-mode permit \
+  --keystore <keystore> --fund USDC:3000 --fund-mode permit \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0x4200000000000000000000000000000000000006 \
   3000000000 4127095293177970497328754 0 368527731711811313801363553 <recipient> <refundTo> \
   '[{"fee":100,"tickSpacing":1},{"fee":500,"tickSpacing":10},{"fee":3000,"tickSpacing":60},{"fee":10000,"tickSpacing":200}]'
 ```
 
 Each is one cook on the owner's Pot: `sauce tx` with the same flags and `--owner <address>` prints
-it unsigned, `{ chainId, to, data, value }`, for any signer to send instead. `--define NAME=VALUE`
-gives one value and wins over the file. On another chain, take the same roles from that chain's
-deployments in
-[../sauce-protocols/references/registry/pancakeswap-v3.md](../sauce-protocols/references/registry/pancakeswap-v3.md)
-and
-[../sauce-protocols/references/registry/aerodrome-slipstream.md](../sauce-protocols/references/registry/aerodrome-slipstream.md).
+it unsigned, `{ chainId, to, data, value }`, for any signer to send instead.
 
-Each venue's discovery sits behind `if (<venue> != 0n)`, which folds at compile time, so a chain
-without a venue compiles without it and never calls an address with no code. This is the pattern
-for every venue a chain may lack; `UniswapV3.Factory` written directly is for a program that
-requires it.
+Each venue's discovery sits behind `if (available(<Namespace.Contract>))`, which is decided when the
+file is compiled for a chain: a chain without the venue compiles without that branch, so the
+program never names a contract the chain lacks and never calls an address with no code. A helper
+that uses a venue starts with the guard `if (!available(UniswapV4.PoolManager)) { return 0n; }`,
+which drops the rest of its body on such a chain. Written without `available(...)`, a venue is
+required: the program does not compile for a chain that lacks it.
 
 ## Which venues it covers
 
 A venue qualifies only if it takes a sqrt-price limit, since the limit is what makes each partial
-fill safe and bounded. The program covers four, the price-limit venues the registry records with a
-factory ABI, or a pool manager, that a program can use as it is:
+fill safe and bounded. The program covers four, the price-limit venues whose namespaces carry a
+factory or a pool manager a program can call as it is; the chains each namespace contract is on are
+in [../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md):
 
-| Venue                | Router entry | Pool lookup                                                                                        | Fee                                      | Address                                                                                                                                      |
-| -------------------- | ------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Uniswap V3           | `swapV3`     | `getPool(a, b, fee)` on `UniswapV3_Factory`, fees `100n`, `500n`, `3000n`, `10000n`                | the tier                                 | the chain's `UniswapV3_Factory`                                                                                                              |
-| PancakeSwap V3       | `swapV3`     | `getPool(a, b, fee)`, fees `100n`, `500n`, `2500n`, `10000n`                                       | the tier                                 | `pancakeswap-v3`: `PancakeSwapV3FactoryABI`, `factory` role (BSC, Ethereum, Arbitrum, Base, Linea)                                           |
-| Aerodrome Slipstream | `swapV3`     | `getPool(a, b, tickSpacing)` on **every** factory, spacings `1n`, `50n`, `100n`, `200n`, `2000n`   | per pool, and it changes: read `fee()`   | `aerodrome-slipstream`: `SlipstreamCLFactoryABI`; Base has three factories (`clFactory`, `clFactoryGaugeCaps`, `clFactoryGaugesV3`), Arc one |
-| Uniswap V4, hookless | `swapV4`     | none: the keys in `v4Keys`, each built into `{ currency0, currency1, fee, tickSpacing, hooks: 0 }` | the LP fee plus any protocol fee (below) | the chain's `UniswapV4_PoolManager`                                                                                                          |
+| Venue                | Router entry | Pool lookup                                                                                        | Fee                                      | Namespace                                                                                        |
+| -------------------- | ------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Uniswap V3           | `swapV3`     | `getPool(a, b, fee)`, fees `100n`, `500n`, `3000n`, `10000n`                                       | the tier                                 | `UniswapV3.Factory`                                                                              |
+| PancakeSwap V3       | `swapV3`     | `getPool(a, b, fee)`, fees `100n`, `500n`, `2500n`, `10000n`                                       | the tier                                 | `PancakeswapV3.Factory`                                                                          |
+| Aerodrome Slipstream | `swapV3`     | `getPool(a, b, tickSpacing)` on **every** factory, spacings `1n`, `50n`, `100n`, `200n`, `2000n`   | per pool, and it changes: read `fee()`   | `AerodromeSlipstream.CLFactory`, and on Base also `.CLFactoryGaugeCaps` and `.CLFactoryGaugesV3` |
+| Uniswap V4, hookless | `swapV4`     | none: the keys in `v4Keys`, each built into `{ currency0, currency1, fee, tickSpacing, hooks: 0 }` | the LP fee plus any protocol fee (below) | `UniswapV4.PoolManager` (the swap), `UniswapV4.StateView` (the reads)                            |
 
 A pair can have a Slipstream pool at the same tick spacing under more than one factory, each with its
 own fee, so the program asks every factory for every spacing.
 
 **Price-limit venues it leaves out, and why:**
 
-- **Synthra V3 and UnitFlow V3** (Arc): the same `swapV3` and `getPool(a, b, fee)`, with factory
-  ABIs in the registry (`synthra-v3`, `unitflow-v3`). Not in the program only to keep it to the
-  venues of the chains it is checked on; add them as another venue (below).
-- **Algebra pools** (Camelot V3 on Arbitrum, QuickSwap V3 on Polygon): the registry records the
-  `v3Factory` address but no factory ABI with Algebra's `poolByPair(a, b)`, so there is no lookup to
-  call. Pass the pool in as a `main` input; its price is the first word of `globalState()`, and its
-  fee is dynamic.
+- **Synthra V3 and UnitFlow V3** (Arc): the same `swapV3` and `getPool(a, b, fee)`, through
+  `SynthraV3.Factory` and `UnitflowV3.Factory`. Not in the program only to keep it to the venues of
+  the chains it is checked on; add them as another venue (below).
+- **Algebra pools** (Camelot V3 on Arbitrum, QuickSwap V3 on Polygon): `Camelot.V3Factory` and
+  `Quickswap.V3Factory` are addresses only, with no verified ABI carrying Algebra's
+  `poolByPair(a, b)`, so there is no lookup to call. Pass the pool in as a `main` input; its price is
+  the first word of `globalState()`, and its fee is dynamic.
 - **PancakeSwap Infinity CL**: the Router's `swapInfinityCL` takes a price limit, but the registry
   records no PancakeSwap Infinity deployment on any chain, so a program has no vault or pool manager
   to name. Its key is also a different shape:
@@ -192,25 +172,23 @@ why the standard keys are the practical default.
 
 ## Reading a pool
 
-Every read is an `evm.static` call with the selector, decoded as one word:
+A V3-style pool is read with `evm.static` by selector, each answer decoded as one word; a V4 pool
+through the chain's `UniswapV4.StateView`, by name:
 
-| What                       | V3-style pool (Uniswap V3, PancakeSwap V3, Slipstream) | Uniswap V4 pool, from its state in the PoolManager                                 |
-| -------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| liquidity at current price | `liquidity()`, selector `0x1a686502`                   | the state's fourth word (first word + 3)                                           |
-| current `sqrtPriceX96`     | first word of `slot0()`, selector `0x3850c7bd`         | bits 0–159 of the state's first word                                               |
-| swap fee, in millionths    | `fee()`, selector `0xddca3f43`                         | LP fee in bits 208–231 of the first word, protocol fee in bits 184–207 (see below) |
+| What                       | V3-style pool (Uniswap V3, PancakeSwap V3, Slipstream) | Uniswap V4 pool, from `UniswapV4.StateView` by its id          |
+| -------------------------- | ------------------------------------------------------ | -------------------------------------------------------------- |
+| liquidity at current price | `liquidity()`, selector `0x1a686502`                   | `getLiquidity(poolId)`                                         |
+| current `sqrtPriceX96`     | first word of `slot0()`, selector `0x3850c7bd`         | `getSlot0(poolId)`: `(sqrtPriceX96, tick, protocolFee, lpFee)` |
+| swap fee, in millionths    | `fee()`, selector `0xddca3f43`                         | `getSlot0`'s `lpFee` plus its `protocolFee` (see below)        |
 
-- **A V4 pool's state** sits in the PoolManager's `pools` mapping (storage slot 6). A hookless
-  pool's id is `crypto.keccak256(abi.encode(currency0, currency1, fee, tickSpacing, 0n))`, its
-  state's first word is at `crypto.keccak256(abi.encode(poolId, 6n))`, and the PoolManager's
-  `extsload(bytes32)` (selector `0x1e2eaeaf`) reads a word. That first word packs `sqrtPriceX96`
-  (bits 0–159), the tick (160–183), the protocol fee (184–207) and the LP fee (208–231). A key
-  with no pool reads 0. Keys are built from the pair itself, so a V4 pool in native ETH (currency
-  `0x0`) is a different pair and is never touched.
+- **A V4 pool's id** is `crypto.keccak256(abi.encode(currency0, currency1, fee, tickSpacing, 0n))`
+  for a hookless key, and `const [sqrtPriceX96, tick, protocolFee, lpFee] = UniswapV4.StateView.getSlot0(poolId);`
+  reads its state. A key with no pool reads 0. Keys are built from the pair itself, so a V4 pool in
+  native ETH (currency `0x0`) is a different pair and is never touched.
 - **A V4 pool's fee** is its LP fee (a hookless key's own `fee`, fixed) plus the protocol fee for the
-  direction, where one is switched on. The protocol fee field holds two 12-bit fees: selling token0
-  in its low 12 bits (184–195), selling token1 in its high 12 (196–207). The protocol fee is taken
-  first and the LP fee from the rest, so the swap fee is
+  direction, where one is switched on. `protocolFee` holds two 12-bit fees: selling token0 in its
+  low 12 bits, selling token1 in its high 12. The protocol fee is taken first and the LP fee from the
+  rest, so the swap fee is
   `protocolFee + lpFee - protocolFee * lpFee / 1000000`. Base's V4 charges one: its WETH/USDC
   500/10 pool reads an LP fee of 500 and a protocol fee of 125, so 625 effective, and 3000/60 reads
   3000 and 500, so 3,499. A hookless key never carries the dynamic-fee flag (`0x800000`), which
@@ -356,7 +334,7 @@ returns at least `amountIn ×` the limit's price. That is the recipe:
 
 - `swapV3(pool, tokenIn, tokenOut, remaining, limit, self, self)`: a positive amount
   is exact input.
-- `swapV4(UniswapV4_PoolManager, key, zeroForOne, -remaining, limit, self, self)`:
+- `swapV4(UniswapV4.PoolManager, key, zeroForOne, -remaining, limit, self, self)`:
   a negative amount is exact input.
 - Each swap is given its pool's own limit, not the caller's.
 - `payer` and `recipient` are the Pot. Each helper returns the input the pool took (the Pot's input
@@ -441,17 +419,16 @@ in base units. Take each token's decimals from
 
 ## Adapting it
 
-- **Another chain**: pass its `--chain`. The chain sets the Uniswap venues; pass the PancakeSwap V3
-  and Slipstream factories from that chain's registry rows as defines, or leave them out.
-- **Another venue**: add a constant for its factory, defaulting to `0n`, and its lookups behind
-  `if (<constant> != 0n)`, and grow the discovery array; `swapIntoV3` already drives every
-  V3-style pool the Router services. For Algebra pools, read `globalState()` for the price.
+- **Another chain**: pass its `--chain`; the venues it has are used, and the others left out.
+- **Another venue**: add its lookups behind `if (available(<Namespace.Contract>))` and grow the
+  discovery array; `swapIntoV3` already drives every V3-style pool the Router services. For Algebra
+  pools, read `globalState()` for the price.
 - **More V4 pools**: pass their `(fee, tickSpacing)` in `v4Keys`, found through the `Initialize`
   logs. A hooked pool needs its `hooks` address (in the pool id and the key) and a hook you have
   reviewed.
 - The input must be in the Pot before the program runs: for a direct cook, the Pot's owner funds it
   (or `--fund` pulls it in with the cook); for an intent, the solver delivers it (`sauce-intents`).
-  Compile and send it with `sauce-run`, passing the venue defines above.
+  Compile and send it with `sauce-run`.
 
 ## Before sending
 

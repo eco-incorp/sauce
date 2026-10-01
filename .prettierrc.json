@@ -11,12 +11,6 @@
       "options": {
         "parser": "typescript"
       }
-    },
-    {
-      "files": "skills/**/*.sauce.ts",
-      "options": {
-        "trailingComma": "none"
-      }
     }
   ]
 }

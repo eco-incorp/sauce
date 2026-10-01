@@ -12,26 +12,13 @@
 //   5. Check the fill, pay `recipient`, refund what is left of `amountIn` to `refundTo`, and
 //      return what happened. Anything else the Pot holds stays there.
 //
-// It names no chain: `--chain` picks one, and the chain sets the Uniswap venues it has. The
-// PancakeSwap V3 and Slipstream factories are optional defines (the sauce-distributed-swap skill
-// gives Base's as a `--defines` file).
+// It names no chain: `--chain` picks one, and each venue is used where that chain has it
+// (`available(...)`), so one file compiles for every chain.
 //
 //   sauce run distributed-swap.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --args <tokenIn> <tokenOut> <amountIn> <sqrtPriceLimitX96> <minOut> \
 //     <minAvgPrice> <recipient> <refundTo> <v4Keys>
 import { ISauceRouter } from "./artifacts/ISauceRouter.json";
-import IUniswapV3Factory from "./protocols/uniswap-v3/UniswapV3FactoryABI.json";
-import IPancakeV3Factory from "./protocols/pancakeswap-v3/PancakeSwapV3FactoryABI.json";
-import ISlipstreamFactory from "./protocols/aerodrome-slipstream/SlipstreamCLFactoryABI.json";
-
-// Venues, as compile-time addresses: 0 leaves a venue out. The chain sets the Uniswap ones where
-// they are deployed; the others are defines, from each protocol's registry deployments.
-const UniswapV3_Factory = 0n;
-const UniswapV4_PoolManager = 0n;
-const PANCAKE_V3_FACTORY = 0n;
-const SLIPSTREAM_INITIAL = 0n; // Aerodrome Slipstream has up to three CLFactory generations
-const SLIPSTREAM_GAUGE_CAPS = 0n;
-const SLIPSTREAM_GAUGES_V3 = 0n;
 
 // A V3-style pool's current sqrtPriceX96: the first word of slot0().
 function spotPrice(pool: Address): Uint256 {
@@ -55,34 +42,26 @@ function poolFee(pool: Address): Uint256 {
   return millionths;
 }
 
-// A word of a hookless Uniswap V4 pool's state: `offset` 0 holds its price and fees, 3 its
-// liquidity at that price. The state lives in the PoolManager's `pools` mapping (storage slot 6)
-// under the pool's id, the hash of its key, and extsload(bytes32) reads it. No pool reads 0.
-function v4State(
+// A hookless Uniswap V4 pool's id: the hash of its key, the pair in address order.
+function v4PoolId(
   fee: Uint256,
   tickSpacing: Uint256,
   tokenIn: Address,
   tokenOut: Address,
-  offset: Uint256
 ): Uint256 {
   const sellsToken0 = tokenIn < tokenOut;
   const currency0 = sellsToken0 ? tokenIn : tokenOut;
   const currency1 = sellsToken0 ? tokenOut : tokenIn;
-  const poolId = crypto.keccak256(abi.encode(currency0, currency1, fee, tickSpacing, 0n));
-  const slot = crypto.keccak256(abi.encode(poolId, 6n)) + offset;
-  const extsload = hex`1e2eaeaf`;
-  const call = extsload.concat(abi.encode(slot));
-  const [word] = abi.decode(evm.static(UniswapV4_PoolManager, call), ["Uint256"]);
-  return word;
+  return crypto.keccak256(abi.encode(currency0, currency1, fee, tickSpacing, 0n));
 }
 
-// A V4 pool's swap fee in millionths, from the first word of its state: the LP fee (a hookless
-// key's own fee) plus the protocol fee for this direction, where one is switched on.
-function v4SwapFee(state: Uint256, sellsToken0: bool): Uint256 {
-  const lpFee = (state >> 208n) & 0xffffffn;
-  let protocolFee = (state >> 184n) & 0xfffn;
+// A V4 pool's swap fee in millionths: the LP fee (a hookless key's own fee) plus the protocol fee
+// for this direction, where one is switched on. The protocol fee holds selling token0's in its low
+// 12 bits and selling token1's in the next 12; it is taken first, and the LP fee from the rest.
+function v4SwapFee(protocolFees: Uint256, lpFee: Uint256, sellsToken0: bool): Uint256 {
+  let protocolFee = protocolFees & 0xfffn;
   if (!sellsToken0) {
-    protocolFee = (state >> 196n) & 0xfffn;
+    protocolFee = (protocolFees >> 12n) & 0xfffn;
   }
   return protocolFee + lpFee - (protocolFee * lpFee) / 1000000n;
 }
@@ -124,7 +103,7 @@ function swapIntoV3(
   tokenIn: Address,
   tokenOut: Address,
   amount: Uint256,
-  limit: Uint256
+  limit: Uint256,
 ): Uint256 {
   const self = ctx.self();
   const before = Token(tokenIn).balanceOf(self);
@@ -140,8 +119,11 @@ function swapIntoV4(
   tokenIn: Address,
   tokenOut: Address,
   amount: Uint256,
-  limit: Uint256
+  limit: Uint256,
 ): Uint256 {
+  if (!available(UniswapV4.PoolManager)) {
+    return 0n;
+  }
   const self = ctx.self();
   const before = Token(tokenIn).balanceOf(self);
   const zeroForOne = tokenIn < tokenOut;
@@ -150,10 +132,10 @@ function swapIntoV4(
     currency1: zeroForOne ? tokenOut : tokenIn,
     fee: fee,
     tickSpacing: tickSpacing,
-    hooks: 0n
+    hooks: 0n,
   };
   const router = ISauceRouter.at(self);
-  router.swapV4(UniswapV4_PoolManager, key, zeroForOne, -amount, limit, self, self);
+  router.swapV4(UniswapV4.PoolManager, key, zeroForOne, -amount, limit, self, self);
   return before - Token(tokenIn).balanceOf(self);
 }
 
@@ -171,35 +153,47 @@ function main(
   minAvgPrice: Uint256,
   recipient: Address,
   refundTo: Address,
-  v4Keys: { fee: Uint256; tickSpacing: Uint256 }[]
+  v4Keys: { fee: Uint256; tickSpacing: Uint256 }[],
 ): bytes {
   const self = ctx.self();
   const sellsToken0 = tokenIn < tokenOut;
   const outBefore = Token(tokenOut).balanceOf(self);
   require(Token(tokenIn).balanceOf(self) >= amountIn, "amountIn is not in the Pot");
 
-  // 1. Discover. The factories give each fee tier's or tick spacing's pool (0 where there is none).
-  //    A pair can have a Slipstream pool at the same tick spacing under each factory.
+  // 1. Discover. Each venue the chain has gives a pool per fee tier or tick spacing (0 where there
+  //    is none); a venue the chain lacks is left out when the program is compiled. A pair can have
+  //    a Slipstream pool at the same tick spacing under each of its three factories.
   let found = new Array(23); // 4 + 4 + 3 * 5
   let m = 0n;
-  if (UniswapV3_Factory != 0n) {
+  if (available(UniswapV3.Factory)) {
     for (const fee of [100n, 500n, 3000n, 10000n]) {
-      found[m] = IUniswapV3Factory.at(UniswapV3_Factory).getPool(tokenIn, tokenOut, fee);
+      found[m] = UniswapV3.Factory.getPool(tokenIn, tokenOut, fee);
       m++;
     }
   }
-  if (PANCAKE_V3_FACTORY != 0n) {
+  if (available(PancakeswapV3.Factory)) {
     for (const fee of [100n, 500n, 2500n, 10000n]) {
-      found[m] = IPancakeV3Factory.at(PANCAKE_V3_FACTORY).getPool(tokenIn, tokenOut, fee);
+      found[m] = PancakeswapV3.Factory.getPool(tokenIn, tokenOut, fee);
       m++;
     }
   }
-  for (const factory of [SLIPSTREAM_INITIAL, SLIPSTREAM_GAUGE_CAPS, SLIPSTREAM_GAUGES_V3]) {
-    if (factory != 0n) {
-      for (const tickSpacing of [1n, 50n, 100n, 200n, 2000n]) {
-        found[m] = ISlipstreamFactory.at(factory).getPool(tokenIn, tokenOut, tickSpacing);
-        m++;
-      }
+  const tickSpacings = [1n, 50n, 100n, 200n, 2000n];
+  if (available(AerodromeSlipstream.CLFactory)) {
+    for (const tickSpacing of tickSpacings) {
+      found[m] = AerodromeSlipstream.CLFactory.getPool(tokenIn, tokenOut, tickSpacing);
+      m++;
+    }
+  }
+  if (available(AerodromeSlipstream.CLFactoryGaugeCaps)) {
+    for (const tickSpacing of tickSpacings) {
+      found[m] = AerodromeSlipstream.CLFactoryGaugeCaps.getPool(tokenIn, tokenOut, tickSpacing);
+      m++;
+    }
+  }
+  if (available(AerodromeSlipstream.CLFactoryGaugesV3)) {
+    for (const tickSpacing of tickSpacings) {
+      found[m] = AerodromeSlipstream.CLFactoryGaugesV3.getPool(tokenIn, tokenOut, tickSpacing);
+      m++;
     }
   }
 
@@ -210,7 +204,7 @@ function main(
   const most = m + v4Keys.length;
   let pools = new Array(most);
   let fees = new Array(most);
-  let tickSpacings = new Array(most);
+  let spacings = new Array(most);
   let limits = new Array(most);
   let prices = new Array(most);
   let n = 0n;
@@ -229,18 +223,17 @@ function main(
       }
     }
   }
-  if (UniswapV4_PoolManager != 0n) {
+  if (available(UniswapV4.StateView)) {
     for (const key of v4Keys) {
-      const liquidity = v4State(key.fee, key.tickSpacing, tokenIn, tokenOut, 3n);
-      const state = v4State(key.fee, key.tickSpacing, tokenIn, tokenOut, 0n);
-      const spot = state & ((1n << 160n) - 1n);
-      if (liquidity != 0n && spot != 0n) {
-        const fee = v4SwapFee(state, sellsToken0);
+      const id = v4PoolId(key.fee, key.tickSpacing, tokenIn, tokenOut);
+      if (UniswapV4.StateView.getLiquidity(id) != 0n) {
+        const [spot, tick, protocolFees, lpFee] = UniswapV4.StateView.getSlot0(id);
+        const fee = v4SwapFee(protocolFees, lpFee, sellsToken0);
         const limit = poolLimit(sqrtPriceLimitX96, fee, sellsToken0);
-        if (isBetter(spot, limit, sellsToken0)) {
+        if (spot != 0n && isBetter(spot, limit, sellsToken0)) {
           pools[n] = 0n;
           fees[n] = key.fee;
-          tickSpacings[n] = key.tickSpacing;
+          spacings[n] = key.tickSpacing;
           limits[n] = limit;
           prices[n] = takerPrice(spot, fee, sellsToken0);
           n++;
@@ -267,7 +260,7 @@ function main(
     if (pools[i] != 0n) {
       remaining -= swapIntoV3(pools[i], tokenIn, tokenOut, remaining, limits[i]);
     } else {
-      remaining -= swapIntoV4(fees[i], tickSpacings[i], tokenIn, tokenOut, remaining, limits[i]);
+      remaining -= swapIntoV4(fees[i], spacings[i], tokenIn, tokenOut, remaining, limits[i]);
     }
   }
 

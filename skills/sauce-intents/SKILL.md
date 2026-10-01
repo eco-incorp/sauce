@@ -12,8 +12,8 @@ undeclared in the file and set with `--define NAME=VALUE` (`sauce-script`).
 
 ```sauce chain=base define=RECIPIENT,AMOUNT
 Arbitrum(() => {
-  Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n).transfer(RECIPIENT, AMOUNT); // Arbitrum USDC
-}).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });
+  USDC.transfer(RECIPIENT, AMOUNT); // Arbitrum's USDC: the body runs there
+}).reward({ tokens: [{ token: USDC, amount: AMOUNT }] }); // the source chain's USDC
 ```
 
 Nothing about the fill is guaranteed: a solver decides whether the reward is worth it, and the
@@ -60,13 +60,19 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
   there is the source chain's USDC. A reward token must be known when the file is compiled: a
   symbol, or a token's address on the source chain as a literal or a define. Its amount may be a
   measured value.
-- **Inside the braces, and in the delivery argument**, the code runs on the destination. Protocol
-  namespaces resolve there: `AaveV3.Pool` in an `Arbitrum(...)` body is Arbitrum's pool. A bare
-  token symbol, `chainId` and a `Namespace_Contract` define resolve on the chain the file is
-  compiled for, so name each destination token by **its address on the destination**, from the
-  destination's file in `sauce-chains`
-  ([../sauce-chains/references/arbitrum.md](../sauce-chains/references/arbitrum.md) for Arbitrum):
-  `Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n)` is Arbitrum's USDC.
+- **Inside the braces, and in the delivery argument**, the code runs on the destination, and every
+  name a chain supplies resolves there: in an `Arbitrum(...)` body, `USDC` is Arbitrum's USDC,
+  `AaveV3.Pool` is Arbitrum's pool, and `chainId` and a `Namespace_Contract` define are Arbitrum's.
+  The tokens a destination has are listed in
+  [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md), with their
+  addresses in the destination's file in `sauce-chains`
+  ([../sauce-chains/references/arbitrum.md](../sauce-chains/references/arbitrum.md) for Arbitrum).
+- **The rule repeats at every depth.** An intent opened inside a body is funded on that body's
+  chain, so its reward resolves there and its own body on its own destination.
+- A literal address means that address everywhere, and so does a define whose name no chain uses
+  (`RECIPIENT`). A define under a chain-scoped name (`USDC`, `chainId`, a protocol address) is a
+  name on the source chain: it applies to the file's own statements and the reward, and a body on
+  another chain keeps that chain's value.
 
 ## Publishing and funding
 
@@ -166,10 +172,10 @@ const amount = USDC.balanceOf(ctx.self());
 const delivered = amount - (amount * 10n) / 10000n;
 Arbitrum(
   () => {
-    Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n).approve(AaveV3.Pool, delivered);
-    AaveV3.Pool.supply(0xaf88d065e77c8cc2239327c5edb3a432268e5831n, delivered, BENEFICIARY, 0n);
+    USDC.approve(AaveV3.Pool, delivered);
+    AaveV3.Pool.supply(USDC, delivered, BENEFICIARY, 0n);
   },
-  { tokens: [{ token: 0xaf88d065e77c8cc2239327c5edb3a432268e5831n, amount: delivered }] }
+  { tokens: [{ token: USDC, amount: delivered }] },
 ).reward({ tokens: [{ token: USDC, amount }] });
 ```
 
@@ -178,12 +184,13 @@ margin. Make it worth filling.
 
 ## A whole program as the body
 
-The body can be any program for the destination. It is written inside the braces, uses the file's
-defines as values, and **imports nothing** (an intent file cannot import): it calls contracts by
-namespace (`UniswapV3.Factory.getPool(...)`) or by selector, with `evm.static(address, data)` for a
-read and `evm.call(address, value, data)` for a write, `data` being the selector bytes
-`.concat(abi.encode(...))`. The swap Router is reached through the Pot itself,
-`evm.call(ctx.self(), 0n, ...)`. Every unsold input and every output leaves the destination Pot
+The body can be any program for the destination. It is written inside the braces and uses the
+file's defines as values. It may also use what the file declares: its imports (an ABI, a library)
+and its helper functions, each compiled into the body's program for the destination. It calls
+contracts by namespace (`UniswapV3.Factory.getPool(...)`), through an imported binding, or by
+selector, with `evm.static(address, data)` for a read and `evm.call(address, value, data)` for a
+write, `data` being the selector bytes `.concat(abi.encode(...))`. The swap Router is reached
+through the Pot itself, `ctx.self()`. Every unsold input and every output leaves the destination Pot
 before the body ends, and a refund the body makes lands on the destination chain. The body runs on
 the shared intent Pot, which holds nothing of anyone's between intents, so it may return a token's
 whole balance there, as the refunds below do; a program on an owner's Pot returns only what is left
@@ -196,66 +203,40 @@ fulfilment, so set it from the limit (`sauce-distributed-swap` has the recipe), 
 pool can pay.
 
 ```sauce chain=arbitrum define=AMOUNT_IN,REWARD,SQRT_PRICE_LIMIT_X96,MIN_OUT,RECIPIENT,REFUND_TO
+import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+
 Base(
   () => {
-    const weth = 0x4200000000000000000000000000000000000006n; // Base WETH
-    const usdc = 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n; // Base USDC
     const self = ctx.self();
-    const pool = UniswapV3.Factory.getPool(weth, usdc, 500n); // the 0.05% tier
+    const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n); // Base's 0.05% tier
     require(pool != 0n, "no WETH/USDC pool at 0.05%");
-    const outBefore = Token(usdc).balanceOf(self);
-    // swapV3(pool, tokenIn, tokenOut, amountSpecified, sqrtPriceLimitX96, payer, recipient)
-    const swapV3 = hex`a5e2989d`;
-    const args = abi.encode(pool, weth, usdc, AMOUNT_IN, SQRT_PRICE_LIMIT_X96, self, self);
-    evm.call(self, 0n, swapV3.concat(args));
-    const out = Token(usdc).balanceOf(self) - outBefore;
+    const outBefore = USDC.balanceOf(self);
+    ISauceRouter.at(self).swapV3(pool, WETH, USDC, AMOUNT_IN, SQRT_PRICE_LIMIT_X96, self, self);
+    const out = USDC.balanceOf(self) - outBefore;
     require(out >= MIN_OUT, "fill below MIN_OUT");
-    Token(usdc).transfer(RECIPIENT, out);
-    const unsold = Token(weth).balanceOf(self); // the shared Pot: return all of it
+    USDC.transfer(RECIPIENT, out);
+    const unsold = WETH.balanceOf(self); // the shared Pot: return all of it
     if (unsold > 0n) {
-      Token(weth).transfer(REFUND_TO, unsold);
+      WETH.transfer(REFUND_TO, unsold);
     }
   },
-  { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: AMOUNT_IN }] }
-).reward({ tokens: [{ token: WETH, amount: REWARD }] });
+  { tokens: [{ token: WETH, amount: AMOUNT_IN }] }, // Base's WETH, which the solver delivers
+).reward({ tokens: [{ token: WETH, amount: REWARD }] }); // the source chain's WETH
 ```
 
 `REWARD` must exceed what the solver delivers, `AMOUNT_IN`, by what filling costs it (below).
 [examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the same with the distributed
 swap (`sauce-distributed-swap`) as the body: every Uniswap V3 and V4 pool with liquidity, best taker
-price first, each up to its own fee-adjusted limit.
-
-Inside a body, read a decoded result by position, `abi.decode(data, ["Address"])[0n]`: destructuring
-it, `const [pool] = …`, is refused there ("Identifier 'pool' has already been declared"), though it
-compiles anywhere else.
-
-A venue with no namespace on the destination, such as PancakeSwap V3 or Aerodrome Slipstream on
-Base, is therefore reached by selector, with its address as a define (the protocol's document in
-`sauce-protocols` has it). The selectors the distributed swap needs:
+price first, each up to its own fee-adjusted limit. It calls the Router and reads the pools by
+selector, which needs no import:
 
 | Call                                                                                                      | Selector                                 |
 | --------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | a V3-style factory's `getPool(address,address,uint24)` (Uniswap V3, PancakeSwap V3)                       | `0x1698ee82`                             |
 | a Slipstream factory's `getPool(address,address,int24)`                                                   | `0x28af8d0b`                             |
 | a pool's `slot0()`, `liquidity()`, `fee()`                                                                | `0x3850c7bd`, `0x1a686502`, `0xddca3f43` |
-| the V4 PoolManager's `extsload(bytes32)`                                                                  | `0x1e2eaeaf`                             |
 | the Router's `swapV3(address,address,address,int256,uint160,address,address)`                             | `0xa5e2989d`                             |
 | the Router's `swapV4(address,(address,address,uint24,int24,address),bool,int256,uint160,address,address)` | `0x7c9e9da3`                             |
-
-```sauce chain=arbitrum define=SLIPSTREAM_FACTORY,AMOUNT_IN,REFUND_TO
-Base(
-  () => {
-    const weth = 0x4200000000000000000000000000000000000006n; // Base WETH
-    const usdc = 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n; // Base USDC
-    const getPool = hex`28af8d0b`; // getPool(address,address,int24)
-    const call = getPool.concat(abi.encode(weth, usdc, 100n));
-    const pool = abi.decode(evm.static(SLIPSTREAM_FACTORY, call), ["Address"])[0n];
-    require(pool != 0n, "no WETH/USDC pool at tick spacing 100");
-    Token(weth).transfer(REFUND_TO, Token(weth).balanceOf(ctx.self()));
-  },
-  { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: AMOUNT_IN }] }
-).reward({ tokens: [{ token: WETH, amount: AMOUNT_IN }] });
-```
 
 ## Cascades
 
@@ -266,12 +247,12 @@ execution and carried into the level below; no amount past the first exists when
 const amount = USDC.balanceOf(ctx.self());
 Arbitrum(
   () => {
-    const arrived = Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n).balanceOf(ctx.self());
+    const arrived = USDC.balanceOf(ctx.self()); // Arbitrum's USDC
     Optimism(() => {
-      Token(0x0b2c639c533813f4aa9d7837caf62653d097ff85n).transfer(RECIPIENT, arrived);
-    }).reward({ tokens: [{ token: 0xaf88d065e77c8cc2239327c5edb3a432268e5831n, amount: arrived }] });
+      USDC.transfer(RECIPIENT, arrived); // Optimism's USDC
+    }).reward({ tokens: [{ token: USDC, amount: arrived }] }); // Arbitrum's: it funds this level
   },
-  { tokens: [{ token: 0xaf88d065e77c8cc2239327c5edb3a432268e5831n, amount }] }
+  { tokens: [{ token: USDC, amount }] },
 ).reward({ tokens: [{ token: USDC, amount }] });
 ```
 

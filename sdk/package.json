@@ -66,6 +66,7 @@
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
     "gen-route-globals": "node scripts/gen-route-globals.mjs",
     "gen-source-globals": "node scripts/gen-source-globals.mjs",
+    "gen-builtins": "node scripts/gen-builtins.mjs",
     "gen-embedded-sources": "node scripts/gen-embedded-sources.mjs",
     "gen-skills-references": "node scripts/gen-skills-references.mjs",
     "test": "node scripts/gen-embedded-sources.mjs && NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",

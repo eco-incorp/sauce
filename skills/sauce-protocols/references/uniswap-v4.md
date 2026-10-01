@@ -122,6 +122,23 @@ The registry's addresses per chain, how a program names each contract there (a n
 an ABI import bound to the address), and the ABI functions are generated in
 [registry/uniswap-v4.md](registry/uniswap-v4.md).
 
+### UniswapV4StateViewABI
+
+StateView (v4-periphery `src/lens/StateView.sol`) reads the PoolManager's pool state as views. A `poolId` is a `bytes32`: keccak256 of the ABI-encoded pool key.
+
+- `getSlot0(bytes32 poolId) -> (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)` - Current price, tick and fees
+- `getLiquidity(bytes32 poolId) -> uint128 liquidity` - In-range liquidity
+- `getTickInfo(bytes32 poolId, int24 tick) -> (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128)` - One tick's state
+- `getTickLiquidity(bytes32 poolId, int24 tick) -> (uint128 liquidityGross, int128 liquidityNet)` - One tick's liquidity
+- `getTickFeeGrowthOutside(bytes32 poolId, int24 tick) -> (uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128)` - One tick's fee growth outside
+- `getTickBitmap(bytes32 poolId, int16 tick) -> uint256 tickBitmap` - One word of the initialized-tick bitmap
+- `getFeeGrowthGlobals(bytes32 poolId) -> (uint256 feeGrowthGlobal0, uint256 feeGrowthGlobal1)` - Global fee growth
+- `getFeeGrowthInside(bytes32 poolId, int24 tickLower, int24 tickUpper) -> (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128)` - Fee growth inside a range
+- `getPositionInfo(bytes32 poolId, bytes32 positionId) -> (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)` - A position by id
+- `getPositionInfo(bytes32 poolId, address owner, int24 tickLower, int24 tickUpper, bytes32 salt) -> (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)` - A position by its key
+- `getPositionLiquidity(bytes32 poolId, bytes32 positionId) -> uint128 liquidity` - A position's liquidity
+- `poolManager() -> address` - The PoolManager it reads
+
 ## Notes
 
 - V4 uses a singleton architecture: ALL pools live in a single PoolManager contract, saving gas on multi-hop swaps

@@ -771,9 +771,14 @@ export const rejections = [
     src: "function main(a: Account): void { a.owner = 1n; }",
   },
   {
-    quotes: ["… can't be an account — …"],
+    quotes: ["a return value can't be an account — …"],
     targets: ["svm"],
-    src: "function main(a: Account): Uint256 { return a; }",
+    src: "function main(a: Account): Account { return a; }",
+  },
+  {
+    quotes: ["…: expected a number, found an account"],
+    targets: ["svm"],
+    src: "function main(a: Account): Uint256 { return a + 1n; }",
   },
 
   // Contract bindings and .catch()

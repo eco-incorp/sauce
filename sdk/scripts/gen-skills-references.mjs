@@ -38,6 +38,9 @@ const TARGETS = join(SDK, "test", "fixtures", "registry-abi", "targets.json");
 
 const HEADER = "<!-- Generated from the SDK's registries. Do not edit. -->";
 
+/** The eco-routes namespace, which the globals index leaves to the intent syntax. */
+const INTENT_PROTOCOL = "eco-routes";
+
 /** Directories whose every `.md` file this generator owns (stale ones are removed). */
 export const GENERATED_DIRS = ["sauce-chains/references", "sauce-protocols/references/registry"];
 
@@ -97,6 +100,9 @@ export function globalsIndex(sdk, ecoRoutes) {
   for (const { chain, globals } of listed) {
     for (const ns of globals.protocols) {
       for (const contract of ns.contracts) {
+        // The Portal and its provers are left to the intent syntax: a program opens an intent with
+        // `Arbitrum(() => { ... }).reward(...)` (`sauce-intents`), never by calling them by name.
+        if (contract.protocol === INTENT_PROTOCOL) continue;
         const name = `${ns.namespace}.${contract.name}`;
         if (ns.kind === "protocol") {
           const entry = contracts.get(name) ?? {

@@ -1,6 +1,6 @@
 ---
 name: sauce-globals
-description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.PoolManager, AaveV3.Pool, …) and family aliases, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
+description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) and family aliases, available(...) for a venue a chain may lack, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
 ---
 
 # Globals in a Sauce program
@@ -79,25 +79,21 @@ name of its own, as here, in a file that also uses the token syntax, which binds
   `Uniswap.UniversalRouter` is `UniswapV4.UniversalRouter`; `Uniswap.Factory` is ambiguous.
 - `Ethereum.UniswapV4.UniversalRouter` takes Ethereum's address but still executes on the program's
   own chain; running on another chain is an intent (`sauce-intents`).
-- Protocols without a namespace are reached through an ABI import: `sauce-protocols`.
+- Every catalogued protocol has a namespace. An interface, such as `Erc4626.Vault`, has no one
+  address and is called at one: `Erc4626.Vault.at(vault).deposit(...)` (`sauce-protocols`).
 
-**A venue a chain may not have** is a compile-time choice. Every namespace contract is also the
-define `Namespace_Contract`, set on the chains where it is deployed. Beside `main`, declare a module
-constant of that name with the default `0n`: `const UniswapV3_Factory = 0n;` is then the chain's
-factory where there is one and `0` elsewhere, and `if (UniswapV3_Factory != 0n) { ... }` folds away
-at compile time where it is `0`. Bind the protocol's ABI to it
-(`IUniswapV3Factory.at(UniswapV3_Factory)`, the ABI imported from `./protocols/<slug>/`), and one
-program compiles on every chain. `Namespace.Contract` is for a contract the program requires: on a
-chain without it, the program does not compile.
+**A venue a chain may not have** is asked with `available(<name>)`, decided when the program is
+compiled for a chain: `if (available(UniswapV3.Factory)) { ... }` keeps its branch where the chain
+has the contract, and removes it, names and all, where it does not. It takes a contract or a token
+symbol (`available(USDT)`); it folds `if`/`else`, `?:`, `&&`, `||` and `!`; and a guard
+`if (!available(X)) { return 0n; }` drops the rest of its function. A name no chain has is an
+error rather than `false`, so a typo cannot quietly drop a branch. `Namespace.Contract` without it
+is for a contract the program requires: on a chain without it, the program does not compile.
 
 ```sauce chain=base,linea
-import IUniswapV3Factory from "./protocols/uniswap-v3/UniswapV3FactoryABI.json";
-
-const UniswapV3_Factory = 0n; // the chain's factory, where it has one
-
 function main(tokenA: Address, tokenB: Address) {
-  if (UniswapV3_Factory != 0n) {
-    const pool = IUniswapV3Factory.at(UniswapV3_Factory).getPool(tokenA, tokenB, 500n);
+  if (available(UniswapV3.Factory)) {
+    const pool = UniswapV3.Factory.getPool(tokenA, tokenB, 500n);
     require(pool != 0n, "no 0.05% pool");
   }
 }
@@ -131,4 +127,4 @@ There is no read for the transaction origin.
 
 [examples/globals.sauce.ts](examples/globals.sauce.ts) uses each kind of name;
 [examples/globals.mts](examples/globals.mts) compiles it and pins the SafeERC20 lowering, the
-`IERC20` import rule, the family-alias rules and the optional-venue defines.
+`IERC20` import rule, the family-alias rules and `available(...)`.

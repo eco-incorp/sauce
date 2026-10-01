@@ -1145,6 +1145,9 @@
         "required": {
           "execute(bytes,bytes[])": "actions' uniswapV4ExactInput and uniswapV4ExactInputMultiHop, which call the deadline-free execute"
         }
+      },
+      "UniswapV4StateViewABI": {
+        "roles": ["stateView"]
       }
     },
     "unitflow-v3": {

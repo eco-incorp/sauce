@@ -1,6 +1,6 @@
 ---
 name: sauce-typescript
-description: The TypeScript side of Sauce (@eco-incorp/sauce) — compiling a .sauce.ts program for a chain from application code exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler with typed programs and compact arguments, JSON action programs, settlement verification, browser compilation with ready(), and the rule that the package embeds no RPC. Use when writing application or script code that compiles, encodes, verifies or submits Sauce programs, or when the user asks which import or subpath to use.
+description: The TypeScript side of Sauce (@eco-incorp/sauce) — compiling a .sauce.ts program for a chain from application code exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler and compact arguments, JSON action programs, settlement verification, browser compilation with ready(), and the rule that the package embeds no RPC. Use when writing application or script code that compiles, encodes, verifies or submits Sauce programs, or when the user asks which import or subpath to use.
 ---
 
 # Sauce from TypeScript
@@ -71,9 +71,9 @@ executionFee }` (`sauce-intents`).
 
 ## The raw compiler
 
-`compile({ target, entry, resolve, ... })` from `/compiler` compiles a **typed** program and resolves
-nothing for you: no registry names, no chain defines. Reach for it for full control of the source
-and resolver, typed programs the way the reference writes them, and compact arguments.
+`compile({ target, entry, resolve, ... })` from `/compiler` compiles a program and resolves nothing
+for you: no registry names, no chain defines, no token syntax. Reach for it for full control of the
+source and resolver, and for compact arguments.
 
 - ABI-v1 arguments by default; `compactArgs: true` returns an `entrySchema` for
   `encodeCompactArguments`/`decodeCompactArguments` (`scalarWidth` keeps offsets fixed).
@@ -94,16 +94,16 @@ export const info = getProtocol("pancakeswap-v3"); // name, category, chains, we
 export const slugs = listProtocolSlugs();
 // Per-chain addresses by role, e.g. { factory, smartRouter, nonfungiblePositionManager }.
 export const pancakeOnBase = pancakeV3.deployments.find((d) => d.chainId === 8453)?.addresses;
-// Whether a namespace contract is callable by name on a chain, and where.
+// Whether a namespace contract is deployed on a chain, and where.
 export const aave = contracts.on("base").AaveV3.Pool; // { available, address, abi, methods, … }
+export const pancake = contracts.on("optimism").PancakeswapV3.Factory.available; // false
 ```
 
 Each protocol module (`@eco-incorp/sauce/protocols/<slug>`) exports `protocolInfo`, `deployments`,
 its ABIs (`…ABI`), and its SauceScript templates by name (`supply`, `swap`, `getPool`, …).
 `getProtocolSkill(slug)`, `getProtocolIndex()` and `listSkillSlugs()` from
-`@eco-incorp/sauce/skills` return the `sauce-protocols` documents. A catalogued protocol is not
-necessarily callable by name, and an address in `deployments` is a recorded address, not proof of
-live code on the chain.
+`@eco-incorp/sauce/skills` return the `sauce-protocols` documents. An address in `deployments` is
+a recorded address, not proof of live code on the chain.
 
 ## Other host tools
 

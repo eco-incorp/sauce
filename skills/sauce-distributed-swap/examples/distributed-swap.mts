@@ -1,20 +1,17 @@
-// Compiles distributed-swap.sauce.ts for Base, Arbitrum and Ethereum the way `sauce compile` does,
-// with the registry's PancakeSwap V3 and Slipstream factories as the defines a run passes, and
-// builds the cooks `sauce tx` would print for selling 1 WETH and buying WETH with 3,000 USDC, each
-// with the limit 0.5% from a reference of 2,700 USDC per WETH and the four standard V4 keys. Checks
-// that the SKILL.md's Base defines file, its V4 keys, its selectors, its worked prices and minimum
-// outputs, and the arguments of its commands are what the registry and the arithmetic give.
-// Asserts what can be checked offline; sends nothing.
+// Compiles distributed-swap.sauce.ts for Base, Arbitrum and Optimism the way `sauce compile` does
+// (each venue where the chain has it), and builds the cooks `sauce tx` would print for selling 1
+// WETH and buying WETH with 3,000 USDC on Base, each with the limit 0.5% from a reference of 2,700
+// USDC per WETH and the four standard V4 keys. Checks that the SKILL.md's V4 keys, its selectors,
+// its worked prices and minimum outputs, and the arguments of its commands are what the registry
+// and the arithmetic give. Asserts what can be checked offline; sends nothing.
 //
 //   node distributed-swap.mts --owner <Pot owner> --recipient <address>
 import { readFileSync } from "node:fs";
 
-import { routes, sqrtPriceX96FromPrice, v12PredictPot } from "@eco-incorp/sauce";
+import { contracts, routes, sqrtPriceX96FromPrice, v12PredictPot } from "@eco-incorp/sauce";
 import { resolveSdkModule } from "@eco-incorp/sauce/compiler";
 import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
-import * as slipstream from "@eco-incorp/sauce/protocols/aerodrome-slipstream";
-import * as pancakeV3 from "@eco-incorp/sauce/protocols/pancakeswap-v3";
 import { bytesToHex, concatHex, getAddress, toFunctionSelector } from "viem";
 
 type Address = `0x${string}`;
@@ -57,17 +54,18 @@ for (const callback of ["uniswapV3SwapCallback", "pancakeV3SwapCallback", "unloc
 }
 
 // The reads the program makes by selector, and the SKILL.md's table of them: a V3-style pool's
-// slot0(), liquidity() and fee(), and the PoolManager's extsload(bytes32) of a V4 pool's state.
+// slot0(), liquidity() and fee(). A V4 pool's come from the chain's StateView, by name.
 for (const [signature, selector] of [
   ["slot0()", "3850c7bd"],
   ["liquidity()", "1a686502"],
   ["fee()", "ddca3f43"],
-  ["extsload(bytes32)", "1e2eaeaf"],
 ] as const) {
   check(toFunctionSelector(signature) === `0x${selector}`, `${signature} is 0x${selector}`);
   check(source.includes(`hex\`${selector}\``), `the program reads ${signature}`);
   check(skill.includes(`0x${selector}`), `the skill gives ${signature}'s selector`);
 }
+for (const read of ["getLiquidity", "getSlot0"])
+  check(source.includes(`UniswapV4.StateView.${read}(`), `the program reads V4 with ${read}`);
 
 function isqrt(n: bigint) {
   let x = n;
@@ -107,59 +105,60 @@ check(
   skill.includes(`'${JSON.stringify(STANDARD_KEYS)}'`),
   "the skill's commands pass the standard keys",
 );
+const keyArgs = STANDARD_KEYS.map(({ fee, tickSpacing }) => ({
+  fee: BigInt(fee),
+  tickSpacing: BigInt(tickSpacing),
+}));
 
-// The Base defines file the SKILL.md gives is the registry's addresses for those roles.
-const fenced = /```json\n([\s\S]*?)```/.exec(skill);
-check(fenced !== null, "the skill gives a defines file");
-const skillDefines = JSON.parse(fenced[1]!) as Record<string, string>;
-
-for (const slug of ["base", "arbitrum", "ethereum"]) {
+// Each chain's venues, as `available(...)` decides them: Base has all of them, Arbitrum no
+// Slipstream, Optimism no PancakeSwap V3 either.
+const VENUES = {
+  base: ["UniswapV3.Factory", "PancakeswapV3.Factory", "AerodromeSlipstream.CLFactory"],
+  arbitrum: ["UniswapV3.Factory", "PancakeswapV3.Factory"],
+  optimism: ["UniswapV3.Factory"],
+} as const;
+const ALL = [
+  "UniswapV3.Factory",
+  "PancakeswapV3.Factory",
+  "AerodromeSlipstream.CLFactory",
+  "AerodromeSlipstream.CLFactoryGaugeCaps",
+  "AerodromeSlipstream.CLFactoryGaugesV3",
+  "UniswapV4.StateView",
+  "UniswapV4.PoolManager",
+];
+for (const [slug, expected] of Object.entries(VENUES)) {
   const chain = routes.chain(slug).chain;
-  // The venue factories the chain does not set, from the registry: what the defines pass.
-  const pancake = pancakeV3.deployments.find((d) => d.chainId === chain.id)?.addresses ?? {};
-  const slip: Record<string, string | undefined> =
-    slipstream.deployments.find((d) => d.chainId === chain.id)?.addresses ?? {};
-  const venues: Record<string, bigint> = {};
-  if (pancake.factory) venues.PANCAKE_V3_FACTORY = BigInt(pancake.factory);
-  if (slip.clFactory) venues.SLIPSTREAM_INITIAL = BigInt(slip.clFactory);
-  if (slip.clFactoryGaugeCaps) venues.SLIPSTREAM_GAUGE_CAPS = BigInt(slip.clFactoryGaugeCaps);
-  if (slip.clFactoryGaugesV3) venues.SLIPSTREAM_GAUGES_V3 = BigInt(slip.clFactoryGaugesV3);
-  if (slug === "base") {
-    check(
-      JSON.stringify(Object.keys(skillDefines).sort()) ===
-        JSON.stringify(Object.keys(venues).sort()),
-      "the skill's Base defines name every venue the chain does not set",
-    );
-    for (const [name, value] of Object.entries(skillDefines)) {
-      check(BigInt(value) === venues[name], `the skill's ${name} is the registry's`);
-    }
-  }
-
-  const program = routes.compileSauceProgram(slug, source, { defines: venues });
-  check((program.source.match(/\.swapV3\(/g) ?? []).length === 1, "one swapV3 call site");
-  check((program.source.match(/\.swapV4\(/g) ?? []).length === 1, "one swapV4 call site");
+  const program = routes.compileSauceProgram(slug, source);
   check(/__sauce_transfer\(tokenOut,/.test(program.source), "the payout is a SafeERC20 transfer");
   check(
     /__sauce_transfer\(tokenIn, refundTo, remaining\)/.test(program.source),
     "the refund is a SafeERC20 transfer of what is left of amountIn, not the Pot's balance",
   );
-  // The chain sets the Uniswap venues itself, so the program carries their addresses.
+  // The program carries the address of exactly the venues the chain has.
   const bytecode = bytesToHex(program.bytecode).toLowerCase();
-  const defines = routes.chainDefines(chain);
-  for (const venue of ["UniswapV3_Factory", "UniswapV4_PoolManager"]) {
-    const at = defines[venue];
-    check(typeof at === "bigint", `${slug} has ${venue}`);
-    // Its significant bytes: an address with leading zero bytes is pushed without them.
-    check(bytecode.includes(at.toString(16)), `the program uses ${venue}`);
+  const on = contracts.on(slug) as unknown as Record<
+    string,
+    Record<string, { available: boolean; address?: string }>
+  >;
+  const used: string[] = [];
+  for (const name of ALL) {
+    const [ns, member] = name.split(".") as [string, string];
+    const contract = on[ns]?.[member];
+    const carried =
+      contract?.available === true && bytecode.includes(contract.address!.toLowerCase().slice(2));
+    check(carried === (contract?.available === true), `${slug}: ${name} is used where it exists`);
+    if (carried) used.push(name);
   }
+  for (const name of expected) check(used.includes(name), `${slug} has ${name}`);
+  check(used.includes("UniswapV4.StateView"), `${slug} reads Uniswap V4 through its StateView`);
 
-  // The token order decides the numbers: WETH is token0 on Base and Arbitrum, USDC on Ethereum.
+  // The token order decides the numbers: WETH is token0 on Base and Arbitrum, token1 on Optimism.
   const weth = routes.TOKEN_REGISTRY[chain.id]!.find((t) => t.symbol === "WETH")!;
   const usdc = routes.TOKEN_REGISTRY[chain.id]!.find((t) => t.symbol === "USDC")!;
   const wethIsToken0 = BigInt(weth.address) < BigInt(usdc.address);
-  check(wethIsToken0 === (slug !== "ethereum"), `on ${slug}, WETH is token0: ${wethIsToken0}`);
-  if (!wethIsToken0) {
-    console.log(`${slug}: ${program.bytecode.length} bytes, USDC is token0 here`);
+  check(wethIsToken0 === (slug !== "optimism"), `on ${slug}, WETH is token0: ${wethIsToken0}`);
+  if (slug !== "base") {
+    console.log(`${slug}: ${program.bytecode.length} bytes, venues ${used.join(", ")}`);
     continue;
   }
 
@@ -236,10 +235,7 @@ for (const slug of ["base", "arbitrum", "ethereum"]) {
       avg,
       recipient,
       recipient,
-      STANDARD_KEYS.map(({ fee, tickSpacing }) => ({
-        fee: BigInt(fee),
-        tickSpacing: BigInt(tickSpacing),
-      })),
+      keyArgs,
     ]);
     const data = v12Pot.encodeCook(
       engine,
@@ -250,8 +246,8 @@ for (const slug of ["base", "arbitrum", "ethereum"]) {
       "the arguments decode back to what was encoded",
     );
     console.log(
-      `${slug}: ${program.bytecode.length} bytes, venues UniswapV3_Factory, UniswapV4_PoolManager, ` +
-        `${Object.keys(venues).join(", ")}; cook to ${pot}, ${(data.length - 2) / 2} bytes of calldata`,
+      `${slug}: ${program.bytecode.length} bytes, venues ${used.join(", ")}; cook to ${pot}, ` +
+        `${(data.length - 2) / 2} bytes of calldata`,
     );
   }
 }
