@@ -24,6 +24,18 @@ registered contract address when used as a value, and exposes its ABI methods wh
 target. Amounts are integers in the token's smallest units; the SDK does not infer decimal
 conversions.
 
+### Tokenized stocks
+
+Ethereum and Base also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)` reads
+Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. Ethereum has Backed's
+xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`) and Ondo Global Markets' tokens (`TSLAon`,
+`SPCXon`); Base has Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens. A symbol is the issuer's
+own ticker for the token, case-sensitive, with a `.` written `_` (`BRK_Bx`). Each row of
+`routes.TOKEN_REGISTRY` that is a stock carries `stock`: its issuer, its name and the underlying's
+ticker. `sauce globals --chain <chain> --stocks` lists a chain's, and `--search <text>` finds one
+by symbol, company name or ticker. [What is registered](../api/coverage.md#tokenized-stocks) counts
+them and says how they differ from a plain ERC-20.
+
 ## Compile a global call
 
 ```ts

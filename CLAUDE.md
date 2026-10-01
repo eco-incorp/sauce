@@ -420,8 +420,12 @@ each issuer's own list (`STOCK_ISSUERS` in `stock-tokens.ts`, never an aggregato
 (`TSLAx`, `bTSLA`, `BRK_Bx`), so it is not always uppercase: the registry keeps symbols unique per
 chain without regard to case, and the CLI looks them up that way. Coinbase's are B20 tokens,
 precompiles of the Base node whose account holds the single byte `0xef`: anvil cannot run them
-(`OpcodeNotFound`), so no anvil-replayed suite can move one. Solana's tokenized stocks are all
-Token-2022 mints and are not registered (the SVM token arm takes classic SPL Token only).
+(`OpcodeNotFound`), so no execution suite may depend on one; the evidence reads them through
+`eth_call` on the live chain, and `--assume-balance` refuses one by that code. Ondo's rows are the
+registry page's that Ondo's app lists (`app.ondo.finance/api/v2/assets`), which leaves out a token
+not launched yet. Solana's tokenized stocks are all Token-2022 mints and are not registered (the SVM
+token arm takes classic SPL Token only). `sauce globals` and `sauce_globals` count a chain's stocks
+by default; `--stocks`/`stocks` lists them and `--search`/`search` finds one.
 
 `src/std/` is the SauceScript **standard library** — source shipped for the compiler to consume, not
 TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), and
