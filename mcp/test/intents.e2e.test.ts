@@ -124,7 +124,8 @@ describe(
     const publish = async (
       route: bigint,
       reward: bigint,
-    ): Promise<{ record: IntentRecord; tx: Hex }> => {
+      fundVia?: "transfer" | "publishAndFund",
+    ): Promise<{ record: IntentRecord; tx: Hex; steps: string[] }> => {
       const out = ok(
         await mcp.call("sauce_intent_publish", {
           source: INTENT,
@@ -135,12 +136,17 @@ describe(
           intentCreator: OWNER.address,
           from: OWNER.address,
           rpcUrl: arbitrum.rpcUrl,
+          ...(fundVia === undefined ? {} : { intentFundVia: fundVia }),
         }),
       ) as { intents: Array<{ record: IntentRecord; transactions: Tx[] }> };
       const [intent] = out.intents;
       const hashes = await sendAll(arbitrum, arbitrum.owner, intent!.transactions);
 
-      return { record: intent!.record, tx: hashes.at(-1)! };
+      return {
+        record: intent!.record,
+        tx: hashes.at(-1)!,
+        steps: intent!.transactions.map((each) => each.what.split(" ")[0]!),
+      };
     };
     /** A tool's result, with both chains' endpoints given by the call. */
     const call = async (tool: string, args: Record<string, unknown>): Promise<unknown> =>
@@ -179,7 +185,9 @@ describe(
 
     it("publishes, reads back, fills and proves, carries the proof, and claims", async () => {
       const start = await now(base);
-      const { record, tx } = await publish(start + 3600n, start + 7200n);
+      const { record, tx, steps } = await publish(start + 3600n, start + 7200n);
+      // Funded by a transfer into its vault, then published: the default.
+      assert.deepEqual(steps, ["transfer", "publish"]);
 
       // The same intent, read back from its transaction alone.
       const imported = (await call("sauce_intent_import", { txHash: tx, chain: "arbitrum" })) as {
@@ -190,8 +198,11 @@ describe(
       assert.equal(imported.intents[0]!.funded, true);
       const funded = (await call("sauce_intent_status", { txHash: tx, chain: "arbitrum" })) as {
         state: string;
+        source: { rewardStatus: string; funded: boolean };
         can: Record<string, { ok: boolean; why: string }>;
       };
+      // The Portal records no Funded status for a transfer, and its isIntentFunded says funded.
+      assert.deepEqual([funded.source.rewardStatus, funded.source.funded], ["Initial", true]);
       assert.equal(funded.state, "funded");
       assert.equal(funded.can.fill!.ok, true, funded.can.fill!.why);
       assert.equal(funded.can.claim!.ok, false);
@@ -237,6 +248,25 @@ describe(
       assert.equal(await arbitrum.balanceOf(arbitrumUsdc, SOLVER.address), before + REWARD);
       const claimed = (await call("sauce_intent_status", { intent: record })) as { state: string };
       assert.equal(claimed.state, "claimed");
+    });
+
+    it("reads an intent funded by publishAndFund as funded too", async () => {
+      const start = await now(base);
+      // Deadlines of its own: the first test's intent, the same one, is published already.
+      const deadlines = [start + 3700n, start + 7300n] as const;
+      const { record, tx, steps } = await publish(...deadlines, "publishAndFund");
+      assert.deepEqual(steps, ["approve", "publishAndFund"]);
+      const imported = (await call("sauce_intent_import", { txHash: tx, chain: "arbitrum" })) as {
+        intents: Array<{ funded: boolean }>;
+      };
+      assert.equal(imported.intents[0]!.funded, true);
+      const status = (await call("sauce_intent_status", { intent: record })) as {
+        state: string;
+        source: { rewardStatus: string };
+        can: Record<string, { ok: boolean }>;
+      };
+      assert.deepEqual([status.state, status.source.rewardStatus], ["funded", "Funded"]);
+      assert.equal(status.can.fill!.ok, true);
     });
 
     it("refunds an unfilled intent from the reward's deadline, not before", async () => {
