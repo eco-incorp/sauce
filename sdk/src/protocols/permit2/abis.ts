@@ -86,4 +86,20 @@ export const Permit2ABI = [
     ],
     outputs: [],
   },
+  // Its custom errors, so a revert inside Permit2 reads as its name rather than as raw data.
+  {
+    name: "SignatureExpired",
+    type: "error",
+    inputs: [{ name: "signatureDeadline", type: "uint256" }],
+  },
+  { name: "InvalidNonce", type: "error", inputs: [] },
+  { name: "InvalidSignature", type: "error", inputs: [] },
+  { name: "InvalidSignatureLength", type: "error", inputs: [] },
+  { name: "InvalidSigner", type: "error", inputs: [] },
+  { name: "InvalidContractSignature", type: "error", inputs: [] },
+  { name: "InvalidAmount", type: "error", inputs: [{ name: "maxAmount", type: "uint256" }] },
+  { name: "LengthMismatch", type: "error", inputs: [] },
+  { name: "AllowanceExpired", type: "error", inputs: [{ name: "deadline", type: "uint256" }] },
+  { name: "InsufficientAllowance", type: "error", inputs: [{ name: "amount", type: "uint256" }] },
+  { name: "ExcessiveInvalidation", type: "error", inputs: [] },
 ] as const;
