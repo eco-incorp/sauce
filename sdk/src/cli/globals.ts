@@ -26,7 +26,9 @@ function defineValue(value: bigint | boolean | number): string | boolean | numbe
   if (typeof value !== "bigint") return value;
   if (value >= 1n << 160n && value < 1n << 256n) return numberToHex(value, { size: 32 });
 
-  return value >= 1n << 64n ? getAddress(numberToHex(value, { size: 20 })) : value.toString();
+  return value >= 1n << 64n && value < 1n << 160n
+    ? getAddress(numberToHex(value, { size: 20 }))
+    : value.toString();
 }
 
 const squash = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, "");
