@@ -18,14 +18,15 @@
  * spacing, the fee read from the pool (a 0.3% pool at spacing 10, so a fee assumed from the spacing
  * would be wrong), and the swap.
  *
- * The pools: Uniswap V3 none at fee 100, 0.05% at 2,700 and 0.3% at 2,705 USDC per WETH with
- * liquidity, 1% at a stale 2,650 with none; Slipstream at spacing 10, 0.3% at 2,703. What the skill
- * says the program does, and this holds it to: a missing pool and an empty one are skipped; each pool
- * stops at its own limit, `maxPrice` moved by √(1 − fee), so every fill costs at most `maxPrice` with
- * its fee paid, on average and at its last unit, which costs `maxPrice`; a pool already past its
- * limit is skipped rather than reverting; the budget's unspent rest goes to `refundTo` and the Pot's
- * other balance stays; `minTokens` and `maxAvgPrice` revert; `main` returns (spent, bought, unspent).
- * And what each guard is for, by taking it out.
+ * The pools: Slipstream at spacing 10, 0.3% at 2,703 USDC per WETH; Uniswap V3 none at fees 100, 200,
+ * 300 and 400, 0.05% at 2,700 and 0.3% at 2,705 with liquidity, 1% at a stale 2,650 with none.
+ * What the skill says the program does, and this holds it to: a missing pool and an empty one are
+ * skipped; each pool stops at its own limit, `maxPrice` moved by √(1 − fee) with the fee read from
+ * the pool, so every fill costs at most `maxPrice` with its fee paid, on average and at its last
+ * unit, which costs `maxPrice`; a pool already past its limit is skipped rather than reverting; the
+ * budget's unspent rest goes to `refundTo` and the Pot's other balance stays; `minTokens` and
+ * `maxAvgPrice` revert; `main` returns (spent, bought, unspent). And what each guard is for, by
+ * taking it out.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite, and a hard failure
  * without it in CI.
@@ -386,7 +387,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 pools", () =
       expect(getAddress((await lookup(fee)) as Address)).toBe(poolAt(`v3:${fee}`));
   });
 
-  it("buys with all of the budget across three pools, each fill within maxPrice", async () => {
+  it("buys with all of the budget across two pools, each fill within maxPrice", async () => {
     const budget = 2_000n * 10n ** 6n;
     const maxPrice = usdcPerWeth(27_135n); // 2,713.5 USDC per WETH
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
@@ -397,9 +398,9 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 pools", () =
     const receipt = await cook(args);
     expect(receipt.status).toBe("success");
     const swapped = fills(receipt);
-    // Uniswap V3 first, each tier to its own limit, then Slipstream with the rest.
-    expect(swapped.map((fill) => fill.venue)).toEqual(["v3:500", "v3:3000", "cl:10"]);
-    swapped.forEach((fill, i) => expectWithin(fill, maxPrice, false, i < 2));
+    // Slipstream first, to its own limit, then the 0.05% Uniswap V3 pool with the rest.
+    expect(swapped.map((fill) => fill.venue)).toEqual(["cl:10", "v3:500"]);
+    swapped.forEach((fill, i) => expectWithin(fill, maxPrice, false, i < 1));
     expect([spent, unspent]).toEqual([budget, 0n]);
     expect(swapped.reduce((sum, fill) => sum + fill.paid, 0n)).toBe(budget);
     expect(bought).toBe(swapped.reduce((sum, fill) => sum + fill.got, 0n));
@@ -422,7 +423,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 pools", () =
     const receipt = await cook(args);
     expect(receipt.status).toBe("success");
     const swapped = fills(receipt);
-    expect(swapped.map((fill) => fill.venue)).toEqual(["v3:500", "v3:3000", "cl:10"]);
+    expect(swapped.map((fill) => fill.venue)).toEqual(["cl:10", "v3:500", "v3:3000"]);
     // Every pool stopped at its own limit: every unit within maxPrice, the last at it.
     for (const fill of swapped) expectWithin(fill, maxPrice, false, true);
     expect(spent).toBe(swapped.reduce((sum, fill) => sum + fill.paid, 0n));
@@ -442,7 +443,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 pools", () =
     const receipt = await cook([WETH, USDC, budget, maxPrice, 0n, 0n, RECIPIENT, REFUND_TO]);
     expect(receipt.status).toBe("success");
     const swapped = fills(receipt);
-    expect(swapped.map((fill) => fill.venue)).toEqual(["v3:500", "v3:3000", "cl:10"]);
+    expect(swapped.map((fill) => fill.venue)).toEqual(["cl:10", "v3:500", "v3:3000"]);
     for (const fill of swapped) expectWithin(fill, maxPrice, true, true);
     const spent = swapped.reduce((sum, fill) => sum + fill.paid, 0n);
     expect(await balance(WETH, REFUND_TO)).toBe(budget - spent);
@@ -515,11 +516,11 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 pools", () =
     expect(square * 1_000_000n * E18).toBeGreaterThan(maxPrice * Q192 * (1_000_000n - 3000n));
   });
 
-  it("without the check for a missing pool, the lookup at fee 100 reverts the cook", async () => {
+  it("without the check for a missing pool, reading it reverts the cook", async () => {
     await call(USDC, erc20, "mint", [sauce.pot, 10n ** 9n]);
     const receipt = await cook(
       [USDC, WETH, 10n ** 9n, usdcPerWeth(27_135n), 0n, 0n, RECIPIENT, REFUND_TO],
-      without("pool != 0n && "),
+      without("pool == 0n || "),
     );
     expect(receipt.status).toBe("reverted");
   });
@@ -530,7 +531,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 pools", () =
     const empty = await slot0Price(poolAt("v3:10000"));
     const receipt = await cook(
       [USDC, WETH, budget, usdcPerWeth(27_135n), 0n, 0n, RECIPIENT, REFUND_TO],
-      without(" && UniswapV3.Pool.at(pool).liquidity() > 0n"),
+      without("liquidity == 0n || "),
     );
     expect(receipt.status).toBe("success");
     const wasted = fills(receipt).find((fill) => fill.venue === "v3:10000")!;
