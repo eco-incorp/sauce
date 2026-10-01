@@ -74,13 +74,14 @@ const SPL_MULTISIG_LEN = 355;
 // reach it, so a program that reads an account twice over (`ownerOf`, then `balanceOf`) carries one
 // copy of the checks and their reasons, at the price of a call for a program that reads once.
 function requireTokenAccount(token: Address, account: Account): void {
-  const size = account.dataLen;
-  require(account.owner == SPL_TOKEN_PROGRAM ||
-    (account.owner == TOKEN_2022_PROGRAM &&
+  if (account.owner != SPL_TOKEN_PROGRAM) {
+    const size = account.dataLen;
+    require(account.owner == TOKEN_2022_PROGRAM &&
       (size == SPL_ACCOUNT_LEN ||
         (size > SPL_ACCOUNT_LEN &&
           size != SPL_MULTISIG_LEN &&
-          svm.sload(account, SPL_ACCOUNT_LEN, 1).toLe() == 2))), "not a token account");
+          svm.sload(account, SPL_ACCOUNT_LEN, 1).toLe() == 2)), "not a token account");
+  }
   require(svm.sload(account, 0, 32).toBe() == token, "wrong mint");
 }
 
@@ -90,14 +91,15 @@ function requireTokenAccount(token: Address, account: Account): void {
 // legacy mint is exactly 82 bytes. Size alone also admits permissionlessly allocated but
 // uninitialized accounts, so require the mint's initialization byte before reading its fields.
 function requireMint(token: Account): void {
-  const program = token.owner;
   const size = token.dataLen;
-  require(program == SPL_TOKEN_PROGRAM || program == TOKEN_2022_PROGRAM, "not a mint");
-  require(size == SPL_MINT_LEN ||
-    (program == TOKEN_2022_PROGRAM &&
-      size > SPL_ACCOUNT_LEN &&
-      size != SPL_MULTISIG_LEN &&
-      svm.sload(token, SPL_ACCOUNT_LEN, 1).toLe() == 1), "not a mint");
+  if (token.owner == TOKEN_2022_PROGRAM) {
+    require(size == SPL_MINT_LEN ||
+      (size > SPL_ACCOUNT_LEN &&
+        size != SPL_MULTISIG_LEN &&
+        svm.sload(token, SPL_ACCOUNT_LEN, 1).toLe() == 1), "not a mint");
+  } else {
+    require(token.owner == SPL_TOKEN_PROGRAM && size == SPL_MINT_LEN, "not a mint");
+  }
   require(svm.sload(token, 45, 1).toLe() == 1, "uninitialized mint");
 }
 

@@ -119,8 +119,7 @@ describe("@sauce/token: the token program ids", () => {
   // one are env-gated. Without this, flipping a digit of a constant — or deleting a guard outright — is
   // green here, which is exactly the failure the library's own comments warn about.
   //
-  // A read pins the account's owner to either program: once each for a token account, and Token-2022
-  // twice for a mint, whose size check asks again whether Token-2022 owns it. A legacy write pins the
+  // A read pins the account's owner to either program, once each. A legacy write pins the
   // source's owner and, separately, the callee it CPIs into, both to legacy SPL Token alone, so the
   // count also catches losing one of the two; a checked write pins its callee to either program and
   // compares every account with the callee. And because an unreachable function is never emitted, a
@@ -129,8 +128,8 @@ describe("@sauce/token: the token program ids", () => {
   it.each([
     ["balanceOf", 1, 1],
     ["ownerOf", 1, 1],
-    ["totalSupply", 1, 2],
-    ["decimals", 1, 2],
+    ["totalSupply", 1, 1],
+    ["decimals", 1, 1],
     ["allowance", 1, 1],
     ["transfer", 2, 0],
     ["transferFrom", 2, 0],
