@@ -24,6 +24,7 @@ import {
   getBase58Encoder,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
+  getCompiledTransactionMessageDecoder,
   getSignatureFromTransaction,
   getTransactionDecoder,
   getTransactionSize,
@@ -97,6 +98,7 @@ import {
   type ProgramInput,
 } from "./commands.js";
 import { decodeReturned, returnedLine } from "./returned.js";
+import { guardOf } from "./policy.js";
 import { secret } from "./signer.js";
 import {
   accountsNow,
@@ -378,20 +380,33 @@ async function confirmed(
   throw new CliError(`transaction ${signature} was not confirmed within a minute`);
 }
 
-/** Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). */
+/**
+ * Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). From a wallet
+ * (`--wallet`), the fee payer's, it is held to the wallet's policy first (`policy.ts`).
+ */
 async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): Promise<SvmSent> {
   const signature = getSignatureFromTransaction(transaction);
-  await ask(url, "sending the transaction", () =>
-    rpc
-      .sendTransaction(getBase64EncodedWireTransaction(transaction), {
-        encoding: "base64",
-        // Every transaction here was simulated first; the node need not do it again.
-        skipPreflight: true,
-      })
-      .send(),
-  );
+  const payer = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes)
+    .staticAccounts[0];
+  const reservation = payer === undefined ? undefined : await guardOf(payer)?.svm(rpc, transaction);
+  try {
+    await ask(url, "sending the transaction", () =>
+      rpc
+        .sendTransaction(getBase64EncodedWireTransaction(transaction), {
+          encoding: "base64",
+          // Every transaction here was simulated first; the node need not do it again.
+          skipPreflight: true,
+        })
+        .send(),
+    );
+  } catch (error) {
+    reservation?.released("sending failed");
+    throw error;
+  }
   // The status is the verdict: it is what confirmed, and it carries the error.
   const { err: statusErr, slot } = await confirmed(rpc, url, signature);
+  if (statusErr === null) reservation?.sent(signature);
+  else reservation?.released(`${signature} failed`);
   // The transaction itself — its logs, units and return data — can lag its status on a node.
   let response;
   for (let tries = 0; ; tries++) {

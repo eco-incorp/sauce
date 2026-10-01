@@ -37,6 +37,7 @@ import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";
 import {
   CLI_FIXTURES,
+  KEYSTORE_PASSWORD_FILE,
   deployPot,
   describeEvm,
   erc20,
@@ -847,7 +848,7 @@ describeEvm(
           "--keystore",
           join(CLI_FIXTURES, "anvil-2.keystore.json"),
           "--password-file",
-          join(CLI_FIXTURES, "anvil-2.password"),
+          KEYSTORE_PASSWORD_FILE,
           "--salt",
           "funded",
           "--fund",

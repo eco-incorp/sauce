@@ -1,16 +1,17 @@
 /**
  * Where the `sauce` command asks its questions: a yes/no before a transaction it sends first, a
- * keystore's password, and a line of text (`sauce intent`'s picker and guided creation).
+ * keystore's or a wallet's password, and a line of text (`sauce intent`'s picker and guided
+ * creation, `sauce wallet export`'s confirmation).
  *
  * Stdin, while it is a terminal and nothing else has read it. Once a program came through stdin
  * (`sauce run -`), stdin is spent — at its end, or a pipe — so the questions go to the controlling
  * terminal instead, `/dev/tty`, where there is one: a program piped in from a terminal session is
  * still answered at that terminal. With neither there is no one to ask, and the command says so
  * before it sends anything (`commands.ts#unapproved`); it never waits on a stdin that is spent.
- * Windows has no `/dev/tty`, so a program piped in there runs with `--auto-approve` and
- * `--password-file`.
+ * Windows has no `/dev/tty`, so a program piped in there runs with `--auto-approve` and a password
+ * source (`--password-env`, `--password-file`, `--password-command`).
  */
-import { closeSync, openSync } from "node:fs";
+import { closeSync, openSync, writeSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { ReadStream, WriteStream } from "node:tty";
 
@@ -76,6 +77,30 @@ export function chooseTerminal(choice: TerminalChoice): Terminal | undefined {
   if (choice.stdin.isTTY !== true) return undefined;
 
   return { input: choice.stdin, output: choice.stderr, close: () => choice.stdin.pause() };
+}
+
+/**
+ * Writes `text` to the controlling terminal itself — never to stdout, where a pipe or an agent could
+ * capture it — or, where there is no `/dev/tty` (Windows), to stdout only while stdout is a
+ * terminal. False where there is no terminal at all. What `sauce wallet export` shows a key with.
+ */
+export function writeToTerminal(text: string): boolean {
+  let fd: number;
+  try {
+    fd = openSync("/dev/tty", "w");
+  } catch {
+    if (process.platform !== "win32" || process.stdout.isTTY !== true) return false;
+    process.stdout.write(text);
+
+    return true;
+  }
+  try {
+    writeSync(fd, text);
+  } finally {
+    closeSync(fd);
+  }
+
+  return true;
 }
 
 /** A yes/no answer typed at `terminal`: yes only for `y` or `yes`. */
