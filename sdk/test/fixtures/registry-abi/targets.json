@@ -92,6 +92,20 @@
       },
       "AeroMetarouterABI": {
         "roles": ["metarouter"]
+      },
+      "AerodromeSlipstreamPoolABI": {
+        "instances": [
+          {
+            "chainId": 8453,
+            "address": "0xb2cc224c1c9feE385f8ad6a55b4d94E92359DC59",
+            "note": "WETH/USDC at tick spacing 100, clFactory.getPool(WETH, USDC, 100) (an EIP-1167 clone)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0x0bf58fe0FAc935Ac69595c19B12Ba0d75E3F8c0E",
+            "note": "a pool of clFactoryGaugesV3 at tick spacing 10 (its factory())"
+          }
+        ]
       }
     },
     "aevo": {
@@ -1159,6 +1173,20 @@
       },
       "UniswapV3SwapRouter02ABI": {
         "roles": ["swapRouter02"]
+      },
+      "UniswapV3PoolABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
+            "note": "USDC/WETH 0.05%, factory.getPool(USDC, WETH, 500)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
+            "note": "WETH/USDC 0.05%, factory.getPool(WETH, USDC, 500)"
+          }
+        ]
       }
     },
     "uniswap-v4": {
