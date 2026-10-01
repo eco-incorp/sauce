@@ -6,21 +6,28 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { compileSplitSwap, ProgramError, type SplitSwap } from "../src/index.js";
-import type { ApproveAction, SwapAction, UniswapV3ExactInputAction } from "../src/types.js";
+import type { ApproveAction, SwapAction, UniswapV3SwapAction } from "../src/types.js";
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
-const SWAP_ROUTER_V3 = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
-const QUOTER_V2 = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
+/** Uniswap V3's USDC/USDT pools at 0.01% and 0.05%. */
+const V3_POOLS = {
+  100: "0x3416cF6C708Da44DB2624D63ea0AAef7113527C6",
+  500: "0x7858E59e0C01EA06Df3aF3D20aC7B0003275D4Bf",
+} as const;
+/** The Sauce Router, which quotes the V3 legs. Any address: nothing here executes. */
+const ROUTER = "0x5000000000000000000000000000000000000005";
 const CURVE_3POOL = "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7";
-const UNIV2_ROUTER = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
+/** A periphery router a non-library candidate pulls through, so it needs an approval first. */
+const CURVE_ROUTER_NG = "0xF0d4c12A5768D806021F80a262B4d39d26C58b8D";
+/** Uniswap V2's USDC/USDT pair. */
+const UNIV2_USDC_USDT = "0x3041CbD36888bECc7bbCBc0045E3B1f144466f5f";
 
-const uniV3 = (fee: 100 | 500): UniswapV3ExactInputAction => ({
-  type: "uniswapV3ExactInput",
-  router: SWAP_ROUTER_V3,
+const uniV3 = (fee: 100 | 500): UniswapV3SwapAction => ({
+  type: "uniswapV3Swap",
+  pool: V3_POOLS[fee],
   tokenIn: USDC,
   tokenOut: USDT,
-  fee,
   amountOutMin: "1",
   recipient: "self",
 });
@@ -30,19 +37,21 @@ const CANDIDATES: SwapAction[] = [
   {
     type: "curveSwap",
     pool: CURVE_3POOL,
+    tokenIn: USDC,
     tokenOut: USDT,
     i: 1,
     j: 2,
+    indexType: "int128",
     amountOutMin: "1",
     recipient: "self",
   },
   {
     type: "uniswapV2Swap",
-    router: UNIV2_ROUTER,
-    path: [USDC, USDT],
+    pool: UNIV2_USDC_USDT,
+    tokenIn: USDC,
+    tokenOut: USDT,
     amountOutMin: "1",
     recipient: "self",
-    deadline: 9_999_999_999,
   },
 ];
 
@@ -53,7 +62,7 @@ function swap(count: number, buckets: number, extra: Partial<SplitSwap> = {}): S
     amount: (1_000_000n * BigInt(buckets)).toString(),
     buckets,
     amountOutMin: "0",
-    quoters: { uniswapV3Quoter: QUOTER_V2 },
+    quoters: { router: ROUTER },
     ...extra,
   };
 }
@@ -107,8 +116,8 @@ describe("split swap — program shape", () => {
 
   it("every leg delivers to the Pot, whatever its recipient says", () => {
     const text = source(swap(1, 1, { candidates: [{ ...uniV3(100), recipient: USDT }] }));
-    assert.match(text, /recipient: ctx\.self\(\)/);
-    assert.doesNotMatch(text, /recipient: 0xdac17f/);
+    assert.match(text, /uniswapV3\([^;]*, ctx\.self\(\)\);/);
+    assert.doesNotMatch(text, /0xdac17f958d2ee523a2206206994597c13d831ec7n\);/);
   });
 });
 
@@ -153,7 +162,7 @@ describe("split swap — approvals and the sweep", () => {
   });
 
   it("runs each approval first, through the SDK's SafeERC20 lowering", () => {
-    const approvals = [approve(SWAP_ROUTER_V3), approve(CURVE_3POOL)];
+    const approvals = [approve(CURVE_ROUTER_NG), approve(CURVE_3POOL)];
     const text = source(swap(2, 2, { approvals }));
     // One allowance read per approval: the reset `forceApprove` makes when one is standing.
     assert.equal(text.match(/hex`dd62ed3e/g)?.length, 2);
@@ -168,7 +177,7 @@ describe("split swap — approvals and the sweep", () => {
   });
 
   it("rejects an approval without an amount", () => {
-    const { amount: _, ...bare } = approve(SWAP_ROUTER_V3);
+    const { amount: _, ...bare } = approve(CURVE_ROUTER_NG);
     assert.throws(
       () => compileSplitSwap(swap(2, 1, { approvals: [bare] })),
       /approvals\[0\]: expected an `approve` action with an explicit `amount`/,
@@ -201,28 +210,15 @@ describe("split swap — input checks", () => {
     assert.throws(
       () =>
         compileSplitSwap(
-          swap(1, 1, { candidates: [{ ...uniV3(100), router: "nope" } as unknown as SwapAction] }),
+          swap(1, 1, { candidates: [{ ...uniV3(100), pool: "nope" } as unknown as SwapAction] }),
         ),
       (error: unknown) =>
-        error instanceof ProgramError && error.issues[0]!.path === "candidates[0].router",
+        error instanceof ProgramError && error.issues[0]!.path === "candidates[0].pool",
     );
   });
 
   it("rejects a venue with no runtime-amount quote on-chain", () => {
-    const v4: SwapAction = {
-      type: "uniswapV4ExactInput",
-      router: SWAP_ROUTER_V3,
-      poolKey: {
-        currency0: USDC,
-        currency1: USDT,
-        fee: 500,
-        tickSpacing: 10,
-        hooks: "0x0000000000000000000000000000000000000000",
-      },
-      zeroForOne: true,
-      amountOutMin: "1",
-      recipient: "self",
-    };
+    // The Vault prices a Balancer swap only by performing it, so no quote runs inside a program.
     const balancer: SwapAction = {
       type: "balancerV2Swap",
       vault: "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
@@ -231,15 +227,23 @@ describe("split swap — input checks", () => {
       tokenOut: USDT,
       amountOutMin: "1",
       recipient: "self",
-      deadline: 1,
     };
-    for (const candidate of [v4, balancer]) {
+    const balancerV3: SwapAction = {
+      type: "balancerV3Swap",
+      router: "0xAE563E3f8219521950555F5962419C8919758Ea2",
+      pool: "0x84f2195dc84d540a3ab92e659603d770014f0440",
+      tokenIn: USDC,
+      tokenOut: USDT,
+      amountOutMin: "1",
+      deadline: 9_999_999_999,
+      wethIsEth: false,
+    };
+    for (const candidate of [balancer, balancerV3]) {
       assert.throws(
         () =>
           compileSplitSwap(
             swap(1, 2, {
               candidates: [uniV3(100), candidate],
-              quoters: { uniswapV3Quoter: QUOTER_V2, uniswapV4Quoter: QUOTER_V2 },
             }),
           ),
         /candidates\[1\] \(\w+\) has no on-chain quote with a runtime amount/,

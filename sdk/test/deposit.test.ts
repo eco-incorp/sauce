@@ -317,12 +317,12 @@ describe("emission shape — approvals", () => {
     expect(stmt.match(/depositAmt/g)?.length).toBeGreaterThanOrEqual(3); // decl + approve + call
   });
 
-  it("depositCallStatement rejects amount 'delta'", () => {
+  it("depositCallStatement refuses an amount that is no integer, 'balance' or 'max'", () => {
     expect(() =>
       depositCallStatement(
         aaveSpec({ amount: "delta" } as unknown as Partial<DepositSpec> as DepositSpec),
       ),
-    ).toThrow(/only meaningful inside swapThenDepositSource/);
+    ).toThrow(/amount "delta" is not an integer, "balance" or "max"/);
   });
 });
 

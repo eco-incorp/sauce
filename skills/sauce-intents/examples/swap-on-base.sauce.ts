@@ -16,6 +16,8 @@
 //     --define MIN_AVG_PRICE=<price> --define RECIPIENT=<address> --define REFUND_TO=<address> \
 //     --intent-deadline <unix seconds> --intent-creator <address> \
 //     --intent-execution-fee <Base Kitchen fee in wei>
+import { uniswapV3, uniswapV4 } from "@sauce/router";
+
 Base(
   () => {
     require(SQRT_PRICE_LIMIT_X96 != 0n && RECIPIENT != 0n && REFUND_TO != 0n, "set the defines");
@@ -72,24 +74,27 @@ Base(
       }
     }
 
-    // 3. One exact-input swap per pool through the Router (swapV3 / swapV4), each offered all the
-    //    WETH still unsold; each pool fills up to the limit and leaves the rest for the next.
-    const swapV3 = hex`a5e2989d`;
-    const swapV4 = hex`7c9e9da3`;
+    // 3. One exact-input swap per pool through @sauce/router, each offered all the WETH still
+    //    unsold; each pool fills up to the limit and leaves the rest, and the USDC, in the Pot.
     let remaining = AMOUNT_IN;
     for (let r = 0n; r < count && remaining > 0n; r++) {
       const i = order[r];
       const before = WETH.balanceOf(self);
       if (pools[i] != 0n) {
-        const args = abi.encode(pools[i], WETH, USDC, remaining, SQRT_PRICE_LIMIT_X96, self, self);
-        evm.call(self, 0n, swapV3.concat(args));
+        uniswapV3(pools[i], WETH, USDC, remaining, SQRT_PRICE_LIMIT_X96, 0n, self);
       } else {
-        const key = abi.encode(currency0, currency1, fees[i], tickSpacings[i], 0n);
-        const rest = abi.encode(zeroForOne ? 1n : 0n, -remaining, SQRT_PRICE_LIMIT_X96, self, self);
-        evm.call(
-          self,
+        const manager = UniswapV4.PoolManager;
+        uniswapV4(
+          manager,
+          WETH,
+          USDC,
+          remaining,
+          fees[i],
+          tickSpacings[i],
           0n,
-          swapV4.concat(abi.encode(UniswapV4.PoolManager)).concat(key).concat(rest),
+          SQRT_PRICE_LIMIT_X96,
+          0n,
+          self,
         );
       }
       remaining -= before - WETH.balanceOf(self);

@@ -13,7 +13,7 @@
 //   sauce run distributed-swap.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --args <tokenIn> <tokenOut> <amountIn> <sqrtPriceLimitX96> <minOut> \
 //     <minAvgPrice> <recipient> <refundTo>
-import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+import { uniswapV3, uniswapV4 } from "@sauce/router";
 
 // A V3-style pool's current sqrtPriceX96: the first word of slot0().
 function spotPrice(pool: Address): Uint256 {
@@ -50,7 +50,8 @@ function isBetter(price: Uint256, than: Uint256, tokenIn: Address, tokenOut: Add
 }
 
 // One exact-input swap offering `amount`; returns the input the pool took. The pool takes what it
-// can fill before the limit, the Router pays exactly that, and the rest stays in the Pot.
+// can fill before the limit, the Pot's Router pays exactly that, and the rest stays in the Pot. The
+// output stays in the Pot too, and the settlement checks it.
 function swapIntoV3(
   pool: Address,
   tokenIn: Address,
@@ -60,12 +61,11 @@ function swapIntoV3(
 ): Uint256 {
   const self = ctx.self();
   const before = Token(tokenIn).balanceOf(self);
-  const router = ISauceRouter.at(self); // the Router, reached through this Pot
-  router.swapV3(pool, tokenIn, tokenOut, amount, limit, self, self);
+  uniswapV3(pool, tokenIn, tokenOut, amount, limit, 0n, self);
   return before - Token(tokenIn).balanceOf(self);
 }
 
-// The same for a hookless Uniswap V4 pool, named by its key. V4 exact input is a negative amount.
+// The same for a hookless Uniswap V4 pool, named by its fee and tick spacing.
 function swapIntoV4(
   fee: Uint256,
   tickSpacing: Uint256,
@@ -79,16 +79,18 @@ function swapIntoV4(
   }
   const self = ctx.self();
   const before = Token(tokenIn).balanceOf(self);
-  const zeroForOne = tokenIn < tokenOut;
-  const key = {
-    currency0: zeroForOne ? tokenIn : tokenOut,
-    currency1: zeroForOne ? tokenOut : tokenIn,
-    fee: fee,
-    tickSpacing: tickSpacing,
-    hooks: 0n,
-  };
-  const router = ISauceRouter.at(self);
-  router.swapV4(UniswapV4.PoolManager, key, zeroForOne, -amount, limit, self, self);
+  uniswapV4(
+    UniswapV4.PoolManager,
+    tokenIn,
+    tokenOut,
+    amount,
+    fee,
+    tickSpacing,
+    0n,
+    limit,
+    0n,
+    self,
+  );
   return before - Token(tokenIn).balanceOf(self);
 }
 

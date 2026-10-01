@@ -55,12 +55,7 @@ import type { Address, Hex, Log } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { compileProgram, SDK_SOURCE_DIRS } from "./helpers";
-import {
-  gateAnchors,
-  installEngineAt,
-  startGatedEngine,
-  type GatedEngine,
-} from "./evm/gated-engine.js";
+import { gateAnchors, startGatedEngine, type GatedEngine } from "./evm/gated-engine.js";
 import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import {
   EVM_REWARD_PARAM,
@@ -441,8 +436,11 @@ const startEvm = async (): Promise<ChildProcess> => {
     DEPLOYER.address,
     creationCode,
   );
-  // The SDK's default engine is the released address; a route built with no `engine` cooks there.
-  await installEngineAt({ publicClient, testClient }, sauce.engine, v12EngineAddress() as Address);
+  // The harness deploys the engine AT the released address, so a route built with no `engine` —
+  // which cooks on `v12EngineAddress()` — cooks on it.
+  if (sauce.engine !== getAddress(v12EngineAddress())) {
+    throw new Error(`the harness engine ${sauce.engine} is not the released ${v12EngineAddress()}`);
+  }
 
   ({ portal, executor } = await deployPortal());
 

@@ -9,7 +9,8 @@
  * does not have. The registry's own suite (`sdk/test/registry-abi.test.ts`) pins each of its
  * functions to the deployed contracts. Where the registry has no such function — the contract is
  * not in it, or it declares another overload — the binding declares its fragment here and says why
- * next to it.
+ * next to it. A swap at one of `@sauce/router`'s venues binds nothing here: it is a call into that
+ * library, which carries the pool and Router ABIs it calls.
  *
  * WHY OUTPUTS ARE DROPPED. A binding decodes every output its ABI declares, even one the program
  * never reads, and decoding from empty return data reverts. 3pool-era Curve pools return nothing
@@ -33,11 +34,9 @@ import {
 } from "viem";
 
 import { AaveV3PoolABI, AcrossSpokePoolABI, BalancerV2VaultABI, CometABI } from "./registry.js";
-import { CrocSwapDexABI, CurveRouterNGABI, CurveThreePoolABI, DODOV2ProxyABI } from "./registry.js";
-import { ERC20ABI, LidoABI, LiquidityPoolABI, MaverickV2RouterABI } from "./registry.js";
-import { Permit2ABI, RETHABI, RocketDepositPoolABI, StargatePoolABI } from "./registry.js";
-import { TokenMessengerABI, UniswapV2RouterABI, UniswapV3SwapRouter02ABI } from "./registry.js";
-import { UniswapV4UniversalRouterABI, WstETHABI } from "./registry.js";
+import { CrocSwapDexABI, CurveRouterNGABI, ERC20ABI, LidoABI } from "./registry.js";
+import { LiquidityPoolABI, Permit2ABI, RETHABI, RocketDepositPoolABI } from "./registry.js";
+import { StargatePoolABI, TokenMessengerABI, UniswapV2RouterABI, WstETHABI } from "./registry.js";
 
 /** A parsed ABI in the shape the compiler's `inlineContracts` and the SDK's `compile.contracts` take. */
 export interface ActionContract {
@@ -141,44 +140,6 @@ const CATALOG = {
     withdraw: local("function withdraw(uint256 wad)", `WETH9 is ${NOT_IN_REGISTRY}`),
     deposit: local("function deposit() payable", `WETH9 is ${NOT_IN_REGISTRY}`),
   }),
-  // Both return the amount they swapped out, which is the action's output.
-  ISwapRouter02: () => ({
-    exactInputSingle: sdk(
-      "uniswap-v3",
-      "UniswapV3SwapRouter02ABI",
-      UniswapV3SwapRouter02ABI,
-      "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))",
-      "keep",
-    ),
-    exactInput: sdk(
-      "uniswap-v3",
-      "UniswapV3SwapRouter02ABI",
-      UniswapV3SwapRouter02ABI,
-      "exactInput((bytes,address,uint256,uint256))",
-      "keep",
-    ),
-  }),
-  IUniversalRouter: () => ({
-    // The deadline-free overload: these actions carry no deadline. It returns nothing.
-    execute: sdk(
-      "uniswap-v4",
-      "UniswapV4UniversalRouterABI",
-      UniswapV4UniversalRouterABI,
-      "execute(bytes,bytes[])",
-      "drop",
-    ),
-  }),
-  ICurvePool: () => ({
-    // 3pool's `exchange` returns nothing, and a StableSwap-NG pool's `uint256` return is simply not
-    // decoded: this output-free spelling suits every 4-argument pool. The output is a balance delta.
-    exchange: sdk(
-      "curve",
-      "CurveThreePoolABI",
-      CurveThreePoolABI,
-      "exchange(int128,int128,uint256,uint256)",
-      "drop",
-    ),
-  }),
   ICurveRouterNG: () => ({
     // The six-argument overload, which takes a receiver. Its return is the amount received.
     exchange: sdk(
@@ -190,13 +151,6 @@ const CATALOG = {
     ),
   }),
   IBalancerV2Vault: () => ({
-    swap: sdk(
-      "balancer-v2",
-      "BalancerV2VaultABI",
-      BalancerV2VaultABI,
-      "swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
-      "keep",
-    ),
     // Its output is measured as a balance delta, so the `int256[]` deltas it returns are not decoded.
     batchSwap: sdk(
       "balancer-v2",
@@ -213,7 +167,7 @@ const CATALOG = {
     ),
   }),
   IUniswapV2Router: () => ({
-    // Fraxswap's router is UniswapV2-compatible for this function, so `fraxswapSwap` binds it too.
+    // `fraxswapSwap`'s: Fraxswap's router is UniswapV2-compatible for this function.
     swapExactTokensForTokens: sdk(
       "uniswap-v2",
       "UniswapV2RouterABI",
@@ -226,30 +180,9 @@ const CATALOG = {
     userCmd: sdk("ambient", "CrocSwapDexABI", CrocSwapDexABI, "userCmd(uint16,bytes)", "drop"),
   }),
   IDodoProxy: () => ({
-    dodoSwapV2TokenToToken: sdk(
-      "dodo",
-      "DODOV2ProxyABI",
-      DODOV2ProxyABI,
-      "dodoSwapV2TokenToToken(address,address,uint256,uint256,address[],uint256,bool,uint256)",
-      "keep",
-    ),
     dodoSwapV1: local(
       "function dodoSwapV1(address fromToken, address toToken, uint256 fromTokenAmount, uint256 minReturnAmount, address[] dodoPairs, uint256 directions, bool isIncentive, uint256 deadLine) payable returns (uint256 returnAmount)",
       "the registry declares only the proxy's V2 entry point",
-    ),
-  }),
-  IMaverickV2Router: () => ({
-    // The registry and the previous raw call both read the first return word as the output.
-    exactInputSingle: sdk(
-      "maverick",
-      "MaverickV2RouterABI",
-      MaverickV2RouterABI,
-      "exactInputSingle(address,address,bool,uint256,uint256)",
-      "keep",
-    ),
-    exactInputMultiHop: local(
-      "function exactInputMultiHop(address recipient, bytes path, uint256 amountIn, uint256 amountOutMinimum) payable returns (uint256 amountOut)",
-      "the registry declares only the single-pool entry point",
     ),
   }),
   ICarbonController: () => ({
@@ -396,7 +329,7 @@ export function methodSelector<B extends BindingName>(binding: B, method: Method
   return toFunctionSelector(bindingMethods(binding)[method]!.fn);
 }
 
-/** The `contracts` map a program naming `bindings` compiles with. */
+/** The `contracts` map a program naming `bindings` compiles with — one ABI per name. */
 export function contractsFor(bindings: Iterable<BindingName>): ActionContracts {
   const out: ActionContracts = {};
   for (const binding of [...new Set(bindings)].sort()) {

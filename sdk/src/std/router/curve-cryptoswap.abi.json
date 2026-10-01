@@ -1,0 +1,29 @@
+{
+  "$comment": "Curve's uint256-index exchange(i, j, dx, min_dy), copied from the verified tricrypto-ng pool on Ethereum, CurveTricryptoOptimizedWETH 0x7F86Bf177Dd4F3494b841a37e810A34dD56c829B (vyper 0.3.9). Its uint256 output is deliberately not declared, like the registry's int128 CurveThreePoolABI: older crypto pools (tricrypto2) return nothing, and a declared output is decoded.",
+  "abi": [
+    {
+      "name": "exchange",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "i",
+          "type": "uint256"
+        },
+        {
+          "name": "j",
+          "type": "uint256"
+        },
+        {
+          "name": "dx",
+          "type": "uint256"
+        },
+        {
+          "name": "min_dy",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

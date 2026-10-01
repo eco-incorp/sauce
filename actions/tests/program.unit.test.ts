@@ -22,6 +22,8 @@ import { A, R, SAMPLES, sampleProgram } from "./samples.js";
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const ROUTER = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
+/** Uniswap V3's USDC/WETH 0.05% pool. */
+const POOL = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640";
 
 /** The issues `input` produces, as `path: message` lines. */
 function issues(input: unknown): string[] {
@@ -56,13 +58,13 @@ describe("action programs — every action type round-trips", () => {
 
   it("serialization is canonical: key order in the input does not matter", () => {
     const shuffled = {
-      actions: [Object.fromEntries(Object.entries(SAMPLES.uniswapV3ExactInput).reverse())],
+      actions: [Object.fromEntries(Object.entries(SAMPLES.uniswapV3Swap).reverse())],
       chainId: 1,
       version: 1,
     };
     assert.equal(
       serializeProgram(parseProgram(shuffled)),
-      serializeProgram(sampleProgram("uniswapV3ExactInput")),
+      serializeProgram(sampleProgram("uniswapV3Swap")),
     );
   });
 
@@ -91,11 +93,10 @@ describe("action programs — chaining is part of the document", () => {
       },
       { type: "approve", token: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", spender: ROUTER },
       {
-        type: "uniswapV3ExactInput",
-        router: ROUTER,
+        type: "uniswapV3Swap",
+        pool: POOL,
         tokenIn: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
         tokenOut: USDC,
-        fee: 500,
         amountOutMin: "1",
         recipient: "self",
         saveOutputAs: "usdc",
@@ -117,7 +118,7 @@ describe("action programs — chaining is part of the document", () => {
     // an ERC-20 call checked like SafeERC20.
     assert.match(source, /hex`095ea7b3[0-9a-f]*68b3465833fb72a70ecdf485e0e4c7bd8665fc45`;/);
     assert.match(source, /\.concat\(t_out0\.toBytesBe\(32\)\)/);
-    assert.match(source, /amountIn: t_out1/);
+    assert.match(source, /= uniswapV3\([^;]*, t_out1, 0n, 1n, ctx\.self\(\)\);/);
     assert.match(source, /let v_usdc = amt\d+;/);
     assert.match(source, /hex`a9059cbb[0-9a-f]*3000000000000000000000000000000000000001`;/);
     assert.match(source, /\.concat\(v_usdc\.toBytesBe\(32\)\)/);
@@ -143,7 +144,7 @@ describe("action programs — errors are precise and complete", () => {
     ],
     [
       "an amount wider than its field",
-      withAction({ ...SAMPLES.uniswapV4ExactInput, amountOutMin: (1n << 128n).toString() }),
+      withAction({ ...SAMPLES.ambientSwap, amountOutMin: (1n << 128n).toString() }),
       /^actions\[0\]\.amountOutMin: 340282366920938463463374607431768211456 does not fit in 128 bits$/,
     ],
     [
@@ -386,7 +387,7 @@ describe("action programs — the published JSON Schema", () => {
       withAction({ ...SAMPLES.carbonSwap, amount: "5" }),
       withAction({ ...SAMPLES.balanceOf, amountRef: "x" }),
       withAction({ ...SAMPLES.curveRouterNGSwap, swapParams: [[1, 2, 3]] }),
-      withAction({ ...SAMPLES.dodoSwap, version: "v3" }),
+      withAction({ ...SAMPLES.curveSwap, indexType: "int256" }),
       { version: 2, chainId: 1, actions: [SAMPLES.approve] },
       { version: 1, chainId: 1, actions: [] },
       { version: 1, chainId: 1, actions: [SAMPLES.approve], extra: true },

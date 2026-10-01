@@ -183,6 +183,58 @@ export function programIssues(actions: readonly Action[], chainId?: number): Pro
     }
   });
 
+  actions.forEach((action, i) => issues.push(...swapIssues(action, i)));
+
   if (chainId !== undefined) issues.push(...nativeErc20Issues(actions, chainId));
+  return issues;
+}
+
+/** True when two addresses are the same, however each is cased. */
+const same = (a: string, b: string): boolean => BigInt(a) === BigInt(b);
+
+/**
+ * What `@sauce/router` would refuse when the program runs, refused here instead, with a path: a
+ * swap of a token for itself; a DODO V2 or Trader Joe LB trade that is not between the two tokens
+ * the action says the pool holds; and a WOOFi swap with no floor, which the pool needs because it
+ * prices from an oracle.
+ */
+function swapIssues(action: Action, i: number): ProgramIssue[] {
+  const at = (key: string): string => `actions[${i}].${key}`;
+  const issues: ProgramIssue[] = [];
+  const pair = (a: string, b: string, names: string): void => {
+    const { tokenIn, tokenOut } = action as { tokenIn: string; tokenOut: string };
+    if ((same(tokenIn, a) && same(tokenOut, b)) || (same(tokenIn, b) && same(tokenOut, a))) return;
+    issues.push({
+      path: at("tokenIn"),
+      message:
+        `tokenIn and tokenOut must be the pool's ${names}, in either order — the swap would ` +
+        "revert, because the side it trades is decided from them",
+    });
+  };
+
+  switch (action.type) {
+    case "uniswapV2Swap":
+    case "uniswapV3Swap":
+    case "uniswapV4Swap":
+    case "curveSwap":
+    case "balancerV2Swap":
+    case "maverickV2Swap":
+    case "dodoV2Swap":
+    case "traderJoeLBSwap":
+    case "woofiSwap":
+      if (same(action.tokenIn, action.tokenOut)) {
+        issues.push({ path: at("tokenOut"), message: "is tokenIn: a swap needs two tokens" });
+        return issues;
+      }
+  }
+  if (action.type === "dodoV2Swap") pair(action.baseToken, action.quoteToken, "base and quote");
+  if (action.type === "traderJoeLBSwap") pair(action.tokenX, action.tokenY, "X and Y tokens");
+  if (action.type === "woofiSwap" && action.amountOutMin === "0") {
+    issues.push({
+      path: at("amountOutMin"),
+      message: "must be positive: WooPPV2 prices from an oracle, so a WOOFi swap needs a floor",
+    });
+  }
+
   return issues;
 }

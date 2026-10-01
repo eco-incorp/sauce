@@ -1,17 +1,23 @@
 /**
  * `quoteAction` against the deployed mainnet quoters, on a local anvil holding mainnet state
  * captured at the pinned block (`mainnet.ts`) — no RPC. Every quote is sent as the `eth_call` it
- * describes, decoded by its own `decode`, and compared with an independent call of the same
- * quoter written here from the protocol's own ABI.
+ * describes, decoded by its own `decode`, and compared with an independent call of a quoter
+ * written here from the protocol's own ABI.
+ *
+ * The anvil carries the released stack, because the Uniswap V3 and V4 swaps (`@sauce/router`'s,
+ * through the Pot's Router) are quoted by the Router itself; each is held to Uniswap's own quoter.
+ * The Trader Joe LB and WOOFi quotes run on their own chains' state, in `swap-avalanche` and
+ * `swap-base`, against the swaps they price.
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createPublicClient, custom, http, parseAbi, type Address, type Hex } from "viem";
+import { createPublicClient, custom, http, parseAbi, type Address } from "viem";
 
 import { quoteAction, type QuoteOptions } from "../src/index.js";
 import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
-import type { SwapAction } from "../src/types.js";
-import { DEADLINE, startMainnet, type Mainnet } from "./mainnet.js";
+import type { ActionType, SwapAction } from "../src/types.js";
+import { skipReason, startAnvil, type Anvil } from "./anvil.js";
+import { DEADLINE } from "./mainnet.js";
 
 const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
@@ -20,9 +26,11 @@ const FRAX = "0x853d955aCEf822Db058eb8505911ED77F175b99e";
 const ZERO = "0x0000000000000000000000000000000000000000";
 const RECIPIENT = "0x0000000000000000000000000000000000000001";
 
-const SWAP_ROUTER_02 = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
-const UNIVERSAL_ROUTER = "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af";
 const UNISWAP_V2_ROUTER = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
+/** Uniswap V2's USDC/WETH pair, and Uniswap V3's USDC/WETH 0.05% pool. */
+const UNIV2_USDC_WETH = "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc";
+const UNIV3_USDC_WETH_500 = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640";
+const POOL_MANAGER = "0x000000000004444c5dc75cB358380D2e3dE08A90";
 const FRAXSWAP_ROUTER = "0xC14d550632db8592D1243Edc8B95b0Ad06703867";
 const CURVE_3POOL = "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7";
 const CURVE_ROUTER_NG = "0xF0d4c12A5768D806021F80a262B4d39d26C58b8D";
@@ -34,23 +42,26 @@ const AMBIENT_DEX = "0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688";
 const DODO_PROXY = "0xa356867fDCEa8e71AEaF87805808803806231FdC";
 const DODO_V1_WETH_USDC = "0x75c23271661d9d143DCb617222BC4BEc783eff34";
 const DODO_V2_WETH_USDC = "0x8B2F062d112aE1ac6Ccc6C358cc40C9518c847Dc";
-const MAVERICK_V2_ROUTER = "0x62e31802c6145A2D5E842EeD8efe01fC224422fA";
 const MAVERICK_USDC_USDT = "0x31373595F40Ea48a7aAb6CBCB0d377C6066E2dCA";
 const CARBON_CONTROLLER = "0xC537e898CD774e2dCBa3B14Ea6f34C93d5eA45e1";
 const CARBON_USDC_USDT = 1020847100762815390390123822295304634823n;
 const FLUID_WSTETH_ETH = "0x0B1a513ee24972DAEf112bC777a5610d4325C9e7";
 
+/** Uniswap's own quoters, which the Router's quotes of the same swaps must agree with. */
+const UNISWAP_V3_QUOTER = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
+const UNISWAP_V4_QUOTER = "0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203";
+
+/** Every quoter but the Router, whose address is the stack's on this anvil. */
 const QUOTERS = {
-  uniswapV3Quoter: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
-  uniswapV4Quoter: "0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203",
   maverickQuoter: "0xb40AfdB85a07f37aE217E7D6462e609900dD8D7A",
   ambientImpact: "0x3e3EDd3eD7621891E574E5d7f47b1f30A994c0D0",
   fluidDexResolver: "0x05Bd8269A20C472b148246De20E6852091BF16Ff",
 } as const satisfies QuoteOptions;
 
+/** Swap action types whose venue Ethereum lacks: their quotes run on their own chain's state. */
+const QUOTED_ELSEWHERE: readonly ActionType[] = ["traderJoeLBSwap", "woofiSwap"];
+
 const ONE_ETH = 10n ** 18n;
-const V3_PATH = `${WETH}0001f4${USDC.slice(2)}` as Hex;
-const MAVERICK_PATH = `${MAVERICK_USDC_USDT}01` as Hex;
 const V4_ETH_USDC = {
   currency0: ZERO,
   currency1: USDC,
@@ -101,13 +112,16 @@ const abi = {
   fluid: parseAbi(["function estimateSwapIn(address, bool, uint256, uint256) returns (uint256)"]),
 };
 
-describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
-  let mainnet: Mainnet;
+describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000 }, () => {
+  let env: Anvil;
   let client: ReturnType<typeof createPublicClient>;
+  /** The quoters, with the Router the stack deployed. */
+  let quoters: QuoteOptions;
 
   before(async () => {
-    mainnet = await startMainnet("quote");
-    const base = http(mainnet.rpc)({ chain: undefined, retryCount: 0, timeout: 30_000 });
+    env = await startAnvil({ mainnet: "quote" });
+    quoters = { ...QUOTERS, router: env.router };
+    const base = http(env.rpc)({ chain: undefined, retryCount: 0, timeout: 30_000 });
     // Every eth_call gets 15M gas, so a quoter that meters gas sees the same budget every run.
     client = createPublicClient({
       transport: custom({
@@ -121,12 +135,12 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
     });
   });
   after(async () => {
-    await mainnet?.stop();
+    await env?.stop();
   });
 
   /** The quote, sent as its `eth_call` (from the zero address) and decoded by its own decoder. */
   async function quote(action: SwapAction): Promise<bigint> {
-    const { to, data, decode } = quoteAction(action, QUOTERS);
+    const { to, data, decode } = quoteAction(action, quoters);
     const { data: result } = await client.call({ account: ZERO, to, data });
     assert.ok(result, `${action.type}: the quote returned nothing`);
 
@@ -175,9 +189,11 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
         type: "curveSwap",
         amount: "1000000000",
         pool: CURVE_3POOL,
+        tokenIn: USDC,
         tokenOut: USDT,
         i: 1,
         j: 2,
+        indexType: "int128",
         amountOutMin: "0",
         recipient: RECIPIENT,
       },
@@ -206,14 +222,15 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
       atLeast: 990_000_000n,
     },
     {
+      // The pair's reserves, priced in the quote's decoder, agree with Router02's getAmountsOut.
       action: {
         type: "uniswapV2Swap",
         amount: `${ONE_ETH}`,
-        router: UNISWAP_V2_ROUTER,
-        path: [WETH, USDC],
+        pool: UNIV2_USDC_WETH,
+        tokenIn: WETH,
+        tokenOut: USDC,
         amountOutMin: "0",
         recipient: RECIPIENT,
-        deadline: DEADLINE,
       },
       expected: async () =>
         (
@@ -254,7 +271,6 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
         tokenOut: USDC,
         amountOutMin: "0",
         recipient: RECIPIENT,
-        deadline: DEADLINE,
       },
       expected: () => balancerV2Query(ONE_ETH / 10_000n),
       atLeast: 1n,
@@ -304,55 +320,41 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
       atLeast: ONE_ETH / 100n,
     },
     {
+      // The Router's own quote of the swap it runs, against Uniswap's QuoterV2.
       action: {
-        type: "uniswapV3ExactInput",
+        type: "uniswapV3Swap",
         amount: `${ONE_ETH}`,
-        router: SWAP_ROUTER_02,
+        pool: UNIV3_USDC_WETH_500,
         tokenIn: WETH,
         tokenOut: USDC,
-        fee: 500,
         amountOutMin: "0",
         recipient: RECIPIENT,
       },
       expected: async () =>
         (
-          (await simulate(QUOTERS.uniswapV3Quoter, abi.uniV3, "quoteExactInputSingle", [
+          (await simulate(UNISWAP_V3_QUOTER, abi.uniV3, "quoteExactInputSingle", [
             { tokenIn: WETH, tokenOut: USDC, amountIn: ONE_ETH, fee: 500, sqrtPriceLimitX96: 0n },
           ])) as bigint[]
         )[0]!,
       atLeast: 1_000_000_000n,
     },
     {
+      // The Router's own quote of the swap it runs, against Uniswap's V4Quoter: native ETH in.
       action: {
-        type: "uniswapV3ExactInputMultiHop",
+        type: "uniswapV4Swap",
         amount: `${ONE_ETH}`,
-        router: SWAP_ROUTER_02,
-        path: V3_PATH,
+        poolManager: POOL_MANAGER,
+        tokenIn: ZERO,
+        tokenOut: USDC,
+        fee: V4_ETH_USDC.fee,
+        tickSpacing: V4_ETH_USDC.tickSpacing,
+        hooks: V4_ETH_USDC.hooks,
         amountOutMin: "0",
         recipient: RECIPIENT,
       },
       expected: async () =>
         (
-          (await simulate(QUOTERS.uniswapV3Quoter, abi.uniV3, "quoteExactInput", [
-            V3_PATH,
-            ONE_ETH,
-          ])) as bigint[]
-        )[0]!,
-      atLeast: 1_000_000_000n,
-    },
-    {
-      action: {
-        type: "uniswapV4ExactInput",
-        amount: `${ONE_ETH}`,
-        router: UNIVERSAL_ROUTER,
-        poolKey: V4_ETH_USDC,
-        zeroForOne: true,
-        amountOutMin: "0",
-        recipient: RECIPIENT,
-      },
-      expected: async () =>
-        (
-          (await simulate(QUOTERS.uniswapV4Quoter, abi.uniV4, "quoteExactInputSingle", [
+          (await simulate(UNISWAP_V4_QUOTER, abi.uniV4, "quoteExactInputSingle", [
             { poolKey: V4_ETH_USDC, zeroForOne: true, exactAmount: ONE_ETH, hookData: "0x" },
           ])) as bigint[]
         )[0]!,
@@ -360,36 +362,16 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
     },
     {
       action: {
-        type: "uniswapV4ExactInputMultiHop",
-        amount: "10000000",
-        router: UNIVERSAL_ROUTER,
-        currencyIn: USDC,
-        path: [{ intermediateCurrency: USDT, fee: 10, tickSpacing: 1, hooks: ZERO }],
+        type: "dodoV1Swap",
+        amount: `${ONE_ETH / 10n}`,
+        proxy: DODO_PROXY,
+        tokenIn: WETH,
+        tokenOut: USDC,
+        pairs: [DODO_V1_WETH_USDC],
+        directions: 0, // sells base (WETH)
         amountOutMin: "0",
-        recipient: RECIPIENT,
+        deadline: DEADLINE,
       },
-      expected: async () =>
-        (
-          (await simulate(QUOTERS.uniswapV4Quoter, abi.uniV4, "quoteExactInput", [
-            {
-              exactCurrency: USDC,
-              path: [
-                {
-                  intermediateCurrency: USDT,
-                  fee: 10,
-                  tickSpacing: 1,
-                  hooks: ZERO,
-                  hookData: "0x",
-                },
-              ],
-              exactAmount: 10_000_000n,
-            },
-          ])) as bigint[]
-        )[0]!,
-      atLeast: 9_900_000n,
-    },
-    {
-      action: dodo("v1", DODO_V1_WETH_USDC),
       expected: async () =>
         (await view(DODO_V1_WETH_USDC, abi.dodoV1, "querySellBaseToken", [
           ONE_ETH / 10n,
@@ -397,7 +379,17 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
       atLeast: 1n,
     },
     {
-      action: dodo("v2", DODO_V2_WETH_USDC),
+      action: {
+        type: "dodoV2Swap",
+        amount: `${ONE_ETH / 10n}`,
+        pool: DODO_V2_WETH_USDC,
+        tokenIn: WETH,
+        tokenOut: USDC,
+        baseToken: WETH,
+        quoteToken: USDC,
+        amountOutMin: "0",
+        recipient: RECIPIENT,
+      },
       expected: async () =>
         (
           (await view(DODO_V2_WETH_USDC, abi.dodoV2, "querySellBase", [
@@ -439,16 +431,17 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
       atLeast: 1_000_000n,
     },
     {
+      // Selling token A, the pool's lower-addressed token, USDC.
       action: {
-        type: "maverickSwap",
+        type: "maverickV2Swap",
         amount: "10000000",
-        router: MAVERICK_V2_ROUTER,
         pool: MAVERICK_USDC_USDT,
-        tokenAIn: true,
+        tokenIn: USDC,
+        tokenOut: USDT,
         amountOutMin: "0",
         recipient: RECIPIENT,
       },
-      // No tick limit in the swap's direction, as the router's swap applies none.
+      // No tick limit in the swap's direction, as the Router's swap applies none.
       expected: async () =>
         (
           (await simulate(QUOTERS.maverickQuoter, abi.maverick, "calculateSwap", [
@@ -459,25 +452,6 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
             2 ** 31 - 1,
           ])) as bigint[]
         )[1]!,
-      atLeast: 9_900_000n,
-    },
-    {
-      action: {
-        type: "maverickMultiHopSwap",
-        amount: "10000000",
-        router: MAVERICK_V2_ROUTER,
-        path: MAVERICK_PATH,
-        amountOutMin: "0",
-        recipient: RECIPIENT,
-      },
-      expected: async () =>
-        (
-          (await simulate(QUOTERS.maverickQuoter, abi.maverick, "calculateMultiHopSwap", [
-            MAVERICK_PATH,
-            10_000_000n,
-            false,
-          ])) as bigint[]
-        )[0]!,
       atLeast: 9_900_000n,
     },
     {
@@ -519,21 +493,6 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
     },
   ];
 
-  function dodo(version: "v1" | "v2", pair: string): SwapAction {
-    return {
-      type: "dodoSwap",
-      amount: `${ONE_ETH / 10n}`,
-      proxy: DODO_PROXY,
-      fromToken: WETH,
-      toToken: USDC,
-      pairs: [pair as Address],
-      directions: 0, // sells base (WETH)
-      amountOutMin: "0",
-      deadline: DEADLINE,
-      version,
-    };
-  }
-
   async function balancerV2Query(amount: bigint): Promise<bigint> {
     const deltas = (await simulate(BALANCER_V2_VAULT, abi.balancerV2, "queryBatchSwap", [
       0,
@@ -554,7 +513,7 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
   }
 
   for (const { action, expected, atLeast } of cases) {
-    const name = action.type === "dodoSwap" ? `dodoSwap (${action.version})` : action.type;
+    const name = action.type;
     it(`${name}: matches the quoter asked directly`, async () => {
       const quoted = await quote(action);
       assert.equal(quoted, await expected());
@@ -563,7 +522,7 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
   }
 
   it("quotes every swap action type", () => {
-    const quoted = new Set<string>(cases.map((c) => c.action.type));
+    const quoted = new Set<string>([...cases.map((c) => c.action.type), ...QUOTED_ELSEWHERE]);
     const swaps = ACTION_TYPES.filter((type) => ACTION_SPECS[type].group === "swap");
     assert.deepEqual(
       swaps.filter((type) => !quoted.has(type)),
@@ -577,7 +536,7 @@ describe("quoteAction, on mainnet state", { timeout: 300_000 }, () => {
       () => quoteAction(bare as SwapAction),
       /set the curveSwap's `amount` to quote it/,
     );
-    const v3 = cases.find((c) => c.action.type === "uniswapV3ExactInput")!.action;
-    assert.throws(() => quoteAction(v3), /needs `uniswapV3Quoter` in the quote options/);
+    const v3 = cases.find((c) => c.action.type === "uniswapV3Swap")!.action;
+    assert.throws(() => quoteAction(v3), /needs `router` in the quote options/);
   });
 });

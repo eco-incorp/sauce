@@ -1,6 +1,8 @@
 /**
  * The split swap EXECUTED against mainnet Uniswap V3 (two fee tiers), Curve 3pool and Uniswap V2,
  * on a local anvil holding mainnet state captured at the pinned block (`mainnet.ts`) — no RPC.
+ * Every leg is a `@sauce/router` call, and the Uniswap V3 legs are quoted by the Router that swaps
+ * them.
  *
  * The property that matters: split across the four, a trade does at least as well as it would in
  * the best of them alone, which the venues' own quotes at the full amount say.
@@ -10,26 +12,28 @@ import assert from "node:assert/strict";
 import { encodeAbiParameters, keccak256, pad, parseAbi, toHex, type Address, type Hex } from "viem";
 
 import { compileSplitSwap, quoteAction } from "../src/index.js";
-import type { ApproveAction, SwapAction } from "../src/types.js";
+import type { QuoteOptions } from "../src/index.js";
+import type { SwapAction } from "../src/types.js";
 import { skipReason, startAnvil, type Anvil } from "./anvil.js";
-import { DEADLINE } from "./mainnet.js";
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
-const SWAP_ROUTER_02 = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
-const QUOTER_V2 = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
+/** Uniswap V3's USDC/USDT pools at 0.01% and 0.05%. */
+const UNIV3_USDC_USDT = {
+  100: "0x3416cF6C708Da44DB2624D63ea0AAef7113527C6",
+  500: "0x7858E59e0C01EA06Df3aF3D20aC7B0003275D4Bf",
+} as const;
 const CURVE_3POOL = "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7";
-const UNISWAP_V2_ROUTER = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
+/** Uniswap V2's USDC/USDT pair. */
+const UNIV2_USDC_USDT = "0x3041CbD36888bECc7bbCBc0045E3B1f144466f5f";
 const RECEIVER = "0x000000000000000000000000000000000000c0DE";
 const USDC_UNIT = 1_000_000n;
-const QUOTERS = { uniswapV3Quoter: QUOTER_V2 } as const;
 
 const uniswapV3 = (fee: 100 | 500): SwapAction => ({
-  type: "uniswapV3ExactInput",
-  router: SWAP_ROUTER_02,
+  type: "uniswapV3Swap",
+  pool: UNIV3_USDC_USDT[fee],
   tokenIn: USDC,
   tokenOut: USDT,
-  fee,
   amountOutMin: "1",
   recipient: "self",
 });
@@ -39,32 +43,27 @@ const CANDIDATES: SwapAction[] = [
   {
     type: "curveSwap",
     pool: CURVE_3POOL,
+    tokenIn: USDC,
     tokenOut: USDT,
     i: 1,
     j: 2,
+    indexType: "int128",
     amountOutMin: "1",
     recipient: "self",
   },
   {
     type: "uniswapV2Swap",
-    router: UNISWAP_V2_ROUTER,
-    path: [USDC, USDT],
+    pool: UNIV2_USDC_USDT,
+    tokenIn: USDC,
+    tokenOut: USDT,
     amountOutMin: "1",
     recipient: "self",
-    deadline: DEADLINE,
   },
 ];
-const approvals = (amount: bigint): ApproveAction[] =>
-  ([SWAP_ROUTER_02, CURVE_3POOL, UNISWAP_V2_ROUTER] as const).map((spender) => ({
-    type: "approve",
-    amount: `${amount}`,
-    token: USDC,
-    spender,
-  }));
 
 /**
- * The quotes are read off the state before the transaction, and the swaps run after the approvals
- * inside it, so a realized amount drifts from its quote by a unit or two. This slack absorbs that
+ * The quotes are read off the state before the transaction, and the swaps run inside it, so a
+ * realized amount drifts from its quote by a unit or two. This slack absorbs that
  * while staying four orders of magnitude below the ~1.7e7-unit gap between the best venue and the
  * next, so a comparison still proves which venue the greedy loop picked.
  */
@@ -75,16 +74,19 @@ const erc20 = parseAbi(["function balanceOf(address) view returns (uint256)"]);
 describe("split swap, on mainnet state", { skip: skipReason(), timeout: 600_000 }, () => {
   let env: Anvil;
   let snapshot: `0x${string}`;
+  /** The Router the stack deployed quotes the Uniswap V3 legs. */
+  let quoters: QuoteOptions;
 
   before(async () => {
     env = await startAnvil({ mainnet: "split-swap" });
+    quoters = { router: env.router };
   });
   after(async () => {
     await env?.stop();
   });
   beforeEach(async () => {
     snapshot = await env.testClient.snapshot();
-    // The quotes cost QuoterV2 calls at million-USDC depth: more than a 60M-gas block holds. Set
+    // The quotes cost Router quotes at million-USDC depth: more than a 60M-gas block holds. Set
     // after the snapshot, because reverting to one restores the block gas limit too.
     await env.testClient.setBlockGasLimit({ gasLimit: 1_000_000_000n });
   });
@@ -114,7 +116,7 @@ describe("split swap, on mainnet state", { skip: skipReason(), timeout: 600_000 
       CANDIDATES.map(async (candidate) => {
         const { to, data, decode } = quoteAction(
           { ...candidate, amount: `${amount}` } as SwapAction,
-          QUOTERS,
+          quoters,
         );
         const { data: result } = await env.publicClient.call({ to, data });
         return decode(result as Hex);
@@ -133,9 +135,8 @@ describe("split swap, on mainnet state", { skip: skipReason(), timeout: 600_000 
       buckets,
       // Waived: these tests compare the split with the best single venue, which a floor would not.
       amountOutMin: "0",
-      approvals: approvals(amount),
       sweep: { token: USDT, recipient: RECEIVER },
-      quoters: QUOTERS,
+      quoters,
     });
     assert.deepEqual(parameters, []);
     const receipt = await env.cook(bytecode, 0n, 500_000_000n);

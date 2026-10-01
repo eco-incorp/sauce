@@ -85,9 +85,9 @@ Both builders, and `sauceEvmDeployPotCall` below, return `{ to, target, data, va
 
 ## Deployment addresses
 
-`sauceEvmDeployPotCall({ owner, salt, kitchen })` encodes Pot deployment through the Kitchen you name; for a direct intent route the owner is the destination `Portal.executor()`. No route the SDK builds includes this call. To deploy an intent's shared Pot yourself before the solver does, pass `kitchen: v12GateKitchen()`, that Executor, and `SAUCE_INTENT_POT_SALT`.
+`sauceEvmDeployPotCall({ owner, salt, kitchen? })` encodes Pot deployment through a Kitchen, by default the released one (`v12KitchenAddress()`); for a direct intent route the owner is the destination `Portal.executor()`. No route the SDK builds includes this call. To deploy an intent's shared Pot yourself before the solver does, pass that Executor and `SAUCE_INTENT_POT_SALT`.
 
-Every address helper here returns a **recorded** address, never a verified one. `v12EngineAddress()` and `v12KitchenAddress()` give the released addresses directly and are the ones to prefer. `sauceEvmDeployPotCall`'s `chainId` form, `v12Deployment` and `requireV12Deployment` filter by a roster of chains where deployment previously succeeded, which is a different question from whether code is there now. `V12_EVM_CONTRACTS` and `v12SvmProgramId` name an earlier deployment generation. Check the chain before trusting any of them; [evm-execution.ts](../examples/evm-execution.ts) shows prediction, deployment and the owner/Kitchen checks.
+Every address helper here returns a **recorded** address, never a verified one. `v12EngineAddress()` and `v12KitchenAddress()` give the released addresses, the same on every chain; the SDK reads no chain, so it cannot say whether code is there. Check the chain before trusting any of them; [evm-execution.ts](../examples/evm-execution.ts) shows prediction, deployment and the owner/Kitchen checks.
 
 `buildSauceSvmCall` and the SVM route path emit an 8-byte engine instruction that the Solana engine does not accept, whatever code account or engine id you give them: they do not build the Kitchen call the engine requires. Build Solana execution with the Kitchen client instead — see [SVM destinations in Eco intents](../guides/solana.md#svm-destinations-in-eco-intents).
 
