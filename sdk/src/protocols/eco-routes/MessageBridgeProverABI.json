@@ -1,0 +1,39 @@
+{
+  "abi": [
+    {
+      "type": "function",
+      "name": "fetchFee",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "domainID",
+          "type": "uint64"
+        },
+        {
+          "name": "encodedProofs",
+          "type": "bytes"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InsufficientFee",
+      "inputs": [
+        {
+          "name": "requiredFee",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

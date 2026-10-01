@@ -28,6 +28,59 @@
       ]
     },
     {
+      "type": "function",
+      "name": "getProofType",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "version",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "PORTAL",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "isWhitelisted",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "type": "event",
       "name": "IntentProven",
       "inputs": [
