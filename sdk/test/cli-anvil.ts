@@ -9,6 +9,8 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -246,4 +248,61 @@ export async function deployPot(
   await local.send(local.deployer, out.to as Address, out.data as Hex);
 
   return out.pot as Address;
+}
+
+/**
+ * An endpoint in front of `upstream` that lags behind the chain the way a load-balanced provider
+ * can: after it has relayed a transaction, its next `stale` answers to `eth_getCode` are empty, as
+ * from a node that has not seen the block yet. `served` counts the empty answers it gave.
+ */
+export async function laggingEndpoint(
+  upstream: string,
+  stale: number,
+): Promise<{ readonly url: string; served(): number; stop(): Promise<void> }> {
+  let owed = 0;
+  let served = 0;
+  const answer = async (request: { id: unknown; method: string }): Promise<unknown> => {
+    if (request.method === "eth_getCode" && owed > 0) {
+      owed--;
+      served++;
+
+      return { jsonrpc: "2.0", id: request.id, result: "0x" };
+    }
+    const response = await fetch(upstream, {
+      method: "POST",
+      headers: { "content-type": "application/json", connection: "close" },
+      body: JSON.stringify(request),
+    });
+    if (request.method === "eth_sendRawTransaction") owed = stale;
+
+    return response.json();
+  };
+  const server = createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk: Buffer) => (body += chunk.toString()));
+    req.on("end", () => {
+      const parsed = JSON.parse(body) as
+        { id: unknown; method: string } | Array<{ id: unknown; method: string }>;
+      void (Array.isArray(parsed) ? Promise.all(parsed.map(answer)) : answer(parsed)).then(
+        (out) => {
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify(out));
+        },
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const { port } = server.address() as AddressInfo;
+
+  return {
+    url: `http://127.0.0.1:${port}`,
+    served: () => served,
+    stop: async () => {
+      server.closeAllConnections();
+      const closed = once(server, "close");
+      server.close();
+      await closed;
+    },
+  };
 }
