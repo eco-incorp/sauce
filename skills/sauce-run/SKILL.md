@@ -170,6 +170,7 @@ return, with their own wallet.
 | `sauce simulate` | `sauce_simulate`                                                       |
 | `sauce tx`       | `sauce_tx`                                                             |
 | `sauce publish`  | `sauce_publish`, unsigned or as a dry run                              |
+| `sauce fill`     | `sauce_fill`: the destination's side, rehearsed                        |
 | `sauce inspect`  | `sauce_inspect`                                                        |
 | `sauce verify`   | `sauce_verify`                                                         |
 | `sauce price`    | `sauce_price`, also from a pool read now                               |
