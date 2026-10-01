@@ -1,16 +1,29 @@
 /**
  * `sauce init`: a project that needs nothing but this package — a manifest pinning it, agent
- * instructions, a `.gitignore` for the local config that holds endpoints and keys, a placeholder
- * example of that config, and the agent skills (`skills.ts`).
+ * instructions every coding agent reads, a `.gitignore` for the local config that holds
+ * endpoints, a placeholder example of that config, and the agent skills (`skills.ts`).
  *
- * It overwrites nothing without `--force`: every file it would write that already exists with other
- * content is listed and the whole scaffold refused, before anything is written.
+ * The instructions are `AGENTS.md`, which Codex, Cursor, Copilot and Claude Code read
+ * (agents.md). Claude Code reads it only while no `CLAUDE.md` exists, and Gemini CLI reads
+ * `GEMINI.md`, so for those two agents `init` adds the one-line file each documents for sharing it:
+ * `@AGENTS.md` (code.claude.com/docs/en/memory) and `@./AGENTS.md` (geminicli.com, GEMINI.md
+ * imports).
+ *
+ * It overwrites nothing without `--force`: every file it would write that already exists with
+ * other content is listed and the whole scaffold refused, before anything is written.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
 import { CliError } from "./args.js";
-import { installSkills, planSkills, type SkillFile, type SkillsSource } from "./skills.js";
+import {
+  installTarget,
+  targetsFor,
+  withoutBlock,
+  type Agent,
+  type SkillsSource,
+  type TargetReport,
+} from "./skills.js";
 
 /** A package name npm accepts, from a directory's name. */
 function packageNameOf(dir: string): string {
@@ -23,8 +36,12 @@ function packageNameOf(dir: string): string {
   return name === "" ? "sauce-project" : name;
 }
 
-/** The files `sauce init` writes, by path relative to the project. */
-export function scaffold(dir: string, source: SkillsSource): Record<string, string> {
+/** The files `sauce init` writes for `agents`, by path relative to the project. */
+export function scaffold(
+  dir: string,
+  source: SkillsSource,
+  agents: readonly Agent[],
+): Record<string, string> {
   const manifest = {
     name: packageNameOf(dir),
     version: "0.0.0",
@@ -37,22 +54,27 @@ export function scaffold(dir: string, source: SkillsSource): Record<string, stri
 
   return {
     "package.json": `${JSON.stringify(manifest, null, 2)}\n`,
-    "CLAUDE.md": [
-      "# CLAUDE.md",
+    "AGENTS.md": [
+      "# AGENTS.md",
       "",
       `This project writes Sauce programs with \`${source.packageName}\`, pinned in \`package.json\`.`,
       "",
-      "- Use the agent skills in `.claude/skills/`: `sauce-run` covers compiling a program and",
-      "  building the transaction that runs it. They describe the pinned version of the package.",
-      "- Run the package's CLI as `npx sauce` (`npx sauce --help`). It signs and sends nothing:",
-      "  transactions go out through `cast` or a wallet.",
-      "- Keep RPC URLs and keys out of tracked files. RPC URLs go in `sauce.config.json`, which",
-      "  is gitignored (start from `sauce.config.example.json`), and reach the CLI as `--rpc-url`.",
-      "  Sign with a keystore (`cast send --account <name>`), never a key written into a file.",
-      "- After upgrading the package, run `npx sauce skills install` to update the skills;",
-      "  `npx sauce skills install --check` fails while they are out of date.",
+      "- Use the agent skills the package installed (`npx sauce skills status` lists them):",
+      "  `sauce-run` covers compiling a program, rehearsing it and running it on a Pot. They",
+      "  describe the pinned version of the package.",
+      "- Run the package's CLI as `npx sauce` (`npx sauce --help`). `sauce simulate` rehearses a",
+      "  program with no key, `sauce run` signs and sends it, and `sauce tx` prints the unsigned",
+      "  transaction for a wallet.",
+      "- Keep RPC URLs and keys out of tracked files. RPC URLs go in `sauce.config.json`, which is",
+      "  gitignored (start from `sauce.config.example.json`), and reach the CLI as",
+      "  `--config sauce.config.json`. Sign with a keystore (`--keystore`), not a key on the",
+      "  command line.",
+      "- After upgrading the package, run `npx sauce skills update`; `npx sauce skills status`",
+      "  fails while the skills are outdated.",
       "",
     ].join("\n"),
+    ...(agents.includes("claude") ? { "CLAUDE.md": "@AGENTS.md\n" } : {}),
+    ...(agents.includes("gemini") ? { "GEMINI.md": "@./AGENTS.md\n" } : {}),
     ".gitignore": [
       "node_modules/",
       "",
@@ -78,30 +100,33 @@ export function scaffold(dir: string, source: SkillsSource): Record<string, stri
 export interface InitResult {
   /** Each scaffold file, with whether it was `wrote`, `unchanged` or `overwrote`. */
   readonly files: ReadonlyArray<{ readonly path: string; readonly state: string }>;
-  readonly skills: readonly SkillFile[];
+  readonly skills: readonly TargetReport[];
 }
 
-/** Scaffolds `dir` (created if absent), then installs the agent skills into it. */
-export function initProject(dir: string, source: SkillsSource, force: boolean): InitResult {
-  const files = scaffold(dir, source);
+/** A file as `init` compares it: `AGENTS.md` without the skills block, which is not its own. */
+const comparable = (path: string, text: string): string =>
+  path === "AGENTS.md" ? withoutBlock(text).trimEnd() : text;
+
+/** Scaffolds `dir` (created if absent) for `agents`, then installs their skills into it. */
+export function initProject(
+  dir: string,
+  source: SkillsSource,
+  agents: readonly Agent[],
+  force: boolean,
+): InitResult {
+  const files = scaffold(dir, source, agents);
   const states = Object.entries(files).map(([path, content]) => {
     const target = join(dir, path);
     const state = !existsSync(target)
       ? "wrote"
-      : readFileSync(target, "utf8") === content
+      : comparable(path, readFileSync(target, "utf8")) === comparable(path, content).trimEnd() ||
+          readFileSync(target, "utf8") === content
         ? "unchanged"
         : "overwrote";
 
     return { path, content, state };
   });
-  const conflicts = [
-    ...states.filter((file) => file.state === "overwrote").map((file) => file.path),
-    ...(existsSync(dir)
-      ? planSkills(dir, source)
-          .filter((file) => file.state === "edited")
-          .map((file) => file.path)
-      : []),
-  ];
+  const conflicts = states.filter((file) => file.state === "overwrote").map((file) => file.path);
   if (conflicts.length > 0 && !force) {
     throw new CliError(
       `${dir} already has files init would overwrite:\n` +
@@ -116,6 +141,6 @@ export function initProject(dir: string, source: SkillsSource, force: boolean): 
 
   return {
     files: states.map(({ path, state }) => ({ path, state })),
-    skills: installSkills(dir, source, force),
+    skills: targetsFor(agents).map((target) => installTarget(dir, source, target)),
   };
 }

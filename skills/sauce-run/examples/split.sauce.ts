@@ -3,7 +3,7 @@
 //
 // The values arrive at run time, so one compiled program serves every call:
 //
-//   sauce tx split.sauce.ts --chain base --owner 0x… --rpc-url <RPC_URL> \
+//   sauce run split.sauce.ts --chain base --config sauce.config.json --keystore <path> \
 //     --args <token> '["0x…","0x…"]' 1000000 true
 //
 // It names no chain, so the same file compiles for any chain that registers USDC; `--chain` picks

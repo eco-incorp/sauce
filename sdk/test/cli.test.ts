@@ -26,17 +26,7 @@ import {
   UsageError,
 } from "../src/cli/args.js";
 import { castSend } from "../src/cli/commands.js";
-import { initProject, scaffold } from "../src/cli/init.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
-import {
-  checkSkills,
-  installSkills,
-  INSTALL_RECORD,
-  PACKAGED_SKILLS,
-  planSkills,
-  SKILLS_DIR,
-  type SkillsSource,
-} from "../src/cli/skills.js";
 import { v12DeployedAddresses, v12EngineAddress } from "../src/deployments/index.js";
 import {
   potSalt,
@@ -1051,165 +1041,6 @@ describe("sauce pot", () => {
   });
 });
 
-describe("sauce skills install", () => {
-  let source: SkillsSource;
-  let project: string;
-  const installed = (path: string): string => join(project, SKILLS_DIR, path);
-
-  beforeEach(() => {
-    const dir = join(work, "packaged");
-    mkdirSync(join(dir, "alpha", "examples"), { recursive: true });
-    writeFileSync(join(dir, "alpha", "SKILL.md"), "alpha v1\n");
-    writeFileSync(join(dir, "alpha", "examples", "one.sauce.ts"), "one v1\n");
-    source = { dir, packageName: "@eco-incorp/sauce", version: "9.9.9" };
-    project = join(work, "project");
-    mkdirSync(project);
-  });
-
-  it("writes every file, records it, and changes nothing on a second install", () => {
-    const first = installSkills(project, source, false);
-    expect(first.map((file) => file.state)).toEqual(["added", "added"]);
-    expect(readFileSync(installed("alpha/SKILL.md"), "utf8")).toBe("alpha v1\n");
-    const record = JSON.parse(readFileSync(installed(INSTALL_RECORD), "utf8"));
-    expect(record).toMatchObject({ package: "@eco-incorp/sauce", version: "9.9.9" });
-    expect(Object.keys(record.files)).toEqual(["alpha/SKILL.md", "alpha/examples/one.sauce.ts"]);
-    expect(installSkills(project, source, false).map((file) => file.state)).toEqual([
-      "unchanged",
-      "unchanged",
-    ]);
-    expect(checkSkills(project, source)).toEqual([]);
-  });
-
-  it("replaces an untouched older copy, and removes one the package dropped", () => {
-    installSkills(project, source, false);
-    writeFileSync(join(source.dir, "alpha", "SKILL.md"), "alpha v2\n");
-    rmSync(join(source.dir, "alpha", "examples", "one.sauce.ts"));
-    expect(checkSkills(project, source)).toEqual([
-      `differs           ${join(SKILLS_DIR, "alpha", "SKILL.md")}`,
-      `no longer shipped ${join(SKILLS_DIR, "alpha", "examples", "one.sauce.ts")}`,
-    ]);
-    const plan = installSkills(project, source, false);
-    expect(plan.map((file) => [file.state, file.shipped])).toEqual([
-      ["updated", true],
-      ["stale", false],
-    ]);
-    expect(readFileSync(installed("alpha/SKILL.md"), "utf8")).toBe("alpha v2\n");
-    expect(() => readFileSync(installed("alpha/examples/one.sauce.ts"))).toThrow();
-    expect(checkSkills(project, source)).toEqual([]);
-  });
-
-  it("refuses to overwrite an edited file, lists it, and overwrites it only with --force", () => {
-    installSkills(project, source, false);
-    writeFileSync(installed("alpha/SKILL.md"), "my notes\n");
-    writeFileSync(join(source.dir, "alpha", "SKILL.md"), "alpha v2\n");
-    expect(planSkills(project, source).find((file) => file.state === "edited")?.path).toBe(
-      join(SKILLS_DIR, "alpha", "SKILL.md"),
-    );
-    expect(() => installSkills(project, source, false)).toThrow(
-      new RegExp(`not installing[^]*${join(SKILLS_DIR, "alpha", "SKILL.md")}[^]*--force`),
-    );
-    expect(readFileSync(installed("alpha/SKILL.md"), "utf8")).toBe("my notes\n");
-    installSkills(project, source, true);
-    expect(readFileSync(installed("alpha/SKILL.md"), "utf8")).toBe("alpha v2\n");
-  });
-
-  it("treats an existing file it never installed as an edit", () => {
-    mkdirSync(join(project, SKILLS_DIR, "alpha"), { recursive: true });
-    writeFileSync(installed("alpha/SKILL.md"), "someone else's\n");
-    expect(() => installSkills(project, source, false)).toThrow(/not installing/);
-  });
-
-  it("leaves a project's own skills alone", () => {
-    mkdirSync(join(project, SKILLS_DIR, "mine"), { recursive: true });
-    writeFileSync(installed("mine/SKILL.md"), "mine\n");
-    installSkills(project, source, true);
-    expect(readFileSync(installed("mine/SKILL.md"), "utf8")).toBe("mine\n");
-  });
-
-  it("installs the package's own skills from the command, and --check fails until it has", async () => {
-    const before = await sauce("skills", "install", "--dir", project, "--check");
-    expect(before.code).toBe(1);
-    expect(before.stderr).toMatch(
-      /are not this version's[^]*missing\s+\.claude\/skills\/sauce-run\/SKILL\.md/,
-    );
-    const run = await sauce("skills", "install", "--dir", project);
-    expect(run.code).toBe(0);
-    expect(run.stdout).toMatch(/^wrote\s+\.claude\/skills\/sauce-run\/SKILL\.md$/m);
-    expect(readFileSync(installed("sauce-run/SKILL.md"), "utf8")).toBe(
-      readFileSync(join(PACKAGED_SKILLS, "sauce-run", "SKILL.md"), "utf8"),
-    );
-    expect((await sauce("skills", "install", "--dir", project, "--check")).code).toBe(0);
-    writeFileSync(installed("sauce-run/SKILL.md"), "edited\n");
-    const check = await sauce("skills", "install", "--dir", project, "--check");
-    expect(check.code).toBe(1);
-    expect(check.stderr).toMatch(/differs\s+\.claude\/skills\/sauce-run\/SKILL\.md/);
-    const refused = await sauce("skills", "install", "--dir", project);
-    expect(refused.code).toBe(1);
-    expect(refused.stderr).toMatch(/not installing/);
-    expect((await sauce("skills", "install", "--dir", project, "--force")).code).toBe(0);
-    expect((await sauce("skills")).stderr).toMatch(/missing subcommand: install/);
-    expect((await sauce("skills", "install", "--check", "--force")).code).toBe(2);
-  });
-});
-
-describe("sauce init", () => {
-  const source = (): SkillsSource => ({
-    dir: PACKAGED_SKILLS,
-    packageName: MANIFEST.name,
-    version: MANIFEST.version,
-  });
-
-  it("scaffolds a project pinning this exact version, with the skills installed", async () => {
-    const dir = join(work, "My App");
-    const run = await sauce("init", dir);
-    expect(run.code).toBe(0);
-    const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-    expect(manifest.name).toBe("my-app");
-    expect(manifest.dependencies).toEqual({ [source().packageName]: source().version });
-    expect(readFileSync(join(dir, ".gitignore"), "utf8")).toMatch(/^sauce\.config\.json$/m);
-    const config = JSON.parse(readFileSync(join(dir, "sauce.config.example.json"), "utf8"));
-    for (const url of Object.values(config.rpcUrls as Record<string, string>)) {
-      expect(url).toMatch(/^<[^<>]+>$/);
-    }
-    expect(readFileSync(join(dir, "CLAUDE.md"), "utf8")).toMatch(/\.claude\/skills\//);
-    expect(checkSkills(dir, source())).toEqual([]);
-    expect(run.stdout).toMatch(/Next:\n {2}cd .*My App\n {2}npm install\n/);
-    expect(run.ran).toEqual([]);
-  });
-
-  it("is idempotent, and overwrites nothing without --force", async () => {
-    const dir = join(work, "app");
-    await sauce("init", dir);
-    expect((await sauce("init", dir)).code).toBe(0);
-    writeFileSync(join(dir, "package.json"), "{}\n");
-    const refused = await sauce("init", dir);
-    expect(refused.code).toBe(1);
-    expect(refused.stderr).toMatch(/already has files init would overwrite:\n {2}package\.json\n/);
-    expect(readFileSync(join(dir, "package.json"), "utf8")).toBe("{}\n");
-    expect((await sauce("init", dir, "--force")).code).toBe(0);
-    expect(readFileSync(join(dir, "package.json"), "utf8")).toBe(
-      scaffold(dir, source())["package.json"],
-    );
-  });
-
-  it("writes into a non-empty directory when nothing would be overwritten", () => {
-    const dir = join(work, "existing");
-    mkdirSync(dir);
-    writeFileSync(join(dir, "README.md"), "mine\n");
-    const result = initProject(dir, source(), false);
-    expect(result.files.every((entry) => entry.state === "wrote")).toBe(true);
-    expect(readFileSync(join(dir, "README.md"), "utf8")).toBe("mine\n");
-  });
-
-  it("runs npm install only when asked", async () => {
-    const dir = join(work, "installed");
-    const run = await sauce("init", dir, "--install");
-    expect(run.ran).toEqual([{ command: "npm", args: ["install"], cwd: dir }]);
-    expect(run.stdout).toContain(`Running npm install in ${dir}`);
-    expect(run.stdout).not.toMatch(/^ {2}npm install$/m);
-  });
-});
-
 describe("the CLI stays out of the browser-facing surface", () => {
   it("is exported by no barrel", async () => {
     const cli = [
@@ -1220,6 +1051,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/init.js"),
       await import("../src/cli/signer.js"),
       await import("../src/cli/chain.js"),
+      await import("../src/cli/publish.js"),
     ].flatMap((module) => Object.keys(module));
     expect(cli.length).toBeGreaterThan(0);
     const routes = root.routes as Record<string, unknown>;

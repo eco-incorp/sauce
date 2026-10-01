@@ -57,10 +57,16 @@ import { initProject } from "./init.js";
 import { publishCommand } from "./publish.js";
 import { loadSigner, scrub, secret } from "./signer.js";
 import {
-  checkSkills,
-  describeInstall,
-  installSkills,
+  AGENTS,
+  describeStatus,
+  detectAgents,
+  installedTargets,
+  installTarget,
   PACKAGED_SKILLS,
+  parseAgents,
+  statusOf,
+  targetsFor,
+  updateTarget,
   type SkillsSource,
 } from "./skills.js";
 
@@ -788,70 +794,116 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   skills: {
-    usage: "sauce skills install [--dir <project>] [--force] [--check]",
-    summary: "Install this package's agent skills into a project",
+    usage:
+      "sauce skills <install | update | status> [--agent <agent>,…] [--dir <project>] [--force]",
+    summary: "Install, update or check this package's agent skills in a project",
     flags: {
-      dir: { type: "string", value: "<project>", help: "The project to install into (default .)" },
-      force: { type: "boolean", help: "Overwrite installed files that were edited" },
-      check: { type: "boolean", help: "Write nothing; exit 1 unless the installed copies match" },
+      agent: {
+        type: "string",
+        multiple: true,
+        value: "<agent>",
+        help: `${AGENTS.join(", ")} or all (default: detected)`,
+      },
+      dir: { type: "string", value: "<project>", help: "The project (default .)" },
+      force: { type: "boolean", help: "update: overwrite files edited since they were installed" },
       ...HELP,
     },
     details: [
-      "Copies the Claude Code agent skills that ship inside this package to",
-      "<project>/.claude/skills/<name>/, and records what it wrote in .sauce-skills.json there.",
-      "A later install replaces what it wrote but refuses a file somebody edited, unless --force.",
-      "--check exits 1 when the installed copies differ from this version's, e.g. after an upgrade.",
+      "The skills ship once, as Agent Skills directories, and are written where each agent",
+      "reads them: .claude/skills/ for claude; .agents/skills/ for codex, cursor, copilot and",
+      "gemini, which all read it; and for agents-md, .agents/skills/ plus an index block in",
+      "AGENTS.md. Without --agent: install detects the agents a project shows signs of (or",
+      "claude and agents-md); update and status take the targets installed.",
+      "",
+      "  install  The first install. Never overwrites: on a project already installed it says",
+      "           whether the skills are current, and to run update if not.",
+      "  update   Adds new skill files, replaces changed ones, removes retired ones. A file edited",
+      "           since it was installed is kept and shown, unless --force.",
+      "  status   Each target: up to date, outdated or modified, with its files. Exits 1 while",
+      "           any is outdated or not installed.",
     ].join("\n"),
     run: (args) => {
       const [sub, ...rest] = args.positionals;
-      if (sub !== "install") {
+      if (sub !== "install" && sub !== "update" && sub !== "status") {
         throw new UsageError(
-          sub === undefined ? "missing subcommand: install" : `unknown subcommand '${sub}'`,
+          sub === undefined
+            ? "missing subcommand: install, update or status"
+            : `unknown subcommand '${sub}': install, update or status`,
         );
       }
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
+      if (args.values.force === true && sub !== "update") {
+        throw new UsageError(`--force goes with update; ${sub} never overwrites`);
+      }
       const project = stringFlag(args, "dir") ?? ".";
-      if (args.values.check === true) {
-        if (args.values.force === true)
-          throw new UsageError("--check writes nothing: drop --force");
-        const differences = checkSkills(project, skillsSource());
-        if (differences.length > 0) {
-          throw new CliError(
-            `the agent skills in ${project} are not this version's — run \`sauce skills install\`:\n` +
-              differences.map((line) => `  ${line}`).join("\n"),
-          );
-        }
+      const source = skillsSource();
+      const asked = parseAgents(repeatedFlag(args, "agent"));
+      const targets =
+        asked !== undefined
+          ? targetsFor(asked)
+          : sub === "install"
+            ? targetsFor(detectAgents(project))
+            : installedTargets(project);
+      if (targets.length === 0) {
+        throw new CliError(
+          `no agent skills are installed in ${project}: run \`sauce skills install\``,
+        );
+      }
+      if (sub === "status") {
+        const statuses = targets.map((target) => statusOf(project, source, target));
+        const failing = statuses.some(
+          (status) => status.state === "outdated" || status.state === "not installed",
+        );
 
-        return lines([`The agent skills in ${project} match this version.`]);
+        return {
+          ...lines(statuses.flatMap((status) => describeStatus(status, source))),
+          ...(failing ? { exitCode: 1 } : {}),
+        };
       }
 
       return lines(
-        describeInstall(installSkills(project, skillsSource(), args.values.force === true)),
+        targets.flatMap(
+          (target) =>
+            (sub === "install"
+              ? installTarget(project, source, target)
+              : updateTarget(project, source, target, args.values.force === true)
+            ).lines,
+        ),
       );
     },
   },
   init: {
-    usage: "sauce init [<dir>] [--force] [--install]",
+    usage: "sauce init [<dir>] [--agent <agent>,…] [--force] [--install]",
     summary: "Scaffold a project that uses this package",
     flags: {
+      agent: {
+        type: "string",
+        multiple: true,
+        value: "<agent>",
+        help: `Whose skills to install: ${AGENTS.join(", ")} or all`,
+      },
       force: { type: "boolean", help: "Overwrite files that already exist with other content" },
       install: { type: "boolean", help: "Run npm install in the project afterwards" },
       ...HELP,
     },
     details: [
-      "Writes package.json (pinning this exact version), CLAUDE.md, a .gitignore for local",
-      "config, sauce.config.example.json (placeholders only), and the agent skills. It runs no",
-      "package manager unless --install, which runs npm install.",
+      "Writes package.json (pinning this exact version), AGENTS.md (the project's instructions,",
+      "which coding agents read), CLAUDE.md or GEMINI.md importing it for those agents, a",
+      ".gitignore for local config, sauce.config.example.json (placeholders only), and then",
+      "installs the agent skills (`sauce skills install`). The agents default to those the",
+      "directory shows signs of, else claude and agents-md. It runs no package manager unless",
+      "--install, which runs npm install.",
     ].join("\n"),
     run: (args, io) => {
       const [dir = ".", ...rest] = args.positionals;
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}: give one <dir>`);
-      const result = initProject(dir, skillsSource(), args.values.force === true);
+      const agents = parseAgents(repeatedFlag(args, "agent")) ?? detectAgents(dir);
+      const result = initProject(dir, skillsSource(), agents, args.values.force === true);
       io.stdout(
         [
           `Scaffolded ${dir}:`,
           ...result.files.map((file) => `  ${file.state.padEnd(10)} ${file.path}`),
-          ...describeInstall(result.skills).map((line) => `  ${line}`),
+          ...result.skills.flatMap((report) => report.lines.map((line) => `  ${line}`)),
           "",
         ].join("\n"),
       );

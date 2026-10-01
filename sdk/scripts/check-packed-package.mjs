@@ -334,7 +334,7 @@ try {
 
   // The `sauce` bin, run the way a consumer runs it — through npx, from the install, with nothing
   // but the tarball's files. It compiles the example its own agent skill ships, builds the Pot and
-  // the transaction, and scaffolds a project whose skills then check clean.
+  // the transaction, and scaffolds a project whose skills then report up to date.
   const sauce = (...args) =>
     execFileSync("npx", ["--no", "--", "sauce", ...args], {
       cwd: work,
@@ -380,31 +380,50 @@ try {
   );
 
   const project = join(work, "scaffolded");
-  sauce("init", project);
+  sauce("init", project, "--agent", "all");
   const scaffoldedManifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
   assert.deepEqual(
     scaffoldedManifest.dependencies,
     { [name]: installedManifest.version },
     "sauce init pins the package to exactly the version that ran it",
   );
-  for (const file of ["CLAUDE.md", ".gitignore", "sauce.config.example.json"]) {
+  for (const file of [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    ".gitignore",
+    "sauce.config.example.json",
+  ]) {
     assert.ok(existsSync(join(project, file)), `sauce init writes ${file}`);
   }
   const shippedSkills = readdirSync(join(installedRoot, "skills"), { recursive: true }).filter(
     (file) => /\.[a-z]+$/.test(file),
   );
   assert.ok(shippedSkills.includes("sauce-run/SKILL.md"), "the package ships the sauce-run skill");
-  for (const file of shippedSkills) {
-    assert.equal(
-      readFileSync(join(project, ".claude/skills", file), "utf8"),
-      readFileSync(join(installedRoot, "skills", file), "utf8"),
-      `sauce init installs ${file} verbatim`,
-    );
+  // Claude Code reads .claude/skills; every other agent reads .agents/skills.
+  for (const dir of [".claude/skills", ".agents/skills"]) {
+    for (const file of shippedSkills) {
+      assert.equal(
+        readFileSync(join(project, dir, file), "utf8"),
+        readFileSync(join(installedRoot, "skills", file), "utf8"),
+        `sauce init installs ${file} verbatim into ${dir}`,
+      );
+    }
   }
-  sauce("skills", "install", "--dir", project, "--check");
+  assert.match(
+    readFileSync(join(project, "AGENTS.md"), "utf8"),
+    new RegExp(
+      `<!-- sauce-skills:begin ${name}@${installedManifest.version.replace(/\./g, "\\.")} `,
+    ),
+    "sauce init indexes the skills in AGENTS.md",
+  );
+  // status exits non-zero on anything outdated, so execFileSync throwing is the failure.
+  const status = sauce("skills", "status", "--dir", project);
+  assert.equal(status.match(/: up to date \(/g)?.length, 3, `every target is current:\n${status}`);
+  assert.match(sauce("skills", "install", "--dir", project), /^skills are up to date \(/);
   console.log(
     `Clean package install: sauce init scaffolds a project pinned to ${installedManifest.version}, ` +
-      `whose ${shippedSkills.length} skill files then check clean`,
+      `whose ${shippedSkills.length} skill files then check clean for every agent`,
   );
 
   // The same browser gates the repository runs, against the INSTALLED package and resolved from
