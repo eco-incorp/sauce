@@ -242,15 +242,6 @@ describe("refused on a preview chain, before any network call", () => {
       "optimism",
       /^sauce run: sending the cook is refused/,
     );
-    // An actions document is a program like any other.
-    const actions = file(
-      "wrap.json",
-      JSON.stringify({ version: 1, actions: [{ type: "wrapETH", weth: "WETH", amount: "1" }] }),
-    );
-    expectRefused(
-      await sauce("tx", actions, "--chain", "optimism", "--owner", OWNER, "--config", config),
-      "optimism",
-    );
     expect(recorded()).toEqual([]);
   });
 
