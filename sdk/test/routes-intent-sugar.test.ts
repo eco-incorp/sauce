@@ -419,6 +419,58 @@ describe("what it refuses, and how clearly", () => {
     expect(() => rewriteIntentSugar(source, context())).toThrow(message);
   });
 
+  describe("a token it cannot resolve, named as the part it is in", () => {
+    // The delivery and the reward share one parser. When that parser called every token a reward
+    // token, an agent told "`reward.tokens[].token` refers to 'USDT0'" about the DELIVERY kept
+    // editing the reward, which was right all along, and never compiled.
+    const messageOf = (source: string): string => {
+      try {
+        rewriteIntentSugar(source, context());
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error("expected the rewrite to refuse the source");
+    };
+    const intent = (deliveryToken: string, deliveryAmount = "amount", rewardToken = "USDC") =>
+      program(`  Arbitrum(() => {
+    if (amount > 1n) { USDC.transfer(RECIPIENT, amount); }
+  }, { tokens: [{ token: ${deliveryToken}, amount: ${deliveryAmount} }] }).reward({ tokens: [{ token: ${rewardToken}, amount }] });`);
+    const DELIVERY =
+      "The delivery — the intent's second argument, `{ tokens: [...] }` — is what the solver " +
+      "brings to arbitrum, so its symbols are arbitrum's: fix it there, not in `.reward(...)`. " +
+      "Use a symbol arbitrum registers, or the token's arbitrum address as a literal or a define.";
+
+    it("a delivery token the destination does not register", () => {
+      expect(messageOf(intent("USDT0"))).toBe(
+        `intent sugar: the delivery token 'USDT0' is not a token arbitrum registers, nor a define. ${DELIVERY}`,
+      );
+    });
+
+    it("a delivery token the program only has while it runs", () => {
+      expect(messageOf(intent("amount"))).toBe(
+        "intent sugar: the delivery token 'amount' is a variable of the program, known only while " +
+          `it runs, and an intent names its tokens when it is built. ${DELIVERY}`,
+      );
+    });
+
+    it("a delivery amount nothing resolves", () => {
+      expect(messageOf(intent("USDC", "mystery"))).toBe(
+        "intent sugar: the delivery's `tokens[].amount` refers to 'mystery', which is neither a " +
+          "compile-time value nor a variable of the enclosing program. Declare it with " +
+          "`const mystery = ...` before the intent, or supply it as a compile-time define.",
+      );
+    });
+
+    it("a reward token the enclosing chain does not register", () => {
+      expect(messageOf(intent("USDC", "amount", "USDT0"))).toBe(
+        "intent sugar: the reward token 'USDT0' is not a token base registers, nor a define. The " +
+          "reward — `.reward({ tokens: [...] })` — is escrowed on base, where the program opening " +
+          "the intent runs, so its symbols are base's. Use a symbol base registers, or the token's " +
+          "base address as a literal or a define.",
+      );
+    });
+  });
+
   it("names the deadline and the creator when they are missing", () => {
     expect(() => rewriteIntentSugar(TRANSFER_INTENT, context({ defaults: {} }))).toThrow(
       /needs a `deadline`/,
