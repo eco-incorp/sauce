@@ -1397,7 +1397,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   fill: {
-    usage: "sauce fill <file> --chain <source> (--config <file> | --rpc-url <url>) [options]",
+    usage: "sauce fill <file | -> --chain <source> (--config <file> | --rpc-url <url>) [options]",
     summary: "Rehearse a solver filling a file's intents on their destination, with no key",
     flags: {
       ...PROGRAM,
@@ -1450,8 +1450,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "    --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0x… \\",
       "    --intent-execution-fee 1000000000000",
     ].join("\n"),
-    run: (args, io) => {
-      const program = programInput(args, io);
+    run: async (args, io) => {
+      const program = await programInput(args, io);
       const rpcUrl = stringFlag(args, "rpc-url");
       const config = stringFlag(args, "config");
       if (rpcUrl === undefined && config === undefined) {
