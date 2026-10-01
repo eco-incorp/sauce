@@ -33,7 +33,7 @@ import { collectDeclaredNames, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import { isChainKey, resolveNamespace } from "./accessor-index.js";
 import { resolveContractReference } from "./protocol-rewrite.js";
-import { TOKEN_REGISTRY } from "./token-registry.js";
+import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "./token-registry.js";
 
 export interface AvailabilityResult {
   readonly source: string;
@@ -48,11 +48,12 @@ function fail(message: string): never {
   throw new Error(`available(): ${message}`);
 }
 
-/** Every token symbol the registry has on any chain: a symbol outside this set is a typo. */
+/** Every token symbol the registry has on any chain, EVM or Solana: a symbol outside this set is
+ *  a typo. */
 let knownSymbols: ReadonlySet<string> | undefined;
 function registrySymbols(): ReadonlySet<string> {
   knownSymbols ??= new Set(
-    Object.values(TOKEN_REGISTRY)
+    [...Object.values(TOKEN_REGISTRY), ...Object.values(SVM_TOKEN_REGISTRY)]
       .flat()
       .map((row) => row.symbol),
   );

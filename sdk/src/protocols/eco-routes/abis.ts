@@ -13,6 +13,15 @@
  * `route` crosses as `bytes` on every entry point, never as a tuple. That is not a style choice:
  * for a Solana destination the route is Borsh rather than ABI, so handing the Portal a pre-encoded
  * blob is the only way its `routeHash` matches the one the SDK computed. See `routes/portal.ts`.
+ *
+ * EVENTS AND ERRORS are the deployed Portal's, as its verified source declares them: the intent
+ * lifecycle events, with each parameter's `indexed` exactly as emitted (a wrong flag decodes no log
+ * at all — `IntentFunded` indexes nothing, `IntentFulfilled` indexes both of its parameters), and
+ * every custom error the runtime code of every listed deployment can revert with, so a revert such
+ * as `InsufficientFunds(intentHash)` decodes by name. Left out: the ERC-7683 `Open`/`OrderFilled`
+ * events, the ECDSA errors of `openFor` (Arc's build has none), and errors only a constructor
+ * throws. `registry-abi.test.ts` checks every one against the deployed code and the verified ABI,
+ * and decodes a real log of each event it has one of.
  */
 
 export const PortalABI = [
@@ -548,8 +557,8 @@ export const PortalABI = [
       },
       {
         name: "rewardTokens",
-        indexed: false,
         type: "tuple[]",
+        indexed: false,
         components: [
           {
             name: "token",
@@ -570,12 +579,12 @@ export const PortalABI = [
       {
         name: "intentHash",
         type: "bytes32",
-        indexed: true,
+        indexed: false,
       },
       {
         name: "funder",
         type: "address",
-        indexed: true,
+        indexed: false,
       },
       {
         name: "complete",
@@ -596,12 +605,321 @@ export const PortalABI = [
       {
         name: "claimant",
         type: "bytes32",
-        indexed: false,
+        indexed: true,
       },
     ],
   },
+  {
+    type: "event",
+    name: "IntentProven",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+        indexed: true,
+      },
+      {
+        name: "claimant",
+        type: "bytes32",
+        indexed: true,
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "IntentWithdrawn",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+        indexed: false,
+      },
+      {
+        name: "claimant",
+        type: "address",
+        indexed: true,
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "IntentRefunded",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+        indexed: false,
+      },
+      {
+        name: "refundee",
+        type: "address",
+        indexed: true,
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "IntentTokenRecovered",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+        indexed: false,
+      },
+      {
+        name: "refundee",
+        type: "address",
+        indexed: true,
+      },
+      {
+        name: "token",
+        type: "address",
+        indexed: true,
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "AddressEmptyCode",
+    inputs: [
+      {
+        name: "target",
+        type: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "ArrayLengthMismatch",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "FailedInnerCall",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InsufficientFunds",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InsufficientNativeAmount",
+    inputs: [
+      {
+        name: "sent",
+        type: "uint256",
+      },
+      {
+        name: "required",
+        type: "uint256",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "IntentAlreadyExists",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "IntentAlreadyFulfilled",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "IntentExpired",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "IntentNotClaimed",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "IntentNotFulfilled",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidClaimant",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidHash",
+    inputs: [
+      {
+        name: "expectedHash",
+        type: "bytes32",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidOriginChainId",
+    inputs: [
+      {
+        name: "expected",
+        type: "uint256",
+      },
+      {
+        name: "actual",
+        type: "uint256",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidOriginSettler",
+    inputs: [
+      {
+        name: "expected",
+        type: "address",
+      },
+      {
+        name: "actual",
+        type: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidPortal",
+    inputs: [
+      {
+        name: "portal",
+        type: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidRecoverToken",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidShortString",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidSignature",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidStatusForFunding",
+    inputs: [
+      {
+        name: "status",
+        type: "uint8",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidStatusForRefund",
+    inputs: [
+      {
+        name: "status",
+        type: "uint8",
+      },
+      {
+        name: "currentTime",
+        type: "uint256",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidStatusForWithdrawal",
+    inputs: [
+      {
+        name: "status",
+        type: "uint8",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "NotCreatorCaller",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "OpenDeadlinePassed",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "SafeERC20FailedOperation",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "TypeSignatureMismatch",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ZeroClaimant",
+    inputs: [],
+  },
 ] as const;
 
+/**
+ * What every eco-routes prover shares (`IProver`): the proof a source chain reads, and the events
+ * it announces a proof by. A prover's own errors differ by kind (Hyperlane, Polymer, …) and are
+ * raised to the mailbox or the Portal that called it, never to a caller of these, so none is here.
+ */
 export const ProverABI = [
   {
     type: "function",
@@ -627,6 +945,49 @@ export const ProverABI = [
             type: "uint64",
           },
         ],
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "IntentProven",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+        indexed: true,
+      },
+      {
+        name: "claimant",
+        type: "address",
+        indexed: true,
+      },
+      {
+        name: "destination",
+        type: "uint64",
+        indexed: false,
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "IntentProofInvalidated",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+        indexed: true,
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "IntentAlreadyProven",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+        indexed: false,
       },
     ],
   },

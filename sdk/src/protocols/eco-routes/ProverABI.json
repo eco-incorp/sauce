@@ -26,6 +26,49 @@
           ]
         }
       ]
+    },
+    {
+      "type": "event",
+      "name": "IntentProven",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "claimant",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destination",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "IntentProofInvalidated",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "IntentAlreadyProven",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
     }
   ]
 }

@@ -532,8 +532,8 @@
         },
         {
           "name": "rewardTokens",
-          "indexed": false,
           "type": "tuple[]",
+          "indexed": false,
           "components": [
             {
               "name": "token",
@@ -554,12 +554,12 @@
         {
           "name": "intentHash",
           "type": "bytes32",
-          "indexed": true
+          "indexed": false
         },
         {
           "name": "funder",
           "type": "address",
-          "indexed": true
+          "indexed": false
         },
         {
           "name": "complete",
@@ -580,9 +580,313 @@
         {
           "name": "claimant",
           "type": "bytes32",
-          "indexed": false
+          "indexed": true
         }
       ]
+    },
+    {
+      "type": "event",
+      "name": "IntentProven",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "claimant",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "IntentWithdrawn",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "claimant",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "IntentRefunded",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "refundee",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "IntentTokenRecovered",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "refundee",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "AddressEmptyCode",
+      "inputs": [
+        {
+          "name": "target",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "ArrayLengthMismatch",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "FailedInnerCall",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InsufficientFunds",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InsufficientNativeAmount",
+      "inputs": [
+        {
+          "name": "sent",
+          "type": "uint256"
+        },
+        {
+          "name": "required",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "IntentAlreadyExists",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "IntentAlreadyFulfilled",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "IntentExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "IntentNotClaimed",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "IntentNotFulfilled",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidClaimant",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidHash",
+      "inputs": [
+        {
+          "name": "expectedHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidOriginChainId",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "uint256"
+        },
+        {
+          "name": "actual",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidOriginSettler",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "address"
+        },
+        {
+          "name": "actual",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidPortal",
+      "inputs": [
+        {
+          "name": "portal",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidRecoverToken",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidShortString",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidSignature",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidStatusForFunding",
+      "inputs": [
+        {
+          "name": "status",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidStatusForRefund",
+      "inputs": [
+        {
+          "name": "status",
+          "type": "uint8"
+        },
+        {
+          "name": "currentTime",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidStatusForWithdrawal",
+      "inputs": [
+        {
+          "name": "status",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "NotCreatorCaller",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "OpenDeadlinePassed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SafeERC20FailedOperation",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "TypeSignatureMismatch",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroClaimant",
+      "inputs": []
     }
   ]
 }

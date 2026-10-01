@@ -590,8 +590,10 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     // call, which is cheaper than a cook and needs neither a Pot nor a Kitchen fee. Anything else --
     // a swap, a condition, a loop, an intent of its own -- is a program, compiled for the
     // destination and run through its Pot. The second shape is strictly more general; the first is
-    // kept because it is free.
-    const simple = isDirectCallBody(site.body, defines);
+    // kept because it is free. It is ERC-20 calldata, so only for an EVM destination: on Solana a
+    // symbol is a mint's key, and a token write there goes the program way, where the SVM compile
+    // refuses the token syntax by name.
+    const simple = site.chain.kind === "evm" && isDirectCallBody(site.body, defines);
     // The Portal the child's route records. Resolved once, here, because it is also what the Pot's
     // owner is derived from: a route recording one Portal is run by that Portal's Executor.
     const destinationPortal = context.defaults.destinationPortal ?? context.portalOf(site.chain);
