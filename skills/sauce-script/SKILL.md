@@ -115,12 +115,51 @@ takes it directly; a program for a chain writes them as above.
   address.
 - A module-level `let` is scratch, reset on every run. Persistent state is `evm.sstore`/`evm.sload`
   (or `svm.sstore`/`svm.sload`).
+- **At module level, only scalar literals.** A `let` there starts as a number, address or boolean
+  literal; anything else (`[1n, 2n]`, `new Array(n)`, `-1n`, `1n << 160n`, a call) is refused with
+  "must be initialized with a literal". A `const` array there is a lookup table, read only at a
+  literal index (`FEES[0]`), never looped over. Declare arrays and computed values inside a function.
+
+## Functions
+
+- Helpers are top-level `function` declarations, annotated on the signature. They may call each
+  other and recurse; `main` is never called.
+- **Arrays and records are passed by reference**: a helper that writes `xs[i] = v` changes the
+  caller's array, so a helper can fill an array it is given. Numbers, bools and bytes are copies.
+- **A comparison is a `bool`, but a function with no return annotation returns a number**, even
+  `return a > b` (1 or 0). `if`, `while` and `&&` take either; a `: bool` function cannot return the
+  number. Give a helper that answers yes or no a `: bool` return type:
+
+```sauce chain=base,arbitrum
+// Selling token0 (the lower address) pushes a pool's price down, so a higher price is better.
+function isBetter(price: Uint256, than: Uint256, sellsToken0: bool): bool {
+  if (sellsToken0) {
+    return price > than;
+  }
+  return price < than;
+}
+
+// Fills `best` in place: an array goes to a helper by reference.
+function keepBest(best: Uint256[], price: Uint256, sellsToken0: bool): void {
+  if (best[0] == 0n || isBetter(price, best[0], sellsToken0)) {
+    best[0] = price;
+  }
+}
+
+function main(prices: Uint256[], tokenIn: Address, tokenOut: Address): Uint256 {
+  let best = new Array(1);
+  for (const price of prices) {
+    keepBest(best, price, tokenIn < tokenOut);
+  }
+  return best[0];
+}
+```
 
 ## Syntax that compiles, and what to write instead
 
 Compiles: `let`/`const`, `if`/`else if`/`else`, `while`, C-style `for`, `for...of` over an array,
 `break`/`continue`, `i++` and `+=` as statements, ternaries, `&&`/`||`/`!`, `**`, bit operators,
-`/` and `%`, helper functions calling helpers, recursion, `Math.mulDiv(a, b, c)`, `Math.sqrt(x)`.
+`/` and `%`, helper functions, `Math.mulDiv(a, b, c)`, `Math.sqrt(x)`.
 The full list, with what each rejection says, is section 14 of
 [references/builtins.md](references/builtins.md).
 

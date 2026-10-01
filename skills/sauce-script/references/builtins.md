@@ -45,7 +45,10 @@ example program each, is `builtins.json`.
 | `Account`, `Account<Writable>`, `Account<Signer>`, `Account<Writable, Signer>` | **SVM:** an account the transaction attaches, declared as a `main` parameter, optionally with the roles it must have. **EVM:** `Account` is just an address, and roles are an error: "`an Account role` is not available on the evm target; an `Account` is an address value on the EVM — write `Account` alone". |
 | `void`                                                                         | No value (return type only)                                                                                                                                                                                                                                                                                       |
 
-- A parameter or return without an annotation is a number.
+- A parameter without an annotation is a number. So is the result of a function without a return annotation,
+  even one that returns a comparison or `true`: it comes back as 1 or 0. `if`, `while`, `&&` and `!` take that,
+  but a `: bool` function cannot return it: "a return value: expected a bool, found a number". Give a helper
+  that answers yes or no a `: bool` return type.
 - An unknown type name is rejected with a list of the valid ones, as in "`uint256` is not a type — write
   `Uint256`, `Address`, `Account`, `bool`, `bytes` or `string`, an array `T[]`, an inline object type `{ a: Uint256 }`
   for a tuple …". Union types, `Array<T>` and `[A, B]` tuple types are rejected the same way.
@@ -133,6 +136,10 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
   can't be used as one — call it as a statement instead".
 - `main` is the entry point and cannot be called from your code.
 - A function other than `main` takes **at most 16 parameters**. More fails with "`f` does not fit …".
+- **Arrays and records are passed by reference.** A helper that writes `xs[i] = v` or `r.amount = v` changes
+  the caller's array or record, so a helper can fill an array it is given. Numbers, bools and bytes are passed
+  by value. A helper cannot replace an array parameter with a new array: "`<name>` cannot be reassigned a value
+  of a different type — expected an element count known only at run time, found N element(s)".
 
 **`main`'s arguments**
 
@@ -149,7 +156,15 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
 **Module constants and defines**
 
 - A top-level `const` must be a literal or a constant expression over other `const`s.
+- A top-level `const` array, `const FEES = [100n, 500n];`, is a lookup table: it is read only at a literal index,
+  `FEES[0]`. A loop over it, `.length` or a write gives "a module-scope lookup table `<name>` can only be read
+  by a literal index or a field name …", and a computed index "a module-scope lookup table can only be indexed by
+  a non-negative integer literal or a `const` bound to one …". Declare an array you loop over or index at run
+  time inside a function.
 - A top-level `let` is scratch space, reset on every run. It is not persistent storage.
+- A top-level `let` starts as a number, address or boolean literal, nothing else: "a module-scope `let <name>`
+  must be initialized with a literal — a number, address or boolean literal. …". An array, bytes, a record, a
+  negative number, an expression or a call goes inside a function.
 - The compile option `defines` replaces a `const` of the same name.
 
 **Imports**

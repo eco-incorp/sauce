@@ -268,6 +268,77 @@ export const rejections = [
     targets: ["evm"],
     src: `function f(${Array.from({ length: 17 }, (_, i) => `p${i}: Uint256`).join(", ")}): Uint256 { return ${Array.from({ length: 17 }, (_, i) => `p${i}`).join(" + ")} + p0; } function main(a: Uint256): Uint256 { return f(${Array.from({ length: 17 }, (_, i) => `a + ${i}n`).join(", ")}); }`,
   },
+  // A function with no return annotation returns a number, even when it returns a comparison.
+  {
+    quotes: ["a return value: expected a bool, found a number"],
+    targets: ["evm", "svm"],
+    src: "function f(a: Uint256, b: Uint256) { return a > b; } function main(): bool { return f(1n, 2n); }",
+  },
+  // A helper fills the caller's array in place; it cannot rebind the parameter to a new one.
+  {
+    quotes: [
+      "`<name>` cannot be reassigned a value of a different type — expected an element count known only at run time, found N element(s)",
+    ],
+    targets: ["evm", "svm"],
+    src: "function f(xs: Uint256[]): void { xs = new Array(2); } function main(): Uint256 { let xs = [1n, 2n]; f(xs); return xs[0]; }",
+  },
+  // Module scope: a `let` starts as a scalar literal, and a `const` array is a lookup table.
+  {
+    quotes: [
+      "a module-scope `let <name>` must be initialized with a literal — a number, address or boolean literal. …",
+    ],
+    targets: ["evm", "svm"],
+    src: "let xs = [1n, 2n]; function main(): Uint256 { return xs[0]; }",
+  },
+  {
+    quotes: [
+      "a module-scope `let <name>` must be initialized with a literal — a number, address or boolean literal. …",
+    ],
+    targets: ["evm"],
+    src: "let x = 1n << 160n; function main(): Uint256 { return x; }",
+  },
+  {
+    quotes: [
+      "a module-scope `let <name>` must be initialized with a literal — a number, address or boolean literal. …",
+    ],
+    targets: ["evm"],
+    src: "let x = -1n; function main(): Uint256 { return x; }",
+  },
+  {
+    quotes: [
+      "a module-scope `let <name>` must be initialized with a literal — a number, address or boolean literal. …",
+    ],
+    targets: ["evm"],
+    src: "let x = ctx.chainId(); function main(): Uint256 { return x; }",
+  },
+  {
+    quotes: [
+      "a module-scope `let <name>` must be initialized with a literal — a number, address or boolean literal. …",
+    ],
+    targets: ["evm"],
+    src: 'let b = "text"; function main(): Uint256 { return b.length; }',
+  },
+  {
+    quotes: [
+      "a module-scope lookup table `<name>` can only be read by a literal index or a field name …",
+    ],
+    targets: ["evm", "svm"],
+    src: "const FEES = [100n, 500n]; function main(): Uint256 { let t = 0n; for (const f of FEES) { t += f; } return t; }",
+  },
+  {
+    quotes: [
+      "a module-scope lookup table `<name>` can only be read by a literal index or a field name …",
+    ],
+    targets: ["evm"],
+    src: "const FEES = [100n, 500n]; function main(): Uint256 { return FEES.length; }",
+  },
+  {
+    quotes: [
+      "a module-scope lookup table can only be indexed by a non-negative integer literal or a `const` bound to one …",
+    ],
+    targets: ["evm", "svm"],
+    src: "const FEES = [100n, 500n]; function main(i: Uint256): Uint256 { return FEES[i]; }",
+  },
   {
     row: "default parameters, rest parameters, destructuring parameters",
     targets: ["evm"],
