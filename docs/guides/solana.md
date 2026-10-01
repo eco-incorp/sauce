@@ -36,14 +36,59 @@ export function compileSplTransfer(amount: bigint) {
 
 The account references are names, not addresses. `manifest.accounts` records their order and required roles. Resolve them to the mint, source token account, destination token account, authority, and token program before execution. Amounts are smallest-unit integers. The builder reads mint decimals for the checked instruction and defaults to the classic SPL Token program. Set the builder's top-level `tokenProgram: "token-2022"` for a supported Token-2022 operation; `svm.tokenProgram` names the account reference and must resolve to that token program.
 
-## Execute through the Kitchen
+## Two ways to run a program
 
-`createSauceSvmClient` requires an RPC URL, engine program ID, Kitchen program ID, and a Kit transaction signer. Its inline execution path constructs a Kitchen `cook`, includes the required heap-frame instruction, resolves accounts, and builds/signs transactions.
+The released engine has two entry points, and the SDK builds a cook for each. A client chooses with
+`via`, and the `sauce` command with `--via` ([CLI guide](cli.md#solana)).
+
+|                                 | Through the Kitchen: `via: "kitchen"` (the default)                      | Direct to the engine: `via: "engine"`                                                  |
+| ------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| What the transaction calls      | the Kitchen's `cook`, or `cook_from_account` for a staged program        | the engine's `cookAndPay`, or `cookAndPayFromAccountPinned` for a staged program       |
+| Whose authority the program has | the owner's Pot, which the Kitchen signs for, and any signer it is given | only the signers the transaction gives it, such as the wallet; nothing signs for a Pot |
+| The execution fee               | charged by the Kitchen, before it calls the engine                       | charged by the engine, before the program runs                                         |
+| CPI depth left for the program  | three levels below it, on mainnet; seven where SIMD-0268 is active       | four, on mainnet; eight where SIMD-0268 is active                                      |
+
+**Through the Kitchen** is for custody through a Pot: the program holds and spends what the Pot
+owns (token accounts whose owner is the Pot) and writes the Pot's own storage, at an address that is
+the same for every cook of that owner and salt. The owner signs every Kitchen cook.
+
+**Direct to the engine** is for a program that acts as the signer: it spends the wallet's own token
+accounts, with the wallet signing as their authority, and makes no Pot at all. It also starts the
+program's own calls one level higher on Solana's invoke stack, because no Kitchen frame sits under
+the engine. That is the difference between fitting and not fitting when the program calls a program
+that calls others — an aggregator into a pool into a token program, say. Solana allows 4 levels of
+CPI below a transaction's instruction (8 once SIMD-0268's feature is active): through the Kitchen
+the engine spends one of them.
+
+What does not change between them:
+
+- **The fee.** Both read it from the Kitchen's `["execution_fee"]` config account and pay it into
+  that same account, the Kitchen's treasury. Both instructions carry a signed `max_execution_fee`,
+  and a fee above it refuses the cook before anything runs or is paid. Directly, the fee payer must
+  be a System-owned account that holds no data, and the engine validates the config even when the
+  fee is zero, so a lookalike account is refused rather than read as free.
+- **The program.** The same compiled bytecode and the same account indices run either way: the
+  Kitchen's accounts, and the three a direct cook pays with, are taken off the list before the
+  program sees it.
+- **`ctx.self()`** is the engine program's id, and **`ctx.msgSender()`** the first signer among the
+  program's accounts.
+
+A program cannot write an account that does not sign (`svm.sstore` refuses it), so a direct cook
+cannot write a Pot's storage, and a transfer whose authority is a Pot fails for the missing
+signature. Attach the wallet, signing, where the program needs an authority.
+
+## Run with the client
+
+`createSauceSvmClient` requires an RPC URL, engine program ID, Kitchen program ID, and a Kit
+transaction signer. It builds the cook `via` names, includes the required heap-frame instruction,
+resolves accounts, and builds/signs transactions. The Kitchen ID is required either way: a direct
+cook pays the fee its config sets.
 
 Use `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from
 `@eco-incorp/sauce/deployments` for the released program identities, and confirm
-they are deployed on your cluster. The client derives a Pot owned by its `payer` signer;
-choose it with `potSalt` when you configure the client.
+they are deployed on your cluster. Through the Kitchen the client derives a Pot owned by its
+`payer` signer; choose it with `potSalt` when you configure the client. Direct, `payer` signs and
+pays the fee, and `potSalt` means nothing.
 
 ```ts
 import {
@@ -64,93 +109,115 @@ export async function simulateProgram(
 }
 ```
 
-For the transfer above, the resolution keys are `sourceAta`, `mint`, `destinationAta`, `owner`, and `tokenProgram`. A non-payer transaction authority should be supplied as `{ address, signer: transactionSigner }`; an address alone cannot provide its signature. A Pot PDA that the Kitchen signs for must be attached with `signer: false` in the transaction resolution. That override represents a signature supplied during invocation, not permission to bypass the program's authority requirement.
+For the transfer above, the resolution keys are `sourceAta`, `mint`, `destinationAta`, `owner`, and `tokenProgram`. A non-payer transaction authority should be supplied as `{ address, signer: transactionSigner }`; an address alone cannot provide its signature. A Pot PDA that the Kitchen signs for must be attached with `signer: false` in the transaction resolution. That override represents a signature supplied during invocation, not permission to bypass the program's authority requirement — and a direct cook has no Kitchen to supply it.
 
 Pass `{ accounts: [...] }` to `simulate` to see what the cook would move: the result's `accounts`
 holds each one's state after the transaction (`lamports`, `owner`, `data`), or `null` where it no
 longer exists, read without sending anything.
 
-After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling accepted for each cook; its default is zero and fails when the Kitchen charges a positive fee. Lookup-table helpers can create or extend an address lookup table and wait until it is usable.
+After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling each cook signs; its default is zero and fails when the Kitchen charges a positive fee. A cook's own `maxExecutionFee` option overrides it. Lookup-table helpers can create or extend an address lookup table and wait until it is usable.
 
 ### Select the released programs and quote the fee
 
 Read the program ids from the deployment helpers rather than pasting them, and
-confirm each is deployed on the cluster you are targeting. The SDK's clients cook
-through the Kitchen; the engine's direct paid instructions have no builder here.
+confirm each is deployed on the cluster you are targeting.
 
-Every cook pays the Kitchen's fee in lamports, and the fee is read from chain, not
-assumed. This example quotes it and refuses to sign past a budget the caller set:
+Every cook pays the Kitchen's fee in lamports, either way, and the fee is read from chain, not
+assumed: `fetchExecutionFee` (or a client's `executionFee()`) reads the config account and refuses
+one that is not the Kitchen's. This example quotes it, refuses to sign past a budget the caller set,
+and signs the quote as the cap:
 
 ```ts
-import { createHash } from "node:crypto";
-import {
-  address,
-  assertAccountExists,
-  createSolanaRpc,
-  fetchEncodedAccount,
-  type TransactionSigner,
-} from "@solana/kit";
+import { address, createSolanaRpc, type TransactionSigner } from "@solana/kit";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "@eco-incorp/sauce/deployments";
-import { createSauceSvmClient, deriveExecutionFeeConfigPda } from "@eco-incorp/sauce/svm";
+import { createSauceSvmClient, fetchExecutionFee, type CookVia } from "@eco-incorp/sauce/svm";
 
 export async function createReleasedClient(
   rpcUrl: string,
   payer: TransactionSigner,
   feeBudgetLamports: bigint,
+  via: CookVia = "kitchen",
 ) {
   const kitchen = address(v12SvmKitchenProgramId());
-  const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen);
-  const account = await fetchEncodedAccount(createSolanaRpc(rpcUrl), feeConfig);
-  assertAccountExists(account);
-  const discriminator = createHash("sha256")
-    .update("account:ExecutionFeeConfig")
-    .digest()
-    .subarray(0, 8);
-  if (
-    account.programAddress !== kitchen ||
-    account.data.length !== 16 ||
-    !discriminator.every((value, index) => account.data[index] === value)
-  )
-    throw new Error("Unexpected Kitchen fee account");
-  const fee = new DataView(
-    account.data.buffer,
-    account.data.byteOffset,
-    account.data.byteLength,
-  ).getBigUint64(8, true);
-  if (fee > feeBudgetLamports) throw new Error("Kitchen fee exceeds the approved budget");
+  const fee = await fetchExecutionFee(createSolanaRpc(rpcUrl), kitchen);
+  if (fee > feeBudgetLamports) throw new Error(`The execution fee ${fee} exceeds the budget`);
   return createSauceSvmClient({
     rpcUrl,
     payer,
     kitchen,
     programId: address(v12SvmEngineProgramId()),
     maxExecutionFee: fee,
+    via,
   });
 }
 ```
 
 The payer needs SOL for this per-cook fee, transaction fees, and any rent or program
-spending. The Kitchen charges its current fee up to the signed cap; a fee increase
+spending. The fee charged is the current one, up to the signed cap; a fee increase
 above the quoted amount makes the cook fail. Requote before signing a retry.
 
 `resolveAccounts` preserves manifest order. The reserved `payer` reference resolves to the fee payer. A manifest ending with `remaining` leaves the final account tail to the caller; do not insert accounts that shift that tail's indices.
 
+### Build a direct cook yourself
+
+The engine's three paid instructions have builders in `@eco-incorp/sauce/svm` (and the narrow
+`@eco-incorp/sauce/svm/engine`): `buildCookAndPayInstruction` for inline bytecode,
+`buildCookAndPayFromAccountPinnedInstruction` for a staged program and its digest, and
+`buildCookAndPayFromAccountInstruction`, unpinned. Each takes the program's tail and appends the
+fee payer, the System Program and the fee config, which the engine takes off before the program
+runs:
+
+```ts
+import type { Address, TransactionSigner } from "@solana/kit";
+import {
+  buildCookAndPayInstruction,
+  buildHeapFramePrepend,
+  deriveExecutionFeeConfigPda,
+  type ResolvedAccountMeta,
+} from "@eco-incorp/sauce/svm";
+
+export async function directCook(
+  engine: Address,
+  kitchen: Address,
+  wallet: TransactionSigner,
+  bytecode: Uint8Array,
+  tail: readonly ResolvedAccountMeta[],
+  quotedFee: bigint,
+) {
+  const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen);
+  return [
+    buildHeapFramePrepend(),
+    buildCookAndPayInstruction({
+      engineProgram: engine,
+      feeConfig,
+      feePayer: wallet.address,
+      maxExecutionFee: quotedFee,
+      bytecode,
+      tail,
+    }),
+  ];
+}
+```
+
 ## Stage a larger program
 
-Staging belongs to the Kitchen. There is no `client.stageBuffer()` convenience method. Build and submit Kitchen instructions in this order:
+Staging belongs to the Kitchen, whichever way the program then runs. There is no `client.stageBuffer()` convenience method. Build and submit Kitchen instructions in this order:
 
 1. Derive metadata and code addresses with `deriveCodeBufferPda(kitchen, owner, nonce)` and `deriveCodePda(kitchen, codeBuffer)`.
 2. Allocate with `buildCreateCodeBufferInstruction`. Capacities above `GROWTH_STEP` require additional `buildGrowCodeBufferInstruction` calls.
 3. Write the bytecode in appropriately sized chunks using `buildWriteCodeBufferInstruction`.
 4. Finalize with `buildFinalizeCodeBufferInstruction`, supplying the byte length and its SHA-256 digest. Finalization verifies the digest and shrinks the code account to that length.
-5. Execute with a Kitchen `buildCookFromAccountInstruction`, or the client's `simulateStaged`/`executeStaged` methods.
+5. Execute with a Kitchen `buildCookFromAccountInstruction`, the engine's `buildCookAndPayFromAccountPinnedInstruction`, or the client's `simulateStaged`/`executeStaged` methods.
 
-The low-level instruction builders return instructions; the application groups, signs, submits, and confirms them. The two Kitchen cook paths require `buildHeapFramePrepend()` when assembling transactions yourself. A staged client's first argument is the **code-buffer metadata address**; it derives the associated code account.
+The low-level instruction builders return instructions; the application groups, signs, submits, and confirms them. Every cook requires `buildHeapFramePrepend()` when assembling transactions yourself. A staged client's first argument is the **code-buffer metadata address**; it derives the associated code account.
 
-`buildCookFromAccountInstruction` takes a `pin` the Kitchen checks at execution time. The client's `expectedSha256` option is rejected — it is not a substitute for that pin. The digest checked when a buffer is finalized and a digest chosen by a caller at execution are different guarantees about different moments; read both before relying on either.
+Through the Kitchen, `buildCookFromAccountInstruction` takes a `pin` the Kitchen checks at execution time, and the Kitchen runs only a finalized buffer the signing owner holds. The client's `expectedSha256` option is rejected there — it is not a substitute for that pin. The digest checked when a buffer is finalized and a digest chosen by a caller at execution are different guarantees about different moments; read both before relying on either.
+
+Direct, the engine checks nothing about the code account — not its owner, not that it is finalized — except, in `cookAndPayFromAccountPinned`, that the SHA-256 of all its data is the digest the instruction carries, and it runs exactly the bytes it hashed. So the client always pins a direct staged cook: to `expectedSha256`, or to the `sha256` of the `StagedBuffer` you pass, and a bare buffer address with neither is refused. `buildCookAndPayFromAccountInstruction` runs whatever the account holds when the transaction lands, with the signer's authority: use it only for an account no one else can change.
 
 ## SVM destinations in Eco intents
 
-**Build Solana execution with the Kitchen client, not the SVM route helpers.**
+**Build Solana execution with the SVM client (`createSauceSvmClient`), not the SVM route helpers.**
 
 `Solana(body, { execution, ... }).reward(...)`, `routes.compileSauceRoute()`,
 `buildSauceSvmCall()` and `buildSauceSvmCalls()` emit an `execute_from_account`

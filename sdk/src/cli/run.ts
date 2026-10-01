@@ -22,9 +22,11 @@ import {
   parseDefinesFile,
   parseFlags,
   parseFundVia,
+  parseLamports,
   parseSalt,
   parseTarget,
   parseUnixSeconds,
+  parseVia,
   parseWei,
   repeatedFlag,
   requiredFlag,
@@ -356,6 +358,18 @@ const COOK: FlagSpecs = {
     multiple: true,
     value: "NAME=<address>",
     help: "An account main takes, by name: an address, pot or owner",
+    only: "svm",
+  },
+  via: {
+    type: "string",
+    value: "<kitchen|engine>",
+    help: "The Kitchen's cook on the Pot (default), or the engine's own, with no Pot",
+    only: "svm",
+  },
+  "max-execution-fee": {
+    type: "string",
+    value: "<lamports>",
+    help: "Refuse a cook whose execution fee is above this",
     only: "svm",
   },
 };
@@ -697,6 +711,14 @@ function cookInput(
     throw new UsageError(
       `--account names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
     );
+  }
+  for (const flag of ["via", "max-execution-fee"]) {
+    if (stringFlag(args, flag) !== undefined) {
+      throw new UsageError(
+        `--${flag} is for a Solana cook, which can reach the engine through the Kitchen or ` +
+          `directly; on ${program.chain.slug} a cook is the Pot's, and --value carries the fee`,
+      );
+    }
   }
 
   return {
@@ -1187,6 +1209,9 @@ function svmCookInput(
     throw new UsageError("--format cast prints an EVM transaction; a Solana one is base64 JSON");
   }
 
+  const via = stringFlag(args, "via");
+  const maxFee = stringFlag(args, "max-execution-fee");
+
   return {
     ...program,
     owner: svmOwner(args, signer),
@@ -1194,6 +1219,10 @@ function svmCookInput(
     accounts: parseAccounts(repeatedFlag(args, "account")),
     ...argsInput(args, io, trailing),
     rpcUrl: requiredEndpoint(args, io, program.chain),
+    ...(via === undefined ? {} : { via: parseVia(via) }),
+    ...(maxFee === undefined
+      ? {}
+      : { maxExecutionFee: parseLamports("max-execution-fee", maxFee) }),
   };
 }
 
@@ -1850,6 +1879,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         value: "NAME=<address>",
         help: "Solana: an account main takes (an address, pot or owner), to size the cook",
       },
+      via: {
+        type: "string",
+        value: "<kitchen|engine>",
+        help: "Solana: size the Kitchen's cook (default) or the engine's direct one",
+      },
       ...ENDPOINT,
       out: { type: "string", value: "<path>", help: "Write the output to a file, not stdout" },
       json: {
@@ -1875,7 +1909,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "             chain: an intent body's on the intent's own",
       "  size       the program's bytes; payload: the program with main's arguments (--args)",
       "  cook       on Solana, the cook's transaction against the 1232-byte limit, measured",
-      "             with --account where given and a distinct account for each other slot",
+      "             with --account where given and a distinct account for each other slot, as",
+      "             the Kitchen's cook or, --via engine, the engine's direct one",
       "  intentPots each intent that runs a program on its destination: the Pot it cooks on (the",
       "             one the destination Portal's Executor owns, salt 0) and, with an endpoint",
       "             for that chain (--config), whether it is deployed; a missing one is warned",
@@ -1895,11 +1930,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           `--account names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
         );
       }
+      const via = stringFlag(args, "via");
+      if (via !== undefined && program.chain.kind !== "svm") {
+        throw new UsageError(
+          `--via chooses how a Solana cook reaches the engine; a cook on ${program.chain.slug} is ` +
+            "the Pot's",
+        );
+      }
       const output = await compileCommand(
         {
           ...program,
           ...argsInput(args, io, trailing),
           ...(accounts.length === 0 ? {} : { accounts: parseAccounts(accounts) }),
+          ...(via === undefined ? {} : { via: parseVia(via) }),
           endpoints: endpointsOf(args, io, program.chain),
         },
         io,
@@ -2024,19 +2067,24 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "On Solana: the Kitchen cook, simulated from --owner with signatures unchecked, with each",
       "account main takes given as --account NAME=<address | pot | owner> and an Address",
       "argument as a base58 public key. A Pot the Kitchen has not created is created first, in the",
-      "same transaction. Prints the compute units and what the cook moved — each token account's",
-      "balance change and each account's lamports, read from the accounts the transaction writes",
-      "before it and as the simulation leaves them — or the reason (a program's revert message",
-      "decoded) and the program logs. Solana's simulateTransaction takes no account overrides, so",
-      "the owner must hold the Pot's rent and the fees, and --assume-balance is refused there. A",
-      "cook too large for one transaction is refused with the bytes to shrink: staging it writes",
-      "a code buffer on chain, which only `sauce run` does.",
+      "same transaction. --via engine rehearses the engine's own paid cook instead: no Kitchen and",
+      "no Pot, --owner signing as the program's authority and paying the fee. Either way the cook",
+      "pays the Kitchen's execution fee, read from the cluster and printed; --max-execution-fee",
+      "refuses one above it. Prints the compute units and what the cook moved — each token",
+      "account's balance change and each account's lamports, read from the accounts the",
+      "transaction writes before it and as the simulation leaves them — or the reason (a program's",
+      "revert message decoded) and the program logs. Solana's simulateTransaction takes no account",
+      "overrides, so the owner must hold the Pot's rent and the fees, and --assume-balance is",
+      "refused there. A cook too large for one transaction is refused with the bytes to shrink:",
+      "staging it writes a code buffer on chain, which only `sauce run` does.",
       "",
       "Examples:",
       "  sauce simulate pay.sauce.ts --chain base --owner 0x… --rpc-url <url> \\",
       "    --assume-balance USDC:2 --args 0x… 1000000",
       "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> --rpc-url <url> \\",
       "    --account source=<token account> --account authority=pot",
+      "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> --rpc-url <url> \\",
+      "    --via engine --account source=<token account> --account authority=owner",
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
@@ -2144,10 +2192,22 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "is created the same way, and a program too large for one transaction is staged in a code",
       "buffer first (closed again after the cook). A failure prints the program logs.",
       "",
+      "--via kitchen|engine (Solana) is how the cook reaches the engine:",
+      "  kitchen  (default) the Kitchen's cook, which signs the owner's Pot: the program can hold",
+      "           and spend what the Pot owns, and write its storage",
+      "  engine   the engine's own paid cook (cookAndPay), with no Kitchen and no Pot: the program",
+      "           acts with the signer's authority (--account NAME=owner), and its own calls get",
+      "           one more level of CPI depth. A staged program is pinned to the staged bytes",
+      "Both pay the same execution fee into the Kitchen's treasury. The cook signs the fee it read",
+      "as its max_execution_fee, so it pays that or fails; --max-execution-fee <lamports> refuses",
+      "a fee above it before anything is sent.",
+      "",
       "Examples:",
       "  sauce run pay.sauce.ts --chain base --rpc-url <url> --keystore ~/.keys/me.json",
       "  sauce run sweep.sauce.ts --chain solana --rpc-url <url> --keypair ~/.config/solana/id.json \\",
       "    --account source=<token account> --account authority=pot",
+      "  sauce run sweep.sauce.ts --chain solana --rpc-url <url> --keypair ~/.config/solana/id.json \\",
+      "    --via engine --max-execution-fee 10000 --account authority=owner …",
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
@@ -2247,9 +2307,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "prints the same transaction as a `cast send` line instead. What must be true for it to",
       "land goes to stderr: the Pot deployed and funded, and sent from its owner.",
       "",
-      "On Solana: { chain, feePayer, pot, fee, transaction }, the Kitchen cook as a base64",
-      "transaction signed by no one, for --owner to sign. It needs an endpoint (for the",
-      "blockhash and the fee), and the --account flags simulate takes.",
+      "On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, transaction }, the Kitchen",
+      "cook as a base64 transaction signed by no one, for --owner to sign — or, --via engine, the",
+      "engine's own paid cook, with no Pot. It needs an endpoint (for the blockhash and the fee),",
+      "and the --account flags simulate takes; --max-execution-fee refuses a fee above it.",
       "",
       "Example:",
       "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0",
