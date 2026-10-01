@@ -18,9 +18,9 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
-  getContractAddress,
   http,
   numberToHex,
   parseAbi,
@@ -29,18 +29,33 @@ import {
   type PublicClient,
   type TestClient,
   type WalletClient,
+  zeroAddress,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
+import {
+  ecoRoutesExecutorOf,
+  ecoRoutesPortal,
+  ecoRoutesVaultImplementationOf,
+} from "../src/protocols/eco-routes/lookup.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import * as gated from "./evm/gated-engine.js";
 
 export const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
-export const describeEvm = RUNTIME_HEX_PATH ? describe : describe.skip;
+/** jest's `describe`, as far as `describeEvm` uses it — typed here, and read when called rather
+ *  than when this module loads, so a suite on another runner (`mcp/test`) can import the harness. */
+interface Describe {
+  (name: string, fn: () => void): void;
+  readonly skip: (name: string, fn: () => void) => void;
+}
+const jestDescribe = (): Describe => (globalThis as unknown as { describe: Describe }).describe;
+/** `describe`, or `describe.skip` without the engine. */
+export const describeEvm = (name: string, fn: () => void): void =>
+  (RUNTIME_HEX_PATH ? jestDescribe() : jestDescribe().skip)(name, fn);
 if (!RUNTIME_HEX_PATH && process.env.CI) {
   throw new Error(
     "SAUCE_V12_RUNTIME_CREATION_HEX is unset in CI. This suite must never skip there — see the " +
@@ -227,44 +242,6 @@ export async function startChain(slug: string, port: number): Promise<LocalChain
   };
 }
 
-/**
- * The eco-routes Portal at `at` — deployed there in effect, not just its code copied there.
- *
- * `plant` moves a contract's runtime, and a Portal's runtime names the two contracts its
- * constructor created — the vault implementation (its first `CREATE`) and the Executor (its second)
- * — which in turn name the address that created them. Copied alone, the Portal at `at` would derive
- * its vaults from the implementation of the address it was really deployed at, which is not what
- * any deployed Portal does and not what the SDK predicts. So this deploys it, then moves all three
- * runtimes to where a Portal deployed at `at` would have put them, rewriting each address they
- * embed to match.
- */
-export async function plantPortal(
-  local: LocalChain,
-  creationCode: Hex,
-  at: Address,
-): Promise<Address> {
-  const deployed = await local.plant(creationCode);
-  const created = (from: Address, nonce: bigint): Address =>
-    getContractAddress({ from, nonce, opcode: "CREATE" });
-  const moves: readonly (readonly [Address, Address])[] = [
-    [deployed, getAddress(at)],
-    [created(deployed, 1n), created(at, 1n)],
-    [created(deployed, 2n), created(at, 2n)],
-  ];
-  const relocated = (code: Hex): Hex =>
-    moves.reduce(
-      (text, [from, to]) => text.split(from.slice(2).toLowerCase()).join(to.slice(2).toLowerCase()),
-      code.toLowerCase(),
-    ) as Hex;
-  for (const [from, to] of moves) {
-    const code = await local.publicClient.getCode({ address: from });
-    if (code === undefined) throw new Error(`the Portal deployment left no contract at ${from}`);
-    await local.testClient.setCode({ address: to, bytecode: relocated(code) });
-  }
-
-  return getAddress(at);
-}
-
 /** The Pot's owner, as the Pot itself reports it. */
 export const potOwner = (local: LocalChain, pot: Address): Promise<Address> =>
   local.publicClient.readContract({
@@ -276,6 +253,69 @@ export const potOwner = (local: LocalChain, pot: Address): Promise<Address> =>
 /** The registry's address for `symbol` on `chain`, as the program names it. */
 export const registered = (chain: CanonicalChain, symbol: string): Address =>
   getAddress(numberToHex(registryTokenAddress(chain, symbol)!, { size: 20 }));
+
+/**
+ * The real eco-routes Portal (`evm/fixtures/Portal.json`, its own forge creation code) at the
+ * address the SDK records for `local`'s chain, deployed there IN EFFECT: its Executor and its vault
+ * implementation where a Portal deployed at that address would have created them. So a fill runs
+ * the Portal's real `_fulfill`, and its vaults are the ones the SDK derives, with no override.
+ *
+ * THE PORTAL IS PUT IN PLACE, NOT DEPLOYED THERE. A Portal's address is its deployer's, and its
+ * constructor CREATEs two contracts: the vault implementation (`ECO_ROUTES_VAULT_IMPLEMENTATION_NONCE`)
+ * and the Executor (`ECO_ROUTES_EXECUTOR_NONCE`). The Portal holds both addresses as immutables (its
+ * `executor`, and the implementation its vaults are clones of), and the two hold the Portal's (the
+ * Executor's `onlyPortal` check). So this deploys the fixture wherever it lands, then copies all three
+ * runtimes to the registry's Portal and the two addresses derived from it, with every copy of those
+ * three addresses rewritten. Copied alone, the Portal would derive its vaults from the
+ * implementation of the address it really landed at, which no deployed Portal does and the SDK does
+ * not predict. Its other immutables are untouched: its chain id (anvil's, which `startChain` sets
+ * to the chain's) and its EIP-712 cache, which recomputes the domain for an address that is not the
+ * cached one.
+ */
+export async function placePortal(local: LocalChain): Promise<{
+  readonly portal: Address;
+  readonly executor: Address;
+  readonly vaultImplementation: Address;
+}> {
+  const portal = getAddress(ecoRoutesPortal(local.chain.slug));
+  const executor = getAddress(ecoRoutesExecutorOf(portal));
+  const vaultImplementation = getAddress(ecoRoutesVaultImplementationOf(portal));
+  const creation = (
+    JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.json"), "utf8")) as {
+      creationCode: Hex;
+    }
+  ).creationCode;
+  const deployed = await local.plant(
+    `${creation}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex,
+  );
+  const moves = [
+    [deployed, portal],
+    [getAddress(ecoRoutesVaultImplementationOf(deployed)), vaultImplementation],
+    [getAddress(ecoRoutesExecutorOf(deployed)), executor],
+  ] as const;
+  const relocated = (code: Hex): Hex =>
+    moves.reduce(
+      (text, [from, to]) => text.split(from.slice(2).toLowerCase()).join(to.slice(2).toLowerCase()),
+      code.toLowerCase(),
+    ) as Hex;
+  for (const [from, to] of moves) {
+    const code = await local.publicClient.getCode({ address: from });
+    if (code === undefined) throw new Error(`the Portal's deployment left no contract at ${from}`);
+    await local.testClient.setCode({ address: to, bytecode: relocated(code) });
+  }
+  const placed = await local.publicClient.readContract({
+    address: portal,
+    abi: PORTAL_EXECUTOR,
+    functionName: "executor",
+  });
+  if (getAddress(placed) !== executor) {
+    throw new Error(`the placed Portal's executor is ${placed}, not ${executor}`);
+  }
+
+  return { portal, executor, vaultImplementation };
+}
+
+const PORTAL_EXECUTOR = parseAbi(["function executor() view returns (address)"]);
 
 /** Deploys the owner's Pot with the transaction `sauce pot` prints, returning its address. */
 export async function deployPot(

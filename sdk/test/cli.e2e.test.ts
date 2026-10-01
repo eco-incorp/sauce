@@ -66,7 +66,7 @@ import {
   OTHER_KEY,
   OWNER,
   OWNER_KEY,
-  plantPortal,
+  placePortal,
   potOwner,
   registered,
   sauce,
@@ -853,7 +853,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     // The real eco-routes Portal, at the address the SDK records for Arbitrum — with the vault
     // implementation and Executor a Portal deployed there would have, so its vaults are the ones
     // the SDK derives for that address, as every deployed Portal's are.
-    portal = await plantPortal(arbitrum, PORTAL_DEPLOYMENT, ecoRoutesPortal("arbitrum"));
+    ({ portal } = await placePortal(arbitrum));
     usdc = await arbitrum.plant(fixture("MockERC20"), registered(arbitrum.chain, "USDC"));
   }, 120_000);
 
