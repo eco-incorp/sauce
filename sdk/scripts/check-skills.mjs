@@ -191,18 +191,24 @@ async function sauce(argv) {
   return { code, stdout, stderr };
 }
 
-// Each command and the flags its --help lists.
+// Each command and the flags its --help lists; a command with verbs (`sauce intent fill`), each
+// verb under `<command> <verb>`, from the verbs its own --help lists.
 const COMMANDS = new Map();
 {
+  const flagsOf = (help) => {
+    const flags = new Set([...help.matchAll(/^\s+(?:-(\w), )?--([\w-]+)/gm)].map((m) => m[2]));
+    for (const short of help.matchAll(/^\s+-(\w), --/gm)) flags.add(`-${short[1]}`);
+    return flags;
+  };
   const { stdout } = await sauce(["--help"]);
   const names = [...stdout.matchAll(/^ {2}([a-z]+) {2,}/gm)].map((m) => m[1]);
   for (const name of names) {
     const help = (await sauce([name, "--help"])).stdout;
-    COMMANDS.set(
-      name,
-      new Set([...help.matchAll(/^\s+(?:-(\w), )?--([\w-]+)/gm)].map((m) => m[2])),
-    );
-    for (const short of help.matchAll(/^\s+-(\w), --/gm)) COMMANDS.get(name).add(`-${short[1]}`);
+    COMMANDS.set(name, flagsOf(help));
+    const verbs = /^Verbs\b.*\n((?: {2}[a-z]+ {2,}.*\n)+)/m.exec(help)?.[1] ?? "";
+    for (const [, verb] of verbs.matchAll(/^ {2}([a-z]+) {2,}/gm)) {
+      COMMANDS.set(`${name} ${verb}`, flagsOf((await sauce([name, verb, "--help"])).stdout));
+    }
   }
   if (COMMANDS.size === 0) fail("sauce --help", "lists no command");
 }
@@ -238,7 +244,15 @@ function commandLines(lines) {
 }
 
 /** Fails an invocation that names no command, or a flag its command does not take. */
-function checkCommand(where, argv) {
+/** `argv` with a command's verb joined to it: `intent fill …` is the command `intent fill`. */
+function joinVerb(argv) {
+  const [first, second, ...more] = argv;
+
+  return COMMANDS.has(`${first} ${second}`) ? [`${first} ${second}`, ...more] : argv;
+}
+
+function checkCommand(where, given) {
+  const argv = joinVerb(given);
   const [name, ...rest] = argv;
   // `sauce <command> --help` stands for any command.
   if (/^<[^>]+>$/.test(name ?? "")) return true;
@@ -847,8 +861,9 @@ for (const skill of skills) {
       fail(where, "has no usage line: a `//   sauce <command> <this file> …` comment");
       continue;
     }
-    for (const argv of usage) {
-      if (!checkCommand(where, argv)) continue;
+    for (const given of usage) {
+      if (!checkCommand(where, given)) continue;
+      const argv = joinVerb(given);
       if (argv[1] !== basename(file))
         fail(where, `its usage line runs ${argv[1]}, not ${basename(file)}`);
       const chainAt = argv.indexOf("--chain");
@@ -858,7 +873,7 @@ for (const skill of skills) {
     if (/^\s*\/\/\s*@(?:chain|target)\b/m.test(read(file)))
       fail(where, "names its chain in a header; a program takes it from --chain");
     for (const chain of programChains.get(entry) ?? []) {
-      for (const argv of usage) await runUsage(where, file, argv, chain);
+      for (const argv of usage) await runUsage(where, file, joinVerb(argv), chain);
     }
   }
   for (const file of skill.documents) {

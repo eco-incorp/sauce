@@ -104,7 +104,12 @@ export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";
 export type { LoweredIntent } from "./intent-sugar.js";
 
-export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
+export {
+  ECO_ROUTES_VAULT_PROXY_CREATION_CODE,
+  ecoRoutesVaultConfig,
+  predictVaultAddress,
+  vaultInitCodeHash,
+} from "./vault.js";
 export type { VaultConfig } from "./vault.js";
 
 export { isSauceClosure, sauceBodyToSource } from "./closure.js";
@@ -153,16 +158,54 @@ export type {
 
 export {
   approvalTxs,
+  assertIntentVault,
+  batchWithdrawTx,
+  CANCELLED_CLAIMANT,
+  CANCELLED_CLAIMANT_BYTES32,
+  cancelAndProveTx,
+  cancelTx,
+  fulfillAndProveTx,
   fulfillApprovalTxs,
+  fulfillmentCall,
   fulfillTx,
   fundTx,
+  hyperlaneProverData,
+  INTENT_FUND_VIA,
+  intentFromPublished,
   intentHashCall,
+  intentSourceTxs,
+  IntentVaultMismatchError,
   intentVaultAddressCall,
   isIntentFundedCall,
+  predictIntentVault,
+  proofMessage,
+  proofTypeCall,
+  provenIntentCall,
+  proverFeeCall,
+  proveTx,
   publishAndFundTx,
   publishTx,
+  refundTx,
+  REWARD_STATUSES,
+  rewardStatusCall,
+  rewardVaultLegs,
+  vaultTransferTx,
+  vaultTransferTxs,
+  withdrawTx,
 } from "./portal.js";
-export type { FulfillOptions, PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
+export type {
+  FulfillOptions,
+  IntentFundVia,
+  IntentSourceTxsOptions,
+  PortalReadCall,
+  PortalTarget,
+  PortalTx,
+  ProveOptions,
+  ProvenPair,
+  PublishedLog,
+  RewardStatus,
+  VaultLeg,
+} from "./portal.js";
 
 export { assertNestingInvariants, assertStaticChild, nestedChildCalls } from "./nest.js";
 export type { AssertNestingInvariantsArgs, NestChild, NestedChildOptions } from "./nest.js";

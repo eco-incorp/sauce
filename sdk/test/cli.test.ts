@@ -48,6 +48,7 @@ import {
 } from "../src/deployments/index.js";
 import { derivePotPda } from "../src/svm/kitchen.js";
 import { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import * as root from "../src/index.js";
 import * as routes from "../src/routes/index.js";
@@ -1182,7 +1183,7 @@ describe("sauce tx", () => {
   });
 });
 
-describe("sauce publish, offline", () => {
+describe("sauce intent publish, offline", () => {
   const INTENT = [
     "// @chain arbitrum",
     "Base(() => {",
@@ -1201,6 +1202,7 @@ describe("sauce publish, offline", () => {
 
   it("prints each fixed intent's hash and unsigned Portal transactions", async () => {
     const run = await sauce(
+      "intent",
       "publish",
       file("bridge.sauce.ts", INTENT),
       ...FLAGS,
@@ -1217,18 +1219,49 @@ describe("sauce publish, offline", () => {
       intents: { deadline: 2_000_000_000n, creator: CREATOR },
     }).intents;
     expect(out.chainId).toBe(42161);
+    const portal = ecoRoutesPortal("arbitrum");
+    const vault = routes.predictIntentVault(intent!.intent, { portal });
     expect(out.intents).toEqual([
       {
         intentHash: routes.hashIntent(intent!.intent).intentHash,
         destination: "base",
+        fundVia: "transfer",
+        vault,
+        vaultFrom: "derived",
         transactions: [
-          expect.objectContaining({ what: expect.stringMatching(/^approve /) }),
-          expect.objectContaining({ what: "publishAndFund", value: "0" }),
+          {
+            what: expect.stringMatching(/^transfer 0x[0-9a-fA-F]{40} to the vault$/),
+            to: expect.stringMatching(/^0x/),
+            data: routes.vaultTransferTxs(intent!.intent, vault)[0]!.data,
+            value: "0",
+          },
+          {
+            what: "publish",
+            to: portal,
+            data: routes.publishTx(intent!.intent, { portal }).data,
+            value: "0",
+          },
         ],
       },
     ]);
-    expect(run.stderr).toMatch(/Approvals are planned without reading the wallet's allowance/);
+    expect(run.stderr).toMatch(/Each vault is the SDK's offline derivation for the Portal/);
+    expect(run.stderr).not.toMatch(/Approvals are planned/);
+
+    // Opted out, the approvals and publishAndFund, as before.
+    const optedOut = await sauce(
+      ...["intent", "publish", file("bridge.sauce.ts", INTENT), ...FLAGS],
+      ...["--intent-fund-via", "publishAndFund", "--format", "json"],
+    );
+    expect(
+      (JSON.parse(optedOut.stdout) as { intents: Array<{ transactions: unknown[] }> }).intents[0]!
+        .transactions,
+    ).toEqual([
+      expect.objectContaining({ what: expect.stringMatching(/^approve /) }),
+      expect.objectContaining({ what: "publishAndFund", value: "0" }),
+    ]);
+    expect(optedOut.stderr).toMatch(/Approvals are planned without reading the wallet's allowance/);
     const cast = await sauce(
+      "intent",
       "publish",
       file("bridge.sauce.ts", INTENT),
       ...FLAGS,
@@ -1243,6 +1276,7 @@ describe("sauce publish, offline", () => {
 
   it("refuses a file with no intent, or with runtime arguments, before any network", async () => {
     const none = await sauce(
+      "intent",
       "publish",
       file("none.sauce.ts", "require(chainId == 1n);\n"),
       "--chain",
@@ -1253,6 +1287,7 @@ describe("sauce publish, offline", () => {
     expect(none.code).toBe(2);
     expect(none.stderr).toMatch(/opens no intent — there is nothing to publish/);
     const typed = await sauce(
+      "intent",
       "publish",
       file(
         "typed.sauce.ts",
@@ -1281,7 +1316,15 @@ describe("sauce publish, offline", () => {
         `}).reward({ tokens: [{ token: USDC, amount: ${amount} }] });`,
       ].join("\n");
     const hashes = async (name: string, text: string, ...flags: string[]) => {
-      const run = await sauce("publish", file(name, text), ...FLAGS, ...flags, "--format", "json");
+      const run = await sauce(
+        "intent",
+        "publish",
+        file(name, text),
+        ...FLAGS,
+        ...flags,
+        "--format",
+        "json",
+      );
       expect(run.code).toBe(0);
       return (JSON.parse(run.stdout) as { intents: Array<{ intentHash: string }> }).intents.map(
         (intent) => intent.intentHash,
@@ -1312,13 +1355,13 @@ describe("sauce publish, offline", () => {
 
     it("still refuses a value the program measures or computes, naming it", async () => {
       const refused = (text: string) =>
-        sauce("publish", file("refused.sauce.ts", text), ...FLAGS, "--format", "json");
+        sauce("intent", "publish", file("refused.sauce.ts", text), ...FLAGS, "--format", "json");
       const measured = await refused(
         `// @chain arbitrum\nconst amount = USDC.balanceOf(ctx.self());\n${body("amount")}\n`,
       );
       expect(measured.code).toBe(1);
       expect(measured.stderr).toBe(
-        "sauce publish: the intent to base uses `amount`, which the program measures or computes " +
+        "sauce intent publish: the intent to base uses `amount`, which the program measures or computes " +
           "while it runs, so it cannot be built from a wallet: use `sauce run` on a Pot, or make " +
           "it a literal, a define or a top-level `const` of a literal\n",
       );
@@ -1337,13 +1380,13 @@ describe("sauce publish, offline", () => {
   });
 
   it("needs an endpoint to send, and a wallet to send from", async () => {
-    const run = await sauce("publish", file("bridge.sauce.ts", INTENT), ...FLAGS);
+    const run = await sauce("intent", "publish", file("bridge.sauce.ts", INTENT), ...FLAGS);
     expect(run.code).toBe(2);
     expect(run.stderr).toMatch(/missing --rpc-url <url> \(or --config <file>\)/);
   });
 });
 
-describe("sauce fill, offline", () => {
+describe("sauce intent fill, offline", () => {
   const INTENT = [
     "// @chain arbitrum",
     "Base(() => {",
@@ -1363,7 +1406,7 @@ describe("sauce fill, offline", () => {
   const NOWHERE = ["--rpc-url", "http://127.0.0.1:9/"];
 
   it("needs the destination's endpoint", async () => {
-    const run = await sauce("fill", file("bridge.sauce.ts", INTENT), ...FLAGS);
+    const run = await sauce("intent", "fill", file("bridge.sauce.ts", INTENT), ...FLAGS);
     expect(run.code).toBe(2);
     expect(run.stderr).toMatch(
       /missing --config <file> \(or --rpc-url <url>\): the endpoint of each intent's destination/,
@@ -1372,6 +1415,7 @@ describe("sauce fill, offline", () => {
 
   it("refuses a claimant that is neither 20 nor 32 bytes", async () => {
     const run = await sauce(
+      "intent",
       "fill",
       file("bridge.sauce.ts", INTENT),
       ...FLAGS,
@@ -1385,6 +1429,7 @@ describe("sauce fill, offline", () => {
 
   it("refuses a file with no intent, and one whose intents --rpc-url cannot all reach", async () => {
     const none = await sauce(
+      "intent",
       "fill",
       file("none.sauce.ts", "require(chainId == 42161n);\n"),
       "--chain",
@@ -1394,6 +1439,7 @@ describe("sauce fill, offline", () => {
     expect(none.code).toBe(2);
     expect(none.stderr).toMatch(/opens no intent: there is nothing for a solver to fill/);
     const two = await sauce(
+      "intent",
       "fill",
       file(
         "two.sauce.ts",
@@ -1408,6 +1454,7 @@ describe("sauce fill, offline", () => {
 
   it("refuses a source chain with no Portal to publish through", async () => {
     const run = await sauce(
+      "intent",
       "fill",
       file("svm.sauce.ts", "function main() {}\n"),
       "--chain",
@@ -1546,6 +1593,32 @@ describe("sauce pot", () => {
     expect(failureReason(at(6012), logs([anchor, 6012], [kitchen, 6012]))).toBe(
       `program ${anchor} failed with custom program error 6012 (0x177c); the logs say why`,
     );
+    // The engine's own refusal, by name — a direct cook's fee cap, a pin that does not match.
+    expect(failureReason(at(84), logs([engine, 84]))).toMatch(
+      /^the engine refused: ExecutionFeeExceedsMaximum \(custom program error 84\): the execution fee is above/,
+    );
+    expect(failureReason(at(72), logs([engine, 72], [kitchen, 72]))).toMatch(
+      /^the engine refused: CodeHashMismatch/,
+    );
+    // A code the engine does not use stays a code.
+    expect(failureReason(at(999), logs([engine, 999]))).toBe(
+      `program ${engine} failed with custom program error 999 (0x3e7); the logs say why`,
+    );
+  });
+
+  it("refuses --via and --max-execution-fee on an EVM chain, whose cook is the Pot's", async () => {
+    const program = file("evm-via.sauce.ts", "function main() {}\n");
+    for (const flag of [
+      ["--via", "engine"],
+      ["--max-execution-fee", "5000"],
+    ]) {
+      const refused = await sauce("tx", program, "--chain", "base", "--owner", OWNER, ...flag);
+      expect(refused.code).toBe(2);
+      expect(refused.stderr).toMatch(new RegExp(`${flag[0]} is for a Solana cook`));
+    }
+    const compiled = await sauce("compile", program, "--chain", "base", "--via", "engine");
+    expect(compiled.code).toBe(2);
+    expect(compiled.stderr).toMatch(/--via chooses how a Solana cook reaches the engine/);
   });
 
   it("derives a Solana Pot as the Kitchen's PDA over (owner, salt), offline", async () => {
@@ -1656,7 +1729,7 @@ describe("flags in any order", () => {
       ],
       [
         ["compile", program, "--chain", "base", "--auto-approve"],
-        /--auto-approve is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce pot take it\)/,
+        /--auto-approve is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce intent, sauce pot, sauce intent publish, sauce intent fill, sauce intent prove, sauce intent claim, sauce intent refund, sauce intent cancel take it\)/,
       ],
       [
         ["globals", "--chain", "base", "--rpc-url", "http://x"],
