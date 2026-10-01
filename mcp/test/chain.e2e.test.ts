@@ -112,7 +112,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   let usdc: Address;
 
   before(async () => {
-    local = await startChain("arbitrum", await freePort());
+    local = await startChain("ethereum", await freePort());
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
     // The real eco-routes Portal, where the SDK records it and deployed there in effect (so its
     // vaults are the ones the SDK derives), for the publish rehearsal.
@@ -134,7 +134,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   });
 
   const pot = getAddress(v12PredictPot(NOBODY, `0x${"00".repeat(32)}`) as Address);
-  const pay = { source: PAY, chain: "arbitrum", args: [RECIPIENT, "1500000"] };
+  const pay = { source: PAY, chain: "ethereum", args: [RECIPIENT, "1500000"] };
 
   it("reads the Kitchen's fee for the cook, and that the Pot is not deployed", async () => {
     const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: NOBODY }));
@@ -144,11 +144,11 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.deepEqual(tx.kitchenFee, {
       wei: FEE.toString(),
       native: formatUnits(FEE, 18),
-      readFrom: "arbitrum",
+      readFrom: "ethereum",
     });
     assert.ok((tx.notes as string[]).some((note) => /It is NOT deployed/.test(note)));
     assert.ok(!(tx.notes as string[]).some((note) => /--|sauce pot/.test(note)), "no flags");
-    const predicted = ok(await mcp.call("sauce_pot", { chain: "arbitrum", owner: NOBODY }));
+    const predicted = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: NOBODY }));
     assert.equal(predicted.pot, pot);
     assert.equal(predicted.deployed, false);
     assert.equal((predicted.kitchenFee as { wei: string }).wei, FEE.toString());
@@ -166,7 +166,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         formatted: string | null;
       }>;
     };
-    const out = ok(await mcp.call("sauce_pot", { chain: "arbitrum", owner: HOLDER }));
+    const out = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: HOLDER }));
     assert.equal(out.pot, holderPot);
     const held = out.balances as Held;
     assert.equal(held.native.wei, "0");
@@ -178,7 +178,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     // A registered token with no code on this chain reads as unknown, not as zero.
     assert.ok(held.tokens.some((token) => token.symbol !== "USDC" && token.balance === null));
     const bare = ok(
-      await mcp.call("sauce_pot", { chain: "arbitrum", owner: HOLDER, balances: false }),
+      await mcp.call("sauce_pot", { chain: "ethereum", owner: HOLDER, balances: false }),
     );
     assert.equal(bare.balances, undefined);
     assert.equal(bare.deployed, false, "still says whether it is deployed");
@@ -215,7 +215,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     const reverts = ok(
       await mcp.call("sauce_simulate", {
         source: 'function main() {\n  throw "not today";\n}\n',
-        chain: "arbitrum",
+        chain: "ethereum",
         owner: NOBODY,
       }),
     );
@@ -235,11 +235,11 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   });
 
   it("builds a deployment the owner's own wallet signs, then sees the Pot deployed", async () => {
-    const unsigned = ok(await mcp.call("sauce_pot", { chain: "arbitrum", owner: OWNER.address }));
+    const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
     assert.equal(unsigned.deployed, false);
     // Signed and sent here, outside the server, with a key it never saw.
     await local.send(local.owner, unsigned.to as Address, unsigned.data as Hex);
-    const after = ok(await mcp.call("sauce_pot", { chain: "arbitrum", owner: OWNER.address }));
+    const after = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
     assert.equal(after.deployed, true);
     assert.ok((after.notes as string[]).some((note) => /do not send the deployment/.test(note)));
     const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: OWNER.address }));
@@ -251,9 +251,9 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   });
 
   it("fetches a transaction by hash and takes it apart", async () => {
-    const unsigned = ok(await mcp.call("sauce_pot", { chain: "arbitrum", owner: RECIPIENT }));
+    const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: RECIPIENT }));
     const hash = await local.send(local.deployer, unsigned.to as Address, unsigned.data as Hex);
-    const out = ok(await mcp.call("sauce_inspect", { hex: hash, chain: "arbitrum" }));
+    const out = ok(await mcp.call("sauce_inspect", { hex: hash, chain: "ethereum" }));
     assert.match(JSON.stringify(out), /deployPot/);
     assert.match(JSON.stringify(out), new RegExp(unsigned.pot as string, "i"));
   });
@@ -268,7 +268,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       try {
         const pot = ok(
           await caller.call("sauce_pot", {
-            chain: "arbitrum",
+            chain: "ethereum",
             owner: NOBODY,
             rpcUrl: local.rpcUrl,
           }),
@@ -299,7 +299,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     const [token0, token1] = [weth, usdc].sort((a, b) =>
       a.toLowerCase() < b.toLowerCase() ? -1 : 1,
     );
-    const pair = { chain: "arbitrum", base: "WETH", quote: "USDC" };
+    const pair = { chain: "ethereum", base: "WETH", quote: "USDC" };
     const quoted = ok(await mcp.call("sauce_price", { ...pair, price: "2700" }));
     const sqrtPriceX96 = BigInt(quoted.sqrtPriceX96 as string);
     const pool: Address = "0x9999999999999999999999999999999999999999";
@@ -325,7 +325,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       tick: -197_000,
       liquidity: "123456789",
       feePpm: 500,
-      readFrom: "arbitrum",
+      readFrom: "ethereum",
     });
     assert.equal(out.limits.feePpm, 500, "the pool's own fee, when feePpm is not given");
     const given = ok(await mcp.call("sauce_price", { ...pair, pool, slippageBps: 30, feePpm: 0 }));
@@ -341,7 +341,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   it("rehearses an intent's publish from a wallet that does not hold the reward yet", async () => {
     const args = {
       source: INTENT,
-      chain: "arbitrum",
+      chain: "ethereum",
       defines: { RECIPIENT },
       intentDeadline: 2_000_000_000,
       intentCreator: NOBODY,
@@ -381,7 +381,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     type PotCheck = { destination: string; pot: string; deployed: boolean | null };
     const args = {
       source: COOKED,
-      chain: "arbitrum",
+      chain: "ethereum",
       defines: { RECIPIENT },
       intentDeadline: 2_000_000_000,
       intentCreator: NOBODY,
@@ -413,7 +413,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     };
     const args = {
       source: INTENT,
-      chain: "arbitrum",
+      chain: "ethereum",
       defines: { RECIPIENT },
       intentDeadline: 2_000_000_000,
       intentCreator: NOBODY,
@@ -426,7 +426,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         intents: Fill[];
       };
       assert.equal(out.ok, true);
-      assert.equal(out.chain, "arbitrum");
+      assert.equal(out.chain, "ethereum");
       const [fill] = out.intents;
       assert.equal(fill!.destination, "base");
       assert.equal(getAddress(fill!.portal), basePortal);

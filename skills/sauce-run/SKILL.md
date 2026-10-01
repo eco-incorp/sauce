@@ -1,6 +1,6 @@
 ---
 name: sauce-run
-description: Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet and fill, prove, claim, refund or cancel them. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, or check what a transaction did.
+description: Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet and fill, prove, claim, refund or cancel them. Transactions are built and sent on Ethereum, Base and Solana, the chains the initial release supports; every other chain is a preview chain, where programs compile and simulate and a transaction is refused with the link to request the chain. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, or when a command refuses a preview chain.
 ---
 
 # Run a Sauce program
@@ -28,6 +28,36 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
 | `sauce verify`   | Checks that a payload, cook or transaction runs the audited settle program        |
 | `sauce price`    | Turns a price into a pool's `sqrtPriceX96`, a swap's limit and its average floor  |
+
+## Supported chains
+
+For the initial release, Sauce supports transactions on **Ethereum, Base and Solana**
+(`--chain ethereum`, `base`, `solana`). Every other chain is a **preview chain**: `globals`,
+`compile`, `actions`, `simulate`, `inspect`, `verify`, `price`, `sauce intent publish --dry-run`,
+`sauce intent fill` without `--send`, `sauce intent status` and `sauce intent import` work there,
+and `sauce pot` predicts the Pot (and reads it with an endpoint) but leaves its deployment out.
+Everything that leaves a transaction ready to sign, unsigned JSON included, or sends one is refused
+there before anything is read or signed: `tx`, `run`, `pot --deploy`, `pot --format cast`,
+`sauce intent publish` and the intent steps sent there (`sauce intent fill --send`, `prove`,
+`claim`, `refund`, `cancel`). An intent publishes only when its source and every destination it
+opens are supported; each later step is refused by the chain it is sent on. A cascade's later
+levels are not checked: keep them on supported chains too.
+There is no flag that overrides it.
+
+The refusal exits 1 and names the supported chains and the chain-support request for the chain:
+
+```
+sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. …
+To ask for Optimism: add your use case to its request if there is one (https://github.com/eco-incorp/sauce/issues?q=…), or open one (https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&…).
+```
+
+When a command refuses a chain, tell the user and offer that request: look for the chain among
+the
+[existing chain-support requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support)
+and add the use case to it as a comment, or
+[open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml) with the
+chain-support form (the chain and its id, what runs there, the protocols and tokens, the expected
+volume and timing). The command's own help ends with the same note.
 
 ## Endpoints and signers
 
@@ -64,7 +94,8 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
    picks Solana); `--chain` overrides it. Leave the line out of a file meant for more than one
    chain.
 3. **Pot**: `npx sauce pot --chain base --owner <address>` (or `--keystore <keystore>` for the
-   signer's own) prints the Pot's address, known before it exists, and its deploy transaction.
+   signer's own) prints the Pot's address, known before it exists, and its deploy transaction (on
+   a preview chain the address alone, with `refused` saying why the deployment is left out).
    With `--config sauce.config.json` it also says whether the chain has the released engine and
    Kitchen (and the Kitchen's fee) and whether the Pot is deployed.
    `npx sauce pot --deploy --chain base --config sauce.config.json --keystore <keystore>` deploys the
@@ -105,7 +136,7 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
    program to read.
 6. **Run**:
    `npx sauce run pay.sauce.ts --chain ethereum --config sauce.config.json --keystore <keystore> --args <recipient> 1000000`
-   compiles, rehearses, signs, sends and waits, then prints the hash, status and gas used, what the
+   compiles, rehearses, signs, sends and waits (on a supported chain), then prints the hash, status and gas used, what the
    cook cost (gas, any L1 data fee, the value) and the tokens it moved. A Pot not
    deployed yet is deployed first once the user agrees at the prompt. `--auto-approve` approves, in
    advance, everything a run sends before its cook (deploying the Pot, approving Permit2 or the Pot
@@ -123,7 +154,8 @@ The transaction's value defaults to the Kitchen's execution fee, read from the c
 **For a wallet instead**:
 `npx sauce tx pay.sauce.ts --chain ethereum --owner <address> --value <wei> --args <recipient> 1000000`
 prints the unsigned transaction as JSON, `{ chainId, to, data, value }`, for any wallet to sign from
-the owner. `--format cast` prints it as a `cast send` line instead.
+the owner. `--format cast` prints it as a `cast send` line instead. Like `run`, it is refused on a
+preview chain.
 
 ## Arguments to `main`
 
@@ -143,6 +175,11 @@ Every value is checked against its declared type before anything is sent: `Addre
 
 - It names no chain: `--chain` picks one, and every name in it resolves on that chain. One file
   compiles for every chain whose names it uses.
+- It starts with a header comment: what it does in one line; the `sauce` command with
+  `--chain <chain>` and `--args` naming every `main` parameter in order; one line per parameter
+  with its type, meaning and units (smallest units: `5000000000` is 5,000 USDC; arrays and records
+  as JSON); and one concrete run on a supported chain with real values (`sauce-script` has an
+  example).
 - The chain's names need no import: token symbols (`USDC`, `WETH`), protocol namespaces
   (`Uniswap.UniversalRouter`), `chainId`, and the `@sauce/token` functions
   (`transfer(token, to, amount)`, `approve`, `balanceOf`). `sauce-globals` explains them.
@@ -180,7 +217,7 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 ## Intents and Solana
 
-- **A file that opens intents** (`Arbitrum(() => { … }).reward({ … })`) also takes
+- **A file that opens intents** (`Ethereum(() => { … }).reward({ … })`) also takes
   `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
   program, `--intent-execution-fee <wei>` (`auto` reads it from the destination through
   `--config`). With `--config`, `compile` and `sauce intent publish` warn while the Pot such an intent cooks on
@@ -198,7 +235,8 @@ USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
   in the shared Pot, and why it reverts. `--config` must name the destination chain's endpoint.
   `sauce-intents` covers writing, publishing, funding (including a transfer into the intent's
   vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
-  `refund`, `cancel`, `status`, `import`).
+  `refund`, `cancel`, `status`, `import`). Publishing, from a wallet or a Pot, needs every chain the
+  intent involves supported; the rehearsals run on any chain.
 - **On Solana** (`--chain solana`) a program declares every account it touches, a cook signs with
   `--keypair`, and the execution fee is read from the cluster and printed as `fee`, with no
   `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it. `--via kitchen`,
@@ -219,6 +257,15 @@ returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` a
 `sauce_intent_*` tools return, with their own wallet. The server keeps no intents: an intent tool
 takes the intent's `record` (which `sauce_intent_publish` and `sauce_intent_import` return), or the
 transaction that published it with its source chain.
+
+The tools keep the chain rule: `sauce_chains` gives each chain's `support` (`supported` or
+`preview`). `sauce_tx`, `sauce_intent_publish` (without `dryRun`), `sauce_intent_fill` (without
+`dryRun`) and `sauce_intent_prove`, `sauce_intent_claim`, `sauce_intent_refund` and
+`sauce_intent_cancel` on the chain they are sent on return an error whose `refused` holds the
+supported chains and, per preview chain, its `request`: `searchUrl` for an existing request,
+`newIssueUrl` for a prefilled new one, and the `title`, `body` and `comment` to post. `sauce_pot`
+returns a preview chain's Pot with `refused` in place of its deployment, and `sauce_actions` its
+report with `refused` in place of `transaction`.
 
 | Command                | Tool                                                                   |
 | ---------------------- | ---------------------------------------------------------------------- |
@@ -249,5 +296,8 @@ them locally.
 - Never write an RPC URL or a key into a tracked file, a program or a command you commit.
 - Rehearse with `sauce simulate` (or `publish --dry-run`, and `sauce intent fill` for an intent's body)
   before the first real send.
+- Send only on a supported chain: Ethereum, Base or Solana. On a preview chain, compile and
+  simulate, and offer the user the chain-support request the refusal names; never look for another
+  way to send there.
 - Do not pass `--auto-approve` or deploy a Pot without the user's go-ahead: deploying costs gas, and with
   `--fund` it also approves Permit2 (or the Pot) to move the user's tokens.
