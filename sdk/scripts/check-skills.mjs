@@ -20,19 +20,26 @@
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
 //      the intents skill, no RPC endpoint, and no description of Sauce as a multicall;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
-//      is referenced by its own skill, and every program names the chains it is checked on there;
+//      is referenced by its own skill, and every program and actions document names the chains it
+//      is checked on there;
 //   4. every program compiles through the `sauce` command on each chain its index row names, run
-//      exactly as its usage line says (defines, intent flags, `main`'s arguments), offline;
+//      exactly as its usage line says (defines, intent flags, `main`'s arguments), offline; every
+//      actions document (`.json`) names no chain and lowers through `sauce actions` on each chain
+//      its row names, with its cook built by `sauce tx`;
 //   5. every `sauce …` command line in a skill names a real command and only flags it takes;
 //   6. every ```sauce block compiles (```sauce chain=a,b through the command, ```sauce target=evm|svm
-//      raw) or, as ```sauce fails, does not; every ```ts block and every runner (`*.mts`)
-//      typechecks, and every runner EXECUTES with the network disabled;
+//      raw) or, as ```sauce fails, does not; every ```json chain=a,b block is an actions document
+//      `sauce actions` lowers on those chains (```json fails chain=a: refused there); every ```ts
+//      block and every runner (`*.mts`) typechecks, and every runner EXECUTES with the network
+//      disabled;
 //   7. every `@eco-incorp/sauce/...` subpath and `node_modules/@eco-incorp/sauce/...` path exists,
 //      and every identifier in inline code is one the package declares;
 //   8. the index of globals (sauce-globals/references) is what `gen-skills-globals.mjs` writes,
 //      everything it lists compiles on its chains, and every global a skill uses is listed;
 //   9. the SauceScript reference (sauce-script/references) compiles every example it gives and is
-//      refused every form it rejects, with the messages it quotes.
+//      refused every form it rejects, with the messages it quotes;
+//  10. the actions reference (sauce-actions/references) is what `gen-skills-actions.mjs` renders
+//      from the actions JSON Schema the package ships.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -50,6 +57,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 
+import { renderActionsReference } from "./gen-skills-actions.mjs";
 import { globalsIndex, renderGlobalsIndex } from "./gen-skills-globals.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
 
@@ -289,6 +297,7 @@ function parseSkill(dir) {
     examples: files.map((f) => join(examplesDir, f)),
     runners: files.filter((f) => f.endsWith(".mts")).map((f) => join(examplesDir, f)),
     programs: files.filter((f) => f.endsWith(".sauce.ts")).map((f) => join(examplesDir, f)),
+    documents: files.filter((f) => f.endsWith(".json")).map((f) => join(examplesDir, f)),
   };
 }
 const skills = readdirSync(SKILLS_DIR)
@@ -477,6 +486,12 @@ for (const skill of skills) {
 }
 
 // ---- 3. Examples and the index ---------------------------------------------------------------------
+/** A fenced block's `key=value` option. */
+const optionOf = (block, key) =>
+  block.info.find((i) => i.startsWith(`${key}=`))?.slice(key.length + 1);
+/** The chains a ```sauce or ```json block is checked on, or undefined when it names none. */
+const chainsOf = (block) => optionOf(block, "chain")?.split(",");
+
 const allExamples = new Set(); // "<skill>/examples/<file>"
 for (const skill of skills)
   for (const f of skill.examples) allExamples.add(relative(SKILLS_DIR, f).split("\\").join("/"));
@@ -486,13 +501,16 @@ if (index === undefined) fail(rel(SKILLS_DIR), `no ${INDEX_SKILL} index skill`);
 for (const skill of skills) {
   const where = rel(skill.path);
   for (const file of skill.examples) {
-    if (!/\.(?:sauce\.ts|mts)$/.test(file))
-      fail(rel(file), "an example is a program (.sauce.ts) or a runner (.mts)");
+    if (!/\.(?:sauce\.ts|mts|json)$/.test(file))
+      fail(
+        rel(file),
+        "an example is a program (.sauce.ts), an actions document (.json) or a runner (.mts)",
+      );
   }
   // References: `examples/<file>` (its own) or `../<skill>/examples/<file>` (another skill's).
   const refs = [
     ...skill.text.matchAll(
-      /(?<![\w/.])(?:\.\.\/([\w-]+)\/)?examples\/([\w-]+(?:\.sauce\.ts|\.mts))\b/g,
+      /(?<![\w/.])(?:\.\.\/([\w-]+)\/)?examples\/([\w-]+(?:\.sauce\.ts|\.mts|\.json))\b/g,
     ),
   ].map((m) => `${m[1] ?? skill.dir}/examples/${m[2]}`);
   if (refs.length === 0 && skill.dir !== INDEX_SKILL) fail(where, "references no example");
@@ -502,9 +520,12 @@ for (const skill of skills) {
     const own = `${skill.dir}/examples/${basename(file)}`;
     if (!refs.includes(own)) fail(rel(file), "is not referenced by its skill's SKILL.md");
   }
-  const checked = skill.blocks.filter((b) => ["ts", "sauce", "sh"].includes(b.lang));
+  const checked = skill.blocks.filter(
+    (b) =>
+      ["ts", "sauce", "sh"].includes(b.lang) || (b.lang === "json" && chainsOf(b) !== undefined),
+  );
   if (checked.length === 0 && skill.dir !== INDEX_SKILL)
-    fail(where, "has no checked code block (sauce, ts or sh)");
+    fail(where, "has no checked code block (sauce, ts, sh, or json chain=…)");
 }
 
 // The index: one row per example, `| <link to the file> | <chains> | … |` for a program.
@@ -517,7 +538,7 @@ if (index !== undefined) {
     const entry = `${m[1]}/examples/${m[2]}`;
     if (listed.has(entry)) fail(rel(index.path), `lists ${entry} twice`);
     listed.add(entry);
-    if (entry.endsWith(".sauce.ts")) {
+    if (entry.endsWith(".sauce.ts") || entry.endsWith(".json")) {
       const chains = [...m[3].matchAll(/`([\w-]+)`/g)].map((c) => c[1]);
       if (chains.length === 0) fail(rel(index.path), `gives ${entry} no chain to check it on`);
       programChains.set(entry, chains);
@@ -639,6 +660,51 @@ async function runUsage(where, file, argv, chain) {
     fail(where, `sauce tx on ${chain} built no cook`);
 }
 
+/**
+ * An actions document, lowered through `sauce actions` on each of `chains`, and its cook built by
+ * `sauce tx` with `main`'s arguments (its `argument` actions) sampled — as the skill tells an agent
+ * to run it. A document names no chain: `--chain` picks one.
+ */
+async function runDocument(where, file, chains) {
+  let document;
+  try {
+    document = JSON.parse(read(file));
+  } catch (error) {
+    fail(where, `is not JSON: ${error.message}`);
+    return;
+  }
+  if (!Array.isArray(document?.actions)) {
+    fail(where, "is not an actions document: a JSON object with an `actions` array");
+    return;
+  }
+  if (document.chainId !== undefined)
+    fail(where, "names its chain (`chainId`); a document in a skill takes it from --chain");
+  for (const chain of chains) {
+    const lowered = await sauce(["actions", file, "--chain", chain, "--json"]);
+    if (lowered.code !== 0) {
+      fail(where, `does not lower for ${chain}: ${diagnostic(lowered.stderr || lowered.stdout)}`);
+      continue;
+    }
+    counts.programRuns++;
+    const { entryParams = [] } = JSON.parse(lowered.stdout);
+    const args = entryParams.map((param) => sample(param.type));
+    const tx = await sauce([
+      "tx",
+      file,
+      "--chain",
+      chain,
+      "--owner",
+      DEV,
+      "--value",
+      "0",
+      ...(args.length === 0 ? [] : ["--args-json", JSON.stringify(args)]),
+    ]);
+    if (tx.code !== 0) fail(where, `sauce tx on ${chain} fails: ${diagnostic(tx.stderr)}`);
+    else if (JSON.parse(tx.stdout).data === undefined)
+      fail(where, `sauce tx on ${chain} built no cook`);
+  }
+}
+
 for (const skill of skills) {
   for (const file of skill.programs) {
     const entry = `${skill.dir}/examples/${basename(file)}`;
@@ -665,6 +731,10 @@ for (const skill of skills) {
     for (const chain of programChains.get(entry) ?? []) {
       for (const argv of usage) await runUsage(where, file, argv, chain);
     }
+  }
+  for (const file of skill.documents) {
+    const entry = `${skill.dir}/examples/${basename(file)}`;
+    await runDocument(rel(file), file, programChains.get(entry) ?? []);
   }
   // Every other command line: in shell blocks, inline code, and every file of the skill.
   for (const block of skill.blocks.filter((b) => ["sh", "bash", "shell"].includes(b.lang))) {
@@ -729,6 +799,24 @@ try {
       if (mustFail && errors.length === 0)
         fail(where, "```sauce fails block compiled, but the skill says it is refused");
       if (!mustFail) for (const error of errors) fail(where, `does not compile: ${error}`);
+    }
+    for (const block of skill.blocks.filter(
+      (b) => b.lang === "json" && chainsOf(b) !== undefined,
+    )) {
+      const where = `${rel(skill.path)}:${block.line}`;
+      const mustFail = block.info.includes("fails");
+      if (mustFail) counts.sauceFails++;
+      else counts.sauce++;
+      const file = join(SCRATCH, `document-${n++}.json`);
+      writeFileSync(file, `${block.body}\n`);
+      const errors = [];
+      for (const chain of chainsOf(block)) {
+        const lowered = await sauce(["actions", file, "--chain", chain, "--json"]);
+        if (lowered.code !== 0) errors.push(`${chain}: ${diagnostic(lowered.stderr)}`);
+      }
+      if (mustFail && errors.length === 0)
+        fail(where, "```json fails block lowered, but the skill says it is refused");
+      if (!mustFail) for (const error of errors) fail(where, `does not lower: ${error}`);
     }
     for (const file of skill.programs) {
       const text = read(file);
@@ -1064,6 +1152,18 @@ else {
     builtinExamples += listed.compiled;
     builtinRejections += listed.rejected;
   }
+}
+
+// ---- 10. The actions reference: what the shipped schema renders ------------------------------------------
+{
+  const reference = join(SKILLS_DIR, "sauce-actions", "references", "actions.md");
+  const schema = join(SDK_DIR, "actions", "action-program.schema.json");
+  if (!existsSync(reference)) fail(rel(reference), "missing: the actions reference");
+  else if (read(reference) !== renderActionsReference(JSON.parse(read(schema))))
+    fail(
+      rel(reference),
+      "is stale: rebuild the SDK (`gen-skills-actions.mjs` writes it from the actions schema) and commit it",
+    );
 }
 
 // ---- Report ----------------------------------------------------------------------------------------------

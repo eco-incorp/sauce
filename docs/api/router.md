@@ -197,19 +197,22 @@ same for every route.
 
 Each [action](../guides/actions.md#swaps) at these venues is a call into this library with the
 action's fields as its arguments. Inside an action program, a swap whose output a later action
-spends delivers to the Pot.
+spends delivers to the Pot. Its tokens and contracts may be names (`"USDC"`, `"UniswapV3.Factory"`),
+which are the program globals of those names, and three may name their pool by key instead of
+`pool`: the program reads the pool from the factory and passes it to the function
+([pools by key](../guides/actions.md#pools-by-key)).
 
-| Action            | Function      | Facts it carries                                                           |
-| ----------------- | ------------- | -------------------------------------------------------------------------- |
-| `uniswapV2Swap`   | `uniswapV2`   | `pool`, optional `feePpm`                                                  |
-| `uniswapV3Swap`   | `uniswapV3`   | `pool`, optional `sqrtPriceLimitX96`                                       |
-| `uniswapV4Swap`   | `uniswapV4`   | `poolManager`, `fee`, `tickSpacing`, `hooks`, optional `sqrtPriceLimitX96` |
-| `curveSwap`       | `curve`       | `pool`, `i`, `j`, `indexType` (`"int128"` or `"uint256"`)                  |
-| `balancerV2Swap`  | `balancerV2`  | `vault`, `poolId`                                                          |
-| `dodoV2Swap`      | `dodoV2`      | `pool`, `baseToken`, `quoteToken`                                          |
-| `traderJoeLBSwap` | `traderJoeLB` | `pool`, `tokenX`, `tokenY`                                                 |
-| `woofiSwap`       | `woofi`       | `pool`                                                                     |
-| `maverickV2Swap`  | `maverickV2`  | `pool`                                                                     |
+| Action            | Function      | Facts it carries                                                                      |
+| ----------------- | ------------- | ------------------------------------------------------------------------------------- |
+| `uniswapV2Swap`   | `uniswapV2`   | `pool` or `factory`, optional `feePpm`                                                |
+| `uniswapV3Swap`   | `uniswapV3`   | `pool`, or `factory` + `fee` or `tickSpacing`; optional `sqrtPriceLimitX96`           |
+| `uniswapV4Swap`   | `uniswapV4`   | `poolManager`, `fee`, `tickSpacing`, optional `hooks` and `sqrtPriceLimitX96`         |
+| `curveSwap`       | `curve`       | `pool`, `i`, `j`, `indexType` (`"int128"` or `"uint256"`)                             |
+| `balancerV2Swap`  | `balancerV2`  | `vault`, `poolId`                                                                     |
+| `dodoV2Swap`      | `dodoV2`      | `pool`, `baseToken`, `quoteToken`                                                     |
+| `traderJoeLBSwap` | `traderJoeLB` | `pool` or `factory` + `binStep`; `tokenX`, `tokenY`, read from the pair when left out |
+| `woofiSwap`       | `woofi`       | `pool`                                                                                |
+| `maverickV2Swap`  | `maverickV2`  | `pool`                                                                                |
 
 ## Compile it yourself
 
