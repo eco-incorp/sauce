@@ -287,6 +287,38 @@ and in each chain's file in `sauce-chains`.
 - `ZksyncBridge.DiamondProxy` ([`zksync-bridge`](../../sauce-protocols/references/registry/zksync-bridge.md), default)
 - `ZksyncBridge.L2Bridge` ([`zksync-bridge`](../../sauce-protocols/references/registry/zksync-bridge.md))
 
+## Interfaces
+
+An interface is an ABI with no fixed address, the same on every EVM chain: a program binds it to
+an address it holds and calls a method in the same expression,
+`Namespace.Contract.at(address).method(...)`, such as a pool its factory returned.
+
+- `Abracadabra.Cauldron.at(<address>)` ([`abracadabra`](../../sauce-protocols/references/registry/abracadabra.md))
+- `AerodromeSlipstream.Pool.at(<address>)` ([`aerodrome-slipstream`](../../sauce-protocols/references/registry/aerodrome-slipstream.md))
+- `Arrakis.Vault.at(<address>)` ([`arrakis`](../../sauce-protocols/references/registry/arrakis.md))
+- `Beefy.Vault.at(<address>)` ([`beefy`](../../sauce-protocols/references/registry/beefy.md))
+- `Benqi.QiToken.at(<address>)` ([`benqi`](../../sauce-protocols/references/registry/benqi.md))
+- `Convex.BaseRewardPool.at(<address>)` ([`convex`](../../sauce-protocols/references/registry/convex.md))
+- `Curve.StableSwap.at(<address>)` ([`curve`](../../sauce-protocols/references/registry/curve.md))
+- `Erc20.ERC20.at(<address>)` ([`erc20`](../../sauce-protocols/references/registry/erc20.md))
+- `Erc3156.FlashLender.at(<address>)` ([`erc3156`](../../sauce-protocols/references/registry/erc3156.md))
+- `Erc4626.Vault.at(<address>)` ([`erc4626`](../../sauce-protocols/references/registry/erc4626.md))
+- `EulerV2.EVault.at(<address>)` ([`euler-v2`](../../sauce-protocols/references/registry/euler-v2.md))
+- `Fluid.Lending.at(<address>)` ([`fluid`](../../sauce-protocols/references/registry/fluid.md))
+- `Fluid.Vault.at(<address>)` ([`fluid`](../../sauce-protocols/references/registry/fluid.md))
+- `Gamma.Hypervisor.at(<address>)` ([`gamma`](../../sauce-protocols/references/registry/gamma.md))
+- `Harvest.Vault.at(<address>)` ([`harvest`](../../sauce-protocols/references/registry/harvest.md))
+- `Layerbank.LToken.at(<address>)` ([`layerbank`](../../sauce-protocols/references/registry/layerbank.md))
+- `Moonwell.MToken.at(<address>)` ([`moonwell`](../../sauce-protocols/references/registry/moonwell.md))
+- `Premia.Diamond.at(<address>)` ([`premia`](../../sauce-protocols/references/registry/premia.md))
+- `Silo.Silo.at(<address>)` ([`silo`](../../sauce-protocols/references/registry/silo.md))
+- `Sommelier.Cellar.at(<address>)` ([`sommelier`](../../sauce-protocols/references/registry/sommelier.md))
+- `Thales.PositionalMarket.at(<address>)` ([`thales`](../../sauce-protocols/references/registry/thales.md))
+- `Tokemak.Autopool.at(<address>)` ([`tokemak`](../../sauce-protocols/references/registry/tokemak.md))
+- `UniswapV3.Pool.at(<address>)` ([`uniswap-v3`](../../sauce-protocols/references/registry/uniswap-v3.md))
+- `Venus.VToken.at(<address>)` ([`venus`](../../sauce-protocols/references/registry/venus.md))
+- `YearnV3.Vault.at(<address>)` ([`yearn-v3`](../../sauce-protocols/references/registry/yearn-v3.md))
+
 ## Family aliases
 
 A family names a contract when exactly one of its members has it on the program's chain. Any

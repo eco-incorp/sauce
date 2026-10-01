@@ -206,10 +206,10 @@ describe("descriptors: registry totals + purity", () => {
     const protocolSlugs = new Set(DESCRIPTORS.map((d) => d.protocol));
     const kinds = (kind: string) => DESCRIPTORS.filter((d) => d.kind === kind).length;
     expect(protocolSlugs).toEqual(new Set(listProtocolSlugs()));
-    expect(DESCRIPTORS.length).toBe(300);
+    expect(DESCRIPTORS.length).toBe(302);
     expect(kinds("singleton")).toBe(222);
     expect(kinds("address-only")).toBe(55);
-    expect(kinds("interface")).toBe(23);
+    expect(kinds("interface")).toBe(25);
   });
 
   it("listDescriptors() is stable/reference-equal across calls, and mutating a returned perChainAddress does not corrupt the registry", () => {
@@ -229,8 +229,8 @@ describe("descriptors: registry totals + purity", () => {
 });
 
 describe("descriptors: listContracts / descriptorChains", () => {
-  it("listContracts('uniswap-v3') returns all 5 uniswap-v3 descriptors", () => {
-    expect(listContracts("uniswap-v3").length).toBe(5);
+  it("listContracts('uniswap-v3') returns all 6 uniswap-v3 descriptors", () => {
+    expect(listContracts("uniswap-v3").length).toBe(6);
   });
 
   it("descriptorChains resolves to real CanonicalChain records matching descriptor.chains", () => {

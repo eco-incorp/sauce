@@ -414,7 +414,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 300 contracts across 135 protocols. */
+/** One entry per contract: 302 contracts across 135 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -453,6 +453,7 @@ export const CONTRACT_LINKS = [
   { protocol: "aerodrome-slipstream", contract: "NonfungiblePositionManagerGaugeCaps", kind: "singleton", roleKey: "nonfungiblePositionManagerGaugeCaps", abiExport: "SlipstreamPositionManagerABI" },
   { protocol: "aerodrome-slipstream", contract: "NonfungiblePositionManagerGaugesV3", kind: "singleton", roleKey: "nonfungiblePositionManagerGaugesV3", abiExport: "SlipstreamPositionManagerABI" },
   { protocol: "aerodrome-slipstream", contract: "Metarouter", kind: "singleton", roleKey: "metarouter", abiExport: "AeroMetarouterABI" },
+  { protocol: "aerodrome-slipstream", contract: "Pool", kind: "interface", abiExport: "AerodromeSlipstreamPoolABI" },
   { protocol: "aevo", contract: "DepositContract", kind: "singleton", roleKey: "depositContract", abiExport: "DepositContractABI" },
   { protocol: "alchemix", contract: "AlchemistAlUSD", kind: "singleton", roleKey: "alchemistAlUSD", abiExport: "AlchemistABI" },
   { protocol: "alchemix", contract: "AlchemistAlETH", kind: "singleton", roleKey: "alchemistAlETH", abiExport: "AlchemistABI" },
@@ -694,6 +695,7 @@ export const CONTRACT_LINKS = [
   { protocol: "uniswap-v3", contract: "QuoterV2", kind: "singleton", roleKey: "quoterV2", abiExport: "UniswapV3QuoterV2ABI" },
   { protocol: "uniswap-v3", contract: "SwapRouter", kind: "singleton", roleKey: "swapRouter", abiExport: "UniswapV3SwapRouterABI" },
   { protocol: "uniswap-v3", contract: "SwapRouter02", kind: "singleton", roleKey: "swapRouter02", abiExport: "UniswapV3SwapRouter02ABI" },
+  { protocol: "uniswap-v3", contract: "Pool", kind: "interface", abiExport: "UniswapV3PoolABI" },
   { protocol: "uniswap-v4", contract: "PoolManager", kind: "singleton", roleKey: "poolManager", abiExport: "UniswapV4PoolManagerABI" },
   { protocol: "uniswap-v4", contract: "PositionManager", kind: "singleton", roleKey: "positionManager", abiExport: "UniswapV4PositionManagerABI" },
   { protocol: "uniswap-v4", contract: "UniversalRouter", kind: "singleton", roleKey: "universalRouter", abiExport: "UniswapV4UniversalRouterABI" },
@@ -774,6 +776,7 @@ export interface AerodromeSlipstreamContracts {
   readonly NonfungiblePositionManagerGaugeCaps: Contract<typeof aerodromeSlipstreamAbis.SlipstreamPositionManagerABI>;
   readonly NonfungiblePositionManagerGaugesV3: Contract<typeof aerodromeSlipstreamAbis.SlipstreamPositionManagerABI>;
   readonly Metarouter: Contract<typeof aerodromeSlipstreamAbis.AeroMetarouterABI>;
+  readonly Pool: InterfaceContract<typeof aerodromeSlipstreamAbis.AerodromeSlipstreamPoolABI>;
 }
 
 export interface AevoContracts {
@@ -1369,6 +1372,7 @@ export interface UniswapV3Contracts {
   readonly QuoterV2: Contract<typeof uniswapV3Abis.UniswapV3QuoterV2ABI>;
   readonly SwapRouter: Contract<typeof uniswapV3Abis.UniswapV3SwapRouterABI>;
   readonly SwapRouter02: Contract<typeof uniswapV3Abis.UniswapV3SwapRouter02ABI>;
+  readonly Pool: InterfaceContract<typeof uniswapV3Abis.UniswapV3PoolABI>;
 }
 
 export interface UniswapV4Contracts {
@@ -1511,6 +1515,7 @@ export interface UniswapFamilyContracts {
   readonly QuoterV2: UniswapV3Contracts["QuoterV2"];
   readonly SwapRouter: UniswapV3Contracts["SwapRouter"];
   readonly SwapRouter02: UniswapV3Contracts["SwapRouter02"];
+  readonly Pool: UniswapV3Contracts["Pool"];
   readonly PoolManager: UniswapV4Contracts["PoolManager"];
   readonly PositionManager: UniswapV4Contracts["PositionManager"];
   readonly UniversalRouter: UniswapV4Contracts["UniversalRouter"];
