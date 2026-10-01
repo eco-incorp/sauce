@@ -58,6 +58,11 @@ interface Body {
 }
 
 export interface ExtensionsOptions {
+  /** Give the program the chain's protocol namespaces (`UniswapV3.Factory`). `accessors: false`
+   *  leaves them out. Default `true`. */
+  readonly protocols?: boolean;
+  /** Give the program a bare `self` (`accessors.selfSugar`). Default `true`. */
+  readonly self?: boolean;
   /** Token symbol overrides, merged per key over the registry for the chain being compiled for —
    *  `SauceCompileOptions.tokens`. */
   readonly tokens?: Readonly<Record<string, AddressInput>>;
@@ -125,6 +130,8 @@ function types(): Record<string, { methods: Record<string, Method>; holder?: str
         transferFrom: { kind: "unavailable", message: refused },
         balanceOf: { kind: "unavailable", message: refused },
       },
+      // `pool.USDC` reaches the same refusal.
+      holder: "balanceOf",
     },
   };
 }
@@ -148,6 +155,11 @@ function registeredSymbols(): ReadonlyMap<string, readonly string[]> {
   }
   symbolChains = map;
   return map;
+}
+
+/** Whether `name` is a token symbol some chain registers — a name the manifest types as a token. */
+export function isTokenSymbol(name: string): boolean {
+  return spellable(name) && registeredSymbols().has(name);
 }
 
 /** The descriptors of each protocol, keyed by its namespace. */
@@ -207,13 +219,9 @@ function body(
   globals.chainId = { kind: "const", value: word(BigInt(chain.id)) };
   globals.CHAIN_ID = { kind: "const", value: word(BigInt(chain.id)) };
   globals.available = { kind: "intrinsic", name: "available" };
-  globals.self = { kind: "lazy", fn: "@sauce/context#self" };
-  globals.Token = evm
-    ? { kind: "constructor", type: TOKEN_TYPE }
-    : {
-        kind: "unavailable",
-        message: `\`Token(address)\` is EVM-only; '${chain.slug}' is svm, where a token is its mint`,
-      };
+  if (options.self !== false) globals.self = { kind: "lazy", fn: "@sauce/context#self" };
+  // On an SVM chain `Token(x)` still constructs — a token whose every method is refused by name.
+  globals.Token = { kind: "constructor", type: evm ? TOKEN_TYPE : SPL_TOKEN_TYPE };
 
   for (const [symbol, chains] of registeredSymbols()) {
     if (!spellable(symbol)) continue;
@@ -246,12 +254,7 @@ function body(
   for (const [slug, descriptors] of protocols) {
     const members: Record<string, Entry> = {};
     for (const descriptor of descriptors) {
-      members[descriptor.contract] = evm
-        ? contractEntry(descriptor, chain, options)
-        : {
-            kind: "unavailable",
-            message: `contract bindings are not supported on target 'svm'; '${chain.slug}' is svm`,
-          };
+      members[descriptor.contract] = contractEntry(descriptor, chain, options);
       const address = descriptor.perChainAddress[chain.id];
       if (evm && address !== undefined) {
         globals[`${pascalOfSlug(slug)}_${descriptor.contract}`] = {
@@ -260,6 +263,7 @@ function body(
         };
       }
     }
+    if (options.protocols === false) continue;
     const callable = descriptors.filter((d) => d.kind === "singleton");
     globals[pascalOfSlug(slug)] = {
       kind: "namespace",
@@ -274,7 +278,7 @@ function body(
       families.set(key, [...(families.get(key) ?? []), slug]);
     }
   }
-  for (const [key, slugs] of families) {
+  for (const [key, slugs] of options.protocols === false ? [] : families) {
     const owners = new Map<string, string[]>();
     for (const slug of slugs) {
       for (const descriptor of protocols.get(slug) ?? []) {
@@ -309,7 +313,13 @@ const bodies = new Map<string, string>();
 function bodyText(chain: CanonicalChain, options: ExtensionsOptions, current: boolean): string {
   // Overrides apply to the chain being compiled for only: a caller's `USDC` is that chain's USDC.
   const overrides = current ? options.tokens : undefined;
-  const key = JSON.stringify([chain.id, overrides ?? null, options.allowWidenedSelectors ?? false]);
+  const key = JSON.stringify([
+    chain.id,
+    overrides ?? null,
+    options.allowWidenedSelectors ?? false,
+    options.protocols ?? true,
+    options.self ?? true,
+  ]);
   let text = bodies.get(key);
   if (text === undefined) {
     text = JSON.stringify(body(chain, resolveTokenMap(chain, overrides), options));
@@ -319,10 +329,17 @@ function bodyText(chain: CanonicalChain, options: ExtensionsOptions, current: bo
 }
 
 /** The path a chain's body is served at, for the given options. */
-const bodyPath = (chain: CanonicalChain, current: boolean, options: ExtensionsOptions): string =>
-  current && (options.tokens !== undefined || options.allowWidenedSelectors)
-    ? `${ROOT}/chains/${chain.slug}.current.json`
-    : `${ROOT}/chains/${chain.slug}${options.allowWidenedSelectors ? ".widened" : ""}.json`;
+const bodyPath = (chain: CanonicalChain, current: boolean, options: ExtensionsOptions): string => {
+  const variant = [
+    current && options.tokens !== undefined ? "tokens" : "",
+    options.allowWidenedSelectors ? "widened" : "",
+    options.protocols === false ? "noprotocols" : "",
+    options.self === false ? "noself" : "",
+  ]
+    .filter((part) => part !== "")
+    .join(".");
+  return `${ROOT}/chains/${chain.slug}${variant === "" ? "" : `.${variant}`}.json`;
+};
 
 /**
  * A `resolve` for the manifest of a compile for `current`: the document at {@link EXTENSIONS_PATH},
