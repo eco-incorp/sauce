@@ -176,6 +176,11 @@ function main(token: Address, spender: Address, amount: Uint256): void {
 }
 ```
 
+`@sauce/token` also pulls tokens into a program, each pull a `safeTransferFrom`:
+`transferFrom` on an allowance, and `permit` (EIP-2612) or `permitTransferFrom`
+(Permit2) on the holder's signature. See
+[Pulling tokens in](../guides/protocols-and-tokens.md#pulling-tokens-in).
+
 A raw compile resolves `@sauce/token` by passing `resolveSdkPackage` and
 `resolveSdkModule` from `@eco-incorp/sauce/compiler`. Swaps have a library of their
 own, [`@sauce/router`](../api/router.md): one function per venue, taking its pool and

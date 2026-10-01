@@ -11,7 +11,14 @@
  * (owner, salt) that `sauceEvmDeployPotCall` encodes. Nothing the SDK builds makes that call: an
  * intent's Pot must exist before it is fulfilled, and the solver deploys it (`routes/intent-pot.ts`).
  */
-import { encodeAbiParameters, getAddress, getCreate2Address, keccak256, type Hex } from "viem";
+import {
+  encodeAbiParameters,
+  getAddress,
+  getCreate2Address,
+  keccak256,
+  stringToBytes,
+  type Hex,
+} from "viem";
 
 import { v12PotDerivation } from "./v12-addresses.js";
 
@@ -29,6 +36,26 @@ import { v12PotDerivation } from "./v12-addresses.js";
  * for the production Portal.
  */
 export const SAUCE_INTENT_POT_SALT: Hex = `0x${"00".repeat(32)}`;
+
+/**
+ * The salt of the Pot an owner names `label`: `keccak256(utf8(label))`.
+ *
+ * An owner has one Pot per salt. The zero salt ({@link SAUCE_INTENT_POT_SALT}) is the convention
+ * for the one Pot an owner has by default — the one the solver deploys and every intent derives —
+ * and a label names any other: `v12PredictPot(owner, potSalt("treasury"))`. Hashing gives any label
+ * a full 32-byte salt, the same everywhere: the `sauce` command's `--salt treasury` is this. An
+ * exact salt needs no helper; pass the 32 bytes to `v12PredictPot` as they are.
+ */
+export function potSalt(label: string): Hex {
+  if (label === "") {
+    throw new Error(
+      "potSalt: a label names a Pot, so it cannot be empty — the default Pot's salt is " +
+        "SAUCE_INTENT_POT_SALT",
+    );
+  }
+
+  return keccak256(stringToBytes(label));
+}
 
 /**
  * `CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)` — the formula

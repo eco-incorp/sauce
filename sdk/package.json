@@ -54,25 +54,27 @@
   },
   "files": [
     "dist",
-    "src/skills",
     "src/protocols"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs",
+    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs && node scripts/gen-skills-globals.mjs",
     "typecheck": "node scripts/gen-embedded-sources.mjs && tsc --noEmit",
     "typecheck:test": "node scripts/gen-embedded-sources.mjs && tsc -p tsconfig.test.json --noEmit",
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
     "gen-route-globals": "node scripts/gen-route-globals.mjs",
     "gen-source-globals": "node scripts/gen-source-globals.mjs",
     "gen-embedded-sources": "node scripts/gen-embedded-sources.mjs",
+    "gen-skills-globals": "node scripts/gen-skills-globals.mjs",
     "test": "node scripts/gen-embedded-sources.mjs && NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
     "sync-eco-routes-addresses": "node scripts/sync-eco-routes-addresses.mjs"
   },
   "dependencies": {
     "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.4.0",
+    "@noble/ciphers": "1.3.0",
+    "@noble/hashes": "1.8.0",
     "@solana-program/address-lookup-table": "^0.12.1",
     "@solana-program/compute-budget": "^0.16.0",
     "@solana-program/system": "^0.12.2",

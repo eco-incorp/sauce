@@ -159,6 +159,8 @@ export interface LoweredIntent {
   readonly intent: Intent;
   /** Enclosing locals spliced into it, in slot order. */
   readonly captures: readonly string[];
+  /** Each sentinel the encoded child carries, and the local whose value replaces it on chain. */
+  readonly sentinels: readonly { readonly sentinel: bigint; readonly capture: string }[];
   readonly destination: CanonicalChain;
 }
 
@@ -609,8 +611,10 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     // call, which is cheaper than a cook and needs neither a Pot nor a Kitchen fee. Anything else --
     // a swap, a condition, a loop, an intent of its own -- is a program, compiled for the
     // destination and run through its Pot. The second shape is strictly more general; the first is
-    // kept because it is free.
-    const simple = isDirectCallBody(site.body, defines);
+    // kept because it is free. It is ERC-20 calldata, so only for an EVM destination: on Solana a
+    // symbol is a mint's key, and a token write there goes the program way, where the SVM compile
+    // refuses the token syntax by name.
+    const simple = site.chain.kind === "evm" && isDirectCallBody(site.body, defines);
     // The Portal the child's route records. Resolved once, here, because it is also what the Pot's
     // owner is derived from: a route recording one Portal is run by that Portal's Executor.
     const destinationPortal = context.defaults.destinationPortal ?? context.portalOf(site.chain);
@@ -738,13 +742,16 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
 
     const sourcePortal = defaults.sourcePortal ?? context.portalOf(context.source);
     const tx = publishAndFundTx(child, defaults.allowPartial ?? false, { portal: sourcePortal });
-    const template = splitByPlaceholders(tx.data, placeholders);
+    // An intent every value of which is known now — defines and literals, no local of the program —
+    // has no slot to fill: its calldata is simply these bytes.
+    const template =
+      placeholders.length === 0 ? undefined : splitByPlaceholders(tx.data, placeholders);
     // Every sentinel must have become a slot. `splitByPlaceholders` guarantees that for the ones it
     // was TOLD about; this catches the other direction — a sentinel written into the payload whose
     // placeholder was never declared, which leaves it in the literal segments and ships an intent
     // carrying `0x5acecab7…` where an amount belongs. That happened once, silently, which is why it
     // is checked rather than reasoned about.
-    for (const segment of template.segments) {
+    for (const segment of template?.segments ?? [tx.data]) {
       for (const tag of [CAPTURE_TAG, CHILD_CAPTURE_TAG]) {
         if (segment.includes(tag)) {
           throw new SugarError(
@@ -756,7 +763,13 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       }
     }
     const locals = Object.fromEntries(captures.map((name) => [name, name]));
-    const emitted = emitTemplate(template, { prefix, locals });
+    const emitted =
+      template === undefined
+        ? {
+            statements: [`const ${prefix}data = hex\`${tx.data.slice(2)}\`;`],
+            dataVar: `${prefix}data`,
+          }
+        : emitTemplate(template, { prefix, locals });
 
     const statements: string[] = [...emitted.statements];
     // One approve per distinct reward token, so the Portal can pull the escrow from this Pot.
@@ -783,7 +796,12 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       `evm.call(${BigInt(denormalizeToEvm(toUniversalAddress(sourcePortal)))}n, 0n, ${emitted.dataVar});`,
     );
 
-    intents.push({ intent: child, captures, destination: site.chain });
+    intents.push({
+      intent: child,
+      captures,
+      sentinels: placeholders.map(({ value, source }) => ({ sentinel: value, capture: source })),
+      destination: site.chain,
+    });
     replacements.push({
       start: site.start,
       end: site.end,

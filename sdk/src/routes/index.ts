@@ -77,6 +77,7 @@ export {
   sauceEvmDeployPotCall,
 } from "./sauce-calls.js";
 export type {
+  SauceEvmCall,
   SauceEvmCallParams,
   SauceEvmCallsParams,
   SauceEvmDeployPotCallParams,
@@ -90,13 +91,17 @@ export type {
 
 // --- cross-chain intent DSL (S1) ---
 
-export { compileSauceRoute, wrapSauceBody } from "./sauce-route.js";
+export { compileSauceProgram, compileSauceRoute, wrapSauceBody } from "./sauce-route.js";
 export type {
+  CompiledSauceProgram,
   CompiledSauceRoute,
   SauceCompileOptions,
   SauceEvmExecutionInput,
   SauceSvmExecutionInput,
 } from "./sauce-route.js";
+export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
+export type { EntryParam, EntryValue } from "./entry.js";
+export type { LoweredIntent } from "./intent-sugar.js";
 
 export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
 export type { VaultConfig } from "./vault.js";
@@ -104,15 +109,27 @@ export type { VaultConfig } from "./vault.js";
 export { isSauceClosure, sauceBodyToSource } from "./closure.js";
 export { chainAmbient, chainDefines } from "./ambient.js";
 export type { AmbientDefinesOptions } from "./ambient.js";
+export { sourceGlobals } from "./source-globals.js";
+export type {
+  SourceChainName,
+  SourceContract,
+  SourceGlobals,
+  SourceMethod,
+  SourceModule,
+  SourceNamespace,
+  SourceToken,
+} from "./source-globals.js";
 export { rewriteTokenMembers, REWRITABLE_METHODS, tokenImportLines } from "./token-rewrite.js";
 export type { SafeWrite, TokenImports, TokenRewriteResult, TokenSymbols } from "./token-rewrite.js";
 export {
   knownTokenSymbols,
   registryTokenAddress,
   resolveTokenMap,
+  SVM_TOKEN_REGISTRY,
+  svmTokenRows,
   TOKEN_REGISTRY,
 } from "./token-registry.js";
-export type { TokenRegistryRow } from "./token-registry.js";
+export type { SvmTokenCluster, SvmTokenRow, TokenRegistryRow } from "./token-registry.js";
 export { openRoute } from "./intent-dsl.js";
 export { destinationPot } from "./intent-pot.js";
 export type {

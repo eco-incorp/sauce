@@ -30,4 +30,9 @@ module.exports = {
     ],
   },
   testMatch: ["**/*.test.ts"],
+  // Every test file re-imports the SDK under ESM, and the modules stay reachable in the process that
+  // ran them, so one process running the whole suite grows to the CI runner's ~2 GB heap — which is
+  // what a two-core runner does, running in band. A limit makes jest use workers even then and
+  // replace one once it has grown past it.
+  workerIdleMemoryLimit: "1GB",
 };

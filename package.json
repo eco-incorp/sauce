@@ -1,7 +1,7 @@
 {
   "name": "@eco-incorp/sauce",
   "version": "1.0.0",
-  "description": "Sauce protocol tooling: SDK, action primitives, and a local dev environment.",
+  "description": "Sauce protocol tooling: the SDK, action primitives, and the sauce command.",
   "type": "module",
   "repository": {
     "type": "git",
@@ -78,26 +78,21 @@
     }
   },
   "bin": {
-    "sauce-dev-tools": "./dev-tools/scripts/init.js"
+    "sauce": "./sdk/dist/cli/main.js"
   },
   "files": [
     "LICENSE.md",
     "sdk/dist",
     "actions/dist",
     "actions/action-program.schema.json",
-    "sdk/src/skills",
     "sdk/src/protocols",
-    "dev-tools/scripts",
-    "dev-tools/src",
-    "dev-tools/sauce",
-    "dev-tools/artifacts",
-    "dev-tools/hardhat.config.cjs",
-    "dev-tools/README.md",
+    "skills",
     "docs/**/*.md",
     "docs/examples/*.ts"
   ],
   "scripts": {
     "docs:check": "node docs/scripts/check-docs.mjs",
+    "skills:check": "node sdk/scripts/check-skills.mjs",
     "check:browser": "node sdk/scripts/check-browser-bundles.mjs && node sdk/scripts/check-browser-compile.mjs",
     "build": "pnpm -r --filter './sdk' --filter './actions' build",
     "typecheck": "pnpm -r typecheck",
@@ -105,10 +100,11 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "prepack": "node dev-tools/scripts/sync-artifacts.js"
+    "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@noble/ciphers": "1.3.0",
+    "@noble/hashes": "1.8.0",
     "@solana-program/address-lookup-table": "^0.12.1",
     "@solana-program/compute-budget": "^0.16.0",
     "@solana-program/system": "^0.12.2",

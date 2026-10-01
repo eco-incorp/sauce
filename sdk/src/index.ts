@@ -32,5 +32,12 @@ import "./routes/source-globals.generated.js";
 export { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "./routes/globals.js";
 export { destinationExecutionFee } from "./evm/execution-fee.js";
 export type { ExecutionFeeCall } from "./evm/execution-fee.js";
-export { SAUCE_INTENT_POT_SALT, v12PredictPot } from "./deployments/pot.js";
+export { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "./deployments/pot.js";
 export { destinationPot } from "./routes/intent-pot.js";
+export {
+  MAX_SQRT_PRICE_X96,
+  MIN_SQRT_PRICE_X96,
+  priceFromSqrtPriceX96,
+  sqrtPriceX96FromPrice,
+  type PoolPriceTokens,
+} from "./price.js";

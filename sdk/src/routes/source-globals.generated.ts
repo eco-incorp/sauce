@@ -167,10 +167,14 @@ export interface Permit2Source {
   readonly "Permit2": bigint & {
     "approve"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
     "transferFrom"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
+    "permitTransferFrom"(arg0: { "permitted": { "token": bigint; "amount": bigint }; "nonce": bigint; "deadline": bigint }, arg1: { "to": bigint; "requestedAmount": bigint }, arg2: bigint, arg3: (string | SauceBytes)): void;
+    "nonceBitmap"(arg0: bigint, arg1: bigint): bigint;
     "lockdown"(arg0: (readonly ({ "token": bigint; "spender": bigint })[] | SauceArray<{ "token": bigint; "spender": bigint }>)): void;
   };
     "approve"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
     "transferFrom"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
+    "permitTransferFrom"(arg0: { "permitted": { "token": bigint; "amount": bigint }; "nonce": bigint; "deadline": bigint }, arg1: { "to": bigint; "requestedAmount": bigint }, arg2: bigint, arg3: (string | SauceBytes)): void;
+    "nonceBitmap"(arg0: bigint, arg1: bigint): bigint;
     "lockdown"(arg0: (readonly ({ "token": bigint; "spender": bigint })[] | SauceArray<{ "token": bigint; "spender": bigint }>)): void;
 }
 
@@ -299,6 +303,7 @@ declare global {
   const WETH: bigint & SauceTokenSource;
   const WMON: bigint & SauceTokenSource;
   const WPOL: bigint & SauceTokenSource;
+  const WSOL: bigint;
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
   const CHAIN_ID: bigint;
