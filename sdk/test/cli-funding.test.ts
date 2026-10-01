@@ -36,6 +36,15 @@ describe("--fund <TOKEN|address>:<amount>", () => {
     expect(parseFund("usdc:2", base).token).toBe(BASE_USDC);
   });
 
+  it("reads a stock token's symbol, which is its issuer's ticker and not uppercase", () => {
+    const spcx = getAddress(
+      TOKEN_REGISTRY[base.id]!.find((row) => row.symbol === "SPCXc")!.address,
+    );
+    for (const raw of ["SPCXc:1", "spcxc:1", "SPCXC:1"]) {
+      expect(parseFund(raw, base)).toMatchObject({ token: spcx, label: "SPCXc", decimals: 8 });
+    }
+  });
+
   it("reads base units from an amount ending in n, as SauceScript writes an integer", () => {
     expect(parseFund("USDC:1500000n", base).amount).toEqual({ base: 1_500_000n });
   });

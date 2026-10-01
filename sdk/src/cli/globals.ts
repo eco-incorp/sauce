@@ -12,6 +12,7 @@ import {
   type SourceInterface,
   type SourceNamespace,
 } from "../routes/source-globals.js";
+import { STOCK_ISSUERS } from "../routes/stock-tokens.js";
 import { SVM_TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
@@ -143,13 +144,22 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       "  parameters; USDC.transfer(…) and the other token methods are EVM-only.",
     );
   } else if (showTokens) {
-    text.push(
-      "",
-      `Tokens (${globals.tokens.length}): <Sym>.transfer(…), or the symbol as an address`,
-    );
-    const width = Math.max(0, ...globals.tokens.map((token) => token.symbol.length));
-    for (const token of globals.tokens) {
+    const tokens = globals.tokens.filter((token) => token.stock === undefined);
+    const stocks = globals.tokens.filter((token) => token.stock !== undefined);
+    text.push("", `Tokens (${tokens.length}): <Sym>.transfer(…), or the symbol as an address`);
+    const width = Math.max(0, ...tokens.map((token) => token.symbol.length));
+    for (const token of tokens) {
       text.push(`  ${token.symbol.padEnd(width)}  ${token.address}  ${token.decimals} decimals`);
+    }
+    if (stocks.length > 0) {
+      text.push(`  Stock tokens (${stocks.length}), named the same way:`);
+      const stockWidth = Math.max(0, ...stocks.map((token) => token.symbol.length));
+      for (const { symbol, address, decimals, stock } of stocks) {
+        text.push(
+          `    ${symbol.padEnd(stockWidth)}  ${address}  ${decimals} decimals  ` +
+            `${stock!.name} (${STOCK_ISSUERS[stock!.issuer].name})`,
+        );
+      }
     }
     text.push("  Any other token: Token(0x…).transfer(…)");
   }
