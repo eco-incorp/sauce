@@ -296,6 +296,14 @@ chain and recipe definitions. **SDK tests compile every protocol's
 to build first, but the suites that import `./artifacts/*.json` need `sync-engine-artifacts` to have
 run (see the Foundry gotcha above).
 
+**Every route rewrite parses with `src/routes/parse.ts`**: acorn extended by
+`@sveltejs/acorn-typescript`, both pinned exactly (the plugin extends acorn's parser class). A route
+source is SauceScript, annotations included, so the rewrites must take what the compiler takes; a
+JavaScript-only parse rejected every typed helper. `ast-walk.ts#walk` steps over annotations and
+type-only declarations, so no rewrite reads a type name as a value. Do not add a second parser, and
+do not reintroduce a "rewrites cannot parse annotations" workaround: the compile seam's one remaining
+insertion is `ensureVoidMain`.
+
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function of each `abis.ts` export against `test/fixtures/registry-abi/evidence.json`: the
 deployed code must dispatch its selector (after resolving EIP-1167 clones, EIP-1967/beacon/legacy

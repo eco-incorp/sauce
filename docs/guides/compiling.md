@@ -48,9 +48,9 @@ spends none. For Portal fulfillment the Pot must be owned by the destination Por
 fee, deriving that Pot, and adding the reward and Portal calldata.
 
 `compileSauceRoute` takes a SauceScript file as written: a module declaring `function main(...)`,
-or a script whose top-level statements are the entry. Its rewrite passes parse
-the source as JavaScript, so a body carrying SauceScript type annotations belongs in raw `compile`,
-which accepts typed source directly.
+or a script whose top-level statements are the entry. Its rewrite passes parse SauceScript as the
+compiler does, type annotations included, so a typed helper that takes or returns an array or a
+record compiles the same way through either.
 
 ## Compile a reusable program
 

@@ -162,10 +162,10 @@ function mainBody(code: string, from: number): string {
 /**
  * Declare `main` void when it falls off the end.
  *
- * The compiler requires a function's return type to be declared rather than inferred, but the SDK's
- * source generators must emit PLAIN JS: the token-member and protocol-accessor rewrites are
- * acorn-based and cannot parse a type annotation. So the annotation is added here, at the single
- * compile seam, after every rewrite pass has run.
+ * The compiler requires a function's return type to be declared rather than inferred. A route body
+ * and the SDK's own generated sources are allowed to leave a `main` that returns nothing
+ * unannotated, so the annotation is added here, at the single compile seam, after every rewrite
+ * pass has run.
  */
 export function ensureVoidMain(source: string): string {
   // EVERY search below runs on the blanked copy, never the raw source: an earlier string or comment

@@ -83,17 +83,22 @@ describe("@sauce/token as the default ambient module", () => {
   // --- the SVM arm ---
   //
   // `chainAmbient` returns the same list for every chain, so `token.svm.js` is broadcast into an
-  // SVM compile too. It cannot be exercised the way the EVM cases above are: EVERY export on the
-  // SVM arm takes at least one `Account` (`balanceOf(token, account)`, `approve(token,
-  // tokenProgram, source, delegate, authority, amount)`), an `Account` reaches a program only as a
-  // `main` parameter, and a parameter needs a TYPE ANNOTATION — which an `openRoute` body cannot
-  // carry, because the rewrite passes parse it with acorn as plain JS. That is pre-existing and not
-  // specific to svm (an annotated body is a SyntaxError on an EVM destination too), so the SPL
-  // execution path is covered by `test/std/token/svm.e2e.test.ts`, which compiles an explicit
-  // `import { balanceOf } from "@sauce/token"` entry instead.
-  //
-  // What IS checkable here is the thing this file is about: that the module RESOLVES on an SVM
-  // compile. The tell is which error comes back.
+  // SVM compile too. EVERY export on the SVM arm takes at least one `Account` (`balanceOf(token,
+  // account)`, `approve(token, tokenProgram, source, delegate, authority, amount)`), and an
+  // `Account` reaches a program only as a `main` parameter with a TYPE ANNOTATION. A route body can
+  // carry one since the rewrites parse TypeScript (`routes/parse.ts`), so the arm is called below;
+  // executing it is `test/std/token/svm.e2e.test.ts`'s.
+  it("calls the SVM arm with zero import, from a body that annotates its Account", () => {
+    const built = openRoute(
+      "solana",
+      `function main(account: Account): Uint256 { return balanceOf(${BigInt(MINT)}n, account); }`,
+      svmOptions(),
+    ).reward(0n);
+    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  // And that the module RESOLVES on an SVM compile even where the call is malformed. The tell is
+  // which error comes back.
   it("resolves on an SVM destination: the failure is the malformed call, never a missing module", () => {
     // No annotation, so this reaches the compiler and fails there — on the call, not on the import.
     // `failed to import module "@sauce/token"` is what an unresolvable ambient specifier raises, and

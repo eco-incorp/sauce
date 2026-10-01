@@ -43,7 +43,6 @@
  * in the SDK's eco-routes deployment registry (`protocols/eco-routes`). A caller supplies what has
  * no correct default — deadlines, and a creator when the refund must not go to the executing Pot.
  */
-import { parse } from "acorn";
 import { encodeFunctionData, type Hex } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
@@ -53,6 +52,7 @@ import { collectDeclaredNames, walk, type AstNode } from "./ast-walk.js";
 import { denormalizeToEvm } from "./encode.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "./normalize.js";
 import { publishAndFundTx } from "./portal.js";
+import { parseSauce } from "./parse.js";
 import { emitTemplate, splitByPlaceholders, type PlaceholderSpec } from "./template.js";
 import type { AddressInput, Intent } from "./types.js";
 
@@ -545,7 +545,7 @@ function collectSites(program: AstNode, context: IntentSugarContext): SugarSite[
 const addressHex = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 
 /** Lowers every `Chain(() => { ... }).reward({ ... })` in `source`. Purely textual surgery driven by
- *  acorn ranges, so everything else survives byte for byte. */
+ *  parser ranges, so everything else survives byte for byte. */
 export function rewriteIntentSugar(source: string, context: IntentSugarContext): IntentSugarResult {
   // Every route compile comes through here, and most programs have no sugar, so skip the parse
   // when a site is impossible. A site is a call whose callee's property is the identifier
@@ -556,10 +556,7 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
   if (!source.includes("reward") && !source.includes("\\u")) {
     return { source, rewrote: false, intents: [] };
   }
-  const program = parse(source, {
-    ecmaVersion: "latest",
-    sourceType: "module",
-  }) as unknown as AstNode;
+  const program = parseSauce(source);
   const sites = collectSites(program, context);
   if (sites.length === 0) return { source, rewrote: false, intents: [] };
 

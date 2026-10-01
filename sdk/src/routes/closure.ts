@@ -2,7 +2,7 @@
  * Closure route bodies — `() => {...}` accepted as a `SauceBody` alongside a string.
  *
  * Mechanism: `Function.prototype.toString.call(fn)` returns the verbatim declared text
- * (ES2018-spec-guaranteed). We parse `(${text})` with acorn (parsing the parenthesized form is
+ * (ES2018-spec-guaranteed). We parse `(${text})` with `parse.ts` (parsing the parenthesized form is
  * what makes both a `function (){}` expression and an arrow valid inputs to one parse), take the
  * single `ExpressionStatement`'s function node, and either:
  *  - a BLOCK body: slice the ORIGINAL text between the block's own braces using the node's
@@ -13,13 +13,14 @@
  *    `function main() {\n  return <slice>;\n}`.
  *
  * Never hand-slice on `=>` or brace-counting: a `=>` inside a string literal, a template literal,
- * a comment, or a default parameter breaks naive slicing, which is exactly why acorn is used.
+ * a comment, or a default parameter breaks naive slicing, which is exactly why a parser is used.
  *
  * CAPTURE: there is none, by construction, and that is CORRECT — a free identifier that is neither
  * a chain-scoped ambient name nor a caller-supplied `defines` entry is a hard "`X` is not a declared variable"
  * compile error, which can never silently bake a stale JS value into bytecode.
  */
-import * as acorn from "acorn";
+import type { AstNode } from "./ast-walk.js";
+import { parseSauceExpression } from "./parse.js";
 
 export type SauceBody = string | (() => unknown);
 
@@ -46,13 +47,13 @@ export function sauceBodyToSource(body: () => unknown): string {
     );
   }
 
-  let parsed: acorn.Node;
+  let parsed: AstNode;
   const PAREN_OFFSET = 1; // the leading "(" we prepend below
   try {
-    parsed = acorn.parseExpressionAt(`(${text})`, 0, { ecmaVersion: "latest" });
+    parsed = parseSauceExpression(`(${text})`);
   } catch (err) {
     fail(
-      `could not parse the closure's own declared source with acorn (${(err as Error).message}) -- ` +
+      `could not parse the closure's own declared source (${(err as Error).message}) -- ` +
         "this can happen under a bundler/minifier that rewrites function text; pass a string instead.",
     );
   }
