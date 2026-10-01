@@ -6,7 +6,8 @@
  * that does not compile or a chain that says no (exit 1).
  */
 import { parseArgs } from "node:util";
-import { getAddress, isAddress, type Address, type Hex } from "viem";
+import { getAddressEncoder, isAddress as isSolanaAddress } from "@solana/kit";
+import { bytesToBigInt, getAddress, isAddress, type Address, type Hex } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { potSalt, SAUCE_INTENT_POT_SALT } from "../deployments/pot.js";
@@ -59,15 +60,27 @@ export function parseFlags(argv: readonly string[], flags: FlagSpecs): ParsedArg
 
     return { values, positionals };
   } catch (error) {
-    throw new UsageError(describeParseError(error, flags));
+    throw new UsageError(describeParseError(error, flags, argv));
   }
 }
 
 /** `parseArgs`'s messages advise on `--` escaping; say what was wrong with the flag instead. */
-function describeParseError(error: unknown, flags: FlagSpecs): string {
+function describeParseError(error: unknown, flags: FlagSpecs, argv: readonly string[]): string {
   const message = error instanceof Error ? error.message : String(error);
   const code = (error as { code?: string }).code;
   const flag = /'(-{1,2}[^' ]+)/.exec(message)?.[1];
+  // Several flags in one word: a shell handed over a quoted string, or a variable it did not split
+  // (zsh never splits an unquoted `$FLAGS`).
+  const joined = argv.find((word) => /^-{1,2}\S+\s/.test(word) && word.startsWith(flag ?? "\0"));
+  if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" && joined !== undefined) {
+    // Only the flags' names: a value in there may be a key.
+    const names = joined.split(/\s+/).filter((word) => /^-{1,2}[\w-]+$/.test(word));
+    return (
+      `one argument holds several words, ${names.join(", ")} and their values, with spaces ` +
+      "between them: a shell passed a quoted string, or a variable it did not split (zsh does not " +
+      "split an unquoted $VARIABLE). Pass each flag and each value as a word of its own."
+    );
+  }
   if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" && flag !== undefined) {
     return `unknown option ${flag}`;
   }
@@ -236,8 +249,20 @@ const DEFINE_VALUE = /^(?:\d[\d_]*|0x[0-9a-fA-F][0-9a-fA-F_]*)n?$/;
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 const WORD = 1n << 256n;
 
-/** `raw` as a define's value, or a usage error naming `where` it was given. */
-function defineValue(raw: unknown, where: string): DefineValue {
+/**
+ * A Solana public key, as the 32-byte big-endian word a program compares an account's `address`
+ * with — `undefined` when `raw` is not one. A string of digits alone is read as the integer it also
+ * is, so a key that is all digits (the System Program's `1111…`) is given as 0x hex instead.
+ */
+function solanaKey(raw: string): bigint | undefined {
+  if (/^\d+$/.test(raw) || !isSolanaAddress(raw)) return undefined;
+
+  return bytesToBigInt(new Uint8Array(getAddressEncoder().encode(raw)));
+}
+
+/** `raw` as a define's value, or a usage error naming `where` it was given. On Solana (`svm`), a
+ *  base58 public key is one too. */
+function defineValue(raw: unknown, where: string, svm: boolean): DefineValue {
   if (typeof raw === "boolean") return raw;
   if (raw === "true" || raw === "false") return raw === "true";
   let word: bigint | undefined;
@@ -245,11 +270,21 @@ function defineValue(raw: unknown, where: string): DefineValue {
   if (typeof raw === "string" && DEFINE_VALUE.test(raw)) {
     word = BigInt(raw.replace(/_/g, "").replace(/n$/, ""));
   }
+  const key = word === undefined && typeof raw === "string" ? solanaKey(raw) : undefined;
+  if (key !== undefined) {
+    if (!svm) {
+      throw new UsageError(
+        `${where}: '${String(raw)}' is a Solana public key (base58), which only a program for ` +
+          "Solana takes; give an EVM address as 0x hex",
+      );
+    }
+    word = key;
+  }
   if (word === undefined) {
     const shown = typeof raw === "string" ? `'${raw}'` : JSON.stringify(raw);
     throw new UsageError(
-      `${where}: ${shown} is not a define value: an address or other integer (decimal or 0x hex), ` +
-        "true or false",
+      `${where}: ${shown} is not a define value: an address or other integer (decimal or 0x hex)` +
+        `${svm ? ", a base58 public key" : ""}, true or false`,
     );
   }
   if (word >= WORD) throw new UsageError(`${where}: ${String(raw)} does not fit 256 bits`);
@@ -268,16 +303,20 @@ function defineName(name: string, where: string): string {
 /**
  * `--define NAME=VALUE`, repeated: compile-time values the program reads by name. A define replaces
  * the program's own module-level `const` of that name. A repeated name is refused rather than
- * last-wins, as the compiler refuses it.
+ * last-wins, as the compiler refuses it. On a Solana program (`target` svm) a value may also be a
+ * base58 public key.
  */
-export function parseDefines(raws: readonly string[]): Record<string, DefineValue> {
+export function parseDefines(
+  raws: readonly string[],
+  target: Target = "evm",
+): Record<string, DefineValue> {
   const defines: Record<string, DefineValue> = {};
   for (const raw of raws) {
     const eq = raw.indexOf("=");
     if (eq < 0) throw new UsageError(`--define: '${raw}' is not NAME=VALUE`);
     const name = defineName(raw.slice(0, eq), "--define");
     if (Object.hasOwn(defines, name)) throw new UsageError(`--define: ${name} is given twice`);
-    defines[name] = defineValue(raw.slice(eq + 1), `--define ${name}`);
+    defines[name] = defineValue(raw.slice(eq + 1), `--define ${name}`, target === "svm");
   }
 
   return defines;
@@ -287,7 +326,11 @@ export function parseDefines(raws: readonly string[]): Record<string, DefineValu
  * `--defines <file.json>`: one JSON object of NAME to value — a string in `--define`'s syntax, a
  * non-negative safe-integer number, or a boolean. `file` is only for the errors.
  */
-export function parseDefinesFile(text: string, file: string): Record<string, DefineValue> {
+export function parseDefinesFile(
+  text: string,
+  file: string,
+  target: Target = "evm",
+): Record<string, DefineValue> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -298,21 +341,22 @@ export function parseDefinesFile(text: string, file: string): Record<string, Def
     throw new UsageError(`--defines ${file}: expected one JSON object of NAME to value`);
   }
 
-  return parseDefineMap(parsed as Record<string, unknown>, `--defines ${file}`);
+  return parseDefineMap(parsed as Record<string, unknown>, `--defines ${file}`, target);
 }
 
 /**
  * Defines given as one object of NAME to value, each value as `--defines` takes it: a string in
- * `--define`'s syntax, a non-negative safe-integer number, or a boolean. `where` names where they
- * were given, for the errors.
+ * `--define`'s syntax, a non-negative safe-integer number, or a boolean — and on a Solana program
+ * (`target` svm) a base58 public key. `where` names where they were given, for the errors.
  */
 export function parseDefineMap(
   entries: Readonly<Record<string, unknown>>,
   where: string,
+  target: Target = "evm",
 ): Record<string, DefineValue> {
   const defines: Record<string, DefineValue> = {};
   for (const [name, raw] of Object.entries(entries)) {
-    defines[defineName(name, where)] = defineValue(raw, `${where}: ${name}`);
+    defines[defineName(name, where)] = defineValue(raw, `${where}: ${name}`, target === "svm");
   }
 
   return defines;

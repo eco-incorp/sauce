@@ -59,7 +59,7 @@
  */
 import { AccountRole, address, getAddressEncoder, isSignerRole, isWritableRole } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { bytesToHex, type Hex } from "viem";
+import { bytesToHex, getAddress, type Hex } from "viem";
 
 import { v12Kitchen, v12Pot } from "../evm/engine.js";
 import {
@@ -93,14 +93,38 @@ export interface SauceEvmCallParams {
   value?: bigint | number | string;
 }
 
+/**
+ * An EVM call these builders return, in both of the shapes it is used in:
+ *
+ * - a transaction or `eth_call`, `{ to, data, value }` — the shape every other request the SDK builds
+ *   has (`destinationExecutionFee()`, `publishAndFundTx`, `approvalTxs`), and what a wallet or
+ *   `client.call` takes as it is;
+ * - a route call, `{ target, data, value }` — the Portal's `Call` struct, for `RouteInput.calls`.
+ *
+ * `to` and `target` name the same contract: `to` as its checksummed 20-byte address, `target` as
+ * the route records it. `target` stays for route calls and every caller that already reads it.
+ */
+export interface SauceEvmCall extends CallInput {
+  readonly to: Hex;
+  readonly data: Hex;
+  readonly value: bigint;
+}
+
+const evmCall = (target: AddressInput, data: Hex, value: bigint): SauceEvmCall => ({
+  to: getAddress(denormalizeToEvm(toUniversalAddress(target))) as Hex,
+  target,
+  data,
+  value,
+});
+
 /** One `cook(engine, program)` call on `pot`. `data` is produced by `v12Pot.encodeCook` — the exact
  *  EVM engine encoder, not re-implemented here. */
-export function buildSauceEvmCall(params: SauceEvmCallParams): CallInput {
-  return {
-    target: toUniversalAddress(params.pot),
-    data: v12Pot.encodeCook(denormalizeToEvm(toUniversalAddress(params.engine)), params.program),
-    value: params.value ?? 0n,
-  };
+export function buildSauceEvmCall(params: SauceEvmCallParams): SauceEvmCall {
+  return evmCall(
+    toUniversalAddress(params.pot),
+    v12Pot.encodeCook(denormalizeToEvm(toUniversalAddress(params.engine)), params.program),
+    toBigInt(params.value ?? 0n),
+  );
 }
 
 export interface SauceEvmCallsParams {
@@ -113,7 +137,7 @@ export interface SauceEvmCallsParams {
 }
 
 /** One `Call` per element of `cooks`, in the given order, all targeting the same `pot`. */
-export function buildSauceEvmCalls(params: SauceEvmCallsParams): CallInput[] {
+export function buildSauceEvmCalls(params: SauceEvmCallsParams): SauceEvmCall[] {
   return params.cooks.map((program) =>
     buildSauceEvmCall({ pot: params.pot, engine: params.engine, program, value: params.value }),
   );
@@ -136,8 +160,11 @@ export interface SauceEvmDeployPotCallParams {
  *
  * Supply `kitchen` explicitly or use `chainId` to select the pinned release Kitchen. The chain
  * roster is historical; this helper does no RPC or current deployment verification.
+ *
+ * Send it as `{ to, data, value }`, or put it in a route's `calls` as `{ target, data, value }`:
+ * both fields are there ({@link SauceEvmCall}).
  */
-export function sauceEvmDeployPotCall(params: SauceEvmDeployPotCallParams): CallInput {
+export function sauceEvmDeployPotCall(params: SauceEvmDeployPotCallParams): SauceEvmCall {
   if (params.kitchen === undefined && params.chainId === undefined) {
     throw new Error(
       "sauceEvmDeployPotCall: pass `kitchen`, or a `chainId` to take it from the gated deployment " +
@@ -147,11 +174,7 @@ export function sauceEvmDeployPotCall(params: SauceEvmDeployPotCallParams): Call
   const kitchen: AddressInput =
     params.kitchen ?? (requireV12Deployment(params.chainId!).v12Kitchen as Hex);
   const ownerAddress = denormalizeToEvm(toUniversalAddress(params.owner));
-  return {
-    target: kitchen,
-    data: v12Kitchen.encodeDeployPot(ownerAddress, params.salt),
-    value: 0n,
-  };
+  return evmCall(kitchen, v12Kitchen.encodeDeployPot(ownerAddress, params.salt), 0n);
 }
 
 /** @deprecated This checks the historical roster only. Verify pinned release code on chain. */

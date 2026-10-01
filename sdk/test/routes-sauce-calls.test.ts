@@ -6,10 +6,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { encodeFunctionData } from "viem";
+import { encodeFunctionData, getAddress } from "viem";
 import { address, getAddressEncoder } from "@solana/kit";
 
-import { v12PotAbi, v12KitchenAbi } from "../src/evm/engine.js";
+import { v12Kitchen, v12PotAbi, v12KitchenAbi } from "../src/evm/engine.js";
+import { destinationExecutionFee } from "../src/evm/execution-fee.js";
 import { v12KitchenAddress, v12SvmEngineProgramId } from "../src/deployments/index.js";
 import {
   decodePortalCalldataWithAccounts,
@@ -107,6 +108,27 @@ describe("sauceEvmDeployPotCall", () => {
     const call = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT, chainId: 8453 });
     expect(call.target).toBe(v12KitchenAddress());
     expect(call.target.toLowerCase()).not.toBe("0xd57b452634c653d80a85160fea895bb07ac41d8f");
+  });
+});
+
+describe("the EVM call builders, as a transaction and as a route call", () => {
+  // `{ to, data, value }` is the shape of every request the SDK builds for a wallet or an eth_call
+  // (`destinationExecutionFee()`, `publishAndFundTx`); `target` is the route `Call`'s field.
+  it("name the contract as `to`, checksummed, beside the route call's `target`", () => {
+    const deploy = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT, kitchen: KITCHEN });
+    expect(deploy).toEqual({
+      to: getAddress(KITCHEN),
+      target: KITCHEN,
+      data: v12Kitchen.encodeDeployPot(OWNER, SALT),
+      value: 0n,
+    });
+    const cook = buildSauceEvmCall({ pot: POT, engine: ENGINE, program: "0x01", value: "7" });
+    expect(cook.to).toBe(getAddress(POT));
+    expect(cook.target).toBe(("0x" + "00".repeat(12) + POT.slice(2)).toLowerCase());
+    expect(cook.value).toBe(7n);
+    // The same keys a fee read has, so either goes to a client as it is.
+    const fee = destinationExecutionFee(KITCHEN);
+    expect(Object.keys(fee).filter((key) => key in deploy)).toEqual(["to", "data"]);
   });
 });
 
