@@ -19,6 +19,7 @@ through an endpoint you name on the command line.
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
 | `sauce pot`      | Predict a Pot's address, and deploy it or print the transaction that does         |
 | `sauce globals`  | List the tokens, protocols and other names a program on a chain can use           |
+| `sauce price`    | Turn a price into a pool's `sqrtPriceX96`, a swap's limit and average-price floor |
 | `sauce inspect`  | Take a cook, a Kitchen or Portal call, a program or a file apart                  |
 | `sauce verify`   | Check that a payload, cook, intent or transaction runs the audited settle program |
 | `sauce init`     | Scaffold a project that uses this package                                         |
@@ -44,8 +45,8 @@ npm install
 
 `sauce init` writes a `package.json` that pins `@eco-incorp/sauce` to exactly the version that ran
 it, an `AGENTS.md` with the project's instructions for coding agents, a `.gitignore` that keeps
-local configuration out of git, and `sauce.config.example.json`, and then installs the agent skills
-([Agent skills](#agent-skills)). `init` refuses to overwrite a file that already has other content,
+local configuration out of git, `sauce.config.example.json`, and `programs/tsconfig.json`
+([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](#agent-skills)). `init` refuses to overwrite a file that already has other content,
 and lists it, unless you pass `--force`. It runs no package manager unless you pass `--install`.
 
 ## Endpoints and signers
@@ -108,11 +109,22 @@ npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/
 ```
 
 `sauce run` compiles, rehearses the cook, signs it, sends it and waits for the receipt, then prints
-the hash, the status and the gas used:
+the hash, the status and the gas used, what the cook cost, and what it moved:
 
 ```text
 cook 0x5f…: success, gas used 184211, block 21004500
+cost 0.000187 ETH: gas 184211 at 1000000 wei = 0.000184 ETH, L1 data 0.0000018 ETH, value 0.000001 ETH (the Kitchen's fee and any native the program spends)
+Token transfers:
+  1 USDC: 0x8a… (the Pot) -> 0x66…
+Net balance changes:
+  0x8a… (the Pot): -1 USDC
+  0x66…: +1 USDC
 ```
+
+The cost is the gas at the price the receipt records, an OP-stack chain's L1 data fee where the
+receipt carries one, and the value the cook carried. What moved is read from the receipt's logs by
+the decoder `simulate` uses: token transfers, approvals and each address's net change. `--json`
+carries both under `cook.cost` and `cook.effects`.
 
 A cook that would revert is not sent: the run stops with the decoded reason — a Pot or Kitchen
 error by name, `Error(string)`, or `the program threw "…"` for a SauceScript `throw` — and exits 1.
@@ -126,9 +138,39 @@ If the Pot is not deployed yet, `run` asks first:
 Pot 0x8a… (owner 0xYou, salt 0x00…00) is not deployed on base. Deploy it now? [y/N]
 ```
 
-`y` deploys it in a transaction of its own and then cooks; anything else sends nothing. With no
-terminal to ask on (CI, a pipe), the run fails and says so, unless you pass `--yes`, which agrees in
-advance.
+`y` deploys it in a transaction of its own and then cooks; anything else sends nothing.
+
+Every transaction a run sends before its cook is asked about like this: deploying a missing Pot (on
+Solana, creating it), approving Permit2 for a token `--fund` pulls, and approving the Pot for an
+amount under `--fund-mode allowance`. `--auto-approve` approves each of them without asking and
+says so for each, as `auto-approved: deploy Pot 0x…` or `auto-approved: approve Permit2 for USDC`.
+With no terminal to ask on (CI, a pipe), the run sends nothing: it names every action it would need
+approved and stops, until it is given `--auto-approve`.
+
+### A program from stdin
+
+Any command that takes a program file takes `-` for one read from stdin, and so does every command
+that takes an [actions document](#an-actions-document-instead-of-a-program):
+
+```sh
+cat pay.sauce.ts | npx sauce compile - --chain base --define RECIPIENT=0x… --define AMOUNT=1
+npx sauce inspect - --chain base < cook.hex
+```
+
+Stdin is read only when the file is `-`, never because a file is missing: a command whose stdin is
+held open (an agent's shell, a CI step) would otherwise wait on it forever. `inspect -` reads hex, a
+transaction hash or a program, whichever stdin carries, and `inspect --source -` the program.
+
+A program from stdin has no directory of its own, so its relative imports
+(`import { fee } from "./lib/fee.js"`) resolve against the current directory, or the one
+`--source-dir <dir>` names; a compile error from one says so. The package's own modules — the
+`./artifacts/*.json` and `./protocols/*` ABIs, `@sauce/token` — resolve as they always do.
+
+Stdin carried the program, so it cannot answer questions too. They go to the terminal the command
+runs in (`/dev/tty`) when there is one, so a program piped in at a terminal is still asked about.
+With no terminal at all — or on Windows, which has no `/dev/tty` — a run sends nothing until
+`--auto-approve` approves what it needs, and a keystore needs `--password-file`. Neither ever waits
+on a stdin that is spent.
 
 ### Rehearsing: `sauce simulate`
 
@@ -139,6 +181,9 @@ nothing on chain changes. It needs neither a deployed Pot nor the tokens the pro
 npx sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
   --assume-balance USDC:2 --assume-balance USDT:2 --define RECIPIENT=0x… --define AMOUNT=1000000
 ```
+
+The owner is `--owner`, or the owner's key: `--keystore` (or `--private-key`; on Solana,
+`--keypair`) names it, and signs nothing but the pulls `--fund` rehearses.
 
 - **A Pot that is not deployed** is deployed in the rehearsal first. Anyone may send a Pot's
   `Kitchen.deployPot(owner, salt)`, and the Pot is the owner's whoever sends it, so the rehearsal
@@ -254,8 +299,9 @@ Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may move 0 of your USDC (ba
 ```
 
 `y` sends the approval (reset to zero first when a smaller one stands, as USDT requires) and then
-the cook; anything else sends nothing. With no terminal to ask on, the run fails unless you pass
-`--yes`. `--fund-mode allowance` asks the same about approving the Pot, and warns when it leaves an
+the cook; anything else sends nothing. With no terminal to ask on, the run names it and sends
+nothing, unless you pass `--auto-approve`. `--fund-mode allowance` asks the same about approving
+the Pot, and warns when it leaves an
 allowance standing. `permit` refuses a token whose `DOMAIN_SEPARATOR()` does not match its name,
 version and address, before sending anything.
 
@@ -301,6 +347,20 @@ account may deploy a Pot; it is its owner's either way. So `pot --deploy` takes 
 another owner's Pot, which the signer sends and pays for — how the Pot every intent to a chain
 cooks on, owned by that chain's Portal Executor, is deployed — and defaults the owner to the
 signer. On Solana the owner signs `create_pot`, so there the signer creates its own.
+
+With a signer and no `--owner`, `sauce pot` is the signer's own Pot: `sauce pot --chain base
+--keystore ~/.keys/me.json` prints your address and your Pot. A keystore that records its address
+(most wallets write one) is read with no password; one that does not is unlocked to learn it.
+
+Given an endpoint and no `--deploy`, `sauce pot` also reads the chain (or the Solana cluster) and
+adds what it found under `deployment`, and in a line on stderr: whether the released engine and
+Kitchen are there, the Kitchen's execution fee, and whether the Pot is deployed and whose it is.
+`--deploy` refuses a chain with no Kitchen rather than send a `deployPot` to an address without
+code, which would succeed and deploy nothing.
+
+```sh
+npx sauce pot --chain base --owner 0xYou --config sauce.config.json
+```
 
 `run` and `publish` act for the signer, so the owner is the signer: `--owner` may only restate it,
 and one that names someone else is refused. `simulate`, `tx` and plain `pot` have no signer and
@@ -378,7 +438,27 @@ write anything larger as a string.
 A define replaces a **module-level** `const`, so in a file with `main` the constant sits beside it,
 as above. In a script, a top-level `const` is the script's own local and a define cannot replace it:
 leave the name undeclared and define it. The command refuses a define a script would never see,
-rather than ignoring it.
+rather than ignoring it, and names on stderr a define the file never reads, which changes nothing.
+For a program on Solana, a value may also be a base58 public key, as `--account` takes them: it is
+the 32-byte word an account's `address` compares to.
+
+`sauce compile --json` reports what the compile applied:
+
+- `defines`: each define the file reads, its value, its `source` and the `chain` it applied on. The
+  source is `user` for `--define` and `--defines`, or `chain` for what compiling for the chain sets,
+  with its `kind` (a `token` symbol, a protocol `contract` such as `UniswapV3_Factory`, the
+  `chain id`). A user define that replaced a chain value says what it `replaces`. An intent body
+  the file opens reads its own chain's values, so its `USDC` is listed again with that chain; a
+  define of such a name stays on the chain it was given for, while any other (`RECIPIENT`) holds
+  in the body too. stderr names a define that changes nothing for that reason.
+- `contracts`: each protocol contract the program calls or reads (`UniswapV3.Factory.getPool(…)`,
+  `Cctp.TokenMessenger`), as written and as resolved, with the chain whose deployment it is — an
+  intent body's resolves on the intent's own chain.
+- `size`, the program's bytes, and `payload`, the program with `main`'s arguments appended, given
+  with `--args` or `--args-json` (`null` until they are).
+- On Solana, `cook`: the size of the cook's transaction against the 1232-byte limit, measured as
+  `sauce run` builds it, with each `--account` given and a distinct account for every other slot.
+  Past the limit, stderr says `sauce run` stages the program first.
 
 ### Values given when it runs: `main`'s arguments
 
@@ -430,6 +510,28 @@ sauce compile: pay.sauce.ts does not compile for base
 hint: if RECIPIENT is a value you supply, pass --define RECIPIENT=<value>
 ```
 
+### In an editor
+
+A program file is checked by an editor as TypeScript, which does not know SauceScript's names.
+`sauce init` writes `programs/tsconfig.json`, a TypeScript project of the `*.sauce.ts` files in
+`programs/` alone, typed by the package's `@eco-incorp/sauce/sauce-script` declarations: the
+builtins (`ctx`, `abi`, `evm`, `svm`, `crypto`, `require`, `revert`), `Token` and the
+`@sauce/token` functions, every chain with its tokens and protocol namespaces, the protocol
+defines, and the ABI a program imports (`import IERC20 from "./artifacts/IERC20.json"`). The
+project's other TypeScript is not in it, so a Node file keeps Node's `crypto` and `require`.
+
+Some valid SauceScript is not valid TypeScript: every SauceScript number is one 256-bit integer, so
+`xs[i]` with a `bigint` index, `n + 1` with `n` a `bigint`, and `f(500)` where `f` takes a `bigint`
+are all fine, and a define the file leaves undeclared for `--define` is not an error until the
+compile. The tsconfig names a TypeScript plugin from the package that drops exactly those
+diagnostics, in `*.sauce.ts` files only; a misspelled builtin, a wrong argument count or a method a
+contract does not have still shows. An editor loads the plugin only when it runs the project's own
+TypeScript (in VS Code, "TypeScript: Select TypeScript Version", then "Use Workspace Version"), and
+`init` adds `typescript` to `devDependencies` for it. Without the plugin, those diagnostics show
+and nothing else changes: whether a program compiles is the compiler's to say, not the editor's.
+
+In a project `init` did not write, copy that `programs/tsconfig.json` beside your programs.
+
 ## An actions document instead of a program
 
 An [actions document](actions.md) is JSON — `{ "version": 1, "actions": [ … ] }`, each action one
@@ -476,6 +578,16 @@ A program can open an intent on another chain — `Base(() => { … }).reward({ 
 needs what the SDK cannot look up: `--intent-deadline <unix seconds>` and `--intent-creator
 <address>`, and, when the intent's body compiles to a program of its own,
 `--intent-execution-fee <wei>`, the destination Kitchen's fee. It names whichever is missing.
+`--intent-execution-fee auto` reads that fee from each destination's Kitchen, through `--config`
+(an `rpcUrls` entry for the destination's chain id), and says what it read.
+
+Every intent whose body runs a program cooks on one Pot on its destination: the one owned by the
+destination Portal's Executor with salt zero, which every intent through that Portal shares. No
+solver can fill the intent until that Pot is deployed. `compile` and `publish` check it on the
+destination when `--config` reaches it (`compile --json` reports each under `intentPots`) and warn
+while it is missing, naming the `sauce pot --deploy --chain <destination> --owner <Executor>` that
+deploys it; any account may send that. `publish` warns before it sends anything, and says how to
+check when it cannot.
 
 There are two ways to get such a file's intents onto the chain:
 
@@ -603,6 +715,23 @@ read. It is `routes.sourceGlobals(chain)`, which reads the registries the compil
 contracts through the protocol rewrite's own resolver, so a name it lists is one the compile
 accepts, at the address the program gets.
 
+### `sauce price`
+
+```sh
+npx sauce price --chain base WETH USDC 2700                       # 2,700 USDC per WETH
+npx sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568
+```
+
+turns a price, in quote tokens per base token, into the numbers a swap program takes, for the pair's
+order on the chain (token0 is the lower address): the `sqrtPriceX96` a Uniswap V3 or V4 pool (or a
+fork) trades at, which is also the swap's `sqrtPriceLimitX96` — a floor when selling token0, a
+ceiling when selling token1 — and, for selling the base token and for buying it, the `minAvgPrice` a
+program compares a fill against, `out * 1e18 >= minAvgPrice * spent`, rounded up so the check never
+passes a worse average. A token is a symbol the chain registers, or `0x…:<decimals>`.
+`--sqrt-price-x96` reads a pool's price back. The conversion is the package's
+`sqrtPriceX96FromPrice` and `priceFromSqrtPriceX96`, which a TypeScript program imports from the
+root; nothing reaches a network.
+
 ### `sauce inspect`
 
 ```sh
@@ -619,7 +748,9 @@ takes bytes back apart into what a SauceScript author wrote:
   decoded against its `main`;
 - a `Kitchen.deployPot` (the Pot it makes), a `Portal.publish` or `publishAndFund` (the route and
   the reward), an ERC-20 call, or bare program bytes;
-- a 32-byte hash with an endpoint: the transaction, fetched — its status, sender, value and call;
+- a 32-byte hash with an endpoint: the transaction, fetched — its status, sender, value and call,
+  what it cost (gas, an OP-stack chain's L1 data fee, the value), and the token transfers,
+  approvals and net balance changes its receipt's logs record;
 - a file: the program it compiles to, and its intents, with every value it measures at run time
   named (`reward: <amount> of 0x…`).
 

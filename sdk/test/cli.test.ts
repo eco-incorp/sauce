@@ -3,6 +3,7 @@
  * file exactly as `openRoute` compiles a route body. Executing what it prints is `cli.e2e.test.ts`.
  */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { PassThrough } from "node:stream";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,9 +29,15 @@ import {
   parseSalt,
   UsageError,
 } from "../src/cli/args.js";
-import { awaitPot } from "../src/cli/chain.js";
+import { awaitPot, caughtUp } from "../src/cli/chain.js";
+import {
+  chooseTerminal,
+  confirmOn,
+  type Terminal,
+  type TerminalChoice,
+} from "../src/cli/terminal.js";
 import { castSend } from "../src/cli/commands.js";
-import { failureReason } from "../src/cli/solana.js";
+import { awaitAccount, failureReason } from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   v12DeployedAddresses,
@@ -68,11 +75,17 @@ interface Run {
 }
 
 async function sauce(...argv: string[]): Promise<Run> {
+  return sauceWith({}, ...argv);
+}
+
+/** `sauce` with `overrides` on the process io: stdin's text, a terminal to ask on. */
+async function sauceWith(overrides: Partial<CliIo>, ...argv: string[]): Promise<Run> {
   let stdout = "";
   let stderr = "";
   const ran: Array<{ command: string; args: readonly string[]; cwd: string }> = [];
   const io: CliIo = {
     ...nodeIo(),
+    ...overrides,
     stdout: (text) => void (stdout += text),
     stderr: (text) => void (stderr += text),
     run: (command, args, cwd) => {
@@ -244,7 +257,8 @@ describe("sauce compile", () => {
       file("ambient.sauce.ts", body),
       "--chain",
       "base",
-      ...PAY_DEFINES,
+      "--define",
+      `RECIPIENT=${RECIPIENT}`,
     );
     expect(run.stderr).toBe("");
     expect(run.stdout).toMatch(/^0x[0-9a-f]+\n$/);
@@ -281,9 +295,29 @@ describe("sauce compile", () => {
       target: "evm",
       bytecode: expect.stringMatching(/^0x[0-9a-f]+$/),
       size: ((out.bytecode as string).length - 2) / 2,
+      payload: { size: ((out.bytecode as string).length - 2) / 2, argumentsSize: 0 },
       entryEncoding: "abi-v1",
       entryParams: [],
       entrySchema: null,
+      defines: [
+        { name: "AMOUNT", value: "1000", source: "user", chain: "ethereum" },
+        { name: "RECIPIENT", value: RECIPIENT, source: "user", chain: "ethereum" },
+        {
+          name: "USDC",
+          value: getAddress(routes.TOKEN_REGISTRY[1]!.find((t) => t.symbol === "USDC")!.address),
+          source: "chain",
+          kind: "token",
+          chain: "ethereum",
+        },
+        {
+          name: "USDT",
+          value: getAddress(routes.TOKEN_REGISTRY[1]!.find((t) => t.symbol === "USDT")!.address),
+          source: "chain",
+          kind: "token",
+          chain: "ethereum",
+        },
+      ],
+      contracts: [],
       compiler: { name: "@eco-incorp/sauce-compiler", version: compiler.version },
       engine: {
         release: "v12-evm",
@@ -309,6 +343,218 @@ describe("sauce compile", () => {
       expect(out.manifest).toEqual({ accounts: [{ kind: "remaining", from: 0 }] });
       expect(out.engine).toMatchObject({ release: "v12-svm", programId: expect.any(String) });
     }
+  });
+
+  it("holds a define of a chain-scoped name on its own chain, and any other at every depth", async () => {
+    // RECIPIENT is the user's alone, so the intent body reads it too. USDC is a name each chain
+    // sets: the user's holds on Base, where the reward reads it, and the body on Arbitrum reads
+    // Arbitrum's; WETH is read only there, so the user's WETH changes nothing.
+    const recipient = "0x6666666666666666666666666666666666666666";
+    const mine = "0x7777777777777777777777777777777777777777";
+    const text = [
+      "Arbitrum(() => {",
+      "  USDC.transfer(RECIPIENT, 1n);",
+      "  require(chainId == 42161n && WETH != 0n);",
+      "}).reward({ tokens: [{ token: USDC, amount: 1n }] });",
+      "",
+    ].join("\n");
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const base = routes.chainDefines(requireChain("base"));
+    const arbitrum = routes.chainDefines(requireChain("arbitrum"));
+    const address = (value: unknown) =>
+      getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    const report = appliedDefines(text, requireChain("base"), {
+      RECIPIENT: BigInt(recipient),
+      USDC: BigInt(mine),
+      WETH: BigInt(mine),
+    });
+    expect(report.defines).toEqual([
+      { name: "RECIPIENT", value: getAddress(recipient), source: "user", chain: "arbitrum" },
+      {
+        name: "USDC",
+        value: address(arbitrum.USDC),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
+      {
+        name: "USDC",
+        value: getAddress(mine),
+        source: "user",
+        replaces: address(base.USDC),
+        chain: "base",
+      },
+      {
+        name: "WETH",
+        value: address(arbitrum.WETH),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
+      { name: "chainId", value: "42161", source: "chain", kind: "chain id", chain: "arbitrum" },
+    ]);
+    expect(report.unread).toEqual([{ name: "WETH", readOn: ["arbitrum"] }]);
+    // And the command says why the WETH define changes nothing.
+    const run = await sauce(
+      "compile",
+      file("scoped.sauce.ts", text),
+      "--chain",
+      "base",
+      "--define",
+      `RECIPIENT=${recipient}`,
+      "--define",
+      `WETH=${mine}`,
+      "--intent-deadline",
+      "2000000000",
+      "--intent-creator",
+      CREATOR,
+      "--intent-execution-fee",
+      "0",
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain(
+      "reads WETH only in intents on arbitrum, where it is that chain's own",
+    );
+  });
+
+  it("reports the defines it applied and where each came from, and the contracts it resolved", async () => {
+    // A venue the chain sets (UniswapV3_Factory), one the user sets, one the user sets and never
+    // reads, and a namespace call and a token — at the top and inside an intent body, which reads
+    // its own chain's.
+    const program = file(
+      "venues.sauce.ts",
+      [
+        "const UniswapV3_Factory = 0n;",
+        "const PANCAKE = 0n;",
+        "function main(amount: Uint256) {",
+        "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
+        "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
+        "  require(pool != 0n);",
+        "  Arbitrum(() => {",
+        "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
+        "    require(there != 0n);",
+        "  }).reward({ tokens: [{ token: USDC, amount: amount }] });",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const pancake = "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865";
+    const run = await sauce(
+      "compile",
+      program,
+      "--chain",
+      "base",
+      "--define",
+      `PANCAKE=${pancake}`,
+      "--define",
+      "UNUSED=5",
+      "--intent-deadline",
+      "2000000000",
+      "--intent-creator",
+      CREATOR,
+      "--intent-execution-fee",
+      "0",
+      "--json",
+      "--args",
+      "1000",
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain("--define UNUSED: ");
+    expect(run.stderr).toContain("never reads UNUSED, so the define changes nothing");
+    const out = JSON.parse(run.stdout) as Record<string, unknown>;
+    const base = routes.chainDefines(requireChain("base"));
+    const address = (value: unknown) =>
+      getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    const arbitrum = routes.chainDefines(requireChain("arbitrum"));
+    expect(out.defines).toEqual([
+      { name: "PANCAKE", value: pancake, source: "user", chain: "base" },
+      {
+        name: "USDC",
+        value: address(arbitrum.USDC),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
+      { name: "USDC", value: address(base.USDC), source: "chain", kind: "token", chain: "base" },
+      {
+        name: "UniswapV3_Factory",
+        value: address(base.UniswapV3_Factory),
+        source: "chain",
+        kind: "contract",
+        chain: "base",
+      },
+      { name: "WETH", value: address(base.WETH), source: "chain", kind: "token", chain: "base" },
+    ]);
+    expect(out.contracts).toEqual([
+      {
+        reference: "UniswapV3.Factory",
+        contract: "UniswapV3.Factory",
+        chain: "arbitrum",
+        address: address(arbitrum.UniswapV3_Factory),
+      },
+      {
+        reference: "UniswapV3.Factory",
+        contract: "UniswapV3.Factory",
+        chain: "base",
+        address: address(base.UniswapV3_Factory),
+      },
+    ]);
+    // main(amount): one ABI-v1 word after the program.
+    expect(out.payload).toEqual({ size: (out.size as number) + 32, argumentsSize: 32 });
+    // Without its arguments the payload is not known.
+    const bare = JSON.parse(
+      (
+        await sauce(
+          "compile",
+          program,
+          "--chain",
+          "base",
+          "--define",
+          `PANCAKE=${pancake}`,
+          "--intent-deadline",
+          "2000000000",
+          "--intent-creator",
+          CREATOR,
+          "--intent-execution-fee",
+          "0",
+          "--json",
+        )
+      ).stdout,
+    ) as Record<string, unknown>;
+    expect(bare.payload).toBeNull();
+  });
+
+  it("says whether a Solana cook fits one transaction, for its accounts", async () => {
+    const program = file(
+      "pay.sauce.ts",
+      [
+        "function main(tokenProgram: Account, source: Account<Writable>, dest: Account<Writable>, pot: Account<Signer>, amount: Uint256) {",
+        "  transfer(1n, tokenProgram, source, dest, pot, amount);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const sized = async (...extra: string[]) =>
+      JSON.parse(
+        (await sauce("compile", program, "--chain", "solana", "--json", ...extra)).stdout,
+      ) as { cook?: { size: number; limit: number; fits: boolean; assumed: string[] } };
+    expect((await sized()).cook).toBeUndefined();
+    const distinct = (await sized("--args", "5")).cook!;
+    expect(distinct).toMatchObject({ limit: 1232, fits: true });
+    expect(distinct.assumed).toEqual(["tokenProgram", "source", "dest", "pot"]);
+    // The Pot named as itself is the cook's own account, which the Kitchen signs for: the
+    // transaction carries one key and one signature fewer than for a signer of its own.
+    const pot = (await sized("--account", "pot=pot", "--args", "5")).cook!;
+    expect(pot.assumed).toEqual(["tokenProgram", "source", "dest"]);
+    expect(pot.size).toBeLessThan(distinct.size);
+    // Past the limit: said on stderr, and that `run` stages it.
+    const large = file(
+      "large.sauce.ts",
+      `function main(x: Uint256) {\n${Array.from({ length: 60 }, (_, i) => `  require(x != ${i}n, "${"x".repeat(20)}${i}");`).join("\n")}\n}\n`,
+    );
+    const run = await sauce("compile", large, "--chain", "solana", "--json", "--args", "99");
+    expect(JSON.parse(run.stdout).cook).toMatchObject({ fits: false });
+    expect(run.stderr).toMatch(/past Solana's 1232: `sauce run` stages the program/);
   });
 
   it("takes a Solana program's key defines in base58, as --account takes them", async () => {
@@ -454,6 +700,22 @@ describe("sauce compile", () => {
     );
   });
 
+  it("needs no fee for --intent-execution-fee auto when no intent runs a program", async () => {
+    // A token-only body is calls the Portal's Executor makes itself: no cook, no Kitchen fee.
+    const program = file(
+      "bridge.sauce.ts",
+      "Base(() => {\n  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n",
+    );
+    const run = await sauce(
+      ...["compile", program, "--chain", "arbitrum", "--define", `RECIPIENT=${RECIPIENT}`],
+      ...["--intent-deadline", "2000000000", "--intent-creator", CREATOR],
+      ...["--intent-execution-fee", "auto", "--json"],
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain("no intent here runs a program, so none pays a fee");
+    expect(JSON.parse(run.stdout).intentPots).toBeUndefined();
+  });
+
   it("builds an intent the program opens, naming each setting it lacks", async () => {
     const body = [
       "const amount = USDC.balanceOf(ctx.self());",
@@ -559,7 +821,7 @@ describe("sauce tx", () => {
     });
     expect(run.stderr).toContain(`Pot ${pot} belongs to ${OWNER} (salt ${SAUCE_INTENT_POT_SALT}).`);
     expect(run.stderr).toContain(
-      `It must be deployed (sauce pot --deploy --owner ${OWNER} --chain ethereum --keystore <its keystore>)`,
+      `It must be deployed (sauce pot --deploy --owner ${OWNER} --chain ethereum --keystore <keystore>)`,
     );
     expect(run.stderr).toContain(`Send from ${OWNER}: cook() is onlyOwner.`);
   });
@@ -641,7 +903,7 @@ describe("sauce tx", () => {
       "treasury",
     );
     expect(hinted.stderr).toContain(
-      `sauce pot --deploy --owner ${OWNER} --chain ethereum --salt treasury --keystore <its keystore>`,
+      `sauce pot --deploy --owner ${OWNER} --chain ethereum --salt treasury --keystore <keystore>`,
     );
   });
 
@@ -1224,6 +1486,29 @@ describe("sauce pot", () => {
     expect(byDefault.salt).toBe(SAUCE_INTENT_POT_SALT);
   });
 
+  it("is the signer's own Pot with a signer and no --owner, unlocking nothing it need not", async () => {
+    // A keystore that names its address: read, never decrypted (there is no password to give).
+    const named = file(
+      "named.keystore.json",
+      JSON.stringify({ address: OWNER.slice(2).toLowerCase(), version: 3, crypto: {} }),
+    );
+    const fromKeystore = JSON.parse(
+      (await sauce("pot", "--chain", "base", "--keystore", named)).stdout,
+    ) as { owner: string; pot: string };
+    expect(fromKeystore).toMatchObject({ owner: OWNER, pot: v12PredictPot(OWNER) });
+    // A raw key's own address (anvil's second dev account is OWNER).
+    const fromKey = await sauce(
+      ...["pot", "--chain", "base", "--private-key"],
+      "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+    );
+    expect(JSON.parse(fromKey.stdout)).toMatchObject({ owner: OWNER });
+    // A keystore without one has to be unlocked: with no terminal, that needs --password-file.
+    const unnamed = file("unnamed.keystore.json", JSON.stringify({ version: 3, crypto: {} }));
+    const locked = await sauce("pot", "--chain", "base", "--keystore", unnamed);
+    expect(locked.code).toBe(2);
+    expect(locked.stderr).toMatch(/pass --password-file/);
+  });
+
   it("refuses a missing owner, and an owner that is not the chain's kind of address", async () => {
     expect((await sauce("pot", "--chain", "base")).stderr).toMatch(/missing --owner <address>/);
     expect((await sauce("pot", "--owner", OWNER)).stderr).toMatch(/missing --chain/);
@@ -1366,16 +1651,20 @@ describe("flags in any order", () => {
         /--keystore is not an option of sauce tx: tx signs nothing: it prints the transaction unsigned/,
       ],
       [
-        ["simulate", program, "--chain", "solana", "--owner", OWNER, "--keypair", "id.json"],
-        /--keypair is not an option of sauce simulate: on Solana, simulate runs the cook from --owner/,
+        ["tx", program, "--chain", "solana", "--owner", OWNER, "--keypair", "id.json"],
+        /--keypair is not an option of sauce tx: tx signs nothing/,
       ],
       [
-        ["compile", program, "--chain", "base", "--yes"],
-        /--yes is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce pot take it\)/,
+        ["compile", program, "--chain", "base", "--auto-approve"],
+        /--auto-approve is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce pot take it\)/,
       ],
       [
         ["globals", "--chain", "base", "--rpc-url", "http://x"],
         /globals reads nothing from a chain/,
+      ],
+      [
+        ["compile", program, "--chain", "base", "--keystore", "k.json"],
+        /--keystore is not an option of sauce compile: compile signs nothing \(sauce simulate, sauce run/,
       ],
       [["compile", program, "--chain", "base", "--nope"], /unknown option --nope/],
     ];
@@ -1384,8 +1673,8 @@ describe("flags in any order", () => {
       expect(run.code).toBe(2);
       expect(run.stderr).toMatch(message);
     }
-    // `pot` takes --yes, which it has no use for: --deploy never asks.
-    const pot = await sauce("pot", "--owner", OWNER, "--chain", "base", "--yes");
+    // `pot` takes --auto-approve, which approves nothing there: --deploy itself is the approval.
+    const pot = await sauce("pot", "--owner", OWNER, "--chain", "base", "--auto-approve");
     expect(pot.code).toBe(0);
   });
 
@@ -1405,6 +1694,122 @@ describe("flags in any order", () => {
     );
     expect(run.stderr).toMatch(/zsh does not split an unquoted \$VARIABLE/);
     expect(run.stderr).not.toContain(key.slice(2, 12));
+  });
+});
+
+describe("a program from stdin", () => {
+  const PROGRAM = "function main(to: Address) {\n  USDC.transfer(to, 5n);\n}\n";
+  const piped = (text: string) => ({ readStdin: () => text });
+
+  it("compiles `-` as the program stdin carries, byte for byte as the file", async () => {
+    const fromFile = await sauce("compile", file("pay.sauce.ts", PROGRAM), "--chain", "base");
+    const fromStdin = await sauceWith(piped(PROGRAM), "compile", "-", "--chain", "base");
+    expect(fromStdin.code).toBe(0);
+    expect(fromStdin.stdout).toBe(fromFile.stdout);
+    // Read only when asked for: a missing file operand never falls back to stdin.
+    const none = await sauceWith(
+      {
+        readStdin: () => {
+          throw new Error("read stdin");
+        },
+      },
+      "compile",
+      "--chain",
+      "base",
+    );
+    expect(none.code).toBe(2);
+    expect(none.stderr).toMatch(
+      /missing <file>: the SauceScript program, or - to read it from stdin/,
+    );
+  });
+
+  it("resolves its relative imports against --source-dir, and says so when one is missing", async () => {
+    file("lib/fee.js", "export function fee(amount) { return amount / 100n; }\n");
+    const program =
+      'import { fee } from "./lib/fee.js";\nfunction main() {\n  require(fee(AMOUNT) > 0n);\n}\n';
+    const args = ["compile", "-", "--chain", "base", "--define", "AMOUNT=1000"];
+    const there = await sauceWith(piped(program), ...args, "--source-dir", work);
+    expect(there.stderr).toBe("");
+    expect(there.code).toBe(0);
+    // From the test's own directory, ./lib/fee.js is not there.
+    const missing = await sauceWith(piped(program), ...args);
+    expect(missing.code).toBe(1);
+    expect(missing.stderr).toContain("<stdin> does not compile for base");
+    expect(missing.stderr).toContain(
+      "hint: the program came from stdin, so its relative imports resolve against",
+    );
+    expect(missing.stderr).toContain("pass --source-dir <dir>");
+  });
+
+  it("takes apart what stdin carries for inspect: hex, or a program", async () => {
+    const compiled = (
+      await sauce("compile", file("pay.sauce.ts", PROGRAM), "--chain", "base")
+    ).stdout.trim();
+    const hex = await sauceWith(piped(`${compiled}\n`), "inspect", "-", "--chain", "base");
+    const direct = await sauce("inspect", compiled, "--chain", "base");
+    expect(hex.code).toBe(0);
+    expect(hex.stdout).toBe(direct.stdout);
+    const source = await sauceWith(piped(PROGRAM), "inspect", "-", "--chain", "base");
+    expect(source.code).toBe(0);
+    expect(source.stdout).toContain("<stdin> for base (evm)");
+    const both = await sauceWith(piped(compiled), "inspect", "-", "--source", "-");
+    expect(both.code).toBe(2);
+    expect(both.stderr).toMatch(/stdin carries one thing/);
+  });
+
+  it("asks nothing on a spent stdin: a keystore needs --password-file, approvals --auto-approve", async () => {
+    // jest's stdin is no terminal and the program used it: no password can be asked for.
+    const keystore = await sauceWith(
+      piped(PROGRAM),
+      ...["run", "-", "--chain", "base", "--rpc-url", "http://127.0.0.1:1"],
+      ...["--keystore", join(SDK, "test/fixtures/cli/anvil-2.keystore.json"), "--args", OWNER],
+    );
+    expect(keystore.code).toBe(2);
+    expect(keystore.stderr).toMatch(/to ask for the keystore password on: pass --password-file/);
+  });
+});
+
+describe("which terminal a question goes to", () => {
+  const stdin = (isTTY: boolean) =>
+    Object.assign(new PassThrough(), { isTTY }) as unknown as TerminalChoice["stdin"];
+  const controlling = { input: new PassThrough(), output: new PassThrough(), close: () => {} };
+  const choose = (stdinRead: boolean, isTTY: boolean, tty?: Terminal) =>
+    chooseTerminal({
+      stdinRead,
+      stdin: stdin(isTTY),
+      stderr: new PassThrough(),
+      controlling: () => tty,
+    });
+
+  it("asks on stdin while it is a terminal nothing has read", () => {
+    expect(choose(false, true, controlling)?.input).not.toBe(controlling.input);
+    expect(choose(false, true, controlling)).toBeDefined();
+  });
+
+  it("asks on the controlling terminal once stdin carried the program", () => {
+    expect(choose(true, false, controlling)).toBe(controlling);
+    expect(choose(true, true, controlling)).toBe(controlling);
+  });
+
+  it("asks nowhere with no terminal at all, and never falls back to an unread pipe", () => {
+    expect(choose(true, false, undefined)).toBeUndefined();
+    // A pipe nothing read is not a terminal, and is not swapped for /dev/tty either.
+    expect(choose(false, false, controlling)).toBeUndefined();
+  });
+
+  it("reads a yes, and anything else as no, at the terminal it is given", async () => {
+    for (const [typed, answer] of [
+      ["y\n", true],
+      ["yes\n", true],
+      ["\n", false],
+      ["nope\n", false],
+    ] as const) {
+      const input = new PassThrough();
+      const output = new PassThrough();
+      const asked = confirmOn({ input, output, close: () => {} }, "Deploy it now? [y/N] ");
+      input.write(typed);
+      expect(await asked).toBe(answer);
+    }
   });
 });
 
@@ -1436,6 +1841,48 @@ describe("waiting for a deployed Pot", () => {
     await expect(awaitPot(client, POT, 7n, { tries: 3, delayMs: 1 })).rejects.toThrow(
       /deployed in block 7, but the endpoint still shows no code there/,
     );
+  });
+
+  it("waits for the endpoint to reach a transaction's block, and gives up quietly", async () => {
+    const heights: Array<bigint | Error> = [5n, new Error("timeout"), 6n, 7n];
+    let asked = 0;
+    const client = {
+      getBlockNumber: async () => {
+        asked++;
+        const next = heights.shift() ?? 6n;
+        if (next instanceof Error) throw next;
+
+        return next;
+      },
+    } as unknown as PublicClient;
+    await caughtUp(client, 7n, { tries: 10, delayMs: 1 });
+    expect(asked).toBe(4);
+    // Never there: it returns rather than fail a transaction that did succeed.
+    asked = 0;
+    await caughtUp(client, 100n, { tries: 3, delayMs: 1 });
+    expect(asked).toBe(3);
+  });
+
+  it("waits on Solana for a created account to show, reading a failed request as not yet", async () => {
+    const answers: Array<null | Error | object> = [null, new Error("503"), {}];
+    let asked = 0;
+    const rpc = {
+      getAccountInfo: () => ({
+        send: async () => {
+          asked++;
+          const next = answers.shift() ?? null;
+          if (next instanceof Error) throw next;
+
+          return { value: next };
+        },
+      }),
+    } as unknown as Parameters<typeof awaitAccount>[0];
+    const pot = svmAddress("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+    await awaitAccount(rpc, "http://rpc", pot, "the Pot", { tries: 5, delayMs: 1 });
+    expect(asked).toBe(3);
+    await expect(
+      awaitAccount(rpc, "http://rpc", pot, "the Pot", { tries: 2, delayMs: 1 }),
+    ).rejects.toThrow(/the Pot 9WzD\w+ was created, but the cluster still does not show it/);
   });
 });
 
@@ -1547,6 +1994,10 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/verify.js"),
       await import("../src/cli/solana.js"),
       await import("../src/cli/price.js"),
+      await import("../src/cli/report.js"),
+      await import("../src/cli/intents.js"),
+      await import("../src/cli/receipt.js"),
+      await import("../src/cli/terminal.js"),
     ].flatMap((module) => Object.keys(module));
     expect(cli.length).toBeGreaterThan(0);
     const routes = root.routes as Record<string, unknown>;
