@@ -30,6 +30,7 @@ import {
   buildSetExecutionFeeInstruction,
   deriveProgramDataPda,
   ENGINE_FAULTS,
+  type ResolvedAccountMeta,
   type TailAccount,
 } from "../../src/svm/index.js";
 import { longestChains, type Via } from "./cpi-depth.js";
@@ -339,13 +340,13 @@ describeSvm("the engine's two Solana entry points: through the Kitchen, and dire
           'function main(pot: Account<Signer>) { require(pot.owner == ctx.self(), "not the Pot"); }',
         ).bytecode;
 
-        expectOk(
-          await run(
-            cook(via, check, [
-              { address: lookalike.address, role: AccountRole.READONLY_SIGNER, signer: lookalike },
-            ]),
-          ),
-        );
+        const signing: ResolvedAccountMeta = {
+          address: lookalike.address,
+          role: AccountRole.READONLY_SIGNER,
+          signer: lookalike,
+        };
+
+        expectOk(await run(cook(via, check, [signing])));
       },
     );
   });
