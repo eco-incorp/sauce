@@ -37,9 +37,12 @@ import {
   type TransactionSigner,
 } from "@solana/kit";
 import type { AccountManifest } from "sauce-compiler";
+import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import { bytesToHex, hexToBytes, type Hex } from "viem";
 
+import type { CanonicalChain } from "../chains/canonical.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
+import { svmTokenRows } from "../routes/token-registry.js";
 import { parseEntryType, type EntryType, type EntryValue } from "../routes/entry.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
@@ -489,6 +492,50 @@ const potOf = async (target: SvmTarget): Promise<Address> =>
 /** Whether the Kitchen has created `target`'s Pot on the cluster `rpcUrl` serves. */
 export async function svmPotExists(target: SvmTarget, rpcUrl: string): Promise<boolean> {
   return exists(createSolanaRpc(rpcUrl), rpcUrl, await potOf(target), "the Pot");
+}
+
+/** The Pot's associated token account for one registered mint, and what it holds. */
+export interface SvmPotTokenAccount {
+  readonly symbol: string;
+  readonly mint: string;
+  readonly decimals: number;
+  /** The associated token account of the Pot for the mint (classic SPL Token). */
+  readonly account: Address;
+  readonly exists: boolean;
+  /** Base units, as a decimal string; `null` while the account does not exist. */
+  readonly balance: string | null;
+}
+
+/**
+ * The Pot's associated token account for every mint the chain's cluster registers — each one a
+ * classic SPL Token mint (the registry's own gate) — whether it exists, and its balance.
+ */
+export async function svmPotTokenAccounts(
+  target: SvmTarget,
+  rpcUrl: string,
+  chain: CanonicalChain,
+): Promise<readonly SvmPotTokenAccount[]> {
+  const pot = await potOf(target);
+  const rpc = createSolanaRpc(rpcUrl);
+
+  return Promise.all(
+    svmTokenRows(chain).map(async (row) => {
+      const [account] = await findAssociatedTokenPda({
+        owner: pot,
+        mint: address(row.mint),
+        tokenProgram: TOKEN_PROGRAM_ADDRESS,
+      });
+      const base = { symbol: row.symbol, mint: row.mint, decimals: row.decimals, account };
+      if (!(await exists(rpc, rpcUrl, account, `the Pot's ${row.symbol} account`))) {
+        return { ...base, exists: false, balance: null };
+      }
+      const { value } = await ask(rpcUrl, `the Pot's ${row.symbol} balance`, () =>
+        rpc.getTokenAccountBalance(account).send(),
+      );
+
+      return { ...base, exists: true, balance: value.amount };
+    }),
+  );
 }
 
 /** The `sauce pot` that creates `target`'s Pot. */

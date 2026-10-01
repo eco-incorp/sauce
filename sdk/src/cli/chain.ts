@@ -30,6 +30,7 @@ import { v12Pot } from "../evm/engine.js";
 import { destinationExecutionFee } from "../evm/execution-fee.js";
 import { PortalABI, ProverABI } from "../protocols/eco-routes/abis.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
+import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import { CliError } from "./args.js";
 
@@ -355,4 +356,35 @@ export async function sendAndWait(
     );
 
   return { ...sent, reason: replay };
+}
+
+const BALANCE_OF = parseAbi(["function balanceOf(address) view returns (uint256)"]);
+
+/** One registered token's balance; `null` where the token could not be read on this chain. */
+export interface RegisteredBalance {
+  readonly symbol: string;
+  readonly address: Address;
+  readonly decimals: number;
+  readonly balance: bigint | null;
+}
+
+/** `holder`'s native balance, and its balance of every token `chain` registers by symbol. */
+export async function registeredBalances(
+  client: PublicClient,
+  chain: CanonicalChain,
+  holder: Address,
+): Promise<{ readonly native: bigint; readonly tokens: readonly RegisteredBalance[] }> {
+  const native = await request("the native balance", () => client.getBalance({ address: holder }));
+  const tokens = await Promise.all(
+    (TOKEN_REGISTRY[chain.id] ?? []).map(async (row) => {
+      const token = getAddress(row.address);
+      const balance = await client
+        .readContract({ address: token, abi: BALANCE_OF, functionName: "balanceOf", args: [holder] })
+        .catch(() => null);
+
+      return { symbol: row.symbol, address: token, decimals: row.decimals, balance };
+    }),
+  );
+
+  return { native, tokens };
 }
