@@ -254,9 +254,12 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
     input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
   const notes = [
     ...pots.filter((check) => check.deployed === false).map(missingPotNote),
-    ...unread.map(
-      (name) =>
-        `--define ${name}: ${input.file} never reads ${name}, so the define changes nothing`,
+    ...unread.map(({ name, readOn }) =>
+      readOn.length === 0
+        ? `--define ${name}: ${input.file} never reads ${name}, so the define changes nothing`
+        : `--define ${name}: ${input.file} reads ${name} only in intents on ${readOn.join(", ")}, ` +
+          `where it is that chain's own: a define of a name each chain sets holds on ` +
+          `${input.chain.slug} alone, so this one changes nothing`,
     ),
     ...(cook === undefined || cook.fits
       ? []

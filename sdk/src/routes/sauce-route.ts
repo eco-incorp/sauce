@@ -138,7 +138,7 @@ export interface CompiledSauceRoute {
 /** Accessor name -> chain, for every canonical chain. `Base(() => ...)` in a program opens an
  *  intent for exactly the chains `import { Base }` gives a caller, so the two cannot diverge. */
 let chainAccessorCache: ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> | undefined;
-function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> {
+export function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> {
   chainAccessorCache ??= new Map(
     CANONICAL_CHAINS.map((chain) => [pascalOfSlug(chain.slug), chain]),
   );

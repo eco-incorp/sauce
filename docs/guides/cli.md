@@ -441,10 +441,13 @@ the 32-byte word an account's `address` compares to.
 
 `sauce compile --json` reports what the compile applied:
 
-- `defines`: each define the file reads, its value, and its `source`: `user` for `--define` and
-  `--defines`, or `chain` for what compiling for the chain sets, with its `kind` (a `token` symbol,
-  a protocol `contract` such as `UniswapV3_Factory`, the `chain id`). A user define that replaced a
-  chain value says what it `replaces`.
+- `defines`: each define the file reads, its value, its `source` and the `chain` it applied on. The
+  source is `user` for `--define` and `--defines`, or `chain` for what compiling for the chain sets,
+  with its `kind` (a `token` symbol, a protocol `contract` such as `UniswapV3_Factory`, the
+  `chain id`). A user define that replaced a chain value says what it `replaces`. An intent body
+  the file opens reads its own chain's values, so its `USDC` is listed again with that chain; a
+  define of such a name stays on the chain it was given for, while any other (`RECIPIENT`) holds
+  in the body too. stderr names a define that changes nothing for that reason.
 - `contracts`: each protocol contract the program calls or reads (`UniswapV3.Factory.getPool(…)`,
   `Cctp.TokenMessenger`), as written and as resolved, with the chain whose deployment it is — an
   intent body's resolves on the intent's own chain.

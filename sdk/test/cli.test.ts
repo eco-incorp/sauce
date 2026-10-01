@@ -298,19 +298,21 @@ describe("sauce compile", () => {
       entryParams: [],
       entrySchema: null,
       defines: [
-        { name: "AMOUNT", value: "1000", source: "user" },
-        { name: "RECIPIENT", value: RECIPIENT, source: "user" },
+        { name: "AMOUNT", value: "1000", source: "user", chain: "ethereum" },
+        { name: "RECIPIENT", value: RECIPIENT, source: "user", chain: "ethereum" },
         {
           name: "USDC",
           value: getAddress(routes.TOKEN_REGISTRY[1]!.find((t) => t.symbol === "USDC")!.address),
           source: "chain",
           kind: "token",
+          chain: "ethereum",
         },
         {
           name: "USDT",
           value: getAddress(routes.TOKEN_REGISTRY[1]!.find((t) => t.symbol === "USDT")!.address),
           source: "chain",
           kind: "token",
+          chain: "ethereum",
         },
       ],
       contracts: [],
@@ -341,9 +343,82 @@ describe("sauce compile", () => {
     }
   });
 
+  it("holds a define of a chain-scoped name on its own chain, and any other at every depth", async () => {
+    // RECIPIENT is the user's alone, so the intent body reads it too. USDC is a name each chain
+    // sets: the user's holds on Base, where the reward reads it, and the body on Arbitrum reads
+    // Arbitrum's; WETH is read only there, so the user's WETH changes nothing.
+    const recipient = "0x6666666666666666666666666666666666666666";
+    const mine = "0x7777777777777777777777777777777777777777";
+    const text = [
+      "Arbitrum(() => {",
+      "  USDC.transfer(RECIPIENT, 1n);",
+      "  require(chainId == 42161n && WETH != 0n);",
+      "}).reward({ tokens: [{ token: USDC, amount: 1n }] });",
+      "",
+    ].join("\n");
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const base = routes.chainDefines(requireChain("base"));
+    const arbitrum = routes.chainDefines(requireChain("arbitrum"));
+    const address = (value: unknown) =>
+      getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    const report = appliedDefines(text, requireChain("base"), {
+      RECIPIENT: BigInt(recipient),
+      USDC: BigInt(mine),
+      WETH: BigInt(mine),
+    });
+    expect(report.defines).toEqual([
+      { name: "RECIPIENT", value: getAddress(recipient), source: "user", chain: "arbitrum" },
+      {
+        name: "USDC",
+        value: address(arbitrum.USDC),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
+      {
+        name: "USDC",
+        value: getAddress(mine),
+        source: "user",
+        replaces: address(base.USDC),
+        chain: "base",
+      },
+      {
+        name: "WETH",
+        value: address(arbitrum.WETH),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
+      { name: "chainId", value: "42161", source: "chain", kind: "chain id", chain: "arbitrum" },
+    ]);
+    expect(report.unread).toEqual([{ name: "WETH", readOn: ["arbitrum"] }]);
+    // And the command says why the WETH define changes nothing.
+    const run = await sauce(
+      "compile",
+      file("scoped.sauce.ts", text),
+      "--chain",
+      "base",
+      "--define",
+      `RECIPIENT=${recipient}`,
+      "--define",
+      `WETH=${mine}`,
+      "--intent-deadline",
+      "2000000000",
+      "--intent-creator",
+      CREATOR,
+      "--intent-execution-fee",
+      "0",
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain(
+      "reads WETH only in intents on arbitrum, where it is that chain's own",
+    );
+  });
+
   it("reports the defines it applied and where each came from, and the contracts it resolved", async () => {
     // A venue the chain sets (UniswapV3_Factory), one the user sets, one the user sets and never
-    // reads, and a namespace call — at the top and inside an intent body, on that intent's chain.
+    // reads, and a namespace call and a token — at the top and inside an intent body, which reads
+    // its own chain's.
     const program = file(
       "venues.sauce.ts",
       [
@@ -354,7 +429,7 @@ describe("sauce compile", () => {
         "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
         "  require(pool != 0n);",
         "  Arbitrum(() => {",
-        "    const there = UniswapV3.Factory.getPool(1n, 2n, 3n);",
+        "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
         "    require(there != 0n);",
         "  }).reward({ tokens: [{ token: USDC, amount: amount }] });",
         "}",
@@ -388,18 +463,26 @@ describe("sauce compile", () => {
     const base = routes.chainDefines(requireChain("base"));
     const address = (value: unknown) =>
       getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    const arbitrum = routes.chainDefines(requireChain("arbitrum"));
     expect(out.defines).toEqual([
-      { name: "PANCAKE", value: pancake, source: "user" },
-      { name: "USDC", value: address(base.USDC), source: "chain", kind: "token" },
+      { name: "PANCAKE", value: pancake, source: "user", chain: "base" },
+      {
+        name: "USDC",
+        value: address(arbitrum.USDC),
+        source: "chain",
+        kind: "token",
+        chain: "arbitrum",
+      },
+      { name: "USDC", value: address(base.USDC), source: "chain", kind: "token", chain: "base" },
       {
         name: "UniswapV3_Factory",
         value: address(base.UniswapV3_Factory),
         source: "chain",
         kind: "contract",
+        chain: "base",
       },
-      { name: "WETH", value: address(base.WETH), source: "chain", kind: "token" },
+      { name: "WETH", value: address(base.WETH), source: "chain", kind: "token", chain: "base" },
     ]);
-    const arbitrum = routes.chainDefines(requireChain("arbitrum"));
     expect(out.contracts).toEqual([
       {
         reference: "UniswapV3.Factory",
