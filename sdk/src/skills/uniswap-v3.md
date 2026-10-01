@@ -199,4 +199,5 @@ SwapRouter02's params structs drop `deadline` (wrap the call in a deadline check
 - Input token must be ERC20-approved to the SwapRouter for swaps
 - Both tokens must be ERC20-approved to the NFPM for minting positions
 - Prefer V3 over V2 for major pairs to benefit from concentrated liquidity and lower effective slippage
+- From a Pot program, `@sauce/router`'s `uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient)` swaps one pool through the Pot's Sauce Router, which answers the pool's callback from the Pot — no SwapRouter and no approval — checks the pool's tokens, sends `amountIn` as positive exact input, and returns the amount out. A path is one call per pool, each spending the last one's output. The `uniswapV3Swap` action is the same call
 - On Arc (5042) `WETH9()` on SwapRouter02 and the position manager is a stub that always reverts with `UnsupportedProtocolError()`, so `unwrapWETH9`, `refundETH` and native-value swaps revert. Trade USDC's ERC-20 `0x3600000000000000000000000000000000000000`; Arc's native coin is USDC and it has no canonical wrapped native

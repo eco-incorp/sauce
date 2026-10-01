@@ -91,7 +91,13 @@ every action against contracts that log the call they receive and compares the c
 independent viem encoding. `actions.mainnet` (every action type, and it fails if one did not run),
 `quote.mainnet` and `split-swap.mainnet` (`test:mainnet`) run against real Ethereum contracts on a
 LOCAL anvil booted from mainnet state captured at a pinned block — no RPC, no secret, and they run
-in CI. See "Mainnet state" below. An action type that cannot execute there does not ship.
+in CI. See "Mainnet state" below. An action type that cannot execute there does not ship. The
+`swap*.mainnet` suites (also `test:mainnet`) execute `@sauce/router` on Ethereum, Base and
+Avalanche state — each venue called with literal arguments, with run-time `main` arguments, through
+its action, and beside the Router's unified `swap` where the Router runs the venue
+(`tests/swap-venues.ts`) — and `traderJoeLBSwap`/`woofiSwap`, whose venues Ethereum lacks, run
+there; `actions.mainnet` counts them as executed elsewhere. `quote.mainnet` deploys the stack too:
+the Router quotes `uniswapV3Swap`/`uniswapV4Swap`, and is held to Uniswap's own quoters.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -316,7 +322,7 @@ those investigations; do not add them back to the public SDK manual.
 **`sdk/`** — registries plus executable SDK logic. `src/protocols/<slug>/` holds per-protocol `info`,
 `addresses`, `abis` as-const, and `functions` SauceScript templates; `src/protocols/index.ts` is the
 query registry. `src/routes/` implements namespace rewrites, compiler integration, intents, and
-Portal encoding; token/swap/deposit builders and EVM/SVM clients construct executable programs,
+Portal encoding; token/deposit builders and EVM/SVM clients construct executable programs,
 account plans, and transactions. `src/skills/*.md` are AI-ready per-protocol docs (loaded by
 `loader.ts`, shipped in the package). `src/chains/`, `src/recipes/`, `src/core/types.ts` hold shared
 chain and recipe definitions. **SDK tests compile every protocol's
@@ -407,6 +413,26 @@ those two are gated. `src/std/token` **ships** two ways: embedded in
 paragraph), and as files under `dist/std/token` (`copy-verify-assets.mjs`) for a consumer that
 resolves it off disk.
 
+`src/std/router/` is **`@sauce/router`**, the SauceScript swap library, SDK-owned and shipped the
+same two ways (embedded, and `dist/std/router` via `copy-verify-assets.mjs`); `resolveSdkPackage`
+maps it like `@sauce/token`, so every SDK compile — route bodies, `openRoute`, actions — resolves it
+with no option. It is THE one implementation of a swap at its nine venues: one exported function
+per venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, `dodoV2`, `traderJoeLB`,
+`woofi`, `maverickV2`), every argument a RUN-TIME value, in one order —
+`venue(pool, tokenIn, tokenOut, amountIn, ...venueFacts, minOut, recipient)` — returning the amount
+the recipient received; plus `try` forms (`tryUniswapV2`, `tryTraderJoeLB`: a capacity check before
+anything moves; `tryCurve`, `tryBalancerV2`: catch and reset the approval) that return `0n` having
+moved nothing, and NONE for DODO V2 or WOOFi, which can do neither. The pay-first venues call the
+pool directly; V3/V4/Maverick call the Pot's Router (`ctx.self()`). Token writes are `@sauce/token`'s
+(it imports the package). Orientation is checked from the arguments at run time (V2/V4 sort order,
+DODO base/quote, LB X/Y); `minOut` is uniform (`0n` none; WOOFi requires it). The pool and Router
+ABI fragments live beside it (`*.abi.json`, each `$comment` naming its verified source), pinned by
+`test/std/router/compile.test.ts` (deployed selectors, the released `ISauceRouter`, the registry
+twins), which also holds the export list to the documented API and refuses a module-level `const` —
+a program-wide define would replace it. Keep its functions FLAT: an internal helper call costs a
+frame (measured ~1–4k gas each on the engine), so each exported function is self-contained. EVM only:
+there is no `router.js` and no SVM arm, so an SVM import fails at the import.
+
 `@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
 list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
 exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any route body opened that
@@ -483,11 +509,14 @@ program. The public surface is deliberately small — `parseProgram`, `serialize
 canonical serialization, no defaults filled in), `schema.ts` generates the committed JSON Schema from
 it, and `tests/docs.unit.test.ts` holds the guide's action list and outputs to it; `semantics.ts`
 holds the cross-action rules. `to-sauce.ts` emits every protocol call as an ABI binding
-(`IBinding.at(addr).method(...)`) from the catalogue in `abis.ts`: a binding takes the registry ABI
-wherever the registry declares the function exactly (same canonical signature, so same selector),
-and a method declares an output ONLY when an action reads it: compiler 2.3.0 decodes declared
-outputs even when discarded, and decoding empty return data reverts (3pool-era Curve). A local
-fragment, with its reason, remains only for a contract or method the registry does not carry
+(`IBinding.at(addr).method(...)`) from the catalogue in `abis.ts` — except a swap at one of
+`@sauce/router`'s venues, which is a call into that library (`uniswapV2Swap` -> `uniswapV2(...)`,
+the nine `RouterSwapAction`s), imported by the generated program and resolved from memory by
+`compile.ts`, so actions and SauceScript share one swap implementation; a binding takes the
+registry ABI wherever the registry declares the function exactly (same canonical signature, so same
+selector), and a method declares an output ONLY when an action reads it: compiler 2.3.0 decodes
+declared outputs even when discarded, and decoding empty return data reverts (3pool-era Curve). A
+local fragment, with its reason, remains only for a contract or method the registry does not carry
 (`abis.unit.test.ts` fails if one ever appears there). ERC-20 `approve`/`transfer` are not
 bindings: they go through the SDK's `token/safe` (USDT returns no `bool`; `SafeERC20` semantics, with
 `forceApprove`'s reset), the lowering every SDK token write uses — one path, so do not add a second. Native-value calls stay raw
@@ -521,27 +550,33 @@ publishes it, which is what blocks `dev-tools/scripts/deploy.ts` and `dev-tools/
 contract, so a recipe calls them as `ISauceRouter.at(address.self).swapX(...)`):
 
 - `swap(SwapParams)` — unified swap; dispatches on `params.poolType` to `_swapV2/_swapV3/_swapV4/
-_swapCurve/_swapBalancerV2/_swapDODOV2/_swapTraderJoeLB/_swapMaverickV2/_swapWOOFi`.
+_swapCurve/_swapBalancerV2/_swapDODOV2/_swapTraderJoeLB/_swapMaverickV2/_swapWOOFi` (`@sauce/router`
+  calls it only for Maverick V2; see below).
   `SwapParams` embeds a `PoolKey` struct (`currency0,currency1,fee,tickSpacing,hooks`) used by V4 and,
-  for its `fee` field only, by V2 (see the fee note below); ignored for V3. Calling this from
+  for its `fee` field only, by V2 (the pair's LP fee in ppm); ignored for V3. Calling this from
   SauceScript requires the compiler to order object-literal
   struct fields by the ABI's declared component order at the call boundary (recursively for nested
-  tuples); sorting them alphabetically scrambles the nested `PoolKey` into an empty revert. The TS
-  compiler was fixed to do this, and its unit pin went away with it — **nothing in this repo pins the
-  behavior against the current compiler**, so verify before relying on the unified `swap()` path. The
-  flat methods below remain valid alternatives.
+  tuples); sorting them alphabetically scrambles the nested `PoolKey` into an empty revert. The
+  current compiler does: `@sauce/router`'s `maverickV2` and the `swap*.mainnet` suites' Router
+  comparisons execute it on real pools.
 - `swapV3(pool, tokenIn, tokenOut, amountSpecified, sqrtPriceLimitX96, payer, recipient)` and
-  `swapV4(...)` — **flat** legacy methods (no nested struct), verified working from SauceScript.
-- `quote(QuoteParams)` — off-chain simulation; performs the swap and reverts with `QuoteRevert(amountIn,
-amountOut, sqrtPriceAfter, gas)`, which the caller decodes. Never lands a swap. **Nothing in this
-  repo uses it** — `actions/src/to-quote.ts` calls each protocol's own quoter contract instead.
+  `swapV4(...)` — **flat** methods (no nested struct); `@sauce/router`'s `uniswapV3`/`uniswapV4` call
+  them, and they return the pool's signed deltas, which the library turns into the amount received.
+- `quote(QuoteParams)` — simulation: performs the swap, reverts it internally with
+  `QuoteRevert(amountIn, amountOut, sqrtPriceAfter, gas)` and returns the decoded result; not
+  `onlySelf`, so an `eth_call` to the Router's own address works. Token-free for V3 and V4 only (the
+  other venues' simulation pays from the caller). `actions/src/to-quote.ts` quotes `uniswapV3Swap` and
+  `uniswapV4Swap` through it (`QuoteOptions.router`), in-program too for the split swap; every other
+  venue's quote is its own contract's.
 
 **`amountSpecified` sign is inconsistent by path** (this bit us): the flat `swapV3` passes through to
-Uniswap, where **positive = exact input** (verified on fork). The unified `swap()`/V4 path and the
-`SwapParams`/`QuoteParams` doc say **negative = exact input** (Uniswap-V4/quote convention). For
-recipes using flat `swapV3`, pass a **positive** amount.
+Uniswap, where **positive = exact input** (verified on fork). The V4 path takes Uniswap V4's sign,
+**negative = exact input**, which `@sauce/router`'s `uniswapV4` passes as unary `-amountIn` (never
+`0n - x`, which the engine's checked subtraction reverts, nor `~x + 1n`). For the flat `swapV3`, pass a
+**positive** amount.
 
-**`SwapPoolType` enum** (`engine/src/interfaces/IRouter.sol`, must match recipe constants):
+**`SwapPoolType` enum** (`engine/src/interfaces/IRouter.sol`, must match recipe constants; the SDK
+no longer exports it — sauce-recipes keeps its own):
 `UniV2=0, UniV3=1, UniV4=2, Curve=3, BalancerV2=4, DODOV2=5, TraderJoeLB=6, MaverickV2=7, WOOFi=8,
 PancakeInfinityCL=9, PancakeInfinityBin=10`. The last two are **flat-method only**
 (`swapInfinityCL`/`swapInfinityBin`) — `SwapParams` can't carry the 6-field `InfinityPoolKey`, so
@@ -549,17 +584,42 @@ unified `swap()` does not dispatch them.
 
 **Callbacks vs callback-free** — the key architectural split for "where does swap logic live":
 
-- **V2/Solidly/Curve/DODO** are _callback-free_: `_swapV2` reads reserves, computes out (the V2 LP fee
-  is **parameterizable**, read from `params.poolKey.fee` as ppm — 3000 = 0.30%, 2500 = 0.25%; `0`
-  defaults to 3000, which reproduces the legacy hardcoded `997/1000` math byte-for-byte, and `>=
-1_000_000` is rejected), transfers tokenIn to the pool, calls
-  `pair.swap(...)`. A recipe can replicate this **entirely in SauceScript** (transfer + `pool.swap`),
-  bypassing the router — so new callback-free sources need only new SauceScript, no engine change.
 - **V3/V4 (and Maverick)** use _callbacks_: the pool re-enters the contract mid-swap
   (`uniswapV3SwapCallback`/`pancakeV3SwapCallback`/`unlockCallback`/`maverickV2SwapCallback`) to pull
   input, reading transient-storage context set by `_swapV3`. A reentrant call during `cook()` hits the
   contract's Solidity dispatcher, **not** the paused bytecode interpreter — so callbacks can only be
-  serviced by the router's compiled code. These swaps **must** go through the router (`swapV3`/`swapV4`).
+  serviced by the router's compiled code. These swaps **must** go through the router (`swapV3`/`swapV4`,
+  or unified `swap()` for a flash `callback` fragment). Maverick stays on the Router even though its pool
+  has a pre-pay mode: the Router pays exactly what the pool asks for, so a partial fill strands nothing.
+- **UniV2 (0), Curve (3), BalancerV2 (4), DODOV2 (5), TraderJoeLB (6), WOOFi (8)** are
+  _callback-free_: the pool is paid first — transferred to (V2, DODO, LB, WooPPV2) or approved for
+  (Curve, the Balancer Vault) — and never calls back. **`@sauce/router` calls these pools directly**
+  (`sdk/src/std/router/router.evm.js`, the one implementation; actions call it too), so they do not
+  depend on which Router the Pot runs — a suite swaps every one with the Pot's Router code replaced by
+  a revert. Each keeps the Router's rules: `@sauce/token` for every transfer and approval, approvals
+  for exactly the input, V2 priced in-program from `getReserves` with the Router's fee math (`feePpm`
+  in ppm; `0` = 3000, `>= 1_000_000` reverts), empty V2 `data`. **Invariant: a pay-first swap
+  consumes its whole input or reverts; there is no refund path.** Each of these pools books all it is
+  paid or reverts (V2/DODO book their whole balance, LB reverts `LBPair__OutOfLiquidity`, WooPPV2
+  books exactly `fromAmount`, which is exactly the push), so no function catches its pool after paying
+  it — the `try` forms check capacity first (V2 reserves, LB `getSwapOut`) or catch only a PULL (Curve,
+  Balancer) and reset the approval. The DODO trap (push base, call `sellQuote`) and a reversed V2 lane
+  both donate silently; the library takes the side from its arguments and reverts on a contradiction,
+  and `actions/tests/swap*.mainnet.test.ts` shows both traps in a hand-written program. The facts
+  themselves (DODO base/quote, LB X/Y) are the caller's, like the pool address. The Router's own Curve
+  handler cannot trade a 3pool-era pool (it decodes a `uint256` `exchange` does not return) or a
+  uint256-index pool, and its WOOFi handler only approves, which drives WooRouterV2 but not the
+  WooPPV2 the library pushes to.
+
+**Gas, library against an inline lowering** (the TS builder that emitted each swap as statements
+with its constants folded in, measured before it was replaced, on the same captured state): a call
+costs ~5–22k gas more per swap (Balancer ~+5.5k, V2/DODO/LB/WOOFi ~+9–15k, Curve ~+21k because it
+always measures the output it returns). The cause is the engine, not the venue: a function frame
+with run-time parameters (~3k, nothing folds), `@sauce/token`'s run-time calldata building and
+nested `checked` call (~3k per write against calldata folded at build time). The fixes, in order of
+reach: compiler inlining of a library call whose arguments are constants (with constant propagation
+into `@sauce/token`), then folding `checked` into each `@sauce/token` write and building its
+calldata with `abi.encode` (~2k per write, measured).
 
 ## Publishing
 
