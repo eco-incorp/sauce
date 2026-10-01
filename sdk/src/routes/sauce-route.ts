@@ -50,7 +50,7 @@ import {
   type LoweredIntent,
 } from "./intent-sugar.js";
 import { withChainAmbient } from "./ambient.js";
-import { liftMainSignature, mainParams, type EntryParam } from "./entry.js";
+import { liftSignatures, mainParams, type EntryParam } from "./entry.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -404,9 +404,9 @@ function compileForChain(
   // "only options.tokens, if any" -- preserving the existing svm-throws-on-any-rewrite behavior.
   const tokenMap = resolveTokenMap(chain, options.tokens);
 
-  // `main`'s type annotations come off for the acorn-based passes below and go back on before the
-  // compiler sees the result (`entry.ts#liftMainSignature`); an untyped `main` is untouched.
-  const signature = liftMainSignature(wrapSauceBody(sauce));
+  // Every function's type annotations come off for the acorn-based passes below and go back on before
+  // the compiler sees the result (`entry.ts#liftSignatures`); an untyped program is untouched.
+  const signature = liftSignatures(wrapSauceBody(sauce));
   let source = signature.source;
 
   // The intent sugar runs FIRST, on the source as written. It reads `USDC` and `RECIPIENT` as

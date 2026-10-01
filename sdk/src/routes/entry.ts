@@ -71,6 +71,8 @@ interface MainSignature {
 }
 
 const MAIN = /(^|[^.\w$])function\s+main\s*\(/;
+/** Any function declaration's head, `function <name>(`. */
+const FUNCTION = /(^|[^.\w$])function\s+([A-Za-z_$][\w$]*)\s*\(/g;
 
 /** The end of the type starting at `from` in blanked `code`: at the body's `{` or end of input. */
 function endOfType(code: string, from: number): number {
@@ -91,7 +93,12 @@ function locateMain(source: string): MainSignature | undefined {
   const code = blankLiterals(source);
   const found = MAIN.exec(code);
   if (found === null) return undefined;
-  const open = found.index + found[0].length - 1;
+
+  return signatureAt(code, found.index + found[0].length - 1);
+}
+
+/** The signature whose parameter list opens at `open` in blanked `code`. */
+function signatureAt(code: string, open: number): MainSignature | undefined {
   let depth = 0;
   let close = -1;
   for (let i = open; i < code.length; i++) {
@@ -139,40 +146,75 @@ function splitParam(param: string): { name: string; type?: string } {
 }
 
 export interface LiftedSignature {
-  /** The source with `main`'s annotations removed, for the acorn-based passes. */
+  /** The source with every function's annotations removed, for the acorn-based passes. */
   readonly source: string;
   /** Puts the annotations back into what those passes made of `source`. */
   readonly restore: (rewritten: string) => string;
 }
 
-/**
- * `source` with `main`'s parameter and return annotations lifted out, and how to put them back.
- * A `main` with none is returned as it is, with a `restore` that changes nothing.
- */
-export function liftMainSignature(source: string): LiftedSignature {
-  const main = locateMain(source);
-  const params = main === undefined ? "" : source.slice(main.open + 1, main.close);
-  const returns = main === undefined ? "" : source.slice(main.close + 1, main.returnEnd);
-  if (main === undefined || (!params.includes(":") && returns === "")) {
-    return { source, restore: (rewritten) => rewritten };
+/** One annotated function's signature, as written and as lifted. */
+interface Lifted {
+  readonly name: string;
+  readonly params: string;
+  readonly returns: string;
+  readonly names: string;
+}
+
+/** Every function declaration in `source`, in order: its name and where its signature is. */
+function declarations(source: string): Array<MainSignature & { readonly name: string }> {
+  const code = blankLiterals(source);
+  const found: Array<MainSignature & { readonly name: string }> = [];
+  for (const match of code.matchAll(FUNCTION)) {
+    const signature = signatureAt(code, match.index + match[0].length - 1);
+    if (signature !== undefined) found.push({ ...signature, name: match[2]! });
   }
-  const names = splitTopLevel(params)
-    .map((param) => splitParam(param).name)
-    .join(", ");
-  const lifted = `${source.slice(0, main.open + 1)}${names})${source.slice(main.returnEnd)}`;
+
+  return found;
+}
+
+/**
+ * `source` with the parameter and return annotations of every function — `main` and its helpers —
+ * lifted out, and how to put them back. Functions with none are left as they are; a source with
+ * none at all comes back unchanged, with a `restore` that changes nothing.
+ */
+export function liftSignatures(source: string): LiftedSignature {
+  const lifted: Lifted[] = [];
+  let out = source;
+  // Right to left, so each splice leaves the offsets of those before it alone.
+  for (const fn of declarations(source).reverse()) {
+    const params = source.slice(fn.open + 1, fn.close);
+    const returns = source.slice(fn.close + 1, fn.returnEnd);
+    if (!params.includes(":") && returns === "") continue;
+    const names = splitTopLevel(params)
+      .map((param) => splitParam(param).name)
+      .join(", ");
+    out = `${out.slice(0, fn.open + 1)}${names})${out.slice(fn.returnEnd)}`;
+    lifted.push({ name: fn.name, params, returns, names });
+  }
+  if (lifted.length === 0) return { source, restore: (rewritten) => rewritten };
 
   return {
-    source: lifted,
+    source: out,
     restore: (rewritten) => {
-      const after = locateMain(rewritten);
-      if (after === undefined || rewritten.slice(after.open + 1, after.close) !== names) {
-        throw new Error(
-          "compileSauceRoute: main's parameters changed while the SDK rewrote the program, so its " +
-            "type annotations cannot be put back",
-        );
+      const found = declarations(rewritten);
+      const places = lifted.map((fn) => {
+        const at = found.find((candidate) => candidate.name === fn.name);
+        if (at === undefined || rewritten.slice(at.open + 1, at.close) !== fn.names) {
+          throw new Error(
+            `compileSauceRoute: ${fn.name}'s parameters changed while the SDK rewrote the program, ` +
+              "so its type annotations cannot be put back",
+          );
+        }
+
+        return { fn, at };
+      });
+      let restored = rewritten;
+      // Right to left again, by where each function now is.
+      for (const { fn, at } of places.sort((a, b) => b.at.open - a.at.open)) {
+        restored = `${restored.slice(0, at.open + 1)}${fn.params})${fn.returns}${restored.slice(at.close + 1)}`;
       }
 
-      return `${rewritten.slice(0, after.open + 1)}${params})${returns}${rewritten.slice(after.close + 1)}`;
+      return restored;
     },
   };
 }

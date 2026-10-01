@@ -25,7 +25,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
-import { liftMainSignature } from "../routes/entry.js";
+import { liftSignatures } from "../routes/entry.js";
 import type { LoweredIntent } from "../routes/intent-sugar.js";
 import { approvalTxs, publishAndFundTx } from "../routes/portal.js";
 import { wrapSauceBody } from "../routes/sauce-route.js";
@@ -82,7 +82,7 @@ const callFree = (node: unknown): boolean => {
 function otherStatement(file: string, text: string): string | undefined {
   const wrapped = wrapSauceBody(text);
   const shift = wrapped === text ? 0 : 1;
-  const program = parse(liftMainSignature(wrapped).source, {
+  const program = parse(liftSignatures(wrapped).source, {
     ecmaVersion: "latest",
     sourceType: "module",
     locations: true,
