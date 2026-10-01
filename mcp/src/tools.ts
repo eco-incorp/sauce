@@ -18,10 +18,10 @@ import type { RpcGuard } from "./guard.js";
 import { callReach, type Reach } from "./reach.js";
 import { toolTerms } from "./terms.js";
 import {
-  actionSource,
+  actionsCommand,
+  actionsProgram,
   assumedBalances,
   CANONICAL_CHAINS,
-  chainById,
   compileCommand,
   compileProgram,
   connect,
@@ -502,6 +502,8 @@ function scaled(price: string, numerator: bigint, denominator: bigint): string {
 }
 
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
+/** The name an actions document goes by in messages: it comes from the call, not a file. */
+const ACTIONS_FILE = "actions.json";
 /** An intent's claimant, as fulfill records it: an address, or 32 bytes. */
 const CLAIMANT = /^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/;
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
@@ -938,87 +940,78 @@ export function registerTools(server: McpServer, context: ToolContext): void {
   tool(
     "sauce_actions",
     {
-      title: "Compile an action program, and build its cook",
+      title: "Compile an actions document, and build its cook",
       description:
-        "Turns an action program — protocol operations written as JSON (swap, approve, wrap, " +
-        "supply, bridge, …), validated against the action-program schema (resource " +
-        "sauce://actions/schema.json) — into the SauceScript that runs them, and compiles it, " +
-        "as sauce_compile would that source. Use it instead of writing SauceScript when the " +
-        "task is a fixed list of protocol calls. Returns `source` (the generated program), " +
-        "`compile` (sauce_compile's result for it), and, given owner or pot, `transaction`: the " +
-        "unsigned cook, exactly as sauce_tx returns it. An `argument` action becomes one of " +
-        "main's parameters, in order, filled by args. EVM chains only. " +
+        "Compiles an actions document — protocol operations written as JSON (swaps, bridges, " +
+        "wraps, staking, lending, token moves), validated against its JSON Schema (resource " +
+        "sauce://actions/schema.json; the sauce-actions skill lists every action) — into the " +
+        "SauceScript program that runs them on a chain, as `sauce actions` does. Use it instead " +
+        "of writing SauceScript when the task is a fixed sequence of protocol operations. Names " +
+        "resolve on the chain it compiles for: tokens by registry symbol (USDC), contracts as " +
+        "Namespace.Contract (AaveV3.Pool), pools by their factory's key; a document without a " +
+        "chainId compiles on any chain that has its names, given `chain`. Returns sauce_compile's " +
+        "report for the generated program (bytecode, size, entryParams, …) with `source` (the " +
+        "generated SauceScript), `parameters` (the argument actions, in the order main takes " +
+        "them as args) and the bindings it calls through; given owner or pot, also " +
+        "`transaction`: the unsigned cook, exactly as sauce_tx returns it. EVM chains only. " +
         UNSIGNED,
       input: {
         program: z
           .union([z.string().min(2).max(LIMITS.source), z.looseObject({})])
           .describe(
-            "The action program: { version: 1, chainId, actions: [...] }, as an object or its " +
-              "JSON text. Amounts are base-unit integers as decimal strings; addresses are 0x " +
-              'hex; `recipient: "self"` is the Pot. Its chainId is the chain it runs on.',
+            'The actions document: { "version": 1, "actions": [...] }, as an object or its JSON ' +
+              'text. Amounts are base-unit integers as decimal strings; `recipient: "self"` is ' +
+              "the Pot. Leave chainId out to compile it for `chain`.",
           ),
-        chain: chainRef.optional().describe("Checked against the program's chainId when given."),
+        chain: chainRef
+          .optional()
+          .describe(
+            "The chain to compile for (slug, alias or id). Needed when the document has no " +
+              "chainId; one with a chainId compiles for that chain only.",
+          ),
         target: z.enum(["evm"]).optional().describe("Always evm: actions run on EVM chains."),
         compactArgs: PROGRAM.compactArgs,
         ...COOK,
       },
       output: {
+        bytecode: z.string(),
+        size: z.number(),
         source: z.string(),
-        compile: z.looseObject({ bytecode: z.string(), size: z.number() }),
+        parameters: z.array(z.string()),
         transaction: z.looseObject({}).optional(),
       },
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      if (typeof args.program === "string" && args.program.length > LIMITS.source) {
+      const text = typeof args.program === "string" ? args.program : JSON.stringify(args.program);
+      if (text.length > LIMITS.source) {
         throw new UsageError(`program: at most ${LIMITS.source} characters`);
       }
-      let document: unknown = args.program;
-      if (typeof document === "string") {
-        try {
-          document = JSON.parse(document);
-        } catch {
-          throw new UsageError("program: not JSON");
-        }
-      }
-      const actions = actionSource(document);
-      const chain = chainById(actions.program.chainId);
-      if (chain === undefined) {
-        throw new UsageError(
-          `program: chainId ${actions.program.chainId} is not a chain Sauce knows`,
-        );
-      }
-      if (args.chain !== undefined && parseChain(String(args.chain), "chain").id !== chain.id) {
-        throw new UsageError(
-          `chain ${String(args.chain)} is not the program's chainId ${chain.id} (${chain.slug})`,
-        );
-      }
-      const { file, files } = callFiles("actions.sauce.ts", actions.source, undefined);
-      const program: Program = {
-        input: {
-          file,
-          text: actions.source,
-          chain,
-          defines: {},
-          compactArgs: args.compactArgs === true,
-          intents: {},
-          contracts: actions.contracts,
-        },
-        files,
+      const input = {
+        file: ACTIONS_FILE,
+        text,
+        ...(args.chain === undefined ? {} : { chain: String(args.chain) }),
+        compactArgs: args.compactArgs === true,
       };
-      const compile = await compiled(program);
+      const report = await actionsCommand(input);
       const building =
         args.owner !== undefined || args.pot !== undefined
-          ? await cookTransaction(args, program, reach)
+          ? await cookTransaction(
+              args,
+              {
+                input: await actionsProgram(input),
+                files: callFiles(ACTIONS_FILE, text, {}).files,
+              },
+              reach,
+            )
           : undefined;
 
       return {
         json: {
-          source: actions.source,
-          compile: compile.json,
+          ...report.json,
           ...(building === undefined ? {} : { transaction: building.json }),
         },
-        notes: [...(compile.notes ?? []), ...(building?.notes ?? [])],
+        notes: [...(report.notes ?? []), ...(building?.notes ?? [])],
       };
     },
   );

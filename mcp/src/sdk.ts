@@ -4,11 +4,11 @@
  * tx, simulate, pot, globals, inspect, verify, publish — with the same inputs, so the two front
  * ends cannot drift. Nothing here is reimplemented.
  *
- * By relative path into `sdk/dist` (and `actions/dist`), the one spelling that resolves in the
- * repository and in the published tarball, where `mcp/dist`, `sdk/dist` and `actions/dist` are
- * siblings (as `actions` reaches the SDK).
+ * By relative path into `sdk/dist`, the one spelling that resolves in the repository and in the
+ * published tarball, where `mcp/dist` and `sdk/dist` are siblings (as `actions` reaches the SDK).
+ * An actions document is lowered by the CLI's `actions.ts`, which loads `actions/dist` itself.
  */
-export { actionSource, type ActionSource } from "../../actions/dist/source.js";
+export { actionsCommand, actionsProgram } from "../../sdk/dist/cli/actions.js";
 export {
   CliError,
   parseAddress,
@@ -70,8 +70,4 @@ export {
   type SvmCookInput,
 } from "../../sdk/dist/cli/solana.js";
 export { parsePin, verifyCommand } from "../../sdk/dist/cli/verify.js";
-export {
-  CANONICAL_CHAINS,
-  chainById,
-  type CanonicalChain,
-} from "../../sdk/dist/chains/canonical.js";
+export { CANONICAL_CHAINS, type CanonicalChain } from "../../sdk/dist/chains/canonical.js";
