@@ -194,8 +194,9 @@ Every value is checked against its declared type before anything is sent: `Addre
   hex.
 - In a project `sauce init` wrote, put programs in `programs/`: its `tsconfig.json` types them as
   SauceScript, so an editor's TypeScript errors there are real ones (with the project's own
-  TypeScript running the editor). Elsewhere a program shows TypeScript errors that the compile
-  does not have; `sauce compile` is what decides.
+  TypeScript running the editor). For programs anywhere else, `npx sauce init <dir> --tsconfig`
+  writes the same `tsconfig.json` into `<dir>` and nothing else. Without one, an editor shows
+  TypeScript errors that the compile does not have; `sauce compile` is what decides.
 - `sauce-script` covers the language and what compiling for a chain adds to it.
 
 [examples/pay.sauce.ts](examples/pay.sauce.ts) pays a recipient in USDC and USDT, on any chain that registers both.

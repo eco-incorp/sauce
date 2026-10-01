@@ -559,6 +559,33 @@ describe("sauce init", () => {
     expect(readFileSync(join(dir, "README.md"), "utf8")).toBe("mine\n");
   });
 
+  it("--tsconfig writes only a directory's SauceScript project, for programs init did not place", async () => {
+    const programs = join(project, "contracts", "sauce");
+    const first = await sauce("init", programs, "--tsconfig");
+    expect([first.code, first.stderr]).toEqual([0, ""]);
+    expect(first.stdout).toContain(`wrote      ${join(programs, "tsconfig.json")}`);
+    expect(JSON.parse(readFileSync(join(programs, "tsconfig.json"), "utf8"))).toEqual(
+      sauceScriptTsconfig(MANIFEST.name),
+    );
+    // Nothing else: no package.json, no skills.
+    expect(readdirSync(programs)).toEqual(["tsconfig.json"]);
+    expect(existsSync(join(project, "package.json"))).toBe(false);
+    expect((await sauce("init", programs, "--tsconfig")).stdout).toContain("unchanged");
+    writeFileSync(join(programs, "tsconfig.json"), "{}\n");
+    const kept = await sauce("init", programs, "--tsconfig");
+    expect(kept.code).toBe(1);
+    expect(kept.stderr).toMatch(/already exists with other content: pass --force/);
+    expect((await sauce("init", programs, "--tsconfig", "--force")).stdout).toContain("overwrote");
+    expect((await sauce("init", programs, "--tsconfig", "--agent", "claude")).code).toBe(2);
+  });
+
+  it("is the tsconfig.json the CLI guide shows, field for field", () => {
+    const guide = readFileSync(join(SDK, "..", "docs", "guides", "cli.md"), "utf8");
+    const shown = /The file it writes is this[^]*?```json\n([^]*?)```/.exec(guide)?.[1];
+    expect(shown).toBeDefined();
+    expect(JSON.parse(shown!)).toEqual(sauceScriptTsconfig(MANIFEST.name));
+  });
+
   it("runs npm install only when asked", async () => {
     let ran: { command: string; args: readonly string[]; cwd: string } | undefined;
     let stdout = "";

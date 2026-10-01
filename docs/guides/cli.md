@@ -602,7 +602,37 @@ TypeScript (in VS Code, "TypeScript: Select TypeScript Version", then "Use Works
 `init` adds `typescript` to `devDependencies` for it. Without the plugin, those diagnostics show
 and nothing else changes: whether a program compiles is the compiler's to say, not the editor's.
 
-In a project `init` did not write, copy that `programs/tsconfig.json` beside your programs.
+In a project `init` did not write, or for programs in another directory,
+`npx sauce init <dir> --tsconfig` writes the same project as `<dir>/tsconfig.json` and nothing else
+(it never replaces a different file without `--force`). An editor takes a file's nearest
+`tsconfig.json`, so every `*.sauce.ts` under `<dir>` is typed as SauceScript. Where the project's
+own `tsconfig.json` also covers those files, add `"exclude": ["**/*.sauce.ts"]` to it, so its
+TypeScript leaves them to their own project. The file it writes is this, `<package>` being
+`@eco-incorp/sauce`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "types": ["@eco-incorp/sauce/sauce-script"],
+    "strict": true,
+    "noImplicitAny": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": false,
+    "skipLibCheck": true,
+    "plugins": [{ "name": "@eco-incorp/sauce/sdk/dist/sauce-script/ts-plugin.cjs" }]
+  },
+  "include": ["**/*.sauce.ts"]
+}
+```
+
+A contract ABI beside a program is typed by its default import, `import IPool from "./IPool.json"`,
+as a contract whose methods the editor does not check; the compile checks them against the ABI.
 
 ## An actions document instead of a program
 

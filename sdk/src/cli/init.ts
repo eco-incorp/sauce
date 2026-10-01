@@ -145,6 +145,37 @@ export function scaffold(
   };
 }
 
+/**
+ * `sauce init <dir> --tsconfig`: only `<dir>/tsconfig.json`, the programs' TypeScript project of
+ * {@link sauceScriptTsconfig}, for a directory of programs in a project `init` did not write (or
+ * outside `programs/`). Never overwrites a different file without `force`.
+ */
+export function writeSauceScriptTsconfig(
+  dir: string,
+  packageName: string,
+  force: boolean,
+): { readonly path: string; readonly state: string } {
+  const path = join(dir, "tsconfig.json");
+  const content = `${JSON.stringify(sauceScriptTsconfig(packageName), null, 2)}\n`;
+  const state = !existsSync(path)
+    ? "wrote"
+    : readFileSync(path, "utf8") === content
+      ? "unchanged"
+      : "overwrote";
+  if (state === "overwrote" && !force) {
+    throw new CliError(
+      `${path} already exists with other content: pass --force to replace it with SauceScript's ` +
+        "project, or merge its compilerOptions (`types`, `plugins`) and include into it",
+    );
+  }
+  if (state !== "unchanged") {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, content);
+  }
+
+  return { path, state };
+}
+
 export interface InitResult {
   /** Each scaffold file, with whether it was `wrote`, `unchanged` or `overwrote`. */
   readonly files: ReadonlyArray<{ readonly path: string; readonly state: string }>;
