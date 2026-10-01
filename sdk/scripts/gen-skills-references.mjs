@@ -31,6 +31,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { getAddressDecoder } from "@solana/kit";
+
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The repository's skills directory. */
 export const SKILLS_DIR = join(SDK, "..", "skills");
@@ -492,6 +494,22 @@ const CHAIN_NOTES = {
 
 const code = (s) => `\`${s}\``;
 const word = (address) => `${address}n`;
+
+/** A Solana key the registry holds as 32 bytes of hex. */
+const SVM_KEY = /^0x[0-9a-fA-F]{64}$/;
+/** A Solana key in base58, as Solana writes it; a base58 key is returned as it is. */
+const base58 = (key) =>
+  SVM_KEY.test(key)
+    ? getAddressDecoder().decode(Uint8Array.from(key.slice(2).match(/../g), (b) => parseInt(b, 16)))
+    : key;
+/**
+ * An address in inline code, as its chain writes it. On Solana that is base58, and a key the
+ * registry holds as hex keeps the hex beside it: the 32-byte value a program holds.
+ */
+const addressCode = (kind, value) =>
+  kind === "svm" && SVM_KEY.test(value)
+    ? `${code(base58(value))} (key ${code(value.toLowerCase())})`
+    : code(value);
 const kindName = (kind) => (kind === "svm" ? "Solana (SVM)" : "EVM");
 const categoryName = (category) => CATEGORIES.find(([key]) => key === category)?.[1] ?? category;
 const constName = (role) => role.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
@@ -628,7 +646,7 @@ function chainExample(chain) {
       "",
       `\`\`\`sauce chain=${chain.slug}`,
       "function main(account: Account): Uint256 {",
-      `  // \`${token.symbol}\` is the mint \`${token.mint ?? token.address}\`, as the key \`${token.address}\`.`,
+      `  // \`${token.symbol}\` is the mint \`${token.mint ?? base58(token.address)}\`, as the key \`${token.address}\`.`,
       `  return balanceOf(${token.symbol}, account);`,
       "}",
       "```",
@@ -694,17 +712,17 @@ function renderChain(chain) {
     );
   } else {
     lines.push(
-      `| Sauce engine program | \`${chain.sauce.engine}\` |`,
-      `| Sauce Kitchen program | \`${chain.sauce.kitchen}\` |`,
+      `| Sauce engine program | ${addressCode(chain.kind, chain.sauce.engine)} |`,
+      `| Sauce Kitchen program | ${addressCode(chain.kind, chain.sauce.kitchen)} |`,
     );
   }
   lines.push(
-    `| Intents (eco-routes) | ${chain.intents ? `takes intents; Portal \`${chain.intents.portal}\`` : "none recorded"} |`,
+    `| Intents (eco-routes) | ${chain.intents ? `takes intents; Portal ${addressCode(chain.kind, chain.intents.portal)}` : "none recorded"} |`,
   );
   if (chain.intents?.executor) {
     lines.push(
-      `| Intent Executor | \`${chain.intents.executor}\` |`,
-      `| Shared intent Pot | \`${chain.intents.pot}\`: the Kitchen's \`deployPot(<Executor>, 0x0)\` creates it, from any account |`,
+      `| Intent Executor | ${addressCode(chain.kind, chain.intents.executor)} |`,
+      `| Shared intent Pot | ${addressCode(chain.kind, chain.intents.pot)}: the Kitchen's \`deployPot(<Executor>, 0x0)\` creates it, from any account |`,
     );
   }
   if (chain.cctp !== undefined) lines.push(`| CCTP domain | ${chain.cctp} |`);
@@ -725,7 +743,7 @@ function renderChain(chain) {
       "| --- | --- | --- | --- |",
       ...list.map(
         (t) =>
-          `| \`${t.symbol}\` | \`${t.mint ?? t.address}\` | \`${t.address}\` | ${t.decimals} |`,
+          `| \`${t.symbol}\` | \`${t.mint ?? base58(t.address)}\` | \`${t.address}\` | ${t.decimals} |`,
       ),
       "",
     ];
@@ -759,7 +777,7 @@ function renderChain(chain) {
     for (const p of chain.protocols) {
       for (const d of p.deployed) {
         lines.push(
-          `| [${p.name}](../../sauce-protocols/references/registry/${p.slug}.md) | ${d.role} | \`${d.address}\` | ${spelling(d)} |`,
+          `| [${p.name}](../../sauce-protocols/references/registry/${p.slug}.md) | ${d.role} | ${addressCode(chain.kind, d.address)} | ${spelling(d)} |`,
         );
       }
     }
@@ -871,7 +889,7 @@ function renderProtocolRegistry(p, data) {
     );
     for (const d of p.deployed) {
       lines.push(
-        `| ${chainLink(chainsBySlug.get(d.chain), "../../../")} | ${d.role} | \`${d.address}\` | ${spelling(d)} |`,
+        `| ${chainLink(chainsBySlug.get(d.chain), "../../../")} | ${d.role} | ${addressCode(chainsBySlug.get(d.chain).kind, d.address)} | ${spelling(d)} |`,
       );
     }
     lines.push("");
